@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import {
   View,
@@ -18,7 +18,8 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
-import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
+import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
+import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { WebAwareModal } from '../../components/WebAwareModal'
 import SkeletonLoader from '../../components/SkeletonLoader'
 import { CachedImage } from '../../components/CachedImage'
@@ -104,6 +105,9 @@ import { isWalletSendRecipient, resolveRecipientWalletNetwork } from '../../lib/
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
+import { SendAmountWebShellView } from '../../components/send/SendAmountWebShellView'
+import { SendRecipientPickerSheet } from '../../components/send/SendRecipientPickerSheet'
+import { getCurrencySymbol } from '../../utils/formatters'
 import { haptics } from '../../lib/haptics'
 import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib/dynamicAmountFontSize'
 import { formatSendAgainKeypadAmount } from '../../lib/resolveSendAgainRecipient'
@@ -150,7 +154,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     maxSize: 114,
   })
   const insets = useSafeAreaInsets()
+  const { showSidebarShell } = useResponsiveLayout()
   const footerPadding = useFixedFooterPadding(spacing[4])
+  const webScrollBottomPadding = useScrollBottomPadding(spacing[6])
   const { userProfile, refreshUserProfile } = useAuth()
   const { showError, showInfo } = useToast()
   const qc = useQueryClient()
@@ -194,6 +200,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [showPurposePicker, setShowPurposePicker] = useState(false)
   const [selectedBalanceCurrency, setSelectedBalanceCurrency] = useState<string>('USD')
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)
+  const [showRecipientPicker, setShowRecipientPicker] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'balance' | 'linkBank' | 'virtualBank' | 'otherCurrency'>(
     selectedPaymentMethodFromRoute ?? 'balance'
   )
@@ -983,9 +990,432 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !exchangePreviewReady &&
     (noahRatesLoading || cryptoRatesLoading || manualQuoteLoading)
 
+  const amountInputCurrency = amountEntryMode === 'receive' ? receiveCurrency : sendCurrency
+
+  const displayBalanceForSource = useMemo(() => {
+    const showLiveRemaining =
+      selectedPaymentMethod === 'balance' && balanceDebitEstimate > 0
+    return showLiveRemaining ? currentBalance - balanceDebitEstimate : currentBalance
+  }, [selectedPaymentMethod, balanceDebitEstimate, currentBalance])
+
+  const sourceDisplayLabel = useMemo(() => {
+    if (selectedPaymentMethod === 'balance') {
+      const symbol = getCurrencySymbol(selectedBalanceCurrency)
+      const fig = displayBalanceForSource.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+      return `${selectedBalanceCurrency} Balance • ${symbol}${fig}`
+    }
+    if (selectedOtherCurrency && selectedOtherPaymentMethod) {
+      const method = currencyPaymentMethods[selectedOtherCurrency]?.find(
+        (m) => m.code === selectedOtherPaymentMethod,
+      )
+      return `${selectedOtherCurrency} • ${method?.name ?? selectedOtherPaymentMethod}`
+    }
+    return 'Select method'
+  }, [
+    selectedPaymentMethod,
+    selectedBalanceCurrency,
+    displayBalanceForSource,
+    selectedOtherCurrency,
+    selectedOtherPaymentMethod,
+    currencyPaymentMethods,
+  ])
+
+  const sourceBalanceNegative =
+    selectedPaymentMethod === 'balance' && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0
+      ? displayBalanceForSource < 0
+      : false
+
+  const shortfallAmount =
+    hasInsufficientBalance && balanceDebitEstimate > currentBalance
+      ? balanceDebitEstimate - currentBalance
+      : 0
+
+  const continueLabel =
+    selectedPaymentMethod === 'balance'
+      ? 'Continue'
+      : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
+        ? 'Authorize'
+        : selectedPaymentMethod
+          ? 'Authorize'
+          : 'Select Method'
+
+  const handleAmountTextChange = useCallback(
+    (text: string) => {
+      if (!recipient) return
+      const v = text.replace(/[^0-9.]/g, '')
+      const parts = v.split('.')
+      if (parts.length > 2) return
+      if (parts[1]?.length > 2) return
+      setSendAmount(formatAmount(v))
+    },
+    [recipient],
+  )
+
+  const handleSendContinue = useCallback(async () => {
+    try {
+      const enteredAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
+      if (!sendAmount || sendAmount === '0' || enteredAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
+
+      if (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) return
+
+      if (isEasetagRecipient && selectedPaymentMethod === 'otherCurrency') {
+        showError('Easetag sends are only supported from your balance.')
+        return
+      }
+
+      if (verificationBlocksSend) return
+
+      const fieldCheck = validateSendAmountFields({
+        hints: payoutHints,
+        note,
+        paymentPurpose,
+        isEasetag: isEasetagRecipient,
+        receiveCurrency: recipient?.currency,
+      })
+      if (!fieldCheck.ok) {
+        setAmountFieldError(fieldCheck.message)
+        showError(fieldCheck.message)
+        return
+      }
+      setAmountFieldError(null)
+
+      haptics.medium()
+
+      const navRateMap = isWalletRecipient ? cryptoFxRates : noahRateMap
+      const navAmounts =
+        sendCurrency !== receiveCurrency
+          ? convertNoahSendFlowAmounts({
+              direction: amountEntryMode,
+              amount: enteredAmountValue,
+              sendCurrency,
+              receiveCurrency,
+              rateMap: navRateMap,
+            })
+          : {
+              sendAmount: enteredAmountValue,
+              receiveAmount: enteredAmountValue,
+              forwardRate: 1,
+            }
+      let receiveAmountValue = normalizePayoutReceiveAmountForCurrency(
+        receiveCurrency,
+        navAmounts.receiveAmount,
+      )
+      const quoteStashMeta = {
+        recipientId: recipient.id,
+        amountEntryMode,
+        entryAmount: amountEntryMode === 'send' ? navAmounts.sendAmount : receiveAmountValue,
+        receiveCurrency,
+      }
+
+      if (isWalletRecipient && selectedPaymentMethod === 'balance' && receiveAmountValue > 0) {
+        const walletMinCheck = validateWalletSendReceiveAmount(receiveAmountValue, receiveCurrency, {
+          minReceive: walletMinReceive,
+        })
+        if (!walletMinCheck.ok) {
+          setAmountFieldError(walletMinCheck.message)
+          showError(walletMinCheck.message)
+          return
+        }
+      }
+
+      if (
+        !isEasetagRecipient &&
+        !isWalletRecipient &&
+        (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency') &&
+        receiveAmountValue > 0
+      ) {
+        const limitCheck = validatePayoutAmountAgainstLimits({
+          amount: receiveAmountValue,
+          hints: payoutHints,
+          currencyCode: receiveCurrency,
+          rail: payoutRail,
+        })
+        if (!limitCheck.ok) {
+          setAmountFieldError(limitCheck.message)
+          showError(limitCheck.message)
+          return
+        }
+      }
+
+      const stashedWalletQuote =
+        selectedPaymentMethod === 'balance' && isWalletRecipient && receiveAmountValue > 0
+          ? walletQuoteFresh
+            ? peekSendWalletQuote()
+            : await ensureSendWalletQuoteStashed(
+                () =>
+                  noahService.createWalletSendQuote({
+                    recipientId: recipient.id,
+                    sourceBalanceCurrency: selectedBalanceCurrency,
+                    amountEntryMode,
+                    ...(amountEntryMode === 'receive' ? { receiveAmount: receiveAmountValue } : {}),
+                    ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+                      ? { sendAmount: navAmounts.sendAmount }
+                      : {}),
+                  }),
+                walletQuoteStashMeta,
+              )
+          : null
+
+      const stashedQuote =
+        selectedPaymentMethod === 'balance' &&
+        !isEasetagRecipient &&
+        !isWalletRecipient &&
+        receiveAmountValue > 0
+          ? await ensureSendPayoutQuoteStashed(
+              () =>
+                noahService.createPayoutQuote({
+                  recipientId: recipient.id,
+                  receiveAmount: receiveAmountValue,
+                  sourceBalanceCurrency: selectedBalanceCurrency,
+                  amountEntryMode,
+                  ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+                    ? { sendAmount: navAmounts.sendAmount }
+                    : {}),
+                  ...(note.trim() ? { note: note.trim() } : {}),
+                  ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+                }),
+              quoteStashMeta,
+            )
+          : isStashedPayoutQuoteFresh(quoteStashMeta)
+            ? peekSendPayoutQuote()
+            : null
+
+      if (
+        selectedPaymentMethod === 'balance' &&
+        isWalletRecipient &&
+        receiveAmountValue > 0 &&
+        !stashedWalletQuote?.formSessionId
+      ) {
+        showError(peekLastWalletQuoteError() || 'Could not load wallet send quote. Try again.')
+        return
+      }
+
+      if (
+        selectedPaymentMethod === 'balance' &&
+        !isEasetagRecipient &&
+        !isWalletRecipient &&
+        receiveAmountValue > 0 &&
+        !isCompletePayoutQuote(stashedQuote)
+      ) {
+        showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
+        return
+      }
+      let calculatedSendingAmount =
+        stashedQuote?.noah?.rate && stashedQuote.noah.rate > 0
+          ? receiveAmountValue / stashedQuote.noah.rate
+          : navAmounts.sendAmount
+      const calculatedFeeAmount = 0
+      let calculatedTotalAmount =
+        stashedQuote?.totalDebited && stashedQuote.totalDebited > 0
+          ? stashedQuote.totalDebited
+          : calculatedSendingAmount
+
+      if (selectedPaymentMethod === 'balance') {
+        const transactionId = generateTransactionId()
+        if (stashedWalletQuote) {
+          receiveAmountValue = stashedWalletQuote.receiveAmount
+          calculatedSendingAmount = stashedWalletQuote.sendAmount
+          calculatedTotalAmount = stashedWalletQuote.totalDebited
+        } else if (stashedQuote) {
+          receiveAmountValue = stashedQuote.receiveAmount
+          calculatedSendingAmount =
+            stashedQuote.customerPrincipal > 0 ? stashedQuote.customerPrincipal : stashedQuote.sendAmount
+          calculatedTotalAmount = stashedQuote.totalDebited
+        }
+
+        navigation.navigate('SendConfirm' as never, {
+          recipient,
+          calculatedSendingAmount,
+          calculatedFeeAmount,
+          calculatedTotalAmount,
+          receiveAmountValue,
+          selectedBalanceCurrency,
+          receiveCurrency: recipient.currency,
+          amountEntryMode,
+          amountScreenSendAmount: navAmounts.sendAmount,
+          transactionId,
+          isWalletSend: Boolean(stashedWalletQuote),
+          ...(stashedQuote
+            ? {
+                pricingQuoteId: stashedQuote.pricingQuoteId,
+                pricingQuoteExpiry: stashedQuote.expiresAt,
+                pricingQuoteResult: stashedQuote.easner,
+              }
+            : {}),
+          ...(stashedWalletQuote
+            ? {
+                pricingQuoteId: stashedWalletQuote.pricingQuoteId,
+                pricingQuoteExpiry: stashedWalletQuote.expiresAt,
+              }
+            : {}),
+          ...(!isWalletRecipient && note.trim() ? { note: note.trim() } : {}),
+          ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+        } as never)
+        return
+      }
+
+      if (selectedPaymentMethod === 'linkBank') {
+        const transactionId = generateTransactionId()
+        navigation.navigate('OpenBanking' as never, {
+          transactionId: transactionId,
+          sendAmount: calculatedSendingAmount,
+          receiveAmount: receiveAmountValue,
+          sendCurrency: selectedBalanceCurrency,
+          receiveCurrency: recipient.currency,
+          recipient: recipient,
+          feeAmount: calculatedFeeAmount,
+          totalAmount: calculatedTotalAmount,
+        } as never)
+      } else if (selectedPaymentMethod === 'virtualBank') {
+        const transactionId = generateTransactionId()
+        navigation.navigate('VirtualBankAccount' as never, {
+          transactionId: transactionId,
+          sendAmount: calculatedSendingAmount,
+          receiveAmount: receiveAmountValue,
+          sendCurrency: selectedBalanceCurrency,
+          receiveCurrency: recipient.currency,
+          recipient: recipient,
+          feeAmount: calculatedFeeAmount,
+          totalAmount: calculatedTotalAmount,
+        } as never)
+      } else if (
+        selectedPaymentMethod === 'otherCurrency' &&
+        selectedOtherCurrency &&
+        selectedOtherPaymentMethod
+      ) {
+        const transactionId = generateTransactionId()
+        const pmOption =
+          manualCatalog?.paymentMethodsByCurrency?.[selectedOtherCurrency]?.find(
+            (o) => o.id === selectedOtherPaymentMethod,
+          ) ??
+          currencyPaymentMethods[selectedOtherCurrency]?.find((m) => m.code === selectedOtherPaymentMethod)
+        const pmType =
+          pmOption && 'type' in pmOption ? String((pmOption as { type?: string }).type ?? '') : ''
+        const screen =
+          manualCatalog && pmType
+            ? resolveManualPayInNavigation(pmType)
+            : selectedOtherPaymentMethod === 'sbp'
+              ? 'OpenBanking'
+              : selectedOtherPaymentMethod === 'bankTransfer'
+                ? 'VirtualBankAccount'
+                : 'MobileMoney'
+        navigation.navigate(screen as never, {
+          transactionId,
+          sendAmount: calculatedSendingAmount,
+          receiveAmount: receiveAmountValue,
+          sendCurrency,
+          receiveCurrency: recipient.currency,
+          recipient,
+          paymentMethodId: selectedOtherPaymentMethod,
+          feeAmount: calculatedFeeAmount,
+          totalAmount: calculatedTotalAmount,
+          manualQuote: manualQuote ?? null,
+        } as never)
+      }
+    } catch (e) {
+      console.error('[SendAmount] continue failed:', e)
+      showError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
+    }
+  }, [
+    sendAmount,
+    recipient,
+    selectedPaymentMethod,
+    selectedOtherCurrency,
+    selectedOtherPaymentMethod,
+    isEasetagRecipient,
+    verificationBlocksSend,
+    payoutHints,
+    note,
+    paymentPurpose,
+    isWalletRecipient,
+    sendCurrency,
+    receiveCurrency,
+    amountEntryMode,
+    cryptoFxRates,
+    noahRateMap,
+    payoutRail,
+    walletMinReceive,
+    walletQuoteFresh,
+    walletQuoteStashMeta,
+    selectedBalanceCurrency,
+    isWalletRecipient,
+    isEasetagRecipient,
+    manualCatalog,
+    currencyPaymentMethods,
+    manualQuote,
+    navigation,
+    showError,
+  ])
+
   return (
     <ScreenWrapper>
       <View style={styles.container}>
+        {showSidebarShell ? (
+          <ScrollView
+            style={styles.webShellScroll}
+            contentContainerStyle={[
+              styles.webShellScrollContent,
+              { paddingBottom: webScrollBottomPadding },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <SendAmountWebShellView
+              recipient={recipient}
+              easenetPreview={easenetDisplay}
+              onOpenRecipientPicker={() => setShowRecipientPicker(true)}
+              sendAmount={sendAmount}
+              onAmountChange={handleAmountTextChange}
+              amountEntryMode={amountEntryMode}
+              amountInputCurrency={amountInputCurrency}
+              receiveCurrency={receiveCurrency}
+              sendCurrency={sendCurrency}
+              showCrossCurrencyExchangeUi={showCrossCurrencyExchangeUi}
+              exchangePreviewReady={exchangePreviewReady}
+              showExchangePreviewSkeleton={showExchangePreviewSkeleton}
+              sendingAmount={sendingAmount}
+              receiveAmount={receiveAmount}
+              exchangeRate={exchangeRate}
+              onToggleAmountDirection={toggleAmountDirection}
+              needsNoahRateForSend={needsNoahRateForSend}
+              needsCryptoRateForSend={needsCryptoRateForSend}
+              noahRatesLoading={noahRatesLoading}
+              cryptoRatesLoading={cryptoRatesLoading}
+              hasNoahRateForPair={hasNoahRateForPair}
+              hasValidCryptoRateForPair={hasValidCryptoRateForPair}
+              manualQuoteLoading={manualQuoteLoading}
+              manualQuoteEnabled={manualQuoteEnabled}
+              selectedPaymentMethod={selectedPaymentMethod}
+              selectedBalanceCurrency={selectedBalanceCurrency}
+              selectedOtherCurrency={selectedOtherCurrency}
+              selectedOtherPaymentMethod={selectedOtherPaymentMethod}
+              currencyPaymentMethods={currencyPaymentMethods}
+              sourceDisplayLabel={sourceDisplayLabel}
+              sourceBalanceNegative={sourceBalanceNegative}
+              onOpenSourcePicker={() => setShowCurrencyPicker(true)}
+              hasInsufficientBalance={hasInsufficientBalance}
+              shortfallAmount={shortfallAmount}
+              shortfallCurrency={selectedBalanceCurrency}
+              isWalletRecipient={isWalletRecipient}
+              amountFieldMode={amountFieldMode}
+              noteFieldUi={noteFieldUi}
+              note={note}
+              onNoteChange={setNote}
+              paymentPurpose={paymentPurpose}
+              onOpenPurposePicker={() => setShowPurposePicker(true)}
+              amountFieldError={amountFieldError}
+              showPayoutCorridorWarning={Boolean(recipient && !isEasetagRecipient && !payoutCorridorActive)}
+              tier1Ok={tier1Ok}
+              onVerifyIdentity={() => navigation.navigate('AccountVerification' as never)}
+              sendButtonDisabled={sendButtonDisabled}
+              continueLabel={continueLabel}
+              onContinue={handleSendContinue}
+            />
+          </ScrollView>
+        ) : (
         <KeyboardAvoidingView
           style={styles.keyboardContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1349,8 +1779,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             </Animated.View>
           </View>
         </KeyboardAvoidingView>
+        )}
 
-        {/* Fixed footer: stays at screen bottom; KAV shifts the form when the note keyboard is open. */}
+        {!showSidebarShell ? (
         <View
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height
@@ -1378,287 +1809,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           <Pressable
            android_ripple={ripple.neutral}
             style={[styles.sendButton, { marginTop: spacing[2] }, sendButtonDisabled && styles.sendButtonDisabled]}
-            onPress={async () => {
-              try {
-              const enteredAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
-              if (!sendAmount || sendAmount === '0' || enteredAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
-
-              // For otherCurrency, require both currency and payment method selection
-              if (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) return
-
-              if (isEasetagRecipient && selectedPaymentMethod === 'otherCurrency') {
-                showError('Easetag sends are only supported from your balance.')
-                return
-              }
-
-              if (verificationBlocksSend) return
-
-              const fieldCheck = validateSendAmountFields({
-                hints: payoutHints,
-                note,
-                paymentPurpose,
-                isEasetag: isEasetagRecipient,
-                receiveCurrency: recipient?.currency,
-              })
-              if (!fieldCheck.ok) {
-                setAmountFieldError(fieldCheck.message)
-                showError(fieldCheck.message)
-                return
-              }
-              setAmountFieldError(null)
-
-              haptics.medium()
-
-              const navRateMap = isWalletRecipient ? cryptoFxRates : noahRateMap
-              const navAmounts =
-                sendCurrency !== receiveCurrency
-                  ? convertNoahSendFlowAmounts({
-                      direction: amountEntryMode,
-                      amount: enteredAmountValue,
-                      sendCurrency,
-                      receiveCurrency,
-                      rateMap: navRateMap,
-                    })
-                  : {
-                      sendAmount: enteredAmountValue,
-                      receiveAmount: enteredAmountValue,
-                      forwardRate: 1,
-                    }
-              let receiveAmountValue = normalizePayoutReceiveAmountForCurrency(
-                receiveCurrency,
-                navAmounts.receiveAmount,
-              )
-              const quoteStashMeta = {
-                recipientId: recipient.id,
-                amountEntryMode,
-                entryAmount: amountEntryMode === 'send' ? navAmounts.sendAmount : receiveAmountValue,
-                receiveCurrency,
-              }
-
-              if (
-                isWalletRecipient &&
-                selectedPaymentMethod === 'balance' &&
-                receiveAmountValue > 0
-              ) {
-                const walletMinCheck = validateWalletSendReceiveAmount(
-                  receiveAmountValue,
-                  receiveCurrency,
-                  { minReceive: walletMinReceive },
-                )
-                if (!walletMinCheck.ok) {
-                  setAmountFieldError(walletMinCheck.message)
-                  showError(walletMinCheck.message)
-                  return
-                }
-              }
-
-              if (
-                !isEasetagRecipient &&
-                !isWalletRecipient &&
-                (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency') &&
-                receiveAmountValue > 0
-              ) {
-                const limitCheck = validatePayoutAmountAgainstLimits({
-                  amount: receiveAmountValue,
-                  hints: payoutHints,
-                  currencyCode: receiveCurrency,
-                  rail: payoutRail,
-                })
-                if (!limitCheck.ok) {
-                  setAmountFieldError(limitCheck.message)
-                  showError(limitCheck.message)
-                  return
-                }
-              }
-
-              const stashedWalletQuote =
-                selectedPaymentMethod === 'balance' &&
-                isWalletRecipient &&
-                receiveAmountValue > 0
-                  ? await ensureSendWalletQuoteStashed(
-                      () =>
-                        noahService.createWalletSendQuote({
-                          recipientId: recipient.id,
-                          sourceBalanceCurrency: selectedBalanceCurrency,
-                          amountEntryMode,
-                          ...(amountEntryMode === 'receive' ? { receiveAmount: receiveAmountValue } : {}),
-                          ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-                            ? { sendAmount: navAmounts.sendAmount }
-                            : {}),
-                        }),
-                      quoteStashMeta,
-                    )
-                  : isStashedWalletQuoteFresh(quoteStashMeta)
-                    ? peekSendWalletQuote()
-                    : null
-
-              const stashedQuote =
-                selectedPaymentMethod === 'balance' &&
-                !isEasetagRecipient &&
-                !isWalletRecipient &&
-                receiveAmountValue > 0
-                  ? await ensureSendPayoutQuoteStashed(
-                      () =>
-                        noahService.createPayoutQuote({
-                          recipientId: recipient.id,
-                          receiveAmount: receiveAmountValue,
-                          sourceBalanceCurrency: selectedBalanceCurrency,
-                          amountEntryMode,
-                          ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-                            ? { sendAmount: navAmounts.sendAmount }
-                            : {}),
-                          ...(note.trim() ? { note: note.trim() } : {}),
-                          ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-                        }),
-                      quoteStashMeta,
-                    )
-                  : isStashedPayoutQuoteFresh(quoteStashMeta)
-                    ? peekSendPayoutQuote()
-                    : null
-
-              if (
-                selectedPaymentMethod === 'balance' &&
-                isWalletRecipient &&
-                receiveAmountValue > 0 &&
-                !stashedWalletQuote?.formSessionId
-              ) {
-                showError(
-                  peekLastWalletQuoteError() || 'Could not load wallet send quote. Try again.',
-                )
-                return
-              }
-
-              if (
-                selectedPaymentMethod === 'balance' &&
-                !isEasetagRecipient &&
-                !isWalletRecipient &&
-                receiveAmountValue > 0 &&
-                !isCompletePayoutQuote(stashedQuote)
-              ) {
-                showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
-                return
-              }
-              let calculatedSendingAmount =
-                stashedQuote?.noah?.rate && stashedQuote.noah.rate > 0
-                  ? receiveAmountValue / stashedQuote.noah.rate
-                  : navAmounts.sendAmount
-              const calculatedFeeAmount = 0
-              let calculatedTotalAmount =
-                stashedQuote?.totalDebited && stashedQuote.totalDebited > 0
-                  ? stashedQuote.totalDebited
-                  : calculatedSendingAmount
-
-              if (selectedPaymentMethod === 'balance') {
-                const transactionId = generateTransactionId()
-                if (stashedWalletQuote) {
-                  receiveAmountValue = stashedWalletQuote.receiveAmount
-                  calculatedSendingAmount = stashedWalletQuote.sendAmount
-                  calculatedTotalAmount = stashedWalletQuote.totalDebited
-                } else if (stashedQuote) {
-                  receiveAmountValue = stashedQuote.receiveAmount
-                  calculatedSendingAmount =
-                    stashedQuote.customerPrincipal > 0
-                      ? stashedQuote.customerPrincipal
-                      : stashedQuote.sendAmount
-                  calculatedTotalAmount = stashedQuote.totalDebited
-                }
-
-                navigation.navigate('SendConfirm' as never, {
-                  recipient,
-                  calculatedSendingAmount,
-                  calculatedFeeAmount,
-                  calculatedTotalAmount,
-                  receiveAmountValue,
-                  selectedBalanceCurrency,
-                  receiveCurrency: recipient.currency,
-                  amountEntryMode,
-                  amountScreenSendAmount: navAmounts.sendAmount,
-                  transactionId,
-                  isWalletSend: Boolean(stashedWalletQuote),
-                  ...(stashedQuote
-                    ? {
-                        pricingQuoteId: stashedQuote.pricingQuoteId,
-                        pricingQuoteExpiry: stashedQuote.expiresAt,
-                        pricingQuoteResult: stashedQuote.easner,
-                      }
-                    : {}),
-                  ...(stashedWalletQuote
-                    ? {
-                        pricingQuoteId: stashedWalletQuote.pricingQuoteId,
-                        pricingQuoteExpiry: stashedWalletQuote.expiresAt,
-                      }
-                    : {}),
-                  ...(!isWalletRecipient && note.trim() ? { note: note.trim() } : {}),
-                  ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-                } as never)
-                return
-              }
-
-              if (selectedPaymentMethod === 'linkBank') {
-                // Generate Transaction ID (same format as web app)
-                const transactionId = generateTransactionId()
-                navigation.navigate('OpenBanking' as never, {
-                  transactionId: transactionId,
-                  sendAmount: calculatedSendingAmount,
-                  receiveAmount: receiveAmountValue,
-                  sendCurrency: selectedBalanceCurrency,
-                  receiveCurrency: recipient.currency,
-                  recipient: recipient,
-                  feeAmount: calculatedFeeAmount,
-                  totalAmount: calculatedTotalAmount,
-                } as never)
-              } else if (selectedPaymentMethod === 'virtualBank') {
-                // Generate Transaction ID (same format as web app)
-                const transactionId = generateTransactionId()
-                navigation.navigate('VirtualBankAccount' as never, {
-                  transactionId: transactionId,
-                  sendAmount: calculatedSendingAmount,
-                  receiveAmount: receiveAmountValue,
-                  sendCurrency: selectedBalanceCurrency,
-                  receiveCurrency: recipient.currency,
-                  recipient: recipient,
-                  feeAmount: calculatedFeeAmount,
-                  totalAmount: calculatedTotalAmount,
-                } as never)
-              } else if (selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod) {
-                const transactionId = generateTransactionId()
-                const pmOption =
-                  manualCatalog?.paymentMethodsByCurrency?.[selectedOtherCurrency]?.find(
-                    (o) => o.id === selectedOtherPaymentMethod,
-                  ) ??
-                  currencyPaymentMethods[selectedOtherCurrency]?.find(
-                    (m) => m.code === selectedOtherPaymentMethod,
-                  )
-                const pmType =
-                  pmOption && 'type' in pmOption
-                    ? String((pmOption as { type?: string }).type ?? '')
-                    : ''
-                const screen =
-                  manualCatalog && pmType
-                    ? resolveManualPayInNavigation(pmType)
-                    : selectedOtherPaymentMethod === 'sbp'
-                      ? 'OpenBanking'
-                      : selectedOtherPaymentMethod === 'bankTransfer'
-                        ? 'VirtualBankAccount'
-                        : 'MobileMoney'
-                navigation.navigate(screen as never, {
-                  transactionId,
-                  sendAmount: calculatedSendingAmount,
-                  receiveAmount: receiveAmountValue,
-                  sendCurrency,
-                  receiveCurrency: recipient.currency,
-                  recipient,
-                  paymentMethodId: selectedOtherPaymentMethod,
-                  feeAmount: calculatedFeeAmount,
-                  totalAmount: calculatedTotalAmount,
-                  manualQuote: manualQuote ?? null,
-                } as never)
-              }
-              } catch (e) {
-                console.error('[SendAmount] continue failed:', e)
-                showError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
-              }
-            }}
+            onPress={handleSendContinue}
             disabled={sendButtonDisabled}
           >
             <LinearGradient
@@ -1667,18 +1818,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               end={{ x: 1, y: 0 }}
               style={styles.sendButtonGradient}
             >
-              <Text style={styles.sendButtonText}>
-                {selectedPaymentMethod === 'balance'
-                  ? 'Continue'
-                  : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
-                    ? 'Authorize'
-                    : selectedPaymentMethod
-                      ? 'Authorize'
-                      : 'Select Method'}
-              </Text>
+              <Text style={styles.sendButtonText}>{continueLabel}</Text>
             </LinearGradient>
           </Pressable>
         </View>
+        ) : null}
+
+        {showSidebarShell ? (
+          <SendRecipientPickerSheet
+            visible={showRecipientPicker}
+            onClose={() => setShowRecipientPicker(false)}
+            onSelect={setRecipient}
+            navigation={navigation}
+            preferredBalanceCurrency={selectedBalanceCurrency}
+          />
+        ) : null}
 
         {/* Sending Method Modal */}
         <WebAwareModal
@@ -1930,6 +2084,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.primary,
+  },
+  webShellScroll: {
+    flex: 1,
+  },
+  webShellScrollContent: {
+    paddingHorizontal: spacing[5],
+    flexGrow: 1,
   },
   keyboardContainer: {
     flex: 1,
