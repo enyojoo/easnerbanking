@@ -34,6 +34,7 @@ import { clearMfaVerified } from '../lib/mfaStatusCache'
 import { warmAvatarCache, warmAvatarCacheAsync } from '../lib/avatarCache'
 import Constants from 'expo-constants'
 import { syncIntercomSession } from '../lib/intercom'
+import { isAppleWebSignInCanceled, signInWithAppleWeb } from '../lib/appleSignInWeb'
 
 // Completes the auth session on web popup flows. Native deep links are handled below.
 WebBrowser.maybeCompleteAuthSession()
@@ -95,9 +96,23 @@ async function finalizePostAuthSession(options?: {
   return { error: null }
 }
 
-function isProbablySupabaseSiteUrlFallbackRedirect(redirectTo: string | null | undefined): boolean {
-  if (!redirectTo) return false
-  return /^https?:\/\//i.test(redirectTo)
+function getOAuthRedirectUri(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return `${window.location.origin}/auth/callback`
+  }
+  return makeRedirectUri({ scheme: 'easner', path: 'auth/callback' })
+}
+
+/** True when we asked for a native deep link but Supabase substituted an https Site URL. */
+function isProbablySupabaseSiteUrlFallbackRedirect(
+  redirectToInAuthUrl: string | null | undefined,
+  requestedRedirectTo: string,
+): boolean {
+  if (!redirectToInAuthUrl) return false
+  if (redirectToInAuthUrl === requestedRedirectTo) return false
+  return (
+    !/^https?:\/\//i.test(requestedRedirectTo) && /^https?:\/\//i.test(redirectToInAuthUrl)
+  )
 }
 
 function parseAuthCallbackUrl(url: string): {
@@ -920,7 +935,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signInWithGoogle = useCallback(async (): Promise<{ error: Error | null }> => {
     try {
-      const redirectTo = makeRedirectUri({ scheme: 'easner', path: 'auth/callback' })
+      const redirectTo = getOAuthRedirectUri()
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -943,7 +958,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const supabaseProjectUrl =
           (Constants.expoConfig?.extra as { supabaseUrl?: string } | undefined)?.supabaseUrl || ''
 
-        if (isProbablySupabaseSiteUrlFallbackRedirect(redirectToInAuthUrl)) {
+        if (isProbablySupabaseSiteUrlFallbackRedirect(redirectToInAuthUrl, redirectTo)) {
           return {
             error: new Error(
               `Supabase rejected the app redirect URL and fell back to a website URL (${redirectToInAuthUrl}). Add "${redirectTo}" to Supabase Auth → URL Configuration → Redirect URLs for the SAME project as EXPO_PUBLIC_SUPABASE_URL (${supabaseProjectUrl}).`,
@@ -964,6 +979,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       analytics.trackSignIn('google')
 
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          window.location.assign(authUrl)
+        }
+        return { error: null }
+      }
+
       await WebBrowser.openBrowserAsync(authUrl, {
         controlsColor: '#0F1110',
         enableBarCollapsing: true,
@@ -981,23 +1003,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signInWithApple = useCallback(async (): Promise<{ error: Error | null }> => {
     if (Platform.OS === 'web') {
       try {
-        const redirectTo =
-          typeof window !== 'undefined'
-            ? `${window.location.origin}/auth/callback`
-            : makeRedirectUri({ scheme: 'easner', path: 'auth/callback' })
-        const { data, error } = await supabase.auth.signInWithOAuth({
+        const { idToken, rawNonce, fullName } = await signInWithAppleWeb()
+
+        const { error: signInError } = await supabase.auth.signInWithIdToken({
           provider: 'apple',
-          options: { redirectTo, skipBrowserRedirect: true },
+          token: idToken,
+          nonce: rawNonce,
         })
-        if (error) return { error: new Error(error.message || 'Unable to start Apple sign-in.') }
-        const authUrl = data?.url
-        if (!authUrl) return { error: new Error('Unable to start Apple sign-in.') }
-        analytics.trackSignIn('apple')
-        if (typeof window !== 'undefined') {
-          window.location.assign(authUrl)
+        if (signInError) {
+          return { error: new Error(signInError.message || 'Unable to continue with Apple.') }
         }
-        return { error: null }
+
+        if (fullName) {
+          await supabase.auth.updateUser({ data: { name: fullName, full_name: fullName } })
+        }
+
+        analytics.trackSignIn('apple')
+        return finalizePostAuthSession({
+          noSessionMessage: 'Apple sign-in did not create a session in the app.',
+        })
       } catch (e) {
+        if (isAppleWebSignInCanceled(e)) return { error: null }
         return { error: e instanceof Error ? e : new Error('Unable to continue with Apple.') }
       }
     }
