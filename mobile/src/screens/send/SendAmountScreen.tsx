@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import {
   View,
@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { SendAmountShellWebForm } from '../../components/send/SendAmountShellWebForm'
 import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { WebAwareModal } from '../../components/WebAwareModal'
@@ -105,13 +106,13 @@ import { isWalletSendRecipient, resolveRecipientWalletNetwork } from '../../lib/
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
-import { SendAmountWebShellView } from '../../components/send/SendAmountWebShellView'
-import { SendRecipientPickerSheet } from '../../components/send/SendRecipientPickerSheet'
-import { getCurrencySymbol } from '../../utils/formatters'
 import { haptics } from '../../lib/haptics'
 import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib/dynamicAmountFontSize'
 import { formatSendAgainKeypadAmount } from '../../lib/resolveSendAgainRecipient'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
+import { getCurrencySymbol } from '../../utils/formatters'
+
+const SHELL_WEB_SEND_FORM_MAX_WIDTH = 672
 
 function initialSendAmountFromRouteParams(params: Record<string, unknown> | undefined): string {
   const formatted = String(params?.initialSendAmount ?? '').trim()
@@ -148,15 +149,16 @@ function LandmarkIcon({ size = 24, color = colors.text.primary }: { size?: numbe
 
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
+  const { showSidebarShell } = useResponsiveLayout()
+  const useWebSendAmountLayout = showSidebarShell
+  const scrollBottomPadding = useScrollBottomPadding(spacing[6])
   const keypadSizing = computeKeypadCellSize(getContentWidth(windowWidth, spacing[5]), {
     gap: spacing[2],
     minSize: 90,
     maxSize: 114,
   })
   const insets = useSafeAreaInsets()
-  const { showSidebarShell } = useResponsiveLayout()
   const footerPadding = useFixedFooterPadding(spacing[4])
-  const webScrollBottomPadding = useScrollBottomPadding(spacing[6])
   const { userProfile, refreshUserProfile } = useAuth()
   const { showError, showInfo } = useToast()
   const qc = useQueryClient()
@@ -200,7 +202,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [showPurposePicker, setShowPurposePicker] = useState(false)
   const [selectedBalanceCurrency, setSelectedBalanceCurrency] = useState<string>('USD')
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)
-  const [showRecipientPicker, setShowRecipientPicker] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'balance' | 'linkBank' | 'virtualBank' | 'otherCurrency'>(
     selectedPaymentMethodFromRoute ?? 'balance'
   )
@@ -990,22 +991,23 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !exchangePreviewReady &&
     (noahRatesLoading || cryptoRatesLoading || manualQuoteLoading)
 
-  const amountInputCurrency = amountEntryMode === 'receive' ? receiveCurrency : sendCurrency
+  const displayBalanceForSource =
+    selectedPaymentMethod === 'balance'
+      ? currentBalance - (balanceDebitEstimate > 0 ? balanceDebitEstimate : 0)
+      : 0
 
-  const displayBalanceForSource = useMemo(() => {
-    const showLiveRemaining =
-      selectedPaymentMethod === 'balance' && balanceDebitEstimate > 0
-    return showLiveRemaining ? currentBalance - balanceDebitEstimate : currentBalance
-  }, [selectedPaymentMethod, balanceDebitEstimate, currentBalance])
+  const shortfallAmount =
+    hasInsufficientBalance && selectedPaymentMethod === 'balance'
+      ? Math.max(0, balanceDebitEstimate - currentBalance)
+      : 0
 
-  const sourceDisplayLabel = useMemo(() => {
+  const sourceDisplayLabel = (() => {
     if (selectedPaymentMethod === 'balance') {
-      const symbol = getCurrencySymbol(selectedBalanceCurrency)
       const fig = displayBalanceForSource.toLocaleString('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })
-      return `${selectedBalanceCurrency} Balance • ${symbol}${fig}`
+      return `${selectedBalanceCurrency} Balance • ${getCurrencySymbol(selectedBalanceCurrency)}${fig}`
     }
     if (selectedOtherCurrency && selectedOtherPaymentMethod) {
       const method = currencyPaymentMethods[selectedOtherCurrency]?.find(
@@ -1013,48 +1015,24 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       )
       return `${selectedOtherCurrency} • ${method?.name ?? selectedOtherPaymentMethod}`
     }
+    if (selectedPaymentMethod === 'linkBank') return 'Link Bank'
+    if (selectedPaymentMethod === 'virtualBank') return 'Bank Transfer'
+    if (selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency) {
+      return `${selectedOtherCurrency} - Select Method`
+    }
     return 'Select method'
-  }, [
-    selectedPaymentMethod,
-    selectedBalanceCurrency,
-    displayBalanceForSource,
-    selectedOtherCurrency,
-    selectedOtherPaymentMethod,
-    currencyPaymentMethods,
-  ])
+  })()
 
-  const sourceBalanceNegative =
-    selectedPaymentMethod === 'balance' && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0
-      ? displayBalanceForSource < 0
-      : false
+  const handleWebAmountTextChange = (text: string) => {
+    if (!recipient) return
+    const v = text.replace(/,/g, '').replace(/[^0-9.]/g, '')
+    const parts = v.split('.')
+    if (parts.length > 2) return
+    if (parts[1] && parts[1].length > 2) return
+    setSendAmount(formatAmount(v || '0'))
+  }
 
-  const shortfallAmount =
-    hasInsufficientBalance && balanceDebitEstimate > currentBalance
-      ? balanceDebitEstimate - currentBalance
-      : 0
-
-  const continueLabel =
-    selectedPaymentMethod === 'balance'
-      ? 'Continue'
-      : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
-        ? 'Authorize'
-        : selectedPaymentMethod
-          ? 'Authorize'
-          : 'Select Method'
-
-  const handleAmountTextChange = useCallback(
-    (text: string) => {
-      if (!recipient) return
-      const v = text.replace(/[^0-9.]/g, '')
-      const parts = v.split('.')
-      if (parts.length > 2) return
-      if (parts[1]?.length > 2) return
-      setSendAmount(formatAmount(v))
-    },
-    [recipient],
-  )
-
-  const handleSendContinue = useCallback(async () => {
+  const handleSendContinue = async () => {
     try {
       const enteredAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
       if (!sendAmount || sendAmount === '0' || enteredAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
@@ -1110,10 +1088,16 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         receiveCurrency,
       }
 
-      if (isWalletRecipient && selectedPaymentMethod === 'balance' && receiveAmountValue > 0) {
-        const walletMinCheck = validateWalletSendReceiveAmount(receiveAmountValue, receiveCurrency, {
-          minReceive: walletMinReceive,
-        })
+      if (
+        isWalletRecipient &&
+        selectedPaymentMethod === 'balance' &&
+        receiveAmountValue > 0
+      ) {
+        const walletMinCheck = validateWalletSendReceiveAmount(
+          receiveAmountValue,
+          receiveCurrency,
+          { minReceive: walletMinReceive },
+        )
         if (!walletMinCheck.ok) {
           setAmountFieldError(walletMinCheck.message)
           showError(walletMinCheck.message)
@@ -1141,23 +1125,25 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       }
 
       const stashedWalletQuote =
-        selectedPaymentMethod === 'balance' && isWalletRecipient && receiveAmountValue > 0
-          ? walletQuoteFresh
+        selectedPaymentMethod === 'balance' &&
+        isWalletRecipient &&
+        receiveAmountValue > 0
+          ? await ensureSendWalletQuoteStashed(
+              () =>
+                noahService.createWalletSendQuote({
+                  recipientId: recipient.id,
+                  sourceBalanceCurrency: selectedBalanceCurrency,
+                  amountEntryMode,
+                  ...(amountEntryMode === 'receive' ? { receiveAmount: receiveAmountValue } : {}),
+                  ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+                    ? { sendAmount: navAmounts.sendAmount }
+                    : {}),
+                }),
+              quoteStashMeta,
+            )
+          : isStashedWalletQuoteFresh(quoteStashMeta)
             ? peekSendWalletQuote()
-            : await ensureSendWalletQuoteStashed(
-                () =>
-                  noahService.createWalletSendQuote({
-                    recipientId: recipient.id,
-                    sourceBalanceCurrency: selectedBalanceCurrency,
-                    amountEntryMode,
-                    ...(amountEntryMode === 'receive' ? { receiveAmount: receiveAmountValue } : {}),
-                    ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-                      ? { sendAmount: navAmounts.sendAmount }
-                      : {}),
-                  }),
-                walletQuoteStashMeta,
-              )
-          : null
+            : null
 
       const stashedQuote =
         selectedPaymentMethod === 'balance' &&
@@ -1222,7 +1208,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         } else if (stashedQuote) {
           receiveAmountValue = stashedQuote.receiveAmount
           calculatedSendingAmount =
-            stashedQuote.customerPrincipal > 0 ? stashedQuote.customerPrincipal : stashedQuote.sendAmount
+            stashedQuote.customerPrincipal > 0
+              ? stashedQuote.customerPrincipal
+              : stashedQuote.sendAmount
           calculatedTotalAmount = stashedQuote.totalDebited
         }
 
@@ -1291,9 +1279,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           manualCatalog?.paymentMethodsByCurrency?.[selectedOtherCurrency]?.find(
             (o) => o.id === selectedOtherPaymentMethod,
           ) ??
-          currencyPaymentMethods[selectedOtherCurrency]?.find((m) => m.code === selectedOtherPaymentMethod)
+          currencyPaymentMethods[selectedOtherCurrency]?.find(
+            (m) => m.code === selectedOtherPaymentMethod,
+          )
         const pmType =
-          pmOption && 'type' in pmOption ? String((pmOption as { type?: string }).type ?? '') : ''
+          pmOption && 'type' in pmOption
+            ? String((pmOption as { type?: string }).type ?? '')
+            : ''
         const screen =
           manualCatalog && pmType
             ? resolveManualPayInNavigation(pmType)
@@ -1319,103 +1311,74 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       console.error('[SendAmount] continue failed:', e)
       showError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
     }
-  }, [
-    sendAmount,
-    recipient,
-    selectedPaymentMethod,
-    selectedOtherCurrency,
-    selectedOtherPaymentMethod,
-    isEasetagRecipient,
-    verificationBlocksSend,
-    payoutHints,
-    note,
-    paymentPurpose,
-    isWalletRecipient,
-    sendCurrency,
-    receiveCurrency,
-    amountEntryMode,
-    cryptoFxRates,
-    noahRateMap,
-    payoutRail,
-    walletMinReceive,
-    walletQuoteFresh,
-    walletQuoteStashMeta,
-    selectedBalanceCurrency,
-    isWalletRecipient,
-    isEasetagRecipient,
-    manualCatalog,
-    currencyPaymentMethods,
-    manualQuote,
-    navigation,
-    showError,
-  ])
+  }
+
+  const recipientSection = (
+    <>
+      {recipient ? (
+        <Pressable
+          android_ripple={ripple.neutral}
+          style={styles.recipientBar}
+          onPress={() => {
+            haptics.tap()
+            navigateToSendRecipientHub(navigation, {
+              preferredBalanceCurrency: selectedBalanceCurrency,
+              selectedPaymentMethod,
+              selectedOtherCurrency,
+              selectedOtherPaymentMethod,
+            })
+          }}
+        >
+          <Text style={styles.recipientLabel}>To:</Text>
+          <SendSelectedRecipientSummary recipient={recipient} easenetPreview={easenetDisplay} />
+          <RotateCcw
+            size={17}
+            color={colors.text.primary}
+            strokeWidth={2}
+            style={styles.changeRecipientIcon}
+            accessibilityLabel="Change recipient"
+          />
+        </Pressable>
+      ) : (
+        <Pressable
+          android_ripple={ripple.neutral}
+          style={styles.selectRecipientBox}
+          onPress={() => {
+            haptics.tap()
+            navigateToSendRecipientHub(navigation, {
+              preferredBalanceCurrency: selectedBalanceCurrency,
+            })
+          }}
+        >
+          <View style={styles.selectRecipientIcon}>
+            <User size={20} color={colors.text.secondary} strokeWidth={2} />
+          </View>
+          <Text style={styles.selectRecipientText}>Select Recipient</Text>
+        </Pressable>
+      )}
+
+      {recipient && !isEasetagRecipient && !payoutCorridorActive ? (
+        <View
+          style={{
+            marginHorizontal: spacing[4],
+            marginBottom: spacing[3],
+            padding: spacing[3],
+            backgroundColor: colors.warning.background,
+            borderRadius: borderRadius.md,
+          }}
+        >
+          <Text style={{ color: colors.warning.dark, fontSize: 14, lineHeight: 20 }}>
+            Fiat payouts to this recipient are not available on your account yet (Noah sell channel missing).
+            Choose another recipient or a US/EUR bank corridor.
+          </Text>
+        </View>
+      ) : null}
+    </>
+  )
 
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        {showSidebarShell ? (
-          <ScrollView
-            style={styles.webShellScroll}
-            contentContainerStyle={[
-              styles.webShellScrollContent,
-              { paddingBottom: webScrollBottomPadding },
-            ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <SendAmountWebShellView
-              recipient={recipient}
-              easenetPreview={easenetDisplay}
-              onOpenRecipientPicker={() => setShowRecipientPicker(true)}
-              sendAmount={sendAmount}
-              onAmountChange={handleAmountTextChange}
-              amountEntryMode={amountEntryMode}
-              amountInputCurrency={amountInputCurrency}
-              receiveCurrency={receiveCurrency}
-              sendCurrency={sendCurrency}
-              showCrossCurrencyExchangeUi={showCrossCurrencyExchangeUi}
-              exchangePreviewReady={exchangePreviewReady}
-              showExchangePreviewSkeleton={showExchangePreviewSkeleton}
-              sendingAmount={sendingAmount}
-              receiveAmount={receiveAmount}
-              exchangeRate={exchangeRate}
-              onToggleAmountDirection={toggleAmountDirection}
-              needsNoahRateForSend={needsNoahRateForSend}
-              needsCryptoRateForSend={needsCryptoRateForSend}
-              noahRatesLoading={noahRatesLoading}
-              cryptoRatesLoading={cryptoRatesLoading}
-              hasNoahRateForPair={hasNoahRateForPair}
-              hasValidCryptoRateForPair={hasValidCryptoRateForPair}
-              manualQuoteLoading={manualQuoteLoading}
-              manualQuoteEnabled={manualQuoteEnabled}
-              selectedPaymentMethod={selectedPaymentMethod}
-              selectedBalanceCurrency={selectedBalanceCurrency}
-              selectedOtherCurrency={selectedOtherCurrency}
-              selectedOtherPaymentMethod={selectedOtherPaymentMethod}
-              currencyPaymentMethods={currencyPaymentMethods}
-              sourceDisplayLabel={sourceDisplayLabel}
-              sourceBalanceNegative={sourceBalanceNegative}
-              onOpenSourcePicker={() => setShowCurrencyPicker(true)}
-              hasInsufficientBalance={hasInsufficientBalance}
-              shortfallAmount={shortfallAmount}
-              shortfallCurrency={selectedBalanceCurrency}
-              isWalletRecipient={isWalletRecipient}
-              amountFieldMode={amountFieldMode}
-              noteFieldUi={noteFieldUi}
-              note={note}
-              onNoteChange={setNote}
-              paymentPurpose={paymentPurpose}
-              onOpenPurposePicker={() => setShowPurposePicker(true)}
-              amountFieldError={amountFieldError}
-              showPayoutCorridorWarning={Boolean(recipient && !isEasetagRecipient && !payoutCorridorActive)}
-              tier1Ok={tier1Ok}
-              onVerifyIdentity={() => navigation.navigate('AccountVerification' as never)}
-              sendButtonDisabled={sendButtonDisabled}
-              continueLabel={continueLabel}
-              onContinue={handleSendContinue}
-            />
-          </ScrollView>
-        ) : (
         <KeyboardAvoidingView
           style={styles.keyboardContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1458,6 +1421,82 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             </View>
             </Animated.View>
 
+            {useWebSendAmountLayout ? (
+              <ScrollView
+                style={styles.shellWebScroll}
+                contentContainerStyle={[
+                  styles.shellWebScrollContent,
+                  { paddingBottom: scrollBottomPadding },
+                ]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <Animated.View
+                  style={[
+                    styles.content,
+                    styles.shellWebContent,
+                    {
+                      opacity: contentAnim,
+                      transform: [{
+                        translateY: contentAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [motion.screenEnterTranslateY, 0],
+                        })
+                      }]
+                    }
+                  ]}
+                >
+                  <View style={styles.sendFormTop}>{recipientSection}</View>
+                  {recipient ? (
+                    <SendAmountShellWebForm
+                      amountEntryMode={amountEntryMode}
+                      sendAmount={sendAmount}
+                      sendCurrency={sendCurrency}
+                      receiveCurrency={receiveCurrency}
+                      sendingAmount={sendingAmount}
+                      receiveAmount={receiveAmount}
+                      exchangeRate={exchangeRate}
+                      showCrossCurrencyExchangeUi={showCrossCurrencyExchangeUi}
+                      exchangePreviewReady={exchangePreviewReady}
+                      showExchangePreviewSkeleton={showExchangePreviewSkeleton}
+                      needsNoahRateForSend={needsNoahRateForSend}
+                      needsCryptoRateForSend={needsCryptoRateForSend}
+                      noahRatesLoading={noahRatesLoading}
+                      cryptoRatesLoading={cryptoRatesLoading}
+                      manualQuoteLoading={manualQuoteLoading}
+                      hasNoahRateForPair={hasNoahRateForPair}
+                      hasValidCryptoRateForPair={hasValidCryptoRateForPair}
+                      selectedPaymentMethod={selectedPaymentMethod}
+                      selectedBalanceCurrency={selectedBalanceCurrency}
+                      selectedOtherCurrency={selectedOtherCurrency}
+                      selectedOtherPaymentMethod={selectedOtherPaymentMethod}
+                      currencyPaymentMethods={currencyPaymentMethods}
+                      sourceDisplayLabel={sourceDisplayLabel}
+                      hasInsufficientBalance={hasInsufficientBalance}
+                      shortfallAmount={shortfallAmount}
+                      isWalletRecipient={isWalletRecipient}
+                      amountFieldMode={amountFieldMode}
+                      noteFieldUi={noteFieldUi}
+                      note={note}
+                      paymentPurpose={paymentPurpose}
+                      amountFieldError={amountFieldError}
+                      tier1Ok={tier1Ok}
+                      sendButtonDisabled={sendButtonDisabled}
+                      onAmountChange={handleWebAmountTextChange}
+                      onToggleAmountDirection={toggleAmountDirection}
+                      onOpenPaymentMethodPicker={() => {
+                        haptics.tap()
+                        setShowCurrencyPicker(true)
+                      }}
+                      onOpenPurposePicker={() => setShowPurposePicker(true)}
+                      onNoteChange={setNote}
+                      onVerifyPress={() => navigation.navigate('AccountVerification' as never)}
+                      onContinue={handleSendContinue}
+                    />
+                  ) : null}
+                </Animated.View>
+              </ScrollView>
+            ) : (
             <Animated.View 
               style={[
                 styles.content,
@@ -1473,65 +1512,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               ]}
             >
               <View style={styles.sendFormTop}>
-              {/* Recipient Section */}
-              {recipient ? (
-                // Selected Recipient View
-                <Pressable
-                 android_ripple={ripple.neutral}
-                  style={styles.recipientBar}
-                  onPress={() => {
-                    haptics.tap()
-                    navigateToSendRecipientHub(navigation, {
-                      preferredBalanceCurrency: selectedBalanceCurrency,
-                      selectedPaymentMethod,
-                      selectedOtherCurrency,
-                      selectedOtherPaymentMethod,
-                    })
-                  }} >
-                  <Text style={styles.recipientLabel}>To:</Text>
-                  <SendSelectedRecipientSummary recipient={recipient} easenetPreview={easenetDisplay} />
-                  <RotateCcw
-                    size={17}
-                    color={colors.text.primary}
-                    strokeWidth={2}
-                    style={styles.changeRecipientIcon}
-                    accessibilityLabel="Change recipient"
-                  />
-                </Pressable>
-              ) : (
-                // Select Recipient Box
-                <Pressable
-                 android_ripple={ripple.neutral}
-                  style={styles.selectRecipientBox}
-                  onPress={() => {
-                    haptics.tap()
-                    navigateToSendRecipientHub(navigation, {
-                      preferredBalanceCurrency: selectedBalanceCurrency,
-                    })
-                  }} >
-                  <View style={styles.selectRecipientIcon}>
-                    <User size={20} color={colors.text.secondary} strokeWidth={2} />
-                  </View>
-                  <Text style={styles.selectRecipientText}>Select Recipient</Text>
-                </Pressable>
-              )}
-
-              {recipient && !isEasetagRecipient && !payoutCorridorActive ? (
-                <View
-                  style={{
-                    marginHorizontal: spacing[4],
-                    marginBottom: spacing[3],
-                    padding: spacing[3],
-                    backgroundColor: colors.warning.background,
-                    borderRadius: borderRadius.md,
-                  }}
-                >
-                  <Text style={{ color: colors.warning.dark, fontSize: 14, lineHeight: 20 }}>
-                    Fiat payouts to this recipient are not available on your account yet (Noah sell channel missing).
-                    Choose another recipient or a US/EUR bank corridor.
-                  </Text>
-                </View>
-              ) : null}
+              {recipientSection}
 
               {/* Amount Display - Wrapped with exchange info */}
               <View style={styles.amountSection}>
@@ -1777,11 +1758,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
               </View>
             </Animated.View>
+            )}
           </View>
         </KeyboardAvoidingView>
-        )}
 
-        {!showSidebarShell ? (
+        {!useWebSendAmountLayout ? (
         <View
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height
@@ -1818,20 +1799,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               end={{ x: 1, y: 0 }}
               style={styles.sendButtonGradient}
             >
-              <Text style={styles.sendButtonText}>{continueLabel}</Text>
+              <Text style={styles.sendButtonText}>
+                {selectedPaymentMethod === 'balance'
+                  ? 'Continue'
+                  : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
+                    ? 'Authorize'
+                    : selectedPaymentMethod
+                      ? 'Authorize'
+                      : 'Select Method'}
+              </Text>
             </LinearGradient>
           </Pressable>
         </View>
-        ) : null}
-
-        {showSidebarShell ? (
-          <SendRecipientPickerSheet
-            visible={showRecipientPicker}
-            onClose={() => setShowRecipientPicker(false)}
-            onSelect={setRecipient}
-            navigation={navigation}
-            preferredBalanceCurrency={selectedBalanceCurrency}
-          />
         ) : null}
 
         {/* Sending Method Modal */}
@@ -2085,13 +2064,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background.primary,
   },
-  webShellScroll: {
-    flex: 1,
-  },
-  webShellScrollContent: {
-    paddingHorizontal: spacing[5],
-    flexGrow: 1,
-  },
   keyboardContainer: {
     flex: 1,
   },
@@ -2123,6 +2095,18 @@ const styles = StyleSheet.create({
     paddingTop: spacing[2],
     flex: 1,
     justifyContent: 'flex-start',
+  },
+  shellWebScroll: {
+    flex: 1,
+  },
+  shellWebScrollContent: {
+    flexGrow: 1,
+  },
+  shellWebContent: {
+    maxWidth: SHELL_WEB_SEND_FORM_MAX_WIDTH,
+    alignSelf: 'center',
+    width: '100%',
+    flex: undefined,
   },
   sendFormTop: {
     flexShrink: 0,
