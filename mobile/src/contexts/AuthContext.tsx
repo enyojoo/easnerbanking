@@ -1005,8 +1005,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const { idToken, fullName } = await signInWithAppleWeb()
 
-        // Omit nonce — matches native iOS. Supabase Apple nonce verification uses hex
-        // encoding while Apple's id_token uses base64url, causing "Nonces mismatch".
+        // Omit nonce — matches native iOS; avoids GoTrue hex vs Apple base64url mismatch.
         const { error: signInError } = await supabase.auth.signInWithIdToken({
           provider: 'apple',
           token: idToken,

@@ -42,7 +42,7 @@ declare global {
           scope: string
           redirectURI: string
           usePopup: boolean
-          nonce: string
+          nonce?: string
         }) => void
         signIn: () => Promise<AppleAuthResponse>
       }
@@ -142,15 +142,6 @@ function isAppleSignInCancelled(error: unknown): boolean {
   return code === 'popup_closed_by_user' || code === 'user_cancelled_authorize'
 }
 
-/** Apple JS expects SHA-256 of the raw nonce, hex-encoded (per Apple + Supabase Flutter docs). */
-async function sha256Hex(value: string): Promise<string> {
-  const data = new TextEncoder().encode(value)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
-}
-
 function formatAppleFullName(name?: AppleUserName): string | undefined {
   if (!name) return undefined
   const parts = [name.firstName, name.lastName].filter(Boolean)
@@ -171,16 +162,16 @@ export async function signInWithAppleWeb(): Promise<AppleWebSignInResult> {
 
   await loadAppleIdScript()
 
-  const rawNonce = crypto.randomUUID()
-  const hashedNonce = await sha256Hex(rawNonce)
   const redirectURI = getAppleWebRedirectUri()
 
+  // Omit nonce — matches native iOS. If Apple embeds a nonce in the id_token we must
+  // pass the same raw value to Supabase; hosted GoTrue compares hex vs Apple's
+  // base64url hash and fails with "Nonces mismatch" (supabase/auth#2378).
   window.AppleID!.auth.init({
     clientId,
     scope: 'name email',
     redirectURI,
     usePopup: true,
-    nonce: hashedNonce,
   })
 
   let response: AppleAuthResponse
