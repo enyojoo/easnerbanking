@@ -4,6 +4,7 @@ import { ArrowLeft, Copy, Check } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import QRCode from 'react-native-qrcode-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
 import { NavigationProps } from '../../types'
 import type { Recipient } from '../../types'
 import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
@@ -29,6 +30,8 @@ function stablecoinLabel(pm: string | undefined): string {
 
 export default function StablecoinScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const footerPadding = useFixedFooterPadding(spacing[4])
+  const listBottomPadding = useScrollPaddingAboveFooter()
   const { showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -142,7 +145,7 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
 
   return (
     <ScreenWrapper>
-      <View style={[styles.container, { paddingBottom: insets.bottom + spacing[4] }]}>
+      <View style={[styles.container, { paddingBottom: footerPadding }]}>
         <Animated.View
           style={[
             styles.header,
@@ -169,7 +172,10 @@ export default function StablecoinScreen({ navigation, route }: NavigationProps)
         </Animated.View>
 
         <Animated.View style={[styles.main, { opacity: contentAnim }]}>
-          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={[styles.scroll, { paddingBottom: listBottomPadding }]}
+            showsVerticalScrollIndicator={false}
+          >
             {loadError ? (
               <Text style={styles.error}>{loadError}</Text>
             ) : showAddressSpinner ? (
@@ -266,9 +272,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing[5],
   },
-  scroll: {
-    paddingBottom: spacing[6],
-  },
+  scroll: {},
   card: {
     backgroundColor: colors.semantic.card,
     borderRadius: borderRadius.lg,

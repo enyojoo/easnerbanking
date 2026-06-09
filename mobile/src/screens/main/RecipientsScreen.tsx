@@ -44,6 +44,7 @@ import { recipientService, RecipientData } from '../../lib/recipientService'
 import { useAuth } from '../../contexts/AuthContext'
 import { analytics } from '../../lib/analytics'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
+import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
 import { useFocusEffect } from '@react-navigation/native'
 import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/currencyAccountTypes'
@@ -124,7 +125,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const recipients = queryRecipients.length > 0 ? queryRecipients : cachedRecipients
   const recipientsLoading = recipientsQuery.isPending && recipients.length === 0
   const insets = useSafeAreaInsets()
-  const listBottomPadding = insets.bottom + 100
+  const listBottomPadding = useScrollPaddingAboveFooter()
+  const footerPadding = useFixedFooterPadding(spacing[4])
   const [uiRecipients, setUiRecipients] = useState<Recipient[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -1260,7 +1262,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         </Animated.View>
 
         {/* Add new recipient Button - Fixed at bottom */}
-        <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + spacing[4] }]}>
+        <View style={[styles.bottomButtonContainer, { paddingBottom: footerPadding }]}>
           <Pressable
            android_ripple={ripple.neutral}
             style={styles.addRecipientButton}
@@ -1285,7 +1287,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         }}
         nativePanelStyle={[
           styles.recipientTypeModal,
-          { paddingBottom: Math.max(insets.bottom, 20) },
+          { paddingBottom: footerPadding },
         ]}
       >
             <View style={styles.modalHeader}>
@@ -1431,7 +1433,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         }}
         nativePanelStyle={{
           height: '92%',
-          paddingBottom: Math.max(insets.bottom, 20),
+          paddingBottom: footerPadding,
         }}
         webPanelStyle={{
           maxWidth: 560,
@@ -1487,7 +1489,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={[
                 styles.modalScrollContent,
-                { paddingBottom: Math.max(insets.bottom, 20) },
+                { paddingBottom: footerPadding },
               ]}
               nestedScrollEnabled={true}
               scrollEnabled={!isAnyDropdownOpen}
@@ -2563,7 +2565,6 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   modalScrollContent: {
-    paddingBottom: spacing[8],
     flexGrow: 1,
   },
   modalContent: {

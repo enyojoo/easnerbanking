@@ -12,6 +12,7 @@ import {
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { NavigationProps } from '../../types'
 import {
@@ -31,6 +32,7 @@ import { haptics } from '../../lib/haptics'
 
 export default function ChangePasswordScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const { showError, showInfo } = useToast()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -85,7 +87,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
       <View style={styles.container}>
         <ScrollView
           style={styles.scrollContainer}
-          contentContainerStyle={{ paddingBottom: insets.bottom + spacing[5] }}
+          contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
           showsVerticalScrollIndicator={false}
         >
           {/* Premium Header - Matching Send Flow */}

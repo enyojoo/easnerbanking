@@ -72,7 +72,7 @@ import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
 import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
-import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
+import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 import {
   DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX,
@@ -111,6 +111,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
   const scrollBottomPadding = useScrollBottomPadding(spacing[4])
+  const footerPadding = useFixedFooterPadding(spacing[4])
   const styles = useMemo(
     () => createDashboardStyles(palette, scrollBottomPadding),
     [palette, scrollBottomPadding],
@@ -535,7 +536,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     const itemHeight = 80
     const headerHeight = 80
     const padding = spacing[4]
-    const estimatedHeight = headerHeight + (itemHeight * availableCurrencies.length) + padding + insets.bottom
+    const estimatedHeight = headerHeight + (itemHeight * availableCurrencies.length) + padding + footerPadding
 
   return (
       <WebAwareModal
@@ -544,7 +545,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
         compact
         nativePanelStyle={{
           maxHeight: estimatedHeight,
-          paddingBottom: insets.bottom,
+          paddingBottom: footerPadding,
         }}
         webPanelStyle={{ maxHeight: estimatedHeight }}
       >

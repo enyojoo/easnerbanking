@@ -9,7 +9,6 @@ import {
 } from 'react-native'
 import { ArrowLeft, Link as LinkIcon } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
@@ -23,9 +22,10 @@ import { completeManualSendOrder } from '../../hooks/use-manual-pay-in-screen'
 import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
 import type { ManualQuoteResponse } from '../../lib/manual-send-api'
 import { haptics } from '../../lib/haptics'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 export default function OpenBankingScreen({ navigation, route }: NavigationProps) {
-  const insets = useSafeAreaInsets()
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
   const { showError } = useToast()
   const [loading, setLoading] = useState(false)
   const showLoadingSpinner = useDeferredLoading(loading)
@@ -125,6 +125,7 @@ export default function OpenBankingScreen({ navigation, route }: NavigationProps
         <Animated.View 
           style={[
             styles.content,
+            { paddingBottom: scrollBottomPadding },
             {
               opacity: contentAnim,
               transform: [{

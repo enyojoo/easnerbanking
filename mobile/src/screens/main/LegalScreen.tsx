@@ -8,8 +8,10 @@ import { NavigationProps } from '../../types'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 export default function LegalScreen({ navigation }: NavigationProps) {
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
   const privacyLink = useExternalLink()
   const termsLink = useExternalLink()
 
@@ -32,7 +34,10 @@ export default function LegalScreen({ navigation }: NavigationProps) {
           </View>
         </View>
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
+        >
           <View style={styles.sectionCard}>
             <View style={styles.sectionContent}>
               <Pressable

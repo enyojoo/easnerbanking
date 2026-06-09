@@ -7,6 +7,7 @@ import { apiGet, apiPost } from '../../lib/apiClient'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing, borderRadius, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 type Offer = {
   code: string
@@ -17,6 +18,7 @@ type Offer = {
 }
 
 export default function OpenCurrencyAccountScreen({ navigation }: NavigationProps) {
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
   const [loading, setLoading] = useState(true)
   const [busyCode, setBusyCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -92,7 +94,7 @@ export default function OpenCurrencyAccountScreen({ navigation }: NavigationProp
           <FlatList
             data={offers}
             keyExtractor={(item) => item.code}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={[styles.list, { paddingBottom: scrollBottomPadding }]}
             renderItem={({ item }) => {
               const disabled = item.alreadyAdded || Boolean(item.disabledReason) || busyCode !== null
               return (
@@ -145,7 +147,7 @@ const styles = StyleSheet.create({
   error: { ...textStyles.bodySmall, color: colors.error.main },
   errorPad: { paddingHorizontal: spacing[5], marginBottom: spacing[3] },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { gap: spacing[3], paddingBottom: spacing[8], paddingHorizontal: spacing[5] },
+  list: { gap: spacing[3], paddingHorizontal: spacing[5] },
   item: {
     ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
     padding: spacing[3],

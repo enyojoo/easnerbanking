@@ -28,6 +28,7 @@ import {
 } from '../../theme'
 import { noahService } from '../../lib/noahService'
 import { haptics } from '../../lib/haptics'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 type Row = {
   id: string
@@ -46,6 +47,7 @@ function isCardLike(tx: Record<string, unknown>): boolean {
 }
 
 export default function TransactionCardScreen({ navigation }: NavigationProps) {
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -143,7 +145,7 @@ export default function TransactionCardScreen({ navigation }: NavigationProps) {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.main} />
           }
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
           keyboardShouldPersistTaps="handled"
         >
           {loading ? (
@@ -215,7 +217,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   scrollContent: {
-    paddingBottom: spacing[10],
   },
   row: {
     flexDirection: 'row',

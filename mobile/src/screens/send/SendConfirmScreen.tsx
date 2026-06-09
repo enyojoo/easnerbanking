@@ -22,6 +22,7 @@ import {
   resolvePayoutCountryCode,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
 import { NavigationProps } from '../../types'
 import type { Recipient, User } from '../../types'
 import {
@@ -111,6 +112,8 @@ function inferCountryFromRecipientCurrency(currency: string): string | undefined
 
 export default function SendConfirmScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const footerPadding = useFixedFooterPadding(spacing[4])
+  const listBottomPadding = useScrollPaddingAboveFooter()
   const { user, userProfile } = useAuth()
   const { showError, showInfo } = useToast()
   const qc = useQueryClient()
@@ -684,7 +687,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   if (!recipient) {
     return (
       <ScreenWrapper>
-        <View style={[styles.container, { paddingBottom: insets.bottom + spacing[4] }]}>
+        <View style={[styles.container, { paddingBottom: footerPadding }]}>
           <Text style={textStyles.body}>Nothing to confirm.</Text>
           <Pressable onPress={() => navigation.goBack()} style={{ marginTop: spacing[4] }}>
             <Text style={{ color: colors.primary.main }}>Go back</Text>
@@ -696,7 +699,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   return (
     <ScreenWrapper>
-      <View style={[styles.container, { paddingBottom: insets.bottom + spacing[4] }]}>
+      <View style={[styles.container, { paddingBottom: footerPadding }]}>
         <Animated.View
           style={[
             styles.header,
@@ -742,7 +745,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             },
           ]}
         >
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: listBottomPadding }]}
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.card}>
               <Row
                 label="You send"
@@ -923,9 +929,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing[5],
   },
-  scrollContent: {
-    paddingBottom: spacing[4],
-  },
+  scrollContent: {},
   card: {
     backgroundColor: colors.semantic.card,
     borderRadius: borderRadius.lg,

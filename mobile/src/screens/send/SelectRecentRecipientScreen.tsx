@@ -65,6 +65,7 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
 import { WebAwareModal } from '../../components/WebAwareModal'
 import { CachedImage } from '../../components/CachedImage'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
@@ -122,7 +123,8 @@ const getInitials = (name: string): string => {
 
 export default function SelectRecentRecipientScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
-  const listBottomPadding = insets.bottom + 100
+  const listBottomPadding = useScrollPaddingAboveFooter()
+  const footerPadding = useFixedFooterPadding(spacing[4])
   const { user, userProfile } = useAuth()
   const { showError } = useToast()
   const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
@@ -985,7 +987,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         </Animated.View>
 
         {/* Add a recipient Button - Fixed at bottom */}
-        <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + spacing[4] }]}>
+        <View style={[styles.bottomButtonContainer, { paddingBottom: footerPadding }]}>
           <Pressable
            android_ripple={ripple.neutral}
             style={styles.addRecipientButton}
@@ -1006,7 +1008,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         }}
         nativePanelStyle={[
           styles.recipientTypeModal,
-          { paddingBottom: Math.max(insets.bottom, 20) },
+          { paddingBottom: footerPadding },
         ]}
       >
             <View style={styles.modalHeader}>
@@ -1147,7 +1149,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         }}
         nativePanelStyle={{
           height: '92%',
-          paddingBottom: Math.max(insets.bottom, 20),
+          paddingBottom: footerPadding,
         }}
         webPanelStyle={{
           maxWidth: 560,
@@ -1202,7 +1204,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               showsVerticalScrollIndicator={false}
               contentContainerStyle={[
                 styles.modalScrollContent,
-                { paddingBottom: Math.max(insets.bottom, 20) },
+                { paddingBottom: footerPadding },
               ]}
               nestedScrollEnabled={true}
               scrollEnabled={!isAnyDropdownOpen}
@@ -2304,7 +2306,6 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   modalScrollContent: {
-    paddingBottom: spacing[8],
     flexGrow: 1,
   },
   modalContent: {

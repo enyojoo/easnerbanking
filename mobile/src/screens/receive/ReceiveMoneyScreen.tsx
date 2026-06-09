@@ -43,10 +43,12 @@ import {
 import QRCode from 'react-native-qrcode-svg'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { haptics } from '../../lib/haptics'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 type TabType = 'bank' | 'stablecoin'
 
 export default function ReceiveMoneyScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const { user, userProfile, refreshUserProfile } = useAuth()
   const { showSuccess, showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
@@ -619,7 +621,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         <ScrollView 
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+          contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         >
           <View style={styles.content}>
             {activeTab === 'bank' ? (

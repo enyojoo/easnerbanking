@@ -67,6 +67,7 @@ import { USE_NATIVE_DRIVER } from '../../lib/animation'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
 import { useSplitPaneConfig } from '../../components/layout/SplitPane'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 import {
   TRANSACTIONS_CACHE_KEY_PREFIX,
@@ -357,6 +358,7 @@ function TransactionsSkeleton() {
 
 function TransactionsContent({ navigation }: NavigationProps) {
   const { width: windowWidth } = useWindowDimensions()
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
   const { regularWidth, config: splitConfig } = useSplitPaneConfig()
   const { refreshBalances } = useBalance()
   const { user, userProfile } = useAuth()
@@ -734,7 +736,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: spacing[8] },
+          { paddingBottom: scrollBottomPadding },
         ]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScrollLoadMore}

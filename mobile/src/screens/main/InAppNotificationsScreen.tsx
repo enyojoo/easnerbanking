@@ -24,6 +24,7 @@ import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, border
 import { ripple } from '../../lib/androidRipple'
 import { useNotifications } from '../../contexts/NotificationsContext'
 import { haptics } from '../../lib/haptics'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 // Mock notifications data
 const MOCK_NOTIFICATIONS = [
@@ -172,6 +173,7 @@ function NotificationItem({
 }
 
 export default function InAppNotificationsScreen({ navigation }: NavigationProps) {
+  const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const { 
     notifications, 
     unreadCount, 
@@ -265,7 +267,7 @@ export default function InAppNotificationsScreen({ navigation }: NavigationProps
         {/* Notifications List */}
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl 
@@ -343,9 +345,7 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: spacing[5],
-  },
+  scrollContent: {},
   notificationsContainer: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[3],

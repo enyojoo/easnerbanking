@@ -55,6 +55,7 @@ import { isTier1Complete } from '../../lib/compliance'
 import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 const TIER_ICONS: Record<1 | 2 | 3, LucideIcon> = {
   1: Globe,
@@ -615,7 +616,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
   }
 
-  const scrollBottomPad = Math.max(insets.bottom, spacing[4]) + spacing[5]
+  const scrollBottomPad = useScrollBottomPadding(spacing[5])
 
   return (
     <ScreenWrapper>

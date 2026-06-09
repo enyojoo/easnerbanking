@@ -20,8 +20,10 @@ import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacin
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 export default function SupportScreen({ navigation }: NavigationProps) {
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
 
@@ -114,7 +116,10 @@ export default function SupportScreen({ navigation }: NavigationProps) {
           </View>
         </Animated.View>
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
+        >
           <Animated.View
             style={{
               opacity: contentAnim,

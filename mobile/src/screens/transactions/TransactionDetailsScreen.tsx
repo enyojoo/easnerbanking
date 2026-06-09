@@ -43,6 +43,7 @@ import {
   fontFamily,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
+import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ripple } from '../../lib/androidRipple'
 import { formatSignedCurrency } from '../../utils/formatters'
@@ -173,6 +174,8 @@ function mergeTransactionSnapshots(
 }
 
 export default function TransactionDetailsScreen({ navigation, route }: NavigationProps) {
+  const scrollBottomPadding = useScrollBottomPadding(spacing[5])
+  const footerPadding = useFixedFooterPadding(spacing[4])
   const { transactionId, fromScreen, initialTransaction } = route.params as {
     transactionId: string
     fromScreen?: string
@@ -639,7 +642,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       
       <ScrollView 
         style={styles.scrollView} 
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[5] }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <TransactionDetailsBodySkeleton />
@@ -796,7 +799,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.main} />
           }
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[5] }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Hero — white SectionCard with 64px tinted icon, title, amount, status pill. */}
@@ -1277,7 +1280,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
         {/* Bottom Actions — Send: Send again + Get help; Receive: Get help only. */}
         {transaction.transaction_type === 'send' ? (
-          <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom + spacing[4], spacing[6]) }]}>
+          <View style={[styles.bottomContainer, { paddingBottom: Math.max(footerPadding, spacing[6]) }]}>
             <View style={styles.bottomActionsRow}>
               <Pressable
                 android_ripple={ripple.primaryTint}
@@ -1310,7 +1313,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             </View>
           </View>
         ) : (
-          <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom + spacing[4], spacing[6]) }]}>
+          <View style={[styles.bottomContainer, { paddingBottom: Math.max(footerPadding, spacing[6]) }]}>
             <Pressable
               android_ripple={ripple.neutral}
               style={({ pressed }) => [

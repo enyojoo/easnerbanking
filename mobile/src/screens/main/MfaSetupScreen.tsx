@@ -18,6 +18,7 @@ import * as Clipboard from 'expo-clipboard'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ArrowLeft, CircleCheck, Copy } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import SkeletonLoader from '../../components/SkeletonLoader'
 import { Button, OtpCodeInput } from '../../components/ui'
 import { supabase } from '../../lib/supabase'
@@ -96,6 +97,7 @@ type MfaListSnapshot = { factors: TotpFactorLike[]; loaded: boolean }
 export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const { user } = useAuth()
   const insets = useSafeAreaInsets()
+  const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const navRoute = useRoute()
   const params = ((navRoute.params ?? route?.params) ?? {}) as MfaRouteParams
   const autoStartEnroll = params.autoStartEnroll === true
@@ -491,7 +493,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
           <ScrollView
             ref={scrollRef}
             style={styles.scrollContainer}
-            contentContainerStyle={{ paddingBottom: insets.bottom + spacing[5] }}
+            contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             // Avoid shifting the whole layout when the keyboard opens; the OTP row is already placed safely.

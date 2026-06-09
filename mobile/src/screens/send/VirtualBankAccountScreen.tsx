@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { NavigationProps } from '../../types'
 import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, motion, fontFamily } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
@@ -37,6 +38,8 @@ interface MockRecipient {
 
 export default function VirtualBankAccountScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const scrollBottomPadding = useScrollBottomPadding(spacing[5])
+  const footerPadding = useFixedFooterPadding(spacing[5])
   const { showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
@@ -266,7 +269,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
         <ScrollView 
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+          contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         >
           <Animated.View 
             style={[
@@ -371,7 +374,7 @@ export default function VirtualBankAccountScreen({ navigation, route }: Navigati
         </ScrollView>
 
         {/* Action Button */}
-        <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={[styles.bottomContainer, { paddingBottom: footerPadding }]}>
           <Pressable
            android_ripple={ripple.neutral}
             style={styles.confirmButton}

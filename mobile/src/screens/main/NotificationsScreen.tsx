@@ -25,9 +25,11 @@ import { apiPatch, apiPost } from '../../lib/apiClient'
 import { pushNotificationService } from '../../lib/pushNotificationService'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 export default function NotificationsScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const { user } = useAuth()
   const { showWarning } = useToast()
   const qc = useQueryClient()
@@ -184,7 +186,7 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
       <View style={styles.container}>
         <ScrollView
           style={styles.scrollContainer}
-          contentContainerStyle={{ paddingBottom: insets.bottom + spacing[5] }}
+          contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
           showsVerticalScrollIndicator={false}
         >
           <Animated.View

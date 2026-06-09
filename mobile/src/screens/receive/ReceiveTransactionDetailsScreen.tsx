@@ -12,12 +12,13 @@ import { ripple } from '../../lib/androidRipple'
 import { NavigationProps } from '../../types'
 import { useAuth } from '../../contexts/AuthContext'
 import { apiGet } from '../../lib/apiClient'
-import { useThemeColors, fontFamily } from '../../theme'
+import { useThemeColors, fontFamily, spacing } from '../../theme'
 import type { Colors } from '../../theme'
 import { CircleCheck, Clock } from 'lucide-react-native'
 import { PlainTwoColumnRowSkeleton } from '../../components/skeletons'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { formatMoneyDisplay } from '@easner/shared'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 interface ReceiveTransaction {
   id: string
@@ -219,6 +220,7 @@ function createReceiveTransactionDetailsStyles(palette: Colors) {
 }
 
 function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps) {
+  const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const palette = useThemeColors()
   const styles = useMemo(() => createReceiveTransactionDetailsStyles(palette), [palette])
   const { userProfile } = useAuth()
@@ -359,7 +361,10 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
 
   return (
     <ScreenWrapper>
-      <ScrollView style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
+      >
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Transaction Details</Text>
           <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>

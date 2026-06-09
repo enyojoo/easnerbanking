@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { WebAwareModal } from '../../components/WebAwareModal'
 import SkeletonLoader from '../../components/SkeletonLoader'
 import { CachedImage } from '../../components/CachedImage'
@@ -149,6 +150,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     maxSize: 114,
   })
   const insets = useSafeAreaInsets()
+  const footerPadding = useFixedFooterPadding(spacing[4])
   const { userProfile, refreshUserProfile } = useAuth()
   const { showError, showInfo } = useToast()
   const qc = useQueryClient()
@@ -1356,7 +1358,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           }}
           style={[
             styles.bottomContainer,
-            { paddingTop: ctaTopPadding, paddingBottom: insets.bottom + spacing[4] },
+            { paddingTop: ctaTopPadding, paddingBottom: footerPadding },
           ]}
         >
           {!tier1Ok ? (
@@ -1685,7 +1687,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           nativePanelStyle={{
             height: Math.min(windowHeight * 0.78, 680),
             minHeight: Math.min(windowHeight * 0.58, 520),
-            paddingBottom: Math.max(insets.bottom, 20),
+            paddingBottom: footerPadding,
           }}
           webPanelStyle={{
             maxHeight: Math.min(windowHeight * 0.78, 680),
@@ -1898,7 +1900,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           visible={showPurposePicker}
           onRequestClose={() => setShowPurposePicker(false)}
           compact
-          nativePanelStyle={{ maxHeight: windowHeight * 0.6, paddingBottom: insets.bottom }}
+          nativePanelStyle={{ maxHeight: windowHeight * 0.6, paddingBottom: footerPadding }}
           webPanelStyle={{ maxHeight: windowHeight * 0.6 }}
         >
               <Text style={styles.modalTitle}>Payment purpose</Text>

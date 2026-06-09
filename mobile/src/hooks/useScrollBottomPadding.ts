@@ -3,7 +3,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import { layout, spacing } from '../theme'
 
-/** Bottom padding for scroll `contentContainerStyle` — accounts for tab bar on native / web phone. */
+/** Primary CTA + footer chrome height for scroll clearance above fixed footers. */
+export const FIXED_FOOTER_SCROLL_CLEARANCE = 72
+
+/**
+ * Bottom padding for scroll `contentContainerStyle`.
+ * Shell web: compact (DesktopShell already pads). Native / phone web: tab bar + safe area.
+ */
 export function useScrollBottomPadding(extra: number = spacing[4]): number {
   const insets = useSafeAreaInsets()
   const { showSidebarShell } = useResponsiveLayout()
@@ -17,4 +23,39 @@ export function useScrollBottomPadding(extra: number = spacing[4]): number {
   }
 
   return insets.bottom + layout.tabBarHeight + extra
+}
+
+/** Bottom inset for a fixed footer bar container. */
+export function useFixedFooterPadding(extra: number = spacing[4]): number {
+  const insets = useSafeAreaInsets()
+  const { showSidebarShell } = useResponsiveLayout()
+
+  if (showSidebarShell) {
+    return spacing[4]
+  }
+
+  if (Platform.OS === 'web') {
+    return extra
+  }
+
+  return insets.bottom + extra
+}
+
+/** Scroll/list padding when content sits above a fixed bottom CTA. */
+export function useScrollPaddingAboveFooter(
+  footerHeight: number = FIXED_FOOTER_SCROLL_CLEARANCE,
+  extra: number = spacing[4],
+): number {
+  const insets = useSafeAreaInsets()
+  const { showSidebarShell } = useResponsiveLayout()
+
+  if (showSidebarShell) {
+    return footerHeight + spacing[4]
+  }
+
+  if (Platform.OS === 'web') {
+    return footerHeight + extra
+  }
+
+  return insets.bottom + layout.tabBarHeight + footerHeight + extra
 }

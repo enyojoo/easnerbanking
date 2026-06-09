@@ -67,6 +67,7 @@ import {
   TIER2_COMPLETE_PLACEHOLDER,
   TIER3_COMPLETE_PLACEHOLDER,
 } from '../../lib/compliance'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 type TierBadge = { label: string; tone: 'green' | 'yellow' }
 
@@ -87,6 +88,7 @@ function tierBadgeForProfile(
 }
 
 function MoreContent({ navigation }: NavigationProps) {
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
   const { user, userProfile, refreshUserProfile, signOut, loading: authLoading } = useAuth()
   const { showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
@@ -394,7 +396,7 @@ function MoreContent({ navigation }: NavigationProps) {
 
         <ScrollView
           style={styles.scrollContainer}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.content}>
@@ -662,9 +664,7 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: spacing[5],
-  },
+  scrollContent: {},
   header: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],

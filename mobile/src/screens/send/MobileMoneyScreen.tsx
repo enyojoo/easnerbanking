@@ -9,7 +9,6 @@ import {
   Animated,
   Keyboard,
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ArrowLeft, Check, Copy, Smartphone } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -35,6 +34,7 @@ import { completeManualSendOrder, useManualPayInScreen } from '../../hooks/use-m
 import { ManualSendReceiptUpload } from '../../components/send/ManualSendReceiptUpload'
 import type { ManualQuoteResponse } from '../../lib/manual-send-api'
 import { haptics } from '../../lib/haptics'
+import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
 
 interface MockRecipient {
   id: string
@@ -45,7 +45,8 @@ interface MockRecipient {
 }
 
 export default function MobileMoneyScreen({ navigation, route }: NavigationProps) {
-  const insets = useSafeAreaInsets()
+  const listBottomPadding = useScrollPaddingAboveFooter()
+  const footerPadding = useFixedFooterPadding(20)
   const { showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
   const [phoneNumber, setPhoneNumber] = useState('')
@@ -204,7 +205,7 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
         <ScrollView 
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+          contentContainerStyle={{ paddingBottom: listBottomPadding }}
         >
           <Animated.View 
             style={[
@@ -310,7 +311,7 @@ export default function MobileMoneyScreen({ navigation, route }: NavigationProps
 
 
         {/* Action Button */}
-        <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={[styles.bottomContainer, { paddingBottom: footerPadding }]}>
           <Pressable
            android_ripple={ripple.neutral}
             style={[
