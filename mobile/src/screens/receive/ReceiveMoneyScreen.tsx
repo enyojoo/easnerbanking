@@ -516,24 +516,37 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     }
   }
 
-  const renderCopyableField = (label: string, value: string, key: string) => (
-    <View style={styles.fieldContainer}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable
-       android_ripple={ripple.neutral}
-        style={styles.fieldValueContainer}
-        onPress={() => handleCopy(value, key)} >
-        <Text style={styles.fieldValue}>{value}</Text>
-        <View style={styles.copyButton}>
-          {copiedStates[key] ? (
-            <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
-          ) : (
-            <Copy size={18} color={colors.text.secondary} strokeWidth={2} />
-          )}
-        </View>
-      </Pressable>
-    </View>
-  )
+  const shouldWrapCopyableValue = (value: string, key: string) =>
+    key === 'stablecoinAddress' || key === 'iban' || key === 'bankAddress' || value.length > 28
+
+  const renderCopyableField = (label: string, value: string, key: string) => {
+    const wrapValue = shouldWrapCopyableValue(value, key)
+
+    return (
+      <View style={styles.fieldContainer}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <Pressable
+          android_ripple={ripple.neutral}
+          style={[styles.fieldValueContainer, wrapValue && styles.fieldValueContainerWrap]}
+          onPress={() => handleCopy(value, key)}
+        >
+          <Text
+            style={[styles.fieldValue, wrapValue && styles.fieldValueWrap]}
+            {...(wrapValue ? {} : { numberOfLines: 1 })}
+          >
+            {value}
+          </Text>
+          <View style={styles.copyButton}>
+            {copiedStates[key] ? (
+              <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
+            ) : (
+              <Copy size={18} color={colors.text.secondary} strokeWidth={2} />
+            )}
+          </View>
+        </Pressable>
+      </View>
+    )
+  }
 
   const renderDetailActions = () => (
     <View style={styles.detailActionsRow}>
@@ -960,17 +973,20 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[2],
+    minWidth: 0,
   },
   section: {
     marginBottom: spacing[5],
+    minWidth: 0,
+  },
+  fieldContainer: {
+    marginBottom: spacing[3],
+    minWidth: 0,
   },
   sectionTitle: {
     ...textStyles.titleMedium,
     color: colors.text.primary,
     fontFamily: fontFamily.semibold,
-    marginBottom: spacing[3],
-  },
-  fieldContainer: {
     marginBottom: spacing[3],
   },
   fieldLabel: {
@@ -982,16 +998,35 @@ const styles = StyleSheet.create({
   fieldValueContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 0,
     ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
   },
+  fieldValueContainerWrap: {
+    alignItems: 'flex-start',
+    paddingVertical: spacing[3],
+    borderRadius: borderRadius.xl,
+  },
   fieldValue: {
     flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     ...textStyles.bodyLarge,
     color: colors.text.primary,
     fontFamily: fontFamily.medium,
     fontVariant: ['tabular-nums'],
+  },
+  fieldValueWrap: {
+    fontFamily: fontFamily.regular,
+    lineHeight: 22,
+    ...Platform.select({
+      web: {
+        wordBreak: 'break-all',
+        overflowWrap: 'anywhere',
+      },
+      default: {},
+    }),
   },
   copyButton: {
     width: 32,
@@ -1000,6 +1035,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: spacing[2],
+    flexShrink: 0,
   },
   detailActionsRow: {
     flexDirection: 'row',
