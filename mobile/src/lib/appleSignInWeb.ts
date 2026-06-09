@@ -3,6 +3,12 @@ import Constants from 'expo-constants'
 const APPLE_SCRIPT_SRC =
   'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js'
 
+/** Default Services ID — must exist in Apple Developer (Identifiers → Services IDs). */
+export const DEFAULT_APPLE_WEB_CLIENT_ID = 'com.easner.mobile.web'
+
+const IOS_BUNDLE_ID =
+  Constants.expoConfig?.ios?.bundleIdentifier?.trim() || 'com.easner.mobile'
+
 type AppleUserName = {
   firstName?: string
   lastName?: string
@@ -25,6 +31,7 @@ type AppleAuthResponse = {
 
 type AppleAuthError = {
   error?: string
+  error_description?: string
 }
 
 declare global {
@@ -51,16 +58,53 @@ export function getAppleWebClientId(): string {
   return (
     extra?.appleWebClientId?.trim() ||
     process.env.EXPO_PUBLIC_APPLE_WEB_CLIENT_ID?.trim() ||
-    ''
+    DEFAULT_APPLE_WEB_CLIENT_ID
   )
 }
 
-async function sha256Hex(value: string): Promise<string> {
-  const data = new TextEncoder().encode(value)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
+export function getAppleWebRedirectUri(): string {
+  if (typeof window === 'undefined') {
+    return 'https://app.easner.com/auth/callback'
+  }
+
+  const extra = Constants.expoConfig?.extra as { appleWebRedirectUri?: string } | undefined
+  const override =
+    extra?.appleWebRedirectUri?.trim() ||
+    process.env.EXPO_PUBLIC_APPLE_WEB_REDIRECT_URI?.trim()
+
+  if (override) return override.replace(/\/$/, '')
+
+  return `${window.location.origin}/auth/callback`.replace(/\/$/, '')
+}
+
+function validateAppleWebClientId(clientId: string): void {
+  if (clientId === IOS_BUNDLE_ID) {
+    throw new Error(
+      `Apple web sign-in must use your Services ID (e.g. ${DEFAULT_APPLE_WEB_CLIENT_ID}), not the iOS bundle ID (${IOS_BUNDLE_ID}). Update EXPO_PUBLIC_APPLE_WEB_CLIENT_ID on Vercel.`,
+    )
+  }
+}
+
+function formatAppleAuthFailure(error: unknown, clientId: string, redirectURI: string): Error {
+  const appleError = error as AppleAuthError | null
+  const code = appleError?.error
+  const description = appleError?.error_description
+
+  if (code === 'invalid_client') {
+    return new Error(
+      `Apple rejected the web client ID "${clientId}". In Apple Developer → Identifiers → Services IDs, create/enable Sign in with Apple for that Services ID (linked to ${IOS_BUNDLE_ID}), set domain app.easner.com and return URL ${redirectURI}, then add the same Services ID under Supabase Auth → Apple → Client IDs.`,
+    )
+  }
+
+  if (code === 'invalid_request' && description?.toLowerCase().includes('redirect')) {
+    return new Error(
+      `Apple rejected the redirect URI "${redirectURI}". Add this exact return URL to your Services ID in Apple Developer (no trailing slash).`,
+    )
+  }
+
+  if (description) return new Error(description)
+  if (error instanceof Error) return error
+  return new Error('Unable to continue with Apple.')
 }
 
 function loadAppleIdScript(): Promise<void> {
@@ -111,11 +155,7 @@ function formatAppleFullName(name?: AppleUserName): string | undefined {
  */
 export async function signInWithAppleWeb(): Promise<AppleWebSignInResult> {
   const clientId = getAppleWebClientId()
-  if (!clientId) {
-    throw new Error(
-      'Apple web sign-in is not configured. Set EXPO_PUBLIC_APPLE_WEB_CLIENT_ID to your Apple Services ID and add it under Supabase Auth → Apple → Client IDs.',
-    )
-  }
+  validateAppleWebClientId(clientId)
 
   if (typeof window === 'undefined') {
     throw new Error('Sign in with Apple is only available in a browser.')
@@ -124,15 +164,14 @@ export async function signInWithAppleWeb(): Promise<AppleWebSignInResult> {
   await loadAppleIdScript()
 
   const rawNonce = crypto.randomUUID()
-  const hashedNonce = await sha256Hex(rawNonce)
-  const redirectURI = `${window.location.origin}/auth/callback`
+  const redirectURI = getAppleWebRedirectUri()
 
   window.AppleID!.auth.init({
     clientId,
     scope: 'name email',
     redirectURI,
     usePopup: true,
-    nonce: hashedNonce,
+    nonce: rawNonce,
   })
 
   let response: AppleAuthResponse
@@ -142,7 +181,7 @@ export async function signInWithAppleWeb(): Promise<AppleWebSignInResult> {
     if (isAppleSignInCancelled(error)) {
       throw new Error('ERR_APPLE_SIGN_IN_CANCELED')
     }
-    throw error instanceof Error ? error : new Error('Unable to continue with Apple.')
+    throw formatAppleAuthFailure(error, clientId, redirectURI)
   }
 
   const idToken = response.authorization?.id_token

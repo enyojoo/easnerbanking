@@ -169,7 +169,9 @@ module.exports = ({ config }) => {
 
   const intercomKeysReady =
     Boolean(intercomAppId && intercomIosApiKey && intercomAndroidApiKey)
-  const appleWebClientId = process.env.EXPO_PUBLIC_APPLE_WEB_CLIENT_ID?.trim() || ''
+  const appleWebClientId =
+    process.env.EXPO_PUBLIC_APPLE_WEB_CLIENT_ID?.trim() || 'com.easner.mobile.web'
+  const appleWebRedirectUri = process.env.EXPO_PUBLIC_APPLE_WEB_REDIRECT_URI?.trim() || ''
   const googleServicesFile =
     process.env.EXPO_ANDROID_GOOGLE_SERVICES_FILE?.trim() ||
     (fs.existsSync(path.join(__dirname, 'google-services.json'))
@@ -257,7 +259,8 @@ module.exports = ({ config }) => {
       easetagLedgerP2pEnabled:
         process.env.EXPO_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true' ||
         process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED === 'true',
-      ...(appleWebClientId ? { appleWebClientId } : {}),
+      appleWebClientId,
+      ...(appleWebRedirectUri ? { appleWebRedirectUri } : {}),
     },
   }
 
