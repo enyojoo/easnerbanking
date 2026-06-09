@@ -266,20 +266,29 @@ function CardActivitySection({
 export default function CardScreen({ navigation: _navigation }: NavigationProps) {
   const { mode, showSidebarShell, width: layoutWidth, sidebarWidth } = useResponsiveLayout()
   const { width: windowWidth } = useWindowDimensions()
-  const scrollBottomPadding = useScrollBottomPadding(spacing[8])
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
   const wideLayout = showSidebarShell && mode === 'desktop'
   const shellLayout = showSidebarShell && !wideLayout
   const centerCardLayout = !showSidebarShell && (mode === 'tablet' || mode === 'desktop')
   const showAddCardPill = shellLayout || wideLayout
 
-  const viewportWidth = shellLayout ? layoutWidth - sidebarWidth - SHELL_MAIN_PADDING * 2 : windowWidth
+  const mainContentWidth = shellLayout
+    ? layoutWidth - sidebarWidth - SHELL_MAIN_PADDING * 2
+    : windowWidth
+  const carouselLaneWidth = shellLayout ? mainContentWidth - spacing[5] * 2 : mainContentWidth
 
   const CARD_ASPECT = 85.6 / 53.98
   const CARD_WIDTH = wideLayout
     ? DESKTOP_CARD_MAX_WIDTH
-    : Math.min(viewportWidth - spacing[5] * 2, DESKTOP_CARD_MAX_WIDTH)
+    : Math.min(
+        shellLayout ? carouselLaneWidth : mainContentWidth - spacing[5] * 2,
+        DESKTOP_CARD_MAX_WIDTH,
+      )
   const CARD_HEIGHT = Math.round(CARD_WIDTH / CARD_ASPECT)
   const cardStride = CARD_WIDTH + CARD_SPACING * 2
+  const carouselSidePadding = shellLayout
+    ? Math.max(0, (carouselLaneWidth - CARD_WIDTH) / 2)
+    : (mainContentWidth - CARD_WIDTH) / 2
 
   const scrollX = useRef(new Animated.Value(0)).current
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -299,8 +308,6 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
     <Animated.View
       style={[
         styles.header,
-        shellLayout && styles.headerShell,
-        wideLayout && styles.headerDesktop,
         {
           opacity: headerAnim,
           transform: [
@@ -315,7 +322,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
       ]}
     >
       <View style={styles.headerContent}>
-        <View style={styles.headerTitleBlock}>
+        <View style={styles.headerTitleWrap}>
           <Text style={styles.title}>Cards</Text>
         </View>
         <Pressable
@@ -354,7 +361,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
         decelerationRate="fast"
         contentContainerStyle={[
           styles.carouselContent,
-          { paddingHorizontal: (viewportWidth - CARD_WIDTH) / 2, gap: CARD_SPACING * 2 },
+          { paddingHorizontal: carouselSidePadding, gap: CARD_SPACING * 2 },
         ]}
         contentInsetAdjustmentBehavior="never"
       >
@@ -407,7 +414,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
       <ScreenWrapper>
         <View style={styles.desktopRoot}>
           {header}
-          <Animated.View style={[styles.desktopBody, animatedBodyStyle]}>
+          <Animated.View style={[styles.desktopBody, styles.shellContentInset, animatedBodyStyle]}>
             <CardsDesktopSplit
               sidebar={
                 <View style={styles.desktopSidebarInner}>
@@ -434,8 +441,10 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
             showsVerticalScrollIndicator={false}
           >
             <Animated.View style={[styles.scrollInner, animatedBodyStyle]}>
-              {cardCarousel}
-              <DesktopActionButtons onPress={actionsComingSoon} />
+              <View style={styles.shellContentInset}>
+                {cardCarousel}
+                <DesktopActionButtons onPress={actionsComingSoon} />
+              </View>
               <CardActivitySection wide={false} />
             </Animated.View>
           </ScrollView>
@@ -468,7 +477,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
   },
   centeredContainer: {
     maxWidth: 480,
@@ -478,7 +487,7 @@ const styles = StyleSheet.create({
   desktopRoot: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.semantic.background,
     ...Platform.select({
       web: {
         height: '100%',
@@ -506,27 +515,19 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
-    paddingBottom: spacing[2],
-  },
-  headerShell: {
     paddingBottom: spacing[3],
-  },
-  headerDesktop: {
-    paddingHorizontal: 0,
-    paddingTop: 0,
-    paddingBottom: spacing[6],
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: spacing[3],
   },
-  headerTitleBlock: {
+  headerTitleWrap: {
     flex: 1,
-    minWidth: 0,
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
-    paddingRight: spacing[3],
+  },
+  shellContentInset: {
+    paddingHorizontal: spacing[5],
   },
   title: {
     ...textStyles.headlineLarge,
