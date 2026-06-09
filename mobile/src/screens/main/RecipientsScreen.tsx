@@ -124,6 +124,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const recipients = queryRecipients.length > 0 ? queryRecipients : cachedRecipients
   const recipientsLoading = recipientsQuery.isPending && recipients.length === 0
   const insets = useSafeAreaInsets()
+  const listBottomPadding = insets.bottom + 100
   const [uiRecipients, setUiRecipients] = useState<Recipient[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -1165,105 +1166,98 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       </View>
         </Animated.View>
 
-        <ScrollView 
-          style={styles.scrollView}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 100 }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+        <Animated.View
+          style={[
+            styles.searchContainer,
+            {
+              opacity: contentAnim,
+              transform: [{
+                translateY: contentAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [motion.screenEnterTranslateY, 0],
+                })
+              }]
+            }
+          ]}
         >
-          {/* Search Bar */}
-          <Animated.View 
-            style={[
-              styles.searchContainer,
-              {
-                opacity: contentAnim,
-                transform: [{
-                  translateY: contentAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [motion.screenEnterTranslateY, 0],
-                  })
-                }]
-              }
-            ]}
-          >
-            <View style={styles.searchWrapper}>
-              <Search size={18} color={colors.primary.main} strokeWidth={2} />
-              <TextInput
-                style={styles.searchInput}
-                value={searchTerm}
-                onChangeText={setSearchTerm}
-                placeholder="Search recipients..."
-                placeholderTextColor={colors.text.secondary}
-                returnKeyType="done"
-                onSubmitEditing={() => Keyboard.dismiss()}
-              />
-              {searchTerm.length > 0 && (
-                <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
-                  <CircleX size={18} color={colors.primary.main} strokeWidth={2} />
-                </Pressable>
-              )}
-            </View>
-          </Animated.View>
-
-          {/* Add New Recipient Button */}
-          {/* Recipients List - No Grouping */}
-          <Animated.View
-            style={[
-              styles.recipientsTray,
-              {
-                opacity: contentAnim,
-                transform: [{
-                  translateY: contentAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [motion.screenEnterTranslateY, 0],
-                  })
-                }]
-              }
-            ]}
-          >
-            {recipientsLoading ? (
-              <View>
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <ListRowSkeleton key={i} variant="recipient" showDivider={i < 5} />
-                ))}
-              </View>
-            ) : filteredRecipients.length > 0 ? (
-              <FlashList
-                data={filteredRecipients}
-                renderItem={renderRecipient}
-                keyExtractor={(item) => item.id}
-                keyboardShouldPersistTaps="handled"
-                scrollEnabled={false}
-                showsVerticalScrollIndicator={false}
-                estimatedItemSize={112}
-                removeClippedSubviews={true}
-                drawDistance={400}
-              />
-            ) : (
-              <EmptyState
-                icon={Users}
-                title={searchTerm.trim() ? 'No matches' : 'No recipients found'}
-                message={
-                  searchTerm.trim() ? 'Try another search' : 'Add a new recipient to get started'
-                }
-                action={
-                  !searchTerm.trim()
-                    ? {
-                        label: 'Add recipient',
-                        onPress: () => {
-                          resetForm()
-                          setShowRecipientTypeModal(true)
-                        },
-                      }
-                    : undefined
-                }
-              />
+          <View style={styles.searchWrapper}>
+            <Search size={18} color={colors.primary.main} strokeWidth={2} />
+            <TextInput
+              style={styles.searchInput}
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholder="Search recipients..."
+              placeholderTextColor={colors.text.secondary}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
+            {searchTerm.length > 0 && (
+              <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
+                <CircleX size={18} color={colors.primary.main} strokeWidth={2} />
+              </Pressable>
             )}
-          </Animated.View>
-        </ScrollView>
+          </View>
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.recipientsTray,
+            styles.listTray,
+            {
+              opacity: contentAnim,
+              transform: [{
+                translateY: contentAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [motion.screenEnterTranslateY, 0],
+                })
+              }]
+            }
+          ]}
+        >
+          {recipientsLoading ? (
+            <View>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <ListRowSkeleton key={i} variant="recipient" showDivider={i < 5} />
+              ))}
+            </View>
+          ) : (
+            <FlashList
+              data={filteredRecipients}
+              renderItem={renderRecipient}
+              keyExtractor={(item) => item.id}
+              style={styles.list}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              estimatedItemSize={112}
+              removeClippedSubviews
+              drawDistance={400}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.main} />
+              }
+              contentContainerStyle={{ paddingBottom: listBottomPadding }}
+              ListEmptyComponent={
+                <EmptyState
+                  icon={Users}
+                  title={searchTerm.trim() ? 'No matches' : 'No recipients found'}
+                  message={
+                    searchTerm.trim() ? 'Try another search' : 'Add a new recipient to get started'
+                  }
+                  action={
+                    !searchTerm.trim()
+                      ? {
+                          label: 'Add recipient',
+                          onPress: () => {
+                            resetForm()
+                            setShowRecipientTypeModal(true)
+                          },
+                        }
+                      : undefined
+                  }
+                />
+              }
+            />
+          )}
+        </Animated.View>
 
         {/* Add new recipient Button - Fixed at bottom */}
         <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + spacing[4] }]}>
@@ -2395,10 +2389,14 @@ const styles = StyleSheet.create({
   recipientsTray: {
     ...surfaceFrameStyle(colors),
     marginHorizontal: spacing[5],
-    marginBottom: spacing[4],
     overflow: 'hidden',
   },
-  scrollView: {
+  listTray: {
+    flex: 1,
+    minHeight: 0,
+    marginBottom: 0,
+  },
+  list: {
     flex: 1,
   },
   recipientItem: {

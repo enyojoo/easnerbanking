@@ -4,10 +4,12 @@ import {
   type QueryClient,
   type UseQueryOptions,
 } from '@tanstack/react-query'
+import { Platform } from 'react-native'
 import { qk, type Scope, type TxFilters, pollingIntervalFor } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
+import { useDocumentVisibility } from '../useDocumentVisibility'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import {
   readCachedTransactionDetail,
@@ -126,7 +128,7 @@ export function transactionDetailQueryOptions(
     // Global mobile client sets refetchOnMount: false — override here so cached
     // detail renders instantly, then enrichment refreshes in the background.
     refetchOnMount: 'always',
-    refetchOnReconnect: 'always',
+    refetchOnReconnect: false,
     refetchOnWindowFocus: false,
   }
 }
@@ -188,7 +190,9 @@ export function prefetchRecentTransactionDetailsInBackground(
 export function useTransactionsList(filters: TxFilters = {}, pageSize = TRANSACTIONS_LEDGER_PAGE_SIZE) {
   const { scope } = useScope()
   const realtimeHealth = useRealtimeHealth()
+  const tabVisible = useDocumentVisibility()
   const listFilters: TxFilters = { ...filters, limit: pageSize }
+  const pollActive = Platform.OS === 'web' ? tabVisible : true
   return useInfiniteQuery({
     queryKey: scope ? qk.transactions.list(scope, listFilters) : ['transactions', 'disabled'],
     enabled: Boolean(scope),
@@ -211,7 +215,7 @@ export function useTransactionsList(filters: TxFilters = {}, pageSize = TRANSACT
     staleTime: 90_000,
     gcTime: 30 * 60_000,
     refetchOnWindowFocus: false,
-    refetchInterval: pollingIntervalFor('operational', realtimeHealth),
+    refetchInterval: pollActive ? pollingIntervalFor('operational', realtimeHealth) : false,
     refetchIntervalInBackground: false,
     meta: { safePersist: true, freshness: 'operational' },
   })

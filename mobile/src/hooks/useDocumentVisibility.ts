@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
 /**
- * True when the browser tab is visible. Used on Expo web to pause focus-driven
- * refetches while backgrounded (business parity).
+ * True when the browser tab is visible. Pauses polling-heavy refetch intervals
+ * while backgrounded (business parity).
  */
 export function useDocumentVisibility(): boolean {
   const [visible, setVisible] = useState(() => {

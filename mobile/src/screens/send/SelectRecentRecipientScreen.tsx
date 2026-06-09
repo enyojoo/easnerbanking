@@ -9,7 +9,6 @@ import {
   Platform,
   Keyboard,
   ActivityIndicator,
-  ScrollView,
 } from 'react-native'
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { FlashList } from '@shopify/flash-list'
@@ -123,6 +122,7 @@ const getInitials = (name: string): string => {
 
 export default function SelectRecentRecipientScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const listBottomPadding = insets.bottom + 100
   const { user, userProfile } = useAuth()
   const { showError } = useToast()
   const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
@@ -179,7 +179,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
 
-  /** Hub search (@mode) live lookup ÔøΩ separate from add-recipient modal. */
+  /** Hub search (@mode) live lookup ù separate from add-recipient modal. */
   const [hubSearchEasenet, setHubSearchEasenet] = useState<{
     easetag: string
     fullName: string
@@ -447,7 +447,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       void prefetchNoahSendExchangeRates(qc, recipient.currency)
     }
     // Use navigate (not push) so re-entering amount after "Change recipient" does not stack duplicate
-    // SendAmount screens ÔøΩ back should be hub once, then dashboard.
+    // SendAmount screens ù back should be hub once, then dashboard.
     navigation.navigate('SendAmount' as never, {
       recipient,
       fromSelectRecentRecipient: true,
@@ -825,7 +825,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
        android_ripple={ripple.neutral}
         style={[styles.recipientItem, !isLast && styles.recipientItemDivider]}
         onPressIn={() => {
-          // Start the rate fetch the instant the finger touches the row ÔøΩ same DB rows as quote.
+          // Start the rate fetch the instant the finger touches the row ù same DB rows as quote.
           if (isWalletSendRecipient(item)) {
             const net = resolveRecipientWalletNetwork(item)
             if (net) void prefetchCryptoSendExchangeRates(qc, item.currency, net)
@@ -853,144 +853,118 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     )
   }
 
-  const listHeader = (
-    <>
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            opacity: headerAnim,
-            transform: [
-              {
-                translateY: headerAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-motion.screenEnterTranslateY, 0],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <Pressable
-         android_ripple={ripple.neutral}
-          onPress={() => {
-            navigation.navigate('MainTabs' as never)
-          }}
-          style={styles.backButton}
-        >
-          <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-        </Pressable>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Send Money</Text>
-        </View>
-      </Animated.View>
-
-      <Animated.View
-        style={[
-          styles.searchContainer,
-          {
-            opacity: contentAnim,
-            transform: [
-              {
-                translateY: contentAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [motion.screenEnterTranslateY, 0],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <View style={styles.searchWrapper}>
-          <Search size={18} color={colors.primary.main} strokeWidth={2} />
-          <TextInput
-            style={styles.searchInput}
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-            placeholder="Search @easetag or recipients"
-            placeholderTextColor={colors.text.secondary}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="done"
-            onSubmitEditing={() => Keyboard.dismiss()}
-          />
-          {searchTerm.trim().startsWith('@') && hubSearchLoading ? (
-            <ActivityIndicator size="small" color={colors.primary.main} />
-          ) : null}
-          {searchTerm.length > 0 && !(searchTerm.trim().startsWith('@') && hubSearchLoading) ? (
-            <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
-              <CircleX size={18} color={colors.primary.main} strokeWidth={2} />
-            </Pressable>
-          ) : null}
-        </View>
-        {searchTerm.trim().startsWith('@') && hubSearchError && !hubSearchLoading && !hubVirtualRecipient ? (
-          <Text style={styles.searchErrorText}>{hubSearchError}</Text>
-        ) : null}
-      </Animated.View>
-    </>
-  )
-
   const screenBody = (
     <>
       <View style={styles.container}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingBottom: insets.bottom + 100,
-          }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+        <Animated.View
+          style={[
+            styles.header,
+            {
+              opacity: headerAnim,
+              transform: [
+                {
+                  translateY: headerAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-motion.screenEnterTranslateY, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
         >
-          {listHeader}
-          <Animated.View
-            style={[
-              styles.recipientsTray,
-              {
-                opacity: contentAnim,
-                transform: [
-                  {
-                    translateY: contentAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [motion.screenEnterTranslateY, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
+          <Pressable
+           android_ripple={ripple.neutral}
+            onPress={() => {
+              navigation.navigate('MainTabs' as never)
+            }}
+            style={styles.backButton}
           >
-            {recipientsLoading && recipients.length === 0 ? (
-              <View>
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <ListRowSkeleton key={i} variant="recipient" showDivider={i < 5} />
-                ))}
-              </View>
-            ) : sendHubFlatListData.length > 0 ? (
-              <FlashList
-                data={sendHubFlatListData}
-                renderItem={renderRecipient}
-                keyExtractor={(item) => item.id}
-                keyboardShouldPersistTaps="handled"
-                scrollEnabled={false}
-                showsVerticalScrollIndicator={false}
-                estimatedItemSize={112}
-                removeClippedSubviews
-                drawDistance={400}
-              />
-            ) : (
-              <Animated.View
-                style={{
-                  opacity: contentAnim,
-                  transform: [
-                    {
-                      translateY: contentAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [motion.screenEnterTranslateY, 0],
-                      }),
-                    },
-                  ],
-                }}
-              >
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
+          </Pressable>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Send Money</Text>
+          </View>
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.searchContainer,
+            {
+              opacity: contentAnim,
+              transform: [
+                {
+                  translateY: contentAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [motion.screenEnterTranslateY, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.searchWrapper}>
+            <Search size={18} color={colors.primary.main} strokeWidth={2} />
+            <TextInput
+              style={styles.searchInput}
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholder="Search @easetag or recipients"
+              placeholderTextColor={colors.text.secondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
+            {searchTerm.trim().startsWith('@') && hubSearchLoading ? (
+              <ActivityIndicator size="small" color={colors.primary.main} />
+            ) : null}
+            {searchTerm.length > 0 && !(searchTerm.trim().startsWith('@') && hubSearchLoading) ? (
+              <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
+                <CircleX size={18} color={colors.primary.main} strokeWidth={2} />
+              </Pressable>
+            ) : null}
+          </View>
+          {searchTerm.trim().startsWith('@') && hubSearchError && !hubSearchLoading && !hubVirtualRecipient ? (
+            <Text style={styles.searchErrorText}>{hubSearchError}</Text>
+          ) : null}
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.recipientsTray,
+            styles.listTray,
+            {
+              opacity: contentAnim,
+              transform: [
+                {
+                  translateY: contentAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [motion.screenEnterTranslateY, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          {recipientsLoading && recipients.length === 0 ? (
+            <View>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <ListRowSkeleton key={i} variant="recipient" showDivider={i < 5} />
+              ))}
+            </View>
+          ) : (
+            <FlashList
+              data={sendHubFlatListData}
+              renderItem={renderRecipient}
+              keyExtractor={(item) => item.id}
+              style={styles.list}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              estimatedItemSize={112}
+              removeClippedSubviews
+              drawDistance={400}
+              contentContainerStyle={{ paddingBottom: listBottomPadding }}
+              ListEmptyComponent={
                 <EmptyState
                   icon={Users}
                   title={searchTerm.trim() ? 'No matches' : 'No recipients found'}
@@ -1005,10 +979,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       : undefined
                   }
                 />
-              </Animated.View>
-            )}
-          </Animated.View>
-        </ScrollView>
+              }
+            />
+          )}
+        </Animated.View>
 
         {/* Add a recipient Button - Fixed at bottom */}
         <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + spacing[4] }]}>
@@ -2010,12 +1984,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background.primary,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingTop: 0,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2104,12 +2072,19 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontFamily: fontFamily.medium,
   },
-  /** White SectionCard frame ÔøΩ flat rows with hairline dividers (More-screen parity). */
+  /** White SectionCard frame ù flat rows with hairline dividers (More-screen parity). */
   recipientsTray: {
     ...surfaceFrameStyle(colors),
     marginHorizontal: spacing[5],
-    marginBottom: spacing[4],
     overflow: 'hidden',
+  },
+  listTray: {
+    flex: 1,
+    minHeight: 0,
+    marginBottom: 0,
+  },
+  list: {
+    flex: 1,
   },
   recipientItem: {
     paddingHorizontal: spacing[4],
@@ -2213,7 +2188,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
   },
-  /** Draft Easenet row ÔøΩ top-trailing corner of the preview block (clear of the chevron). */
+  /** Draft Easenet row ù top-trailing corner of the preview block (clear of the chevron). */
   newRecipientBadgeCorner: {
     position: 'absolute',
     top: 0,

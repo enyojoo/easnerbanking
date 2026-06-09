@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useCallback, useMemo, ReactNode, useEffect, useRef, useState } from 'react'
-import { AppState } from 'react-native'
+import { AppState, Platform } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk } from '@easner/shared'
 import { useWalletBalances } from '../hooks/queries/use-wallets'
@@ -130,14 +130,17 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
         if (parsed) applySnapshot(parsed)
       })
     }
-    const appSub = AppState.addEventListener('change', (status) => {
-      if (status === 'active') syncFromDisk()
-    })
+    const appSub =
+      Platform.OS === 'web'
+        ? null
+        : AppState.addEventListener('change', (status) => {
+            if (status === 'active') syncFromDisk()
+          })
     const offLock = registerAppLockListener((event) => {
       if (event === 'unlocked') syncFromDisk()
     })
     return () => {
-      appSub.remove()
+      appSub?.remove()
       offLock()
     }
   }, [applySnapshot, scope])
@@ -175,6 +178,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
         await qc.refetchQueries({ queryKey: qk.wallets.root(scope), type: 'active' })
         return
       }
+      if (!query.isStale) return
       await query.refetch()
     },
     [qc, scope, query],

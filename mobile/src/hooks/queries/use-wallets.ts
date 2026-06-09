@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { AppState, type AppStateStatus } from 'react-native'
+import { AppState, Platform, type AppStateStatus } from 'react-native'
 import { useEffect, useRef, useState } from 'react'
+import { useDocumentVisibility } from '../useDocumentVisibility'
 import { markRecentMoneyActivity, pollingIntervalFor, qk } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
@@ -30,12 +31,14 @@ export function useWalletBalances() {
   const { scope } = useScope()
   const qc = useQueryClient()
   const realtimeHealth = useRealtimeHealth()
+  const tabVisible = useDocumentVisibility()
   const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState)
   useEffect(() => {
+    if (Platform.OS === 'web') return
     const sub = AppState.addEventListener('change', setAppState)
     return () => sub.remove()
   }, [])
-  const inForeground = appState === 'active'
+  const inForeground = Platform.OS === 'web' ? tabVisible : appState === 'active'
   const queryKey = scope ? qk.wallets.list(scope) : (['wallets', 'disabled'] as const)
   const balanceSigRef = useRef<string | null>(null)
 

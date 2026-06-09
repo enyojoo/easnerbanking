@@ -32,13 +32,11 @@ import { recipientService } from '../lib/recipientService'
 // QueryClient (see client.ts) but hooks can opt in per-query.
 focusManager.setEventListener((handleFocus) => {
   if (Platform.OS === 'web') {
+    // Business parity: tab visibility must not toggle query "focus" (avoids
+    // refetch/resume jank when switching browser tabs).
     if (typeof document === 'undefined') return () => {}
-    const onVisibility = () => {
-      handleFocus(document.visibilityState === 'visible')
-    }
-    handleFocus(document.visibilityState === 'visible')
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
+    handleFocus(true)
+    return () => {}
   }
   const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
     handleFocus(status === 'active')
@@ -139,12 +137,8 @@ function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) 
 
   React.useEffect(() => {
     if (Platform.OS === 'web') {
-      if (typeof document === 'undefined') return
-      const onVisibility = () => {
-        if (document.visibilityState === 'visible') refreshNow()
-      }
-      document.addEventListener('visibilitychange', onVisibility)
-      return () => document.removeEventListener('visibilitychange', onVisibility)
+      // Web: realtime + pull-to-refresh only — no visibility-driven refetch storm.
+      return
     }
     const sub = AppState.addEventListener('change', (status) => {
       if (status === 'active') {

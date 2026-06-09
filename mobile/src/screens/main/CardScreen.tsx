@@ -23,9 +23,11 @@ import { ripple } from '../../lib/androidRipple'
 import { EASNER_CARD_ICON_SOURCE } from '../../lib/easnerBrand'
 import { haptics } from '../../lib/haptics'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 const CARD_SPACING = spacing[1]
 const DESKTOP_CARD_MAX_WIDTH = 400
+const SHELL_MAIN_PADDING = spacing[8]
 
 const COMING_SOON_COPY = 'Easner Card is coming soon'
 
@@ -262,15 +264,20 @@ function CardActivitySection({
 }
 
 export default function CardScreen({ navigation: _navigation }: NavigationProps) {
-  const { mode, showSidebarShell } = useResponsiveLayout()
+  const { mode, showSidebarShell, width: layoutWidth, sidebarWidth } = useResponsiveLayout()
   const { width: windowWidth } = useWindowDimensions()
+  const scrollBottomPadding = useScrollBottomPadding(spacing[8])
   const wideLayout = showSidebarShell && mode === 'desktop'
-  const centerCardLayout = !wideLayout && (mode === 'tablet' || mode === 'desktop')
+  const shellLayout = showSidebarShell && !wideLayout
+  const centerCardLayout = !showSidebarShell && (mode === 'tablet' || mode === 'desktop')
+  const showAddCardPill = shellLayout || wideLayout
+
+  const viewportWidth = shellLayout ? layoutWidth - sidebarWidth - SHELL_MAIN_PADDING * 2 : windowWidth
 
   const CARD_ASPECT = 85.6 / 53.98
   const CARD_WIDTH = wideLayout
     ? DESKTOP_CARD_MAX_WIDTH
-    : Math.min(windowWidth - spacing[5] * 2, 420)
+    : Math.min(viewportWidth - spacing[5] * 2, DESKTOP_CARD_MAX_WIDTH)
   const CARD_HEIGHT = Math.round(CARD_WIDTH / CARD_ASPECT)
   const cardStride = CARD_WIDTH + CARD_SPACING * 2
 
@@ -292,6 +299,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
     <Animated.View
       style={[
         styles.header,
+        shellLayout && styles.headerShell,
         wideLayout && styles.headerDesktop,
         {
           opacity: headerAnim,
@@ -308,17 +316,21 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
     >
       <View style={styles.headerContent}>
         <View style={styles.headerTitleBlock}>
-          <Text style={[styles.title, wideLayout && styles.titleDesktop]}>Cards</Text>
+          <Text style={styles.title}>Cards</Text>
         </View>
         <Pressable
           android_ripple={ripple.neutral}
-          style={wideLayout ? styles.addCardButton : styles.iconBtn}
+          style={showAddCardPill ? styles.addCardButton : styles.iconBtn}
           onPress={() => haptics.tap()}
           accessibilityRole="button"
           accessibilityLabel="Add card"
         >
-          <Plus size={wideLayout ? 18 : 22} color={wideLayout ? colors.text.inverse : colors.primary.main} strokeWidth={2} />
-          {wideLayout ? <Text style={styles.addCardButtonText}>Add Card</Text> : null}
+          <Plus
+            size={showAddCardPill ? 18 : 22}
+            color={showAddCardPill ? colors.text.inverse : colors.primary.main}
+            strokeWidth={2}
+          />
+          {showAddCardPill ? <Text style={styles.addCardButtonText}>Add Card</Text> : null}
         </Pressable>
       </View>
     </Animated.View>
@@ -342,7 +354,7 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
         decelerationRate="fast"
         contentContainerStyle={[
           styles.carouselContent,
-          { paddingHorizontal: (windowWidth - CARD_WIDTH) / 2, gap: CARD_SPACING * 2 },
+          { paddingHorizontal: (viewportWidth - CARD_WIDTH) / 2, gap: CARD_SPACING * 2 },
         ]}
         contentInsetAdjustmentBehavior="never"
       >
@@ -378,27 +390,24 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
     </View>
   )
 
+  const animatedBodyStyle = {
+    opacity: contentAnim,
+    transform: [
+      {
+        translateY: contentAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [motion.screenEnterTranslateY, 0],
+        }),
+      },
+    ],
+  }
+
   if (wideLayout) {
     return (
       <ScreenWrapper>
         <View style={styles.desktopRoot}>
           {header}
-          <Animated.View
-            style={[
-              styles.desktopBody,
-              {
-                opacity: contentAnim,
-                transform: [
-                  {
-                    translateY: contentAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [motion.screenEnterTranslateY, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
+          <Animated.View style={[styles.desktopBody, animatedBodyStyle]}>
             <CardsDesktopSplit
               sidebar={
                 <View style={styles.desktopSidebarInner}>
@@ -414,6 +423,27 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
     )
   }
 
+  if (shellLayout) {
+    return (
+      <ScreenWrapper>
+        <View style={styles.container}>
+          {header}
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
+            showsVerticalScrollIndicator={false}
+          >
+            <Animated.View style={[styles.scrollInner, animatedBodyStyle]}>
+              {cardCarousel}
+              <DesktopActionButtons onPress={actionsComingSoon} />
+              <CardActivitySection wide={false} />
+            </Animated.View>
+          </ScrollView>
+        </View>
+      </ScreenWrapper>
+    )
+  }
+
   return (
     <ScreenWrapper>
       <View style={[styles.container, centerCardLayout && styles.centeredContainer]}>
@@ -421,25 +451,10 @@ export default function CardScreen({ navigation: _navigation }: NavigationProps)
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: spacing[8] }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View
-            style={[
-              styles.scrollInner,
-              {
-                opacity: contentAnim,
-                transform: [
-                  {
-                    translateY: contentAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [motion.screenEnterTranslateY, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
+          <Animated.View style={[styles.scrollInner, animatedBodyStyle]}>
             {cardCarousel}
             <MobileActionButtons onPress={actionsComingSoon} />
             <CardActivitySection wide={false} />
@@ -464,6 +479,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     backgroundColor: colors.background.primary,
+    ...Platform.select({
+      web: {
+        height: '100%',
+      },
+    }),
   },
   desktopBody: {
     flex: 1,
@@ -471,6 +491,8 @@ const styles = StyleSheet.create({
   },
   desktopSidebarInner: {
     gap: spacing[6],
+    width: '100%',
+    alignSelf: 'flex-start',
   },
   scrollView: {
     flex: 1,
@@ -485,6 +507,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
     paddingBottom: spacing[2],
+  },
+  headerShell: {
+    paddingBottom: spacing[3],
   },
   headerDesktop: {
     paddingHorizontal: 0,
@@ -506,10 +531,9 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineLarge,
     color: colors.text.primary,
-  },
-  titleDesktop: {
-    ...textStyles.headlineSmall,
     fontFamily: fontFamily.semibold,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   iconBtn: {
     ...surfaceChromeCircleStyle(colors, 40),
@@ -770,7 +794,7 @@ const styles = StyleSheet.create({
   },
   desktopActivityPanel: {
     flex: 1,
-    minHeight: 300,
+    minHeight: 0,
     borderWidth: 1,
     borderColor: colors.border.default,
     borderRadius: borderRadius.lg,

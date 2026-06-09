@@ -25,7 +25,7 @@ export function getMobileQueryClient(): QueryClient {
           // On mobile we hook into AppState rather than window focus;
           // realtime + explicit pull-to-refresh drive the rest.
           refetchOnWindowFocus: false,
-          refetchOnReconnect: 'always',
+          refetchOnReconnect: false,
           refetchOnMount: false,
         },
       },
