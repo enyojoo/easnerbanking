@@ -16,7 +16,6 @@ type AppleUserName = {
 
 type AppleWebSignInResult = {
   idToken: string
-  rawNonce: string
   fullName?: string
 }
 
@@ -143,6 +142,15 @@ function isAppleSignInCancelled(error: unknown): boolean {
   return code === 'popup_closed_by_user' || code === 'user_cancelled_authorize'
 }
 
+/** Apple JS expects SHA-256 of the raw nonce, hex-encoded (per Apple + Supabase Flutter docs). */
+async function sha256Hex(value: string): Promise<string> {
+  const data = new TextEncoder().encode(value)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
 function formatAppleFullName(name?: AppleUserName): string | undefined {
   if (!name) return undefined
   const parts = [name.firstName, name.lastName].filter(Boolean)
@@ -164,6 +172,7 @@ export async function signInWithAppleWeb(): Promise<AppleWebSignInResult> {
   await loadAppleIdScript()
 
   const rawNonce = crypto.randomUUID()
+  const hashedNonce = await sha256Hex(rawNonce)
   const redirectURI = getAppleWebRedirectUri()
 
   window.AppleID!.auth.init({
@@ -171,7 +180,7 @@ export async function signInWithAppleWeb(): Promise<AppleWebSignInResult> {
     scope: 'name email',
     redirectURI,
     usePopup: true,
-    nonce: rawNonce,
+    nonce: hashedNonce,
   })
 
   let response: AppleAuthResponse
@@ -191,7 +200,6 @@ export async function signInWithAppleWeb(): Promise<AppleWebSignInResult> {
 
   return {
     idToken,
-    rawNonce,
     fullName: formatAppleFullName(response.user?.name),
   }
 }

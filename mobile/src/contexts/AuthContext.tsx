@@ -1003,12 +1003,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signInWithApple = useCallback(async (): Promise<{ error: Error | null }> => {
     if (Platform.OS === 'web') {
       try {
-        const { idToken, rawNonce, fullName } = await signInWithAppleWeb()
+        const { idToken, fullName } = await signInWithAppleWeb()
 
+        // Omit nonce — matches native iOS. Supabase Apple nonce verification uses hex
+        // encoding while Apple's id_token uses base64url, causing "Nonces mismatch".
         const { error: signInError } = await supabase.auth.signInWithIdToken({
           provider: 'apple',
           token: idToken,
-          nonce: rawNonce,
         })
         if (signInError) {
           return { error: new Error(signInError.message || 'Unable to continue with Apple.') }
