@@ -234,15 +234,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
   },
   searchWrap: {
-    ...searchFieldWrapperStyle(colors),
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...searchFieldWrapperStyle,
     marginBottom: spacing[3],
+    gap: spacing[2],
   },
   searchIcon: {
     marginRight: spacing[2],
   },
   searchInput: {
-    ...searchFieldInputStyle(colors),
+    ...searchFieldInputStyle,
     flex: 1,
+    color: colors.text.primary,
   },
   searchSpinner: {
     marginLeft: spacing[2],
