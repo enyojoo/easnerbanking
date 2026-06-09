@@ -793,6 +793,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       ? manualQuote.totalAmount
       : sendingAmount
 
+  const walletQuoteStashMeta = useMemo(
+    () => ({
+      recipientId: recipient?.id ?? '',
+      amountEntryMode,
+      entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
+      receiveCurrency,
+    }),
+    [recipient?.id, amountEntryMode, sendingAmount, receiveAmount, receiveCurrency],
+  )
+
+  const walletQuoteFresh = isStashedWalletQuoteFresh(walletQuoteStashMeta)
+
   /** Debit from wallet when paying from balance (includes fees when FX order amounts are available). */
   const balanceDebitEstimate =
     selectedPaymentMethod === 'balance' && recipient && receiveAmount > 0
@@ -917,18 +929,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     receiveAmount,
     selectedBalanceCurrency,
   ])
-
-  const walletQuoteStashMeta = useMemo(
-    () => ({
-      recipientId: recipient?.id ?? '',
-      amountEntryMode,
-      entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
-      receiveCurrency,
-    }),
-    [recipient?.id, amountEntryMode, sendingAmount, receiveAmount, receiveCurrency],
-  )
-
-  const walletQuoteFresh = isStashedWalletQuoteFresh(walletQuoteStashMeta)
 
   useEffect(() => {
     if (!walletQuotePrefetchKey || !recipient?.id) return

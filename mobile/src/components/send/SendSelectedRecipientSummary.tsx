@@ -66,11 +66,13 @@ export function SendSelectedRecipientSummary({
 
   return (
     <View style={[styles.root, alignEnd && styles.rootAlignEnd]}>
-      {isEasenet ? (
-        <EasenetRecipientAvatar recipient={recipient} easenetPreview={easenetPreview} />
-      ) : (
-        <PayoutRecipientAvatar recipient={recipient} size={36} />
-      )}
+      <View style={styles.avatarSlot}>
+        {isEasenet ? (
+          <EasenetRecipientAvatar recipient={recipient} easenetPreview={easenetPreview} />
+        ) : (
+          <PayoutRecipientAvatar recipient={recipient} size={36} />
+        )}
+      </View>
       <View style={[styles.info, alignEnd && styles.infoAlignEnd]}>
         <Text style={[styles.name, alignEnd && styles.textAlignEnd]} numberOfLines={1} ellipsizeMode="tail">
           {displayName}
@@ -104,9 +106,14 @@ const styles = StyleSheet.create({
   },
   rootAlignEnd: {
     flexDirection: 'row-reverse',
-    flex: 0,
-    flexShrink: 1,
+    alignItems: 'center',
     justifyContent: 'flex-end',
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '100%',
+  },
+  avatarSlot: {
+    flexShrink: 0,
   },
   info: {
     flex: 1,
@@ -114,8 +121,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   infoAlignEnd: {
-    flex: 0,
     flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '100%',
     alignItems: 'flex-end',
   },
   textAlignEnd: {
