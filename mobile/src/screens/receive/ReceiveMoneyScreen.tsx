@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk } from '@easner/shared'
+import { qk, isVaAnswerSettled, shouldShowBankDepositTab } from '@easner/shared'
 import {
   View,
   Text,
@@ -131,6 +131,19 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     Boolean(virtualAccount?.hasAccount) ||
     Boolean(virtualAccount && (virtualAccount.accountNumber || virtualAccount.iban))
 
+  const vaSettled = isVaAnswerSettled({
+    isFetched: vaFetched,
+    hasCachedEntry: vaRecord != null,
+  })
+  const verificationComplete = kycStatus === 'approved'
+  const showBankTab = shouldShowBankDepositTab({
+    verificationComplete,
+    vaSettled,
+    hasVirtualAccount: hasAccountData,
+  })
+  const showStablecoinTab = supportsStablecoins
+  const showTabBar = showBankTab && showStablecoinTab
+
   const accountReady = hasAccountData
 
   const hasStablecoinData = Boolean(
@@ -180,6 +193,11 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     const autoCreateAccounts = async () => {
       // Only trigger if KYC is approved
       if (kycStatus !== 'approved') {
+        accountCreationTriggeredRef.current = false
+        return
+      }
+
+      if (vaSettled && !hasAccountData) {
         accountCreationTriggeredRef.current = false
         return
       }
@@ -245,7 +263,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     
     // Only run when KYC status changes to approved
     autoCreateAccounts()
-  }, [kycStatus, currency, accountReady, walletReady])
+  }, [kycStatus, currency, accountReady, walletReady, vaSettled, hasAccountData])
   
   // Refresh on focus and re-evaluate account state when verification status changes.
   useFocusEffect(
@@ -271,12 +289,20 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     }, [kycStatus, queryClient, refreshUserProfile, scope]),
   )
   
-  // Set default tab based on currency support
+  // Set default tab based on currency support and bank tab availability
   useEffect(() => {
     if (!supportsStablecoins) {
       setActiveTab('bank')
+      return
     }
-  }, [supportsStablecoins])
+    if (!showBankTab && showStablecoinTab) {
+      setActiveTab('stablecoin')
+      return
+    }
+    if (showBankTab && !showStablecoinTab) {
+      setActiveTab('bank')
+    }
+  }, [supportsStablecoins, showBankTab, showStablecoinTab])
 
   const getCurrencyName = (curr: string): string => {
     return curr === 'USD' ? 'US Dollar'
@@ -602,8 +628,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           </View>
         </View>
 
-        {/* Tabs - Only show if multiple options available */}
-        {supportsStablecoins && (
+        {/* Tabs - Only show when both bank and stablecoin are available */}
+        {showTabBar && (
           <View style={styles.tabsContainer}>
             <Pressable
              android_ripple={ripple.neutral}
@@ -637,7 +663,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         >
           <View style={styles.content}>
-            {activeTab === 'bank' ? (
+            {activeTab === 'bank' && showBankTab ? (
               <>
                 {/* Show account details immediately if we have data */}
                 {hasAccountData && bankAccountDetails ? (

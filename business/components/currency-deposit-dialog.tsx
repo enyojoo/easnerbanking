@@ -98,6 +98,10 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
         }
       : undefined
   const hasStablecoin = stablecoinAccount !== undefined
+  const showBankTab = account.showBankDepositTab ?? !tier1Complete
+  const showStablecoinTab = hasStablecoin
+  const showTabBar = showBankTab && showStablecoinTab
+  const defaultTab = showBankTab ? "bank" : "stablecoin"
 
   const isNgn = account.currency === "NGN"
   const blockedByAfricanTier = isNgn && !TIER2_COMPLETE_PLACEHOLDER
@@ -180,14 +184,17 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             </Link>
           </div>
         ) : (
-        <Tabs defaultValue="bank" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="bank">
-              {account.currency === "USD" ? "US Bank Account" : account.currency === "EUR" ? "EU Bank Account" : "Bank transfer"}
-            </TabsTrigger>
-            <TabsTrigger value="stablecoin">Stablecoin</TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue={defaultTab} className="w-full">
+          {showTabBar ? (
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="bank">
+                {account.currency === "USD" ? "US Bank Account" : account.currency === "EUR" ? "EU Bank Account" : "Bank transfer"}
+              </TabsTrigger>
+              <TabsTrigger value="stablecoin">Stablecoin</TabsTrigger>
+            </TabsList>
+          ) : null}
 
+          {showBankTab ? (
           <TabsContent value="bank" className="space-y-4 mt-4">
             <div className="space-y-4">
               <CopyableField
@@ -266,6 +273,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
               <PaymentInstructions currency={account.currency} type="bank" />
             </div>
           </TabsContent>
+          ) : null}
 
           <TabsContent value="stablecoin" className="space-y-4 mt-4">
             {hasStablecoin && stablecoinAccount ? (

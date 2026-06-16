@@ -1,18 +1,23 @@
 "use client"
 
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { qk } from "@easner/shared"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
   isBusinessTier1Complete,
   needsBusinessVirtualAccountProvision,
 } from "@/lib/noah/business-account-sync"
 import { syncBusinessNoahStatus } from "@/lib/noah/sync-business-noah-status"
+import { useScope } from "@/lib/query/scope"
 
 /**
  * Business KYB: POST `/api/noah/sync-status` with `business` scope while KYB is incomplete or
  * approved but fiat virtual account ids are still missing (parity with mobile `useConsumerKycNoahSync`).
  */
 export function useBusinessNoahSync(): void {
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
   const {
     businessId,
     tier1Complete,
@@ -23,6 +28,11 @@ export function useBusinessNoahSync(): void {
   } = useBusinessProfile()
 
   const lastAutoSyncMsRef = useRef(0)
+  const [fiatProvisionResolved, setFiatProvisionResolved] = useState(false)
+
+  useEffect(() => {
+    setFiatProvisionResolved(false)
+  }, [businessId])
 
   const profileSlice = {
     tier1Complete,
@@ -35,7 +45,7 @@ export function useBusinessNoahSync(): void {
     Boolean(businessId) &&
     canManageBusinessVerification &&
     (!isBusinessTier1Complete(profileSlice) ||
-      needsBusinessVirtualAccountProvision(profileSlice))
+      needsBusinessVirtualAccountProvision(profileSlice, { fiatProvisionResolved }))
 
   const runSync = useCallback(async () => {
     if (!shouldSync) return
@@ -45,11 +55,17 @@ export function useBusinessNoahSync(): void {
     lastAutoSyncMsRef.current = now
 
     try {
-      await syncBusinessNoahStatus()
+      const result = await syncBusinessNoahStatus()
+      if (result.needsFiatAccounts === false) {
+        setFiatProvisionResolved(true)
+        if (scope) {
+          void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
+        }
+      }
     } catch {
       /* non-blocking; hosted return + webhooks can still update */
     }
-  }, [shouldSync])
+  }, [shouldSync, queryClient, scope])
 
   useEffect(() => {
     void runSync()

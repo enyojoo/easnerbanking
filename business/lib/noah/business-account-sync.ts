@@ -18,7 +18,9 @@ export function needsBusinessVirtualAccountProvision(
       >
     | null
     | undefined,
+  opts?: { fiatProvisionResolved?: boolean },
 ): boolean {
+  if (opts?.fiatProvisionResolved) return false
   if (!isBusinessTier1Complete(profile)) return false
   return !profile?.noahUsdVirtualAccountId || !profile?.noahEurVirtualAccountId
 }

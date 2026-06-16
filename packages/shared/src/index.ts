@@ -133,6 +133,7 @@ export {
   payoutReceiveAmountsMatch,
   payoutReceiveAmountsMatchForCurrency,
 } from "./noah-send-rates"
+export { isVaAnswerSettled, shouldShowBankDepositTab } from "./noah/bank-deposit-tab-visibility"
 export type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from "./payout-corridor"
 export { corridorDisplayLabel, corridorMatchesCountryCurrency, flagCodeFromCorridor } from "./payout-corridor"
 export {

@@ -24,6 +24,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
 import { useFocusEffect } from '@react-navigation/native'
+import { useQueryClient } from '@tanstack/react-query'
+import { qk } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import {
   IframeWebViewModalHeader,
@@ -53,6 +55,11 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
 import { isTier1Complete } from '../../lib/compliance'
 import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
+import {
+  readFiatProvisionResolved,
+  writeFiatProvisionResolved,
+} from '../../lib/noahFiatProvisionResolved'
+import { useScope } from '../../query/scope'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
@@ -82,11 +89,14 @@ function tierTitleDisplay(title: string) {
 
 function AccountVerificationContent({ navigation }: NavigationProps) {
   const { userProfile, refreshUserProfile } = useAuth()
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
   const insets = useSafeAreaInsets()
   const { showInfo, showError, showSuccess, showWarning } = useToast()
 
   const [creatingCustomer, setCreatingCustomer] = useState(false)
   const [customerError, setCustomerError] = useState<string | null>(null)
+  const [fiatProvisionResolved, setFiatProvisionResolved] = useState(false)
   // Ref to prevent multiple simultaneous Noah / verification status fetches
   const fetchingNoahStatusRef = useRef(false)
   // Ref to track periodic sync interval
@@ -110,6 +120,20 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
+  useEffect(() => {
+    if (!userProfile?.id) {
+      setFiatProvisionResolved(false)
+      return
+    }
+    let cancelled = false
+    void readFiatProvisionResolved(userProfile.id).then((resolved) => {
+      if (!cancelled) setFiatProvisionResolved(resolved)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [userProfile?.id])
+
   // Sync Noah customer status — fetches from the verification API and updates the database
   const syncNoahStatus = useCallback(async (silent: boolean = false, force: boolean = false) => {
     /** Backend resolves `eind_{userId}` when `noah_customer_id` is null — do not require the column. */
@@ -130,9 +154,10 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     try {
       const kycRaw = userProfile?.noah_kyc_status
       const kycNorm = typeof kycRaw === 'string' ? kycRaw.trim().toLowerCase() : ''
-      /** Pull Noah until approved; after approval, keep syncing until fiat VA ids exist. */
+      /** Pull Noah until approved; after approval, keep syncing until fiat provisioning is resolved. */
       const shouldSyncByStatus =
-        kycNorm !== 'approved' || needsNoahVirtualAccountProvision(userProfile)
+        kycNorm !== 'approved' ||
+        needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved })
 
       if (!shouldSyncByStatus && !force) {
         if (!silent) {
@@ -203,6 +228,14 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           console.log('[SYNC-STATUS] ✅ Status synced successfully:', result.data)
         }
 
+        if (result.data?.needsFiatAccounts === false && userProfile.id) {
+          await writeFiatProvisionResolved(userProfile.id)
+          setFiatProvisionResolved(true)
+          if (scope) {
+            void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
+          }
+        }
+
         try {
           const SYNC_CACHE_KEY = `easner_noah_sync_${userProfile.id}`
           await AsyncStorage.setItem(
@@ -247,7 +280,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     userProfile?.noah_kyc_status,
     userProfile?.noah_kyc_rejection_reasons,
     userProfile?.updated_at,
+    userProfile?.noah_usd_virtual_account_id,
+    userProfile?.noah_eur_virtual_account_id,
     refreshUserProfile,
+    fiatProvisionResolved,
+    queryClient,
+    scope,
   ])
 
   // Force Noah pull when opening this screen (success path calls refreshUserProfile — avoid double-fetch).

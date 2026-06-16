@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { qk } from "@easner/shared"
+import { qk, isVaAnswerSettled, shouldShowBankDepositTab } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import type { Account } from "@/lib/finance-types"
@@ -208,6 +208,17 @@ export function useBusinessAccountRows() {
             : 0
 
       const hasVa = Boolean(va?.hasAccount)
+      const isNoahFiatRail = currency === "USD" || currency === "EUR" || currency === "GBP"
+      const showBankDepositTab = isNoahFiatRail
+        ? shouldShowBankDepositTab({
+            verificationComplete: tier1Complete,
+            vaSettled: isVaAnswerSettled({
+              isFetched: virtualAccountsQuery.isFetched,
+              hasCachedEntry: va != null,
+            }),
+            hasVirtualAccount: hasVa,
+          })
+        : true
       const usdc = currency === "USD" || currency === "GBP"
       const eurc = currency === "EUR"
       const stablecoinAddress =
@@ -233,6 +244,7 @@ export function useBusinessAccountRows() {
         stablecoinAddress,
         stablecoinChain: "Solana",
         stablecoinToken: usdc ? "USDC" : eurc ? "EURC" : "USDC",
+        showBankDepositTab,
       }
     })
   }, [
@@ -246,6 +258,7 @@ export function useBusinessAccountRows() {
     stablecoinDeposit.USD,
     tier1Complete,
     vaByCurrency,
+    virtualAccountsQuery.isFetched,
   ])
 
   const loading =

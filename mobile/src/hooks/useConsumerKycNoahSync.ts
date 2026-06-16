@@ -1,9 +1,16 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, AppStateStatus } from 'react-native'
+import { useQueryClient } from '@tanstack/react-query'
+import { qk } from '@easner/shared'
 import { useAuth } from '../contexts/AuthContext'
 import { noahService } from '../lib/noahService'
 import { isTier1Complete } from '../lib/compliance'
 import { needsNoahVirtualAccountProvision } from '../lib/noahAccountSync'
+import {
+  readFiatProvisionResolved,
+  writeFiatProvisionResolved,
+} from '../lib/noahFiatProvisionResolved'
+import { useScope } from '../query/scope'
 
 /**
  * Consumer (individual) KYC: POST `/api/noah/sync-status` with `individual` scope after the user
@@ -15,17 +22,35 @@ import { needsNoahVirtualAccountProvision } from '../lib/noahAccountSync'
  */
 export function useConsumerKycNoahSync(): void {
   const { user, userProfile, refreshUserProfile } = useAuth()
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
   const lastAutoSyncMsRef = useRef(0)
+  const [fiatProvisionResolved, setFiatProvisionResolved] = useState(false)
 
   const role = userProfile?.role ?? userProfile?.profile?.role
+
+  useEffect(() => {
+    if (!user?.id) {
+      setFiatProvisionResolved(false)
+      return
+    }
+    let cancelled = false
+    void readFiatProvisionResolved(user.id).then((resolved) => {
+      if (!cancelled) setFiatProvisionResolved(resolved)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   const shouldSync =
     !!user?.id &&
     role !== 'business' &&
-    (!isTier1Complete(userProfile) || needsNoahVirtualAccountProvision(userProfile))
+    (!isTier1Complete(userProfile) ||
+      needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved }))
 
   const runSync = useCallback(async () => {
-    if (!shouldSync || !refreshUserProfile) return
+    if (!shouldSync || !refreshUserProfile || !user?.id) return
     const now = Date.now()
     const MIN_MS = 15_000
     if (now - lastAutoSyncMsRef.current < MIN_MS) return
@@ -34,12 +59,19 @@ export function useConsumerKycNoahSync(): void {
     try {
       const result = await noahService.syncStatus({ scope: 'individual' })
       if (result.success && result.synced) {
+        if (result.data?.needsFiatAccounts === false) {
+          await writeFiatProvisionResolved(user.id)
+          setFiatProvisionResolved(true)
+          if (scope) {
+            void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
+          }
+        }
         await refreshUserProfile()
       }
     } catch {
       // Non-blocking; Account Verification / webhooks can still update.
     }
-  }, [shouldSync, refreshUserProfile])
+  }, [shouldSync, refreshUserProfile, user?.id, queryClient, scope])
 
   useEffect(() => {
     void runSync()

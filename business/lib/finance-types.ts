@@ -16,6 +16,7 @@ export interface Account {
   stablecoinAddress?: string
   stablecoinChain?: string
   stablecoinToken?: "USDC" | "EURC"
+  showBankDepositTab?: boolean
 }
 
 export interface Card {

@@ -16,7 +16,10 @@ export function needsNoahVirtualAccountProvision(
       }
     | null
     | undefined,
+  opts?: { fiatProvisionResolved?: boolean },
 ): boolean {
+  if (opts?.fiatProvisionResolved) return false
+
   const status = String(
     profile?.noah_kyc_status ?? profile?.profile?.noah_kyc_status ?? "",
   )
