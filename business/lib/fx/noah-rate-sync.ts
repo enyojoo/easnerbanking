@@ -1,5 +1,6 @@
 import {
   loadNoahRatePairsFromSupabase,
+  parseNoahPayoutMarginFromEnv,
   seedNoahRatePairRows,
   syncNoahRatesToSupabase,
   type NoahRateSyncResult,
@@ -27,6 +28,7 @@ export async function syncNoahExchangeRates(options?: {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
+  const margin = parseNoahPayoutMarginFromEnv(process.env.NOAH_PAYOUT_MARGIN)
   const pairs = await loadNoahRatePairsFromSupabase(supabase)
   if (pairs.length === 0) {
     return { updated: 0, skipped: 0, pairs: [], skippedPairs: [] }
@@ -36,6 +38,7 @@ export async function syncNoahExchangeRates(options?: {
     await seedNoahRatePairRows({
       supabaseUrl,
       serviceRoleKey,
+      margin,
       pairs: pairs.map((p) => ({
         from_currency: p.from_currency,
         to_currency: p.to_currency,
@@ -88,6 +91,7 @@ export async function syncNoahExchangeRates(options?: {
     serviceRoleKey,
     inputs,
     dryRun: options?.dryRun,
+    margin,
   })
 
   return {

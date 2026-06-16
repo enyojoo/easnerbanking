@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { applyNoahCustomerRate, easnerBridgeMarginBps, NOAH_PAYOUT_MARGIN } from "@easner/rate-sync"
+import {
+  applyNoahCustomerRate,
+  easnerBridgeMarginBps,
+  NOAH_PAYOUT_MARGIN,
+  parseNoahPayoutMarginFromEnv,
+} from "@easner/rate-sync"
 
 export type NoahRateUpsertRow = {
   from_currency: string
@@ -40,6 +45,9 @@ export async function listNoahRatesAdmin(admin: SupabaseClient) {
 
 export async function upsertNoahRatesAdmin(admin: SupabaseClient, rows: NoahRateUpsertRow[]) {
   const now = new Date().toISOString()
+  const defaultMarginBps = easnerBridgeMarginBps(
+    parseNoahPayoutMarginFromEnv(process.env.NOAH_PAYOUT_MARGIN),
+  )
   const payload = rows.map((row) => {
     const { from, to } = assertNoahRatesPair(row.from_currency, row.to_currency)
     const noahMid =
@@ -50,7 +58,7 @@ export async function upsertNoahRatesAdmin(admin: SupabaseClient, rows: NoahRate
     const marginBps =
       row.margin_bps != null && Number.isFinite(row.margin_bps)
         ? Math.round(row.margin_bps)
-        : easnerBridgeMarginBps()
+        : defaultMarginBps
     return {
       from_currency: from,
       to_currency: to,

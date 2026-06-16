@@ -17,6 +17,7 @@ export {
   applyNoahCustomerRate,
   easnerBridgeMarginBps,
   NOAH_PAYOUT_MARGIN,
+  parseNoahPayoutMarginFromEnv,
 } from "./noah-margin"
 export {
   applyCryptoCustomerRate,

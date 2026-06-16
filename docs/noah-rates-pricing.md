@@ -29,7 +29,7 @@
 | Name | Example (₦5,000 NG) | Meaning |
 |------|---------------------|---------|
 | Noah mid (`noah_mid`) | ~1,356 NGN/USD | Raw `Rate` from `/prices`; matches `FiatPayment.Rate` at settlement |
-| Customer rate (`noah_rates.rate`) | ~1,336 NGN/USD | Mid × `(1 − NOAH_PAYOUT_MARGIN)` |
+| Customer rate (`noah_rates.rate`) | ~1,349 NGN/USD | Mid × `(1 − NOAH_PAYOUT_MARGIN)` |
 | All-in effective | ~1,106 NGN/USD | `receive ÷ totalDebited` — includes channel spread; not shown as exchange rate |
 
 Do **not** use `DestinationAmount ÷ SourceAmount` from `/prices` as the mid — that embeds channel fees and varies by ticket size.
@@ -42,7 +42,13 @@ Do **not** use `DestinationAmount ÷ SourceAmount` from `/prices` as the mid —
 customer_rate = noah_mid × (1 − NOAH_PAYOUT_MARGIN)
 ```
 
-Default margin: 1.5% (`NOAH_PAYOUT_MARGIN` in `packages/rate-sync/src/noah-margin.ts`). P2P manual send still uses `EASNER_BRIDGE_MARGIN` (5%) on `exchange_rates`.
+Default margin: **0.5%** (`NOAH_PAYOUT_MARGIN` in `packages/rate-sync/src/noah-margin.ts`). Override at deploy time with env:
+
+```text
+NOAH_PAYOUT_MARGIN=0.005
+```
+
+Decimal fraction (same convention as `WALLET_SEND_MARGIN`). Invalid or missing values fall back to the code default. P2P manual send still uses `EASNER_BRIDGE_MARGIN` (5%) on `exchange_rates`.
 
 ### Refresh cadence
 

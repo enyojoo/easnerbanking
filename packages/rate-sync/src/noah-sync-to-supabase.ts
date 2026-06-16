@@ -131,8 +131,9 @@ export async function seedNoahRatePairRows(options: {
   supabaseUrl: string
   serviceRoleKey: string
   pairs: Array<{ from_currency: string; to_currency: string; country_code: string }>
+  margin?: number
 }): Promise<number> {
-  const { supabaseUrl, serviceRoleKey, pairs } = options
+  const { supabaseUrl, serviceRoleKey, pairs, margin = NOAH_PAYOUT_MARGIN } = options
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
@@ -143,7 +144,7 @@ export async function seedNoahRatePairRows(options: {
     country_code: p.country_code.toUpperCase(),
     noah_mid: 0,
     rate: 0,
-    margin_bps: easnerBridgeMarginBps(),
+    margin_bps: easnerBridgeMarginBps(margin),
     source: "seed",
     as_of: nowIso,
     status: "pending_sync",
