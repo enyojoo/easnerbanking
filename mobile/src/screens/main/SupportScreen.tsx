@@ -7,7 +7,6 @@ import {
   Pressable,
   Linking,
   Alert,
-  InteractionManager,
   Animated,
 } from 'react-native'
 import { ArrowLeft, ChevronRight } from 'lucide-react-native'
@@ -15,7 +14,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { prepareIntercomMessenger, presentIntercomMessenger } from '../../lib/intercom'
+import { presentIntercomMessenger } from '../../lib/intercom'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing, motion } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -32,10 +31,6 @@ export default function SupportScreen({ navigation }: NavigationProps) {
   useFocusEffect(
     useCallback(() => {
       analytics.trackScreenView('Support')
-      const task = InteractionManager.runAfterInteractions(() => {
-        void prepareIntercomMessenger()
-      })
-      return () => task.cancel()
     }, []),
   )
 
