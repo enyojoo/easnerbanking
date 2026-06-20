@@ -211,7 +211,7 @@ module.exports = ({ config }) => {
     ...config,
     web: {
       ...(config.web || {}),
-      orientation: 'default',
+      orientation: 'portrait',
     },
     android: {
       ...(config.android || {}),
