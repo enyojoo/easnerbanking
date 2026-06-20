@@ -96,6 +96,7 @@ import {
   type RecipientType,
 } from '../../lib/recipientCatalog'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
+import { MobileMoneyProviderIcon } from '@easner/shared'
 import { loadRecipientsListCache, saveRecipientsListCache } from '../../lib/recipientsListCache'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
@@ -181,7 +182,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
 
-  /** Hub search (@mode) live lookup ù separate from add-recipient modal. */
+  /** Hub search (@mode) live lookup ? separate from add-recipient modal. */
   const [hubSearchEasenet, setHubSearchEasenet] = useState<{
     easetag: string
     fullName: string
@@ -449,7 +450,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       void prefetchNoahSendExchangeRates(qc, recipient.currency)
     }
     // Use navigate (not push) so re-entering amount after "Change recipient" does not stack duplicate
-    // SendAmount screens ù back should be hub once, then dashboard.
+    // SendAmount screens ? back should be hub once, then dashboard.
     navigation.navigate('SendAmount' as never, {
       recipient,
       fromSelectRecentRecipient: true,
@@ -827,7 +828,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
        android_ripple={ripple.neutral}
         style={[styles.recipientItem, !isLast && styles.recipientItemDivider]}
         onPressIn={() => {
-          // Start the rate fetch the instant the finger touches the row ù same DB rows as quote.
+          // Start the rate fetch the instant the finger touches the row ? same DB rows as quote.
           if (isWalletSendRecipient(item)) {
             const net = resolveRecipientWalletNetwork(item)
             if (net) void prefetchCryptoSendExchangeRates(qc, item.currency, net)
@@ -1359,9 +1360,14 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                       }} disabled={isSubmitting}
                     >
                       <View style={styles.currencySelectorContent}>
-                        <Text style={styles.currencySelectorText}>
-                          {newRecipient.provider || 'Select provider'}
-                        </Text>
+                        {newRecipient.provider ? (
+                          <>
+                            <MobileMoneyProviderIcon provider={newRecipient.provider} size={22} />
+                            <Text style={styles.currencySelectorText}>{newRecipient.provider}</Text>
+                          </>
+                        ) : (
+                          <Text style={styles.currencySelectorText}>Select provider</Text>
+                        )}
                         {showProviderDropdown ? (
                           <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
                         ) : (
@@ -1410,6 +1416,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                                   setProviderSearchTerm('')
                                 }}
                               >
+                                <MobileMoneyProviderIcon provider={provider} size={22} />
                                 <View style={styles.currencyInfo}>
                                   <Text style={styles.currencyCode}>{provider}</Text>
                                 </View>
@@ -2074,7 +2081,7 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontFamily: fontFamily.medium,
   },
-  /** White SectionCard frame ù flat rows with hairline dividers (More-screen parity). */
+  /** White SectionCard frame ? flat rows with hairline dividers (More-screen parity). */
   recipientsTray: {
     ...surfaceFrameStyle(colors),
     marginHorizontal: spacing[5],
@@ -2190,7 +2197,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
   },
-  /** Draft Easenet row ù top-trailing corner of the preview block (clear of the chevron). */
+  /** Draft Easenet row ? top-trailing corner of the preview block (clear of the chevron). */
   newRecipientBadgeCorner: {
     position: 'absolute',
     top: 0,

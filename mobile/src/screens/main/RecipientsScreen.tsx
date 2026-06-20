@@ -1653,10 +1653,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     >
                       <View style={styles.currencySelectorContent}>
                         {newRecipient.provider ? (
-                          <View style={styles.currencyInfo}>
+                          <>
                             <MobileMoneyProviderIcon provider={newRecipient.provider} size={22} />
                             <Text style={styles.currencySelectorText}>{newRecipient.provider}</Text>
-                          </View>
+                          </>
                         ) : (
                           <Text style={styles.currencySelectorText}>Select provider</Text>
                         )}
@@ -1700,8 +1700,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                                 setProviderSearchTerm('')
                               }}
                             >
+                              <MobileMoneyProviderIcon provider={provider} size={22} />
                               <View style={styles.currencyInfo}>
-                                <MobileMoneyProviderIcon provider={provider} size={22} />
                                 <Text style={styles.currencyCode}>{provider}</Text>
                               </View>
                               {newRecipient.provider === provider ? (
