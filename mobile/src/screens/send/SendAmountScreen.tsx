@@ -11,6 +11,7 @@ import {
   Animated,
   Keyboard,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { MessageSquareText, ChevronDown, User, Coins, RotateCcw, ArrowLeft, ArrowUpDown, Link, Delete, X, ChevronRight } from 'lucide-react-native'
@@ -43,7 +44,7 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
-import { useNoahSendExchangeRates, useCryptoSendExchangeRates, useManualSendCatalog, useManualQuote, prefetchNoahSendExchangeRates, prefetchCryptoSendExchangeRates } from '../../hooks/queries'
+import { useNoahSendExchangeRates, useManualSendCatalog, useManualQuote, prefetchNoahSendExchangeRates } from '../../hooks/queries'
 import { useQueryClient } from '@tanstack/react-query'
 import { pickDefaultManualPayInOption } from '@easner/shared'
 import { resolveManualPayInNavigation } from '../../lib/manual-send-navigation'
@@ -56,7 +57,6 @@ import { CountryFlag } from '../../components/flags/CountryFlag'
 import {
   convertNoahSendFlowAmounts,
   exchangeRatesToRateMap,
-  getNoahSendConversionRate,
   hasNoahSendRateRow,
   findPayoutFieldsSchema,
   formatMoneyDisplay,
@@ -72,8 +72,6 @@ import {
   validateSendAmountFields,
   validateWalletSendReceiveAmount,
   resolveEffectiveWalletSendMin,
-  hasWalletSendFxDisplay,
-  isDirectTurnkeyWalletCorridor,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
@@ -183,6 +181,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const didInitializeBalanceCurrency = useRef(false)
   const sendAgainPrefillAppliedRef = useRef(false)
   const [walletQuotePreview, setWalletQuotePreview] = useState<WalletSendQuote | null>(null)
+  const [isContinuePending, setIsContinuePending] = useState(false)
+  const [isContinueLoading, setIsContinueLoading] = useState(false)
+  const continueSpinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   
   // UI State only - no backend integration
   const [recipient, setRecipient] = useState<Recipient | null>(recipientFromRoute || null)
@@ -229,24 +230,19 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   } = useNoahSendExchangeRates(recipient?.currency, {
     enabled: !skipNoahExchangeRatesForEasetagP2p && !isWalletRecipientEarly,
   })
-  const {
-    data: cryptoRatesFromContext = [],
-    isFetched: cryptoRatesFetched,
-  } = useCryptoSendExchangeRates(recipient?.currency, resolvedWalletNetwork, {
-    enabled: isWalletRecipientEarly,
-  })
 
   useEffect(() => {
     if (!recipient?.currency || skipNoahExchangeRatesForEasetagP2p || isWalletRecipientEarly) return
     void prefetchNoahSendExchangeRates(qc, recipient.currency)
   }, [recipient?.currency, skipNoahExchangeRatesForEasetagP2p, isWalletRecipientEarly, qc])
 
-  useEffect(() => {
-    if (!isWalletRecipientEarly || !recipient?.currency || !resolvedWalletNetwork) return
-    void prefetchCryptoSendExchangeRates(qc, recipient.currency, resolvedWalletNetwork)
-  }, [isWalletRecipientEarly, recipient?.currency, resolvedWalletNetwork, qc])
-
   const isWalletRecipient = isWalletRecipientEarly
+
+  useEffect(() => {
+    if (isWalletRecipient && amountEntryMode !== 'receive') {
+      setAmountEntryMode('receive')
+    }
+  }, [isWalletRecipient, amountEntryMode, recipient?.id])
 
   // Initialize sending balance currency once:
   React.useEffect(() => {
@@ -524,51 +520,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     dynamicAmountLineHeight + spacing[2],
   )
 
-  const isDirectTurnkeyWallet =
-    isWalletRecipient &&
-    isDirectTurnkeyWalletCorridor(receiveCurrency, resolvedWalletNetwork)
-
-  const showCrossCurrencyExchangeUi = isWalletRecipient
-    ? hasWalletSendFxDisplay(sendCurrency, receiveCurrency, resolvedWalletNetwork)
-    : String(sendCurrency || '').toUpperCase() !== String(receiveCurrency || '').toUpperCase()
+  const showCrossCurrencyExchangeUi =
+    !isWalletRecipient &&
+    String(sendCurrency || '').toUpperCase() !== String(receiveCurrency || '').toUpperCase()
 
   const noahRateMap = useMemo(
     () => exchangeRatesToRateMap(exchangeRatesFromContext),
     [exchangeRatesFromContext],
   )
-
-  const cryptoFxRates = useMemo(
-    () =>
-      exchangeRatesToRateMap(
-        cryptoRatesFromContext.map((r) => ({
-          from_currency: r.from_currency,
-          to_currency: r.to_currency,
-          rate: r.rate,
-        })),
-      ),
-    [cryptoRatesFromContext],
-  )
-
-  const activeCryptoRateRow = useMemo(() => {
-    if (!isWalletRecipient) return null
-    const send = String(sendCurrency || '').trim().toUpperCase()
-    const receive = String(receiveCurrency || '').trim().toUpperCase()
-    const network = resolvedWalletNetwork
-    return (
-      cryptoRatesFromContext.find(
-        (r) =>
-          String(r.from_currency || '').toUpperCase() === send &&
-          String(r.to_currency || '').toUpperCase() === receive &&
-          String(r.receive_network || '').trim() === network,
-      ) ?? null
-    )
-  }, [
-    isWalletRecipient,
-    cryptoRatesFromContext,
-    sendCurrency,
-    receiveCurrency,
-    resolvedWalletNetwork,
-  ])
 
   const hasNoahRateForPair = useMemo(() => {
     if (isWalletRecipient) return true
@@ -611,16 +570,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !isWalletRecipient &&
     showCrossCurrencyExchangeUi
 
-  const needsCryptoRateForSend =
-    selectedPaymentMethod === 'balance' &&
-    isWalletRecipient &&
-    showCrossCurrencyExchangeUi &&
-    !isDirectTurnkeyWallet
-
-  const hasValidCryptoRateForPair =
-    !needsCryptoRateForSend ||
-    (activeCryptoRateRow != null && Number(activeCryptoRateRow.rate) > 0)
-
   const walletMinReceive = useMemo(() => {
     if (!isWalletRecipient || !resolvedWalletNetwork) {
       return resolveEffectiveWalletSendMin({
@@ -629,33 +578,26 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         customerRate: 1,
       })
     }
-    const rate = Number(activeCryptoRateRow?.rate ?? 0)
     return resolveEffectiveWalletSendMin({
       receiveCurrency,
       receiveNetwork: resolvedWalletNetwork,
-      customerRate: rate > 0 ? rate : 1,
+      customerRate: 1,
     })
-  }, [isWalletRecipient, resolvedWalletNetwork, receiveCurrency, activeCryptoRateRow?.rate])
+  }, [isWalletRecipient, resolvedWalletNetwork, receiveCurrency])
 
   const noahRatesLoading =
     needsNoahRateForSend &&
     !hasNoahRateForPair &&
     !noahRatesFetched
 
-  const cryptoRatesLoading =
-    needsCryptoRateForSend &&
-    !hasValidCryptoRateForPair &&
-    !cryptoRatesFetched
-
   const manualQuoteLoading = manualQuoteEnabled && !manualQuote && manualQuoteFetching
 
   const exchangePreviewReady =
     !showCrossCurrencyExchangeUi ||
+    isWalletRecipient ||
     (selectedPaymentMethod === 'otherCurrency'
       ? !manualQuoteEnabled || Boolean(manualQuote)
-      : isWalletRecipient
-        ? !needsCryptoRateForSend || hasValidCryptoRateForPair
-        : !needsNoahRateForSend || hasNoahRateForPair)
+      : !needsNoahRateForSend || hasNoahRateForPair)
 
   const flowAmounts = useMemo(() => {
     if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) {
@@ -668,15 +610,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         forwardRate: manualQuote.exchangeRate,
       }
     }
-    const previewRateMap = isWalletRecipient ? cryptoFxRates : noahRateMap
-    const hasPreviewRate = isWalletRecipient ? hasValidCryptoRateForPair : hasNoahRateForPair
-    if (!hasPreviewRate) {
+    if (!hasNoahRateForPair) {
       const fallback = convertNoahSendFlowAmounts({
         direction: amountEntryMode,
         amount: enteredAmount,
         sendCurrency,
         receiveCurrency,
-        rateMap: previewRateMap,
+        rateMap: noahRateMap,
       })
       return {
         sendAmount: fallback.sendAmount,
@@ -689,7 +629,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       amount: enteredAmount,
       sendCurrency,
       receiveCurrency,
-      rateMap: previewRateMap,
+      rateMap: noahRateMap,
     })
   }, [
     showCrossCurrencyExchangeUi,
@@ -698,12 +638,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendCurrency,
     receiveCurrency,
     noahRateMap,
-    cryptoFxRates,
-    isWalletRecipient,
     selectedPaymentMethod,
     manualQuote,
     hasNoahRateForPair,
-    hasValidCryptoRateForPair,
   ])
 
   const receiveAmount = normalizePayoutReceiveAmountForCurrency(
@@ -776,11 +713,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     enabled: walletMinEnforcementEnabled,
     seedKey: walletMinSeedKey,
     minReceive: walletMinReceive,
-    amountEntryMode,
+    amountEntryMode: 'receive',
     enteredAmount,
     sendCurrency,
     receiveCurrency,
-    rateMap: cryptoFxRates,
+    rateMap: {},
     onApplyEnteredAmount: (amount) => {
       setSendAmount(formatAmount(amount.toFixed(2)))
     },
@@ -796,11 +733,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const walletQuoteStashMeta = useMemo(
     () => ({
       recipientId: recipient?.id ?? '',
-      amountEntryMode,
-      entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
+      amountEntryMode: 'receive' as const,
+      entryAmount: receiveAmount,
       receiveCurrency,
     }),
-    [recipient?.id, amountEntryMode, sendingAmount, receiveAmount, receiveCurrency],
+    [recipient?.id, receiveAmount, receiveCurrency],
   )
 
   const walletQuoteFresh = isStashedWalletQuoteFresh(walletQuoteStashMeta)
@@ -830,7 +767,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     currentBalanceCents < balanceDebitCents
 
   const toggleAmountDirection = () => {
-    if (!recipient) return
+    if (!recipient || isWalletRecipient) return
     if (amountEntryMode === 'receive') {
       if (!sendingAmount || sendingAmount <= 0) return
       setAmountEntryMode('send')
@@ -915,20 +852,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const walletQuotePrefetchKey = useMemo(() => {
     if (!needsBackgroundWalletSendQuote || !recipient?.id) return ''
-    return [
-      recipient.id,
-      amountEntryMode,
-      amountEntryMode === 'send' ? sendingAmount : receiveAmount,
-      selectedBalanceCurrency,
-    ].join('|')
-  }, [
-    needsBackgroundWalletSendQuote,
-    recipient?.id,
-    amountEntryMode,
-    sendingAmount,
-    receiveAmount,
-    selectedBalanceCurrency,
-  ])
+    return [recipient.id, receiveAmount, selectedBalanceCurrency].join('|')
+  }, [needsBackgroundWalletSendQuote, recipient?.id, receiveAmount, selectedBalanceCurrency])
 
   useEffect(() => {
     if (!walletQuotePrefetchKey || !recipient?.id) return
@@ -938,9 +863,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         noahService.createWalletSendQuote({
           recipientId: recipient!.id,
           sourceBalanceCurrency: selectedBalanceCurrency,
-          amountEntryMode,
-          ...(amountEntryMode === 'receive' ? { receiveAmount } : {}),
-          ...(amountEntryMode === 'send' && sendingAmount > 0 ? { sendAmount: sendingAmount } : {}),
+          amountEntryMode: 'receive',
+          receiveAmount,
         }),
       walletQuoteStashMeta,
     ).then((quote) => {
@@ -949,16 +873,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     return () => {
       cancelled = true
     }
-  }, [
-    walletQuotePrefetchKey,
-    recipient,
-    receiveAmount,
-    receiveCurrency,
-    selectedBalanceCurrency,
-    amountEntryMode,
-    sendingAmount,
-    walletQuoteStashMeta,
-  ])
+  }, [walletQuotePrefetchKey, recipient, receiveAmount, selectedBalanceCurrency, walletQuoteStashMeta])
 
   useEffect(() => {
     clearSendPayoutQuote()
@@ -970,6 +885,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !!(recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0)
 
   const sendButtonDisabled =
+    isContinuePending ||
+    isContinueLoading ||
     !sendAmount ||
     sendAmount === '0.00' ||
     Number.parseFloat(sendAmount.replace(/,/g, '')) <= 0 ||
@@ -989,7 +906,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     exchangeInfoAmountPositive &&
     showCrossCurrencyExchangeUi &&
     !exchangePreviewReady &&
-    (noahRatesLoading || cryptoRatesLoading || manualQuoteLoading)
+    (noahRatesLoading || manualQuoteLoading)
 
   const displayBalanceForSource =
     selectedPaymentMethod === 'balance'
@@ -1033,6 +950,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }
 
   const handleSendContinue = async () => {
+    if (isContinuePending || isContinueLoading) return
     try {
       const enteredAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
       if (!sendAmount || sendAmount === '0' || enteredAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
@@ -1062,9 +980,19 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
       haptics.medium()
 
-      const navRateMap = isWalletRecipient ? cryptoFxRates : noahRateMap
-      const navAmounts =
-        sendCurrency !== receiveCurrency
+      const walletReceiveAmount = normalizePayoutReceiveAmountForCurrency(
+        receiveCurrency,
+        enteredAmountValue,
+      )
+
+      const navRateMap = isWalletRecipient ? {} : noahRateMap
+      const navAmounts = isWalletRecipient
+        ? {
+            sendAmount: walletReceiveAmount,
+            receiveAmount: walletReceiveAmount,
+            forwardRate: 1,
+          }
+        : sendCurrency !== receiveCurrency
           ? convertNoahSendFlowAmounts({
               direction: amountEntryMode,
               amount: enteredAmountValue,
@@ -1077,14 +1005,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               receiveAmount: enteredAmountValue,
               forwardRate: 1,
             }
-      let receiveAmountValue = normalizePayoutReceiveAmountForCurrency(
-        receiveCurrency,
-        navAmounts.receiveAmount,
-      )
+      let receiveAmountValue = isWalletRecipient
+        ? walletReceiveAmount
+        : normalizePayoutReceiveAmountForCurrency(receiveCurrency, navAmounts.receiveAmount)
       const quoteStashMeta = {
         recipientId: recipient.id,
-        amountEntryMode,
-        entryAmount: amountEntryMode === 'send' ? navAmounts.sendAmount : receiveAmountValue,
+        amountEntryMode: isWalletRecipient ? ('receive' as const) : amountEntryMode,
+        entryAmount: isWalletRecipient
+          ? walletReceiveAmount
+          : amountEntryMode === 'send'
+            ? navAmounts.sendAmount
+            : receiveAmountValue,
         receiveCurrency,
       }
 
@@ -1124,6 +1055,22 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         }
       }
 
+      const needsQuoteAwait =
+        selectedPaymentMethod === 'balance' &&
+        ((isWalletRecipient && walletReceiveAmount > 0) ||
+          (!isEasetagRecipient && !isWalletRecipient && receiveAmountValue > 0))
+
+      const quoteAlreadyWarm =
+        needsQuoteAwait &&
+        (isWalletRecipient
+          ? isStashedWalletQuoteFresh(quoteStashMeta)
+          : isStashedPayoutQuoteFresh(quoteStashMeta))
+
+      if (needsQuoteAwait && !quoteAlreadyWarm) {
+        setIsContinuePending(true)
+        continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+      }
+
       const stashedWalletQuote =
         selectedPaymentMethod === 'balance' &&
         isWalletRecipient &&
@@ -1133,11 +1080,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 noahService.createWalletSendQuote({
                   recipientId: recipient.id,
                   sourceBalanceCurrency: selectedBalanceCurrency,
-                  amountEntryMode,
-                  ...(amountEntryMode === 'receive' ? { receiveAmount: receiveAmountValue } : {}),
-                  ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-                    ? { sendAmount: navAmounts.sendAmount }
-                    : {}),
+                  amountEntryMode: 'receive',
+                  receiveAmount: receiveAmountValue,
                 }),
               quoteStashMeta,
             )
@@ -1222,7 +1166,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           receiveAmountValue,
           selectedBalanceCurrency,
           receiveCurrency: recipient.currency,
-          amountEntryMode,
+          amountEntryMode: isWalletRecipient ? 'receive' : amountEntryMode,
           amountScreenSendAmount: navAmounts.sendAmount,
           transactionId,
           isWalletSend: Boolean(stashedWalletQuote),
@@ -1310,6 +1254,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     } catch (e) {
       console.error('[SendAmount] continue failed:', e)
       showError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
+    } finally {
+      if (continueSpinnerTimerRef.current) {
+        clearTimeout(continueSpinnerTimerRef.current)
+        continueSpinnerTimerRef.current = null
+      }
+      setIsContinuePending(false)
+      setIsContinueLoading(false)
     }
   }
 
@@ -1460,12 +1411,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       exchangePreviewReady={exchangePreviewReady}
                       showExchangePreviewSkeleton={showExchangePreviewSkeleton}
                       needsNoahRateForSend={needsNoahRateForSend}
-                      needsCryptoRateForSend={needsCryptoRateForSend}
+                      needsCryptoRateForSend={false}
                       noahRatesLoading={noahRatesLoading}
-                      cryptoRatesLoading={cryptoRatesLoading}
+                      cryptoRatesLoading={false}
                       manualQuoteLoading={manualQuoteLoading}
                       hasNoahRateForPair={hasNoahRateForPair}
-                      hasValidCryptoRateForPair={hasValidCryptoRateForPair}
+                      hasValidCryptoRateForPair
+                      isContinueLoading={isContinueLoading}
                       selectedPaymentMethod={selectedPaymentMethod}
                       selectedBalanceCurrency={selectedBalanceCurrency}
                       selectedOtherCurrency={selectedOtherCurrency}
@@ -1567,10 +1519,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         </Text>
                       </View>
                     </View>
-                  ) : needsCryptoRateForSend && !cryptoRatesLoading && !hasValidCryptoRateForPair ? (
-                    <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>
-                      Exchange rate unavailable. Try again shortly.
-                    </Text>
                   ) : needsNoahRateForSend && !noahRatesLoading && !hasNoahRateForPair ? (
                     <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>
                       Exchange rate unavailable. Try again shortly.
@@ -1799,15 +1747,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               end={{ x: 1, y: 0 }}
               style={styles.sendButtonGradient}
             >
-              <Text style={styles.sendButtonText}>
-                {selectedPaymentMethod === 'balance'
-                  ? 'Continue'
-                  : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
-                    ? 'Authorize'
-                    : selectedPaymentMethod
+              {isContinueLoading ? (
+                <ActivityIndicator color={colors.text.inverse} size="small" />
+              ) : (
+                <Text style={styles.sendButtonText}>
+                  {selectedPaymentMethod === 'balance'
+                    ? 'Continue'
+                    : selectedPaymentMethod === 'otherCurrency' &&
+                        selectedOtherCurrency &&
+                        selectedOtherPaymentMethod
                       ? 'Authorize'
-                      : 'Select Method'}
-              </Text>
+                      : selectedPaymentMethod
+                        ? 'Authorize'
+                        : 'Select Method'}
+                </Text>
+              )}
             </LinearGradient>
           </Pressable>
         </View>

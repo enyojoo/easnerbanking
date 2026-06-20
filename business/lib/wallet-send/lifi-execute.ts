@@ -7,7 +7,9 @@ import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-ma
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
 import type { WalletSendSessionRow } from "./wallet-send-session"
-import { quoteLifiWalletBridge } from "./lifi-wallet-quote"
+import { parseLifiToAmountHuman } from "./lifi-from-amount"
+import { meetsLifiReceiveTarget } from "./lifi-receive-search"
+import { quoteLifiWalletBridge, quoteLifiWalletBridgeFromAmountRaw } from "./lifi-wallet-quote"
 
 type TurnkeyClientLike = Record<string, (...args: unknown[]) => Promise<unknown>>
 
@@ -44,18 +46,37 @@ export async function executeLifiWalletSend(input: {
   )
   if (!fromAddress) return { ok: false, error: "no_source_vault" }
 
+  const slippage = 0.03
+  const storedFromAmountRaw = String(input.session.lifi_from_amount_raw || "").trim()
   let quote
   try {
-    quote = await quoteLifiWalletBridge({
-      source,
-      dest,
-      fromAddress,
-      toAddress: input.session.destination_address,
-      amountEntryMode: "receive",
-      receiveAmount: input.session.receive_amount,
-      customerRate: input.session.customer_rate,
-      lifiMid: input.session.lifi_mid,
-    })
+    if (storedFromAmountRaw) {
+      quote = await quoteLifiWalletBridgeFromAmountRaw({
+        source,
+        dest,
+        fromAddress,
+        toAddress: input.session.destination_address,
+        fromAmountRaw: storedFromAmountRaw,
+        slippage,
+      })
+      const toHuman = parseLifiToAmountHuman(quote, dest.decimals)
+      if (!meetsLifiReceiveTarget(toHuman, input.session.receive_amount, slippage)) {
+        return { ok: false, error: "lifi_receive_target_not_met" }
+      }
+    } else {
+      // Legacy sessions without stored fromAmount — full binary search.
+      quote = await quoteLifiWalletBridge({
+        source,
+        dest,
+        fromAddress,
+        toAddress: input.session.destination_address,
+        amountEntryMode: "receive",
+        receiveAmount: input.session.receive_amount,
+        customerRate: input.session.customer_rate,
+        lifiMid: input.session.lifi_mid,
+        slippage,
+      })
+    }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "lifi_quote_failed" }
   }

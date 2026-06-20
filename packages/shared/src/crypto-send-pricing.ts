@@ -27,6 +27,33 @@ function roundUsdc(n: number): number {
 }
 
 /**
+ * Ticket-sized LI.FI mid from a live quote (Noah payout 2B pattern).
+ * Uses receiveAmount / lifiFloor — not quote toAmount, which can overshoot the user's target.
+ */
+export function resolveLifiTicketPricingInput(input: {
+  receiveAmount: number
+  planningCustomerRate: number
+  planningLifiMid: number
+  lifiFloor: number
+  margin: number
+}): { customerRate: number; lifiMid: number } {
+  const { receiveAmount, planningCustomerRate, planningLifiMid, lifiFloor, margin } = input
+  if (!Number.isFinite(margin) || margin < 0 || margin >= 1) {
+    return { customerRate: planningCustomerRate, lifiMid: planningLifiMid }
+  }
+  if (receiveAmount > 0 && lifiFloor > 0) {
+    const ticketMid = receiveAmount / lifiFloor
+    if (Number.isFinite(ticketMid) && ticketMid > 0) {
+      return {
+        lifiMid: ticketMid,
+        customerRate: Number((ticketMid * (1 - margin)).toPrecision(14)),
+      }
+    }
+  }
+  return { customerRate: planningCustomerRate, lifiMid: planningLifiMid }
+}
+
+/**
  * LI.FI bridge pricing. Ledger and on-chain out both equal lifiFloor + marginAmount
  * (= customerPrincipal + routeCost). Margin is in customerRate; execute SPL-sends margin to fee wallet.
  * Direct Turnkey uses computeDirectTurnkeyWalletSendPricing instead.

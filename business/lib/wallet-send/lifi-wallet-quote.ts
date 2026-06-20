@@ -1,12 +1,14 @@
-import { resolveEffectiveWalletSendMin } from "@easner/shared"
 import { lifiQuote, type LifiQuoteResponse } from "@/lib/lifi/client"
 import type { WalletSendTokenRef } from "@/lib/lifi/token-map"
 import {
   estimateLifiFromAmountRaw,
   lifiFromAmountRawForSendBudget,
   lifiMinFromAmountRaw,
-  parseLifiToAmountHuman,
 } from "./lifi-from-amount"
+import {
+  findMinLifiFromAmountRaw,
+  maxLifiReceiveSearchSourceHuman,
+} from "./lifi-receive-search"
 
 const DEFAULT_LIFI_BRIDGE_MIN_SOURCE_USDC = 7
 
@@ -30,11 +32,20 @@ function isLifiNoQuotesError(err: unknown): boolean {
   return msg.includes("lifi_quote_failed:404") || msg.includes("No available quotes")
 }
 
-function lifiQuoteErrorMessage(err: unknown, input: {
-  receiveAsset: string
-  receiveNetwork: string
-  minReceive: number
-}): string {
+function lifiQuoteErrorMessage(
+  err: unknown,
+  input: {
+    receiveAsset: string
+    receiveNetwork: string
+    minReceive: number
+  },
+): string {
+  if (err instanceof Error && err.message === "lifi_receive_target_not_met") {
+    return (
+      `No LI.FI route for ${input.receiveAsset} on ${input.receiveNetwork} at this amount. ` +
+      `Try a larger amount or a different network.`
+    )
+  }
   if (isLifiNoQuotesError(err)) {
     return (
       `No LI.FI route for ${input.receiveAsset} on ${input.receiveNetwork} at this amount. ` +
@@ -42,6 +53,128 @@ function lifiQuoteErrorMessage(err: unknown, input: {
     )
   }
   return err instanceof Error ? err.message : "lifi_quote_failed"
+}
+
+type BridgeQuoteParams = {
+  fromChain: number | string
+  toChain: number | string
+  fromToken: string
+  toToken: string
+  fromAddress: string
+  toAddress: string
+  slippage: number
+}
+
+function bridgeQuoteParams(input: {
+  source: WalletSendTokenRef
+  dest: WalletSendTokenRef
+  fromAddress: string
+  toAddress: string
+  slippage: number
+}): BridgeQuoteParams {
+  return {
+    fromChain: input.source.chainId,
+    toChain: input.dest.chainId,
+    fromToken: input.source.address,
+    toToken: input.dest.address,
+    fromAddress: input.fromAddress,
+    toAddress: input.toAddress,
+    slippage: input.slippage,
+  }
+}
+
+/** Send mode: fixed fromAmount = sendBudget; accept live toAmount (no slippage bump). */
+async function quoteLifiWalletBridgeSend(input: {
+  source: WalletSendTokenRef
+  dest: WalletSendTokenRef
+  fromAddress: string
+  toAddress: string
+  sendBudget: number
+  slippage: number
+}): Promise<LifiQuoteResponse> {
+  const fromAmountRaw = lifiFromAmountRawForSendBudget(input.sendBudget, input.source.decimals)
+  const params = bridgeQuoteParams(input)
+
+  let lastErr: unknown
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await lifiQuote({ ...params, fromAmount: fromAmountRaw, fee: 0 })
+    } catch (e) {
+      lastErr = e
+      if (!isLifiNoQuotesError(e) || attempt >= 3) break
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error("lifi_quote_failed")
+}
+
+/** Receive mode: binary search minimum fromAmount for target receive. */
+async function quoteLifiWalletBridgeReceive(input: {
+  source: WalletSendTokenRef
+  dest: WalletSendTokenRef
+  fromAddress: string
+  toAddress: string
+  receiveAmount: number
+  customerRate: number
+  lifiMid: number
+  slippage: number
+}): Promise<LifiQuoteResponse> {
+  const minSourceHuman = getLifiBridgeMinSourceUsdc()
+  const maxSourceHuman = maxLifiReceiveSearchSourceHuman({
+    receiveAmount: input.receiveAmount,
+    lifiMid: input.lifiMid,
+    minSourceHuman,
+  })
+  const initialHighRaw = lifiMinFromAmountRaw(
+    estimateLifiFromAmountRaw({
+      receiveAmount: input.receiveAmount,
+      customerRate: input.customerRate,
+      lifiMid: input.lifiMid,
+      sourceDecimals: input.source.decimals,
+      slippage: input.slippage,
+      minSourceHuman,
+    }),
+    input.source.decimals,
+    minSourceHuman,
+  )
+  const params = bridgeQuoteParams(input)
+
+  const { quote } = await findMinLifiFromAmountRaw({
+    receiveAmount: input.receiveAmount,
+    lifiMid: input.lifiMid,
+    sourceDecimals: input.source.decimals,
+    destDecimals: input.dest.decimals,
+    slippage: input.slippage,
+    minSourceHuman,
+    maxSourceHuman,
+    initialHighRaw,
+    quoteFn: (fromAmountRaw) => lifiQuote({ ...params, fromAmount: fromAmountRaw, fee: 0 }),
+  })
+
+  return quote
+}
+
+/** Single LI.FI quote at a known fromAmount (execute re-quote after quote-time binary search). */
+export async function quoteLifiWalletBridgeFromAmountRaw(input: {
+  source: WalletSendTokenRef
+  dest: WalletSendTokenRef
+  fromAddress: string
+  toAddress: string
+  fromAmountRaw: string
+  slippage?: number
+}): Promise<LifiQuoteResponse> {
+  const fromAmountRaw = String(input.fromAmountRaw || "").trim()
+  if (!fromAmountRaw || fromAmountRaw === "0") {
+    throw new Error("lifi_from_amount_raw_required")
+  }
+  const params = bridgeQuoteParams({
+    source: input.source,
+    dest: input.dest,
+    fromAddress: input.fromAddress,
+    toAddress: input.toAddress,
+    slippage: input.slippage ?? 0.03,
+  })
+  return lifiQuote({ ...params, fromAmount: fromAmountRaw, fee: 0 })
 }
 
 export async function quoteLifiWalletBridge(input: {
@@ -57,12 +190,7 @@ export async function quoteLifiWalletBridge(input: {
   slippage?: number
 }): Promise<LifiQuoteResponse> {
   const slippage = input.slippage ?? 0.03
-  const minReceive = resolveEffectiveWalletSendMin({
-    receiveCurrency: input.dest.asset,
-    receiveNetwork: input.dest.network,
-    customerRate: input.customerRate,
-    minSourceUsdc: getLifiBridgeMinSourceUsdc(),
-  })
+  const minReceive = minReceiveForLifiBridge(input.customerRate)
 
   if (input.amountEntryMode === "receive" && input.receiveAmount < minReceive) {
     throw new Error(
@@ -70,66 +198,39 @@ export async function quoteLifiWalletBridge(input: {
     )
   }
 
-  let fromAmountRaw =
-    input.amountEntryMode === "send" && input.sendBudget != null && input.sendBudget > 0
-      ? lifiFromAmountRawForSendBudget(input.sendBudget, input.source.decimals)
-      : estimateLifiFromAmountRaw({
-          receiveAmount: input.receiveAmount,
-          customerRate: input.customerRate,
-          lifiMid: input.lifiMid,
-          sourceDecimals: input.source.decimals,
-          slippage,
-          minSourceHuman: getLifiBridgeMinSourceUsdc(),
-        })
-
-  fromAmountRaw = lifiMinFromAmountRaw(fromAmountRaw, input.source.decimals, getLifiBridgeMinSourceUsdc())
-
-  const params = {
-    fromChain: input.source.chainId,
-    toChain: input.dest.chainId,
-    fromToken: input.source.address,
-    toToken: input.dest.address,
-    fromAddress: input.fromAddress,
-    toAddress: input.toAddress,
-    fee: 0 as const,
-    slippage,
-  }
-
-  let lastErr: unknown
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      const quote = await lifiQuote({ ...params, fromAmount: fromAmountRaw })
-      const toHuman = parseLifiToAmountHuman(quote, input.dest.decimals)
-      const target =
-        input.amountEntryMode === "receive"
-          ? input.receiveAmount
-          : input.sendBudget != null && input.sendBudget > 0
-            ? input.sendBudget * input.customerRate
-            : input.receiveAmount
-
-      if (target > 0 && toHuman + 1e-9 < target * (1 - slippage)) {
-        const scale = Math.max(1.15, target / Math.max(toHuman, 1e-12))
-        const bumped = Math.ceil(Number(fromAmountRaw) * scale)
-        fromAmountRaw = String(Math.max(bumped, Number(lifiMinFromAmountRaw("1", input.source.decimals, getLifiBridgeMinSourceUsdc()))))
-        continue
+  try {
+    if (input.amountEntryMode === "send") {
+      const sendBudget = input.sendBudget
+      if (sendBudget == null || sendBudget <= 0) {
+        throw new Error("sendBudget must be positive for send mode.")
       }
-      return quote
-    } catch (e) {
-      lastErr = e
-      if (isLifiNoQuotesError(e) && attempt < 3) {
-        const bumped = Math.ceil(Number(fromAmountRaw) * 1.5)
-        fromAmountRaw = String(Math.max(bumped, Number(lifiMinFromAmountRaw("1", input.source.decimals, getLifiBridgeMinSourceUsdc()))))
-        continue
-      }
-      break
+      return await quoteLifiWalletBridgeSend({
+        source: input.source,
+        dest: input.dest,
+        fromAddress: input.fromAddress,
+        toAddress: input.toAddress,
+        sendBudget,
+        slippage,
+      })
     }
-  }
 
-  throw new Error(
-    lifiQuoteErrorMessage(lastErr, {
-      receiveAsset: input.dest.asset,
-      receiveNetwork: input.dest.network,
-      minReceive,
-    }),
-  )
+    return await quoteLifiWalletBridgeReceive({
+      source: input.source,
+      dest: input.dest,
+      fromAddress: input.fromAddress,
+      toAddress: input.toAddress,
+      receiveAmount: input.receiveAmount,
+      customerRate: input.customerRate,
+      lifiMid: input.lifiMid,
+      slippage,
+    })
+  } catch (e) {
+    throw new Error(
+      lifiQuoteErrorMessage(e, {
+        receiveAsset: input.dest.asset,
+        receiveNetwork: input.dest.network,
+        minReceive,
+      }),
+    )
+  }
 }

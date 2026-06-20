@@ -16,6 +16,7 @@ import { resolveWalletSendExecutionModel } from "./routing"
 import { pricingFromDirectTurnkey, pricingFromLifiQuote } from "./pricing"
 import { coerceWalletRecipientRow } from "./coerce-recipient"
 import { quoteLifiWalletBridge } from "./lifi-wallet-quote"
+import { parseLifiToAmountHuman } from "./lifi-from-amount"
 import {
   validateWalletRecipientForSend,
   walletDestinationAddress,
@@ -86,6 +87,10 @@ export async function buildWalletSendQuote(input: {
   let customerRate = 1
   let lifiMid = 1
   let receiveAmount: number
+  const sendBudget =
+    amountEntryMode === "send" && input.sendAmount != null && input.sendAmount > 0
+      ? input.sendAmount
+      : undefined
 
   if (executionModel === "direct_turnkey") {
     receiveAmount = normalizeDirectTurnkeyWalletSendReceiveAmount({
@@ -108,17 +113,30 @@ export async function buildWalletSendQuote(input: {
     customerRate = rateRow.rate
     lifiMid = rateRow.lifi_mid
 
-    receiveAmount = normalizeCryptoSendQuoteReceiveAmount({
-      amountEntryMode,
-      receiveAmount: Number(input.receiveAmount ?? 0),
-      sendBudget: input.sendAmount,
-      customerRate,
-    })
-    receiveAmount = Math.round(receiveAmount * 1_000_000) / 1_000_000
+    if (amountEntryMode === "send" && sendBudget != null) {
+      if (!Number.isFinite(sendBudget) || sendBudget <= 0) {
+        throw new Error("Amount must be positive.")
+      }
+      receiveAmount = 0
+    } else {
+      receiveAmount = normalizeCryptoSendQuoteReceiveAmount({
+        amountEntryMode,
+        receiveAmount: Number(input.receiveAmount ?? 0),
+        sendBudget: input.sendAmount,
+        customerRate,
+      })
+      receiveAmount = Math.round(receiveAmount * 1_000_000) / 1_000_000
+    }
   }
 
-  if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
-    throw new Error("Amount must be positive.")
+  if (executionModel === "direct_turnkey") {
+    if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
+      throw new Error("Amount must be positive.")
+    }
+  } else if (amountEntryMode !== "send") {
+    if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
+      throw new Error("Amount must be positive.")
+    }
   }
 
   const minReceive = resolveEffectiveWalletSendMin({
@@ -126,11 +144,18 @@ export async function buildWalletSendQuote(input: {
     receiveNetwork,
     customerRate: executionModel === "direct_turnkey" ? 1 : customerRate,
   })
-  const minCheck = validateWalletSendReceiveAmount(receiveAmount, receiveAsset, { minReceive })
-  if (!minCheck.ok) throw new Error(minCheck.message)
+
+  if (executionModel === "direct_turnkey") {
+    const minCheck = validateWalletSendReceiveAmount(receiveAmount, receiveAsset, { minReceive })
+    if (!minCheck.ok) throw new Error(minCheck.message)
+  } else if (amountEntryMode !== "send") {
+    const minCheck = validateWalletSendReceiveAmount(receiveAmount, receiveAsset, { minReceive })
+    if (!minCheck.ok) throw new Error(minCheck.message)
+  }
 
   let pricing
   let lifiQuoteId: string | undefined
+  let lifiFromAmountRaw: string | undefined
   let lifiFloorStr: string
 
   if (executionModel === "direct_turnkey") {
@@ -154,16 +179,23 @@ export async function buildWalletSendQuote(input: {
       fromAddress: probeFrom,
       toAddress: destinationAddress,
       amountEntryMode,
-      receiveAmount,
-      sendBudget:
-        amountEntryMode === "send" && input.sendAmount != null && input.sendAmount > 0
-          ? input.sendAmount
-          : undefined,
+      receiveAmount: amountEntryMode === "send" ? 0 : receiveAmount,
+      sendBudget,
       customerRate,
       lifiMid,
     })
 
+    if (amountEntryMode === "send") {
+      receiveAmount = roundReceive(receiveAsset, parseLifiToAmountHuman(quote, dest.decimals))
+      if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
+        throw new Error("LI.FI quote returned an invalid receive amount.")
+      }
+      const minCheck = validateWalletSendReceiveAmount(receiveAmount, receiveAsset, { minReceive })
+      if (!minCheck.ok) throw new Error(minCheck.message)
+    }
+
     lifiQuoteId = quote.id
+    lifiFromAmountRaw = String(quote.estimate?.fromAmount || "").trim() || undefined
     pricing = pricingFromLifiQuote({
       receiveAmount,
       customerRate,
@@ -171,6 +203,8 @@ export async function buildWalletSendQuote(input: {
       quote,
       sourceDecimals: source.decimals,
     })
+    customerRate = pricing.customerRate
+    lifiMid = pricing.lifiMid
     lifiFloorStr = pricing.lifiFloor.toFixed(6)
   }
 
@@ -194,6 +228,7 @@ export async function buildWalletSendQuote(input: {
     margin_amount: pricing.marginAmount,
     execution_model: executionModel,
     lifi_quote_id: lifiQuoteId,
+    lifi_from_amount_raw: lifiFromAmountRaw ?? null,
     expires_at: expiresAt,
   })
 

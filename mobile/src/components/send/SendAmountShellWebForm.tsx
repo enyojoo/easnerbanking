@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Platform,
   Keyboard,
+  ActivityIndicator,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
@@ -90,6 +91,7 @@ export type SendAmountShellWebFormProps = {
   amountFieldError: string | null
   tier1Ok: boolean
   sendButtonDisabled: boolean
+  isContinueLoading?: boolean
   onAmountChange: (text: string) => void
   onToggleAmountDirection: () => void
   onOpenPaymentMethodPicker: () => void
@@ -133,6 +135,7 @@ export function SendAmountShellWebForm({
   amountFieldError,
   tier1Ok,
   sendButtonDisabled,
+  isContinueLoading = false,
   onAmountChange,
   onToggleAmountDirection,
   onOpenPaymentMethodPicker,
@@ -367,7 +370,11 @@ export function SendAmountShellWebForm({
           end={{ x: 1, y: 0 }}
           style={styles.sendButtonGradient}
         >
-          <Text style={styles.sendButtonText}>{continueLabel}</Text>
+          {isContinueLoading ? (
+            <ActivityIndicator color={colors.text.inverse} size="small" />
+          ) : (
+            <Text style={styles.sendButtonText}>{continueLabel}</Text>
+          )}
         </LinearGradient>
       </Pressable>
     </View>

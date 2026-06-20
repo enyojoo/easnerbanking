@@ -1,9 +1,11 @@
+import { parseWalletSendMarginFromEnv } from "@easner/rate-sync"
 import type { LifiQuoteResponse } from "@/lib/lifi/client"
 import {
   computeCryptoSendPricing,
   computeDirectTurnkeyWalletSendPricing,
   parseWalletSendProcessingFeeBpsFromEnv,
   parseWalletSendProcessingFeeCapFromEnv,
+  resolveLifiTicketPricingInput,
   type CryptoSendPricing,
 } from "@easner/shared"
 
@@ -28,10 +30,18 @@ export function pricingFromLifiQuote(input: {
 }): CryptoSendPricing {
   const fromRaw = Number(input.quote.estimate?.fromAmount ?? 0)
   const lifiFloor = fromRaw / 10 ** input.sourceDecimals
+  const { customerRate, lifiMid } = resolveLifiTicketPricingInput({
+    receiveAmount: input.receiveAmount,
+    planningCustomerRate: input.customerRate,
+    planningLifiMid: input.lifiMid,
+    lifiFloor,
+    margin: parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN),
+  })
+
   return computeCryptoSendPricing({
     receiveAmount: input.receiveAmount,
-    customerRate: input.customerRate,
-    lifiMid: input.lifiMid,
+    customerRate,
+    lifiMid,
     lifiFloor,
     networkFee: parseLifiNetworkFeeUsd(input.quote),
   })

@@ -29,6 +29,7 @@ import {
   ArrowUpDown,
   Landmark,
   AlertCircle,
+  Loader2,
 } from "lucide-react"
 import {
   Dialog,
@@ -51,8 +52,6 @@ import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import {
   exchangeRatesToRateMap,
-  hasWalletSendFxDisplay,
-  isDirectTurnkeyWalletCorridor,
   resolveEffectivePayoutMin,
   resolveEffectiveWalletSendMin,
   getSendAmountNoteFieldUi,
@@ -122,16 +121,9 @@ export default function SendPage() {
   const [noahFxRates, setNoahFxRates] = useState<Record<string, number>>({})
   const [noahRateRows, setNoahRateRows] = useState<NoahWalletRateRow[]>([])
   const [noahRatesLoading, setNoahRatesLoading] = useState(false)
-  type CryptoSendRateRow = {
-    from_currency: string
-    to_currency: string
-    receive_network: string
-    rate: number
-    lifi_mid: number
-    as_of: string
-  }
-  const [cryptoRateRows, setCryptoRateRows] = useState<CryptoSendRateRow[]>([])
-  const [cryptoRatesLoading, setCryptoRatesLoading] = useState(false)
+  const [isContinuePending, setIsContinuePending] = useState(false)
+  const [isContinueLoading, setIsContinueLoading] = useState(false)
+  const continueSpinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
@@ -273,47 +265,10 @@ export default function SendPage() {
   }, [recipient?.currency, isWalletRecipient])
 
   useEffect(() => {
-    const asset = (recipient?.currency || "").trim().toUpperCase()
-    const network = (recipient?.walletNetwork || "").trim()
-    if (!isWalletRecipient || !asset || !network) {
-      setCryptoRatesLoading(false)
-      if (!isWalletRecipient) {
-        setCryptoRateRows([])
-      }
-      return
+    if (isWalletRecipient && amountEntryMode !== "receive") {
+      setAmountEntryMode("receive")
     }
-    let cancelled = false
-    setCryptoRatesLoading(true)
-    void (async () => {
-      try {
-        const params = new URLSearchParams({ destinations: asset, networks: network })
-        const res = await fetchWithSession(`/api/fx/crypto-rates?${params.toString()}`)
-        const data = (await res.json().catch(() => ({}))) as { rates?: CryptoSendRateRow[] }
-        if (!res.ok || cancelled) return
-        setCryptoRateRows(data.rates || [])
-      } catch {
-        if (!cancelled) setCryptoRateRows([])
-      } finally {
-        if (!cancelled) setCryptoRatesLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [isWalletRecipient, recipient?.currency, recipient?.walletNetwork])
-
-  const cryptoFxRates = useMemo(
-    () =>
-      noahWalletRowsToRateMap(
-        cryptoRateRows.map((r) => ({
-          from_currency: r.from_currency,
-          to_currency: r.to_currency,
-          rate: r.rate,
-          as_of: r.as_of,
-        })),
-      ),
-    [cryptoRateRows],
-  )
+  }, [isWalletRecipient, amountEntryMode, recipient?.id])
 
   const sendCurrency = useMemo(() => {
     if (paymentMethod === "balance" && sourceAccount) return sourceAccount.currency
@@ -321,10 +276,6 @@ export default function SendPage() {
     if (otherCurrency) return otherCurrency
     return "USD"
   }, [paymentMethod, sourceAccount, otherCurrency])
-
-  const walletNetwork = (recipient?.walletNetwork || "").trim()
-  const isDirectTurnkeyWallet =
-    isWalletRecipient && isDirectTurnkeyWalletCorridor(receiveCurrency, walletNetwork)
 
   const flowAmounts = useMemo(() => {
     if (!recipient || enteredAmount <= 0) {
@@ -342,21 +293,8 @@ export default function SendPage() {
       // Don't preview Noah/reference rates while the manual quote is in flight.
       return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
     }
-    if (isWalletRecipient && crossCurrency && !isDirectTurnkeyWallet) {
-      return convertNoahSendFlowAmounts({
-        direction: amountEntryMode,
-        amount: enteredAmount,
-        sendCurrency,
-        receiveCurrency,
-        rateMap: cryptoFxRates,
-      })
-    }
-    if (isDirectTurnkeyWallet && walletQuotePreview) {
-      return {
-        sendAmount: walletQuotePreview.sendAmount,
-        receiveAmount: walletQuotePreview.receiveAmount,
-        forwardRate: 1,
-      }
+    if (isWalletRecipient) {
+      return { sendAmount: enteredAmount, receiveAmount: enteredAmount, forwardRate: 1 }
     }
     return convertNoahSendFlowAmounts({
       direction: amountEntryMode,
@@ -372,10 +310,7 @@ export default function SendPage() {
     sendCurrency,
     receiveCurrency,
     noahFxRates,
-    cryptoFxRates,
     isWalletRecipient,
-    isDirectTurnkeyWallet,
-    walletQuotePreview,
     otherCurrency,
     manualSend.quote,
   ])
@@ -389,9 +324,8 @@ export default function SendPage() {
     quotedTotalDebited != null && quotedTotalDebited > 0 ? quotedTotalDebited : sendAmount
 
   const hasFx =
-    (isWalletRecipient
-      ? hasWalletSendFxDisplay(sendCurrency, receiveCurrency, walletNetwork)
-      : receiveCurrency !== sendCurrency) &&
+    !isWalletRecipient &&
+    receiveCurrency !== sendCurrency &&
     receiveAmount > 0 &&
     sendAmount > 0
   const forwardRate = flowAmounts.forwardRate
@@ -402,29 +336,6 @@ export default function SendPage() {
     !isEasetagRecipient &&
     !isWalletRecipient &&
     sendCurrency !== receiveCurrency
-
-  const needsCryptoRateForSend =
-    isBalanceSource &&
-    isWalletRecipient &&
-    sendCurrency !== receiveCurrency &&
-    !isDirectTurnkeyWallet
-
-  const activeCryptoRateRow = useMemo(() => {
-    const send = sendCurrency.trim().toUpperCase()
-    const receive = receiveCurrency.trim().toUpperCase()
-    const network = (recipient?.walletNetwork || "").trim()
-    return (
-      cryptoRateRows.find(
-        (r) =>
-          r.from_currency === send &&
-          r.to_currency === receive &&
-          r.receive_network === network,
-      ) ?? null
-    )
-  }, [cryptoRateRows, sendCurrency, receiveCurrency, recipient?.walletNetwork])
-
-  const hasValidCryptoRateForPair =
-    !needsCryptoRateForSend || (activeCryptoRateRow != null && activeCryptoRateRow.rate > 0)
 
   const activeNoahRateRow = useMemo(() => {
     const send = sendCurrency.trim().toUpperCase()
@@ -447,11 +358,10 @@ export default function SendPage() {
 
   const exchangePreviewReady =
     sendCurrency === receiveCurrency ||
+    isWalletRecipient ||
     (manualQuoteEnabled
       ? Boolean(manualSend.quote)
-      : isWalletRecipient
-        ? !needsCryptoRateForSend || hasValidCryptoRateForPair
-        : !needsNoahRateForSend || hasValidNoahRateForPair)
+      : !needsNoahRateForSend || hasValidNoahRateForPair)
 
   const displayBalanceForSource =
     sourceAccount && paymentMethod === "balance"
@@ -580,13 +490,12 @@ export default function SendPage() {
         customerRate: 1,
       })
     }
-    const rate = Number(activeCryptoRateRow?.rate ?? 0)
     return resolveEffectiveWalletSendMin({
       receiveCurrency,
       receiveNetwork: network,
-      customerRate: rate > 0 ? rate : 1,
+      customerRate: 1,
     })
-  }, [isWalletRecipient, recipient?.walletNetwork, receiveCurrency, activeCryptoRateRow?.rate])
+  }, [isWalletRecipient, recipient?.walletNetwork, receiveCurrency])
 
   const walletMinEnforcementEnabled = isWalletRecipient && isBalanceSource
 
@@ -599,11 +508,11 @@ export default function SendPage() {
     enabled: walletMinEnforcementEnabled,
     seedKey: walletMinSeedKey,
     minReceive: walletMinReceive,
-    amountEntryMode,
+    amountEntryMode: "receive",
     enteredAmount,
     sendCurrency,
     receiveCurrency,
-    rateMap: cryptoFxRates,
+    rateMap: {},
     onApplyEnteredAmount: (amount) => {
       setAmountStr(formatAmountForDisplay(amount.toFixed(2)))
     },
@@ -633,7 +542,7 @@ export default function SendPage() {
     sourceAccount.availableBalance >= balanceDebitAmount &&
     isBalanceSource &&
     tier1Complete &&
-    (isWalletRecipient ? hasValidCryptoRateForPair : hasValidNoahRateForPair) &&
+    (isWalletRecipient || hasValidNoahRateForPair) &&
     !payoutReceiveBelowMin &&
     !walletReceiveBelowMin &&
     (!needsProfileBeforeEasenetSend || (hasData && !profileLoading))
@@ -713,13 +622,8 @@ export default function SendPage() {
 
   const walletQuoteCacheKey = useMemo(() => {
     if (!recipient?.id || !(receiveAmount > 0)) return ""
-    return [
-      recipient.id,
-      amountEntryMode,
-      amountEntryMode === "send" ? sendAmount : receiveAmount,
-      sendCurrency,
-    ].join("|")
-  }, [recipient?.id, amountEntryMode, sendAmount, receiveAmount, sendCurrency])
+    return [recipient.id, receiveAmount, sendCurrency].join("|")
+  }, [recipient?.id, receiveAmount, sendCurrency])
 
   const payoutQuoteCacheKey = useMemo(() => {
     if (!recipient?.id || !(receiveAmount > 0)) return ""
@@ -817,12 +721,8 @@ export default function SendPage() {
           body: JSON.stringify({
             recipientId: recipient.id,
             sourceBalanceCurrency: sendCurrency,
-            amountEntryMode,
-            ...(amountEntryMode === "receive"
-              ? { receiveAmount }
-              : sendAmount > 0
-                ? { sendAmount }
-                : {}),
+            amountEntryMode: "receive",
+            receiveAmount,
           }),
         })
         const data = (await res.json().catch(() => ({}))) as {
@@ -870,7 +770,7 @@ export default function SendPage() {
   }, [needsPayoutQuoteBeforeConfirm, payoutQuoteCacheKey, recipient?.id, fetchPayoutQuote])
 
   const handleContinue = async () => {
-    if (!canContinue || !recipient) return
+    if (!canContinue || !recipient || isContinuePending || isContinueLoading) return
     if (isEasetagRecipient && paymentMethod === "otherCurrency") {
       setAmountFieldError("Easetag sends are only supported from your balance.")
       return
@@ -909,13 +809,15 @@ export default function SendPage() {
     const feeAmount = otherCurrency && manualSend.quote ? manualSend.quote.feeAmount : 0
     const totalAmount = otherCurrency && manualSend.quote ? manualSend.quote.totalAmount : sendAmount
 
+    const walletAmountEntryMode = isWalletRecipient ? ("receive" as const) : amountEntryMode
+
     const state: SendFlowState = {
       recipient: coerceBeneficiaryEasenetDisplay(recipient),
       amount: receiveAmount,
       receiveCurrency,
       sendAmount,
       sendCurrency,
-      amountEntryMode,
+      amountEntryMode: walletAmountEntryMode,
       sourceAccountId: sourceAccount?.id,
       paymentMethod,
       otherCurrency: otherCurrency ?? undefined,
@@ -929,35 +831,54 @@ export default function SendPage() {
       transactionId,
     }
     let flowState = state
-    if (needsPayoutQuoteBeforeConfirm) {
-      const quote = await fetchPayoutQuote()
-      if (!quote?.noah?.formSessionId) {
-        setAmountFieldError("Could not load payout quote. Try again.")
-        return
-      }
-      flowState = mapPayoutQuoteToFlowState(state, quote)
-    } else if (needsWalletQuoteBeforeConfirm) {
-      const quote = await fetchWalletQuote()
-      if (!quote?.formSessionId) {
-        setAmountFieldError("Could not load wallet send quote. Try again.")
-        return
-      }
-      flowState = mapWalletQuoteToFlowState(state, quote)
+    const needsQuoteAwait = needsPayoutQuoteBeforeConfirm || needsWalletQuoteBeforeConfirm
+    const quoteAlreadyWarm =
+      (needsWalletQuoteBeforeConfirm &&
+        walletQuoteCacheRef.current?.key === walletQuoteCacheKey) ||
+      (needsPayoutQuoteBeforeConfirm &&
+        payoutQuoteCacheRef.current?.key === payoutQuoteCacheKey)
+    if (needsQuoteAwait && !quoteAlreadyWarm) {
+      setIsContinuePending(true)
+      continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
     }
+    try {
+      if (needsPayoutQuoteBeforeConfirm) {
+        const quote = await fetchPayoutQuote()
+        if (!quote?.noah?.formSessionId) {
+          setAmountFieldError("Could not load payout quote. Try again.")
+          return
+        }
+        flowState = mapPayoutQuoteToFlowState(state, quote)
+      } else if (needsWalletQuoteBeforeConfirm) {
+        const quote = await fetchWalletQuote()
+        if (!quote?.formSessionId) {
+          setAmountFieldError("Could not load wallet send quote. Try again.")
+          return
+        }
+        flowState = mapWalletQuoteToFlowState(state, quote)
+      }
 
-    persistSendFlowState(flowState)
+      persistSendFlowState(flowState)
 
-    if (isBalanceSource) {
+      if (isBalanceSource) {
+        router.push("/send/confirm")
+        return
+      }
+
+      if (paymentMethod === "otherCurrency" && manualPaymentMethodId) {
+        router.push(manualSend.authorizePathForPaymentMethodId(manualPaymentMethodId))
+        return
+      }
+
       router.push("/send/confirm")
-      return
+    } finally {
+      if (continueSpinnerTimerRef.current) {
+        clearTimeout(continueSpinnerTimerRef.current)
+        continueSpinnerTimerRef.current = null
+      }
+      setIsContinuePending(false)
+      setIsContinueLoading(false)
     }
-
-    if (paymentMethod === "otherCurrency" && manualPaymentMethodId) {
-      router.push(manualSend.authorizePathForPaymentMethodId(manualPaymentMethodId))
-      return
-    }
-
-    router.push("/send/confirm")
   }
 
   return (
@@ -984,7 +905,7 @@ export default function SendPage() {
             <Label className="text-muted-foreground mb-0 shrink-0 text-sm font-medium leading-none">
               Amount ({amountEntryMode === "receive" ? receiveCurrency : sendCurrency})
             </Label>
-            {receiveCurrency !== sendCurrency ? (
+            {receiveCurrency !== sendCurrency && !isWalletRecipient ? (
               <div className="flex min-w-0 flex-1 items-center justify-end text-sm text-muted-foreground">
                 {manualQuoteLoading ? (
                   <Skeleton className="h-4 w-52 max-w-full" />
@@ -994,13 +915,7 @@ export default function SendPage() {
                   </span>
                 ) : needsNoahRateForSend && noahRatesLoading ? (
                   <Skeleton className="h-4 w-52 max-w-full" />
-                ) : needsCryptoRateForSend && cryptoRatesLoading ? (
-                  <Skeleton className="h-4 w-52 max-w-full" />
                 ) : needsNoahRateForSend && !hasValidNoahRateForPair ? (
-                  <span className="text-destructive text-xs">
-                    Exchange rate unavailable. Try again shortly.
-                  </span>
-                ) : needsCryptoRateForSend && !hasValidCryptoRateForPair ? (
                   <span className="text-destructive text-xs">
                     Exchange rate unavailable. Try again shortly.
                   </span>
@@ -1143,10 +1058,19 @@ export default function SendPage() {
       <Button
         size="lg"
         className="w-full h-12"
-        disabled={!canContinue}
+        disabled={!canContinue || isContinuePending || isContinueLoading}
         onClick={handleContinue}
       >
-        {isAuthorizeFlow ? "Authorize" : "Continue"}
+        {isContinueLoading ? (
+          <span className="inline-flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            {isAuthorizeFlow ? "Authorize" : "Continue"}
+          </span>
+        ) : isAuthorizeFlow ? (
+          "Authorize"
+        ) : (
+          "Continue"
+        )}
       </Button>
 
       <Dialog open={sourceSheetOpen} onOpenChange={setSourceSheetOpen}>

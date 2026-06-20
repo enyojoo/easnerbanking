@@ -19,6 +19,7 @@ export type WalletSendSessionRow = {
   margin_amount: number
   execution_model: WalletSendExecutionModel
   lifi_quote_id?: string | null
+  lifi_from_amount_raw?: string | null
   status: string
   expires_at: string
 }
@@ -40,6 +41,8 @@ function rowFromDb(data: Record<string, unknown>): WalletSendSessionRow {
     margin_amount: Number(data.margin_amount),
     execution_model: data.execution_model as WalletSendExecutionModel,
     lifi_quote_id: data.lifi_quote_id == null ? null : String(data.lifi_quote_id),
+    lifi_from_amount_raw:
+      data.lifi_from_amount_raw == null ? null : String(data.lifi_from_amount_raw),
     status: String(data.status),
     expires_at: String(data.expires_at),
   }
@@ -65,6 +68,7 @@ export async function createWalletSendSession(
     margin_amount: input.margin_amount,
     execution_model: input.execution_model,
     lifi_quote_id: input.lifi_quote_id ?? null,
+    lifi_from_amount_raw: input.lifi_from_amount_raw ?? null,
     status: "quoted",
     expires_at: input.expires_at,
   })

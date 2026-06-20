@@ -14,7 +14,10 @@
  *   SOURCE_CURRENCY — USD | EUR balance bucket (default USD)
  */
 import { applyCryptoCustomerRate, parseWalletSendMarginFromEnv } from "@easner/rate-sync"
-import { computeCryptoSendPricing } from "../../packages/shared/src/crypto-send-pricing"
+import {
+  computeCryptoSendPricing,
+  resolveLifiTicketPricingInput,
+} from "../../packages/shared/src/crypto-send-pricing"
 import {
   computeDirectTurnkeyWalletSendPricing,
   parseWalletSendProcessingFeeBpsFromEnv,
@@ -23,13 +26,10 @@ import {
 import type { LifiQuoteResponse } from "../lib/lifi/client"
 import { lifiQuote } from "../lib/lifi/client"
 import { resolveWalletSendToken, sourceSolVaultToken } from "../lib/lifi/token-map"
-import {
-  estimateLifiFromAmountRaw,
-  lifiMinFromAmountRaw,
-  parseLifiToAmountHuman,
-} from "../lib/wallet-send/lifi-from-amount"
+import { parseLifiToAmountHuman } from "../lib/wallet-send/lifi-from-amount"
 import { listWalletSendCorridors } from "../lib/wallet-send/corridors"
 import { isDirectTurnkeyCorridor } from "../lib/wallet-send/routing"
+import { quoteLifiWalletBridge } from "../lib/wallet-send/lifi-wallet-quote"
 
 function parseLifiNetworkFeeUsd(quote: LifiQuoteResponse): number {
   const gas = quote.estimate?.gasCosts ?? []
@@ -52,10 +52,17 @@ function pricingFromLifiQuote(input: {
 }) {
   const fromRaw = Number(input.quote.estimate?.fromAmount ?? 0)
   const lifiFloor = fromRaw / 10 ** input.sourceDecimals
+  const { customerRate, lifiMid } = resolveLifiTicketPricingInput({
+    receiveAmount: input.receiveAmount,
+    planningCustomerRate: input.customerRate,
+    planningLifiMid: input.lifiMid,
+    lifiFloor,
+    margin: parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN),
+  })
   return computeCryptoSendPricing({
     receiveAmount: input.receiveAmount,
-    customerRate: input.customerRate,
-    lifiMid: input.lifiMid,
+    customerRate,
+    lifiMid,
     lifiFloor,
     networkFee: parseLifiNetworkFeeUsd(input.quote),
   })
@@ -186,41 +193,18 @@ async function rowForLifiBridge(input: {
     const margin = parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN)
     const { lifiMid, tool } = await probeLifiMid(source, dest)
     const customerRate = applyCryptoCustomerRate(lifiMid, margin)
-    const slippage = 0.03
-    const minSourceUsdc = 7
-    let fromAmountRaw = estimateLifiFromAmountRaw({
+
+    const bridgeQuote = await quoteLifiWalletBridge({
+      source,
+      dest,
+      fromAddress: PROBE_FROM,
+      toAddress: dummyTo(dest.network),
+      amountEntryMode: "receive",
       receiveAmount: input.receiveAmount,
       customerRate,
       lifiMid,
-      sourceDecimals: source.decimals,
-      slippage,
-      minSourceHuman: minSourceUsdc,
     })
-    fromAmountRaw = lifiMinFromAmountRaw(fromAmountRaw, source.decimals, minSourceUsdc)
 
-    const params = {
-      fromChain: source.chainId,
-      toChain: dest.chainId,
-      fromToken: source.address,
-      toToken: dest.address,
-      fromAddress: PROBE_FROM,
-      toAddress: dummyTo(dest.network),
-      fee: 0 as const,
-      slippage,
-    }
-
-    let bridgeQuote: LifiQuoteResponse | null = null
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const q = await lifiQuote({ ...params, fromAmount: fromAmountRaw })
-      const toHuman = parseLifiToAmountHuman(q, dest.decimals)
-      if (toHuman + 1e-9 >= input.receiveAmount * (1 - slippage)) {
-        bridgeQuote = q
-        break
-      }
-      const scale = Math.max(1.15, input.receiveAmount / Math.max(toHuman, 1e-12))
-      fromAmountRaw = String(Math.ceil(Number(fromAmountRaw) * scale))
-    }
-    if (!bridgeQuote) throw new Error("lifi_quote_did_not_meet_receive_target")
     const p = pricingFromLifiQuote({
       receiveAmount: input.receiveAmount,
       customerRate,
@@ -232,8 +216,8 @@ async function rowForLifiBridge(input: {
       corridor,
       model: "lifi_bridge",
       tool,
-      lifiMid,
-      customerRate,
+      lifiMid: p.lifiMid,
+      customerRate: p.customerRate,
       receiveAmount: p.receiveAmount,
       youSend: p.customerPrincipal,
       exchangeFee: p.routeCost,
