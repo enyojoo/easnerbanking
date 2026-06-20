@@ -82,8 +82,8 @@ function identifierChannels(items: ChannelItem[]): ChannelItem[] {
   return items.filter((c) => String(c.PaymentMethodCategory ?? "").toLowerCase() === "identifier")
 }
 
-/** Noah MTN mobile corridors where product copy uses MTN MoMo (GH, RW). */
-const MTN_MOMO_COUNTRIES = new Set(["GH", "RW"])
+/** Noah MTN mobile corridors where product copy uses MTN MoMo (GH). */
+const MTN_MOMO_COUNTRIES = new Set(["GH"])
 
 function mtnProviderLabel(countryCode: string): string {
   const cc = countryCode.toUpperCase()

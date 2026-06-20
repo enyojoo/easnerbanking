@@ -80,7 +80,7 @@ describe("mobileProviderLabelsFromSellItems", () => {
       ],
       "RW",
     )
-    expect(labels).toEqual(["Airtel Money", "MTN MoMo"])
+    expect(labels).toEqual(["Airtel Money", "MTN"])
   })
 
   it("resolves prepare substrings from issuer-backed labels", () => {
@@ -88,7 +88,7 @@ describe("mobileProviderLabelsFromSellItems", () => {
     expect(mobileProviderPrepareSubstrings("Vodafone")).toEqual(["vodafone"])
     expect(mobileProviderPrepareSubstrings("MTN MoMo")).toEqual(["mtn", "momo"])
     expect(labelFromNoahIssuer("MTN", "GH")).toBe("MTN MoMo")
-    expect(labelFromNoahIssuer("MTN", "RW")).toBe("MTN MoMo")
+    expect(labelFromNoahIssuer("MTN", "RW")).toBe("MTN")
     expect(labelFromNoahIssuer("MPS", "RW")).toBe("Airtel Money")
   })
 })

@@ -64,8 +64,41 @@ export function SendSelectedRecipientSummary({
     ? (easenetPreview?.fullName || recipient.full_name).trim()
     : recipient.full_name
 
+  if (alignEnd) {
+    return (
+      <View style={styles.rootAlignEnd}>
+        <View style={styles.infoAlignEnd}>
+          <Text style={[styles.name, styles.textAlignEnd]} numberOfLines={1} ellipsizeMode="tail">
+            {displayName}
+          </Text>
+          {isEasenet ? (
+            <EasenetSubtitleRow
+              easetag={resolveRecipientEasetagForUi(recipient)}
+              accountKind={easenetPreview?.accountKind ?? recipient.payee_account_kind}
+              textStyle={styles.details}
+              gap={4}
+            />
+          ) : (
+            <PayoutSubtitleRow
+              {...getPayoutRecipientSubtitleParts(recipient)}
+              textStyle={styles.details}
+              gap={4}
+            />
+          )}
+        </View>
+        <View style={styles.avatarSlot}>
+          {isEasenet ? (
+            <EasenetRecipientAvatar recipient={recipient} easenetPreview={easenetPreview} />
+          ) : (
+            <PayoutRecipientAvatar recipient={recipient} size={36} />
+          )}
+        </View>
+      </View>
+    )
+  }
+
   return (
-    <View style={[styles.root, alignEnd && styles.rootAlignEnd]}>
+    <View style={styles.root}>
       <View style={styles.avatarSlot}>
         {isEasenet ? (
           <EasenetRecipientAvatar recipient={recipient} easenetPreview={easenetPreview} />
@@ -73,8 +106,8 @@ export function SendSelectedRecipientSummary({
           <PayoutRecipientAvatar recipient={recipient} size={36} />
         )}
       </View>
-      <View style={[styles.info, alignEnd && styles.infoAlignEnd]}>
-        <Text style={[styles.name, alignEnd && styles.textAlignEnd]} numberOfLines={1} ellipsizeMode="tail">
+      <View style={styles.info}>
+        <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
           {displayName}
         </Text>
         {isEasenet ? (
@@ -105,9 +138,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rootAlignEnd: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
+    gap: spacing[3],
     flexShrink: 1,
     minWidth: 0,
     maxWidth: '100%',

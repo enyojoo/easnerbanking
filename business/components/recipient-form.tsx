@@ -83,7 +83,7 @@ const mobileMoneyProvidersByCurrency: Record<string, string[]> = {
   KES: ["Airtel Money", "M-PESA"],
   GHS: ["AirtelTigo", "MTN MoMo", "Vodafone"],
   MWK: ["Airtel Money", "TNM"],
-  RWF: ["Airtel Money", "MTN MoMo"],
+  RWF: ["Airtel Money"],
   TZS: ["Airtel Money", "TigoPesa"],
   UGX: ["Airtel Money", "MTN"],
   ZMW: ["Airtel Money", "MTN", "TNM"],

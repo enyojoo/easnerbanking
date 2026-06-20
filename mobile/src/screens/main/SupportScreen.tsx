@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback } from 'react'
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   Pressable,
   Linking,
   Alert,
-  Animated,
 } from 'react-native'
 import { ArrowLeft, ChevronRight } from 'lucide-react-native'
 import { useFocusEffect } from '@react-navigation/native'
@@ -15,18 +14,13 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { presentIntercomMessenger } from '../../lib/intercom'
-import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing, motion } from '../../theme'
-import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
+import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
 export default function SupportScreen({ navigation }: NavigationProps) {
   const scrollBottomPadding = useScrollBottomPadding(spacing[4])
-  const headerAnim = useRef(new Animated.Value(0)).current
-  const contentAnim = useRef(new Animated.Value(0)).current
-
-  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
   useFocusEffect(
     useCallback(() => {
@@ -80,22 +74,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        <Animated.View
-          style={[
-            styles.header,
-            {
-              opacity: headerAnim,
-              transform: [
-                {
-                  translateY: headerAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-motion.screenEnterTranslateY, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
+        <View style={styles.header}>
           <Pressable
             android_ripple={ripple.neutral}
             style={styles.backButton}
@@ -109,37 +88,23 @@ export default function SupportScreen({ navigation }: NavigationProps) {
           <View style={styles.headerContent}>
             <Text style={styles.title}>Support</Text>
           </View>
-        </Animated.View>
+        </View>
 
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
         >
-          <Animated.View
-            style={{
-              opacity: contentAnim,
-              transform: [
-                {
-                  translateY: contentAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [motion.screenEnterTranslateY, 0],
-                  }),
-                },
-              ],
-            }}
-          >
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Get in Touch</Text>
-              {renderContactButton(
-                'Live Chat',
-                handleLiveChat,
-                '💬',
-                false,
-                'Message our team in the app',
-              )}
-              {renderContactButton('Email Support', handleEmailSupport, '📧', true, 'support@easner.com')}
-            </View>
-          </Animated.View>
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Get in Touch</Text>
+            {renderContactButton(
+              'Live Chat',
+              handleLiveChat,
+              '💬',
+              false,
+              'Message our team in the app',
+            )}
+            {renderContactButton('Email Support', handleEmailSupport, '📧', true, 'support@easner.com')}
+          </View>
         </ScrollView>
       </View>
     </ScreenWrapper>
