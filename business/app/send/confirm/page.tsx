@@ -14,6 +14,7 @@ import {
   getGlobalPayoutTransferMethod,
   hasWalletSendFxDisplay,
   resolvePayoutCountryCode,
+  resolveRecipientPayoutRail,
   resolveSendConfirmArrivalHint,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
@@ -87,9 +88,12 @@ export default function SendConfirmPage() {
   }, [state?.transactionId])
 
   const payoutRail =
-    state && (/mobile money/i.test(state.recipient.bankName || "") || state.recipient.mobileProvider)
-      ? ("mobile_money" as const)
-      : ("bank_transfer" as const)
+    state
+      ? resolveRecipientPayoutRail({
+          bankName: state.recipient.bankName,
+          mobileProvider: state.recipient.mobileProvider,
+        })
+      : "bank_transfer"
   const { hints: payoutHints } = usePayoutFormSchema({
     countryCode: state?.recipient.countryCode,
     currencyCode: state?.receiveCurrency,

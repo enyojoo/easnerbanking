@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { resolveRecipientPayoutRail } from "@easner/shared"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-payout-country"
 import { hasNoahSellChannel } from "@/lib/noah/channel-availability"
 type RecipientLike = {
@@ -21,7 +22,12 @@ function isEasenetRow(row: RecipientLike): boolean {
 }
 
 function isMobileRow(row: RecipientLike): boolean {
-  return Boolean(row.mobile_provider) || String(row.bank_name || "").toLowerCase().includes("mobile money")
+  return (
+    resolveRecipientPayoutRail({
+      bank_name: row.bank_name,
+      mobile_provider: row.mobile_provider,
+    }) === "mobile_money"
+  )
 }
 
 export type PayoutCorridorGateOptions = {

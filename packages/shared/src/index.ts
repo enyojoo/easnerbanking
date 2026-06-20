@@ -181,6 +181,7 @@ export {
   getPayoutRecipientSubtitleParts,
   isMobileMoneyPayoutRow,
   isWalletPayoutRow,
+  resolveRecipientPayoutRail,
   truncateMiddle,
   type PayoutRecipientSubtitleInput,
 } from "./payout-recipient-subtitle"

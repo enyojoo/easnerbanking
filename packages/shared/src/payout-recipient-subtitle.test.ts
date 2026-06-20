@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest"
 import {
   formatPayoutRecipientSubtitle,
   getPayoutRecipientSubtitleParts,
+  resolveRecipientPayoutRail,
 } from "./payout-recipient-subtitle"
+import { resolveEffectivePayoutMin } from "./payout-business-limits"
+import { validatePayoutAmountAgainstLimits } from "./payout-form-schema"
 
 describe("getPayoutRecipientSubtitleParts", () => {
   it("formats bank as bank lead and account number", () => {
@@ -67,5 +70,47 @@ describe("formatPayoutRecipientSubtitle", () => {
         fullAccountNumber: "123456789",
       }),
     ).toBe("Chase • 1234 5678 9")
+  })
+})
+
+describe("resolveRecipientPayoutRail", () => {
+  it("uses mobile_money when mobile_provider is set without Mobile Money bank label", () => {
+    expect(
+      resolveRecipientPayoutRail({
+        bank_name: "MTN MoMo",
+        mobile_provider: "MTN MoMo",
+      }),
+    ).toBe("mobile_money")
+  })
+
+  it("uses bank_transfer for plain GHS bank rows", () => {
+    expect(
+      resolveRecipientPayoutRail({
+        bank_name: "GTBank Plc",
+      }),
+    ).toBe("bank_transfer")
+  })
+})
+
+describe("Ghana mobile money minimum", () => {
+  it("requires 40 GHS receive for mobile money, not the 10 GHS bank floor", () => {
+    expect(
+      resolveEffectivePayoutMin({
+        hints: { limits: { min: "10" } },
+        currencyCode: "GHS",
+        rail: "mobile_money",
+      }),
+    ).toBe(40)
+
+    const limitCheck = validatePayoutAmountAgainstLimits({
+      amount: 10,
+      hints: { limits: { min: "10" } },
+      currencyCode: "GHS",
+      rail: "mobile_money",
+    })
+    expect(limitCheck.ok).toBe(false)
+    if (!limitCheck.ok) {
+      expect(limitCheck.message).toContain("40")
+    }
   })
 })

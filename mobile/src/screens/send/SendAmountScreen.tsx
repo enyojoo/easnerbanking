@@ -63,6 +63,7 @@ import {
   formatSendRateLabel,
   normalizePayoutReceiveAmountForCurrency,
   resolveEffectivePayoutMin,
+  resolveRecipientPayoutRail,
   resolvePayoutCountryCode,
   getSendAmountNoteFieldUi,
   isWideSendAmountSymbol,
@@ -265,7 +266,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     { code: 'EUR', name: 'Euro', symbol: '€' },
   ]
 
-  const payoutRail = recipient && isMobileMoneyRecipient(recipient) ? 'mobile_money' : 'bank_transfer'
+  const payoutRail =
+    recipient != null
+      ? resolveRecipientPayoutRail({
+          bank_name: recipient.bank_name,
+          mobile_provider: recipient.mobile_provider,
+        })
+      : 'bank_transfer'
   const payoutCountryCode = useMemo(() => {
     if (!recipient) return ''
     return resolvePayoutCountryCode({
@@ -884,6 +891,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const exchangeInfoAmountPositive =
     !!(recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0)
 
+  const payoutReceiveBelowMin =
+    payoutMinReceive != null &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    receiveAmount > 0 &&
+    receiveAmount < payoutMinReceive
+
   const sendButtonDisabled =
     isContinuePending ||
     isContinueLoading ||
@@ -900,6 +914,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       selectedPaymentMethod === 'balance' &&
       receiveAmount > 0 &&
       receiveAmount < walletMinReceive) ||
+    payoutReceiveBelowMin ||
     (exchangeInfoAmountPositive && showCrossCurrencyExchangeUi && !exchangePreviewReady)
 
   const showExchangePreviewSkeleton =

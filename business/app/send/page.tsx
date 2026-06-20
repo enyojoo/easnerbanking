@@ -52,6 +52,7 @@ import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import {
   exchangeRatesToRateMap,
+  resolveRecipientPayoutRail,
   resolveEffectivePayoutMin,
   resolveEffectiveWalletSendMin,
   getSendAmountNoteFieldUi,
@@ -407,10 +408,12 @@ export default function SendPage() {
     paymentMethod === "otherCurrency" &&
     Boolean(manualPaymentMethodId || otherPaymentMethod)
 
-  const payoutRail =
-    recipient && /mobile money/i.test(recipient.bankName || "")
-      ? ("mobile_money" as const)
-      : ("bank_transfer" as const)
+  const payoutRail = recipient
+    ? resolveRecipientPayoutRail({
+        bankName: recipient.bankName,
+        mobileProvider: recipient.mobileProvider,
+      })
+    : "bank_transfer"
   const { hints: payoutHints } = usePayoutFormSchema({
     countryCode: recipient?.countryCode,
     currencyCode: recipient?.currency,

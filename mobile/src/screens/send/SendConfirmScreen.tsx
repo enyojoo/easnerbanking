@@ -20,6 +20,7 @@ import {
   shouldShowWalletSendProcessingFee,
   qk,
   resolvePayoutCountryCode,
+  resolveRecipientPayoutRail,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
@@ -52,7 +53,6 @@ import type { PricingQuote } from '../../lib/noahService'
 import { noahService } from '../../lib/noahService'
 import type { PayoutPrepareSession } from '../../lib/payoutPrepareSession'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
-import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
@@ -276,7 +276,13 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient) : ''
   const easenetDisplay = useEasenetRecipientHydration(recipient ?? null)
   const sendDestinations = getSendDestinationsMemory()
-  const payoutRail = recipient && isMobileMoneyRecipient(recipient) ? 'mobile_money' : 'bank_transfer'
+  const payoutRail =
+    recipient != null
+      ? resolveRecipientPayoutRail({
+          bank_name: recipient.bank_name,
+          mobile_provider: recipient.mobile_provider,
+        })
+      : 'bank_transfer'
   const payoutCountryCode = recipient
     ? resolvePayoutCountryCode({
         countryCode: recipient.country_code,

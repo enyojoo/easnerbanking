@@ -1,8 +1,12 @@
 /** Row fields used for payout recipient subtitles (bank / mobile money / wallet). */
 export type PayoutRecipientSubtitleInput = {
   bankName?: string | null
+  /** Snake_case alias for API / mobile rows. */
+  bank_name?: string | null
   phone?: string | null
   mobileProvider?: string | null
+  /** Snake_case alias for API / mobile rows. */
+  mobile_provider?: string | null
   iban?: string | null
   accountNumber?: string | null
   fullAccountNumber?: string | null
@@ -27,8 +31,15 @@ function isEasetagRow(input: PayoutRecipientSubtitleInput): boolean {
 }
 
 export function isMobileMoneyPayoutRow(input: PayoutRecipientSubtitleInput): boolean {
-  const bank = String(input.bankName || "").toLowerCase()
-  return bank.includes("mobile money") || Boolean(input.mobileProvider)
+  const bank = String(input.bankName ?? input.bank_name ?? "").toLowerCase()
+  return bank.includes("mobile money") || Boolean(input.mobileProvider ?? input.mobile_provider)
+}
+
+/** Bank vs mobile money rail for Noah fiat payout mins and corridor hints. */
+export function resolveRecipientPayoutRail(
+  input: PayoutRecipientSubtitleInput,
+): "bank_transfer" | "mobile_money" {
+  return isMobileMoneyPayoutRow(input) ? "mobile_money" : "bank_transfer"
 }
 
 export function isWalletPayoutRow(input: PayoutRecipientSubtitleInput): boolean {
