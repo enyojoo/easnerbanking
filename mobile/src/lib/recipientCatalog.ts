@@ -261,7 +261,6 @@ export const recipientCatalog: RecipientCatalogEntry[] = [
   { countryCode: 'GA', countryName: 'Gabon', currencyCode: 'XAF', currencyName: 'Central African CFA Franc', recipientType: 'mobile_money', status: 'coming_soon', providers: ['Coming soon'], fields: mobileMoneyFields },
   { countryCode: 'ML', countryName: 'Mali', currencyCode: 'XOF', currencyName: 'West African CFA Franc', recipientType: 'mobile_money', status: 'coming_soon', providers: ['Coming soon'], fields: mobileMoneyFields },
   { countryCode: 'PH', countryName: 'Philippines', currencyCode: 'PHP', currencyName: 'Philippine Peso', recipientType: 'mobile_money', status: 'supported', providers: ['GCash', 'Maya'], fields: mobileMoneyFields },
-  { countryCode: 'ID', countryName: 'Indonesia', currencyCode: 'IDR', currencyName: 'Indonesian Rupiah', recipientType: 'mobile_money', status: 'supported', providers: ['DANA', 'OVO', 'GoPay'], fields: mobileMoneyFields },
   { countryCode: 'IN', countryName: 'India', currencyCode: 'INR', currencyName: 'Indian Rupee', recipientType: 'mobile_money', status: 'supported', providers: ['UPI'], fields: mobileMoneyFields },
   { countryCode: 'NG', countryName: 'Nigeria', currencyCode: 'USDT', currencyName: 'Tether USD', recipientType: 'wallet', status: 'supported', providers: ['TRON', 'Ethereum', 'Solana'], fields: walletFields },
   { countryCode: 'KE', countryName: 'Kenya', currencyCode: 'USDC', currencyName: 'USD Coin', recipientType: 'wallet', status: 'supported', providers: ['Ethereum', 'Solana'], fields: walletFields },

@@ -88,7 +88,6 @@ const mobileMoneyProvidersByCurrency: Record<string, string[]> = {
   UGX: ["Airtel Money", "MTN"],
   ZMW: ["Airtel Money", "MTN", "TNM"],
   PHP: ["GCash", "Maya"],
-  IDR: ["DANA", "OVO", "GoPay"],
   INR: ["UPI"],
 }
 
