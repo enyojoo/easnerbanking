@@ -68,16 +68,14 @@ export function PayoutBankCombobox({
                   <CommandItem
                     key={bank}
                     value={bank}
-                    className="min-w-0 overflow-hidden"
+                    className="items-start"
                     onSelect={() => {
                       onChange(bank)
                       setOpen(false)
                     }}
                   >
-                    <Check className={cn("mr-2 h-4 w-4 shrink-0", value === bank ? "opacity-100" : "opacity-0")} />
-                    <span className="min-w-0 flex-1 truncate" title={bank}>
-                      {bank}
-                    </span>
+                    <Check className={cn("mr-2 mt-0.5 h-4 w-4 shrink-0", value === bank ? "opacity-100" : "opacity-0")} />
+                    <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">{bank}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>

@@ -134,9 +134,7 @@ export function RecipientBankNameField({
                   close()
                 }}
               >
-                <Text style={styles.itemLabel} numberOfLines={2} ellipsizeMode="tail">
-                  {bank}
-                </Text>
+                <Text style={styles.itemLabel}>{bank}</Text>
                 {value === bank ? (
                   <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
                 ) : null}
