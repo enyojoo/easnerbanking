@@ -744,7 +744,7 @@ export function RecipientForm({
   )
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="min-w-0 space-y-6">
       {recipientTypeTabs.length > 1 ? (
         <div className="space-y-2 max-w-3xl">
           <label className="text-sm font-medium">Recipient Type</label>
@@ -781,7 +781,7 @@ export function RecipientForm({
         key={formData.recipientType}
         className="space-y-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-out"
       >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid min-w-0 grid-cols-1 gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {formData.recipientType === "easenet" && (
           <div className="space-y-4 md:col-span-2">
             <div className="space-y-2">
@@ -1385,7 +1385,7 @@ export function RecipientForm({
         )}
 
         {formData.recipientType === "bank" && (
-          <div className="min-w-0 space-y-2">
+          <div className="min-w-0 space-y-2 md:col-span-2">
             <label className="text-xs text-muted-foreground">Bank Name</label>
             {bankEnumOptions.length > 0 ? (
               <PayoutBankCombobox

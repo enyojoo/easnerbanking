@@ -606,7 +606,7 @@ export function TerminalPayoutSetupPanel({
       }
 
       <Dialog open={showAddPanel} onOpenChange={setShowAddPanel}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="min-w-0 max-w-lg overflow-x-hidden max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Payout Account</DialogTitle>
             <DialogDescription>

@@ -143,7 +143,7 @@ export function SettingsRecipientsTab() {
                   Add Recipient
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogContent className="min-w-0 overflow-x-hidden sm:max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add New Recipient</DialogTitle>
                   <DialogDescription>
@@ -242,7 +242,7 @@ export function SettingsRecipientsTab() {
       </Card>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="min-w-0 overflow-x-hidden sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Recipient</DialogTitle>
             <DialogDescription>Update the recipient&apos;s details.</DialogDescription>
