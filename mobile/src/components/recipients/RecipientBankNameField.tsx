@@ -92,14 +92,18 @@ export function RecipientBankNameField({
           <Text
             style={value ? styles.valueText : styles.placeholderText}
             numberOfLines={1}
+            ellipsizeMode="tail"
+            accessibilityLabel={value || placeholder}
           >
             {value || placeholder}
           </Text>
-          {showDropdown ? (
-            <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
-          ) : (
-            <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
-          )}
+          <View style={styles.selectorIcon}>
+            {showDropdown ? (
+              <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
+            ) : (
+              <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
+            )}
+          </View>
         </View>
       </Pressable>
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
@@ -152,6 +156,7 @@ const styles = StyleSheet.create({
   wrapper: {
     marginBottom: spacing[2],
     zIndex: 1000,
+    minWidth: 0,
   },
   wrapperActive: {
     zIndex: 4000,
@@ -164,23 +169,32 @@ const styles = StyleSheet.create({
     backgroundColor: colors.frame.background,
     minHeight: 48,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   selectorContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
+    minWidth: 0,
   },
   valueText: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     fontFamily: fontFamily.regular,
   },
   placeholderText: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
     fontFamily: fontFamily.regular,
+  },
+  selectorIcon: {
+    flexShrink: 0,
   },
   textInput: {
     borderWidth: 1.5,

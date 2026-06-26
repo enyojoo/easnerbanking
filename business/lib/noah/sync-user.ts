@@ -3,7 +3,7 @@ import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { mapNoahVerificationToKycStatus } from "./map-kyc"
 import { parseNoahCustomerForBusiness } from "./parse-noah-customer-for-business"
 import { parseNoahCustomerForUsers } from "./parse-noah-customer-for-users"
-import { extractNoahRejectionReasons } from "./rejection-reasons"
+import { extractNoahRejectionReasons, pickNoahRejectionReasonsToStore } from "./rejection-reasons"
 
 /**
  * Persist Noah customer id + mapped KYC/KYB status (+ decline reasons when rejected).
@@ -17,10 +17,23 @@ export async function syncNoahCustomerToSupabase(
 ): Promise<void> {
   const admin = createSupabaseAdmin()
   const kyc = mapNoahVerificationToKycStatus(customer)
-  const rejectionReasons = kyc === "rejected" ? extractNoahRejectionReasons(customer) : null
+  const extractedReasons = kyc === "rejected" ? extractNoahRejectionReasons(customer) : null
   const now = new Date().toISOString()
 
   if (target.kind === "business") {
+    let rejectionReasons = extractedReasons
+    if (kyc === "rejected") {
+      const { data: existingRow } = await admin
+        .from("businesses")
+        .select("noah_kyb_rejection_reasons")
+        .eq("id", target.businessId)
+        .maybeSingle()
+      rejectionReasons = pickNoahRejectionReasonsToStore(
+        existingRow?.noah_kyb_rejection_reasons as unknown[] | null | undefined,
+        extractedReasons,
+      )
+    }
+
     const update: Record<string, unknown> = {
       noah_customer_id: customerId,
       noah_kyb_status: kyc,
@@ -54,6 +67,19 @@ export async function syncNoahCustomerToSupabase(
       }
     }
     return
+  }
+
+  let rejectionReasons = extractedReasons
+  if (kyc === "rejected") {
+    const { data: existingRow } = await admin
+      .from("users")
+      .select("noah_kyc_rejection_reasons")
+      .eq("id", target.userId)
+      .maybeSingle()
+    rejectionReasons = pickNoahRejectionReasonsToStore(
+      existingRow?.noah_kyc_rejection_reasons as unknown[] | null | undefined,
+      extractedReasons,
+    )
   }
 
   const update: Record<string, unknown> = {

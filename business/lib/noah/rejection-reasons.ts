@@ -1,11 +1,76 @@
+const PLACEHOLDER_REJECTION_MESSAGES = new Set([
+  "Verification declined for this region.",
+  "Verification was declined. Review your documents and details, then try again or contact support if you need help.",
+])
+
+function readTrimmedString(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
+}
+
+function entityRejectionDetail(entity: Record<string, unknown>): string | null {
+  const rejectionData = entity.RejectionData ?? entity.rejectionData
+  if (rejectionData && typeof rejectionData === "object") {
+    const rd = rejectionData as Record<string, unknown>
+    const publicComment = readTrimmedString(rd.PublicComment ?? rd.publicComment)
+    if (publicComment) return publicComment
+  }
+
+  return (
+    readTrimmedString(entity.DeclinedReason) ??
+    readTrimmedString(entity.Reason) ??
+    readTrimmedString(entity.reason) ??
+    readTrimmedString(entity.Comments) ??
+    readTrimmedString(entity.comments) ??
+    readTrimmedString(entity.Message) ??
+    readTrimmedString(entity.message)
+  )
+}
+
+function entityRejectType(entity: Record<string, unknown>): string | null {
+  const rejectionData = entity.RejectionData ?? entity.rejectionData
+  if (!rejectionData || typeof rejectionData !== "object") return null
+  const rd = rejectionData as Record<string, unknown>
+  return readTrimmedString(rd.RejectType ?? rd.rejectType)
+}
+
+/** True when stored reasons are generic fallbacks, not Noah-provided detail. */
+export function isPlaceholderNoahRejectionReasons(reasons: unknown[] | null | undefined): boolean {
+  if (!reasons?.length) return true
+  return reasons.every((item) => {
+    if (typeof item === "string") return PLACEHOLDER_REJECTION_MESSAGES.has(item.trim())
+    if (!item || typeof item !== "object") return true
+    const o = item as Record<string, unknown>
+    const message = readTrimmedString(o.message)
+    const reason = readTrimmedString(o.reason)
+    const detail = reason ?? message
+    if (!detail) return true
+    return PLACEHOLDER_REJECTION_MESSAGES.has(detail)
+  })
+}
+
+/** Prefer richer webhook detail over later GET payloads that omit PublicComment. */
+export function pickNoahRejectionReasonsToStore(
+  existing: unknown[] | null | undefined,
+  incoming: unknown[] | null | undefined,
+): unknown[] | null {
+  if (!incoming?.length) return existing?.length ? existing : null
+  if (!existing?.length) return incoming
+  if (isPlaceholderNoahRejectionReasons(incoming) && !isPlaceholderNoahRejectionReasons(existing)) {
+    return existing
+  }
+  if (!isPlaceholderNoahRejectionReasons(incoming)) return incoming
+  return existing
+}
+
 /** Normalize Noah decline payloads into JSON we store on users / businesses. */
 export function extractNoahRejectionReasons(customer: Record<string, unknown>): unknown[] {
   const reasons: unknown[] = []
 
   const pushScalar = (v: unknown) => {
-    if (typeof v === "string" && v.trim()) {
-      reasons.push({ message: v.trim() })
-    }
+    const text = readTrimmedString(v)
+    if (text) reasons.push({ message: text })
   }
 
   const pushCollection = (v: unknown) => {
@@ -45,20 +110,15 @@ export function extractNoahRejectionReasons(customer: Record<string, unknown>): 
         const entity = raw as Record<string, unknown>
         const status = String(entity.Status ?? entity.status ?? "").toLowerCase()
         if (!status.includes("declin") && !status.includes("reject")) continue
-        const detail =
-          entity.DeclinedReason ??
-          entity.Reason ??
-          entity.reason ??
-          entity.Comments ??
-          entity.comments ??
-          entity.Message ??
-          entity.message ??
-          null
+        const detail = entityRejectionDetail(entity)
+        if (!detail) continue
+        const rejectType = entityRejectType(entity)
         reasons.push({
           entity: entity.Entity ?? entity.entity ?? null,
           status: entity.Status ?? entity.status ?? "Declined",
-          reason: detail != null ? String(detail) : null,
-          message: detail != null ? String(detail) : "Verification declined for this region.",
+          reason: detail,
+          message: detail,
+          ...(rejectType ? { rejectType } : {}),
         })
       }
     }
