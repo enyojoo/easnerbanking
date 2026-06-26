@@ -28,6 +28,7 @@ export {
   buildCaBankLocalSellForm,
   buildEurSepaSellForm,
   buildGbBankLocalSellForm,
+  buildIdBankLocalSellForm,
   buildIdentifierSellForm,
   buildUsBankSellForm,
   isNoahUsAchChannel,

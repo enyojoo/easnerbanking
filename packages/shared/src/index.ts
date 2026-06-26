@@ -147,6 +147,7 @@ export {
   recipientFormNeedsEmail,
   recipientFormNeedsAddress,
   recipientFormNeedsPhone,
+  recipientFormNeedsBankCode,
   formatPayoutArrivalHint,
   isWithinMinutesBankPayoutCorridor,
   resolveSendConfirmArrivalHint,
@@ -376,12 +377,14 @@ export {
   countryDisplayName,
   formatMaskedIdForDisplay,
   formatVerifiedAddressDisplay,
+  isBusinessProfileLockedFromKybFields,
   isProfileLockedFromKycFields,
   mapNoahIdTypeLabel,
   maskIdNumber,
   normalizeCountryIso,
 } from "./verified-identity"
 export type {
+  ProfileLockOptions,
   VerifiedCountryRef,
   VerifiedIdentityPayload,
 } from "./verified-identity"

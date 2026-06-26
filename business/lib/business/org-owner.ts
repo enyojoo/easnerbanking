@@ -37,6 +37,29 @@ export async function resolveOrgOwnerUserId(
   return orgUsers?.[0]?.id ?? fallbackUserId
 }
 
+/** True when the user is the org owner (or has no org — full personal profile). */
+export async function resolveIsOrgOwnerForUser(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  userId: string,
+  businessId: string | null | undefined,
+): Promise<boolean> {
+  if (!businessId) return true
+
+  const ownerUserId = await resolveOrgOwnerUserId(admin, businessId, userId)
+  const { data: row, error } = await admin
+    .from("business_memberships")
+    .select("role,status")
+    .eq("business_id", businessId)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (!error && row && row.status !== "invited") {
+    return normalizeMembershipRole(row.role) === "Owner"
+  }
+
+  return userId === ownerUserId
+}
+
 /** For webhooks: org owner user id for `transactions.user_id`, or null if unresolved. */
 export async function resolveBusinessOrgOwnerUserId(
   admin: ReturnType<typeof createSupabaseAdmin>,

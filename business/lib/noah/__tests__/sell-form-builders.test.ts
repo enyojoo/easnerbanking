@@ -7,6 +7,7 @@ import {
   buildCaBankLocalSellForm,
   buildEurSepaSellForm,
   buildGbBankLocalSellForm,
+  buildIdBankLocalSellForm,
   buildIdentifierSellForm,
   buildUsBankSellForm,
   isNoahUsAchChannel,
@@ -141,6 +142,27 @@ describe("buildGbBankLocalSellForm", () => {
     })
     expect((form.BankDetails as Record<string, unknown>).SortCode).toBe("123456")
     expect((form.BankDetails as Record<string, unknown>).BankName).toBe("Barclays")
+  })
+})
+
+describe("buildIdBankLocalSellForm", () => {
+  it("maps BankName, SWIFT BankCode, phone, and required purpose", () => {
+    const form = buildIdBankLocalSellForm({
+      accountNumber: "1234567890",
+      bankName: "Bank Mandiri",
+      swiftBic: "bmriidja",
+      fullName: "Jane Doe",
+      phone: "081234567890",
+      paymentPurpose: "family support",
+    })
+    expect(form.BankDetails).toEqual({
+      AccountNumber: "1234567890",
+      BankName: "Bank Mandiri",
+      BankCode: "BMRIIDJA",
+    })
+    expect(form.PaymentPurpose).toBe("family support")
+    expect(form.PhoneNumber).toBe("+6281234567890")
+    expect(form.AccountHolderName).toBeDefined()
   })
 })
 

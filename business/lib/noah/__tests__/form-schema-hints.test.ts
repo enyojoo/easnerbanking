@@ -26,6 +26,27 @@ describe("bankEnumFromFormSchema", () => {
     }
     expect(bankEnumFromFormSchema(schema)).toEqual(["Access Bank", "GTBank"])
   })
+
+  it("reads BankName enum when Bank is absent (ID BankLocal)", () => {
+    const schema = {
+      required: ["BankDetails", "PaymentPurpose"],
+      properties: {
+        BankDetails: {
+          type: "object",
+          properties: {
+            BankName: { type: "string", enum: ["Bank Mandiri", "Bank Central Asia (BCA)"] },
+            BankCode: { type: "string" },
+            AccountNumber: { type: "string" },
+          },
+        },
+        PaymentPurpose: { type: "string", enum: ["family support", "goods payment"] },
+      },
+    }
+    expect(bankEnumFromFormSchema(schema)).toEqual([
+      "Bank Mandiri",
+      "Bank Central Asia (BCA)",
+    ])
+  })
 })
 
 describe("mobileProviderLabelsFromSellItems", () => {
@@ -171,5 +192,37 @@ describe("normalizeFormSchemaHints", () => {
     })
     expect(hints.reference_required).toBe(true)
     expect(hints.amount_field_mode).toBe("note")
+  })
+
+  it("sets payment_purpose mode and needs_bank_code for ID BankLocal", () => {
+    const hints = normalizeFormSchemaHints({
+      ID: "ch-id",
+      PaymentMethodType: "BankLocal",
+      Country: "ID",
+      FiatCurrency: "IDR",
+      ProcessingSeconds: 86400,
+      FormSchema: {
+        required: ["BankDetails", "AccountHolderName", "PhoneNumber", "PaymentPurpose"],
+        properties: {
+          BankDetails: {
+            properties: {
+              BankName: { enum: ["Bank Mandiri"] },
+              BankCode: { type: "string", pattern: "^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$" },
+              AccountNumber: { type: "string" },
+            },
+          },
+          PhoneNumber: { type: "string" },
+          PaymentPurpose: {
+            type: "string",
+            enum: ["family support", "goods payment"],
+          },
+        },
+      },
+    })
+    expect(hints.bank_enum).toEqual(["Bank Mandiri"])
+    expect(hints.needs_bank_code).toBe(true)
+    expect(hints.needs_phone).toBe(true)
+    expect(hints.amount_field_mode).toBe("payment_purpose")
+    expect(hints.payment_purpose_enum).toEqual(["family support", "goods payment"])
   })
 })

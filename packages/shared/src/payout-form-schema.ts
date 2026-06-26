@@ -166,6 +166,11 @@ export function recipientFormNeedsPhone(hints: PayoutFieldsSchemaHint | null | u
   return Boolean(hints?.needs_phone)
 }
 
+/** Recipient form: ID BankLocal and similar require SWIFT/BIC (BankCode) on save. */
+export function recipientFormNeedsBankCode(hints: PayoutFieldsSchemaHint | null | undefined): boolean {
+  return Boolean(hints?.needs_bank_code)
+}
+
 /** Persist ISO2 country on recipient rows (picker value or currency default). */
 export function countryCodeForRecipientSave(input: {
   countryCode?: string | null

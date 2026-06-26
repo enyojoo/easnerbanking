@@ -65,7 +65,6 @@ type BusinessSettingsForm = {
   businessLogo: string | null
   businessType: string
   registrationNumber: string
-  taxId: string
   website: string
   email: string
   phone: string
@@ -110,7 +109,6 @@ export function SettingsBusinessTab() {
     businessLogo: null,
     businessType: "",
     registrationNumber: "",
-    taxId: "",
     website: "",
     email: "",
     phone: "",
@@ -138,7 +136,6 @@ export function SettingsBusinessTab() {
       businessLogo: profile.logoUrl ?? prev.businessLogo,
       businessType: profile.businessType || prev.businessType,
       registrationNumber: profile.registrationNumber || prev.registrationNumber,
-      taxId: profile.taxId || prev.taxId,
       baseCurrency: profile.baseCurrency || prev.baseCurrency,
       description: profile.description || prev.description,
       website: profile.website || prev.website,
@@ -158,7 +155,6 @@ export function SettingsBusinessTab() {
     profile.logoUrl,
     profile.businessType,
     profile.registrationNumber,
-    profile.taxId,
     profile.baseCurrency,
     profile.description,
     profile.website,
@@ -200,7 +196,6 @@ export function SettingsBusinessTab() {
           businessLogo: formData.businessLogo,
           businessType: formData.businessType,
           registrationNumber: formData.registrationNumber,
-          taxId: formData.taxId,
           baseCurrency: formData.baseCurrency,
           businessDescription: formData.description,
         })
@@ -208,7 +203,6 @@ export function SettingsBusinessTab() {
         updated = await updateBusinessProfile({
           ...(countryCode.trim() ? { countryCode } : {}),
           registrationNumber: formData.registrationNumber,
-          taxId: formData.taxId,
         })
       } else if (section === "address") {
         updated = await updateBusinessProfile({
@@ -241,7 +235,6 @@ export function SettingsBusinessTab() {
       businessLogo: p.logoUrl ?? prev.businessLogo,
       businessType: p.businessType || prev.businessType,
       registrationNumber: p.registrationNumber || prev.registrationNumber,
-      taxId: p.taxId || prev.taxId,
       baseCurrency: p.baseCurrency || prev.baseCurrency,
       description: p.description || prev.description,
       website: p.website || prev.website,
@@ -268,6 +261,7 @@ export function SettingsBusinessTab() {
 
   const selectedCountry = getCountryFromCode(countryCode)
   const kybFields = getKybFields(countryCode)
+  const profileLocked = profile.profileLocked ?? false
   const easetagDraftLen = formData.easetag.replace(/^@/, "").trim().length
   const easetagStatus =
     easetagDraftLen > 0 ?
@@ -346,7 +340,7 @@ export function SettingsBusinessTab() {
                 className={SETTINGS_CONTROL_SURFACE}
                 value={formData.businessName}
                 onChange={(e) => handleInputChange("businessName", e.target.value)}
-                disabled={editingSection !== "business"}
+                disabled={profileLocked || editingSection !== "business"}
               />
             </div>
             <div className="relative min-w-0 space-y-1.5">
@@ -505,7 +499,7 @@ export function SettingsBusinessTab() {
                   Save
                 </Button>
               </div>
-            ) : (
+            ) : profileLocked ? null : (
               <Button variant="outline" size="sm" onClick={() => handleEdit("legal")}>
                 <Edit className="h-4 w-4 mr-1" />
                 Edit
@@ -611,7 +605,7 @@ export function SettingsBusinessTab() {
                         handleInputChange(field.id as keyof BusinessSettingsForm, e.target.value)
                       }
                       placeholder={field.placeholder}
-                      disabled={editingSection !== "legal"}
+                      disabled={profileLocked || editingSection !== "legal"}
                     />
                   </div>
                 ))}
@@ -647,7 +641,7 @@ export function SettingsBusinessTab() {
                   Save
                 </Button>
               </div>
-            ) : (
+            ) : profileLocked ? null : (
               <Button variant="outline" size="sm" onClick={() => handleEdit("address")}>
                 <Edit className="h-4 w-4 mr-1" />
                 Edit
@@ -674,7 +668,7 @@ export function SettingsBusinessTab() {
               className={SETTINGS_CONTROL_SURFACE}
               value={formData.address}
               onChange={(e) => handleInputChange("address", e.target.value)}
-              disabled={editingSection !== "address"}
+              disabled={profileLocked || editingSection !== "address"}
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -685,7 +679,7 @@ export function SettingsBusinessTab() {
                 className={SETTINGS_CONTROL_SURFACE}
                 value={formData.city}
                 onChange={(e) => handleInputChange("city", e.target.value)}
-                disabled={editingSection !== "address"}
+                disabled={profileLocked || editingSection !== "address"}
               />
             </div>
             <div className="space-y-2">
@@ -695,7 +689,7 @@ export function SettingsBusinessTab() {
                 className={SETTINGS_CONTROL_SURFACE}
                 value={formData.state}
                 onChange={(e) => handleInputChange("state", e.target.value)}
-                disabled={editingSection !== "address"}
+                disabled={profileLocked || editingSection !== "address"}
               />
             </div>
             <div className="space-y-2">
@@ -705,7 +699,7 @@ export function SettingsBusinessTab() {
                 className={SETTINGS_CONTROL_SURFACE}
                 value={formData.zipCode}
                 onChange={(e) => handleInputChange("zipCode", e.target.value)}
-                disabled={editingSection !== "address"}
+                disabled={profileLocked || editingSection !== "address"}
               />
             </div>
           </div>

@@ -105,6 +105,7 @@ import { CountryFlag } from '../../components/flags/CountryFlag'
 import {
   getCountryCodeForCurrency,
   recipientFormNeedsAddress,
+  recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
 } from '@easner/shared'
@@ -918,6 +919,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         : null
     if (recipientFormNeedsEmail(schemaHints) && !newRecipient.email.trim()) return false
     if (recipientFormNeedsPhone(schemaHints) && !newRecipient.phoneNumber.trim()) return false
+    if (recipientFormNeedsBankCode(schemaHints)) {
+      const swift = newRecipient.swiftBic.trim()
+      if (!swift || !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) return false
+    }
     if (
       recipientFormNeedsAddress({ hints: schemaHints, currencyCode: newRecipient.currency }) &&
       selectedCountryCurrency?.countryCode !== 'US'
@@ -1044,6 +1049,26 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       if (!result.isValid) {
         setFieldErrors(prev => ({ ...prev, [fieldName]: result.error || '' }))
         return result
+      }
+    }
+
+    if (fieldName === 'swiftBic' && selectedCountryCurrency && selectedRecipientType === 'bank') {
+      const schemaHints = getPayoutFieldsSchemaForCorridor({
+        countryCode: selectedCountryCurrency.countryCode,
+        currencyCode: selectedCountryCurrency.currencyCode,
+        rail: 'bank_transfer',
+      })
+      if (recipientFormNeedsBankCode(schemaHints)) {
+        if (!value.trim()) {
+          const error = 'SWIFT/BIC is required'
+          setFieldErrors(prev => ({ ...prev, [fieldName]: error }))
+          return { isValid: false, error }
+        }
+        if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(value.trim())) {
+          const error = 'Enter a valid SWIFT/BIC code'
+          setFieldErrors(prev => ({ ...prev, [fieldName]: error }))
+          return { isValid: false, error }
+        }
       }
     }
 
@@ -2236,6 +2261,36 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                         {fieldErrors.accountNumber && (
                           <Text style={styles.errorText}>{fieldErrors.accountNumber}</Text>
                         )}
+                        {selectedCountryCurrency && selectedRecipientType === 'bank' &&
+                        recipientFormNeedsBankCode(
+                          getPayoutFieldsSchemaForCorridor({
+                            countryCode: selectedCountryCurrency.countryCode,
+                            currencyCode: selectedCountryCurrency.currencyCode,
+                            rail: 'bank_transfer',
+                          }),
+                        ) ? (
+                          <>
+                            <TextInput
+                              style={[styles.modalInput, fieldErrors.swiftBic && styles.modalInputError]}
+                              value={newRecipient.swiftBic}
+                              onChangeText={(text) => {
+                                const formatted = text.toUpperCase()
+                                setNewRecipient(prev => ({ ...prev, swiftBic: formatted }))
+                                validateField('swiftBic', formatted)
+                              }}
+                              onBlur={() => validateField('swiftBic', newRecipient.swiftBic)}
+                              placeholder="SWIFT/BIC *"
+                              placeholderTextColor={colors.text.secondary}
+                              autoCapitalize="characters"
+                              returnKeyType="done"
+                              onSubmitEditing={() => Keyboard.dismiss()}
+                              editable={!isSubmitting}
+                            />
+                            {fieldErrors.swiftBic ? (
+                              <Text style={styles.errorText}>{fieldErrors.swiftBic}</Text>
+                            ) : null}
+                          </>
+                        ) : null}
                       </View>
                     )}
 

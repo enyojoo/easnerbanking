@@ -2,6 +2,11 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import {
+  recipientFormNeedsBankCode,
+  recipientFormNeedsEmail,
+  recipientFormNeedsPhone,
+} from "@easner/shared"
+import {
   looksLikeMissingStructuredColumn,
   toRecipientLegacyPayload,
   type RecipientWritePayload,
@@ -24,7 +29,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const admin = createSupabaseAdmin()
   const { data: existing } = await admin
     .from("recipients")
-    .select("country_code,currency,mobile_provider,wallet_network,bank_name")
+    .select("country_code,currency,mobile_provider,wallet_network,bank_name,swift_bic,phone_number,email")
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle()
@@ -42,6 +47,75 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
   const gate = await payoutCorridorGate(admin, merged)
   if (gate) return gate
+
+  const cc = String(merged.country_code || "").toUpperCase()
+  const cur = String(merged.currency || "").toUpperCase()
+  const isMobile = Boolean(merged.mobile_provider)
+  const bankLabel = String(merged.bank_name || "").toLowerCase()
+  const isEasetagRow = bankLabel.includes("easetag") || bankLabel.includes("easenet")
+  if (cc && cur && !merged.wallet_network && !isEasetagRow) {
+    const rail = isMobile ? "mobile_money" : "bank_transfer"
+    const { data: corridor } = await admin
+      .from("payout_corridors")
+      .select("fields_schema")
+      .eq("country_code", cc)
+      .eq("currency_code", cur)
+      .eq("rail", rail)
+      .maybeSingle()
+    const bankEnum = (
+      corridor?.fields_schema as { bank_enum?: string[] } | null | undefined
+    )?.bank_enum
+    const bankName = String(payload.bank_name ?? existing.bank_name ?? "").trim()
+    if (
+      !isMobile &&
+      Array.isArray(bankEnum) &&
+      bankEnum.length > 0 &&
+      bankName &&
+      !bankEnum.includes(bankName)
+    ) {
+      return NextResponse.json(
+        { error: "Bank must be selected from the corridor list." },
+        { status: 400 },
+      )
+    }
+    const fieldsSchema = corridor?.fields_schema as
+      | { needs_email?: boolean; needs_phone?: boolean; needs_bank_code?: boolean }
+      | null
+      | undefined
+    if (!isMobile && recipientFormNeedsEmail(fieldsSchema ?? null)) {
+      const em = String(payload.email ?? existing.email ?? "").trim()
+      if (!em) {
+        return NextResponse.json(
+          { error: "Email is required for this payout corridor." },
+          { status: 400 },
+        )
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+        return NextResponse.json({ error: "Invalid email address." }, { status: 400 })
+      }
+    }
+    if (!isMobile && recipientFormNeedsPhone(fieldsSchema ?? null)) {
+      const phone = String(payload.phone_number ?? existing.phone_number ?? "").replace(/\s/g, "")
+      if (!phone) {
+        return NextResponse.json(
+          { error: "Phone number is required for this payout corridor." },
+          { status: 400 },
+        )
+      }
+    }
+    if (!isMobile && recipientFormNeedsBankCode(fieldsSchema ?? null)) {
+      const swift = String(payload.swift_bic ?? existing.swift_bic ?? "").trim()
+      if (!swift) {
+        return NextResponse.json(
+          { error: "SWIFT/BIC is required for this payout corridor." },
+          { status: 400 },
+        )
+      }
+      if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) {
+        return NextResponse.json({ error: "Invalid SWIFT/BIC code." }, { status: 400 })
+      }
+    }
+  }
 
   const primary = await admin
     .from("recipients")

@@ -75,10 +75,27 @@ export function countryDisplayName(iso: string | null | undefined, locale = "en"
   }
 }
 
-export function isProfileLockedFromKycFields(row: Record<string, unknown> | null | undefined): boolean {
+export type ProfileLockOptions = {
+  orgKybApproved?: boolean
+}
+
+export function isBusinessProfileLockedFromKybFields(
+  row: Record<string, unknown> | null | undefined,
+): boolean {
   if (!row) return false
+  const status = String(row.noah_kyb_status ?? "").toLowerCase()
+  return status === "approved" && row.kyb_verified_at != null
+}
+
+export function isProfileLockedFromKycFields(
+  row: Record<string, unknown> | null | undefined,
+  opts?: ProfileLockOptions,
+): boolean {
+  if (!row?.kyc_verified_at) return false
   const status = String(row.noah_kyc_status ?? "").toLowerCase()
-  return status === "approved" && row.kyc_verified_at != null
+  if (status === "approved") return true
+  if (opts?.orgKybApproved && row.kyc_id_type) return true
+  return false
 }
 
 /** Spaced display for masked ID (e.g. `2238 • • • 5976`). */
@@ -119,8 +136,9 @@ export function formatVerifiedAddressDisplay(
 
 export function buildVerifiedIdentityFromKycFields(
   row: Record<string, unknown> | null | undefined,
+  opts?: ProfileLockOptions,
 ): VerifiedIdentityPayload {
-  if (!row || !isProfileLockedFromKycFields(row)) {
+  if (!row || !isProfileLockedFromKycFields(row, opts)) {
     return { visible: false }
   }
   const hasId = Boolean(row.kyc_id_type || row.kyc_id_number)

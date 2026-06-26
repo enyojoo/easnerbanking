@@ -21,6 +21,8 @@ export type PayoutFieldsSchemaHint = {
   needs_address?: boolean
   needs_branch_code?: boolean
   needs_sort_code?: boolean
+  /** ID and similar: SWIFT/BIC on BankDetails.BankCode. */
+  needs_bank_code?: boolean
   limits?: { min?: string; max?: string }
   processing_seconds?: number
   /** Drives amount-screen control. */
@@ -71,11 +73,14 @@ function formFieldNode(
   return node && typeof node === "object" ? (node as Record<string, unknown>) : undefined
 }
 
-/** BankDetails.Bank enum (NG/KE/GH/ZA BankLocal). */
+/** BankDetails.Bank enum (NG/KE/GH/ZA) or BankName enum (ID/CAD/GB). */
 export function bankEnumFromFormSchema(
   schema: Record<string, unknown> | undefined,
 ): string[] | undefined {
-  return stringEnum(formFieldNode(schema, "Bank"))
+  return (
+    stringEnum(formFieldNode(schema, "Bank")) ??
+    stringEnum(formFieldNode(schema, "BankName"))
+  )
 }
 
 function identifierChannels(items: ChannelItem[]): ChannelItem[] {
@@ -178,10 +183,15 @@ export function normalizeFormSchemaHints(
   const referenceOptional =
     (referenceInSchema && !referenceRequired) || usBankOptionalReference
 
+  const paymentPurposeRequired =
+    purposeEnum != null &&
+    purposeEnum.length > 0 &&
+    isRequired(schema, "PaymentPurpose")
+
   let amount_field_mode: PayoutFieldsSchemaHint["amount_field_mode"] = "note_optional_only"
   if (usBankOptionalReference) {
     amount_field_mode = "note_optional_only"
-  } else if (purposeEnum && purposeEnum.length > 0 && country === "CA") {
+  } else if (paymentPurposeRequired) {
     amount_field_mode = "payment_purpose"
   } else if (referenceRequired) {
     amount_field_mode = "note"
@@ -207,6 +217,7 @@ export function normalizeFormSchemaHints(
       (country === "CA" && formFieldNode(schema, "AccountHolderAddress") != null),
     needs_branch_code: formFieldNode(schema, "BranchCode") != null,
     needs_sort_code: formFieldNode(schema, "SortCode") != null,
+    needs_bank_code: formFieldNode(schema, "BankCode") != null,
     limits:
       limitsRaw?.MinLimit || limitsRaw?.MaxLimit
         ? { min: limitsRaw.MinLimit, max: limitsRaw.MaxLimit }

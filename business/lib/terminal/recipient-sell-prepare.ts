@@ -6,6 +6,7 @@ import {
   buildCaBankLocalSellForm,
   buildEurSepaSellForm,
   buildGbBankLocalSellForm,
+  buildIdBankLocalSellForm,
   buildIdentifierSellForm,
   buildUsBankSellForm,
   fetchSellChannelItems,
@@ -293,6 +294,48 @@ export async function prepareSellFromRecipientRow(input: {
       sortCode,
       bankName,
       fullName,
+      paymentPurpose,
+    })
+    const prep = await prepareSellTransaction({
+      channelId: channel.channelId,
+      cryptoCurrency,
+      fiatAmount: fiat,
+      form,
+      customerId: noahCustomerId,
+    })
+    return { channelId: channel.channelId, prep }
+  }
+
+  if (fiatCurrency === "IDR") {
+    const payCountry = country === "ID" ? "ID" : country || "ID"
+    const accountNumber = String(row.account_number || "").trim()
+    const bankName = String(row.bank_name || "").trim()
+    const swiftBic = String(row.swift_bic || "").trim()
+    const phone = String(row.phone_number || "").trim()
+    if (!accountNumber || !bankName || !swiftBic || !phone) {
+      throw new Error(
+        "Indonesian bank recipients require account number, bank name, SWIFT/BIC, and phone number.",
+      )
+    }
+    if (!paymentPurpose) {
+      throw new Error("Payment purpose is required for Indonesian bank payouts.")
+    }
+    const channel = await findBankSellChannelId({
+      country: payCountry,
+      fiatCurrency,
+      cryptoCurrency,
+      preferAch: false,
+      preferSepa: false,
+    })
+    if (!channel) {
+      throw new Error("No Indonesian rupiah bank payout channel is available for this recipient.")
+    }
+    const form = buildIdBankLocalSellForm({
+      accountNumber,
+      bankName,
+      swiftBic,
+      fullName,
+      phone,
       paymentPurpose,
     })
     const prep = await prepareSellTransaction({

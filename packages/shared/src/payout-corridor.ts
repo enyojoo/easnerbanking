@@ -18,6 +18,7 @@ export type PayoutFieldsSchemaHint = {
   needs_address?: boolean
   needs_branch_code?: boolean
   needs_sort_code?: boolean
+  needs_bank_code?: boolean
   limits?: { min?: string; max?: string }
   processing_seconds?: number
   amount_field_mode: "note" | "payment_purpose" | "note_optional_only"

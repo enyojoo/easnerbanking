@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
-import { recipientFormNeedsEmail, recipientFormNeedsPhone } from "@easner/shared"
+import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone } from "@easner/shared"
 import {
   looksLikeMissingStructuredColumn,
   toRecipientLegacyPayload,
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       )
     }
     const fieldsSchema = corridor?.fields_schema as
-      | { needs_email?: boolean; needs_phone?: boolean }
+      | { needs_email?: boolean; needs_phone?: boolean; needs_bank_code?: boolean }
       | null
       | undefined
     if (!isMobile && recipientFormNeedsEmail(fieldsSchema ?? null)) {
@@ -99,6 +99,18 @@ export async function POST(request: Request) {
           { error: "Phone number is required for this payout corridor." },
           { status: 400 },
         )
+      }
+    }
+    if (!isMobile && recipientFormNeedsBankCode(fieldsSchema ?? null)) {
+      const swift = String(payload.swift_bic || "").trim()
+      if (!swift) {
+        return NextResponse.json(
+          { error: "SWIFT/BIC is required for this payout corridor." },
+          { status: 400 },
+        )
+      }
+      if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) {
+        return NextResponse.json({ error: "Invalid SWIFT/BIC code." }, { status: 400 })
       }
     }
   }

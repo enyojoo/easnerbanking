@@ -40,7 +40,6 @@ export function isBusinessTabComplete(profile: BusinessProfile): boolean {
   if (!code) return false
 
   for (const f of getKybFields(code)) {
-    if (f.id === "taxId" && !nonEmpty(profile.taxId)) return false
     if (f.id === "registrationNumber" && !nonEmpty(profile.registrationNumber)) return false
   }
 

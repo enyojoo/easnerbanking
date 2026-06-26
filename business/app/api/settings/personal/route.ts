@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server"
+import { resolveIsOrgOwnerForUser } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import {
   buildVerifiedIdentityFromKycFields,
   isProfileLockedFromKycFields,
+  type VerifiedIdentityPayload,
 } from "@easner/shared"
 import { removeAllProfileAvatarObjects } from "@/lib/profile-avatar-storage"
 
@@ -20,7 +22,7 @@ type PersonalUpdateBody = {
 }
 
 const USER_SELECT =
-  "id,email,full_name,phone,date_of_birth,avatar_url,noah_kyc_status,kyc_verified_at,kyc_id_type,kyc_id_number,kyc_id_issuing_country,kyc_address_street,kyc_address_city,kyc_address_state,kyc_address_post_code,kyc_address_country"
+  "id,email,full_name,phone,date_of_birth,avatar_url,easner_business_id,noah_kyc_status,kyc_verified_at,kyc_id_type,kyc_id_number,kyc_id_issuing_country,kyc_address_street,kyc_address_city,kyc_address_state,kyc_address_post_code,kyc_address_country"
 
 const USER_SELECT_LEGACY =
   "id,email,full_name,phone,date_of_birth,avatar_url,noah_kyc_status"
@@ -50,6 +52,23 @@ function fallbackNameFromMeta(user: { user_metadata?: Record<string, unknown> | 
   const meta = user.user_metadata ?? {}
   if (typeof meta.name === "string" && meta.name.trim()) return meta.name.trim()
   return user.email ?? "User"
+}
+
+async function resolveOrgKybApproved(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  businessId: string | null | undefined,
+): Promise<boolean> {
+  if (!businessId) return false
+  const { data } = await admin
+    .from("businesses")
+    .select("noah_kyb_status,kyb_verified_at")
+    .eq("id", businessId)
+    .maybeSingle()
+  if (!data) return false
+  return (
+    String(data.noah_kyb_status ?? "").toLowerCase() === "approved" &&
+    data.kyb_verified_at != null
+  )
 }
 
 async function fetchUserRow(admin: ReturnType<typeof createSupabaseAdmin>, userId: string) {
@@ -106,7 +125,14 @@ export async function GET(request: Request) {
     }
   }
 
-  const profileLocked = isProfileLockedFromKycFields(data)
+  const businessId = (data?.easner_business_id as string | null | undefined) ?? null
+  const isOrgOwner = await resolveIsOrgOwnerForUser(admin, user.id, businessId)
+  const orgKybApproved = isOrgOwner ? await resolveOrgKybApproved(admin, businessId) : false
+
+  const profileLocked = isProfileLockedFromKycFields(data, { orgKybApproved })
+  const verifiedIdentity: VerifiedIdentityPayload = isOrgOwner
+    ? buildVerifiedIdentityFromKycFields(data, { orgKybApproved })
+    : { visible: false }
 
   return NextResponse.json({
     personal: {
@@ -116,8 +142,10 @@ export async function GET(request: Request) {
       dateOfBirth: (data?.date_of_birth as string | null) ?? "",
       avatarUrl,
       profileLocked,
+      isOrgOwner,
+      showPhoneAndDateOfBirth: isOrgOwner,
     },
-    verifiedIdentity: buildVerifiedIdentityFromKycFields(data),
+    verifiedIdentity,
     sessionRefreshSuggested,
   })
 }
@@ -135,7 +163,11 @@ export async function PUT(request: Request) {
 
   const admin = createSupabaseAdmin()
   const { data: existing } = await fetchUserRow(admin, user.id)
-  const locked = isProfileLockedFromKycFields(existing)
+  const businessId = (existing?.easner_business_id as string | null | undefined) ?? null
+  const isOrgOwner = await resolveIsOrgOwnerForUser(admin, user.id, businessId)
+  const orgKybApproved = isOrgOwner ? await resolveOrgKybApproved(admin, businessId) : false
+  const lockOpts = { orgKybApproved }
+  const locked = isProfileLockedFromKycFields(existing, lockOpts)
 
   if (locked) {
     const wantsName =
@@ -152,6 +184,13 @@ export async function PUT(request: Request) {
     }
   }
 
+  if (!isOrgOwner && ("phone" in body || "dateOfBirth" in body)) {
+    return NextResponse.json(
+      { error: "Phone and date of birth are not available for your account role." },
+      { status: 403 },
+    )
+  }
+
   const updatePayload: Record<string, unknown> = {
     id: user.id,
     updated_at: new Date().toISOString(),
@@ -162,10 +201,10 @@ export async function PUT(request: Request) {
   if (resolvedFullName !== undefined) {
     updatePayload.full_name = resolvedFullName
   }
-  if ("phone" in body) {
+  if ("phone" in body && isOrgOwner) {
     updatePayload.phone = body.phone?.trim() || null
   }
-  if ("dateOfBirth" in body) {
+  if ("dateOfBirth" in body && isOrgOwner) {
     const raw = body.dateOfBirth
     updatePayload.date_of_birth =
       raw === null || raw === undefined || String(raw).trim() === ""

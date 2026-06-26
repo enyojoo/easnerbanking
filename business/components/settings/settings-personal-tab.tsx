@@ -50,6 +50,12 @@ import {
 import { hasPin } from "@/lib/login-pin"
 import { PinSettingsDialog } from "@/components/app-lock/pin-settings-dialog"
 import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
+import {
+  formatMaskedIdForDisplay,
+  formatVerifiedAddressDisplay,
+  type VerifiedIdentityPayload,
+} from "@easner/shared"
+import { CountryFlag } from "@/components/flags"
 
 /** Aligns with personal settings store / dataCache freshness window. */
 const MFA_STATUS_CACHE_TTL_MS = 5 * 60 * 1000
@@ -68,7 +74,11 @@ type PersonalSettingsResponse = {
     phone: string
     dateOfBirth: string
     avatarUrl: string | null
+    profileLocked?: boolean
+    isOrgOwner?: boolean
+    showPhoneAndDateOfBirth?: boolean
   }
+  verifiedIdentity?: VerifiedIdentityPayload
   sessionRefreshSuggested?: boolean
 }
 
@@ -158,6 +168,13 @@ export function SettingsPersonalTab() {
 
   const canUsePassword = hasEmailPasswordIdentity(user)
   const mfaVerifiedOn = mfaStatusLine === "On"
+  const profileLocked = personalData.personal.profileLocked ?? false
+  const showPhoneAndDateOfBirth = personalData.personal.showPhoneAndDateOfBirth ?? true
+  const verifiedIdentity = personalData.verifiedIdentity
+  const verifiedIdDisplay = formatMaskedIdForDisplay(verifiedIdentity?.idNumberMasked)
+  const verifiedAddressDisplay = verifiedIdentity?.visible
+    ? formatVerifiedAddressDisplay(verifiedIdentity)
+    : ""
   const hasPersonalData = Boolean(
     personalData.personal.fullName ||
       personalData.personal.email ||
@@ -345,15 +362,18 @@ export function SettingsPersonalTab() {
     try {
       const { data } = await supabase.auth.getSession()
       if (!data.session) return
+      const payload: Record<string, unknown> = {
+        fullName: formData.fullName,
+        avatarUrl: formData.avatarUrl,
+      }
+      if (showPhoneAndDateOfBirth) {
+        payload.phone = formData.phone
+        payload.dateOfBirth = formData.dateOfBirth
+      }
       const res = await fetchWithSession("/api/settings/personal", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fullName: formData.fullName,
-          phone: formData.phone,
-          dateOfBirth: formData.dateOfBirth,
-          avatarUrl: formData.avatarUrl,
-        }),
+        body: JSON.stringify(payload),
       })
       if (res.ok) {
         const next = (await res.json()) as PersonalSettingsResponse
@@ -427,7 +447,7 @@ export function SettingsPersonalTab() {
                   className={SETTINGS_CONTROL_SURFACE}
                   value={formData.fullName}
                   onChange={(e) => handleInputChange("fullName", e.target.value)}
-                  disabled={editingSection !== "personal"}
+                  disabled={profileLocked || editingSection !== "personal"}
                 />
               )}
             </div>
@@ -450,42 +470,74 @@ export function SettingsPersonalTab() {
               )}
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="phone">Phone Number</Label>
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              {showPersonalSkeleton ? (
-                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
-              ) : (
-                <Input
-                  id="phone"
-                  className={SETTINGS_CONTROL_SURFACE}
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange("phone", e.target.value)}
-                  disabled={editingSection !== "personal"}
-                />
-              )}
+          {showPhoneAndDateOfBirth ? (
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                {showPersonalSkeleton ? (
+                  <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+                ) : (
+                  <Input
+                    id="phone"
+                    className={SETTINGS_CONTROL_SURFACE}
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange("phone", e.target.value)}
+                    disabled={editingSection !== "personal"}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="dateOfBirth">Date of Birth</Label>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              {showPersonalSkeleton ? (
-                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
-              ) : (
-                <Input
-                  id="dateOfBirth"
-                  className={SETTINGS_CONTROL_SURFACE}
-                  type="date"
-                  value={formData.dateOfBirth}
-                  onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
-                  disabled={editingSection !== "personal"}
-                />
-              )}
+          ) : null}
+          {showPhoneAndDateOfBirth ? (
+            <div className="space-y-2">
+              <Label htmlFor="dateOfBirth">Date of Birth</Label>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                {showPersonalSkeleton ? (
+                  <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+                ) : (
+                  <Input
+                    id="dateOfBirth"
+                    className={SETTINGS_CONTROL_SURFACE}
+                    type="date"
+                    value={formData.dateOfBirth}
+                    onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
+                    disabled={profileLocked || editingSection !== "personal"}
+                  />
+                )}
+              </div>
             </div>
-          </div>
+          ) : null}
+          {verifiedIdentity?.visible ? (
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <p className="text-sm font-medium flex items-center gap-2">
+                <Lock className="h-4 w-4 text-muted-foreground" aria-hidden />
+                Verified identity
+              </p>
+              {verifiedIdentity.idType ? (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Government ID</p>
+                  <div className="flex items-center gap-2 text-sm">
+                    {verifiedIdentity.issuingCountry?.code ? (
+                      <CountryFlag code={verifiedIdentity.issuingCountry.code} size={20} />
+                    ) : null}
+                    <span>{verifiedIdentity.idType}</span>
+                    {verifiedIdDisplay ? (
+                      <span className="text-muted-foreground">{verifiedIdDisplay}</span>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              {verifiedAddressDisplay ? (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Residential address</p>
+                  <p className="text-sm">{verifiedAddressDisplay}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

@@ -9,6 +9,7 @@ import {
   getSendAmountNoteFieldUi,
   validatePayoutAmountAgainstLimits,
   validateSendAmountFields,
+  recipientFormNeedsBankCode,
 } from "./payout-form-schema"
 import type { PayoutCorridorPublic, PayoutFieldsSchemaHint } from "./payout-corridor"
 
@@ -255,5 +256,36 @@ describe("USD optional reference on send amount", () => {
         paymentPurpose: "",
       }),
     ).toEqual({ ok: false, message: "Enter a payment reference to continue." })
+  })
+
+  it("requires payment purpose when amount_field_mode is payment_purpose", () => {
+    expect(
+      validateSendAmountFields({
+        hints: {
+          amount_field_mode: "payment_purpose",
+          payment_purpose_enum: ["family support"],
+        } as PayoutFieldsSchemaHint,
+        note: "",
+        paymentPurpose: "",
+      }),
+    ).toEqual({ ok: false, message: "Select a payment purpose to continue." })
+    expect(
+      validateSendAmountFields({
+        hints: {
+          amount_field_mode: "payment_purpose",
+          payment_purpose_enum: ["family support"],
+        } as PayoutFieldsSchemaHint,
+        note: "",
+        paymentPurpose: "family support",
+      }),
+    ).toEqual({ ok: true })
+  })
+})
+
+describe("recipientFormNeedsBankCode", () => {
+  it("returns true when needs_bank_code is set", () => {
+    expect(recipientFormNeedsBankCode({ amount_field_mode: "note_optional_only", needs_bank_code: true })).toBe(true)
+    expect(recipientFormNeedsBankCode({ amount_field_mode: "note_optional_only" })).toBe(false)
+    expect(recipientFormNeedsBankCode(null)).toBe(false)
   })
 })

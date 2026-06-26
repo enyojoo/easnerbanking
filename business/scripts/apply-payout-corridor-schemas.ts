@@ -26,6 +26,7 @@ const COUNTRY_NAMES: Record<string, string> = {
   GB: "United Kingdom",
   DE: "Germany",
   FR: "France",
+  ID: "Indonesia",
 }
 
 const CURRENCY_NAMES: Record<string, string> = {
@@ -38,6 +39,7 @@ const CURRENCY_NAMES: Record<string, string> = {
   GHS: "Ghanaian Cedi",
   RWF: "Rwandan Franc",
   ZAR: "South African Rand",
+  IDR: "Indonesian Rupiah",
 }
 
 async function main() {
@@ -147,6 +149,23 @@ async function main() {
   }
 
   console.log(`fields_schema sync done. updated=${updated} inserted=${inserted}`)
+
+  // Noah exposes no Identifier channels for ID — bank-only until e-wallets are available.
+  const { error: idMobileOff } = await admin
+    .from("payout_corridors")
+    .update({
+      enabled: false,
+      providers: [],
+      updated_at: new Date().toISOString(),
+    })
+    .eq("country_code", "ID")
+    .eq("currency_code", "IDR")
+    .eq("rail", "mobile_money")
+  if (idMobileOff) {
+    console.warn("ID mobile_money disable", idMobileOff.message)
+  } else {
+    console.log("ID/IDR mobile_money disabled (bank-only)")
+  }
 }
 
 main().catch((e) => {

@@ -3,6 +3,7 @@ import { removeAllOrganizationLogoObjects } from "@/lib/organization-logo-storag
 import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
+import { isBusinessProfileLockedFromKybFields } from "@easner/shared"
 import { validateEasetag, normalizeEasetag } from "@/lib/easetag-validation"
 import { isEasetagGloballyAvailable } from "@/lib/easetag-global"
 import { isValidIndustryId } from "@/lib/business-industries"
@@ -15,7 +16,6 @@ type UpdateBody = {
   businessLogo?: string | null
   businessType?: string
   registrationNumber?: string
-  taxId?: string
   baseCurrency?: string
   businessDescription?: string
   website?: string
@@ -139,7 +139,7 @@ async function ensureOrganizationId(
 
 async function fetchBusinessProfile(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string) {
   const richSelect =
-    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country"
+    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country,noah_kyb_status,kyb_verified_at"
   const baseSelect = "id,name,easetag,logo_url,business_type,base_currency,description,country"
   const minimalSelect = "id,name,easetag,country"
 
@@ -196,6 +196,8 @@ export async function GET(request: Request) {
     state: string | null
     postal_code: string | null
     country: string | null
+    noah_kyb_status?: string | null
+    kyb_verified_at?: string | null
   }
 
   if (userRow?.easner_business_id) {
@@ -220,18 +222,21 @@ export async function GET(request: Request) {
   let noahUsdVirtualAccountId: string | null = null
   let noahEurVirtualAccountId: string | null = null
   let canManageBusinessVerification = true
+  let orgKyb: Record<string, unknown> | null = null
 
   if (orgId) {
     const orgOwnerUserId = await resolveOrgOwnerUserId(admin, orgId, user.id)
     canManageBusinessVerification = await resolveCanManageBusinessVerification(admin, orgId, user.id, orgOwnerUserId)
 
-    const { data: orgKyb } = await admin
+    const { data: orgKybRow } = await admin
       .from("businesses")
       .select(
-        "noah_kyb_status,noah_customer_id,noah_kyb_rejection_reasons,noah_usd_virtual_account_id,noah_eur_virtual_account_id",
+        "noah_kyb_status,noah_customer_id,noah_kyb_rejection_reasons,noah_usd_virtual_account_id,noah_eur_virtual_account_id,kyb_verified_at",
       )
       .eq("id", orgId)
       .maybeSingle()
+
+    orgKyb = (orgKybRow as Record<string, unknown> | null) ?? null
 
     tier1VerificationStatus = (orgKyb?.noah_kyb_status as string | null | undefined) ?? null
     noahKybCustomerId = (orgKyb?.noah_customer_id as string | null | undefined) ?? null
@@ -243,6 +248,13 @@ export async function GET(request: Request) {
       (orgKyb?.noah_eur_virtual_account_id as string | null | undefined) ?? null
   }
 
+  const profileLocked =
+    orgId && orgKyb
+      ? isBusinessProfileLockedFromKybFields(orgKyb as Record<string, unknown>)
+      : org
+        ? isBusinessProfileLockedFromKybFields(org as Record<string, unknown>)
+        : false
+
   return NextResponse.json({
     profile: {
       businessId: org?.id ?? userRow?.easner_business_id ?? null,
@@ -251,7 +263,6 @@ export async function GET(request: Request) {
       logoUrl: org?.logo_url ?? null,
       businessType: org?.business_type ?? "",
       registrationNumber: org?.registration_number ?? "",
-      taxId: org?.tax_id ?? "",
       baseCurrency: org?.base_currency ?? "USD",
       description: org?.description ?? "",
       website: org?.website ?? "",
@@ -276,6 +287,7 @@ export async function GET(request: Request) {
       canManageBusinessVerification,
       noahUsdVirtualAccountId,
       noahEurVirtualAccountId,
+      profileLocked,
     },
   })
 }
@@ -312,6 +324,35 @@ export async function PUT(request: Request) {
     user.email,
     typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null,
   )
+
+  const { data: orgRow } = await admin
+    .from("businesses")
+    .select(
+      "name,country,registration_number,address_line1,city,state,postal_code,noah_kyb_status,kyb_verified_at",
+    )
+    .eq("id", businessId)
+    .maybeSingle()
+
+  const profileLocked = isBusinessProfileLockedFromKybFields(
+    (orgRow ?? null) as Record<string, unknown> | null,
+  )
+
+  if (profileLocked) {
+    const blocked =
+      body.businessName !== undefined ||
+      body.countryCode !== undefined ||
+      body.registrationNumber !== undefined ||
+      body.addressLine1 !== undefined ||
+      body.city !== undefined ||
+      body.state !== undefined ||
+      body.postalCode !== undefined
+    if (blocked) {
+      return NextResponse.json(
+        { error: "Verified business fields cannot be changed after KYB approval." },
+        { status: 403 },
+      )
+    }
+  }
 
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -372,7 +413,6 @@ export async function PUT(request: Request) {
 
   if (body.businessType !== undefined) updates.business_type = body.businessType?.trim() || null
   if (body.registrationNumber !== undefined) updates.registration_number = body.registrationNumber?.trim() || null
-  if (body.taxId !== undefined) updates.tax_id = body.taxId?.trim() || null
   if (body.baseCurrency !== undefined) {
     const cur = body.baseCurrency?.trim() || ""
     updates.base_currency = cur ? cur.toUpperCase() : null

@@ -81,6 +81,7 @@ import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } 
 import { CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
   recipientFormNeedsAddress,
+  recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
 } from '@easner/shared'
@@ -590,6 +591,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         : null
     if (recipientFormNeedsEmail(schemaHints) && !newRecipient.email.trim()) return false
     if (recipientFormNeedsPhone(schemaHints) && !newRecipient.phoneNumber.trim()) return false
+    if (recipientFormNeedsBankCode(schemaHints)) {
+      const swift = newRecipient.swiftBic.trim()
+      if (!swift || !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) return false
+    }
     if (
       recipientFormNeedsAddress({ hints: schemaHints, currencyCode: newRecipient.currency }) &&
       selectedCountryCurrency?.countryCode !== 'US'
@@ -1915,6 +1920,28 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           textContentType="none"
                           editable={!isSubmitting}
                         />
+                        {selectedCountryCurrency && selectedRecipientType === 'bank' &&
+                        recipientFormNeedsBankCode(
+                          getPayoutFieldsSchemaForCorridor({
+                            countryCode: selectedCountryCurrency.countryCode,
+                            currencyCode: selectedCountryCurrency.currencyCode,
+                            rail: 'bank_transfer',
+                          }),
+                        ) ? (
+                          <TextInput
+                            style={styles.modalInput}
+                            value={newRecipient.swiftBic}
+                            onChangeText={(text) =>
+                              setNewRecipient(prev => ({ ...prev, swiftBic: text.toUpperCase() }))
+                            }
+                            placeholder="SWIFT/BIC *"
+                            placeholderTextColor={colors.text.secondary}
+                            autoCapitalize="characters"
+                            returnKeyType="done"
+                            onSubmitEditing={() => Keyboard.dismiss()}
+                            editable={!isSubmitting}
+                          />
+                        ) : null}
                       </View>
                     )}
 

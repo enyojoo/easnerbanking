@@ -9,6 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Loader2, User, Phone, CreditCard, MapPin, ChevronDown } from "lucide-react"
 import {
   recipientFormNeedsAddress,
+  recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   sortByEasnerCountryPickerOrder,
 } from "@easner/shared"
@@ -534,6 +535,18 @@ export function RecipientForm({
 
     if (formData.recipientType === "bank" && currency === "CAD" && !formData.routingNumber.trim()) {
       newErrors.routingNumber = "Routing number is required for CAD (CPA format)"
+    }
+
+    if (
+      formData.recipientType === "bank" &&
+      recipientFormNeedsBankCode(payoutFormHints)
+    ) {
+      const swift = formData.bic?.trim() || ""
+      if (!swift) {
+        newErrors.bic = "SWIFT/BIC is required for this corridor"
+      } else if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) {
+        newErrors.bic = "Enter a valid SWIFT/BIC code"
+      }
     }
 
     setErrors(newErrors)
@@ -1343,16 +1356,31 @@ export function RecipientForm({
         )}
 
         {formData.recipientType === "bank" && !["USD", "EUR", "GBP", "CAD"].includes(currency) && (
-          <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">Account Number</label>
-            <Input
-              value={formData.accountNumber}
-              onChange={(e) => handleInputChange("accountNumber", e.target.value)}
-              placeholder="1234567890"
-              className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
-              required
-            />
-            {errors.accountNumber && <p className="text-xs text-red-500">{errors.accountNumber}</p>}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs text-muted-foreground">Account Number</label>
+              <Input
+                value={formData.accountNumber}
+                onChange={(e) => handleInputChange("accountNumber", e.target.value)}
+                placeholder="1234567890"
+                className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
+                required
+              />
+              {errors.accountNumber && <p className="text-xs text-red-500">{errors.accountNumber}</p>}
+            </div>
+            {recipientFormNeedsBankCode(payoutFormHints) ? (
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">SWIFT/BIC</label>
+                <Input
+                  value={formData.bic || ""}
+                  onChange={(e) => handleInputChange("bic", e.target.value.toUpperCase())}
+                  placeholder="CENAIDJA"
+                  className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.bic ? "border-red-500" : ""}`}
+                  required
+                />
+                {errors.bic && <p className="text-xs text-red-500">{errors.bic}</p>}
+              </div>
+            ) : null}
           </div>
         )}
 

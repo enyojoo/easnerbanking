@@ -17,7 +17,11 @@ export interface KybField {
 
 export const KYB_BY_COUNTRY: Record<string, KybField[]> = {
   US: [
-    { id: "taxId", label: "EIN (Employer Identification Number)", placeholder: "12-3456789" },
+    {
+      id: "registrationNumber",
+      label: "EIN (Employer Identification Number)",
+      placeholder: "12-3456789",
+    },
   ],
   GB: [
     { id: "registrationNumber", label: "Companies House registration number", placeholder: "e.g. 12345678" },
@@ -33,10 +37,9 @@ export const KYB_BY_COUNTRY: Record<string, KybField[]> = {
   ],
 }
 
-/** Default fields for countries not explicitly listed - most jurisdictions require registration + tax ID */
+/** Default field for countries not explicitly listed. */
 export const KYB_DEFAULT: KybField[] = [
   { id: "registrationNumber", label: "Business registration number", placeholder: "From company registry" },
-  { id: "taxId", label: "Tax ID / VAT number", placeholder: "From tax authority" },
 ]
 
 export function getKybFields(countryCode: string): KybField[] {

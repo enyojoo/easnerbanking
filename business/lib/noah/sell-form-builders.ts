@@ -199,6 +199,27 @@ export function buildGbBankLocalSellForm(input: {
   }
 }
 
+/** BankLocal with BankName + BankCode SWIFT (ID). */
+export function buildIdBankLocalSellForm(input: {
+  accountNumber: string
+  bankName: string
+  swiftBic: string
+  fullName: string
+  phone: string
+  paymentPurpose: string
+}): Record<string, unknown> {
+  return {
+    BankDetails: {
+      AccountNumber: normalizeBankAccountNumber(input.accountNumber),
+      BankName: input.bankName.trim(),
+      BankCode: input.swiftBic.trim().toUpperCase(),
+    },
+    AccountHolderName: buildAccountHolderName({ fullName: input.fullName }),
+    PhoneNumber: normalizeNoahE164Phone(input.phone, "ID"),
+    PaymentPurpose: input.paymentPurpose.trim(),
+  }
+}
+
 export type BankLocalSellInput = {
   accountNumber: string
   bankName: string
