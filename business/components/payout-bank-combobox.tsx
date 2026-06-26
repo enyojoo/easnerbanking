@@ -37,15 +37,14 @@ export function PayoutBankCombobox({
           role="combobox"
           aria-expanded={open}
           disabled={disabled || sorted.length === 0}
-          title={value || undefined}
           className={cn(
-            "h-12 w-full justify-between gap-2 overflow-hidden font-normal",
+            "h-12 w-full min-w-0 justify-between overflow-hidden font-normal",
             !value && "text-muted-foreground",
             error && "border-red-500",
           )}
         >
           <span className="min-w-0 flex-1 truncate text-left">{value || placeholder}</span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -67,16 +66,13 @@ export function PayoutBankCombobox({
                 <CommandItem
                   key={bank}
                   value={bank}
-                  title={bank}
-                  className="flex items-center gap-2"
+                  className="min-w-0"
                   onSelect={() => {
                     onChange(bank)
                     setOpen(false)
                   }}
                 >
-                  <Check
-                    className={cn("h-4 w-4 shrink-0", value === bank ? "opacity-100" : "opacity-0")}
-                  />
+                  <Check className={cn("mr-2 h-4 w-4 shrink-0", value === bank ? "opacity-100" : "opacity-0")} />
                   <span className="min-w-0 flex-1 truncate">{bank}</span>
                 </CommandItem>
               ))}

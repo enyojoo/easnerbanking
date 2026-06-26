@@ -1385,7 +1385,7 @@ export function RecipientForm({
         )}
 
         {formData.recipientType === "bank" && (
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <label className="text-xs text-muted-foreground">Bank Name</label>
             {bankEnumOptions.length > 0 ? (
               <PayoutBankCombobox

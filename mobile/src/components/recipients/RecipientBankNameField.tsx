@@ -93,17 +93,14 @@ export function RecipientBankNameField({
             style={value ? styles.valueText : styles.placeholderText}
             numberOfLines={1}
             ellipsizeMode="tail"
-            accessibilityLabel={value || placeholder}
           >
             {value || placeholder}
           </Text>
-          <View style={styles.selectorIcon}>
-            {showDropdown ? (
-              <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} />
-            ) : (
-              <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} />
-            )}
-          </View>
+          {showDropdown ? (
+            <ChevronUp size={16} color={colors.brand.slate} strokeWidth={2} style={styles.chevron} />
+          ) : (
+            <ChevronDown size={16} color={colors.brand.slate} strokeWidth={2} style={styles.chevron} />
+          )}
         </View>
       </Pressable>
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
@@ -137,7 +134,7 @@ export function RecipientBankNameField({
                   close()
                 }}
               >
-                <Text style={styles.itemLabel} numberOfLines={2}>
+                <Text style={styles.itemLabel} numberOfLines={2} ellipsizeMode="tail">
                   {bank}
                 </Text>
                 {value === bank ? (
@@ -156,7 +153,8 @@ const styles = StyleSheet.create({
   wrapper: {
     marginBottom: spacing[2],
     zIndex: 1000,
-    minWidth: 0,
+    width: '100%',
+    maxWidth: '100%',
   },
   wrapperActive: {
     zIndex: 4000,
@@ -169,6 +167,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.frame.background,
     minHeight: 48,
     justifyContent: 'center',
+    width: '100%',
+    maxWidth: '100%',
     overflow: 'hidden',
   },
   selectorContent: {
@@ -176,10 +176,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[2],
     minWidth: 0,
+    width: '100%',
   },
   valueText: {
     flex: 1,
-    flexShrink: 1,
     minWidth: 0,
     ...textStyles.bodyMedium,
     color: colors.text.primary,
@@ -187,13 +187,12 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     flex: 1,
-    flexShrink: 1,
     minWidth: 0,
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
     fontFamily: fontFamily.regular,
   },
-  selectorIcon: {
+  chevron: {
     flexShrink: 0,
   },
   textInput: {
@@ -237,6 +236,7 @@ const styles = StyleSheet.create({
   },
   itemLabel: {
     flex: 1,
+    minWidth: 0,
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     fontFamily: fontFamily.regular,
