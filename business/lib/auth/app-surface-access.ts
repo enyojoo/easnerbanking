@@ -1,4 +1,5 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { hasPendingTeamInviteForEmail } from "@/lib/business/claim-team-invite"
 
 export type AppSurface = "business_web" | "consumer_mobile"
 
@@ -20,6 +21,7 @@ export type SurfaceAccessResult = { ok: true } | SurfaceAccessFailure
 export async function validateAppSurfaceAccess(
   userId: string,
   surface: AppSurface,
+  userEmail?: string | null,
 ): Promise<SurfaceAccessResult> {
   const admin = createSupabaseAdmin()
 
@@ -50,14 +52,23 @@ export async function validateAppSurfaceAccess(
 
   if (surface === "business_web") {
     if (role !== "business") {
+      if (role === "individual") {
+        const email = typeof userEmail === "string" ? userEmail.trim() : ""
+        if (email && (await hasPendingTeamInviteForEmail(admin, email))) {
+          return { ok: true }
+        }
+        return {
+          ok: false,
+          status: 403,
+          code: "WRONG_ROLE_FOR_BUSINESS_WEB",
+          message: "You're an Easner Mobile user, please sign in through the Easner mobile app.",
+        }
+      }
       return {
         ok: false,
         status: 403,
         code: "WRONG_ROLE_FOR_BUSINESS_WEB",
-        message:
-          role === "individual"
-            ? "You're an Easner Mobile user, please sign in through the Easner mobile app."
-            : "This account is not enabled for the Business dashboard.",
+        message: "This account is not enabled for the Business dashboard.",
       }
     }
     return { ok: true }

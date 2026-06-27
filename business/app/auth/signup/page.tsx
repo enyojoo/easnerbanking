@@ -25,6 +25,7 @@ import { useAllowedCountryCodes } from "@/hooks/use-allowed-country-codes"
 import { filterCountriesByPolicy } from "@easner/shared"
 import { CountryFlag } from "@/components/flags"
 import { OtpCodeInput } from "@/components/otp-code-input"
+import { useTeamInviteContext } from "@/lib/team-invite-storage"
 
 const TERMS_URL = "https://www.easner.com/terms?from=register"
 
@@ -44,7 +45,7 @@ export default function SignupPage() {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const { signup, verifySignupOtp, signInWithGoogle } = useAuth()
   const router = useRouter()
-  const countryPolicy = useAllowedCountryCodes("signup")
+  const { isTeamInvite, invitePreview } = useTeamInviteContext()
   const countriesForPicker = useMemo(
     () => filterCountriesByPolicy(countries, countryPolicy.unrestricted ? null : countryPolicy.codes),
     [countryPolicy.codes, countryPolicy.unrestricted],
@@ -121,10 +122,16 @@ export default function SignupPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl font-bold">
-            {step === "otp" ? "Verify your email" : "Open an account"}
+            {step === "otp" ? "Verify your email" : isTeamInvite ? "Join your team" : "Open an account"}
           </CardTitle>
           {step === "otp" ? (
             <CardDescription>Enter the 6-digit code we sent to your email</CardDescription>
+          ) : isTeamInvite && invitePreview ? (
+            <CardDescription>
+              Create an account to join {invitePreview.businessName} as {invitePreview.role}
+            </CardDescription>
+          ) : isTeamInvite ? (
+            <CardDescription>Create an account to accept your team invitation</CardDescription>
           ) : null}
         </CardHeader>
         <CardContent>
@@ -160,7 +167,9 @@ export default function SignupPage() {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-xs text-sm">
-                        Select the country where your business is incorporated or registered.
+                        {isTeamInvite
+                          ? "Select your country of residence for account setup."
+                          : "Select the country where your business is incorporated or registered."}
                       </p>
                     </TooltipContent>
                   </Tooltip>

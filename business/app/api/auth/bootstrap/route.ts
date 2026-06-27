@@ -6,11 +6,13 @@ import { noahCustomerIdFromBusinessId, noahCustomerIdFromUserId } from "@/lib/no
 import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-sub-org"
 import { emailService } from "@easner/server"
 import { getEmailAudienceProfile } from "@easner/server"
+import { claimTeamInvite } from "@/lib/business/claim-team-invite"
 
 type BootstrapBody = {
   countryCode?: string
   role?: "business" | "individual"
   fullName?: string | null
+  membershipId?: string
 }
 
 function normalizeCountryCode(value: unknown): string | null {
@@ -144,6 +146,63 @@ export async function POST(request: Request) {
     userRow?.role === "business" || userRow?.role === "individual" ? userRow.role : null
   const hasBusinessLink = typeof userRow?.easner_business_id === "string" && userRow.easner_business_id.length > 0
 
+  const dbFullNameTrim =
+    typeof userRow?.full_name === "string" ? userRow.full_name.trim() : ""
+
+  const resolvedBootstrapFullName =
+    userRow?.id && dbFullNameTrim.length > 0
+      ? dbFullNameTrim
+      : explicitFullNameProvided
+        ? explicitName.fullName
+        : userRow?.id
+          ? typeof userRow.full_name === "string"
+            ? userRow.full_name
+            : null
+          : parseName(metadataName).fullName
+
+  const membershipId = typeof body.membershipId === "string" ? body.membershipId.trim() : ""
+
+  if (role === "business" && membershipId) {
+    const claim = await claimTeamInvite(admin, {
+      userId: user.id,
+      authEmail: user.email,
+      fullName: resolvedBootstrapFullName,
+      membershipId,
+    })
+    if (!claim.ok) {
+      return NextResponse.json(
+        { ok: false, error: claim.message, code: claim.code },
+        { status: claim.httpStatus },
+      )
+    }
+    if (claim.claimed) {
+      try {
+        const tk = await ensureTurnkeySubOrgForEasnerOwner({
+          admin,
+          scope: "business",
+          subjectUserId: user.id,
+          subjectBusinessId: claim.businessId,
+          noahCustomerId: noahCustomerIdFromBusinessId(claim.businessId),
+          userEmail: user.email,
+          displayName: resolvedBootstrapFullName,
+        })
+        if (!tk.ok && tk.reason !== "email_required" && tk.reason !== "turnkey_disabled") {
+          console.warn("[bootstrap] Turnkey sub-org (team invite):", tk.reason)
+        }
+      } catch (e) {
+        console.warn("[bootstrap] Turnkey sub-org (team invite) error:", e)
+      }
+
+      return NextResponse.json({
+        ok: true,
+        role: "business",
+        userId: user.id,
+        businessId: claim.businessId,
+        joinedViaInvite: true,
+      })
+    }
+  }
+
   /**
    * Never allow bootstrap to flip an existing account between consumer/business roles.
    * - Existing individual cannot be upgraded to business via bootstrap.
@@ -172,25 +231,6 @@ export async function POST(request: Request) {
       { status: 403 },
     )
   }
-
-  const dbFullNameTrim =
-    typeof userRow?.full_name === "string" ? userRow.full_name.trim() : ""
-
-  /**
-   * `public.users.full_name` is the profile source of truth once set.
-   * Mobile bootstrap always sends `body.fullName` from JWT `user_metadata.name`, which often matches
-   * Noah/KYC and lags behind SQL or `PUT /api/settings/personal` — never overwrite a non-empty DB name from bootstrap.
-   */
-  const resolvedBootstrapFullName =
-    userRow?.id && dbFullNameTrim.length > 0
-      ? dbFullNameTrim
-      : explicitFullNameProvided
-        ? explicitName.fullName
-        : userRow?.id
-          ? typeof userRow.full_name === "string"
-            ? userRow.full_name
-            : null
-          : parseName(metadataName).fullName
 
   const baseUserPayload = {
     id: user.id,

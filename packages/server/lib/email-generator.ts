@@ -3,7 +3,11 @@
 import {
   emailTheme,
   EASNER_COMPANY_ADDRESS,
-  EASNER_LOGO_URL,
+  EASNER_COMPANY_ADDRESS_HTML,
+  EASNER_COMPANY_LEGAL_NAME,
+  EASNER_LOGO_URL_DARK,
+  EASNER_LOGO_URL_LIGHT,
+  resolveEmailFooterNotice,
 } from "./email-theme"
 import {
   getEmailAudienceProfile,
@@ -16,6 +20,8 @@ export type EmailTemplateOptions = {
   preheader?: string
   /** When true, footer includes manage-preferences link */
   showPreferencesLink?: boolean
+  /** When true (default), footer uses existing-account copy; false for pre-account flows (signup OTP, invite to new email). */
+  recipientHasEasnerAccount?: boolean
 }
 
 function escapeHtml(s: string): string {
@@ -24,6 +30,14 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
+}
+
+/** Light/dark wordmarks — swapped via `prefers-color-scheme: dark` in email clients that support it. */
+export function generateEmailLogoMarkup(width = 120): string {
+  return `
+            <img src="${EASNER_LOGO_URL_LIGHT}" alt="Easner" class="logo logo-light" width="${width}">
+            <img src="${EASNER_LOGO_URL_DARK}" alt="Easner" class="logo logo-dark" width="${width}">
+  `.trim()
 }
 
 export function generateBaseEmailTemplate(
@@ -38,6 +52,7 @@ export function generateBaseEmailTemplate(
   const preheader = options?.preheader?.trim()
   const year = new Date().getFullYear()
   const t = emailTheme
+  const accountNotice = resolveEmailFooterNotice(options?.recipientHasEasnerAccount !== false)
 
   const preferencesBlock =
     options?.showPreferencesLink !== false
@@ -77,6 +92,7 @@ export function generateBaseEmailTemplate(
             border-bottom: 1px solid ${t.mist};
         }
         .logo { max-width: 120px; height: auto; margin: 0 auto 24px auto; display: block; }
+        .logo-dark { display: none; }
         .email-title {
             color: ${t.graphite};
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
@@ -121,6 +137,37 @@ export function generateBaseEmailTemplate(
             text-transform: uppercase;
         }
         .security-note p { color: ${t.bodyText}; font-size: 15px; margin: 0; }
+        .otp-container {
+            background-color: ${t.cloud};
+            border: 1px solid ${t.mist};
+            border-radius: 12px;
+            padding: 24px 22px;
+            text-align: center;
+            margin: 24px 0;
+        }
+        .otp-label {
+            color: ${t.graphite};
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+        .otp-code {
+            font-size: 32px;
+            font-weight: 600;
+            color: ${t.primary};
+            letter-spacing: 8px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            background: #FFFFFF;
+            padding: 16px 22px;
+            border-radius: 12px;
+            border: 1px solid ${t.mist};
+            display: inline-block;
+            margin: 4px 0;
+            font-variant-numeric: tabular-nums;
+        }
+        .otp-help { color: ${t.slate}; font-size: 13px; margin-top: 12px; line-height: 1.5; }
         .email-footer {
             background-color: #FFFFFF;
             padding: 28px 32px 32px 32px;
@@ -152,22 +199,26 @@ export function generateBaseEmailTemplate(
             letter-spacing: 0.08em;
             text-transform: uppercase;
         }
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .transaction-details-table {
+            width: 100%;
+            border-collapse: collapse;
+            border-spacing: 0;
+        }
+        .detail-row td {
             padding: 8px 0;
             border-bottom: 1px solid #EFECE2;
             font-size: 14px;
+            vertical-align: top;
         }
-        .detail-row:last-child { border-bottom: none; }
-        .detail-label { color: ${t.slate}; font-weight: 500; font-size: 13px; }
+        .detail-row:last-child td { border-bottom: none; }
+        .detail-label { color: ${t.slate}; font-weight: 500; font-size: 13px; padding-right: 16px; }
         .detail-value {
             color: ${t.graphite};
             font-weight: 600;
             font-size: 14px;
             font-variant-numeric: tabular-nums;
             text-align: right;
+            white-space: nowrap;
         }
         .status-badge {
             display: inline-block;
@@ -187,6 +238,8 @@ export function generateBaseEmailTemplate(
             body { background-color: #0A0B0A; color: #E5E1D5; }
             .email-container { background-color: #151817; border-color: #262926; }
             .email-header { background: #151817; border-bottom-color: #262926; }
+            .logo-light { display: none !important; }
+            .logo-dark { display: block !important; margin-left: auto; margin-right: auto; }
             .email-title { color: ${t.ivory}; }
             .email-subtitle { color: #8A8F8A; }
             .welcome-text { color: ${t.ivory}; }
@@ -194,12 +247,20 @@ export function generateBaseEmailTemplate(
             .security-note { background-color: #1C201E; border-color: #262926; border-left-color: ${t.darkAccent}; }
             .security-note h3 { color: ${t.ivory}; }
             .security-note p { color: #D5D1C5; }
+            .otp-container { background-color: #1C201E; border-color: #262926; }
+            .otp-label { color: ${t.ivory}; }
+            .otp-code {
+                color: ${t.darkAccent};
+                background: #0A0B0A;
+                border-color: #262926;
+            }
+            .otp-help { color: #8A8F8A; }
             .email-footer { background-color: #151817; border-top-color: #262926; }
             .footer-text { color: #8A8F8A; }
             .footer-links a { color: ${t.darkAccent}; }
             .transaction-details { background-color: #1C201E; border-color: #262926; }
             .transaction-details h3 { color: ${t.ivory}; }
-            .detail-row { border-bottom-color: #262926; }
+            .detail-row td { border-bottom-color: #262926; }
             .detail-label { color: #8A8F8A; }
             .detail-value { color: ${t.ivory}; }
             .cta-button { background: ${t.darkAccent}; color: ${t.ivory} !important; }
@@ -210,18 +271,18 @@ export function generateBaseEmailTemplate(
             .email-header { padding: 36px 24px 28px 24px; }
             .email-title { font-size: 24px; }
             .email-body { padding: 32px 24px; }
+            .otp-code { font-size: 28px; letter-spacing: 6px; padding: 14px 18px; }
             .cta-button { display: block; width: 100%; padding: 16px 20px; }
             .email-footer { padding: 24px 20px; }
             .footer-links a { display: block; margin: 10px 0; }
-            .detail-row { flex-direction: column; align-items: flex-start; gap: 2px; }
-            .detail-value { text-align: left; }
+            .detail-value { text-align: left; white-space: normal; }
         }
     </style>
 </head>
 <body>
     <div class="email-container">
         <div class="email-header">
-            <img src="${EASNER_LOGO_URL}" alt="Easner" class="logo">
+            ${generateEmailLogoMarkup()}
             <h1 class="email-title">${escapeHtml(title)}</h1>
             ${subtitle ? `<p class="email-subtitle">${escapeHtml(subtitle)}</p>` : ""}
         </div>
@@ -236,15 +297,85 @@ export function generateBaseEmailTemplate(
             </div>
             ${preferencesBlock}
             <p class="company-info">
-                © ${year} Easner, Inc. All rights reserved.<br>
-                ${EASNER_COMPANY_ADDRESS}<br>
-                You received this email because you have an ${escapeHtml(profile.productName)} account.
+                © ${year} ${escapeHtml(EASNER_COMPANY_LEGAL_NAME)} All rights reserved.<br>
+                ${EASNER_COMPANY_ADDRESS_HTML}<br>
+                ${escapeHtml(accountNotice)}
             </p>
         </div>
     </div>
 </body>
 </html>
   `
+}
+
+export type SupabaseAuthEmailVariant = "password_reset" | "signup_verify"
+
+const SUPABASE_AUTH_EMAIL_COPY: Record<
+  SupabaseAuthEmailVariant,
+  {
+    title: string
+    subtitle: string
+    preheader: string
+    intro: string
+    note: string
+    includeHelpLine: boolean
+  }
+> = {
+  password_reset: {
+    title: "Password reset",
+    subtitle: "Use the code below to set a new password",
+    preheader: "Your Easner password reset code",
+    intro:
+      "We received a request to reset the password for your Easner account. Enter the verification code below in the password reset screen.",
+    note: "If you didn't request a password reset, you can safely ignore this email.",
+    includeHelpLine: true,
+  },
+  signup_verify: {
+    title: "Verify your email",
+    subtitle: "Enter the code below to finish creating your account",
+    preheader: "Your Easner verification code",
+    intro: "Use this verification code to confirm your email and continue signing up for Easner.",
+    note: "If you didn't request this code, you can safely ignore this email.",
+    includeHelpLine: false,
+  },
+}
+
+/** OTP block — paste `{{ .Token }}` verbatim into Supabase Auth email templates. */
+export function generateAuthOtpBlock(tokenPlaceholder = "{{ .Token }}"): string {
+  return `
+        <div class="otp-container">
+            <div class="otp-label">Your 6-digit verification code</div>
+            <div class="otp-code">${tokenPlaceholder}</div>
+            <div class="otp-help">This code expires in 10 minutes.</div>
+        </div>
+  `.trim()
+}
+
+/**
+ * Full HTML for Supabase Auth (Confirm signup, Reset password, etc.).
+ * Paste output into Supabase Dashboard → Authentication → Email Templates.
+ */
+export function generateSupabaseAuthEmailHtml(variant: SupabaseAuthEmailVariant): string {
+  const copy = SUPABASE_AUTH_EMAIL_COPY[variant]
+  const profile = getEmailAudienceProfile("personal")
+
+  const content = `
+        <p class="confirmation-text">${copy.intro}</p>
+        ${generateAuthOtpBlock()}
+        <div class="security-note"><p>${copy.note}</p></div>
+        ${
+          copy.includeHelpLine
+            ? `<p class="confirmation-text">Need help? <a href="mailto:${profile.supportEmail}" style="color: ${emailTheme.primary}; text-decoration: none;">Contact support</a> and we'll take care of you.</p>`
+            : ""
+        }
+  `.trim()
+
+  return generateBaseEmailTemplate(copy.title, copy.subtitle, content, undefined, {
+    audience: "personal",
+    preheader: copy.preheader,
+    showPreferencesLink: false,
+    recipientHasEasnerAccount: variant !== "signup_verify",
+  })
 }
 
 export type TransactionDetailRow = { label: string; value: string; isStatus?: boolean; statusClass?: string }
@@ -258,14 +389,18 @@ export function generateTransactionDetailsTable(
       const valueHtml = row.isStatus
         ? `<span class="status-badge status-${row.statusClass ?? "completed"}">${escapeHtml(row.value)}</span>`
         : escapeHtml(row.value)
-      return `<div class="detail-row"><span class="detail-label">${escapeHtml(row.label)}</span><span class="detail-value">${valueHtml}</span></div>`
+      return `<tr class="detail-row"><td class="detail-label">${escapeHtml(row.label)}</td><td class="detail-value" align="right">${valueHtml}</td></tr>`
     })
     .join("")
 
   return `
     <div class="transaction-details">
       <h3>${escapeHtml(heading)}</h3>
-      ${detailRows}
+      <table class="transaction-details-table" role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tbody>
+          ${detailRows}
+        </tbody>
+      </table>
     </div>
   `
 }
@@ -314,7 +449,7 @@ export function generateFooter(): string {
   return `
     <p class="footer-text">Need help? We're here for you.</p>
     <div class="footer-links"><a href="mailto:${profile.supportEmail}">Contact Support</a></div>
-    <p class="company-info">© ${year} Easner, Inc. All rights reserved.</p>
+    <p class="company-info">© ${year} ${EASNER_COMPANY_LEGAL_NAME} All rights reserved.<br>${EASNER_COMPANY_ADDRESS}</p>
   `
 }
 

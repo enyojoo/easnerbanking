@@ -59,6 +59,14 @@ describe("emailTemplates", () => {
     expect(html).toContain("ET-1001")
   })
 
+  it("transaction detail rows use table cells so label and value do not run together", () => {
+    const data = templateFixtures.transactionFailed
+    const html = emailTemplates.transactionFailed.html(data, "personal")
+    expect(html).toContain('<td class="detail-label">Transaction ID</td>')
+    expect(html).toContain('<td class="detail-value" align="right">ET-1001</td>')
+    expect(html).not.toContain("Transaction IDET-1001")
+  })
+
   it("welcome business html includes product name", () => {
     const html = emailTemplates.welcomeBusiness.html(templateFixtures.welcomeBusiness, "business")
     expect(html).toContain("Easner Business")

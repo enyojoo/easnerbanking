@@ -1,5 +1,5 @@
-import type { CommunicationPreferences } from "@easner/shared"
-import { parseCommunicationPreferences } from "@easner/shared"
+import type { CommunicationPreferences } from "../../shared/src/communication-preferences"
+import { parseCommunicationPreferences } from "../../shared/src/communication-preferences"
 
 /**
  * Maps `emailTemplates` keys to a preference bucket.

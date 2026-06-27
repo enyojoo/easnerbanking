@@ -60,6 +60,8 @@ export interface TeamInviteEmailData {
   businessName: string
   role: string
   acceptUrl: string
+  /** When false, footer uses pre-account copy (invitee not in `public.users` yet). */
+  recipientHasEasnerAccount?: boolean
 }
 
 export interface SecurityAlertEmailData {

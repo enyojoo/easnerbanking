@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     return applyCorsHeaders(res, request, allowed)
   }
 
-  const access = await validateAppSurfaceAccess(user.id, surface)
+  const access = await validateAppSurfaceAccess(user.id, surface, user.email)
   if (!access.ok) {
     const res = NextResponse.json(
       { ok: false, error: access.message, code: access.code },

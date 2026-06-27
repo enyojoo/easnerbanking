@@ -26,7 +26,33 @@ export const emailTheme = {
   },
 } as const
 
-export const EASNER_LOGO_URL =
-  "https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/object/public/brand/Easner%20Logo.png"
+export const EASNER_BRAND_CDN =
+  "https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/object/public/brand"
 
-export const EASNER_COMPANY_ADDRESS = "28 Geary St Ste 650, San Francisco, CA 94108"
+/** Dark wordmark for light backgrounds (default). */
+export const EASNER_LOGO_URL_LIGHT = `${EASNER_BRAND_CDN}/Easner%20Logo.png`
+
+/** Light wordmark for dark backgrounds (`prefers-color-scheme: dark`). */
+export const EASNER_LOGO_URL_DARK =
+  "https://kixymrjsupzkxokujmwu.supabase.co/storage/v1/object/public/brand/Easner%20LogoW.png"
+
+/** @deprecated Use EASNER_LOGO_URL_LIGHT */
+export const EASNER_LOGO_URL = EASNER_LOGO_URL_LIGHT
+
+export const EASNER_COMPANY_LEGAL_NAME = "Easner Group, Inc."
+
+export const EASNER_COMPANY_ADDRESS_HTML =
+  "584 Castro St, Suite 4092<br>San Francisco, CA 94114, United States"
+
+export const EASNER_COMPANY_ADDRESS =
+  "584 Castro St, Suite 4092, San Francisco, CA 94114, United States"
+
+export const EASNER_EMAIL_ACCOUNT_NOTICE =
+  "You received this email because you have an Easner account."
+
+export const EASNER_EMAIL_NO_ACCOUNT_NOTICE =
+  "You received this email because you're creating an Easner account."
+
+export function resolveEmailFooterNotice(recipientHasEasnerAccount = true): string {
+  return recipientHasEasnerAccount ? EASNER_EMAIL_ACCOUNT_NOTICE : EASNER_EMAIL_NO_ACCOUNT_NOTICE
+}

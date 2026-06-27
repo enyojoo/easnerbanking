@@ -239,18 +239,24 @@ ${data.dashboardUrl || profile.dashboardUrl}`
         <p class="confirmation-text">
           ${data.inviterName} invited you to join <strong>${data.businessName}</strong> on Easner Business as <strong>${data.role}</strong>.
         </p>
-        <p class="confirmation-text">Accept the invitation to access the business dashboard.</p>
+        <p class="confirmation-text">
+          Use <strong>${data.inviteeEmail}</strong> when you create an account or sign in to accept this invitation.
+        </p>
       `
       return generateBaseEmailTemplate(
         "Team invitation",
         data.businessName,
         content,
         { text: "Accept invitation", url: data.acceptUrl },
-        { audience: "business", showPreferencesLink: false },
+        {
+          audience: "business",
+          showPreferencesLink: false,
+          recipientHasEasnerAccount: data.recipientHasEasnerAccount !== false,
+        },
       )
     },
     text: (data: TeamInviteEmailData) =>
-      `${data.inviterName} invited you to ${data.businessName} as ${data.role}.\n\nAccept: ${data.acceptUrl}`,
+      `${data.inviterName} invited you to ${data.businessName} as ${data.role}.\n\nUse ${data.inviteeEmail} when you create an account or sign in.\n\nAccept: ${data.acceptUrl}`,
   },
 
   passwordChanged: securityTemplate("password_changed"),

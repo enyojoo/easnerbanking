@@ -73,7 +73,8 @@ export const teamInviteFixture: TeamInviteEmailData = {
   inviterName: "Alex Owner",
   businessName: "Acme LLC",
   role: "Admin",
-  acceptUrl: "https://business.easner.com/auth/signup?invite=1",
+  acceptUrl: "https://business.easner.com/auth/join/mem_abc123",
+  recipientHasEasnerAccount: false,
 }
 
 export const securityPasswordChangedFixture: SecurityAlertEmailData = {

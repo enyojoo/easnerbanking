@@ -7,3 +7,9 @@ export {
   emailTemplatePreferenceCategory,
   shouldSendTemplatedEmail,
 } from "./communication-email-guard"
+export {
+  generateSupabaseAuthEmailHtml,
+  generateAuthOtpBlock,
+  generateEmailLogoMarkup,
+  type SupabaseAuthEmailVariant,
+} from "./email-generator"
