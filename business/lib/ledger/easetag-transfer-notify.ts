@@ -4,7 +4,7 @@ import { normalizeDirection } from "@/lib/ledger/transactions"
 
 /**
  * Easetag P2P rows are inserted by SQL RPC — settlement notifications from the API after transfer.
- * Push-only for success (email disabled via descriptor.emailEnabled).
+ * Push + email via {@link dispatchTransactionNotification} (ledger email flag applies).
  */
 export async function notifyEasetagTransferSettled(
   admin: SupabaseClient,
@@ -58,7 +58,6 @@ export async function notifyEasetagTransferSettled(
       payload: (row.payload as Record<string, unknown> | null) ?? null,
       outcome: "success",
       easnerTransactionId: etid,
-      sendEmail: false,
     }).catch((e) => console.warn("easetag settled notification (non-fatal):", e))
   }
 }
@@ -104,10 +103,10 @@ export async function fetchEasetagDebitSnapshot(
   }
 }
 
-/** Easetag rollback — push + email reversal notice (uses pre-rollback snapshot). */
-export async function notifyEasetagTransferReversed(
+/** Easetag chain-settlement rollback — failed notice only (uses pre-rollback snapshot). */
+export async function notifyEasetagTransferFailed(
   admin: SupabaseClient,
-  input: { userId: string; snapshot: EasetagDebitSnapshot },
+  input: { userId: string; snapshot: EasetagDebitSnapshot; failureReason: string },
 ): Promise<void> {
   await dispatchTransactionNotification(admin, {
     userId: input.userId,
@@ -118,9 +117,8 @@ export async function notifyEasetagTransferReversed(
     currency: input.snapshot.currency,
     metadata: input.snapshot.metadata,
     payload: input.snapshot.payload,
-    outcome: "reversed",
+    outcome: "failed",
+    failureReason: input.failureReason,
     easnerTransactionId: input.snapshot.easnerTransactionId,
-    sendEmail: true,
-    sendPush: true,
-  }).catch((e) => console.warn("easetag reversal notification (non-fatal):", e))
+  }).catch((e) => console.warn("easetag failed notification (non-fatal):", e))
 }

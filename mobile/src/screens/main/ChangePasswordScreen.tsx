@@ -29,11 +29,15 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { supabase } from '../../lib/supabase'
+import { notifySecurityAlert } from '../../lib/securityAlertNotify'
+
+const MIN_PASSWORD_LEN = 8
 
 export default function ChangePasswordScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const scrollBottomPadding = useScrollBottomPadding(spacing[5])
-  const { showError, showInfo } = useToast()
+  const { showError, showSuccess } = useToast()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -60,15 +64,44 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
       return
     }
 
-    if (newPassword.length < 8) {
-      showError('Password must be at least 8 characters')
+    if (newPassword.length < MIN_PASSWORD_LEN) {
+      showError(`Password must be at least ${MIN_PASSWORD_LEN} characters`)
+      return
+    }
+
+    if (newPassword === currentPassword) {
+      showError('New password must be different from your current password')
       return
     }
 
     setLoading(true)
     try {
-      // TODO: Implement password change API call
-      showInfo('Password change functionality will be implemented')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const email = session?.user?.email?.trim()
+      if (!email) {
+        showError('No active session. Please sign in again.')
+        return
+      }
+
+      const { error: signErr } = await supabase.auth.signInWithPassword({
+        email,
+        password: currentPassword,
+      })
+      if (signErr) {
+        showError('Current password is incorrect')
+        return
+      }
+
+      const { error: updErr } = await supabase.auth.updateUser({ password: newPassword })
+      if (updErr) {
+        showError(updErr.message || 'Could not update password')
+        return
+      }
+
+      void notifySecurityAlert('password_changed')
+      showSuccess('Your password was updated')
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')

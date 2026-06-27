@@ -7,6 +7,7 @@ import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-s
 import { emailService } from "@easner/server"
 import { getEmailAudienceProfile } from "@easner/server"
 import { claimTeamInvite } from "@/lib/business/claim-team-invite"
+import { ensureDefaultCommunicationPreferences } from "@/lib/notifications/ensure-communication-preferences"
 
 type BootstrapBody = {
   countryCode?: string
@@ -193,6 +194,8 @@ export async function POST(request: Request) {
         console.warn("[bootstrap] Turnkey sub-org (team invite) error:", e)
       }
 
+      await ensureDefaultCommunicationPreferences(admin, user.id)
+
       return NextResponse.json({
         ok: true,
         role: "business",
@@ -302,6 +305,7 @@ export async function POST(request: Request) {
       audience: "personal",
       isNewAccount: !userRow?.id,
     })
+    await ensureDefaultCommunicationPreferences(admin, user.id)
     return NextResponse.json({ ok: true, role, userId: user.id, businessId: userRow?.easner_business_id ?? null })
   }
 
@@ -417,6 +421,8 @@ export async function POST(request: Request) {
     audience: "business",
     isNewAccount: isNewBusinessAccount,
   })
+
+  await ensureDefaultCommunicationPreferences(admin, user.id)
 
   return NextResponse.json({
     ok: true,

@@ -10,7 +10,7 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { CACHE_KEYS } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
 import type { CommunicationPreferences } from "@easner/shared"
-import { DEFAULT_COMMUNICATION_PREFERENCES } from "@easner/shared"
+import { DEFAULT_COMMUNICATION_PREFERENCES, COMMUNICATION_PREFERENCES_DISCLAIMER } from "@easner/shared"
 import { toast } from "sonner"
 
 const COMMUNICATION_SETTINGS_TTL_MS = 60 * 60 * 1000
@@ -101,6 +101,18 @@ export function SettingsCommunicationTab() {
             <>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
+                  <Label>Email notifications</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Transaction and account emails to your inbox
+                  </p>
+                </div>
+                <Switch
+                  checked={prefs.channels.email}
+                  onCheckedChange={(v) => patch({ channels: { ...prefs.channels, email: v } })}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
                   <Label>Product updates</Label>
                   <p className="text-sm text-muted-foreground">
                     Receive emails about new features and improvements
@@ -135,6 +147,7 @@ export function SettingsCommunicationTab() {
                   onCheckedChange={(v) => patch({ marketingEmails: v })}
                 />
               </div>
+              <p className="text-sm text-muted-foreground">{COMMUNICATION_PREFERENCES_DISCLAIMER}</p>
             </>
           )}
         </CardContent>

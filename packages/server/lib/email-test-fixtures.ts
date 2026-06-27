@@ -48,7 +48,7 @@ export const welcomeBusinessFixture: WelcomeEmailData = {
 export const welcomePersonalFixture: WelcomeEmailData = {
   firstName: "Sam",
   email: "sam@example.com",
-  dashboardUrl: "https://www.easner.com/dashboard",
+  dashboardUrl: "https://app.easner.com/user/dashboard",
   audience: "personal",
 }
 

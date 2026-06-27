@@ -45,6 +45,11 @@
       "import": "./src/payout-form-schema.ts",
       "require": "./src/payout-form-schema.ts"
     },
+    "./mobile-personal-links": {
+      "types": "./src/mobile-personal-links.ts",
+      "import": "./src/mobile-personal-links.ts",
+      "require": "./src/mobile-personal-links.ts"
+    },
     "./warm-flags": {
       "types": "./src/flags/warm-flags.native.ts",
       "import": "./src/flags/warm-flags.native.ts",

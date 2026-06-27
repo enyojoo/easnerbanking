@@ -62,6 +62,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useInvoicePayIn } from "@/hooks/use-invoice-pay-in"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
 import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
+import { InvoiceReplyEmailNotice } from "@/components/invoices/invoice-reply-email-notice"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
   TIER2_COMPLETE_PLACEHOLDER,
@@ -434,6 +435,13 @@ export default function InvoiceDetailPage() {
           <p className="text-muted-foreground mt-1">
             Billed to {invoice.customerName} - {formatCurrency(invoice.total, invoice.currency)}
           </p>
+          <div className="mt-3">
+            <InvoiceReplyEmailNotice
+              email={profile.invoiceReplyEmail}
+              source={profile.invoiceReplyEmailSource}
+              variant="invoices"
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {!invoice.archived && invoice.status !== "draft" && invoice.customerEmail?.trim() && (

@@ -12,7 +12,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import { ArrowLeft } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { CommunicationPreferences } from '@easner/shared'
-import { DEFAULT_COMMUNICATION_PREFERENCES, qk } from '@easner/shared'
+import { DEFAULT_COMMUNICATION_PREFERENCES, qk, COMMUNICATION_PREFERENCES_DISCLAIMER } from '@easner/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../contexts/AuthContext'
@@ -259,6 +259,19 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
                 </View>
 
                 <View style={styles.sectionCard}>
+                  <Text style={styles.sectionTitle}>Email</Text>
+                  <View style={styles.sectionContent}>
+                    {renderToggleItem(
+                      'Email notifications',
+                      'Transaction and account emails to your inbox',
+                      prefs.channels.email,
+                      (v) => patch({ channels: { ...prefs.channels, email: v } }),
+                      true,
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.sectionCard}>
                   <Text style={styles.sectionTitle}>Email types</Text>
                   <View style={styles.sectionContent}>
                     {renderToggleItem(
@@ -282,6 +295,8 @@ export default function NotificationsScreen({ navigation }: NavigationProps) {
                     )}
                   </View>
                 </View>
+
+                <Text style={styles.disclaimer}>{COMMUNICATION_PREFERENCES_DISCLAIMER}</Text>
               </>
             )}
           </Animated.View>
@@ -365,5 +380,10 @@ const styles = StyleSheet.create({
   toggleDescription: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
+  },
+  disclaimer: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    lineHeight: 20,
   },
 })

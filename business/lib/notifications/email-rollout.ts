@@ -1,4 +1,6 @@
-/** Ledger transaction emails require explicit opt-in (default off). */
+/** Ledger transaction emails are on by default; set LEDGER_TRANSACTION_EMAIL_ENABLED=false to disable. */
 export function isLedgerTransactionEmailEnabled(): boolean {
-  return String(process.env.LEDGER_TRANSACTION_EMAIL_ENABLED || "").trim().toLowerCase() === "true"
+  const raw = String(process.env.LEDGER_TRANSACTION_EMAIL_ENABLED ?? "").trim().toLowerCase()
+  if (raw === "false" || raw === "0" || raw === "off" || raw === "no") return false
+  return true
 }

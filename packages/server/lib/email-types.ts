@@ -20,6 +20,8 @@ export interface TransactionEmailData {
   transactionId: string
   easnerTransactionId?: string
   title: string
+  /** SendGrid subject — may differ from pushTitle on failed/reversed */
+  emailSubject?: string
   body: string
   amountDisplay: string
   counterpartyLabel?: string

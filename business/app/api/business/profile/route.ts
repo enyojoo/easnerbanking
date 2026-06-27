@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { removeAllOrganizationLogoObjects } from "@/lib/organization-logo-storage"
 import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
+import { resolveInvoiceReplyEmailWithSource } from "@/lib/invoices/issuer"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { isBusinessProfileLockedFromKybFields } from "@easner/shared"
 import { validateEasetag, normalizeEasetag } from "@/lib/easetag-validation"
@@ -274,6 +275,16 @@ export async function GET(request: Request) {
         ? isBusinessProfileLockedFromKybFields(org as Record<string, unknown>)
         : false
 
+  let invoiceReplyEmail: string | null = null
+  let invoiceReplyEmailSource: "support" | "owner" | "sender" | null = null
+  if (orgId) {
+    const reply = await resolveInvoiceReplyEmailWithSource(admin, orgId, user.id)
+    if (reply) {
+      invoiceReplyEmail = reply.email
+      invoiceReplyEmailSource = reply.source
+    }
+  }
+
   return NextResponse.json({
     profile: {
       businessId: org?.id ?? orgId ?? userRow?.easner_business_id ?? null,
@@ -307,6 +318,8 @@ export async function GET(request: Request) {
       noahUsdVirtualAccountId,
       noahEurVirtualAccountId,
       profileLocked,
+      invoiceReplyEmail,
+      invoiceReplyEmailSource,
     },
   })
 }

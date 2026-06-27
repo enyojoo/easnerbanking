@@ -3,6 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServerClient } from './supabase'
 import { emailService } from './email-service'
+import { getEmailAudienceProfile } from './email-audience'
 
 async function fetchUserCommunicationPreferences(
   supabase: SupabaseClient,
@@ -85,14 +86,14 @@ export class EmailNotificationService {
         prefs = undefined
       }
 
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.easner.com'
+      const profile = getEmailAudienceProfile('personal')
       const result = await emailService.sendWelcomeEmail(
         {
           firstName,
           lastName: '',
           email: userEmail,
           baseCurrency: 'USD',
-          dashboardUrl: `${appUrl}/dashboard`,
+          dashboardUrl: profile.dashboardUrl,
         },
         prefs,
       )

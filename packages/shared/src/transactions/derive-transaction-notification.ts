@@ -20,6 +20,25 @@ import {
   formatVerificationDepositPushBody,
   isVerificationDepositMetadata,
 } from "./verification-deposit"
+import {
+  activityLabelForNotification,
+  buildTransactionNotificationHeadlines,
+} from "./transaction-notification-headlines"
+
+/** Appended to failed outbound push copy when debited funds are restored. */
+export const FAILED_OUTBOUND_FUNDS_RETURNED_PUSH =
+  "Any debited funds have been returned to your balance."
+
+function withFailedOutboundPushBody(
+  body: string,
+  direction: LedgerNotificationDirection | null,
+  outcome: NotificationOutcome,
+): string {
+  if (outcome !== "failed" || direction !== "out") return body
+  const trimmed = body.trim()
+  if (!trimmed) return FAILED_OUTBOUND_FUNDS_RETURNED_PUSH
+  return `${trimmed.replace(/\.\s*$/, "")}. ${FAILED_OUTBOUND_FUNDS_RETURNED_PUSH}`
+}
 
 export type LedgerNotificationDirection = "in" | "out"
 
@@ -54,10 +73,13 @@ export type DeriveTransactionNotificationInput = {
 export type TransactionNotificationDescriptor = {
   kind: TransactionNotificationKind
   outcome: NotificationOutcome
+  /** Email HTML H1 */
   title: string
   body: string
   pushTitle: string
   pushBody: string
+  /** SendGrid subject (may differ from pushTitle on failed/reversed) */
+  emailSubject: string
   amountDisplay: string
   counterpartyLabel?: string
   counterpartyName?: string
@@ -65,7 +87,6 @@ export type TransactionNotificationDescriptor = {
   paymentRail?: string
   direction: LedgerNotificationDirection | null
   provider: string
-  /** When false, email channel should skip (Easetag success, card) */
   emailEnabled: boolean
   transactionId?: string
   easnerTransactionId?: string
@@ -144,13 +165,13 @@ function parseEasetag(meta: Record<string, unknown> | null, direction: LedgerNot
   return { outbound, inbound }
 }
 
-function buildWalletSendContent(input: {
+function buildWalletSendBody(input: {
   metadata?: Record<string, unknown> | null
   payload?: Record<string, unknown> | null
   amount: number
   currency: string
   amountText: string
-}): { title: string; body: string } {
+}): string {
   const meta = input.metadata ?? null
   const payoutReview = normalizePayoutReviewSnapshot(meta?.payout_review)
   const receiveAmount =
@@ -169,12 +190,83 @@ function buildWalletSendContent(input: {
       ? formatMoneyDisplay(receiveAmount, receiveCurrency)
       : input.amountText
   const destinationLabel = walletAddress ? truncateMiddle(walletAddress, 6, 6) : ""
+  return destinationLabel
+    ? `Sent ${amountDisplay} to ${destinationLabel}`
+    : `Sent ${amountDisplay}`
+}
+
+type DescriptorDraft = Omit<
+  TransactionNotificationDescriptor,
+  "title" | "pushTitle" | "emailSubject" | "emailEnabled"
+> & { emailEnabled?: boolean }
+
+function buildGlobalPayoutOutContext(input: {
+  meta: Record<string, unknown> | null
+  payload: Record<string, unknown> | null
+  amountText: string
+}): {
+  transferMethod: string
+  recipientName?: string
+  amountDisplay: string
+  sentBody: string
+} {
+  const meta = input.meta
+  const payoutReview = normalizePayoutReviewSnapshot(meta?.payout_review)
+  const receiveAmount =
+    payoutReview?.receive_amount ??
+    (typeof meta?.receive_amount === "number" ? meta.receive_amount : null)
+  const receiveCurrency = String(
+    payoutReview?.receive_currency ?? meta?.receive_currency ?? meta?.fiat_currency ?? "",
+  ).toUpperCase()
+  const recipientRaw =
+    (typeof (meta?.recipient_snapshot as Record<string, unknown> | undefined)?.full_name === "string"
+      ? String((meta?.recipient_snapshot as Record<string, unknown>).full_name)
+      : "") ||
+    deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload ?? null }) ||
+    ""
+  const recipientName = formatDisplayPersonName(recipientRaw) || recipientRaw || undefined
+  const amountDisplay =
+    receiveAmount != null && receiveCurrency
+      ? formatMoneyDisplay(receiveAmount, receiveCurrency)
+      : input.amountText
+  const transferMethod =
+    payoutReview?.transfer_method ||
+    (typeof meta?.transfer_method === "string" ? String(meta.transfer_method) : "Bank transfer")
+  const sentBody = recipientName
+    ? `Sent ${amountDisplay} to ${recipientName}`
+    : `Sent ${amountDisplay}`
+  return { transferMethod, recipientName, amountDisplay, sentBody }
+}
+
+function finalizeDescriptor(
+  draft: DescriptorDraft,
+  activityLabel: string,
+  headlineOptions?: { successUsesCompleteSuffix?: boolean },
+): TransactionNotificationDescriptor {
+  const headlines = buildTransactionNotificationHeadlines(
+    activityLabel,
+    draft.outcome,
+    headlineOptions,
+  )
   return {
-    title: "Stablecoin Transfer",
-    body: destinationLabel
-      ? `Sent ${amountDisplay} to ${destinationLabel}`
-      : `Sent ${amountDisplay}`,
+    ...draft,
+    ...headlines,
+    emailEnabled: draft.emailEnabled ?? true,
   }
+}
+
+function inferFailedKind(input: {
+  isCard: boolean
+  direction: LedgerNotificationDirection | null
+  outboundEasetag: string | null
+  inboundEasetag: string | null
+}): TransactionNotificationKind {
+  if (input.isCard) {
+    return input.direction === "in" ? "card_topup" : "card_payment"
+  }
+  if (input.outboundEasetag) return "easetag_send"
+  if (input.inboundEasetag) return "easetag_receive"
+  return "generic"
 }
 
 /**
@@ -210,101 +302,137 @@ export function deriveTransactionNotification(
   }
 
   if (outcome === "failed") {
+    if (direction === "out" && isGlobalPayoutOffRampFlow(meta)) {
+      const payout = buildGlobalPayoutOutContext({
+        meta,
+        payload: input.payload ?? null,
+        amountText,
+      })
+      const body = payout.recipientName
+        ? input.failureReason
+          ? `Could not send ${payout.amountDisplay} to ${payout.recipientName}. ${input.failureReason}`
+          : `Could not send ${payout.amountDisplay} to ${payout.recipientName}.`
+        : input.failureReason
+          ? `Your ${payout.transferMethod.toLowerCase()} could not be completed. ${input.failureReason}`
+          : `Your ${payout.transferMethod.toLowerCase()} could not be completed.`
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "bank_payout",
+          body,
+          pushBody: withFailedOutboundPushBody(body, direction, outcome),
+          amountDisplay: payout.amountDisplay,
+          counterpartyLabel: "Recipient",
+          counterpartyName: payout.recipientName,
+          category: payout.transferMethod,
+        },
+        activityLabelForNotification("bank_payout", payout.transferMethod),
+      )
+    }
+
     const category = toEasnerTransactionProductCategory({
       provider,
       direction: direction ?? "out",
       metadata: meta,
       payload: input.payload ?? null,
     })
+    const kind = inferFailedKind({ isCard, direction, outboundEasetag, inboundEasetag })
     const body = input.failureReason
       ? `Your ${category.toLowerCase()} could not be completed. ${input.failureReason}`
       : `Your ${category.toLowerCase()} could not be completed.`
-    return {
-      ...base,
-      kind: "generic",
-      title: `${category} — not completed`,
-      body,
-      pushTitle: category,
-      pushBody: body,
-      counterpartyLabel: direction === "in" ? "Sender" : "Recipient",
-      counterpartyName: deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload }),
-      category,
-      emailEnabled: !isCard && !(outboundEasetag || inboundEasetag),
-    }
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind,
+        body,
+        pushBody: withFailedOutboundPushBody(body, direction, outcome),
+        counterpartyLabel: direction === "in" ? "Sender" : "Recipient",
+        counterpartyName: deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload }),
+        category,
+      },
+      activityLabelForNotification(kind, category),
+    )
   }
 
   if (outcome === "reversed") {
-    return {
-      ...base,
-      kind: outboundEasetag || inboundEasetag ? "easetag_send" : "generic",
-      title: "Transaction reversed",
-      body: "A recent transaction was reversed and your balance has been updated.",
-      pushTitle: "Transaction reversed",
-      pushBody: "Your balance has been updated after a reversal.",
-      category: "Reversal",
-      emailEnabled: Boolean(outboundEasetag || inboundEasetag),
-    }
+    const kind =
+      outboundEasetag || inboundEasetag
+        ? outboundEasetag
+          ? "easetag_send"
+          : "easetag_receive"
+        : "generic"
+    const body = "A recent transaction was reversed and your balance has been updated."
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind,
+        body,
+        pushBody: "Your balance has been updated after a reversal.",
+        category: "Reversal",
+      },
+      activityLabelForNotification(kind, "Reversal"),
+    )
   }
 
   if (direction === "out" && outboundEasetag) {
     const body = `Sent ${amountText} to @${outboundEasetag}`
-    return {
-      ...base,
-      kind: "easetag_send",
-      title: "Easetag Transfer",
-      body,
-      pushTitle: "Easetag Transfer",
-      pushBody: body,
-      counterpartyLabel: "Recipient",
-      counterpartyName: `@${outboundEasetag}`,
-      category: "Easetag Send",
-      emailEnabled: false,
-    }
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "easetag_send",
+        body,
+        pushBody: body,
+        counterpartyLabel: "Recipient",
+        counterpartyName: `@${outboundEasetag}`,
+        category: "Easetag Send",
+      },
+      activityLabelForNotification("easetag_send", "Easetag Send"),
+    )
   }
   if (direction === "in" && inboundEasetag) {
     const body = `Received ${amountText} from @${inboundEasetag}`
-    return {
-      ...base,
-      kind: "easetag_receive",
-      title: "Easetag Deposit",
-      body,
-      pushTitle: "Easetag Deposit",
-      pushBody: body,
-      counterpartyLabel: "Sender",
-      counterpartyName: `@${inboundEasetag}`,
-      category: "Easetag Received",
-      emailEnabled: false,
-    }
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "easetag_receive",
+        body,
+        pushBody: body,
+        counterpartyLabel: "Sender",
+        counterpartyName: `@${inboundEasetag}`,
+        category: "Easetag Received",
+      },
+      activityLabelForNotification("easetag_receive", "Easetag Received"),
+    )
   }
 
   if (isCard) {
     if (direction === "in") {
       const body = `Added ${amountText} from your card`
-      return {
-        ...base,
-        kind: "card_topup",
-        title: "Card top up complete",
-        body,
-        pushTitle: "Card top up complete",
-        pushBody: body,
-        category: "Card top up",
-        emailEnabled: false,
-      }
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "card_topup",
+          body,
+          pushBody: body,
+          category: "Card top up",
+        },
+        activityLabelForNotification("card_topup", "Card top up"),
+      )
     }
     const merchant = deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload ?? null })
     const body = merchant ? `Paid ${amountText} to ${merchant}` : `Paid ${amountText}`
-    return {
-      ...base,
-      kind: "card_payment",
-      title: "Card payment successful",
-      body,
-      pushTitle: "Card payment successful",
-      pushBody: body,
-      counterpartyLabel: "Merchant",
-      counterpartyName: merchant,
-      category: "Card payment",
-      emailEnabled: false,
-    }
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "card_payment",
+        body,
+        pushBody: body,
+        counterpartyLabel: "Merchant",
+        counterpartyName: merchant,
+        category: "Card payment",
+      },
+      activityLabelForNotification("card_payment", "Card payment"),
+    )
   }
 
   const category = toEasnerTransactionProductCategory({
@@ -316,129 +444,110 @@ export function deriveTransactionNotification(
 
   if (category === "Stablecoin Deposit") {
     const body = `Received ${amountText} via address`
-    return {
-      ...base,
-      kind: "stablecoin_deposit",
-      title: "Stablecoin Deposit",
-      body,
-      pushTitle: "Stablecoin Deposit",
-      pushBody: body,
-      category,
-      emailEnabled: true,
-    }
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "stablecoin_deposit",
+        body,
+        pushBody: body,
+        category,
+      },
+      activityLabelForNotification("stablecoin_deposit", category),
+    )
   }
 
   if (category === "Stablecoin Transfer") {
-    const walletSend =
+    const body =
       String(meta?.activity_type ?? "").trim().toLowerCase() === "wallet_send"
-        ? buildWalletSendContent({
+        ? buildWalletSendBody({
             metadata: meta,
             payload: input.payload ?? null,
             amount: input.amount,
             currency: input.currency,
             amountText,
           })
-        : { title: "Stablecoin Transfer", body: `Sent ${amountText} to wallet address` }
-    return {
-      ...base,
-      kind: "stablecoin_transfer",
-      title: walletSend.title,
-      body: walletSend.body,
-      pushTitle: walletSend.title,
-      pushBody: walletSend.body,
-      counterpartyLabel: "Destination",
-      category,
-      emailEnabled: true,
-    }
+        : `Sent ${amountText} to wallet address`
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "stablecoin_transfer",
+        body,
+        pushBody: body,
+        counterpartyLabel: "Destination",
+        category,
+      },
+      activityLabelForNotification("stablecoin_transfer", category),
+    )
   }
 
   if (category === "Easetag Received") {
     const body = inboundEasetag
       ? `Received ${amountText} from @${inboundEasetag}`
       : `Received ${amountText}`
-    return {
-      ...base,
-      kind: "easetag_receive",
-      title: "Easetag Deposit",
-      body,
-      pushTitle: "Easetag Deposit",
-      pushBody: body,
-      category,
-      emailEnabled: false,
-    }
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "easetag_receive",
+        body,
+        pushBody: body,
+        category,
+      },
+      activityLabelForNotification("easetag_receive", category),
+    )
   }
   if (category === "Easetag Send") {
     const body = outboundEasetag ? `Sent ${amountText} to @${outboundEasetag}` : `Sent ${amountText}`
-    return {
-      ...base,
-      kind: "easetag_send",
-      title: "Easetag Transfer",
-      body,
-      pushTitle: "Easetag Transfer",
-      pushBody: body,
-      category,
-      emailEnabled: false,
-    }
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "easetag_send",
+        body,
+        pushBody: body,
+        category,
+      },
+      activityLabelForNotification("easetag_send", category),
+    )
   }
 
   if (direction === "out" && String(meta?.activity_type ?? "").trim().toLowerCase() === "wallet_send") {
-    const walletSend = buildWalletSendContent({
+    const body = buildWalletSendBody({
       metadata: meta,
       payload: input.payload ?? null,
       amount: input.amount,
       currency: input.currency,
       amountText,
     })
-    return {
-      ...base,
-      kind: "stablecoin_transfer",
-      title: walletSend.title,
-      body: walletSend.body,
-      pushTitle: walletSend.title,
-      pushBody: walletSend.body,
-      category: "Stablecoin Transfer",
-      emailEnabled: true,
-    }
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "stablecoin_transfer",
+        body,
+        pushBody: body,
+        category: "Stablecoin Transfer",
+      },
+      activityLabelForNotification("stablecoin_transfer", "Stablecoin Transfer"),
+    )
   }
 
   if (direction === "out" && isGlobalPayoutOffRampFlow(meta)) {
-    const payoutReview = normalizePayoutReviewSnapshot(meta?.payout_review)
-    const receiveAmount =
-      payoutReview?.receive_amount ??
-      (typeof meta?.receive_amount === "number" ? meta.receive_amount : null)
-    const receiveCurrency = String(
-      payoutReview?.receive_currency ?? meta?.receive_currency ?? meta?.fiat_currency ?? "",
-    ).toUpperCase()
-    const recipientRaw =
-      (typeof (meta?.recipient_snapshot as Record<string, unknown> | undefined)?.full_name === "string"
-        ? String((meta?.recipient_snapshot as Record<string, unknown>).full_name)
-        : "") ||
-      deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload ?? null }) ||
-      ""
-    const recipientName = formatDisplayPersonName(recipientRaw) || recipientRaw
-    const amountDisplay =
-      receiveAmount != null && receiveCurrency
-        ? formatMoneyDisplay(receiveAmount, receiveCurrency)
-        : amountText
-    const transferMethod =
-      payoutReview?.transfer_method ||
-      (typeof meta?.transfer_method === "string" ? String(meta.transfer_method) : "Bank transfer")
-    const body = recipientName
-      ? `Sent ${amountDisplay} to ${recipientName}`
-      : `Sent ${amountDisplay}`
-    return {
-      ...base,
-      kind: "bank_payout",
-      title: transferMethod,
-      body,
-      pushTitle: transferMethod,
-      pushBody: body,
-      amountDisplay,
-      counterpartyLabel: "Recipient",
-      counterpartyName: recipientName || undefined,
-      category: transferMethod,
-      emailEnabled: true,
-    }
+    const payout = buildGlobalPayoutOutContext({
+      meta,
+      payload: input.payload ?? null,
+      amountText,
+    })
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "bank_payout",
+        body: payout.sentBody,
+        pushBody: payout.sentBody,
+        amountDisplay: payout.amountDisplay,
+        counterpartyLabel: "Recipient",
+        counterpartyName: payout.recipientName,
+        category: payout.transferMethod,
+      },
+      activityLabelForNotification("bank_payout", payout.transferMethod),
+    )
   }
 
   if (direction === "in") {
@@ -449,62 +558,63 @@ export function deriveTransactionNotification(
         currency: input.currency,
         bankName: bank,
       })
-      return {
-        ...base,
-        kind: "bank_verification_credit",
-        title: "Bank verification credit",
-        body,
-        pushTitle: "Bank verification credit",
-        pushBody: body,
-        category: "Bank verification",
-        emailEnabled: true,
-      }
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "bank_verification_credit",
+          body,
+          pushBody: body,
+          category: "Bank verification",
+        },
+      activityLabelForNotification("bank_verification_credit", "Bank verification"),
+      { successUsesCompleteSuffix: false },
+    )
     }
     if (isBankOnrampDepositFlow(meta)) {
-      return {
-        ...base,
-        kind: "bank_deposit",
-        title: "Bank Deposit",
-        body: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
-        pushTitle: "Bank Deposit",
-        pushBody: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
-        category: "Bank Deposit",
-        emailEnabled: true,
-      }
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "bank_deposit",
+          body: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
+          pushBody: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
+          category: "Bank Deposit",
+        },
+        activityLabelForNotification("bank_deposit", "Bank Deposit"),
+      )
     }
     const from = deriveEasnerInboundRemitterDisplayName({
       metadata: meta,
       payload: input.payload ?? null,
     })
     const body = from ? `Received ${amountText} from ${from}` : `Received ${amountText}`
-    return {
-      ...base,
-      kind: "bank_deposit",
-      title: "Bank Deposit",
-      body,
-      pushTitle: "Bank Deposit",
-      pushBody: body,
-      counterpartyLabel: "Sender",
-      counterpartyName: from || undefined,
-      category: "Bank Deposit",
-      emailEnabled: true,
-    }
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "bank_deposit",
+        body,
+        pushBody: body,
+        counterpartyLabel: "Sender",
+        counterpartyName: from || undefined,
+        category: "Bank Deposit",
+      },
+      activityLabelForNotification("bank_deposit", "Bank Deposit"),
+    )
   }
 
   const to = deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload ?? null })
   const body = to ? `Sent ${amountText} to ${to}` : `Sent ${amountText}`
-  return {
-    ...base,
-    kind: "bank_transfer",
-    title: "Bank Transfer",
-    body,
-    pushTitle: "Bank Transfer",
-    pushBody: body,
-    counterpartyLabel: "Recipient",
-    counterpartyName: to,
-    category: "Bank Transfer",
-    emailEnabled: true,
-  }
+  return finalizeDescriptor(
+    {
+      ...base,
+      kind: "bank_transfer",
+      body,
+      pushBody: body,
+      counterpartyLabel: "Recipient",
+      counterpartyName: to,
+      category: "Bank Transfer",
+    },
+    activityLabelForNotification("bank_transfer", "Bank Transfer"),
+  )
 }
 
 export function descriptorToPushContent(descriptor: TransactionNotificationDescriptor): {
@@ -513,3 +623,8 @@ export function descriptorToPushContent(descriptor: TransactionNotificationDescr
 } {
   return { title: descriptor.pushTitle, body: descriptor.pushBody }
 }
+
+export {
+  activityLabelForNotification,
+  buildTransactionNotificationHeadlines,
+} from "./transaction-notification-headlines"

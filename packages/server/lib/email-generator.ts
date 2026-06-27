@@ -49,6 +49,9 @@ export function generateBaseEmailTemplate(
 ): string {
   const audience = options?.audience ?? "personal"
   const profile = getEmailAudienceProfile(audience)
+  /** Omit product line under the title — logo + H1 only (personal and business). */
+  const headerSubtitle =
+    subtitle.trim() === profile.productName.trim() ? "" : subtitle
   const preheader = options?.preheader?.trim()
   const year = new Date().getFullYear()
   const t = emailTheme
@@ -284,7 +287,7 @@ export function generateBaseEmailTemplate(
         <div class="email-header">
             ${generateEmailLogoMarkup()}
             <h1 class="email-title">${escapeHtml(title)}</h1>
-            ${subtitle ? `<p class="email-subtitle">${escapeHtml(subtitle)}</p>` : ""}
+            ${headerSubtitle ? `<p class="email-subtitle">${escapeHtml(headerSubtitle)}</p>` : ""}
         </div>
         <div class="email-body">
             ${content}

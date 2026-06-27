@@ -1,6 +1,11 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { displayCountryFromBusinessSetting } from "@/lib/countries"
 import type { BusinessProfile } from "@/lib/use-business-profile"
+import { pickInvoiceReplyEmail, pickInvoiceReplyEmailWithSource } from "@/lib/invoices/invoice-reply-email"
+import type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
+
+export { pickInvoiceReplyEmail, pickInvoiceReplyEmailWithSource } from "@/lib/invoices/invoice-reply-email"
+export type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
 
 /** Header block for invoice PDF + customer-facing invoice HTML (matches `InvoicePDFDocument` fields). */
 export type InvoicePdfIssuer = {
@@ -67,4 +72,69 @@ export async function fetchInvoiceIssuerForBusiness(
     email: (org.support_email as string | null)?.trim() || "",
     phone: (org.support_phone as string | null)?.trim() || "",
   }
+}
+
+/**
+ * Reply-To for invoice emails to customers: org support email (Settings → Business),
+ * then org owner, then the user sending the invoice.
+ */
+export async function resolveInvoiceReplyEmail(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  businessId: string,
+  senderUserId: string,
+): Promise<string | null> {
+  const issuer = await fetchInvoiceIssuerForBusiness(admin, businessId)
+
+  const { resolveOrgOwnerUserId } = await import("@/lib/business/org-owner")
+  const ownerUserId = await resolveOrgOwnerUserId(admin, businessId, senderUserId)
+
+  let ownerEmail: string | null = null
+  let senderEmail: string | null = null
+
+  for (const [userId, slot] of [
+    [ownerUserId, "owner"],
+    [senderUserId, "sender"],
+  ] as const) {
+    const { data } = await admin.from("users").select("email").eq("id", userId).maybeSingle()
+    const email = (data?.email as string | null | undefined)?.trim() || null
+    if (slot === "owner") ownerEmail = email
+    else senderEmail = email
+  }
+
+  return pickInvoiceReplyEmail({
+    supportEmail: issuer.email,
+    ownerEmail,
+    senderEmail,
+  })
+}
+
+/** Same resolution as send-email, with source label for Settings / Invoices UI. */
+export async function resolveInvoiceReplyEmailWithSource(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  businessId: string,
+  senderUserId: string,
+): Promise<{ email: string; source: InvoiceReplyEmailSource } | null> {
+  const issuer = await fetchInvoiceIssuerForBusiness(admin, businessId)
+
+  const { resolveOrgOwnerUserId } = await import("@/lib/business/org-owner")
+  const ownerUserId = await resolveOrgOwnerUserId(admin, businessId, senderUserId)
+
+  let ownerEmail: string | null = null
+  let senderEmail: string | null = null
+
+  for (const [userId, slot] of [
+    [ownerUserId, "owner"],
+    [senderUserId, "sender"],
+  ] as const) {
+    const { data } = await admin.from("users").select("email").eq("id", userId).maybeSingle()
+    const email = (data?.email as string | null | undefined)?.trim() || null
+    if (slot === "owner") ownerEmail = email
+    else senderEmail = email
+  }
+
+  return pickInvoiceReplyEmailWithSource({
+    supportEmail: issuer.email,
+    ownerEmail,
+    senderEmail,
+  })
 }

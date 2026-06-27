@@ -32,6 +32,7 @@ import {
   type TotpFactorLike,
 } from '../../lib/auth-mfa'
 import { saveMfaVerified } from '../../lib/mfaStatusCache'
+import { notifySecurityAlert } from '../../lib/securityAlertNotify'
 import {
   colors,
   surfaceFrameStyle,
@@ -292,6 +293,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
         }
         return
       }
+      void notifySecurityAlert('mfa_enabled')
       suppressVerifiedApiPopRef.current = true
       await loadFactors()
       resetLocal()
@@ -379,6 +381,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
         setError(uErr.message || 'Could not disable two-factor authentication.')
         return
       }
+      void notifySecurityAlert('mfa_disabled')
       const {
         data: { session: s2 },
       } = await supabase.auth.getSession()
@@ -433,6 +436,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
         setError(uErr.message || 'Could not disable two-factor authentication.')
         return
       }
+      void notifySecurityAlert('mfa_disabled')
       setShowDisableOtp(false)
       setDisableOtpCode('')
       const {

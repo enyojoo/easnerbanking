@@ -31,7 +31,7 @@ import {
 } from "@/lib/ledger/easetag-turnkey-settlement"
 import {
   fetchEasetagDebitSnapshot,
-  notifyEasetagTransferReversed,
+  notifyEasetagTransferFailed,
   notifyEasetagTransferSettled,
 } from "@/lib/ledger/easetag-transfer-notify"
 import { createTurnkeySend, reconcileTurnkeySendStatus } from "@/lib/turnkey/send"
@@ -336,9 +336,10 @@ export async function POST(request: Request) {
           payeeBusinessId: payeeBusinessId ?? null,
         })
         if (rollbackSnapshot) {
-          await notifyEasetagTransferReversed(admin, {
+          await notifyEasetagTransferFailed(admin, {
             userId: senderUserId,
             snapshot: rollbackSnapshot,
+            failureReason: detail,
           })
         }
         await updateEasetagSettlementFailed(admin, transferGroupId, detail).catch(() => {})
@@ -368,9 +369,10 @@ export async function POST(request: Request) {
         payeeBusinessId: payeeBusinessId ?? null,
       })
       if (rollbackSnapshot) {
-        await notifyEasetagTransferReversed(admin, {
+        await notifyEasetagTransferFailed(admin, {
           userId: senderUserId,
           snapshot: rollbackSnapshot,
+          failureReason: msg || "Easetag transfer could not be completed.",
         })
       }
       await updateEasetagSettlementFailed(admin, transferGroupId, msg).catch(() => {})

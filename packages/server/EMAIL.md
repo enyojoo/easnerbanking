@@ -8,19 +8,15 @@ Transaction and verification emails are **not** driven by legacy remittance stat
 
 1. **`deriveTransactionNotification`** (`packages/shared/src/transactions/derive-transaction-notification.ts`) — channel-agnostic descriptor from live `Transaction` rows (provider, direction, metadata, outcome).
 2. **`dispatchTransactionNotification`** (`business/lib/notifications/dispatch.ts`) — resolves audience, checks `communication_preferences`, sends push + email.
-3. **Chokepoints**: `business/lib/ledger/transactions.ts` (settled / failed / cancelled), `bank-deposit-settled-notify.ts`, `easetag-transfer-notify.ts`, `global-payout-ledger.ts` (reversal), `sync-user.ts` (KYB/KYC transitions).
+3. **Chokepoints**: `business/lib/ledger/transactions.ts` (settled / failed / cancelled), `bank-deposit-settled-notify.ts`, `easetag-transfer-notify.ts`, `global-payout-notify.ts`, `sync-user.ts` (KYB/KYC transitions).
 
 Audience (`business` | `personal`) is resolved in `business/lib/notifications/resolve-email-audience.ts` and threaded through `emailService.sendEmail`.
 
 ## Rollout flag (ledger transaction emails)
 
-Ledger **transaction** emails (deposit, payout, wallet send, stablecoin receive — settled / failed / reversed) require:
+Ledger **transaction** emails (deposit, payout, wallet send, stablecoin receive — settled / failed) are **on by default**. Set `LEDGER_TRANSACTION_EMAIL_ENABLED=false` to disable platform-wide (e.g. rollback). User-level opt-out still uses **Settings → Communication → Email notifications**.
 
-```bash
-LEDGER_TRANSACTION_EMAIL_ENABLED=true
-```
-
-When unset or any value other than `true`, transaction emails are **skipped**; push is unchanged. Welcome, KYB/KYC, team invite, and security emails are **not** gated by this flag.
+Welcome, KYB/KYC, team invite, security, and invoice emails are always subject to normal preference rules (not gated by this env flag).
 
 ## Environment variables
 
@@ -32,7 +28,8 @@ When unset or any value other than `true`, transaction emails are **skipped**; p
 | `SENDGRID_FROM_EMAIL_BUSINESS` | Recommended | Business from address (falls back to `SENDGRID_FROM_EMAIL`) |
 | `SENDGRID_FROM_NAME_BUSINESS` | Recommended | Business from display name |
 | `SENDGRID_REPLY_TO` | Recommended | Reply-to / support routing |
-| `LEDGER_TRANSACTION_EMAIL_ENABLED` | For tx email | Set `true` to enable ledger transaction emails |
+| `LEDGER_TRANSACTION_EMAIL_ENABLED` | Optional | Default **on**. Set `false` to disable ledger transaction emails platform-wide |
+| `NEXT_PUBLIC_MOBILE_APP_URL` | Optional | Personal email / universal-link origin (default `https://app.easner.com`) |
 
 Before deploy, run:
 
@@ -56,7 +53,7 @@ npx tsx packages/server/scripts/send-all-email-previews.ts --template welcomePer
 npx tsx packages/server/scripts/send-all-email-previews.ts --dry-run
 ```
 
-Ledger **transaction** emails in production still require `LEDGER_TRANSACTION_EMAIL_ENABLED=true` on the business app; this script sends template previews directly and bypasses that flag.
+Ledger **transaction** emails in production are **on by default**; set `LEDGER_TRANSACTION_EMAIL_ENABLED=false` to turn them off. This script sends template previews directly and bypasses that flag.
 
 ## Supabase Auth emails (OTP / password reset)
 
@@ -84,7 +81,7 @@ Flow: owner invites via **Settings → Team** → `POST /api/settings/team` upse
 | Route | App | Purpose |
 |-------|-----|---------|
 | `POST /api/send-email-notification` | **business** | Admin transaction notices only (`type: admin-transaction`). User `type: transaction` returns **410 deprecated**. |
-| `POST /api/notifications/security-alert` | **business** | Security alert emails (password changed, MFA enabled/disabled). |
+| `POST /api/notifications/security-alert` | **business** (mobile + web) | Security alert emails (password changed, MFA enabled/disabled). |
 | `POST /api/invoices/send-email` | **business** | Invoice PDF to **customer** — not gated by marketing toggles (operational). |
 | `GET` / `PATCH /api/settings/communication` | **business** | Read/update `users.communication_preferences` (shared with mobile). |
 | `POST /api/settings/push-token` | **business** | Register Expo push tokens; sends new-device security email on first device. |
@@ -94,16 +91,57 @@ Flow: owner invites via **Settings → Team** → `POST /api/settings/team` upse
 
 Mobile sets `EXPO_PUBLIC_API_URL` to the business app origin and must send `Authorization: Bearer` for user-triggered notification calls.
 
+## Personal (Easner Mobile) email links
+
+Personal SendGrid templates use **`https://app.easner.com/user/*`** universal links (see `packages/shared/src/mobile-personal-links.ts`):
+
+| Email CTA | URL |
+|-----------|-----|
+| Welcome / KYC approved | `https://app.easner.com/user/dashboard` |
+| Transaction detail | `https://app.easner.com/user/transactions/{id}` |
+| Email preferences footer | `https://app.easner.com/user/notifications` |
+
+Override origin with `NEXT_PUBLIC_MOBILE_APP_URL` in the business app env. Mobile handles these paths in `pendingDeepLinkNavigation.ts` (native) and `linking.ts` (web).
+
+## Business email branding
+
+- Product name in profile: **Easner Business Banking** (`email-audience.ts`).
+- SendGrid from name: **Easner Business** (`SENDGRID_FROM_NAME_BUSINESS`).
+- Subjects use **Easner Business** where mobile uses **Easner** / **Easner Banking** (KYB, security, welcome).
+- Email header: **no product subtitle** under the H1 (logo + title only), same as personal.
+- Transaction CTAs: `https://business.easner.com/transactions/{id}`; preferences: `/settings/communication`.
+
+## Invoice emails (to customers)
+
+Separate from the shared template registry (`business/lib/invoice-email-service.ts`).
+
+| Field | Value |
+|-------|--------|
+| **From** | Easner Business — `SENDGRID_FROM_EMAIL_BUSINESS` → `SENDGRID_FROM_EMAIL` → `invoices@easner.com` |
+| **Reply-To** | Org **Settings → Business → Support Email**; else org owner email; else sender’s account email |
+| **Subject** | `{Invoice from \| Reminder…} {businessName} — {invoiceNumber}` |
+| **Attachment** | Invoice PDF (contact block uses same Reply-To email) |
+| **Footer** | “Contact **{businessName}** at **{reply email}**” |
+| **Trigger** | `POST /api/invoices/send-email` |
+| **Blocked when** | No support, owner, or sender email can be resolved (400 with settings hint) |
+
+Platform mail to business users still uses **`SENDGRID_REPLY_TO`** (Easner support). Invoice Reply-To is per org, not env-based.
+
+Mobile security emails: **Change password** and **MFA enable/disable** call `POST /api/notifications/security-alert` after Supabase auth succeeds (`ChangePasswordScreen`, `MfaSetupScreen`).
+
 ## Push (Expo) vs email
 
 - **Push** and **email** share derivation via `deriveTransactionNotification` + `dispatchTransactionNotification`.
-- **Email channel scope**: bank deposit, payout, wallet send, stablecoin receive (settled + failure/reversal). Easetag P2P + card are push-only except Easetag reversal notice.
+- **Business** users receive **email only** (no Expo push), even when ledger events fire for org accounts.
+- **Personal (mobile)** receives push + email when preferences allow.
+- **Email channel scope**: settled ledger activities including Easetag P2P and card, plus failed outbound transfers (funds restored — no separate reversal notices). Gated by user `channels.email` (default on); platform kill-switch: `LEDGER_TRANSACTION_EMAIL_ENABLED=false`.
 - **Email** delivery is enforced in **`communication-email-guard.ts`** together with `channels.email` and product/security/marketing toggles. Transactional templates are not suppressed by marketing toggles.
 - **Push** checks **`parseCommunicationPreferences(...).channels.push`** and reads tokens from **`public.user_push_devices`**.
 
 ## Preference enforcement
 
-- Parsed with `@easner/shared` **`parseCommunicationPreferences`**.
+- Parsed with `@easner/shared` **`parseCommunicationPreferences`** — all channels and categories default **on**.
+- New accounts seed defaults on bootstrap and first visit to **Settings → Communication**.
 - Template → bucket: **`communication-email-guard.ts`** (`shouldSendTemplatedEmail`).
 - Transaction lifecycle templates are **never** blocked by product/marketing toggles (`channels.email` still gates delivery).
 

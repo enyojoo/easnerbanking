@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
-import { parseCommunicationPreferences, type CommunicationPreferences } from "@easner/shared"
+import {
+  parseCommunicationPreferences,
+  DEFAULT_COMMUNICATION_PREFERENCES,
+  type CommunicationPreferences,
+} from "@easner/shared"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
+import { ensureDefaultCommunicationPreferences } from "@/lib/notifications/ensure-communication-preferences"
 
 type PatchBody = Partial<{
   productUpdates: boolean
@@ -29,8 +34,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  if (!data) {
+    await ensureDefaultCommunicationPreferences(admin, user.id)
+    return NextResponse.json({ preferences: { ...DEFAULT_COMMUNICATION_PREFERENCES, channels: { ...DEFAULT_COMMUNICATION_PREFERENCES.channels } } })
+  }
+
   const preferences =
-    data && "communication_preferences" in data
+    "communication_preferences" in data
       ? parseCommunicationPreferences(data.communication_preferences)
       : parseCommunicationPreferences(undefined)
 

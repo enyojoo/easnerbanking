@@ -46,4 +46,10 @@ describe('parseDeepLinkFromUrl', () => {
       }),
     )
   })
+
+  it('maps notifications preferences path', () => {
+    expect(parseDeepLinkFromUrl('https://app.easner.com/user/notifications')).toEqual(
+      expect.objectContaining({ screen: 'Notifications' }),
+    )
+  })
 })
