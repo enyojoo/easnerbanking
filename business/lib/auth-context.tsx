@@ -166,15 +166,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const bootstrap = async () => {
       // Throttle bootstrap on reload; it's idempotent server-side but can compete with initial navigation.
+      // Only mark the throttle AFTER a successful bootstrap so a failed/partial run (e.g. org link never
+      // persisted) retries on the next mount instead of being suppressed for 6h.
+      const throttleKey = `easner_business_bootstrap_v1_${user.id}`
+      const countryAppliedKey = `easner_business_country_applied_v1_${user.id}`
+
+      // The country picked at signup only reaches the org through this (deferred, best-effort) bootstrap.
+      // If a signup country is still pending (not yet confirmed applied), run even when throttled so it
+      // reliably propagates to Business settings instead of being silently dropped.
+      const onboarding = getOnboarding()
+      const countryCode = onboarding?.countryCode?.trim() || undefined
+      let countryAlreadyApplied = false
       try {
-        const key = `easner_business_bootstrap_v1_${user.id}`
-        const raw = localStorage.getItem(key)
+        countryAlreadyApplied = localStorage.getItem(countryAppliedKey) === "1"
+      } catch {
+        // ignore storage errors
+      }
+      const hasPendingCountry = Boolean(countryCode) && !countryAlreadyApplied
+
+      try {
+        const raw = localStorage.getItem(throttleKey)
         const last = raw ? Number(raw) : 0
         const MIN_MS = 6 * 60 * 60 * 1000 // 6h
-        if (Number.isFinite(last) && last > 0 && Date.now() - last < MIN_MS) {
+        if (!hasPendingCountry && Number.isFinite(last) && last > 0 && Date.now() - last < MIN_MS) {
           return
         }
-        localStorage.setItem(key, String(Date.now()))
       } catch {
         // ignore storage errors
       }
@@ -188,8 +204,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      const onboarding = getOnboarding()
-      const countryCode = onboarding?.countryCode?.trim() || undefined
       const role = "business"
 
       try {
@@ -203,6 +217,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }),
         })
         if (bootRes.ok) {
+          try {
+            localStorage.setItem(throttleKey, String(Date.now()))
+            // Server backfills org country (idempotent, only when empty); mark applied so we don't
+            // keep force-running past the throttle once the signup country has landed on the org.
+            if (countryCode) localStorage.setItem(countryAppliedKey, "1")
+          } catch {
+            // ignore storage errors
+          }
           try {
             const er = await fetchWithSession("/api/wallets/ensure-sub-org", {
               method: "POST",

@@ -118,6 +118,10 @@ export function BusinessVerificationSection() {
 
   const openHostedVerification = useCallback(async () => {
     setError(null)
+    if (!businessId) {
+      setError("Your organization is still being set up. Refresh and try again in a moment.")
+      return
+    }
     setBusy("link")
     try {
       const supabase = createSupabaseBrowser()
@@ -187,7 +191,7 @@ export function BusinessVerificationSection() {
     } finally {
       setBusy(null)
     }
-  }, [syncBusinessTier1FromNoah])
+  }, [businessId, syncBusinessTier1FromNoah])
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
@@ -251,7 +255,9 @@ export function BusinessVerificationSection() {
                     </p>
                   ) : null}
                   {!businessId ? (
-                    <p className="text-xs text-muted-foreground">Create or join an organization to continue.</p>
+                    <p className="text-xs text-muted-foreground">
+                      Finishing organization setup… refresh in a moment if this persists.
+                    </p>
                   ) : null}
                   {!canManageBusinessVerification ? (
                     <p className="text-sm text-muted-foreground">
@@ -261,7 +267,11 @@ export function BusinessVerificationSection() {
                   ) : null}
                   <div className="flex flex-wrap gap-2">
                     {canManageBusinessVerification && !tier1Complete ? (
-                      <Button size="sm" onClick={() => void openHostedVerification()} disabled={busy !== null}>
+                      <Button
+                        size="sm"
+                        onClick={() => void openHostedVerification()}
+                        disabled={busy !== null || !businessId}
+                      >
                         {busy === "link" ? "Opening…" : "Begin verification"}
                       </Button>
                     ) : null}

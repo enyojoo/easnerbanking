@@ -200,20 +200,39 @@ export async function GET(request: Request) {
     kyb_verified_at?: string | null
   }
 
-  if (userRow?.easner_business_id) {
-    org = (await fetchBusinessProfile(admin, userRow.easner_business_id)) as typeof org
+  const ownerNameFromAuth = ownerNameFromAuthUser(user)
+  const ownerName = userRow?.full_name || ownerNameFromAuth
+
+  /**
+   * Provision the org on read when it's missing so Settings / Compliance is never a dead-end.
+   * Bootstrap normally creates it at sign-in, but that runs deferred + throttled and can fail;
+   * GET must not depend on it having succeeded. Idempotent, and skipped for explicit individuals.
+   */
+  let orgId = userRow?.easner_business_id ?? null
+  if (!orgId && userRow?.role !== "individual") {
+    try {
+      orgId = await ensureOrganizationId(
+        admin,
+        user.id,
+        user.email ?? undefined,
+        userRow?.full_name ??
+          (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null),
+      )
+    } catch {
+      orgId = null
+    }
+  }
+
+  if (orgId) {
+    org = (await fetchBusinessProfile(admin, orgId)) as typeof org
   }
 
   const onboardingComplete = Boolean(org && org.business_type && org.base_currency && org.description)
-  const ownerNameFromAuth = ownerNameFromAuthUser(user)
-  const ownerName = userRow?.full_name || ownerNameFromAuth
   const generatedOrgName = (() => {
     const first = firstNameFromFullName(ownerName)
     if (first) return possessiveBusinessName(first)
     return defaultOrgName(user.email, user.id)
   })()
-
-  const orgId = userRow?.easner_business_id ?? null
   let tier1Complete = false
   let tier1VerificationStatus: string | null = null
   let tier1RejectionReasons: unknown[] | null = null
@@ -257,7 +276,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     profile: {
-      businessId: org?.id ?? userRow?.easner_business_id ?? null,
+      businessId: org?.id ?? orgId ?? userRow?.easner_business_id ?? null,
       name: (org?.name ?? "").trim() || generatedOrgName,
       easetag: org?.easetag ?? null,
       logoUrl: org?.logo_url ?? null,

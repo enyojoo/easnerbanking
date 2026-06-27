@@ -101,10 +101,24 @@ export async function POST(request: Request) {
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    const friendly = isNoahSignatureErrorMessage(msg) ? formatNoahSignatureHelpError(msg) : msg
-    return NextResponse.json(
-      { error: friendly, code: isNoahSignatureErrorMessage(msg) ? "NOAH_SIGNATURE_INVALID" : undefined },
-      { status: 400 },
-    )
+    if (isNoahSignatureErrorMessage(msg)) {
+      return NextResponse.json(
+        { error: formatNoahSignatureHelpError(msg), code: "NOAH_SIGNATURE_INVALID" },
+        { status: 400 },
+      )
+    }
+    // Never leak raw runtime errors (e.g. "Cannot read properties of null") to the UI. These are
+    // bugs, not actionable user messages — log server-side and show a generic, friendly message.
+    if (e instanceof TypeError || e instanceof RangeError || e instanceof ReferenceError) {
+      console.error("[noah/kyc-links] unexpected error starting onboarding:", e)
+      return NextResponse.json(
+        {
+          error:
+            "We couldn't start verification right now. Please try again in a moment, or contact support if this keeps happening.",
+        },
+        { status: 500 },
+      )
+    }
+    return NextResponse.json({ error: msg }, { status: 400 })
   }
 }
