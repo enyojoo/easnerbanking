@@ -224,6 +224,11 @@ export function SettingsPersonalTab() {
       }
       const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: id })
       if (!uErr) {
+        void fetch("/api/notifications/security-alert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ alertType: "mfa_disabled" }),
+        }).catch(() => {})
         setTurnOffMfaOpen(false)
         void refreshMfaStatus({ force: true })
       }

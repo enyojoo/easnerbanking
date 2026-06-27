@@ -134,7 +134,14 @@ async function markGlobalPayoutExecuteFailed(
 
   await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
     easnerPayoutId: input.easnerPayoutId,
-  }).catch((e) => console.warn("global_payout_execute_failed_reversal:", e))
+  })
+    .then(async (reversed) => {
+      if (reversed) {
+        const { notifyGlobalPayoutReversed } = await import("@/lib/notifications/global-payout-notify")
+        await notifyGlobalPayoutReversed(admin, input.easnerPayoutId)
+      }
+    })
+    .catch((e) => console.warn("global_payout_execute_failed_reversal:", e))
 }
 
 async function findExistingPayoutByIdempotency(

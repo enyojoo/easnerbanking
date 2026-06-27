@@ -35,6 +35,11 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdmin()
   const now = new Date().toISOString()
 
+  const { count: priorCount } = await admin
+    .from("user_push_devices")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+
   if (token === null) {
     const removeRaw = body.removeExpoPushToken
     const removeToken = typeof removeRaw === "string" ? removeRaw.trim() || null : null
@@ -88,6 +93,16 @@ export async function POST(request: Request) {
     .from("user_push_devices")
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id)
+
+  if ((priorCount ?? 0) === 0 && user.email) {
+    const { sendSecurityAlertEmail } = await import("@/lib/notifications/security-notify")
+    await sendSecurityAlertEmail(admin, {
+      userId: user.id,
+      userEmail: user.email,
+      alertType: "new_device",
+      deviceLabel: platform ?? "mobile device",
+    }).catch((e) => console.warn("new device security email (non-fatal):", e))
+  }
 
   return NextResponse.json({
     ok: true,

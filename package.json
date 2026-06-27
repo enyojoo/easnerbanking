@@ -31,6 +31,7 @@
     "build:business": "turbo run build --filter=easner-business",
     "start:business": "turbo run start --filter=easner-business",
     "test:login-pin-vectors": "node scripts/login-pin-test-vectors.mjs",
+    "test:server": "npm run test --workspace=@easner/server",
     "sync:flags": "npm run sync:flags --workspace=@easner/shared",
     "postinstall": "node scripts/postinstall-patch-package.mjs"
   },

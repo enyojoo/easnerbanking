@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
+import { emailService } from "@easner/server"
 
 type TeamMember = {
   id: string
@@ -190,6 +191,43 @@ export async function POST(request: Request) {
     .from("business_memberships")
     .upsert(rows, { onConflict: "business_id,email" })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const { data: business } = await admin
+    .from("businesses")
+    .select("legal_name,display_name")
+    .eq("id", ownerCheck.orgId)
+    .maybeSingle()
+  const businessName =
+    String(business?.display_name ?? business?.legal_name ?? "Easner Business").trim() ||
+    "Easner Business"
+  const inviterName =
+    (typeof user.user_metadata?.name === "string" ? user.user_metadata.name.trim() : "") ||
+    user.email?.split("@")[0] ||
+    "A team member"
+  const acceptBase =
+    process.env.NEXT_PUBLIC_BUSINESS_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://business.easner.com"
+
+  for (const row of invites) {
+    await emailService
+      .sendEmail(
+        {
+          to: row.email,
+          template: "teamInvitation",
+          audience: "business",
+          data: {
+            inviteeEmail: row.email,
+            inviterName,
+            businessName,
+            role: row.role,
+            acceptUrl: `${acceptBase}/auth/signup?invite=1`,
+          },
+        },
+        undefined,
+      )
+      .catch((e) => console.warn("team invite email (non-fatal):", e))
+  }
 
   return GET(request)
 }

@@ -4,6 +4,12 @@ import { mapNoahVerificationToKycStatus } from "./map-kyc"
 import { parseNoahCustomerForBusiness } from "./parse-noah-customer-for-business"
 import { parseNoahCustomerForUsers } from "./parse-noah-customer-for-users"
 import { extractNoahRejectionReasons, pickNoahRejectionReasonsToStore } from "./rejection-reasons"
+import {
+  notifyBusinessKybStatusChange,
+  notifyIndividualKycStatusChange,
+} from "@/lib/notifications/verification-notify"
+
+type VerificationStatus = "not_started" | "under_review" | "approved" | "rejected"
 
 /**
  * Persist Noah customer id + mapped KYC/KYB status (+ decline reasons when rejected).
@@ -21,6 +27,13 @@ export async function syncNoahCustomerToSupabase(
   const now = new Date().toISOString()
 
   if (target.kind === "business") {
+    const { data: priorBiz } = await admin
+      .from("businesses")
+      .select("noah_kyb_status")
+      .eq("id", target.businessId)
+      .maybeSingle()
+    const previousStatus = String(priorBiz?.noah_kyb_status ?? "not_started").toLowerCase() as VerificationStatus
+
     let rejectionReasons = extractedReasons
     if (kyc === "rejected") {
       const { data: existingRow } = await admin
@@ -45,6 +58,14 @@ export async function syncNoahCustomerToSupabase(
     }
     await admin.from("businesses").update(update).eq("id", target.businessId)
 
+    await notifyBusinessKybStatusChange(
+      admin,
+      target.businessId,
+      previousStatus,
+      kyc as VerificationStatus,
+      Array.isArray(rejectionReasons) ? rejectionReasons.map(String) : null,
+    ).catch((e) => console.warn("kyb verification email (non-fatal):", e))
+
     if (kyc === "approved") {
       const ownerUserId = await resolveOrgOwnerUserId(admin, target.businessId, "")
       if (ownerUserId) {
@@ -68,6 +89,13 @@ export async function syncNoahCustomerToSupabase(
     }
     return
   }
+
+  const { data: priorUser } = await admin
+    .from("users")
+    .select("noah_kyc_status")
+    .eq("id", target.userId)
+    .maybeSingle()
+  const previousStatus = String(priorUser?.noah_kyc_status ?? "not_started").toLowerCase() as VerificationStatus
 
   let rejectionReasons = extractedReasons
   if (kyc === "rejected") {
@@ -94,4 +122,12 @@ export async function syncNoahCustomerToSupabase(
   }
 
   await admin.from("users").update(update).eq("id", target.userId)
+
+  await notifyIndividualKycStatusChange(
+    admin,
+    target.userId,
+    previousStatus,
+    kyc as VerificationStatus,
+    Array.isArray(rejectionReasons) ? rejectionReasons.map(String) : null,
+  ).catch((e) => console.warn("kyc verification email (non-fatal):", e))
 }

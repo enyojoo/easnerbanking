@@ -5,7 +5,7 @@ import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 
 /**
  * - `type: admin-transaction` — office staff, or the transaction owner (Bearer) notifying ops.
- * - `type: transaction` (default) — user JWT must own the transaction, **or** office staff.
+ * - `type: transaction` (default) — **deprecated**; ledger dispatch sends user transaction emails.
  */
 export async function POST(request: Request) {
   let body: { type?: string; transactionId?: string; status?: string }
@@ -24,6 +24,21 @@ export async function POST(request: Request) {
   const status = body.status ?? ""
   if (!status) {
     return NextResponse.json({ error: "status required" }, { status: 400 })
+  }
+
+  if (type === "transaction") {
+    return NextResponse.json(
+      {
+        deprecated: true,
+        error:
+          "User transaction status emails are deprecated. Notifications are sent from ledger dispatch.",
+      },
+      { status: 410 },
+    )
+  }
+
+  if (type !== "admin-transaction") {
+    return NextResponse.json({ error: "Unknown type" }, { status: 400 })
   }
 
   const admin = createSupabaseAdmin()
@@ -48,29 +63,14 @@ export async function POST(request: Request) {
   const user = await getUserFromApiRequest(request)
   const ownerOk = !!(user && user.id === tx.user_id)
 
-  if (type === "admin-transaction") {
-    if (ownerOk) {
-      await EmailNotificationService.sendAdminTransactionNotification(txId, status)
-      return NextResponse.json({ success: true })
-    }
-    const auth = await requireOfficeAdmin(request)
-    if (!auth.ok) return auth.response
+  if (ownerOk) {
     await EmailNotificationService.sendAdminTransactionNotification(txId, status)
     return NextResponse.json({ success: true })
   }
 
-  if (ownerOk) {
-    await EmailNotificationService.sendTransactionStatusEmail(txId, status)
-    return NextResponse.json({ success: true })
-  }
+  const auth = await requireOfficeAdmin(request)
+  if (!auth.ok) return auth.response
 
-  const adminAuth = await requireOfficeAdmin(request)
-  if (adminAuth.ok) {
-    await EmailNotificationService.sendTransactionStatusEmail(txId, status)
-    return NextResponse.json({ success: true })
-  }
-
-  return NextResponse.json({
-    error: "Unauthorized — sign in or use office staff access.",
-  }, { status: 401 })
+  await EmailNotificationService.sendAdminTransactionNotification(txId, status)
+  return NextResponse.json({ success: true })
 }

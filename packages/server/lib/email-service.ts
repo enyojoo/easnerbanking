@@ -1,25 +1,34 @@
 // Main email service using SendGrid API
 
-import sgMail from '@sendgrid/mail'
-import { emailTemplates } from './email-templates'
-import { shouldSendTemplatedEmail } from './communication-email-guard'
-import type { 
-  EmailData, 
-  EmailServiceConfig, 
-  SendGridResponse, 
-  TransactionEmailData, 
-  WelcomeEmailData 
-} from './email-types'
+import sgMail from "@sendgrid/mail"
+import { emailTemplates } from "./email-templates"
+import { shouldSendTemplatedEmail } from "./communication-email-guard"
+import {
+  getEmailAudienceProfile,
+  resolveEmailAudienceFromData,
+  type EmailAudience,
+} from "./email-audience"
+import type {
+  EmailData,
+  EmailServiceConfig,
+  SendGridResponse,
+  TransactionEmailData,
+  WelcomeEmailData,
+} from "./email-types"
 
-// Lazy init: set API key on first send (allows build without SENDGRID_API_KEY)
 let apiKeyInitialized = false
 function ensureSendGridInitialized() {
   if (!apiKeyInitialized) {
     const key = process.env.SENDGRID_API_KEY
-    if (!key) throw new Error('SENDGRID_API_KEY environment variable is required')
+    if (!key) throw new Error("SENDGRID_API_KEY environment variable is required")
     sgMail.setApiKey(key)
     apiKeyInitialized = true
   }
+}
+
+function resolveAudience(emailData: EmailData): EmailAudience {
+  if (emailData.audience) return emailData.audience
+  return resolveEmailAudienceFromData(emailData.data ?? {})
 }
 
 export class EmailService {
@@ -27,17 +36,22 @@ export class EmailService {
 
   constructor(config?: Partial<EmailServiceConfig>) {
     this.config = {
-      fromEmail: process.env.SENDGRID_FROM_EMAIL || 'noreply@easner.com',
-      fromName: process.env.SENDGRID_FROM_NAME || 'Easner',
-      replyTo: process.env.SENDGRID_REPLY_TO || 'support@easner.com',
-      ...config
+      fromEmail: process.env.SENDGRID_FROM_EMAIL || "noreply@easner.com",
+      fromName: process.env.SENDGRID_FROM_NAME || "Easner",
+      replyTo: process.env.SENDGRID_REPLY_TO || "support@easner.com",
+      ...config,
     }
   }
 
-  /**
-   * Send a generic email using a template
-   * @param communicationPreferences — from `user_preferences.communication_preferences` (raw jsonb); omit to send without a preference check (avoid for user-facing mail).
-   */
+  private fromForAudience(audience: EmailAudience) {
+    const profile = getEmailAudienceProfile(audience)
+    const email =
+      audience === "business"
+        ? process.env.SENDGRID_FROM_EMAIL_BUSINESS || process.env.SENDGRID_FROM_EMAIL || "invoices@easner.com"
+        : this.config.fromEmail
+    return { email, name: profile.fromName }
+  }
+
   async sendEmail(
     emailData: EmailData,
     communicationPreferences?: unknown,
@@ -49,7 +63,7 @@ export class EmailService {
       )
       if (!send) {
         console.info(
-          `[email] skipped template=${emailData.template} to=${emailData.to}: ${reason ?? 'opt-out'}`,
+          `[email] skipped template=${emailData.template} to=${emailData.to}: ${reason ?? "opt-out"}`,
         )
         return { success: true, skipped: true, skipReason: reason }
       }
@@ -60,170 +74,93 @@ export class EmailService {
         throw new Error(`Email template '${emailData.template}' not found`)
       }
 
+      const audience = resolveAudience(emailData)
+      const subject =
+        typeof template.subject === "function"
+          ? template.subject(emailData.data, audience)
+          : template.subject
+
       const msg = {
         to: emailData.to,
-        from: {
-          email: this.config.fromEmail,
-          name: this.config.fromName
-        },
+        from: this.fromForAudience(audience),
         replyTo: this.config.replyTo,
-        subject: typeof template.subject === 'function' ? template.subject(emailData.data) : template.subject,
-        html: template.html(emailData.data),
-        text: template.text(emailData.data)
+        subject,
+        html: template.html(emailData.data, audience),
+        text: template.text(emailData.data, audience),
       }
 
       const response = await sgMail.send(msg)
-      
       return {
         success: true,
-        messageId: response[0].headers['x-message-id'] as string
+        messageId: response[0].headers["x-message-id"] as string,
       }
     } catch (error) {
-      console.error('Email sending failed:', error)
+      console.error("Email sending failed:", error)
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : "Unknown error",
       }
     }
   }
 
-  /**
-   * Send welcome email to new user
-   */
   async sendWelcomeEmail(
     userData: WelcomeEmailData,
     communicationPreferences?: unknown,
   ): Promise<SendGridResponse> {
+    const audience = userData.audience ?? "personal"
     return this.sendEmail(
       {
         to: userData.email,
-        template: 'welcome',
+        template: audience === "business" ? "welcomeBusiness" : "welcomePersonal",
         data: userData,
+        audience,
       },
       communicationPreferences,
     )
   }
 
-  /**
-   * Send transaction status notification
-   */
-  async sendTransactionNotification(
-    userEmail: string, 
-    transactionData: TransactionEmailData, 
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled',
+  async sendTransactionSettledEmail(
+    userEmail: string,
+    data: TransactionEmailData,
     communicationPreferences?: unknown,
   ): Promise<SendGridResponse> {
-    const templateMap = {
-      pending: 'transactionPending',
-      processing: 'transactionProcessing',
-      completed: 'transactionCompleted',
-      failed: 'transactionFailed',
-      cancelled: 'transactionCancelled'
-    }
-
-    const templateName = templateMap[status]
-    if (!templateName) {
-      throw new Error(`Invalid transaction status: ${status}`)
-    }
-
+    const template =
+      data.outcome === "failed"
+        ? "transactionFailed"
+        : data.outcome === "reversed"
+          ? "transactionReversed"
+          : "transactionSettled"
     return this.sendEmail(
       {
         to: userEmail,
-        template: templateName,
-        data: {
-          ...transactionData,
-          status
-        }
+        template,
+        data,
+        audience: data.audience,
       },
       communicationPreferences,
     )
   }
 
-  /**
-   * Send transaction pending email
-   */
-  async sendTransactionPendingEmail(
-    userEmail: string,
-    transactionData: TransactionEmailData,
-    communicationPreferences?: unknown,
-  ): Promise<SendGridResponse> {
-    return this.sendTransactionNotification(userEmail, transactionData, 'pending', communicationPreferences)
-  }
-
-  /**
-   * Send transaction processing email
-   */
-  async sendTransactionProcessingEmail(
-    userEmail: string,
-    transactionData: TransactionEmailData,
-    communicationPreferences?: unknown,
-  ): Promise<SendGridResponse> {
-    return this.sendTransactionNotification(userEmail, transactionData, 'processing', communicationPreferences)
-  }
-
-  /**
-   * Send transaction completed email
-   */
-  async sendTransactionCompletedEmail(
-    userEmail: string,
-    transactionData: TransactionEmailData,
-    communicationPreferences?: unknown,
-  ): Promise<SendGridResponse> {
-    return this.sendTransactionNotification(userEmail, transactionData, 'completed', communicationPreferences)
-  }
-
-  /**
-   * Send transaction failed email
-   */
-  async sendTransactionFailedEmail(
-    userEmail: string,
-    transactionData: TransactionEmailData,
-    communicationPreferences?: unknown,
-  ): Promise<SendGridResponse> {
-    return this.sendTransactionNotification(userEmail, transactionData, 'failed', communicationPreferences)
-  }
-
-  /**
-   * Send transaction cancelled email
-   */
-  async sendTransactionCancelledEmail(
-    userEmail: string,
-    transactionData: TransactionEmailData,
-    communicationPreferences?: unknown,
-  ): Promise<SendGridResponse> {
-    return this.sendTransactionNotification(userEmail, transactionData, 'cancelled', communicationPreferences)
-  }
-
-  /**
-   * Test email sending (for development)
-   */
-  async sendTestEmail(to: string): Promise<SendGridResponse> {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.easner.com'
+  async sendTestEmail(to: string, audience: EmailAudience = "personal"): Promise<SendGridResponse> {
+    const profile = getEmailAudienceProfile(audience)
     return this.sendEmail({
       to,
-      template: 'welcome',
+      template: audience === "business" ? "welcomeBusiness" : "welcomePersonal",
       data: {
-        firstName: 'Test',
-        lastName: 'User',
+        firstName: "Test",
         email: to,
-        baseCurrency: 'USD',
-        dashboardUrl: `${appUrl}/dashboard`
-      }
+        dashboardUrl: profile.dashboardUrl,
+        audience,
+      },
+      audience,
     })
   }
 }
 
-// Export singleton instance
 export const emailService = new EmailService()
 
-// Export individual functions for convenience
 export const {
   sendWelcomeEmail,
-  sendTransactionNotification,
-  sendTransactionPendingEmail,
-  sendTransactionProcessingEmail,
-  sendTransactionCompletedEmail,
-  sendTransactionFailedEmail,
-  sendTransactionCancelledEmail,
-  sendTestEmail
+  sendTransactionSettledEmail,
+  sendTestEmail,
 } = emailService

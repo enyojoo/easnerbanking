@@ -518,9 +518,18 @@ export async function applyNoahWebhookSideEffects(
           (status === "failed" || status === "cancelled") &&
           externalId
         ) {
-          await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+          const reversed = await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
             easnerPayoutId: externalId,
-          }).catch((e) => console.warn("global_payout_failed_reversal:", e))
+          }).catch((e) => {
+            console.warn("global_payout_failed_reversal:", e)
+            return false
+          })
+          if (reversed) {
+            const { notifyGlobalPayoutReversed } = await import(
+              "@/lib/notifications/global-payout-notify"
+            )
+            await notifyGlobalPayoutReversed(admin, externalId)
+          }
         }
         }
       }

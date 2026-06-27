@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ensureExchangeRatesFresh, findExchangeRate } from "@/lib/fx/exchange-rates"
 import { ensureEasnerTransactionId } from "@/lib/easner-transaction-id"
-import { sendTransactionSettledPush } from "@/lib/notifications/expo-push"
-import { buildTransactionSettledPushContent } from "@/lib/notifications/transaction-settled-content"
+import { dispatchTransactionNotification } from "@/lib/notifications/dispatch"
 import { shouldDeferBankDepositSettledPush } from "@/lib/notifications/bank-deposit-settled-notify"
 import {
   isEasetagChainSettlementTransaction,
@@ -42,6 +41,7 @@ export type UpsertLedgerTransactionResult = {
   previousStatus: string | null
   nextStatus: string
   becameSettled: boolean
+  becameFailed: boolean
 }
 
 function normalizeStatus(raw: string | null | undefined): string {
@@ -73,6 +73,58 @@ function mergeMetadata(
   incoming: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
   return ensureEasnerTransactionId(existing, incoming)
+}
+
+function shouldSkipLedgerNotification(metadata: Record<string, unknown>): boolean {
+  return (
+    isEasetagChainSettlementTransaction(metadata) ||
+    isTurnkeyEasetagP2pChainMirror(metadata) ||
+    isNoahInternalSettlementTransaction(metadata)
+  )
+}
+
+async function maybeNotifyLedgerTransaction(
+  admin: SupabaseClient,
+  input: {
+    userId: string
+    transactionId: string
+    provider: string
+    direction: LedgerDirection | null
+    amount: number
+    currency: string
+    metadata: Record<string, unknown>
+    payload: Record<string, unknown> | null
+    outcome: "success" | "failed"
+    easnerTransactionId?: string | null
+    deferBankDeposit?: boolean
+  },
+): Promise<void> {
+  if (shouldSkipLedgerNotification(input.metadata)) return
+  if (input.outcome === "success" && input.deferBankDeposit) return
+
+  const etid =
+    typeof input.easnerTransactionId === "string" && input.easnerTransactionId.trim()
+      ? input.easnerTransactionId.trim()
+      : typeof input.metadata.easner_transaction_id === "string"
+        ? input.metadata.easner_transaction_id.trim()
+        : undefined
+
+  await dispatchTransactionNotification(admin, {
+    userId: input.userId,
+    transactionId: input.transactionId,
+    provider: input.provider,
+    direction: input.direction,
+    amount: input.amount,
+    currency: input.currency,
+    metadata: input.metadata,
+    payload: input.payload,
+    outcome: input.outcome,
+    easnerTransactionId: etid,
+    failureReason:
+      typeof input.metadata.failure_reason === "string"
+        ? input.metadata.failure_reason
+        : undefined,
+  }).catch((e) => console.warn("ledger transaction notification (non-fatal):", e))
 }
 
 export async function upsertLedgerTransaction(
@@ -116,6 +168,10 @@ export async function upsertLedgerTransaction(
     (status === "pending" || status === "processing" || status === "unknown")
   const nextStatus = isStatusDowngradeFromSettled ? "settled" : status
   const becameSettled = previousStatus !== "settled" && nextStatus === "settled"
+  const becameFailed =
+    previousStatus !== "failed" &&
+    previousStatus !== "cancelled" &&
+    (nextStatus === "failed" || nextStatus === "cancelled")
   const payload = isStatusDowngradeFromSettled
     ? ((existing?.payload as Record<string, unknown> | null | undefined) ?? input.payload ?? null)
     : (input.payload ?? null)
@@ -167,30 +223,41 @@ export async function upsertLedgerTransaction(
       .update(record)
       .eq("id", existing.id)
     if (error) throw error
-    if (
-      becameSettled &&
-      !isEasetagChainSettlementTransaction(mergedMetadata) &&
-      !isTurnkeyEasetagP2pChainMirror(mergedMetadata) &&
-      !isNoahInternalSettlementTransaction(mergedMetadata) &&
-      !shouldDeferBankDepositSettledPush(mergedMetadata)
-    ) {
-      const { title, body } = buildTransactionSettledPushContent({
+    if (becameSettled) {
+      await maybeNotifyLedgerTransaction(admin, {
+        userId: input.userId,
+        transactionId: existing.id,
         provider,
         direction,
         amount,
         currency,
         metadata: mergedMetadata,
         payload: (input.payload ?? null) as Record<string, unknown> | null,
+        outcome: "success",
+        deferBankDeposit: shouldDeferBankDepositSettledPush(mergedMetadata),
       })
-      await sendTransactionSettledPush(admin, {
+    } else if (becameFailed) {
+      await maybeNotifyLedgerTransaction(admin, {
         userId: input.userId,
         transactionId: existing.id,
-        title,
-        body,
-        data: { type: "transaction_settled", transactionId: existing.id },
-      }).catch((e) => console.warn("transaction settled push (non-fatal):", e))
+        provider,
+        direction,
+        amount,
+        currency,
+        metadata: mergedMetadata,
+        payload: (input.payload ?? null) as Record<string, unknown> | null,
+        outcome: "failed",
+      })
     }
-    return { transactionId: existing.id, inserted: false, updated: true, previousStatus, nextStatus, becameSettled }
+    return {
+      transactionId: existing.id,
+      inserted: false,
+      updated: true,
+      previousStatus,
+      nextStatus,
+      becameSettled,
+      becameFailed,
+    }
   }
 
   const insert = await admin.from("transactions").insert(record).select("id").maybeSingle()
@@ -204,28 +271,31 @@ export async function upsertLedgerTransaction(
   if (!insertedId) throw new Error("Inserted transaction missing id")
 
   const insertedBecameSettled = nextStatus === "settled"
-  if (
-    insertedBecameSettled &&
-    !isEasetagChainSettlementTransaction(mergedMetadata) &&
-    !isTurnkeyEasetagP2pChainMirror(mergedMetadata) &&
-    !isNoahInternalSettlementTransaction(mergedMetadata) &&
-    !shouldDeferBankDepositSettledPush(mergedMetadata)
-  ) {
-    const { title, body } = buildTransactionSettledPushContent({
+  if (insertedBecameSettled) {
+    await maybeNotifyLedgerTransaction(admin, {
+      userId: input.userId,
+      transactionId: insertedId,
       provider,
       direction,
       amount,
       currency,
       metadata: mergedMetadata,
       payload: (input.payload ?? null) as Record<string, unknown> | null,
+      outcome: "success",
+      deferBankDeposit: shouldDeferBankDepositSettledPush(mergedMetadata),
     })
-    await sendTransactionSettledPush(admin, {
+  } else if (nextStatus === "failed" || nextStatus === "cancelled") {
+    await maybeNotifyLedgerTransaction(admin, {
       userId: input.userId,
       transactionId: insertedId,
-      title,
-      body,
-      data: { type: "transaction_settled", transactionId: insertedId },
-    }).catch((e) => console.warn("transaction settled push (non-fatal):", e))
+      provider,
+      direction,
+      amount,
+      currency,
+      metadata: mergedMetadata,
+      payload: (input.payload ?? null) as Record<string, unknown> | null,
+      outcome: "failed",
+    })
   }
 
   return {
@@ -235,5 +305,6 @@ export async function upsertLedgerTransaction(
     previousStatus: null,
     nextStatus,
     becameSettled: insertedBecameSettled,
+    becameFailed: nextStatus === "failed" || nextStatus === "cancelled",
   }
 }

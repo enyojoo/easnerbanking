@@ -164,64 +164,10 @@ export class TransactionStatusService {
    * Send email notification based on status
    */
   async sendStatusNotification(
-    transaction: Transaction, 
-    status: string
+    _transaction: Transaction,
+    _status: string,
   ): Promise<void> {
-    if (!transaction.user?.email) {
-      console.warn('No user email found for transaction notification')
-      return
-    }
-
-    // Only send emails on server side
-    if (typeof window !== 'undefined') {
-      return
-    }
-
-    const emailData = {
-      transactionId: transaction.transaction_id,
-      recipientName: transaction.recipient?.full_name || 'Unknown',
-      sendAmount: transaction.send_amount,
-      sendCurrency: transaction.send_currency,
-      receiveAmount: transaction.receive_amount,
-      receiveCurrency: transaction.receive_currency,
-      exchangeRate: transaction.exchange_rate,
-      fee: transaction.fee_amount,
-      status: status as any,
-      failureReason: transaction.failure_reason,
-      createdAt: transaction.created_at,
-      updatedAt: transaction.updated_at
-    }
-
-    try {
-      // Dynamically import email service only on server side
-      const { emailService } = await import('./email-service')
-      
-      // Send user notification email only (no admin notification for status updates)
-      switch (status) {
-        case 'pending':
-          await emailService.sendTransactionPendingEmail(transaction.user.email, emailData)
-          break
-        case 'processing':
-          await emailService.sendTransactionProcessingEmail(transaction.user.email, emailData)
-          break
-        case 'completed':
-          await emailService.sendTransactionCompletedEmail(transaction.user.email, emailData)
-          break
-        case 'failed':
-          await emailService.sendTransactionFailedEmail(transaction.user.email, emailData)
-          break
-        case 'cancelled':
-          await emailService.sendTransactionCancelledEmail(transaction.user.email, emailData)
-          break
-        default:
-          console.warn(`Unknown transaction status: ${status}`)
-      }
-
-      console.log('User notification email sent successfully')
-    } catch (error) {
-      console.error('Failed to send status notification email:', error)
-      // Don't throw error as email failure shouldn't break the status update
-    }
+    // Legacy remittance status emails retired — ledger dispatch handles notifications.
   }
 
   /**

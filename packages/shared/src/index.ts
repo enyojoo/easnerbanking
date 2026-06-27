@@ -317,6 +317,15 @@ export {
   shouldIncludeRowInUserFeed,
 } from "./transactions/map-ledger-list-row"
 export {
+  deriveTransactionNotification,
+  descriptorToPushContent,
+  type DeriveTransactionNotificationInput,
+  type TransactionNotificationDescriptor,
+  type NotificationOutcome,
+  type TransactionNotificationKind,
+  type LedgerNotificationDirection,
+} from "./transactions/derive-transaction-notification"
+export {
   abbreviateBlockchainNetwork,
   formatWalletSendTransferMethod,
   isWalletSendOutRow,
