@@ -90,6 +90,12 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
         return
       }
 
+      void fetch("/api/notifications/security-alert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alertType: "password_changed" }),
+      }).catch(() => {})
+
       setSuccess("Your password was updated.")
       setCurrent("")
       setNext("")

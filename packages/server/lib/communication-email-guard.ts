@@ -2,8 +2,8 @@ import type { CommunicationPreferences } from "@easner/shared"
 import { parseCommunicationPreferences } from "@easner/shared"
 
 /**
- * Maps `emailTemplates` keys in email-templates.ts to a preference bucket.
- * `transactional` and `internal` are never suppressed by user toggles.
+ * Maps `emailTemplates` keys to a preference bucket.
+ * `transactional` and `internal` are never suppressed by product/marketing toggles.
  */
 export type EmailPreferenceCategory =
   | "transactional"
@@ -13,21 +13,26 @@ export type EmailPreferenceCategory =
   | "internal"
 
 const TEMPLATE_PREFERENCE: Record<string, EmailPreferenceCategory> = {
-  welcome: "product_updates",
-  transactionPending: "transactional",
-  transactionProcessing: "transactional",
-  transactionCompleted: "transactional",
+  welcomeBusiness: "product_updates",
+  welcomePersonal: "product_updates",
+  transactionSettled: "transactional",
   transactionFailed: "transactional",
-  transactionCancelled: "transactional",
-  earlyAccessRequest: "marketing",
-  earlyAccessConfirmation: "marketing",
+  transactionReversed: "transactional",
+  kybSubmitted: "transactional",
+  kybApproved: "transactional",
+  kybRejected: "transactional",
+  kycSubmitted: "transactional",
+  kycApproved: "transactional",
+  kycRejected: "transactional",
+  teamInvitation: "transactional",
+  passwordChanged: "security_alerts",
+  passwordResetCompleted: "security_alerts",
+  mfaEnabled: "security_alerts",
+  mfaDisabled: "security_alerts",
+  newDeviceLogin: "security_alerts",
   adminTransactionNotification: "internal",
 }
 
-/**
- * Transaction lifecycle and invoice-to-customer emails must always be deliverable
- * (product policy; aligns with plan "do not block transaction status").
- */
 export function emailTemplatePreferenceCategory(templateKey: string): EmailPreferenceCategory {
   return TEMPLATE_PREFERENCE[templateKey] ?? "product_updates"
 }

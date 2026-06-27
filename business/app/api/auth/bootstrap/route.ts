@@ -4,6 +4,8 @@ import { countries } from "@/lib/countries"
 import { isCountryAllowedForSurface } from "@/lib/jurisdiction-country-policy"
 import { noahCustomerIdFromBusinessId, noahCustomerIdFromUserId } from "@/lib/noah/customer-id"
 import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-sub-org"
+import { emailService } from "@easner/server"
+import { getEmailAudienceProfile } from "@easner/server"
 
 type BootstrapBody = {
   countryCode?: string
@@ -46,6 +48,32 @@ function parseName(fullName: string | null | undefined): { fullName: string | nu
   const trimmed = typeof fullName === "string" ? fullName.trim() : ""
   if (!trimmed) return { fullName: null }
   return { fullName: trimmed }
+}
+
+async function sendWelcomeEmailIfNew(input: {
+  email: string | null | undefined
+  firstName: string | null | undefined
+  audience: "business" | "personal"
+  isNewAccount: boolean
+}) {
+  if (!input.isNewAccount || !input.email?.trim()) return
+  const audience = input.audience
+  const profile = getEmailAudienceProfile(audience)
+  const firstName =
+    input.firstName?.trim() ||
+    input.email.split("@")[0]?.trim() ||
+    "there"
+  await emailService
+    .sendWelcomeEmail(
+      {
+        firstName,
+        email: input.email.trim(),
+        dashboardUrl: profile.dashboardUrl,
+        audience,
+      },
+      undefined,
+    )
+    .catch((e) => console.warn("welcome email (non-fatal):", e))
 }
 
 async function ensureOwnerMembership(params: {
@@ -228,10 +256,17 @@ export async function POST(request: Request) {
     } catch (e) {
       console.warn("[bootstrap] Turnkey sub-org (individual) error:", e)
     }
+    await sendWelcomeEmailIfNew({
+      email: user.email,
+      firstName: firstNameFromFullName(resolvedBootstrapFullName),
+      audience: "personal",
+      isNewAccount: !userRow?.id,
+    })
     return NextResponse.json({ ok: true, role, userId: user.id, businessId: userRow?.easner_business_id ?? null })
   }
 
   let businessId = userRow?.easner_business_id ?? null
+  const isNewBusinessAccount = !userRow?.id
 
   if (!businessId) {
     const first = firstNameFromFullName(resolvedBootstrapFullName)
@@ -335,6 +370,13 @@ export async function POST(request: Request) {
   } catch (e) {
     console.warn("[bootstrap] Turnkey sub-org (business) error:", e)
   }
+
+  await sendWelcomeEmailIfNew({
+    email: user.email,
+    firstName: firstNameFromFullName(resolvedBootstrapFullName),
+    audience: "business",
+    isNewAccount: isNewBusinessAccount,
+  })
 
   return NextResponse.json({
     ok: true,

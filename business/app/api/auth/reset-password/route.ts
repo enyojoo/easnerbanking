@@ -78,6 +78,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Failed to reset password." }, { status: 500 })
   }
 
+  const { sendSecurityAlertEmail } = await import("@/lib/notifications/security-notify")
+  await sendSecurityAlertEmail(admin, {
+    userId,
+    userEmail: email,
+    alertType: "password_reset_completed",
+  }).catch((e) => console.warn("password reset security email (non-fatal):", e))
+
   return NextResponse.json({ ok: true }, { status: 200 })
 }
 

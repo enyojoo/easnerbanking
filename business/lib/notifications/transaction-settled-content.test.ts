@@ -1,42 +1,14 @@
 import { describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/utils", () => ({
-  formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-}))
-
-vi.mock("@easner/shared", () => ({
-  BANK_DEPOSIT_COMPLETED_DESCRIPTION: "Funds are now available in your account balance.",
-  isBankOnrampDepositFlow: (meta: Record<string, unknown> | null | undefined) =>
-    String(meta?.flow ?? "").toLowerCase() === "bank_onramp",
-  isGlobalPayoutOffRampFlow: (meta: Record<string, unknown> | null | undefined) =>
-    String(meta?.payout_type ?? "").toLowerCase() === "global_fiat",
-  isVerificationDepositMetadata: (meta: Record<string, unknown> | null | undefined) =>
-    String(meta?.deposit_kind ?? "").toLowerCase() === "verification",
-  deriveVerificationBankName: (input: { metadata?: Record<string, unknown> | null }) =>
-    String(input.metadata?.verification_bank_name ?? "Your bank"),
-  formatVerificationDepositPushBody: (input: {
-    amount: number
-    currency: string
-    bankName: string
-  }) => `Received $${input.amount.toFixed(2)} from ${input.bankName}`,
-  deriveEasnerInboundRemitterDisplayName: () => undefined,
-  formatDisplayPersonName: (n: string) =>
-    n === "SAMUEL ODIBA ENYOJO"
-      ? "Samuel Odiba Enyojo"
-      : n === "SAMUEL"
-        ? "Samuel"
-        : n,
-  formatMoneyDisplay: (amount: number, currency: string) =>
-    currency.toUpperCase() === "NGN"
-      ? `₦${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      : `$${amount.toFixed(2)}`,
-  truncateMiddle: (s: string, start = 6, end = 6) => {
-    const t = s.trim()
-    if (t.length <= start + end + 3) return t
-    return `${t.slice(0, start)}...${t.slice(-end)}`
-  },
-  toEasnerTransactionProductCategory: () => "Bank Deposit",
-}))
+vi.mock("@easner/shared", async () => {
+  const derive = await import(
+    "../../../packages/shared/src/transactions/derive-transaction-notification"
+  )
+  return {
+    deriveTransactionNotification: derive.deriveTransactionNotification,
+    descriptorToPushContent: derive.descriptorToPushContent,
+  }
+})
 
 import { buildTransactionSettledPushContent } from "./transaction-settled-content"
 
@@ -100,7 +72,7 @@ describe("buildTransactionSettledPushContent", () => {
       },
     })
     expect(title).toBe("Bank transfer")
-    expect(body).toBe("Sent ₦5,000.00 to Samuel Odiba Enyojo")
+    expect(body).toBe("Sent ₦5,000 to Samuel Odiba Enyojo")
   })
 
   it("uses Stablecoin Transfer title and receive amount for wallet send", () => {
@@ -129,7 +101,7 @@ describe("buildTransactionSettledPushContent", () => {
       },
     })
     expect(title).toBe("Stablecoin Transfer")
-    expect(body).toBe("Sent $1.00 to Fjw9ot...WfP5Xc")
+    expect(body).toBe("Sent $1 to Fjw9ot...WfP5Xc")
   })
 
   it("falls back to metadata receive amount for pre-snapshot global payout", () => {
@@ -146,7 +118,7 @@ describe("buildTransactionSettledPushContent", () => {
       },
     })
     expect(title).toBe("Bank transfer")
-    expect(body).toContain("₦5,000.00")
+    expect(body).toContain("₦5,000")
     expect(body).toContain("Samuel")
   })
 })

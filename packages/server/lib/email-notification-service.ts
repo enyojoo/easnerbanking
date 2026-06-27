@@ -38,199 +38,28 @@ export class EmailNotificationService {
   /**
    * Send transaction status email notification
    */
+  /** @deprecated Legacy remittance path — ledger dispatch sends transaction emails now. */
   static async sendTransactionStatusEmail(
-    transactionId: string, 
-    status: string
+    transactionId: string,
+    status: string,
   ): Promise<void> {
-    console.log('Sending email for transaction:', transactionId, 'status:', status)
-    
-    try {
-      // Get transaction data from database
-      console.log('Creating Supabase client...')
-      let supabase
-      try {
-        supabase = createServerClient()
-        console.log('Supabase client created successfully')
-      } catch (clientError) {
-        console.error('Failed to create Supabase client:', clientError)
-        return
-      }
-      
-      console.log('Fetching transaction data...')
-      const { data: transaction, error: transactionError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('transaction_id', transactionId)
-        .single()
-
-      if (transactionError) {
-        console.error('Transaction query error:', transactionError)
-        throw new Error(`Transaction query failed: ${transactionError.message}`)
-      }
-
-      if (!transaction) {
-        console.error('Transaction not found for ID:', transactionId)
-        throw new Error(`Transaction not found for ID: ${transactionId}`)
-      }
-
-      console.log('Transaction found:', transaction.transaction_id)
-
-      // Get user email
-      console.log('Fetching user data...')
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select('email')
-        .eq('id', transaction.user_id)
-        .single()
-
-      if (userError || !user?.email) {
-        console.error('User not found:', userError)
-        throw new Error(`User not found or no email: ${userError?.message || 'No email address'}`)
-      }
-
-      console.log('User email found:', user.email)
-
-      const comm = await fetchUserCommunicationPreferences(supabase, transaction.user_id)
-
-      // Get recipient name
-      console.log('Fetching recipient data...')
-      const { data: recipient, error: recipientError } = await supabase
-        .from('recipients')
-        .select('full_name')
-        .eq('id', transaction.recipient_id)
-        .single()
-
-      console.log('Recipient found:', recipient?.full_name || 'Unknown')
-
-      // Create email data
-      const emailData: TransactionEmailData = {
-        transactionId: transaction.transaction_id,
-        recipientName: recipient?.full_name || 'Unknown',
-        sendAmount: transaction.send_amount,
-        sendCurrency: transaction.send_currency,
-        receiveAmount: transaction.receive_amount,
-        receiveCurrency: transaction.receive_currency,
-        exchangeRate: transaction.exchange_rate,
-        fee: transaction.fee_amount,
-        status: status as any,
-        failureReason: transaction.failure_reason,
-        createdAt: transaction.created_at,
-        updatedAt: transaction.updated_at
-      }
-
-      // Send email based on status
-      console.log('Sending email to:', user.email, 'with status:', status)
-
-      let result
-      if (status === 'completed') {
-        result = await emailService.sendTransactionCompletedEmail(user.email, emailData, comm)
-      } else if (status === 'processing') {
-        result = await emailService.sendTransactionProcessingEmail(user.email, emailData, comm)
-      } else if (status === 'pending') {
-        result = await emailService.sendTransactionPendingEmail(user.email, emailData, comm)
-      } else if (status === 'failed') {
-        result = await emailService.sendTransactionFailedEmail(user.email, emailData, comm)
-      } else if (status === 'cancelled') {
-        result = await emailService.sendTransactionCancelledEmail(user.email, emailData, comm)
-      } else {
-        console.log('Unknown status:', status)
-        return
-      }
-
-      if (result.success) {
-        console.log('Email sent successfully!', result.messageId)
-      } else {
-        console.error('Email sending failed:', result.error)
-      }
-    } catch (error) {
-      console.error('Error sending email:', error)
-    }
+    console.warn(
+      'sendTransactionStatusEmail is deprecated (legacy remittance model):',
+      transactionId,
+      status,
+    )
   }
 
-  /**
-   * Send crypto receive transaction status email notification
-   */
+  /** @deprecated Stablecoin receive emails are sent via ledger dispatch on settle. */
   static async sendCryptoReceiveTransactionEmail(
     transactionId: string,
-    status: string
+    status: string,
   ): Promise<void> {
-    console.log('Sending email for crypto receive transaction:', transactionId, 'status:', status)
-
-    try {
-      const supabase = createServerClient()
-
-      // Get crypto receive transaction data
-      const { data: transaction, error: transactionError } = await supabase
-        .from('crypto_receive_transactions')
-        .select(`
-          *,
-          crypto_wallet:crypto_wallets(*, recipient:recipients(*)),
-          user:users(first_name, last_name, email)
-        `)
-        .eq('transaction_id', transactionId)
-        .single()
-
-      if (transactionError || !transaction) {
-        console.error('Crypto receive transaction not found:', transactionError)
-        return
-      }
-
-      const userEmail = transaction.user?.email
-      if (!userEmail) {
-        console.error('User email not found')
-        return
-      }
-
-      const comm = await fetchUserCommunicationPreferences(supabase, transaction.user_id as string)
-
-      // Map crypto receive status to transaction email status
-      let emailStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' = 'processing'
-      if (status === 'deposited') {
-        emailStatus = 'completed'
-      } else if (status === 'failed') {
-        emailStatus = 'failed'
-      } else if (status === 'pending') {
-        emailStatus = 'pending'
-      }
-
-      // Create email data for crypto receive transaction
-      const emailData: TransactionEmailData = {
-        transactionId: transaction.transaction_id,
-        recipientName: transaction.crypto_wallet?.recipient?.full_name || 'Your Account',
-        sendAmount: transaction.crypto_amount,
-        sendCurrency: transaction.crypto_currency,
-        receiveAmount: transaction.fiat_amount,
-        receiveCurrency: transaction.fiat_currency,
-        exchangeRate: transaction.exchange_rate,
-        fee: 0,
-        status: emailStatus,
-        createdAt: transaction.created_at,
-        updatedAt: transaction.updated_at,
-      }
-
-      // Send email based on status
-      let result
-      if (status === 'deposited') {
-        result = await emailService.sendTransactionCompletedEmail(userEmail, emailData, comm)
-      } else if (status === 'converting' || status === 'converted' || status === 'confirmed') {
-        result = await emailService.sendTransactionProcessingEmail(userEmail, emailData, comm)
-      } else if (status === 'pending') {
-        result = await emailService.sendTransactionPendingEmail(userEmail, emailData, comm)
-      } else if (status === 'failed') {
-        result = await emailService.sendTransactionFailedEmail(userEmail, emailData, comm)
-      } else {
-        console.log('Unknown crypto receive status:', status)
-        return
-      }
-
-      if (result.success) {
-        console.log('Crypto receive email sent successfully!', result.messageId)
-      } else {
-        console.error('Crypto receive email sending failed:', result.error)
-      }
-    } catch (error) {
-      console.error('Error sending crypto receive email:', error)
-    }
+    console.warn(
+      'sendCryptoReceiveTransactionEmail is deprecated:',
+      transactionId,
+      status,
+    )
   }
 
   /**

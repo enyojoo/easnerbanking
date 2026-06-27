@@ -6,6 +6,7 @@ import {
   pickNoahOrchestrationRuleExecutionId,
 } from "@/lib/noah/bank-onramp-tx"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
+import { normalizeDirection } from "@/lib/ledger/transactions"
 
 export function pendingGlobalPayoutProviderTransactionId(easnerPayoutId: string): string {
   return `global_payout_pending:${easnerPayoutId}`

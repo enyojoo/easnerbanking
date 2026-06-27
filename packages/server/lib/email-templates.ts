@@ -1,500 +1,382 @@
-// Email templates for all notification types
+// Email templates — design-system aligned, Business vs Personal variants
 
-import { generateBaseEmailTemplate, generateTransactionDetails } from './email-generator'
-import type { EmailTemplate, TransactionEmailData, WelcomeEmailData } from './email-types'
+import {
+  generateBaseEmailTemplate,
+  generateTransactionDetailsTable,
+  type TransactionDetailRow,
+} from "./email-generator"
+import { getEmailAudienceProfile, type EmailAudience } from "./email-audience"
+import type {
+  EmailTemplate,
+  SecurityAlertEmailData,
+  TeamInviteEmailData,
+  TransactionEmailData,
+  VerificationEmailData,
+  WelcomeEmailData,
+} from "./email-types"
+
+const CONTACT_URL = "https://easner.com/contact"
+
+function txDetailUrl(data: TransactionEmailData, audience: EmailAudience): string {
+  if (data.detailUrl) return data.detailUrl
+  const base =
+    audience === "business"
+      ? process.env.NEXT_PUBLIC_BUSINESS_URL ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        "https://business.easner.com"
+      : process.env.NEXT_PUBLIC_APP_URL || "https://www.easner.com"
+  const id = data.easnerTransactionId || data.transactionId
+  return `${base}/transactions/${encodeURIComponent(id)}`
+}
+
+function buildTransactionDetailRows(data: TransactionEmailData): TransactionDetailRow[] {
+  const rows: TransactionDetailRow[] = [
+    {
+      label: "Transaction ID",
+      value: data.easnerTransactionId || data.transactionId,
+    },
+    { label: "Type", value: data.category || data.title },
+    { label: "Amount", value: data.amountDisplay },
+  ]
+  if (data.counterpartyName && data.counterpartyLabel) {
+    rows.push({ label: data.counterpartyLabel, value: data.counterpartyName })
+  }
+  if (data.paymentRail) rows.push({ label: "Payment method", value: data.paymentRail })
+  const displayStatus = data.status === "settled" ? "completed" : data.status
+  rows.push({
+    label: "Status",
+    value: displayStatus,
+    isStatus: true,
+    statusClass: data.status === "settled" ? "completed" : displayStatus,
+  })
+  if (data.createdAt) {
+    rows.push({ label: "Date", value: new Date(data.createdAt).toLocaleDateString() })
+  }
+  return rows
+}
+
+function transactionSettledTemplate(): EmailTemplate {
+  return {
+    subject: (data: TransactionEmailData) => data.title,
+    preheader: (data: TransactionEmailData) => data.body,
+    html: (data: TransactionEmailData, audience = "personal") => {
+      const content = `
+        <p class="confirmation-text">${data.body}</p>
+        ${generateTransactionDetailsTable(buildTransactionDetailRows(data))}
+      `
+      return generateBaseEmailTemplate(data.title, "", content, {
+        text: "View transaction",
+        url: txDetailUrl(data, audience),
+      }, { audience, preheader: data.body, showPreferencesLink: false })
+    },
+    text: (data: TransactionEmailData, audience = "personal") =>
+      `${data.title}\n\n${data.body}\n\nView transaction: ${txDetailUrl(data, audience)}`,
+  }
+}
+
+function transactionFailedTemplate(): EmailTemplate {
+  return {
+    subject: (data: TransactionEmailData) => `${data.title} — not completed`,
+    preheader: (data: TransactionEmailData) => data.body,
+    html: (data: TransactionEmailData, audience = "personal") => {
+      const reason = data.failureReason
+        ? `<p class="confirmation-text"><strong>Reason:</strong> ${data.failureReason}</p>`
+        : ""
+      const content = `
+        <p class="confirmation-text">${data.body}</p>
+        ${reason}
+        ${generateTransactionDetailsTable(buildTransactionDetailRows(data))}
+        <div class="security-note"><h3>What happens next</h3><p>If funds were debited, we will restore your balance where applicable. Contact support if you need help.</p></div>
+      `
+      const profile = getEmailAudienceProfile(audience)
+      return generateBaseEmailTemplate(data.title, "", content, {
+        text: "Contact support",
+        url: `mailto:${profile.supportEmail}`,
+      }, { audience, preheader: data.body, showPreferencesLink: false })
+    },
+    text: (data: TransactionEmailData, audience = "personal") => {
+      const profile = getEmailAudienceProfile(audience)
+      return `${data.title}\n\n${data.body}${data.failureReason ? `\nReason: ${data.failureReason}` : ""}\n\nContact: ${profile.supportEmail}`
+    },
+  }
+}
+
+function transactionReversedTemplate(): EmailTemplate {
+  return {
+    subject: (data: TransactionEmailData) => `${data.title} — reversed`,
+    html: (data: TransactionEmailData, audience = "personal") => {
+      const content = `
+        <p class="confirmation-text">${data.body}</p>
+        ${generateTransactionDetailsTable(buildTransactionDetailRows(data))}
+      `
+      return generateBaseEmailTemplate(data.title, "", content, {
+        text: "View transaction",
+        url: txDetailUrl(data, audience),
+      }, { audience, showPreferencesLink: false })
+    },
+    text: (data: TransactionEmailData, audience = "personal") =>
+      `${data.title}\n\n${data.body}\n\nView: ${txDetailUrl(data, audience)}`,
+  }
+}
 
 export const emailTemplates: Record<string, EmailTemplate> = {
-  // Welcome Email
-  welcome: {
-    subject: "Welcome to Easner! Let's get started",
+  welcomeBusiness: {
+    subject: "Welcome to Easner Business Banking",
+    preheader: "Complete KYB, fund your account, and explore global payouts and collections.",
     html: (data: WelcomeEmailData) => {
+      const profile = getEmailAudienceProfile("business")
       const content = `
-        <p class="welcome-text">
-          Hi ${data.firstName}! Welcome to Easner.
-        </p>
-        
+        <p class="welcome-text">Dear ${data.firstName},</p>
         <p class="confirmation-text">
-          Thank you for joining Easner! We're excited to have you as part of our community. 
-          Your account is now active and ready to send money across borders in under 5 minutes.
+          Congratulations on creating your Easner Business account. We're excited to have you with us as you start managing multi-currency accounts, global payouts, collections, and more — all in one dashboard.
         </p>
-        
-        <p class="confirmation-text">
-          With Easner, you can:
-        </p>
-        
-        <ul style="color: #3D403D; font-size: 16px; line-height: 1.7; margin: 20px 0; padding-left: 20px;">
-          <li><strong>Send money globally in under 5 minutes</strong> - Lightning-fast cross-border transfers</li>
-          <li>Track your transfers in real-time with live updates</li>
-          <li>Save your favorite recipients for instant transfers</li>
-          <li>Enjoy competitive exchange rates with zero hidden fees</li>
-        </ul>
-        
         <div class="security-note">
-          <h3>Getting Started</h3>
-          <p>To send your first transfer, simply click the "Send Money" button in your dashboard and follow the easy steps. Your money will reach its destination in under 5 minutes!</p>
-        </div>
-      `
-      
-      return generateBaseEmailTemplate(
-        "Welcome to Easner!",
-        "",
-        content,
-        {
-          text: "Go to Dashboard",
-          url: data.dashboardUrl
-        }
-      )
-    },
-    text: (data: WelcomeEmailData) => `
-Welcome to Easner!
-
-Hi ${data.firstName}!
-
-Thank you for joining Easner! We're excited to have you as part of our community. Your account is now active and ready to send money across borders in under 5 minutes.
-
-With Easner, you can:
-• Send money globally in under 5 minutes - Lightning-fast cross-border transfers
-• Track your transfers in real-time with live updates
-• Save your favorite recipients for instant transfers
-• Enjoy competitive exchange rates with zero hidden fees
-
-Getting Started:
-To send your first transfer, simply go to your dashboard and click "Send Money". Your money will reach its destination in under 5 minutes!
-
-Go to Dashboard: ${data.dashboardUrl}
-
-Need help? Contact us at support@easner.com
-
-© 2025 Easner, Inc. All rights reserved.
-    `
-  },
-
-  // Transaction Pending
-  transactionPending: {
-    subject: (data: TransactionEmailData) => `Transfer Created - #${data.transactionId}`,
-    html: (data: TransactionEmailData) => {
-      const content = `
-        <p class="confirmation-text">
-          Your transfer to ${data.recipientName} has been created and is now being processed. 
-          We'll send you updates as your money makes its way to its destination!
-        </p>
-        
-        ${generateTransactionDetails(data)}
-        
-        <div class="security-note">
-          <h3>What's Next</h3>
-          <p>We're working on your transfer and will notify you as soon as it's completed. You can track the progress in your dashboard.</p>
-        </div>
-      `
-      
-      return generateBaseEmailTemplate(
-        "Transaction Created",
-        "",
-        content,
-        {
-          text: "Track Transaction",
-          url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.easner.com'}/send/${data.transactionId.toLowerCase()}`
-        }
-      )
-    },
-    text: (data: TransactionEmailData) => `
-Transaction Created - #${data.transactionId}
-
-Your transfer to ${data.recipientName} has been created and is now being processed. We'll send you updates as your money makes its way to its destination!
-
-Transaction Details:
-- Transaction ID: ${data.transactionId}
-- Recipient: ${data.recipientName}
-- Amount: ${data.sendAmount} ${data.sendCurrency}
-- Receiving: ${data.receiveAmount} ${data.receiveCurrency}
-- Rate Used: 1 ${data.sendCurrency} = ${data.exchangeRate} ${data.receiveCurrency}
-- Fee: ${data.fee} ${data.sendCurrency}
-- Status: ${data.status}
-
-What's Next:
-We're working on your transfer and will notify you as soon as it's completed. You can track the progress in your dashboard.
-
-Track Transaction: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.easner.com'}/send/${data.transactionId.toLowerCase()}
-
-Need help? Contact us at support@easner.com
-    `
-  },
-
-  // Transaction Processing
-  transactionProcessing: {
-    subject: (data: TransactionEmailData) => `Transfer Processing - #${data.transactionId}`,
-    html: (data: TransactionEmailData) => {
-      const content = `
-        <p class="confirmation-text">
-          Great news! We've received your payment and your transfer to ${data.recipientName} is now being processed. 
-          Your money will arrive in under 5 minutes!
-        </p>
-        
-        ${generateTransactionDetails(data)}
-        
-        <div class="security-note">
-          <h3>What's Happening</h3>
-          <p>We're working with our banking partners to complete your transfer. Thanks to our advanced technology, this typically takes under 5 minutes!</p>
-        </div>
-      `
-      
-      return generateBaseEmailTemplate(
-        "Transfer Processing",
-        "",
-        content,
-        {
-          text: "Track Transfer",
-          url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.easner.com'}/send/${data.transactionId.toLowerCase()}`
-        }
-      )
-    },
-    text: (data: TransactionEmailData) => `
-Transfer Processing - Transaction #${data.transactionId}
-
-Great news! We've received your payment and your transfer to ${data.recipientName} is now being processed. Your money will arrive in under 5 minutes!
-
-Transaction Details:
-- Transaction ID: ${data.transactionId}
-- Recipient: ${data.recipientName}
-- Amount: ${data.sendAmount} ${data.sendCurrency}
-- Receiving: ${data.receiveAmount} ${data.receiveCurrency}
-- Rate Used: 1 ${data.sendCurrency} = ${data.exchangeRate} ${data.receiveCurrency}
-- Fee: ${data.fee} ${data.sendCurrency}
-- Status: ${data.status}
-
-What's Happening:
-We're working with our banking partners to complete your transfer. Thanks to our advanced technology, this typically takes under 5 minutes!
-
-Track Transfer: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.easner.com'}/send/${data.transactionId.toLowerCase()}
-
-Need help? Contact us at support@easner.com
-    `
-  },
-
-  // Transaction Completed
-  transactionCompleted: {
-    subject: (data: TransactionEmailData) => `Transfer Completed Successfully! 🎉 #${data.transactionId}`,
-    html: (data: TransactionEmailData) => {
-      const content = `
-        <p class="confirmation-text">
-          Your transfer to ${data.recipientName} has been completed successfully! 
-          The money has been sent and should arrive within minutes.
-        </p>
-        
-        ${generateTransactionDetails(data)}
-        
-        <div class="security-note">
-          <h3>What's Next</h3>
-          <p>Your recipient should receive the money within minutes thanks to our fast processing. You can track all your transfers in your dashboard.</p>
-        </div>
-      `
-      
-      return generateBaseEmailTemplate(
-        "Transfer Completed!",
-        "",
-        content,
-        {
-          text: "View Transaction",
-          url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.easner.com'}/send/${data.transactionId.toLowerCase()}`
-        }
-      )
-    },
-    text: (data: TransactionEmailData) => `
-Transfer Completed - Transaction #${data.transactionId}
-
-Your transfer to ${data.recipientName} has been completed successfully! The money has been sent and should arrive within minutes.
-
-Transaction Details:
-- Transaction ID: ${data.transactionId}
-- Recipient: ${data.recipientName}
-- Amount: ${data.sendAmount} ${data.sendCurrency}
-- Receiving: ${data.receiveAmount} ${data.receiveCurrency}
-- Rate Used: 1 ${data.sendCurrency} = ${data.exchangeRate} ${data.receiveCurrency}
-- Fee: ${data.fee} ${data.sendCurrency}
-- Status: ${data.status}
-
-What's Next:
-Your recipient should receive the money within minutes thanks to our fast processing. You can track all your transfers in your dashboard.
-
-View Transaction: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.easner.com'}/send/${data.transactionId.toLowerCase()}
-
-Need help? Contact us at support@easner.com
-    `
-  },
-
-  // Transaction Failed
-  transactionFailed: {
-    subject: (data: TransactionEmailData) => `Transfer Failed - #${data.transactionId}`,
-    html: (data: TransactionEmailData) => {
-      const content = `
-        <p class="confirmation-text">
-          Unfortunately, your transfer to ${data.recipientName} could not be completed. 
-          ${data.failureReason ? `Reason: ${data.failureReason}` : 'Please contact support for more information.'}
-        </p>
-        
-        ${generateTransactionDetails(data)}
-        
-        <div class="security-note">
-          <h3>What Happens Next</h3>
-          <p>If you were charged for this transfer, we will automatically refund the amount to your original payment method within 3-5 business days.</p>
-        </div>
-      `
-      
-      return generateBaseEmailTemplate(
-        "Transfer Failed",
-        "",
-        content,
-        {
-          text: "Contact Support",
-          url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.easner.com'}/support`
-        }
-      )
-    },
-    text: (data: TransactionEmailData) => `
-Transfer Failed - Transaction #${data.transactionId}
-
-Unfortunately, your transfer to ${data.recipientName} could not be completed. 
-${data.failureReason ? `Reason: ${data.failureReason}` : 'Please contact support for more information.'}
-
-Transaction Details:
-- Transaction ID: ${data.transactionId}
-- Recipient: ${data.recipientName}
-- Amount: ${data.sendAmount} ${data.sendCurrency}
-- Receiving: ${data.receiveAmount} ${data.receiveCurrency}
-- Rate Used: 1 ${data.sendCurrency} = ${data.exchangeRate} ${data.receiveCurrency}
-- Fee: ${data.fee} ${data.sendCurrency}
-- Status: ${data.status}
-
-What Happens Next:
-If you were charged for this transfer, we will automatically refund the amount to your original payment method within 3-5 business days.
-
-Contact Support: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.easner.com'}/support
-
-Need help? Contact us at support@easner.com
-    `
-  },
-
-  // Transaction Cancelled
-  transactionCancelled: {
-    subject: (data: TransactionEmailData) => `Transfer Cancelled - #${data.transactionId}`,
-    html: (data: TransactionEmailData) => {
-      const content = `
-        <p class="confirmation-text">
-          Your transfer to ${data.recipientName} has been cancelled. 
-          ${data.failureReason ? `Reason: ${data.failureReason}` : 'This may have been cancelled by you or our support team.'}
-        </p>
-        
-        ${generateTransactionDetails(data)}
-        
-        <div class="security-note">
-          <h3>Refund Information</h3>
-          <p>If you were charged for this transfer, we will automatically refund the amount to your original payment method within 3-5 business days.</p>
-        </div>
-      `
-      
-      return generateBaseEmailTemplate(
-        "Transfer Cancelled",
-        "",
-        content,
-        {
-          text: "Send New Transfer",
-          url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.easner.com'}/send`
-        }
-      )
-    },
-    text: (data: TransactionEmailData) => `
-Transfer Cancelled - Transaction #${data.transactionId}
-
-Your transfer to ${data.recipientName} has been cancelled. 
-${data.failureReason ? `Reason: ${data.failureReason}` : 'This may have been cancelled by you or our support team.'}
-
-Transaction Details:
-- Transaction ID: ${data.transactionId}
-- Recipient: ${data.recipientName}
-- Amount: ${data.sendAmount} ${data.sendCurrency}
-- Receiving: ${data.receiveAmount} ${data.receiveCurrency}
-- Rate Used: 1 ${data.sendCurrency} = ${data.exchangeRate} ${data.receiveCurrency}
-- Fee: ${data.fee} ${data.sendCurrency}
-- Status: ${data.status}
-
-Refund Information:
-If you were charged for this transfer, we will automatically refund the amount to your original payment method within 3-5 business days.
-
-Send New Transfer: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.easner.com'}/send
-
-Need help? Contact us at support@easner.com
-    `
-  },
-
-  // Early Access Request
-  earlyAccessRequest: {
-    subject: "New Early Access Request - Easner",
-    html: (data: any) => {
-      const content = `
-        <p class="welcome-text">
-          New Early Access Request
-        </p>
-        
-        <p class="confirmation-text">
-          A new user has requested early access to Easner. Here are their details:
-        </p>
-        
-        <div style="background: #F8F6F0; border: 1px solid #E9E4D8; border-radius: 12px; padding: 20px; margin: 20px 0;">
-          <h3 style="color: #0F1110; margin: 0 0 14px 0; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;">Contact Information</h3>
-          <p style="margin: 5px 0; font-size: 16px;"><strong>Name:</strong> ${data.fullName}</p>
-          <p style="margin: 5px 0; font-size: 16px;"><strong>Email:</strong> ${data.email}</p>
-          <p style="margin: 5px 0; font-size: 16px;"><strong>WhatsApp/Telegram:</strong> ${data.whatsappTelegram}</p>
-        </div>
-        
-        <div style="background: #F8F6F0; border: 1px solid #E9E4D8; border-radius: 12px; padding: 20px; margin: 20px 0;">
-          <h3 style="color: #0F1110; margin: 0 0 14px 0; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;">Use Case & Transfer Preferences</h3>
-          <p style="margin: 5px 0; font-size: 16px;"><strong>Primary Use Case:</strong> ${data.primaryUseCase}</p>
-          <p style="margin: 5px 0; font-size: 16px;"><strong>Located in:</strong> ${data.locatedIn}</p>
-          <p style="margin: 5px 0; font-size: 16px;"><strong>Sending to:</strong> ${data.sendingTo}</p>
-        </div>
-        
-        <div style="background: #F8F6F0; border: 1px solid #E9E4D8; border-radius: 12px; padding: 20px; margin: 20px 0;">
-          <h3 style="color: #0F1110; margin: 0 0 14px 0; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;">Request Details</h3>
-          <p style="margin: 5px 0; font-size: 16px;"><strong>Submitted at:</strong> ${new Date(data.submittedAt).toLocaleString()}</p>
-          <p style="margin: 5px 0; font-size: 16px;"><strong>User Agent:</strong> ${data.userAgent}</p>
-          <p style="margin: 5px 0; font-size: 16px;"><strong>IP Address:</strong> ${data.ipAddress}</p>
-        </div>
-        
-            `
-
-            return generateBaseEmailTemplate(
-              "New Early Access Request",
-              "",
-              content
-            )
-    },
-    text: (data: any) => `
-New Early Access Request - Easner
-
-A new user has requested early access to Easner. Here are their details:
-
-Contact Information:
-- Name: ${data.fullName}
-- Email: ${data.email}
-- WhatsApp/Telegram: ${data.whatsappTelegram}
-
-Use Case & Transfer Preferences:
-- Primary Use Case: ${data.primaryUseCase}
-- Located in: ${data.locatedIn}
-- Sending to: ${data.sendingTo}
-
-Request Details:
-- Submitted at: ${new Date(data.submittedAt).toLocaleString()}
-- User Agent: ${data.userAgent}
-- IP Address: ${data.ipAddress}
-
-        © 2025 Easner, Inc. All rights reserved.
-    `
-  },
-
-  // Early Access Confirmation (sent to user)
-  earlyAccessConfirmation: {
-    subject: "You're on the list! - Easner Early Access",
-    html: (data: any) => {
-      const content = `
-        <p class="welcome-text">
-          You're on the list! 🎉
-        </p>
-
-        <p class="confirmation-text">
-          Thank you for requesting early access to Easner! We're excited to have you join our community of users who will experience zero-fee international money transfers.
-        </p>
-
-        <div style="background: #F8F6F0; border: 1px solid #E9E4D8; border-radius: 12px; padding: 20px; margin: 20px 0;">
-          <h3 style="color: #0F1110; margin: 0 0 14px 0; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;">What happens next?</h3>
-          <ul style="margin: 0; padding-left: 20px; color: #3D403D; font-size: 16px;">
-            <li style="margin-bottom: 8px; font-size: 16px;">We'll review your application and use case</li>
-            <li style="margin-bottom: 8px; font-size: 16px;">You'll receive an invitation email when approved</li>
-            <li style="margin-bottom: 8px; font-size: 16px;">We'll follow up with you via the contact method you provided</li>
-            <li style="margin-bottom: 0; font-size: 16px;">You'll be among the first to experience our platform</li>
-          </ul>
-        </div>
-
-        <div style="background: #E6F4EC; border: 1px solid #C7E3D4; border-radius: 12px; padding: 20px; margin: 20px 0;">
-          <h3 style="color: #0F1110; margin: 0 0 10px 0; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;">Why Easner?</h3>
-          <p style="margin: 0; color: #3D403D; font-size: 16px;">
-            We're building the future of international money transfers with zero fees, real-time exchange rates, and instant transfers. Your early access will help us shape the perfect experience for users like you.
+          <h3>Quick next steps</h3>
+          <p>
+            <strong>Complete your KYB verification</strong> — Log in at business.easner.com and finish business verification. This usually takes just a few minutes and unlocks full access where supported.<br><br>
+            <strong>Fund your account</strong> — Add funds via USD or EUR bank accounts or stablecoin to start sending payouts or collecting payments where enabled.<br><br>
+            <strong>Explore the platform</strong> — Multi-currency balances, global payouts, invoicing, QR Pay, team controls, and reporting.
           </p>
         </div>
-
-        <div class="security-note">
-          <h3>Questions?</h3>
-          <p>If you have any questions about your early access request or our platform, feel free to reach out to us. We're here to help!</p>
-        </div>
+        <p class="confirmation-text">
+          <strong>Want a personalized walkthrough?</strong> We offer free 15–20 minute onboarding calls. We can walk you through the dashboard, help with KYB questions, and show you the fastest ways to send payouts or set up collections.
+        </p>
+        <p class="confirmation-text">
+          Book a call at <a href="${CONTACT_URL}" style="color: #007ACC;">easner.com/contact</a> or reply to this email with your preferred time.
+        </p>
+        <p class="confirmation-text">
+          If you prefer to explore on your own first, our in-app chat and support team are always available. Fees and FX may apply; shown before you confirm.
+        </p>
+        ${profile.signatureHtml ?? ""}
       `
-
       return generateBaseEmailTemplate(
-        "You're on the list!",
-        `Hi ${data.fullName},`,
-        content
+        "Welcome to Easner Business",
+        profile.productName,
+        content,
+        { text: "Go to dashboard", url: data.dashboardUrl || profile.dashboardUrl },
+        { audience: "business", preheader: "Complete KYB and explore your dashboard.", showPreferencesLink: true },
       )
     },
-    text: (data: any) => `
-You're on the list! 🎉
+    text: (data: WelcomeEmailData) => {
+      const profile = getEmailAudienceProfile("business")
+      return `Welcome to Easner Business Banking
 
-Hi ${data.fullName},
+Dear ${data.firstName},
 
-Thank you for requesting early access to Easner! We're excited to have you join our community of users who will experience zero-fee international money transfers.
+Congratulations on creating your Easner Business account.
 
-What happens next?
-- We'll review your application and use case
-- You'll receive an invitation email when approved
-- We'll follow up with you via the contact method you provided
-- You'll be among the first to experience our platform
+Quick next steps:
+- Complete KYB at business.easner.com
+- Fund your account (bank or stablecoin where enabled)
+- Explore payouts, collections, invoicing, and team controls
 
-Why Easner?
-We're building the future of international money transfers with zero fees, real-time exchange rates, and instant transfers. Your early access will help us shape the perfect experience for users like you.
+Book an onboarding call: ${CONTACT_URL}
 
-Questions?
-If you have any questions about your early access request or our platform, feel free to reach out to us. We're here to help!
-
-© 2025 Easner, Inc. All rights reserved.
-    `
+Dashboard: ${data.dashboardUrl || profile.dashboardUrl}
+${profile.signatureText ?? ""}`
+    },
   },
 
-  // Admin Transaction Notification
-  adminTransactionNotification: {
-    subject: (data: any) => `New Transfer ${data.status === 'pending' ? 'Created' : 'Updated'} - #${data.transactionId}`,
-    html: (data: any) => {
-      const userName = data.userName && data.userName !== 'User' && data.userName !== 'Unknown' ? data.userName : 'a user'
+  welcomePersonal: {
+    subject: "Welcome to Easner Personal Banking",
+    preheader: "Verify your identity and start moving money with banking-simple screens.",
+    html: (data: WelcomeEmailData) => {
+      const profile = getEmailAudienceProfile("personal")
       const content = `
+        <p class="welcome-text">Hi ${data.firstName},</p>
         <p class="confirmation-text">
-          ${data.status === 'pending' 
-            ? `A new transaction has been created by ${userName} and requires your attention.` 
-            : `A transaction status has been updated to ${data.status}. Please review the details below.`}
+          Welcome to Easner Mobile — your Easner Personal Banking account is ready. Send, receive, and track money in screens that feel like banking, not crypto complexity.
+        </p>
+        <div class="security-note">
+          <h3>Get started</h3>
+          <p>
+            Complete identity verification in the app to unlock accounts and transfers where supported.<br>
+            Add funds via bank deposit or stablecoin where enabled.<br>
+            Save recipients and track activity in real time.
+          </p>
+        </div>
+        <p class="confirmation-text">
+          Fees and FX may apply and are shown before you confirm. Availability depends on verification, jurisdiction, and partner enablement.
         </p>
       `
-
-      const adminUrl = process.env.NEXT_PUBLIC_OFFICE_URL || 'https://bk.easner.com'
       return generateBaseEmailTemplate(
-        data.status === 'pending' ? "New Transaction Created" : `Transaction ${data.status.toUpperCase()}`,
-        "",
+        "Welcome to Easner",
+        profile.productName,
         content,
-        {
-          text: "View in Admin Dashboard",
-          url: `${adminUrl}/transactions`
-        }
+        { text: "Open the app", url: data.dashboardUrl || profile.dashboardUrl },
+        { audience: "personal", preheader: "Verify and start using Easner Mobile.", showPreferencesLink: true },
       )
     },
-    text: (data: any) => {
-      const userName = data.userName && data.userName !== 'User' && data.userName !== 'Unknown' ? data.userName : 'a user'
-      const adminUrl = process.env.NEXT_PUBLIC_OFFICE_URL || 'https://bk.easner.com'
-      return `
-${data.status === 'pending' ? 'New Transaction Created' : `Transaction Status Updated to ${data.status.toUpperCase()}`} - #${data.transactionId}
+    text: (data: WelcomeEmailData) => {
+      const profile = getEmailAudienceProfile("personal")
+      return `Welcome to Easner Personal Banking
 
-${data.status === 'pending' 
-  ? `A new transaction has been created by ${userName} and requires your attention.` 
-  : `A transaction status has been updated to ${data.status}. Please review the details below.`}
+Hi ${data.firstName},
 
-View in Admin Dashboard: ${adminUrl}/transactions
+Your Easner Mobile account is ready. Complete verification in the app, then send and receive where supported.
 
-© 2025 Easner, Inc. All rights reserved.
-    `
-    }
+Fees and FX may apply; shown before you confirm.
+
+${data.dashboardUrl || profile.dashboardUrl}`
+    },
+  },
+
+  transactionSettled: transactionSettledTemplate(),
+  transactionFailed: transactionFailedTemplate(),
+  transactionReversed: transactionReversedTemplate(),
+
+  kybSubmitted: verificationTemplate("KYB", "business", "submitted"),
+  kybApproved: verificationTemplate("KYB", "business", "approved"),
+  kybRejected: verificationTemplate("KYB", "business", "rejected"),
+  kycSubmitted: verificationTemplate("KYC", "personal", "submitted"),
+  kycApproved: verificationTemplate("KYC", "personal", "approved"),
+  kycRejected: verificationTemplate("KYC", "personal", "rejected"),
+
+  teamInvitation: {
+    subject: (data: TeamInviteEmailData) => `You're invited to ${data.businessName} on Easner`,
+    html: (data: TeamInviteEmailData) => {
+      const content = `
+        <p class="confirmation-text">
+          ${data.inviterName} invited you to join <strong>${data.businessName}</strong> on Easner Business as <strong>${data.role}</strong>.
+        </p>
+        <p class="confirmation-text">Accept the invitation to access the business dashboard.</p>
+      `
+      return generateBaseEmailTemplate(
+        "Team invitation",
+        data.businessName,
+        content,
+        { text: "Accept invitation", url: data.acceptUrl },
+        { audience: "business", showPreferencesLink: false },
+      )
+    },
+    text: (data: TeamInviteEmailData) =>
+      `${data.inviterName} invited you to ${data.businessName} as ${data.role}.\n\nAccept: ${data.acceptUrl}`,
+  },
+
+  passwordChanged: securityTemplate("password_changed"),
+  passwordResetCompleted: securityTemplate("password_reset_completed"),
+  mfaEnabled: securityTemplate("mfa_enabled"),
+  mfaDisabled: securityTemplate("mfa_disabled"),
+  newDeviceLogin: securityTemplate("new_device"),
+
+  adminTransactionNotification: {
+    subject: (data: { status?: string; transactionId?: string }) =>
+      `New transfer ${data.status === "pending" ? "created" : "updated"} — #${data.transactionId}`,
+    html: (data: { status?: string; userName?: string }) => {
+      const userName =
+        data.userName && data.userName !== "User" && data.userName !== "Unknown"
+          ? data.userName
+          : "a user"
+      const content = `<p class="confirmation-text">${
+        data.status === "pending"
+          ? `A new transaction was created by ${userName}.`
+          : `A transaction was updated to ${data.status}.`
+      }</p>`
+      const adminUrl = process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"
+      return generateBaseEmailTemplate("Admin alert", "", content, {
+        text: "View in admin",
+        url: `${adminUrl}/transactions`,
+      }, { showPreferencesLink: false })
+    },
+    text: (data: { status?: string; transactionId?: string }) => {
+      const adminUrl = process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"
+      return `Transaction ${data.transactionId} — ${data.status}\n${adminUrl}/transactions`
+    },
+  },
+}
+
+function verificationTemplate(
+  kind: "KYB" | "KYC",
+  audience: EmailAudience,
+  status: VerificationEmailData["status"],
+): EmailTemplate {
+  const titles = {
+    submitted: `${kind} verification submitted`,
+    approved: `${kind} verification approved`,
+    rejected: `${kind} verification update`,
+  }
+  const bodies = {
+    submitted: `We've received your ${kind} verification. We'll email you when there is an update.`,
+    approved: `Your ${kind} verification is approved. You can now access features where enabled for your profile.`,
+    rejected: `Your ${kind} verification could not be approved at this time.`,
+  }
+  return {
+    subject: () => titles[status],
+    html: (data: VerificationEmailData) => {
+      const reasons =
+        status === "rejected" && data.rejectionReasons?.length
+          ? `<p class="confirmation-text"><strong>Details:</strong> ${data.rejectionReasons.join("; ")}</p>`
+          : ""
+      const profile = getEmailAudienceProfile(audience)
+      const content = `
+        <p class="welcome-text">${data.firstName ? `Hi ${data.firstName},` : "Hello,"}</p>
+        <p class="confirmation-text">${bodies[status]}</p>
+        ${reasons}
+      `
+      return generateBaseEmailTemplate(
+        titles[status],
+        profile.productName,
+        content,
+        status === "approved"
+          ? { text: "Go to dashboard", url: data.dashboardUrl || profile.dashboardUrl }
+          : undefined,
+        { audience, showPreferencesLink: false },
+      )
+    },
+    text: (data: VerificationEmailData) => {
+      const profile = getEmailAudienceProfile(audience)
+      let t = `${titles[status]}\n\n${bodies[status]}`
+      if (status === "rejected" && data.rejectionReasons?.length) {
+        t += `\n\nDetails: ${data.rejectionReasons.join("; ")}`
+      }
+      if (status === "approved") t += `\n\n${data.dashboardUrl || profile.dashboardUrl}`
+      return t
+    },
+  }
+}
+
+function securityTemplate(alertType: SecurityAlertEmailData["alertType"]): EmailTemplate {
+  const copy: Record<SecurityAlertEmailData["alertType"], { subject: string; body: string }> = {
+    password_changed: {
+      subject: "Your Easner password was changed",
+      body: "Your account password was just changed. If you did not make this change, contact support immediately.",
+    },
+    password_reset_completed: {
+      subject: "Your Easner password was reset",
+      body: "Your account password was reset successfully. If you did not request this, contact support immediately.",
+    },
+    mfa_enabled: {
+      subject: "Two-factor authentication enabled",
+      body: "Two-factor authentication was enabled on your Easner account.",
+    },
+    mfa_disabled: {
+      subject: "Two-factor authentication disabled",
+      body: "Two-factor authentication was disabled on your Easner account. If you did not make this change, contact support immediately.",
+    },
+    new_device: {
+      subject: "New device registered on your Easner account",
+      body: "A new device was registered to receive notifications on your account.",
+    },
+  }
+  const c = copy[alertType]
+  return {
+    subject: () => c.subject,
+    html: (data: SecurityAlertEmailData, audience = "personal") => {
+      const device =
+        data.deviceLabel && alertType === "new_device"
+          ? `<p class="confirmation-text">Device: ${data.deviceLabel}</p>`
+          : ""
+      const content = `
+        <p class="confirmation-text">${c.body}</p>
+        ${device}
+      `
+      const profile = getEmailAudienceProfile(audience)
+      return generateBaseEmailTemplate(c.subject, "", content, {
+        text: "Contact support",
+        url: `mailto:${profile.supportEmail}`,
+      }, { audience, showPreferencesLink: false })
+    },
+    text: (data: SecurityAlertEmailData) =>
+      `${c.subject}\n\n${c.body}${data.deviceLabel ? `\nDevice: ${data.deviceLabel}` : ""}`,
   }
 }

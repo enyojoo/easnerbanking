@@ -29,7 +29,11 @@ import {
   resolvePayeeSolanaVaultAta,
   resolveSenderTurnkeySubOrgId,
 } from "@/lib/ledger/easetag-turnkey-settlement"
-import { notifyEasetagTransferSettled } from "@/lib/ledger/easetag-transfer-notify"
+import {
+  fetchEasetagDebitSnapshot,
+  notifyEasetagTransferReversed,
+  notifyEasetagTransferSettled,
+} from "@/lib/ledger/easetag-transfer-notify"
 import { createTurnkeySend, reconcileTurnkeySendStatus } from "@/lib/turnkey/send"
 
 export const runtime = "nodejs"
@@ -321,6 +325,7 @@ export async function POST(request: Request) {
         const detail =
           send.chainFailureDetail?.trim() ||
           "Turnkey Solana broadcast failed (check gas sponsorship, rent sponsorship, and wallet USDC on-chain balance)."
+        const rollbackSnapshot = await fetchEasetagDebitSnapshot(admin, result.transferGroupId)
         await rollbackEasetagP2pLedger(admin, {
           transferGroupId: result.transferGroupId,
           amount: amt,
@@ -330,6 +335,12 @@ export async function POST(request: Request) {
           payeeUserId: payeeUserId!,
           payeeBusinessId: payeeBusinessId ?? null,
         })
+        if (rollbackSnapshot) {
+          await notifyEasetagTransferReversed(admin, {
+            userId: senderUserId,
+            snapshot: rollbackSnapshot,
+          })
+        }
         await updateEasetagSettlementFailed(admin, transferGroupId, detail).catch(() => {})
         return NextResponse.json({ ok: false, error: "turnkey_chain_settlement_failed", detail }, { status: 502 })
       }
@@ -346,6 +357,7 @@ export async function POST(request: Request) {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
+      const rollbackSnapshot = await fetchEasetagDebitSnapshot(admin, result.transferGroupId)
       await rollbackEasetagP2pLedger(admin, {
         transferGroupId: result.transferGroupId,
         amount: amt,
@@ -355,6 +367,12 @@ export async function POST(request: Request) {
         payeeUserId: payeeUserId!,
         payeeBusinessId: payeeBusinessId ?? null,
       })
+      if (rollbackSnapshot) {
+        await notifyEasetagTransferReversed(admin, {
+          userId: senderUserId,
+          snapshot: rollbackSnapshot,
+        })
+      }
       await updateEasetagSettlementFailed(admin, transferGroupId, msg).catch(() => {})
       return NextResponse.json({ ok: false, error: msg || "turnkey_settlement_failed" }, { status: 400 })
     }

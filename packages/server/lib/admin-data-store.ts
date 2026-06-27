@@ -1105,36 +1105,9 @@ class AdminDataStore {
     }
   }
 
-  /**
-   * Send email notification in background (non-blocking)
-   */
-  private async sendEmailNotification(transactionId: string, status: string): Promise<void> {
-    try {
-      console.log('AdminDataStore: sendEmailNotification called for:', transactionId, status)
-      
-      const baseUrl = typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-      
-      // Send user notification email only (no admin notification for status updates)
-      console.log('AdminDataStore: Sending user notification email')
-      const userResponse = await fetch(`${baseUrl}/api/send-email-notification`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: 'transaction',
-          transactionId,
-          status
-        })
-      })
-      
-      console.log('AdminDataStore: User email notification response:', userResponse.status, userResponse.statusText)
-      const userResponseData = await userResponse.json()
-      console.log('AdminDataStore: User email notification response data:', userResponseData)
-    } catch (error) {
-      console.error('Failed to send email notification:', error)
-      // Don't throw - this is non-blocking
-    }
+  /** @deprecated Ledger notifications dispatch from business/lib/notifications/dispatch.ts */
+  private async sendEmailNotification(_transactionId: string, _status: string): Promise<void> {
+    return
   }
 
   async updateUserStatus(userId: string, newStatus: string) {

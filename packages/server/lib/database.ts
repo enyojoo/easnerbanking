@@ -428,66 +428,6 @@ export const transactionService = {
       // Force refresh user transactions cache
       dataCache.invalidate(CACHE_KEYS.USER_TRANSACTIONS(transactionData.userId))
 
-      // Send initial pending status email via API (non-blocking)
-      try {
-        console.log('Sending initial pending email for transaction:', data.transaction_id)
-        const baseUrl = typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-        
-        // Use fetch to call the email API endpoint
-        fetch(`${baseUrl}/api/send-email-notification`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'transaction',
-            transactionId: data.transaction_id,
-            status: 'pending'
-          })
-        }).then(response => {
-          if (response.ok) {
-            console.log('Initial pending email sent successfully')
-          } else {
-            console.error('Failed to send initial transaction email:', response.statusText)
-          }
-        }).catch(error => {
-          console.error('Failed to send initial transaction email:', error)
-        })
-      } catch (emailError) {
-        console.error('Failed to send initial transaction email:', emailError)
-        // Don't fail the transaction creation if email fails
-      }
-
-      // Send admin notification email via API (non-blocking)
-      try {
-        console.log('Sending admin notification for new transaction:', data.transaction_id)
-        const baseUrl = typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-        
-        // Use fetch to call the email API endpoint
-        fetch(`${baseUrl}/api/send-email-notification`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'admin-transaction',
-            transactionId: data.transaction_id,
-            status: 'pending'
-          })
-        }).then(response => {
-          if (response.ok) {
-            console.log('Admin notification sent successfully')
-          } else {
-            console.error('Failed to send admin notification email:', response.statusText)
-          }
-        }).catch(error => {
-          console.error('Failed to send admin notification email:', error)
-        })
-      } catch (adminEmailError) {
-        console.error('Failed to send admin notification email:', adminEmailError)
-        // Don't fail the transaction creation if admin email fails
-      }
-
       return data
     } catch (error) {
       console.error("Transaction creation error:", error)

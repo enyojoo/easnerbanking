@@ -1,11 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { buildTransactionSettledPushContent } from "@/lib/notifications/transaction-settled-content"
-import { sendTransactionSettledPush } from "@/lib/notifications/expo-push"
+import { dispatchTransactionNotification } from "@/lib/notifications/dispatch"
 import { normalizeDirection } from "@/lib/ledger/transactions"
 
 /**
- * Easetag P2P rows are inserted by SQL RPC (not {@link upsertLedgerTransaction}), so settlement
- * pushes must be triggered from the API after a successful transfer.
+ * Easetag P2P rows are inserted by SQL RPC — settlement notifications from the API after transfer.
+ * Push-only for success (email disabled via descriptor.emailEnabled).
  */
 export async function notifyEasetagTransferSettled(
   admin: SupabaseClient,
@@ -40,29 +39,88 @@ export async function notifyEasetagTransferSettled(
 
   for (const row of rows) {
     if (String(row.status ?? "").toLowerCase() !== "settled") continue
-    const dir = normalizeDirection(String(row.direction ?? ""))
-    const amount = typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
-    const currency = String(row.currency ?? "USD")
-    const provider = String(row.provider ?? "easner_internal")
     const meta = row.metadata as Record<string, unknown> | null | undefined
-    const payload = row.payload as Record<string, unknown> | null | undefined
-    const { title, body } = buildTransactionSettledPushContent({
-      provider,
-      direction: dir,
-      amount,
-      currency,
-      metadata: meta ?? null,
-      payload: payload ?? null,
-    })
     const id = String(row.id ?? "").trim()
     const uid = String(row.user_id ?? "").trim()
     if (!id || !uid) continue
-    await sendTransactionSettledPush(admin, {
+
+    const etid =
+      typeof meta?.easner_transaction_id === "string" ? meta.easner_transaction_id.trim() : undefined
+
+    await dispatchTransactionNotification(admin, {
       userId: uid,
       transactionId: id,
-      title,
-      body,
-      data: { type: "transaction_settled", transactionId: id },
-    }).catch((e) => console.warn("easetag settled push (non-fatal):", e))
+      provider: String(row.provider ?? "easner_internal"),
+      direction: normalizeDirection(String(row.direction ?? "")),
+      amount: typeof row.amount === "number" ? row.amount : Number(row.amount) || 0,
+      currency: String(row.currency ?? "USD"),
+      metadata: meta ?? null,
+      payload: (row.payload as Record<string, unknown> | null) ?? null,
+      outcome: "success",
+      easnerTransactionId: etid,
+      sendEmail: false,
+    }).catch((e) => console.warn("easetag settled notification (non-fatal):", e))
   }
+}
+
+export type EasetagDebitSnapshot = {
+  transactionId: string
+  provider: string
+  direction: string
+  amount: number
+  currency: string
+  metadata: Record<string, unknown>
+  payload: Record<string, unknown> | null
+  easnerTransactionId?: string
+}
+
+/** Fetch debit leg before ledger rollback deletes the row. */
+export async function fetchEasetagDebitSnapshot(
+  admin: SupabaseClient,
+  transferGroupId: string,
+): Promise<EasetagDebitSnapshot | null> {
+  const debitPtid = `easetag_p2p:${transferGroupId}:debit`
+  const { data: row } = await admin
+    .from("transactions")
+    .select("id,user_id,provider,metadata,payload,amount,currency,direction,status")
+    .eq("provider", "easner_internal")
+    .eq("provider_transaction_id", debitPtid)
+    .maybeSingle()
+  if (!row?.id) return null
+
+  const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
+  const etid =
+    typeof meta.easner_transaction_id === "string" ? meta.easner_transaction_id.trim() : undefined
+
+  return {
+    transactionId: String(row.id),
+    provider: String(row.provider ?? "easner_internal"),
+    direction: normalizeDirection(String(row.direction ?? "")),
+    amount: typeof row.amount === "number" ? row.amount : Number(row.amount) || 0,
+    currency: String(row.currency ?? "USD"),
+    metadata: meta,
+    payload: (row.payload as Record<string, unknown> | null) ?? null,
+    easnerTransactionId: etid,
+  }
+}
+
+/** Easetag rollback — push + email reversal notice (uses pre-rollback snapshot). */
+export async function notifyEasetagTransferReversed(
+  admin: SupabaseClient,
+  input: { userId: string; snapshot: EasetagDebitSnapshot },
+): Promise<void> {
+  await dispatchTransactionNotification(admin, {
+    userId: input.userId,
+    transactionId: input.snapshot.transactionId,
+    provider: input.snapshot.provider,
+    direction: input.snapshot.direction,
+    amount: input.snapshot.amount,
+    currency: input.snapshot.currency,
+    metadata: input.snapshot.metadata,
+    payload: input.snapshot.payload,
+    outcome: "reversed",
+    easnerTransactionId: input.snapshot.easnerTransactionId,
+    sendEmail: true,
+    sendPush: true,
+  }).catch((e) => console.warn("easetag reversal notification (non-fatal):", e))
 }

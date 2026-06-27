@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isBankOnrampDepositFlow, isVerificationDepositMetadata } from "@easner/shared"
-import { sendTransactionSettledPush } from "@/lib/notifications/expo-push"
-import { buildTransactionSettledPushContent } from "@/lib/notifications/transaction-settled-content"
+import { dispatchTransactionNotification } from "@/lib/notifications/dispatch"
 import { normalizeDirection } from "@/lib/ledger/transactions"
 
 /**
@@ -14,9 +13,7 @@ export function shouldDeferBankDepositSettledPush(metadata: unknown): boolean {
   return !isVerificationDepositMetadata(metadata as Record<string, unknown>)
 }
 
-/**
- * Send (idempotent) settled push for a bank pay-in row after `on_chain_settled_at` is known.
- */
+/** Send settled push + email for bank pay-in after `on_chain_settled_at` is known. */
 export async function notifyBankDepositPayInSettledPush(
   admin: SupabaseClient,
   transactionId: string,
@@ -41,20 +38,19 @@ export async function notifyBankDepositPayInSettledPush(
   const userId = String(row.user_id ?? "").trim()
   if (!userId) return
 
-  const { title, body } = buildTransactionSettledPushContent({
+  const etid =
+    typeof meta.easner_transaction_id === "string" ? meta.easner_transaction_id.trim() : undefined
+
+  await dispatchTransactionNotification(admin, {
+    userId,
+    transactionId: id,
     provider: "noah",
     direction: normalizeDirection(String(row.direction ?? "")),
     amount: typeof row.amount === "number" ? row.amount : Number(row.amount) || 0,
     currency: String(row.currency ?? "USD"),
     metadata: meta,
     payload: (row.payload as Record<string, unknown> | null) ?? null,
-  })
-
-  await sendTransactionSettledPush(admin, {
-    userId,
-    transactionId: id,
-    title,
-    body,
-    data: { type: "transaction_settled", transactionId: id },
-  }).catch((e) => console.warn("bank deposit settled push (non-fatal):", e))
+    outcome: "success",
+    easnerTransactionId: etid,
+  }).catch((e) => console.warn("bank deposit settled notification (non-fatal):", e))
 }

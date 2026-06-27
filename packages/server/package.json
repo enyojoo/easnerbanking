@@ -4,6 +4,9 @@
   "private": true,
   "main": "./lib/index.ts",
   "types": "./lib/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
   "exports": {
     ".": "./lib/index.ts"
   },
@@ -11,5 +14,8 @@
     "@easner/shared": "*",
     "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.57.2"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
   }
 }
