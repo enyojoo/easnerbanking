@@ -17,7 +17,7 @@ export type EmailAudienceProfile = {
   supportEmail: string
   /** Shown in footer for non-transactional mail */
   preferencesUrl: string
-  /** Optional founder signature block (business welcome) */
+  /** Optional founder signature block (welcome emails) */
   signatureHtml?: string
   signatureText?: string
 }
@@ -31,6 +31,14 @@ const PERSONAL_MOBILE_ORIGIN = resolvePersonalMobileAppOrigin(
   process.env.NEXT_PUBLIC_MOBILE_APP_URL,
 )
 
+const FOUNDER_SIGNATURE_HTML = `<p style="margin: 24px 0 0 0; color: #3D403D; font-size: 15px; line-height: 1.7;">
+        Best regards,<br><br>
+        <strong>Enyo Sam</strong><br>
+        Founder, Easner
+      </p>`
+
+const FOUNDER_SIGNATURE_TEXT = "\n\nBest regards,\n\nEnyo Sam\nFounder, Easner"
+
 export function getEmailAudienceProfile(audience: EmailAudience): EmailAudienceProfile {
   if (audience === "business") {
     return {
@@ -40,12 +48,8 @@ export function getEmailAudienceProfile(audience: EmailAudience): EmailAudienceP
       dashboardUrl: `${BUSINESS_BASE}/dashboard`,
       supportEmail: process.env.SENDGRID_REPLY_TO || "support@easner.com",
       preferencesUrl: `${BUSINESS_BASE}/settings/communication`,
-      signatureHtml: `<p style="margin: 24px 0 0 0; color: #3D403D; font-size: 15px; line-height: 1.7;">
-        Best regards,<br><br>
-        <strong>Enyo Sam</strong><br>
-        Founder, Easner
-      </p>`,
-      signatureText: "\n\nBest regards,\n\nEnyo Sam\nFounder, Easner",
+      signatureHtml: FOUNDER_SIGNATURE_HTML,
+      signatureText: FOUNDER_SIGNATURE_TEXT,
     }
   }
 
@@ -56,6 +60,8 @@ export function getEmailAudienceProfile(audience: EmailAudience): EmailAudienceP
     dashboardUrl: personalMobileDashboardUrl(PERSONAL_MOBILE_ORIGIN),
     supportEmail: process.env.SENDGRID_REPLY_TO || "support@easner.com",
     preferencesUrl: personalMobileNotificationsUrl(PERSONAL_MOBILE_ORIGIN),
+    signatureHtml: FOUNDER_SIGNATURE_HTML,
+    signatureText: FOUNDER_SIGNATURE_TEXT,
   }
 }
 
