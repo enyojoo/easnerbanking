@@ -1,11 +1,14 @@
 import { businessInfo } from "@/lib/business-info"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import type { Invoice } from "@/lib/b2b/types"
+import { invoiceCustomerContactLine } from "@/lib/invoices/invoice-reply-email"
 
 export interface InvoiceEmailData {
   invoice: Invoice
   invoiceViewUrl: string
   businessName: string
+  /** Merchant support email — used for Reply-To and footer contact line. */
+  businessReplyEmail?: string
 }
 
 /** Status-specific email copy */
@@ -74,6 +77,22 @@ function getBodyIntroPlain(data: InvoiceEmailData): string {
     : config.bodyIntroPlain
 }
 
+function invoiceContactFooter(data: InvoiceEmailData): { html: string; text: string } {
+  const merchantEmail = data.businessReplyEmail?.trim()
+  if (!merchantEmail) {
+    const support = process.env.SENDGRID_REPLY_TO?.trim() || "support@easner.com"
+    return {
+      html: `If you have any questions or think an error was made, please contact Easner at <a href="mailto:${support}">${support}</a>.`,
+      text: `If you have any questions or think an error was made, please contact Easner at ${support}.`,
+    }
+  }
+  const line = invoiceCustomerContactLine(data.businessName, merchantEmail)
+  return {
+    html: `If you have any questions about this invoice, contact <strong>${data.businessName}</strong> at <a href="mailto:${merchantEmail}">${merchantEmail}</a>.`,
+    text: line,
+  }
+}
+
 export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
   const { invoice, invoiceViewUrl, businessName } = data
   const dueDate = formatDate(invoice.dueDate, {
@@ -83,6 +102,7 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
   })
   const amount = formatCurrency(invoice.total, invoice.currency)
   const bodyIntro = getBodyIntro(data)
+  const contact = invoiceContactFooter(data)
 
   return `
 <!DOCTYPE html>
@@ -137,7 +157,7 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
 
     <div class="footer">
       <p>You're receiving this email because ${businessName} uses Easner Business Banking services to manage their business processes.</p>
-      <p>If you have any questions or think an error was made, please contact Easner Banking at <a href="mailto:support@easner.com">support@easner.com</a>.</p>
+      <p>${contact.html}</p>
       <p class="copyright">© 2026 Easner, Inc.</p>
     </div>
   </div>
@@ -155,6 +175,7 @@ export function generateInvoiceEmailText(data: InvoiceEmailData): string {
   })
   const amount = formatCurrency(invoice.total, invoice.currency)
   const bodyIntro = getBodyIntroPlain(data)
+  const contact = invoiceContactFooter(data)
 
   return `
 Dear ${invoice.customerName},
@@ -168,7 +189,7 @@ View Invoice: ${invoiceViewUrl}
 
 ---
 
-You're receiving this email because ${businessName} uses Easner Business Banking services to manage their business processes. If you have any questions or think an error was made, please contact Easner Banking at support@easner.com.
+You're receiving this email because ${businessName} uses Easner Business Banking services to manage their business processes. ${contact.text}
 
 © 2026 Easner, Inc.
   `.trim()

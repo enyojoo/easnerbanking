@@ -51,6 +51,7 @@ import type { Invoice } from "@/lib/b2b/types"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
+import { InvoiceReplyEmailNotice } from "@/components/invoices/invoice-reply-email-notice"
 import type { Account, StablecoinAccount } from "@/lib/finance-types"
 import {
   TIER2_COMPLETE_PLACEHOLDER,
@@ -316,6 +317,13 @@ export default function InvoicesPage() {
             </Button>
           </Link>
         </div>
+        {profile.invoiceReplyEmailSource !== "support" ? (
+          <InvoiceReplyEmailNotice
+            email={profile.invoiceReplyEmail}
+            source={profile.invoiceReplyEmailSource}
+            variant="invoices"
+          />
+        ) : null}
         <div className="flex space-x-1">
           {statusTabs.map((tab) => (
             <button

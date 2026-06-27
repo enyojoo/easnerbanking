@@ -20,6 +20,8 @@ export interface TransactionEmailData {
   transactionId: string
   easnerTransactionId?: string
   title: string
+  /** SendGrid subject — may differ from pushTitle on failed/reversed */
+  emailSubject?: string
   body: string
   amountDisplay: string
   counterpartyLabel?: string
@@ -60,6 +62,8 @@ export interface TeamInviteEmailData {
   businessName: string
   role: string
   acceptUrl: string
+  /** When false, footer uses pre-account copy (invitee not in `public.users` yet). */
+  recipientHasEasnerAccount?: boolean
 }
 
 export interface SecurityAlertEmailData {

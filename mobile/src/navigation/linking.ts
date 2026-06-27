@@ -43,6 +43,7 @@ export const webLinking: LinkingOptions<Record<string, unknown>> = {
       Recipients: 'user/recipients',
       Support: 'user/support',
       Profile: 'user/profile',
+      Notifications: 'user/notifications',
       TransactionDetails: 'user/transactions/:transactionId',
     },
   },

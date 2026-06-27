@@ -47,12 +47,14 @@ console.log(`  business: ${businessName} <${businessFrom}>`)
 console.log(`  reply-to: ${replyTo}`)
 
 console.log("\nLedger transaction emails:")
-const ledgerEmail =
-  String(process.env.LEDGER_TRANSACTION_EMAIL_ENABLED || "").trim().toLowerCase() === "true"
+const ledgerDisabled =
+  ["false", "0", "off", "no"].includes(
+    String(process.env.LEDGER_TRANSACTION_EMAIL_ENABLED ?? "").trim().toLowerCase(),
+  )
 console.log(
-  ledgerEmail
-    ? "  LEDGER_TRANSACTION_EMAIL_ENABLED=true (transaction emails ON)"
-    : "  LEDGER_TRANSACTION_EMAIL_ENABLED unset/false (transaction emails OFF until enabled)",
+  ledgerDisabled
+    ? "  LEDGER_TRANSACTION_EMAIL_ENABLED=false (transaction emails OFF)"
+    : "  default ON (set LEDGER_TRANSACTION_EMAIL_ENABLED=false to disable)",
 )
 
 process.exit(failed ? 1 : 0)

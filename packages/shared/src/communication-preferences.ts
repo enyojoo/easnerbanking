@@ -1,6 +1,7 @@
 /**
  * Stored in `public.user_preferences.communication_preferences` (jsonb).
  * Business app and mobile share the same row keyed by `user_id`.
+ * All categories and channels default to **on**; users opt out via Settings.
  */
 export type CommunicationChannels = {
   email: boolean

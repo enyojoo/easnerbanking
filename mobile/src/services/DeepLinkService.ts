@@ -97,6 +97,7 @@ export class DeepLinkService {
         SendAmount: '/user/send',
         Support: '/user/support',
         Profile: '/user/profile',
+        Notifications: '/user/notifications',
       }
 
       let path = screenMap[screen] || '/user/dashboard'

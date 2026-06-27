@@ -38,6 +38,7 @@ import { useAllowedBaseCurrencies } from "@/hooks/use-allowed-base-currencies"
 import { useAllowedCountryCodes } from "@/hooks/use-allowed-country-codes"
 import { filterCountriesByPolicy } from "@easner/shared"
 import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
+import { InvoiceReplyEmailNotice } from "@/components/invoices/invoice-reply-email-notice"
 
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
@@ -761,6 +762,10 @@ export function SettingsBusinessTab() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="supportEmail">Support Email</Label>
+            <p className="text-sm text-muted-foreground">
+              Set this so customer replies to invoice emails go to your billing inbox. Also shown on
+              invoice PDFs.
+            </p>
             <Input
               id="supportEmail"
               className={SETTINGS_CONTROL_SURFACE}
@@ -768,6 +773,12 @@ export function SettingsBusinessTab() {
               value={formData.email}
               onChange={(e) => handleInputChange("email", e.target.value)}
               disabled={editingSection !== "public"}
+            />
+            <InvoiceReplyEmailNotice
+              email={profile.invoiceReplyEmail}
+              source={profile.invoiceReplyEmailSource}
+              draftSupportEmail={editingSection === "public" ? formData.email : undefined}
+              variant="settings"
             />
           </div>
           <div className="space-y-2">

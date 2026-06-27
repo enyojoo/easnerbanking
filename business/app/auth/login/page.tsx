@@ -20,6 +20,7 @@ import {
 } from "@/lib/auth-mfa"
 import { getSafeNextPath } from "@/lib/auth/safe-next-path"
 import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
+import { useTeamInviteContext } from "@/lib/team-invite-storage"
 
 type Step = "password" | "mfa"
 
@@ -33,6 +34,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const successMessage = searchParams.get("message")
   const nextPath = getSafeNextPath(searchParams.get("next"))
+  const { isTeamInvite, invitePreview } = useTeamInviteContext()
 
   const [step, setStep] = useState<Step>("password")
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
@@ -154,8 +156,19 @@ export default function LoginPage() {
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle className="text-2xl font-bold">
-          {step === "password" ? "Welcome back" : "Two-Factor Authentication"}
+          {step === "password"
+            ? isTeamInvite
+              ? "Sign in to join your team"
+              : "Welcome back"
+            : "Two-Factor Authentication"}
         </CardTitle>
+        {step === "password" && isTeamInvite && invitePreview ? (
+          <p className="text-sm text-muted-foreground">
+            Sign in to join {invitePreview.businessName} as {invitePreview.role}.
+          </p>
+        ) : step === "password" && isTeamInvite ? (
+          <p className="text-sm text-muted-foreground">Sign in to accept your team invitation.</p>
+        ) : null}
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -219,6 +232,7 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     className="h-10"
+                    disabled={passwordSigningIn}
                   />
                 </div>
                 <div className="space-y-2">

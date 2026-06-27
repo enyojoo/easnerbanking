@@ -15,6 +15,7 @@ import { analytics } from "@/lib/analytics"
 import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
 import { clearBrowserQueryClient } from "@/lib/query/query-client"
 import { clearAllBusinessBrowserState } from "@/lib/query/web-persist"
+import { clearPendingTeamInvite, getPendingTeamInvite } from "@/lib/team-invite-storage"
 
 function parseAuthFragment(hash: string): Record<string, string> {
   const raw = hash.replace(/^#/, "")
@@ -183,12 +184,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // ignore storage errors
       }
       const hasPendingCountry = Boolean(countryCode) && !countryAlreadyApplied
+      const pendingInvite = getPendingTeamInvite()
+      const hasPendingInvite = Boolean(pendingInvite?.membershipId)
 
       try {
         const raw = localStorage.getItem(throttleKey)
         const last = raw ? Number(raw) : 0
         const MIN_MS = 6 * 60 * 60 * 1000 // 6h
-        if (!hasPendingCountry && Number.isFinite(last) && last > 0 && Date.now() - last < MIN_MS) {
+        if (!hasPendingCountry && !hasPendingInvite && Number.isFinite(last) && last > 0 && Date.now() - last < MIN_MS) {
           return
         }
       } catch {
@@ -214,9 +217,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ...(countryCode ? { countryCode } : {}),
             role,
             ...(bootstrapFullName ? { fullName: bootstrapFullName } : {}),
+            ...(pendingInvite?.membershipId ? { membershipId: pendingInvite.membershipId } : {}),
           }),
         })
+        const bootJson = (await bootRes.json().catch(() => ({}))) as {
+          joinedViaInvite?: boolean
+          error?: string
+          code?: string
+        }
         if (bootRes.ok) {
+          if (bootJson.joinedViaInvite) {
+            clearPendingTeamInvite()
+          }
           try {
             localStorage.setItem(throttleKey, String(Date.now()))
             // Server backfills org country (idempotent, only when empty); mark applied so we don't
@@ -240,6 +252,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch (e) {
             console.warn("ensure-sub-org error:", e)
           }
+        } else if (hasPendingInvite) {
+          console.warn("team invite bootstrap failed:", bootRes.status, bootJson.error ?? bootJson.code)
         }
       } catch (error) {
         console.error("auth bootstrap failed", error)

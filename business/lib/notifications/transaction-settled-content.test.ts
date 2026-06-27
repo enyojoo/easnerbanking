@@ -26,7 +26,7 @@ describe("buildTransactionSettledPushContent", () => {
         fiat_deposit_amount: 0.32,
       },
     })
-    expect(title).toBe("Bank verification credit")
+    expect(title).toBe("Bank verification deposit")
     expect(body).toBe("Received $0.32 from Chase")
   })
 
@@ -42,8 +42,41 @@ describe("buildTransactionSettledPushContent", () => {
         settled_amount: 9.95,
       },
     })
-    expect(title).toBe("Bank Deposit")
+    expect(title).toBe("Bank deposit complete")
     expect(body).toContain("Funds are now available")
+  })
+
+  it("uses transfer method headline for failed global payout", () => {
+    const { title, body } = buildTransactionSettledPushContent({
+      provider: "noah",
+      direction: "out",
+      amount: 4.52,
+      currency: "USD",
+      outcome: "failed",
+      failureReason: "Recipient bank rejected the transfer.",
+      metadata: {
+        payout_type: "global_fiat",
+        receive_amount: 5000,
+        receive_currency: "NGN",
+        payout_review: {
+          you_send_amount: 4,
+          total_debited: 4.52,
+          exchange_fee: 0.32,
+          processing_fee: 0.2,
+          exchange_rate: 1342.75,
+          send_currency: "USD",
+          receive_amount: 5000,
+          receive_currency: "NGN",
+          transfer_method: "Mobile money transfer",
+          processing_time: "Within minutes",
+        },
+        recipient_snapshot: { full_name: "SAMUEL ODIBA ENYOJO" },
+      },
+    })
+    expect(title).toBe("Mobile money transfer failed")
+    expect(body).toContain("Could not send")
+    expect(body).toContain("Recipient bank rejected")
+    expect(body).toContain("Any debited funds have been returned to your balance.")
   })
 
   it("uses receive fiat and corridor title for global payout send", () => {
@@ -71,7 +104,7 @@ describe("buildTransactionSettledPushContent", () => {
         recipient_snapshot: { full_name: "SAMUEL ODIBA ENYOJO" },
       },
     })
-    expect(title).toBe("Bank transfer")
+    expect(title).toBe("Bank transfer complete")
     expect(body).toBe("Sent ₦5,000 to Samuel Odiba Enyojo")
   })
 
@@ -100,7 +133,7 @@ describe("buildTransactionSettledPushContent", () => {
         },
       },
     })
-    expect(title).toBe("Stablecoin Transfer")
+    expect(title).toBe("Stablecoin transfer complete")
     expect(body).toBe("Sent $1 to Fjw9ot...WfP5Xc")
   })
 
@@ -117,7 +150,7 @@ describe("buildTransactionSettledPushContent", () => {
         beneficiary_name: "SAMUEL",
       },
     })
-    expect(title).toBe("Bank transfer")
+    expect(title).toBe("Bank transfer complete")
     expect(body).toContain("₦5,000")
     expect(body).toContain("Samuel")
   })

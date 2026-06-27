@@ -48,7 +48,7 @@ export const welcomeBusinessFixture: WelcomeEmailData = {
 export const welcomePersonalFixture: WelcomeEmailData = {
   firstName: "Sam",
   email: "sam@example.com",
-  dashboardUrl: "https://www.easner.com/dashboard",
+  dashboardUrl: "https://app.easner.com/user/dashboard",
   audience: "personal",
 }
 
@@ -73,7 +73,8 @@ export const teamInviteFixture: TeamInviteEmailData = {
   inviterName: "Alex Owner",
   businessName: "Acme LLC",
   role: "Admin",
-  acceptUrl: "https://business.easner.com/auth/signup?invite=1",
+  acceptUrl: "https://business.easner.com/auth/join/mem_abc123",
+  recipientHasEasnerAccount: false,
 }
 
 export const securityPasswordChangedFixture: SecurityAlertEmailData = {

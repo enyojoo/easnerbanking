@@ -8,6 +8,7 @@ import { countries } from "@/lib/countries"
 import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
 import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
+import type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
 
 export type BusinessProfile = {
   businessId: string | null
@@ -45,6 +46,9 @@ export type BusinessProfile = {
   /** Mirrored from `businesses` after Noah provisioning. */
   noahUsdVirtualAccountId: string | null
   noahEurVirtualAccountId: string | null
+  /** Resolved Reply-To for invoice emails (support → owner → sender). */
+  invoiceReplyEmail: string | null
+  invoiceReplyEmailSource: InvoiceReplyEmailSource | null
 }
 
 const DEFAULT_PROFILE: BusinessProfile = {
@@ -76,6 +80,8 @@ const DEFAULT_PROFILE: BusinessProfile = {
   canManageBusinessVerification: true,
   noahUsdVirtualAccountId: null,
   noahEurVirtualAccountId: null,
+  invoiceReplyEmail: null,
+  invoiceReplyEmailSource: null,
 }
 
 function countryCodeFromName(name: string | null | undefined): string | null {

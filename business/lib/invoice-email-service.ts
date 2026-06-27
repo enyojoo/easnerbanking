@@ -31,23 +31,38 @@ export async function sendInvoiceEmail(
   invoice: Invoice,
   invoiceViewUrl: string,
   pdfBuffer: Buffer,
-  options?: { businessName?: string },
+  options?: { businessName?: string; businessReplyEmail: string },
 ): Promise<SendInvoiceEmailResult> {
   if (!invoice.customerEmail?.trim()) {
     return { success: false, error: "Invoice has no customer email" }
   }
 
+  const businessReplyEmail = options?.businessReplyEmail?.trim()
+  if (!businessReplyEmail) {
+    return {
+      success: false,
+      error: "Business reply email is required for invoice delivery",
+    }
+  }
+
   try {
     ensureSendGridInitialized()
 
-    const fromEmail = process.env.SENDGRID_FROM_EMAIL || "invoices@easner.com"
-    const fromName = process.env.SENDGRID_FROM_NAME || "Easner Business"
+    const fromEmail =
+      process.env.SENDGRID_FROM_EMAIL_BUSINESS ||
+      process.env.SENDGRID_FROM_EMAIL ||
+      "invoices@easner.com"
+    const fromName =
+      process.env.SENDGRID_FROM_NAME_BUSINESS ||
+      process.env.SENDGRID_FROM_NAME ||
+      "Easner Business"
     const businessName = options?.businessName?.trim() || businessInfo.name
 
     const data: InvoiceEmailData = {
       invoice,
       invoiceViewUrl,
       businessName,
+      businessReplyEmail,
     }
 
     const html = generateInvoiceEmailHtml(data)
@@ -57,6 +72,7 @@ export async function sendInvoiceEmail(
     const msg = {
       to: invoice.customerEmail,
       from: { email: fromEmail, name: fromName },
+      replyTo: businessReplyEmail,
       subject,
       html,
       text,

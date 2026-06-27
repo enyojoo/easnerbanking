@@ -23,6 +23,12 @@ export {
   LOGIN_PIN_REGEX,
 } from "./constants/login-pin"
 export { APP_URLS, MOBILE_DEEP_LINK_HOSTS, isMobileDeepLinkHost } from "./constants/urls"
+export {
+  resolvePersonalMobileAppOrigin,
+  personalMobileDashboardUrl,
+  personalMobileNotificationsUrl,
+  personalMobileTransactionUrl,
+} from "./mobile-personal-links"
 export type { MobileDeepLinkHost } from "./constants/urls"
 export { buildAppleAppSiteAssociation, buildAssetLinks } from "./mobile-app-links"
 export { cn } from "./utils/cn"

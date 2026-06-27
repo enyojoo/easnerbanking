@@ -1,6 +1,12 @@
 /**
  * Business vs Personal email audience profiles (NAMING.md)
  */
+import {
+  personalMobileDashboardUrl,
+  personalMobileNotificationsUrl,
+  resolvePersonalMobileAppOrigin,
+} from "@easner/shared/mobile-personal-links"
+
 export type EmailAudience = "business" | "personal"
 
 export type EmailAudienceProfile = {
@@ -21,7 +27,9 @@ const BUSINESS_BASE =
   process.env.NEXT_PUBLIC_APP_URL ||
   "https://business.easner.com"
 
-const PERSONAL_BASE = process.env.NEXT_PUBLIC_APP_URL || "https://www.easner.com"
+const PERSONAL_MOBILE_ORIGIN = resolvePersonalMobileAppOrigin(
+  process.env.NEXT_PUBLIC_MOBILE_APP_URL,
+)
 
 export function getEmailAudienceProfile(audience: EmailAudience): EmailAudienceProfile {
   if (audience === "business") {
@@ -43,11 +51,11 @@ export function getEmailAudienceProfile(audience: EmailAudience): EmailAudienceP
 
   return {
     audience: "personal",
-    productName: "Easner Personal Banking",
+    productName: "Easner Banking",
     fromName: process.env.SENDGRID_FROM_NAME || "Easner",
-    dashboardUrl: `${PERSONAL_BASE}/dashboard`,
+    dashboardUrl: personalMobileDashboardUrl(PERSONAL_MOBILE_ORIGIN),
     supportEmail: process.env.SENDGRID_REPLY_TO || "support@easner.com",
-    preferencesUrl: `${PERSONAL_BASE}/settings/communication`,
+    preferencesUrl: personalMobileNotificationsUrl(PERSONAL_MOBILE_ORIGIN),
   }
 }
 

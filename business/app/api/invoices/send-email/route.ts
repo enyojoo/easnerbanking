@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { mapRowToInvoice, type B2bInvoiceRow } from "@/lib/b2b/map-invoice"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import { generateInvoicePdfBuffer } from "@/lib/generate-invoice-pdf"
-import { fetchInvoiceIssuerForBusiness } from "@/lib/invoices/issuer"
+import { fetchInvoiceIssuerForBusiness, resolveInvoiceReplyEmail } from "@/lib/invoices/issuer"
 import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-business"
 import { sendInvoiceEmail } from "@/lib/invoice-email-service"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
@@ -80,12 +80,28 @@ export async function POST(request: NextRequest) {
       : {}
 
     const issuer = await fetchInvoiceIssuerForBusiness(admin, ctx.businessId)
+    const businessReplyEmail = await resolveInvoiceReplyEmail(
+      admin,
+      ctx.businessId,
+      ctx.userId,
+    )
+    if (!businessReplyEmail) {
+      return NextResponse.json(
+        {
+          error:
+            "Add a support email in Settings → Business before sending invoices, so customers can reply to you.",
+        },
+        { status: 400 },
+      )
+    }
+
+    const issuerForCustomer = { ...issuer, email: businessReplyEmail }
 
     const pdfBuffer = await generateInvoicePdfBuffer(
       invoice,
       canProvision ? payIn.bankAccount : undefined,
       canProvision ? payIn.stablecoinAccount : undefined,
-      issuer,
+      issuerForCustomer,
     )
 
     const origin =
@@ -106,6 +122,7 @@ export async function POST(request: NextRequest) {
 
     const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {
       businessName: issuer.name,
+      businessReplyEmail,
     })
 
     if (!result.success) {

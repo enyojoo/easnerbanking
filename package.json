@@ -32,6 +32,8 @@
     "start:business": "turbo run start --filter=easner-business",
     "test:login-pin-vectors": "node scripts/login-pin-test-vectors.mjs",
     "test:server": "npm run test --workspace=@easner/server",
+    "email:preview-all": "npx tsx packages/server/scripts/send-all-email-previews.ts",
+    "email:render-supabase-auth": "npx tsx packages/server/scripts/render-supabase-auth-templates.ts",
     "sync:flags": "npm run sync:flags --workspace=@easner/shared",
     "postinstall": "node scripts/postinstall-patch-package.mjs"
   },

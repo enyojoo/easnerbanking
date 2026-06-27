@@ -59,6 +59,7 @@ export function parseDeepLinkFromUrl(url: string): PendingDeepLinkPayload | null
       'user/send': 'SendAmount',
       'user/support': 'Support',
       'user/profile': 'Profile',
+      'user/notifications': 'Notifications',
     }
 
     let screen = screenMap[segments.join('/')]
@@ -141,6 +142,9 @@ function navigateToDeepLinkScreen(
       break
     case 'Profile':
       navigationRef.navigate('Profile' as never, {} as never)
+      break
+    case 'Notifications':
+      navigationRef.navigate('Notifications' as never, {} as never)
       break
     case 'TransactionDetails':
       navigationRef.navigate('TransactionDetails' as never, params as never)

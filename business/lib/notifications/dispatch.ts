@@ -4,6 +4,7 @@ import {
   deriveTransactionNotification,
   descriptorToPushContent,
   parseCommunicationPreferences,
+  personalMobileTransactionUrl,
   type DeriveTransactionNotificationInput,
   type NotificationOutcome,
 } from "@easner/shared"
@@ -47,13 +48,12 @@ function descriptorToEmailData(
     process.env.NEXT_PUBLIC_BUSINESS_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     "https://business.easner.com"
-  const personalBase = process.env.NEXT_PUBLIC_APP_URL || "https://www.easner.com"
-  const base = audience === "business" ? businessBase : personalBase
   const id = input.easnerTransactionId || input.transactionId
   return {
     transactionId: input.transactionId,
     easnerTransactionId: input.easnerTransactionId,
     title: descriptor.title,
+    emailSubject: descriptor.emailSubject,
     body: descriptor.body,
     amountDisplay: descriptor.amountDisplay,
     counterpartyLabel: descriptor.counterpartyLabel,
@@ -70,7 +70,10 @@ function descriptorToEmailData(
           : "failed",
     outcome: descriptor.outcome,
     failureReason: descriptor.failureReason,
-    detailUrl: `${base}/transactions/${encodeURIComponent(id)}`,
+    detailUrl:
+      audience === "business"
+        ? `${businessBase}/transactions/${encodeURIComponent(id)}`
+        : personalMobileTransactionUrl(id, process.env.NEXT_PUBLIC_MOBILE_APP_URL),
     audience,
   }
 }
@@ -97,6 +100,8 @@ export async function dispatchTransactionNotification(
   input: DispatchTransactionNotificationInput,
 ): Promise<void> {
   const outcome = input.outcome ?? "success"
+  // Failed transfers restore debited funds — no separate reversal notifications.
+  if (outcome === "reversed") return
   const descriptor = deriveTransactionNotification({ ...input, outcome })
   const { title, body } = descriptorToPushContent(descriptor)
 
@@ -106,8 +111,10 @@ export async function dispatchTransactionNotification(
 
   const prefs = await fetchCommunicationPreferences(admin, input.userId)
   const parsed = parseCommunicationPreferences(prefs)
+  const audience = await resolveEmailAudience(admin, input.userId)
 
-  if (sendPush && parsed.channels.push) {
+  // Business is email-only — no Expo push.
+  if (audience !== "business" && sendPush && parsed.channels.push) {
     await sendTransactionSettledPush(admin, {
       userId: input.userId,
       transactionId: input.transactionId,
@@ -120,7 +127,6 @@ export async function dispatchTransactionNotification(
   if (sendEmailChannel && parsed.channels.email) {
     const email = input.userEmail?.trim() || (await fetchUserEmail(admin, input.userId))
     if (email) {
-      const audience = await resolveEmailAudience(admin, input.userId)
       const emailData = descriptorToEmailData(descriptor, input, audience)
       const { emailService } = await import("@easner/server")
       await emailService
@@ -133,7 +139,7 @@ export async function dispatchTransactionNotification(
     !isLedgerTransactionEmailEnabled()
   ) {
     console.info(
-      `[email] skipped ledger transaction email user=${input.userId} tx=${input.transactionId}: LEDGER_TRANSACTION_EMAIL_ENABLED is off`,
+      `[email] skipped ledger transaction email user=${input.userId} tx=${input.transactionId}: LEDGER_TRANSACTION_EMAIL_ENABLED=false`,
     )
   }
 

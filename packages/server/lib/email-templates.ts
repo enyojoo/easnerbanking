@@ -1,5 +1,6 @@
 // Email templates — design-system aligned, Business vs Personal variants
 
+import { personalMobileTransactionUrl } from "@easner/shared/mobile-personal-links"
 import {
   generateBaseEmailTemplate,
   generateTransactionDetailsTable,
@@ -17,16 +18,23 @@ import type {
 
 const CONTACT_URL = "https://easner.com/contact"
 
+const WELCOME_PERSONAL_PREHEADER =
+  "Verify your identity and start using Easner Mobile."
+
+const WELCOME_BUSINESS_PREHEADER =
+  "Complete KYB, fund your account, and explore global payouts and collections."
+
 function txDetailUrl(data: TransactionEmailData, audience: EmailAudience): string {
   if (data.detailUrl) return data.detailUrl
-  const base =
-    audience === "business"
-      ? process.env.NEXT_PUBLIC_BUSINESS_URL ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        "https://business.easner.com"
-      : process.env.NEXT_PUBLIC_APP_URL || "https://www.easner.com"
   const id = data.easnerTransactionId || data.transactionId
-  return `${base}/transactions/${encodeURIComponent(id)}`
+  if (audience === "business") {
+    const base =
+      process.env.NEXT_PUBLIC_BUSINESS_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "https://business.easner.com"
+    return `${base}/transactions/${encodeURIComponent(id)}`
+  }
+  return personalMobileTransactionUrl(id, process.env.NEXT_PUBLIC_MOBILE_APP_URL)
 }
 
 function buildTransactionDetailRows(data: TransactionEmailData): TransactionDetailRow[] {
@@ -55,9 +63,13 @@ function buildTransactionDetailRows(data: TransactionEmailData): TransactionDeta
   return rows
 }
 
+function transactionEmailSubject(data: TransactionEmailData): string {
+  return data.emailSubject?.trim() || data.title
+}
+
 function transactionSettledTemplate(): EmailTemplate {
   return {
-    subject: (data: TransactionEmailData) => data.title,
+    subject: (data: TransactionEmailData) => transactionEmailSubject(data),
     preheader: (data: TransactionEmailData) => data.body,
     html: (data: TransactionEmailData, audience = "personal") => {
       const content = `
@@ -76,7 +88,7 @@ function transactionSettledTemplate(): EmailTemplate {
 
 function transactionFailedTemplate(): EmailTemplate {
   return {
-    subject: (data: TransactionEmailData) => `${data.title} — not completed`,
+    subject: (data: TransactionEmailData) => transactionEmailSubject(data),
     preheader: (data: TransactionEmailData) => data.body,
     html: (data: TransactionEmailData, audience = "personal") => {
       const reason = data.failureReason
@@ -103,7 +115,8 @@ function transactionFailedTemplate(): EmailTemplate {
 
 function transactionReversedTemplate(): EmailTemplate {
   return {
-    subject: (data: TransactionEmailData) => `${data.title} — reversed`,
+    subject: (data: TransactionEmailData) => transactionEmailSubject(data),
+    preheader: (data: TransactionEmailData) => data.body,
     html: (data: TransactionEmailData, audience = "personal") => {
       const content = `
         <p class="confirmation-text">${data.body}</p>
@@ -112,7 +125,7 @@ function transactionReversedTemplate(): EmailTemplate {
       return generateBaseEmailTemplate(data.title, "", content, {
         text: "View transaction",
         url: txDetailUrl(data, audience),
-      }, { audience, showPreferencesLink: false })
+      }, { audience, preheader: data.body, showPreferencesLink: false })
     },
     text: (data: TransactionEmailData, audience = "personal") =>
       `${data.title}\n\n${data.body}\n\nView: ${txDetailUrl(data, audience)}`,
@@ -122,7 +135,7 @@ function transactionReversedTemplate(): EmailTemplate {
 export const emailTemplates: Record<string, EmailTemplate> = {
   welcomeBusiness: {
     subject: "Welcome to Easner Business Banking",
-    preheader: "Complete KYB, fund your account, and explore global payouts and collections.",
+    preheader: WELCOME_BUSINESS_PREHEADER,
     html: (data: WelcomeEmailData) => {
       const profile = getEmailAudienceProfile("business")
       const content = `
@@ -150,11 +163,11 @@ export const emailTemplates: Record<string, EmailTemplate> = {
         ${profile.signatureHtml ?? ""}
       `
       return generateBaseEmailTemplate(
-        "Welcome to Easner Business",
+        "Welcome to Easner Business Banking",
         profile.productName,
         content,
         { text: "Go to dashboard", url: data.dashboardUrl || profile.dashboardUrl },
-        { audience: "business", preheader: "Complete KYB and explore your dashboard.", showPreferencesLink: true },
+        { audience: "business", preheader: WELCOME_BUSINESS_PREHEADER, showPreferencesLink: true },
       )
     },
     text: (data: WelcomeEmailData) => {
@@ -178,14 +191,14 @@ ${profile.signatureText ?? ""}`
   },
 
   welcomePersonal: {
-    subject: "Welcome to Easner Personal Banking",
-    preheader: "Verify your identity and start moving money with banking-simple screens.",
+    subject: "Welcome to Easner Banking",
+    preheader: WELCOME_PERSONAL_PREHEADER,
     html: (data: WelcomeEmailData) => {
       const profile = getEmailAudienceProfile("personal")
       const content = `
         <p class="welcome-text">Hi ${data.firstName},</p>
         <p class="confirmation-text">
-          Welcome to Easner Mobile — your Easner Personal Banking account is ready. Send, receive, and track money in screens that feel like banking, not crypto complexity.
+          Welcome to Easner Mobile — your Easner Banking account is ready. Send, receive, and track money in screens that feel like banking, not crypto complexity.
         </p>
         <div class="security-note">
           <h3>Get started</h3>
@@ -200,16 +213,16 @@ ${profile.signatureText ?? ""}`
         </p>
       `
       return generateBaseEmailTemplate(
-        "Welcome to Easner",
+        "Welcome to Easner Banking",
         profile.productName,
         content,
         { text: "Open the app", url: data.dashboardUrl || profile.dashboardUrl },
-        { audience: "personal", preheader: "Verify and start using Easner Mobile.", showPreferencesLink: true },
+        { audience: "personal", preheader: WELCOME_PERSONAL_PREHEADER, showPreferencesLink: true },
       )
     },
     text: (data: WelcomeEmailData) => {
       const profile = getEmailAudienceProfile("personal")
-      return `Welcome to Easner Personal Banking
+      return `Welcome to Easner Banking
 
 Hi ${data.firstName},
 
@@ -233,24 +246,31 @@ ${data.dashboardUrl || profile.dashboardUrl}`
   kycRejected: verificationTemplate("KYC", "personal", "rejected"),
 
   teamInvitation: {
-    subject: (data: TeamInviteEmailData) => `You're invited to ${data.businessName} on Easner`,
+    subject: (data: TeamInviteEmailData) =>
+      `You're invited to ${data.businessName} on Easner Business`,
     html: (data: TeamInviteEmailData) => {
       const content = `
         <p class="confirmation-text">
           ${data.inviterName} invited you to join <strong>${data.businessName}</strong> on Easner Business as <strong>${data.role}</strong>.
         </p>
-        <p class="confirmation-text">Accept the invitation to access the business dashboard.</p>
+        <p class="confirmation-text">
+          Use <strong>${data.inviteeEmail}</strong> when you create an account or sign in to accept this invitation.
+        </p>
       `
       return generateBaseEmailTemplate(
         "Team invitation",
         data.businessName,
         content,
         { text: "Accept invitation", url: data.acceptUrl },
-        { audience: "business", showPreferencesLink: false },
+        {
+          audience: "business",
+          showPreferencesLink: false,
+          recipientHasEasnerAccount: data.recipientHasEasnerAccount !== false,
+        },
       )
     },
     text: (data: TeamInviteEmailData) =>
-      `${data.inviterName} invited you to ${data.businessName} as ${data.role}.\n\nAccept: ${data.acceptUrl}`,
+      `${data.inviterName} invited you to ${data.businessName} as ${data.role}.\n\nUse ${data.inviteeEmail} when you create an account or sign in.\n\nAccept: ${data.acceptUrl}`,
   },
 
   passwordChanged: securityTemplate("password_changed"),
@@ -285,23 +305,38 @@ ${data.dashboardUrl || profile.dashboardUrl}`
   },
 }
 
+function verificationSubject(kind: "KYB" | "KYC", status: VerificationEmailData["status"]): string {
+  if (kind === "KYC") {
+    const kycSubjects = {
+      submitted: "Your Easner KYC verification submitted",
+      approved: "Your Easner KYC verification approved",
+      rejected: "Your Easner KYC verification update",
+    } as const
+    return kycSubjects[status]
+  }
+  const kybSubjects = {
+    submitted: "Your Easner Business KYB verification submitted",
+    approved: "Your Easner Business KYB verification approved",
+    rejected: "Your Easner Business KYB verification update",
+  } as const
+  return kybSubjects[status]
+}
+
 function verificationTemplate(
   kind: "KYB" | "KYC",
   audience: EmailAudience,
   status: VerificationEmailData["status"],
 ): EmailTemplate {
-  const titles = {
-    submitted: `${kind} verification submitted`,
-    approved: `${kind} verification approved`,
-    rejected: `${kind} verification update`,
-  }
+  const subjectLine = verificationSubject(kind, status)
   const bodies = {
     submitted: `We've received your ${kind} verification. We'll email you when there is an update.`,
     approved: `Your ${kind} verification is approved. You can now access features where enabled for your profile.`,
     rejected: `Your ${kind} verification could not be approved at this time.`,
   }
+  const bodyLine = bodies[status]
   return {
-    subject: () => titles[status],
+    subject: () => subjectLine,
+    preheader: () => bodyLine,
     html: (data: VerificationEmailData) => {
       const reasons =
         status === "rejected" && data.rejectionReasons?.length
@@ -314,18 +349,18 @@ function verificationTemplate(
         ${reasons}
       `
       return generateBaseEmailTemplate(
-        titles[status],
-        profile.productName,
+        subjectLine,
+        "",
         content,
         status === "approved"
           ? { text: "Go to dashboard", url: data.dashboardUrl || profile.dashboardUrl }
           : undefined,
-        { audience, showPreferencesLink: false },
+        { audience, showPreferencesLink: false, preheader: bodyLine },
       )
     },
     text: (data: VerificationEmailData) => {
       const profile = getEmailAudienceProfile(audience)
-      let t = `${titles[status]}\n\n${bodies[status]}`
+      let t = `${subjectLine}\n\n${bodies[status]}`
       if (status === "rejected" && data.rejectionReasons?.length) {
         t += `\n\nDetails: ${data.rejectionReasons.join("; ")}`
       }
@@ -335,33 +370,70 @@ function verificationTemplate(
   }
 }
 
+const PERSONAL_SECURITY_BATCH_SUBJECT = "Security update on your Easner account"
+const BUSINESS_SECURITY_BATCH_SUBJECT = "Security update on your Easner Business account"
+
+function securityEmailSubject(
+  alertType: SecurityAlertEmailData["alertType"],
+  audience: EmailAudience,
+): string {
+  if (
+    audience === "personal" &&
+    (alertType === "mfa_enabled" || alertType === "mfa_disabled" || alertType === "new_device")
+  ) {
+    return PERSONAL_SECURITY_BATCH_SUBJECT
+  }
+  if (
+    audience === "business" &&
+    (alertType === "mfa_enabled" || alertType === "mfa_disabled" || alertType === "new_device")
+  ) {
+    return BUSINESS_SECURITY_BATCH_SUBJECT
+  }
+  if (audience === "business") {
+    const businessCopy: Record<SecurityAlertEmailData["alertType"], string> = {
+      password_changed: "Your Easner Business password was changed",
+      password_reset_completed: "Your Easner Business password was reset",
+      mfa_enabled: BUSINESS_SECURITY_BATCH_SUBJECT,
+      mfa_disabled: BUSINESS_SECURITY_BATCH_SUBJECT,
+      new_device: BUSINESS_SECURITY_BATCH_SUBJECT,
+    }
+    return businessCopy[alertType]
+  }
+  const copy: Record<SecurityAlertEmailData["alertType"], string> = {
+    password_changed: "Your Easner password was changed",
+    password_reset_completed: "Your Easner password was reset",
+    mfa_enabled: "Two-factor authentication enabled",
+    mfa_disabled: "Two-factor authentication disabled",
+    new_device: "New device registered on your Easner account",
+  }
+  return copy[alertType]
+}
+
 function securityTemplate(alertType: SecurityAlertEmailData["alertType"]): EmailTemplate {
-  const copy: Record<SecurityAlertEmailData["alertType"], { subject: string; body: string }> = {
+  const copy: Record<SecurityAlertEmailData["alertType"], { body: string }> = {
     password_changed: {
-      subject: "Your Easner password was changed",
       body: "Your account password was just changed. If you did not make this change, contact support immediately.",
     },
     password_reset_completed: {
-      subject: "Your Easner password was reset",
       body: "Your account password was reset successfully. If you did not request this, contact support immediately.",
     },
     mfa_enabled: {
-      subject: "Two-factor authentication enabled",
       body: "Two-factor authentication was enabled on your Easner account.",
     },
     mfa_disabled: {
-      subject: "Two-factor authentication disabled",
       body: "Two-factor authentication was disabled on your Easner account. If you did not make this change, contact support immediately.",
     },
     new_device: {
-      subject: "New device registered on your Easner account",
       body: "A new device was registered to receive notifications on your account.",
     },
   }
   const c = copy[alertType]
   return {
-    subject: () => c.subject,
+    subject: (_data: SecurityAlertEmailData, audience = "personal") =>
+      securityEmailSubject(alertType, audience),
+    preheader: (_data: SecurityAlertEmailData) => c.body,
     html: (data: SecurityAlertEmailData, audience = "personal") => {
+      const subject = securityEmailSubject(alertType, audience)
       const device =
         data.deviceLabel && alertType === "new_device"
           ? `<p class="confirmation-text">Device: ${data.deviceLabel}</p>`
@@ -371,12 +443,14 @@ function securityTemplate(alertType: SecurityAlertEmailData["alertType"]): Email
         ${device}
       `
       const profile = getEmailAudienceProfile(audience)
-      return generateBaseEmailTemplate(c.subject, "", content, {
+      return generateBaseEmailTemplate(subject, "", content, {
         text: "Contact support",
         url: `mailto:${profile.supportEmail}`,
-      }, { audience, showPreferencesLink: false })
+      }, { audience, showPreferencesLink: false, preheader: c.body })
     },
-    text: (data: SecurityAlertEmailData) =>
-      `${c.subject}\n\n${c.body}${data.deviceLabel ? `\nDevice: ${data.deviceLabel}` : ""}`,
+    text: (data: SecurityAlertEmailData, audience = "personal") => {
+      const subject = securityEmailSubject(alertType, audience)
+      return `${subject}\n\n${c.body}${data.deviceLabel ? `\nDevice: ${data.deviceLabel}` : ""}`
+    },
   }
 }

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { emailService } from "@easner/server"
+import { isEmailOwnerOfAnotherBusiness, normalizeInviteEmail, recipientHasEasnerAccount } from "@/lib/business/claim-team-invite"
+import { buildTeamInvitePath } from "@/lib/team-invite-storage"
 
 type TeamMember = {
   id: string
@@ -176,21 +178,61 @@ export async function POST(request: Request) {
   const ownerCheck = await requireOwner(admin, user.id)
   if ("error" in ownerCheck) return ownerCheck.error
 
-  const rows = invites.map((row) => ({
-    business_id: ownerCheck.orgId,
-    user_id: null,
-    full_name: row.fullName,
-    email: row.email,
-    role: row.role.toLowerCase(),
-    status: "invited",
-    invited_by: user.id,
-    updated_at: new Date().toISOString(),
-  }))
+  const ownerEmail = normalizeInviteEmail(user.email ?? "")
+  const upsertedInvites: Array<{ id: string; email: string; fullName: string; role: string }> = []
 
-  const { error } = await admin
-    .from("business_memberships")
-    .upsert(rows, { onConflict: "business_id,email" })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  for (const row of invites) {
+    if (ownerEmail && row.email === ownerEmail) {
+      return NextResponse.json({ error: "You cannot invite your own email address." }, { status: 400 })
+    }
+
+    const { data: activeMembership } = await admin
+      .from("business_memberships")
+      .select("id,status")
+      .eq("business_id", ownerCheck.orgId)
+      .eq("email", row.email)
+      .maybeSingle()
+
+    if (activeMembership && activeMembership.status !== "invited") {
+      return NextResponse.json(
+        { error: `${row.email} is already a member of this organization.` },
+        { status: 400 },
+      )
+    }
+
+    if (await isEmailOwnerOfAnotherBusiness(admin, row.email, ownerCheck.orgId)) {
+      return NextResponse.json(
+        { error: `${row.email} already owns another Easner Business organization.` },
+        { status: 400 },
+      )
+    }
+
+    const { data: upserted, error: upsertError } = await admin
+      .from("business_memberships")
+      .upsert(
+        {
+          business_id: ownerCheck.orgId,
+          user_id: null,
+          full_name: row.fullName,
+          email: row.email,
+          role: row.role.toLowerCase(),
+          status: "invited",
+          invited_by: user.id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "business_id,email" },
+      )
+      .select("id,email")
+      .single()
+
+    if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 })
+    upsertedInvites.push({
+      id: upserted.id,
+      email: row.email,
+      fullName: row.fullName,
+      role: row.role,
+    })
+  }
 
   const { data: business } = await admin
     .from("businesses")
@@ -209,7 +251,9 @@ export async function POST(request: Request) {
     process.env.NEXT_PUBLIC_APP_URL ||
     "https://business.easner.com"
 
-  for (const row of invites) {
+  for (const row of upsertedInvites) {
+    const acceptUrl = `${acceptBase}${buildTeamInvitePath(row.id)}`
+    const hasAccount = await recipientHasEasnerAccount(admin, row.email)
     await emailService
       .sendEmail(
         {
@@ -221,7 +265,8 @@ export async function POST(request: Request) {
             inviterName,
             businessName,
             role: row.role,
-            acceptUrl: `${acceptBase}/auth/signup?invite=1`,
+            acceptUrl,
+            recipientHasEasnerAccount: hasAccount,
           },
         },
         undefined,
