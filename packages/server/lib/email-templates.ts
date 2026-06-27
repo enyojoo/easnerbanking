@@ -1,4 +1,4 @@
-// Email templates — design-system aligned, Business vs Personal variants
+// Email templates – design-system aligned, Business vs Personal variants
 
 import { personalMobileTransactionUrl } from "@easner/shared/mobile-personal-links"
 import {
@@ -141,14 +141,14 @@ export const emailTemplates: Record<string, EmailTemplate> = {
       const content = `
         <p class="welcome-text">Dear ${data.firstName},</p>
         <p class="confirmation-text">
-          Congratulations on creating your Easner Business account. We're excited to have you with us as you start managing multi-currency accounts, global payouts, collections, and more — all in one dashboard.
+          Congratulations on creating your Easner Business account. We're excited to have you with us as you start managing multi-currency accounts, global payouts, collections, and more – all in one dashboard.
         </p>
         <div class="security-note">
           <h3>Quick next steps</h3>
           <p>
-            <strong>Complete your KYB verification</strong> — Log in at business.easner.com and finish business verification. This usually takes just a few minutes and unlocks full access where supported.<br><br>
-            <strong>Fund your account</strong> — Add funds via USD or EUR bank accounts or stablecoin to start sending payouts or collecting payments where enabled.<br><br>
-            <strong>Explore the platform</strong> — Multi-currency balances, global payouts, invoicing, QR Pay, team controls, and reporting.
+            <strong>Complete your KYB verification</strong> – Log in at business.easner.com and finish business verification. This usually takes just a few minutes and unlocks full access where supported.<br><br>
+            <strong>Fund your account</strong> – Add funds via USD or EUR bank accounts or stablecoin to start sending payouts or collecting payments where enabled.<br><br>
+            <strong>Explore the platform</strong> – Multi-currency balances, global payouts, invoicing, QR Pay, team controls, and reporting.
           </p>
         </div>
         <p class="confirmation-text">
@@ -198,19 +198,20 @@ ${profile.signatureText ?? ""}`
       const content = `
         <p class="welcome-text">Hi ${data.firstName},</p>
         <p class="confirmation-text">
-          Welcome to Easner Mobile — your Easner Banking account is ready. Send, receive, and track money in screens that feel like banking, not crypto complexity.
+          Congratulations on creating your Easner banking account. Send, receive, and track money in screens that feel like traditional banking, no complexity, no friction.
         </p>
         <div class="security-note">
           <h3>Get started</h3>
           <p>
-            Complete identity verification in the app to unlock accounts and transfers where supported.<br>
-            Add funds via bank deposit or stablecoin where enabled.<br>
+            Complete identity verification in the app to unlock accounts and transfers where supported.<br><br>
+            Add funds via bank deposit or stablecoin where enabled.<br><br>
             Save recipients and track activity in real time.
           </p>
         </div>
         <p class="confirmation-text">
           Fees and FX may apply and are shown before you confirm. Availability depends on verification, jurisdiction, and partner enablement.
         </p>
+        ${profile.signatureHtml ?? ""}
       `
       return generateBaseEmailTemplate(
         "Welcome to Easner Banking",
@@ -226,11 +227,17 @@ ${profile.signatureText ?? ""}`
 
 Hi ${data.firstName},
 
-Your Easner Mobile account is ready. Complete verification in the app, then send and receive where supported.
+Congratulations on creating your Easner banking account. Send, receive, and track money in screens that feel like traditional banking, no complexity, no friction.
+
+Complete identity verification in the app to unlock accounts and transfers where supported.
+
+Add funds via bank deposit or stablecoin where enabled.
+
+Save recipients and track activity in real time.
 
 Fees and FX may apply; shown before you confirm.
 
-${data.dashboardUrl || profile.dashboardUrl}`
+${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
     },
   },
 
@@ -259,7 +266,7 @@ ${data.dashboardUrl || profile.dashboardUrl}`
       `
       return generateBaseEmailTemplate(
         "Team invitation",
-        data.businessName,
+        "",
         content,
         { text: "Accept invitation", url: data.acceptUrl },
         {
@@ -281,7 +288,7 @@ ${data.dashboardUrl || profile.dashboardUrl}`
 
   adminTransactionNotification: {
     subject: (data: { status?: string; transactionId?: string }) =>
-      `New transfer ${data.status === "pending" ? "created" : "updated"} — #${data.transactionId}`,
+      `New transfer ${data.status === "pending" ? "created" : "updated"} – #${data.transactionId}`,
     html: (data: { status?: string; userName?: string }) => {
       const userName =
         data.userName && data.userName !== "User" && data.userName !== "Unknown"
@@ -300,7 +307,7 @@ ${data.dashboardUrl || profile.dashboardUrl}`
     },
     text: (data: { status?: string; transactionId?: string }) => {
       const adminUrl = process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"
-      return `Transaction ${data.transactionId} — ${data.status}\n${adminUrl}/transactions`
+      return `Transaction ${data.transactionId} – ${data.status}\n${adminUrl}/transactions`
     },
   },
 }
@@ -315,9 +322,9 @@ function verificationSubject(kind: "KYB" | "KYC", status: VerificationEmailData[
     return kycSubjects[status]
   }
   const kybSubjects = {
-    submitted: "Your Easner Business KYB verification submitted",
-    approved: "Your Easner Business KYB verification approved",
-    rejected: "Your Easner Business KYB verification update",
+    submitted: "Your Easner KYB verification submitted",
+    approved: "Your Easner KYB verification approved",
+    rejected: "Your Easner KYB verification update",
   } as const
   return kybSubjects[status]
 }

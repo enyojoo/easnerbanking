@@ -65,6 +65,8 @@ describe("emailTemplates", () => {
     const html = emailTemplates.welcomePersonal.html(templateFixtures.welcomePersonal, "personal")
     expect(html).toContain("https://app.easner.com/user/dashboard")
     expect(html).not.toContain('class="email-subtitle">Easner Banking')
+    expect(html).toContain("Enyo Sam")
+    expect(html).toContain("Founder, Easner")
   })
 
   it("personal KYC templates omit product name header subtitle", () => {
@@ -141,16 +143,23 @@ describe("emailTemplates", () => {
     expect(html).not.toContain('class="email-subtitle">Easner Business Banking')
   })
 
+  it("team invitation omits business name header subtitle", () => {
+    const html = emailTemplates.teamInvitation.html(templateFixtures.teamInvitation, "business")
+    expect(html).not.toContain('class="email-subtitle">Acme LLC')
+    expect(html).not.toContain('class="email-subtitle">')
+    expect(html).toContain("Acme LLC")
+  })
+
   it("business KYB subjects match brand pattern", () => {
     expect(
       emailTemplates.kybSubmitted.subject(templateFixtures.kybSubmitted, "business"),
-    ).toBe("Your Easner Business KYB verification submitted")
+    ).toBe("Your Easner KYB verification submitted")
     expect(
       emailTemplates.kybApproved.subject(templateFixtures.kybApproved, "business"),
-    ).toBe("Your Easner Business KYB verification approved")
+    ).toBe("Your Easner KYB verification approved")
     expect(
       emailTemplates.kybRejected.subject(templateFixtures.kybRejected, "business"),
-    ).toBe("Your Easner Business KYB verification update")
+    ).toBe("Your Easner KYB verification update")
   })
 
   it("business security uses Easner Business subjects", () => {

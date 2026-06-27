@@ -21,8 +21,8 @@ Both templates use the Go template variable **`{{ .Token }}`** for the 6-digit c
 
 Suggested subjects:
 
-- Reset password: `Reset your password — Easner`
-- Confirm signup: `Verify your email — Easner`
+- Reset password: `Reset your password – Easner`
+- Confirm signup: `Verify your email – Easner`
 
 ## Notes
 

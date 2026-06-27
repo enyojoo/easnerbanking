@@ -58,7 +58,7 @@ const defaultEmail = EMAIL_BY_STATUS.sent
 export function getInvoiceEmailSubject(data: InvoiceEmailData): string {
   const { invoice, businessName } = data
   const config = EMAIL_BY_STATUS[invoice.status] ?? defaultEmail
-  return `${config.subject} ${businessName} — ${invoice.invoiceNumber}`
+  return `${config.subject} ${businessName} – ${invoice.invoiceNumber}`
 }
 
 function getBodyIntro(data: InvoiceEmailData): string {
@@ -149,7 +149,7 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
 
     <div class="invoice-details">
       <h3>Invoice details</h3>
-      <p><strong>Invoice #${invoice.invoiceNumber}</strong> — ${amount} ${invoice.currency}</p>
+      <p><strong>Invoice #${invoice.invoiceNumber}</strong> – ${amount} ${invoice.currency}</p>
       <p>Due: ${dueDate}</p>
     </div>
 
@@ -182,7 +182,7 @@ Dear ${invoice.customerName},
 
 ${bodyIntro}
 
-Invoice #${invoice.invoiceNumber} — ${amount} ${invoice.currency}
+Invoice #${invoice.invoiceNumber} – ${amount} ${invoice.currency}
 Due: ${dueDate}
 
 View Invoice: ${invoiceViewUrl}

@@ -107,7 +107,7 @@ Override origin with `NEXT_PUBLIC_MOBILE_APP_URL` in the business app env. Mobil
 
 - Product name in profile: **Easner Business Banking** (`email-audience.ts`).
 - SendGrid from name: **Easner Business** (`SENDGRID_FROM_NAME_BUSINESS`).
-- Subjects use **Easner Business** where mobile uses **Easner** / **Easner Banking** (KYB, security, welcome).
+- Subjects use **Easner Business** for security and welcome; **KYB** matches personal KYC pattern (**Your Easner KYB verification …**).
 - Email header: **no product subtitle** under the H1 (logo + title only), same as personal.
 - Transaction CTAs: `https://business.easner.com/transactions/{id}`; preferences: `/settings/communication`.
 
@@ -119,7 +119,7 @@ Separate from the shared template registry (`business/lib/invoice-email-service.
 |-------|--------|
 | **From** | Easner Business — `SENDGRID_FROM_EMAIL_BUSINESS` → `SENDGRID_FROM_EMAIL` → `invoices@easner.com` |
 | **Reply-To** | Org **Settings → Business → Support Email**; else org owner email; else sender’s account email |
-| **Subject** | `{Invoice from \| Reminder…} {businessName} — {invoiceNumber}` |
+| **Subject** | `{Invoice from \| Reminder…} {businessName} – {invoiceNumber}` |
 | **Attachment** | Invoice PDF (contact block uses same Reply-To email) |
 | **Footer** | “Contact **{businessName}** at **{reply email}**” |
 | **Trigger** | `POST /api/invoices/send-email` |
