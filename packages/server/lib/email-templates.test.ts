@@ -131,6 +131,15 @@ describe("emailTemplates", () => {
     expect(html).not.toContain("Transaction IDET-1001")
   })
 
+  it("transaction details stack on narrow screens", () => {
+    const html = emailTemplates.transactionFailed.html(templateFixtures.transactionFailed, "personal")
+    expect(html).toContain(".transaction-details-table tr,")
+    expect(html).toContain("display: block !important;")
+    expect(html).toContain("word-break: break-word;")
+    expect(html).toContain(".detail-row .detail-value {")
+    expect(html).toContain("text-align: left !important;")
+  })
+
   it("business welcome omits product name header subtitle", () => {
     const html = emailTemplates.welcomeBusiness.html(templateFixtures.welcomeBusiness, "business")
     expect(html).toContain("https://business.easner.com/dashboard")
