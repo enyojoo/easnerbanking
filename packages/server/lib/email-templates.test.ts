@@ -126,9 +126,18 @@ describe("emailTemplates", () => {
   it("transaction detail rows use table cells so label and value do not run together", () => {
     const data = templateFixtures.transactionFailed
     const html = emailTemplates.transactionFailed.html(data, "personal")
-    expect(html).toContain('<td class="detail-label">Transaction ID</td>')
-    expect(html).toContain('<td class="detail-value" align="right">ET-1001</td>')
+    expect(html).toContain('<td class="detail-label" style="width:38%;max-width:38%;vertical-align:top;">Transaction ID</td>')
+    expect(html).toContain(
+      '<td class="detail-value" align="right" style="width:62%;max-width:62%;word-break:break-word;overflow-wrap:anywhere;white-space:normal;vertical-align:top;">ET-1001</td>',
+    )
     expect(html).not.toContain("Transaction IDET-1001")
+  })
+
+  it("transaction detail values wrap instead of forcing nowrap overflow", () => {
+    const html = emailTemplates.transactionFailed.html(templateFixtures.transactionFailed, "personal")
+    expect(html).toContain("table-layout: fixed;")
+    expect(html).toContain("white-space:normal;vertical-align:top;")
+    expect(html).not.toMatch(/\.detail-value \{[^}]*white-space: nowrap/)
   })
 
   it("transaction details stack on narrow screens", () => {

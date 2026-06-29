@@ -22,6 +22,14 @@ function invoiceAmountLine(invoice: Invoice): string {
   return `${invoice.invoiceNumber} – ${amount} ${invoice.currency}`
 }
 
+function invoiceSummaryRows(invoice: Invoice): TransactionDetailRow[] {
+  const amount = formatCurrency(invoice.total, invoice.currency)
+  return [
+    { label: "Invoice number", value: invoice.invoiceNumber },
+    { label: "Amount", value: `${amount} ${invoice.currency}` },
+  ]
+}
+
 function invoiceDetailsTable(rows: TransactionDetailRow[]): string {
   return generateTransactionDetailsTable(rows)
 }
@@ -115,7 +123,7 @@ export function generateInvoiceViewedNotificationHtml(
     <p class="welcome-text">Hello ${businessName},</p>
     <p class="confirmation-text">${customer} viewed invoice <strong>${invoice.invoiceNumber}</strong>.</p>
     ${invoiceDetailsTable([
-      { label: "Invoice", value: invoiceAmountLine(invoice) },
+      ...invoiceSummaryRows(invoice),
       { label: "Customer", value: customer },
     ])}
     <p class="confirmation-text">
@@ -172,7 +180,7 @@ export function generateInvoiceReceiptEmailHtml(data: InvoiceReceiptEmailData): 
     <p class="welcome-text">Dear ${invoice.customerName},</p>
     <p class="confirmation-text">Thank you — we received your payment for this invoice from ${businessName}.</p>
     ${invoiceDetailsTable([
-      { label: "Invoice", value: invoiceAmountLine(invoice) },
+      ...invoiceSummaryRows(invoice),
       { label: "Status", value: "Paid", isStatus: true, statusClass: "completed" },
     ])}
   `.trim()
@@ -299,7 +307,7 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
     <p class="welcome-text">Dear ${invoice.customerName},</p>
     <p class="confirmation-text">${bodyIntro}</p>
     ${invoiceDetailsTable([
-      { label: "Invoice", value: invoiceAmountLine(invoice) },
+      ...invoiceSummaryRows(invoice),
       { label: "Due", value: dueDate },
     ])}
   `.trim()

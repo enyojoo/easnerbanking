@@ -203,6 +203,8 @@ function generateEmailLayoutStyles(): string {
             border-radius: 12px;
             padding: 22px;
             margin: 24px 0;
+            max-width: 100%;
+            overflow-wrap: anywhere;
         }
         .transaction-details h3 {
             color: ${t.graphite};
@@ -214,8 +216,10 @@ function generateEmailLayoutStyles(): string {
         }
         .transaction-details-table {
             width: 100%;
+            max-width: 100%;
             border-collapse: collapse;
             border-spacing: 0;
+            table-layout: fixed;
         }
         .detail-row td {
             padding: 8px 0;
@@ -224,14 +228,25 @@ function generateEmailLayoutStyles(): string {
             vertical-align: top;
         }
         .detail-row:last-child td { border-bottom: none; }
-        .detail-label { color: ${t.slate}; font-weight: 500; font-size: 13px; padding-right: 16px; }
+        .detail-label {
+            color: ${t.slate};
+            font-weight: 500;
+            font-size: 13px;
+            padding-right: 16px;
+            width: 38%;
+            max-width: 38%;
+        }
         .detail-value {
             color: ${t.graphite};
             font-weight: 600;
             font-size: 14px;
             font-variant-numeric: tabular-nums;
             text-align: right;
-            white-space: nowrap;
+            white-space: normal;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            width: 62%;
+            max-width: 62%;
         }
         .status-badge {
             display: inline-block;
@@ -508,7 +523,7 @@ export function generateTransactionDetailsTable(
       const valueHtml = row.isStatus
         ? `<span class="status-badge status-${row.statusClass ?? "completed"}">${escapeHtml(row.value)}</span>`
         : escapeHtml(row.value)
-      return `<tr class="detail-row"><td class="detail-label">${escapeHtml(row.label)}</td><td class="detail-value" align="right">${valueHtml}</td></tr>`
+      return `<tr class="detail-row"><td class="detail-label" style="width:38%;max-width:38%;vertical-align:top;">${escapeHtml(row.label)}</td><td class="detail-value" align="right" style="width:62%;max-width:62%;word-break:break-word;overflow-wrap:anywhere;white-space:normal;vertical-align:top;">${valueHtml}</td></tr>`
     })
     .join("")
 

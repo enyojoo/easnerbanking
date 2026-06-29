@@ -50,6 +50,10 @@ describe("invoice email templates", () => {
     expect(html).toContain("logo-light")
     expect(html).toContain("Dear Jane Doe")
     expect(html).toContain("Acme Ltd has sent you an invoice")
+    expect(html).toContain("Invoice number")
+    expect(html).toContain("INV-001")
+    expect(html).toContain("$100.00 USD")
+    expect(html).toContain("word-break:break-word")
     expect(html).not.toContain('<h1 class="email-title">')
     expect(html).toContain(
       "You're receiving this email because Acme Ltd uses Easner Business Banking services to manage their business processes.",
