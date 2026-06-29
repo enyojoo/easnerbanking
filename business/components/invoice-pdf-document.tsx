@@ -321,7 +321,8 @@ export function InvoicePDFDocument({
     phone: defaultBusinessInfo.phone,
   }
   const showPayCard =
-    (invoice.status === "open" || invoice.status === "sent" || invoice.status === "past_due") && bankAccount
+    (invoice.status === "open" || invoice.status === "sent" || invoice.status === "past_due") &&
+    (bankAccount || stablecoinAccount)
 
   const formatDatePdf = (dateString: string) =>
     formatDate(dateString, {
@@ -498,6 +499,7 @@ export function InvoicePDFDocument({
             </Text>
             <View style={styles.paymentTwoCol}>
               {/* Bank column */}
+              {bankAccount ? (
               <View style={styles.paymentCol}>
                 <View style={styles.paymentColContent}>
                   <Text style={styles.paymentColTitle}>
@@ -589,10 +591,12 @@ export function InvoicePDFDocument({
                   </View>
                 )}
               </View>
+              ) : null}
 
               {/* Stablecoin column */}
+              {stablecoinAccount ? (
               <View style={styles.paymentCol}>
-                {stablecoinAccount && qrDataUrl ? (
+                {qrDataUrl ? (
                   <>
                     <View style={styles.paymentColContent}>
                       <Text style={styles.paymentColTitle}>Stablecoin</Text>
@@ -635,10 +639,11 @@ export function InvoicePDFDocument({
                   </>
                 ) : (
                   <Text style={styles.sectionTextMuted}>
-                    Stablecoin not available for {invoice.currency}
+                    QR code unavailable
                   </Text>
                 )}
               </View>
+              ) : null}
             </View>
           </View>
         )}

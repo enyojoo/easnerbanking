@@ -17,6 +17,7 @@ import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import { BRAND } from "@/components/brand/brand-constants"
 import { LoadingSpinner } from "@/components/loading-spinner"
+import { useFxRates } from "@/hooks/queries"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
 
@@ -45,6 +46,7 @@ export default function InvoiceViewPage() {
   const [payIn, setPayIn] = useState<InvoicePayInPayload>({})
   const [loadState, setLoadState] = useState<"loading" | "error" | "ok">("loading")
   const [paymentTab, setPaymentTab] = useState<"bank" | "stablecoin">("bank")
+  const { data: fxRates = [] } = useFxRates()
   const [isDownloading, setIsDownloading] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
@@ -74,6 +76,7 @@ export default function InvoiceViewPage() {
           issuer?: InvoicePdfIssuer
           payIn?: InvoicePayInPayload
           businessEasetag?: string | null
+          paymentDisplay?: { defaultTab?: "bank" | "stablecoin" }
         }
         if (cancelled) return
         if (!r.ok || !data.invoice) {
@@ -89,7 +92,8 @@ export default function InvoiceViewPage() {
         setIssuer(data.issuer ?? null)
         const pi = data.payIn ?? {}
         setPayIn(pi)
-        setPaymentTab(pi.bankAccount ? "bank" : "stablecoin")
+        const tab = data.paymentDisplay?.defaultTab ?? (pi.bankAccount ? "bank" : "stablecoin")
+        setPaymentTab(tab)
         setLoadState("ok")
       })
       .catch(() => {
@@ -101,6 +105,24 @@ export default function InvoiceViewPage() {
   }, [parts])
 
   const displayIssuer = issuer ?? FALLBACK_ISSUER
+
+  const fxHint = useMemo(() => {
+    if (!invoice) return null
+    const invCur = invoice.currency.toUpperCase()
+    const localeCur =
+      typeof navigator !== "undefined" && navigator.language?.startsWith("en-GB")
+        ? "GBP"
+        : typeof navigator !== "undefined" && navigator.language?.includes("EU")
+          ? "EUR"
+          : "USD"
+    if (invCur === localeCur) return null
+    const rate = fxRates.find(
+      (r) => r.from_currency === invCur && r.to_currency === localeCur,
+    )
+    if (!rate) return null
+    const approx = invoice.total * rate.rate
+    return { localeCur, approx }
+  }, [invoice, fxRates])
 
   useEffect(() => {
     if (invoice?.id) {
@@ -382,6 +404,11 @@ export default function InvoiceViewPage() {
                   {formatCurrency(invoice.total, invoice.currency)}
                 </span>
               </div>
+              {fxHint ? (
+                <p className="text-xs text-muted-foreground text-right mt-1">
+                  ≈ {formatCurrency(fxHint.approx, fxHint.localeCur)} at today&apos;s rate (indicative only)
+                </p>
+              ) : null}
             </div>
           </div>
 

@@ -8,6 +8,11 @@ export type InvoiceMetadata = {
   tax?: number
   archived?: boolean
   memo?: string
+  poNumber?: string
+  paymentDisplay?: Invoice["paymentDisplay"]
+  documentType?: Invoice["documentType"]
+  creditForInvoiceId?: string
+  remindersSent?: Invoice["remindersSent"]
   notes?: Invoice["notes"]
   statusHistory?: Invoice["statusHistory"]
   paymentInfo?: InvoicePaymentInfo

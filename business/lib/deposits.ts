@@ -1,5 +1,6 @@
 import type { Invoice } from "@/lib/b2b/types"
 import type { Transaction } from "@/lib/finance-types"
+import { sortDepositsByMatch } from "@/lib/invoices/deposit-match"
 
 export type InboundDepositSource = "bank" | "stablecoin"
 
@@ -69,7 +70,7 @@ export function getInboundDeposits(
   })
 
   merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  return merged
+  return sortDepositsByMatch(invoice, merged)
 }
 
 function findTransactionById(id: string, transactions: Transaction[]): Transaction | undefined {

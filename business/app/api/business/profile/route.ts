@@ -10,6 +10,12 @@ import { isEasetagGloballyAvailable } from "@/lib/easetag-global"
 import { isValidIndustryId } from "@/lib/business-industries"
 import { isAllowedBaseCurrency } from "@/lib/accounts/currency-controls"
 import { isCountryAllowedForSurface } from "@/lib/jurisdiction-country-policy"
+import {
+  parseBusinessInvoiceSettings,
+  invoiceSettingsToDbPayload,
+  type BusinessInvoiceSettings,
+} from "@/lib/invoices/invoice-settings"
+import type { InvoicePaymentDefaults } from "@/lib/b2b/types"
 
 type UpdateBody = {
   businessName?: string
@@ -27,6 +33,7 @@ type UpdateBody = {
   state?: string
   postalCode?: string
   countryCode?: string
+  invoiceSettings?: Partial<InvoicePaymentDefaults>
 }
 
 function normalizeCountryCode(value: unknown): string | null {
@@ -140,7 +147,7 @@ async function ensureOrganizationId(
 
 async function fetchBusinessProfile(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string) {
   const richSelect =
-    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country,noah_kyb_status,kyb_verified_at"
+    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country,noah_kyb_status,kyb_verified_at,invoice_settings"
   const baseSelect = "id,name,easetag,logo_url,business_type,base_currency,description,country"
   const minimalSelect = "id,name,easetag,country"
 
@@ -199,6 +206,7 @@ export async function GET(request: Request) {
     country: string | null
     noah_kyb_status?: string | null
     kyb_verified_at?: string | null
+    invoice_settings?: unknown
   }
 
   const ownerNameFromAuth = ownerNameFromAuthUser(user)
@@ -277,12 +285,17 @@ export async function GET(request: Request) {
 
   let invoiceReplyEmail: string | null = null
   let invoiceReplyEmailSource: "support" | "owner" | "sender" | null = null
+  let invoiceSettings: BusinessInvoiceSettings = parseBusinessInvoiceSettings(null)
   if (orgId) {
     const reply = await resolveInvoiceReplyEmailWithSource(admin, orgId, user.id)
     if (reply) {
       invoiceReplyEmail = reply.email
       invoiceReplyEmailSource = reply.source
     }
+  }
+
+  if (org?.invoice_settings != null) {
+    invoiceSettings = parseBusinessInvoiceSettings(org.invoice_settings)
   }
 
   return NextResponse.json({
@@ -320,6 +333,7 @@ export async function GET(request: Request) {
       profileLocked,
       invoiceReplyEmail,
       invoiceReplyEmailSource,
+      invoiceSettings,
     },
   })
 }
@@ -457,6 +471,17 @@ export async function PUT(request: Request) {
   if (body.city !== undefined) updates.city = body.city?.trim() || null
   if (body.state !== undefined) updates.state = body.state?.trim() || null
   if (body.postalCode !== undefined) updates.postal_code = body.postalCode?.trim() || null
+
+  if (body.invoiceSettings !== undefined) {
+    const { data: existingBiz } = await admin
+      .from("businesses")
+      .select("invoice_settings")
+      .eq("id", businessId)
+      .maybeSingle()
+    const current = parseBusinessInvoiceSettings(existingBiz?.invoice_settings)
+    const merged = { ...current, ...body.invoiceSettings }
+    updates.invoice_settings = invoiceSettingsToDbPayload(merged)
+  }
 
   const { error } = await admin.from("businesses").update(updates).eq("id", businessId)
   if (!error && clearingLogo) {

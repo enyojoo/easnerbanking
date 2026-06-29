@@ -29,6 +29,18 @@
     {
       "path": "/api/cron/sync-crypto-rates",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/invoices/mark-past-due",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/internal/invoices/send-reminders",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/internal/invoices/generate-recurring",
+      "schedule": "0 7 * * *"
     }
   ]
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { isAllowedBaseCurrency } from "@/lib/accounts/currency-controls"
 import { mapRowToCustomerWithEmptyStats, type B2bCustomerRow } from "@/lib/b2b/map-customer"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
+import { normalizePaymentTermsDays } from "@/lib/invoices/due-date"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 export async function GET(request: Request) {
@@ -31,6 +32,7 @@ type CreateBody = {
   address?: string
   currency?: string
   status?: "active" | "inactive"
+  paymentTermsDays?: number
 }
 
 export async function POST(request: Request) {
@@ -55,18 +57,23 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
+  const insertRow: Record<string, unknown> = {
+    business_id: ctx.businessId,
+    name,
+    email,
+    phone: String(body.phone ?? "").trim(),
+    company: String(body.company ?? "").trim(),
+    address: String(body.address ?? "").trim(),
+    currency: currencyRaw,
+    status: body.status === "inactive" ? "inactive" : "active",
+  }
+  if (body.paymentTermsDays != null) {
+    insertRow.payment_terms_days = normalizePaymentTermsDays(body.paymentTermsDays)
+  }
+
   const { data, error } = await admin
     .from("business_customers")
-    .insert({
-      business_id: ctx.businessId,
-      name,
-      email,
-      phone: String(body.phone ?? "").trim(),
-      company: String(body.company ?? "").trim(),
-      address: String(body.address ?? "").trim(),
-      currency: currencyRaw,
-      status: body.status === "inactive" ? "inactive" : "active",
-    })
+    .insert(insertRow)
     .select("*")
     .single()
 

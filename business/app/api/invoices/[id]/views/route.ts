@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getInvoiceViewEvents } from "@/lib/invoice-view-events"
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id: invoiceId } = await params
@@ -11,13 +11,12 @@ export async function GET(
       return NextResponse.json({ error: "Invoice ID required" }, { status: 400 })
     }
 
-    const events = getInvoiceViewEvents(invoiceId)
-    return NextResponse.json({ views: events })
+    const events = await getInvoiceViewEvents(invoiceId)
+    return NextResponse.json({
+      views: events.map((e) => ({ viewedAt: e.viewedAt, viewerIp: e.viewerIp })),
+    })
   } catch (err) {
     console.error("Get invoice views error:", err)
-    return NextResponse.json(
-      { error: "Failed to get views" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to get views" }, { status: 500 })
   }
 }

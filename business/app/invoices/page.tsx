@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { 
   Plus, 
   Download,
@@ -16,6 +17,7 @@ import {
   Archive,
   ArchiveRestore,
   Trash2,
+  Search,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -42,6 +44,7 @@ import { formatDate, formatCurrency } from "@/lib/utils"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
 import { useInvoicesList } from "@/hooks/queries/use-invoices"
+import { isInvoicePastDue } from "@/lib/invoices/past-due"
 import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutations/use-invoices"
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
@@ -113,18 +116,6 @@ export default function InvoicesPage() {
   }
   const [activeTab, setActiveTab] = useState("all")
 
-  useEffect(() => {
-    const deletedId = searchParams.get("deleted")
-    if (!deletedId) return
-    void (async () => {
-      try {
-        await deleteInvoiceMut.mutateAsync(deletedId)
-      } finally {
-        router.replace("/invoices")
-      }
-    })()
-  }, [searchParams, deleteInvoiceMut, router])
-
   const [searchTerm, setSearchTerm] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null)
@@ -137,8 +128,27 @@ export default function InvoicesPage() {
   const draftCount = activeInvoices.filter((i) => i.status === "draft").length
   const archivedCount = archivedInvoices.length
 
+  const outstanding = activeInvoices
+    .filter((i) => ["open", "sent", "past_due"].includes(i.status))
+    .reduce((s, i) => s + i.total, 0)
+  const overdue = activeInvoices
+    .filter((i) => i.status === "past_due" || (["open", "sent"].includes(i.status) && i.dueDate.slice(0, 10) < new Date().toISOString().slice(0, 10)))
+    .reduce((s, i) => s + i.total, 0)
+  const paidThisMonth = activeInvoices
+    .filter((i) => {
+      if (i.status !== "paid") return false
+      const paidAt = i.paymentInfo?.paidAt?.slice(0, 7)
+      const month = new Date().toISOString().slice(0, 7)
+      return paidAt === month
+    })
+    .reduce((s, i) => s + i.total, 0)
+
   const statusTabs = [
     { id: "all", label: "All invoices", count: activeInvoices.length },
+    { id: "open", label: "Open", count: activeInvoices.filter((i) => i.status === "open").length },
+    { id: "sent", label: "Sent", count: activeInvoices.filter((i) => i.status === "sent").length },
+    { id: "past_due", label: "Past due", count: activeInvoices.filter((i) => i.status === "past_due").length },
+    { id: "paid", label: "Paid", count: activeInvoices.filter((i) => i.status === "paid").length },
     ...(draftCount > 0 ? [{ id: "draft", label: "Draft", count: draftCount }] : []),
     ...(archivedCount > 0 ? [{ id: "archived", label: "Archived", count: archivedCount }] : []),
   ]
@@ -309,12 +319,78 @@ export default function InvoicesPage() {
             <h1 className="text-2xl font-semibold text-foreground">Invoices</h1>
             <p className="text-sm text-muted-foreground mt-1">Manage your billing and invoicing</p>
           </div>
-          <Link href={withReturnTo("/invoices/create", listHere)}>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Create invoice
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const header = "invoice_number,customer_name,customer_email,amount,currency,status,due_date\n"
+                const rows = activeInvoices
+                  .map((i) =>
+                    [
+                      i.invoiceNumber,
+                      `"${i.customerName.replace(/"/g, '""')}"`,
+                      i.customerEmail,
+                      i.total,
+                      i.currency,
+                      i.status,
+                      i.dueDate,
+                    ].join(","),
+                  )
+                  .join("\n")
+                const blob = new Blob([header + rows], { type: "text/csv" })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement("a")
+                a.href = url
+                a.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
             </Button>
-          </Link>
+            <Link href={withReturnTo("/invoices/create", listHere)}>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Create invoice
+              </Button>
+            </Link>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-sm text-muted-foreground">Outstanding</p>
+              <p className="text-xl font-semibold tabular-nums">
+                {formatCurrency(outstanding, profile.baseCurrency || "USD")}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-sm text-muted-foreground">Overdue</p>
+              <p className="text-xl font-semibold tabular-nums text-destructive">
+                {formatCurrency(overdue, profile.baseCurrency || "USD")}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-sm text-muted-foreground">Paid this month</p>
+              <p className="text-xl font-semibold tabular-nums">
+                {formatCurrency(paidThisMonth, profile.baseCurrency || "USD")}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search invoices, customers…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9"
+          />
         </div>
         <div className="flex space-x-1">
           {statusTabs.map((tab) => (
@@ -413,6 +489,9 @@ export default function InvoicesPage() {
                       </td>
                       <td className="p-4 align-middle">
                         <InvoiceStatusBadge status={invoice.archived ? "archived" : invoice.status} />
+                        {isInvoicePastDue(invoice) && invoice.status !== "past_due" ? (
+                          <span className="ml-1 text-xs text-destructive">Overdue</span>
+                        ) : null}
                       </td>
                       <td className="p-4 align-middle">
                         <DropdownMenu>

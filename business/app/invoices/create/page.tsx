@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { 
   ArrowLeft, 
@@ -36,7 +37,7 @@ import { format } from "date-fns"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { formatCurrency } from "@/lib/utils"
-import { useInvoicesList } from "@/hooks/queries/use-invoices"
+import { useInvoicesList, useInvoiceDetail } from "@/hooks/queries/use-invoices"
 import { useCustomersList } from "@/hooks/queries/use-customers"
 import { useAddInvoice, useUpdateInvoice } from "@/hooks/mutations/use-invoices"
 import { useAddCustomer } from "@/hooks/mutations/use-customers"
@@ -47,6 +48,17 @@ import { AddEditCustomerDialog } from "@/components/add-edit-customer-dialog"
 import { BaseCurrencySelect } from "@/components/base-currency-select"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { invoiceBackHref, withReturnTo } from "@/lib/invoice-navigation"
+import { dueDateFromPaymentTerms } from "@/lib/invoices/due-date"
+import { useInvoicePayIn } from "@/hooks/use-invoice-pay-in"
+import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
+import { InvoicePreviewDialog } from "@/components/invoice-preview-dialog"
+import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
+import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
+import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
+import { defaultPaymentDisplayFromForm } from "@/lib/invoices/resolve-payment-display"
+import { Checkbox } from "@/components/ui/checkbox"
+import { fetchWithSession } from "@/lib/fetch-with-session"
+import { toast } from "sonner"
 
 /** Digits only for quantity (empty allowed while typing). */
 function filterQuantityInput(s: string): string {
@@ -86,6 +98,11 @@ interface InvoiceForm {
   dueDate: string
   taxRate: number
   discountRate: number
+  memo: string
+  poNumber: string
+  showBank: boolean
+  showStablecoin: boolean
+  paymentDefaultTab: "bank" | "stablecoin"
   lineItems: LineItem[]
 }
 
@@ -102,6 +119,11 @@ export default function CreateInvoicePage() {
 
   const invoices = invoicesQuery.data ?? []
   const customers = customersQuery.data ?? []
+  const invoiceDetailQuery = useInvoiceDetail(editId)
+  const invoiceFromList = editId ? invoices.find((i) => i.id === editId) : null
+  const invoiceToEdit = invoiceDetailQuery.data ?? invoiceFromList ?? null
+  const isEditMode = Boolean(editId && invoiceToEdit)
+  const editLoading = Boolean(editId) && invoiceDetailQuery.isPending && !invoiceToEdit
 
   const addInvoice = async (invoice: Invoice) => {
     const res = await addInvoiceMut.mutateAsync(invoice)
@@ -121,24 +143,41 @@ export default function CreateInvoicePage() {
       return null
     }
   }
-  const { baseCurrency, isLoading: profileLoading } = useBusinessProfile()
-  const invoiceToEdit = editId ? invoices.find((i) => i.id === editId) : null
-  const isEditMode = !!invoiceToEdit
+  const profile = useBusinessProfile()
+  const { baseCurrency, isLoading: profileLoading, tier1Complete, invoiceSettings } = profile
+  const issuer = issuerFromBusinessProfile(profile)
 
   const [formData, setFormData] = useState<InvoiceForm>({
     customerId: "",
     billToType: "individual",
     customerName: "",
     customerEmail: "",
+    customerPhone: "",
     customerCompany: "",
     customerAddress: "",
-    customerPhone: "",
     currency: "USD",
     dueDate: "",
     taxRate: 0,
     discountRate: 0,
+    memo: "",
+    poNumber: "",
+    showBank: true,
+    showStablecoin: true,
+    paymentDefaultTab: "bank",
     lineItems: [{ id: "1", description: "", quantity: "", unitPrice: "" }]
   })
+
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState<null | "finalize" | "finalize_email">(null)
+  const { bankAccount: rawBank, stablecoinAccount: rawStable, loading: payInLoading } = useInvoicePayIn({
+    currency: formData.currency,
+    tier1Complete,
+    enabled: Boolean(formData.currency),
+  })
+  const hasBankProvision = rawBank !== undefined
+  const hasStableProvision = rawStable !== undefined
+  const isLockedEdit =
+    isEditMode && invoiceToEdit != null && invoiceToEdit.status !== "draft" && invoiceToEdit.status !== "quote"
 
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
   const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false)
@@ -196,6 +235,7 @@ export default function CreateInvoicePage() {
     const hasCompany = !!customer.company?.trim()
     const invoiceCurrency =
       customer.currency?.trim() || baseCurrency?.trim() || "USD"
+    const terms = customer.paymentTermsDays ?? 30
     setFormData(prev => ({
       ...prev,
       customerId: customer.id,
@@ -206,9 +246,26 @@ export default function CreateInvoicePage() {
       customerPhone: customer.phone || "",
       billToType: hasCompany ? "company" : "individual",
       currency: invoiceCurrency,
+      dueDate: dueDateFromPaymentTerms(terms),
     }))
     setIsCustomerDialogOpen(false)
     setCustomerSearchTerm("")
+  }
+
+  const validateForm = (forFinalize: boolean): string | null => {
+    if (!formData.customerName.trim() || !formData.customerEmail.trim()) {
+      return "Select or add a customer with name and email"
+    }
+    const validItems = formData.lineItems.filter(
+      (item) => item.description.trim() && lineItemAmount(item) > 0,
+    )
+    if (validItems.length === 0) {
+      return "Add at least one line item with amount greater than zero"
+    }
+    if (forFinalize && total <= 0) {
+      return "Invoice total must be greater than zero to finalize"
+    }
+    return null
   }
 
   const filteredCustomers = customers.filter(
@@ -219,7 +276,7 @@ export default function CreateInvoicePage() {
       (c.company ?? "").toLowerCase().includes(customerSearchTerm.toLowerCase())
   )
 
-  const createInvoiceFromForm = (status: "draft" | "open"): Invoice => {
+  const createInvoiceFromForm = (status: Invoice["status"], documentType?: Invoice["documentType"]): Invoice => {
     const dateOnly = new Date().toISOString().slice(0, 10)
     const nowIso = new Date().toISOString()
     const lineItems = formData.lineItems
@@ -262,6 +319,14 @@ export default function CreateInvoicePage() {
       customerAddress: formData.customerAddress || undefined,
       customerPhone: formData.customerPhone || undefined,
       customerCompany: formData.billToType === "company" ? (formData.customerCompany || undefined) : undefined,
+      memo: formData.memo.trim() || undefined,
+      poNumber: formData.poNumber.trim() || undefined,
+      paymentDisplay: defaultPaymentDisplayFromForm({
+        showBank: formData.showBank,
+        showStablecoin: formData.showStablecoin,
+        defaultTab: formData.paymentDefaultTab,
+      }),
+      documentType,
     }
     if (isEditMode && invoiceToEdit) {
       return {
@@ -287,6 +352,11 @@ export default function CreateInvoicePage() {
 
   const handleSaveDraft = async () => {
     if (invoiceAction) return
+    const err = validateForm(false)
+    if (err) {
+      toast.error(err)
+      return
+    }
     setInvoiceAction("draft")
     try {
       const invoice = createInvoiceFromForm("draft")
@@ -302,11 +372,68 @@ export default function CreateInvoicePage() {
     }
   }
 
-  const handleSendInvoice = async () => {
-    if (invoiceAction) return
+  const draftPreviewInvoice = createInvoiceFromForm("open")
+  const previewPayIn = filterPayInByDisplay(
+    { bankAccount: rawBank, stablecoinAccount: rawStable },
+    resolvePaymentDisplay({
+      invoice: draftPreviewInvoice,
+      businessDefaults: invoiceSettings,
+      payIn: { bankAccount: rawBank, stablecoinAccount: rawStable },
+      payable: true,
+    }),
+  )
+
+  const runPendingAction = async () => {
+    if (!pendingAction) return
     setInvoiceAction("create")
     try {
       const invoice = createInvoiceFromForm("open")
+      let saved: Invoice | null = null
+      if (isEditMode) {
+        saved = await updateInvoice(invoice.id, invoice)
+      } else {
+        saved = await addInvoice(invoice)
+      }
+      if (!saved) return
+
+      if (pendingAction === "finalize_email") {
+        const res = await fetchWithSession("/api/invoices/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invoiceId: saved.id }),
+        })
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) throw new Error(data.error || "Failed to send email")
+        await updateInvoice(saved.id, {
+          status: "sent",
+          statusHistory: [
+            ...(saved.statusHistory ?? []),
+            { status: "sent", timestamp: new Date().toISOString() },
+          ],
+        })
+        toast.success(`Invoice sent to ${saved.customerEmail}`)
+      }
+
+      router.push(withReturnTo(`/invoices/${saved.id}`, backHref))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save invoice")
+    } finally {
+      setInvoiceAction(null)
+      setPreviewOpen(false)
+      setPendingAction(null)
+    }
+  }
+
+  const handleSaveQuote = async () => {
+    if (invoiceAction) return
+    const err = validateForm(false)
+    if (err) {
+      toast.error(err)
+      return
+    }
+    setInvoiceAction("draft")
+    try {
+      const invoice = { ...createInvoiceFromForm("quote", "quote"), status: "quote" as const }
       if (isEditMode) {
         await updateInvoice(invoice.id, invoice)
         router.push(withReturnTo(`/invoices/${invoice.id}`, backHref))
@@ -317,6 +444,39 @@ export default function CreateInvoicePage() {
     } finally {
       setInvoiceAction(null)
     }
+  }
+
+  const handleSendInvoice = async () => {
+    if (invoiceAction) return
+    const err = validateForm(isEditMode ? false : true)
+    if (err) {
+      toast.error(err)
+      return
+    }
+    if (isEditMode) {
+      setInvoiceAction("create")
+      try {
+        const invoice = createInvoiceFromForm(invoiceToEdit?.status ?? "draft")
+        await updateInvoice(invoice.id, invoice)
+        router.push(withReturnTo(`/invoices/${invoice.id}`, backHref))
+      } finally {
+        setInvoiceAction(null)
+      }
+      return
+    }
+    setPendingAction("finalize")
+    setPreviewOpen(true)
+  }
+
+  const handleFinalizeAndEmail = async () => {
+    if (invoiceAction) return
+    const err = validateForm(true)
+    if (err) {
+      toast.error(err)
+      return
+    }
+    setPendingAction("finalize_email")
+    setPreviewOpen(true)
   }
 
   // Load invoice when editing (including duplicated invoices)
@@ -337,6 +497,11 @@ export default function CreateInvoicePage() {
         dueDate: invoiceToEdit.dueDate,
         taxRate: invoiceToEdit.taxRate ?? 0,
         discountRate: invoiceToEdit.discountRate ?? 0,
+        memo: invoiceToEdit.memo ?? "",
+        poNumber: invoiceToEdit.poNumber ?? "",
+        showBank: invoiceToEdit.paymentDisplay?.showBank ?? invoiceSettings?.showBankTransfer !== false,
+        showStablecoin: invoiceToEdit.paymentDisplay?.showStablecoin ?? invoiceSettings?.showStablecoin !== false,
+        paymentDefaultTab: invoiceToEdit.paymentDisplay?.defaultTab ?? "bank",
         lineItems: invoiceToEdit.lineItems.map((item, i) => ({
           id: (i + 1).toString(),
           description: item.description,
@@ -347,17 +512,15 @@ export default function CreateInvoicePage() {
     }
   }, [editId, invoiceToEdit, customers])
 
-  // Set default due date (30 days from now) - only when creating
+  // Set default due date (Net 30) - only when creating
   useEffect(() => {
-    if (!isEditMode) {
-      const futureDate = new Date()
-      futureDate.setDate(futureDate.getDate() + 30)
+    if (!isEditMode && !formData.dueDate) {
       setFormData(prev => ({
         ...prev,
-        dueDate: futureDate.toISOString().split('T')[0]
+        dueDate: dueDateFromPaymentTerms(30),
       }))
     }
-  }, [])
+  }, [isEditMode, formData.dueDate])
 
   // Default invoice currency to business base currency when no customer (same as Add Customer dialog).
   // Only on initial profile load — not on every baseCurrency change — so manual picks are preserved.
@@ -394,8 +557,28 @@ export default function CreateInvoicePage() {
       customerPhone: c.phone || "",
       currency: invoiceCurrency,
       billToType: hasCompany ? "company" : "individual",
+      dueDate: dueDateFromPaymentTerms(c.paymentTermsDays ?? 30),
     }))
   }, [customerFromUrl, customers, isEditMode, baseCurrency])
+
+  if (editLoading) {
+    return (
+      <div className="flex justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (editId && !invoiceToEdit && !invoiceDetailQuery.isPending) {
+    return (
+      <div className="space-y-4 py-12 text-center">
+        <h2 className="text-lg font-semibold">Invoice not found</h2>
+        <Link href={backHref}>
+          <Button>Go back</Button>
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -415,6 +598,13 @@ export default function CreateInvoicePage() {
           </p>
         </div>
       </div>
+
+      {isLockedEdit ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm">
+          This invoice was sent to your customer. Customer, currency, and line amounts are locked.
+          Void and reissue to change amounts.
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form */}
@@ -473,6 +663,7 @@ export default function CreateInvoicePage() {
                   label="Currency"
                   value={formData.currency}
                   onValueChange={(value) => setFormData((prev) => ({ ...prev, currency: value }))}
+                  disabled={isLockedEdit}
                 />
                 <div className="space-y-3">
                   <Label htmlFor="dueDate">Due Date</Label>
@@ -502,6 +693,15 @@ export default function CreateInvoicePage() {
                     </PopoverContent>
                   </Popover>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="poNumber">PO / reference number</Label>
+                <Input
+                  id="poNumber"
+                  placeholder="Customer PO or reference"
+                  value={formData.poNumber}
+                  onChange={(e) => setFormData((p) => ({ ...p, poNumber: e.target.value }))}
+                />
               </div>
             </CardContent>
           </Card>
@@ -585,39 +785,112 @@ export default function CreateInvoicePage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Action buttons - above Invoice Summary */}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              disabled={!!invoiceAction}
-              onClick={handleSaveDraft}
-            >
-              {invoiceAction === "draft" ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Draft
-                </>
-              ) : (
-                "Draft"
-              )}
-            </Button>
-            <Button
-              className="flex-1"
-              disabled={!!invoiceAction}
-              onClick={handleSendInvoice}
-            >
-              {invoiceAction === "create" ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isEditMode ? "Save" : "Create"}
-                </>
-              ) : isEditMode ? (
-                "Save"
-              ) : (
-                "Create"
-              )}
-            </Button>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                disabled={!!invoiceAction}
+                onClick={handleSaveDraft}
+              >
+                {invoiceAction === "draft" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  "Save draft"
+                )}
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={!!invoiceAction}
+                onClick={handleSendInvoice}
+              >
+                {invoiceAction === "create" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isEditMode ? "Saving…" : "Finalizing…"}
+                  </>
+                ) : isEditMode ? (
+                  "Save changes"
+                ) : (
+                  "Finalize invoice"
+                )}
+              </Button>
+            </div>
+            {!isEditMode ? (
+              <div className="flex gap-2">
+                <Button variant="secondary" className="flex-1" disabled={!!invoiceAction} onClick={handleSaveQuote}>
+                  Save as quote
+                </Button>
+                <Button variant="secondary" className="flex-1" disabled={!!invoiceAction} onClick={handleFinalizeAndEmail}>
+                  Finalize and email
+                </Button>
+              </div>
+            ) : null}
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Payment methods on this invoice</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="show-bank"
+                  checked={formData.showBank}
+                  disabled={!hasBankProvision}
+                  onCheckedChange={(v) => setFormData((p) => ({ ...p, showBank: v === true }))}
+                />
+                <Label htmlFor="show-bank" className="font-normal">
+                  Bank transfer {!hasBankProvision ? "(not available)" : ""}
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="show-stable"
+                  checked={formData.showStablecoin}
+                  disabled={!hasStableProvision}
+                  onCheckedChange={(v) => setFormData((p) => ({ ...p, showStablecoin: v === true }))}
+                />
+                <Label htmlFor="show-stable" className="font-normal">
+                  Stablecoin {!hasStableProvision ? "(not available)" : ""}
+                </Label>
+              </div>
+              {formData.showBank && formData.showStablecoin && hasBankProvision && hasStableProvision ? (
+                <div className="space-y-2">
+                  <Label>Default tab</Label>
+                  <select
+                    className="w-full border rounded-md h-9 px-2 text-sm bg-background"
+                    value={formData.paymentDefaultTab}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        paymentDefaultTab: e.target.value as "bank" | "stablecoin",
+                      }))
+                    }
+                  >
+                    <option value="bank">Bank transfer</option>
+                    <option value="stablecoin">Stablecoin</option>
+                  </select>
+                </div>
+              ) : null}
+              {payInLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : (
+                <InvoicePaymentOptions
+                  invoice={draftPreviewInvoice}
+                  bankAccount={previewPayIn.bankAccount}
+                  stablecoinAccount={previewPayIn.stablecoinAccount}
+                  embedded
+                  audience="business"
+                  businessDisplayName={issuer.name}
+                  defaultTab={formData.paymentDefaultTab}
+                />
+              )}
+            </CardContent>
+          </Card>
 
           {/* Invoice Summary */}
           <Card>
@@ -625,7 +898,18 @@ export default function CreateInvoicePage() {
               <CardTitle className="text-base">Invoice Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex justify-between text-sm">
+              <div className="space-y-2">
+                <Label htmlFor="memo">Message to customer (shown on invoice)</Label>
+                <Textarea
+                  id="memo"
+                  placeholder="Optional message visible on the invoice and PDF"
+                  value={formData.memo}
+                  onChange={(e) => setFormData((p) => ({ ...p, memo: e.target.value }))}
+                  rows={3}
+                  className="resize-none text-sm"
+                />
+              </div>
+              <div className="flex justify-between text-sm pt-2 border-t">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>{formatCurrency(subtotal, formData.currency)}</span>
               </div>
@@ -749,6 +1033,18 @@ export default function CreateInvoicePage() {
             setIsAddCustomerDialogOpen(false)
           }
         }}
+      />
+
+      <InvoicePreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        invoice={draftPreviewInvoice}
+        issuer={issuer}
+        payIn={previewPayIn}
+        defaultTab={formData.paymentDefaultTab}
+        confirmLabel={pendingAction === "finalize_email" ? "Confirm and send" : "Confirm and finalize"}
+        onConfirm={runPendingAction}
+        confirming={invoiceAction === "create"}
       />
     </div>
   )

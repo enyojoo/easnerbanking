@@ -36,6 +36,7 @@ export function AddEditCustomerDialog({
   const [company, setCompany] = useState("")
   const [address, setAddress] = useState("")
   const [currency, setCurrency] = useState("USD")
+  const [paymentTermsDays, setPaymentTermsDays] = useState("30")
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export function AddEditCustomerDialog({
         setCompany(customer.company || "")
         setAddress(customer.address || "")
         setCurrency(customer.currency || "USD")
+        setPaymentTermsDays(String(customer.paymentTermsDays ?? 30))
       } else {
         setName("")
         setEmail("")
@@ -54,6 +56,7 @@ export function AddEditCustomerDialog({
         setCompany("")
         setAddress("")
         setCurrency(profile.baseCurrency || "USD")
+        setPaymentTermsDays("30")
       }
       setError(null)
     }
@@ -79,6 +82,10 @@ export function AddEditCustomerDialog({
       return
     }
 
+    const terms = parseInt(paymentTermsDays, 10)
+    const paymentTermsDaysFinal =
+      Number.isFinite(terms) && terms > 0 ? Math.min(365, terms) : 30
+
     const customerData: Customer = isEdit
       ? {
           ...customer!,
@@ -88,6 +95,7 @@ export function AddEditCustomerDialog({
           company: company.trim(),
           address: address.trim(),
           currency: currency,
+          paymentTermsDays: paymentTermsDaysFinal,
         }
       : {
           id: "",
@@ -101,6 +109,7 @@ export function AddEditCustomerDialog({
           currency: currency,
           status: "active",
           lastInvoiceDate: "",
+          paymentTermsDays: paymentTermsDaysFinal,
         }
 
     onSave(customerData)
@@ -166,6 +175,19 @@ export function AddEditCustomerDialog({
             value={currency}
             onValueChange={setCurrency}
           />
+          <div className="space-y-2">
+            <Label htmlFor="paymentTermsDays">Payment terms (days)</Label>
+            <Input
+              id="paymentTermsDays"
+              type="number"
+              min={1}
+              max={365}
+              value={paymentTermsDays}
+              onChange={(e) => setPaymentTermsDays(e.target.value)}
+              placeholder="30"
+            />
+            <p className="text-xs text-muted-foreground">Default due date for new invoices (Net N)</p>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="address">Address</Label>
             <Input

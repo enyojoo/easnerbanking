@@ -4,6 +4,9 @@ import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import { generateInvoicePdfBuffer } from "@/lib/generate-invoice-pdf"
 import { fetchInvoiceIssuerForBusiness, resolveInvoiceReplyEmail } from "@/lib/invoices/issuer"
 import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-business"
+import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
+import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
+import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import { sendInvoiceEmail } from "@/lib/invoice-email-service"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
@@ -60,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     const { data: biz } = await admin
       .from("businesses")
-      .select("noah_kyb_status")
+      .select("noah_kyb_status, invoice_settings")
       .eq("id", ctx.businessId)
       .maybeSingle()
 
@@ -73,10 +76,21 @@ export async function POST(request: NextRequest) {
       TIER2_COMPLETE_PLACEHOLDER,
     )
 
-    const payIn = canProvision
+    const rawPayIn = canProvision
       ? await resolvePayInForBusiness(ctx.businessId, invoice.currency, {
           persistVirtualAccount: true,
         })
+      : {}
+
+    const invoiceSettings = parseBusinessInvoiceSettings(biz?.invoice_settings)
+    const paymentDisplay = resolvePaymentDisplay({
+      invoice,
+      businessDefaults: invoiceSettings,
+      payIn: rawPayIn,
+      payable: true,
+    })
+    const payIn = paymentDisplay.includePaymentInEmail
+      ? filterPayInByDisplay(rawPayIn, paymentDisplay)
       : {}
 
     const issuer = await fetchInvoiceIssuerForBusiness(admin, ctx.businessId)
@@ -99,8 +113,8 @@ export async function POST(request: NextRequest) {
 
     const pdfBuffer = await generateInvoicePdfBuffer(
       invoice,
-      canProvision ? payIn.bankAccount : undefined,
-      canProvision ? payIn.stablecoinAccount : undefined,
+      paymentDisplay.includePaymentOnPdf ? payIn.bankAccount : undefined,
+      paymentDisplay.includePaymentOnPdf ? payIn.stablecoinAccount : undefined,
       issuerForCustomer,
     )
 

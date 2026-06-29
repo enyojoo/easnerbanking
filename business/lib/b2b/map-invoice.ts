@@ -38,6 +38,7 @@ function normalizeStatus(s: string | null | undefined): Invoice["status"] {
   const v = (s ?? "draft").toLowerCase()
   const allowed: Invoice["status"][] = [
     "draft",
+    "quote",
     "open",
     "sent",
     "past_due",
@@ -45,6 +46,7 @@ function normalizeStatus(s: string | null | undefined): Invoice["status"] {
     "void",
     "uncollectible",
     "failed",
+    "credit_note",
   ]
   if (allowed.includes(v as Invoice["status"])) return v as Invoice["status"]
   if (v === "pastdue" || v === "past-due") return "past_due"
@@ -54,6 +56,94 @@ function normalizeStatus(s: string | null | undefined): Invoice["status"] {
 function finiteNum(n: unknown, fallback = 0): number {
   const x = typeof n === "number" ? n : Number(n)
   return Number.isFinite(x) ? x : fallback
+}
+
+const INVOICE_PATCH_KEYS = new Set([
+  "customerId",
+  "customerName",
+  "customerEmail",
+  "customerPhone",
+  "customerCompany",
+  "customerAddress",
+  "billToType",
+  "subtotal",
+  "discountRate",
+  "discount",
+  "taxRate",
+  "tax",
+  "total",
+  "currency",
+  "status",
+  "dueDate",
+  "createdDate",
+  "finalizedDate",
+  "frequency",
+  "lineItems",
+  "notes",
+  "statusHistory",
+  "archived",
+  "memo",
+  "poNumber",
+  "paymentDisplay",
+  "documentType",
+  "creditForInvoiceId",
+  "remindersSent",
+  "paymentInfo",
+  "invoiceNumber",
+] as const satisfies readonly (keyof Invoice)[])
+
+/** Keys explicitly sent in a PATCH body (excluding `id`). */
+export function patchKeysFromBody(body: Record<string, unknown>): Set<string> {
+  const keys = new Set<string>()
+  for (const key of Object.keys(body)) {
+    if (key === "id") continue
+    if (INVOICE_PATCH_KEYS.has(key as keyof Invoice)) keys.add(key)
+  }
+  return keys
+}
+
+/**
+ * Merge a partial PATCH onto an existing invoice. Only keys present in `patchKeys`
+ * are overwritten; `id` is always preserved from `existing`.
+ */
+export function mergeInvoicePatch(
+  existing: Invoice,
+  patch: Partial<Invoice>,
+  patchKeys?: Set<string>,
+): Invoice {
+  const keys = patchKeys ?? patchKeysFromBody(patch as Record<string, unknown>)
+  const merged: Invoice = { ...existing, id: existing.id }
+
+  for (const key of keys) {
+    if (key === "id" || key === "invoiceNumber") continue
+    const value = patch[key as keyof Invoice]
+    if (value !== undefined) {
+      ;(merged as Record<string, unknown>)[key] = value
+    }
+  }
+
+  if (keys.has("invoiceNumber") && patch.invoiceNumber !== undefined) {
+    merged.invoiceNumber = patch.invoiceNumber
+  }
+
+  return merged
+}
+
+/** Resolve customer_id for DB: use patch value if sent, else keep existing row. */
+export function resolvePatchCustomerId(
+  patch: Partial<Invoice>,
+  patchKeys: Set<string>,
+  existingCustomerId: string | null,
+): string | null {
+  if (!patchKeys.has("customerId")) {
+    return existingCustomerId && isUuid(existingCustomerId) ? existingCustomerId : null
+  }
+  const raw =
+    typeof patch.customerId === "string" && patch.customerId.trim().length > 0
+      ? patch.customerId.trim()
+      : null
+  if (!raw) return null
+  return isUuid(raw) ? raw : null
 }
 
 export function mapRowToInvoice(row: B2bInvoiceRow): Invoice {
@@ -106,6 +196,11 @@ export function mapRowToInvoice(row: B2bInvoiceRow): Invoice {
     statusHistory: meta.statusHistory,
     archived: meta.archived,
     memo: meta.memo,
+    poNumber: meta.poNumber,
+    paymentDisplay: meta.paymentDisplay,
+    documentType: meta.documentType,
+    creditForInvoiceId: meta.creditForInvoiceId,
+    remindersSent: meta.remindersSent,
     paymentInfo: meta.paymentInfo,
   }
   return inv
@@ -136,6 +231,7 @@ function normalizeDueDate(raw: unknown): string | null {
 
 const ALLOWED_INVOICE_STATUS = new Set([
   "draft",
+  "quote",
   "open",
   "sent",
   "past_due",
@@ -143,6 +239,7 @@ const ALLOWED_INVOICE_STATUS = new Set([
   "void",
   "uncollectible",
   "failed",
+  "credit_note",
 ])
 
 function normalizeInvoiceStatus(raw: unknown): string {
@@ -190,6 +287,11 @@ export function invoiceToDbPayload(input: {
       invoice.tax != null && Number.isFinite(Number(invoice.tax)) ? finiteNum(invoice.tax) : undefined,
     archived: invoice.archived,
     memo: invoice.memo,
+    poNumber: invoice.poNumber,
+    paymentDisplay: invoice.paymentDisplay,
+    documentType: invoice.documentType,
+    creditForInvoiceId: invoice.creditForInvoiceId,
+    remindersSent: invoice.remindersSent,
     notes: invoice.notes,
     statusHistory: invoice.statusHistory,
     paymentInfo: invoice.paymentInfo,

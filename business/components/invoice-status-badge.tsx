@@ -5,12 +5,14 @@ const statusConfig: Record<
   { label: string; variant: "default" | "secondary" | "destructive" }
 > = {
   draft: { label: "Draft", variant: "secondary" },
+  quote: { label: "Quote", variant: "secondary" },
   open: { label: "Unpaid", variant: "default" },
   sent: { label: "Sent", variant: "secondary" },
   past_due: { label: "Past due", variant: "destructive" },
   paid: { label: "Paid", variant: "default" },
   void: { label: "Void", variant: "secondary" },
   failed: { label: "Failed", variant: "destructive" },
+  credit_note: { label: "Credit note", variant: "secondary" },
   archived: { label: "Archived", variant: "secondary" },
 }
 

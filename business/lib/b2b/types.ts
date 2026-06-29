@@ -12,6 +12,26 @@ export interface InvoicePaymentInfo {
   cashNote?: string
 }
 
+/** Business-level defaults stored in `businesses.invoice_settings`. */
+export type InvoicePaymentDefaults = {
+  showBankTransfer: boolean
+  showStablecoin: boolean
+  preferredMethod: "bank" | "stablecoin" | "customer_choice"
+  includePaymentOnPdf: boolean
+  includePaymentInEmail: boolean
+  notifyOnInvoiceView?: boolean
+  sendReceiptOnPaid?: boolean
+  brandColor?: string
+  footerText?: string
+}
+
+/** Per-invoice overrides stored in `invoices.metadata.paymentDisplay`. */
+export type InvoicePaymentDisplay = {
+  showBank: boolean
+  showStablecoin: boolean
+  defaultTab?: "bank" | "stablecoin"
+}
+
 export interface Invoice {
   id: string
   invoiceNumber: string
@@ -28,7 +48,7 @@ export interface Invoice {
   tax?: number
   total: number
   currency: string
-  status: "draft" | "open" | "sent" | "past_due" | "paid" | "void" | "uncollectible" | "failed"
+  status: "draft" | "quote" | "open" | "sent" | "past_due" | "paid" | "void" | "uncollectible" | "failed" | "credit_note"
   dueDate: string
   /** Creation instant: full ISO from `invoices.created_at` after load; date-only possible briefly from client-only state. */
   createdDate: string
@@ -43,6 +63,16 @@ export interface Invoice {
   statusHistory?: { status: string; timestamp: string }[]
   archived?: boolean
   memo?: string
+  /** PO or customer reference for reconciliation (stored in metadata). */
+  poNumber?: string
+  /** Per-invoice payment method visibility (stored in metadata). */
+  paymentDisplay?: InvoicePaymentDisplay
+  /** Quote vs invoice document type (stored in metadata). */
+  documentType?: "quote" | "invoice"
+  /** Parent invoice id for credit notes (stored in metadata). */
+  creditForInvoiceId?: string
+  /** Reminder emails sent (stored in metadata). */
+  remindersSent?: { type: string; sentAt: string }[]
   paymentInfo?: InvoicePaymentInfo
 }
 
@@ -58,4 +88,6 @@ export interface Customer {
   currency: string
   status: "active" | "inactive"
   lastInvoiceDate: string
+  /** Net payment terms in days (default 30). */
+  paymentTermsDays?: number
 }

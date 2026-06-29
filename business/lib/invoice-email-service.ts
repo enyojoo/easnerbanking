@@ -98,3 +98,93 @@ export async function sendInvoiceEmail(
     }
   }
 }
+
+export async function sendInvoiceViewNotificationEmail(input: {
+  to: string
+  businessName: string
+  invoice: Invoice
+}): Promise<SendInvoiceEmailResult> {
+  try {
+    ensureSendGridInitialized()
+    const fromEmail =
+      process.env.SENDGRID_FROM_EMAIL_BUSINESS ||
+      process.env.SENDGRID_FROM_EMAIL ||
+      "invoices@easner.com"
+    const fromName =
+      process.env.SENDGRID_FROM_NAME_BUSINESS ||
+      process.env.SENDGRID_FROM_NAME ||
+      "Easner Business"
+
+    const subject = `Customer viewed invoice ${input.invoice.invoiceNumber}`
+    const text = `${input.invoice.customerName || "A customer"} viewed invoice ${input.invoice.invoiceNumber} for ${input.invoice.currency} ${input.invoice.total}.`
+    const html = `<p>${text}</p>`
+
+    await sgMail.send({
+      to: input.to,
+      from: { email: fromEmail, name: fromName },
+      subject,
+      text,
+      html,
+    })
+    return { success: true }
+  } catch (err) {
+    console.error("Failed to send invoice view notification:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    }
+  }
+}
+
+export async function sendInvoiceReceiptEmail(input: {
+  invoice: Invoice
+  pdfBuffer: Buffer
+  businessName?: string
+  businessReplyEmail: string
+  invoiceViewUrl?: string
+}): Promise<SendInvoiceEmailResult> {
+  if (!input.invoice.customerEmail?.trim()) {
+    return { success: false, error: "Invoice has no customer email" }
+  }
+
+  try {
+    ensureSendGridInitialized()
+    const fromEmail =
+      process.env.SENDGRID_FROM_EMAIL_BUSINESS ||
+      process.env.SENDGRID_FROM_EMAIL ||
+      "invoices@easner.com"
+    const fromName =
+      process.env.SENDGRID_FROM_NAME_BUSINESS ||
+      process.env.SENDGRID_FROM_NAME ||
+      "Easner Business"
+    const businessName = input.businessName?.trim() || businessInfo.name
+
+    const subject = `Payment received for invoice ${input.invoice.invoiceNumber}`
+    const text = `Thank you — we received your payment for invoice ${input.invoice.invoiceNumber} (${input.invoice.currency} ${input.invoice.total}).`
+    const html = `<p>${text}</p>${input.invoiceViewUrl ? `<p><a href="${input.invoiceViewUrl}">View invoice</a></p>` : ""}`
+
+    await sgMail.send({
+      to: input.invoice.customerEmail,
+      from: { email: fromEmail, name: fromName },
+      replyTo: input.businessReplyEmail,
+      subject,
+      text,
+      html,
+      attachments: [
+        {
+          content: input.pdfBuffer.toString("base64"),
+          filename: `Receipt-${input.invoice.invoiceNumber}.pdf`,
+          type: "application/pdf",
+          disposition: "attachment",
+        },
+      ],
+    })
+    return { success: true }
+  } catch (err) {
+    console.error("Failed to send receipt email:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    }
+  }
+}

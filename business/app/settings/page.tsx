@@ -9,8 +9,9 @@ import { SettingsTeamTab } from "@/components/settings/settings-team-tab"
 import { SettingsCommunicationTab } from "@/components/settings/settings-communication-tab"
 import { SettingsRecipientsTab } from "@/components/settings/settings-recipients-tab"
 import { SettingsCustomersTab } from "@/components/settings/settings-customers-tab"
+import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
 
-const TABS = ["personal", "business", "team", "recipients", "customers", "communication"] as const
+const TABS = ["personal", "business", "team", "recipients", "customers", "communication", "invoicing"] as const
 type TabValue = (typeof TABS)[number]
 
 function SettingsContent() {
@@ -52,6 +53,7 @@ function SettingsContent() {
           <TabsTrigger value="recipients">Recipients</TabsTrigger>
           <TabsTrigger value="customers">Customers</TabsTrigger>
           <TabsTrigger value="communication">Communication</TabsTrigger>
+          <TabsTrigger value="invoicing">Invoicing</TabsTrigger>
         </TabsList>
 
         <TabsContent value="personal" className="mt-6">
@@ -71,6 +73,9 @@ function SettingsContent() {
         </TabsContent>
         <TabsContent value="communication" className="mt-6">
           <SettingsCommunicationTab />
+        </TabsContent>
+        <TabsContent value="invoicing" className="mt-6">
+          <SettingsInvoicingTab />
         </TabsContent>
       </Tabs>
     </div>

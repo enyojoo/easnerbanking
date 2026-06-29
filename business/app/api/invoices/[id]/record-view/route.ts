@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { addInvoiceViewEvent } from "@/lib/invoice-view-events"
+import { notifyMerchantInvoiceViewed } from "@/lib/invoices/notify-invoice-viewed"
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for")
@@ -11,7 +12,7 @@ function getClientIp(request: NextRequest): string {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id: invoiceId } = await params
@@ -22,19 +23,21 @@ export async function POST(
     const clientIp = getClientIp(request)
     const businessOwnerIp = request.cookies.get("easner_business_owner_ip")?.value
 
-    // If IP differs from business owner (or no cookie set), treat as customer view
     const isCustomerView = !businessOwnerIp || clientIp !== businessOwnerIp
 
     if (isCustomerView) {
-      addInvoiceViewEvent(invoiceId)
+      const { recorded, isFirstCustomerView } = await addInvoiceViewEvent(invoiceId, clientIp)
+      if (recorded && isFirstCustomerView) {
+        void notifyMerchantInvoiceViewed(invoiceId).catch((err) =>
+          console.error("notifyMerchantInvoiceViewed:", err),
+        )
+      }
+      return NextResponse.json({ recorded })
     }
 
-    return NextResponse.json({ recorded: isCustomerView })
+    return NextResponse.json({ recorded: false })
   } catch (err) {
     console.error("Record invoice view error:", err)
-    return NextResponse.json(
-      { error: "Failed to record view" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to record view" }, { status: 500 })
   }
 }

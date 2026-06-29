@@ -9,6 +9,7 @@ import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
 import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
 import type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
+import type { InvoicePaymentDefaults } from "@/lib/b2b/types"
 
 export type BusinessProfile = {
   businessId: string | null
@@ -49,6 +50,8 @@ export type BusinessProfile = {
   /** Resolved Reply-To for invoice emails (support → owner → sender). */
   invoiceReplyEmail: string | null
   invoiceReplyEmailSource: InvoiceReplyEmailSource | null
+  /** From `businesses.invoice_settings`. */
+  invoiceSettings?: InvoicePaymentDefaults
 }
 
 const DEFAULT_PROFILE: BusinessProfile = {
@@ -82,6 +85,7 @@ const DEFAULT_PROFILE: BusinessProfile = {
   noahEurVirtualAccountId: null,
   invoiceReplyEmail: null,
   invoiceReplyEmailSource: null,
+  invoiceSettings: undefined,
 }
 
 function countryCodeFromName(name: string | null | undefined): string | null {

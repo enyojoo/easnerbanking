@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { isAllowedBaseCurrency } from "@/lib/accounts/currency-controls"
 import { mapRowToCustomerWithEmptyStats, type B2bCustomerRow } from "@/lib/b2b/map-customer"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
+import { normalizePaymentTermsDays } from "@/lib/invoices/due-date"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -38,6 +39,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (typeof body.company === "string") updates.company = body.company.trim()
   if (typeof body.address === "string") updates.address = body.address.trim()
   if (body.status === "active" || body.status === "inactive") updates.status = body.status
+  if (body.paymentTermsDays != null) {
+    updates.payment_terms_days = normalizePaymentTermsDays(body.paymentTermsDays)
+  }
 
   if (typeof body.currency === "string") {
     const c = body.currency.trim().toUpperCase()

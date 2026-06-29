@@ -88,6 +88,8 @@ interface InvoicePaymentOptionsProps {
   onValueChange?: (value: "bank" | "stablecoin") => void
   /** When set, public “view invoice” links use `/invoice-view/{easetag}/{invoiceNumber}` instead of row id. */
   publicInvoiceEasetag?: string | null
+  /** Initial tab when both methods shown */
+  defaultTab?: "bank" | "stablecoin"
 }
 
 const audienceDescriptions = {
@@ -106,11 +108,16 @@ export function InvoicePaymentOptions({
   value,
   onValueChange,
   publicInvoiceEasetag,
+  defaultTab,
 }: InvoicePaymentOptionsProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const hasBank = bankAccount !== undefined
   const hasStablecoin = stablecoinAccount !== undefined
   const brandName = businessDisplayName?.trim() || businessInfo.name
+
+  if (!hasBank && !hasStablecoin) {
+    return null
+  }
 
   const copyToClipboard = async (text: string, field?: string) => {
     try {
@@ -210,7 +217,7 @@ export function InvoicePaymentOptions({
             onValueChange: (v: string) =>
               onValueChange(v as "bank" | "stablecoin"),
           }
-        : { defaultValue: hasBank ? "bank" : "stablecoin" })}
+        : { defaultValue: defaultTab ?? (hasBank ? "bank" : "stablecoin") })}
       className="w-full"
     >
           <TabsList

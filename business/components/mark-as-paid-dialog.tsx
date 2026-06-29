@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Banknote, Building2, Check, Search } from "lucide-react"
 import { getInboundDeposits, type InboundDeposit } from "@/lib/deposits"
+import { scoreDepositMatch } from "@/lib/invoices/deposit-match"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { Invoice, InvoicePaymentInfo } from "@/lib/b2b/types"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
@@ -188,6 +189,7 @@ export function MarkAsPaidDialog({
                   <div className="divide-y">
                     {deposits.map((d) => {
                       const isSelected = selectedDeposit?.id === d.id
+                      const match = scoreDepositMatch(invoice, d)
                       return (
                         <button
                           key={d.id}
@@ -209,6 +211,9 @@ export function MarkAsPaidDialog({
                               {d.id} • {formatDate(d.date)}
                               {d.reference && ` • ${d.reference}`}
                             </p>
+                            {match === "likely" ? (
+                              <p className="text-xs text-primary font-medium mt-0.5">Likely match</p>
+                            ) : null}
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className="font-medium text-sm">

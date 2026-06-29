@@ -49,7 +49,7 @@ import Link from "next/link"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 import { useInvoiceDetail } from "@/hooks/queries/use-invoices"
-import { useAddInvoice, useUpdateInvoice } from "@/hooks/mutations/use-invoices"
+import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutations/use-invoices"
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
@@ -69,6 +69,9 @@ import {
 } from "@/lib/compliance-placeholders"
 import { currentLocationPath, invoiceBackHref, withReturnTo } from "@/lib/invoice-navigation"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
+import { InvoicePreviewDialog } from "@/components/invoice-preview-dialog"
+import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
+import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 const STATUS_ACTIVITY_DESCRIPTIONS: Record<string, string> = {
   sent: "Invoice was sent to customer",
   paid: "Invoice was marked as paid",
@@ -160,7 +163,7 @@ export default function InvoiceDetailPage() {
   const backHref = invoiceBackHref(searchParams)
   const here = currentLocationPath(pathname, searchParams)
   const profile = useBusinessProfile()
-  const { tier1Complete, easetag: orgEasetag } = profile
+  const { tier1Complete, easetag: orgEasetag, invoiceSettings } = profile
   const issuer = issuerFromBusinessProfile(profile)
   const rawParamId = params?.id
   const invoiceId =
@@ -168,6 +171,7 @@ export default function InvoiceDetailPage() {
   const invoiceDetailQuery = useInvoiceDetail(invoiceId)
   const addInvoiceMut = useAddInvoice()
   const updateInvoiceMut = useUpdateInvoice()
+  const deleteInvoiceMut = useDeleteInvoice()
   const { data: ledgerRows } = useTransactionsCached()
   const invoice = invoiceDetailQuery.data
   /** Avoid full-page spinner when list cache seeds detail via `placeholderData`. */
@@ -194,6 +198,7 @@ export default function InvoiceDetailPage() {
   const [noteText, setNoteText] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [markAsPaidOpen, setMarkAsPaidOpen] = useState(false)
+  const [emailPreviewOpen, setEmailPreviewOpen] = useState(false)
   const [customerViewUrl, setCustomerViewUrl] = useState("")
 
   const canProvisionDepositInstructions = invoice
@@ -219,7 +224,66 @@ export default function InvoiceDetailPage() {
     enabled: payInQueryEnabled,
   })
 
-  const hasAnyPayIn = Boolean(bankAccount || stablecoinAccount)
+  const filteredPayIn = useMemo(() => {
+    if (!invoice) return {}
+    const display = resolvePaymentDisplay({
+      invoice,
+      businessDefaults: invoiceSettings,
+      payIn: { bankAccount, stablecoinAccount },
+      payable: payInQueryEnabled,
+    })
+    return filterPayInByDisplay({ bankAccount, stablecoinAccount }, display)
+  }, [invoice, invoiceSettings, bankAccount, stablecoinAccount, payInQueryEnabled])
+
+  const paymentDefaultTab = useMemo(() => {
+    if (!invoice) return "bank" as const
+    return resolvePaymentDisplay({
+      invoice,
+      businessDefaults: invoiceSettings,
+      payIn: { bankAccount, stablecoinAccount },
+      payable: true,
+    }).defaultTab
+  }, [invoice, invoiceSettings, bankAccount, stablecoinAccount])
+
+  const hasAnyPayIn = Boolean(filteredPayIn.bankAccount || filteredPayIn.stablecoinAccount)
+
+  const sendInvoiceEmailConfirmed = async () => {
+    if (!invoice) return
+    setIsSendingEmail(true)
+    try {
+      const res = await fetchWithSession("/api/invoices/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: invoice.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to send email")
+      handleStatusChange("sent")
+      toast.success(`Invoice sent to ${invoice.customerEmail}`)
+      setEmailPreviewOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send email")
+    } finally {
+      setIsSendingEmail(false)
+    }
+  }
+
+  const convertQuoteToInvoice = async () => {
+    if (!invoice) return
+    try {
+      const res = await fetchWithSession(`/api/business/b2b/invoices/${invoice.id}/convert-to-invoice`, {
+        method: "POST",
+      })
+      const data = (await res.json()) as { invoice?: Invoice; error?: string }
+      if (!res.ok) throw new Error(data.error || "Convert failed")
+      if (data.invoice) {
+        toast.success("Quote converted to invoice")
+        router.push(withReturnTo(`/invoices/${data.invoice.id}`, here))
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not convert quote")
+    }
+  }
 
   useEffect(() => {
     if (!invoice?.id) return
@@ -304,12 +368,17 @@ export default function InvoiceDetailPage() {
     toast.success("Invoice restored")
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!invoice) return
     const id = invoice.id
     setDeleteDialogOpen(false)
-    toast.success("Invoice deleted")
-    router.replace(`/invoices?deleted=${id}`)
+    try {
+      await deleteInvoiceMut.mutateAsync(id)
+      toast.success("Invoice deleted")
+      router.replace(backHref)
+    } catch {
+      toast.error("Could not delete invoice")
+    }
   }
 
   const copyToClipboard = async (text: string, field?: string) => {
@@ -433,6 +502,9 @@ export default function InvoiceDetailPage() {
           </div>
           <p className="text-muted-foreground mt-1">
             Billed to {invoice.customerName} - {formatCurrency(invoice.total, invoice.currency)}
+            {invoice.poNumber?.trim() ? (
+              <span className="block text-sm mt-0.5">PO / Ref: {invoice.poNumber}</span>
+            ) : null}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -440,29 +512,7 @@ export default function InvoiceDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={async () => {
-                if (!invoice) return
-                setIsSendingEmail(true)
-                try {
-                  const res = await fetchWithSession("/api/invoices/send-email", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ invoiceId: invoice.id }),
-                  })
-                  const data = await res.json()
-                  if (!res.ok) {
-                    throw new Error(data.error || "Failed to send email")
-                  }
-                  handleStatusChange("sent")
-                  toast.success(`Invoice sent to ${invoice.customerEmail}`)
-                } catch (err) {
-                  toast.error(
-                    err instanceof Error ? err.message : "Failed to send email"
-                  )
-                } finally {
-                  setIsSendingEmail(false)
-                }
-              }}
+              onClick={() => setEmailPreviewOpen(true)}
               disabled={isSendingEmail}
             >
               {isSendingEmail ? (
@@ -510,6 +560,11 @@ export default function InvoiceDetailPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {(invoice.status === "quote" || invoice.documentType === "quote") && (
+                <DropdownMenuItem onClick={() => void convertQuoteToInvoice()}>
+                  Convert to invoice
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={handleEdit}>
                 Edit invoice
               </DropdownMenuItem>
@@ -699,11 +754,12 @@ export default function InvoiceDetailPage() {
             ) : hasAnyPayIn ? (
               <InvoicePaymentOptions
                 invoice={invoice}
-                bankAccount={bankAccount}
-                stablecoinAccount={stablecoinAccount}
+                bankAccount={filteredPayIn.bankAccount}
+                stablecoinAccount={filteredPayIn.stablecoinAccount}
                 businessDisplayName={issuer.name}
                 audience="business"
                 publicInvoiceEasetag={orgEasetag}
+                defaultTab={paymentDefaultTab}
               />
             ) : canProvisionDepositInstructions ? (
               <Card className="border-dashed bg-muted/20">
@@ -975,11 +1031,14 @@ export default function InvoiceDetailPage() {
       <Dialog open={addNoteOpen} onOpenChange={setAddNoteOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add note</DialogTitle>
+            <DialogTitle>Add internal note</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Internal note (team only, not sent to customer)
+            </p>
             <Textarea
-              placeholder="Add a note to this invoice..."
+              placeholder="Add an internal note for your team…"
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               rows={4}
@@ -1012,6 +1071,20 @@ export default function InvoiceDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {invoice ? (
+        <InvoicePreviewDialog
+          open={emailPreviewOpen}
+          onOpenChange={setEmailPreviewOpen}
+          invoice={invoice}
+          issuer={issuer}
+          payIn={filteredPayIn}
+          defaultTab={paymentDefaultTab}
+          confirmLabel="Confirm and send"
+          onConfirm={sendInvoiceEmailConfirmed}
+          confirming={isSendingEmail}
+        />
+      ) : null}
     </div>
   )
 }

@@ -35,6 +35,7 @@ export function useAddCustomer() {
           address: customer.address,
           currency: customer.currency,
           status: customer.status,
+          paymentTermsDays: customer.paymentTermsDays,
         },
       }),
     onMutate: async (customer) => {
@@ -75,6 +76,7 @@ export function useUpdateCustomer() {
           address: updates.address,
           currency: updates.currency,
           status: updates.status,
+          paymentTermsDays: updates.paymentTermsDays,
         },
       }),
     onMutate: async ({ id, updates }) => {
