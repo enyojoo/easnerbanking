@@ -70,8 +70,8 @@ describe("pickInvoiceReplyEmail", () => {
   })
 
   it("formats customer contact line for invoice footer", () => {
-    expect(invoiceCustomerContactLine("Acme LLC", "billing@acme.com")).toBe(
-      "If you have any questions about this invoice, contact Acme LLC at billing@acme.com.",
+    expect(invoiceCustomerContactLine("billing@acme.com")).toBe(
+      "If you have any questions about this invoice, email billing@acme.com.",
     )
   })
 })

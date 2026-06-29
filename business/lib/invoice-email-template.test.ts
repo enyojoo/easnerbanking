@@ -58,7 +58,8 @@ describe("invoice email templates", () => {
     expect(html).toContain(
       "You're receiving this email because Acme Ltd uses Easner Business Banking services to manage their business processes.",
     )
-    expect(html).toContain("If you have any questions about this invoice, contact")
+    expect(html).toContain("If you have any questions about this invoice, email")
+    expect(html).toContain('href="mailto:billing@acme.com"')
     expect(html).toContain("billing@acme.com")
     expect(html).toContain("Easner Group, Inc.")
     expect(html).toContain("All rights reserved")

@@ -27,9 +27,6 @@ export function pickInvoiceReplyEmail(input: {
   return pickInvoiceReplyEmailWithSource(input)?.email ?? null
 }
 
-export function invoiceCustomerContactLine(
-  businessName: string,
-  businessReplyEmail: string,
-): string {
-  return `If you have any questions about this invoice, contact ${businessName} at ${businessReplyEmail.trim()}.`
+export function invoiceCustomerContactLine(businessReplyEmail: string): string {
+  return `If you have any questions about this invoice, email ${businessReplyEmail.trim()}.`
 }

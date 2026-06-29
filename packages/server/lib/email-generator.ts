@@ -186,8 +186,12 @@ function generateEmailLayoutStyles(): string {
         }
         .footer-text { color: ${t.slate}; font-size: 13px; margin-bottom: 14px; line-height: 1.6; }
         .footer-disclaimer { margin: 0 0 14px; text-align: center; }
+        .footer-disclaimer .footer-text {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
         .footer-disclaimer .footer-text:last-child { margin-bottom: 0; }
-        .footer-disclaimer a { word-break: break-all; }
+        .footer-disclaimer a { word-break: break-all; overflow-wrap: anywhere; }
         .footer-links { margin: 14px 0; }
         .footer-links a {
             color: ${t.primary};

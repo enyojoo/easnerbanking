@@ -42,13 +42,13 @@ function invoiceContactFooter(data: {
   if (!merchantEmail) {
     const support = process.env.SENDGRID_REPLY_TO?.trim() || "support@easner.com"
     return {
-      html: `If you have any questions or think an error was made, please contact Easner at <a href="mailto:${support}" style="color: #007ACC; text-decoration: none;">${support}</a>.`,
-      text: `If you have any questions or think an error was made, please contact Easner at ${support}.`,
+      html: `If you have any questions or think an error was made, email <a href="mailto:${support}" style="color: #007ACC; text-decoration: none; word-break: break-all;">${support}</a>.`,
+      text: `If you have any questions or think an error was made, email ${support}.`,
     }
   }
-  const line = invoiceCustomerContactLine(data.businessName, merchantEmail)
+  const line = invoiceCustomerContactLine(merchantEmail)
   return {
-    html: `If you have any questions about this invoice, contact <strong>${data.businessName}</strong> at <a href="mailto:${merchantEmail}" style="color: #007ACC; text-decoration: none;">${merchantEmail}</a>.`,
+    html: `If you have any questions about this invoice, email <a href="mailto:${merchantEmail}" style="color: #007ACC; text-decoration: none; word-break: break-all;">${merchantEmail}</a>.`,
     text: line,
   }
 }
