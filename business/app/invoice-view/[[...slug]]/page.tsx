@@ -406,7 +406,7 @@ export default function InvoiceViewPage() {
               </div>
               {fxHint ? (
                 <p className="text-xs text-muted-foreground text-right mt-1">
-                  ≈ {formatCurrency(fxHint.approx, fxHint.localeCur)} at today&apos;s rate (indicative only)
+                  ≈ {formatCurrency(fxHint.approx, fxHint.localeCur)}{" "}at today&apos;s rate
                 </p>
               ) : null}
             </div>
