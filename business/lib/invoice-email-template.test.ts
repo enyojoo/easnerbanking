@@ -38,7 +38,7 @@ const sampleIssuer = {
 }
 
 describe("invoice email templates", () => {
-  it("uses Easner Business logo, Dear-first body, and invoice footer disclaimer", () => {
+  it("uses standard Easner logo, Dear-first body, and invoice footer disclaimer", () => {
     const html = generateInvoiceEmailHtml({
       invoice: sampleInvoice,
       invoiceViewUrl: "https://example.com/invoice-view/inv_1",
@@ -46,7 +46,8 @@ describe("invoice email templates", () => {
       businessReplyEmail: "billing@acme.com",
       issuer: sampleIssuer,
     })
-    expect(html).toContain("Easner%20Business.png")
+    expect(html).toContain("Easner%20Logo.png")
+    expect(html).toContain("logo-light")
     expect(html).toContain("Dear Jane Doe")
     expect(html).toContain("Acme Ltd has sent you an invoice")
     expect(html).not.toContain('<h1 class="email-title">')
@@ -84,7 +85,7 @@ describe("invoice email templates", () => {
       businessReplyEmail: "billing@acme.com",
       issuer: sampleIssuer,
     })
-    expect(html).toContain("Easner%20Business.png")
+    expect(html).toContain("Easner%20Logo.png")
     expect(html).toContain("Dear Jane Doe")
     expect(html).toContain("Thank you")
     expect(html).toContain("from Acme Ltd")

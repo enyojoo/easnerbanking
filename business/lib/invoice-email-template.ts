@@ -1,7 +1,6 @@
 import {
   generateBaseEmailTemplate,
   generateTransactionDetailsTable,
-  EASNER_BUSINESS_LOGO_URL,
   EASNER_COMPANY_ADDRESS,
   EASNER_COMPANY_LEGAL_NAME,
   type TransactionDetailRow,
@@ -16,7 +15,6 @@ const INVOICE_EMAIL_OPTIONS = {
   showPreferencesLink: false,
   hideHeaderTitle: true,
   minimalFooter: true,
-  logoMarkup: `<img src="${EASNER_BUSINESS_LOGO_URL}" alt="Easner Business" class="logo" width="140">`,
 } as const
 
 function invoiceAmountLine(invoice: Invoice): string {
