@@ -11,5 +11,12 @@ export {
   generateSupabaseAuthEmailHtml,
   generateAuthOtpBlock,
   generateEmailLogoMarkup,
+  generateBaseEmailTemplate,
+  generateTransactionDetailsTable,
   type SupabaseAuthEmailVariant,
+  type TransactionDetailRow,
 } from "./email-generator"
+export {
+  EASNER_COMPANY_LEGAL_NAME,
+  EASNER_COMPANY_ADDRESS,
+} from "./email-theme"

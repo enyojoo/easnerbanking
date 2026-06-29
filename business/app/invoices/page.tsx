@@ -320,8 +320,8 @@ export default function InvoicesPage() {
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading invoices…</p>
       ) : null}
-      {/* Header + Tabs - sticky so content doesn't scroll through */}
-      <div className="sticky top-0 z-20 flex flex-col gap-4 shrink-0 pb-4 bg-background border-b">
+      {/* Header + Tabs - sticky below shell header / verification banner */}
+      <div className="sticky top-[var(--dashboard-sticky-top)] z-10 flex flex-col gap-4 shrink-0 pb-4 bg-background border-b">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Invoices</h1>

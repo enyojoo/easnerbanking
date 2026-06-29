@@ -130,6 +130,11 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
           </div>
           ) : null}
           <main
+            style={
+              {
+                "--dashboard-sticky-top": showTier1Banner ? "6.5rem" : "4rem",
+              } as React.CSSProperties
+            }
             className={cn(
               "flex-1 px-8 pb-10",
               showTier1Banner ? "pt-[6.5rem]" : "pt-20",

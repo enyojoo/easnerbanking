@@ -27,7 +27,9 @@ function isDashboardShellPath(pathname: string) {
 
 function resolveShellProps(pathname: string) {
   const constrained = matchesShellRoot(pathname, "/dashboard")
-  const mainClassName = ["/invoices", "/qr-pay", "/settings", "/terminal"].some((root) => matchesShellRoot(pathname, root))
+  const mainClassName = ["/qr-pay", "/settings", "/terminal"].some((root) =>
+    matchesShellRoot(pathname, root),
+  )
     ? "overflow-y-auto"
     : ""
 

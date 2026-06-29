@@ -38,7 +38,7 @@ const sampleIssuer = {
 }
 
 describe("invoice email templates", () => {
-  it("does not render company address block in customer invoice email", () => {
+  it("uses shared email footer and does not render merchant address in body", () => {
     const html = generateInvoiceEmailHtml({
       invoice: sampleInvoice,
       invoiceViewUrl: "https://example.com/invoice-view/inv_1",
@@ -48,24 +48,27 @@ describe("invoice email templates", () => {
     })
     expect(html).toContain("Acme Ltd has sent you an invoice")
     expect(html).toContain("billing@acme.com")
-    expect(html).not.toContain("business-info")
+    expect(html).toContain("Easner Group, Inc.")
+    expect(html).toContain("All rights reserved")
+    expect(html).toContain("584 Castro St")
+    expect(html).toContain("Contact Support")
     expect(html).not.toContain("10 Market St")
     expect(html).not.toContain("United Kingdom")
   })
 
-  it("renders styled customer viewed notification", () => {
+  it("renders customer viewed notification with shared template shell", () => {
     const html = generateInvoiceViewedNotificationHtml({
       invoice: sampleInvoice,
       businessName: "Acme Ltd",
       manageInvoiceUrl: "https://business.easner.com/invoices/inv_1",
     })
-    expect(html).toContain("Easner Business")
     expect(html).toContain("Hello Acme Ltd")
     expect(html).toContain("Jane Doe viewed invoice")
     expect(html).toContain("View invoice</a>")
+    expect(html).toContain("Easner Group, Inc.")
   })
 
-  it("does not render company address block in receipt email", () => {
+  it("does not render merchant address block in receipt email", () => {
     const html = generateInvoiceReceiptEmailHtml({
       invoice: { ...sampleInvoice, status: "paid" },
       invoiceViewUrl: "https://example.com/invoice-view/inv_1",
@@ -76,7 +79,7 @@ describe("invoice email templates", () => {
     expect(html).toContain("Payment received")
     expect(html).toContain("Thank you")
     expect(html).toContain("from Acme Ltd")
-    expect(html).not.toContain("business-info")
+    expect(html).toContain("Easner Group, Inc.")
     expect(html).not.toContain("10 Market St")
   })
 })

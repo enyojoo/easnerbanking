@@ -8,7 +8,10 @@
     "test": "vitest run"
   },
   "exports": {
-    ".": "./lib/index.ts"
+    ".": "./lib/index.ts",
+    "./lib/email-generator": "./lib/email-generator.ts",
+    "./lib/email-audience": "./lib/email-audience.ts",
+    "./lib/email-theme": "./lib/email-theme.ts"
   },
   "dependencies": {
     "@easner/shared": "*",

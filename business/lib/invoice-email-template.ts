@@ -1,64 +1,25 @@
+import {
+  generateBaseEmailTemplate,
+  generateTransactionDetailsTable,
+  type TransactionDetailRow,
+} from "@easner/server/lib/email-generator"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import type { Invoice } from "@/lib/b2b/types"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import { invoiceCustomerContactLine } from "@/lib/invoices/invoice-reply-email"
 
-const EASNER_BUSINESS_LOGO =
-  "https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/object/public/brand/Easner%20Business.png"
-
-const INVOICE_EMAIL_STYLES = `
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1C201E; background: #F6F3EB; }
-    .container { max-width: 600px; margin: 0 auto; padding: 40px 30px; background: #F8F6F0; border-radius: 22px; }
-    .logo { max-width: 140px; height: auto; margin-bottom: 24px; display: block; }
-    .greeting { font-size: 18px; font-weight: 600; color: #0F1110; margin-bottom: 20px; letter-spacing: -0.01em; }
-    .body-text { font-size: 16px; color: #1C201E; margin-bottom: 24px; line-height: 1.7; }
-    .invoice-details { background: #F6F3EB; border: 1px solid #D9D4C7; border-radius: 16px; padding: 20px; margin: 24px 0; }
-    .invoice-details h3 { font-size: 12px; color: #6F756F; margin-bottom: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
-    .invoice-details p { font-size: 16px; margin-bottom: 8px; color: #0F1110; }
-    .cta { display: inline-block; background: #007ACC; color: #F6F3EB !important; text-decoration: none; padding: 14px 28px; border-radius: 16px; font-weight: 600; font-size: 15px; margin: 24px 0; letter-spacing: -0.005em; }
-    .cta:hover { background: #0062A3; }
-    .footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid #D9D4C7; font-size: 14px; color: #6F756F; }
-    .footer p { margin-bottom: 12px; }
-    .copyright { font-size: 12px; color: #6F756F; margin-top: 20px; }
-`
-
-function wrapInvoiceEmailDocument(title: string, content: string): string {
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  <style>${INVOICE_EMAIL_STYLES}</style>
-</head>
-<body>
-  <div class="container">
-    <img src="${EASNER_BUSINESS_LOGO}" alt="Easner Business" class="logo" width="140" />
-    ${content}
-    <p class="copyright">© 2026 Easner, Inc.</p>
-  </div>
-</body>
-</html>
-  `.trim()
+const INVOICE_EMAIL_OPTIONS = {
+  audience: "business" as const,
+  showPreferencesLink: false,
 }
 
-function invoiceDetailsBlock(
-  heading: string,
-  rows: Array<{ strong?: boolean; text: string }>,
-): string {
-  const rowHtml = rows
-    .map((row) =>
-      row.strong ? `<p><strong>${row.text}</strong></p>` : `<p>${row.text}</p>`,
-    )
-    .join("\n      ")
-  return `
-    <div class="invoice-details">
-      <h3>${heading}</h3>
-      ${rowHtml}
-    </div>
-  `.trim()
+function invoiceAmountLine(invoice: Invoice): string {
+  const amount = formatCurrency(invoice.total, invoice.currency)
+  return `${invoice.invoiceNumber} – ${amount} ${invoice.currency}`
+}
+
+function invoiceDetailsTable(rows: TransactionDetailRow[]): string {
+  return generateTransactionDetailsTable(rows)
 }
 
 export interface InvoiceViewedNotificationEmailData {
@@ -83,24 +44,31 @@ export function generateInvoiceViewedNotificationHtml(
   data: InvoiceViewedNotificationEmailData,
 ): string {
   const { invoice, businessName, manageInvoiceUrl } = data
-  const amount = formatCurrency(invoice.total, invoice.currency)
   const customer = invoice.customerName?.trim() || "A customer"
+  const subject = getInvoiceViewedNotificationSubject(invoice.invoiceNumber)
 
-  return wrapInvoiceEmailDocument(
-    getInvoiceViewedNotificationSubject(invoice.invoiceNumber),
-    `
-    <p class="greeting">Hello ${businessName},</p>
-    <p class="body-text">${customer} viewed invoice <strong>${invoice.invoiceNumber}</strong>.</p>
-    ${invoiceDetailsBlock("Invoice details", [
-      { strong: true, text: `Invoice #${invoice.invoiceNumber} – ${amount} ${invoice.currency}` },
-      { text: `Customer: ${customer}` },
+  const content = `
+    <p class="welcome-text">Hello ${businessName},</p>
+    <p class="confirmation-text">${customer} viewed invoice <strong>${invoice.invoiceNumber}</strong>.</p>
+    ${invoiceDetailsTable([
+      { label: "Invoice", value: invoiceAmountLine(invoice) },
+      { label: "Customer", value: customer },
     ])}
-    <a href="${manageInvoiceUrl}" class="cta">View invoice</a>
-    <div class="footer">
-      <p>You're receiving this because invoice view notifications are enabled in Easner Business.</p>
-      <p>Manage this in Settings → Invoicing.</p>
-    </div>
-    `.trim(),
+    <p class="confirmation-text">
+      You're receiving this because invoice view notifications are enabled in Easner Business.
+      Manage this in Settings → Invoicing.
+    </p>
+  `.trim()
+
+  return generateBaseEmailTemplate(
+    subject,
+    "",
+    content,
+    { text: "View invoice", url: manageInvoiceUrl },
+    {
+      ...INVOICE_EMAIL_OPTIONS,
+      preheader: `${customer} viewed invoice ${invoice.invoiceNumber}`,
+    },
   )
 }
 
@@ -108,7 +76,6 @@ export function generateInvoiceViewedNotificationText(
   data: InvoiceViewedNotificationEmailData,
 ): string {
   const { invoice, businessName, manageInvoiceUrl } = data
-  const amount = formatCurrency(invoice.total, invoice.currency)
   const customer = invoice.customerName?.trim() || "A customer"
 
   return `
@@ -116,7 +83,7 @@ Hello ${businessName},
 
 ${customer} viewed invoice ${invoice.invoiceNumber}.
 
-Invoice #${invoice.invoiceNumber} – ${amount} ${invoice.currency}
+Invoice: ${invoiceAmountLine(invoice)}
 Customer: ${customer}
 
 View invoice: ${manageInvoiceUrl}
@@ -125,8 +92,6 @@ View invoice: ${manageInvoiceUrl}
 
 You're receiving this because invoice view notifications are enabled in Easner Business.
 Manage this in Settings → Invoicing.
-
-© 2026 Easner, Inc.
   `.trim()
 }
 
@@ -136,47 +101,44 @@ export function getInvoiceReceiptEmailSubject(invoiceNumber: string): string {
 
 export function generateInvoiceReceiptEmailHtml(data: InvoiceReceiptEmailData): string {
   const { invoice, invoiceViewUrl, businessName, businessReplyEmail } = data
-  const amount = formatCurrency(invoice.total, invoice.currency)
-  const contact = invoiceContactFooter({
-    invoice,
-    invoiceViewUrl,
-    businessName,
-    businessReplyEmail,
-  })
+  const contact = invoiceContactFooter({ businessName, businessReplyEmail })
+  const subject = getInvoiceReceiptEmailSubject(invoice.invoiceNumber)
 
-  return wrapInvoiceEmailDocument(
-    getInvoiceReceiptEmailSubject(invoice.invoiceNumber),
-    `
-    <p class="greeting">Dear ${invoice.customerName},</p>
-    <p class="body-text">Thank you — we received your payment for this invoice from ${businessName}.</p>
-    ${invoiceDetailsBlock("Payment received", [
-      { strong: true, text: `Invoice #${invoice.invoiceNumber} – ${amount} ${invoice.currency}` },
-      { text: "Status: Paid" },
+  const content = `
+    <p class="welcome-text">Dear ${invoice.customerName},</p>
+    <p class="confirmation-text">Thank you — we received your payment for this invoice from ${businessName}.</p>
+    ${invoiceDetailsTable([
+      { label: "Invoice", value: invoiceAmountLine(invoice) },
+      { label: "Status", value: "Paid", isStatus: true, statusClass: "completed" },
     ])}
-    <a href="${invoiceViewUrl}" class="cta">View invoice</a>
-    <div class="footer">
-      <p>You're receiving this email because ${businessName} uses Easner Business Banking services to manage their business processes.</p>
-      <p>${contact.html}</p>
-    </div>
-    `.trim(),
+    <p class="confirmation-text">
+      You're receiving this email because ${businessName} uses Easner Business Banking services to manage their business processes.
+    </p>
+    <p class="confirmation-text">${contact.html}</p>
+  `.trim()
+
+  return generateBaseEmailTemplate(
+    subject,
+    "",
+    content,
+    { text: "View invoice", url: invoiceViewUrl },
+    {
+      ...INVOICE_EMAIL_OPTIONS,
+      preheader: `Payment received for invoice ${invoice.invoiceNumber}`,
+    },
   )
 }
 
 export function generateInvoiceReceiptEmailText(data: InvoiceReceiptEmailData): string {
   const { invoice, invoiceViewUrl, businessName, businessReplyEmail } = data
-  const amount = formatCurrency(invoice.total, invoice.currency)
-  const contact = invoiceContactFooter({
-    invoice,
-    invoiceViewUrl,
-    businessName,
-    businessReplyEmail,
-  })
+  const contact = invoiceContactFooter({ businessName, businessReplyEmail })
+
   return `
 Dear ${invoice.customerName},
 
 Thank you — we received your payment for this invoice from ${businessName}.
 
-Invoice #${invoice.invoiceNumber} – ${amount} ${invoice.currency}
+Invoice: ${invoiceAmountLine(invoice)}
 Status: Paid
 
 View invoice: ${invoiceViewUrl}
@@ -184,8 +146,6 @@ View invoice: ${invoiceViewUrl}
 ---
 
 You're receiving this email because ${businessName} uses Easner Business Banking services to manage their business processes. ${contact.text}
-
-© 2026 Easner, Inc.
   `.trim()
 }
 
@@ -265,18 +225,21 @@ function getBodyIntroPlain(data: InvoiceEmailData): string {
     : config.bodyIntroPlain
 }
 
-function invoiceContactFooter(data: Pick<InvoiceEmailData, "businessName" | "businessReplyEmail">): { html: string; text: string } {
+function invoiceContactFooter(data: Pick<InvoiceEmailData, "businessName" | "businessReplyEmail">): {
+  html: string
+  text: string
+} {
   const merchantEmail = data.businessReplyEmail?.trim()
   if (!merchantEmail) {
     const support = process.env.SENDGRID_REPLY_TO?.trim() || "support@easner.com"
     return {
-      html: `If you have any questions or think an error was made, please contact Easner at <a href="mailto:${support}">${support}</a>.`,
+      html: `If you have any questions or think an error was made, please contact Easner at <a href="mailto:${support}" style="color: #007ACC; text-decoration: none;">${support}</a>.`,
       text: `If you have any questions or think an error was made, please contact Easner at ${support}.`,
     }
   }
   const line = invoiceCustomerContactLine(data.businessName, merchantEmail)
   return {
-    html: `If you have any questions about this invoice, contact <strong>${data.businessName}</strong> at <a href="mailto:${merchantEmail}">${merchantEmail}</a>.`,
+    html: `If you have any questions about this invoice, contact <strong>${data.businessName}</strong> at <a href="mailto:${merchantEmail}" style="color: #007ACC; text-decoration: none;">${merchantEmail}</a>.`,
     text: line,
   }
 }
@@ -288,25 +251,32 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
     day: "numeric",
     year: "numeric",
   })
-  const amount = formatCurrency(invoice.total, invoice.currency)
   const bodyIntro = getBodyIntro(data)
   const contact = invoiceContactFooter(data)
+  const emailSubject = getInvoiceEmailSubject(data)
 
-  return wrapInvoiceEmailDocument(
-    `Invoice ${invoice.invoiceNumber} - ${businessName}`,
-    `
-    <p class="greeting">Dear ${invoice.customerName},</p>
-    <p class="body-text">${bodyIntro}</p>
-    ${invoiceDetailsBlock("Invoice details", [
-      { strong: true, text: `Invoice #${invoice.invoiceNumber} – ${amount} ${invoice.currency}` },
-      { text: `Due: ${dueDate}` },
+  const content = `
+    <p class="welcome-text">Dear ${invoice.customerName},</p>
+    <p class="confirmation-text">${bodyIntro}</p>
+    ${invoiceDetailsTable([
+      { label: "Invoice", value: invoiceAmountLine(invoice) },
+      { label: "Due", value: dueDate },
     ])}
-    <a href="${invoiceViewUrl}" class="cta">View Invoice</a>
-    <div class="footer">
-      <p>You're receiving this email because ${businessName} uses Easner Business Banking services to manage their business processes.</p>
-      <p>${contact.html}</p>
-    </div>
-    `.trim(),
+    <p class="confirmation-text">
+      You're receiving this email because ${businessName} uses Easner Business Banking services to manage their business processes.
+    </p>
+    <p class="confirmation-text">${contact.html}</p>
+  `.trim()
+
+  return generateBaseEmailTemplate(
+    emailSubject,
+    "",
+    content,
+    { text: "View invoice", url: invoiceViewUrl },
+    {
+      ...INVOICE_EMAIL_OPTIONS,
+      preheader: bodyIntro,
+    },
   )
 }
 
@@ -317,7 +287,6 @@ export function generateInvoiceEmailText(data: InvoiceEmailData): string {
     day: "numeric",
     year: "numeric",
   })
-  const amount = formatCurrency(invoice.total, invoice.currency)
   const bodyIntro = getBodyIntroPlain(data)
   const contact = invoiceContactFooter(data)
 
@@ -326,15 +295,13 @@ Dear ${invoice.customerName},
 
 ${bodyIntro}
 
-Invoice #${invoice.invoiceNumber} – ${amount} ${invoice.currency}
+Invoice: ${invoiceAmountLine(invoice)}
 Due: ${dueDate}
 
-View Invoice: ${invoiceViewUrl}
+View invoice: ${invoiceViewUrl}
 
 ---
 
 You're receiving this email because ${businessName} uses Easner Business Banking services to manage their business processes. ${contact.text}
-
-© 2026 Easner, Inc.
   `.trim()
 }
