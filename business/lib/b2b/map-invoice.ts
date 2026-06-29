@@ -286,8 +286,8 @@ export function invoiceToDbPayload(input: {
     tax:
       invoice.tax != null && Number.isFinite(Number(invoice.tax)) ? finiteNum(invoice.tax) : undefined,
     archived: invoice.archived,
-    memo: invoice.memo,
-    poNumber: invoice.poNumber,
+    memo: invoice.memo?.trim() || undefined,
+    poNumber: invoice.poNumber?.trim() || undefined,
     paymentDisplay: invoice.paymentDisplay,
     documentType: invoice.documentType,
     creditForInvoiceId: invoice.creditForInvoiceId,

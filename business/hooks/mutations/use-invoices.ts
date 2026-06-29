@@ -61,36 +61,17 @@ export function useAddInvoice() {
   })
 }
 
-function mergeUpdatesWithCachedInvoice(
-  qc: ReturnType<typeof useQueryClient>,
-  scope: string,
-  id: string,
-  updates: Partial<Invoice>,
-): Partial<Invoice> {
-  const detailKey = qk.invoices.detail(scope, id)
-  const cached =
-    qc.getQueryData<Invoice>(detailKey) ??
-    qc.getQueryData<InvoicesListEnvelope>(qk.invoices.list(scope, {}))?.invoices?.find(
-      (i) => i.id === id,
-    )
-  if (!cached) return updates
-  return { ...cached, ...updates, id }
-}
-
 /** Optimistic update by id. */
 export function useUpdateInvoice() {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
     meta: { intent: "update invoice", destructive: false },
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Invoice> }) => {
-      const body =
-        scope != null ? mergeUpdatesWithCachedInvoice(qc, scope, id, updates) : { id, ...updates }
-      return apiFetch<{ invoice: Invoice }>(`/api/business/b2b/invoices/${encodeURIComponent(id)}`, {
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Invoice> }) =>
+      apiFetch<{ invoice: Invoice }>(`/api/business/b2b/invoices/${encodeURIComponent(id)}`, {
         method: "PATCH",
-        body,
-      })
-    },
+        body: { id, ...updates },
+      }),
     onMutate: async ({ id, updates }) => {
       if (!scope) return {}
       const listKey = qk.invoices.list(scope, {})

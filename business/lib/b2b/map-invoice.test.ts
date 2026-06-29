@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { mergeInvoicePatch, mapRowToInvoice, type B2bInvoiceRow } from "./map-invoice"
+import { mergeInvoicePatch, mapRowToInvoice, invoiceToDbPayload, type B2bInvoiceRow } from "./map-invoice"
 import type { Invoice } from "./types"
 
 function sampleRow(): B2bInvoiceRow {
@@ -83,6 +83,22 @@ describe("mergeInvoicePatch", () => {
     expect(merged.customerName).toBe("Jane Doe")
     expect(merged.lineItems).toHaveLength(1)
     expect(merged.status).toBe("open")
+  })
+
+  it("memo and poNumber patch persist in metadata payload", () => {
+    const existing = sampleInvoice()
+    const merged = mergeInvoicePatch(existing, {
+      memo: "Please pay by wire",
+      poNumber: "PO-4421",
+    })
+    const payload = invoiceToDbPayload({
+      businessId: sampleRow().business_id,
+      customerId: sampleRow().customer_id,
+      invoice: merged,
+    })
+    const metadata = payload.metadata as { memo?: string; poNumber?: string }
+    expect(metadata.memo).toBe("Please pay by wire")
+    expect(metadata.poNumber).toBe("PO-4421")
   })
 
   it("mark-as-paid patch sets paymentInfo without data loss", () => {

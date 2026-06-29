@@ -55,6 +55,7 @@ import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
 import { resolvePaymentDisplay, defaultPaymentDisplayFromForm } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import { isInvoiceFieldsLocked, invoiceFieldsLockBanner } from "@/lib/invoices/invoice-edit-lock"
+import type { BusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoice-business-readiness"
 import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
 import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
@@ -106,6 +107,41 @@ interface InvoiceForm {
   showStablecoin: boolean
   paymentDefaultTab: "bank" | "stablecoin"
   lineItems: LineItem[]
+}
+
+function invoiceFormFromInvoice(
+  invoice: Invoice,
+  customers: Customer[],
+  invoiceSettings?: BusinessInvoiceSettings,
+): InvoiceForm {
+  return {
+    customerId:
+      invoice.customerId ??
+      customers.find((c) => c.email === invoice.customerEmail)?.id ??
+      "",
+    billToType: (invoice.billToType as "individual" | "company") || "individual",
+    customerName: invoice.customerName,
+    customerEmail: invoice.customerEmail,
+    customerCompany: invoice.customerCompany || "",
+    customerAddress: invoice.customerAddress || "",
+    customerPhone: invoice.customerPhone || "",
+    currency: invoice.currency,
+    dueDate: invoice.dueDate,
+    taxRate: invoice.taxRate ?? 0,
+    discountRate: invoice.discountRate ?? 0,
+    memo: invoice.memo ?? "",
+    poNumber: invoice.poNumber ?? "",
+    showBank: invoice.paymentDisplay?.showBank ?? invoiceSettings?.showBankTransfer !== false,
+    showStablecoin:
+      invoice.paymentDisplay?.showStablecoin ?? invoiceSettings?.showStablecoin !== false,
+    paymentDefaultTab: invoice.paymentDisplay?.defaultTab ?? "bank",
+    lineItems: invoice.lineItems.map((item, i) => ({
+      id: (i + 1).toString(),
+      description: item.description,
+      quantity: String(item.quantity),
+      unitPrice: String(item.unitPrice),
+    })),
+  }
 }
 
 export default function CreateInvoicePage() {
@@ -189,6 +225,8 @@ export default function CreateInvoicePage() {
   const [invoiceAction, setInvoiceAction] = useState<null | "draft" | "create" | "email">(null)
   /** When true, next transition to `profileLoading === false` seeds currency from base (no customer). */
   const awaitingProfileForDefaultCurrency = useRef(true)
+  /** Avoid re-hydrating the edit form when query cache or customers list updates mid-edit. */
+  const hydratedEditIdRef = useRef<string | null>(null)
 
   const backHref = invoiceBackHref(searchParams)
 
@@ -321,8 +359,8 @@ export default function CreateInvoicePage() {
       customerAddress: formData.customerAddress || undefined,
       customerPhone: formData.customerPhone || undefined,
       customerCompany: formData.billToType === "company" ? (formData.customerCompany || undefined) : undefined,
-      memo: formData.memo.trim() || undefined,
-      poNumber: formData.poNumber.trim() || undefined,
+      memo: formData.memo.trim(),
+      poNumber: formData.poNumber.trim(),
       paymentDisplay: defaultPaymentDisplayFromForm({
         showBank: formData.showBank,
         showStablecoin: formData.showStablecoin,
@@ -476,38 +514,27 @@ export default function CreateInvoicePage() {
     await runFinalizeAndEmail()
   }
 
-  // Load invoice when editing (including duplicated invoices)
+  // Load invoice once when entering edit mode (wait for detail fetch; do not reset on cache updates).
   useEffect(() => {
-    if (invoiceToEdit) {
-      setFormData({
-        customerId:
-          invoiceToEdit.customerId ??
-          customers.find((c) => c.email === invoiceToEdit.customerEmail)?.id ??
-          "",
-        billToType: (invoiceToEdit.billToType as "individual" | "company") || "individual",
-        customerName: invoiceToEdit.customerName,
-        customerEmail: invoiceToEdit.customerEmail,
-        customerCompany: invoiceToEdit.customerCompany || "",
-        customerAddress: invoiceToEdit.customerAddress || "",
-        customerPhone: invoiceToEdit.customerPhone || "",
-        currency: invoiceToEdit.currency,
-        dueDate: invoiceToEdit.dueDate,
-        taxRate: invoiceToEdit.taxRate ?? 0,
-        discountRate: invoiceToEdit.discountRate ?? 0,
-        memo: invoiceToEdit.memo ?? "",
-        poNumber: invoiceToEdit.poNumber ?? "",
-        showBank: invoiceToEdit.paymentDisplay?.showBank ?? invoiceSettings?.showBankTransfer !== false,
-        showStablecoin: invoiceToEdit.paymentDisplay?.showStablecoin ?? invoiceSettings?.showStablecoin !== false,
-        paymentDefaultTab: invoiceToEdit.paymentDisplay?.defaultTab ?? "bank",
-        lineItems: invoiceToEdit.lineItems.map((item, i) => ({
-          id: (i + 1).toString(),
-          description: item.description,
-          quantity: String(item.quantity),
-          unitPrice: String(item.unitPrice),
-        })),
-      })
+    if (!editId) {
+      hydratedEditIdRef.current = null
+      return
     }
-  }, [editId, invoiceToEdit, customers])
+    if (invoiceDetailQuery.isPending && !invoiceDetailQuery.data) return
+    const invoice = invoiceDetailQuery.data ?? invoiceFromList
+    if (!invoice) return
+    if (hydratedEditIdRef.current === editId) return
+
+    hydratedEditIdRef.current = editId
+    setFormData(invoiceFormFromInvoice(invoice, customers, invoiceSettings))
+  }, [
+    editId,
+    invoiceDetailQuery.data,
+    invoiceDetailQuery.isPending,
+    invoiceFromList,
+    customers,
+    invoiceSettings,
+  ])
 
   // Set default due date (Net 30) - only when creating
   useEffect(() => {
