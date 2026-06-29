@@ -86,6 +86,24 @@ const STATUS_ACTIVITY_DESCRIPTIONS: Record<string, string> = {
   failed: "Invoice was marked as failed",
 }
 
+function customerLinkHint(status: Invoice["status"]): string {
+  switch (status) {
+    case "draft":
+      return "Preview how your customer will see this invoice after you finalize or send it."
+    case "open":
+      return "Share this link so your customer can view and pay this invoice."
+    case "sent":
+    case "past_due":
+      return "Your customer can view and pay using this link."
+    case "paid":
+      return "Your customer can view this invoice and download the receipt."
+    case "void":
+      return "Link shows this invoice as void to your customer."
+    default:
+      return "Share this link so your customer can view this invoice."
+  }
+}
+
 function getInvoiceActivities(invoice: Invoice): { id: string; type: string; description: string; timestamp: string }[] {
   const activities: { id: string; type: string; description: string; timestamp: string }[] = []
   const createdTs = invoice.createdDate.includes("T") ? invoice.createdDate : `${invoice.createdDate}T00:00:00`
@@ -1066,9 +1084,7 @@ export default function InvoiceDetailPage() {
               {!invoice.archived && publicViewHref && (
                 <div className="space-y-1 pt-2 border-t">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-muted-foreground">
-                      {invoice.status === "draft" ? "Customer view" : "Invoice link"}
-                    </span>
+                    <span className="text-sm text-muted-foreground">Customer link</span>
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
@@ -1088,11 +1104,7 @@ export default function InvoiceDetailPage() {
                       </Link>
                     </div>
                   </div>
-                  {invoice.status === "draft" ? (
-                    <p className="text-xs text-muted-foreground">
-                      Preview how your customer will see this invoice after you finalize or send it.
-                    </p>
-                  ) : null}
+                  <p className="text-xs text-muted-foreground">{customerLinkHint(invoice.status)}</p>
                 </div>
               )}
             </CardContent>
