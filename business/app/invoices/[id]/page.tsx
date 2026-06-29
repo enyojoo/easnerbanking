@@ -74,6 +74,7 @@ import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import {
   showInvoicePaymentPreview,
 } from "@/lib/invoices/invoice-edit-lock"
+import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
 const STATUS_ACTIVITY_DESCRIPTIONS: Record<string, string> = {
   sent: "Invoice was sent to customer",
   paid: "Invoice was marked as paid",
@@ -575,7 +576,7 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {!invoice.archived && publicViewHref ? (
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" className={invoiceActionBtnClass.view} asChild>
               <Link href={publicViewHref} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 {invoice.status === "draft" ? "View invoice" : "View sent invoice"}
@@ -587,6 +588,7 @@ export default function InvoiceDetailPage() {
               <Button
                 variant="outline"
                 size="sm"
+                className={invoiceActionBtnClass.finalize}
                 disabled={isFinalizing || isSendingEmail}
                 onClick={() => void finalizeDraft(false)}
               >
@@ -602,6 +604,7 @@ export default function InvoiceDetailPage() {
               {invoice.customerEmail?.trim() ? (
                 <Button
                   size="sm"
+                  className={invoiceActionBtnClass.email}
                   disabled={isFinalizing || isSendingEmail}
                   onClick={() => void finalizeDraft(true)}
                 >
@@ -627,6 +630,7 @@ export default function InvoiceDetailPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className={invoiceActionBtnClass.markSent}
                   onClick={markAsSent}
                   disabled={isSendingEmail}
                 >
@@ -634,6 +638,7 @@ export default function InvoiceDetailPage() {
                 </Button>
                 <Button
                   size="sm"
+                  className={invoiceActionBtnClass.email}
                   onClick={() => void sendInvoiceEmailConfirmed()}
                   disabled={isSendingEmail}
                 >
@@ -657,6 +662,7 @@ export default function InvoiceDetailPage() {
               <Button
                 variant="outline"
                 size="sm"
+                className={invoiceActionBtnClass.email}
                 onClick={() => void sendInvoiceEmailConfirmed()}
                 disabled={isSendingEmail}
               >
@@ -677,6 +683,7 @@ export default function InvoiceDetailPage() {
             <Button
               variant="outline"
               size="sm"
+              className={invoiceActionBtnClass.download}
               onClick={async () => {
                 if (!invoice) return
                 setIsDownloading(true)
@@ -696,11 +703,16 @@ export default function InvoiceDetailPage() {
               disabled={isDownloading}
             >
               {isDownloading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Downloading…
+                </>
               ) : (
-                <Download className="h-4 w-4 mr-2" />
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Invoice
+                </>
               )}
-              Download Invoice
             </Button>
           )}
           <DropdownMenu>
@@ -1015,6 +1027,7 @@ export default function InvoiceDetailPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className={invoiceActionBtnClass.downloadReceipt}
                   onClick={async () => {
                     if (!invoice) return
                     setIsDownloading(true)
@@ -1029,11 +1042,16 @@ export default function InvoiceDetailPage() {
                   disabled={isDownloading}
                 >
                   {isDownloading ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Downloading…
+                    </>
                   ) : (
-                    <Download className="h-4 w-4 mr-2" />
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Receipt
+                    </>
                   )}
-                  Download Receipt
                 </Button>
               </div>
             )

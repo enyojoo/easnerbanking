@@ -56,6 +56,7 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
 import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoice-business-readiness"
 import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
+import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
 import type { Account, StablecoinAccount } from "@/lib/finance-types"
 import {
   TIER2_COMPLETE_PLACEHOLDER,
@@ -358,13 +359,13 @@ export default function InvoicesPage() {
             </Button>
             {invoiceReadiness.ready ? (
               <Link href={withReturnTo("/invoices/create", listHere)}>
-                <Button>
+                <Button className={invoiceActionBtnClass.email}>
                   <Plus className="h-4 w-4 mr-2" />
                   Create invoice
                 </Button>
               </Link>
             ) : (
-              <Button disabled title={invoiceReadiness.message}>
+              <Button disabled title={invoiceReadiness.message} className={invoiceActionBtnClass.email}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create invoice
               </Button>
@@ -538,6 +539,7 @@ export default function InvoicesPage() {
                             </DropdownMenuItem>
                             {invoice.status !== "draft" && invoice.customerEmail?.trim() && (
                               <DropdownMenuItem
+                                className={invoiceActionBtnClass.menuItem}
                                 onClick={(e) => handleEmailInvoice(invoice, e)}
                                 disabled={sendingId === invoice.id}
                               >
@@ -546,7 +548,11 @@ export default function InvoicesPage() {
                               </DropdownMenuItem>
                             )}
                             {invoice.status !== "draft" && (
-                              <DropdownMenuItem onClick={(e) => handleDownloadPdf(invoice, e)} disabled={downloadingId === invoice.id}>
+                              <DropdownMenuItem
+                                className={invoiceActionBtnClass.menuItem}
+                                onClick={(e) => handleDownloadPdf(invoice, e)}
+                                disabled={downloadingId === invoice.id}
+                              >
                                 <FileDown className="h-4 w-4 mr-2" />
                                 {downloadingId === invoice.id ? "Downloading…" : "Download PDF"}
                               </DropdownMenuItem>

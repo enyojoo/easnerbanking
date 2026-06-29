@@ -9,6 +9,7 @@ import { useAddInvoice } from "@/hooks/mutations/use-invoices"
 import { generateInvoiceId, formatInvoiceNumberFromClientId } from "@/lib/invoice-id"
 import type { Invoice } from "@/lib/b2b/types"
 import { toast } from "sonner"
+import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
 
 function parseCsv(text: string): Record<string, string>[] {
   const lines = text.trim().split(/\r?\n/)
@@ -103,7 +104,7 @@ export default function ImportInvoicesPage() {
           {preview.length > 0 ? (
             <>
               <p className="text-sm">{preview.length} invoice(s) ready to import as drafts.</p>
-              <Button onClick={() => void importAll()} disabled={importing}>
+              <Button className={invoiceActionBtnClass.import} onClick={() => void importAll()} disabled={importing}>
                 {importing ? "Importing…" : "Import all"}
               </Button>
             </>

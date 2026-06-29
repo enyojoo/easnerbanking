@@ -57,6 +57,7 @@ import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import { isInvoiceFieldsLocked, invoiceFieldsLockBanner } from "@/lib/invoices/invoice-edit-lock"
 import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoice-business-readiness"
 import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
+import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
 import { Checkbox } from "@/components/ui/checkbox"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
@@ -806,7 +807,7 @@ export default function CreateInvoicePage() {
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                className="flex-1"
+                className={invoiceActionBtnClass.flex}
                 disabled={!!invoiceAction}
                 onClick={handleSaveDraft}
               >
@@ -820,7 +821,7 @@ export default function CreateInvoicePage() {
                 )}
               </Button>
               <Button
-                className="flex-1"
+                className={invoiceActionBtnClass.flex}
                 disabled={!!invoiceAction}
                 onClick={handleSendInvoice}
               >
@@ -838,12 +839,12 @@ export default function CreateInvoicePage() {
             </div>
             {!isEditMode ? (
               <div className="flex gap-2">
-                <Button variant="secondary" className="flex-1" disabled={!!invoiceAction} onClick={handleSaveQuote}>
+                <Button variant="secondary" className={invoiceActionBtnClass.flex} disabled={!!invoiceAction} onClick={handleSaveQuote}>
                   Save as quote
                 </Button>
                 <Button
                   variant="secondary"
-                  className="flex-1"
+                  className={invoiceActionBtnClass.flex}
                   disabled={!!invoiceAction}
                   onClick={() => void handleFinalizeAndEmail()}
                 >
