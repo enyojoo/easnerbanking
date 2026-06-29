@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -13,19 +13,45 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { FileText } from "lucide-react"
-import { useBusinessProfile } from "@/lib/use-business-profile"
+import { Check, Edit, FileText, Loader2, Palette, X } from "lucide-react"
+import { useBusinessProfile, type BusinessProfile } from "@/lib/use-business-profile"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
 import type { InvoicePaymentDefaults } from "@/lib/b2b/types"
-import { DEFAULT_INVOICE_PAYMENT_DEFAULTS } from "@/lib/invoices/invoice-settings"
+import {
+  DEFAULT_INVOICE_PAYMENT_DEFAULTS,
+  type BusinessInvoiceSettings,
+} from "@/lib/invoices/invoice-settings"
 import { toast } from "sonner"
+
+type BrandingForm = {
+  brandColor: string
+  footerText: string
+}
+
+function brandingFromSettings(settings: BusinessInvoiceSettings): BrandingForm {
+  return {
+    brandColor: settings.brandColor ?? "",
+    footerText: settings.footerText ?? "",
+  }
+}
 
 export function SettingsInvoicingTab() {
   const profile = useBusinessProfile()
-  const [saving, setSaving] = useState(false)
-  const [settings, setSettings] = useState<InvoicePaymentDefaults>({
+  const [settings, setSettings] = useState<BusinessInvoiceSettings>({
     ...DEFAULT_INVOICE_PAYMENT_DEFAULTS,
   })
+  const settingsRef = useRef(settings)
+  const [editingBranding, setEditingBranding] = useState(false)
+  const [brandingForm, setBrandingForm] = useState<BrandingForm>({
+    brandColor: "",
+    footerText: "",
+  })
+  const [savingBranding, setSavingBranding] = useState(false)
+
+  useEffect(() => {
+    settingsRef.current = settings
+  }, [settings])
 
   useEffect(() => {
     if (profile.invoiceSettings) {
@@ -33,36 +59,66 @@ export function SettingsInvoicingTab() {
     }
   }, [profile.invoiceSettings])
 
-  const save = useCallback(async () => {
-    setSaving(true)
+  const persistSettings = useCallback(async (next: BusinessInvoiceSettings) => {
     try {
       const res = await fetchWithSession("/api/business/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceSettings: settings }),
+        body: JSON.stringify({ invoiceSettings: next }),
       })
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(j.error || "Failed to save")
       }
-      const json = (await res.json()) as { profile?: typeof profile }
+      const json = (await res.json()) as { profile?: BusinessProfile }
       if (json.profile) {
-        window.dispatchEvent(new CustomEvent("business-profile-updated", { detail: json.profile }))
+        window.dispatchEvent(
+          new CustomEvent("business-profile-updated", { detail: json.profile }),
+        )
       }
-      toast.success("Invoicing settings saved")
+      return true
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save invoicing settings")
-    } finally {
-      setSaving(false)
+      return false
     }
-  }, [settings])
+  }, [])
 
-  const patch = (partial: Partial<InvoicePaymentDefaults>) => {
-    setSettings((prev) => ({ ...prev, ...partial }))
+  const patch = useCallback(
+    (partial: Partial<InvoicePaymentDefaults>) => {
+      const optimistic = { ...settingsRef.current, ...partial }
+      setSettings(optimistic)
+      void persistSettings(optimistic)
+    },
+    [persistSettings],
+  )
+
+  const handleEditBranding = () => {
+    setBrandingForm(brandingFromSettings(settingsRef.current))
+    setEditingBranding(true)
+  }
+
+  const handleCancelBranding = () => {
+    setEditingBranding(false)
+  }
+
+  const handleSaveBranding = async () => {
+    setSavingBranding(true)
+    try {
+      const optimistic: BusinessInvoiceSettings = {
+        ...settingsRef.current,
+        brandColor: brandingForm.brandColor.trim() || undefined,
+        footerText: brandingForm.footerText.trim() || undefined,
+      }
+      setSettings(optimistic)
+      const ok = await persistSettings(optimistic)
+      if (ok) setEditingBranding(false)
+    } finally {
+      setSavingBranding(false)
+    }
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Customer email delivery</CardTitle>
@@ -200,34 +256,75 @@ export function SettingsInvoicingTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Branding</CardTitle>
-          <CardDescription>Optional styling for PDF and public invoice view</CardDescription>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2">
+                <Palette className="h-5 w-5" />
+                Branding
+              </CardTitle>
+              <CardDescription>Optional styling for PDF and public invoice view</CardDescription>
+            </div>
+            {editingBranding ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancelBranding}
+                  disabled={savingBranding}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void handleSaveBranding()}
+                  disabled={savingBranding}
+                >
+                  {savingBranding ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Check className="h-4 w-4" aria-hidden />
+                  )}
+                  Save
+                </Button>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" onClick={handleEditBranding} className="shrink-0">
+                <Edit className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="brand-color">Accent color (hex)</Label>
             <Input
               id="brand-color"
+              className={SETTINGS_CONTROL_SURFACE}
               placeholder="#0066cc"
-              value={settings.brandColor ?? ""}
-              onChange={(e) => patch({ brandColor: e.target.value || undefined })}
+              value={editingBranding ? brandingForm.brandColor : settings.brandColor ?? ""}
+              onChange={(e) =>
+                setBrandingForm((prev) => ({ ...prev, brandColor: e.target.value }))
+              }
+              disabled={!editingBranding}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="footer-text">Footer text</Label>
             <Input
               id="footer-text"
+              className={SETTINGS_CONTROL_SURFACE}
               placeholder="Thank you for your business"
-              value={settings.footerText ?? ""}
-              onChange={(e) => patch({ footerText: e.target.value || undefined })}
+              value={editingBranding ? brandingForm.footerText : settings.footerText ?? ""}
+              onChange={(e) =>
+                setBrandingForm((prev) => ({ ...prev, footerText: e.target.value }))
+              }
+              disabled={!editingBranding}
             />
           </div>
         </CardContent>
       </Card>
-
-      <Button onClick={() => void save()} disabled={saving}>
-        {saving ? "Saving…" : "Save invoicing settings"}
-      </Button>
     </div>
   )
 }
