@@ -1,5 +1,3 @@
-"use client"
-
 import {
   Document,
   Page,
@@ -368,7 +366,7 @@ export function InvoicePDFDocument({
           <View style={styles.gridCol}>
             <Text style={styles.sectionTitle}>Bill to</Text>
             {invoice.billToType === "company" && invoice.customerCompany ? (
-              <>
+              <View>
                 <Text style={styles.sectionText}>{invoice.customerCompany}</Text>
                 <Text style={styles.sectionTextMuted}>{invoice.customerEmail}</Text>
                 {invoice.customerAddress ? (
@@ -382,9 +380,9 @@ export function InvoicePDFDocument({
                     Attn: {invoice.customerName}
                   </Text>
                 ) : null}
-              </>
+              </View>
             ) : (
-              <>
+              <View>
                 <Text style={styles.sectionText}>{invoice.customerName}</Text>
                 <Text style={styles.sectionTextMuted}>{invoice.customerEmail}</Text>
                 {invoice.customerAddress ? (
@@ -393,7 +391,7 @@ export function InvoicePDFDocument({
                 {invoice.customerPhone ? (
                   <Text style={styles.sectionTextMuted}>{invoice.customerPhone}</Text>
                 ) : null}
-              </>
+              </View>
             )}
           </View>
           <View style={styles.gridColEmpty} />
@@ -492,7 +490,7 @@ export function InvoicePDFDocument({
         </View>
 
         {/* Payment options - two columns: bank and stablecoin */}
-        {showPayCard && (
+        {showPayCard ? (
           <View style={styles.paymentSection} wrap={false}>
             <Text style={styles.paymentSectionTitle}>
               Invoice payment options
@@ -516,24 +514,24 @@ export function InvoicePDFDocument({
                     </Text>
                   </View>
                   {bankAccount.currency === "EUR" && bankAccount.iban ? (
-                    <>
+                    <View>
                       <View style={styles.paymentField}>
                         <Text style={styles.paymentFieldLabel}>IBAN</Text>
                         <Text style={styles.paymentFieldValue}>
                           {bankAccount.iban}
                         </Text>
                       </View>
-                      {bankAccount.bic && (
+                      {bankAccount.bic ? (
                         <View style={styles.paymentField}>
                           <Text style={styles.paymentFieldLabel}>BIC/SWIFT</Text>
                           <Text style={styles.paymentFieldValue}>
                             {bankAccount.bic}
                           </Text>
                         </View>
-                      )}
-                    </>
+                      ) : null}
+                    </View>
                   ) : (
-                    <>
+                    <View>
                       <View style={styles.paymentField}>
                         <Text style={styles.paymentFieldLabel}>
                           Account Number
@@ -542,7 +540,7 @@ export function InvoicePDFDocument({
                           {bankAccount.fullAccountNumber}
                         </Text>
                       </View>
-                      {bankAccount.routingNumber && (
+                      {bankAccount.routingNumber ? (
                         <View style={styles.paymentField}>
                           <Text style={styles.paymentFieldLabel}>
                             Routing Number
@@ -551,16 +549,16 @@ export function InvoicePDFDocument({
                             {bankAccount.routingNumber}
                           </Text>
                         </View>
-                      )}
-                      {bankAccount.sortCode && (
+                      ) : null}
+                      {bankAccount.sortCode ? (
                         <View style={styles.paymentField}>
                           <Text style={styles.paymentFieldLabel}>Sort Code</Text>
                           <Text style={styles.paymentFieldValue}>
                             {bankAccount.sortCode}
                           </Text>
                         </View>
-                      )}
-                    </>
+                      ) : null}
+                    </View>
                   )}
                   <View style={styles.paymentField}>
                     <Text style={styles.paymentFieldLabel}>Bank Name</Text>
@@ -568,16 +566,16 @@ export function InvoicePDFDocument({
                       {bankAccount.bankName}
                     </Text>
                   </View>
-                  {bankAccount.bankAddress && (
+                  {bankAccount.bankAddress ? (
                     <View style={styles.paymentField}>
                       <Text style={styles.paymentFieldLabel}>Address</Text>
                       <Text style={styles.paymentFieldValue}>
                         {bankAccount.bankAddress}
                       </Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
-                {bankInstructions.length > 0 && (
+                {bankInstructions.length > 0 ? (
                   <View style={styles.paymentInstructions}>
                     <Text style={styles.paymentInstructionsTitle}>
                       Payment Instructions
@@ -589,15 +587,14 @@ export function InvoicePDFDocument({
                       >{`• ${line}`}</Text>
                     ))}
                   </View>
-                )}
+                ) : null}
               </View>
               ) : null}
 
-              {/* Stablecoin column */}
               {stablecoinAccount ? (
               <View style={styles.paymentCol}>
                 {qrDataUrl ? (
-                  <>
+                  <View>
                     <View style={styles.paymentColContent}>
                       <Text style={styles.paymentColTitle}>Stablecoin</Text>
                       <View style={styles.stablecoinRow}>
@@ -623,7 +620,7 @@ export function InvoicePDFDocument({
                         </View>
                       </View>
                     </View>
-                    {stablecoinInstructions.length > 0 && (
+                    {stablecoinInstructions.length > 0 ? (
                       <View style={styles.paymentInstructions}>
                         <Text style={styles.paymentInstructionsTitle}>
                           Payment Instructions
@@ -635,8 +632,8 @@ export function InvoicePDFDocument({
                           >{`• ${line}`}</Text>
                         ))}
                       </View>
-                    )}
-                  </>
+                    ) : null}
+                  </View>
                 ) : (
                   <Text style={styles.sectionTextMuted}>
                     QR code unavailable
@@ -646,7 +643,7 @@ export function InvoicePDFDocument({
               ) : null}
             </View>
           </View>
-        )}
+        ) : null}
 
         {/* Footer: Powered by Easner Business */}
         <View style={styles.footer} fixed>

@@ -51,11 +51,10 @@ import { invoiceBackHref, withReturnTo } from "@/lib/invoice-navigation"
 import { dueDateFromPaymentTerms } from "@/lib/invoices/due-date"
 import { useInvoicePayIn } from "@/hooks/use-invoice-pay-in"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
-import { InvoicePreviewDialog } from "@/components/invoice-preview-dialog"
 import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
 import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
-import { defaultPaymentDisplayFromForm } from "@/lib/invoices/resolve-payment-display"
+import { isInvoiceFieldsLocked, invoiceFieldsLockBanner } from "@/lib/invoices/invoice-edit-lock"
 import { Checkbox } from "@/components/ui/checkbox"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
@@ -167,8 +166,6 @@ export default function CreateInvoicePage() {
     lineItems: [{ id: "1", description: "", quantity: "", unitPrice: "" }]
   })
 
-  const [previewOpen, setPreviewOpen] = useState(false)
-  const [pendingAction, setPendingAction] = useState<null | "finalize" | "finalize_email">(null)
   const { bankAccount: rawBank, stablecoinAccount: rawStable, loading: payInLoading } = useInvoicePayIn({
     currency: formData.currency,
     tier1Complete,
@@ -177,14 +174,15 @@ export default function CreateInvoicePage() {
   const hasBankProvision = rawBank !== undefined
   const hasStableProvision = rawStable !== undefined
   const isLockedEdit =
-    isEditMode && invoiceToEdit != null && invoiceToEdit.status !== "draft" && invoiceToEdit.status !== "quote"
+    isEditMode && invoiceToEdit != null && isInvoiceFieldsLocked(invoiceToEdit.status)
+  const editLockBanner = invoiceToEdit ? invoiceFieldsLockBanner(invoiceToEdit.status) : null
 
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
   const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false)
   const [customerSearchTerm, setCustomerSearchTerm] = useState("")
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
-  /** Which primary action is running (shows loading on both buttons). */
-  const [invoiceAction, setInvoiceAction] = useState<null | "draft" | "create">(null)
+  /** Which primary action is running (shows loading on action buttons). */
+  const [invoiceAction, setInvoiceAction] = useState<null | "draft" | "create" | "email">(null)
   /** When true, next transition to `profileLoading === false` seeds currency from base (no customer). */
   const awaitingProfileForDefaultCurrency = useRef(true)
 
@@ -383,44 +381,34 @@ export default function CreateInvoicePage() {
     }),
   )
 
-  const runPendingAction = async () => {
-    if (!pendingAction) return
-    setInvoiceAction("create")
+  const runFinalizeAndEmail = async () => {
+    setInvoiceAction("email")
     try {
       const invoice = createInvoiceFromForm("open")
-      let saved: Invoice | null = null
-      if (isEditMode) {
-        saved = await updateInvoice(invoice.id, invoice)
-      } else {
-        saved = await addInvoice(invoice)
-      }
+      const saved = isEditMode ? await updateInvoice(invoice.id, invoice) : await addInvoice(invoice)
       if (!saved) return
 
-      if (pendingAction === "finalize_email") {
-        const res = await fetchWithSession("/api/invoices/send-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ invoiceId: saved.id }),
-        })
-        const data = (await res.json().catch(() => ({}))) as { error?: string }
-        if (!res.ok) throw new Error(data.error || "Failed to send email")
-        await updateInvoice(saved.id, {
-          status: "sent",
-          statusHistory: [
-            ...(saved.statusHistory ?? []),
-            { status: "sent", timestamp: new Date().toISOString() },
-          ],
-        })
-        toast.success(`Invoice sent to ${saved.customerEmail}`)
-      }
+      const res = await fetchWithSession("/api/invoices/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: saved.id }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error || "Failed to send email")
 
+      await updateInvoice(saved.id, {
+        status: "sent",
+        statusHistory: [
+          ...(saved.statusHistory ?? []),
+          { status: "sent", timestamp: new Date().toISOString() },
+        ],
+      })
+      toast.success(`Invoice sent to ${saved.customerEmail}`)
       router.push(withReturnTo(`/invoices/${saved.id}`, backHref))
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to save invoice")
+      toast.error(e instanceof Error ? e.message : "Failed to send invoice")
     } finally {
       setInvoiceAction(null)
-      setPreviewOpen(false)
-      setPendingAction(null)
     }
   }
 
@@ -464,8 +452,14 @@ export default function CreateInvoicePage() {
       }
       return
     }
-    setPendingAction("finalize")
-    setPreviewOpen(true)
+    setInvoiceAction("create")
+    try {
+      const invoice = createInvoiceFromForm("open")
+      const created = await addInvoice(invoice)
+      if (created) router.push(withReturnTo(`/invoices/${created.id}`, backHref))
+    } finally {
+      setInvoiceAction(null)
+    }
   }
 
   const handleFinalizeAndEmail = async () => {
@@ -475,8 +469,7 @@ export default function CreateInvoicePage() {
       toast.error(err)
       return
     }
-    setPendingAction("finalize_email")
-    setPreviewOpen(true)
+    await runFinalizeAndEmail()
   }
 
   // Load invoice when editing (including duplicated invoices)
@@ -599,10 +592,9 @@ export default function CreateInvoicePage() {
         </div>
       </div>
 
-      {isLockedEdit ? (
+      {editLockBanner ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm">
-          This invoice was sent to your customer. Customer, currency, and line amounts are locked.
-          Void and reissue to change amounts.
+          {editLockBanner}
         </div>
       ) : null}
 
@@ -629,7 +621,7 @@ export default function CreateInvoicePage() {
                     ) : null}
                     <p className="text-sm text-muted-foreground">{formData.customerEmail}</p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => setIsCustomerDialogOpen(true)}>
+                  <Button variant="outline" size="sm" onClick={() => setIsCustomerDialogOpen(true)} disabled={isLockedEdit}>
                     Change
                   </Button>
                 </div>
@@ -726,6 +718,7 @@ export default function CreateInvoicePage() {
                       <Input
                         placeholder="Item description"
                         value={item.description}
+                        disabled={isLockedEdit}
                         onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
                       />
                     </div>
@@ -736,6 +729,7 @@ export default function CreateInvoicePage() {
                         inputMode="numeric"
                         autoComplete="off"
                         value={item.quantity}
+                        disabled={isLockedEdit}
                         onChange={(e) => updateLineItem(item.id, "quantity", e.target.value)}
                         className="tabular-nums min-w-0"
                       />
@@ -747,6 +741,7 @@ export default function CreateInvoicePage() {
                         inputMode="decimal"
                         autoComplete="off"
                         value={item.unitPrice}
+                        disabled={isLockedEdit}
                         onChange={(e) => updateLineItem(item.id, "unitPrice", e.target.value)}
                         className="tabular-nums min-w-0"
                       />
@@ -764,7 +759,7 @@ export default function CreateInvoicePage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => removeLineItem(item.id)}
-                        disabled={formData.lineItems.length === 1}
+                        disabled={isLockedEdit || formData.lineItems.length === 1}
                         className="shrink-0"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -773,7 +768,7 @@ export default function CreateInvoicePage() {
                   </div>
                 ))}
                 
-                <Button variant="outline" onClick={addLineItem} className="w-full">
+                <Button variant="outline" onClick={addLineItem} className="w-full" disabled={isLockedEdit}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Item
                 </Button>
@@ -824,8 +819,20 @@ export default function CreateInvoicePage() {
                 <Button variant="secondary" className="flex-1" disabled={!!invoiceAction} onClick={handleSaveQuote}>
                   Save as quote
                 </Button>
-                <Button variant="secondary" className="flex-1" disabled={!!invoiceAction} onClick={handleFinalizeAndEmail}>
-                  Finalize and email
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={!!invoiceAction}
+                  onClick={() => void handleFinalizeAndEmail()}
+                >
+                  {invoiceAction === "email" ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending…
+                    </>
+                  ) : (
+                    "Finalize and email"
+                  )}
                 </Button>
               </div>
             ) : null}
@@ -1035,17 +1042,6 @@ export default function CreateInvoicePage() {
         }}
       />
 
-      <InvoicePreviewDialog
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-        invoice={draftPreviewInvoice}
-        issuer={issuer}
-        payIn={previewPayIn}
-        defaultTab={formData.paymentDefaultTab}
-        confirmLabel={pendingAction === "finalize_email" ? "Confirm and send" : "Confirm and finalize"}
-        onConfirm={runPendingAction}
-        confirming={invoiceAction === "create"}
-      />
     </div>
   )
 }
