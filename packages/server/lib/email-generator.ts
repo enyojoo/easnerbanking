@@ -40,75 +40,53 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;")
 }
 
-/** Light/dark wordmarks — swapped via `prefers-color-scheme: dark` in email clients that support it. */
-export function generateEmailLogoMarkup(width = 120): string {
-  return `
-            <img src="${EASNER_LOGO_URL_LIGHT}" alt="Easner" class="logo logo-light" width="${width}">
-            <img src="${EASNER_LOGO_URL_DARK}" alt="Easner" class="logo logo-dark" width="${width}">
-  `.trim()
-}
+/** Markers every Easner HTML email must include (viewport, stacking, touch-friendly CTAs). */
+export const EMAIL_RESPONSIVE_MARKERS = [
+  'name="viewport" content="width=device-width, initial-scale=1.0"',
+  'name="color-scheme" content="light dark"',
+  "-webkit-text-size-adjust: 100%",
+  "@media only screen and (max-width: 600px)",
+  ".transaction-details-table tr",
+  "display: block !important",
+  ".cta-button { display: block; width: 100%",
+] as const
 
-export function generateBaseEmailTemplate(
-  title: string,
-  subtitle: string,
-  content: string,
-  ctaButton?: { text: string; url: string },
-  options?: EmailTemplateOptions,
-): string {
-  const audience = options?.audience ?? "personal"
-  const profile = getEmailAudienceProfile(audience)
-  /** Omit product line under the title — logo + H1 only (personal and business). */
-  const headerSubtitle =
-    subtitle.trim() === profile.productName.trim() ? "" : subtitle
-  const preheader = options?.preheader?.trim()
-  const year = new Date().getFullYear()
+function generateEmailLayoutStyles(): string {
   const t = emailTheme
-  const minimalFooter = options?.minimalFooter === true
-  const accountNotice = minimalFooter
-    ? ""
-    : resolveEmailFooterNotice(options?.recipientHasEasnerAccount !== false)
-
-  const preferencesBlock =
-    !minimalFooter && options?.showPreferencesLink !== false
-      ? `<p class="footer-text" style="margin-top: 12px;">
-          <a href="${profile.preferencesUrl}" style="color: ${t.primary}; text-decoration: none; font-size: 13px;">Manage email preferences</a>
-        </p>`
-      : ""
-
-  const helpBlock = minimalFooter
-    ? ""
-    : `<p class="footer-text">Need help? We're here for you.</p>
-            <div class="footer-links">
-                <a href="mailto:${profile.supportEmail}">Contact Support</a>
-            </div>`
-
-  const disclaimerBlock = options?.footerDisclaimerHtml?.trim()
-    ? `<div class="footer-disclaimer">${options.footerDisclaimerHtml.trim()}</div>`
-    : ""
-
-  const logoHtml = options?.logoMarkup?.trim() ?? generateEmailLogoMarkup()
-  const headerTitleBlock = options?.hideHeaderTitle
-    ? ""
-    : `<h1 class="email-title">${escapeHtml(title)}</h1>`
-
   return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${escapeHtml(title)} - Easner</title>
-    ${preheader ? `<span style="display:none!important;visibility:hidden;mso-hide:all;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(preheader)}</span>` : ""}
-    <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100% !important;
+            margin: 0;
+            padding: 0;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
             color: ${t.ink};
             background-color: ${t.cloud};
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        img {
+            border: 0;
+            outline: none;
+            text-decoration: none;
+            max-width: 100%;
+            height: auto;
+            -ms-interpolation-mode: bicubic;
+        }
+        a { color: ${t.primary}; word-break: break-word; }
+        .email-outer {
+            width: 100%;
+            background-color: ${t.cloud};
+            padding: 24px 16px;
         }
         .email-container {
             max-width: 600px;
+            width: 100%;
             margin: 0 auto;
             background-color: #FFFFFF;
             border-radius: 16px;
@@ -136,6 +114,7 @@ export function generateBaseEmailTemplate(
         .email-body { padding: 40px 32px; }
         .welcome-text { font-size: 17px; color: ${t.graphite}; margin-bottom: 20px; font-weight: 600; }
         .confirmation-text { font-size: 15px; color: ${t.bodyText}; margin-bottom: 24px; line-height: 1.7; }
+        .cta-wrap { text-align: center; margin: 8px 0; }
         .cta-button {
             display: inline-block;
             background: ${t.primary};
@@ -196,6 +175,7 @@ export function generateBaseEmailTemplate(
             display: inline-block;
             margin: 4px 0;
             font-variant-numeric: tabular-nums;
+            max-width: 100%;
         }
         .otp-help { color: ${t.slate}; font-size: 13px; margin-top: 12px; line-height: 1.5; }
         .email-footer {
@@ -204,7 +184,10 @@ export function generateBaseEmailTemplate(
             text-align: center;
             border-top: 1px solid ${t.mist};
         }
-        .footer-text { color: ${t.slate}; font-size: 13px; margin-bottom: 14px; }
+        .footer-text { color: ${t.slate}; font-size: 13px; margin-bottom: 14px; line-height: 1.6; }
+        .footer-disclaimer { margin: 0 0 14px; text-align: center; }
+        .footer-disclaimer .footer-text:last-child { margin-bottom: 0; }
+        .footer-disclaimer a { word-break: break-all; }
         .footer-links { margin: 14px 0; }
         .footer-links a {
             color: ${t.primary};
@@ -266,6 +249,7 @@ export function generateBaseEmailTemplate(
         .status-cancelled { background-color: ${t.statusBadges.cancelled.bg}; color: ${t.statusBadges.cancelled.fg}; }
         @media (prefers-color-scheme: dark) {
             body { background-color: #0A0B0A; color: #E5E1D5; }
+            .email-outer { background-color: #0A0B0A; }
             .email-container { background-color: #151817; border-color: #262926; }
             .email-header { background: #151817; border-bottom-color: #262926; }
             .logo-light { display: none !important; }
@@ -297,19 +281,126 @@ export function generateBaseEmailTemplate(
             .cta-button:hover { background: ${t.darkPrimaryHover}; }
         }
         @media only screen and (max-width: 600px) {
-            .email-container { margin: 0; border-radius: 0; border-left: none; border-right: none; }
-            .email-header { padding: 36px 24px 28px 24px; }
-            .email-title { font-size: 24px; }
-            .email-body { padding: 32px 24px; }
-            .otp-code { font-size: 28px; letter-spacing: 6px; padding: 14px 18px; }
-            .cta-button { display: block; width: 100%; padding: 16px 20px; }
+            .email-outer { padding: 0; }
+            .email-container {
+                margin: 0;
+                width: 100% !important;
+                max-width: 100% !important;
+                border-radius: 0;
+                border-left: none;
+                border-right: none;
+            }
+            .email-header { padding: 32px 20px 24px; }
+            .email-title { font-size: 22px; }
+            .email-subtitle { font-size: 14px; }
+            .email-body { padding: 28px 20px; }
+            .welcome-text { font-size: 16px; }
+            .security-note { padding: 16px 18px; margin: 20px 0; }
+            .transaction-details { padding: 16px 18px; margin: 20px 0; }
+            .otp-container { padding: 20px 16px; }
+            .otp-code { font-size: 26px; letter-spacing: 5px; padding: 14px 16px; }
+            .cta-wrap { margin: 12px 0; }
+            .cta-button { display: block; width: 100%; padding: 16px 20px; box-sizing: border-box; margin: 16px 0; }
             .email-footer { padding: 24px 20px; }
             .footer-links a { display: block; margin: 10px 0; }
-            .detail-value { text-align: left; white-space: normal; }
+            .transaction-details-table,
+            .transaction-details-table tbody,
+            .transaction-details-table tr,
+            .transaction-details-table td {
+                display: block !important;
+                width: 100% !important;
+            }
+            .detail-row td { border-bottom: none; padding: 0; }
+            .detail-row .detail-label { padding-right: 0; padding-bottom: 2px; font-size: 12px; }
+            .detail-row .detail-value {
+                text-align: left !important;
+                white-space: normal;
+                word-break: break-word;
+                padding-bottom: 12px;
+                margin-bottom: 8px;
+                border-bottom: 1px solid #EFECE2;
+            }
+            .detail-row:last-child .detail-value {
+                border-bottom: none;
+                margin-bottom: 0;
+                padding-bottom: 0;
+            }
         }
+        @media (prefers-color-scheme: dark) and (max-width: 600px) {
+            .detail-row .detail-value { border-bottom-color: #262926; }
+        }
+  `.trim()
+}
+
+/** Light/dark wordmarks — swapped via `prefers-color-scheme: dark` in email clients that support it. */
+export function generateEmailLogoMarkup(width = 120): string {
+  return `
+            <img src="${EASNER_LOGO_URL_LIGHT}" alt="Easner" class="logo logo-light" width="${width}">
+            <img src="${EASNER_LOGO_URL_DARK}" alt="Easner" class="logo logo-dark" width="${width}">
+  `.trim()
+}
+
+export function generateBaseEmailTemplate(
+  title: string,
+  subtitle: string,
+  content: string,
+  ctaButton?: { text: string; url: string },
+  options?: EmailTemplateOptions,
+): string {
+  const audience = options?.audience ?? "personal"
+  const profile = getEmailAudienceProfile(audience)
+  /** Omit product line under the title — logo + H1 only (personal and business). */
+  const headerSubtitle =
+    subtitle.trim() === profile.productName.trim() ? "" : subtitle
+  const preheader = options?.preheader?.trim()
+  const year = new Date().getFullYear()
+  const t = emailTheme
+  const minimalFooter = options?.minimalFooter === true
+  const accountNotice = minimalFooter
+    ? ""
+    : resolveEmailFooterNotice(options?.recipientHasEasnerAccount !== false)
+
+  const preferencesBlock =
+    !minimalFooter && options?.showPreferencesLink !== false
+      ? `<p class="footer-text" style="margin-top: 12px;">
+          <a href="${profile.preferencesUrl}" style="color: ${t.primary}; text-decoration: none; font-size: 13px;">Manage email preferences</a>
+        </p>`
+      : ""
+
+  const helpBlock = minimalFooter
+    ? ""
+    : `<p class="footer-text">Need help? We're here for you.</p>
+            <div class="footer-links">
+                <a href="mailto:${profile.supportEmail}">Contact Support</a>
+            </div>`
+
+  const disclaimerBlock = options?.footerDisclaimerHtml?.trim()
+    ? `<div class="footer-disclaimer">${options.footerDisclaimerHtml.trim()}</div>`
+    : ""
+
+  const logoHtml = options?.logoMarkup?.trim() ?? generateEmailLogoMarkup()
+  const headerTitleBlock = options?.hideHeaderTitle
+    ? ""
+    : `<h1 class="email-title">${escapeHtml(title)}</h1>`
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+    <title>${escapeHtml(title)} - Easner</title>
+    ${preheader ? `<span style="display:none!important;visibility:hidden;mso-hide:all;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(preheader)}</span>` : ""}
+    <style>
+        ${generateEmailLayoutStyles()}
     </style>
 </head>
 <body>
+    <div class="email-outer">
     <div class="email-container">
         <div class="email-header">
             ${logoHtml}
@@ -318,7 +409,7 @@ export function generateBaseEmailTemplate(
         </div>
         <div class="email-body">
             ${content}
-            ${ctaButton ? `<div style="text-align: center;"><a href="${escapeHtml(ctaButton.url)}" class="cta-button">${escapeHtml(ctaButton.text)}</a></div>` : ""}
+            ${ctaButton ? `<div class="cta-wrap"><a href="${escapeHtml(ctaButton.url)}" class="cta-button">${escapeHtml(ctaButton.text)}</a></div>` : ""}
         </div>
         <div class="email-footer">
             ${helpBlock}
@@ -329,6 +420,7 @@ export function generateBaseEmailTemplate(
                 ${EASNER_COMPANY_ADDRESS_HTML}${accountNotice ? `<br>${escapeHtml(accountNotice)}` : ""}
             </p>
         </div>
+    </div>
     </div>
 </body>
 </html>

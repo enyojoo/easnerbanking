@@ -3,18 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
     <title>Verify your email - Easner</title>
     <span style="display:none!important;visibility:hidden;mso-hide:all;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">Your Easner verification code</span>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100% !important;
+            margin: 0;
+            padding: 0;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
             color: #1C201E;
             background-color: #F8F6F0;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        img {
+            border: 0;
+            outline: none;
+            text-decoration: none;
+            max-width: 100%;
+            height: auto;
+            -ms-interpolation-mode: bicubic;
+        }
+        a { color: #007ACC; word-break: break-word; }
+        .email-outer {
+            width: 100%;
+            background-color: #F8F6F0;
+            padding: 24px 16px;
         }
         .email-container {
             max-width: 600px;
+            width: 100%;
             margin: 0 auto;
             background-color: #FFFFFF;
             border-radius: 16px;
@@ -42,6 +70,7 @@
         .email-body { padding: 40px 32px; }
         .welcome-text { font-size: 17px; color: #0F1110; margin-bottom: 20px; font-weight: 600; }
         .confirmation-text { font-size: 15px; color: #3D403D; margin-bottom: 24px; line-height: 1.7; }
+        .cta-wrap { text-align: center; margin: 8px 0; }
         .cta-button {
             display: inline-block;
             background: #007ACC;
@@ -102,6 +131,7 @@
             display: inline-block;
             margin: 4px 0;
             font-variant-numeric: tabular-nums;
+            max-width: 100%;
         }
         .otp-help { color: #6F756F; font-size: 13px; margin-top: 12px; line-height: 1.5; }
         .email-footer {
@@ -110,7 +140,10 @@
             text-align: center;
             border-top: 1px solid #E9E4D8;
         }
-        .footer-text { color: #6F756F; font-size: 13px; margin-bottom: 14px; }
+        .footer-text { color: #6F756F; font-size: 13px; margin-bottom: 14px; line-height: 1.6; }
+        .footer-disclaimer { margin: 0 0 14px; text-align: center; }
+        .footer-disclaimer .footer-text:last-child { margin-bottom: 0; }
+        .footer-disclaimer a { word-break: break-all; }
         .footer-links { margin: 14px 0; }
         .footer-links a {
             color: #007ACC;
@@ -135,22 +168,26 @@
             letter-spacing: 0.08em;
             text-transform: uppercase;
         }
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .transaction-details-table {
+            width: 100%;
+            border-collapse: collapse;
+            border-spacing: 0;
+        }
+        .detail-row td {
             padding: 8px 0;
             border-bottom: 1px solid #EFECE2;
             font-size: 14px;
+            vertical-align: top;
         }
-        .detail-row:last-child { border-bottom: none; }
-        .detail-label { color: #6F756F; font-weight: 500; font-size: 13px; }
+        .detail-row:last-child td { border-bottom: none; }
+        .detail-label { color: #6F756F; font-weight: 500; font-size: 13px; padding-right: 16px; }
         .detail-value {
             color: #0F1110;
             font-weight: 600;
             font-size: 14px;
             font-variant-numeric: tabular-nums;
             text-align: right;
+            white-space: nowrap;
         }
         .status-badge {
             display: inline-block;
@@ -168,6 +205,7 @@
         .status-cancelled { background-color: #EFECE2; color: #6F756F; }
         @media (prefers-color-scheme: dark) {
             body { background-color: #0A0B0A; color: #E5E1D5; }
+            .email-outer { background-color: #0A0B0A; }
             .email-container { background-color: #151817; border-color: #262926; }
             .email-header { background: #151817; border-bottom-color: #262926; }
             .logo-light { display: none !important; }
@@ -192,27 +230,65 @@
             .footer-links a { color: #3AA6F8; }
             .transaction-details { background-color: #1C201E; border-color: #262926; }
             .transaction-details h3 { color: #F6F3EB; }
-            .detail-row { border-bottom-color: #262926; }
+            .detail-row td { border-bottom-color: #262926; }
             .detail-label { color: #8A8F8A; }
             .detail-value { color: #F6F3EB; }
             .cta-button { background: #3AA6F8; color: #F6F3EB !important; }
             .cta-button:hover { background: #2B8FDC; }
         }
         @media only screen and (max-width: 600px) {
-            .email-container { margin: 0; border-radius: 0; border-left: none; border-right: none; }
-            .email-header { padding: 36px 24px 28px 24px; }
-            .email-title { font-size: 24px; }
-            .email-body { padding: 32px 24px; }
-            .otp-code { font-size: 28px; letter-spacing: 6px; padding: 14px 18px; }
-            .cta-button { display: block; width: 100%; padding: 16px 20px; }
+            .email-outer { padding: 0; }
+            .email-container {
+                margin: 0;
+                width: 100% !important;
+                max-width: 100% !important;
+                border-radius: 0;
+                border-left: none;
+                border-right: none;
+            }
+            .email-header { padding: 32px 20px 24px; }
+            .email-title { font-size: 22px; }
+            .email-subtitle { font-size: 14px; }
+            .email-body { padding: 28px 20px; }
+            .welcome-text { font-size: 16px; }
+            .security-note { padding: 16px 18px; margin: 20px 0; }
+            .transaction-details { padding: 16px 18px; margin: 20px 0; }
+            .otp-container { padding: 20px 16px; }
+            .otp-code { font-size: 26px; letter-spacing: 5px; padding: 14px 16px; }
+            .cta-wrap { margin: 12px 0; }
+            .cta-button { display: block; width: 100%; padding: 16px 20px; box-sizing: border-box; margin: 16px 0; }
             .email-footer { padding: 24px 20px; }
             .footer-links a { display: block; margin: 10px 0; }
-            .detail-row { flex-direction: column; align-items: flex-start; gap: 2px; }
-            .detail-value { text-align: left; }
+            .transaction-details-table,
+            .transaction-details-table tbody,
+            .transaction-details-table tr,
+            .transaction-details-table td {
+                display: block !important;
+                width: 100% !important;
+            }
+            .detail-row td { border-bottom: none; padding: 0; }
+            .detail-row .detail-label { padding-right: 0; padding-bottom: 2px; font-size: 12px; }
+            .detail-row .detail-value {
+                text-align: left !important;
+                white-space: normal;
+                word-break: break-word;
+                padding-bottom: 12px;
+                margin-bottom: 8px;
+                border-bottom: 1px solid #EFECE2;
+            }
+            .detail-row:last-child .detail-value {
+                border-bottom: none;
+                margin-bottom: 0;
+                padding-bottom: 0;
+            }
+        }
+        @media (prefers-color-scheme: dark) and (max-width: 600px) {
+            .detail-row .detail-value { border-bottom-color: #262926; }
         }
     </style>
 </head>
 <body>
+    <div class="email-outer">
     <div class="email-container">
         <div class="email-header">
             <img src="https://seeqjiebmrnolcyydewj.supabase.co/storage/v1/object/public/brand/Easner%20Logo.png" alt="Easner" class="logo logo-light" width="120">
@@ -236,12 +312,13 @@
                 <a href="mailto:support@easner.com">Contact Support</a>
             </div>
             
+            
             <p class="company-info">
                 © 2026 Easner Group, Inc. All rights reserved.<br>
-                584 Castro St, Suite 4092<br>San Francisco, CA 94114, United States<br>
-                You received this email because you're creating an Easner account.
+                584 Castro St, Suite 4092<br>San Francisco, CA 94114, United States<br>You received this email because you're creating an Easner account.
             </p>
         </div>
+    </div>
     </div>
 </body>
 </html>
