@@ -22,6 +22,14 @@ export type EmailTemplateOptions = {
   showPreferencesLink?: boolean
   /** When true (default), footer uses existing-account copy; false for pre-account flows (signup OTP, invite to new email). */
   recipientHasEasnerAccount?: boolean
+  /** Hide the H1 title under the logo (body starts immediately below header). */
+  hideHeaderTitle?: boolean
+  /** Custom logo HTML; defaults to light/dark Easner wordmark pair. */
+  logoMarkup?: string
+  /** Replace default “Need help?” / Contact Support footer with custom HTML above copyright. */
+  footerDisclaimerHtml?: string
+  /** Omit default help links and account notice in footer (copyright + address kept). */
+  minimalFooter?: boolean
 }
 
 function escapeHtml(s: string): string {
@@ -55,14 +63,33 @@ export function generateBaseEmailTemplate(
   const preheader = options?.preheader?.trim()
   const year = new Date().getFullYear()
   const t = emailTheme
-  const accountNotice = resolveEmailFooterNotice(options?.recipientHasEasnerAccount !== false)
+  const minimalFooter = options?.minimalFooter === true
+  const accountNotice = minimalFooter
+    ? ""
+    : resolveEmailFooterNotice(options?.recipientHasEasnerAccount !== false)
 
   const preferencesBlock =
-    options?.showPreferencesLink !== false
+    !minimalFooter && options?.showPreferencesLink !== false
       ? `<p class="footer-text" style="margin-top: 12px;">
           <a href="${profile.preferencesUrl}" style="color: ${t.primary}; text-decoration: none; font-size: 13px;">Manage email preferences</a>
         </p>`
       : ""
+
+  const helpBlock = minimalFooter
+    ? ""
+    : `<p class="footer-text">Need help? We're here for you.</p>
+            <div class="footer-links">
+                <a href="mailto:${profile.supportEmail}">Contact Support</a>
+            </div>`
+
+  const disclaimerBlock = options?.footerDisclaimerHtml?.trim()
+    ? `<div class="footer-disclaimer">${options.footerDisclaimerHtml.trim()}</div>`
+    : ""
+
+  const logoHtml = options?.logoMarkup?.trim() ?? generateEmailLogoMarkup()
+  const headerTitleBlock = options?.hideHeaderTitle
+    ? ""
+    : `<h1 class="email-title">${escapeHtml(title)}</h1>`
 
   return `
 <!DOCTYPE html>
@@ -285,8 +312,8 @@ export function generateBaseEmailTemplate(
 <body>
     <div class="email-container">
         <div class="email-header">
-            ${generateEmailLogoMarkup()}
-            <h1 class="email-title">${escapeHtml(title)}</h1>
+            ${logoHtml}
+            ${headerTitleBlock}
             ${headerSubtitle ? `<p class="email-subtitle">${escapeHtml(headerSubtitle)}</p>` : ""}
         </div>
         <div class="email-body">
@@ -294,15 +321,12 @@ export function generateBaseEmailTemplate(
             ${ctaButton ? `<div style="text-align: center;"><a href="${escapeHtml(ctaButton.url)}" class="cta-button">${escapeHtml(ctaButton.text)}</a></div>` : ""}
         </div>
         <div class="email-footer">
-            <p class="footer-text">Need help? We're here for you.</p>
-            <div class="footer-links">
-                <a href="mailto:${profile.supportEmail}">Contact Support</a>
-            </div>
+            ${helpBlock}
             ${preferencesBlock}
+            ${disclaimerBlock}
             <p class="company-info">
                 © ${year} ${escapeHtml(EASNER_COMPANY_LEGAL_NAME)} All rights reserved.<br>
-                ${EASNER_COMPANY_ADDRESS_HTML}<br>
-                ${escapeHtml(accountNotice)}
+                ${EASNER_COMPANY_ADDRESS_HTML}${accountNotice ? `<br>${escapeHtml(accountNotice)}` : ""}
             </p>
         </div>
     </div>

@@ -38,7 +38,7 @@ const sampleIssuer = {
 }
 
 describe("invoice email templates", () => {
-  it("uses shared email footer and does not render merchant address in body", () => {
+  it("uses Easner Business logo, Dear-first body, and invoice footer disclaimer", () => {
     const html = generateInvoiceEmailHtml({
       invoice: sampleInvoice,
       invoiceViewUrl: "https://example.com/invoice-view/inv_1",
@@ -46,12 +46,20 @@ describe("invoice email templates", () => {
       businessReplyEmail: "billing@acme.com",
       issuer: sampleIssuer,
     })
+    expect(html).toContain("Easner%20Business.png")
+    expect(html).toContain("Dear Jane Doe")
     expect(html).toContain("Acme Ltd has sent you an invoice")
+    expect(html).not.toContain('<h1 class="email-title">')
+    expect(html).toContain(
+      "You're receiving this email because Acme Ltd uses Easner Business Banking services to manage their business processes.",
+    )
+    expect(html).toContain("If you have any questions about this invoice, contact")
     expect(html).toContain("billing@acme.com")
     expect(html).toContain("Easner Group, Inc.")
     expect(html).toContain("All rights reserved")
     expect(html).toContain("584 Castro St")
-    expect(html).toContain("Contact Support")
+    expect(html).not.toContain("Contact Support")
+    expect(html).not.toContain("You received this email because you have an Easner account")
     expect(html).not.toContain("10 Market St")
     expect(html).not.toContain("United Kingdom")
   })
@@ -68,7 +76,7 @@ describe("invoice email templates", () => {
     expect(html).toContain("Easner Group, Inc.")
   })
 
-  it("does not render merchant address block in receipt email", () => {
+  it("uses invoice customer footer on receipt email", () => {
     const html = generateInvoiceReceiptEmailHtml({
       invoice: { ...sampleInvoice, status: "paid" },
       invoiceViewUrl: "https://example.com/invoice-view/inv_1",
@@ -76,9 +84,13 @@ describe("invoice email templates", () => {
       businessReplyEmail: "billing@acme.com",
       issuer: sampleIssuer,
     })
-    expect(html).toContain("Payment received")
+    expect(html).toContain("Easner%20Business.png")
+    expect(html).toContain("Dear Jane Doe")
     expect(html).toContain("Thank you")
     expect(html).toContain("from Acme Ltd")
+    expect(html).toContain(
+      "You're receiving this email because Acme Ltd uses Easner Business Banking services",
+    )
     expect(html).toContain("Easner Group, Inc.")
     expect(html).not.toContain("10 Market St")
   })

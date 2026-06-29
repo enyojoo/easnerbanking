@@ -36,6 +36,9 @@ export const EASNER_LOGO_URL_LIGHT = `${EASNER_BRAND_CDN}/Easner%20Logo.png`
 export const EASNER_LOGO_URL_DARK =
   "https://kixymrjsupzkxokujmwu.supabase.co/storage/v1/object/public/brand/Easner%20LogoW.png"
 
+/** Easner Business wordmark for customer-facing invoice emails. */
+export const EASNER_BUSINESS_LOGO_URL = `${EASNER_BRAND_CDN}/Easner%20Business.png`
+
 /** @deprecated Use EASNER_LOGO_URL_LIGHT */
 export const EASNER_LOGO_URL = EASNER_LOGO_URL_LIGHT
 
