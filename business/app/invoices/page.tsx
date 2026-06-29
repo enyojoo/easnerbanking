@@ -320,8 +320,7 @@ export default function InvoicesPage() {
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading invoices…</p>
       ) : null}
-      {/* Header + Tabs - sticky below shell header / verification banner */}
-      <div className="sticky top-[var(--dashboard-sticky-top)] z-10 flex flex-col gap-4 shrink-0 pb-4 bg-background border-b">
+      <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Invoices</h1>
@@ -429,11 +428,11 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {/* Invoices Table - fixed min-height for consistent view when switching tabs */}
-      <Card className="flex flex-col min-h-[400px]">
-        <CardContent className="p-0 flex flex-col flex-1 min-h-0">
+      {/* Invoices table */}
+      <Card>
+        <CardContent className="p-0">
           {filteredInvoices.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-12">
               <div className="text-center">
                 <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto mb-4">
                   <DollarSign className="h-6 w-6 text-muted-foreground" />
@@ -445,7 +444,7 @@ export default function InvoicesPage() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 overflow-auto min-h-0">
+            <div className="overflow-x-auto">
               <table className="w-full min-w-[800px] table-fixed">
                 <colgroup>
                   <col style={{ width: "22%" }} />
