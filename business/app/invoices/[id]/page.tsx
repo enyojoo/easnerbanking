@@ -693,6 +693,7 @@ export default function InvoiceDetailPage() {
                     canProvisionDepositInstructions ? bankAccount : undefined,
                     canProvisionDepositInstructions ? stablecoinAccount : undefined,
                     issuer,
+                    { publicEasetag: orgEasetag ?? undefined },
                   )
                 } catch (err) {
                   console.error("Failed to download PDF:", err)

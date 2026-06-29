@@ -61,19 +61,20 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
   const replyEmail = await resolveInvoiceReplyEmail(admin, businessId, "")
   if (!replyEmail) return false
 
-  const pdfBuffer = await generateInvoicePdfBuffer(
-    invoice,
-    display.includePaymentOnPdf ? payIn.bankAccount : undefined,
-    display.includePaymentOnPdf ? payIn.stablecoinAccount : undefined,
-    { ...issuer, email: replyEmail },
-  )
-
   const easetag =
     typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com"
   const invoiceViewUrl = easetag
     ? `${baseUrl}${invoicePublicViewPath(easetag, invoice.invoiceNumber)}`
     : `${baseUrl}/invoice-view/${invoice.id}`
+
+  const pdfBuffer = await generateInvoicePdfBuffer(
+    invoice,
+    display.includePaymentOnPdf ? payIn.bankAccount : undefined,
+    display.includePaymentOnPdf ? payIn.stablecoinAccount : undefined,
+    { ...issuer, email: replyEmail },
+    invoiceViewUrl,
+  )
 
   const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {
     businessName: issuer.name,

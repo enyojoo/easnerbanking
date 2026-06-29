@@ -12,6 +12,7 @@ export async function generateInvoicePdfBuffer(
   bankAccount?: Account,
   stablecoinAccount?: StablecoinAccount,
   issuer?: InvoicePdfIssuer,
+  invoiceViewUrl?: string,
 ): Promise<Buffer> {
   const logoUrl = PDF_LOGO_DATA_URL
 
@@ -35,6 +36,7 @@ export async function generateInvoicePdfBuffer(
       issuer={issuer}
       logoUrl={logoUrl}
       qrDataUrl={qrDataUrl}
+      invoiceViewUrl={invoiceViewUrl}
     />
   )
 }

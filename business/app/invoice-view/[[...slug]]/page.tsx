@@ -204,7 +204,9 @@ export default function InvoiceViewPage() {
     if (!invoice) return
     setIsDownloading(true)
     try {
-      await downloadInvoicePdf(invoice, bankAccount, stablecoinAccount, displayIssuer)
+      await downloadInvoicePdf(invoice, bankAccount, stablecoinAccount, displayIssuer, {
+        publicEasetag: publicEasetag ?? undefined,
+      })
     } catch (err) {
       console.error("Failed to download PDF:", err)
     } finally {

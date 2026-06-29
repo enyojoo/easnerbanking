@@ -116,13 +116,6 @@ export async function POST(request: NextRequest) {
 
     const issuerForCustomer = { ...issuer, email: businessReplyEmail }
 
-    const pdfBuffer = await generateInvoicePdfBuffer(
-      invoice,
-      paymentDisplay.includePaymentOnPdf ? payIn.bankAccount : undefined,
-      paymentDisplay.includePaymentOnPdf ? payIn.stablecoinAccount : undefined,
-      issuerForCustomer,
-    )
-
     const origin =
       request.headers.get("origin") ||
       request.headers.get("x-forwarded-host") ||
@@ -138,6 +131,14 @@ export async function POST(request: NextRequest) {
     const invoiceViewUrl = easetag
       ? `${baseUrl}${invoicePublicViewPath(easetag, invoice.invoiceNumber)}`
       : `${baseUrl}/invoice-view/${invoice.id}`
+
+    const pdfBuffer = await generateInvoicePdfBuffer(
+      invoice,
+      paymentDisplay.includePaymentOnPdf ? payIn.bankAccount : undefined,
+      paymentDisplay.includePaymentOnPdf ? payIn.stablecoinAccount : undefined,
+      issuerForCustomer,
+      invoiceViewUrl,
+    )
 
     const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {
       businessName: issuer.name,

@@ -52,4 +52,15 @@ describe("generateInvoicePdfBuffer", () => {
     )
     expect(buf.length).toBeGreaterThan(500)
   })
+
+  it("renders EUR invoice with view link", async () => {
+    const buf = await generateInvoicePdfBuffer(
+      { ...baseInvoice, currency: "EUR", total: 250.5 },
+      undefined,
+      undefined,
+      undefined,
+      "https://business.easner.com/invoice-view/acme/einv-testpdf001",
+    )
+    expect(buf.length).toBeGreaterThan(500)
+  })
 })
