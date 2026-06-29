@@ -78,6 +78,7 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
   const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {
     businessName: issuer.name,
     businessReplyEmail: replyEmail,
+    issuer: { ...issuer, email: replyEmail },
   })
 
   if (!result.success) return false

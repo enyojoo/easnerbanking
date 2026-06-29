@@ -2,10 +2,17 @@ import sgMail from "@sendgrid/mail"
 import {
   generateInvoiceEmailHtml,
   generateInvoiceEmailText,
+  generateInvoiceReceiptEmailHtml,
+  generateInvoiceReceiptEmailText,
+  generateInvoiceViewedNotificationHtml,
+  generateInvoiceViewedNotificationText,
   getInvoiceEmailSubject,
+  getInvoiceReceiptEmailSubject,
+  getInvoiceViewedNotificationSubject,
   type InvoiceEmailData,
 } from "@/lib/invoice-email-template"
-import { businessInfo } from "@/lib/business-info"
+import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
+import { resolveInvoiceFromEmail } from "@/lib/invoices/invoice-from-email"
 import type { Invoice } from "@/lib/b2b/types"
 
 let apiKeyInitialized = false
@@ -31,14 +38,14 @@ export async function sendInvoiceEmail(
   invoice: Invoice,
   invoiceViewUrl: string,
   pdfBuffer: Buffer,
-  options?: { businessName?: string; businessReplyEmail: string },
+  options?: { businessName?: string; businessReplyEmail: string; issuer?: InvoicePdfIssuer },
 ): Promise<SendInvoiceEmailResult> {
   if (!invoice.customerEmail?.trim()) {
     return { success: false, error: "Invoice has no customer email" }
   }
 
-  const businessReplyEmail = options?.businessReplyEmail?.trim()
-  if (!businessReplyEmail) {
+  const replyEmail = options?.businessReplyEmail?.trim()
+  if (!replyEmail) {
     return {
       success: false,
       error: "Business reply email is required for invoice delivery",
@@ -48,21 +55,25 @@ export async function sendInvoiceEmail(
   try {
     ensureSendGridInitialized()
 
-    const fromEmail =
-      process.env.SENDGRID_FROM_EMAIL_BUSINESS ||
-      process.env.SENDGRID_FROM_EMAIL ||
-      "invoices@easner.com"
-    const fromName =
-      process.env.SENDGRID_FROM_NAME_BUSINESS ||
-      process.env.SENDGRID_FROM_NAME ||
-      "Easner Business"
-    const businessName = options?.businessName?.trim() || businessInfo.name
+    const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
+    const businessName = options?.businessName?.trim() || options?.issuer?.name?.trim() || "Business"
+    const issuer: InvoicePdfIssuer = options?.issuer ?? {
+      name: businessName,
+      address: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      country: "",
+      email: replyEmail,
+      phone: "",
+    }
 
     const data: InvoiceEmailData = {
       invoice,
       invoiceViewUrl,
       businessName,
-      businessReplyEmail,
+      businessReplyEmail: replyEmail,
+      issuer: { ...issuer, name: issuer.name?.trim() || businessName, email: replyEmail },
     }
 
     const html = generateInvoiceEmailHtml(data)
@@ -103,28 +114,23 @@ export async function sendInvoiceViewNotificationEmail(input: {
   to: string
   businessName: string
   invoice: Invoice
+  manageInvoiceUrl: string
 }): Promise<SendInvoiceEmailResult> {
   try {
     ensureSendGridInitialized()
-    const fromEmail =
-      process.env.SENDGRID_FROM_EMAIL_BUSINESS ||
-      process.env.SENDGRID_FROM_EMAIL ||
-      "invoices@easner.com"
-    const fromName =
-      process.env.SENDGRID_FROM_NAME_BUSINESS ||
-      process.env.SENDGRID_FROM_NAME ||
-      "Easner Business"
-
-    const subject = `Customer viewed invoice ${input.invoice.invoiceNumber}`
-    const text = `${input.invoice.customerName || "A customer"} viewed invoice ${input.invoice.invoiceNumber} for ${input.invoice.currency} ${input.invoice.total}.`
-    const html = `<p>${text}</p>`
+    const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
+    const templateData = {
+      invoice: input.invoice,
+      businessName: input.businessName,
+      manageInvoiceUrl: input.manageInvoiceUrl,
+    }
 
     await sgMail.send({
       to: input.to,
       from: { email: fromEmail, name: fromName },
-      subject,
-      text,
-      html,
+      subject: getInvoiceViewedNotificationSubject(input.invoice.invoiceNumber),
+      text: generateInvoiceViewedNotificationText(templateData),
+      html: generateInvoiceViewedNotificationHtml(templateData),
     })
     return { success: true }
   } catch (err) {
@@ -142,6 +148,7 @@ export async function sendInvoiceReceiptEmail(input: {
   businessName?: string
   businessReplyEmail: string
   invoiceViewUrl?: string
+  issuer?: InvoicePdfIssuer
 }): Promise<SendInvoiceEmailResult> {
   if (!input.invoice.customerEmail?.trim()) {
     return { success: false, error: "Invoice has no customer email" }
@@ -149,27 +156,34 @@ export async function sendInvoiceReceiptEmail(input: {
 
   try {
     ensureSendGridInitialized()
-    const fromEmail =
-      process.env.SENDGRID_FROM_EMAIL_BUSINESS ||
-      process.env.SENDGRID_FROM_EMAIL ||
-      "invoices@easner.com"
-    const fromName =
-      process.env.SENDGRID_FROM_NAME_BUSINESS ||
-      process.env.SENDGRID_FROM_NAME ||
-      "Easner Business"
-    const businessName = input.businessName?.trim() || businessInfo.name
-
-    const subject = `Payment received for invoice ${input.invoice.invoiceNumber}`
-    const text = `Thank you — we received your payment for invoice ${input.invoice.invoiceNumber} (${input.invoice.currency} ${input.invoice.total}).`
-    const html = `<p>${text}</p>${input.invoiceViewUrl ? `<p><a href="${input.invoiceViewUrl}">View invoice</a></p>` : ""}`
+    const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
+    const businessName = input.businessName?.trim() || input.issuer?.name?.trim() || "Business"
+    const invoiceViewUrl = input.invoiceViewUrl?.trim() || ""
+    const issuer: InvoicePdfIssuer = input.issuer ?? {
+      name: businessName,
+      address: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      country: "",
+      email: input.businessReplyEmail,
+      phone: "",
+    }
+    const templateData = {
+      invoice: input.invoice,
+      invoiceViewUrl,
+      businessName,
+      businessReplyEmail: input.businessReplyEmail,
+      issuer: { ...issuer, name: issuer.name?.trim() || businessName, email: input.businessReplyEmail },
+    }
 
     await sgMail.send({
       to: input.invoice.customerEmail,
       from: { email: fromEmail, name: fromName },
       replyTo: input.businessReplyEmail,
-      subject,
-      text,
-      html,
+      subject: getInvoiceReceiptEmailSubject(input.invoice.invoiceNumber),
+      text: generateInvoiceReceiptEmailText(templateData),
+      html: generateInvoiceReceiptEmailHtml(templateData),
       attachments: [
         {
           content: input.pdfBuffer.toString("base64"),

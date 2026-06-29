@@ -52,9 +52,11 @@ import { dueDateFromPaymentTerms } from "@/lib/invoices/due-date"
 import { useInvoicePayIn } from "@/hooks/use-invoice-pay-in"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
 import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
-import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
+import { resolvePaymentDisplay, defaultPaymentDisplayFromForm } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import { isInvoiceFieldsLocked, invoiceFieldsLockBanner } from "@/lib/invoices/invoice-edit-lock"
+import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoice-business-readiness"
+import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
 import { Checkbox } from "@/components/ui/checkbox"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
@@ -145,6 +147,7 @@ export default function CreateInvoicePage() {
   const profile = useBusinessProfile()
   const { baseCurrency, isLoading: profileLoading, tier1Complete, invoiceSettings } = profile
   const issuer = issuerFromBusinessProfile(profile)
+  const invoiceReadiness = assessInvoiceBusinessReadinessFromProfile(profile)
 
   const [formData, setFormData] = useState<InvoiceForm>({
     customerId: "",
@@ -569,6 +572,25 @@ export default function CreateInvoicePage() {
         <Link href={backHref}>
           <Button>Go back</Button>
         </Link>
+      </div>
+    )
+  }
+
+  if (!isEditMode && !invoiceReadiness.ready) {
+    return (
+      <div className="space-y-6 max-w-2xl">
+        <div className="flex items-center gap-4">
+          <Link href={backHref}>
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">Create invoice</h1>
+            <p className="text-muted-foreground">Set up your business profile first</p>
+          </div>
+        </div>
+        <InvoiceBusinessSetupBanner readiness={invoiceReadiness} />
       </div>
     )
   }

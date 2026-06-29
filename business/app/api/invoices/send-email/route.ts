@@ -10,6 +10,7 @@ import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import { sendInvoiceEmail } from "@/lib/invoice-email-service"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
+import { assessInvoiceBusinessReadinessFromIssuer } from "@/lib/invoices/invoice-business-readiness"
 import {
   canProvisionInvoiceDepositInstructions,
   TIER2_COMPLETE_PLACEHOLDER,
@@ -99,6 +100,10 @@ export async function POST(request: NextRequest) {
       ctx.businessId,
       ctx.userId,
     )
+    const readiness = assessInvoiceBusinessReadinessFromIssuer(issuer, businessReplyEmail)
+    if (!readiness.ready) {
+      return NextResponse.json({ error: readiness.message }, { status: 400 })
+    }
     if (!businessReplyEmail) {
       return NextResponse.json(
         {
@@ -137,6 +142,7 @@ export async function POST(request: NextRequest) {
     const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {
       businessName: issuer.name,
       businessReplyEmail,
+      issuer: { ...issuer, email: businessReplyEmail },
     })
 
     if (!result.success) {

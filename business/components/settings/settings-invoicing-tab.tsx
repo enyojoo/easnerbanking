@@ -65,6 +65,35 @@ export function SettingsInvoicingTab() {
     <div className="space-y-6 max-w-2xl">
       <Card>
         <CardHeader>
+          <CardTitle>Customer email delivery</CardTitle>
+          <CardDescription>
+            Invoice emails are sent from Easner Business (<strong>invoices@easner.com</strong>).
+            Customer replies go to your business support email below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">Reply-To for customers</span>
+            <span className="font-medium text-right">
+              {profile.invoiceReplyEmail?.trim() || "Add support email in Business settings"}
+            </span>
+          </div>
+          {profile.invoiceReplyEmailSource ? (
+            <p className="text-xs text-muted-foreground">
+              Resolved from{" "}
+              {profile.invoiceReplyEmailSource === "support"
+                ? "Settings → Business → Support Email"
+                : profile.invoiceReplyEmailSource === "owner"
+                  ? "organization owner account email"
+                  : "your account email"}
+              .
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
             Default payment methods

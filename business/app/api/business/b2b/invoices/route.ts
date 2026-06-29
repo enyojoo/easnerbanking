@@ -8,6 +8,11 @@ import {
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import type { Invoice } from "@/lib/b2b/types"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import {
+  fetchInvoiceIssuerForBusiness,
+  resolveInvoiceReplyEmail,
+} from "@/lib/invoices/issuer"
+import { assessInvoiceBusinessReadinessFromIssuer } from "@/lib/invoices/invoice-business-readiness"
 
 export async function GET(request: Request) {
   const ctx = await requireBusinessOrg(request)
@@ -55,6 +60,17 @@ export async function POST(request: Request) {
   const customerId = rawCustomerId && isUuid(rawCustomerId) ? rawCustomerId : null
 
   const admin = createSupabaseAdmin()
+
+  const issuer = await fetchInvoiceIssuerForBusiness(admin, ctx.businessId)
+  const invoiceReplyEmail = await resolveInvoiceReplyEmail(
+    admin,
+    ctx.businessId,
+    ctx.userId,
+  )
+  const readiness = assessInvoiceBusinessReadinessFromIssuer(issuer, invoiceReplyEmail)
+  if (!readiness.ready) {
+    return NextResponse.json({ error: readiness.message }, { status: 400 })
+  }
 
   if (customerId) {
     const { data: cust } = await admin

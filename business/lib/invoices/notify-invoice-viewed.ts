@@ -1,5 +1,8 @@
 import { mapRowToInvoice, type B2bInvoiceRow } from "@/lib/b2b/map-invoice"
-import { fetchInvoiceIssuerForBusiness } from "@/lib/invoices/issuer"
+import {
+  fetchInvoiceIssuerForBusiness,
+  resolveInvoiceReplyEmail,
+} from "@/lib/invoices/issuer"
 import { sendInvoiceViewNotificationEmail } from "@/lib/invoice-email-service"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
@@ -36,12 +39,16 @@ export async function notifyMerchantInvoiceViewed(invoiceId: string): Promise<vo
   if (!notifyEnabled(settings)) return
 
   const issuer = await fetchInvoiceIssuerForBusiness(admin, b2b.business_id)
-  const replyEmail = issuer.email?.trim()
+  const replyEmail = await resolveInvoiceReplyEmail(admin, b2b.business_id, "")
   if (!replyEmail) return
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com"
+  const manageInvoiceUrl = `${baseUrl.replace(/\/$/, "")}/invoices/${invoice.id}`
 
   await sendInvoiceViewNotificationEmail({
     to: replyEmail.trim(),
-    businessName: (biz?.name as string | null)?.trim() || "Your business",
+    businessName: issuer.name?.trim() || (biz?.name as string | null)?.trim() || "Your business",
     invoice,
+    manageInvoiceUrl,
   })
 }

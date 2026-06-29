@@ -54,6 +54,8 @@ import type { Invoice } from "@/lib/b2b/types"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
+import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoice-business-readiness"
+import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
 import type { Account, StablecoinAccount } from "@/lib/finance-types"
 import {
   TIER2_COMPLETE_PLACEHOLDER,
@@ -70,6 +72,10 @@ export default function InvoicesPage() {
   const profile = useBusinessProfile()
   const { tier1Complete } = profile
   const issuer = issuerFromBusinessProfile(profile)
+  const invoiceReadiness = useMemo(
+    () => assessInvoiceBusinessReadinessFromProfile(profile),
+    [profile],
+  )
   const invoicesQuery = useInvoicesList()
   const addInvoiceMut = useAddInvoice()
   const updateInvoiceMut = useUpdateInvoice()
@@ -309,6 +315,7 @@ export default function InvoicesPage() {
           {invoicesError}
         </p>
       ) : null}
+      <InvoiceBusinessSetupBanner readiness={invoiceReadiness} />
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading invoices…</p>
       ) : null}
@@ -349,12 +356,19 @@ export default function InvoicesPage() {
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
-            <Link href={withReturnTo("/invoices/create", listHere)}>
-              <Button>
+            {invoiceReadiness.ready ? (
+              <Link href={withReturnTo("/invoices/create", listHere)}>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create invoice
+                </Button>
+              </Link>
+            ) : (
+              <Button disabled title={invoiceReadiness.message}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create invoice
               </Button>
-            </Link>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -37,13 +37,19 @@ const personalName = process.env.SENDGRID_FROM_NAME || "Easner"
 const businessFrom =
   process.env.SENDGRID_FROM_EMAIL_BUSINESS ||
   process.env.SENDGRID_FROM_EMAIL ||
-  "invoices@easner.com"
+  "business@easner.com"
 const businessName = process.env.SENDGRID_FROM_NAME_BUSINESS || "Easner Business"
+const invoiceFrom = process.env.SENDGRID_FROM_EMAIL_INVOICES || "invoices@easner.com"
+const invoiceName =
+  process.env.SENDGRID_FROM_NAME_INVOICES ||
+  process.env.SENDGRID_FROM_NAME_BUSINESS ||
+  "Easner Business"
 const replyTo = process.env.SENDGRID_REPLY_TO || "support@easner.com"
 
 console.log("\nResolved from profiles:")
 console.log(`  personal: ${personalName} <${personalFrom}>`)
 console.log(`  business: ${businessName} <${businessFrom}>`)
+console.log(`  invoices: ${invoiceName} <${invoiceFrom}>`)
 console.log(`  reply-to: ${replyTo}`)
 
 console.log("\nLedger transaction emails:")

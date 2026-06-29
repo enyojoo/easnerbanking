@@ -27,6 +27,8 @@ Welcome, KYB/KYC, team invite, security, and invoice emails are always subject t
 | `SENDGRID_FROM_NAME` | Recommended | Personal from display name |
 | `SENDGRID_FROM_EMAIL_BUSINESS` | Recommended | Business from address (falls back to `SENDGRID_FROM_EMAIL`) |
 | `SENDGRID_FROM_NAME_BUSINESS` | Recommended | Business from display name |
+| `SENDGRID_FROM_EMAIL_INVOICES` | Optional | Invoice to-customer from address (default **`invoices@easner.com`**, independent of business from) |
+| `SENDGRID_FROM_NAME_INVOICES` | Optional | Invoice from display name (defaults to `SENDGRID_FROM_NAME_BUSINESS`) |
 | `SENDGRID_REPLY_TO` | Recommended | Reply-to / support routing |
 | `LEDGER_TRANSACTION_EMAIL_ENABLED` | Optional | Default **on**. Set `false` to disable ledger transaction emails platform-wide |
 | `NEXT_PUBLIC_MOBILE_APP_URL` | Optional | Personal email / universal-link origin (default `https://app.easner.com`) |
@@ -117,13 +119,17 @@ Separate from the shared template registry (`business/lib/invoice-email-service.
 
 | Field | Value |
 |-------|--------|
-| **From** | Easner Business — `SENDGRID_FROM_EMAIL_BUSINESS` → `SENDGRID_FROM_EMAIL` → `invoices@easner.com` |
+| **From** | **Easner Business** — `SENDGRID_FROM_EMAIL_INVOICES` (default **`invoices@easner.com`**). Does **not** use `SENDGRID_FROM_EMAIL_BUSINESS` (`business@easner.com`). |
 | **Reply-To** | Org **Settings → Business → Support Email**; else org owner email; else sender’s account email |
 | **Subject** | `{Invoice from \| Reminder…} {businessName} – {invoiceNumber}` |
 | **Attachment** | Invoice PDF (contact block uses same Reply-To email) |
 | **Footer** | “Contact **{businessName}** at **{reply email}**” |
-| **Trigger** | `POST /api/invoices/send-email` |
-| **Blocked when** | No support, owner, or sender email can be resolved (400 with settings hint) |
+| **Trigger** | `POST /api/invoices/send-email`, reminder cron |
+| **Blocked when** | Business profile incomplete or no reply email can be resolved (400 with settings hint) |
+
+**Customer viewed invoice** (to merchant): styled template in `invoice-email-template.ts` — same Easner Business shell; CTA links to `/invoices/{id}` in the business app.
+
+**Payment receipt** (to customer on mark paid): styled template with merchant header block, payment confirmation, PDF attachment.
 
 Platform mail to business users still uses **`SENDGRID_REPLY_TO`** (Easner support). Invoice Reply-To is per org, not env-based.
 

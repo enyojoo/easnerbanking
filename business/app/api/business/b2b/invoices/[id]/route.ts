@@ -173,6 +173,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             businessName: issuer.name,
             businessReplyEmail: reply,
             invoiceViewUrl: viewUrl,
+            issuer: { ...issuer, email: reply },
           })
         } catch (e) {
           console.error("paid receipt email:", e)
