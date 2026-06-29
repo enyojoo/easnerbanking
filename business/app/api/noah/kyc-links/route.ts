@@ -33,21 +33,25 @@ export async function POST(request: Request) {
   if (!ctx.ok) return ctx.response
 
   try {
-    const session = await noahFetch<Record<string, unknown>>({
-      method: "POST",
-      path: `/onboarding/${encodeURIComponent(ctx.noahCustomerId)}`,
-      json: buildHostedOnboardingBody({
-        scope: ctx.scope,
-        customerType: ctx.customerType,
-        metadata: {
-          easner_user_id: user.id,
-          ...(ctx.businessId ? { easner_business_id: ctx.businessId } : {}),
-          full_name: body.full_name || "",
-          email: body.email || user.email || "",
-          easner_product: ctx.scope === "business" ? "easner_business" : "easner_mobile",
-        },
-      }),
-    })
+    // Noah returns an empty body (→ `noahFetch` resolves `null`) when there's no resumable hosted
+    // session — e.g. a fully-submitted customer that's under review. Coalesce so we never deref null
+    // (this was the source of "Cannot read properties of null (reading 'HostedURL')").
+    const session =
+      (await noahFetch<Record<string, unknown> | null>({
+        method: "POST",
+        path: `/onboarding/${encodeURIComponent(ctx.noahCustomerId)}`,
+        json: buildHostedOnboardingBody({
+          scope: ctx.scope,
+          customerType: ctx.customerType,
+          metadata: {
+            easner_user_id: user.id,
+            ...(ctx.businessId ? { easner_business_id: ctx.businessId } : {}),
+            full_name: body.full_name || "",
+            email: body.email || user.email || "",
+            easner_product: ctx.scope === "business" ? "easner_business" : "easner_mobile",
+          },
+        }),
+      })) ?? {}
 
     const hostedUrl = typeof session.HostedURL === "string" ? session.HostedURL.trim() : ""
     if (hostedUrl) {

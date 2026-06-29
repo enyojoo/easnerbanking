@@ -50,6 +50,8 @@ export function BusinessVerificationSection() {
 
   const [busy, setBusy] = useState<null | "link">(null)
   const [error, setError] = useState<string | null>(null)
+  /** Neutral (non-error) notice, e.g. when KYB is already submitted and under review. */
+  const [info, setInfo] = useState<string | null>(null)
   const [hostedOpen, setHostedOpen] = useState(false)
   const [hostedUrl, setHostedUrl] = useState<string | null>(null)
   /** Which tier the hosted iframe session is for (only Tier 1 today; same header pattern for future tiers). */
@@ -118,8 +120,9 @@ export function BusinessVerificationSection() {
 
   const openHostedVerification = useCallback(async () => {
     setError(null)
+    setInfo(null)
     if (!businessId) {
-      setError("Your organization is still being set up. Refresh and try again in a moment.")
+      setInfo("Your organization is still being set up. Refresh and try again in a moment.")
       return
     }
     setBusy("link")
@@ -168,14 +171,19 @@ export function BusinessVerificationSection() {
         void syncBusinessTier1FromNoah()
         if (json.kyc_status === "approved") {
           setError(null)
+          setInfo(null)
           return
         }
-        setError(
+        if (json.kyc_status === "rejected") {
+          setError("Verification was declined. Review the message above or contact support.")
+          return
+        }
+        // Submitted with no resumable hosted session (Noah returns an empty onboarding body) — this is
+        // a normal "in review" state, not a failure. Show it as a neutral notice, not a red error.
+        setInfo(
           json.kyc_status === "under_review" || json.kyc_status === "in_review"
-            ? "Verification is already in review. We will update your status shortly."
-            : json.kyc_status === "rejected"
-              ? "Verification was declined. Review the message above or contact support."
-              : "Verification session is not available right now. Try again shortly or contact support.",
+            ? "Your verification is already in review. We'll update your status here shortly — no action needed right now."
+            : "No additional verification steps are available right now. We'll update your status shortly.",
         )
         return
       }
@@ -201,6 +209,10 @@ export function BusinessVerificationSection() {
   const hostedTierTitle = hostedTierMeta?.title ?? `Tier ${hostedTierLevel}`
   const tier1Rejected = tier1VerificationStatus === "rejected"
   const rejectionCopy = tier1Rejected ? formatNoahRejectionReasonsText(tier1RejectionReasons) : ""
+  const tier1UnderReview = (() => {
+    const s = (tier1VerificationStatus || "").toLowerCase()
+    return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
+  })()
 
   return (
     <div className="space-y-6" id="business-verification">
@@ -243,6 +255,7 @@ export function BusinessVerificationSection() {
               {isT1 ? (
                 <CardContent className="space-y-4 pt-0">
                   {error ? <p className="text-sm text-destructive">{error}</p> : null}
+                  {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
                   {tier1Rejected && rejectionCopy ? (
                     <p className="text-sm text-destructive">
                       Verification was declined: {rejectionCopy}. Review your documents and try again, or contact
@@ -272,7 +285,11 @@ export function BusinessVerificationSection() {
                         onClick={() => void openHostedVerification()}
                         disabled={busy !== null || !businessId}
                       >
-                        {busy === "link" ? "Opening…" : "Begin verification"}
+                        {busy === "link"
+                          ? "Opening…"
+                          : tier1UnderReview || tier1Rejected
+                            ? "Continue verification"
+                            : "Begin verification"}
                       </Button>
                     ) : null}
                   </div>

@@ -39,19 +39,22 @@ export async function POST(request: Request) {
   const errors: string[] = []
 
   try {
-    const session = await noahFetch<Record<string, unknown>>({
-      method: "POST",
-      path: `/onboarding/${encodeURIComponent(noahCustomerId)}`,
-      json: buildHostedOnboardingBody({
-        scope,
-        customerType,
-        metadata: {
-          easner_user_id: subjectUserId,
-          ...(acc.ctx.subjectBusinessId ? { easner_business_id: acc.ctx.subjectBusinessId } : {}),
-          easner_product: scope === "business" ? "easner_business" : "easner_mobile",
-        },
-      }),
-    })
+    // Noah returns an empty body (→ null) when there's no resumable hosted session (e.g. submitted/
+    // under review). Coalesce so we never deref null ("Cannot read properties of null").
+    const session =
+      (await noahFetch<Record<string, unknown> | null>({
+        method: "POST",
+        path: `/onboarding/${encodeURIComponent(noahCustomerId)}`,
+        json: buildHostedOnboardingBody({
+          scope,
+          customerType,
+          metadata: {
+            easner_user_id: subjectUserId,
+            ...(acc.ctx.subjectBusinessId ? { easner_business_id: acc.ctx.subjectBusinessId } : {}),
+            easner_product: scope === "business" ? "easner_business" : "easner_mobile",
+          },
+        }),
+      })) ?? {}
 
     const hostedUrl = session.HostedURL as string | undefined
     if (hostedUrl) {
