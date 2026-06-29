@@ -137,7 +137,6 @@ export async function POST(request: NextRequest) {
       paymentDisplay.includePaymentOnPdf ? payIn.bankAccount : undefined,
       paymentDisplay.includePaymentOnPdf ? payIn.stablecoinAccount : undefined,
       issuerForCustomer,
-      invoiceViewUrl,
     )
 
     const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {

@@ -73,7 +73,6 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
     display.includePaymentOnPdf ? payIn.bankAccount : undefined,
     display.includePaymentOnPdf ? payIn.stablecoinAccount : undefined,
     { ...issuer, email: replyEmail },
-    invoiceViewUrl,
   )
 
   const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {

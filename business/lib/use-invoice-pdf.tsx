@@ -7,23 +7,7 @@ import type { Invoice } from "@/lib/b2b/types"
 import type { Account } from "@/lib/finance-types"
 import type { StablecoinAccount } from "@/lib/finance-types"
 import { PDF_LOGO_DATA_URL } from "@/lib/pdf-logo-base64"
-import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
-
-function resolveClientInvoiceViewUrl(
-  invoice: Invoice,
-  invoiceViewUrl?: string,
-  publicEasetag?: string,
-): string | undefined {
-  const explicit = invoiceViewUrl?.trim()
-  if (explicit) return explicit
-  if (typeof window === "undefined") return undefined
-  const origin = window.location.origin
-  if (publicEasetag?.trim()) {
-    return `${origin}${invoicePublicViewPath(publicEasetag.trim(), invoice.invoiceNumber)}`
-  }
-  return `${origin}/invoice-view/${invoice.id}`
-}
 
 async function getLogoDataUrl(): Promise<string> {
   if (typeof window === "undefined") return PDF_LOGO_DATA_URL
@@ -47,7 +31,6 @@ export async function downloadInvoicePdf(
   bankAccount: Account | undefined,
   stablecoinAccount: StablecoinAccount | undefined,
   issuer?: InvoicePdfIssuer,
-  options?: { invoiceViewUrl?: string; publicEasetag?: string },
 ): Promise<void> {
   const logoUrl = await getLogoDataUrl()
 
@@ -71,11 +54,6 @@ export async function downloadInvoicePdf(
       issuer={issuer}
       logoUrl={logoUrl}
       qrDataUrl={qrDataUrl}
-      invoiceViewUrl={resolveClientInvoiceViewUrl(
-        invoice,
-        options?.invoiceViewUrl,
-        options?.publicEasetag,
-      )}
     />
   ).toBlob()
 

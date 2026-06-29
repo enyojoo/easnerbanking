@@ -288,24 +288,6 @@ const styles = StyleSheet.create({
     objectFit: "contain",
     flexShrink: 0,
   },
-  viewOnlineSection: {
-    marginBottom: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#D9D4C7",
-    borderRadius: 6,
-    backgroundColor: "#F8F6F0",
-  },
-  viewOnlineLabel: {
-    fontSize: 9,
-    color: "#6F756F",
-    marginBottom: 4,
-  },
-  viewOnlineLink: {
-    fontSize: 10,
-    color: "#007ACC",
-    textDecoration: "none",
-  },
 })
 
 interface InvoicePDFDocumentProps {
@@ -316,8 +298,6 @@ interface InvoicePDFDocumentProps {
   issuer?: InvoicePdfIssuer
   logoUrl: string
   qrDataUrl?: string
-  /** Public hosted invoice URL (same link as customer email / invoice page). */
-  invoiceViewUrl?: string
 }
 
 export function InvoicePDFDocument({
@@ -327,7 +307,6 @@ export function InvoicePDFDocument({
   issuer,
   logoUrl,
   qrDataUrl,
-  invoiceViewUrl,
 }: InvoicePDFDocumentProps) {
   const biz = issuer ?? {
     name: defaultBusinessInfo.name,
@@ -344,7 +323,6 @@ export function InvoicePDFDocument({
     invoice.status === "sent" ||
     invoice.status === "past_due"
   const showPayCard = isPayable && (bankAccount || stablecoinAccount)
-  const showViewOnlineLink = Boolean(invoiceViewUrl?.trim()) && isPayable
 
   const formatDatePdf = (dateString: string) =>
     formatDate(dateString, {
@@ -512,15 +490,6 @@ export function InvoicePDFDocument({
             </View>
           </View>
         </View>
-
-        {showViewOnlineLink ? (
-          <View style={styles.viewOnlineSection}>
-            <Text style={styles.viewOnlineLabel}>View and pay online</Text>
-            <Link src={invoiceViewUrl!} style={styles.viewOnlineLink}>
-              {invoiceViewUrl}
-            </Link>
-          </View>
-        ) : null}
 
         {/* Payment options - two columns: bank and stablecoin */}
         {showPayCard ? (
