@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
 import {
-  formatInvoiceEmailBusinessLines,
   generateInvoiceEmailHtml,
   generateInvoiceReceiptEmailHtml,
   generateInvoiceViewedNotificationHtml,
@@ -27,46 +26,31 @@ const sampleInvoice: Invoice = {
   lineItems: [{ description: "Service", quantity: 1, unitPrice: 100, amount: 100 }],
 }
 
-describe("invoice email business header", () => {
-  it("omits empty address lines", () => {
-    const lines = formatInvoiceEmailBusinessLines(
-      {
-        name: "Acme Ltd",
-        address: "",
-        city: "",
-        state: "",
-        zipCode: "",
-        country: "",
-        email: "",
-        phone: "",
-      },
-      "billing@acme.com",
-    )
-    expect(lines).toEqual(["Acme Ltd", "billing@acme.com"])
-  })
+const sampleIssuer = {
+  name: "Acme Ltd",
+  address: "10 Market St",
+  city: "London",
+  state: "",
+  zipCode: "EC1A 1BB",
+  country: "United Kingdom",
+  email: "billing@acme.com",
+  phone: "+44 20 7946 0958",
+}
 
-  it("does not render placeholder Your Business block", () => {
+describe("invoice email templates", () => {
+  it("does not render company address block in customer invoice email", () => {
     const html = generateInvoiceEmailHtml({
       invoice: sampleInvoice,
       invoiceViewUrl: "https://example.com/invoice-view/inv_1",
       businessName: "Acme Ltd",
       businessReplyEmail: "billing@acme.com",
-      issuer: {
-        name: "Acme Ltd",
-        address: "10 Market St",
-        city: "London",
-        state: "",
-        zipCode: "EC1A 1BB",
-        country: "United Kingdom",
-        email: "billing@acme.com",
-        phone: "+44 20 7946 0958",
-      },
+      issuer: sampleIssuer,
     })
-    expect(html).toContain("<strong>Acme Ltd</strong>")
-    expect(html).toContain("10 Market St")
-    expect(html).not.toContain("Your Business")
-    expect(html).not.toContain("<p>,</p>")
-    expect(html).not.toContain(" | </p>")
+    expect(html).toContain("Acme Ltd has sent you an invoice")
+    expect(html).toContain("billing@acme.com")
+    expect(html).not.toContain("business-info")
+    expect(html).not.toContain("10 Market St")
+    expect(html).not.toContain("United Kingdom")
   })
 
   it("renders styled customer viewed notification", () => {
@@ -79,28 +63,20 @@ describe("invoice email business header", () => {
     expect(html).toContain("Hello Acme Ltd")
     expect(html).toContain("Jane Doe viewed invoice")
     expect(html).toContain("View invoice</a>")
-    expect(html).not.toContain("<p>Jane Doe viewed")
   })
 
-  it("renders styled payment receipt email", () => {
+  it("does not render company address block in receipt email", () => {
     const html = generateInvoiceReceiptEmailHtml({
       invoice: { ...sampleInvoice, status: "paid" },
       invoiceViewUrl: "https://example.com/invoice-view/inv_1",
       businessName: "Acme Ltd",
       businessReplyEmail: "billing@acme.com",
-      issuer: {
-        name: "Acme Ltd",
-        address: "10 Market St",
-        city: "London",
-        state: "",
-        zipCode: "EC1A 1BB",
-        country: "United Kingdom",
-        email: "billing@acme.com",
-        phone: "",
-      },
+      issuer: sampleIssuer,
     })
     expect(html).toContain("Payment received")
     expect(html).toContain("Thank you")
-    expect(html).toContain("<strong>Acme Ltd</strong>")
+    expect(html).toContain("from Acme Ltd")
+    expect(html).not.toContain("business-info")
+    expect(html).not.toContain("10 Market St")
   })
 })

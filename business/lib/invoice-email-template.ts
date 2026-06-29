@@ -11,8 +11,6 @@ const INVOICE_EMAIL_STYLES = `
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1C201E; background: #F6F3EB; }
     .container { max-width: 600px; margin: 0 auto; padding: 40px 30px; background: #F8F6F0; border-radius: 22px; }
     .logo { max-width: 140px; height: auto; margin-bottom: 24px; display: block; }
-    .business-info { font-size: 14px; color: #6F756F; margin-bottom: 32px; }
-    .business-info p { margin-bottom: 4px; }
     .greeting { font-size: 18px; font-weight: 600; color: #0F1110; margin-bottom: 20px; letter-spacing: -0.01em; }
     .body-text { font-size: 16px; color: #1C201E; margin-bottom: 24px; line-height: 1.7; }
     .invoice-details { background: #F6F3EB; border: 1px solid #D9D4C7; border-radius: 16px; padding: 20px; margin: 24px 0; }
@@ -139,27 +137,16 @@ export function getInvoiceReceiptEmailSubject(invoiceNumber: string): string {
 export function generateInvoiceReceiptEmailHtml(data: InvoiceReceiptEmailData): string {
   const { invoice, invoiceViewUrl, businessName, businessReplyEmail } = data
   const amount = formatCurrency(invoice.total, invoice.currency)
-  const businessInfoHtml = buildBusinessInfoHtml({
-    invoice,
-    invoiceViewUrl,
-    businessName,
-    businessReplyEmail,
-    issuer: data.issuer,
-  })
   const contact = invoiceContactFooter({
     invoice,
     invoiceViewUrl,
     businessName,
     businessReplyEmail,
-    issuer: data.issuer,
   })
 
   return wrapInvoiceEmailDocument(
     getInvoiceReceiptEmailSubject(invoice.invoiceNumber),
     `
-    <div class="business-info">
-      ${businessInfoHtml}
-    </div>
     <p class="greeting">Dear ${invoice.customerName},</p>
     <p class="body-text">Thank you — we received your payment for this invoice from ${businessName}.</p>
     ${invoiceDetailsBlock("Payment received", [
@@ -183,14 +170,11 @@ export function generateInvoiceReceiptEmailText(data: InvoiceReceiptEmailData): 
     invoiceViewUrl,
     businessName,
     businessReplyEmail,
-    issuer: data.issuer,
   })
-  const businessLines = formatInvoiceEmailBusinessLines(data.issuer, businessReplyEmail)
-
   return `
 Dear ${invoice.customerName},
 
-${businessLines.length ? `${businessLines.join("\n")}\n\n` : ""}Thank you — we received your payment for this invoice from ${businessName}.
+Thank you — we received your payment for this invoice from ${businessName}.
 
 Invoice #${invoice.invoiceNumber} – ${amount} ${invoice.currency}
 Status: Paid
@@ -211,7 +195,7 @@ export interface InvoiceEmailData {
   businessName: string
   /** Merchant support email — used for Reply-To and footer contact line. */
   businessReplyEmail?: string
-  /** Merchant address block shown in the email header. */
+  /** Merchant profile — used for Reply-To resolution upstream; not shown in email body. */
   issuer: InvoicePdfIssuer
 }
 
@@ -281,52 +265,7 @@ function getBodyIntroPlain(data: InvoiceEmailData): string {
     : config.bodyIntroPlain
 }
 
-/** Plain-text lines for merchant header — skips empty address/contact fields. */
-export function formatInvoiceEmailBusinessLines(
-  issuer: InvoicePdfIssuer,
-  replyEmail?: string,
-): string[] {
-  const lines: string[] = []
-  const name = issuer.name?.trim()
-  if (name) lines.push(name)
-
-  const address = issuer.address?.trim()
-  if (address) lines.push(address)
-
-  const city = issuer.city?.trim()
-  const state = issuer.state?.trim()
-  const zip = issuer.zipCode?.trim()
-  const cityLineParts: string[] = []
-  if (city) cityLineParts.push(city)
-  const stateZip = [state, zip].filter(Boolean).join(" ")
-  if (stateZip) cityLineParts.push(stateZip)
-  if (cityLineParts.length) lines.push(cityLineParts.join(", "))
-
-  const country = issuer.country?.trim()
-  if (country) lines.push(country)
-
-  const email = replyEmail?.trim() || issuer.email?.trim()
-  const phone = issuer.phone?.trim()
-  const contactParts = [email, phone].filter(Boolean)
-  if (contactParts.length) lines.push(contactParts.join(" | "))
-
-  return lines
-}
-
-function buildBusinessInfoHtml(data: InvoiceEmailData): string {
-  const lines = formatInvoiceEmailBusinessLines(data.issuer, data.businessReplyEmail)
-  const fallbackName = data.businessName.trim() || data.issuer.name?.trim() || "Business"
-  if (lines.length === 0) {
-    return `<p><strong>${fallbackName}</strong></p>`
-  }
-  return lines
-    .map((line, index) =>
-      index === 0 ? `<p><strong>${line}</strong></p>` : `<p>${line}</p>`,
-    )
-    .join("\n      ")
-}
-
-function invoiceContactFooter(data: InvoiceEmailData): { html: string; text: string } {
+function invoiceContactFooter(data: Pick<InvoiceEmailData, "businessName" | "businessReplyEmail">): { html: string; text: string } {
   const merchantEmail = data.businessReplyEmail?.trim()
   if (!merchantEmail) {
     const support = process.env.SENDGRID_REPLY_TO?.trim() || "support@easner.com"
@@ -352,14 +291,10 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
   const amount = formatCurrency(invoice.total, invoice.currency)
   const bodyIntro = getBodyIntro(data)
   const contact = invoiceContactFooter(data)
-  const businessInfoHtml = buildBusinessInfoHtml(data)
 
   return wrapInvoiceEmailDocument(
     `Invoice ${invoice.invoiceNumber} - ${businessName}`,
     `
-    <div class="business-info">
-      ${businessInfoHtml}
-    </div>
     <p class="greeting">Dear ${invoice.customerName},</p>
     <p class="body-text">${bodyIntro}</p>
     ${invoiceDetailsBlock("Invoice details", [
@@ -385,12 +320,11 @@ export function generateInvoiceEmailText(data: InvoiceEmailData): string {
   const amount = formatCurrency(invoice.total, invoice.currency)
   const bodyIntro = getBodyIntroPlain(data)
   const contact = invoiceContactFooter(data)
-  const businessLines = formatInvoiceEmailBusinessLines(data.issuer, data.businessReplyEmail)
 
   return `
 Dear ${invoice.customerName},
 
-${businessLines.length ? `${businessLines.join("\n")}\n\n` : ""}${bodyIntro}
+${bodyIntro}
 
 Invoice #${invoice.invoiceNumber} – ${amount} ${invoice.currency}
 Due: ${dueDate}
