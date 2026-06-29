@@ -2,7 +2,7 @@ import {
   generateBaseEmailTemplate,
   generateTransactionDetailsTable,
   type TransactionDetailRow,
-} from "@easner/server/lib/email-generator"
+} from "@easner/server"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import type { Invoice } from "@/lib/b2b/types"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
