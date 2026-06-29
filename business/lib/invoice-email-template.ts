@@ -140,6 +140,7 @@ export function generateInvoiceViewedNotificationHtml(
     {
       audience: "business",
       showPreferencesLink: false,
+      hideHeaderTitle: true,
       preheader: `${customer} viewed invoice ${invoice.invoiceNumber}`,
     },
   )

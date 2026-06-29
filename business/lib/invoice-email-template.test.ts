@@ -78,6 +78,7 @@ describe("invoice email templates", () => {
     })
     expect(html).toContain("Hello Acme Ltd")
     expect(html).toContain("Jane Doe viewed invoice")
+    expect(html).not.toContain('<h1 class="email-title">')
     expect(html).toContain("View invoice</a>")
     expect(html).toContain("Easner Group, Inc.")
   })
