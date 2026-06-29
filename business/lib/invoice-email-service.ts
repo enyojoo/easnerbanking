@@ -83,7 +83,7 @@ export async function sendInvoiceEmail(
     const msg = {
       to: invoice.customerEmail,
       from: { email: fromEmail, name: fromName },
-      replyTo: businessReplyEmail,
+      replyTo: replyEmail,
       subject,
       html,
       text,
