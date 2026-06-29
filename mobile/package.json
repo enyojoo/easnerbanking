@@ -71,7 +71,7 @@
     "expo-web-browser": "~56.0.5",
     "jest-expo": "~56.0.5",
     "lucide-react-native": "^0.555.0",
-    "posthog-react-native": "^4.5.0",
+    "posthog-react-native": "^4.53.1",
     "pressto": "^0.6.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",

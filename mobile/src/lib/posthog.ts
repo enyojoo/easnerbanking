@@ -10,10 +10,12 @@ export function initPostHog() {
     if (posthogKey && posthogHost) {
       posthog = new PostHog(posthogKey, {
         host: posthogHost,
-        captureApplicationLifecycleEvents: true,
-        captureDeepLinks: true,
-        debug: __DEV__,
+        captureAppLifecycleEvents: true,
       })
+
+      if (__DEV__) {
+        posthog.debug(true)
+      }
     }
   }
   return posthog
