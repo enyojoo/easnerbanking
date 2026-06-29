@@ -46,6 +46,7 @@ export default function SignupPage() {
   const { signup, verifySignupOtp, signInWithGoogle } = useAuth()
   const router = useRouter()
   const { isTeamInvite, invitePreview } = useTeamInviteContext()
+  const countryPolicy = useAllowedCountryCodes("signup")
   const countriesForPicker = useMemo(
     () => filterCountriesByPolicy(countries, countryPolicy.unrestricted ? null : countryPolicy.codes),
     [countryPolicy.codes, countryPolicy.unrestricted],
@@ -61,6 +62,18 @@ export default function SignupPage() {
     }
     try {
       setIsSubmitting(true)
+      const precheck = (await fetch("/api/auth/signup-precheck", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), surface: "business_web" }),
+      })
+        .then((r) => r.json())
+        .catch(() => ({ ok: true }))) as { ok?: boolean; error?: string }
+      if (precheck?.ok === false) {
+        setError(precheck.error || "This email can't be used to sign up.")
+        setIsSubmitting(false)
+        return
+      }
       setOnboarding({ countryCode: country, businessOnboardingComplete: false })
       const result = await signup(email, password, name)
       if (result.needsEmailConfirmation) {

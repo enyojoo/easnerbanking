@@ -28,6 +28,7 @@ import { TERMS_URL } from '../../constants/auth'
 import { TextField } from '../../components/ui'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { signupPrecheck } from '../../lib/signupPrecheck'
 
 export default function RegisterScreen({ navigation }: NavigationProps) {
   const [formData, setFormData] = useState({
@@ -91,6 +92,14 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
     if (!validateForm()) return
 
     setLoading(true)
+
+    const precheck = await signupPrecheck(formData.email)
+    if (!precheck.ok) {
+      setLoading(false)
+      showError(precheck.error)
+      return
+    }
+
     const { error: signUpError, needsEmailConfirmation } = await signUp(
       formData.email,
       formData.password,

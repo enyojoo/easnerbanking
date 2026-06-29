@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { countries } from "@/lib/countries"
+import { isDisposableEmail } from "@easner/shared"
 import { isCountryAllowedForSurface } from "@/lib/jurisdiction-country-policy"
 import { noahCustomerIdFromBusinessId, noahCustomerIdFromUserId } from "@/lib/noah/customer-id"
 import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-sub-org"
@@ -146,6 +147,22 @@ export async function POST(request: Request) {
   const existingRole =
     userRow?.role === "business" || userRow?.role === "individual" ? userRow.role : null
   const hasBusinessLink = typeof userRow?.easner_business_id === "string" && userRow.easner_business_id.length > 0
+
+  /**
+   * Server-side anti-bot guard (defense-in-depth behind the sign-up pre-check): refuse to create an
+   * app account for a disposable/throwaway email. Only applies to brand-new accounts so existing
+   * users are never locked out on a later sign-in.
+   */
+  if (!userRow?.id && isDisposableEmail(user.email)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Please use a permanent email address. Temporary or disposable email providers aren't allowed.",
+        code: "DISPOSABLE_EMAIL",
+      },
+      { status: 403 },
+    )
+  }
 
   const dbFullNameTrim =
     typeof userRow?.full_name === "string" ? userRow.full_name.trim() : ""

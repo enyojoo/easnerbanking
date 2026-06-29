@@ -24,6 +24,11 @@ export {
 } from "./constants/login-pin"
 export { APP_URLS, MOBILE_DEEP_LINK_HOSTS, isMobileDeepLinkHost } from "./constants/urls"
 export {
+  DISPOSABLE_EMAIL_DOMAINS,
+  emailDomain,
+  isDisposableEmail,
+} from "./disposable-email"
+export {
   resolvePersonalMobileAppOrigin,
   personalMobileDashboardUrl,
   personalMobileNotificationsUrl,
