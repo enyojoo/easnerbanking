@@ -575,14 +575,6 @@ export default function InvoiceDetailPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {!invoice.archived && publicViewHref ? (
-            <Button variant="outline" size="sm" className={invoiceActionBtnClass.view} asChild>
-              <Link href={publicViewHref} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                {invoice.status === "draft" ? "View invoice" : "View sent invoice"}
-              </Link>
-            </Button>
-          ) : null}
           {!invoice.archived && invoice.status === "draft" && (
             <>
               <Button
@@ -682,8 +674,9 @@ export default function InvoiceDetailPage() {
           {!invoice.archived && invoice.status !== "draft" && (
             <Button
               variant="outline"
-              size="sm"
-              className={invoiceActionBtnClass.download}
+              size="icon"
+              className={invoiceActionBtnClass.downloadIcon}
+              aria-label={isDownloading ? "Downloading invoice" : "Download invoice"}
               onClick={async () => {
                 if (!invoice) return
                 setIsDownloading(true)
@@ -704,15 +697,9 @@ export default function InvoiceDetailPage() {
               disabled={isDownloading}
             >
               {isDownloading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Downloading…
-                </>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Invoice
-                </>
+                <Download className="h-4 w-4" aria-hidden />
               )}
             </Button>
           )}
