@@ -38,10 +38,24 @@ function TransactionDetailActions({
   downloadingReceipt: boolean
   onDownloadReceipt: () => void
 }) {
+  const showInvoice = Boolean(transaction.invoiceId)
+  const showTrackStatus =
+    !omitTrackStatus &&
+    !showLifecycleTracker &&
+    (Boolean(transaction.transferId) || transaction.id.startsWith("ETID")) &&
+    (transaction.status === "pending" || transaction.status === "processing")
+  // Easetag transfers/deposits are free, 1:1 wallet-to-wallet with no fee/FX detail,
+  // so they don't get a downloadable receipt.
+  const showDownloadReceipt =
+    transaction.status === "completed" && transaction.paymentScheme !== "Easetag"
+
+  // Nothing to offer (e.g. a completed Easetag transfer) — don't render an empty card.
+  if (!showInvoice && !showTrackStatus && !showDownloadReceipt) return null
+
   return (
     <Card className="border-border shadow-sm">
       <CardContent className="space-y-2 p-6">
-        {transaction.invoiceId ? (
+        {showInvoice ? (
           <Button variant="outline" className="w-full gap-2 bg-transparent" asChild>
             <Link href={withReturnTo(`/invoices/${transaction.invoiceId}`, txHere)}>
               <FileText className="h-4 w-4" />
@@ -49,20 +63,15 @@ function TransactionDetailActions({
             </Link>
           </Button>
         ) : null}
-        {!omitTrackStatus &&
-          !showLifecycleTracker &&
-          (transaction.transferId || transaction.id.startsWith("ETID")) &&
-          (transaction.status === "pending" || transaction.status === "processing") && (
-            <Button variant="outline" className="w-full gap-2 bg-transparent" asChild>
-              <Link href={etidForLink}>
-                <Activity className="h-4 w-4" />
-                Track status
-              </Link>
-            </Button>
-          )}
-        {/* Easetag transfers/deposits are free, 1:1 wallet-to-wallet with no fee/FX detail,
-            so they don't get a downloadable receipt. */}
-        {transaction.status === "completed" && transaction.paymentScheme !== "Easetag" ? (
+        {showTrackStatus ? (
+          <Button variant="outline" className="w-full gap-2 bg-transparent" asChild>
+            <Link href={etidForLink}>
+              <Activity className="h-4 w-4" />
+              Track status
+            </Link>
+          </Button>
+        ) : null}
+        {showDownloadReceipt ? (
           <Button
             variant="outline"
             className="w-full gap-2 bg-transparent"
