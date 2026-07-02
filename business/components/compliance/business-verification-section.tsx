@@ -38,6 +38,11 @@ function formatTier1Status(status: string | null): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
+function tier1StatusIsInReview(status: string | null | undefined): boolean {
+  const s = (status || "").toLowerCase()
+  return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
+}
+
 function tierLadderCopy(tier: 1 | 2 | 3) {
   return BUSINESS_TIER_LADDER.tiers.find((x) => x.tier === tier)
 }
@@ -48,17 +53,20 @@ export function BusinessVerificationSection() {
     tier1VerificationStatus,
     tier1RejectionReasons,
     tier1RejectionType,
-    tier1CanResubmit,
     tier1RetryGuidance,
     canManageBusinessVerification,
     isLoading,
     businessId,
+    noahKybCustomerId,
   } = useBusinessProfile()
 
   const [busy, setBusy] = useState<null | "link">(null)
   const [error, setError] = useState<string | null>(null)
   /** Neutral (non-error) notice, e.g. when KYB is already submitted and under review. */
   const [info, setInfo] = useState<string | null>(null)
+  /** When in review, probe whether Noah still exposes a resumable hosted URL. */
+  const [hostedResumeAvailable, setHostedResumeAvailable] = useState<boolean | null>(null)
+  const probedHostedUrlRef = useRef<string | null>(null)
   const [hostedOpen, setHostedOpen] = useState(false)
   const [hostedUrl, setHostedUrl] = useState<string | null>(null)
   /** Which tier the hosted iframe session is for (only Tier 1 today; same header pattern for future tiers). */
@@ -76,6 +84,54 @@ export function BusinessVerificationSection() {
       if (clearUrlAfterCloseRef.current) clearTimeout(clearUrlAfterCloseRef.current)
     }
   }, [])
+
+  const tier1RejectedForProbe = tier1VerificationStatus === "rejected"
+  const tier1UnderReviewForProbe = tier1StatusIsInReview(tier1VerificationStatus)
+  const tier1AwaitingReviewForProbe = tier1UnderReviewForProbe && !tier1RejectedForProbe
+
+  useEffect(() => {
+    probedHostedUrlRef.current = null
+    if (
+      !canManageBusinessVerification ||
+      !businessId ||
+      tier1Complete ||
+      !tier1AwaitingReviewForProbe
+    ) {
+      setHostedResumeAvailable(null)
+      return
+    }
+
+    let cancelled = false
+    setHostedResumeAvailable(null)
+    void (async () => {
+      try {
+        const res = await fetchWithSession("/api/noah/kyc-links", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Easner-Noah-Scope": "business",
+          },
+          body: JSON.stringify({ type: "business" }),
+        })
+        const json = (await res.json().catch(() => ({}))) as { kyc_link?: string | null }
+        if (cancelled) return
+        const link = typeof json.kyc_link === "string" ? json.kyc_link.trim() : ""
+        probedHostedUrlRef.current = link || null
+        setHostedResumeAvailable(Boolean(link))
+      } catch {
+        if (!cancelled) setHostedResumeAvailable(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    businessId,
+    canManageBusinessVerification,
+    tier1Complete,
+    tier1AwaitingReviewForProbe,
+  ])
 
   const syncBusinessTier1FromNoah = useCallback(async (): Promise<boolean> => {
     const result = await syncBusinessNoahStatus()
@@ -132,6 +188,19 @@ export function BusinessVerificationSection() {
       setInfo("Your organization is still being set up. Refresh and try again in a moment.")
       return
     }
+
+    const probedUrl = probedHostedUrlRef.current
+    if (probedUrl) {
+      if (clearUrlAfterCloseRef.current) {
+        clearTimeout(clearUrlAfterCloseRef.current)
+        clearUrlAfterCloseRef.current = null
+      }
+      setHostedTierLevel(1)
+      setHostedUrl(probedUrl)
+      setHostedOpen(true)
+      return
+    }
+
     setBusy("link")
     try {
       const supabase = createSupabaseBrowser()
@@ -191,13 +260,12 @@ export function BusinessVerificationSection() {
           setError("Verification was declined. Review the message above or contact support.")
           return
         }
-        // Submitted with no resumable hosted session (Noah returns an empty onboarding body) — this is
-        // a normal "in review" state, not a failure. Show it as a neutral notice, not a red error.
-        setInfo(
-          json.kyc_status === "under_review" || json.kyc_status === "in_review"
-            ? NOAH_VERIFICATION_IN_REVIEW_COPY
-            : "No additional verification steps are available right now. We'll update your status shortly.",
-        )
+        // Submitted with no resumable hosted session — show in-review once (card may already show it).
+        if (tier1StatusIsInReview(json.kyc_status)) {
+          setInfo(tier1StatusIsInReview(tier1VerificationStatus) ? null : NOAH_VERIFICATION_IN_REVIEW_COPY)
+          return
+        }
+        setInfo("No additional verification steps are available right now. We'll update your status shortly.")
         return
       }
       if (clearUrlAfterCloseRef.current) {
@@ -207,12 +275,14 @@ export function BusinessVerificationSection() {
       setHostedTierLevel(1)
       setHostedUrl(json.kyc_link)
       setHostedOpen(true)
+      probedHostedUrlRef.current = json.kyc_link
+      setHostedResumeAvailable(true)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Something went wrong.")
     } finally {
       setBusy(null)
     }
-  }, [businessId, syncBusinessTier1FromNoah])
+  }, [businessId, syncBusinessTier1FromNoah, tier1VerificationStatus])
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
@@ -223,10 +293,22 @@ export function BusinessVerificationSection() {
   const tier1Rejected = tier1VerificationStatus === "rejected"
   const rejectionDisplay = tier1Rejected ? getNoahRejectionDisplay(tier1RejectionReasons) : null
   const tier1FinalReject = tier1RejectionType === "Final" || rejectionDisplay?.isFinal === true
-  const tier1UnderReview = (() => {
-    const s = (tier1VerificationStatus || "").toLowerCase()
-    return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
-  })()
+  const tier1UnderReview = tier1StatusIsInReview(tier1VerificationStatus)
+  /** Submitted to Noah — nothing for the business to do until review completes. */
+  const tier1AwaitingReview = tier1UnderReview && !tier1Rejected
+  const tier1StartedNotSubmitted =
+    !tier1Rejected && !tier1AwaitingReview && Boolean(noahKybCustomerId?.trim())
+  const showTier1HostedCta =
+    canManageBusinessVerification &&
+    !tier1Complete &&
+    !tier1FinalReject &&
+    (!tier1AwaitingReview || hostedResumeAvailable === true)
+  const tier1HostedCtaLabel = tier1Rejected
+    ? "Retry verification"
+    : tier1StartedNotSubmitted || hostedResumeAvailable === true
+      ? "Continue verification"
+      : "Begin verification"
+  const tier1HostedCtaBusy = busy === "link" || (tier1AwaitingReview && hostedResumeAvailable === null)
 
   return (
     <div className="space-y-6" id="business-verification">
@@ -299,21 +381,17 @@ export function BusinessVerificationSection() {
                       verification.
                     </p>
                   ) : null}
-                  {canManageBusinessVerification && !tier1Complete && !tier1FinalReject ? (
+                  {canManageBusinessVerification && !tier1Complete && !tier1FinalReject && !tier1AwaitingReview ? (
                     <KybRequiredDocumentsNotice />
                   ) : null}
                   <div className="flex flex-wrap gap-2">
-                    {canManageBusinessVerification && !tier1Complete && !tier1FinalReject ? (
+                    {showTier1HostedCta ? (
                       <Button
                         size="sm"
                         onClick={() => void openHostedVerification()}
-                        disabled={busy !== null || !businessId}
+                        disabled={tier1HostedCtaBusy || !businessId}
                       >
-                        {busy === "link"
-                          ? "Opening…"
-                          : tier1UnderReview || tier1Rejected
-                            ? "Continue verification"
-                            : "Begin verification"}
+                        {tier1HostedCtaBusy ? "Opening…" : tier1HostedCtaLabel}
                       </Button>
                     ) : null}
                   </div>

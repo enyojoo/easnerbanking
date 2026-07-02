@@ -23,13 +23,10 @@ function normalizeIso2(value: unknown): string | null {
   return /^[A-Z]{2}$/.test(code) ? code : null
 }
 
+/** Only skip a new hosted onboarding POST when verification is fully approved. */
 function shouldSkipNewHostedSession(status: string | null | undefined): boolean {
   const s = (status ?? "").toLowerCase()
-  if (!s) return false
-  if (s === "approved") return true
-  if (s === "pending") return true
-  if (s.includes("review")) return true
-  return false
+  return s === "approved"
 }
 
 export async function evaluateKycLinksPreflight(params: {
