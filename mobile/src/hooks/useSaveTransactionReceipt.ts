@@ -1,15 +1,19 @@
 import { useCallback, useState, type RefObject } from 'react'
 import { Platform } from 'react-native'
 import type { View } from 'react-native'
-import { captureRef } from 'react-native-view-shot'
-import * as MediaLibrary from 'expo-media-library'
-import * as Sharing from 'expo-sharing'
 import { useToast } from '../components/ToastProvider'
 
 /**
  * Captures the off-screen `TransactionReceiptCard` to a PNG and either saves it to the
  * device Photos (via expo-media-library) or hands it to the native share sheet. Image only —
  * the business web app keeps the PDF receipt.
+ *
+ * IMPORTANT: the native deps (react-native-view-shot, expo-media-library, expo-sharing) are
+ * loaded lazily via `require` inside the handlers, NOT with top-level `import`. This screen is
+ * imported eagerly by AppNavigator, so a top-level import of a native module that is missing or
+ * ABI-mismatched would throw during module evaluation and hard-crash the app at launch (no
+ * redbox in production). Lazy-loading confines any such failure to the moment the user taps
+ * Save/Share, where we can show a toast instead.
  */
 export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
   const [saving, setSaving] = useState(false)
@@ -17,10 +21,12 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
 
   const capture = useCallback(async (): Promise<string> => {
     if (!ref.current) throw new Error('Receipt is not ready yet.')
+    const { captureRef } = require('react-native-view-shot')
     return captureRef(ref, { format: 'png', quality: 1, result: 'tmpfile' })
   }, [ref])
 
   const shareUri = useCallback(async (uri: string): Promise<boolean> => {
+    const Sharing = require('expo-sharing')
     if (!(await Sharing.isAvailableAsync())) return false
     await Sharing.shareAsync(uri, {
       mimeType: 'image/png',
@@ -43,6 +49,7 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
         return
       }
 
+      const MediaLibrary = require('expo-media-library')
       const perm = await MediaLibrary.requestPermissionsAsync(true)
       if (!perm.granted) {
         showWarning('Allow photo access to save the receipt.')
