@@ -298,6 +298,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             postedAmount: stablecoinDepositDetail.postedAmount || undefined,
             postedCurrency: stablecoinDepositDetail.postedCurrency,
             paymentScheme: stablecoinDepositDetail.schemeLabel,
+            // Parity with mobile: surface the deposit fee so the "Processing fee" row
+            // renders in-app and on the receipt (hidden automatically when 0).
+            fee: stablecoinDepositDetail.feeAmount || undefined,
             ledgerCreatedAt: stablecoinDepositDetail.ledgerCreatedAt ?? ledgerCreatedAt,
           }
         : globalPayoutList

@@ -225,6 +225,8 @@ module.exports = ({ config }) => {
           'Easner uses the camera to scan wallet QR codes and when you take or attach photos.',
         NSMicrophoneUsageDescription:
           'Easner uses the microphone when you record or send audio.',
+        NSPhotoLibraryAddUsageDescription:
+          'Easner saves your transaction receipts to Photos when you download them.',
       },
     },
     plugins: [
@@ -236,6 +238,14 @@ module.exports = ({ config }) => {
             'Allow Easner to access your camera to scan wallet address QR codes.',
           recordAudioAndroid: false,
           barcodeScannerEnabled: true,
+        },
+      ],
+      [
+        'expo-media-library',
+        {
+          photosPermission: 'Allow Easner to save transaction receipts to your photos.',
+          savePhotosPermission: 'Allow Easner to save transaction receipts to your photos.',
+          isAccessMediaLocationEnabled: false,
         },
       ],
       './plugins/withHermesCompilerPath.js',

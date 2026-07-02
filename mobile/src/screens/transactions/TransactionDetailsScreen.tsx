@@ -23,6 +23,7 @@ import {
   Clock,
   Copy,
   HelpCircle,
+  Share2,
 } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQueryClient } from '@tanstack/react-query'
@@ -33,6 +34,7 @@ import {
   type LifecycleStep,
 } from '../../components/TransactionLifecycleTracker'
 import { SectionCard, StatusPill } from '../../components/ui'
+import { TransactionReceiptSheet } from '../../components/receipt/TransactionReceiptSheet'
 import { NavigationProps } from '../../types'
 import {
   colors,
@@ -65,6 +67,7 @@ import {
   isEasetagReceiveTitle,
   qk,
   scopeKey,
+  buildTransactionEmailDetailRows,
   formatMoneyDisplay,
   formatSendRateLabel,
   formatPayoutRecipientSubtitle,
@@ -334,6 +337,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       { maxSize: 48, minSize: 24 },
     )
   }, [heroAmountLabel, transaction?.transaction_type])
+
+  const [receiptSheetOpen, setReceiptSheetOpen] = useState(false)
 
   const formatTimestamp = (dateString: string) => {
     if (!dateString) return ''
@@ -771,6 +776,63 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       })
     : 0
   const easetagWhenTs = whenTs
+
+  // Downloadable receipt (image) — completed, non-Easetag transactions. Reuses the same
+  // canonical rows as the in-app view / business PDF so all surfaces foot identically.
+  const receiptRows =
+    transaction.status === 'completed' && !isEasetagP2p
+      ? isGlobalPayoutSend && transaction.payout_review
+        ? buildTransactionEmailDetailRows({
+            direction: 'out',
+            payoutReview: transaction.payout_review,
+            receiveNetwork: isWalletSendReview ? walletSendReceiveNetwork : undefined,
+            recipient: transaction.recipient_snapshot
+              ? {
+                  fullName: transaction.recipient_snapshot.full_name,
+                  bankName: transaction.recipient_snapshot.bank_name,
+                  accountNumber: transaction.recipient_snapshot.account_number,
+                  phone: transaction.recipient_snapshot.phone,
+                  mobileProvider: transaction.recipient_snapshot.mobile_provider,
+                  walletNetwork: walletSendReceiveNetwork || undefined,
+                }
+              : isWalletSendReview
+                ? {
+                    fullName: String(
+                      transaction.display_description ||
+                        transaction.name ||
+                        transaction.metadata?.counterparty_name ||
+                        'Wallet transfer',
+                    ),
+                    bankName: 'Wallet',
+                    accountNumber:
+                      transaction.metadata?.counterparty_address ||
+                      transaction.metadata?.destination_address,
+                    walletNetwork: walletSendReceiveNetwork || undefined,
+                  }
+                : undefined,
+          })
+        : isBankOnrampReceive || isStablecoinReceive
+          ? buildTransactionEmailDetailRows({
+              direction: 'in',
+              deposit: {
+                scheme: formatScheme(
+                  transaction,
+                  transaction.source_payment_rail || (isStablecoinReceive ? 'solana' : ''),
+                ),
+                senderDisplay: transaction.sender_display_name,
+                feeAmount: transaction.fee_amount,
+                feeCurrency: transaction.currency,
+                postedAmount: transaction.posted_amount ?? transaction.settled_amount,
+                postedCurrency:
+                  transaction.posted_currency ||
+                  transaction.settled_currency ||
+                  transaction.currency,
+                narration: transaction.reference,
+              },
+            })
+          : []
+      : []
+  const receiptEligible = receiptRows.length > 0
 
   return (
     <ScreenWrapper>
@@ -1278,7 +1340,9 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               </View>
             </SectionCard>
 
-            {(isBankOnrampReceive || isStablecoinReceive || isGlobalPayoutSend) &&
+            {/* Stablecoin deposits settle on-chain in a single event, so the Processing → Completed
+                tracker would always render both steps complete. Skip it (bank deposits keep it). */}
+            {(isBankOnrampReceive || isGlobalPayoutSend) &&
             transaction.lifecycle &&
             transaction.lifecycle.length > 0 ? (
               <SectionCard style={styles.card}>
@@ -1288,8 +1352,49 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 />
               </SectionCard>
             ) : null}
+
+            {/* Receipt (image) — completed, non-Easetag only. Business web keeps the PDF.
+                One entry that opens a preview + Share/Save sheet (the share sheet itself
+                includes Save to Photos/Files). */}
+            {receiptEligible ? (
+              <View style={styles.receiptActions}>
+                <Pressable
+                  android_ripple={ripple.neutral}
+                  style={({ pressed }) => [
+                    styles.outlineButton,
+                    pressed && styles.outlineButtonPressed,
+                  ]}
+                  onPress={() => {
+                    haptics.tap()
+                    setReceiptSheetOpen(true)
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share receipt"
+                >
+                  <Share2 size={18} color={colors.primary.main} strokeWidth={2.25} />
+                  <Text style={styles.outlineButtonText}>Share receipt</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </Animated.View>
         </ScrollView>
+
+        {receiptEligible ? (
+          <TransactionReceiptSheet
+            visible={receiptSheetOpen}
+            onClose={() => setReceiptSheetOpen(false)}
+            receipt={{
+              title: getTransactionTypeDisplay(),
+              amountText: heroAmountLabel,
+              isCredit: isReceived,
+              statusLabel: statusInfo.label,
+              outcome: transaction.status === 'completed' ? 'success' : 'failed',
+              dateText: formatTimestamp(whenTs),
+              rows: receiptRows,
+              transactionId: transaction.transaction_id,
+            }}
+          />
+        ) : null}
 
         {/* Bottom Actions — Send: Send again + Get help; Receive: Get help only. */}
         {transaction.transaction_type === 'send' ? (
@@ -1554,6 +1659,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.semantic.background,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border.default,
+  },
+  receiptActions: {
+    marginTop: spacing[4],
   },
   bottomActionsRow: {
     flexDirection: 'row',

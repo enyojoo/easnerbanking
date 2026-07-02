@@ -43,6 +43,14 @@ function tier1StatusIsInReview(status: string | null | undefined): boolean {
   return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
 }
 
+/**
+ * Last-known "can resume hosted session" result per business, kept at module scope so it survives
+ * remounts (e.g. leaving Settings and returning, or switching tabs). This lets the in-review CTA
+ * render immediately from the cached value instead of flashing while the probe re-runs in the
+ * background — the visibility/label is resolved before the user sees the page.
+ */
+const hostedResumeAvailableCache = new Map<string, boolean>()
+
 function tierLadderCopy(tier: 1 | 2 | 3) {
   return BUSINESS_TIER_LADDER.tiers.find((x) => x.tier === tier)
 }
@@ -56,6 +64,7 @@ export function BusinessVerificationSection() {
     tier1RetryGuidance,
     canManageBusinessVerification,
     isLoading,
+    hasData,
     businessId,
     noahKybCustomerId,
   } = useBusinessProfile()
@@ -64,8 +73,11 @@ export function BusinessVerificationSection() {
   const [error, setError] = useState<string | null>(null)
   /** Neutral (non-error) notice, e.g. when KYB is already submitted and under review. */
   const [info, setInfo] = useState<string | null>(null)
-  /** When in review, probe whether Noah still exposes a resumable hosted URL. */
-  const [hostedResumeAvailable, setHostedResumeAvailable] = useState<boolean | null>(null)
+  /** When in review, probe whether Noah still exposes a resumable hosted URL. Seed from the module
+   *  cache so the CTA does not flash on remount while the probe revalidates in the background. */
+  const [hostedResumeAvailable, setHostedResumeAvailable] = useState<boolean | null>(() =>
+    businessId ? hostedResumeAvailableCache.get(businessId) ?? null : null,
+  )
   const probedHostedUrlRef = useRef<string | null>(null)
   const [hostedOpen, setHostedOpen] = useState(false)
   const [hostedUrl, setHostedUrl] = useState<string | null>(null)
@@ -102,7 +114,8 @@ export function BusinessVerificationSection() {
     }
 
     let cancelled = false
-    setHostedResumeAvailable(null)
+    // Keep the last-known value (from a prior probe) while revalidating so the CTA stays stable.
+    setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? null)
     void (async () => {
       try {
         const res = await fetchWithSession("/api/noah/kyc-links", {
@@ -117,9 +130,11 @@ export function BusinessVerificationSection() {
         if (cancelled) return
         const link = typeof json.kyc_link === "string" ? json.kyc_link.trim() : ""
         probedHostedUrlRef.current = link || null
+        hostedResumeAvailableCache.set(businessId, Boolean(link))
         setHostedResumeAvailable(Boolean(link))
       } catch {
-        if (!cancelled) setHostedResumeAvailable(false)
+        // Preserve any cached value on transient network failure rather than hiding the CTA.
+        if (!cancelled) setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? false)
       }
     })()
 
@@ -276,6 +291,7 @@ export function BusinessVerificationSection() {
       setHostedUrl(json.kyc_link)
       setHostedOpen(true)
       probedHostedUrlRef.current = json.kyc_link
+      if (businessId) hostedResumeAvailableCache.set(businessId, true)
       setHostedResumeAvailable(true)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Something went wrong.")
@@ -284,7 +300,9 @@ export function BusinessVerificationSection() {
     }
   }, [businessId, syncBusinessTier1FromNoah, tier1VerificationStatus])
 
-  if (isLoading) {
+  // Only show the loading placeholder on a genuine cold load. When cached profile data exists
+  // (e.g. returning to Settings), render the real section immediately so the CTA does not flash.
+  if (isLoading && !hasData) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
   }
 

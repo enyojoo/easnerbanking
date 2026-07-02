@@ -9,6 +9,7 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer"
 import type { Style } from "@react-pdf/types"
+import { buildTransactionEmailDetailRows } from "@easner/shared"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
 
@@ -195,6 +196,106 @@ function TableRow({
   )
 }
 
+type ReceiptRow = { label: string; value: string; valueStyle?: Style }
+
+/**
+ * Canonical receipt rows, mirroring the in-app detail panel and transaction emails via the
+ * shared `buildTransactionEmailDetailRows` builder. Receipts describe what has happened, so
+ * payouts show "Sent" (not "Sending"). Falls back to generic rows for card/book transactions.
+ */
+function buildReceiptRows(transaction: Transaction, cardLast4?: string): ReceiptRow[] {
+  const rows: ReceiptRow[] = [
+    { label: "Transaction", value: transaction.description },
+    { label: "Transaction ID", value: transaction.id },
+  ]
+
+  // Payout (debit) — canonical Sent / Processing fee / Exchange rate / Total debited /
+  // Recipient gets / Recipient / Transfer method rows.
+  if (transaction.payoutReview) {
+    const snap = transaction.recipientSnapshot
+    const canonical = buildTransactionEmailDetailRows({
+      direction: "out",
+      payoutReview: transaction.payoutReview,
+      receiveNetwork: transaction.chain,
+      recipient: snap
+        ? {
+            fullName: snap.full_name ?? transaction.counterpartyName ?? null,
+            bankName: snap.bank_name ?? null,
+            accountNumber: snap.account_number ?? null,
+            phone: snap.phone ?? null,
+            mobileProvider: snap.mobile_provider ?? null,
+            walletNetwork: transaction.chain ?? null,
+          }
+        : transaction.counterpartyName
+          ? { fullName: transaction.counterpartyName }
+          : null,
+    })
+    rows.push(...canonical)
+    return rows
+  }
+
+  // Deposit (credit) — canonical Scheme / Sender / Processing fee / Amount credited / Narration.
+  const isEnrichedDeposit =
+    transaction.direction === "credit" &&
+    Boolean(
+      transaction.paymentScheme ||
+        transaction.postedAmount ||
+        transaction.narration ||
+        transaction.lifecycle?.length,
+    )
+  if (isEnrichedDeposit) {
+    const depositCurrency =
+      transaction.postedCurrency || transaction.displayCurrency || "USD"
+    const canonical = buildTransactionEmailDetailRows({
+      direction: "in",
+      deposit: {
+        scheme: transaction.paymentScheme ?? null,
+        senderDisplay: transaction.counterpartyName ?? null,
+        feeAmount: transaction.fee ?? null,
+        feeCurrency: transaction.displayCurrency ?? depositCurrency,
+        postedAmount: transaction.postedAmount ?? null,
+        postedCurrency: depositCurrency,
+        narration: transaction.narration ?? null,
+      },
+    })
+    rows.push(...canonical)
+    return rows
+  }
+
+  // Generic fallback (card, book transfer, unenriched rows).
+  const descriptionLower = transaction.description.toLowerCase()
+  const isStablecoin =
+    transaction.type === "stablecoin" || descriptionLower.startsWith("stablecoin")
+  const isBank = descriptionLower.startsWith("bank")
+  const isCard = Boolean(cardLast4) || transaction.type === "card"
+  const partyLabel = transaction.direction === "credit" ? "Sender" : "Recipient"
+
+  if (transaction.counterpartyName) {
+    rows.push({ label: partyLabel, value: transaction.counterpartyName })
+  }
+  if (isBank && transaction.paymentRail) {
+    rows.push({ label: "Payment Rail", value: transaction.paymentRail.toUpperCase() })
+  }
+  if (!isStablecoin && !isCard) {
+    rows.push({ label: "Type", value: transaction.type.toUpperCase() })
+  }
+  if (isCard) {
+    rows.push({ label: "Card", value: cardLast4 ? `•••• ${cardLast4}` : "-" })
+  } else if (transaction.category) {
+    rows.push({ label: "Category", value: transaction.category })
+  }
+  if (!isStablecoin && transaction.reference) {
+    rows.splice(2, 0, { label: "Reference", value: transaction.reference })
+  }
+  if (transaction.fee !== undefined && transaction.fee > 0) {
+    rows.push({
+      label: "Processing fee",
+      value: formatCurrency(transaction.fee, transaction.displayCurrency || "USD"),
+    })
+  }
+  return rows
+}
+
 export function TransactionReceiptPDFDocument({
   transaction,
   logoUrl,
@@ -208,54 +309,12 @@ export function TransactionReceiptPDFDocument({
     minute: "2-digit",
   })
 
+  const heroCurrency = transaction.displayCurrency || transaction.postedCurrency || "USD"
   const amountStr =
     (transaction.direction === "credit" ? "+" : "-") +
-    formatCurrency(Math.abs(transaction.amount), "USD")
+    formatCurrency(Math.abs(transaction.amount), heroCurrency)
 
-  const descriptionLower = transaction.description.toLowerCase()
-  const isStablecoin = transaction.type === "stablecoin" || descriptionLower.startsWith("stablecoin")
-  const isBank = descriptionLower.startsWith("bank")
-  const isCard = Boolean(cardLast4) || transaction.type === "card"
-  const partyLabel = transaction.direction === "credit" ? "Sender" : "Recipient"
-
-  const rows: { label: string; value: string; valueStyle?: Style }[] = [
-    { label: "Transaction", value: transaction.description },
-    { label: "Transaction ID", value: transaction.id },
-  ]
-
-  if (transaction.counterpartyName) {
-    rows.push({ label: partyLabel, value: transaction.counterpartyName })
-  }
-
-  if (isBank && transaction.paymentRail) {
-    rows.push({ label: "Payment Rail", value: transaction.paymentRail.toUpperCase() })
-  }
-
-  if (!isStablecoin && !isCard) {
-    rows.push({ label: "Type", value: transaction.type.toUpperCase() })
-  }
-
-  if (isCard) {
-    rows.push({
-      label: "Card",
-      value: cardLast4 ? `•••• ${cardLast4}` : "-",
-    })
-  } else if (transaction.category) {
-    rows.push({
-      label: "Category",
-      value: transaction.category,
-    })
-  }
-
-  if (!isStablecoin && transaction.reference) {
-    rows.splice(2, 0, { label: "Reference", value: transaction.reference })
-  }
-  if (transaction.fee !== undefined && transaction.fee > 0) {
-    rows.push({
-      label: "Fee",
-      value: formatCurrency(transaction.fee, "USD"),
-    })
-  }
+  const rows = buildReceiptRows(transaction, cardLast4)
 
   return (
     <Document>

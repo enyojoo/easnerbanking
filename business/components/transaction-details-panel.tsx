@@ -60,7 +60,9 @@ function TransactionDetailActions({
               </Link>
             </Button>
           )}
-        {transaction.status === "completed" ? (
+        {/* Easetag transfers/deposits are free, 1:1 wallet-to-wallet with no fee/FX detail,
+            so they don't get a downloadable receipt. */}
+        {transaction.status === "completed" && transaction.paymentScheme !== "Easetag" ? (
           <Button
             variant="outline"
             className="w-full gap-2 bg-transparent"
@@ -228,7 +230,11 @@ export function TransactionDetailsPanel({
         "",
     ).trim() ||
     undefined
-  const showLifecycleTracker = Boolean(transaction.lifecycle?.length)
+  // Stablecoin deposits settle on-chain in a single event, so the Processing → Completed
+  // tracker would always render both steps complete. Skip it (bank deposits keep it).
+  const isStablecoinDeposit =
+    transaction.type === "stablecoin" && transaction.direction === "credit"
+  const showLifecycleTracker = Boolean(transaction.lifecycle?.length) && !isStablecoinDeposit
   const lifecycleTitle = isGlobalPayout ? "Transfer status" : "Deposit status"
 
   const handleCopy = async (text: string, key: string) => {
