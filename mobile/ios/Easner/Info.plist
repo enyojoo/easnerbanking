@@ -71,8 +71,10 @@
     <string>Expo Dev Launcher uses the local network to discover and connect to development servers running on your computer.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Easner uses the microphone when you record or send audio.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Allow Easner to save transaction receipts to your photos.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your photos</string>
+    <string>Allow Easner to save transaction receipts to your photos.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UIBackgroundModes</key>
