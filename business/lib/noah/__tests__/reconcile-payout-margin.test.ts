@@ -63,7 +63,10 @@ describe("buildGlobalPayoutChannelFeeReconciliationPatch", () => {
     expect(result.noahChannelFee).toBe(0.79)
     expect(result.deltaQuoted).toBe(0)
     expect(result.patch.channel_fee_reconciled).toBe(true)
-    expect(result.patch.payout_review).toBeDefined()
+    expect(result.patch.noah_settlement_channel_fee).toBe(0.79)
+    // The display exchange_fee (channel component that foots with total) is no longer rewritten
+    // from the settled Noah ChannelFee, so payout_review is left untouched here.
+    expect(result.patch.payout_review).toBeUndefined()
   })
 
   it("returns empty patch when Breakdown missing ChannelFee", () => {

@@ -69,13 +69,11 @@ import {
   formatSendRateLabel,
   formatPayoutRecipientSubtitle,
   formatTransactionDetailHeroTitle,
+  computeDisplayProcessingFee,
+  normalizeTransferMethodLabel,
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
-  shouldShowPayoutExchangeFee,
-  shouldShowGlobalPayoutProcessingFee,
-  shouldShowPayoutNetworkFee,
-  shouldShowWalletSendNetworkFee,
-  shouldShowWalletSendProcessingFee,
+  shouldShowPayoutReviewFeeRow,
   type GlobalPayoutReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
 } from '@easner/shared'
@@ -713,7 +711,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const isReceived = transaction.transaction_type === 'receive'
   const statusInfo = getStatusInfo(transaction.status)
   const isEasetagP2p = transaction.source_type === 'easetag_p2p'
+  const isStablecoinReceive =
+    transaction.transaction_type === 'receive' &&
+    transaction.source_type === 'liquidation_address'
   const isBankOnrampReceive =
+    !isStablecoinReceive &&
     transaction.transaction_type === 'receive' &&
     (Boolean(transaction.lifecycle?.length) ||
       transaction.metadata?.flow === 'bank_onramp' ||
@@ -725,6 +727,12 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         transaction.metadata?.payout_type === 'global_fiat' ||
         transaction.metadata?.activity_type === 'wallet_send',
     )
+  const depositSendNote = String(
+    transaction.send_note ??
+      transaction.metadata?.send_note ??
+      transaction.metadata?.note ??
+      '',
+  ).trim()
   const whenTs =
     transaction.ledger_created_at ||
     transaction.created_at
@@ -751,15 +759,17 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
           transaction.payout_review.receive_currency,
         ))
   const showPayoutProcessingFee =
-    transaction.payout_review &&
-    (isWalletSendReview
-      ? shouldShowWalletSendProcessingFee({
-          executionModel: transaction.payout_review.execution_model,
-          processingFee: transaction.payout_review.processing_fee,
-        })
-      : shouldShowGlobalPayoutProcessingFee({
-          processingFee: transaction.payout_review.processing_fee,
-        }))
+    !!transaction.payout_review &&
+    shouldShowPayoutReviewFeeRow({
+      processingFee: transaction.payout_review.processing_fee,
+      exchangeFee: transaction.payout_review.exchange_fee,
+    })
+  const payoutDisplayProcessingFee = transaction.payout_review
+    ? computeDisplayProcessingFee({
+        processingFee: transaction.payout_review.processing_fee,
+        exchangeFee: transaction.payout_review.exchange_fee,
+      })
+    : 0
   const easetagWhenTs = whenTs
 
   return (
@@ -910,20 +920,9 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 ) : null}
 
                 {!isEasetagP2p &&
-                (() => {
-                  const sendNote = String(
-                    transaction.metadata?.send_note ?? transaction.metadata?.note ?? '',
-                  ).trim()
-                  if (!sendNote) return null
-                  return (
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Note</Text>
-                      <Text style={styles.summaryValue}>{sendNote}</Text>
-                    </View>
-                  )
-                })()}
-
-                {!isEasetagP2p && !isBankOnrampReceive && transaction.sender_display_name ? (
+                !isBankOnrampReceive &&
+                !isStablecoinReceive &&
+                transaction.sender_display_name ? (
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Sender</Text>
                     <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
@@ -936,9 +935,29 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       <Text style={styles.summaryLabel}>When</Text>
                       <Text style={styles.summaryValue}>{formatTimestamp(whenTs)}</Text>
                     </View>
+                    {transaction.source_payment_rail ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Scheme</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatScheme(transaction, transaction.source_payment_rail)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {transaction.sender_display_name ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Sender</Text>
+                        <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
+                      </View>
+                    ) : null}
+                    {transaction.reference ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Narration</Text>
+                        <Text style={styles.summaryValue}>{transaction.reference}</Text>
+                      </View>
+                    ) : null}
                     {transaction.fee_amount != null && transaction.fee_amount > 0 ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Fee</Text>
+                        <Text style={styles.summaryLabel}>Processing fee</Text>
                         <Text style={styles.summaryValue}>
                           {formatAmount(transaction.fee_amount, transaction.currency, false)}
                         </Text>
@@ -959,26 +978,12 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         </Text>
                       </View>
                     ) : null}
-                    {transaction.source_payment_rail ? (
+                    {depositSendNote ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Scheme</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatScheme(transaction, transaction.source_payment_rail)}
-                        </Text>
+                        <Text style={styles.summaryLabel}>Note</Text>
+                        <Text style={styles.summaryValue}>{depositSendNote}</Text>
                       </View>
                     ) : null}
-                    {transaction.reference ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Narration</Text>
-                        <Text style={styles.summaryValue}>{transaction.reference}</Text>
-                      </View>
-                    ) : null}
-                    {transaction.transaction_timing?.map((row) => (
-                      <View key={row.label} style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{row.label}</Text>
-                        <Text style={styles.summaryValue}>{row.value}</Text>
-                      </View>
-                    ))}
                   </>
                 ) : null}
 
@@ -1031,8 +1036,15 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 )}
 
                 {/* Stablecoin deposits */}
-                {!isEasetagP2p && transaction.transaction_type === 'receive' && transaction.source_type === 'liquidation_address' && (
+                {!isEasetagP2p && isStablecoinReceive && (
                   <>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>When</Text>
+                      <Text style={styles.summaryValue}>
+                        {formatTimestamp(whenTs)}
+                      </Text>
+                    </View>
+
                     {/* Scheme - always show "USDC on SOL" or "EURC on SOL" */}
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Scheme</Text>
@@ -1041,14 +1053,43 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       </Text>
                     </View>
 
-                    {/* When */}
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>When</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatTimestamp(whenTs)}
-                      </Text>
-                    </View>
+                    {transaction.sender_display_name ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Sender</Text>
+                        <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
+                      </View>
+                    ) : null}
 
+                    {transaction.fee_amount != null && transaction.fee_amount > 0 ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Processing fee</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatAmount(transaction.fee_amount, transaction.currency, false)}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {(transaction.posted_amount ?? transaction.settled_amount) != null &&
+                    (transaction.posted_amount ?? transaction.settled_amount)! > 0 ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Amount credited</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatAmount(
+                            transaction.posted_amount ?? transaction.settled_amount!,
+                            transaction.posted_currency ||
+                              transaction.settled_currency ||
+                              transaction.currency,
+                            true,
+                          )}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {depositSendNote ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Note</Text>
+                        <Text style={styles.summaryValue}>{depositSendNote}</Text>
+                      </View>
+                    ) : null}
                   </>
                 )}
 
@@ -1056,7 +1097,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 {isGlobalPayoutSend && transaction.payout_review ? (
                   <>
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>You send</Text>
+                      <Text style={styles.summaryLabel}>Sent</Text>
                       <Text style={styles.summaryValue}>
                         {formatMoneyDisplay(
                           transaction.payout_review.you_send_amount,
@@ -1064,43 +1105,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         )}
                       </Text>
                     </View>
-                    {payoutReviewHasFx &&
-                    shouldShowPayoutExchangeFee({
-                      sendCurrency: transaction.payout_review!.send_currency,
-                      receiveCurrency: transaction.payout_review!.receive_currency,
-                      exchangeFee: transaction.payout_review!.exchange_fee,
-                    }) ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Exchange fee</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatMoneyDisplay(
-                            transaction.payout_review.exchange_fee,
-                            transaction.payout_review.send_currency,
-                          )}
-                        </Text>
-                      </View>
-                    ) : null}
                     {showPayoutProcessingFee ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Processing fee</Text>
                         <Text style={styles.summaryValue}>
                           {formatMoneyDisplay(
-                            transaction.payout_review!.processing_fee,
+                            payoutDisplayProcessingFee,
                             transaction.payout_review!.send_currency,
-                          )}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {shouldShowWalletSendNetworkFee({
-                      executionModel: transaction.payout_review.execution_model,
-                      networkFee: transaction.payout_review.network_fee,
-                    }) ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Network fee</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatMoneyDisplay(
-                            transaction.payout_review.network_fee!,
-                            transaction.payout_review.send_currency,
                           )}
                         </Text>
                       </View>
@@ -1200,7 +1211,9 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     ) : null}
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Transfer method</Text>
-                      <Text style={styles.summaryValue}>{transaction.payout_review.transfer_method}</Text>
+                      <Text style={styles.summaryValue}>
+                        {normalizeTransferMethodLabel(transaction.payout_review.transfer_method)}
+                      </Text>
                     </View>
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>When</Text>
@@ -1208,12 +1221,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         {formatTimestamp(whenTs)}
                       </Text>
                     </View>
-                    {transaction.transaction_timing?.map((row) => (
-                      <View key={row.label} style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{row.label}</Text>
-                        <Text style={styles.summaryValue}>{row.value}</Text>
-                      </View>
-                    ))}
                     {transaction.send_note || transaction.metadata?.send_note ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Note</Text>
@@ -1260,18 +1267,24 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       </Text>
                     </View>
 
+                    {depositSendNote ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Note</Text>
+                        <Text style={styles.summaryValue}>{depositSendNote}</Text>
+                      </View>
+                    ) : null}
                   </>
                 )}
               </View>
             </SectionCard>
 
-            {(isBankOnrampReceive || isGlobalPayoutSend) &&
+            {(isBankOnrampReceive || isStablecoinReceive || isGlobalPayoutSend) &&
             transaction.lifecycle &&
             transaction.lifecycle.length > 0 ? (
               <SectionCard style={styles.card}>
                 <TransactionLifecycleTracker
                   steps={transaction.lifecycle}
-                  title={isGlobalPayoutSend ? 'Transfer status' : undefined}
+                  title={isGlobalPayoutSend ? 'Transfer status' : 'Deposit status'}
                 />
               </SectionCard>
             ) : null}

@@ -13,11 +13,9 @@ import {
   getGlobalPayoutTransferMethod,
   resolveSendConfirmArrivalHint,
   hasWalletSendFxDisplay,
-  shouldShowPayoutExchangeFee,
-  shouldShowGlobalPayoutProcessingFee,
-  shouldShowPayoutNetworkFee,
-  shouldShowWalletSendNetworkFee,
-  shouldShowWalletSendProcessingFee,
+  computeDisplayProcessingFee,
+  normalizeTransferMethodLabel,
+  shouldShowPayoutReviewFeeRow,
   qk,
   resolvePayoutCountryCode,
   resolveRecipientPayoutRail,
@@ -344,27 +342,15 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const processingFee = quoteDisplay?.marginAmount ?? easnerFee ?? calculatedFeeAmount
   const exchangeFee = quoteDisplay?.exchangeFee ?? 0
   const networkFee = isWalletRecipient ? (quoteDisplay as { networkFee?: number } | null)?.networkFee ?? 0 : 0
-  const showExchangeFee = shouldShowPayoutExchangeFee({
-    sendCurrency: selectedBalanceCurrency,
-    receiveCurrency,
+  const displayProcessingFee = computeDisplayProcessingFee({
+    processingFee,
     exchangeFee,
   })
   const walletExecutionModel =
     (quoteDisplay as { executionModel?: string } | null)?.executionModel ??
     walletSession?.executionModel ??
     peekSendWalletQuote()?.executionModel
-  const showProcessingFee = isWalletRecipient
-    ? shouldShowWalletSendProcessingFee({
-        executionModel: walletExecutionModel,
-        processingFee: processingFee,
-      })
-    : shouldShowGlobalPayoutProcessingFee({ processingFee })
-  const showNetworkFee = isWalletRecipient
-    ? shouldShowWalletSendNetworkFee({
-        executionModel: walletExecutionModel,
-        networkFee,
-      })
-    : shouldShowPayoutNetworkFee(networkFee)
+  const showProcessingFee = shouldShowPayoutReviewFeeRow({ processingFee, exchangeFee })
   const transferMethod = recipient
     ? isWalletRecipient
       ? formatWalletSendTransferMethod(receiveCurrency, walletNetwork)
@@ -375,7 +361,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           mobileProvider: recipient.mobile_provider,
           payeeEasetag: recipient.payee_easetag,
         })
-    : 'Bank transfer'
+    : 'Local transfer'
   const processingTime = arrivalHint ?? undefined
 
   const [sendingAfterPin, setSendingAfterPin] = useState(false)
@@ -553,7 +539,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                   receive_currency: receiveCurrency,
                   transfer_method: transferMethod,
                   ...(processingTime ? { processing_time: processingTime } : {}),
-                  ...(processingFee > 0 ? { margin_amount: processingFee, easner_fee: processingFee } : {}),
+                  ...(processingFee > 0 ? { easner_fee: processingFee } : {}),
                   ...(isWalletRecipient && walletExecutionModel
                     ? { execution_model: walletExecutionModel }
                     : {}),
@@ -756,12 +742,21 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.card}>
+              {displayTransactionId ? (
+                <Row label="Transaction ID" value={displayTransactionId} />
+              ) : null}
               <Row
-                label="You send"
+                label="Sending"
                 value={formatMoneyDisplay(youSendAmount, selectedBalanceCurrency)}
               />
               {selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR' ? (
                 <FromBalanceRow currency={selectedBalanceCurrency} />
+              ) : null}
+              {!easetagUi && quoteReady && showProcessingFee ? (
+                <Row
+                  label="Processing fee"
+                  value={formatMoneyDisplay(displayProcessingFee, selectedBalanceCurrency)}
+                />
               ) : null}
               {hasFx && customerRate > 0 ? (
                 <Row
@@ -772,28 +767,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                     customerRate,
                   )}
                 />
-              ) : null}
-              {!easetagUi && quoteReady ? (
-                <>
-                  {showExchangeFee ? (
-                    <Row
-                      label="Exchange fee"
-                      value={formatMoneyDisplay(exchangeFee, selectedBalanceCurrency)}
-                    />
-                  ) : null}
-                  {showProcessingFee ? (
-                    <Row
-                      label="Processing fee"
-                      value={formatMoneyDisplay(processingFee, selectedBalanceCurrency)}
-                    />
-                  ) : null}
-                  {showNetworkFee ? (
-                    <Row
-                      label="Network fee"
-                      value={formatMoneyDisplay(networkFee, selectedBalanceCurrency)}
-                    />
-                  ) : null}
-                </>
               ) : null}
               {!easetagUi && calculatedTotalAmount > 0 ? (
                 <Row
@@ -806,14 +779,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 label="Recipient gets"
                 value={formatMoneyDisplay(quotedReceiveAmount, receiveCurrency)}
               />
-              {arrivalHint ? <Row label="Arrival" value={arrivalHint} /> : null}
               {recipient ? (
-                <View
-                  style={[
-                    styles.recipientRow,
-                    !displayTransactionId && !pricingQuoteExpiry && styles.rowLast,
-                  ]}
-                >
+                <View style={styles.recipientRow}>
                   <Text style={styles.rowLabel}>Recipient</Text>
                   <View style={styles.recipientSummaryWrap}>
                     <SendSelectedRecipientSummary
@@ -824,8 +791,14 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                   </View>
                 </View>
               ) : null}
-              {displayTransactionId ? (
-                <Row label="Transaction ID" value={displayTransactionId} last={!pricingQuoteExpiry} />
+              {!easetagUi ? (
+                <Row
+                  label="Transfer method"
+                  value={normalizeTransferMethodLabel(transferMethod)}
+                />
+              ) : null}
+              {arrivalHint ? (
+                <Row label="Arrival" value={arrivalHint} last={!pricingQuoteExpiry} />
               ) : null}
               {quoteError ? (
                 <Text style={styles.quoteError} accessibilityRole="alert">

@@ -36,24 +36,24 @@ describe("formatTransactionDetailHeroTitle", () => {
 })
 
 describe("getGlobalPayoutTransferMethod", () => {
-  it("uses Bank transfer for NG bank corridor", () => {
+  it("uses Local transfer for NG bank corridor", () => {
     expect(
       getGlobalPayoutTransferMethod({
         currency: "NGN",
         countryCode: "NG",
         bankName: "Kuda",
       }),
-    ).toBe("Bank transfer")
+    ).toBe("Local transfer")
   })
 
-  it("uses Mobile money when provider present", () => {
+  it("uses Local transfer when mobile money provider present", () => {
     expect(
       getGlobalPayoutTransferMethod({
         currency: "NGN",
         countryCode: "NG",
         mobileProvider: "MTN",
       }),
-    ).toBe("Mobile money")
+    ).toBe("Local transfer")
   })
 
   it("uses SEPA Instant for EUR corridors", () => {

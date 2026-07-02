@@ -22,7 +22,7 @@ export function isMobileMoneyPayoutCorridor(input: PayoutTransferMethodInput): b
 /** Corridor label for global payout review, push title, and detail rows. */
 export function getGlobalPayoutTransferMethod(input: PayoutTransferMethodInput): string {
   if (String(input.payeeEasetag || "").trim()) return "Easetag (wallet-to-wallet)"
-  if (isMobileMoneyPayoutCorridor(input)) return "Mobile money"
+  if (isMobileMoneyPayoutCorridor(input)) return "Local transfer"
 
   const currency = String(input.currency || "").toUpperCase()
   const country = normalizeCountry(input)
@@ -30,7 +30,20 @@ export function getGlobalPayoutTransferMethod(input: PayoutTransferMethodInput):
   if (currency === "USD" && country === "US") return "ACH"
   if (currency === "EUR") return "SEPA Instant"
   if (currency === "GBP" && country === "GB") return "Faster Payments"
-  return "Bank transfer"
+  return "Local transfer"
+}
+
+/**
+ * Normalize legacy persisted transfer-method labels to current copy.
+ * Old rows may store "Bank transfer", "Mobile money", or "Mobile money transfer".
+ */
+export function normalizeTransferMethodLabel(raw: string | null | undefined): string {
+  const s = String(raw || "").trim()
+  if (!s) return ""
+  const lower = s.toLowerCase()
+  if (lower === "bank transfer") return "Local transfer"
+  if (lower === "mobile money" || lower === "mobile money transfer") return "Local transfer"
+  return s
 }
 
 export function getGlobalPayoutProcessingTime(method: string): string {
@@ -43,6 +56,7 @@ export function getGlobalPayoutProcessingTime(method: string): string {
     case "SEPA Instant":
       return "Within minutes"
     case "Faster Payments":
+    case "Local transfer":
     case "Mobile money":
     case "Bank transfer":
       return "Within minutes"

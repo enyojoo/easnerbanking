@@ -2,15 +2,15 @@
 
 import type { ReactNode } from "react"
 import {
+  computeDisplayProcessingFee,
+  CurrencyFlag,
   formatMoneyDisplay,
   formatPayoutRecipientSubtitle,
   formatSendRateLabel,
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
-  shouldShowPayoutExchangeFee,
-  shouldShowGlobalPayoutProcessingFee,
-  shouldShowWalletSendNetworkFee,
-  shouldShowWalletSendProcessingFee,
+  normalizeTransferMethodLabel,
+  shouldShowPayoutReviewFeeRow,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
   type TransactionTimingRow,
@@ -102,23 +102,15 @@ export function PayoutReviewDetailsRows({
         receiveNetwork,
       )
     : hasPayoutCrossCurrencyFx(payoutReview.send_currency, payoutReview.receive_currency)
-  const showExchangeFee = shouldShowPayoutExchangeFee({
-    sendCurrency: payoutReview.send_currency,
-    receiveCurrency: payoutReview.receive_currency,
+  const displayProcessingFee = computeDisplayProcessingFee({
+    processingFee: payoutReview.processing_fee,
     exchangeFee: payoutReview.exchange_fee,
   })
-  const showProcessingFee = globalFiatPayout
-    ? shouldShowGlobalPayoutProcessingFee({ processingFee: payoutReview.processing_fee })
-    : shouldShowWalletSendProcessingFee({
-        executionModel:
-          walletSendExecutionModel ?? payoutReview.execution_model ?? null,
-        processingFee: payoutReview.processing_fee,
-      })
-  const showNetworkFee = shouldShowWalletSendNetworkFee({
-    executionModel:
-      walletSendExecutionModel ?? payoutReview.execution_model ?? null,
-    networkFee: payoutReview.network_fee,
+  const showProcessingFee = shouldShowPayoutReviewFeeRow({
+    processingFee: payoutReview.processing_fee,
+    exchangeFee: payoutReview.exchange_fee,
   })
+  const transferMethodLabel = normalizeTransferMethodLabel(payoutReview.transfer_method)
 
   return (
     <Card className="border-border shadow-sm">
@@ -145,7 +137,9 @@ export function PayoutReviewDetailsRows({
         </div>
 
         <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">You send</span>
+          <span className="text-sm text-muted-foreground">
+            {mode === "confirm" ? "Sending" : "Sent"}
+          </span>
           <span className="text-xl font-semibold">
             {formatMoneyDisplay(payoutReview.you_send_amount, payoutReview.send_currency)}
           </span>
@@ -163,29 +157,11 @@ export function PayoutReviewDetailsRows({
 
         {showFeeBreakdown ? (
           <>
-            {showExchangeFee ? (
-              <div className="flex items-center justify-between border-b pb-4">
-                <span className="text-sm text-muted-foreground">Exchange fee</span>
-                <span className="font-semibold">
-                  {formatMoneyDisplay(payoutReview.exchange_fee, payoutReview.send_currency)}
-                </span>
-              </div>
-            ) : null}
-
             {showProcessingFee ? (
               <div className="flex items-center justify-between border-b pb-4">
                 <span className="text-sm text-muted-foreground">Processing fee</span>
                 <span className="font-semibold">
-                  {formatMoneyDisplay(payoutReview.processing_fee, payoutReview.send_currency)}
-                </span>
-              </div>
-            ) : null}
-
-            {showNetworkFee ? (
-              <div className="flex items-center justify-between border-b pb-4">
-                <span className="text-sm text-muted-foreground">Network fee</span>
-                <span className="font-semibold">
-                  {formatMoneyDisplay(payoutReview.network_fee!, payoutReview.send_currency)}
+                  {formatMoneyDisplay(displayProcessingFee, payoutReview.send_currency)}
                 </span>
               </div>
             ) : null}
@@ -258,7 +234,7 @@ export function PayoutReviewDetailsRows({
 
         <div className="flex items-center justify-between border-b pb-4">
           <span className="text-sm text-muted-foreground">Transfer method</span>
-          <span className="font-medium">{payoutReview.transfer_method}</span>
+          <span className="font-medium">{transferMethodLabel}</span>
         </div>
 
         {whenAt ? (

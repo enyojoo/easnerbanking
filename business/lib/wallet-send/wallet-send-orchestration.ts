@@ -263,13 +263,18 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
 
   const marginAmount = session.margin_amount
   const lifiFloor = session.lifi_floor
+  // Explicit Easner 1% leg = total − lifiFloor − FX margin (also SPL-sent to the fee wallet).
+  const processingFee = Math.max(
+    0,
+    Math.round((session.total_debited - lifiFloor - marginAmount) * 1_000_000) / 1_000_000,
+  )
   const ready = await assertWalletSendExecuteReady(input.admin, {
     ctx: input.ctx,
     userId: input.userId,
     businessId: input.businessId,
     balanceCurrency,
     totalDebited: session.total_debited,
-    onChainOutTotal: lifiFloor + marginAmount,
+    onChainOutTotal: lifiFloor + marginAmount + processingFee,
   })
   if (!ready.ok) return ready
 
@@ -320,7 +325,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
       receive_currency: session.receive_asset,
       lifi_floor: lifiFloor,
       margin_amount: marginAmount,
-      processing_fee: marginAmount,
+      processing_fee: processingFee,
       fee_destination_address: feeAddress,
       lifi_tool: lifi.lifiTool,
       lifi_quote_id: lifi.lifiQuoteId,

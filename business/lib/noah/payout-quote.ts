@@ -3,6 +3,7 @@ import { getNoahEurCryptoTicker, getNoahSettlementCryptoCurrency } from "@/lib/n
 import { findNoahRate, listNoahRates } from "@/lib/fx/noah-rates"
 import {
   computeGlobalPayoutPricing,
+  computePayoutProcessingFeeBps,
   normalizeGlobalPayoutQuoteReceiveAmount,
   normalizePayoutReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
@@ -56,6 +57,10 @@ export type PayoutQuoteResult = {
   totalDebited: number
   channelCost: number
   marginAmount: number
+  /** Explicit Easner 1% processing fee leg (uncapped), collected to the fee wallet. */
+  processingFee: number
+  /** Channel component shown in the combined Processing fee row (foots with total). */
+  displayChannelCost: number
   channelId?: string
   noah: {
     totalFee: number
@@ -330,6 +335,7 @@ export async function buildPayoutQuote(input: {
         })
       : null
 
+  const sameCurrencyProcessingFee = computePayoutProcessingFeeBps(quoteReceiveAmount)
   const pricing =
     sourceBalanceCurrency === receiveCurrency
       ? {
@@ -337,7 +343,12 @@ export async function buildPayoutQuote(input: {
           midNotional: quoteReceiveAmount,
           marginAmount: 0,
           channelCost: 0,
-          totalDebited: noahFloor,
+          processingFee: sameCurrencyProcessingFee,
+          displayChannelCost: Math.max(
+            0,
+            Math.round((noahFloor - quoteReceiveAmount) * 1_000_000) / 1_000_000,
+          ),
+          totalDebited: Math.round((noahFloor + sameCurrencyProcessingFee) * 1_000_000) / 1_000_000,
           noahSendAmount: noahFloor,
           triggerAmount: noahFloor,
           marginCaptureMode,
@@ -422,6 +433,8 @@ export async function buildPayoutQuote(input: {
     totalDebited: pricing.totalDebited,
     channelCost: pricing.channelCost,
     marginAmount: pricing.marginAmount,
+    processingFee: pricing.processingFee,
+    displayChannelCost: pricing.displayChannelCost,
     channelId,
     noah: {
       totalFee: noahFee,

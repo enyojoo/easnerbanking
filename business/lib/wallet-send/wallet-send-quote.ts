@@ -36,6 +36,10 @@ export type WalletSendQuoteResult = {
   totalDebited: number
   marginAmount: number
   channelCost: number
+  /** Explicit Easner 1% processing fee leg (uncapped), collected to the fee wallet. */
+  processingFee: number
+  /** Channel/route component shown in the combined Processing fee row (foots with total). */
+  displayChannelCost: number
   networkFee: number
   rate: number
   customerRate: number
@@ -241,6 +245,8 @@ export async function buildWalletSendQuote(input: {
     totalDebited: pricing.totalDebited,
     marginAmount: pricing.marginAmount,
     channelCost: pricing.routeCost,
+    processingFee: pricing.processingFee,
+    displayChannelCost: pricing.displayChannelCost,
     networkFee: pricing.networkFee,
     rate: customerRate,
     customerRate,

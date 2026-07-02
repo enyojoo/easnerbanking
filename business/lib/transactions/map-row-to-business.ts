@@ -15,6 +15,7 @@ import {
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
+import { resolveStablecoinDepositPayInDetail } from "@/lib/transactions/resolve-stablecoin-deposit-pay-in"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 import {
   isWalletSendOutRow,
@@ -36,6 +37,7 @@ function resolveWalletSendTransactionTiming(row: Record<string, unknown>) {
     failedAt: timingAnchors.failedAt,
     showExpectedWhileInFlight: false,
     showStartedWhileInFlight: false,
+    showTerminalDuration: false,
   })
 }
 
@@ -101,6 +103,10 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     !isVerification &&
     (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
       ? resolveBankDepositPayInDetail(row)
+      : null
+  const stablecoinDepositDetail =
+    !globalPayoutDetail && !walletSendPayoutReview && !bankDepositDetail && !isVerification
+      ? resolveStablecoinDepositPayInDetail(row)
       : null
   const globalPayoutList = globalPayoutDetail ? null : resolveGlobalPayoutListDisplay(row)
   const walletSendList =
@@ -196,8 +202,11 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
         row.chain ??
         "",
     ).trim() || undefined
-  const counterpartyName =
-    counterpartyNameRaw && counterpartyNameRaw !== description ? counterpartyNameRaw : undefined
+  const counterpartyName = stablecoinDepositDetail?.senderDisplay
+    ? stablecoinDepositDetail.senderDisplay
+    : counterpartyNameRaw && counterpartyNameRaw !== description
+      ? counterpartyNameRaw
+      : undefined
 
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const displayHeroTitle =
@@ -234,7 +243,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     direction,
     source: "account" as const,
     reference: easnerId,
-    paymentScheme: isEasetagP2p ? "Easetag" : undefined,
+    paymentScheme: isEasetagP2p
+      ? "Easetag"
+      : stablecoinDepositDetail?.schemeLabel ?? undefined,
     transferId: providerTxId,
     baseCurrency: listBaseCurrency,
     baseAmount: listBaseAmount,
@@ -279,6 +290,15 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             paymentScheme: bankDepositDetail.depositSchemeLabel,
             narration: bankDepositDetail.narration ?? undefined,
             ledgerCreatedAt: bankDepositDetail.ledgerCreatedAt ?? ledgerCreatedAt,
+          }
+        : stablecoinDepositDetail
+        ? {
+            lifecycle: stablecoinDepositDetail.lifecycle,
+            transactionTiming: stablecoinDepositDetail.transactionTiming,
+            postedAmount: stablecoinDepositDetail.postedAmount || undefined,
+            postedCurrency: stablecoinDepositDetail.postedCurrency,
+            paymentScheme: stablecoinDepositDetail.schemeLabel,
+            ledgerCreatedAt: stablecoinDepositDetail.ledgerCreatedAt ?? ledgerCreatedAt,
           }
         : globalPayoutList
         ? {

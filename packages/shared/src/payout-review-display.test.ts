@@ -19,26 +19,19 @@ describe("payout-review-display", () => {
     expect(isPayoutReviewFeeVisible(0.006)).toBe(true)
   })
 
-  it("shows exchange fee only for cross-currency with a fee", () => {
+  it("never shows a standalone exchange fee row (folded into Processing fee)", () => {
     expect(
       shouldShowPayoutExchangeFee({
         sendCurrency: "USD",
         receiveCurrency: "NGN",
-        exchangeFee: 0.32,
-      }),
-    ).toBe(true)
-    expect(
-      shouldShowPayoutExchangeFee({
-        sendCurrency: "USD",
-        receiveCurrency: "USD",
         exchangeFee: 0.32,
       }),
     ).toBe(false)
     expect(
       shouldShowPayoutExchangeFee({
         sendCurrency: "USD",
-        receiveCurrency: "NGN",
-        exchangeFee: 0,
+        receiveCurrency: "USD",
+        exchangeFee: 0.32,
       }),
     ).toBe(false)
   })
@@ -50,23 +43,27 @@ describe("payout-review-display", () => {
     expect(shouldShowPayoutNetworkFee(null)).toBe(false)
   })
 
-  it("hides wallet send processing fee for LI.FI bridge (margin in customer rate)", () => {
+  it("shows the combined Processing fee for LI.FI bridge (explicit 1% leg now visible)", () => {
     expect(
       shouldShowWalletSendProcessingFee({ executionModel: "lifi_bridge", processingFee: 1.5 }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldShowWalletSendProcessingFee({ executionModel: "direct_turnkey", processingFee: 1 }),
     ).toBe(true)
+    // Channel-only cost (no explicit leg) still surfaces in the combined row.
+    expect(
+      shouldShowWalletSendProcessingFee({ executionModel: "lifi_bridge", exchangeFee: 0.8 }),
+    ).toBe(true)
   })
 
-  it("hides global fiat processing fee (margin in noah_rates.rate)", () => {
-    expect(shouldShowGlobalPayoutProcessingFee({ processingFee: 0.056 })).toBe(false)
+  it("shows global fiat processing fee (explicit 1% + channel cost)", () => {
+    expect(shouldShowGlobalPayoutProcessingFee({ processingFee: 0.056 })).toBe(true)
     expect(
       shouldShowPayoutReviewProcessingFee({
         payoutFlow: "global_fiat",
         processingFee: 0.056,
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldShowPayoutReviewProcessingFee({
         payoutFlow: "wallet_send",
@@ -80,7 +77,7 @@ describe("payout-review-display", () => {
         executionModel: "lifi_bridge",
         processingFee: 1.5,
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it("hides wallet send network fee for both execution models", () => {

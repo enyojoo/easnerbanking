@@ -85,6 +85,21 @@ export function truncateMiddle(s: string, start = 6, end = 6): string {
   return `${t.slice(0, start)}...${t.slice(-end)}`
 }
 
+/**
+ * Deposit "Sender" display — prefer a human name from metadata, otherwise mask the
+ * on-chain counterparty address (`0x1a2b...c3d4`) so sensitive data isn't shown in full.
+ */
+export function formatMaskedSenderDisplay(input: {
+  senderName?: string | null
+  counterpartyAddress?: string | null
+}): string {
+  const name = String(input.senderName || "").trim()
+  if (name) return name
+  const addr = String(input.counterpartyAddress || "").trim()
+  if (addr) return truncateMiddle(addr, 6, 6)
+  return ""
+}
+
 function formatBankAccountDisplay(input: PayoutRecipientSubtitleInput): string {
   const iban = String(input.iban || "").replace(/\s/g, "").trim()
   const acct = String(input.fullAccountNumber || input.accountNumber || "").trim()

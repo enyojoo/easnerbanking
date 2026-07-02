@@ -109,15 +109,23 @@ export function walletDisplayAmountsFromQuote(quote: WalletSendQuote): {
   youSendAmount: number
   exchangeFee: number
   marginAmount: number
+  processingFee: number
+  displayChannelCost: number
   networkFee: number
   totalDebited: number
   customerRate: number
   executionModel?: WalletSendQuote["executionModel"]
 } {
+  const processingFee = quote.processingFee ?? quote.marginAmount
+  const displayChannelCost = quote.displayChannelCost ?? quote.channelCost
   return {
     youSendAmount: quote.sendAmount,
-    exchangeFee: quote.channelCost,
-    marginAmount: quote.marginAmount,
+    // `exchangeFee` feeds the combined Processing fee row — use the footing display channel.
+    exchangeFee: displayChannelCost,
+    // `marginAmount` here is what the screen renders as the Easner processing fee leg.
+    marginAmount: processingFee,
+    processingFee,
+    displayChannelCost,
     networkFee: quote.networkFee,
     totalDebited: quote.totalDebited,
     customerRate: quote.customerRate,

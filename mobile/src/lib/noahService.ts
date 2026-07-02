@@ -98,6 +98,10 @@ export interface PayoutQuote {
   totalDebited: number
   channelCost: number
   marginAmount: number
+  /** Explicit Easner 1% processing fee leg (uncapped). */
+  processingFee?: number
+  /** Channel component shown in the combined Processing fee row (foots with total). */
+  displayChannelCost?: number
   channelId?: string
   noah: {
     totalFee: number
@@ -127,6 +131,10 @@ export interface WalletSendQuote {
   totalDebited: number
   marginAmount: number
   channelCost: number
+  /** Explicit Easner 1% processing fee leg (uncapped). */
+  processingFee?: number
+  /** Channel/route component shown in the combined Processing fee row (foots with total). */
+  displayChannelCost?: number
   networkFee: number
   rate: number
   customerRate: number

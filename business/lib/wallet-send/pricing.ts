@@ -44,6 +44,9 @@ export function pricingFromLifiQuote(input: {
     lifiMid,
     lifiFloor,
     networkFee: parseLifiNetworkFeeUsd(input.quote),
+    processingFeeBps: parseWalletSendProcessingFeeBpsFromEnv(
+      process.env.WALLET_SEND_PROCESSING_FEE_BPS,
+    ),
   })
 }
 

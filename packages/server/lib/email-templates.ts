@@ -43,13 +43,23 @@ function buildTransactionDetailRows(data: TransactionEmailData): TransactionDeta
       label: "Transaction ID",
       value: data.easnerTransactionId || data.transactionId,
     },
-    { label: "Type", value: data.category || data.title },
-    { label: "Amount", value: data.amountDisplay },
   ]
-  if (data.counterpartyName && data.counterpartyLabel) {
-    rows.push({ label: data.counterpartyLabel, value: data.counterpartyName })
+
+  if (data.detailRows?.length) {
+    // Hero amount (receive amount for payouts, gross received for deposits) stays visible,
+    // then the canonical rows (Sending / Processing fee / Total debited / Recipient /
+    // Transfer method, or Scheme / Sender / Processing fee / Amount credited).
+    if (data.amountDisplay) rows.push({ label: "Amount", value: data.amountDisplay })
+    for (const row of data.detailRows) rows.push({ label: row.label, value: row.value })
+  } else {
+    rows.push({ label: "Type", value: data.category || data.title })
+    rows.push({ label: "Amount", value: data.amountDisplay })
+    if (data.counterpartyName && data.counterpartyLabel) {
+      rows.push({ label: data.counterpartyLabel, value: data.counterpartyName })
+    }
+    if (data.paymentRail) rows.push({ label: "Payment method", value: data.paymentRail })
   }
-  if (data.paymentRail) rows.push({ label: "Payment method", value: data.paymentRail })
+
   const displayStatus = data.status === "settled" ? "completed" : data.status
   rows.push({
     label: "Status",

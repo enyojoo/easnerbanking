@@ -62,6 +62,10 @@ export interface SendFlowState {
     noahSendAmount?: string
     marginAmount?: number
     channelCost?: number
+    /** Explicit Easner 1% processing fee leg (uncapped). */
+    processingFee?: number
+    /** Channel component shown in the combined Processing fee row (foots with total). */
+    displayChannelCost?: number
     customerPrincipal?: number
     marginCaptureMode?: "surplus_send" | "split_debit"
     noahMid?: number
@@ -84,6 +88,8 @@ export interface SendFlowState {
     totalDebited: number
     marginAmount: number
     channelCost: number
+    processingFee?: number
+    displayChannelCost?: number
     networkFee: number
     customerRate: number
     lifiMid: number

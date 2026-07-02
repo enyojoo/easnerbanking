@@ -20,6 +20,11 @@ import {
   isGlobalPayoutOffRampRow,
 } from "@/lib/transactions/global-payout-detail"
 import { attachWalletSendDetailFields } from "@/lib/transactions/wallet-send-detail"
+import {
+  attachStablecoinDepositDetailFields,
+  isStablecoinDepositPayInRow,
+} from "@/lib/transactions/stablecoin-deposit-detail"
+import { resolveStablecoinDepositPayInDetail } from "@/lib/transactions/resolve-stablecoin-deposit-pay-in"
 import { isWalletSendOutRow } from "@/lib/wallet-send/build-wallet-send-payout-review"
 import {
   isNoahGlobalPayoutOrchestrationInHiddenFromFeed,
@@ -347,6 +352,7 @@ export async function GET(request: Request, routeCtx: Props) {
   transaction = await attachBankDepositDetailFieldsAsync(admin, rec, transaction)
   transaction = await attachGlobalPayoutDetailFieldsAsync(admin, rec, transaction)
   transaction = attachWalletSendDetailFields(rec, transaction)
+  transaction = attachStablecoinDepositDetailFields(rec, transaction)
 
   if (scope === "business") {
     const [enrichedRec] = await enrichBankDepositLedgerRows(admin, [rec])

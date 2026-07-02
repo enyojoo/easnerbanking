@@ -93,11 +93,23 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
       ? exchangeRateFromReview
       : customerRate
 
+  // Explicit Easner 1% leg. Direct Turnkey: margin_amount IS the fee. LI.FI: derive the bps
+  // leg = total − lifiFloor − FX margin (FX margin stays hidden, folded into the rate).
+  const processingFeeFromReview = Number(input.reviewSnapshot?.processing_fee)
+  const fallbackProcessingFee =
+    executionModel === "direct_turnkey"
+      ? marginAmount
+      : roundMoney(Math.max(0, totalDebited - input.session.lifi_floor - marginAmount))
+  const processingFee =
+    Number.isFinite(processingFeeFromReview) && processingFeeFromReview >= 0
+      ? processingFeeFromReview
+      : fallbackProcessingFee
+
   return {
     you_send_amount: youSendAmount,
     total_debited: totalDebited,
     exchange_fee: exchangeFee,
-    processing_fee: marginAmount,
+    processing_fee: processingFee,
     exchange_rate: exchangeRate,
     send_currency: balanceCurrency,
     receive_amount: receiveAmount,
@@ -105,8 +117,8 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
     transfer_method: transferMethod,
     processing_time: processingTime,
     execution_model: executionModel,
-    margin_amount: marginAmount,
-    easner_fee: marginAmount,
+    ...(marginAmount > 0 ? { margin_amount: marginAmount } : {}),
+    ...(processingFee > 0 ? { easner_fee: processingFee } : {}),
     ...(exchangeFee > 0 ? { channel_cost: exchangeFee } : {}),
   }
 }

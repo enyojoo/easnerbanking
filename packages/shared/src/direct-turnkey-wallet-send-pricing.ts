@@ -3,7 +3,8 @@
 import type { CryptoSendPricing } from "./crypto-send-pricing"
 
 export const DEFAULT_WALLET_SEND_PROCESSING_FEE_BPS = 100
-export const DEFAULT_WALLET_SEND_PROCESSING_FEE_CAP = 20
+/** Processing fee is uncapped (Easner 1% applies to the full principal). */
+export const DEFAULT_WALLET_SEND_PROCESSING_FEE_CAP = Number.POSITIVE_INFINITY
 
 function roundStablecoin(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -22,7 +23,9 @@ export function parseWalletSendProcessingFeeBpsFromEnv(raw: string | undefined):
 }
 
 export function parseWalletSendProcessingFeeCapFromEnv(raw: string | undefined): number {
-  const parsed = Number.parseFloat(String(raw ?? "").trim())
+  const trimmed = String(raw ?? "").trim()
+  if (!trimmed) return DEFAULT_WALLET_SEND_PROCESSING_FEE_CAP
+  const parsed = Number.parseFloat(trimmed)
   if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_WALLET_SEND_PROCESSING_FEE_CAP
   return parsed
 }
@@ -63,6 +66,9 @@ export function computeDirectTurnkeyWalletSendPricing(input: {
     marginAmount,
     lifiFloor: receiveAmount,
     routeCost: 0,
+    // Direct Turnkey has no FX margin — the fee IS the explicit processing fee.
+    processingFee: marginAmount,
+    displayChannelCost: 0,
     networkFee: 0,
     totalDebited,
   }

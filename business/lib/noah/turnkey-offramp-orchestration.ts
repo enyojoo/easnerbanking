@@ -14,6 +14,7 @@ import {
 } from "@/lib/noah/margin-capture-mode"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolvePooledSolanaSourceAddress } from "@/lib/liquidity/platform-pool"
+import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { generateTransactionId } from "@/lib/transaction-id"
 import {
@@ -268,11 +269,18 @@ export async function executeTurnkeyOfframpPayout(
     parsePositiveAmount(quoted?.totalDebited) ??
     parsePositiveAmount(quoted?.noahSendAmount) ??
     noahFloor
-  const marginAmount = parsePositiveAmount(quoted?.marginAmount) ?? Math.max(0, totalDebited - noahFloor)
+  const marginAmount =
+    parsePositiveAmount(quoted?.marginAmount) ?? Math.max(0, totalDebited - noahFloor)
+  // Explicit Easner 1% leg (uncapped). totalDebited = noahFloor + FX margin + processingFee,
+  // so the fee is whatever the customer paid beyond the Noah floor + hidden FX margin.
+  const processingFee = Math.max(
+    0,
+    Math.round((totalDebited - noahFloor - marginAmount) * 1_000_000) / 1_000_000,
+  )
   const noahSendAmount =
     marginCaptureMode === "split_debit"
       ? noahFloor
-      : (parsePositiveAmount(quoted?.noahSendAmount) ?? totalDebited)
+      : (parsePositiveAmount(quoted?.noahSendAmount) ?? Math.max(0, totalDebited - processingFee))
 
   const { available, err: balErr } = await readAvailableBalance(admin, {
     businessId,
@@ -347,6 +355,7 @@ export async function executeTurnkeyOfframpPayout(
     noah_send_amount: noahSendAmount,
     total_debited: totalDebited,
     margin_amount: marginAmount,
+    processing_fee: processingFee,
     margin_capture_mode: marginCaptureMode,
     ...(quoted?.customerRate != null ? { customer_rate: quoted.customerRate } : {}),
     ...(quoted?.noahMid != null ? { noah_mid: quoted.noahMid } : {}),
@@ -445,6 +454,30 @@ export async function executeTurnkeyOfframpPayout(
       marginTurnkeySendId = marginSend.providerTransactionId
     }
 
+    let processingFeeTurnkeySendId: string | undefined
+    if (processingFee > 0.000_001) {
+      const feeAddress = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: walletCurrency })
+      if (!feeAddress) {
+        throw new Error("wallet_send_fee_address_not_configured")
+      }
+      const feeSend = await createTurnkeySend(admin, {
+        ctx,
+        asset,
+        chain: "solana",
+        destinationAddress: feeAddress,
+        amount: processingFee,
+        settlementPollTimeoutMs: 0,
+        globalPayout: {
+          easnerPayoutId,
+          noahWorkflowId,
+          formSessionId,
+          walletDebitAmount: 0,
+          marginLeg: true,
+        },
+      })
+      processingFeeTurnkeySendId = feeSend.providerTransactionId
+    }
+
     await admin
       .from("transactions")
       .update({
@@ -454,6 +487,9 @@ export async function executeTurnkeyOfframpPayout(
           turnkey_tx_hash: send.txHash,
           turnkey_send_status: send.status,
           ...(marginTurnkeySendId ? { margin_turnkey_send_id: marginTurnkeySendId } : {}),
+          ...(processingFeeTurnkeySendId
+            ? { processing_fee_turnkey_send_id: processingFeeTurnkeySendId }
+            : {}),
         },
         updated_at: new Date().toISOString(),
       })

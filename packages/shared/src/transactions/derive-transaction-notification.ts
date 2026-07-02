@@ -6,6 +6,7 @@ import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
 import {
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
+  normalizeTransferMethodLabel,
 } from "./payout-transfer-method"
 import {
   BANK_DEPOSIT_COMPLETED_DESCRIPTION,
@@ -229,9 +230,10 @@ function buildGlobalPayoutOutContext(input: {
     receiveAmount != null && receiveCurrency
       ? formatMoneyDisplay(receiveAmount, receiveCurrency)
       : input.amountText
-  const transferMethod =
+  const transferMethod = normalizeTransferMethodLabel(
     payoutReview?.transfer_method ||
-    (typeof meta?.transfer_method === "string" ? String(meta.transfer_method) : "Bank transfer")
+      (typeof meta?.transfer_method === "string" ? String(meta.transfer_method) : "Bank transfer"),
+  )
   const sentBody = recipientName
     ? `Sent ${amountDisplay} to ${recipientName}`
     : `Sent ${amountDisplay}`

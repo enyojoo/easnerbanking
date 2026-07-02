@@ -1,4 +1,5 @@
 import { isDirectTurnkeyWalletCorridor } from "./wallet-send-limits"
+import { computeDisplayProcessingFee } from "./payout-processing-fee"
 
 /** Hide fee rows at or below half a cent in USD/EUR (confirm + transaction details). */
 export const PAYOUT_REVIEW_FEE_VISIBLE_EPSILON = 0.005
@@ -39,50 +40,68 @@ export function hasWalletSendFxDisplay(
   return hasPayoutCrossCurrencyFx(sendCurrency, receiveCurrency)
 }
 
-export function shouldShowPayoutExchangeFee(input: {
+/**
+ * Exchange fee is never shown as its own row — channel/route cost is folded into the
+ * single "Processing fee" row via `computeDisplayProcessingFee`. Retained (always false)
+ * so existing call sites compile; remove call sites over time.
+ */
+export function shouldShowPayoutExchangeFee(_input?: {
+  sendCurrency?: string
+  receiveCurrency?: string
+  exchangeFee?: number | null
+}): boolean {
+  return false
+}
+
+/** Exchange rate row shows our (Easner) rate — cross-currency corridors only. */
+export function shouldShowPayoutExchangeRate(input: {
   sendCurrency: string
   receiveCurrency: string
-  exchangeFee: number | null | undefined
 }): boolean {
-  return (
-    hasPayoutCrossCurrencyFx(input.sendCurrency, input.receiveCurrency) &&
-    isPayoutReviewFeeVisible(input.exchangeFee)
-  )
+  return hasPayoutCrossCurrencyFx(input.sendCurrency, input.receiveCurrency)
+}
+
+/** Combined display "Processing fee" (Easner bps leg + provider channel cost). */
+export function shouldShowPayoutReviewFeeRow(input: {
+  processingFee?: number | null
+  exchangeFee?: number | null
+}): boolean {
+  return isPayoutReviewFeeVisible(computeDisplayProcessingFee(input))
 }
 
 export type WalletSendExecutionModel = "direct_turnkey" | "lifi_bridge"
 
 /**
- * LI.FI bridge: margin is in `customerRate` / you-send principal — do not show a separate processing fee.
- * Direct Turnkey: explicit 1% (cap 20) fee on top of recipient amount.
+ * Show the combined "Processing fee" row (Easner bps leg + channel/route cost).
+ * All rails including LI.FI now surface an explicit fee.
  */
 export function shouldShowWalletSendProcessingFee(input: {
   executionModel?: WalletSendExecutionModel | string | null
   processingFee?: number | null
+  exchangeFee?: number | null
 }): boolean {
-  if (input.executionModel === "lifi_bridge") return false
-  return shouldShowPayoutProcessingFee(input.processingFee)
+  return shouldShowPayoutReviewFeeRow(input)
 }
 
 export function shouldShowPayoutProcessingFee(processingFee: number | null | undefined): boolean {
   return isPayoutReviewFeeVisible(processingFee)
 }
 
-/** Noah global fiat: margin is in noah_rates.rate / you-send — never show a separate processing row. */
-export function shouldShowGlobalPayoutProcessingFee(_input?: {
+/** Global fiat now shows an explicit Processing fee (Easner 1% + channel cost). */
+export function shouldShowGlobalPayoutProcessingFee(input?: {
   processingFee?: number | null
+  exchangeFee?: number | null
 }): boolean {
-  return false
+  return shouldShowPayoutReviewFeeRow(input ?? {})
 }
 
 export function shouldShowPayoutReviewProcessingFee(input: {
   processingFee?: number | null
+  exchangeFee?: number | null
   executionModel?: WalletSendExecutionModel | string | null
   payoutFlow?: "global_fiat" | "wallet_send"
 }): boolean {
-  if (input.payoutFlow === "global_fiat") return false
-  if (input.executionModel === "lifi_bridge") return false
-  return shouldShowPayoutProcessingFee(input.processingFee)
+  return shouldShowPayoutReviewFeeRow(input)
 }
 
 export function shouldShowPayoutNetworkFee(networkFee: number | null | undefined): boolean {

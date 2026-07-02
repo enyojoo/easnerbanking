@@ -378,8 +378,8 @@ export default function SendConfirmPage() {
         const reviewSnapshot = {
           you_send_amount: wq.sendAmount,
           total_debited: wq.totalDebited,
-          exchange_fee: wq.channelCost,
-          processing_fee: wq.marginAmount,
+          exchange_fee: wq.displayChannelCost ?? wq.channelCost,
+          processing_fee: wq.processingFee ?? wq.marginAmount,
           network_fee: wq.networkFee,
           exchange_rate:
             wq.executionModel === "direct_turnkey" ? 1 : wq.customerRate,
@@ -456,21 +456,25 @@ export default function SendConfirmPage() {
       const processingTime = arrivalHint ?? undefined
       const reviewYouSend = pq!.customerPrincipal ?? pq!.sendAmount
       const reviewExchangeRate = pq!.midRate && pq!.midRate > 0 ? pq!.midRate : 1
-      const reviewExchangeFee = pq!.channelCost ?? 0
-      const reviewMargin = pq!.marginAmount ?? pq!.easnerFee ?? 0
+      // Display channel component (foots with total); ops channel cost + margin kept separately.
+      const reviewDisplayChannel = pq!.displayChannelCost ?? pq!.channelCost ?? 0
+      const reviewChannelCost = pq!.channelCost ?? 0
+      const reviewMargin = pq!.marginAmount ?? 0
+      const reviewProcessingFee = pq!.processingFee ?? pq!.easnerFee ?? 0
       const reviewSnapshot = {
         you_send_amount: reviewYouSend,
         total_debited: pq!.totalDebited,
-        exchange_fee: reviewExchangeFee,
-        processing_fee: reviewMargin,
+        exchange_fee: reviewDisplayChannel,
+        processing_fee: reviewProcessingFee,
         exchange_rate: reviewExchangeRate,
         send_currency: state.sendCurrency,
         receive_amount: state.amount,
         receive_currency: state.receiveCurrency,
         transfer_method: transferMethod,
         processing_time: processingTime,
-        ...(reviewMargin > 0 ? { margin_amount: reviewMargin, easner_fee: reviewMargin } : {}),
-        ...(reviewExchangeFee > 0 ? { channel_cost: reviewExchangeFee } : {}),
+        ...(reviewProcessingFee > 0 ? { easner_fee: reviewProcessingFee } : {}),
+        ...(reviewMargin > 0 ? { margin_amount: reviewMargin } : {}),
+        ...(reviewChannelCost > 0 ? { channel_cost: reviewChannelCost } : {}),
         ...(pq!.scheduleFee != null ? { noah_schedule_fee: pq!.scheduleFee } : {}),
         ...(pq!.prepareChannelFee != null ? { noah_channel_fee: pq!.prepareChannelFee } : {}),
         ...(pq!.quoteNoahMid != null ? { quote_noah_mid: pq!.quoteNoahMid } : {}),
@@ -583,8 +587,8 @@ export default function SendConfirmPage() {
       ? isWalletQuoteFresh(wq, state.amount, state.recipient.id)
       : isPayoutQuoteFresh(pq, state.amount, state.recipient.id))
   const easnerFee = walletSend
-    ? (wq?.marginAmount ?? 0)
-    : (pq?.marginAmount ?? pq?.easnerFee ?? 0)
+    ? (wq?.processingFee ?? wq?.marginAmount ?? 0)
+    : (pq?.processingFee ?? pq?.easnerFee ?? 0)
   const easnerFeeCurrency = walletSend
     ? state.sendCurrency
     : (pq?.easnerFeeCurrency ?? state.sendCurrency)
@@ -598,7 +602,9 @@ export default function SendConfirmPage() {
         ? wq!.customerRate
         : pq!.midRate!
       : 1
-  const exchangeFee = walletSend ? (wq?.channelCost ?? 0) : (pq?.channelCost ?? 0)
+  const exchangeFee = walletSend
+    ? (wq?.displayChannelCost ?? wq?.channelCost ?? 0)
+    : (pq?.displayChannelCost ?? 0)
   const networkFee = walletSend ? (wq?.networkFee ?? 0) : 0
   const totalDebited = walletSend
     ? (wq?.totalDebited ?? state.sendAmount)

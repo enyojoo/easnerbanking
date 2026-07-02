@@ -48,12 +48,22 @@ export {
 export { formatMoneyDisplay } from "./format-money-display"
 export { computeBalancePayoutExchangeFee } from "./payout-review-fees"
 export {
+  computeDisplayProcessingFee,
+  computePayoutProcessingFeeBps,
+  parsePayoutProcessingFeeBpsFromEnv,
+  DEFAULT_PAYOUT_PROCESSING_FEE_BPS,
+  type DisplayProcessingFeeInput,
+  type PayoutProcessingFeeOpts,
+} from "./payout-processing-fee"
+export {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
   isBalanceStablecoinParity,
   isPayoutReviewFeeVisible,
   PAYOUT_REVIEW_FEE_VISIBLE_EPSILON,
   shouldShowPayoutExchangeFee,
+  shouldShowPayoutExchangeRate,
+  shouldShowPayoutReviewFeeRow,
   shouldShowGlobalPayoutProcessingFee,
   shouldShowPayoutNetworkFee,
   shouldShowPayoutProcessingFee,
@@ -189,6 +199,7 @@ export {
   beneficiaryToPayoutSubtitleInput,
   formatAccountNumberDigits,
   formatIbanDisplay,
+  formatMaskedSenderDisplay,
   formatPayoutRecipientSubtitle,
   getPayoutRecipientSubtitleParts,
   isMobileMoneyPayoutRow,
@@ -371,6 +382,22 @@ export {
   formatGlobalPayoutCompletedDescription,
 } from "./transactions/global-payout-lifecycle"
 export {
+  buildStablecoinDepositLifecycle,
+  STABLECOIN_DEPOSIT_COMPLETED_DESCRIPTION,
+  STABLECOIN_DEPOSIT_PROCESSING_DESCRIPTION,
+} from "./transactions/stablecoin-deposit-lifecycle"
+export type {
+  BuildStablecoinDepositLifecycleInput,
+  StablecoinDepositLifecycleStep,
+  StablecoinDepositLifecycleStepId,
+  StablecoinDepositLifecycleStepState,
+} from "./transactions/stablecoin-deposit-lifecycle"
+export {
+  buildTransactionEmailDetailRows,
+  type TransactionEmailDetailInput,
+  type TransactionEmailDetailRow,
+} from "./transactions/transaction-email-detail-rows"
+export {
   ledgerStatusMatchesUserFilter,
   ledgerTransactionStatusDisplay,
   mapLedgerStatusToUserStatus,
@@ -394,6 +421,7 @@ export {
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
   isMobileMoneyPayoutCorridor,
+  normalizeTransferMethodLabel,
 } from "./transactions/payout-transfer-method"
 export type { PayoutTransferMethodInput } from "./transactions/payout-transfer-method"
 export {
@@ -401,6 +429,7 @@ export {
 } from "./transactions/transaction-detail-hero-title"
 export type { TransactionDetailHeroTitleInput } from "./transactions/transaction-detail-hero-title"
 export {
+  appendLifecycleDuration,
   buildTransactionTimingRows,
   formatTransactionDurationMs,
   resolveTransactionTimingAnchors,

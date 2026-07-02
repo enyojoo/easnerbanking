@@ -62,6 +62,7 @@ export function attachWalletSendDetailFields(
     failedAt: timingAnchors.failedAt,
     showExpectedWhileInFlight: false,
     showStartedWhileInFlight: false,
+    showTerminalDuration: false,
   })
 
   const displayCurrency = walletSendUserFacingDisplayCurrency({

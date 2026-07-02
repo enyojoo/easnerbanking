@@ -17,10 +17,11 @@
 ### Execution layer (Noah prepare + margin capture)
 
 - `POST /transactions/sell/prepare` → `cryptoAuthorizedAmount` is the Noah floor (`noahFloor`)
-- Wallet debit = `noahFloor + marginAmount` where `marginAmount = customerPrincipal − midNotional`
-- `customerPrincipal` = `receive ÷ noah_rates.rate` (you-send box)
-- Plan A (default): single Turnkey send of `totalDebited`; surplus lands as Noah `BusinessFee` at settlement
-- Plan B (`GLOBAL_PAYOUT_MARGIN_CAPTURE_MODE=split_debit`): Turnkey sends `noahFloor` to Noah + `marginAmount` to platform liquidity pool
+- Wallet debit = `noahFloor + marginAmount + processingFee` where `marginAmount = customerPrincipal − midNotional` (hidden FX spread) and `processingFee = 1% × customerPrincipal` (explicit, uncapped)
+- `customerPrincipal` = `receive ÷ noah_rates.rate` (Sending box)
+- Plan A (default): Turnkey send of `noahFloor + marginAmount` to Noah; surplus lands as Noah `BusinessFee` at settlement. The explicit `processingFee` is a **separate** SPL send to `WALLET_SEND_FEE_SOLANA_ADDRESS_*` (same fee wallet as wallet sends).
+- Plan B (`GLOBAL_PAYOUT_MARGIN_CAPTURE_MODE=split_debit`): Turnkey sends `noahFloor` to Noah + `marginAmount` to platform liquidity pool + `processingFee` to `WALLET_SEND_FEE_SOLANA_ADDRESS_*`
+- Easetag (wallet-to-wallet) payouts are **free** — no processing fee.
 
 ---
 
@@ -65,25 +66,30 @@ Easner revenue on global payout is captured at wallet debit via the margin wedge
 
 ## Customer UI rows
 
+Canonical order (business + mobile): **Sending → Processing fee → Exchange rate (cross-currency only) → Total debited → Recipient gets → Recipient → Transfer method → When → Note**.
+
 | Row | Source | Shown? |
 |-----|--------|--------|
-| Exchange rate | `noah_rates.rate` | Yes |
-| You send | Quote `customerPrincipal` (= `receive ÷ rate`) | Yes |
-| Exchange fee | Quote `channelCost` = Noah `ChannelFee` (prepare `Breakdown` when present, else `noahFloor − midNotional − marginAmount`) | Yes (cross-currency) |
-| Processing fee / margin | Quote `marginAmount` | **Hidden** (in customer rate / You send) |
-| Total debited | Quote `totalDebited` (= `noahFloor + marginAmount`; authoritative wallet debit) | Yes |
+| Sending | Quote `customerPrincipal` (= `receive ÷ rate`) | Yes |
+| Processing fee | `computeDisplayProcessingFee` = explicit 1% leg (`processingFee`) + channel component (`displayChannelCost` = `noahFloor + marginAmount − customerPrincipal`) | Yes |
+| Exchange rate | `noah_rates.rate` | Yes (cross-currency only) |
+| Total debited | Quote `totalDebited` (= `noahFloor + marginAmount + processingFee`; authoritative wallet debit) | Yes |
 | Recipient gets | user input (full prepare receive) | Yes |
 
-Product rule (shared with [wallet-send-pricing.md](./wallet-send-pricing.md)): margin baked into quoted rate → hide processing row; explicit 1:1 fee on top → show it.
+No standalone **Exchange fee** row — the Noah channel cost is folded into the single **Processing fee** row.
+
+Product rule (shared with [wallet-send-pricing.md](./wallet-send-pricing.md)): the hidden FX margin stays baked into the quoted rate; the explicit **1% processing fee is always shown** (combined with channel cost). `Total debited = Sending + Processing fee`.
 
 ### Confirm row identity (global fiat)
 
 ```text
-totalDebited = customerPrincipal + channelCost + marginAmount
-channelCost  = Noah ChannelFee ≈ merchant PDF rail fee
+totalDebited      = customerPrincipal + channelCost + marginAmount + processingFee
+displayProcessing = processingFee (1% leg) + displayChannelCost
+Total debited     = Sending + displayProcessing   (exact footing)
+channelCost       = Noah ChannelFee ≈ merchant PDF rail fee
 ```
 
-`You send + Exchange fee` may be **marginAmount short** of `Total debited` because margin is hidden in the quoted rate and also captured in Plan A wallet debit. **Total debited** is the source of truth.
+The hidden `marginAmount` (0.5% FX spread) is not a visible line; it is inside the quoted rate and folded into `displayChannelCost` for footing. **Total debited** is the source of truth.
 
 Settlement: `noahFloor = ChannelFee + Remaining + BusinessFee`; quoted `channelCost` reconciles to settlement `ChannelFee`, not `BusinessFee`.
 

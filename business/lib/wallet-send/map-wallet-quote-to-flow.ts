@@ -21,6 +21,8 @@ export function mapWalletQuoteToFlowState(
       totalDebited: q.totalDebited,
       marginAmount: q.marginAmount,
       channelCost: q.channelCost,
+      processingFee: q.processingFee,
+      displayChannelCost: q.displayChannelCost,
       networkFee: q.networkFee,
       customerRate: q.customerRate,
       lifiMid: q.lifiMid,

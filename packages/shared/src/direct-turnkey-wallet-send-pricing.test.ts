@@ -13,9 +13,9 @@ describe("computeWalletSendProcessingFee", () => {
     expect(computeWalletSendProcessingFee(500)).toBe(5)
   })
 
-  it("caps at 20", () => {
+  it("is uncapped (pure 1%)", () => {
     expect(computeWalletSendProcessingFee(2000)).toBe(20)
-    expect(computeWalletSendProcessingFee(50000)).toBe(20)
+    expect(computeWalletSendProcessingFee(50000)).toBe(500)
   })
 })
 
@@ -25,14 +25,18 @@ describe("computeDirectTurnkeyWalletSendPricing", () => {
     expect(p.customerRate).toBe(1)
     expect(p.customerPrincipal).toBe(100)
     expect(p.marginAmount).toBe(1)
+    // Direct Turnkey has no FX margin — the fee IS the explicit processing fee.
+    expect(p.processingFee).toBe(1)
+    expect(p.displayChannelCost).toBe(0)
     expect(p.totalDebited).toBe(101)
     expect(p.routeCost).toBe(0)
   })
 
-  it("applies cap at 2000 receive", () => {
-    const p = computeDirectTurnkeyWalletSendPricing({ receiveAmount: 2000 })
-    expect(p.marginAmount).toBe(20)
-    expect(p.totalDebited).toBe(2020)
+  it("is uncapped 1% on large receive", () => {
+    const p = computeDirectTurnkeyWalletSendPricing({ receiveAmount: 50000 })
+    expect(p.marginAmount).toBe(500)
+    expect(p.processingFee).toBe(500)
+    expect(p.totalDebited).toBe(50500)
   })
 })
 

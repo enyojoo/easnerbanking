@@ -217,7 +217,7 @@ export default function BankTransferPage() {
             </button>
           </div>
           <div className="flex justify-between items-center pb-4 border-b">
-            <span className="text-sm text-muted-foreground">You send</span>
+            <span className="text-sm text-muted-foreground">Sending</span>
             <span className="font-semibold">
               {getCurrencySymbol(state.sendCurrency)}
               {state.sendAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}{" "}

@@ -365,6 +365,7 @@ export function resolveGlobalPayoutOffRampDetail(
     expectedProcessingTime: payoutReview?.processing_time,
     showExpectedWhileInFlight: false,
     showStartedWhileInFlight: false,
+    showTerminalDuration: false,
   })
 
   const transactionStartedAt = timingAnchors.startedAt

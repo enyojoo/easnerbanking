@@ -98,6 +98,23 @@ function parseIsoMs(iso: string | null | undefined): number | null {
   return Number.isFinite(t) ? t : null
 }
 
+/**
+ * Appends ` · Took {duration}` to a lifecycle step description when both instants exist.
+ * Used by the Completed (and Failed) steps now that terminal duration rows were removed.
+ */
+export function appendLifecycleDuration(
+  description: string,
+  startIso: string | null | undefined,
+  endIso: string | null | undefined,
+): string {
+  const startMs = parseIsoMs(startIso ?? null)
+  const endMs = parseIsoMs(endIso ?? null)
+  if (startMs == null || endMs == null || endMs < startMs) return description
+  const suffix = `Took ${formatTransactionDurationMs(endMs - startMs)}`
+  const base = String(description || "").trim()
+  return base ? `${base} · ${suffix}` : suffix
+}
+
 /** Human-readable duration between two instants. */
 export function formatTransactionDurationMs(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return "—"

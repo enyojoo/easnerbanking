@@ -1,5 +1,5 @@
-/** Global wallet-send customer margin (distinct from Noah payout and P2P bridge). */
-export const WALLET_SEND_MARGIN = 1.5 / 100
+/** Global wallet-send customer margin — 0.5%, matched to Noah payout margin now that an explicit 1% processing fee applies. */
+export const WALLET_SEND_MARGIN = 0.5 / 100
 
 export function walletSendMarginBps(margin = WALLET_SEND_MARGIN): number {
   return Math.round(margin * 10_000)

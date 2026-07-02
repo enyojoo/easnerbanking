@@ -14,7 +14,6 @@ import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { TransactionLifecycleTracker } from "@/components/transactions/transaction-lifecycle-tracker"
 import { TransactionDetailHero } from "@/components/transactions/transaction-detail-hero"
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
-import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
@@ -98,10 +97,14 @@ function TransactionSummaryDetails({
     (transaction.type === "book" || transaction.type === "ach" || transaction.type === "wire") &&
     Boolean(transaction.paymentRail)
   const isCard = Boolean(cardLast4) || transaction.type === "card"
-  const partyLabel = transaction.direction === "credit" ? "Sender" : "Recipient"
+  const isDeposit = transaction.direction === "credit"
+  const partyLabel = isDeposit ? "Sender" : "Recipient"
   const showLifecycleTracker = Boolean(transaction.lifecycle?.length)
   const displayCurrency = transaction.postedCurrency || transaction.displayCurrency || "USD"
-  const timingRows = transaction.transactionTiming
+  const showParty =
+    (isBank || isStablecoin || isCard) &&
+    Boolean(transaction.counterpartyName) &&
+    (isDeposit || !showLifecycleTracker)
 
   return (
     <Card className="border-border shadow-sm">
@@ -126,13 +129,6 @@ function TransactionSummaryDetails({
           </div>
         </div>
 
-        {transaction.paymentScheme ? (
-          <div className="flex justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">Scheme</span>
-            <span className="text-right font-medium">{transaction.paymentScheme}</span>
-          </div>
-        ) : null}
-
         <div className="flex justify-between gap-4 text-sm">
           <span className="shrink-0 text-muted-foreground">When</span>
           <span className="text-right font-medium">
@@ -146,8 +142,11 @@ function TransactionSummaryDetails({
           </span>
         </div>
 
-        {timingRows?.length ? (
-          <TransactionTimingRows rows={timingRows} className="flex justify-between gap-4 border-b pb-4 text-sm" />
+        {transaction.paymentScheme ? (
+          <div className="flex justify-between gap-4 text-sm">
+            <span className="shrink-0 text-muted-foreground">Scheme</span>
+            <span className="text-right font-medium">{transaction.paymentScheme}</span>
+          </div>
         ) : null}
 
         {isCard && cardLast4 ? (
@@ -162,19 +161,35 @@ function TransactionSummaryDetails({
           </div>
         ) : null}
 
-        {isBank && transaction.paymentRail ? (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Payment Rail</span>
-            <span className="font-medium">{transaction.paymentRail.toUpperCase()}</span>
-          </div>
-        ) : null}
-
-        {(isBank || isStablecoin || isCard) &&
-        transaction.counterpartyName &&
-        !showLifecycleTracker ? (
+        {showParty ? (
           <div className="flex justify-between gap-4 text-sm">
             <span className="shrink-0 text-muted-foreground">{partyLabel}</span>
             <span className="text-right font-medium">{transaction.counterpartyName}</span>
+          </div>
+        ) : null}
+
+        {transaction.narration ? (
+          <div className="flex justify-between gap-4 text-sm">
+            <span className="shrink-0 text-muted-foreground">Narration</span>
+            <span className="text-right font-medium">{transaction.narration}</span>
+          </div>
+        ) : null}
+
+        {transaction.fee !== undefined && transaction.fee > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Processing fee</span>
+            <span className="font-medium">
+              {formatCurrency(transaction.fee, transaction.displayCurrency || "USD")}
+            </span>
+          </div>
+        )}
+
+        {transaction.postedAmount != null && transaction.postedAmount > 0 ? (
+          <div className="flex justify-between gap-4 text-sm">
+            <span className="shrink-0 text-muted-foreground">Amount credited</span>
+            <span className="text-right font-medium">
+              {formatCurrency(transaction.postedAmount, displayCurrency)}
+            </span>
           </div>
         ) : null}
 
@@ -182,33 +197,6 @@ function TransactionSummaryDetails({
           <div className="flex justify-between gap-4 text-sm">
             <span className="shrink-0 text-muted-foreground">Note</span>
             <span className="text-right font-medium">{transaction.sendNote}</span>
-          </div>
-        ) : null}
-
-        {transaction.fee !== undefined && transaction.fee > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Fee</span>
-            <span className="font-medium">
-              {formatCurrency(transaction.fee, transaction.displayCurrency || "USD")}
-            </span>
-          </div>
-        )}
-
-        {showLifecycleTracker && transaction.narration ? (
-          <div className="flex justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">Narration</span>
-            <span className="text-right font-medium">{transaction.narration}</span>
-          </div>
-        ) : null}
-
-        {showLifecycleTracker &&
-        transaction.postedAmount != null &&
-        transaction.postedAmount > 0 ? (
-          <div className="flex justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">Amount credited</span>
-            <span className="text-right font-medium">
-              {formatCurrency(transaction.postedAmount, displayCurrency)}
-            </span>
           </div>
         ) : null}
       </CardContent>

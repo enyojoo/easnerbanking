@@ -1,5 +1,6 @@
 import { formatMoneyDisplay } from "../format-money-display"
 import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
+import { appendLifecycleDuration } from "./transaction-timing-display"
 
 export type GlobalPayoutLifecycleStepId = "processing" | "completed" | "failed"
 export type GlobalPayoutLifecycleStepState = "complete" | "current" | "upcoming"
@@ -99,7 +100,13 @@ export function buildGlobalPayoutLifecycle(
     {
       id: "completed",
       title: "Completed",
-      description: completedDescription,
+      description: isSettled
+        ? appendLifecycleDuration(
+            completedDescription,
+            processingAt ?? input.createdAt ?? null,
+            completedAt,
+          )
+        : completedDescription,
       state: completedState,
       occurredAt: isSettled ? completedAt : null,
     },

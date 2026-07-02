@@ -61,6 +61,24 @@ describe("emailTemplates", () => {
     expect(html).toContain("https://app.easner.com/user/transactions/ET-1001")
   })
 
+  it("renders canonical detailRows (Sending / Processing fee / Transfer method) for payouts", () => {
+    const html = emailTemplates.transactionFailed.html(templateFixtures.transactionFailed, "personal")
+    expect(html).toContain("Sent")
+    expect(html).toContain("Processing fee")
+    expect(html).toContain("Total debited")
+    expect(html).toContain("Transfer method")
+    expect(html).toContain("Local transfer")
+    // Combined fee row is used; no standalone Exchange fee row.
+    expect(html).not.toContain(">Exchange fee<")
+  })
+
+  it("renders canonical deposit detailRows (Scheme / Sender / Amount credited)", () => {
+    const html = emailTemplates.transactionSettled.html(templateFixtures.transactionSettled, "personal")
+    expect(html).toContain(">Scheme<")
+    expect(html).toContain(">Sender<")
+    expect(html).toContain("Amount credited")
+  })
+
   it("personal welcome uses mobile dashboard deep link", () => {
     const html = emailTemplates.welcomePersonal.html(templateFixtures.welcomePersonal, "personal")
     expect(html).toContain("https://app.easner.com/user/dashboard")

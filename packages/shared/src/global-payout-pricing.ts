@@ -1,5 +1,7 @@
 /** Margin capture math for global balance → local fiat payouts. */
 
+import { computePayoutProcessingFeeBps } from "./payout-processing-fee"
+
 export type GlobalPayoutMarginCaptureMode = "surplus_send" | "split_debit"
 
 export type ComputeGlobalPayoutPricingInput = {
@@ -12,6 +14,8 @@ export type ComputeGlobalPayoutPricingInput = {
   prepareChannelFee?: number
   /** From Noah prepare Breakdown when present — preferred for midNotional. */
   prepareRemaining?: number
+  /** Easner processing fee in basis points (defaults to 100 = 1%). */
+  processingFeeBps?: number
 }
 
 export type GlobalPayoutPricing = {
@@ -23,6 +27,13 @@ export type GlobalPayoutPricing = {
   marginAmount: number
   noahFloor: number
   channelCost: number
+  /** Explicit Easner 1% leg (uncapped), collected to the fee wallet. */
+  processingFee: number
+  /**
+   * Display channel component so that `Total debited = Sending + (processingFee + displayChannelCost)`
+   * foots exactly (= noahFloor + marginAmount − customerPrincipal). Distinct from the ops `channelCost`.
+   */
+  displayChannelCost: number
   totalDebited: number
   noahSendAmount: number
   triggerAmount: number
@@ -76,10 +87,16 @@ export function computeGlobalPayoutPricing(
       ? input.prepareChannelFee
       : Math.max(0, noahFloor - midNotional - marginAmount),
   )
-  const totalDebited = roundUsdc(noahFloor + marginAmount)
+  /** Pre-fee debit the customer already covers beyond Sending (channel cost the customer sees). */
+  const baseTotalDebited = roundUsdc(noahFloor + marginAmount)
+  const displayChannelCost = roundUsdc(Math.max(0, baseTotalDebited - customerPrincipal))
+  const processingFee = computePayoutProcessingFeeBps(customerPrincipal, {
+    bps: input.processingFeeBps,
+  })
+  const totalDebited = roundUsdc(baseTotalDebited + processingFee)
 
   const noahSendAmount =
-    marginCaptureMode === "split_debit" ? noahFloor : totalDebited
+    marginCaptureMode === "split_debit" ? noahFloor : baseTotalDebited
 
   return {
     receiveAmount,
@@ -90,6 +107,8 @@ export function computeGlobalPayoutPricing(
     marginAmount,
     noahFloor,
     channelCost,
+    processingFee,
+    displayChannelCost,
     totalDebited,
     noahSendAmount,
     triggerAmount: noahFloor,

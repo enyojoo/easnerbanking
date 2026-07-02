@@ -146,13 +146,21 @@ export function payoutDisplayAmountsFromQuote(quote: PayoutQuote): {
   youSendAmount: number
   exchangeFee: number
   marginAmount: number
+  processingFee: number
+  displayChannelCost: number
   totalDebited: number
   customerRate: number
 } {
+  const processingFee = quote.processingFee ?? 0
+  const displayChannelCost = quote.displayChannelCost ?? quote.channelCost
   return {
     youSendAmount: quote.customerPrincipal,
-    exchangeFee: quote.channelCost,
-    marginAmount: quote.marginAmount,
+    // `exchangeFee` feeds the combined Processing fee row — use the footing display channel.
+    exchangeFee: displayChannelCost,
+    // `marginAmount` here is what the screen renders as the Easner processing fee leg.
+    marginAmount: processingFee,
+    processingFee,
+    displayChannelCost,
     totalDebited: quote.totalDebited,
     customerRate: quote.noah?.rate ?? quote.easner?.providerRate ?? 0,
   }

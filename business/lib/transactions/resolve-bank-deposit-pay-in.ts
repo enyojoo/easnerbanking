@@ -281,7 +281,7 @@ export function resolveBankDepositPayInDetail(
     failedAt: timingAnchors.failedAt,
     showExpectedWhileInFlight: false,
     showStartedWhileInFlight: false,
-    showTerminalDuration: true,
+    showTerminalDuration: false,
   })
 
   return {

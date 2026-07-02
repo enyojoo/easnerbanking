@@ -1,11 +1,15 @@
 /** Margin capture math for balance-funded crypto wallet sends. */
 
+import { computePayoutProcessingFeeBps } from "./payout-processing-fee"
+
 export type ComputeCryptoSendPricingInput = {
   receiveAmount: number
   customerRate: number
   lifiMid: number
   lifiFloor: number
   networkFee?: number
+  /** Easner processing fee in basis points (defaults to 100 = 1%). */
+  processingFeeBps?: number
 }
 
 export type CryptoSendPricing = {
@@ -18,6 +22,10 @@ export type CryptoSendPricing = {
   lifiFloor: number
   routeCost: number
   networkFee: number
+  /** Explicit Easner 1% leg (uncapped), collected to the fee wallet. */
+  processingFee: number
+  /** Channel/route component shown in the combined Processing fee row (foots with total). */
+  displayChannelCost: number
   totalDebited: number
 }
 
@@ -82,7 +90,12 @@ export function computeCryptoSendPricing(input: ComputeCryptoSendPricingInput): 
   const customerPrincipal = roundUsdc(receiveAmount / customerRate)
   const marginAmount = roundUsdc(Math.max(0, customerPrincipal - midNotional))
   const routeCost = roundUsdc(Math.max(0, lifiFloor - midNotional))
-  const totalDebited = roundUsdc(lifiFloor + marginAmount)
+  const processingFee = computePayoutProcessingFeeBps(customerPrincipal, {
+    bps: input.processingFeeBps,
+  })
+  const totalDebited = roundUsdc(lifiFloor + marginAmount + processingFee)
+  // Foots: Sending (customerPrincipal) + (processingFee + displayChannelCost) = totalDebited.
+  const displayChannelCost = roundUsdc(Math.max(0, lifiFloor + marginAmount - customerPrincipal))
 
   return {
     receiveAmount,
@@ -93,6 +106,8 @@ export function computeCryptoSendPricing(input: ComputeCryptoSendPricingInput): 
     marginAmount,
     lifiFloor,
     routeCost,
+    processingFee,
+    displayChannelCost,
     networkFee,
     totalDebited,
   }

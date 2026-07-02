@@ -18,18 +18,28 @@ describe("computeGlobalPayoutPricing", () => {
     expect(p.customerPrincipal).toBeCloseTo(3.743527, 4)
     expect(p.midNotional).toBeCloseTo(3.687403, 4)
     expect(p.marginAmount).toBeCloseTo(0.056124, 3)
-    expect(p.totalDebited).toBeCloseTo(4.576245, 3)
+    // Explicit Easner 1% leg is added on top of the Noah floor + hidden FX margin.
+    expect(p.processingFee).toBeCloseTo(p.customerPrincipal * 0.01, 6)
+    expect(p.totalDebited).toBeCloseTo(4.61368, 3)
     expect(p.channelCost).toBeCloseTo(0.776594, 3)
-    expect(p.customerPrincipal + p.channelCost + p.marginAmount).toBeCloseTo(p.totalDebited, 6)
+    expect(
+      p.customerPrincipal + p.channelCost + p.marginAmount + p.processingFee,
+    ).toBeCloseTo(p.totalDebited, 6)
     expect(p.customerPrincipal + p.channelCost).toBeCloseTo(p.noahFloor, 6)
-    expect(p.noahSendAmount).toBeCloseTo(p.totalDebited, 6)
+    // Display footing: Total = Sending + (display channel + processing fee).
+    expect(p.customerPrincipal + p.displayChannelCost + p.processingFee).toBeCloseTo(
+      p.totalDebited,
+      6,
+    )
+    // Noah still receives floor + FX margin (pre-fee); only the 1% leg is skimmed to the fee wallet.
+    expect(p.noahSendAmount).toBeCloseTo(p.totalDebited - p.processingFee, 6)
     expect(p.triggerAmount).toBe(4.520121)
   })
 
   it("split_debit sends noahFloor to Noah, not totalDebited", () => {
     const p = computeGlobalPayoutPricing({ ...payout2, marginCaptureMode: "split_debit" })
     expect(p.noahSendAmount).toBe(4.520121)
-    expect(p.totalDebited).toBeCloseTo(4.576245, 3)
+    expect(p.totalDebited).toBeCloseTo(4.61368, 3)
   })
 
   it("same receive from send-entry normalization at customer rate", () => {
@@ -75,7 +85,9 @@ describe("computeGlobalPayoutPricing", () => {
     })
     expect(p.channelCost).toBeCloseTo(0.557706, 4)
     expect(p.marginAmount).toBeCloseTo(businessFee, 4)
-    expect(p.customerPrincipal + p.channelCost + p.marginAmount).toBeCloseTo(p.totalDebited, 6)
+    expect(
+      p.customerPrincipal + p.channelCost + p.marginAmount + p.processingFee,
+    ).toBeCloseTo(p.totalDebited, 6)
     expect(p.customerPrincipal + p.channelCost).toBeCloseTo(p.noahFloor, 6)
   })
 
@@ -92,7 +104,9 @@ describe("computeGlobalPayoutPricing", () => {
     })
     expect(p.channelCost).toBeCloseTo(1.510658, 4)
     expect(p.marginAmount).toBeCloseTo(businessFee, 4)
-    expect(p.customerPrincipal + p.channelCost + p.marginAmount).toBeCloseTo(p.totalDebited, 6)
+    expect(
+      p.customerPrincipal + p.channelCost + p.marginAmount + p.processingFee,
+    ).toBeCloseTo(p.totalDebited, 6)
   })
 
   it("matches settled ZAR tx 1b06600d ChannelFee", () => {
@@ -108,6 +122,8 @@ describe("computeGlobalPayoutPricing", () => {
     })
     expect(p.channelCost).toBeCloseTo(1.003079, 4)
     expect(p.marginAmount).toBeCloseTo(businessFee, 4)
-    expect(p.customerPrincipal + p.channelCost + p.marginAmount).toBeCloseTo(p.totalDebited, 6)
+    expect(
+      p.customerPrincipal + p.channelCost + p.marginAmount + p.processingFee,
+    ).toBeCloseTo(p.totalDebited, 6)
   })
 })

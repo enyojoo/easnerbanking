@@ -35,6 +35,12 @@ export interface TransactionEmailData {
   failureReason?: string
   detailUrl?: string
   createdAt?: string
+  /**
+   * Canonical detail rows (Sending / Processing fee / Total debited / Recipient / Transfer method
+   * for payouts; Scheme / Sender / Processing fee / Amount credited for deposits). Built at dispatch
+   * time via `buildTransactionEmailDetailRows`. When present, replaces the legacy generic rows.
+   */
+  detailRows?: { label: string; value: string }[]
   audience?: EmailAudience
 }
 

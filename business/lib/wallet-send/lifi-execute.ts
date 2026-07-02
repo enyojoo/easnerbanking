@@ -130,17 +130,27 @@ export async function executeLifiWalletSend(input: {
     String(sendRes.signature ?? sendRes.txHash ?? sendRes.transactionHash ?? "").trim() || null
 
   const marginAmount = input.session.margin_amount
+  // Explicit Easner processing fee leg (uncapped 1%), derived from the quoted total so no
+  // extra session column is needed: total = lifiFloor + FX margin + processingFee.
+  const processingFee = Math.max(
+    0,
+    Math.round((input.session.total_debited - input.session.lifi_floor - marginAmount) * 1_000_000) /
+      1_000_000,
+  )
+  // Both the hidden FX margin and the explicit processing fee route to the same fee wallet;
+  // collect them in a single SPL send.
+  const feeLegAmount = Math.round((marginAmount + processingFee) * 1_000_000) / 1_000_000
   const walletSendCtx = { formSessionId: input.session.form_session_id }
   let marginTurnkeySendId: string | undefined
 
-  if (marginAmount > MARGIN_DUST) {
+  if (feeLegAmount > MARGIN_DUST) {
     const asset = source.asset === "EURC" ? "EURC" : "USDC"
     const marginSend = await createTurnkeySend(input.admin, {
       ctx: input.ctx,
       asset,
       chain: "solana",
       destinationAddress: input.feeAddress,
-      amount: marginAmount,
+      amount: feeLegAmount,
       settlementPollTimeoutMs: 0,
       walletSend: { ...walletSendCtx, marginLeg: true },
     })

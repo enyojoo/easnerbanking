@@ -6,7 +6,7 @@ export function mapPayoutQuoteToFlowState(
   state: SendFlowState,
   q: PayoutQuoteResult,
 ): SendFlowState {
-  const easnerFee = q.marginAmount
+  const easnerFee = q.processingFee
   const channelFee = q.channelCost
   return {
     ...state,
@@ -34,6 +34,8 @@ export function mapPayoutQuoteToFlowState(
       noahSendAmount: q.noah.noahSendAmount,
       marginAmount: q.marginAmount,
       channelCost: q.channelCost,
+      processingFee: q.processingFee,
+      displayChannelCost: q.displayChannelCost,
       customerPrincipal: q.customerPrincipal,
       marginCaptureMode: q.noah.marginCaptureMode,
       noahMid: q.noah.noahMid,

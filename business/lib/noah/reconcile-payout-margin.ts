@@ -131,19 +131,10 @@ export function buildGlobalPayoutChannelFeeReconciliationPatch(
     channel_fee_reconciliation_delta: deltaQuoted,
   }
 
-  const payoutReview = input.priorMetadata.payout_review
-  if (
-    payoutReview &&
-    typeof payoutReview === "object" &&
-    deltaQuoted != null &&
-    Math.abs(deltaQuoted) <= RECONCILE_WARN_TOLERANCE_USDC
-  ) {
-    patch.payout_review = {
-      ...(payoutReview as Record<string, unknown>),
-      exchange_fee: noahChannelFee,
-      channel_cost: noahChannelFee,
-    }
-  }
+  // Intentionally do NOT rewrite payout_review.exchange_fee/channel_cost here. That field is
+  // now the display channel component that foots `Total = Sending + Processing fee`; replacing
+  // it with the raw Noah ChannelFee would break the displayed footing. The settlement value is
+  // still recorded above as noah_settlement_channel_fee for ops/reconciliation.
 
   return {
     patch,
