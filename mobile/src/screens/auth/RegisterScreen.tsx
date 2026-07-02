@@ -29,6 +29,9 @@ import { TextField } from '../../components/ui'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
 import { signupPrecheck } from '../../lib/signupPrecheck'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { PENDING_RESIDENCE_COUNTRY_KEY } from '../../constants/residenceCountry'
+import { ResidenceCountryField } from '../../components/compliance/ResidenceCountryField'
 
 export default function RegisterScreen({ navigation }: NavigationProps) {
   const [formData, setFormData] = useState({
@@ -36,6 +39,7 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
     email: '',
     password: '',
   })
+  const [residenceCountry, setResidenceCountry] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const { signUp } = useAuth()
@@ -80,6 +84,11 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
       return false
     }
 
+    if (!residenceCountry.trim()) {
+      showError('Please select your country of residence')
+      return false
+    }
+
     return true
   }
 
@@ -98,6 +107,12 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
       setLoading(false)
       showError(precheck.error)
       return
+    }
+
+    try {
+      await AsyncStorage.setItem(PENDING_RESIDENCE_COUNTRY_KEY, residenceCountry.trim().toUpperCase())
+    } catch {
+      // Non-blocking — bootstrap may still receive country on next attempt.
     }
 
     const { error: signUpError, needsEmailConfirmation } = await signUp(
@@ -203,6 +218,12 @@ export default function RegisterScreen({ navigation }: NavigationProps) {
                 onSubmitEditing={() => Keyboard.dismiss()}
                 editable={!loading}
                 containerStyle={styles.fieldFlush}
+              />
+
+              <ResidenceCountryField
+                value={residenceCountry}
+                onChange={setResidenceCountry}
+                disabled={loading}
               />
 
               <TextField

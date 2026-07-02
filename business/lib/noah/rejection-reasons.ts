@@ -1,7 +1,24 @@
-const PLACEHOLDER_REJECTION_MESSAGES = new Set([
-  "Verification declined for this region.",
-  "Verification was declined. Review your documents and details, then try again or contact support if you need help.",
-])
+/**
+ * Noah decline payload ingest + thin re-exports for business app.
+ */
+
+import {
+  isNoahPlaceholderRejectionText,
+  isPlaceholderNoahRejectionReasons,
+  NOAH_PLACEHOLDER_REJECTION_MESSAGES,
+  formatNoahRejectionReasonsText,
+} from "@easner/shared"
+
+export {
+  isPlaceholderNoahRejectionReasons,
+  formatNoahRejectionReasonsText,
+  getNoahRejectionDisplay,
+  canResubmitNoahVerification,
+  NOAH_VERIFICATION_IN_REVIEW_COPY,
+  NOAH_FINAL_REJECTION_USER_MESSAGE,
+} from "@easner/shared"
+
+const PLACEHOLDER_REJECTION_MESSAGES = NOAH_PLACEHOLDER_REJECTION_MESSAGES
 
 function readTrimmedString(value: unknown): string | null {
   if (typeof value !== "string") return null
@@ -9,23 +26,9 @@ function readTrimmedString(value: unknown): string | null {
   return trimmed ? trimmed : null
 }
 
-function entityRejectionDetail(entity: Record<string, unknown>): string | null {
-  const rejectionData = entity.RejectionData ?? entity.rejectionData
-  if (rejectionData && typeof rejectionData === "object") {
-    const rd = rejectionData as Record<string, unknown>
-    const publicComment = readTrimmedString(rd.PublicComment ?? rd.publicComment)
-    if (publicComment) return publicComment
-  }
-
-  return (
-    readTrimmedString(entity.DeclinedReason) ??
-    readTrimmedString(entity.Reason) ??
-    readTrimmedString(entity.reason) ??
-    readTrimmedString(entity.Comments) ??
-    readTrimmedString(entity.comments) ??
-    readTrimmedString(entity.Message) ??
-    readTrimmedString(entity.message)
-  )
+function parseRejectLabels(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw.map((x) => (typeof x === "string" ? x.trim() : "")).filter(Boolean)
 }
 
 function entityRejectType(entity: Record<string, unknown>): string | null {
@@ -35,19 +38,21 @@ function entityRejectType(entity: Record<string, unknown>): string | null {
   return readTrimmedString(rd.RejectType ?? rd.rejectType)
 }
 
-/** True when stored reasons are generic fallbacks, not Noah-provided detail. */
-export function isPlaceholderNoahRejectionReasons(reasons: unknown[] | null | undefined): boolean {
-  if (!reasons?.length) return true
-  return reasons.every((item) => {
-    if (typeof item === "string") return PLACEHOLDER_REJECTION_MESSAGES.has(item.trim())
-    if (!item || typeof item !== "object") return true
-    const o = item as Record<string, unknown>
-    const message = readTrimmedString(o.message)
-    const reason = readTrimmedString(o.reason)
-    const detail = reason ?? message
-    if (!detail) return true
-    return PLACEHOLDER_REJECTION_MESSAGES.has(detail)
-  })
+function entityRejectionPayload(entity: Record<string, unknown>): {
+  rejectType: string | null
+  rejectLabels: string[]
+  publicComment: string | null
+} {
+  const rejectionData = entity.RejectionData ?? entity.rejectionData
+  if (!rejectionData || typeof rejectionData !== "object") {
+    return { rejectType: null, rejectLabels: [], publicComment: null }
+  }
+  const rd = rejectionData as Record<string, unknown>
+  return {
+    rejectType: readTrimmedString(rd.RejectType ?? rd.rejectType),
+    rejectLabels: parseRejectLabels(rd.RejectLabels ?? rd.rejectLabels ?? rd.Label ?? rd.label),
+    publicComment: readTrimmedString(rd.PublicComment ?? rd.publicComment),
+  }
 }
 
 /** Prefer richer webhook detail over later GET payloads that omit PublicComment. */
@@ -70,14 +75,14 @@ export function extractNoahRejectionReasons(customer: Record<string, unknown>): 
 
   const pushScalar = (v: unknown) => {
     const text = readTrimmedString(v)
-    if (text) reasons.push({ message: text })
+    if (text && !isNoahPlaceholderRejectionText(text)) reasons.push({ message: text })
   }
 
   const pushCollection = (v: unknown) => {
     if (Array.isArray(v)) {
       for (const item of v) {
         if (typeof item === "string" && item.trim()) {
-          reasons.push({ message: item.trim() })
+          if (!isNoahPlaceholderRejectionText(item)) reasons.push({ message: item.trim() })
         } else if (item && typeof item === "object") {
           reasons.push(item)
         }
@@ -110,61 +115,41 @@ export function extractNoahRejectionReasons(customer: Record<string, unknown>): 
         const entity = raw as Record<string, unknown>
         const status = String(entity.Status ?? entity.status ?? "").toLowerCase()
         if (!status.includes("declin") && !status.includes("reject")) continue
-        const detail = entityRejectionDetail(entity)
-        if (!detail) continue
-        const rejectType = entityRejectType(entity)
+
+        const { rejectType, rejectLabels, publicComment } = entityRejectionPayload(entity)
+        const rejectTypeNorm = rejectType?.toLowerCase()
+
+        if (rejectTypeNorm === "final") {
+          reasons.push({
+            entity: entity.Entity ?? entity.entity ?? null,
+            status: entity.Status ?? entity.status ?? "Declined",
+            rejectType: "Final",
+            ...(rejectLabels.length ? { rejectLabels } : {}),
+          })
+          continue
+        }
+
+        const detail = publicComment
+        if (detail && isNoahPlaceholderRejectionText(detail)) continue
+
+        if (!detail && rejectLabels.length === 0 && !rejectType) continue
+
         reasons.push({
           entity: entity.Entity ?? entity.entity ?? null,
           status: entity.Status ?? entity.status ?? "Declined",
-          reason: detail,
-          message: detail,
-          ...(rejectType ? { rejectType } : {}),
+          ...(rejectType ? { rejectType } : { rejectType: "Retry" }),
+          ...(rejectLabels.length ? { rejectLabels } : {}),
+          ...(publicComment ? { publicComment, reason: publicComment, message: publicComment } : {}),
         })
       }
     }
   }
 
   if (reasons.length === 0) {
-    return [
-      {
-        message:
-          "Verification was declined. Review your documents and details, then try again or contact support if you need help.",
-      },
-    ]
+    return []
   }
 
   return reasons
 }
 
-/** Human-readable copy for web + mobile UI. */
-export function formatNoahRejectionReasonsText(raw: unknown): string {
-  if (raw == null) return ""
-  if (typeof raw === "string" && raw.trim()) return raw.trim()
-
-  const lines = new Set<string>()
-  const visit = (item: unknown) => {
-    if (typeof item === "string" && item.trim()) {
-      lines.add(item.trim())
-      return
-    }
-    if (!item || typeof item !== "object") return
-    const o = item as Record<string, unknown>
-    for (const key of ["message", "reason", "detail", "Description", "description"]) {
-      const v = o[key]
-      if (typeof v === "string" && v.trim()) lines.add(v.trim())
-    }
-    const entity = o.entity ?? o.Entity
-    const reason = o.reason ?? o.message
-    if (entity && reason && typeof reason === "string") {
-      lines.add(`${String(entity)}: ${reason.trim()}`)
-    }
-  }
-
-  if (Array.isArray(raw)) {
-    for (const item of raw) visit(item)
-  } else {
-    visit(raw)
-  }
-
-  return Array.from(lines).join(". ")
-}
+export { PLACEHOLDER_REJECTION_MESSAGES }

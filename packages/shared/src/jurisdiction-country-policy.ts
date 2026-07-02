@@ -1,6 +1,6 @@
 import { filterBlockedJurisdictions, isEasnerBlockedJurisdiction } from "./jurisdiction-blocked-countries"
 
-export type JurisdictionSurface = "signup" | "kyb"
+export type JurisdictionSurface = "signup" | "kyb" | "individual_residence"
 
 export type JurisdictionCountryPolicyV1 = {
   v: number
@@ -63,7 +63,7 @@ export function effectiveAllowlistForSurface(
   surface: JurisdictionSurface,
 ): string[] | null {
   if (!policy) return null
-  if (surface === "signup") {
+  if (surface === "signup" || surface === "individual_residence") {
     return normalizeIso2List(policy.allowedSignup ?? null)
   }
   const kybExplicit = policy.allowedKybEntity

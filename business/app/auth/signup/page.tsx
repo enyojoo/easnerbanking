@@ -57,7 +57,7 @@ export default function SignupPage() {
     setError("")
     setMessage("")
     if (!country) {
-      setError("Please select your country")
+      setError(countryRequiredError)
       return
     }
     try {
@@ -110,7 +110,7 @@ export default function SignupPage() {
     setError("")
     setMessage("")
     if (!country) {
-      setError("Please select your country")
+      setError(countryRequiredError)
       return
     }
     try {
@@ -129,6 +129,13 @@ export default function SignupPage() {
   }
 
   const selectedCountry = countriesForPicker.find((c) => c.code === country)
+  const countryFieldLabel = isTeamInvite ? "Country of residence" : "Country of registration"
+  const countryPlaceholder = isTeamInvite
+    ? "Select country of residence"
+    : "Select country of registration"
+  const countryRequiredError = isTeamInvite
+    ? "Please select your country of residence."
+    : "Please select your country of registration."
 
   return (
     <TooltipProvider>
@@ -167,7 +174,7 @@ export default function SignupPage() {
             {step === "signup" ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="country" className="text-sm font-medium">Country</Label>
+                  <Label htmlFor="country" className="text-sm font-medium">{countryFieldLabel}</Label>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -205,7 +212,7 @@ export default function SignupPage() {
                       ) : (
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">Select your country</span>
+                          <span className="text-sm text-muted-foreground">{countryPlaceholder}</span>
                         </div>
                       )}
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />

@@ -7,6 +7,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   effectiveAllowlistForSurface,
   isEasnerBlockedJurisdiction,
+  isNoahRestrictedGeography,
   parseJurisdictionCountryPolicyJson,
   resolveJurisdictionAllowlist,
   type JurisdictionCountryPolicyV1,
@@ -51,11 +52,17 @@ export async function isCountryAllowedForSurface(
   countryCode: string | null,
   surface: JurisdictionSurface,
 ): Promise<boolean> {
-  if (!countryCode) return true
+  if (!countryCode) return surface === "individual_residence" ? false : true
   const code = countryCode.trim().toUpperCase()
   if (!/^[A-Z]{2}$/.test(code)) return false
   if (isEasnerBlockedJurisdiction(code)) return false
+  if (isNoahRestrictedGeography(code)) return false
   const resolved = await getJurisdictionPolicyResolved(admin)
-  const list = surface === "kyb" ? resolved.kybAllowlist : resolved.signupAllowlist
+  const list =
+    surface === "kyb"
+      ? resolved.kybAllowlist
+      : surface === "individual_residence"
+        ? resolved.signupAllowlist
+        : resolved.signupAllowlist
   return list.includes(code)
 }

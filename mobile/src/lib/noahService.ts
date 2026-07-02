@@ -364,8 +364,17 @@ export const noahService = {
   /**
    * Noah hosted onboarding (identity + partner terms in one session).
    */
-  async getKycLink(full_name: string, email: string, type: 'individual' | 'business' = 'individual'): Promise<NoahKycLink> {
+  async getKycLink(
+    full_name: string,
+    email: string,
+    type: 'individual' | 'business' = 'individual',
+    options?: { residenceCountry?: string },
+  ): Promise<NoahKycLink> {
     const session = await requireAuthSession()
+
+    const body: Record<string, string> = { full_name, email, type }
+    const residence = options?.residenceCountry?.trim().toUpperCase()
+    if (residence) body.residenceCountry = residence
 
     const response = await fetch(`${apiUrl()}/api/noah/kyc-links`, {
       method: 'POST',
@@ -374,7 +383,7 @@ export const noahService = {
         'Authorization': `Bearer ${session.access_token}`,
         'X-Easner-Noah-Scope': 'individual',
       },
-      body: JSON.stringify({ full_name, email, type }),
+      body: JSON.stringify(body),
     })
 
     if (!response.ok) {

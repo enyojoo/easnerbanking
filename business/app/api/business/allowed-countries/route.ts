@@ -9,11 +9,21 @@ import { getJurisdictionPolicyResolved, type JurisdictionSurface } from "@/lib/j
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const surfaceRaw = url.searchParams.get("surface")
-  const surface: JurisdictionSurface = surfaceRaw === "kyb" ? "kyb" : "signup"
+  const surface: JurisdictionSurface =
+    surfaceRaw === "kyb"
+      ? "kyb"
+      : surfaceRaw === "individual_residence"
+        ? "individual_residence"
+        : "signup"
 
   const admin = createSupabaseAdmin()
   const resolved = await getJurisdictionPolicyResolved(admin)
-  const codes = surface === "kyb" ? resolved.kybAllowlist : resolved.signupAllowlist
+  const codes =
+    surface === "kyb"
+      ? resolved.kybAllowlist
+      : surface === "individual_residence"
+        ? resolved.signupAllowlist
+        : resolved.signupAllowlist
 
   return NextResponse.json({
     surface,

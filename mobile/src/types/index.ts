@@ -175,6 +175,7 @@ export interface User {
   kyc_address_state?: string | null
   kyc_address_post_code?: string | null
   kyc_address_country?: string | null
+  residence_country?: string | null
   kyc_verified_at?: string | null
   status: "active" | "inactive"
   /** Legacy default for stats until preferences live on `users` */
@@ -214,6 +215,7 @@ export interface AuthUser {
   noah_customer_id?: string | null
   noah_kyc_status?: string | null
   noah_kyc_rejection_reasons?: unknown
+  residence_country?: string | null
   role?: "individual" | "business"
   easner_business_id?: string | null
   bridge_kyc_status?: string

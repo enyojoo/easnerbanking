@@ -140,13 +140,40 @@ export async function POST(request: Request) {
 
   const { data: userRow } = await admin
     .from("users")
-    .select("id,easner_business_id,full_name,role")
+    .select("id,easner_business_id,full_name,role,residence_country")
     .eq("id", user.id)
     .maybeSingle()
 
   const existingRole =
     userRow?.role === "business" || userRow?.role === "individual" ? userRow.role : null
   const hasBusinessLink = typeof userRow?.easner_business_id === "string" && userRow.easner_business_id.length > 0
+
+  if (role === "individual") {
+    const isNewIndividual = !userRow?.id
+    if (isNewIndividual && !countryCode) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Please select your country of residence.",
+          code: "RESIDENCE_COUNTRY_REQUIRED",
+        },
+        { status: 400 },
+      )
+    }
+    if (countryCode) {
+      const ok = await isCountryAllowedForSurface(admin, countryCode, "individual_residence")
+      if (!ok) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "This country is not available for registration. Choose another or contact support.",
+            code: "COUNTRY_NOT_SUPPORTED",
+          },
+          { status: 400 },
+        )
+      }
+    }
+  }
 
   /**
    * Server-side anti-bot guard (defense-in-depth behind the sign-up pre-check): refuse to create an
@@ -252,11 +279,18 @@ export async function POST(request: Request) {
     )
   }
 
-  const baseUserPayload = {
+  const baseUserPayload: Record<string, unknown> = {
     id: user.id,
     email: user.email ?? null,
     full_name: resolvedBootstrapFullName,
     updated_at: new Date().toISOString(),
+  }
+  if (role === "individual" && countryCode) {
+    const curRes =
+      typeof userRow?.residence_country === "string" ? userRow.residence_country.trim() : ""
+    if (!curRes) {
+      baseUserPayload.residence_country = countryCode
+    }
   }
 
   // Support both migrated and pre-migration schemas.
@@ -264,18 +298,29 @@ export async function POST(request: Request) {
     .from("users")
     .upsert({ ...baseUserPayload, role: existingRole ?? role }, { onConflict: "id" })
   if (upsertErrWithRole) {
-    const { error: upsertErrNoRole } = await admin.from("users").upsert(baseUserPayload, { onConflict: "id" })
-    if (upsertErrNoRole) {
-      await admin
-        .from("users")
-        .upsert(
-          {
-            id: user.id,
-            email: user.email ?? null,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "id" },
-        )
+    const payloadNoResidence = {
+      id: user.id,
+      email: user.email ?? null,
+      full_name: resolvedBootstrapFullName,
+      updated_at: new Date().toISOString(),
+    }
+    const { error: upsertErrWithRoleNoRes } = await admin
+      .from("users")
+      .upsert({ ...payloadNoResidence, role: existingRole ?? role }, { onConflict: "id" })
+    if (upsertErrWithRoleNoRes) {
+      const { error: upsertErrNoRole } = await admin.from("users").upsert(payloadNoResidence, { onConflict: "id" })
+      if (upsertErrNoRole) {
+        await admin
+          .from("users")
+          .upsert(
+            {
+              id: user.id,
+              email: user.email ?? null,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" },
+          )
+      }
     }
   }
 

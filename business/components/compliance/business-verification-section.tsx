@@ -25,8 +25,12 @@ import {
 import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
 import { buildNoahHostedIframeUrl } from "@/lib/noah/hosted-iframe-url"
 import { isNoahCompleteUrl } from "@/lib/noah/noah-complete-url"
-import { formatNoahRejectionReasonsText } from "@/lib/noah/rejection-reasons"
 import { cn } from "@/lib/utils"
+import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
+import {
+  getNoahRejectionDisplay,
+  NOAH_VERIFICATION_IN_REVIEW_COPY,
+} from "@/lib/noah/rejection-reasons"
 
 function formatTier1Status(status: string | null): string {
   if (!status) return "Not started"
@@ -43,6 +47,9 @@ export function BusinessVerificationSection() {
     tier1Complete,
     tier1VerificationStatus,
     tier1RejectionReasons,
+    tier1RejectionType,
+    tier1CanResubmit,
+    tier1RetryGuidance,
     canManageBusinessVerification,
     isLoading,
     businessId,
@@ -147,6 +154,7 @@ export function BusinessVerificationSection() {
         error?: string
         alreadyOnboarded?: boolean
         kyc_status?: string
+        canResubmit?: boolean
       }
       if (text) {
         try {
@@ -167,6 +175,11 @@ export function BusinessVerificationSection() {
         setError(json.error ?? "Could not start verification.")
         return
       }
+      if (json.canResubmit === false) {
+        setError(null)
+        setInfo("Verification could not be completed for this account. Please contact support if you have questions.")
+        return
+      }
       if (json.alreadyOnboarded || !json.kyc_link) {
         void syncBusinessTier1FromNoah()
         if (json.kyc_status === "approved") {
@@ -182,7 +195,7 @@ export function BusinessVerificationSection() {
         // a normal "in review" state, not a failure. Show it as a neutral notice, not a red error.
         setInfo(
           json.kyc_status === "under_review" || json.kyc_status === "in_review"
-            ? "Your verification is already in review. We'll update your status here shortly — no action needed right now."
+            ? NOAH_VERIFICATION_IN_REVIEW_COPY
             : "No additional verification steps are available right now. We'll update your status shortly.",
         )
         return
@@ -208,7 +221,8 @@ export function BusinessVerificationSection() {
   const hostedTierMeta = tierLadderCopy(hostedTierLevel)
   const hostedTierTitle = hostedTierMeta?.title ?? `Tier ${hostedTierLevel}`
   const tier1Rejected = tier1VerificationStatus === "rejected"
-  const rejectionCopy = tier1Rejected ? formatNoahRejectionReasonsText(tier1RejectionReasons) : ""
+  const rejectionDisplay = tier1Rejected ? getNoahRejectionDisplay(tier1RejectionReasons) : null
+  const tier1FinalReject = tier1RejectionType === "Final" || rejectionDisplay?.isFinal === true
   const tier1UnderReview = (() => {
     const s = (tier1VerificationStatus || "").toLowerCase()
     return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
@@ -256,10 +270,17 @@ export function BusinessVerificationSection() {
                 <CardContent className="space-y-4 pt-0">
                   {error ? <p className="text-sm text-destructive">{error}</p> : null}
                   {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
-                  {tier1Rejected && rejectionCopy ? (
+                  {tier1UnderReview && !tier1Rejected ? (
+                    <p className="text-sm text-muted-foreground">{NOAH_VERIFICATION_IN_REVIEW_COPY}</p>
+                  ) : null}
+                  {tier1Rejected && tier1FinalReject ? (
+                    <p className="text-sm text-muted-foreground">
+                      Verification could not be completed for this account. Please contact support if you have
+                      questions.
+                    </p>
+                  ) : tier1Rejected && (tier1RetryGuidance?.length || rejectionDisplay?.guidanceLines.length) ? (
                     <p className="text-sm text-destructive">
-                      Verification was declined: {rejectionCopy}. Review your documents and try again, or contact
-                      support if you need help.
+                      Verification needs attention: {(tier1RetryGuidance ?? rejectionDisplay?.guidanceLines ?? []).join(" ")}
                     </p>
                   ) : tier1Rejected ? (
                     <p className="text-sm text-destructive">
@@ -278,8 +299,11 @@ export function BusinessVerificationSection() {
                       verification.
                     </p>
                   ) : null}
+                  {canManageBusinessVerification && !tier1Complete && !tier1FinalReject ? (
+                    <KybRequiredDocumentsNotice />
+                  ) : null}
                   <div className="flex flex-wrap gap-2">
-                    {canManageBusinessVerification && !tier1Complete ? (
+                    {canManageBusinessVerification && !tier1Complete && !tier1FinalReject ? (
                       <Button
                         size="sm"
                         onClick={() => void openHostedVerification()}

@@ -25,7 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk } from '@easner/shared'
+import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import {
   IframeWebViewModalHeader,
@@ -63,6 +63,10 @@ import { useScope } from '../../query/scope'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
+import { KycRequiredDocumentsNotice } from '../../components/compliance/KycRequiredDocumentsNotice'
+import { ResidenceCountryField } from '../../components/compliance/ResidenceCountryField'
+import { WebAwareModal } from '../../components/WebAwareModal'
+import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 
 const TIER_ICONS: Record<1 | 2 | 3, LucideIcon> = {
   1: Globe,
@@ -113,6 +117,10 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const [kycCompleted, setKycCompleted] = useState(false)
   const kycProcessedRef = useRef(false)
   const externalLink = useExternalLink()
+  const [legacyResidenceOpen, setLegacyResidenceOpen] = useState(false)
+  const [legacyResidenceCode, setLegacyResidenceCode] = useState('')
+  const [legacyResidenceError, setLegacyResidenceError] = useState<string | null>(null)
+  const [savingLegacyResidence, setSavingLegacyResidence] = useState(false)
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -363,8 +371,18 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     .toLowerCase()
   const noahKycInReview = kycStatusLower === 'under_review' || kycStatusLower === 'in_review'
   const noahKycRejected = kycStatusLower === 'rejected'
+  const rejectionReasons =
+    userProfile?.noah_kyc_rejection_reasons ?? userProfile?.profile?.noah_kyc_rejection_reasons
+  const rejectionDisplay = noahKycRejected ? getNoahRejectionDisplay(rejectionReasons) : null
+  const kycFinalReject = rejectionDisplay?.isFinal === true
+  const kycCanResubmit = noahKycRejected ? canResubmitNoahVerification(rejectionReasons) : true
+  const residenceCountry =
+    (typeof userProfile?.residence_country === 'string' && userProfile.residence_country.trim()) ||
+    (typeof userProfile?.profile?.residence_country === 'string' &&
+      userProfile.profile.residence_country.trim()) ||
+    ''
 
-  const handleOpenKYC = async () => {
+  const proceedOpenKyc = async (residenceOverride?: string) => {
     if (!userProfile?.email) {
       showWarning('Please complete your profile information before starting KYC verification.')
       return
@@ -431,7 +449,9 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       
       let response
       try {
-        response = await noahService.getKycLink(fullName, userProfile.email, 'individual')
+        response = await noahService.getKycLink(fullName, userProfile.email, 'individual', {
+          residenceCountry: residenceOverride || residenceCountry || undefined,
+        })
       } catch (error: any) {
         // Handle case where Noah returns existing KYC link in error
         if (error.message && error.message.includes('kyc link has already been created')) {
@@ -544,6 +564,47 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       )
     } finally {
       setLoadingKyc(false)
+    }
+  }
+
+  const handleOpenKYC = async () => {
+    if (kycFinalReject || !kycCanResubmit) {
+      showWarning(NOAH_FINAL_REJECTION_USER_MESSAGE)
+      return
+    }
+
+    const effectiveResidence = residenceCountry.trim()
+    if (!effectiveResidence) {
+      setLegacyResidenceCode('')
+      setLegacyResidenceError(null)
+      setLegacyResidenceOpen(true)
+      return
+    }
+
+    await proceedOpenKyc(effectiveResidence)
+  }
+
+  const handleLegacyResidenceContinue = async () => {
+    const code = legacyResidenceCode.trim().toUpperCase()
+    if (!code) {
+      setLegacyResidenceError('Please select your country of residence.')
+      return
+    }
+    setSavingLegacyResidence(true)
+    setLegacyResidenceError(null)
+    try {
+      await proceedOpenKyc(code)
+      setLegacyResidenceOpen(false)
+      if (refreshUserProfile) await refreshUserProfile()
+    } catch (error: any) {
+      const msg = error?.message ?? 'Could not save your country of residence.'
+      if (/not available|COUNTRY_NOT_SUPPORTED/i.test(msg)) {
+        setLegacyResidenceError(msg)
+      } else {
+        setLegacyResidenceError(msg)
+      }
+    } finally {
+      setSavingLegacyResidence(false)
     }
   }
 
@@ -724,44 +785,18 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     <>
                       <CircleAlert size={20} color={colors.error.main} strokeWidth={2} />
                       <Text style={[styles.infoText, { color: colors.error.main }]}>
-                        {userProfile?.noah_kyc_rejection_reasons 
-                          ? (Array.isArray(userProfile.noah_kyc_rejection_reasons) && userProfile.noah_kyc_rejection_reasons.length > 0
-                              ? (() => {
-                                  // Extract unique customer-facing reasons (deduplicate)
-                                  const uniqueReasons = new Set<string>()
-                                  userProfile.noah_kyc_rejection_reasons.forEach((reasonObj: any) => {
-                                    if (typeof reasonObj === 'object' && reasonObj !== null) {
-                                      const reason = String(
-                                        reasonObj.reason ?? reasonObj.message ?? reasonObj.detail ?? '',
-                                      ).trim()
-                                      if (reason) {
-                                        uniqueReasons.add(reason)
-                                      }
-                                    } else if (typeof reasonObj === 'string' && reasonObj.trim()) {
-                                      uniqueReasons.add(reasonObj.trim())
-                                    }
-                                  })
-                                  
-                                  const reasonsArray = Array.from(uniqueReasons)
-                                  const reasonsText = reasonsArray.length > 0 
-                                    ? reasonsArray.join(". ")
-                                    : ''
-                                  
-                                  return reasonsText
-                                    ? `We couldn’t approve your verification: ${reasonsText}. Tap Start below to try again.`
-                                    : 'We couldn’t approve your verification. Tap Start below to try again.'
-                                })()
-                              : typeof userProfile.noah_kyc_rejection_reasons === 'string'
-                              ? `We couldn’t approve your verification: ${userProfile.noah_kyc_rejection_reasons}. Tap Start below to try again.`
-                              : 'We couldn’t approve your verification. Tap Start below to try again.')
-                          : 'We couldn’t approve your verification. Tap Start below to try again.'}
-                  </Text>
+                        {kycFinalReject
+                          ? NOAH_FINAL_REJECTION_USER_MESSAGE
+                          : rejectionDisplay?.guidanceLines?.length
+                            ? `Verification needs attention: ${rejectionDisplay.guidanceLines.join(' ')}`
+                            : 'Verification was declined. Review your documents and try again, or contact support if you need help.'}
+                      </Text>
                     </>
                   ) : noahKycInReview ? (
                     <>
                       <Info size={20} color={colors.warning.main} strokeWidth={2} />
                       <Text style={[styles.infoText, { color: colors.warning.main }]}>
-                        Your verification is under review. We will email you when there is an update.
+                        {NOAH_VERIFICATION_IN_REVIEW_COPY}
                       </Text>
                     </>
                   ) : (
@@ -777,6 +812,9 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             )}
 
             {/* Tier cards: 1 = Noah KYC; 2–3 = roadmap — always visible (approved = read-only, like business). */}
+            {!noahKycApproved && !kycFinalReject ? (
+              <KycRequiredDocumentsNotice />
+            ) : null}
             <View style={styles.cardsContainer}>
               {noahKycApproved ? (
                 <View style={styles.card}>
@@ -803,6 +841,35 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                         userProfile?.noah_kyc_status ||
                           userProfile?.profile?.noah_kyc_status ||
                           'approved',
+                      )}
+                    </View>
+                  </View>
+                </View>
+              ) : kycFinalReject ? (
+                <View style={styles.card}>
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardLeft}>
+                      <View style={styles.iconContainer}>
+                        <TierGlyph tier={1} size={24} color={colors.primary.main} />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {tierTitleDisplay(CONSUMER_TIER_LADDER.tiers[0].title)}
+                      </Text>
+                      <Text style={styles.cardDescription}>
+                        {CONSUMER_TIER_LADDER.tiers[0].description}
+                      </Text>
+                    </View>
+                    <View style={styles.cardRight}>
+                      <View style={styles.tierPill}>
+                        <Text style={styles.tierPillText}>Tier 1</Text>
+                      </View>
+                      {getStatusBadge(
+                        userProfile?.noah_kyc_status ||
+                          userProfile?.profile?.noah_kyc_status ||
+                          'rejected',
+                        userProfile?.noah_kyc_status ||
+                          userProfile?.profile?.noah_kyc_status ||
+                          'rejected',
                       )}
                     </View>
                   </View>
@@ -1013,6 +1080,33 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         title={externalLink.title}
         onClose={externalLink.closeLink}
       />
+      <WebAwareModal
+        visible={legacyResidenceOpen}
+        onRequestClose={() => {
+          if (!savingLegacyResidence) setLegacyResidenceOpen(false)
+        }}
+        keyboardAvoiding
+      >
+        <View style={styles.legacyResidencePanel}>
+          <Text style={styles.legacyResidenceTitle}>Country of residence</Text>
+          <Text style={styles.legacyResidenceBody}>
+            We need your country of residence before starting verification. This is used for eligibility
+            checks only and is collected once here.
+          </Text>
+          <ResidenceCountryField
+            value={legacyResidenceCode}
+            onChange={setLegacyResidenceCode}
+            disabled={savingLegacyResidence}
+            error={legacyResidenceError}
+          />
+          <GlossyPrimaryButton
+            title={savingLegacyResidence ? 'Saving…' : 'Continue'}
+            onPress={() => void handleLegacyResidenceContinue()}
+            disabled={savingLegacyResidence}
+            style={styles.legacyResidenceCta}
+          />
+        </View>
+      </WebAwareModal>
     </ScreenWrapper>
   )
 }
@@ -1300,6 +1394,23 @@ const styles = StyleSheet.create({
   },
   webView: {
     flex: 1,
+  },
+  legacyResidencePanel: {
+    padding: spacing[5],
+  },
+  legacyResidenceTitle: {
+    ...textStyles.headlineSmall,
+    color: colors.text.primary,
+    marginBottom: spacing[2],
+  },
+  legacyResidenceBody: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing[4],
+    lineHeight: 20,
+  },
+  legacyResidenceCta: {
+    marginTop: spacing[2],
   },
 })
 

@@ -40,6 +40,9 @@ export type BusinessProfile = {
   tier1VerificationStatus: string | null
   /** Decline reasons from Noah when org KYB is rejected. */
   tier1RejectionReasons: unknown[] | null
+  tier1RejectionType: string | null
+  tier1CanResubmit: boolean
+  tier1RetryGuidance: string[]
   /** Internal reference on Owner's user row; not shown to customers in UI. */
   noahKybCustomerId: string | null
   /** Whether the signed-in user may start or refresh hosted business verification. */
@@ -79,6 +82,9 @@ const DEFAULT_PROFILE: BusinessProfile = {
   tier1Complete: false,
   tier1VerificationStatus: null,
   tier1RejectionReasons: null,
+  tier1RejectionType: null,
+  tier1CanResubmit: true,
+  tier1RetryGuidance: [],
   noahKybCustomerId: null,
   canManageBusinessVerification: true,
   noahUsdVirtualAccountId: null,

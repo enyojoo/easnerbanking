@@ -8,6 +8,8 @@ import {
 import { buildHostedOnboardingBody } from "@/lib/noah/hosted-onboarding"
 import { mapNoahCustomerToMobileSummary, mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { evaluateKycLinksPreflight } from "@/lib/noah/kyc-links-preflight"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 
 /**
@@ -22,7 +24,7 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error
   const { user } = auth
 
-  let body: { full_name?: string; email?: string; type?: string } = {}
+  let body: { full_name?: string; email?: string; type?: string; residenceCountry?: string } = {}
   try {
     body = await request.json()
   } catch {
@@ -32,10 +34,47 @@ export async function POST(request: Request) {
   const ctx = await resolveNoahContextAsync(user.id, request, body.type)
   if (!ctx.ok) return ctx.response
 
+  const admin = createSupabaseAdmin()
+  const preflight = await evaluateKycLinksPreflight({
+    admin,
+    scope: ctx.scope,
+    userId: user.id,
+    businessId: ctx.businessId,
+    residenceCountryFromBody: body.residenceCountry,
+  })
+  if (preflight.action === "respond") {
+    return preflight.response
+  }
+  if (preflight.action === "skipHostedPost") {
+    const subjectId = ctx.scope === "business" ? (ctx.businessId ?? ctx.noahCustomerId) : user.id
+    const { customer, resolvedCustomerId } = await fetchNoahCustomerForScope(
+      ctx.scope,
+      subjectId,
+      ctx.noahCustomerId,
+    )
+    await syncNoahCustomerToSupabase(
+      ctx.scope === "business" && ctx.businessId
+        ? { kind: "business", businessId: ctx.businessId }
+        : { kind: "individual", userId: user.id },
+      customer,
+      resolvedCustomerId,
+    )
+    const summary = mapNoahCustomerToMobileSummary(customer, resolvedCustomerId)
+    const kycStatus = mapNoahVerificationToKycStatus(customer)
+    return NextResponse.json({
+      kyc_link: null,
+      kyc_status: kycStatus || preflight.kycStatus || "pending",
+      customer_id: resolvedCustomerId,
+      kyc_link_id: resolvedCustomerId,
+      noahScope: ctx.scope,
+      hostedCustomerType: ctx.customerType,
+      alreadyOnboarded: true,
+      hostedIncludesTerms: true,
+      ...summary,
+    })
+  }
+
   try {
-    // Noah returns an empty body (→ `noahFetch` resolves `null`) when there's no resumable hosted
-    // session — e.g. a fully-submitted customer that's under review. Coalesce so we never deref null
-    // (this was the source of "Cannot read properties of null (reading 'HostedURL')").
     const session =
       (await noahFetch<Record<string, unknown> | null>({
         method: "POST",
@@ -68,7 +107,7 @@ export async function POST(request: Request) {
         hostedCustomerType: ctx.customerType,
         onboardingStatus: session.OnboardingStatus ?? null,
         missingSteps: session.MissingSteps ?? null,
-        /** Noah Standard Model: identity + partner T&C in one hosted session (no separate TOS link). */
+        canResubmit: true,
         hostedIncludesTerms: true,
       })
     }
@@ -111,8 +150,6 @@ export async function POST(request: Request) {
         { status: 400 },
       )
     }
-    // Never leak raw runtime errors (e.g. "Cannot read properties of null") to the UI. These are
-    // bugs, not actionable user messages — log server-side and show a generic, friendly message.
     if (e instanceof TypeError || e instanceof RangeError || e instanceof ReferenceError) {
       console.error("[noah/kyc-links] unexpected error starting onboarding:", e)
       return NextResponse.json(

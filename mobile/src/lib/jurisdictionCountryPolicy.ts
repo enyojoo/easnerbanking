@@ -111,9 +111,14 @@ export async function getAllowedCountriesCached(surface: JurisdictionSurface): P
 export async function clearJurisdictionCountryPolicyCache(): Promise<void> {
   delete memory.signup
   delete memory.kyb
+  delete memory.individual_residence
   inflight.clear()
   try {
-    await AsyncStorage.multiRemove([storageKey('signup'), storageKey('kyb')])
+    await AsyncStorage.multiRemove([
+      storageKey('signup'),
+      storageKey('kyb'),
+      storageKey('individual_residence'),
+    ])
   } catch {
     // ignore
   }

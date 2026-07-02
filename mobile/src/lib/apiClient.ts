@@ -1,5 +1,7 @@
 import Constants from 'expo-constants'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
+import { PENDING_RESIDENCE_COUNTRY_KEY } from '../constants/residenceCountry'
 
 /**
  * Last-resort API origin for release builds when `extra.apiUrl` / `EXPO_PUBLIC_API_URL`
@@ -37,9 +39,11 @@ export const getApiBaseUrl = (): string => {
 
 /**
  * Same as business web `POST /api/auth/bootstrap` (Bearer + service-role upsert to public.users).
- * Call after session exists; `role: individual` skips org/country (no country on mobile).
+ * Individual accounts may pass `countryCode` (ISO2 residence) from signup or pending storage.
  */
-export async function ensureBusinessAppUserBootstrap(): Promise<{ ok: boolean; status?: number; errorText?: string }> {
+export async function ensureBusinessAppUserBootstrap(options?: {
+  countryCode?: string
+}): Promise<{ ok: boolean; status?: number; errorText?: string }> {
   const apiBase = getApiBaseUrl()
   try {
     const {
@@ -52,6 +56,16 @@ export async function ensureBusinessAppUserBootstrap(): Promise<{ ok: boolean; s
         ? session.user.user_metadata.name.trim()
         : null
 
+    let countryCode = options?.countryCode?.trim().toUpperCase()
+    if (!countryCode) {
+      try {
+        const stored = await AsyncStorage.getItem(PENDING_RESIDENCE_COUNTRY_KEY)
+        if (stored?.trim()) countryCode = stored.trim().toUpperCase()
+      } catch {
+        // ignore
+      }
+    }
+
     const res = await fetch(`${apiBase}/api/auth/bootstrap`, {
       method: 'POST',
       headers: {
@@ -61,6 +75,7 @@ export async function ensureBusinessAppUserBootstrap(): Promise<{ ok: boolean; s
       body: JSON.stringify({
         role: 'individual',
         fullName: fullName || undefined,
+        countryCode: countryCode || undefined,
       }),
     })
 
@@ -71,6 +86,10 @@ export async function ensureBusinessAppUserBootstrap(): Promise<{ ok: boolean; s
     }
     /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side — refresh JWT. */
     await supabase.auth.refreshSession().catch(() => undefined)
+
+    if (countryCode) {
+      await AsyncStorage.removeItem(PENDING_RESIDENCE_COUNTRY_KEY).catch(() => undefined)
+    }
 
     /** Idempotent Turnkey sub-org + wallet queue — retries if bootstrap Turnkey step failed earlier. */
     try {

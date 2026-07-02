@@ -4,7 +4,7 @@ import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { resolveInvoiceReplyEmailWithSource } from "@/lib/invoices/issuer"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
-import { isBusinessProfileLockedFromKybFields } from "@easner/shared"
+import { isBusinessProfileLockedFromKybFields, getNoahRejectionDisplay } from "@easner/shared"
 import { validateEasetag, normalizeEasetag } from "@/lib/easetag-validation"
 import { isEasetagGloballyAvailable } from "@/lib/easetag-global"
 import { isValidIndustryId } from "@/lib/business-industries"
@@ -298,6 +298,11 @@ export async function GET(request: Request) {
     invoiceSettings = parseBusinessInvoiceSettings(org.invoice_settings)
   }
 
+  const tier1RejectionDisplay = getNoahRejectionDisplay(tier1RejectionReasons)
+  const tier1RejectionType = tier1RejectionDisplay.rejectType
+  const tier1CanResubmit = tier1RejectionDisplay.canResubmit
+  const tier1RetryGuidance = tier1RejectionDisplay.guidanceLines
+
   return NextResponse.json({
     profile: {
       businessId: org?.id ?? orgId ?? userRow?.easner_business_id ?? null,
@@ -326,6 +331,9 @@ export async function GET(request: Request) {
       tier1Complete,
       tier1VerificationStatus,
       tier1RejectionReasons,
+      tier1RejectionType,
+      tier1CanResubmit,
+      tier1RetryGuidance,
       noahKybCustomerId,
       canManageBusinessVerification,
       noahUsdVirtualAccountId,

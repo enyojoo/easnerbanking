@@ -79,6 +79,7 @@ export function mapUsersRowToUser(ru: Record<string, unknown>): User {
     kyc_address_state: (ru.kyc_address_state as string) ?? null,
     kyc_address_post_code: (ru.kyc_address_post_code as string) ?? null,
     kyc_address_country: (ru.kyc_address_country as string) ?? null,
+    residence_country: (ru.residence_country as string) ?? null,
     easetag: typeof ru.easetag === 'string' && ru.easetag.trim() ? ru.easetag.trim().toLowerCase() : undefined,
     status: 'active',
     base_currency: 'USD',
