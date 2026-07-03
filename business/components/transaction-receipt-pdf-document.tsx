@@ -7,25 +7,82 @@ import {
   View,
   Image,
   StyleSheet,
+  Svg,
+  Line,
+  Polyline,
 } from "@react-pdf/renderer"
 import { buildTransactionEmailDetailRows, filterTransactionReceiptDetailRows } from "@easner/shared"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
 
-/** Business palette — aligned with mobile receipt tokens (#007ACC primary, neutral text). */
+/** Business palette — matches the original PDF tokens (blue primary, neutral text/borders). */
 const palette = {
   primary: "#007ACC",
+  primaryTint: "#EAF4FB",
   textPrimary: "#0F1110",
   textSecondary: "#6F756F",
   textTertiary: "#6F756F",
   border: "#D9D4C7",
   white: "#FFFFFF",
   pageBg: "#F8F6F0",
-  success: "#16A34A",
-  successBg: "#DCFCE7",
-  error: "#DC2626",
-  errorBg: "#FEE2E2",
+  statusBadgeBg: "#EFEDE6",
+  statusBadgeText: "#3D403D",
 } as const
+
+/**
+ * Direction glyph — react-pdf/Helvetica can't render Unicode check/arrow marks, so the icon
+ * is drawn with SVG. Deposits (credit) point down-left; transfers (debit) point up-right,
+ * mirroring the mobile app hero (ArrowDownLeft / ArrowUpRight, brand blue).
+ */
+function DirectionArrow({ isCredit }: { isCredit: boolean }) {
+  return (
+    <Svg width={26} height={26} viewBox="0 0 24 24">
+      {isCredit ? (
+        <>
+          <Line
+            x1="17"
+            y1="7"
+            x2="7"
+            y2="17"
+            stroke={palette.primary}
+            strokeWidth={2.25}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <Polyline
+            points="17 17 7 17 7 7"
+            fill="none"
+            stroke={palette.primary}
+            strokeWidth={2.25}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </>
+      ) : (
+        <>
+          <Line
+            x1="7"
+            y1="17"
+            x2="17"
+            y2="7"
+            stroke={palette.primary}
+            strokeWidth={2.25}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <Polyline
+            points="7 7 17 7 17 17"
+            fill="none"
+            stroke={palette.primary}
+            strokeWidth={2.25}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </>
+      )}
+    </Svg>
+  )
+}
 
 const statusLabels: Record<string, string> = {
   completed: "Completed",
@@ -55,14 +112,6 @@ function formatReceiptTimestamp(dateInput: string | Date): string {
   const ampm = hours >= 12 ? "PM" : "AM"
   const displayHours = hours % 12 || 12
   return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
-}
-
-function receiptOutcome(status: string): "success" | "failed" {
-  const s = status.toLowerCase()
-  if (s.includes("failed") || s.includes("refunded") || s.includes("returned")) {
-    return "failed"
-  }
-  return "success"
 }
 
 /**
@@ -223,13 +272,10 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
+    backgroundColor: palette.primaryTint,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
-  },
-  glyphMark: {
-    fontSize: 22,
-    fontWeight: "bold",
   },
   amount: {
     fontSize: 26,
@@ -255,11 +301,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: 6,
+    backgroundColor: palette.statusBadgeBg,
   },
   statusPillText: {
     fontSize: 9,
     fontWeight: "bold",
+    color: palette.statusBadgeText,
   },
   dateText: {
     fontSize: 9,
@@ -354,10 +402,6 @@ export function TransactionReceiptPDFDocument({
   logoUrl,
   cardLast4,
 }: TransactionReceiptPDFDocumentProps) {
-  const outcome = receiptOutcome(transaction.status)
-  const succeeded = outcome === "success"
-  const glyphColor = succeeded ? palette.success : palette.error
-  const glyphBg = succeeded ? palette.successBg : palette.errorBg
   const isCredit = transaction.direction === "credit"
 
   const heroCurrency = transaction.displayCurrency || transaction.postedCurrency || "USD"
@@ -380,12 +424,10 @@ export function TransactionReceiptPDFDocument({
               <Text style={styles.headerLabel}>Transaction Receipt</Text>
             </View>
 
-            {/* Hero — glyph, amount, title, status pill, date. */}
+            {/* Hero — direction arrow, amount, title, status pill, date. */}
             <View style={styles.heroBlock}>
-              <View style={[styles.glyph, { backgroundColor: glyphBg }]}>
-                <Text style={[styles.glyphMark, { color: glyphColor }]}>
-                  {succeeded ? "✓" : "✗"}
-                </Text>
+              <View style={styles.glyph}>
+                <DirectionArrow isCredit={isCredit} />
               </View>
               <Text
                 style={[
@@ -396,10 +438,8 @@ export function TransactionReceiptPDFDocument({
                 {amountStr}
               </Text>
               {title ? <Text style={styles.heroTitle}>{title}</Text> : null}
-              <View style={[styles.statusPill, { backgroundColor: glyphBg }]}>
-                <Text style={[styles.statusPillText, { color: glyphColor }]}>
-                  {statusLabel}
-                </Text>
+              <View style={styles.statusPill}>
+                <Text style={styles.statusPillText}>{statusLabel}</Text>
               </View>
               <Text style={styles.dateText}>{dateText}</Text>
             </View>
