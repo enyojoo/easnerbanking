@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'
-import { View, StyleSheet, Modal } from 'react-native'
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
+import { View, StyleSheet } from 'react-native'
 import Toast, { ToastType } from './Toast'
 
 interface ToastData {
@@ -24,15 +24,33 @@ interface ToastContextType {
   showError: (message: string, duration?: number) => void
   showInfo: (message: string, duration?: number) => void
   showWarning: (message: string, duration?: number) => void
+  /** @internal — used by ToastViewport / ModalToastHost to render the toasts. */
+  _toasts: ToastData[]
+  /** @internal */
+  _removeToast: (id: string) => void
+  /**
+   * @internal — a Modal can register itself as the active toast host so toasts
+   * render inside it (on top). Native Modals present in a separate window, so a
+   * root-level overlay would otherwise be hidden behind an open Modal.
+   */
+  _registerModalHost: () => () => void
+  /** @internal — true while a Modal host is mounted; root viewport hides to avoid duplicates. */
+  _modalHostActive: boolean
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastData[]>([])
+  const [modalHostCount, setModalHostCount] = useState(0)
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id))
+  }, [])
+
+  const registerModalHost = useCallback(() => {
+    setModalHostCount((c) => c + 1)
+    return () => setModalHostCount((c) => Math.max(0, c - 1))
   }, [])
 
   const showToast = useCallback(
@@ -79,36 +97,78 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [showToast]
   )
 
+  const value = useMemo<ToastContextType>(
+    () => ({
+      showToast,
+      showSuccess,
+      showError,
+      showInfo,
+      showWarning,
+      _toasts: toasts,
+      _removeToast: removeToast,
+      _registerModalHost: registerModalHost,
+      _modalHostActive: modalHostCount > 0,
+    }),
+    [
+      showToast,
+      showSuccess,
+      showError,
+      showInfo,
+      showWarning,
+      toasts,
+      removeToast,
+      registerModalHost,
+      modalHostCount,
+    ],
+  )
+
   return (
-    <ToastContext.Provider
-      value={{ showToast, showSuccess, showError, showInfo, showWarning }}
-    >
+    <ToastContext.Provider value={value}>
       {children}
-      {/* Hosted in a Modal so toasts render above other native Modals (e.g. the
-          receipt sheet). Mounted only while toasts exist; box-none lets taps in
-          empty areas pass through to the content beneath. */}
-      <Modal
-        visible={toasts.length > 0}
-        transparent
-        animationType="none"
-        statusBarTranslucent
-        onRequestClose={() => {}}
-      >
-        <View style={styles.container} pointerEvents="box-none">
-          {toasts.map((toast) => (
-            <Toast
-              key={toast.id}
-              message={toast.message}
-              type={toast.type}
-              duration={toast.duration}
-              action={toast.action}
-              onClose={() => removeToast(toast.id)}
-            />
-          ))}
-        </View>
-      </Modal>
+      {/* Root overlay for normal screens. While a Modal hosts the toasts (see
+          ModalToastHost), the root viewport hides so toasts don't render twice. */}
+      {modalHostCount === 0 ? <ToastViewport /> : null}
     </ToastContext.Provider>
   )
+}
+
+/** Renders the active toasts as a top-anchored overlay. Reused at the root and inside Modals. */
+export function ToastViewport() {
+  const context = useContext(ToastContext)
+  if (!context) return null
+  const { _toasts, _removeToast } = context
+  return (
+    <View style={styles.container} pointerEvents="box-none">
+      {_toasts.map((toast) => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          duration={toast.duration}
+          action={toast.action}
+          onClose={() => _removeToast(toast.id)}
+        />
+      ))}
+    </View>
+  )
+}
+
+/**
+ * Drop inside a native Modal (e.g. the receipt sheet) so toasts appear on top of
+ * it. Native Modals present in their own window, so the root overlay would be
+ * hidden behind them; this re-hosts the toasts within the Modal instead.
+ */
+export function ModalToastHost() {
+  const context = useContext(ToastContext)
+  const register = context?._registerModalHost
+
+  useEffect(() => {
+    if (!register) return
+    return register()
+  }, [register])
+
+  if (!context) return null
+  return <ToastViewport />
 }
 
 export function useToast() {

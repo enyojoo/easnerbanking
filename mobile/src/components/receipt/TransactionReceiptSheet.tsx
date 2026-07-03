@@ -15,6 +15,7 @@ import { Download, Share2, X } from 'lucide-react-native'
 import { TransactionReceiptCard } from './TransactionReceiptCard'
 import type { ReceiptDetails } from './receipt-types'
 import { useSaveTransactionReceipt } from '../../hooks/useSaveTransactionReceipt'
+import { ModalToastHost } from '../ToastProvider'
 import { colors, spacing, borderRadius, textStyles, fontFamily, shadows } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useWebCenteredModal } from '../../lib/webCenteredModal'
@@ -134,6 +135,9 @@ export function TransactionReceiptSheet({ visible, onClose, receipt }: Props) {
             </Pressable>
           </View>
         </View>
+        {/* Re-hosts toasts inside this Modal so "Receipt saved" appears above the
+            sheet (a root overlay would be hidden behind the native Modal). */}
+        <ModalToastHost />
       </View>
     </Modal>
   )
