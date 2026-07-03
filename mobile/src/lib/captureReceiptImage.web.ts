@@ -1,5 +1,6 @@
 import type { RefObject } from 'react'
 import type { View } from 'react-native'
+import type { ReceiptDetails } from '../components/receipt/receipt-types'
 
 /**
  * Web: react-native-view-shot delegates to html2canvas, which defaults to
@@ -7,7 +8,10 @@ import type { View } from 'react-native'
  * explicit high scale so the downloaded/shared PNG (logo + text) stays crisp everywhere.
  * On react-native-web a View ref resolves to the underlying DOM node.
  */
-export async function captureReceiptImage(ref: RefObject<View | null>): Promise<string> {
+export async function captureReceiptImage(
+  ref: RefObject<View | null>,
+  _receipt: ReceiptDetails | null,
+): Promise<string> {
   const node = ref.current as unknown as HTMLElement | null
   if (!node) throw new Error('Receipt is not ready yet.')
   const html2canvas = (await import('html2canvas')).default

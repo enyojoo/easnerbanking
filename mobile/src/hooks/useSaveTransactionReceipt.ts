@@ -1,6 +1,7 @@
 import { useCallback, useState, type RefObject } from 'react'
 import { Platform } from 'react-native'
 import type { View } from 'react-native'
+import type { ReceiptDetails } from '../components/receipt/receipt-types'
 import { useToast } from '../components/ToastProvider'
 import { captureReceiptImage } from '../lib/captureReceiptImage'
 
@@ -17,8 +18,6 @@ async function shareReceiptOnWeb(dataUrl: string): Promise<'shared' | 'downloade
 
   const blob = await dataUrlToBlob(dataUrl)
   const file = new File([blob], RECEIPT_FILENAME, { type: 'image/png' })
-  // Files only — macOS Safari drops the image when title/text accompany files and
-  // recipients receive just the title string (e.g. "Receipt").
   const payload: ShareData = { files: [file] }
 
   if (navigator.share && navigator.canShare && navigator.canShare(payload)) {
@@ -48,22 +47,17 @@ async function downloadReceiptOnWeb(dataUrl: string): Promise<void> {
 }
 
 /**
- * Captures the on-screen `TransactionReceiptCard` to a PNG (both iOS and Android) and
- * either saves it to Photos (expo-media-library) or hands it to the native share sheet.
- * Consistent image receipt across platforms — the business web app keeps the PDF.
- *
- * Native deps (react-native-view-shot, expo-media-library, expo-sharing) are required
- * lazily inside the handlers, not at module scope, so nothing native runs until the
- * user taps Save/Share. The iOS 26 TurboModule launch-crash is fixed separately via
- * the react-native RCTTurboModule patch (patches/react-native+0.85.3.patch).
+ * Captures the on-screen receipt card to a PNG on iOS, Android, and web.
+ * iOS uses a local UIKit snapshot module; Android uses react-native-view-shot.
  */
-export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
+export function useSaveTransactionReceipt(
+  ref: RefObject<View | null>,
+  receipt: ReceiptDetails | null,
+) {
   const [pendingAction, setPendingAction] = useState<'save' | 'share' | null>(null)
   const { showSuccess, showError, showWarning } = useToast()
 
-  // Platform-split: web renders a high-DPI data: URL via html2canvas; native returns a
-  // device-scale tmpfile path via react-native-view-shot.
-  const capture = useCallback(() => captureReceiptImage(ref), [ref])
+  const capture = useCallback(() => captureReceiptImage(ref, receipt), [ref, receipt])
 
   const shareUri = useCallback(async (uri: string): Promise<boolean> => {
     const Sharing = require('expo-sharing')
@@ -110,8 +104,6 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
     setPendingAction('share')
     try {
       const uri = await capture()
-      // Capture is done — clear before the share sheet so the correct button isn't spinning
-      // while the user picks a destination.
       setPendingAction(null)
 
       if (Platform.OS === 'web') {

@@ -36,7 +36,7 @@ type Props = {
 export function TransactionReceiptSheet({ visible, onClose, receipt }: Props) {
   const useCenteredModal = useWebCenteredModal()
   const receiptRef = useRef<RNView | null>(null)
-  const { pendingAction, saveToPhotos, shareReceipt } = useSaveTransactionReceipt(receiptRef)
+  const { pendingAction, saveToPhotos, shareReceipt } = useSaveTransactionReceipt(receiptRef, receipt)
   const isBusy = pendingAction !== null
 
   const cardWidth = Math.min(Dimensions.get('window').width - spacing[6] * 2, 400)
