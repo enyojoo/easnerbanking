@@ -285,6 +285,8 @@ PODS:
     - RNWorklets
   - ExpoNotifications (56.0.18):
     - ExpoModulesCore
+  - ExpoPrint (56.0.4):
+    - ExpoModulesCore
   - ExpoSecureStore (56.0.4):
     - ExpoModulesCore
   - ExpoSharing (56.0.19):
@@ -1888,28 +1890,6 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - react-native-view-shot (5.1.0):
-    - hermes-engine
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-Core-prebuilt
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - ReactNativeDependencies
-    - Yoga
   - react-native-webview (13.16.1):
     - hermes-engine
     - RCTRequired
@@ -2661,6 +2641,7 @@ DEPENDENCIES:
   - ExpoModulesWorklets (from `../../node_modules/expo-modules-core/ExpoModulesWorklets.podspec`)
   - ExpoModulesWorkletsAdapter (from `../../node_modules/expo-modules-core`)
   - ExpoNotifications (from `../../node_modules/expo-notifications/ios`)
+  - ExpoPrint (from `../../node_modules/expo-print/ios/ExpoPrint.podspec`)
   - ExpoSecureStore (from `../../node_modules/expo-secure-store/ios`)
   - ExpoSharing (from `../node_modules/expo-sharing/ios`)
   - ExpoSplashScreen (from `../node_modules/expo-splash-screen/ios`)
@@ -2713,7 +2694,6 @@ DEPENDENCIES:
   - react-native-quick-base64 (from `../../node_modules/react-native-quick-base64`)
   - react-native-quick-crypto (from `../../node_modules/react-native-quick-crypto`)
   - react-native-safe-area-context (from `../../node_modules/react-native-safe-area-context`)
-  - react-native-view-shot (from `../../node_modules/react-native-view-shot`)
   - react-native-webview (from `../../node_modules/react-native-webview`)
   - React-NativeModulesApple (from `../../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-networking (from `../../node_modules/react-native/ReactCommon/react/networking`)
@@ -2839,6 +2819,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-modules-core"
   ExpoNotifications:
     :path: "../../node_modules/expo-notifications/ios"
+  ExpoPrint:
+    :podspec: "../../node_modules/expo-print/ios/ExpoPrint.podspec"
   ExpoSecureStore:
     :path: "../../node_modules/expo-secure-store/ios"
   ExpoSharing:
@@ -2942,8 +2924,6 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/react-native-quick-crypto"
   react-native-safe-area-context:
     :path: "../../node_modules/react-native-safe-area-context"
-  react-native-view-shot:
-    :path: "../../node_modules/react-native-view-shot"
   react-native-webview:
     :path: "../../node_modules/react-native-webview"
   React-NativeModulesApple:
@@ -3071,6 +3051,7 @@ SPEC CHECKSUMS:
   ExpoModulesWorklets: 38cbef838d25eaa28fe57e28275e5d940f852eeb
   ExpoModulesWorkletsAdapter: 161532aa0ef0eee8c9c7f1f7ee926792682b099b
   ExpoNotifications: 87875dae0faded5284004bc1204990947d3f64e0
+  ExpoPrint: 8f6dc664a26f40baa7307a194eb6a45a3d8347eb
   ExpoSecureStore: f1bd083c1b7b8d4142013ffcc0082d377d9f49f4
   ExpoSharing: e30e1302796886a7d0477ca996a68d2b9ec23833
   ExpoSplashScreen: d012bb405b5127e37c469ce0e8e53f538d6a8704
@@ -3124,7 +3105,6 @@ SPEC CHECKSUMS:
   react-native-quick-base64: 53393ee5ea472a7486e6652ad3d7a640ebf6ebda
   react-native-quick-crypto: 4cda9f23b60fa731cae94007a3569a6a0443dc41
   react-native-safe-area-context: 6b4966397ada0f7dd481e4486a2ef936834861a1
-  react-native-view-shot: 5bf17256c542d46c02a6f2d2752fe88eb3a8d058
   react-native-webview: 2da09bdea1aeb6c46e27dd94632e21059cade6c1
   React-NativeModulesApple: deba264b03bd79c6bd61014fa30e40321b5e443a
   React-networking: 35e6070b084f435429f85c5db40b4d5b38652fe9
