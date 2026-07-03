@@ -41,8 +41,8 @@
     "turbo": "^2.8.12"
   },
   "dependencies": {
-    "@react-native/normalize-colors": "^0.85.3",
-    "expo-constants": "^56.0.18",
+    "@react-native/normalize-colors": "0.85.3",
+    "expo-constants": "56.0.18",
     "next": "^16.1.6",
     "patch-package": "^8.0.1",
     "react": "19.2.3",
