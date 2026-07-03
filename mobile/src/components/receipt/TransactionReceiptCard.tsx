@@ -1,7 +1,7 @@
 import React, { forwardRef } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { Check, X } from 'lucide-react-native'
-import BrandLogo from '../BrandLogo'
+import ReceiptBrandLogo from './ReceiptBrandLogo'
 import { colors, spacing, borderRadius, textStyles, fontFamily } from '../../theme'
 import type { ReceiptRow } from './receipt-types'
 
@@ -69,7 +69,7 @@ export const TransactionReceiptCard = forwardRef<View, Props>(function Transacti
   return (
     <View ref={ref} collapsable={false} style={[styles.card, { width }]}>
       <View style={styles.header}>
-        <BrandLogo size="sm" />
+        <ReceiptBrandLogo />
         <Text style={styles.headerLabel}>Transaction Receipt</Text>
       </View>
 

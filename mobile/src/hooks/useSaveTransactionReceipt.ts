@@ -17,17 +17,15 @@ async function shareReceiptOnWeb(dataUrl: string): Promise<'shared' | 'downloade
 
   const blob = await dataUrlToBlob(dataUrl)
   const file = new File([blob], RECEIPT_FILENAME, { type: 'image/png' })
-  const payload: ShareData = { files: [file], title: 'Receipt' }
+  // Files only — macOS Safari drops the image when title/text accompany files and
+  // recipients receive just the title string (e.g. "Receipt").
+  const payload: ShareData = { files: [file] }
 
-  // Only share when the browser can actually share the *file*. Some mobile browsers
-  // expose navigator.share but silently drop files (sharing just the title text), so
-  // requiring canShare({ files }) avoids sending a text-only "Receipt" share.
   if (navigator.share && navigator.canShare && navigator.canShare(payload)) {
     try {
       await navigator.share(payload)
       return 'shared'
     } catch (e: unknown) {
-      // User dismissed the share sheet — don't fall through to a download.
       if (e instanceof Error && e.name === 'AbortError') return 'unavailable'
     }
   }
@@ -60,7 +58,7 @@ async function downloadReceiptOnWeb(dataUrl: string): Promise<void> {
  * the react-native RCTTurboModule patch (patches/react-native+0.85.3.patch).
  */
 export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
-  const [saving, setSaving] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'save' | 'share' | null>(null)
   const { showSuccess, showError, showWarning } = useToast()
 
   // Platform-split: web renders a high-DPI data: URL via html2canvas; native returns a
@@ -79,20 +77,17 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
   }, [])
 
   const saveToPhotos = useCallback(async () => {
-    if (saving) return
-    setSaving(true)
+    if (pendingAction) return
+    setPendingAction('save')
     try {
       const uri = await capture()
 
-      // view-shot returns a data: URL on web; expo-sharing passes it to navigator.share({ url })
-      // which rejects non-http(s) URLs. Share via File API or download instead.
       if (Platform.OS === 'web') {
         await downloadReceiptOnWeb(uri)
         showSuccess('Receipt downloaded')
         return
       }
 
-      // SDK 56 moved saveToLibraryAsync to the legacy entry — the main export throws at runtime.
       const MediaLibrary = require('expo-media-library/legacy')
       const perm = await MediaLibrary.requestPermissionsAsync(true)
       if (!perm.granted) {
@@ -106,15 +101,18 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
     } catch (e: unknown) {
       showError(e instanceof Error ? e.message : 'Could not save receipt')
     } finally {
-      setSaving(false)
+      setPendingAction(null)
     }
-  }, [capture, saving, shareUri, showSuccess, showError, showWarning])
+  }, [capture, pendingAction, shareUri, showSuccess, showError, showWarning])
 
   const shareReceipt = useCallback(async () => {
-    if (saving) return
-    setSaving(true)
+    if (pendingAction) return
+    setPendingAction('share')
     try {
       const uri = await capture()
+      // Capture is done — clear before the share sheet so the correct button isn't spinning
+      // while the user picks a destination.
+      setPendingAction(null)
 
       if (Platform.OS === 'web') {
         const outcome = await shareReceiptOnWeb(uri)
@@ -132,9 +130,9 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
     } catch (e: unknown) {
       showError(e instanceof Error ? e.message : 'Could not share receipt')
     } finally {
-      setSaving(false)
+      setPendingAction(null)
     }
-  }, [capture, saving, shareUri, showError, showWarning])
+  }, [capture, pendingAction, shareUri, showError, showWarning])
 
-  return { saving, saveToPhotos, shareReceipt }
+  return { pendingAction, saveToPhotos, shareReceipt }
 }

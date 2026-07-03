@@ -36,7 +36,8 @@ type Props = {
 export function TransactionReceiptSheet({ visible, onClose, receipt }: Props) {
   const useCenteredModal = useWebCenteredModal()
   const receiptRef = useRef<RNView | null>(null)
-  const { saving, saveToPhotos, shareReceipt } = useSaveTransactionReceipt(receiptRef)
+  const { pendingAction, saveToPhotos, shareReceipt } = useSaveTransactionReceipt(receiptRef)
+  const isBusy = pendingAction !== null
 
   const cardWidth = Math.min(Dimensions.get('window').width - spacing[6] * 2, 400)
 
@@ -90,33 +91,39 @@ export function TransactionReceiptSheet({ visible, onClose, receipt }: Props) {
           <View style={styles.actions}>
             <Pressable
               android_ripple={ripple.neutral}
-              disabled={saving}
+              disabled={isBusy}
               style={({ pressed }) => [
                 styles.action,
-                pressed && Platform.OS === 'ios' && !saving && styles.actionPressedIOS,
-                saving && styles.disabled,
+                pressed && Platform.OS === 'ios' && !isBusy && styles.actionPressedIOS,
+                isBusy && styles.disabled,
               ]}
               onPress={() => void saveToPhotos()}
               accessibilityRole="button"
               accessibilityLabel="Save to Photos"
             >
-              <Download size={18} color={colors.primary.main} strokeWidth={2.25} />
-              <Text style={styles.actionText}>Save</Text>
+              {pendingAction === 'save' ? (
+                <ActivityIndicator color={colors.primary.main} />
+              ) : (
+                <>
+                  <Download size={18} color={colors.primary.main} strokeWidth={2.25} />
+                  <Text style={styles.actionText}>Save</Text>
+                </>
+              )}
             </Pressable>
 
             <Pressable
               android_ripple={ripple.neutral}
-              disabled={saving}
+              disabled={isBusy}
               style={({ pressed }) => [
                 styles.action,
-                pressed && Platform.OS === 'ios' && !saving && styles.actionPressedIOS,
-                saving && styles.disabled,
+                pressed && Platform.OS === 'ios' && !isBusy && styles.actionPressedIOS,
+                isBusy && styles.disabled,
               ]}
               onPress={() => void shareReceipt()}
               accessibilityRole="button"
               accessibilityLabel="Share receipt"
             >
-              {saving ? (
+              {pendingAction === 'share' ? (
                 <ActivityIndicator color={colors.primary.main} />
               ) : (
                 <>
