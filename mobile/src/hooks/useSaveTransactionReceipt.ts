@@ -2,6 +2,7 @@ import { useCallback, useState, type RefObject } from 'react'
 import { Platform } from 'react-native'
 import type { View } from 'react-native'
 import { useToast } from '../components/ToastProvider'
+import { captureReceiptImage } from '../lib/captureReceiptImage'
 
 const RECEIPT_FILENAME = 'easner-receipt.png'
 
@@ -16,16 +17,18 @@ async function shareReceiptOnWeb(dataUrl: string): Promise<'shared' | 'downloade
 
   const blob = await dataUrlToBlob(dataUrl)
   const file = new File([blob], RECEIPT_FILENAME, { type: 'image/png' })
+  const payload: ShareData = { files: [file], title: 'Receipt' }
 
-  if (navigator.share) {
-    const payload: ShareData = { files: [file], title: 'Receipt' }
-    if (!navigator.canShare || navigator.canShare(payload)) {
-      try {
-        await navigator.share(payload)
-        return 'shared'
-      } catch (e: unknown) {
-        if (e instanceof Error && e.name === 'AbortError') return 'unavailable'
-      }
+  // Only share when the browser can actually share the *file*. Some mobile browsers
+  // expose navigator.share but silently drop files (sharing just the title text), so
+  // requiring canShare({ files }) avoids sending a text-only "Receipt" share.
+  if (navigator.share && navigator.canShare && navigator.canShare(payload)) {
+    try {
+      await navigator.share(payload)
+      return 'shared'
+    } catch (e: unknown) {
+      // User dismissed the share sheet — don't fall through to a download.
+      if (e instanceof Error && e.name === 'AbortError') return 'unavailable'
     }
   }
 
@@ -60,16 +63,9 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
   const [saving, setSaving] = useState(false)
   const { showSuccess, showError, showWarning } = useToast()
 
-  const capture = useCallback(async (): Promise<string> => {
-    if (!ref.current) throw new Error('Receipt is not ready yet.')
-    const { captureRef } = require('react-native-view-shot')
-    return captureRef(ref, {
-      format: 'png',
-      quality: 1,
-      // Web returns a data: URL (tmpfile is aliased); native returns a file path.
-      result: Platform.OS === 'web' ? 'data-uri' : 'tmpfile',
-    })
-  }, [ref])
+  // Platform-split: web renders a high-DPI data: URL via html2canvas; native returns a
+  // device-scale tmpfile path via react-native-view-shot.
+  const capture = useCallback(() => captureReceiptImage(ref), [ref])
 
   const shareUri = useCallback(async (uri: string): Promise<boolean> => {
     const Sharing = require('expo-sharing')
