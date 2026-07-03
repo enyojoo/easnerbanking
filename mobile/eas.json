@@ -8,7 +8,8 @@
       "node": "22.14.0",
       "env": {
         "NPM_CONFIG_IGNORE_SCRIPTS": "true",
-        "EAS_BUILD": "true"
+        "EAS_BUILD": "true",
+        "EXPO_USE_PRECOMPILED_MODULES": "false"
       }
     },
     "development": {
@@ -48,6 +49,10 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6762069433"
+      }
+    }
   }
 }
