@@ -1,6 +1,7 @@
 import React from 'react'
 import { PixelRatio } from 'react-native'
 import { unstable_createElement } from 'react-native-web'
+import { RECEIPT_LOGO_HEIGHT, RECEIPT_LOGO_WIDTH } from './receipt-brand-logo-metrics'
 
 const logoSource = require('../../../assets/icons/logo.png')
 
@@ -35,15 +36,18 @@ function resolveWebLogoUri(source: unknown): string {
 }
 
 /**
- * Web: react-native-web renders <Image> as a CSS background-image, which html2canvas
- * rasterizes at low resolution (blurry logo) even at high capture scale. A real <img>
- * element is captured at full scale, so the receipt logo stays crisp on download/share.
+ * Web: real <img> at the logo's native aspect ratio. html2canvas often ignores
+ * object-fit and stretches into a mismatched box (80×24 on a 4.6:1 wordmark).
  */
 export default function ReceiptBrandLogo() {
   const src = resolveWebLogoUri(logoSource)
   return unstable_createElement('img', {
     src,
     alt: 'Easner',
-    style: { width: 80, height: 24, objectFit: 'contain' },
+    style: {
+      width: RECEIPT_LOGO_WIDTH,
+      height: RECEIPT_LOGO_HEIGHT,
+      display: 'block',
+    },
   })
 }
