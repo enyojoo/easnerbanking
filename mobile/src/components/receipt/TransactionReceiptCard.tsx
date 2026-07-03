@@ -3,8 +3,9 @@ import { View, Text, StyleSheet } from 'react-native'
 import { Check, X } from 'lucide-react-native'
 import BrandLogo from '../BrandLogo'
 import { colors, spacing, borderRadius, textStyles, fontFamily } from '../../theme'
+import type { ReceiptRow } from './receipt-types'
 
-export type ReceiptRow = { label: string; value: string }
+export type { ReceiptRow } from './receipt-types'
 
 /** Canonical rows encode recipient as "Name (Bank • account)" — split for two-line receipt layout. */
 function parseRecipientReceiptValue(value: string): { name: string; subtitle: string } | null {

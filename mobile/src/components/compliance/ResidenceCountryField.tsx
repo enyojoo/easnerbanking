@@ -1,16 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  FlatList,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
-  ActivityIndicator,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native'
-import { ChevronDown, MapPin } from 'lucide-react-native'
-import { filterCountriesByPolicy, sortByEasnerCountryPickerOrder } from '@easner/shared'
-import { countryService, type Country } from '../../lib/countryService'
+import { ChevronDown, Info, MapPin } from 'lucide-react-native'
+import { filterResidenceCountryCatalog } from '../../lib/residenceCountryCatalog'
 import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
 import { WebAwareModal } from '../WebAwareModal'
 import { CountryFlag } from '../flags/CountryFlag'
@@ -22,51 +23,77 @@ type Props = {
   onChange: (iso2: string) => void
   label?: string
   helperText?: string
+  /** Info affordance next to the label (tap to reveal), mirroring business signup. */
+  tooltip?: string
   disabled?: boolean
   error?: string | null
+  containerStyle?: StyleProp<ViewStyle>
 }
 
 export function ResidenceCountryField({
   value,
   onChange,
   label = 'Country of residence',
-  helperText = 'Where you live — used for identity verification and account eligibility.',
+  helperText,
+  tooltip,
   disabled = false,
   error = null,
+  containerStyle,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [countries, setCountries] = useState<Country[]>([])
+  const [tooltipOpen, setTooltipOpen] = useState(false)
+  const [tipTop, setTipTop] = useState<number | null>(null)
+  const infoRef = useRef<View>(null)
+
+  // Allowlist policy is best-effort. `null` means "show everything", so the
+  // list renders instantly from the local catalog and never blocks/spins on
+  // the network; it only narrows once (and if) the policy resolves.
+  const [allowedCodes, setAllowedCodes] = useState<string[] | null>(null)
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      setLoading(true)
       try {
-        const [all, policy] = await Promise.all([
-          countryService.getAllIncludingUnsupported(),
-          getAllowedCountriesCached('individual_residence'),
-        ])
-        const catalog = all.map((c) => ({ code: c.code, name: c.name }))
-        const filtered = filterCountriesByPolicy(
-          catalog,
-          policy.unrestricted ? null : policy.codes,
-        )
-        const sorted = sortByEasnerCountryPickerOrder(filtered)
-        const byCode = new Map(all.map((c) => [c.code, c]))
-        const list = sorted
-          .map((e) => byCode.get(e.code))
-          .filter((c): c is Country => Boolean(c))
-        if (!cancelled) setCountries(list)
-      } finally {
-        if (!cancelled) setLoading(false)
+        const policy = await getAllowedCountriesCached('individual_residence')
+        if (!cancelled) setAllowedCodes(policy.unrestricted ? null : policy.codes)
+      } catch {
+        if (!cancelled) setAllowedCodes(null)
       }
     })()
     return () => {
       cancelled = true
     }
   }, [])
+
+  const countries = useMemo(
+    () => filterResidenceCountryCatalog(allowedCodes),
+    [allowedCodes],
+  )
+
+  useEffect(() => {
+    if (!tooltipOpen) return
+    const id = setTimeout(() => setTooltipOpen(false), 4000)
+    return () => clearTimeout(id)
+  }, [tooltipOpen])
+
+  const toggleTooltip = () => {
+    haptics.tap()
+    if (tooltipOpen) {
+      setTooltipOpen(false)
+      return
+    }
+    const node = infoRef.current
+    if (node && typeof node.measureInWindow === 'function') {
+      node.measureInWindow((_x, y, _w, h) => {
+        setTipTop(y + h + 6)
+        setTooltipOpen(true)
+      })
+    } else {
+      setTipTop(null)
+      setTooltipOpen(true)
+    }
+  }
 
   const selected = useMemo(
     () => countries.find((c) => c.code === value) ?? null,
@@ -82,20 +109,32 @@ export function ResidenceCountryField({
   }, [countries, search])
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.label}>{label}</Text>
+    <View style={[styles.wrap, containerStyle]}>
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{label}</Text>
+        {tooltip ? (
+          <Pressable
+            ref={infoRef}
+            onPress={toggleTooltip}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`${label} info`}
+          >
+            <Info size={15} color={colors.semantic.mutedForeground} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+      </View>
       {helperText ? <Text style={styles.helper}>{helperText}</Text> : null}
       <Pressable
         style={[styles.trigger, disabled && styles.triggerDisabled, error ? styles.triggerError : null]}
-        disabled={disabled || loading}
+        disabled={disabled}
         onPress={() => {
           haptics.tap()
+          setTooltipOpen(false)
           setOpen(true)
         }}
       >
-        {loading ? (
-          <ActivityIndicator size="small" color={colors.primary.main} />
-        ) : selected ? (
+        {selected ? (
           <View style={styles.triggerInner}>
             <CountryFlag code={selected.code} size={22} />
             <Text style={styles.triggerText}>{selected.name}</Text>
@@ -109,6 +148,24 @@ export function ResidenceCountryField({
         <ChevronDown size={18} color={colors.semantic.mutedForeground} strokeWidth={2} />
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {tooltip ? (
+        <Modal
+          visible={tooltipOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setTooltipOpen(false)}
+        >
+          <Pressable style={styles.tooltipOverlay} onPress={() => setTooltipOpen(false)}>
+            <View
+              pointerEvents="none"
+              style={[styles.tooltipBubble, { top: tipTop ?? 120 }]}
+            >
+              <Text style={styles.tooltipText}>{tooltip}</Text>
+            </View>
+          </Pressable>
+        </Modal>
+      ) : null}
 
       <WebAwareModal
         visible={open}
@@ -129,29 +186,32 @@ export function ResidenceCountryField({
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => item.code}
+          <ScrollView
             keyboardShouldPersistTaps="handled"
             style={styles.list}
-            ListEmptyComponent={
-              <Text style={styles.empty}>{loading ? 'Loading…' : 'No countries found.'}</Text>
-            }
-            renderItem={({ item }) => (
-              <Pressable
-                style={styles.row}
-                onPress={() => {
-                  haptics.tap()
-                  onChange(item.code)
-                  setOpen(false)
-                  setSearch('')
-                }}
-              >
-                <CountryFlag code={item.code} size={22} />
-                <Text style={styles.rowText}>{item.name}</Text>
-              </Pressable>
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+          >
+            {filtered.length === 0 ? (
+              <Text style={styles.empty}>No countries found.</Text>
+            ) : (
+              filtered.map((item) => (
+                <Pressable
+                  key={item.code}
+                  style={styles.row}
+                  onPress={() => {
+                    haptics.tap()
+                    onChange(item.code)
+                    setOpen(false)
+                    setSearch('')
+                  }}
+                >
+                  <CountryFlag code={item.code} size={22} />
+                  <Text style={styles.rowText}>{item.name}</Text>
+                </Pressable>
+              ))
             )}
-          />
+          </ScrollView>
         </View>
       </WebAwareModal>
     </View>
@@ -160,12 +220,40 @@ export function ResidenceCountryField({
 
 const styles = StyleSheet.create({
   wrap: {
-    marginBottom: spacing[3],
+    marginBottom: spacing[4],
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[2],
   },
   label: {
-    ...textStyles.labelMedium,
-    color: colors.text.primary,
-    marginBottom: spacing[1],
+    ...textStyles.labelLarge,
+    color: colors.semantic.foreground,
+  },
+  tooltipOverlay: {
+    flex: 1,
+  },
+  tooltipBubble: {
+    position: 'absolute',
+    left: spacing[4],
+    right: spacing[4],
+    elevation: 8,
+    backgroundColor: colors.semantic.card,
+    borderWidth: 1,
+    borderColor: colors.semantic.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+  },
+  tooltipText: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
   },
   helper: {
     ...textStyles.bodySmall,
@@ -177,12 +265,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: colors.frame.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing[3],
+    borderColor: colors.semantic.border,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    backgroundColor: colors.background.primary,
-    minHeight: 48,
+    backgroundColor: colors.semantic.background,
+    minHeight: 52,
   },
   triggerDisabled: {
     opacity: 0.6,
@@ -197,12 +285,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   triggerText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.primary,
+    ...textStyles.textInputSingleLine,
+    color: colors.semantic.foreground,
     flexShrink: 1,
   },
   placeholder: {
-    ...textStyles.bodyMedium,
+    ...textStyles.textInputSingleLine,
     color: colors.semantic.mutedForeground,
   },
   error: {

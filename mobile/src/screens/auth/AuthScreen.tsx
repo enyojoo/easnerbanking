@@ -14,6 +14,8 @@ import ExternalLinkModal from '../../components/ExternalLinkModal'
 import { TextField } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { AppleSignInButton, GoogleOutlineButton, OrDivider, WebAppleSignInButton } from '../../components/auth/AuthChrome'
+import { ResidenceCountryField } from '../../components/compliance/ResidenceCountryField'
+import { PENDING_RESIDENCE_COUNTRY_KEY } from '../../constants/residenceCountry'
 import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
@@ -52,6 +54,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [residenceCountry, setResidenceCountry] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const { signIn, signInWithGoogle, signInWithApple, resendSignupOtp, signUp, verifySignupOtp } = useAuth()
@@ -106,6 +109,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
     setEmail('')
     setPassword('')
     setFullName('')
+    setResidenceCountry('')
     setSignupStep('form')
     setSignupOtp('')
     setSignupOtpError('')
@@ -119,6 +123,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
       setEmail('')
       setPassword('')
       setFullName('')
+      setResidenceCountry('')
       setPasswordVisible(false)
       setSignupStep('form')
       setSignupOtp('')
@@ -182,7 +187,23 @@ export default function AuthScreen({ navigation }: NavigationProps) {
       showError('Please enter a valid email address')
       return false
     }
+    if (!residenceCountry.trim()) {
+      showError('Please select your country of residence')
+      return false
+    }
     return true
+  }
+
+  /** Persist residence so bootstrap can set it after email/OAuth signup (mirrors business onboarding). */
+  const persistResidenceForSignup = async () => {
+    try {
+      await AsyncStorage.setItem(
+        PENDING_RESIDENCE_COUNTRY_KEY,
+        residenceCountry.trim().toUpperCase(),
+      )
+    } catch {
+      // Non-blocking — bootstrap may still receive country on next attempt.
+    }
   }
 
   const handleSubmit = async (opts?: { otp?: string }) => {
@@ -219,6 +240,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
           }
         }
       } else {
+        await persistResidenceForSignup()
         const { error: signUpError, needsEmailConfirmation } = await signUp(
           email,
           password,
@@ -244,6 +266,13 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   }
 
   const handleAppleAuth = async () => {
+    if (mode === 'signup') {
+      if (!residenceCountry.trim()) {
+        showError('Please select your country of residence')
+        return
+      }
+      await persistResidenceForSignup()
+    }
     setIsLoading(true)
     try {
       const { error } = await signInWithApple()
@@ -257,6 +286,13 @@ export default function AuthScreen({ navigation }: NavigationProps) {
 
   const handleGoogleAuth = async () => {
     haptics.tap()
+    if (mode === 'signup') {
+      if (!residenceCountry.trim()) {
+        showError('Please select your country of residence')
+        return
+      }
+      await persistResidenceForSignup()
+    }
     setIsLoading(true)
     try {
       const { error } = await signInWithGoogle()
@@ -368,6 +404,16 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                 </Text>
                 .
               </Text>
+            )}
+
+            {!isLogin && signupStep === 'form' && (
+              <ResidenceCountryField
+                value={residenceCountry}
+                onChange={setResidenceCountry}
+                disabled={isLoading}
+                containerStyle={styles.fieldFlush}
+                tooltip="We use where you live for identity verification and account eligibility"
+              />
             )}
 
             {!isSignupOtp && (

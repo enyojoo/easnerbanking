@@ -3,7 +3,7 @@ import { colors, textStyles, borderRadius, spacing } from './index'
 import { standardInputMetrics } from './textInputStyles'
 
 /**
- * Shared typography and field styles for auth flows (AuthScreen, RegisterScreen, LoginScreen).
+ * Shared typography and field styles for auth flows (AuthScreen, LoginScreen).
  * Uses design tokens only — no one-off font sizes.
  *
  * Form controls use pill radius for mobile auth parity with `TextField` / premium fields.
@@ -11,7 +11,7 @@ import { standardInputMetrics } from './textInputStyles'
 export const AUTH_FIELD_MIN_HEIGHT = 52
 
 export const authScreenStyles = StyleSheet.create({
-/** Hero title for sign-in / sign-up entry only (`LoginScreen`, `RegisterScreen`, `AuthScreen` form + login). */
+/** Hero title for sign-in / sign-up entry only (`LoginScreen`, `AuthScreen` form + login). */
   screenTitle: {
     ...textStyles.displaySmall,
     color: colors.text.primary,

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native'
 import FontAwesome from '@expo/vector-icons/FontAwesome'
 import * as AppleAuthentication from 'expo-apple-authentication'
@@ -56,8 +56,30 @@ export function WebAppleSignInButton({ mode, onPress, disabled }: AppleButtonPro
   )
 }
 
-/** Native Sign in with Apple button (iOS only; Apple HIG styling). */
+/**
+ * Native Sign in with Apple button (iOS only; Apple HIG styling).
+ * Guarded by `isAvailableAsync()` so it hides gracefully when the native module isn't
+ * present (e.g. a stale dev build) instead of rendering an "Unimplemented component" box.
+ */
 export function AppleSignInButton({ mode, onPress, disabled }: AppleButtonProps) {
+  const [available, setAvailable] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    AppleAuthentication.isAvailableAsync()
+      .then((ok) => {
+        if (mounted) setAvailable(ok)
+      })
+      .catch(() => {
+        if (mounted) setAvailable(false)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  if (!available) return null
+
   return (
     <AppleAuthentication.AppleAuthenticationButton
       buttonType={

@@ -25,7 +25,7 @@ import { useAllowedCountryCodes } from "@/hooks/use-allowed-country-codes"
 import { filterCountriesByPolicy } from "@easner/shared"
 import { CountryFlag } from "@/components/flags"
 import { OtpCodeInput } from "@/components/otp-code-input"
-import { useTeamInviteContext } from "@/lib/team-invite-storage"
+import { useTeamInviteContext } from "@/lib/use-team-invite-context"
 
 const TERMS_URL = "https://www.easner.com/terms?from=register"
 

@@ -190,18 +190,16 @@ const countriesList: Country[] = [
   { code: "MH", name: "Marshall Islands", flag_emoji: "🇲🇭" },
 ].sort((a, b) => a.name.localeCompare(b.name))
 
-import { filterNoahSupportedCountries } from './noahSupportedCountries'
-
 export const countryService = {
-  async getAll(): Promise<Country[]> {
-    // Filter to only include Noah-supported countries
-    return filterNoahSupportedCountries(countriesList)
-  },
-  
   /**
    * Get all countries (including unsupported ones) - for admin/internal use
    */
   async getAllIncludingUnsupported(): Promise<Country[]> {
+    return countriesList
+  },
+
+  /** Synchronous full catalog — lets pickers render instantly without a loading spinner. */
+  getAllIncludingUnsupportedSync(): Country[] {
     return countriesList
   },
 }

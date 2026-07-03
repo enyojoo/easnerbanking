@@ -20,7 +20,7 @@ import {
 } from "@/lib/auth-mfa"
 import { getSafeNextPath } from "@/lib/auth/safe-next-path"
 import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
-import { useTeamInviteContext } from "@/lib/team-invite-storage"
+import { useTeamInviteContext } from "@/lib/use-team-invite-context"
 
 type Step = "password" | "mfa"
 

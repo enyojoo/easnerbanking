@@ -12,22 +12,14 @@ import {
 } from 'react-native'
 import type { View as RNView } from 'react-native'
 import { Download, Share2, X } from 'lucide-react-native'
-import { TransactionReceiptCard, type ReceiptRow } from './TransactionReceiptCard'
+import { TransactionReceiptCard } from './TransactionReceiptCard'
+import type { ReceiptDetails } from './receipt-types'
 import { useSaveTransactionReceipt } from '../../hooks/useSaveTransactionReceipt'
 import { colors, spacing, borderRadius, textStyles, fontFamily, shadows } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useWebCenteredModal } from '../../lib/webCenteredModal'
 
-export type ReceiptDetails = {
-  title: string
-  amountText: string
-  isCredit: boolean
-  statusLabel: string
-  outcome: 'success' | 'failed'
-  dateText: string
-  rows: ReceiptRow[]
-  transactionId: string
-}
+export type { ReceiptDetails, ReceiptRow } from './receipt-types'
 
 type Props = {
   visible: boolean

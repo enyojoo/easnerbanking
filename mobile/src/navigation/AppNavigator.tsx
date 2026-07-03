@@ -69,8 +69,10 @@ import NotificationsScreen from '../screens/main/NotificationsScreen'
 import InAppNotificationsScreen from '../screens/main/InAppNotificationsScreen'
 import LegalScreen from '../screens/main/LegalScreen'
 
-// Transaction Screens
-import TransactionDetailsScreen from '../screens/transactions/TransactionDetailsScreen'
+// Transaction Screens — lazy-loaded so receipt capture native modules never run at app launch.
+function loadTransactionDetailsScreen() {
+  return require('../screens/transactions/TransactionDetailsScreen').default
+}
 
 // Send Money Flow Screens
 import SendAmountScreen from '../screens/send/SendAmountScreen'
@@ -499,7 +501,7 @@ function MainStack() {
       />
       <Stack.Screen 
         name="TransactionDetails" 
-        component={TransactionDetailsScreen}
+        getComponent={loadTransactionDetailsScreen}
         options={{ 
           headerShown: false,
           ...mainStackPreset(),

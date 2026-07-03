@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import type { ReceiptDetails } from './TransactionReceiptSheet'
+import type { ReceiptDetails } from './receipt-types'
 
 type Props = {
   visible: boolean

@@ -21,7 +21,12 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
 
   const capture = useCallback(async (): Promise<string> => {
     if (!ref.current) throw new Error('Receipt is not ready yet.')
-    const { captureRef } = require('react-native-view-shot')
+    let captureRef: (view: unknown, options: object) => Promise<string>
+    try {
+      ;({ captureRef } = require('react-native-view-shot'))
+    } catch {
+      throw new Error('Receipt capture is unavailable on this build. Reinstall the latest app update.')
+    }
     return captureRef(ref, { format: 'png', quality: 1, result: 'tmpfile' })
   }, [ref])
 
