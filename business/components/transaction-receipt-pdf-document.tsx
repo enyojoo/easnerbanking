@@ -232,32 +232,30 @@ function ReceiptDetailRow({ label, value }: ReceiptRow) {
 const styles = StyleSheet.create({
   page: {
     padding: 40,
-    paddingBottom: 56,
+    paddingBottom: 72,
     fontSize: 10,
     fontFamily: "Helvetica",
     backgroundColor: palette.pageBg,
   },
-  cardWrap: {
-    alignItems: "center",
-  },
   card: {
     width: "100%",
-    maxWidth: 420,
     backgroundColor: palette.white,
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingHorizontal: 32,
+    paddingTop: 28,
+    paddingBottom: 28,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 20,
+    marginBottom: 24,
   },
   headerLogo: {
-    width: 88,
-    height: 28,
+    width: 100,
+    height: 32,
     objectFit: "contain",
   },
   headerLabel: {
@@ -295,7 +293,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 4,
     marginBottom: 2,
-    maxWidth: 320,
+    maxWidth: "85%",
   },
   statusPill: {
     marginTop: 8,
@@ -374,9 +372,12 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
     textAlign: "right",
   },
-  cardFooter: {
+  pageFooter: {
+    position: "absolute",
+    bottom: 28,
+    left: 40,
+    right: 40,
     alignItems: "center",
-    marginTop: 20,
   },
   footerText: {
     fontSize: 9,
@@ -416,59 +417,57 @@ export function TransactionReceiptPDFDocument({
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <View style={styles.cardWrap}>
-          <View style={styles.card}>
-            {/* Header — logo left, label right (matches mobile card). */}
-            <View style={styles.header}>
-              <Image style={styles.headerLogo} src={logoUrl} />
-              <Text style={styles.headerLabel}>Transaction Receipt</Text>
-            </View>
-
-            {/* Hero — direction arrow, amount, title, status pill, date. */}
-            <View style={styles.heroBlock}>
-              <View style={styles.glyph}>
-                <DirectionArrow isCredit={isCredit} />
-              </View>
-              <Text
-                style={[
-                  styles.amount,
-                  isCredit ? styles.amountCredit : styles.amountDebit,
-                ]}
-              >
-                {amountStr}
-              </Text>
-              {title ? <Text style={styles.heroTitle}>{title}</Text> : null}
-              <View style={styles.statusPill}>
-                <Text style={styles.statusPillText}>{statusLabel}</Text>
-              </View>
-              <Text style={styles.dateText}>{dateText}</Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.rows}>
-              {detailRows.map((row) => (
-                <ReceiptDetailRow key={`${row.label}:${row.value}`} {...row} />
-              ))}
-            </View>
-
-            <View style={styles.dashedDivider} />
-
-            <View style={styles.idBlock}>
-              <Text style={styles.idLabel}>Transaction ID</Text>
-              <Text style={styles.idValue}>{transaction.id}</Text>
-            </View>
-
-            <View style={styles.cardFooter}>
-              <Text style={styles.footerText}>
-                For complaints regarding this transaction,
-              </Text>
-              <Text style={styles.footerText}>
-                please contact our support:{" "}
-                <Text style={styles.footerEmail}>support@easner.com</Text>
-              </Text>
-            </View>
+        <View style={styles.card}>
+          {/* Header — logo left, label right. */}
+          <View style={styles.header}>
+            <Image style={styles.headerLogo} src={logoUrl} />
+            <Text style={styles.headerLabel}>Transaction Receipt</Text>
           </View>
+
+          {/* Hero — direction arrow, amount, title, status pill, date. */}
+          <View style={styles.heroBlock}>
+            <View style={styles.glyph}>
+              <DirectionArrow isCredit={isCredit} />
+            </View>
+            <Text
+              style={[
+                styles.amount,
+                isCredit ? styles.amountCredit : styles.amountDebit,
+              ]}
+            >
+              {amountStr}
+            </Text>
+            {title ? <Text style={styles.heroTitle}>{title}</Text> : null}
+            <View style={styles.statusPill}>
+              <Text style={styles.statusPillText}>{statusLabel}</Text>
+            </View>
+            <Text style={styles.dateText}>{dateText}</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.rows}>
+            {detailRows.map((row) => (
+              <ReceiptDetailRow key={`${row.label}:${row.value}`} {...row} />
+            ))}
+          </View>
+
+          <View style={styles.dashedDivider} />
+
+          <View style={styles.idBlock}>
+            <Text style={styles.idLabel}>Transaction ID</Text>
+            <Text style={styles.idValue}>{transaction.id}</Text>
+          </View>
+        </View>
+
+        <View style={styles.pageFooter} fixed>
+          <Text style={styles.footerText}>
+            For complaints regarding this transaction,
+          </Text>
+          <Text style={styles.footerText}>
+            please contact our support:{" "}
+            <Text style={styles.footerEmail}>support@easner.com</Text>
+          </Text>
         </View>
       </Page>
     </Document>
