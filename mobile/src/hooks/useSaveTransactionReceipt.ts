@@ -3,6 +3,49 @@ import { Platform } from 'react-native'
 import type { View } from 'react-native'
 import { useToast } from '../components/ToastProvider'
 
+const RECEIPT_FILENAME = 'easner-receipt.png'
+
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const response = await fetch(dataUrl)
+  return response.blob()
+}
+
+/** Web Share API rejects data: URLs — share a File, or download when sharing is unavailable. */
+async function shareReceiptOnWeb(dataUrl: string): Promise<'shared' | 'downloaded' | 'unavailable'> {
+  if (typeof navigator === 'undefined') return 'unavailable'
+
+  const blob = await dataUrlToBlob(dataUrl)
+  const file = new File([blob], RECEIPT_FILENAME, { type: 'image/png' })
+
+  if (navigator.share) {
+    const payload: ShareData = { files: [file], title: 'Receipt' }
+    if (!navigator.canShare || navigator.canShare(payload)) {
+      try {
+        await navigator.share(payload)
+        return 'shared'
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name === 'AbortError') return 'unavailable'
+      }
+    }
+  }
+
+  await downloadReceiptOnWeb(dataUrl)
+  return 'downloaded'
+}
+
+async function downloadReceiptOnWeb(dataUrl: string): Promise<void> {
+  const blob = await dataUrlToBlob(dataUrl)
+  const objectUrl = URL.createObjectURL(blob)
+  try {
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = RECEIPT_FILENAME
+    anchor.click()
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
 /**
  * Captures the on-screen `TransactionReceiptCard` to a PNG (both iOS and Android) and
  * either saves it to Photos (expo-media-library) or hands it to the native share sheet.
@@ -20,7 +63,12 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
   const capture = useCallback(async (): Promise<string> => {
     if (!ref.current) throw new Error('Receipt is not ready yet.')
     const { captureRef } = require('react-native-view-shot')
-    return captureRef(ref, { format: 'png', quality: 1, result: 'tmpfile' })
+    return captureRef(ref, {
+      format: 'png',
+      quality: 1,
+      // Web returns a data: URL (tmpfile is aliased); native returns a file path.
+      result: Platform.OS === 'web' ? 'data-uri' : 'tmpfile',
+    })
   }, [ref])
 
   const shareUri = useCallback(async (uri: string): Promise<boolean> => {
@@ -40,10 +88,11 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
     try {
       const uri = await capture()
 
-      // react-native-view-shot / media-library aren't meaningful on web — offer share/download instead.
+      // view-shot returns a data: URL on web; expo-sharing passes it to navigator.share({ url })
+      // which rejects non-http(s) URLs. Share via File API or download instead.
       if (Platform.OS === 'web') {
-        const shared = await shareUri(uri)
-        if (!shared) showWarning('Open the Easner app on your phone to save receipts.')
+        await downloadReceiptOnWeb(uri)
+        showSuccess('Receipt downloaded')
         return
       }
 
@@ -70,6 +119,18 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
     setSaving(true)
     try {
       const uri = await capture()
+
+      if (Platform.OS === 'web') {
+        const outcome = await shareReceiptOnWeb(uri)
+        if (outcome === 'shared') return
+        if (outcome === 'downloaded') {
+          showSuccess('Receipt downloaded')
+          return
+        }
+        showWarning('Sharing is not available on this device.')
+        return
+      }
+
       const shared = await shareUri(uri)
       if (!shared) showWarning('Sharing is not available on this device.')
     } catch (e: unknown) {
