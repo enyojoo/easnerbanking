@@ -239,23 +239,16 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "100%",
-    backgroundColor: palette.white,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: palette.border,
-    paddingHorizontal: 32,
-    paddingTop: 28,
-    paddingBottom: 28,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 24,
+    marginBottom: 32,
   },
   headerLogo: {
-    width: 100,
-    height: 32,
+    width: 200,
+    height: 80,
     objectFit: "contain",
   },
   headerLabel: {
