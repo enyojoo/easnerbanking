@@ -63,7 +63,6 @@
     "expo-linking": "56.0.15",
     "expo-media-library": "56.0.9",
     "expo-notifications": "56.0.18",
-    "expo-print": "56.0.4",
     "expo-secure-store": "~56.0.4",
     "expo-sharing": "56.0.20",
     "expo-splash-screen": "56.0.12",
@@ -105,13 +104,6 @@
     "typescript": "~6.0.3"
   },
   "expo": {
-    "autolinking": {
-      "ios": {
-        "exclude": [
-          "expo-media-library"
-        ]
-      }
-    },
     "install": {
       "exclude": [
         "expo",

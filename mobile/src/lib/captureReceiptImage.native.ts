@@ -3,8 +3,8 @@ import type { View } from 'react-native'
 import type { ReceiptDetails } from '../components/receipt/receipt-types'
 
 /**
- * Android: react-native-view-shot captures at the device pixel density,
- * so the PNG is as sharp as the screen. Returns a tmpfile path.
+ * iOS + Android: react-native-view-shot captures the rendered receipt card at the
+ * device pixel density, so the PNG is as sharp as the screen. Returns a tmpfile path.
  */
 export async function captureReceiptImage(
   ref: RefObject<View | null>,
