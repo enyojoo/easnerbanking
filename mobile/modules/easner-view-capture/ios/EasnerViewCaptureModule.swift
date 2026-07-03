@@ -1,13 +1,13 @@
 import ExpoModulesCore
 import UIKit
 
-internal final class ViewNotFoundException: Exception {
+internal final class ViewNotFoundException: Exception, @unchecked Sendable {
   override var reason: String {
     "No native view found for the given React tag."
   }
 }
 
-internal final class CaptureFailedException: Exception {
+internal final class CaptureFailedException: Exception, @unchecked Sendable {
   override var reason: String {
     "Could not capture the view as a PNG."
   }
@@ -18,8 +18,12 @@ public class EasnerViewCaptureModule: Module {
     Name("EasnerViewCapture")
 
     AsyncFunction("captureView") { (viewTag: Int) async throws -> String in
-      try await MainActor.run {
-        guard let view = self.appContext.findView(withTag: viewTag, ofType: UIView.self) else {
+      guard let appContext = self.appContext else {
+        throw CaptureFailedException()
+      }
+
+      return try await MainActor.run {
+        guard let view = appContext.findView(withTag: viewTag, ofType: UIView.self) else {
           throw ViewNotFoundException()
         }
 
