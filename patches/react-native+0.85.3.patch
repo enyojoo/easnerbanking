@@ -1,0 +1,32 @@
+diff --git a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
+index a2c71d8..a80d061 100644
+--- a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
++++ b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
+@@ -10,6 +10,7 @@
+ #import <React/RCTBridgeModule.h>
+ #import <React/RCTConvert.h>
+ #import <React/RCTCxxConvert.h>
++#import <React/RCTLog.h>
+ #import <React/RCTManagedPointer.h>
+ #import <React/RCTModuleMethod.h>
+ #import <React/RCTUtils.h>
+@@ -461,9 +462,16 @@ TraceSection s(
+     @try {
+       [inv invokeWithTarget:strongModule];
+     } @catch (NSException *exception) {
+-      // Void methods are always async, re-throw instead of converting to
+-      // JSError, same as the async branch in performMethodInvocation.
+-      @throw exception;
++      // Void methods are always async. An @throw here (or converting to a JSError)
++      // has no JS caller to receive it and no C++ frame up the invokeAsync stack to
++      // catch it, so on iOS 26 it terminates the app with SIGABRT at/near launch
++      // (react-native #54859 / #55390). Log instead of re-throwing so a misbehaving
++      // native module can never hard-crash the app.
++      RCTLogError(
++          @"[TurboModule] Uncaught exception in void method %s.%s: %@",
++          moduleName,
++          methodName,
++          exception);
+     } @finally {
+       [retainedObjectsForInvocation removeAllObjects];
+     }

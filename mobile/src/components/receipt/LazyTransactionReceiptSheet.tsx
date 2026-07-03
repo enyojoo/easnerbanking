@@ -8,9 +8,8 @@ type Props = {
 }
 
 /**
- * Loads the receipt sheet (and its native deps) only when the user opens it.
- * TransactionDetailsScreen is lazy-loaded by AppNavigator — receipt native modules must
- * not be linked on iOS (see react-native.config.js).
+ * Loads the receipt sheet (and its native capture deps) only when the user opens it,
+ * so nothing native runs at app launch.
  */
 export function LazyTransactionReceiptSheet({ visible, onClose, receipt }: Props) {
   const [Sheet, setSheet] = useState<React.ComponentType<Props> | null>(null)

@@ -1,33 +1,34 @@
 import { useCallback, useState, type RefObject } from 'react'
 import { Platform } from 'react-native'
 import type { View } from 'react-native'
-import type { ReceiptDetails } from '../components/receipt/receipt-types'
-import { captureTransactionReceipt } from '../lib/captureTransactionReceipt'
 import { useToast } from '../components/ToastProvider'
 
 /**
- * Captures a receipt image (Android) or PDF (iOS) and saves/shares it.
- * Native capture modules are platform-split so iOS production builds do not link
- * react-native-view-shot / expo-media-library (those caused launch crashes).
+ * Captures the on-screen `TransactionReceiptCard` to a PNG (both iOS and Android) and
+ * either saves it to Photos (expo-media-library) or hands it to the native share sheet.
+ * Consistent image receipt across platforms — the business web app keeps the PDF.
+ *
+ * Native deps (react-native-view-shot, expo-media-library, expo-sharing) are required
+ * lazily inside the handlers, not at module scope, so nothing native runs until the
+ * user taps Save/Share. The iOS 26 TurboModule launch-crash is fixed separately via
+ * the react-native RCTTurboModule patch (patches/react-native+0.85.3.patch).
  */
-export function useSaveTransactionReceipt(
-  ref: RefObject<View | null>,
-  receipt: ReceiptDetails | null,
-) {
+export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
   const [saving, setSaving] = useState(false)
   const { showSuccess, showError, showWarning } = useToast()
 
   const capture = useCallback(async (): Promise<string> => {
-    return captureTransactionReceipt(ref, receipt)
-  }, [ref, receipt])
+    if (!ref.current) throw new Error('Receipt is not ready yet.')
+    const { captureRef } = require('react-native-view-shot')
+    return captureRef(ref, { format: 'png', quality: 1, result: 'tmpfile' })
+  }, [ref])
 
   const shareUri = useCallback(async (uri: string): Promise<boolean> => {
     const Sharing = require('expo-sharing')
     if (!(await Sharing.isAvailableAsync())) return false
-    const isPdf = Platform.OS === 'ios'
     await Sharing.shareAsync(uri, {
-      mimeType: isPdf ? 'application/pdf' : 'image/png',
-      UTI: isPdf ? 'com.adobe.pdf' : 'public.png',
+      mimeType: 'image/png',
+      UTI: 'public.png',
       dialogTitle: 'Receipt',
     })
     return true
@@ -39,21 +40,14 @@ export function useSaveTransactionReceipt(
     try {
       const uri = await capture()
 
+      // react-native-view-shot / media-library aren't meaningful on web — offer share/download instead.
       if (Platform.OS === 'web') {
         const shared = await shareUri(uri)
         if (!shared) showWarning('Open the Easner app on your phone to save receipts.')
         return
       }
 
-      // iOS: no direct gallery write — share sheet includes Save to Files / Photos.
-      if (Platform.OS === 'ios') {
-        const shared = await shareUri(uri)
-        if (!shared) showWarning('Sharing is not available on this device.')
-        else showSuccess('Choose where to save your receipt')
-        return
-      }
-
-      // Android: direct save to gallery via legacy media-library API.
+      // SDK 56 moved saveToLibraryAsync to the legacy entry — the main export throws at runtime.
       const MediaLibrary = require('expo-media-library/legacy')
       const perm = await MediaLibrary.requestPermissionsAsync(true)
       if (!perm.granted) {
