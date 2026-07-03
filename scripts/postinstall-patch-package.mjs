@@ -5,7 +5,7 @@
  */
 import { execSync } from "node:child_process"
 import { createRequire } from "node:module"
-import { existsSync, readdirSync } from "node:fs"
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs"
 
 const require = createRequire(import.meta.url)
 import { join } from "node:path"
@@ -40,5 +40,26 @@ if (applicable.length === 0) {
   process.exit(0)
 }
 
+const packageNames = [
+  ...new Set(
+    applicable.map((file) => packageNameFromPatchFile(file)).filter(Boolean),
+  ),
+]
+
 const patchPackageBin = require.resolve("patch-package/index.js")
-execSync(`"${process.execPath}" "${patchPackageBin}"`, { stdio: "inherit" })
+// patch-package requires --patch-dir to be relative to the project root.
+const tempPatchDir = ".patch-package-staging"
+rmSync(join(process.cwd(), tempPatchDir), { recursive: true, force: true })
+mkdirSync(join(process.cwd(), tempPatchDir), { recursive: true })
+try {
+  for (const file of applicable) {
+    copyFileSync(join(patchesDir, file), join(process.cwd(), tempPatchDir, file))
+  }
+  console.log(`patch-package: applying ${packageNames.join(", ")}`)
+  execSync(
+    `"${process.execPath}" "${patchPackageBin}" --patch-dir "${tempPatchDir}"`,
+    { stdio: "inherit" },
+  )
+} finally {
+  rmSync(join(process.cwd(), tempPatchDir), { recursive: true, force: true })
+}
