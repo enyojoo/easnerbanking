@@ -41,16 +41,16 @@
     "@tanstack/react-query": "^5.99.1",
     "@tanstack/react-query-persist-client": "^5.99.1",
     "babel-plugin-module-resolver": "^5.0.3",
-    "expo": "~56.0.12",
+    "expo": "56.0.12",
     "expo-apple-authentication": "~56.0.0",
     "expo-auth-session": "~56.0.14",
     "expo-background-task": "~56.0.19",
     "expo-blur": "~56.0.3",
     "expo-camera": "~56.0.8",
     "expo-clipboard": "~56.0.4",
-    "expo-constants": "~56.0.18",
+    "expo-constants": "56.0.18",
     "expo-crypto": "~56.0.4",
-    "expo-dev-client": "~56.0.20",
+    "expo-dev-client": "56.0.20",
     "expo-device": "~56.0.4",
     "expo-document-picker": "~56.0.4",
     "expo-file-system": "~56.0.8",
@@ -62,7 +62,7 @@
     "expo-linear-gradient": "~56.0.4",
     "expo-linking": "~56.0.14",
     "expo-media-library": "~56.0.8",
-    "expo-notifications": "~56.0.18",
+    "expo-notifications": "56.0.18",
     "expo-secure-store": "~56.0.4",
     "expo-sharing": "~56.0.18",
     "expo-splash-screen": "~56.0.10",
@@ -106,7 +106,10 @@
   "expo": {
     "install": {
       "exclude": [
-        "expo-image"
+        "expo-image",
+        "expo",
+        "expo-constants",
+        "expo-notifications"
       ]
     },
     "doctor": {
