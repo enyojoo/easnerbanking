@@ -9,7 +9,7 @@ type Props = {
 
 /**
  * Loads the receipt sheet only when the user opens it.
- * iOS must not link react-native-view-shot (see react-native.config.js); capture uses easner-view-capture.
+ * Receipt capture native modules must not link on iOS (see react-native.config.js).
  */
 export function LazyTransactionReceiptSheet({ visible, onClose, receipt }: Props) {
   const [Sheet, setSheet] = useState<React.ComponentType<Props> | null>(null)

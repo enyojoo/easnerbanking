@@ -1,9 +1,0 @@
-{
-  "platforms": ["apple", "android"],
-  "apple": {
-    "modules": ["EasnerViewCaptureModule"]
-  },
-  "android": {
-    "modules": ["expo.modules.easner.viewcapture.EasnerViewCaptureModule"]
-  }
-}

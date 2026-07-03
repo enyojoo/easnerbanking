@@ -5,7 +5,8 @@ import type { ReceiptDetails } from '../components/receipt/receipt-types'
 import { useToast } from '../components/ToastProvider'
 import { captureReceiptImage } from '../lib/captureReceiptImage'
 
-const RECEIPT_FILENAME = 'easner-receipt.png'
+const RECEIPT_FILENAME_PNG = 'easner-receipt.png'
+const RECEIPT_FILENAME_PDF = 'easner-receipt.pdf'
 
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const response = await fetch(dataUrl)
@@ -17,7 +18,7 @@ async function shareReceiptOnWeb(dataUrl: string): Promise<'shared' | 'downloade
   if (typeof navigator === 'undefined') return 'unavailable'
 
   const blob = await dataUrlToBlob(dataUrl)
-  const file = new File([blob], RECEIPT_FILENAME, { type: 'image/png' })
+  const file = new File([blob], RECEIPT_FILENAME_PNG, { type: 'image/png' })
   const payload: ShareData = { files: [file] }
 
   if (navigator.share && navigator.canShare && navigator.canShare(payload)) {
@@ -39,7 +40,7 @@ async function downloadReceiptOnWeb(dataUrl: string): Promise<void> {
   try {
     const anchor = document.createElement('a')
     anchor.href = objectUrl
-    anchor.download = RECEIPT_FILENAME
+    anchor.download = RECEIPT_FILENAME_PNG
     anchor.click()
   } finally {
     URL.revokeObjectURL(objectUrl)
@@ -47,8 +48,8 @@ async function downloadReceiptOnWeb(dataUrl: string): Promise<void> {
 }
 
 /**
- * Captures the on-screen receipt card to a PNG on iOS, Android, and web.
- * iOS uses a local UIKit snapshot module; Android uses react-native-view-shot.
+ * Android/web: PNG via view-shot / html2canvas. iOS: PDF via expo-print (no receipt native
+ * modules linked at launch — view-shot and expo-media-library are excluded on iOS).
  */
 export function useSaveTransactionReceipt(
   ref: RefObject<View | null>,
@@ -56,19 +57,23 @@ export function useSaveTransactionReceipt(
 ) {
   const [pendingAction, setPendingAction] = useState<'save' | 'share' | null>(null)
   const { showSuccess, showError, showWarning } = useToast()
+  const isIosPdf = Platform.OS === 'ios'
 
   const capture = useCallback(() => captureReceiptImage(ref, receipt), [ref, receipt])
 
-  const shareUri = useCallback(async (uri: string): Promise<boolean> => {
-    const Sharing = require('expo-sharing')
-    if (!(await Sharing.isAvailableAsync())) return false
-    await Sharing.shareAsync(uri, {
-      mimeType: 'image/png',
-      UTI: 'public.png',
-      dialogTitle: 'Receipt',
-    })
-    return true
-  }, [])
+  const shareUri = useCallback(
+    async (uri: string): Promise<boolean> => {
+      const Sharing = require('expo-sharing')
+      if (!(await Sharing.isAvailableAsync())) return false
+      await Sharing.shareAsync(uri, {
+        mimeType: isIosPdf ? 'application/pdf' : 'image/png',
+        UTI: isIosPdf ? 'com.adobe.pdf' : 'public.png',
+        dialogTitle: 'Receipt',
+      })
+      return true
+    },
+    [isIosPdf],
+  )
 
   const saveToPhotos = useCallback(async () => {
     if (pendingAction) return
@@ -79,6 +84,14 @@ export function useSaveTransactionReceipt(
       if (Platform.OS === 'web') {
         await downloadReceiptOnWeb(uri)
         showSuccess('Receipt downloaded')
+        return
+      }
+
+      // iOS: no expo-media-library pod — share sheet includes Save to Files / Photos.
+      if (Platform.OS === 'ios') {
+        const shared = await shareUri(uri)
+        if (!shared) showWarning('Sharing is not available on this device.')
+        else showSuccess('Choose where to save your receipt')
         return
       }
 

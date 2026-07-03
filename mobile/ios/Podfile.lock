@@ -21,8 +21,6 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - EasnerViewCapture (1.0.0):
-    - ExpoModulesCore
   - EXApplication (56.0.3):
     - ExpoModulesCore
   - EXConstants (56.0.18):
@@ -247,9 +245,6 @@ PODS:
     - ExpoModulesCore
   - ExpoLogBox (56.0.14):
     - React-Core
-  - ExpoMediaLibrary (56.0.9):
-    - ExpoModulesCore
-    - React-Core
   - ExpoModulesCore (56.0.18):
     - ExpoModulesJSI
     - hermes-engine
@@ -286,6 +281,8 @@ PODS:
     - ExpoModulesWorklets
     - RNWorklets
   - ExpoNotifications (56.0.18):
+    - ExpoModulesCore
+  - ExpoPrint (56.0.4):
     - ExpoModulesCore
   - ExpoSecureStore (56.0.4):
     - ExpoModulesCore
@@ -2605,7 +2602,6 @@ PODS:
 
 DEPENDENCIES:
   - Ease (from `../../node_modules/react-native-ease`)
-  - EasnerViewCapture (from `../modules/easner-view-capture/ios`)
   - EXApplication (from `../../node_modules/expo-application/ios`)
   - EXConstants (from `../../node_modules/expo-constants/ios`)
   - EXJSONUtils (from `../../node_modules/expo-json-utils/ios`)
@@ -2636,12 +2632,12 @@ DEPENDENCIES:
   - ExpoLinearGradient (from `../../node_modules/expo-linear-gradient/ios`)
   - ExpoLinking (from `../../node_modules/expo-linking/ios`)
   - "ExpoLogBox (from `../../node_modules/@expo/log-box`)"
-  - ExpoMediaLibrary (from `../../node_modules/expo-media-library/ios/ExpoMediaLibrary.podspec`)
   - ExpoModulesCore (from `../../node_modules/expo-modules-core/ExpoModulesCore.podspec`)
   - ExpoModulesJSI (from `../../node_modules/expo-modules-jsi/apple`)
   - ExpoModulesWorklets (from `../../node_modules/expo-modules-core/ExpoModulesWorklets.podspec`)
   - ExpoModulesWorkletsAdapter (from `../../node_modules/expo-modules-core`)
   - ExpoNotifications (from `../../node_modules/expo-notifications/ios`)
+  - ExpoPrint (from `../../node_modules/expo-print/ios/ExpoPrint.podspec`)
   - ExpoSecureStore (from `../../node_modules/expo-secure-store/ios`)
   - ExpoSharing (from `../node_modules/expo-sharing/ios`)
   - ExpoSplashScreen (from `../node_modules/expo-splash-screen/ios`)
@@ -2747,8 +2743,6 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   Ease:
     :path: "../../node_modules/react-native-ease"
-  EasnerViewCapture:
-    :path: "../modules/easner-view-capture/ios"
   EXApplication:
     :path: "../../node_modules/expo-application/ios"
   EXConstants:
@@ -2809,8 +2803,6 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-linking/ios"
   ExpoLogBox:
     :path: "../../node_modules/@expo/log-box"
-  ExpoMediaLibrary:
-    :podspec: "../../node_modules/expo-media-library/ios/ExpoMediaLibrary.podspec"
   ExpoModulesCore:
     :podspec: "../../node_modules/expo-modules-core/ExpoModulesCore.podspec"
   ExpoModulesJSI:
@@ -2821,6 +2813,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-modules-core"
   ExpoNotifications:
     :path: "../../node_modules/expo-notifications/ios"
+  ExpoPrint:
+    :podspec: "../../node_modules/expo-print/ios/ExpoPrint.podspec"
   ExpoSecureStore:
     :path: "../../node_modules/expo-secure-store/ios"
   ExpoSharing:
@@ -3015,7 +3009,6 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Ease: 91720d5a28047201547bdcd0747db99a27e01fa7
-  EasnerViewCapture: 622b0ddff93b83fcfed8079e8dc3e6140d566b53
   EXApplication: e6040c92edc5522accd62852342e6b14742d42c0
   EXConstants: e836b478e4f5c835f3c77921d8162e1918e2c06e
   EXJSONUtils: dba2755f4e24009eaf87a876b2d615ea06c16e42
@@ -3046,12 +3039,12 @@ SPEC CHECKSUMS:
   ExpoLinearGradient: 16c2b9c6105444883d34958d573725de1293b8d0
   ExpoLinking: f8a78524352bf2c3baed5b33c8b56cd57c448702
   ExpoLogBox: cdad5c9402a186574fb5924ea91df1f08ba9a98a
-  ExpoMediaLibrary: f8911433a87a315632d28908359460e7790084a9
   ExpoModulesCore: 4fd0c4e4b30a6bf670855bfbd7704a4ad69a3bc2
   ExpoModulesJSI: abc606cf32f6eeb4e2ad44ec3fc4b24143abd8f6
   ExpoModulesWorklets: 38cbef838d25eaa28fe57e28275e5d940f852eeb
   ExpoModulesWorkletsAdapter: 161532aa0ef0eee8c9c7f1f7ee926792682b099b
   ExpoNotifications: 87875dae0faded5284004bc1204990947d3f64e0
+  ExpoPrint: 8f6dc664a26f40baa7307a194eb6a45a3d8347eb
   ExpoSecureStore: f1bd083c1b7b8d4142013ffcc0082d377d9f49f4
   ExpoSharing: d5e79c74e4fd502761b0ed558f350826dae68296
   ExpoSplashScreen: db432721a17dc8a718d5e2562f8edebe310e524f
