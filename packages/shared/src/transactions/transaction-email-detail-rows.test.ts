@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildTransactionEmailDetailRows } from "./transaction-email-detail-rows"
+import { buildTransactionEmailDetailRows, filterTransactionReceiptDetailRows } from "./transaction-email-detail-rows"
 import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
 
 function rowMap(rows: { label: string; value: string }[]): Record<string, string> {
@@ -103,5 +103,31 @@ describe("buildTransactionEmailDetailRows", () => {
   it("returns no rows for shapes without enrichment (e.g. Easetag)", () => {
     expect(buildTransactionEmailDetailRows({ direction: "out" })).toEqual([])
     expect(buildTransactionEmailDetailRows({ direction: "in" })).toEqual([])
+  })
+
+  it("filterTransactionReceiptDetailRows omits Exchange rate and Transfer method", () => {
+    const review: GlobalPayoutReviewSnapshot = {
+      you_send_amount: 100,
+      total_debited: 101,
+      exchange_fee: 0,
+      processing_fee: 1,
+      exchange_rate: 1342.75,
+      send_currency: "USD",
+      receive_amount: 134275,
+      receive_currency: "NGN",
+      transfer_method: "Bank transfer",
+      processing_time: "Within minutes",
+    }
+    const rows = buildTransactionEmailDetailRows({
+      direction: "out",
+      payoutReview: review,
+      recipient: { fullName: "Samuel Odiba", bankName: "Kuda", accountNumber: "1234567890" },
+    })
+    const filtered = filterTransactionReceiptDetailRows(rows)
+    const labels = filtered.map((r) => r.label)
+    expect(labels).not.toContain("Exchange rate")
+    expect(labels).not.toContain("Transfer method")
+    expect(labels).toContain("Sent")
+    expect(labels).toContain("Recipient")
   })
 })

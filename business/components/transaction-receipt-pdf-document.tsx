@@ -8,233 +8,91 @@ import {
   Image,
   StyleSheet,
 } from "@react-pdf/renderer"
-import type { Style } from "@react-pdf/types"
-import { buildTransactionEmailDetailRows } from "@easner/shared"
+import { buildTransactionEmailDetailRows, filterTransactionReceiptDetailRows } from "@easner/shared"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
 
+/** Business palette — aligned with mobile receipt tokens (#007ACC primary, neutral text). */
+const palette = {
+  primary: "#007ACC",
+  textPrimary: "#0F1110",
+  textSecondary: "#6F756F",
+  textTertiary: "#6F756F",
+  border: "#D9D4C7",
+  white: "#FFFFFF",
+  pageBg: "#F8F6F0",
+  success: "#16A34A",
+  successBg: "#DCFCE7",
+  error: "#DC2626",
+  errorBg: "#FEE2E2",
+} as const
+
 const statusLabels: Record<string, string> = {
   completed: "Completed",
-  pending: "Pending",
+  pending: "Processing",
   processing: "Processing",
   failed: "Failed",
 }
 
-const styles = StyleSheet.create({
-  page: {
-    padding: 0,
-    paddingBottom: 48,
-    fontSize: 10,
-    fontFamily: "Helvetica",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 40,
-    paddingVertical: 24,
-    marginBottom: 24,
-  },
-  receiptTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#0F1110",
-    marginBottom: 2,
-  },
-  headerLogo: {
-    width: 200,
-    height: 80,
-    objectFit: "contain",
-  },
-  heroSection: {
-    paddingHorizontal: 40,
-    marginBottom: 24,
-  },
-  statusBadge: {
-    backgroundColor: "#e5e7eb",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: "flex-start",
-    marginBottom: 12,
-  },
-  statusText: {
-    fontSize: 9,
-    fontWeight: "bold",
-  },
-  amountBig: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  amountCredit: {
-    color: "#007ACC",
-  },
-  amountDebit: {
-    color: "#0F1110",
-  },
-  dateText: {
-    fontSize: 10,
-    color: "#6F756F",
-  },
-  tableWrapper: {
-    marginHorizontal: 40,
-    borderWidth: 1,
-    borderColor: "#D9D4C7",
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E9E4D8",
-  },
-  tableRowLast: {
-    flexDirection: "row",
-  },
-  tableRowFirst: {
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-  },
-  tableRowLastRounded: {
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-  },
-  tableRowEven: {
-    backgroundColor: "#F8F6F0",
-  },
-  tableRowOdd: {
-    backgroundColor: "#ffffff",
-  },
-  tableCell: {
-    flex: 1,
-    padding: 12,
-    fontSize: 10,
-    color: "#3D403D",
-  },
-  tableCellValue: {
-    flex: 1.5,
-    padding: 12,
-    fontSize: 10,
-    color: "#0F1110",
-    textAlign: "right",
-  },
-  amountCellCredit: {
-    flex: 1.5,
-    padding: 12,
-    fontSize: 10,
-    color: "#007ACC",
-    fontWeight: "bold",
-    textAlign: "right",
-  },
-  amountCellDebit: {
-    flex: 1.5,
-    padding: 12,
-    fontSize: 10,
-    color: "#0F1110",
-    fontWeight: "bold",
-    textAlign: "right",
-  },
-  footer: {
-    position: "absolute",
-    bottom: 24,
-    left: 40,
-    right: 40,
-    alignItems: "center",
-  },
-  footerText: {
-    fontSize: 9,
-    color: "#6F756F",
-    textAlign: "center",
-    marginBottom: 2,
-  },
-  footerTextLink: {
-    fontSize: 9,
-    color: "#6F756F",
-    textAlign: "center",
-  },
-  footerEmail: {
-    fontSize: 9,
-    color: "#007ACC",
-    textAlign: "center",
-  },
-})
+type ReceiptRow = { label: string; value: string }
 
-interface TransactionReceiptPDFDocumentProps {
-  transaction: Transaction
-  logoUrl: string
-  cardLast4?: string
+function parseRecipientReceiptValue(value: string): { name: string; subtitle: string } | null {
+  const match = value.match(/^(.+?) \((.+)\)$/)
+  if (!match) return null
+  const name = match[1].trim()
+  const subtitle = match[2].trim()
+  if (!name || !subtitle) return null
+  return { name, subtitle }
 }
 
-function TableRow({
-  label,
-  value,
-  valueStyle,
-  isFirst,
-  isLast,
-  rowStyle,
-}: {
-  label: string
-  value: string
-  valueStyle?: Style
-  isFirst?: boolean
-  isLast?: boolean
-  rowStyle?: Style
-}) {
-  return (
-    <View
-      style={[
-        isLast ? styles.tableRowLast : styles.tableRow,
-        ...(isFirst ? [styles.tableRowFirst] : []),
-        ...(isLast ? [styles.tableRowLastRounded] : []),
-        ...(rowStyle ? [rowStyle] : []),
-      ]}
-    >
-      <Text style={styles.tableCell}>{label}</Text>
-      <Text style={valueStyle ?? styles.tableCellValue}>{value}</Text>
-    </View>
-  )
+function formatReceiptTimestamp(dateInput: string | Date): string {
+  const date = new Date(dateInput)
+  const month = date.toLocaleString("en-US", { month: "short" })
+  const day = date.getDate().toString().padStart(2, "0")
+  const year = date.getFullYear()
+  const hours = date.getHours()
+  const minutes = date.getMinutes().toString().padStart(2, "0")
+  const ampm = hours >= 12 ? "PM" : "AM"
+  const displayHours = hours % 12 || 12
+  return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
 }
 
-type ReceiptRow = { label: string; value: string; valueStyle?: Style }
+function receiptOutcome(status: string): "success" | "failed" {
+  const s = status.toLowerCase()
+  if (s.includes("failed") || s.includes("refunded") || s.includes("returned")) {
+    return "failed"
+  }
+  return "success"
+}
 
 /**
- * Canonical receipt rows, mirroring the in-app detail panel and transaction emails via the
- * shared `buildTransactionEmailDetailRows` builder. Receipts describe what has happened, so
- * payouts show "Sent" (not "Sending"). Falls back to generic rows for card/book transactions.
+ * Detail rows only — Transaction ID and hero title are rendered outside this list,
+ * matching the mobile `TransactionReceiptCard` layout.
  */
-function buildReceiptRows(transaction: Transaction, cardLast4?: string): ReceiptRow[] {
-  const rows: ReceiptRow[] = [
-    { label: "Transaction", value: transaction.description },
-    { label: "Transaction ID", value: transaction.id },
-  ]
-
-  // Payout (debit) — canonical Sent / Processing fee / Exchange rate / Total debited /
-  // Recipient gets / Recipient / Transfer method rows.
+function buildReceiptDetailRows(transaction: Transaction, cardLast4?: string): ReceiptRow[] {
   if (transaction.payoutReview) {
     const snap = transaction.recipientSnapshot
-    const canonical = buildTransactionEmailDetailRows({
-      direction: "out",
-      payoutReview: transaction.payoutReview,
-      receiveNetwork: transaction.chain,
-      recipient: snap
-        ? {
-            fullName: snap.full_name ?? transaction.counterpartyName ?? null,
-            bankName: snap.bank_name ?? null,
-            accountNumber: snap.account_number ?? null,
-            phone: snap.phone ?? null,
-            mobileProvider: snap.mobile_provider ?? null,
-            walletNetwork: transaction.chain ?? null,
-          }
-        : transaction.counterpartyName
-          ? { fullName: transaction.counterpartyName }
-          : null,
-    })
-    rows.push(...canonical)
-    return rows
+    return filterTransactionReceiptDetailRows(
+      buildTransactionEmailDetailRows({
+        direction: "out",
+        payoutReview: transaction.payoutReview,
+        receiveNetwork: transaction.chain,
+        recipient: snap
+          ? {
+              fullName: snap.full_name ?? transaction.counterpartyName ?? null,
+              bankName: snap.bank_name ?? null,
+              accountNumber: snap.account_number ?? null,
+              phone: snap.phone ?? null,
+              mobileProvider: snap.mobile_provider ?? null,
+              walletNetwork: transaction.chain ?? null,
+            }
+          : transaction.counterpartyName
+            ? { fullName: transaction.counterpartyName }
+            : null,
+      }),
+    )
   }
 
-  // Deposit (credit) — canonical Scheme / Sender / Processing fee / Amount credited / Narration.
   const isEnrichedDeposit =
     transaction.direction === "credit" &&
     Boolean(
@@ -246,23 +104,23 @@ function buildReceiptRows(transaction: Transaction, cardLast4?: string): Receipt
   if (isEnrichedDeposit) {
     const depositCurrency =
       transaction.postedCurrency || transaction.displayCurrency || "USD"
-    const canonical = buildTransactionEmailDetailRows({
-      direction: "in",
-      deposit: {
-        scheme: transaction.paymentScheme ?? null,
-        senderDisplay: transaction.counterpartyName ?? null,
-        feeAmount: transaction.fee ?? null,
-        feeCurrency: transaction.displayCurrency ?? depositCurrency,
-        postedAmount: transaction.postedAmount ?? null,
-        postedCurrency: depositCurrency,
-        narration: transaction.narration ?? null,
-      },
-    })
-    rows.push(...canonical)
-    return rows
+    return filterTransactionReceiptDetailRows(
+      buildTransactionEmailDetailRows({
+        direction: "in",
+        deposit: {
+          scheme: transaction.paymentScheme ?? null,
+          senderDisplay: transaction.counterpartyName ?? null,
+          feeAmount: transaction.fee ?? null,
+          feeCurrency: transaction.displayCurrency ?? depositCurrency,
+          postedAmount: transaction.postedAmount ?? null,
+          postedCurrency: depositCurrency,
+          narration: transaction.narration ?? null,
+        },
+      }),
+    )
   }
 
-  // Generic fallback (card, book transfer, unenriched rows).
+  const rows: ReceiptRow[] = []
   const descriptionLower = transaction.description.toLowerCase()
   const isStablecoin =
     transaction.type === "stablecoin" || descriptionLower.startsWith("stablecoin")
@@ -285,7 +143,7 @@ function buildReceiptRows(transaction: Transaction, cardLast4?: string): Receipt
     rows.push({ label: "Category", value: transaction.category })
   }
   if (!isStablecoin && transaction.reference) {
-    rows.splice(2, 0, { label: "Reference", value: transaction.reference })
+    rows.push({ label: "Reference", value: transaction.reference })
   }
   if (transaction.fee !== undefined && transaction.fee > 0) {
     rows.push({
@@ -296,83 +154,280 @@ function buildReceiptRows(transaction: Transaction, cardLast4?: string): Receipt
   return rows
 }
 
+function ReceiptDetailRow({ label, value }: ReceiptRow) {
+  if (label === "Recipient") {
+    const parsed = parseRecipientReceiptValue(value)
+    if (parsed) {
+      return (
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>{label}</Text>
+          <View style={styles.rowValueStack}>
+            <Text style={styles.rowValue}>{parsed.name}</Text>
+            <Text style={styles.rowValueSub}>({parsed.subtitle})</Text>
+          </View>
+        </View>
+      )
+    }
+  }
+
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <View style={styles.rowValueStack}>
+        <Text style={styles.rowValue}>{value}</Text>
+      </View>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  page: {
+    padding: 40,
+    paddingBottom: 56,
+    fontSize: 10,
+    fontFamily: "Helvetica",
+    backgroundColor: palette.pageBg,
+  },
+  cardWrap: {
+    alignItems: "center",
+  },
+  card: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: palette.white,
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  headerLogo: {
+    width: 88,
+    height: 28,
+    objectFit: "contain",
+  },
+  headerLabel: {
+    fontSize: 9,
+    color: palette.textTertiary,
+  },
+  heroBlock: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  glyph: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  glyphMark: {
+    fontSize: 22,
+    fontWeight: "bold",
+  },
+  amount: {
+    fontSize: 26,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  amountCredit: {
+    color: palette.primary,
+  },
+  amountDebit: {
+    color: palette.textPrimary,
+  },
+  heroTitle: {
+    fontSize: 11,
+    color: palette.textSecondary,
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 2,
+    maxWidth: 320,
+  },
+  statusPill: {
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  statusPillText: {
+    fontSize: 9,
+    fontWeight: "bold",
+  },
+  dateText: {
+    fontSize: 9,
+    color: palette.textTertiary,
+    marginTop: 6,
+    textAlign: "center",
+  },
+  divider: {
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+    marginBottom: 12,
+  },
+  rows: {
+    gap: 10,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  rowLabel: {
+    fontSize: 10,
+    color: palette.textSecondary,
+    flexShrink: 0,
+  },
+  rowValueStack: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  rowValue: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: palette.textPrimary,
+    textAlign: "right",
+  },
+  rowValueSub: {
+    fontSize: 9,
+    color: palette.textSecondary,
+    textAlign: "right",
+    marginTop: 2,
+  },
+  dashedDivider: {
+    borderTopWidth: 1,
+    borderStyle: "dashed",
+    borderColor: palette.border,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  idBlock: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  idLabel: {
+    fontSize: 10,
+    color: palette.textSecondary,
+  },
+  idValue: {
+    flex: 1,
+    fontSize: 9,
+    fontFamily: "Courier",
+    color: palette.textPrimary,
+    textAlign: "right",
+  },
+  cardFooter: {
+    alignItems: "center",
+    marginTop: 20,
+  },
+  footerText: {
+    fontSize: 9,
+    color: palette.textTertiary,
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  footerEmail: {
+    fontSize: 9,
+    color: palette.primary,
+    textAlign: "center",
+  },
+})
+
+interface TransactionReceiptPDFDocumentProps {
+  transaction: Transaction
+  logoUrl: string
+  cardLast4?: string
+}
+
 export function TransactionReceiptPDFDocument({
   transaction,
   logoUrl,
   cardLast4,
 }: TransactionReceiptPDFDocumentProps) {
-  const dateStr = new Date(transaction.date).toLocaleString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  const outcome = receiptOutcome(transaction.status)
+  const succeeded = outcome === "success"
+  const glyphColor = succeeded ? palette.success : palette.error
+  const glyphBg = succeeded ? palette.successBg : palette.errorBg
+  const isCredit = transaction.direction === "credit"
 
   const heroCurrency = transaction.displayCurrency || transaction.postedCurrency || "USD"
   const amountStr =
-    (transaction.direction === "credit" ? "+" : "-") +
-    formatCurrency(Math.abs(transaction.amount), heroCurrency)
+    (isCredit ? "+" : "-") + formatCurrency(Math.abs(transaction.amount), heroCurrency)
 
-  const rows = buildReceiptRows(transaction, cardLast4)
+  const statusLabel = statusLabels[transaction.status] ?? transaction.status
+  const dateText = formatReceiptTimestamp(transaction.date)
+  const title = transaction.description?.trim() ?? ""
+  const detailRows = buildReceiptDetailRows(transaction, cardLast4)
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.receiptTitle}>Transaction</Text>
-            <Text style={styles.receiptTitle}>Receipt</Text>
-          </View>
-          <Image style={styles.headerLogo} src={logoUrl} />
-        </View>
+        <View style={styles.cardWrap}>
+          <View style={styles.card}>
+            {/* Header — logo left, label right (matches mobile card). */}
+            <View style={styles.header}>
+              <Image style={styles.headerLogo} src={logoUrl} />
+              <Text style={styles.headerLabel}>Transaction Receipt</Text>
+            </View>
 
-        {/* Hero section: status, amount, date */}
-        <View style={styles.heroSection}>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>
-              {statusLabels[transaction.status] ?? transaction.status}
-            </Text>
-          </View>
-          <Text
-            style={[
-              styles.amountBig,
-              transaction.direction === "credit"
-                ? styles.amountCredit
-                : styles.amountDebit,
-            ]}
-          >
-            {amountStr}
-          </Text>
-          <Text style={styles.dateText}>{dateStr}</Text>
-        </View>
+            {/* Hero — glyph, amount, title, status pill, date. */}
+            <View style={styles.heroBlock}>
+              <View style={[styles.glyph, { backgroundColor: glyphBg }]}>
+                <Text style={[styles.glyphMark, { color: glyphColor }]}>
+                  {succeeded ? "✓" : "✗"}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.amount,
+                  isCredit ? styles.amountCredit : styles.amountDebit,
+                ]}
+              >
+                {amountStr}
+              </Text>
+              {title ? <Text style={styles.heroTitle}>{title}</Text> : null}
+              <View style={[styles.statusPill, { backgroundColor: glyphBg }]}>
+                <Text style={[styles.statusPillText, { color: glyphColor }]}>
+                  {statusLabel}
+                </Text>
+              </View>
+              <Text style={styles.dateText}>{dateText}</Text>
+            </View>
 
-        {/* Transaction data table */}
-        <View style={styles.tableWrapper}>
-          {rows.map((row, i) => (
-            <TableRow
-              key={row.label}
-              label={row.label}
-              value={row.value}
-              valueStyle={row.valueStyle}
-              isFirst={i === 0}
-              isLast={i === rows.length - 1}
-              rowStyle={i % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}
-            />
-          ))}
-        </View>
+            <View style={styles.divider} />
 
-        {/* Footer */}
-        <View style={styles.footer} fixed>
-          <Text style={styles.footerText}>
-            For complaints regarding this transaction,
-          </Text>
-          <View style={{ flexDirection: "row", justifyContent: "center" }}>
-            <Text style={styles.footerTextLink}>
-              please contact our support:{" "}
-            </Text>
-            <Text style={styles.footerEmail}>support@easner.com</Text>
+            <View style={styles.rows}>
+              {detailRows.map((row) => (
+                <ReceiptDetailRow key={`${row.label}:${row.value}`} {...row} />
+              ))}
+            </View>
+
+            <View style={styles.dashedDivider} />
+
+            <View style={styles.idBlock}>
+              <Text style={styles.idLabel}>Transaction ID</Text>
+              <Text style={styles.idValue}>{transaction.id}</Text>
+            </View>
+
+            <View style={styles.cardFooter}>
+              <Text style={styles.footerText}>
+                For complaints regarding this transaction,
+              </Text>
+              <Text style={styles.footerText}>
+                please contact our support:{" "}
+                <Text style={styles.footerEmail}>support@easner.com</Text>
+              </Text>
+            </View>
           </View>
         </View>
       </Page>

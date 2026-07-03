@@ -49,7 +49,8 @@ export function useSaveTransactionReceipt(ref: RefObject<View | null>) {
         return
       }
 
-      const MediaLibrary = require('expo-media-library')
+      // SDK 56 moved saveToLibraryAsync to the legacy entry — the main export throws at runtime.
+      const MediaLibrary = require('expo-media-library/legacy')
       const perm = await MediaLibrary.requestPermissionsAsync(true)
       if (!perm.granted) {
         showWarning('Allow photo access to save the receipt.')

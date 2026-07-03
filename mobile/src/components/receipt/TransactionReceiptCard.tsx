@@ -6,6 +6,35 @@ import { colors, spacing, borderRadius, textStyles, fontFamily } from '../../the
 
 export type ReceiptRow = { label: string; value: string }
 
+/** Canonical rows encode recipient as "Name (Bank • account)" — split for two-line receipt layout. */
+function parseRecipientReceiptValue(value: string): { name: string; subtitle: string } | null {
+  const match = value.match(/^(.+?) \((.+)\)$/)
+  if (!match) return null
+  const name = match[1].trim()
+  const subtitle = match[2].trim()
+  if (!name || !subtitle) return null
+  return { name, subtitle }
+}
+
+function ReceiptRowValue({ label, value }: ReceiptRow) {
+  if (label === 'Recipient') {
+    const parsed = parseRecipientReceiptValue(value)
+    if (parsed) {
+      return (
+        <View style={styles.rowValueStack}>
+          <Text style={styles.rowValue}>{parsed.name}</Text>
+          <Text style={styles.rowValueSub}>({parsed.subtitle})</Text>
+        </View>
+      )
+    }
+  }
+  return (
+    <View style={styles.rowValueStack}>
+      <Text style={styles.rowValue}>{value}</Text>
+    </View>
+  )
+}
+
 type Props = {
   /** Hero subtitle, e.g. "Sent to Samuel Odiba" / "Received from Chase". */
   title: string
@@ -40,7 +69,7 @@ export const TransactionReceiptCard = forwardRef<View, Props>(function Transacti
     <View ref={ref} collapsable={false} style={[styles.card, { width }]}>
       <View style={styles.header}>
         <BrandLogo size="sm" />
-        <Text style={styles.headerLabel}>Receipt</Text>
+        <Text style={styles.headerLabel}>Transaction Receipt</Text>
       </View>
 
       <View style={styles.heroBlock}>
@@ -71,7 +100,7 @@ export const TransactionReceiptCard = forwardRef<View, Props>(function Transacti
         {rows.map((row) => (
           <View key={`${row.label}:${row.value}`} style={styles.row}>
             <Text style={styles.rowLabel}>{row.label}</Text>
-            <Text style={styles.rowValue}>{row.value}</Text>
+            <ReceiptRowValue label={row.label} value={row.value} />
           </View>
         ))}
       </View>
@@ -171,8 +200,18 @@ const styles = StyleSheet.create({
   rowValue: {
     ...textStyles.titleMedium,
     color: colors.text.primary,
-    flex: 1,
     textAlign: 'right',
+  },
+  rowValueStack: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  rowValueSub: {
+    ...textStyles.titleMedium,
+    fontSize: 13,
+    color: colors.text.secondary,
+    textAlign: 'right',
+    marginTop: spacing[1],
   },
   dashedDivider: {
     borderTopWidth: 1,

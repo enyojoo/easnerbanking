@@ -34,7 +34,7 @@ import {
   type LifecycleStep,
 } from '../../components/TransactionLifecycleTracker'
 import { SectionCard, StatusPill } from '../../components/ui'
-import { TransactionReceiptSheet } from '../../components/receipt/TransactionReceiptSheet'
+import { LazyTransactionReceiptSheet } from '../../components/receipt/LazyTransactionReceiptSheet'
 import { NavigationProps } from '../../types'
 import {
   colors,
@@ -45,7 +45,7 @@ import {
   fontFamily,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
-import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
+import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ripple } from '../../lib/androidRipple'
 import { formatSignedCurrency } from '../../utils/formatters'
@@ -68,6 +68,7 @@ import {
   qk,
   scopeKey,
   buildTransactionEmailDetailRows,
+  filterTransactionReceiptDetailRows,
   formatMoneyDisplay,
   formatSendRateLabel,
   formatPayoutRecipientSubtitle,
@@ -174,9 +175,15 @@ function mergeTransactionSnapshots(
   return merged as LedgerTransaction
 }
 
+/** Fixed footer: paddingTop + button + paddingBottom (matches styles.bottomContainer). */
+const TRANSACTION_DETAILS_FOOTER_HEIGHT = 52 + spacing[4]
+
 export default function TransactionDetailsScreen({ navigation, route }: NavigationProps) {
-  const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const footerPadding = useFixedFooterPadding(spacing[4])
+  // Stack screen — tab bar is hidden. Pad only for the fixed footer so the last row
+  // (Share receipt) scrolls into view without a large empty gap below it.
+  const scrollBottomPadding =
+    TRANSACTION_DETAILS_FOOTER_HEIGHT + Math.max(footerPadding, spacing[6]) + spacing[2]
   const { transactionId, fromScreen, initialTransaction } = route.params as {
     transactionId: string
     fromScreen?: string
@@ -779,7 +786,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   // Downloadable receipt (image) — completed, non-Easetag transactions. Reuses the same
   // canonical rows as the in-app view / business PDF so all surfaces foot identically.
-  const receiptRows =
+  const receiptRows = filterTransactionReceiptDetailRows(
     transaction.status === 'completed' && !isEasetagP2p
       ? isGlobalPayoutSend && transaction.payout_review
         ? buildTransactionEmailDetailRows({
@@ -831,7 +838,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               },
             })
           : []
-      : []
+      : [],
+  )
   const receiptEligible = receiptRows.length > 0
 
   return (
@@ -1380,7 +1388,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         </ScrollView>
 
         {receiptEligible ? (
-          <TransactionReceiptSheet
+          <LazyTransactionReceiptSheet
             visible={receiptSheetOpen}
             onClose={() => setReceiptSheetOpen(false)}
             receipt={{

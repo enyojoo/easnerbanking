@@ -394,6 +394,7 @@ export type {
 } from "./transactions/stablecoin-deposit-lifecycle"
 export {
   buildTransactionEmailDetailRows,
+  filterTransactionReceiptDetailRows,
   type TransactionEmailDetailInput,
   type TransactionEmailDetailRow,
 } from "./transactions/transaction-email-detail-rows"

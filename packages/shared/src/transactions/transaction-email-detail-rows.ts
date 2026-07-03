@@ -138,3 +138,13 @@ export function buildTransactionEmailDetailRows(
   if (input.direction === "in" && input.deposit) return buildDepositRows(input.deposit)
   return []
 }
+
+/** Row labels omitted from downloadable receipts (mobile image + business PDF). */
+const RECEIPT_OMITTED_ROW_LABELS = new Set(["Exchange rate", "Transfer method"])
+
+/** Receipts reuse canonical rows but hide ops-oriented payout fields. */
+export function filterTransactionReceiptDetailRows(
+  rows: TransactionEmailDetailRow[],
+): TransactionEmailDetailRow[] {
+  return rows.filter((row) => !RECEIPT_OMITTED_ROW_LABELS.has(row.label))
+}
