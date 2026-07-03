@@ -158,7 +158,11 @@ function MoreContent({ navigation }: NavigationProps) {
     }
 
     if (cached !== null) {
+      // Show the cached state (and its banner) immediately; the listFactors call
+      // below refines it. Gating `resolved` on the network made the banner appear
+      // late on every focus for returning users.
       setMfaStatusLine(cached ? 'On' : 'Off')
+      setMfaStatusResolved(true)
     }
 
     const { data, error } = await listFactorsForMfaStatus(supabase)

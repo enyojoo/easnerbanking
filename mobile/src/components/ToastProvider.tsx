@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import { View, StyleSheet } from 'react-native'
+import { View, StyleSheet, Modal } from 'react-native'
 import Toast, { ToastType } from './Toast'
 
 interface ToastData {
@@ -84,18 +84,29 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       value={{ showToast, showSuccess, showError, showInfo, showWarning }}
     >
       {children}
-      <View style={styles.container} pointerEvents="box-none">
-        {toasts.map((toast) => (
-          <Toast
-            key={toast.id}
-            message={toast.message}
-            type={toast.type}
-            duration={toast.duration}
-            action={toast.action}
-            onClose={() => removeToast(toast.id)}
-          />
-        ))}
-      </View>
+      {/* Hosted in a Modal so toasts render above other native Modals (e.g. the
+          receipt sheet). Mounted only while toasts exist; box-none lets taps in
+          empty areas pass through to the content beneath. */}
+      <Modal
+        visible={toasts.length > 0}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={() => {}}
+      >
+        <View style={styles.container} pointerEvents="box-none">
+          {toasts.map((toast) => (
+            <Toast
+              key={toast.id}
+              message={toast.message}
+              type={toast.type}
+              duration={toast.duration}
+              action={toast.action}
+              onClose={() => removeToast(toast.id)}
+            />
+          ))}
+        </View>
+      </Modal>
     </ToastContext.Provider>
   )
 }

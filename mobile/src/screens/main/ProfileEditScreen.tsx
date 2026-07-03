@@ -48,7 +48,7 @@ import { AvatarImage } from '../../components/AvatarImage'
 import { bustAvatarUrl, warmAvatarCache } from '../../lib/avatarCache'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { EasnerAlertSheet } from '../../components/premium'
-import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
+import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { haptics } from '../../lib/haptics'
 
 const ACCOUNT_DELETED_FLAG_KEY = '@easner_account_deleted'
@@ -56,7 +56,8 @@ const ACCOUNT_DELETED_FLAG_KEY = '@easner_account_deleted'
 function ProfileEditContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, applyPersonalSettingsFromServer, signOut } = useAuth()
   const insets = useSafeAreaInsets()
-  const scrollBottomPadding = useScrollBottomPadding(spacing[6])
+  // Stack screen — tab bar is hidden, so pad only for the safe-area inset (no tab bar height).
+  const scrollBottomPadding = useFixedFooterPadding(spacing[6])
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)

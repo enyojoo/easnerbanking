@@ -175,15 +175,12 @@ function mergeTransactionSnapshots(
   return merged as LedgerTransaction
 }
 
-/** Fixed footer: paddingTop + button + paddingBottom (matches styles.bottomContainer). */
-const TRANSACTION_DETAILS_FOOTER_HEIGHT = 52 + spacing[4]
-
 export default function TransactionDetailsScreen({ navigation, route }: NavigationProps) {
   const footerPadding = useFixedFooterPadding(spacing[4])
-  // Stack screen — tab bar is hidden. Pad only for the fixed footer so the last row
-  // (Share receipt) scrolls into view without a large empty gap below it.
-  const scrollBottomPadding =
-    TRANSACTION_DETAILS_FOOTER_HEIGHT + Math.max(footerPadding, spacing[6]) + spacing[2]
+  // The action bar (bottomContainer) is a normal-flow view below the ScrollView, so the
+  // scroll content only needs a small clearance above it — reserving the footer height
+  // here too would leave a large empty gap below the last row (Share receipt).
+  const scrollBottomPadding = spacing[6]
   const { transactionId, fromScreen, initialTransaction } = route.params as {
     transactionId: string
     fromScreen?: string
