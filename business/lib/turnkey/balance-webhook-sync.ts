@@ -5,6 +5,8 @@ import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exis
 import type { NormalizedTurnkeyBalanceDeposit } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import { turnkeyBalanceDepositProviderTransactionId } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import { resolveTurnkeyWalletScopeFromEvent } from "@/lib/turnkey/resolve-turnkey-wallet-scope"
+import { isDepositOmnibusAddress } from "@/lib/deposit-omnibus/config"
+import { handleDepositOmnibusInbound } from "@/lib/deposit-omnibus/handle-omnibus-inbound"
 
 function mapAssetToCurrency(asset: string): string {
   const a = asset.trim().toUpperCase()
@@ -23,6 +25,10 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
   eventId: string,
 ): Promise<boolean> {
   if (!isTurnkeyBalanceWebhooksIngestEnabled()) return false
+
+  if (isDepositOmnibusAddress(deposit.address)) {
+    return handleDepositOmnibusInbound(admin, deposit, eventId)
+  }
 
   const scope = await resolveTurnkeyWalletScopeFromEvent(admin, {
     ...deposit.raw,

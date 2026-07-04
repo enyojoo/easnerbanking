@@ -39,6 +39,7 @@ import {
   pickNoahOrchestrationRuleExecutionId,
 } from "@/lib/noah/bank-onramp-tx"
 import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-in-transaction"
+import { isDepositSplitEnabled } from "@/lib/deposit-omnibus/config"
 import {
   applyNoahBankOnrampOrchestrationOutSideEffects,
   tryCreditNoahBankOnrampPayInWallet,
@@ -479,6 +480,7 @@ export async function applyNoahWebhookSideEffects(
         })
 
         const shouldCreditWallet =
+          !isDepositSplitEnabled() &&
           isNoahBankOnrampFiatPayIn(txData) &&
           status === "settled" &&
           payInEnrichment != null &&

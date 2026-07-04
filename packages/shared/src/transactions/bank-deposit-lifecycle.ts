@@ -28,6 +28,17 @@ export type BankDepositLifecycleStep = {
 export const BANK_DEPOSIT_COMPLETED_DESCRIPTION =
   "Funds are now available in your account balance."
 
+/** Deposit omnibus split blocked when Noah channel fee exceeds customer fee. */
+export const BANK_DEPOSIT_BLOCKED_NEGATIVE_MARGIN_DESCRIPTION =
+  "We're reviewing this deposit. Funds will be posted once processing completes."
+
+export function isDepositSplitBlockedNegativeMargin(
+  metadata: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!metadata || typeof metadata !== "object") return false
+  return String(metadata.deposit_split_status ?? "").trim() === "blocked_negative_margin"
+}
+
 export function formatBankDepositPostedAmount(amount: number, currency: string): string {
   const c = String(currency || "USD").trim().toUpperCase()
   const n = Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0
@@ -101,7 +112,10 @@ export function buildBankDepositLifecycle(
     metadata: meta,
     payload: input.payload ?? null,
   })
-  const processingDescription = buildBankDepositProcessingDescription(schemeLabel)
+  const blockedNegativeMargin = isDepositSplitBlockedNegativeMargin(meta)
+  const processingDescription = blockedNegativeMargin
+    ? BANK_DEPOSIT_BLOCKED_NEGATIVE_MARGIN_DESCRIPTION
+    : buildBankDepositProcessingDescription(schemeLabel)
 
   if (ledgerStatus === "failed") {
     return [

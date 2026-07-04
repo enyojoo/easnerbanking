@@ -69,7 +69,7 @@ import {
   isWideSendAmountSymbol,
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
-  validatePayoutAmountAgainstLimits,
+  validatePayoutAmountAgainstLimitsForEntry,
   validateSendAmountFields,
   validateWalletSendReceiveAmount,
   resolveEffectiveWalletSendMin,
@@ -1057,8 +1057,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency') &&
         receiveAmountValue > 0
       ) {
-        const limitCheck = validatePayoutAmountAgainstLimits({
-          amount: receiveAmountValue,
+        const limitCheck = validatePayoutAmountAgainstLimitsForEntry({
+          amountEntryMode,
+          receiveAmount: receiveAmountValue,
+          customerRate: exchangeRate,
+          sendCurrency,
           hints: payoutHints,
           currencyCode: receiveCurrency,
           rail: payoutRail,

@@ -46,6 +46,20 @@ export function normalizeTransferMethodLabel(raw: string | null | undefined): st
   return s
 }
 
+/**
+ * Push/email subject activity label for global fiat payouts.
+ * Detail rows may still use normalized corridor labels (e.g. Local transfer).
+ */
+export function resolvePayoutNotificationActivityLabel(
+  input: PayoutTransferMethodInput & { transferMethod?: string | null },
+): "Bank transfer" | "Mobile transfer" {
+  const raw = String(input.transferMethod || "").trim().toLowerCase()
+  if (raw.includes("mobile") || isMobileMoneyPayoutCorridor(input)) {
+    return "Mobile transfer"
+  }
+  return "Bank transfer"
+}
+
 export function getGlobalPayoutProcessingTime(method: string): string {
   switch (method) {
     case "Easetag (wallet-to-wallet)":

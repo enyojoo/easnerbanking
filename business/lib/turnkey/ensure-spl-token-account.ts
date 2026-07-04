@@ -14,7 +14,7 @@ import {
   interpretTurnkeyGetSendTransactionStatus,
   pollUntilTurnkeySendTerminal,
   resolveSolSendParsedIds,
-} from "@/lib/turnkey/send"
+} from "@/lib/turnkey/sol-send-polling"
 
 type TurnkeyClientLike = Record<string, (...args: any[]) => Promise<any>>
 

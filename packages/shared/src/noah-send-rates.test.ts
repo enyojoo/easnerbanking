@@ -8,6 +8,7 @@ import {
   noahWalletRowsToRateMap,
   normalizePayoutReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
+  formatPayoutFiatAmountForPrepare,
   payoutReceiveAmountsMatch,
   payoutReceiveAmountsMatchForCurrency,
 } from "./noah-send-rates"
@@ -115,6 +116,21 @@ describe("convertNoahSendFlowAmounts", () => {
     })
     expect(o.receiveAmount).toBe(9997)
   })
+
+  it("send-entered: normalizes IDR receive to whole rupiah", () => {
+    const idrMap = noahWalletRowsToRateMap([
+      { from_currency: "USD", to_currency: "IDR", rate: 16_500 },
+    ])
+    const o = convertNoahSendFlowAmounts({
+      direction: "send",
+      amount: 100,
+      sendCurrency: "USD",
+      receiveCurrency: "IDR",
+      rateMap: idrMap,
+    })
+    expect(o.receiveAmount).toBe(1_650_000)
+    expect(Number.isInteger(o.receiveAmount)).toBe(true)
+  })
 })
 
 describe("normalizePayoutReceiveAmountForCurrency", () => {
@@ -125,6 +141,21 @@ describe("normalizePayoutReceiveAmountForCurrency", () => {
 
   it("keeps USD at two decimal places", () => {
     expect(normalizePayoutReceiveAmountForCurrency("USD", 5.555)).toBe(5.56)
+  })
+
+  it("rounds IDR to whole rupiah", () => {
+    expect(normalizePayoutReceiveAmountForCurrency("IDR", 1_654_321.78)).toBe(1_654_322)
+  })
+})
+
+describe("formatPayoutFiatAmountForPrepare", () => {
+  it("formats zero-decimal fiats without fractional digits", () => {
+    expect(formatPayoutFiatAmountForPrepare("IDR", 1_654_321.2)).toBe("1654321")
+    expect(formatPayoutFiatAmountForPrepare("NGN", 6530.85)).toBe("6531")
+  })
+
+  it("formats USD with two decimal places", () => {
+    expect(formatPayoutFiatAmountForPrepare("USD", 100)).toBe("100.00")
   })
 })
 

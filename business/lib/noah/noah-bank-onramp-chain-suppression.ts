@@ -41,6 +41,7 @@ function classifyNoahBankOnrampChainLedgerRow(row: {
       meta.flow === "bank_onramp" ||
       meta.noah_rule_execution_id ||
       meta.noah_orchestration_settlement_in_leg === true ||
+      meta.deposit_split_leg === true ||
       isNoahBankOnrampFiatPayIn(payload) ||
       isNoahBankOnrampLedgerPayload(payload)
     ) {

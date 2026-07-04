@@ -73,7 +73,7 @@ describe("buildTransactionSettledPushContent", () => {
         recipient_snapshot: { full_name: "SAMUEL ODIBA ENYOJO" },
       },
     })
-    expect(title).toBe("Local transfer failed")
+    expect(title).toBe("Mobile transfer failed")
     expect(body).toContain("Could not send")
     expect(body).toContain("Recipient bank rejected")
     expect(body).toContain("Any debited funds have been returned to your balance.")
@@ -104,7 +104,7 @@ describe("buildTransactionSettledPushContent", () => {
         recipient_snapshot: { full_name: "SAMUEL ODIBA ENYOJO" },
       },
     })
-    expect(title).toBe("Local transfer complete")
+    expect(title).toBe("Bank transfer complete")
     expect(body).toBe("Sent ₦5,000 to Samuel Odiba Enyojo")
   })
 
@@ -150,7 +150,7 @@ describe("buildTransactionSettledPushContent", () => {
         beneficiary_name: "SAMUEL",
       },
     })
-    expect(title).toBe("Local transfer complete")
+    expect(title).toBe("Bank transfer complete")
     expect(body).toContain("₦5,000")
     expect(body).toContain("Samuel")
   })

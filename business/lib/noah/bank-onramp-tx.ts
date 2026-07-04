@@ -19,6 +19,7 @@ import {
   deriveVerificationDepositNarrationLabel,
   formatVerificationBankDisplayName,
 } from "@easner/shared/transactions/verification-deposit"
+import { enrichBankDepositPayInFeeFields } from "@/lib/deposit-fees/enrich-pay-in-metadata"
 
 function breakdownAmount(tx: Record<string, unknown>, type: string): number | null {
   const items = tx.Breakdown
@@ -534,6 +535,7 @@ export function buildNoahBankPayInLedgerMetadata(
     destination_payment_rail: "crypto",
     processing_at: processingAt,
     ...(isVerification ? { completed_at: fiatSettledAt } : { fiat_settled_at: fiatSettledAt }),
+    ...enrichBankDepositPayInFeeFields(tx, enrichment),
   }
   return mergePayInMetadataWithLifecycle({}, base, {
     processing_at: processingAt,

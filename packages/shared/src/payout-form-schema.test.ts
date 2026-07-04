@@ -8,6 +8,8 @@ import {
   SEND_ARRIVAL_WITHIN_SECONDS,
   getSendAmountNoteFieldUi,
   validatePayoutAmountAgainstLimits,
+  validatePayoutAmountAgainstLimitsForEntry,
+  deriveSendBudgetFromReceiveAmount,
   validateSendAmountFields,
   recipientFormNeedsBankCode,
 } from "./payout-form-schema"
@@ -279,6 +281,28 @@ describe("USD optional reference on send amount", () => {
         paymentPurpose: "family support",
       }),
     ).toEqual({ ok: true })
+  })
+})
+
+describe("deriveSendBudgetFromReceiveAmount", () => {
+  it("converts receive to send budget using customer rate", () => {
+    expect(deriveSendBudgetFromReceiveAmount(1_650_000, 16_500)).toBe(100)
+  })
+})
+
+describe("validatePayoutAmountAgainstLimitsForEntry", () => {
+  it("uses send currency copy when send-entry exceeds max receive", () => {
+    const result = validatePayoutAmountAgainstLimitsForEntry({
+      amountEntryMode: "send",
+      receiveAmount: 5_000_000,
+      customerRate: 1_400,
+      sendCurrency: "USD",
+      currencyCode: "RWF",
+      hints: { limits: { max: "3500000" } },
+    })
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain("Maximum you can send")
+    expect(result.message).toContain("USD")
   })
 })
 

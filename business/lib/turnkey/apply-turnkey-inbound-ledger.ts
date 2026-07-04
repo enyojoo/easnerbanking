@@ -10,6 +10,8 @@ import {
   findNoahBankOnrampChainSettlementForSuppression,
   findPendingNoahBankOnrampForInboundAmount,
 } from "@/lib/noah/noah-bank-onramp-chain-suppression"
+import { tryCompleteDepositSplitFromUserVaultInbound } from "@/lib/deposit-omnibus/execute-deposit-split"
+import { isDepositSplitEnabled } from "@/lib/deposit-omnibus/config"
 import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { enqueueLiquiditySweepJob } from "@/lib/liquidity/sweep-jobs"
@@ -63,6 +65,18 @@ export async function applyTurnkeyInboundLedgerEvent(
   const direction = input.direction
 
   if (direction === "in") {
+    if (isDepositSplitEnabled() && txHash && status === "settled") {
+      const completed = await tryCompleteDepositSplitFromUserVaultInbound(admin, {
+        txHash,
+        userId,
+        businessId,
+        amount: input.amount,
+      }).catch(() => false)
+      if (completed) {
+        return { kind: "suppressed_noah" }
+      }
+    }
+
     if (txHash) {
       const noahSuppressed = await findNoahBankOnrampChainSettlementForSuppression(admin, {
         txHash,

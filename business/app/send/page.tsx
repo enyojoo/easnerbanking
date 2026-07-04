@@ -56,7 +56,7 @@ import {
   resolveEffectivePayoutMin,
   resolveEffectiveWalletSendMin,
   getSendAmountNoteFieldUi,
-  validatePayoutAmountAgainstLimits,
+  validatePayoutAmountAgainstLimitsForEntry,
   validateSendAmountFields,
 } from "@easner/shared"
 import { mapPayoutQuoteToFlowState } from "@/lib/noah/map-payout-quote-to-flow"
@@ -795,8 +795,11 @@ export default function SendPage() {
       (isBalanceSource || paymentMethod === "otherCurrency") &&
       receiveAmount > 0
     ) {
-      const limitCheck = validatePayoutAmountAgainstLimits({
-        amount: receiveAmount,
+      const limitCheck = validatePayoutAmountAgainstLimitsForEntry({
+        amountEntryMode,
+        receiveAmount,
+        customerRate: forwardRate,
+        sendCurrency,
         hints: payoutHints,
         currencyCode: receiveCurrency,
         rail: payoutRail,

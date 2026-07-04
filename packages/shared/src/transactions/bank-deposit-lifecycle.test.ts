@@ -81,4 +81,18 @@ describe("buildBankDepositLifecycle", () => {
     expect(steps[1].id).toBe("failed")
     expect(steps[1].title).toBe("Failed")
   })
+
+  it("shows under-review copy when deposit split blocked for negative margin", () => {
+    const steps = buildBankDepositLifecycle({
+      status: "processing",
+      metadata: {
+        processing_at: "2026-05-19T22:00:46Z",
+        deposit_split_status: "blocked_negative_margin",
+        flow: "bank_onramp",
+      },
+    })
+    expect(steps[0].state).toBe("current")
+    expect(steps[0].description).toContain("reviewing this deposit")
+    expect(steps[1].state).toBe("upcoming")
+  })
 })

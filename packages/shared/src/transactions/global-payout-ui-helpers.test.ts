@@ -3,6 +3,7 @@ import { formatTransactionDetailHeroTitle } from "./transaction-detail-hero-titl
 import {
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
+  resolvePayoutNotificationActivityLabel,
 } from "./payout-transfer-method"
 import { resolveOutboundTransactionListLabel } from "./transaction-list-label"
 
@@ -60,6 +61,44 @@ describe("getGlobalPayoutTransferMethod", () => {
     expect(getGlobalPayoutTransferMethod({ currency: "EUR", countryCode: "DE" })).toBe(
       "SEPA Instant",
     )
+  })
+})
+
+describe("resolvePayoutNotificationActivityLabel", () => {
+  it("maps bank corridors to Bank transfer", () => {
+    expect(
+      resolvePayoutNotificationActivityLabel({
+        transferMethod: "Bank transfer",
+        currency: "NGN",
+        countryCode: "NG",
+        bankName: "Kuda",
+      }),
+    ).toBe("Bank transfer")
+    expect(
+      resolvePayoutNotificationActivityLabel({
+        transferMethod: "Local transfer",
+        currency: "NGN",
+        countryCode: "NG",
+        bankName: "Kuda",
+      }),
+    ).toBe("Bank transfer")
+    expect(resolvePayoutNotificationActivityLabel({ transferMethod: "ACH" })).toBe("Bank transfer")
+  })
+
+  it("maps mobile corridors to Mobile transfer", () => {
+    expect(
+      resolvePayoutNotificationActivityLabel({
+        transferMethod: "Mobile money transfer",
+      }),
+    ).toBe("Mobile transfer")
+    expect(
+      resolvePayoutNotificationActivityLabel({
+        transferMethod: "Local transfer",
+        currency: "NGN",
+        countryCode: "NG",
+        mobileProvider: "MTN",
+      }),
+    ).toBe("Mobile transfer")
   })
 })
 

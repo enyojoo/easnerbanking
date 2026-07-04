@@ -15,6 +15,7 @@ import {
   isNoahUsAchChannel,
   prepareSellTransaction,
 } from "@/lib/noah/payout-prepare"
+import { formatPayoutFiatAmountForPrepare } from "@easner/shared"
 
 export type RecipientSellPrepareRow = {
   country_code?: string | null
@@ -112,9 +113,9 @@ export async function prepareSellFromRecipientRow(input: {
   overrides?: SellPrepareOverrides
 }): Promise<{ channelId: string; prep: Awaited<ReturnType<typeof prepareSellTransaction>> }> {
   const { row, fiatAmount, cryptoCurrency, noahCustomerId, overrides } = input
-  const fiat = fiatAmount.toFixed(2)
   const country = resolveRecipientPayoutCountry(row)
   const fiatCurrency = String(row.currency || "").toUpperCase()
+  const fiat = formatPayoutFiatAmountForPrepare(fiatCurrency, fiatAmount)
   const fullName = String(row.full_name || "").trim()
   const note = overrides?.note?.trim()
   const paymentPurpose = overrides?.paymentPurpose?.trim()
@@ -210,7 +211,12 @@ export async function prepareSellFromRecipientRow(input: {
     }
     const achRail = isNoahUsAchChannel(channel.paymentMethodType)
     const form = buildUsBankSellForm({
-      accountHolderAddress: addr,
+      accountHolderAddress: {
+        address: addr.street,
+        city: addr.city,
+        state: addr.state,
+        postalCode: addr.postalCode,
+      },
       accountNumber,
       routingNumber,
       fullName,

@@ -45,7 +45,7 @@ export function normalizePayoutReceiveAmount(amount: number): number {
 }
 
 /**
- * Noah BankLocal / mobile corridors (e.g. NGN) reject fractional destination fiat.
+ * Noah BankLocal / mobile corridors (e.g. NGN, IDR) reject fractional destination fiat.
  * Round to whole units before prepare and when comparing stash freshness.
  */
 export const ZERO_DECIMAL_PAYOUT_CURRENCIES = new Set([
@@ -56,6 +56,7 @@ export const ZERO_DECIMAL_PAYOUT_CURRENCIES = new Set([
   "RWF",
   "XOF",
   "XAF",
+  "IDR",
 ])
 
 export function isZeroDecimalPayoutCurrency(currency: string): boolean {
@@ -72,6 +73,16 @@ export function normalizePayoutReceiveAmountForCurrency(
     return Math.round(normalized)
   }
   return normalized
+}
+
+/** Noah sell/prepare FiatAmount string — whole units for zero-decimal fiats. */
+export function formatPayoutFiatAmountForPrepare(currency: string, amount: number): string {
+  const normalized = normalizePayoutReceiveAmountForCurrency(currency, amount)
+  if (!Number.isFinite(normalized) || normalized <= 0) return "0"
+  if (isZeroDecimalPayoutCurrency(currency)) {
+    return String(Math.round(normalized))
+  }
+  return normalized.toFixed(2)
 }
 
 /** Match wallet balance / send-side display precision. */

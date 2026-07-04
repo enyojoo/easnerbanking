@@ -56,6 +56,16 @@ export {
   type PayoutProcessingFeeOpts,
 } from "./payout-processing-fee"
 export {
+  computeCustomerDepositFee,
+  computeEasnerMarginFromOmnibus,
+  isDepositSplitEconomicsValid,
+  DEFAULT_DEPOSIT_FEE_BPS,
+  type CustomerDepositFeeOpts,
+  type DepositFeeCurrency,
+  type EasnerMarginFromOmnibusInput,
+  type EasnerMarginFromOmnibusResult,
+} from "./deposit-fee-pricing"
+export {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
   isBalanceStablecoinParity,
@@ -151,6 +161,7 @@ export {
   normalizePayoutReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
   normalizePayoutSendAmount,
+  formatPayoutFiatAmountForPrepare,
   isZeroDecimalPayoutCurrency,
   payoutReceiveAmountsMatch,
   payoutReceiveAmountsMatchForCurrency,
@@ -165,6 +176,8 @@ export {
   getSendAmountNoteFieldUi,
   validateSendAmountFields,
   validatePayoutAmountAgainstLimits,
+  validatePayoutAmountAgainstLimitsForEntry,
+  deriveSendBudgetFromReceiveAmount,
   recipientFormNeedsEmail,
   recipientFormNeedsAddress,
   recipientFormNeedsPhone,
@@ -298,10 +311,12 @@ export {
 } from "./transactions/product-label"
 export type { EasnerLedgerDirection } from "./transactions/product-label"
 export {
+  BANK_DEPOSIT_BLOCKED_NEGATIVE_MARGIN_DESCRIPTION,
   BANK_DEPOSIT_COMPLETED_DESCRIPTION,
   buildBankDepositLifecycle,
   formatBankDepositPostedAmount,
   isBankOnrampDepositFlow,
+  isDepositSplitBlockedNegativeMargin,
 } from "./transactions/bank-deposit-lifecycle"
 export {
   buildBankDepositProcessingDescription,
@@ -423,6 +438,7 @@ export {
   getGlobalPayoutTransferMethod,
   isMobileMoneyPayoutCorridor,
   normalizeTransferMethodLabel,
+  resolvePayoutNotificationActivityLabel,
 } from "./transactions/payout-transfer-method"
 export type { PayoutTransferMethodInput } from "./transactions/payout-transfer-method"
 export {

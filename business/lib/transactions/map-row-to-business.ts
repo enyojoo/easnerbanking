@@ -289,6 +289,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             postedCurrency: bankDepositDetail.postedCurrency,
             paymentScheme: bankDepositDetail.depositSchemeLabel,
             narration: bankDepositDetail.narration ?? undefined,
+            fee: bankDepositDetail.feeAmount || undefined,
             ledgerCreatedAt: bankDepositDetail.ledgerCreatedAt ?? ledgerCreatedAt,
           }
         : stablecoinDepositDetail

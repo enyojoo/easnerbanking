@@ -216,6 +216,67 @@ export function validatePayoutAmountAgainstLimits(input: {
   return { ok: true }
 }
 
+/** Inverse of send-entry receive normalization: receive ÷ customerRate → send budget. */
+export function deriveSendBudgetFromReceiveAmount(
+  receiveAmount: number,
+  customerRate: number,
+): number {
+  if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) return 0
+  if (!Number.isFinite(customerRate) || customerRate <= 0) return 0
+  return Math.round((receiveAmount / customerRate) * 100) / 100
+}
+
+/**
+ * Amount screen limit check — when entry mode is send, over-max copy uses send currency.
+ */
+export function validatePayoutAmountAgainstLimitsForEntry(input: {
+  amountEntryMode?: "send" | "receive"
+  receiveAmount: number
+  customerRate?: number
+  sendCurrency?: string
+  hints: PayoutFieldsSchemaHint | null | undefined
+  currencyCode?: string
+  rail?: PayoutRail
+  isEasetag?: boolean
+}): SendAmountFieldValidation {
+  const receiveCheck = validatePayoutAmountAgainstLimits({
+    amount: input.receiveAmount,
+    hints: input.hints,
+    currencyCode: input.currencyCode,
+    rail: input.rail,
+    isEasetag: input.isEasetag,
+  })
+  if (receiveCheck.ok || input.amountEntryMode !== "send") return receiveCheck
+
+  const cur = input.currencyCode?.trim().toUpperCase() || ""
+  const sendCur = input.sendCurrency?.trim().toUpperCase() || ""
+  const rate = input.customerRate ?? 0
+  const maxRaw = input.hints?.limits?.max
+  const max = maxRaw != null ? Number.parseFloat(String(maxRaw)) : NaN
+
+  if (Number.isFinite(max) && input.receiveAmount > max && rate > 0 && sendCur) {
+    const maxSend = deriveSendBudgetFromReceiveAmount(max, rate)
+    const label = formatPayoutLimitLabel(maxSend)
+    return { ok: false, message: `Maximum you can send is ~${label} ${sendCur}.` }
+  }
+
+  const effectiveMin =
+    cur.length > 0
+      ? resolveEffectivePayoutMin({
+          hints: input.hints,
+          currencyCode: cur,
+          rail: input.rail,
+        })
+      : null
+  if (effectiveMin != null && input.receiveAmount < effectiveMin && rate > 0 && sendCur) {
+    const minSend = deriveSendBudgetFromReceiveAmount(effectiveMin, rate)
+    const label = formatPayoutLimitLabel(minSend)
+    return { ok: false, message: `Minimum you can send is ~${label} ${sendCur}.` }
+  }
+
+  return receiveCheck
+}
+
 function formatPayoutLimitLabel(amount: number): string {
   if (Number.isInteger(amount) || Math.abs(amount - Math.round(amount)) < 1e-9) {
     return Math.round(amount).toLocaleString("en-US")

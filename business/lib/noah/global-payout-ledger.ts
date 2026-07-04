@@ -243,6 +243,89 @@ export async function reverseGlobalPayoutWalletDebitForEasnerPayoutId(
   return true
 }
 
+export type GlobalPayoutFailedWithoutReversalRow = {
+  transactionId: string
+  easnerPayoutId: string | null
+  userId: string | null
+  businessId: string | null
+}
+
+function isGlobalPayoutFailedWithoutReversal(meta: Record<string, unknown>): boolean {
+  if (!isGlobalPayoutNoahOutRow(meta)) return false
+  return meta.balance_delta_applied === true && meta.balance_delta_reversed !== true
+}
+
+/** Failed global fiat payouts where wallet debit was reserved but not reversed. */
+export async function listGlobalPayoutsFailedWithoutReversal(
+  admin: SupabaseClient,
+  opts?: { limit?: number },
+): Promise<GlobalPayoutFailedWithoutReversalRow[]> {
+  const limit = opts?.limit ?? 100
+  const { data, error } = await admin
+    .from("transactions")
+    .select("id, user_id, business_id, metadata")
+    .eq("provider", "noah")
+    .eq("direction", "out")
+    .in("status", ["failed", "cancelled"])
+    .or("metadata->>payout_type.eq.global_fiat,metadata->>flow.eq.global_fiat_offramp")
+    .limit(500)
+
+  if (error) throw error
+
+  const rows: GlobalPayoutFailedWithoutReversalRow[] = []
+  for (const row of data ?? []) {
+    const meta = (row.metadata || {}) as Record<string, unknown>
+    if (!isGlobalPayoutFailedWithoutReversal(meta)) continue
+    const easnerPayoutId =
+      typeof meta.easner_payout_id === "string" && meta.easner_payout_id.trim()
+        ? meta.easner_payout_id.trim()
+        : null
+    rows.push({
+      transactionId: String(row.id),
+      easnerPayoutId,
+      userId: row.user_id != null ? String(row.user_id) : null,
+      businessId: row.business_id != null ? String(row.business_id) : null,
+    })
+    if (rows.length >= limit) break
+  }
+  return rows
+}
+
+export async function countGlobalPayoutsFailedWithoutReversal(
+  admin: SupabaseClient,
+): Promise<number> {
+  const rows = await listGlobalPayoutsFailedWithoutReversal(admin, { limit: 1000 })
+  return rows.length
+}
+
+/** Idempotently retry wallet debit reversals for failed global payouts. */
+export async function repairGlobalPayoutsFailedWithoutReversal(
+  admin: SupabaseClient,
+  opts?: { limit?: number },
+): Promise<{
+  attempted: number
+  repaired: number
+  stillStuck: GlobalPayoutFailedWithoutReversalRow[]
+}> {
+  const stuck = await listGlobalPayoutsFailedWithoutReversal(admin, opts)
+  let repaired = 0
+  for (const row of stuck) {
+    if (!row.easnerPayoutId) continue
+    const ok = await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+      easnerPayoutId: row.easnerPayoutId,
+    })
+    if (ok) repaired += 1
+  }
+  const stillStuck = await listGlobalPayoutsFailedWithoutReversal(admin, opts)
+  if (stillStuck.length > 0) {
+    console.warn("[global_payout_reversal_repair] still_stuck", {
+      count: stillStuck.length,
+      sample: stillStuck.slice(0, 5),
+    })
+  }
+  return { attempted: stuck.length, repaired, stillStuck }
+}
+
 export function extractNoahRefundHintsFromOrchestrationIn(
   txData: Record<string, unknown>,
 ): Record<string, unknown> | null {

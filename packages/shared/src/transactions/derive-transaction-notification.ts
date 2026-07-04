@@ -7,6 +7,7 @@ import {
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
   normalizeTransferMethodLabel,
+  resolvePayoutNotificationActivityLabel,
 } from "./payout-transfer-method"
 import {
   BANK_DEPOSIT_COMPLETED_DESCRIPTION,
@@ -207,12 +208,14 @@ function buildGlobalPayoutOutContext(input: {
   amountText: string
 }): {
   transferMethod: string
+  notificationActivityLabel: string
   recipientName?: string
   amountDisplay: string
   sentBody: string
 } {
   const meta = input.meta
   const payoutReview = normalizePayoutReviewSnapshot(meta?.payout_review)
+  const recipientSnapshot = meta?.recipient_snapshot as Record<string, unknown> | undefined
   const receiveAmount =
     payoutReview?.receive_amount ??
     (typeof meta?.receive_amount === "number" ? meta.receive_amount : null)
@@ -230,14 +233,34 @@ function buildGlobalPayoutOutContext(input: {
     receiveAmount != null && receiveCurrency
       ? formatMoneyDisplay(receiveAmount, receiveCurrency)
       : input.amountText
-  const transferMethod = normalizeTransferMethodLabel(
+  const rawTransferMethod =
     payoutReview?.transfer_method ||
-      (typeof meta?.transfer_method === "string" ? String(meta.transfer_method) : "Bank transfer"),
-  )
+    (typeof meta?.transfer_method === "string" ? String(meta.transfer_method) : "Bank transfer")
+  const transferMethod = normalizeTransferMethodLabel(rawTransferMethod)
+  const notificationActivityLabel = resolvePayoutNotificationActivityLabel({
+    transferMethod: rawTransferMethod,
+    currency: receiveCurrency,
+    countryCode: firstNonEmptyString([
+      recipientSnapshot?.country_code,
+      meta?.country_code,
+      meta?.receive_country_code,
+    ]),
+    bankName: firstNonEmptyString([recipientSnapshot?.bank_name, meta?.bank_name]),
+    mobileProvider: firstNonEmptyString([
+      recipientSnapshot?.mobile_provider,
+      meta?.mobile_provider,
+    ]),
+  })
   const sentBody = recipientName
     ? `Sent ${amountDisplay} to ${recipientName}`
     : `Sent ${amountDisplay}`
-  return { transferMethod, recipientName, amountDisplay, sentBody }
+  return {
+    transferMethod,
+    notificationActivityLabel,
+    recipientName,
+    amountDisplay,
+    sentBody,
+  }
 }
 
 function finalizeDescriptor(
@@ -315,8 +338,8 @@ export function deriveTransactionNotification(
           ? `Could not send ${payout.amountDisplay} to ${payout.recipientName}. ${input.failureReason}`
           : `Could not send ${payout.amountDisplay} to ${payout.recipientName}.`
         : input.failureReason
-          ? `Your ${payout.transferMethod.toLowerCase()} could not be completed. ${input.failureReason}`
-          : `Your ${payout.transferMethod.toLowerCase()} could not be completed.`
+          ? `Your ${payout.notificationActivityLabel.toLowerCase()} could not be completed. ${input.failureReason}`
+          : `Your ${payout.notificationActivityLabel.toLowerCase()} could not be completed.`
       return finalizeDescriptor(
         {
           ...base,
@@ -328,7 +351,7 @@ export function deriveTransactionNotification(
           counterpartyName: payout.recipientName,
           category: payout.transferMethod,
         },
-        activityLabelForNotification("bank_payout", payout.transferMethod),
+        payout.notificationActivityLabel,
       )
     }
 
@@ -548,7 +571,7 @@ export function deriveTransactionNotification(
         counterpartyName: payout.recipientName,
         category: payout.transferMethod,
       },
-      activityLabelForNotification("bank_payout", payout.transferMethod),
+      payout.notificationActivityLabel,
     )
   }
 

@@ -4,6 +4,20 @@ import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import { isNewPaymentIntentsPaused } from "@/lib/ops/safe-mode"
 import { getTurnkeyWebhookFeatureUrl, validateTurnkeyEnvForProduction } from "@/lib/turnkey/config"
 import { isNoahConfigured } from "@/lib/noah/config"
+import {
+  depositOmnibusSolanaAddressEur,
+  depositOmnibusSolanaAddressUsd,
+  depositOmnibusAllowlistCustomerIds,
+  isDepositFeePricingEnabled,
+  isDepositOmnibusEnabled,
+  isDepositSplitConfigValid,
+  isDepositSplitDryRun,
+  isDepositSplitEnabled,
+} from "@/lib/deposit-omnibus/config"
+import {
+  countGlobalPayoutsFailedWithoutReversal,
+  listGlobalPayoutsFailedWithoutReversal,
+} from "@/lib/noah/global-payout-ledger"
 
 export const runtime = "nodejs"
 
@@ -64,6 +78,38 @@ export async function GET(request: Request) {
   const turnkeyWebhookUrl = getTurnkeyWebhookFeatureUrl()
   const turnkeyWebhookUrlError = validateWebhookUrl(turnkeyWebhookUrl)
 
+  const [globalPayoutsFailedWithoutReversal, globalPayoutStuckSample] = await Promise.all([
+    countGlobalPayoutsFailedWithoutReversal(admin),
+    listGlobalPayoutsFailedWithoutReversal(admin, { limit: 5 }),
+  ])
+
+  let depositSplitJobsPending: number | null = null
+  let depositSplitJobsStuck: number | null = null
+  let depositBlockedNegativeMarginCount: number | null = null
+  if (isDepositSplitEnabled()) {
+    const cutoff = new Date(Date.now() - 90_000).toISOString()
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const [pendingRes, stuckRes, blockedRes] = await Promise.all([
+      admin
+        .from("deposit_split_jobs")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["pending", "send_submitted"]),
+      admin
+        .from("deposit_split_jobs")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["pending", "send_submitted"])
+        .lt("updated_at", cutoff),
+      admin
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .contains("metadata", { deposit_split_status: "blocked_negative_margin" })
+        .gte("created_at", thirtyDaysAgo),
+    ])
+    depositSplitJobsPending = pendingRes.count ?? null
+    depositSplitJobsStuck = stuckRes.count ?? null
+    depositBlockedNegativeMarginCount = blockedRes.count ?? null
+  }
+
   return NextResponse.json({
     ok: true,
     safe_mode_new_intents: isNewPaymentIntentsPaused(),
@@ -90,5 +136,22 @@ export async function GET(request: Request) {
       awaiting_crypto_deposit: intentsAwaitingCrypto,
     },
     event_inbox_failed: inboxFailed.count ?? null,
+    global_payouts: {
+      failed_without_reversal: globalPayoutsFailedWithoutReversal,
+      sample_transaction_ids: globalPayoutStuckSample.map((r) => r.transactionId),
+    },
+    deposit_omnibus: {
+      omnibus_enabled: isDepositOmnibusEnabled(),
+      fee_pricing_enabled: isDepositFeePricingEnabled(),
+      split_enabled: isDepositSplitEnabled(),
+      split_dry_run: isDepositSplitDryRun(),
+      split_config_valid: isDepositSplitConfigValid(),
+      omnibus_address_usd_configured: Boolean(depositOmnibusSolanaAddressUsd()),
+      omnibus_address_eur_configured: Boolean(depositOmnibusSolanaAddressEur()),
+      allowlist_customer_count: depositOmnibusAllowlistCustomerIds().length,
+      split_jobs_pending: depositSplitJobsPending,
+      split_jobs_stuck: depositSplitJobsStuck,
+      blocked_negative_margin_count: depositBlockedNegativeMarginCount,
+    },
   })
 }

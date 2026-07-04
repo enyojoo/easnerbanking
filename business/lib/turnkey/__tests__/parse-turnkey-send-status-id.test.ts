@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { extractTurnkeySolSendTransactionStatusId } from "@/lib/turnkey/send"
+import { extractTurnkeySolSendTransactionStatusId } from "@/lib/turnkey/sol-send-polling"
 
 describe("extractTurnkeySolSendTransactionStatusId", () => {
   it("does not infer status id from bare top-level activity id field", () => {

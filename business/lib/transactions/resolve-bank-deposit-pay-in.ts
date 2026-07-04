@@ -113,15 +113,21 @@ export function resolveBankDepositPayInDetail(
   ) ?? fdEnrichment?.fiatAmount ?? txEnrichment?.fiatAmount ?? 0
 
   const feeAmount = roundFiat(
-    typeof meta.fee_amount === "number" ? meta.fee_amount : txEnrichment?.feeAmount,
+    typeof meta.customer_fee === "number"
+      ? meta.customer_fee
+      : typeof meta.fee_amount === "number"
+        ? meta.fee_amount
+        : txEnrichment?.feeAmount,
   )
 
   const postedAmount = roundFiat(
-    typeof meta.posted_amount === "number"
-      ? meta.posted_amount
-      : typeof meta.settled_amount === "number"
-        ? meta.settled_amount
-        : txEnrichment?.settledStablecoinAmount,
+    typeof meta.user_net_amount === "number"
+      ? meta.user_net_amount
+      : typeof meta.posted_amount === "number"
+        ? meta.posted_amount
+        : typeof meta.settled_amount === "number"
+          ? meta.settled_amount
+          : txEnrichment?.settledStablecoinAmount,
   )
 
   const fiatCurrency =

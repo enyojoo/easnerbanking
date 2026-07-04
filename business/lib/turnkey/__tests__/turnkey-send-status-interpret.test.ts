@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   extractTxHashFromTurnkeySendStatusResponse,
   interpretTurnkeyGetSendTransactionStatus,
-} from "@/lib/turnkey/send"
+} from "@/lib/turnkey/sol-send-polling"
 
 describe("extractTxHashFromTurnkeySendStatusResponse", () => {
   it("reads Solana signature from solana.signature", () => {

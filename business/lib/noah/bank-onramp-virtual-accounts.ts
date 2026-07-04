@@ -12,7 +12,7 @@ import {
   persistVirtualAccountFromBankOnrampWorkflow,
 } from "@/lib/noah/persist-account-data"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
+import { resolveBankOnrampDestinationAddress } from "@/lib/deposit-omnibus/resolve-va-destination"
 
 const NOAH_BANK_ONRAMP_NETWORK = "Solana"
 
@@ -125,7 +125,7 @@ async function ensureSingleFiatRailViaBankOnramp(
   }
 
   const ctx = buildAccountContext(opts)
-  const destination = await resolveTurnkeyAddressForNoahPair(
+  const destination = await resolveBankOnrampDestinationAddress(
     admin,
     ctx,
     rail.cryptoCurrency,
@@ -216,6 +216,151 @@ export async function ensureFiatVirtualAccountsViaBankOnramp(
     usdBankOnrampCreated: usd.created,
     eurBankOnrampCreated: eur.created,
   }
+}
+
+export type ReprovisionBankOnrampRailResult = {
+  rail: FiatRail
+  destinationAddress: string | null
+  attempted: boolean
+  ok: boolean
+  paymentMethodId: string | null
+  error: string | null
+}
+
+/**
+ * Force Noah `bank-deposit-to-onchain-address` for one rail — even when a VA already exists.
+ * Use when migrating destination (e.g. user vault → deposit omnibus) for approved customers.
+ */
+export async function reprovisionBankOnrampRail(
+  admin: SupabaseClient,
+  opts: {
+    scope: "individual" | "business"
+    subjectUserId: string
+    subjectBusinessId: string | null
+    noahCustomerId: string
+    rail: FiatRail
+    dryRun?: boolean
+  },
+): Promise<ReprovisionBankOnrampRailResult> {
+  const railConfig = FIAT_RAILS.find((r) => r.fiat === opts.rail)
+  if (!railConfig) {
+    return {
+      rail: opts.rail,
+      destinationAddress: null,
+      attempted: false,
+      ok: false,
+      paymentMethodId: null,
+      error: "unknown_rail",
+    }
+  }
+
+  const ctx = buildAccountContext({
+    scope: opts.scope,
+    subjectUserId: opts.subjectUserId,
+    subjectBusinessId: opts.subjectBusinessId,
+    noahCustomerId: opts.noahCustomerId,
+  })
+
+  const destination = await resolveBankOnrampDestinationAddress(
+    admin,
+    ctx,
+    railConfig.cryptoCurrency,
+    NOAH_BANK_ONRAMP_NETWORK,
+  )
+
+  if (!destination) {
+    return {
+      rail: opts.rail,
+      destinationAddress: null,
+      attempted: false,
+      ok: false,
+      paymentMethodId: null,
+      error: "no_destination_address",
+    }
+  }
+
+  if (opts.dryRun) {
+    return {
+      rail: opts.rail,
+      destinationAddress: destination,
+      attempted: false,
+      ok: true,
+      paymentMethodId: null,
+      error: null,
+    }
+  }
+
+  try {
+    const workflow = await startBankDepositToOnchainAddress({
+      customerId: opts.noahCustomerId,
+      fiatCurrency: railConfig.fiatCurrency,
+      cryptoCurrency: railConfig.cryptoCurrency,
+      network: NOAH_BANK_ONRAMP_NETWORK,
+      destinationAddress: destination,
+    })
+    await persistVirtualAccountFromBankOnrampWorkflow(
+      opts.subjectUserId,
+      opts.rail,
+      workflow,
+      opts.subjectBusinessId,
+      opts.noahCustomerId,
+    )
+    const paymentMethods = await fetchAllPaymentMethodsForCustomer(opts.noahCustomerId)
+    await persistAllPayinVirtualAccountsFromPaymentMethods(
+      opts.subjectUserId,
+      paymentMethods,
+      opts.subjectBusinessId,
+      opts.noahCustomerId,
+    )
+    const pmId = String(workflow.PaymentMethodID ?? "").trim() || null
+    return {
+      rail: opts.rail,
+      destinationAddress: destination,
+      attempted: true,
+      ok: true,
+      paymentMethodId: pmId,
+      error: null,
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return {
+      rail: opts.rail,
+      destinationAddress: destination,
+      attempted: true,
+      ok: false,
+      paymentMethodId: null,
+      error: msg.slice(0, 500),
+    }
+  }
+}
+
+/** Re-provision USD and/or EUR bank on-ramp VAs (existing or new customers). */
+export async function reprovisionBankOnrampVirtualAccounts(
+  admin: SupabaseClient,
+  opts: {
+    scope: "individual" | "business"
+    subjectUserId: string
+    subjectBusinessId: string | null
+    noahCustomerId: string
+    rails?: FiatRail[]
+    dryRun?: boolean
+  },
+): Promise<ReprovisionBankOnrampRailResult[]> {
+  const rails = opts.rails?.length ? opts.rails : (["usd", "eur"] as FiatRail[])
+  const results: ReprovisionBankOnrampRailResult[] = []
+  for (const rail of rails) {
+    results.push(
+      await reprovisionBankOnrampRail(admin, {
+        scope: opts.scope,
+        subjectUserId: opts.subjectUserId,
+        subjectBusinessId: opts.subjectBusinessId,
+        noahCustomerId: opts.noahCustomerId,
+        rail,
+        dryRun: opts.dryRun,
+      }),
+    )
+  }
+  return results
 }
 
 /** After a Turnkey vault is provisioned, try bank onramp for the matching fiat rail. */

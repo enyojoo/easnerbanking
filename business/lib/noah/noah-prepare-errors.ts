@@ -2,6 +2,106 @@ import { NoahHttpError } from "@/lib/noah/http"
 
 export type NoahPayoutErrorStage = "prepare" | "sell" | "quote"
 
+export type NoahChannelLimitHints = {
+  min?: string
+  max?: string
+  currency?: string
+}
+
+function readLimitString(value: unknown): string | undefined {
+  if (value == null) return undefined
+  const s = String(value).trim()
+  return s || undefined
+}
+
+function pickLimitFields(obj: Record<string, unknown>): Partial<NoahChannelLimitHints> {
+  const min =
+    readLimitString(obj.MinLimit) ??
+    readLimitString(obj.minLimit) ??
+    readLimitString(obj.Min) ??
+    readLimitString(obj.min)
+  const max =
+    readLimitString(obj.MaxLimit) ??
+    readLimitString(obj.maxLimit) ??
+    readLimitString(obj.Max) ??
+    readLimitString(obj.max)
+  const currency =
+    readLimitString(obj.FiatCurrency) ??
+    readLimitString(obj.Currency) ??
+    readLimitString(obj.currency)
+  return { ...(min ? { min } : {}), ...(max ? { max } : {}), ...(currency ? { currency } : {}) }
+}
+
+function mergeLimitHints(
+  base: NoahChannelLimitHints,
+  next: Partial<NoahChannelLimitHints>,
+): NoahChannelLimitHints {
+  return {
+    min: next.min ?? base.min,
+    max: next.max ?? base.max,
+    currency: next.currency ?? base.currency,
+  }
+}
+
+function walkForLimitHints(node: unknown, depth = 0): NoahChannelLimitHints {
+  if (node == null || depth > 6) return {}
+  if (typeof node !== "object") return {}
+
+  let hints: NoahChannelLimitHints = {}
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      hints = mergeLimitHints(hints, walkForLimitHints(item, depth + 1))
+    }
+    return hints
+  }
+
+  const obj = node as Record<string, unknown>
+  hints = mergeLimitHints(hints, pickLimitFields(obj))
+
+  for (const key of ["Limits", "Request", "FiatAmount", "Extensions", "RequestExtension"]) {
+    const child = obj[key]
+    if (child != null) {
+      hints = mergeLimitHints(hints, walkForLimitHints(child, depth + 1))
+    }
+  }
+
+  for (const value of Object.values(obj)) {
+    if (value != null && typeof value === "object") {
+      const nested = walkForLimitHints(value, depth + 1)
+      if (nested.min || nested.max || nested.currency) {
+        hints = mergeLimitHints(hints, nested)
+      }
+    }
+  }
+
+  return hints
+}
+
+/** Parse min/max fiat hints from Noah prepare channel-limit error bodies. */
+export function parseNoahChannelLimitHints(body: unknown): NoahChannelLimitHints {
+  return walkForLimitHints(body)
+}
+
+function isChannelLimitMessage(msg: string): boolean {
+  const m = msg.toLowerCase()
+  return m.includes("channel limit") || m.includes("outside of channel limits")
+}
+
+function formatChannelLimitUserError(hints: NoahChannelLimitHints): string {
+  const cur = hints.currency?.trim().toUpperCase()
+  const suffix = cur ? ` ${cur}` : ""
+  if (hints.min && hints.max) {
+    return `This amount is outside the allowed range for this transfer. Try between ${hints.min} and ${hints.max}${suffix}.`
+  }
+  if (hints.max) {
+    return `This amount exceeds the maximum for this transfer (${hints.max}${suffix}). Try a smaller amount.`
+  }
+  if (hints.min) {
+    return `This amount is below the minimum for this transfer (${hints.min}${suffix}). Try a larger amount.`
+  }
+  return "This amount is outside the allowed range for this transfer. Try a smaller or larger amount."
+}
+
 function noahValidationDescriptions(body: unknown): string[] {
   if (!body || typeof body !== "object") return []
   const ext = (body as Record<string, unknown>).RequestExtension
@@ -32,6 +132,10 @@ export function mapNoahPayoutUserError(
     }
 
     const msg = (e.detail || e.message).toLowerCase()
+    if (isChannelLimitMessage(msg) || validations.some((v) => isChannelLimitMessage(v))) {
+      const hints = parseNoahChannelLimitHints(e.body)
+      return formatChannelLimitUserError(hints)
+    }
     if (msg.includes("reference")) {
       return "Payment reference is required or invalid for this corridor."
     }

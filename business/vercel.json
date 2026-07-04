@@ -31,6 +31,14 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/process-deposit-splits",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/process-global-payout-reversal-repair",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/internal/invoices/mark-past-due",
       "schedule": "0 6 * * *"
     },

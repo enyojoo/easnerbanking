@@ -10,6 +10,8 @@ import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-
 import { notifyBankDepositPayInSettledPush } from "@/lib/notifications/bank-deposit-settled-notify"
 import { mergeBankDepositLifecycleMetadata } from "@/lib/noah/bank-onramp-tx"
 import { pickNoahOnChainTxHashFromLedgerRow } from "@/lib/noah/noah-on-chain-tx-hash"
+import { isDepositSplitEnabled } from "@/lib/deposit-omnibus/config"
+import { triggerDepositSplitFromOrchestrationOut } from "@/lib/deposit-omnibus/handle-omnibus-inbound"
 
 function applyLedgerScope<T extends { eq: (col: string, val: string) => T; is: (col: string, val: null) => T }>(
   query: T,
@@ -79,6 +81,9 @@ export async function tryCreditNoahBankOnrampPayInWallet(
   admin: SupabaseClient,
   input: CreditNoahBankOnrampInput,
 ): Promise<{ credited: boolean; skippedReason?: string }> {
+  if (isDepositSplitEnabled()) {
+    return { credited: false, skippedReason: "deferred_to_split" }
+  }
   const enrichment = input.payInEnrichment
   if (
     enrichment.settledStablecoinAmount == null ||
@@ -172,6 +177,18 @@ export async function applyNoahBankOnrampOrchestrationOutSideEffects(
     userId: opts.userId,
     businessId: opts.businessId,
   })
+
+  if (isDepositSplitEnabled()) {
+    await triggerDepositSplitFromOrchestrationOut(admin, {
+      ruleExecutionId,
+      userId: opts.userId,
+      businessId: opts.businessId,
+      solanaTxHash,
+      amount: Number(opts.txData.Amount ?? 0) || null,
+    })
+    return
+  }
+
   await reconcileNoahBankOnrampCreditForSolanaTx(admin, {
     solanaTxHash,
     userId: opts.userId,
@@ -204,9 +221,12 @@ export async function patchBankOnrampPayInOnChainSettled(
   })
   if (!payIn?.id) return null
 
-  const merged = mergeBankDepositLifecycleMetadata(payIn.metadata, {
-    on_chain_settled_at: opts.onChainSettledAt,
-  })
+  const merged = mergeBankDepositLifecycleMetadata(
+    payIn.metadata,
+    isDepositSplitEnabled()
+      ? {}
+      : { on_chain_settled_at: opts.onChainSettledAt },
+  )
 
   await admin
     .from("transactions")

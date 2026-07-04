@@ -100,7 +100,7 @@ describe("prepareSellFromRecipientRow IDR", () => {
     expect(prepareSellTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         channelId: "b6ec1c95-f036-523c-b092-eb5ce4255e4a",
-        fiatAmount: "100000.00",
+        fiatAmount: "100000",
       }),
     )
     expect(result.channelId).toBe("b6ec1c95-f036-523c-b092-eb5ce4255e4a")
