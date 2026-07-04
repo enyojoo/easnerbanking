@@ -1,15 +1,21 @@
-import React, { useEffect } from 'react'
-import { initPostHog } from '../lib/posthog'
+import React from 'react'
+import { PostHogProvider as PostHogSDKProvider } from 'posthog-react-native'
+import { getPostHog } from '../lib/posthog'
 
 interface PostHogProviderProps {
   children: React.ReactNode
 }
 
 export function PostHogProvider({ children }: PostHogProviderProps) {
-  useEffect(() => {
-    // Initialize once at app root. Lifecycle events are handled by SDK config.
-    initPostHog()
-  }, [])
+  const client = getPostHog()
 
-  return <>{children}</>
+  if (!client) {
+    return <>{children}</>
+  }
+
+  return (
+    <PostHogSDKProvider client={client} autocapture={false} debug={__DEV__}>
+      {children}
+    </PostHogSDKProvider>
+  )
 }

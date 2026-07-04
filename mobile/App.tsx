@@ -17,7 +17,6 @@ import { NotificationsProvider } from './src/contexts/NotificationsContext'
 import { BalanceProvider } from './src/contexts/BalanceContext'
 import { QueryProvider } from './src/query'
 import { ToastProvider } from './src/components/ToastProvider'
-import { PostHogProvider } from './src/components/PostHogProvider'
 import { analytics } from './src/lib/analytics'
 import { deepLinkService } from './src/services/DeepLinkService'
 import { pushNotificationService } from './src/lib/pushNotificationService'
@@ -384,7 +383,6 @@ export default function App() {
           <ResponsiveLayoutProvider>
           <ShellAwareSafeArea>
           <ThemePaletteProvider>
-            <PostHogProvider>
               <AuthProvider>
                 <QueryProvider>
                   <PushNotificationBootstrap />
@@ -397,7 +395,6 @@ export default function App() {
                   </BalanceProvider>
                 </QueryProvider>
               </AuthProvider>
-            </PostHogProvider>
           </ThemePaletteProvider>
           </ShellAwareSafeArea>
           </ResponsiveLayoutProvider>
