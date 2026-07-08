@@ -2,6 +2,8 @@
 
 Companion to [deposit-omnibus-rollout.md](./deposit-omnibus-rollout.md) for global fiat payouts (Noah prepare + Easner 1% processing fee).
 
+**Deposit fees:** Under Noah Standard, deposit omnibus/split is **blocked**. Go-live (Option A) = **no Easner VA inbound fee**; this doc covers **payout** economics only.
+
 ## Payout pricing (rate drift)
 
 - The **amount screen** preview uses `noah_rates` from the database (customer rate ≈ mid − FX margin).

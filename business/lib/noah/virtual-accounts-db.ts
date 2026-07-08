@@ -45,9 +45,41 @@ function rowToDisplay(row: VirtualAccountDbRow, currency: "usd" | "eur" | "gbp")
   }
 }
 
+async function readMirroredVirtualAccountId(
+  admin: SupabaseClient,
+  opts: {
+    subjectUserId: string
+    subjectBusinessId: string | null
+    currency: "usd" | "eur" | "gbp"
+  },
+): Promise<string | null> {
+  const columnByCurrency = {
+    usd: "noah_usd_virtual_account_id",
+    eur: "noah_eur_virtual_account_id",
+    gbp: "noah_gbp_virtual_account_id",
+  } as const
+  const col = columnByCurrency[opts.currency]
+  if (opts.subjectBusinessId) {
+    const { data } = await admin
+      .from("businesses")
+      .select(col)
+      .eq("id", opts.subjectBusinessId)
+      .maybeSingle()
+    const id = (data as Record<string, string | null> | null)?.[col]
+    return id?.trim() || null
+  }
+  const { data } = await admin
+    .from("users")
+    .select(col)
+    .eq("id", opts.subjectUserId)
+    .maybeSingle()
+  const id = (data as Record<string, string | null> | null)?.[col]
+  return id?.trim() || null
+}
+
 /**
  * Read cached fiat virtual account details from `public.virtual_accounts`.
- * Returns null when no row exists for the scope + currency.
+ * Prefers the row matching `users` / `businesses` mirrored Noah payment method id.
  */
 export async function getVirtualAccountDisplayFromDb(
   admin: SupabaseClient,
@@ -79,7 +111,16 @@ export async function getVirtualAccountDisplayFromDb(
   const currency = normalizeCurrencyCode(String(data[0]?.currency ?? fiat))
   if (!currency) return null
 
-  const row = pickPreferredVirtualAccountRow(data as VirtualAccountDbRow[], currency)
+  const mirroredPmId = await readMirroredVirtualAccountId(admin, {
+    subjectUserId: input.userId,
+    subjectBusinessId: input.businessId ?? null,
+    currency,
+  })
+  const rows = data as VirtualAccountDbRow[]
+  const row =
+    (mirroredPmId
+      ? rows.find((r) => String(r.noah_virtual_account_id ?? "").trim() === mirroredPmId)
+      : null) ?? pickPreferredVirtualAccountRow(rows, currency)
   if (!row) return null
 
   const hasDetails =

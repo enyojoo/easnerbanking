@@ -1,6 +1,22 @@
 # Deposit omnibus + fee split rollout
 
-Internal runbook for the flag-gated deposit omnibus flow (Noah Option 1 + Easner 1% min/max fee).
+Internal runbook for the flag-gated deposit omnibus flow (Noah Option 1 + Easner deposit fee / split).
+
+## Status: Noah Standard — blocked (do not enable)
+
+**July 2026:** Noah confirmed that under the **Standard** model (Noah’s licensing covers end customers), partners **cannot sit in the flow of funds** or hold user funds in transit. Routing remaining USDC/EURC to an Easner-controlled omnibus (then splitting to users and retaining margin) changes the onboarded flow and requires the partner’s own licensing.
+
+| Ask | Noah | Go-live position |
+|-----|------|------------------|
+| Omnibus as VA destination | Rejected | Keep flags **off** |
+| Inbound deduct + omnibus | Blocked by above | Keep flags **off** |
+| Monthly on-ramp invoicing / fixed-fee-only | Deferred until after go-live + history | Revisit later |
+
+**Option A (current go-live):**
+
+- VA deposits: **no Easner fee**. Noah ChannelFee applies; credit full Noah `Remaining` to each customer’s self-custodial vault.
+- Payouts: unchanged — Noah channel + FX margin in rate + **Easner 1%** processing fee from user balance.
+- Code for omnibus/split may remain in the repo (flag-gated) for a possible licensed / non-Standard model later. **Never enable under Standard.**
 
 ## Feature flags
 
@@ -14,28 +30,30 @@ Internal runbook for the flag-gated deposit omnibus flow (Noah Option 1 + Easner
 
 **Dependency chain**
 
-- `DEPOSIT_FEE_PRICING_ENABLED` alone → UI/metadata only; credit unchanged.
-- `DEPOSIT_OMNIBUS_ENABLED` alone → Noah sends to omnibus; no user credit if split off.
-- `DEPOSIT_SPLIT_ENABLED` → requires `DEPOSIT_OMNIBUS_ENABLED`.
+- `DEPOSIT_FEE_PRICING_ENABLED` alone → UI/metadata only; credit unchanged (still not used for Option A go-live).
+- `DEPOSIT_OMNIBUS_ENABLED` alone → Noah sends to omnibus; no user credit if split off — **must stay false**.
+- `DEPOSIT_SPLIT_ENABLED` → requires `DEPOSIT_OMNIBUS_ENABLED` — **must stay false**.
 
-Shipping with all flags `false` is safe. Toggling flags off rolls back without redeploy.
+Shipping with all flags `false` is the go-live configuration.
 
-## Required env (when omnibus live)
+## Required env (omnibus — do not enable under Standard)
 
 ```
 DEPOSIT_OMNIBUS_SOLANA_ADDRESS_USD=<parent-org Solana owner address, USDC ATA>
 DEPOSIT_OMNIBUS_SOLANA_ADDRESS_EUR=<parent-org Solana owner address, EURC ATA>
-WALLET_SEND_FEE_USD=<Easner margin destination, USD>
-WALLET_SEND_FEE_EUR=<Easner margin destination, EUR>
+WALLET_SEND_FEE_SOLANA_ADDRESS_USD=<Easner payout fee wallet>
+WALLET_SEND_FEE_SOLANA_ADDRESS_EUR=<Easner payout fee wallet>
 ```
 
-Optional: `DEPOSIT_OMNIBUS_ALLOWLIST_CUSTOMER_IDS` for staged rollout.
+Payout fee wallets remain required for outbound 1% capture. Omnibus address vars are unused while flags are off.
 
 ## Database
 
-Apply `business/scripts/sql/deposit-split-jobs-schema.sql` before enabling `DEPOSIT_SPLIT_ENABLED`.
+`business/scripts/sql/deposit-split-jobs-schema.sql` only needed if/when `DEPOSIT_SPLIT_ENABLED` is turned on (licensed model). Not required for Option A.
 
 ## Turnkey omnibus setup (parent org)
+
+Historical / future licensed-model notes only. Skip for Option A go-live.
 
 1. **Organization:** Use parent org (`TURNKEY_ORGANIZATION_ID`). Sub-org wallets cannot be signed from the parent API key.
 2. **Create wallet:** Dashboard → Wallets → Create → name `Easner deposit omnibus` → add Solana account → copy address → `DEPOSIT_OMNIBUS_SOLANA_ADDRESS_USD`.
@@ -43,38 +61,33 @@ Apply `business/scripts/sql/deposit-split-jobs-schema.sql` before enabling `DEPO
 4. **ATAs:** Run `ensureStablecoinTokenAccountOnChain` for USDC on the USD address and EURC on the EUR address.
 5. **API user + policies:** Create `easner-deposit-splitter` API user in parent org. Policies (deny-by-default) allow SPL sends from the omnibus wallet only to `WALLET_SEND_FEE_*` and user vault addresses.
 6. **Balance webhooks:** Subscribe both omnibus addresses to Turnkey balance webhooks (same infra as `/api/internal/turnkey-balance-webhook-endpoint`).
-7. **Staging:** Enable flags on the deploy environment; set `DEPOSIT_OMNIBUS_ALLOWLIST_CUSTOMER_IDS` to internal test Noah customer IDs only.
 
 ## Noah coordination
 
-Before go-live:
+**Option A / Standard (current):**
 
-1. Confirm Noah orchestration `DestinationAddress` for bank on-ramp VAs points to omnibus addresses (not user vaults) for customers on the new flow.
-2. **Re-provision VAs** for each pilot customer (existing or new) — see below.
-3. Send Noah the follow-up in the implementation plan (Option 1 inbound, Easner min/max in UX only, monthly on-ramp invoicing on trust).
-4. Run the E2E matrix below after re-provision.
+1. Confirm VA `DestinationAddress` = **each customer’s Turnkey vault** (never Easner omnibus).
+2. Re-provision any pilot customers that were temporarily bound to omnibus back to their user vault (see below).
+3. Do **not** request inbound omnibus deduct or monthly on-ramp invoicing for go-live; revisit post go-live per Noah.
 
-### Re-provision virtual accounts (existing + new customers)
+### Re-provision virtual accounts (rollback to user vault)
 
-First-time provisioning only runs when no VA exists. **Existing KYC'd customers** need a **force re-provision** after omnibus env + flags are set.
-
-**Prerequisites:** `DEPOSIT_OMNIBUS_ENABLED=true`, omnibus addresses in env, customer on `DEPOSIT_OMNIBUS_ALLOWLIST_CUSTOMER_IDS` (if using allowlist).
-
-**CLI (staging/prod with service role + Noah env):**
+After turning omnibus flags **off**, force re-bind so Noah destination returns to the user vault.
 
 ```bash
 cd business
 
-# Dry-run: show destination only (omnibus vs vault)
-npx tsx scripts/reprovision-bank-onramp-va.ts --business-id <uuid> --dry-run
+# Dry-run: destination must be user vault (not omnibus pubkeys)
+npx tsx scripts/reprovision-bank-onramp-va.ts \
+  --noah-customer-id eind_... --dry-run
 
-# Re-bind USD + EUR workflows to current destination
-npx tsx scripts/reprovision-bank-onramp-va.ts --business-id <uuid>
+# Live re-bind USD + EUR
+npx tsx scripts/reprovision-bank-onramp-va.ts \
+  --noah-customer-id eind_...
 
-# Or by user / Noah customer id
+# Or by user / business id
 npx tsx scripts/reprovision-bank-onramp-va.ts --user-id <uuid>
-npx tsx scripts/reprovision-bank-onramp-va.ts --noah-customer-id ebiz_<hex>
-npx tsx scripts/reprovision-bank-onramp-va.ts --business-id <uuid> --rails usd
+npx tsx scripts/reprovision-bank-onramp-va.ts --business-id <uuid>
 ```
 
 **Office admin API:** `POST /api/admin/ops/reprovision-bank-onramp-va` (staff JWT) with body:
@@ -87,62 +100,57 @@ npx tsx scripts/reprovision-bank-onramp-va.ts --business-id <uuid> --rails usd
 }
 ```
 
-**New customers:** If omnibus flags are on **before** their first VA is created, normal KYC → Accounts provisioning uses omnibus automatically. If they were provisioned earlier, run the same re-provision script.
+**Verify:** Noah dashboard / dry-run output shows destination = user vault pubkey (not omnibus).
 
-**Verify:** Noah dashboard shows workflow destination = omnibus pubkey; sandbox deposit lands on omnibus in Solscan.
+## Flow summary (Option A — flags off)
 
-## Flow summary
+1. Fiat deposit → Noah fiat→crypto settlement (`ChannelFee` deducted by Noah).
+2. `Remaining` lands on the **customer’s** Solana vault.
+3. Orchestration Out / vault inbound → credit `wallet_balances` for full Remaining (no Easner deposit fee).
 
-1. Fiat deposit → Noah fiat→crypto settlement (`ChannelFee` deducted; `Remaining` to omnibus).
-2. Orchestration Out webhook and/or omnibus Turnkey balance webhook → `triggerDepositSplit` (synchronous).
-3. Turnkey send: `user_net` → user vault; optional `easner_margin` → `WALLET_SEND_FEE_*`.
-4. User vault inbound webhook → credit `wallet_balances` + push/email (if not already credited after poll).
+## Flow summary (omnibus — archived; do not enable)
 
-Cron `/api/cron/process-deposit-splits` (every 2 min) retries stuck `pending` / `send_submitted` jobs.
+1. Fiat deposit → Remaining to omnibus.
+2. Split job: `user_net` → user vault; `easner_margin` → fee wallet.
+3. Requires licensed FoF model — blocked under Standard.
+
+Cron `/api/cron/process-deposit-splits` only matters if split is enabled; with flags off it no-ops.
 
 ## Ops monitoring
 
 `GET /api/admin/ops/rail-health` exposes:
 
-- `deposit_omnibus.*` — flag states, omnibus addresses, pending/stuck split jobs, `blocked_negative_margin_count` (last 30d)
+- `deposit_omnibus.*` — expect `omnibus_enabled: false`, `split_enabled: false` for go-live
 - `global_payouts.failed_without_reversal` — failed payouts where wallet debit was not reversed (should be 0)
 
 Cron jobs:
 
-- `/api/cron/process-deposit-splits` (every 2 min) — retry stuck split jobs
+- `/api/cron/process-deposit-splits` (every 2 min) — no-op when split disabled
 - `/api/cron/process-global-payout-reversal-repair` (every 15 min) — retry failed payout debit reversals
 
 See also [payout-economics-rollout.md](./payout-economics-rollout.md) for corridor limits and economics probes.
 
-## Test matrix (staging)
+## Test matrix
 
 | Case | Flags | Expected |
 |------|-------|----------|
-| Legacy | all off | VA → user vault; full Remaining credited; no fee line |
-| Pricing only | `FEE_PRICING` on | Fee/net in UI; credit unchanged |
-| Dry run | omnibus + split + `DRY_RUN` | Job enqueued; no sends; no credit |
-| Happy path $100 ACH | all on | UI fee $3; credit $97; push after vault settle |
-| Min fee edge $50 | all on | Fee $3; credit $47 |
-| Max fee edge $1000 | all on | Fee $10; credit $990 |
-| Negative margin guard | simulate high ChannelFee | Split blocked; `deposit_split_status: blocked_negative_margin`; lifecycle shows “We're reviewing this deposit” |
+| **Option A go-live** | all off | VA → user vault; full Remaining credited; no Easner deposit fee line |
+| Pricing only | `FEE_PRICING` on | Fee/net in UI only; credit unchanged (not used for go-live) |
+| Omnibus / split | any omnibus/split on | **Do not run** under Standard |
 
-## Rollback
+## Rollback from omnibus pilot
 
-1. Set `DEPOSIT_SPLIT_ENABLED=false` (stops new splits; credits revert to legacy path on next deploy path only for new deposits).
-2. Set `DEPOSIT_OMNIBUS_ENABLED=false` (new VAs → user vault).
-3. Re-provision VAs for affected customers.
-4. Leave `deposit_split_jobs` rows for ops review; do not delete in-flight jobs without manual reconciliation.
+1. Set `DEPOSIT_SPLIT_ENABLED=false` and `DEPOSIT_OMNIBUS_ENABLED=false` (and fee pricing off for Option A).
+2. Re-provision VAs for affected customers → user vault.
+3. Leave any `deposit_split_jobs` for ops review; do not delete in-flight jobs without reconciliation.
 
-## Go-live checklist
+## Go-live checklist (Option A)
 
-- [ ] SQL migration applied
-- [ ] Turnkey omnibus wallet + ATAs + policies + webhooks
-- [ ] Env addresses set in production
-- [ ] Noah omnibus destination confirmed
-- [ ] VAs re-provisioned for pilot customers
-- [ ] `rail-health` shows `split_config_valid: true`
-- [ ] `rail-health` shows `blocked_negative_margin_count: 0` and `global_payouts.failed_without_reversal: 0`
-- [ ] Staging E2E matrix passed
-- [ ] Payout economics probe passed ([payout-economics-rollout.md](./payout-economics-rollout.md))
-- [ ] `apply-payout-corridor-schemas` run
-- [ ] Enable flags (allowlist first, then full rollout)
+- [ ] All `DEPOSIT_OMNIBUS_*` / `DEPOSIT_SPLIT_*` / `DEPOSIT_FEE_PRICING_ENABLED` **false** in local + Vercel
+- [ ] Pilot VAs re-provisioned to **user vault** (confirm destination ≠ omnibus)
+- [ ] `rail-health` shows `omnibus_enabled: false`, `split_enabled: false`
+- [ ] `rail-health` shows `global_payouts.failed_without_reversal: 0`
+- [ ] VA deposit credits full Noah Remaining (legacy path)
+- [ ] Payout economics unchanged (Easner 1% + existing Noah/FX)
+- [ ] Payout economics probe / corridor schemas as needed ([payout-economics-rollout.md](./payout-economics-rollout.md))
+- [ ] Noah reply sent acknowledging Standard FoF constraint and Option A

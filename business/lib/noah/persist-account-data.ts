@@ -140,6 +140,51 @@ async function pruneExtraUsdVirtualAccountRows(
   }
 }
 
+async function fetchEurVirtualAccountRows(
+  admin: SupabaseClient,
+  subjectUserId: string,
+  businessId?: string | null,
+): Promise<VirtualAccountDbRow[]> {
+  let q = admin
+    .from("virtual_accounts")
+    .select(
+      "noah_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name",
+    )
+    .eq("currency", "EUR")
+  if (businessId) {
+    q = q.eq("business_id", businessId)
+  } else {
+    q = q.eq("user_id", subjectUserId).is("business_id", null)
+  }
+  const { data, error } = await q
+  if (error) {
+    console.error("[fetchEurVirtualAccountRows]", error)
+    return []
+  }
+  return (data ?? []) as VirtualAccountDbRow[]
+}
+
+/** Remove stale EUR SEPA rows after sync (e.g. probe/test payment methods). */
+async function pruneExtraEurVirtualAccountRows(
+  admin: SupabaseClient,
+  opts: {
+    subjectUserId: string
+    businessId?: string | null
+    keepPmId: string
+  },
+): Promise<void> {
+  const rows = await fetchEurVirtualAccountRows(admin, opts.subjectUserId, opts.businessId)
+  const staleIds = rows
+    .map((r) => String(r.noah_virtual_account_id ?? "").trim())
+    .filter((id) => id && id !== opts.keepPmId)
+  if (!staleIds.length) return
+
+  const { error } = await admin.from("virtual_accounts").delete().in("noah_virtual_account_id", staleIds)
+  if (error) {
+    console.error("[pruneExtraEurVirtualAccountRows]", error)
+  }
+}
+
 async function upsertMergedUsdVirtualAccount(
   admin: SupabaseClient,
   opts: {
@@ -327,6 +372,11 @@ export async function persistAllPayinVirtualAccountsFromPaymentMethods(
         businessId,
         currency: "eur",
         pmId,
+      })
+      await pruneExtraEurVirtualAccountRows(admin, {
+        subjectUserId,
+        businessId,
+        keepPmId: pmId,
       })
     }
   }
