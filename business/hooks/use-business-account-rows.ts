@@ -122,21 +122,17 @@ export function useBusinessAccountRows() {
   const canDisplayFinancialData = canDisplayProvisionedFinancialData(tier1Complete, hasAnyProvisionedData)
   const canMoveMoney = canPerformNoahMoneyMovement(tier1Complete)
 
+  // Balances always reflect wallet state (KYB only gates deposit rails, not amounts).
   const balances = useMemo(
     () => ({
-      USD: canDisplayFinancialData
-        ? isAuthoritativeBalanceRead
-          ? String(walletQuery.data?.balances?.USD ?? "0")
-          : (lastKnownAuthoritativeBalancesRef.current?.USD ?? "0")
-        : "0",
-      EUR: canDisplayFinancialData
-        ? isAuthoritativeBalanceRead
-          ? String(walletQuery.data?.balances?.EUR ?? "0")
-          : (lastKnownAuthoritativeBalancesRef.current?.EUR ?? "0")
-        : "0",
+      USD: isAuthoritativeBalanceRead
+        ? String(walletQuery.data?.balances?.USD ?? "0")
+        : (lastKnownAuthoritativeBalancesRef.current?.USD ?? "0"),
+      EUR: isAuthoritativeBalanceRead
+        ? String(walletQuery.data?.balances?.EUR ?? "0")
+        : (lastKnownAuthoritativeBalancesRef.current?.EUR ?? "0"),
     }),
     [
-      canDisplayFinancialData,
       isAuthoritativeBalanceRead,
       walletQuery.data?.balances?.EUR,
       walletQuery.data?.balances?.USD,
@@ -145,11 +141,11 @@ export function useBusinessAccountRows() {
 
   const stablecoinDeposit = useMemo(
     () => ({
-      USD: canDisplayFinancialData ? String(walletQuery.data?.deposits?.USD?.ownerAddress ?? "") : "",
-      EUR: canDisplayFinancialData ? String(walletQuery.data?.deposits?.EUR?.ownerAddress ?? "") : "",
+      USD: tier1Complete ? String(walletQuery.data?.deposits?.USD?.ownerAddress ?? "") : "",
+      EUR: tier1Complete ? String(walletQuery.data?.deposits?.EUR?.ownerAddress ?? "") : "",
     }),
     [
-      canDisplayFinancialData,
+      tier1Complete,
       walletQuery.data?.deposits?.EUR?.ownerAddress,
       walletQuery.data?.deposits?.USD?.ownerAddress,
     ],
@@ -185,10 +181,8 @@ export function useBusinessAccountRows() {
             : null
 
   const accountRows: Account[] = useMemo(() => {
-    if (!canDisplayFinancialData) {
-      return []
-    }
-
+    // Mirror mobile Receive: always show USD/EUR cards. When KYB is incomplete, Deposit
+    // still shows the verification notice (rails omitted below); balances stay live.
     if (
       tier1Complete &&
       !isAuthoritativeBalanceRead &&
@@ -207,7 +201,7 @@ export function useBusinessAccountRows() {
             ? parseBalanceString(balances.EUR)
             : 0
 
-      const hasVa = Boolean(va?.hasAccount)
+      const hasVa = Boolean(tier1Complete && va?.hasAccount)
       const isNoahFiatRail = currency === "USD" || currency === "EUR" || currency === "GBP"
       const showBankDepositTab = isNoahFiatRail
         ? shouldShowBankDepositTab({
@@ -233,14 +227,14 @@ export function useBusinessAccountRows() {
         bankName: hasVa ? va?.bankName || "—" : "—",
         accountNumber: hasVa ? maskTail(va?.accountNumber ?? va?.iban) : "—",
         fullAccountNumber: hasVa ? va?.accountNumber ?? va?.iban ?? "" : "",
-        routingNumber: currency === "USD" ? va?.routingNumber : undefined,
-        sortCode: currency === "GBP" ? va?.sortCode ?? va?.routingNumber : undefined,
-        iban: currency === "EUR" ? va?.iban : undefined,
-        bic: currency === "EUR" ? va?.bic : undefined,
-        bankAddress: va?.bankAddress,
+        routingNumber: currency === "USD" && hasVa ? va?.routingNumber : undefined,
+        sortCode: currency === "GBP" && hasVa ? va?.sortCode ?? va?.routingNumber : undefined,
+        iban: currency === "EUR" && hasVa ? va?.iban : undefined,
+        bic: currency === "EUR" && hasVa ? va?.bic : undefined,
+        bankAddress: hasVa ? va?.bankAddress : undefined,
         balance: bal,
         availableBalance: bal,
-        status: tier1Complete ? "active" : "restricted",
+        status: tier1Complete ? "active" : "pending",
         stablecoinAddress,
         stablecoinChain: "Solana",
         stablecoinToken: usdc ? "USDC" : eurc ? "EURC" : "USDC",
@@ -250,7 +244,6 @@ export function useBusinessAccountRows() {
   }, [
     balances.EUR,
     balances.USD,
-    canDisplayFinancialData,
     displayName,
     enabledExtras,
     isAuthoritativeBalanceRead,
@@ -263,8 +256,7 @@ export function useBusinessAccountRows() {
 
   const loading =
     profileLoading ||
-    (tier1Complete &&
-      accountRows.length === 0 &&
+    (accountRows.length === 0 &&
       ((walletQuery.isPending && !walletQuery.data) ||
         (virtualAccountsQuery.isPending && !virtualAccountsQuery.data))) ||
     (tier1Complete &&

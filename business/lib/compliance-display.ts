@@ -1,9 +1,10 @@
 /**
  * Display vs action entitlements for Noah Tier 1.
  *
- * - **Display:** show balances, deposit instructions, and cached fiat VAs when artifacts exist,
- *   even if KYC/KYB status later changes away from `approved`.
- * - **Actions:** send, offramp, open new currency, and Noah provisioning require `approved`.
+ * - **Display:** show balances and cached financial artifacts when KYC/KYB is `approved`,
+ *   or when provisioned artifacts already exist.
+ * - **Deposit rails / money movement:** bank & stablecoin deposit instructions, send,
+ *   offramp, open new currency, and Noah provisioning require `approved`.
  */
 
 export function canDisplayProvisionedFinancialData(

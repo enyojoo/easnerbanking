@@ -131,11 +131,20 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     Boolean(virtualAccount?.hasAccount) ||
     Boolean(virtualAccount && (virtualAccount.accountNumber || virtualAccount.iban))
 
+  const hasStablecoinData = Boolean(
+    turnkeyDepositAddress &&
+      turnkeyDepositAddress !== 'Loading...' &&
+      turnkeyDepositAddress !== 'Wallet address not available',
+  )
+
   const vaSettled = isVaAnswerSettled({
     isFetched: vaFetched,
     hasCachedEntry: vaRecord != null,
   })
   const verificationComplete = kycStatus === 'approved'
+  /** Deposit rails only when KYC is approved — balances stay visible elsewhere. */
+  const showBankDepositDetails = verificationComplete && hasAccountData
+  const showStablecoinDepositDetails = verificationComplete && hasStablecoinData
   const showBankTab = shouldShowBankDepositTab({
     verificationComplete,
     vaSettled,
@@ -145,12 +154,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const showTabBar = showBankTab && showStablecoinTab
 
   const accountReady = hasAccountData
-
-  const hasStablecoinData = Boolean(
-    turnkeyDepositAddress &&
-      turnkeyDepositAddress !== 'Loading...' &&
-      turnkeyDepositAddress !== 'Wallet address not available',
-  )
 
   const walletReady = hasStablecoinData
 
@@ -665,8 +668,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           <View style={styles.content}>
             {activeTab === 'bank' && showBankTab ? (
               <>
-                {/* Show account details immediately if we have data */}
-                {hasAccountData && bankAccountDetails ? (
+                {/* Bank rails only while KYC approved; otherwise verification notice. */}
+                {showBankDepositDetails && bankAccountDetails ? (
                   /* Show account details when we have account data */
                   <>
                     {/* Bank Account Details */}
@@ -716,11 +719,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
                     {renderDetailActions()}
                   </>
-                ) : vaFetched ? (
-                  /* Show KYC notice only when:
-                     - Virtual account query has settled AND
-                     - No account data exists
-                  */
+                ) : !verificationComplete || vaFetched ? (
+                  /* KYC notice when not approved, or setup notice when approved but VA missing */
                   <View style={styles.kycNoticeContainer}>
                     <View style={styles.kycNoticeIconContainer}>
                       <ShieldCheck size={32} color={colors.primary.main} strokeWidth={2} />
@@ -763,8 +763,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               </>
             ) : (
               <>
-                {/* Show wallet details immediately if we have data */}
-                {hasStablecoinData && stablecoinData.address ? (
+                {/* Stablecoin rails only while KYC approved; otherwise verification notice. */}
+                {showStablecoinDepositDetails && stablecoinData.address ? (
                   /* Show wallet details when we have wallet data */
                   <>
                     {/* Stablecoin Details */}
@@ -822,11 +822,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
                     {renderDetailActions()}
                   </>
-                ) : depositFetched ? (
-                  /* Show KYC notice only when:
-                     - Deposit-address query has settled AND
-                     - No stablecoin address data exists
-                  */
+                ) : !verificationComplete || depositFetched ? (
+                  /* KYC notice when not approved, or setup notice when approved but address missing */
                   <View style={styles.kycNoticeContainer}>
                     <View style={styles.kycNoticeIconContainer}>
                       <ShieldCheck size={32} color={colors.primary.main} strokeWidth={2} />

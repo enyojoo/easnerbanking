@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Copy, Check, Plus, Share2 } from "lucide-react"
+import { ArrowRight, Copy, Check, Plus, Share2, ShieldCheck } from "lucide-react"
 import type { Account } from "@/lib/finance-types"
 import { QRCodeSVG } from "qrcode.react"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
@@ -21,6 +21,11 @@ import {
   getPaymentInstructions,
   getStablecoinPaymentInstructions,
 } from "@/lib/payment-instructions"
+
+function tier1StatusIsInReview(status: string | null | undefined): boolean {
+  const s = (status || "").toLowerCase()
+  return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
+}
 
 interface CopyableFieldProps {
   label: string
@@ -86,7 +91,7 @@ interface CurrencyDepositDialogProps {
 }
 
 export function CurrencyDepositDialog({ account, copiedField, onCopy }: CurrencyDepositDialogProps) {
-  const { tier1Complete } = useBusinessProfile()
+  const { tier1Complete, tier1VerificationStatus } = useBusinessProfile()
   const stablecoinAccount =
     account.stablecoinAddress && account.stablecoinToken
       ? {
@@ -105,12 +110,29 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
   const isNgn = account.currency === "NGN"
   const blockedByAfricanTier = isNgn && !TIER2_COMPLETE_PLACEHOLDER
-  const hasProvisionedDepositDetails =
-    Boolean(account.fullAccountNumber?.trim()) ||
-    Boolean(account.stablecoinAddress?.trim()) ||
-    account.accountNumber !== "—"
-  const blockedByGlobalTier = !isNgn && !tier1Complete && !hasProvisionedDepositDetails
+  /** Mirror mobile Receive: deposit rails require approved verification (not cached artifacts alone). */
+  const blockedByGlobalTier = !isNgn && !tier1Complete
   const depositDetailsBlocked = blockedByAfricanTier || blockedByGlobalTier
+
+  const kybInReview =
+    blockedByGlobalTier && tier1StatusIsInReview(tier1VerificationStatus)
+  const kybRejected =
+    blockedByGlobalTier && (tier1VerificationStatus || "").toLowerCase() === "rejected"
+  const showVerifyCta = blockedByGlobalTier && !kybInReview
+
+  const blockedTitle = blockedByAfricanTier
+    ? "African banking verification required"
+    : kybInReview
+      ? "Verification in Review"
+      : "Complete Verification to get an account"
+
+  const blockedBody = blockedByAfricanTier
+    ? "Please complete African banking setup for your organization to receive NGN pay-in details and local pay-in/pay-out. This is separate from global account verification."
+    : kybInReview
+      ? "Your business verification is currently being reviewed."
+      : kybRejected
+        ? "Your verification was not approved. Please complete business verification again to receive your account details."
+        : "Please complete your business verification to receive bank and stablecoin deposit information."
 
   const handleShare = async (type: "bank" | "stablecoin") => {
     const bankDetails = type === "bank"
@@ -164,24 +186,28 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             {depositDetailsBlocked
               ? blockedByAfricanTier
                 ? "African banking verification is required for NGN pay-in details."
-                : ""
+                : kybInReview
+                  ? "Your business verification is being reviewed."
+                  : "Complete business verification to receive deposit details."
               : `Deposit funds via bank transfer or stablecoin. Both methods credit your ${account.currency} balance.`}
           </DialogDescription>
         </DialogHeader>
 
         {depositDetailsBlocked ? (
-          <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-4 space-y-3 text-sm text-foreground/90">
-            <p>
-              {blockedByAfricanTier
-                ? "Please complete African banking setup for your organization to receive NGN pay-in details and local pay-in/pay-out. This is separate from global account verification."
-                : "Please complete your business verification to receive bank and stablecoin deposit information."}
-            </p>
-            <Link
-              href="/settings?tab=business"
-              className="inline-block w-full sm:w-auto font-semibold underline underline-offset-2"
-            >
-              Verify
-            </Link>
+          <div className="flex flex-col items-center rounded-lg border border-border bg-muted/40 px-4 py-8 text-center">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+              <ShieldCheck className="h-8 w-8 text-primary" strokeWidth={2} />
+            </div>
+            <p className="text-base font-semibold text-foreground">{blockedTitle}</p>
+            <p className="mt-2 max-w-sm text-sm text-muted-foreground">{blockedBody}</p>
+            {showVerifyCta || blockedByAfricanTier ? (
+              <Button asChild className="mt-6 gap-2">
+                <Link href="/settings?tab=business">
+                  Complete Verification
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            ) : null}
           </div>
         ) : (
         <Tabs defaultValue={defaultTab} className="w-full">
