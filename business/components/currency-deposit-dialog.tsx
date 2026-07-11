@@ -182,15 +182,15 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             <CurrencyFlagCircle currency={account.currency} size={28} />
             {account.currency} Deposit
           </DialogTitle>
-          <DialogDescription>
-            {depositDetailsBlocked
-              ? blockedByAfricanTier
-                ? "African banking verification is required for NGN pay-in details."
-                : kybInReview
-                  ? "Your business verification is being reviewed."
-                  : "Complete business verification to receive deposit details."
-              : `Deposit funds via bank transfer or stablecoin. Both methods credit your ${account.currency} balance.`}
-          </DialogDescription>
+          {!depositDetailsBlocked ? (
+            <DialogDescription>
+              {`Deposit funds via bank transfer or stablecoin. Both methods credit your ${account.currency} balance.`}
+            </DialogDescription>
+          ) : (
+            <DialogDescription className="sr-only">
+              Business verification is required to view deposit details.
+            </DialogDescription>
+          )}
         </DialogHeader>
 
         {depositDetailsBlocked ? (
