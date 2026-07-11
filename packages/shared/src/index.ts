@@ -265,6 +265,8 @@ export {
   canResubmitNoahVerification,
   formatNoahRejectionReasonsText,
   isPlaceholderNoahRejectionReasons,
+  isNoahPlaceholderRejectionText,
+  NOAH_PLACEHOLDER_REJECTION_MESSAGES,
   NOAH_VERIFICATION_IN_REVIEW_COPY,
   NOAH_FINAL_REJECTION_USER_MESSAGE,
   NOAH_RETRY_GENERIC_GUIDANCE,

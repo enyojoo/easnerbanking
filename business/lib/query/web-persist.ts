@@ -156,6 +156,7 @@ export function clearLegacyBusinessLocalSnapshots(userId?: string | null): void 
     ? [
         `autopayout_list_cache_${userId}`,
         `autopayout_payer_wallets_${userId}`,
+        `business_onboarding_steps_${userId}`,
         `business_profile_cache_${userId}`,
         `communication_preferences_${userId}`,
         `personal_settings_${userId}`,
@@ -176,6 +177,7 @@ export function clearLegacyBusinessLocalSnapshots(userId?: string | null): void 
         [
         "autopayout_list_cache_",
         "autopayout_payer_wallets_",
+        "business_onboarding_steps_",
         "business_profile_cache_",
         "communication_preferences_",
         "personal_settings_",
@@ -191,6 +193,7 @@ export function clearLegacyBusinessLocalSnapshots(userId?: string | null): void 
       )
     }
     if (key.startsWith("easner_business_wallets_list_v1_")) return true
+    if (key.startsWith("business_onboarding_steps_")) return true
     if (key === "easner_business_transactions_list_v1") return true
     return false
   })

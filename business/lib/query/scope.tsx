@@ -32,32 +32,43 @@ const ScopeContext = React.createContext<BusinessScopeContextValue | undefined>(
 export function BusinessScopeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const [override, setOverride] = React.useState<BusinessScope | null>(null)
-  const [businessId, setBusinessId] = React.useState<string | null>(null)
+  /** Always tagged with the user it belongs to so a switch cannot reuse the prior org id. */
+  const [businessIdState, setBusinessIdState] = React.useState<{
+    userId: string
+    businessId: string | null
+  } | null>(null)
 
-  // Seed scope from persisted business profile (avoids an extra /api/business/profile fetch on reload).
-  React.useEffect(() => {
-    if (!user?.id) return
-    const startup = readBusinessStartupSnapshot()
-    if (startup?.userId === user.id && startup.businessId) {
-      setBusinessId(startup.businessId)
-      return
-    }
-    try {
-      const raw = localStorage.getItem(`business_profile_cache_${user.id}`)
-      if (!raw) return
-      const parsed = JSON.parse(raw) as { data?: { businessId?: string | null }; timestamp?: number }
-      const id = parsed?.data?.businessId ? String(parsed.data.businessId) : null
-      if (id) setBusinessId(id)
-    } catch {
-      // ignore
-    }
-  }, [user?.id])
+  const businessId =
+    user?.id && businessIdState?.userId === user.id ? businessIdState.businessId : null
 
+  // Resolve org id for the signed-in user only. Reset immediately on user change so
+  // the previous account's businessId never scopes wallets/queries for the next login.
   React.useEffect(() => {
     if (!user?.id) {
-      setBusinessId(null)
+      setBusinessIdState(null)
+      setOverride(null)
       return
     }
+
+    let seeded: string | null = null
+    const startup = readBusinessStartupSnapshot()
+    if (startup?.userId === user.id && startup.businessId) {
+      seeded = startup.businessId
+    } else {
+      try {
+        const raw = localStorage.getItem(`business_profile_cache_${user.id}`)
+        if (raw) {
+          const parsed = JSON.parse(raw) as { data?: { businessId?: string | null }; timestamp?: number }
+          const id = parsed?.data?.businessId ? String(parsed.data.businessId) : null
+          if (id) seeded = id
+        }
+      } catch {
+        // ignore
+      }
+    }
+    setBusinessIdState({ userId: user.id, businessId: seeded })
+    setOverride(null)
+
     let cancelled = false
     void (async () => {
       try {
@@ -65,7 +76,7 @@ export function BusinessScopeProvider({ children }: { children: React.ReactNode 
         if (!res.ok) return
         const json = (await res.json().catch(() => null)) as { profile?: { businessId?: string | null } } | null
         const id = json?.profile?.businessId ? String(json.profile.businessId) : null
-        if (!cancelled) setBusinessId(id)
+        if (!cancelled) setBusinessIdState({ userId: user.id, businessId: id })
       } catch {
         // ignore; fall back to user.id scope
       }
@@ -82,13 +93,14 @@ export function BusinessScopeProvider({ children }: { children: React.ReactNode 
   }, [businessId, user?.id])
 
   const value = React.useMemo<BusinessScopeContextValue>(() => {
-    const scope = override ?? derived
+    const scope =
+      override && businessIdState?.userId === user?.id ? override : derived
     return {
       scope,
       setScope: setOverride,
       isReady: scope !== null,
     }
-  }, [override, derived])
+  }, [override, derived, businessIdState?.userId, user?.id])
 
   return <ScopeContext.Provider value={value}>{children}</ScopeContext.Provider>
 }

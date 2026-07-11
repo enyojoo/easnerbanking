@@ -20,6 +20,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { BusinessLogo } from "@/components/brand/business-logo"
+import { useAuth } from "@/lib/auth-context"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
 import { BusinessOnboardingChecklist } from "@/components/business-onboarding-checklist"
@@ -40,6 +41,7 @@ function deriveOpenGroups(pathname: string) {
 export function DashboardNav() {
   const pathname = usePathname()
   const router = useRouter()
+  const { user } = useAuth()
   const {
     name: businessName,
     logoUrl: businessLogoUrl,
@@ -224,7 +226,7 @@ export function DashboardNav() {
         })}
       </nav>
 
-      <BusinessOnboardingChecklist />
+      {user?.id ? <BusinessOnboardingChecklist key={user.id} /> : null}
 
       <div className="px-5 py-4 border-t border-sidebar-border flex items-center justify-center">
         <BusinessLogo size="md" href="/" />

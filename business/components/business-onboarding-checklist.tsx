@@ -54,43 +54,12 @@ function ProgressRing({ pct }: { pct: number }) {
 }
 
 type StepVisual = "complete" | "error" | "pending"
-type StickyCompletedSteps = {
-  business: boolean
-  verify: boolean
-  terminal: boolean
-  fund: boolean
-}
 
-function defaultStickySteps(): StickyCompletedSteps {
-  return { business: false, verify: false, terminal: false, fund: false }
-}
-
-function readStickySteps(userId: string): StickyCompletedSteps {
-  if (typeof window === "undefined") return defaultStickySteps()
-  try {
-    const raw = localStorage.getItem(`business_onboarding_steps_${userId}`)
-    if (!raw) return defaultStickySteps()
-    const parsed = JSON.parse(raw) as Partial<StickyCompletedSteps>
-    return {
-      business: Boolean(parsed.business),
-      verify: Boolean(parsed.verify),
-      terminal: Boolean(parsed.terminal),
-      fund: Boolean(parsed.fund),
-    }
-  } catch {
-    return defaultStickySteps()
-  }
-}
-
-function persistStickySteps(userId: string, steps: StickyCompletedSteps) {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(`business_onboarding_steps_${userId}`, JSON.stringify(steps))
-  } catch {
-    // ignore quota
-  }
-}
-
+/**
+ * Sidebar onboarding progress — driven only by the signed-in account's live
+ * profile / terminal / wallet data (same isolation model as balances).
+ * No sticky localStorage: that leaked completed steps across account switches.
+ */
 export function BusinessOnboardingChecklist() {
   const { user } = useAuth()
   const userId = user?.id ?? null
@@ -98,21 +67,45 @@ export function BusinessOnboardingChecklist() {
   const walletQuery = useWalletBalances()
   const { data: terminalSetup, refetch: refetchTerminalSetup } = useTerminalPayoutSetupCached()
   const [expanded, setExpanded] = useState(false)
-  const [stickyDone, setStickyDone] = useState<StickyCompletedSteps>(defaultStickySteps())
-  const terminalPayoutId = userId ? terminalSetup.defaultTerminalPayoutId : undefined
-  const funded = hasPositiveFiat(
-    walletQuery.data?.balances
-      ? {
-          USD: String(walletQuery.data.balances.USD ?? "0"),
-          EUR: String(walletQuery.data.balances.EUR ?? "0"),
-        }
-      : null,
-  )
+  const walletReady = Boolean(walletQuery.isSuccess || walletQuery.isFetched)
+  const funded =
+    walletReady &&
+    hasPositiveFiat(
+      walletQuery.data?.balances
+        ? {
+            USD: String(walletQuery.data.balances.USD ?? "0"),
+            EUR: String(walletQuery.data.balances.EUR ?? "0"),
+          }
+        : null,
+    )
 
-  const step1Raw = isBusinessInfoStepComplete(profile)
-  const step2Raw = profile.tier1Complete
+  // Drop legacy sticky progress keys that leaked completed steps across accounts.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const keys: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key?.startsWith("business_onboarding_steps_")) keys.push(key)
+      }
+      for (const key of keys) localStorage.removeItem(key)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const step1Done = isBusinessInfoStepComplete(profile)
+  const step2Done = profile.tier1Complete
   const verifyKind = tier1VerificationKind(profile.tier1Complete, profile.tier1VerificationStatus)
-  const step3Raw = Boolean(terminalPayoutId)
+  /** Done when external default payout is set, or Easner balance settlement with USD/EUR chosen. */
+  const step3Done = Boolean(
+    userId &&
+      (terminalSetup.defaultTerminalPayoutId ||
+        (terminalSetup.settlementDestination === "easner_balance" &&
+          (terminalSetup.defaultBalanceCurrency === "USD" ||
+            terminalSetup.defaultBalanceCurrency === "EUR"))),
+  )
+  const step4Done = profile.tier1Complete && funded
 
   const refreshBalances = useCallback(async () => {
     if (!userId) return
@@ -171,43 +164,6 @@ export function BusinessOnboardingChecklist() {
     }
   }, [expanded, refreshBalances, refreshTerminal])
 
-  const step4Raw = profile.tier1Complete && funded
-
-  useEffect(() => {
-    if (!userId) {
-      setStickyDone(defaultStickySteps())
-      return
-    }
-    setStickyDone(readStickySteps(userId))
-  }, [userId])
-
-  useEffect(() => {
-    if (!userId) return
-    setStickyDone((prev) => {
-      const next: StickyCompletedSteps = {
-        business: prev.business || step1Raw,
-        verify: prev.verify || step2Raw,
-        terminal: prev.terminal || step3Raw,
-        fund: prev.fund || step4Raw,
-      }
-      if (
-        next.business === prev.business &&
-        next.verify === prev.verify &&
-        next.terminal === prev.terminal &&
-        next.fund === prev.fund
-      ) {
-        return prev
-      }
-      persistStickySteps(userId, next)
-      return next
-    })
-  }, [userId, step1Raw, step2Raw, step3Raw, step4Raw])
-
-  const step1Done = step1Raw || stickyDone.business
-  const step2Done = step2Raw || stickyDone.verify
-  const step3Done = step3Raw || stickyDone.terminal
-  const step4Done = step4Raw || stickyDone.fund
-
   const completedCount = [step1Done, step2Done, step3Done, step4Done].filter(Boolean).length
   const allDone = completedCount === 4
   const pct = Math.round((completedCount / 4) * 100)
@@ -243,7 +199,11 @@ export function BusinessOnboardingChecklist() {
       {
         id: "terminal",
         title: "Set up Terminal",
-        subtitle: step3Done ? "Payout destination saved" : "Choose a default terminal payout",
+        subtitle: step3Done
+          ? terminalSetup.settlementDestination === "easner_balance"
+            ? `${terminalSetup.defaultBalanceCurrency ?? "USD"} balance settlement`
+            : "External payout destination saved"
+          : "Choose Easner balance or an external payout",
         href: "/terminal",
         visual: step3Done ? ("complete" as const) : ("pending" as const),
       },
@@ -259,10 +219,23 @@ export function BusinessOnboardingChecklist() {
         visual: !profile.tier1Complete ? ("pending" as const) : step4Done ? ("complete" as const) : ("pending" as const),
       },
     ],
-    [profile.onboardingComplete, profile.tier1Complete, step1Done, step2Done, step3Done, step4Done, verifyKind, step2Visual],
+    [
+      profile.onboardingComplete,
+      profile.tier1Complete,
+      step1Done,
+      step2Done,
+      step3Done,
+      step4Done,
+      verifyKind,
+      step2Visual,
+      terminalSetup.settlementDestination,
+      terminalSetup.defaultBalanceCurrency,
+    ],
   )
 
-  if (profile.isLoading || !profile.hasData) return null
+  // Wait for this account's profile (and fund balances when verification unlocks funding).
+  if (!userId || profile.isLoading || !profile.hasData) return null
+  if (profile.tier1Complete && walletQuery.isPending && !walletQuery.data) return null
   if (allDone) return null
 
   return (

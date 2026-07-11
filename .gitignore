@@ -127,3 +127,6 @@ next-env.d.ts
 
 # Cursor
 .cursor/
+
+# Local / internal docs (not part of app deploy)
+/docs/
