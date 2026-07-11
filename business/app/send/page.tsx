@@ -146,16 +146,17 @@ export default function SendPage() {
   }, [])
 
   const enteredAmount = parseAmountFromDisplay(amountStr)
-  const receiveCurrency = recipient?.currency ?? "USD"
   const sourceAccount = sourceAccounts.find((a) => a.id === sourceAccountId)
   const isEasetagRecipient = Boolean(recipient?.payeeEasetag?.trim())
   const isWalletRecipient =
     Boolean(recipient?.walletNetwork) || /wallet/i.test(recipient?.bankName || "")
+  /** Bank/wallet receive currency from the recipient; easetag overrides after sendCurrency. */
+  const recipientReceiveCurrency = recipient?.currency ?? "USD"
 
   const manualSend = useManualSendFlow({
     enabled: !isEasetagRecipient,
     otherCurrency,
-    receiveCurrency,
+    receiveCurrency: recipientReceiveCurrency,
     amountEntryMode,
     enteredAmount,
   })
@@ -277,6 +278,9 @@ export default function SendPage() {
     if (otherCurrency) return otherCurrency
     return "USD"
   }, [paymentMethod, sourceAccount, otherCurrency])
+
+  // Easetag P2P is same-currency: amount UI follows the selected source balance (USD or EUR).
+  const receiveCurrency = isEasetagRecipient ? sendCurrency : recipientReceiveCurrency
 
   const flowAmounts = useMemo(() => {
     if (!recipient || enteredAmount <= 0) {

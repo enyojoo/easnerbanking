@@ -222,9 +222,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   )
   const isWalletRecipientEarly = isWalletSendRecipient(recipient)
   const skipNoahExchangeRatesForEasetagP2p =
-    isEasetagRecipient &&
-    selectedPaymentMethod === 'balance' &&
-    String(selectedBalanceCurrency).toUpperCase() === String((recipient?.currency || '').trim().toUpperCase())
+    isEasetagRecipient && selectedPaymentMethod === 'balance'
   const {
     data: exchangeRatesFromContext = [],
     isFetched: noahRatesFetched,
@@ -296,7 +294,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const noteFieldUi = getSendAmountNoteFieldUi({
     hints: payoutHints,
     isEasetag: isEasetagRecipient,
-    receiveCurrency: recipient?.currency,
+    receiveCurrency: isEasetagRecipient ? selectedBalanceCurrency : recipient?.currency,
   })
 
   const { data: manualCatalog } = useManualSendCatalog(true)
@@ -498,11 +496,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     String(balances[selectedBalanceCurrency as 'USD' | 'EUR'] || '0').replace(/,/g, ''),
   ) || 0
   const enteredAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
-  const receiveCurrency = recipient?.currency || 'EUR'
   const sendCurrency =
     selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
       ? selectedOtherCurrency
       : selectedBalanceCurrency
+  // Easetag P2P is same-currency: amount UI follows the selected source balance (USD or EUR).
+  const receiveCurrency = isEasetagRecipient
+    ? sendCurrency
+    : recipient?.currency || 'EUR'
   const dynamicAmountFontSize = getDynamicAmountFontSize(sendAmount)
   const dynamicAmountLineHeight = Math.round(dynamicAmountFontSize * 1.12)
   const amountTextBase = buildDynamicAmountTextStyle(textStyles.balanceDisplay, sendAmount)
