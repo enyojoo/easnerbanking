@@ -67,6 +67,7 @@ import {
 } from '@easner/shared'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
+import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
 import { getTransactionListName } from '../../lib/transactionListLabel'
 import { AvatarImage } from '../../components/AvatarImage'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
@@ -74,11 +75,6 @@ import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
 import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
 import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
-
-import {
-  DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX,
-  DASHBOARD_RECENT_TX_CACHE_TTL_MS,
-} from '../../lib/background-feed-cache-keys'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 /** Recent activity rows shown on Home (UI only). Ledger fetch uses {@link TRANSACTIONS_LEDGER_PAGE_SIZE}. */
@@ -243,63 +239,16 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     }
   }, [userProfile?.id, user?.id])
 
-  const queryRecent = useMemo<DashboardTransaction[]>(() => {
+  const recentTransactions = useMemo<DashboardTransaction[]>(() => {
     const firstPage = txQuery.data?.pages?.[0]?.transactions ?? []
     return (firstPage as DashboardTransaction[]).slice(0, DASHBOARD_RECENT_TX_LIMIT)
   }, [txQuery.data])
-  const [cachedRecentTransactions, setCachedRecentTransactions] = useState<DashboardTransaction[]>([])
-  const [txCacheHydrated, setTxCacheHydrated] = useState(false)
-  const recentTransactions = queryRecent.length > 0 ? queryRecent : cachedRecentTransactions
-  const hasAnyTransactionData = recentTransactions.length > 0
-  const loadingTransactions =
-    txQuery.isPending && !hasAnyTransactionData && txCacheHydrated
-  const hasAttemptedLoad = txQuery.isFetched || recentTransactions.length > 0
+  const loadingTransactions = txQuery.isPending && recentTransactions.length === 0
+  const hasAttemptedLoad = txQuery.isFetched
   const lastStableBalanceTextRef = useRef<Record<string, string>>({})
   /** Recent list + "All" row: reduce scroll end padding so the card sits closer to the tab bar. */
   const dashboardRecentListWithAllRow =
     !loadingTransactions && recentTransactions.length > 0
-
-  useEffect(() => {
-    const uid = userProfile?.id || user?.id
-    if (!uid) return
-    const key = `${DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX}${uid}`
-    let mounted = true
-    const loadCachedRecent = async () => {
-      try {
-        const raw = await AsyncStorage.getItem(key)
-        if (!raw) return
-        const parsed = JSON.parse(raw) as { at?: number; rows?: DashboardTransaction[] } | null
-        const at = Number(parsed?.at ?? 0)
-        const rows = Array.isArray(parsed?.rows) ? parsed?.rows : []
-        if (!Number.isFinite(at) || Date.now() - at > DASHBOARD_RECENT_TX_CACHE_TTL_MS) return
-        if (mounted && rows.length > 0) {
-          setCachedRecentTransactions(rows.slice(0, DASHBOARD_RECENT_TX_LIMIT))
-        }
-      } catch {
-        // Ignore malformed/expired cache.
-      }
-    }
-    void loadCachedRecent().finally(() => {
-      if (mounted) setTxCacheHydrated(true)
-    })
-    return () => {
-      mounted = false
-    }
-  }, [userProfile?.id, user?.id])
-
-  useEffect(() => {
-    const uid = userProfile?.id || user?.id
-    if (!uid) return
-    if (queryRecent.length === 0) return
-    const key = `${DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX}${uid}`
-    const payload = JSON.stringify({
-      at: Date.now(),
-      rows: queryRecent.slice(0, DASHBOARD_RECENT_TX_LIMIT),
-    })
-    AsyncStorage.setItem(key, payload).catch(() => {
-      // Ignore storage write failures.
-    })
-  }, [queryRecent, userProfile?.id, user?.id])
 
   useEffect(() => {
     if (!scope || recentTransactions.length === 0) return
@@ -722,16 +671,24 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             onRefresh={async () => {
               setRefreshing(true)
               try {
-                const inserted = await syncChainLedgerIfDue(true)
-                if (inserted) void txQuery.refetch()
+                haptics.tap()
+                const uid = userProfile?.id || user?.id
+                void syncChainLedgerIfDue(true).then((inserted) => {
+                  if (inserted && uid && scope) {
+                    void invalidateTransactionsFeed(qc, scope, uid)
+                  }
+                })
                 await Promise.all([
                   refreshBalances(true),
-                  txQuery.refetch(),
+                  uid && scope
+                    ? invalidateTransactionsFeed(qc, scope, uid)
+                    : txQuery.refetch(),
                 ])
               } catch (error) {
                 console.error('Error refreshing dashboard:', error)
               } finally {
                 setRefreshing(false)
+                haptics.select()
               }
             }}
             tintColor={palette.primary.main}

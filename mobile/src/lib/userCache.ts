@@ -23,6 +23,10 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import {
+  DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX,
+  TRANSACTIONS_CACHE_KEY_PREFIX,
+} from './background-feed-cache-keys'
 import { clearProfileSnapshot } from './profileSnapshot'
 
 /** Canonical TTLs — single source of truth for SWR windows. */
@@ -139,6 +143,8 @@ export async function bustFinancialFeedCaches(userId: string): Promise<void> {
   await Promise.all([
     removeUserCache(buildUserCacheKey('dashboardCombinedTx', userId)),
     removeUserCache(buildUserCacheKey('combinedTxList', userId)),
+    removeUserCache(`${DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX}${userId}`),
+    removeUserCache(`${TRANSACTIONS_CACHE_KEY_PREFIX}${userId}`),
   ])
 }
 
@@ -155,6 +161,8 @@ export function allScopedUserCacheKeys(userId: string): string[] {
     buildUserCacheKey('paymentMethods', userId),
     buildUserCacheKey('dashboardCombinedTx', userId),
     buildUserCacheKey('combinedTxList', userId),
+    `${DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX}${userId}`,
+    `${TRANSACTIONS_CACHE_KEY_PREFIX}${userId}`,
     buildUserCacheKey('communicationPrefs', userId),
   ]
 }

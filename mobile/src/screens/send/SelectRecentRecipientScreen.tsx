@@ -71,7 +71,7 @@ import { CachedImage } from '../../components/CachedImage'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
-import { useCurrenciesCatalog, useRecipientsList, useTransactionsList, mapLedgerRowToTransaction, prefetchNoahSendExchangeRates, prefetchCryptoSendExchangeRates } from '../../hooks/queries'
+import { useCurrenciesCatalog, useRecipientsList, useTransactionsList, mapLedgerRowToTransaction, prefetchNoahSendExchangeRates, prefetchCryptoSendExchangeRates, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { isWalletSendRecipient, resolveRecipientWalletNetwork } from '../../lib/recipientWalletMeta'
 import { useScope } from '../../query/scope'
 import { invalidateRecipientsFeed } from '../../query/refresh-user-feeds'
@@ -98,7 +98,6 @@ import {
 } from '../../lib/recipientCatalog'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
 import { MobileMoneyProviderIcon } from '@easner/shared'
-import { loadRecipientsListCache, saveRecipientsListCache } from '../../lib/recipientsListCache'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import RecipientFormDropdownList from '../../components/recipients/RecipientFormDropdownList'
@@ -142,10 +141,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const { scope } = useScope()
   const recipientsQuery = useRecipientsList()
   const { data: currencies = [] } = useCurrenciesCatalog()
-  const txHubQuery = useTransactionsList({}, 100)
-  const [cachedRecipients, setCachedRecipients] = useState<Recipient[]>([])
+  const txHubQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
   const queryRecipients = recipientsQuery.data ?? []
-  const recipients = queryRecipients.length > 0 ? queryRecipients : cachedRecipients
+  const recipients = queryRecipients
   const recipientsLoading = recipientsQuery.isPending && recipients.length === 0
   const transactions = useMemo(() => {
     if (!user?.id) return []
@@ -271,25 +269,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const formScrollRef = useRef<React.ComponentRef<typeof KeyboardAwareScrollView>>(null)
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
-
-  useEffect(() => {
-    const uid = userProfile?.id || user?.id
-    if (!uid) return
-    let mounted = true
-    void loadRecipientsListCache(uid).then((rows) => {
-      if (!mounted || rows.length === 0) return
-      setCachedRecipients(rows)
-    })
-    return () => {
-      mounted = false
-    }
-  }, [userProfile?.id, user?.id])
-
-  useEffect(() => {
-    const uid = userProfile?.id || user?.id
-    if (!uid || queryRecipients.length === 0) return
-    void saveRecipientsListCache(uid, queryRecipients)
-  }, [queryRecipients, userProfile?.id, user?.id])
 
   // Match RecipientsScreen: refetch list when hub gains focus (first visit or stale > 5m).
   useFocusRefresh(

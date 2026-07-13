@@ -12,7 +12,6 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import {
   ArrowDownLeft,
@@ -66,13 +65,9 @@ import { prepareTransactionDetailsNavigation } from '../../navigation/transactio
 import { USE_NATIVE_DRIVER } from '../../lib/animation'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
+import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
 import { useSplitPaneConfig } from '../../components/layout/SplitPane'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
-
-import {
-  TRANSACTIONS_CACHE_KEY_PREFIX,
-  DASHBOARD_RECENT_TX_CACHE_TTL_MS as TRANSACTIONS_CACHE_TTL_MS,
-} from '../../lib/background-feed-cache-keys'
 
 function useCurrencies() {
   const { data: currencies = [] } = useCurrenciesCatalog()
@@ -398,58 +393,16 @@ function TransactionsContent({ navigation }: NavigationProps) {
     analytics.trackScreenView('Transactions')
   }, [])
 
-  const queryRows = useMemo<CombinedTransaction[]>(() => {
+  const transactions = useMemo<CombinedTransaction[]>(() => {
     const pages = txQuery.data?.pages ?? []
     return pages.flatMap((p) => (p.transactions ?? []) as CombinedTransaction[])
   }, [txQuery.data])
-  const [cachedRows, setCachedRows] = useState<CombinedTransaction[]>([])
-  const transactions = queryRows.length > 0 ? queryRows : cachedRows
   const loading = txQuery.isPending && transactions.length === 0
 
   useEffect(() => {
-    const uid = userProfile?.id || user?.id
-    if (!uid) return
-    const key = `${TRANSACTIONS_CACHE_KEY_PREFIX}${uid}`
-    let mounted = true
-    const loadCachedTransactions = async () => {
-      try {
-        const raw = await AsyncStorage.getItem(key)
-        if (!raw) return
-        const parsed = JSON.parse(raw) as { at?: number; rows?: CombinedTransaction[] } | null
-        const at = Number(parsed?.at ?? 0)
-        const rows = Array.isArray(parsed?.rows) ? parsed?.rows : []
-        if (!Number.isFinite(at) || Date.now() - at > TRANSACTIONS_CACHE_TTL_MS) return
-        if (mounted && rows.length > 0) {
-          setCachedRows(rows.slice(0, 200))
-        }
-      } catch {
-        // Ignore malformed cache.
-      }
-    }
-    void loadCachedTransactions()
-    return () => {
-      mounted = false
-    }
-  }, [userProfile?.id, user?.id])
-
-  useEffect(() => {
-    const uid = userProfile?.id || user?.id
-    if (!uid) return
-    if (queryRows.length === 0) return
-    const key = `${TRANSACTIONS_CACHE_KEY_PREFIX}${uid}`
-    const payload = JSON.stringify({
-      at: Date.now(),
-      rows: queryRows.slice(0, 200),
-    })
-    AsyncStorage.setItem(key, payload).catch(() => {
-      // Ignore storage write failures.
-    })
-  }, [queryRows, userProfile?.id, user?.id])
-
-  useEffect(() => {
-    if (!scope || queryRows.length === 0) return
-    prefetchRecentTransactionDetailsInBackground(qc, scope, queryRows, 30)
-  }, [qc, queryRows, scope])
+    if (!scope || transactions.length === 0) return
+    prefetchRecentTransactionDetailsInBackground(qc, scope, transactions, 30)
+  }, [qc, transactions, scope])
 
   // Refresh stale data when screen comes into focus
   useFocusRefreshAll(false) // Only refresh if stale (> 5 minutes)
@@ -504,11 +457,18 @@ function TransactionsContent({ navigation }: NavigationProps) {
     setRefreshing(true)
     try {
       haptics.tap()
-      // Chain sync can take many seconds — don't block the spinner; refresh ledger after if it inserted rows.
+      const uid = userProfile?.id || user?.id
       void syncChainLedgerIfDue(true).then((inserted) => {
-        if (inserted) void txQuery.refetch()
+        if (inserted && uid && scope) {
+          void invalidateTransactionsFeed(qc, scope, uid)
+        }
       })
-      await Promise.all([refreshBalances(true), txQuery.refetch()])
+      await Promise.all([
+        refreshBalances(true),
+        uid && scope
+          ? invalidateTransactionsFeed(qc, scope, uid)
+          : txQuery.refetch(),
+      ])
     } catch (error: any) {
       if (error?.message?.includes('Network request failed') || error?.name === 'TypeError') {
         console.warn("Network error refreshing transactions:", error?.message || 'Network unavailable')

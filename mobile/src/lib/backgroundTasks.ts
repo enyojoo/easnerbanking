@@ -5,17 +5,10 @@ import * as TaskManager from 'expo-task-manager'
 import { apiFetch } from '../query/api-client'
 import { getSessionReliable } from './authSession'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from './apiClient'
-
-export const BACKGROUND_TASK_IDENTIFIER = 'background-task'
-
-import {
-  DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX,
-  TRANSACTIONS_CACHE_KEY_PREFIX,
-} from './background-feed-cache-keys'
-import { recipientService } from './recipientService'
-import { saveRecipientsListCache } from './recipientsListCache'
 import { isDefinitiveEmptyBalanceResponse } from './wallet-balance-display'
 import { BALANCE_SNAPSHOT_KEY_PREFIX } from './wallet-balance-snapshot'
+
+export const BACKGROUND_TASK_IDENTIFIER = 'background-task'
 
 type BalanceEnvelope = {
   USD?: string
@@ -24,25 +17,16 @@ type BalanceEnvelope = {
   detail?: string
 }
 
-type TransactionsEnvelope = {
-  transactions?: Record<string, unknown>[]
-}
-
 async function refreshBackgroundSnapshots(): Promise<boolean> {
   const session = await getSessionReliable()
   const userId = session?.user?.id
   if (!userId) return false
 
-  const [balancesResult, transactionsResult, recipientsResult] = await Promise.allSettled([
+  const balancesResult = await Promise.allSettled([
     apiFetch<BalanceEnvelope>('/api/wallets/on-chain-balances', {
       headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
     }),
-    apiFetch<TransactionsEnvelope>('/api/transactions', {
-      query: { limit: 50 },
-      headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-    }),
-    recipientService.getByUserId(userId),
-  ])
+  ]).then(([r]) => r)
 
   const writes: [string, string][] = []
   const now = Date.now()
@@ -64,32 +48,6 @@ async function refreshBackgroundSnapshots(): Promise<boolean> {
         }),
       ])
     }
-  }
-
-  if (transactionsResult.status === 'fulfilled') {
-    const rows = Array.isArray(transactionsResult.value?.transactions)
-      ? transactionsResult.value.transactions
-      : []
-
-    writes.push([
-      `${DASHBOARD_RECENT_TX_CACHE_KEY_PREFIX}${userId}`,
-      JSON.stringify({
-        at: now,
-        rows: rows.slice(0, 5),
-      }),
-    ])
-    writes.push([
-      `${TRANSACTIONS_CACHE_KEY_PREFIX}${userId}`,
-      JSON.stringify({
-        at: now,
-        rows: rows.slice(0, 50),
-      }),
-    ])
-  }
-
-  if (recipientsResult.status === 'fulfilled' && recipientsResult.value.length > 0) {
-    await saveRecipientsListCache(userId, recipientsResult.value)
-    updated = true
   }
 
   if (writes.length > 0) {
