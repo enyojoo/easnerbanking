@@ -16,7 +16,7 @@ import type {
   WelcomeEmailData,
 } from "./email-types"
 
-const CONTACT_URL = "https://easner.com/contact"
+const CONTACT_URL = "https://www.easner.com/contact"
 
 const WELCOME_PERSONAL_PREHEADER =
   "Verify your identity and start using Easner Mobile."
@@ -46,10 +46,6 @@ function buildTransactionDetailRows(data: TransactionEmailData): TransactionDeta
   ]
 
   if (data.detailRows?.length) {
-    // Hero amount (receive amount for payouts, gross received for deposits) stays visible,
-    // then the canonical rows (Sending / Processing fee / Total debited / Recipient /
-    // Transfer method, or Scheme / Sender / Processing fee / Amount credited).
-    if (data.amountDisplay) rows.push({ label: "Amount", value: data.amountDisplay })
     for (const row of data.detailRows) rows.push({ label: row.label, value: row.value })
   } else {
     rows.push({ label: "Type", value: data.category || data.title })
@@ -110,15 +106,13 @@ function transactionFailedTemplate(): EmailTemplate {
         ${generateTransactionDetailsTable(buildTransactionDetailRows(data))}
         <div class="security-note"><h3>What happens next</h3><p>If funds were debited, we will restore your balance where applicable. Contact support if you need help.</p></div>
       `
-      const profile = getEmailAudienceProfile(audience)
       return generateBaseEmailTemplate(data.title, "", content, {
         text: "Contact support",
-        url: `mailto:${profile.supportEmail}`,
+        url: CONTACT_URL,
       }, { audience, preheader: data.body, showPreferencesLink: false })
     },
     text: (data: TransactionEmailData, audience = "personal") => {
-      const profile = getEmailAudienceProfile(audience)
-      return `${data.title}\n\n${data.body}${data.failureReason ? `\nReason: ${data.failureReason}` : ""}\n\nContact: ${profile.supportEmail}`
+      return `${data.title}\n\n${data.body}${data.failureReason ? `\nReason: ${data.failureReason}` : ""}\n\nContact support: ${CONTACT_URL}`
     },
   }
 }
@@ -459,10 +453,9 @@ function securityTemplate(alertType: SecurityAlertEmailData["alertType"]): Email
         <p class="confirmation-text">${c.body}</p>
         ${device}
       `
-      const profile = getEmailAudienceProfile(audience)
       return generateBaseEmailTemplate(subject, "", content, {
         text: "Contact support",
-        url: `mailto:${profile.supportEmail}`,
+        url: CONTACT_URL,
       }, { audience, showPreferencesLink: false, preheader: c.body })
     },
     text: (data: SecurityAlertEmailData, audience = "personal") => {

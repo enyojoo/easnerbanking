@@ -4,6 +4,7 @@ import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettle
 import {
   findGlobalPayoutRefundForInboundSuppression,
   findGlobalPayoutSettlementForChainSuppression,
+  persistGlobalPayoutRefundTxHashOnOutRow,
 } from "@/lib/noah/global-payout-ledger"
 import { reconcileNoahBankOnrampCreditForSolanaTx, linkBankOnrampPayInToSolanaTxHash } from "@/lib/noah/credit-bank-onramp-wallet"
 import {
@@ -126,6 +127,12 @@ export async function applyTurnkeyInboundLedgerEvent(
       currency: input.currency,
     })
     if (refundSuppressed) {
+      if (txHash) {
+        await persistGlobalPayoutRefundTxHashOnOutRow(admin, {
+          outRowId: refundSuppressed.outRowId,
+          txHash,
+        }).catch(() => {})
+      }
       return { kind: "suppressed_noah" }
     }
   }

@@ -69,6 +69,68 @@ function pickDebitAmountFromGlobalPayoutMeta(
   return null
 }
 
+/** Noah refunds ~noah_send_amount (fee-exclusive), not total_debited. */
+export function pickRefundAmountCandidatesFromGlobalPayoutMeta(
+  meta: Record<string, unknown>,
+  rowAmount: number,
+): number[] {
+  const candidates: number[] = []
+  const push = (raw: unknown) => {
+    const v = Number(raw)
+    if (!Number.isFinite(v) || v <= 0) return
+    if (!candidates.some((c) => amountsRoughlyEqual(c, v))) candidates.push(v)
+  }
+  push(meta.noah_refund_amount)
+  push(meta.noah_send_amount)
+  push(meta.crypto_authorized_amount)
+  push(meta.noah_floor)
+  if (Number.isFinite(rowAmount) && rowAmount > 0) push(rowAmount)
+  push(meta.total_debited)
+  return candidates
+}
+
+export function inboundMatchesGlobalPayoutRefundAmount(
+  inboundAmount: number,
+  meta: Record<string, unknown>,
+  rowAmount: number,
+): boolean {
+  if (!Number.isFinite(inboundAmount) || inboundAmount <= 0) return false
+  return pickRefundAmountCandidatesFromGlobalPayoutMeta(meta, rowAmount).some((c) =>
+    amountsRoughlyEqual(inboundAmount, c),
+  )
+}
+
+/** Persist refund tx hash on failed OUT row when Turnkey inbound is suppressed by amount. */
+export async function persistGlobalPayoutRefundTxHashOnOutRow(
+  admin: SupabaseClient,
+  input: { outRowId: string; txHash: string },
+): Promise<void> {
+  const txHash = String(input.txHash || "").trim()
+  if (!txHash) return
+
+  const { data: row } = await admin
+    .from("transactions")
+    .select("metadata")
+    .eq("id", input.outRowId)
+    .maybeSingle()
+  if (!row?.metadata || typeof row.metadata !== "object") return
+
+  const prior = row.metadata as Record<string, unknown>
+  if (String(prior.noah_refund_tx_hash ?? "").trim() === txHash) return
+
+  await admin
+    .from("transactions")
+    .update({
+      metadata: {
+        ...prior,
+        noah_refund_expected: true,
+        noah_refund_tx_hash: txHash,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.outRowId)
+}
+
 export type FailedGlobalPayoutOutRow = {
   id: string
   easnerPayoutId: string
@@ -173,7 +235,14 @@ export async function findGlobalPayoutRefundForInboundSuppression(
   recentQ = applyLedgerScope(recentQ, scope)
   const { data: failedRows } = await recentQ.limit(20)
 
-  for (const row of failedRows ?? []) {
+  const sortedRows = [...(failedRows ?? [])].sort((a, b) => {
+    const aExpected = (a.metadata as Record<string, unknown> | undefined)?.noah_refund_expected === true
+    const bExpected = (b.metadata as Record<string, unknown> | undefined)?.noah_refund_expected === true
+    if (aExpected === bExpected) return 0
+    return aExpected ? -1 : 1
+  })
+
+  for (const row of sortedRows) {
     const meta = (row.metadata || {}) as Record<string, unknown>
     if (!isGlobalPayoutNoahOutRow(meta)) continue
     const easnerPayoutId = readEasnerPayoutIdFromNoahMeta(meta)
@@ -191,9 +260,7 @@ export async function findGlobalPayoutRefundForInboundSuppression(
     const rowCurrency = String(row.currency ?? "USD").toUpperCase()
     if (inboundCurrency && rowCurrency !== inboundCurrency) continue
 
-    const debitAmt = pickDebitAmountFromGlobalPayoutMeta(meta, Number(row.amount ?? 0))
-    if (debitAmt == null) continue
-    if (!amountsRoughlyEqual(inboundAmount, debitAmt)) continue
+    if (!inboundMatchesGlobalPayoutRefundAmount(inboundAmount, meta, Number(row.amount ?? 0))) continue
 
     const outboundHash = String(meta.turnkey_tx_hash ?? meta.noah_on_chain_tx_hash ?? "").trim()
     if (txHash && outboundHash && txHash === outboundHash) continue
@@ -202,6 +269,36 @@ export async function findGlobalPayoutRefundForInboundSuppression(
   }
 
   return null
+}
+
+const GLOBAL_PAYOUT_LEDGER_RESERVATION_KEYS = [
+  "balance_delta_applied",
+  "balance_delta_reversed",
+  "wallet_debit_reserved_at",
+  "turnkey_settled",
+  "stranded_processing_fee_written_off",
+  "stranded_processing_fee_amount",
+] as const
+
+/** Preserve wallet reservation flags when orchestration/refund patches rewrite OUT metadata. */
+export function mergeGlobalPayoutLedgerReservationFlags(
+  existing: Record<string, unknown> | null | undefined,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = { ...incoming }
+  if (!existing) return merged
+  for (const key of GLOBAL_PAYOUT_LEDGER_RESERVATION_KEYS) {
+    if (existing[key] !== undefined) merged[key] = existing[key]
+  }
+  return merged
+}
+
+/** Execute reserved wallet balance when Turnkey send left the wallet (even if metadata flag was wiped). */
+export function globalPayoutWalletDebitEvidence(meta: Record<string, unknown>): boolean {
+  if (meta.balance_delta_applied === true) return true
+  const sendId = String(meta.turnkey_send_id ?? "").trim()
+  const txHash = String(meta.turnkey_tx_hash ?? meta.noah_on_chain_tx_hash ?? "").trim()
+  return !!(sendId || txHash)
 }
 
 /**
@@ -215,8 +312,8 @@ export async function reverseGlobalPayoutWalletDebitForEasnerPayoutId(
   if (!row?.id) return false
 
   const meta = row.metadata
-  if (meta.balance_delta_applied !== true) return false
   if (meta.balance_delta_reversed === true) return false
+  if (!globalPayoutWalletDebitEvidence(meta)) return false
 
   const creditAmt = pickDebitAmountFromGlobalPayoutMeta(meta, row.amount)
   if (creditAmt == null) return false
@@ -234,6 +331,7 @@ export async function reverseGlobalPayoutWalletDebitForEasnerPayoutId(
     .update({
       metadata: {
         ...meta,
+        balance_delta_applied: true,
         balance_delta_reversed: true,
       },
       updated_at: new Date().toISOString(),
@@ -252,7 +350,8 @@ export type GlobalPayoutFailedWithoutReversalRow = {
 
 function isGlobalPayoutFailedWithoutReversal(meta: Record<string, unknown>): boolean {
   if (!isGlobalPayoutNoahOutRow(meta)) return false
-  return meta.balance_delta_applied === true && meta.balance_delta_reversed !== true
+  if (meta.balance_delta_reversed === true) return false
+  return globalPayoutWalletDebitEvidence(meta)
 }
 
 /** Failed global fiat payouts where wallet debit was reserved but not reversed. */
@@ -1097,11 +1196,18 @@ export async function linkGlobalPayoutOutRowFromOrchestrationIn(
     orchestrationInStatus?: string | null
   },
 ): Promise<void> {
-  const patch: Record<string, unknown> = {
+  const { data: current } = await admin
+    .from("transactions")
+    .select("metadata")
+    .eq("id", input.outRowId)
+    .maybeSingle()
+  const liveMeta = (current?.metadata as Record<string, unknown> | undefined) ?? {}
+
+  const patch: Record<string, unknown> = mergeGlobalPayoutLedgerReservationFlags(liveMeta, {
     ...input.priorMetadata,
     flow: "global_fiat_offramp",
     global_payout_orchestration_in_leg_linked: true,
-  }
+  })
   if (input.ruleExecutionId) {
     patch.noah_rule_execution_id = input.ruleExecutionId
   }

@@ -3,6 +3,7 @@ import {
   buildNoahGlobalPayoutOrchestrationInSuppressMetadata,
   extractNoahGlobalPayoutPayOutEnrichment,
   extractNoahRefundHintsFromOrchestrationIn,
+  inboundMatchesGlobalPayoutRefundAmount,
   isNoahGlobalPayoutOrchestrationInLeg,
   isNoahGlobalPayoutOrchestrationInLegShape,
   isNoahGlobalPayoutRefundOutLeg,
@@ -10,6 +11,7 @@ import {
   pendingGlobalPayoutProviderTransactionId,
   pickNoahGlobalPayoutLedgerFields,
   pickNoahGlobalPayoutOrchestrationRuleExecutionId,
+  pickRefundAmountCandidatesFromGlobalPayoutMeta,
 } from "@/lib/noah/global-payout-ledger"
 
 describe("pickNoahGlobalPayoutOrchestrationRuleExecutionId", () => {
@@ -224,6 +226,21 @@ describe("extractNoahRefundHintsFromOrchestrationIn", () => {
 describe("pendingGlobalPayoutProviderTransactionId", () => {
   it("prefixes easner payout id for pending rows", () => {
     expect(pendingGlobalPayoutProviderTransactionId("abc-123")).toBe("global_payout_pending:abc-123")
+  })
+})
+
+describe("pickRefundAmountCandidatesFromGlobalPayoutMeta", () => {
+  it("prefers noah_send_amount over total_debited for refund matching", () => {
+    const meta = {
+      noah_refund_amount: "1.99993",
+      noah_send_amount: 1.99993,
+      total_debited: 2.014657,
+      processing_fee: 0.014727,
+    }
+    const candidates = pickRefundAmountCandidatesFromGlobalPayoutMeta(meta, 1.99)
+    expect(candidates[0]).toBeCloseTo(1.99993, 6)
+    expect(candidates[candidates.length - 1]).toBeCloseTo(2.014657, 6)
+    expect(inboundMatchesGlobalPayoutRefundAmount(1.99993, meta, 1.99)).toBe(true)
   })
 })
 

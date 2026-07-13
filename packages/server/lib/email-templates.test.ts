@@ -53,12 +53,27 @@ describe("emailTemplates", () => {
     })
   }
 
-  it("transaction settled html includes amount and transaction id", () => {
+  it("transaction settled html includes transaction id and credited amount", () => {
     const data = { ...templateFixtures.transactionSettled, emailSubject: "Bank deposit complete" }
     const html = emailTemplates.transactionSettled.html(data, "personal")
-    expect(html).toContain("$100.00")
+    expect(html).toContain("$99.95")
     expect(html).toContain("ET-1001")
     expect(html).toContain("https://app.easner.com/user/transactions/ET-1001")
+  })
+
+  it("failed transfer email omits duplicate Amount row and uses contact page CTA", () => {
+    const html = emailTemplates.transactionFailed.html(templateFixtures.transactionFailed, "personal")
+    expect(html).toContain("Recipient gets")
+    expect(html).not.toContain(">Amount<")
+    expect(html).toContain("https://www.easner.com/contact")
+  })
+
+  it("security alert contact CTA uses contact page", () => {
+    const html = emailTemplates.mfaEnabled.html(
+      templateFixtures.mfaEnabled as SecurityAlertEmailData,
+      "personal",
+    )
+    expect(html).toContain("https://www.easner.com/contact")
   })
 
   it("renders canonical detailRows (Sending / Processing fee / Transfer method) for payouts", () => {

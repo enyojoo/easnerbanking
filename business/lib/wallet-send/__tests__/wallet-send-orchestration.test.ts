@@ -34,6 +34,9 @@ vi.mock("../fee-address", () => ({
   assertWalletSendFeeSolanaAddressConfigured: vi.fn(),
   resolveWalletSendFeeSolanaAddress: () => "fee-wallet-address",
 }))
+vi.mock("@/lib/processing-fee/capture-pending-processing-fee", () => ({
+  captureWalletSendFeeLegIfPending: vi.fn().mockResolvedValue({ captured: false }),
+}))
 
 import { executeWalletSend } from "../wallet-send-orchestration"
 
@@ -75,23 +78,17 @@ beforeEach(() => {
   getWalletSendSession.mockResolvedValue(baseSession)
   getTurnkeyDisplayBalancesUsdEur.mockResolvedValue({ USD: "200", EUR: "0" })
   applyWalletBalanceDelta.mockResolvedValue(undefined)
-  upsertLedgerTransaction.mockResolvedValue(undefined)
+  upsertLedgerTransaction.mockResolvedValue({ transactionId: "tx-1" })
   markWalletSendSessionExecuted.mockResolvedValue(undefined)
 })
 
 describe("executeWalletSend", () => {
-  it("debits balance only after recipient and margin sends succeed", async () => {
-    createTurnkeySend
-      .mockResolvedValueOnce({
-        status: "settled",
-        providerTransactionId: "tk-main",
-        txHash: "hash-main",
-      })
-      .mockResolvedValueOnce({
-        status: "settled",
-        providerTransactionId: "tk-margin",
-        txHash: "hash-margin",
-      })
+  it("debits balance after principal send succeeds; fee leg deferred until settled", async () => {
+    createTurnkeySend.mockResolvedValueOnce({
+      status: "settled",
+      providerTransactionId: "tk-main",
+      txHash: "hash-main",
+    })
 
     const result = await executeWalletSend({
       admin: mockAdmin(),
@@ -103,13 +100,14 @@ describe("executeWalletSend", () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(createTurnkeySend).toHaveBeenCalledTimes(2)
+    expect(createTurnkeySend).toHaveBeenCalledTimes(1)
     expect(applyWalletBalanceDelta).toHaveBeenCalledTimes(1)
     expect(upsertLedgerTransaction).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         amount: 101,
         metadata: expect.objectContaining({
+          processing_fee_pending: true,
           payout_review: expect.objectContaining({
             total_debited: 101,
             execution_model: "direct_turnkey",
@@ -117,23 +115,14 @@ describe("executeWalletSend", () => {
         }),
       }),
     )
-    const debitOrder = applyWalletBalanceDelta.mock.invocationCallOrder[0]
-    const marginOrder = createTurnkeySend.mock.invocationCallOrder[1]
-    expect(debitOrder).toBeGreaterThan(marginOrder)
   })
 
-  it("does not debit when margin send fails", async () => {
-    createTurnkeySend
-      .mockResolvedValueOnce({
-        status: "settled",
-        providerTransactionId: "tk-main",
-        txHash: "hash-main",
-      })
-      .mockResolvedValueOnce({
-        status: "failed",
-        providerTransactionId: "tk-margin-fail",
-        chainFailureDetail: "margin_capture_failed",
-      })
+  it("does not debit when principal send fails", async () => {
+    createTurnkeySend.mockResolvedValueOnce({
+      status: "failed",
+      providerTransactionId: "tk-main-fail",
+      chainFailureDetail: "broadcast_failed",
+    })
 
     const result = await executeWalletSend({
       admin: mockAdmin(),
@@ -149,7 +138,7 @@ describe("executeWalletSend", () => {
     expect(upsertLedgerTransaction).not.toHaveBeenCalled()
   })
 
-  it("debits after LI.FI and margin SPL succeed", async () => {
+  it("debits after LI.FI bridge succeeds; fee leg deferred", async () => {
     getWalletSendSession.mockResolvedValue({
       ...baseSession,
       receive_asset: "USDT",
@@ -186,6 +175,7 @@ describe("executeWalletSend", () => {
       expect.objectContaining({
         provider: "lifi",
         metadata: expect.objectContaining({
+          processing_fee_pending: true,
           payout_review: expect.objectContaining({
             execution_model: "lifi_bridge",
             total_debited: 104.52,

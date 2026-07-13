@@ -47,6 +47,7 @@ import {
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { applyGlobalPayoutMarginReconciliation, applyGlobalPayoutChannelFeeReconciliation } from "@/lib/noah/reconcile-payout-margin"
+import { captureGlobalPayoutProcessingFeeIfPending } from "@/lib/processing-fee/capture-pending-processing-fee"
 
 function pickWebhookOccurredIso(
   envelope: Record<string, unknown>,
@@ -512,6 +513,13 @@ export async function applyNoahWebhookSideEffects(
             txData,
             priorMetadata: metadata,
             transactionId: upsert.transactionId,
+          })
+          await captureGlobalPayoutProcessingFeeIfPending(admin, {
+            transactionId: upsert.transactionId,
+            userId,
+            businessId,
+          }).catch((e) => {
+            console.warn("global_payout_processing_fee_capture:", e)
           })
         }
 

@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
 import { getTurnkeySolanaBroadcastCaip2, isTurnkeySolSponsorshipEnabled } from "@/lib/turnkey/config"
-import { createTurnkeySend } from "@/lib/turnkey/send"
 import { lifiGetStatus } from "@/lib/lifi/client"
 import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-map"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
@@ -12,8 +11,6 @@ import { meetsLifiReceiveTarget } from "./lifi-receive-search"
 import { quoteLifiWalletBridge, quoteLifiWalletBridgeFromAmountRaw } from "./lifi-wallet-quote"
 
 type TurnkeyClientLike = Record<string, (...args: unknown[]) => Promise<unknown>>
-
-const MARGIN_DUST = 0.000_001
 
 export async function executeLifiWalletSend(input: {
   admin: SupabaseClient
@@ -27,7 +24,6 @@ export async function executeLifiWalletSend(input: {
       providerTransactionId: string
       status: "pending" | "settled" | "failed"
       txHash?: string | null
-      marginTurnkeySendId?: string
       lifiTool?: string
       lifiQuoteId?: string
     }
@@ -130,36 +126,7 @@ export async function executeLifiWalletSend(input: {
     String(sendRes.signature ?? sendRes.txHash ?? sendRes.transactionHash ?? "").trim() || null
 
   const marginAmount = input.session.margin_amount
-  // Explicit Easner processing fee leg (uncapped 1%), derived from the quoted total so no
-  // extra session column is needed: total = lifiFloor + FX margin + processingFee.
-  const processingFee = Math.max(
-    0,
-    Math.round((input.session.total_debited - input.session.lifi_floor - marginAmount) * 1_000_000) /
-      1_000_000,
-  )
-  // Both the hidden FX margin and the explicit processing fee route to the same fee wallet;
-  // collect them in a single SPL send.
-  const feeLegAmount = Math.round((marginAmount + processingFee) * 1_000_000) / 1_000_000
-  const walletSendCtx = { formSessionId: input.session.form_session_id }
-  let marginTurnkeySendId: string | undefined
-
-  if (feeLegAmount > MARGIN_DUST) {
-    const asset = source.asset === "EURC" ? "EURC" : "USDC"
-    const marginSend = await createTurnkeySend(input.admin, {
-      ctx: input.ctx,
-      asset,
-      chain: "solana",
-      destinationAddress: input.feeAddress,
-      amount: feeLegAmount,
-      settlementPollTimeoutMs: 0,
-      walletSend: { ...walletSendCtx, marginLeg: true },
-    })
-    marginTurnkeySendId = marginSend.providerTransactionId
-    if (marginSend.status === "failed") {
-      const detail = marginSend.chainFailureDetail?.trim() || "margin_capture_failed"
-      return { ok: false, error: detail || "margin_capture_failed" }
-    }
-  }
+  void marginAmount
 
   if (txHash) {
     try {
@@ -170,7 +137,6 @@ export async function executeLifiWalletSend(input: {
           providerTransactionId,
           status: "settled",
           txHash,
-          marginTurnkeySendId,
           lifiTool: quote.tool,
           lifiQuoteId: quote.id,
         }
@@ -185,7 +151,6 @@ export async function executeLifiWalletSend(input: {
     providerTransactionId,
     status: "pending",
     txHash,
-    marginTurnkeySendId,
     lifiTool: quote.tool,
     lifiQuoteId: quote.id,
   }

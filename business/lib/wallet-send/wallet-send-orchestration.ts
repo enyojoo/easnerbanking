@@ -18,6 +18,9 @@ import {
 import { formatDisplayPersonName } from "@easner/shared"
 import { buildRecipientSnapshotFromRow } from "@/lib/noah/build-payout-execute-snapshot"
 import { buildWalletSendPayoutReviewSnapshot } from "./build-wallet-send-payout-review"
+import {
+  captureWalletSendFeeLegIfPending,
+} from "@/lib/processing-fee/capture-pending-processing-fee"
 
 export type ExecuteWalletSendInput = {
   admin: SupabaseClient
@@ -154,7 +157,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
       businessId: input.businessId,
       balanceCurrency,
       totalDebited: session.total_debited,
-      onChainOutTotal: session.receive_amount + marginAmount,
+      onChainOutTotal: session.receive_amount,
     })
     if (!ready.ok) return ready
 
@@ -181,25 +184,6 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         return { ok: false, error: detail }
       }
 
-      let marginTurnkeySendId: string | undefined
-      if (marginAmount > MARGIN_DUST) {
-        const marginSend = await createTurnkeySend(input.admin, {
-          ctx: input.ctx,
-          asset,
-          chain: "solana",
-          destinationAddress: feeAddress,
-          amount: marginAmount,
-          settlementPollTimeoutMs: 0,
-          walletSend: { ...walletSendCtx, marginLeg: true },
-        })
-        marginTurnkeySendId = marginSend.providerTransactionId
-        if (marginSend.status === "failed") {
-          const detail =
-            marginSend.chainFailureDetail?.trim() || "margin_capture_failed"
-          return { ok: false, error: detail || "margin_capture_failed" }
-        }
-      }
-
       await debitWalletBalance(input.admin, {
         userId: input.userId,
         businessId: input.businessId,
@@ -208,7 +192,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
       })
 
       const occurredAt = new Date().toISOString()
-      await upsertLedgerTransaction(input.admin, {
+      const upsert = await upsertLedgerTransaction(input.admin, {
         userId: input.userId,
         businessId: input.businessId,
         provider: "turnkey",
@@ -238,10 +222,18 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
           fee_destination_address: feeAddress,
           payout_review: payoutReview,
           ...walletSendRecipientMetadata(input.recipient),
-          ...(marginTurnkeySendId ? { margin_turnkey_send_id: marginTurnkeySendId } : {}),
+          ...(marginAmount > MARGIN_DUST ? { processing_fee_pending: true } : {}),
           ...(input.reviewSnapshot ?? {}),
         },
       })
+
+      if (send.status === "settled" && upsert.transactionId) {
+        await captureWalletSendFeeLegIfPending(input.admin, {
+          transactionId: upsert.transactionId,
+          userId: input.userId,
+          businessId: input.businessId,
+        }).catch((e) => console.warn("wallet_send_fee_capture:", e))
+      }
 
       await markWalletSendSessionExecuted(input.admin, session.form_session_id)
       return {
@@ -274,7 +266,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     businessId: input.businessId,
     balanceCurrency,
     totalDebited: session.total_debited,
-    onChainOutTotal: lifiFloor + marginAmount + processingFee,
+    onChainOutTotal: lifiFloor,
   })
   if (!ready.ok) return ready
 
@@ -299,8 +291,11 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     amount: session.total_debited,
   })
 
+  const feeLegAmount =
+    Math.round((marginAmount + processingFee) * 1_000_000) / 1_000_000
+
   const occurredAt = new Date().toISOString()
-  await upsertLedgerTransaction(input.admin, {
+  const upsert = await upsertLedgerTransaction(input.admin, {
     userId: input.userId,
     businessId: input.businessId,
     provider: "lifi",
@@ -333,10 +328,18 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
       easner_transaction_id: easnerTransactionId,
       payout_review: payoutReview,
       ...walletSendRecipientMetadata(input.recipient),
-      ...(lifi.marginTurnkeySendId ? { margin_turnkey_send_id: lifi.marginTurnkeySendId } : {}),
+      ...(feeLegAmount > MARGIN_DUST ? { processing_fee_pending: true } : {}),
       ...(input.reviewSnapshot ?? {}),
     },
   })
+
+  if (lifi.status === "settled" && upsert.transactionId) {
+    await captureWalletSendFeeLegIfPending(input.admin, {
+      transactionId: upsert.transactionId,
+      userId: input.userId,
+      businessId: input.businessId,
+    }).catch((e) => console.warn("wallet_send_fee_capture:", e))
+  }
 
   await markWalletSendSessionExecuted(input.admin, session.form_session_id)
   return {

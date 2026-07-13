@@ -174,4 +174,25 @@ describe("reverseGlobalPayoutWalletDebitForEasnerPayoutId", () => {
     })
     expect(getMetadata().balance_delta_reversed).toBe(true)
   })
+
+  it("reverses when execute debited on-chain but balance_delta_applied metadata was wiped", async () => {
+    const { admin, getMetadata, easnerPayoutId } = createPayoutAdmin({
+      turnkey_send_id: "sha256:abc",
+      turnkey_tx_hash: "sig-xyz",
+    })
+
+    const reversed = await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+      easnerPayoutId,
+    })
+
+    expect(reversed).toBe(true)
+    expect(applyWalletBalanceDelta).toHaveBeenCalledWith(admin, {
+      businessId: null,
+      userId: "user-1",
+      currency: "USD",
+      delta: 42.5,
+    })
+    expect(getMetadata().balance_delta_applied).toBe(true)
+    expect(getMetadata().balance_delta_reversed).toBe(true)
+  })
 })

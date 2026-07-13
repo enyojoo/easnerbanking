@@ -9,7 +9,10 @@
  */
 import { createSupabaseAdmin } from "../lib/supabase/admin"
 import { applyWalletBalanceDelta } from "../lib/wallet/wallet-balances-db"
-import { reverseGlobalPayoutWalletDebitForEasnerPayoutId } from "../lib/noah/global-payout-ledger"
+import {
+  inboundMatchesGlobalPayoutRefundAmount,
+  reverseGlobalPayoutWalletDebitForEasnerPayoutId,
+} from "../lib/noah/global-payout-ledger"
 
 const dryRun = process.argv.includes("--dry-run")
 const deleteMirrors = process.argv.includes("--delete")
@@ -19,8 +22,10 @@ function amountsRoughlyEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= Math.max(0.02, a * 0.002)
 }
 
-function pickDebitAmount(meta: Record<string, unknown>, rowAmount: number): number | null {
+function pickRefundMatchAmount(meta: Record<string, unknown>, rowAmount: number): number | null {
   const total = Number(meta.total_debited ?? 0)
+  const refund = Number(meta.noah_send_amount ?? meta.noah_refund_amount ?? 0)
+  if (Number.isFinite(refund) && refund > 0) return refund
   if (Number.isFinite(total) && total > 0) return total
   const crypto = Number(meta.crypto_authorized_amount ?? 0)
   if (Number.isFinite(crypto) && crypto > 0) return crypto
@@ -79,7 +84,7 @@ async function main() {
     const businessId = row.business_id != null ? String(row.business_id) : null
     const payoutRowId = String(row.id)
 
-    if (easnerPayoutId && meta.balance_delta_applied === true && meta.balance_delta_reversed !== true) {
+    if (easnerPayoutId && meta.balance_delta_reversed !== true) {
       console.log(
         `${dryRun ? "[dry-run] " : ""}reverse payout debit easner_payout_id=${easnerPayoutId} row=${payoutRowId}`,
       )
@@ -88,12 +93,53 @@ async function main() {
       }
     }
 
+    if (!dryRun && easnerPayoutId) {
+      const { data: freshPayout } = await admin
+        .from("transactions")
+        .select("metadata, currency")
+        .eq("id", payoutRowId)
+        .maybeSingle()
+      const feeMeta = (freshPayout?.metadata as Record<string, unknown> | undefined) ?? meta
+      if (feeMeta.balance_delta_reversed === true) {
+        const processingFee = Number(feeMeta.processing_fee ?? 0)
+        const feeSent = String(feeMeta.processing_fee_turnkey_send_id ?? "").trim()
+        const alreadyWrittenOff = feeMeta.stranded_processing_fee_written_off === true
+        if (
+          feeSent &&
+          !alreadyWrittenOff &&
+          Number.isFinite(processingFee) &&
+          processingFee > 0
+        ) {
+          console.log(
+            `${dryRun ? "[dry-run] " : ""}write off stranded processing fee ${processingFee} easner_payout_id=${easnerPayoutId}`,
+          )
+          await applyWalletBalanceDelta(admin, {
+            businessId,
+            userId: businessId ? null : userId,
+            currency: String(freshPayout?.currency ?? row.currency ?? "USD"),
+            delta: -processingFee,
+          })
+          await admin
+            .from("transactions")
+            .update({
+              metadata: {
+                ...feeMeta,
+                stranded_processing_fee_written_off: true,
+                stranded_processing_fee_amount: processingFee,
+              },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", payoutRowId)
+        }
+      }
+    }
+
     const refundHash = String(meta.noah_refund_tx_hash ?? "").trim()
     if (refundHash) {
       refundHashToScope.set(refundHash, { userId, businessId, payoutRowId })
     }
 
-    const debit = pickDebitAmount(meta, Number(row.amount ?? 0))
+    const debit = pickRefundMatchAmount(meta, Number(row.amount ?? 0))
     if (debit == null) continue
 
     const outboundTxHash = String(
@@ -149,7 +195,8 @@ async function main() {
       for (const scope of amountScopes) {
         if (!scopeMatches({ user_id: userId, business_id: businessId }, scope)) continue
         if (h && scope.outboundTxHash && h === scope.outboundTxHash) continue
-        if (!amountsRoughlyEqual(amount, scope.debitAmount)) continue
+        if (!amountsRoughlyEqual(amount, scope.debitAmount) &&
+            !inboundMatchesGlobalPayoutRefundAmount(amount, scope.payoutMeta, scope.debitAmount)) continue
         mirror = true
         linkedPayoutRowId = scope.payoutRowId
         linkedPayoutMeta = scope.payoutMeta
@@ -160,7 +207,12 @@ async function main() {
     if (!mirror) continue
 
     if (!dryRun && h && linkedPayoutRowId) {
-      const payoutMeta = linkedPayoutMeta ?? {}
+      const { data: payoutRow } = await admin
+        .from("transactions")
+        .select("metadata")
+        .eq("id", linkedPayoutRowId)
+        .maybeSingle()
+      const payoutMeta = (payoutRow?.metadata as Record<string, unknown> | undefined) ?? linkedPayoutMeta ?? {}
       if (!String(payoutMeta.noah_refund_tx_hash ?? "").trim()) {
         await admin
           .from("transactions")

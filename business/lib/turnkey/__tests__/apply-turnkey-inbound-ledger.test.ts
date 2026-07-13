@@ -42,6 +42,13 @@ vi.mock("@/lib/liquidity/platform-pool", () => ({
 vi.mock("@/lib/noah/global-payout-ledger", () => ({
   findGlobalPayoutRefundForInboundSuppression: mocks.findRefund,
   findGlobalPayoutSettlementForChainSuppression: mocks.findGlobalPayoutSettlement,
+  persistGlobalPayoutRefundTxHashOnOutRow: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("@/lib/deposit-omnibus/execute-deposit-split", () => ({
+  tryCompleteDepositSplitFromUserVaultInbound: vi.fn().mockResolvedValue(false),
+}))
+vi.mock("@/lib/deposit-omnibus/config", () => ({
+  isDepositSplitEnabled: () => false,
 }))
 vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
   turnkeyInboundLedgerRowExists: vi.fn().mockResolvedValue(false),

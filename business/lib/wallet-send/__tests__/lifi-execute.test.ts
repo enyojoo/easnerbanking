@@ -97,6 +97,7 @@ describe("executeLifiWalletSend", () => {
 
     expect(result.ok).toBe(true)
     expect(vi.mocked(lifiQuote)).toHaveBeenCalledTimes(1)
+    expect(createTurnkeySend).not.toHaveBeenCalled()
     expect(vi.mocked(lifiQuote).mock.calls[0][0]).toMatchObject({
       fromAmount: "10500000",
       fee: 0,

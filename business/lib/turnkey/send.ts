@@ -555,6 +555,17 @@ export async function reconcileTurnkeySendStatus(
         providerTransactionId: params.providerTransactionId,
         easnerPayoutId,
       }).catch((e) => console.warn("global_payout_turnkey_settle_debit:", e))
+
+      if (String(meta.activity_type ?? "") === "wallet_send") {
+        const { captureWalletSendFeeLegIfPending } = await import(
+          "@/lib/processing-fee/capture-pending-processing-fee"
+        )
+        await captureWalletSendFeeLegIfPending(admin, {
+          transactionId: String(existing.id),
+          userId: String(existing.user_id),
+          businessId: existing.business_id ? String(existing.business_id) : null,
+        }).catch((e) => console.warn("wallet_send_fee_capture:", e))
+      }
     }
   } else {
     const easetagSettlement = await findEasetagSettlementForChainSuppression(admin, {
