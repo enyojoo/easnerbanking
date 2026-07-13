@@ -83,6 +83,9 @@ export function mapUsersRowToUser(ru: Record<string, unknown>): User {
     easetag: typeof ru.easetag === 'string' && ru.easetag.trim() ? ru.easetag.trim().toLowerCase() : undefined,
     status: 'active',
     base_currency: 'USD',
+    deletion_scheduled_at:
+      typeof ru.deletion_scheduled_at === 'string' ? ru.deletion_scheduled_at : null,
+    deleted_at: typeof ru.deleted_at === 'string' ? ru.deleted_at : null,
     created_at: String(ru.created_at ?? ''),
     updated_at: String(ru.updated_at ?? ''),
   }

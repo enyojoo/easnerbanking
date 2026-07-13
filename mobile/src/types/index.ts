@@ -197,6 +197,10 @@ export interface User {
   }
   country_code?: string
   bridge_kyc_metadata?: unknown
+  /** When set, permanent deletion is pending (cleared on sign-in). */
+  deletion_scheduled_at?: string | null
+  /** When set, account is closed (auth revoked); profile retained. */
+  deleted_at?: string | null
   created_at: string
   updated_at: string
 }

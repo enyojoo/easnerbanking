@@ -1,5 +1,6 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { hasPendingTeamInviteForEmail } from "@/lib/business/claim-team-invite"
+import { ACCOUNT_CLOSED_MESSAGE } from "@/lib/settings/account-deletion"
 
 export type AppSurface = "business_web" | "consumer_mobile"
 
@@ -43,8 +44,21 @@ export async function validateAppSurfaceAccess(
     }
   }
 
-  const { data: userRow } = await admin.from("users").select("role").eq("id", userId).maybeSingle()
+  const { data: userRow } = await admin
+    .from("users")
+    .select("role,deleted_at,deletion_scheduled_at")
+    .eq("id", userId)
+    .maybeSingle()
   const role = userRow?.role as string | null | undefined
+
+  if (userRow?.deleted_at) {
+    return {
+      ok: false,
+      status: 403,
+      code: "ACCOUNT_CLOSED",
+      message: ACCOUNT_CLOSED_MESSAGE,
+    }
+  }
 
   if (userRow == null) {
     return { ok: true }

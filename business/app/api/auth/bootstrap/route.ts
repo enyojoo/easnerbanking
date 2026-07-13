@@ -9,6 +9,7 @@ import { emailService } from "@easner/server"
 import { getEmailAudienceProfile } from "@easner/server"
 import { claimTeamInvite } from "@/lib/business/claim-team-invite"
 import { ensureDefaultCommunicationPreferences } from "@/lib/notifications/ensure-communication-preferences"
+import { cancelAccountDeletion } from "@/lib/settings/account-deletion"
 
 type BootstrapBody = {
   countryCode?: string
@@ -140,13 +141,33 @@ export async function POST(request: Request) {
 
   const { data: userRow } = await admin
     .from("users")
-    .select("id,easner_business_id,full_name,role,residence_country")
+    .select("id,easner_business_id,full_name,role,residence_country,deletion_scheduled_at,deleted_at")
     .eq("id", user.id)
     .maybeSingle()
 
   const existingRole =
     userRow?.role === "business" || userRow?.role === "individual" ? userRow.role : null
   const hasBusinessLink = typeof userRow?.easner_business_id === "string" && userRow.easner_business_id.length > 0
+
+  if (userRow?.deleted_at) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "This account has been closed. Contact support@easner.com if you need help restoring access.",
+        code: "ACCOUNT_CLOSED",
+      },
+      { status: 403 },
+    )
+  }
+
+  // Signing back in during the grace period cancels pending account closure.
+  if (userRow?.id && userRow.deletion_scheduled_at) {
+    try {
+      await cancelAccountDeletion(admin, user.id)
+    } catch (e) {
+      console.warn("[bootstrap] cancel pending account deletion:", e)
+    }
+  }
 
   if (role === "individual") {
     const isNewIndividual = !userRow?.id

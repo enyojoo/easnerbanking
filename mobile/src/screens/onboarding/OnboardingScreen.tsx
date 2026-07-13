@@ -61,8 +61,8 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
         if (flag === '1') {
           await AsyncStorage.removeItem(ACCOUNT_DELETED_FLAG_KEY).catch(() => undefined)
           showInfo(
-            "Account deleted. We're sorry to see you go — come back again.\n\nQuestions? support@easner.com",
-            6000,
+            "Account closure scheduled. Your login access will be removed in 7 days. Records are retained per our Terms of Service. Sign in anytime before then to cancel.\n\nQuestions? support@easner.com",
+            7000,
           )
         }
       } catch {

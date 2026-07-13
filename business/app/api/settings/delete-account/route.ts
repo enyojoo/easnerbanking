@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
+import {
+  ACCOUNT_DELETION_GRACE_DAYS,
+  scheduleAccountDeletion,
+} from "@/lib/settings/account-deletion"
 
 /**
- * Self-serve account deletion for the currently authenticated user.
+ * Self-serve account closure for the currently authenticated user.
  *
  * - Auth: Bearer access token (mobile/web).
- * - Behavior: Best-effort cleanup of `public.users` row, then delete Supabase Auth user.
- *
- * Note: Downstream data cleanup relies on DB FK cascades / triggers where configured.
+ * - Behavior: Schedules account closure after a 7-day grace period.
+ *   Profile and financial records are retained; only login access is revoked after grace.
+ *   Signing back in cancels the pending closure.
+ * - Final closure is performed by `/api/cron/process-account-deletions`.
  */
 export async function POST(request: Request) {
   const user = await getUserFromApiRequest(request)
@@ -16,24 +21,15 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdmin()
 
   try {
-    // Best-effort: remove profile row (ignore failures; may be protected by FKs).
-    await admin.from("users").delete().eq("id", user.id)
-
-    const { error } = await admin.auth.admin.deleteUser(user.id)
-    if (error) {
-      console.error("delete-account: auth deleteUser", error)
-      const msg = (error.message || "").toLowerCase()
-      // Idempotency: if the auth user is already gone, treat as success.
-      if (msg.includes("not found") || msg.includes("user not found")) {
-        return NextResponse.json({ ok: true })
-      }
-      return NextResponse.json({ error: error.message || "Unable to delete account." }, { status: 500 })
-    }
-
-    return NextResponse.json({ ok: true })
+    const { deletion_scheduled_at } = await scheduleAccountDeletion(admin, user.id)
+    return NextResponse.json({
+      ok: true,
+      grace_days: ACCOUNT_DELETION_GRACE_DAYS,
+      deletion_scheduled_at,
+    })
   } catch (e) {
     console.error("delete-account: unexpected", e)
-    return NextResponse.json({ error: "Unable to delete account." }, { status: 500 })
+    const msg = e instanceof Error ? e.message : "Unable to schedule account closure."
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
-

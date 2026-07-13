@@ -544,9 +544,10 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       }
 
       setShowDeleteDialog(false)
-      // Show "Account deleted" message after we return to onboarding.
+      // Show grace-period message after we return to onboarding.
       await AsyncStorage.setItem(ACCOUNT_DELETED_FLAG_KEY, '1').catch(() => undefined)
       // Ensure local state is cleared and user exits to Auth stack.
+      // Account remains recoverable for 7 days; signing back in cancels deletion.
       await signOut()
     } catch (e) {
       setShowDeleteDialog(false)
@@ -1008,8 +1009,8 @@ function ProfileEditContent({ navigation }: NavigationProps) {
           if (!deleteLoading) setShowDeleteDialog(false)
         }}
         title="Delete Account"
-        message="Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted."
-        primaryLabel="Delete Account"
+        message="Your account access will be removed after 7 days. Your records will be retained as described in our Terms of Service. Sign back in anytime within those 7 days to cancel."
+        primaryLabel="Close Account in 7 Days"
         onPrimary={() => void handleDeleteAccount()}
         onSecondary={() => setShowDeleteDialog(false)}
         primaryDestructive
