@@ -1,61 +1,37 @@
-import React, { useMemo, useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, LogOut, MessageCircle, User } from 'lucide-react-native'
+import React, { useEffect, useMemo } from 'react'
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { MessageCircle } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { navigateFromRoot } from '../../navigation/rootNavigationRef'
 import { useAuth } from '../../contexts/AuthContext'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
-import { HEADER_HEIGHT, spacing, textStyles, userAvatarStyles } from '../../theme'
+import { HEADER_HEIGHT, spacing, userAvatarStyles } from '../../theme'
 import { AvatarImage } from '../AvatarImage'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
-import { avatarImageUri } from '../../lib/avatarCache'
+import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { haptics } from '../../lib/haptics'
 import { ripple } from '../../lib/androidRipple'
-import { useWebCenteredModal, webCenteredModalStyles } from '../../lib/webCenteredModal'
+import { analytics } from '../../lib/analytics'
+import { intercomPresentErrorMessage, presentIntercomMessenger } from '../../lib/intercom'
 
 export function DesktopHeader() {
-  const useCenteredModal = useWebCenteredModal()
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
-  const { userProfile, signOut } = useAuth()
-  const [menuOpen, setMenuOpen] = useState(false)
-
-  const fullName = userProfile?.profile?.full_name || userProfile?.profile?.name || ''
-  const avatarUri = avatarImageUri(userProfile?.profile?.avatar_url)
+  const { user, userProfile } = useAuth()
   const styles = useMemo(() => createStyles(palette), [palette])
 
-  const navigateTo = (route: string) => {
-    setMenuOpen(false)
-    navigateFromRoot(route)
-  }
+  // Same name resolution as DashboardScreen header avatar
+  const avatarFullName =
+    userProfile?.profile?.full_name ||
+    [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ') ||
+    user?.full_name ||
+    [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
+    ''
+  const headerAvatarUri = avatarImageUri(userProfile?.profile?.avatar_url)
 
-  const menuItems = (
-    <>
-      <Pressable
-        style={styles.dropdownItem}
-        onPress={() => {
-          haptics.tap()
-          navigateTo('Profile')
-        }}
-        android_ripple={ripple.neutral}
-      >
-        <User size={18} color={palette.text.primary} strokeWidth={2} />
-        <Text style={styles.dropdownLabel}>Profile</Text>
-      </Pressable>
-      <Pressable
-        style={styles.dropdownItem}
-        onPress={() => {
-          haptics.tap()
-          setMenuOpen(false)
-          void signOut()
-        }}
-        android_ripple={ripple.neutral}
-      >
-        <LogOut size={18} color={palette.error.main} strokeWidth={2} />
-        <Text style={[styles.dropdownLabel, { color: palette.error.main }]}>Sign out</Text>
-      </Pressable>
-    </>
-  )
+  useEffect(() => {
+    warmAvatarCache(headerAvatarUri)
+  }, [headerAvatarUri])
 
   return (
     <View style={[styles.header, { paddingTop: insets.top > 0 ? 0 : spacing[2] }]}>
@@ -65,70 +41,39 @@ export function DesktopHeader() {
           style={styles.supportButton}
           onPress={() => {
             haptics.tap()
-            navigateTo('Support')
+            analytics.trackSupportLiveChatOpened()
+            void presentIntercomMessenger().catch((e) => {
+              Alert.alert('Live chat', intercomPresentErrorMessage(e))
+            })
           }}
           android_ripple={ripple.neutral}
           accessibilityRole="button"
           accessibilityLabel="Support chat"
         >
-          <MessageCircle size={20} color={palette.primary.main} strokeWidth={2} />
+          <MessageCircle size={22} color={palette.primary.main} strokeWidth={2} />
         </Pressable>
-        <View style={styles.menuAnchor}>
-          <Pressable
-            style={styles.profileButton}
-            onPress={() => {
-              haptics.tap()
-              setMenuOpen((v) => !v)
-            }}
-            android_ripple={ripple.neutral}
-            accessibilityRole="button"
-            accessibilityLabel="Account menu"
-          >
-            {avatarUri ? (
-              <AvatarImage avatarUrl={userProfile?.profile?.avatar_url} style={userAvatarStyles.image} />
-            ) : (
-              <Text style={userAvatarStyles.initials}>{initialsFromFullName(fullName)}</Text>
-            )}
-            <Text style={styles.profileName} numberOfLines={1}>
-              {fullName || 'Account'}
-            </Text>
-            <ChevronDown size={16} color={palette.text.secondary} strokeWidth={2} />
-          </Pressable>
-
-          {menuOpen && !useCenteredModal ? (
-            <View style={styles.dropdown}>{menuItems}</View>
-          ) : null}
-        </View>
-      </View>
-      {useCenteredModal ? (
-        <Modal
-          visible={menuOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setMenuOpen(false)}
+        <Pressable
+          style={styles.avatarButton}
+          onPress={() => {
+            haptics.tap()
+            navigateFromRoot('Profile')
+          }}
+          android_ripple={ripple.neutral}
+          accessibilityRole="button"
+          accessibilityLabel="Profile"
         >
-          <View style={webCenteredModalStyles.anchoredMenuOverlay}>
-            <Pressable
-              style={StyleSheet.absoluteFill}
-              onPress={() => setMenuOpen(false)}
-              accessibilityRole="button"
-              accessibilityLabel="Close account menu"
+          {headerAvatarUri ? (
+            <AvatarImage
+              avatarUrl={userProfile?.profile?.avatar_url}
+              style={userAvatarStyles.image}
             />
-            <Pressable
-              style={[
-                webCenteredModalStyles.anchoredMenuPanel,
-                {
-                  backgroundColor: palette.semantic.card,
-                  borderColor: palette.border.default,
-                },
-              ]}
-              onPress={(e) => e.stopPropagation()}
-            >
-              {menuItems}
-            </Pressable>
-          </View>
-        </Modal>
-      ) : null}
+          ) : (
+            <Text style={userAvatarStyles.initials}>
+              {initialsFromFullName(avatarFullName)}
+            </Text>
+          )}
+        </Pressable>
+      </View>
     </View>
   )
 }
@@ -140,6 +85,7 @@ function createStyles(palette: ReturnType<typeof useThemeColors>) {
       minHeight: HEADER_HEIGHT,
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'flex-end',
       paddingHorizontal: spacing[8],
       backgroundColor: palette.semantic.card,
       borderBottomWidth: StyleSheet.hairlineWidth,
@@ -154,6 +100,7 @@ function createStyles(palette: ReturnType<typeof useThemeColors>) {
       alignItems: 'center',
       gap: spacing[2],
     },
+    /** Matches DashboardScreen `supportHeaderButton`. */
     supportButton: {
       width: 40,
       height: 40,
@@ -163,49 +110,20 @@ function createStyles(palette: ReturnType<typeof useThemeColors>) {
       borderColor: palette.border.default,
       justifyContent: 'center',
       alignItems: 'center',
+      flexShrink: 0,
     },
-    menuAnchor: {
-      position: 'relative',
-    },
-    profileButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing[2],
-      paddingVertical: spacing[2],
-      paddingHorizontal: spacing[3],
-      borderRadius: spacing[4],
-    },
-    profileName: {
-      ...textStyles.titleSmall,
-      color: palette.text.primary,
-      maxWidth: 160,
-    },
-    dropdown: {
-      position: 'absolute',
-      top: HEADER_HEIGHT - spacing[2],
-      right: 0,
-      minWidth: 180,
+    /** Matches DashboardScreen `headerAvatarButton`. */
+    avatarButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      overflow: 'hidden',
+      flexShrink: 0,
       backgroundColor: palette.semantic.card,
-      borderRadius: spacing[3],
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: palette.border.default,
-      paddingVertical: spacing[1],
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
-      shadowRadius: 12,
-      elevation: 4,
-    },
-    dropdownItem: {
-      flexDirection: 'row',
+      justifyContent: 'center',
       alignItems: 'center',
-      gap: spacing[3],
-      paddingVertical: spacing[3],
-      paddingHorizontal: spacing[4],
-    },
-    dropdownLabel: {
-      ...textStyles.bodyMedium,
-      color: palette.text.primary,
     },
   })
 }

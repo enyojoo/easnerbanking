@@ -13,6 +13,10 @@ function parseAllowedOrigins(): Set<string> {
   const defaults = [
     "http://localhost:3002",
     "http://127.0.0.1:3002",
+    "http://localhost:8081",
+    "http://127.0.0.1:8081",
+    "http://localhost:19006",
+    "http://127.0.0.1:19006",
     "https://easnerbanking-office.vercel.app",
     /** Expo web consumer app (browser calls api.easner.com with Bearer + Noah scope header). */
     "https://app.easner.com",

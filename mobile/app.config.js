@@ -169,6 +169,7 @@ module.exports = ({ config }) => {
 
   const intercomKeysReady =
     Boolean(intercomAppId && intercomIosApiKey && intercomAndroidApiKey)
+  const intercomWebReady = Boolean(intercomAppId)
   const appleWebClientId =
     process.env.EXPO_PUBLIC_APPLE_WEB_CLIENT_ID?.trim() || 'com.easner.mobile.web'
   const appleWebRedirectUri = process.env.EXPO_PUBLIC_APPLE_WEB_REDIRECT_URI?.trim() || ''
@@ -259,9 +260,14 @@ module.exports = ({ config }) => {
       supabasePublishableKey,
       apiUrl,
       intercomConfigured: intercomKeysReady,
-      ...(intercomKeysReady
+      ...(intercomWebReady
         ? {
             intercomAppId,
+            intercomRegion,
+          }
+        : {}),
+      ...(intercomKeysReady
+        ? {
             intercomIosApiKey,
             intercomAndroidApiKey,
           }

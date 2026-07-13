@@ -105,22 +105,21 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
           <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
           {showProfileChromeSkeleton ? (
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 animate-pulse rounded-full bg-muted" />
-              <div className="h-9 w-9 animate-pulse rounded-full bg-muted" />
+              <div className="h-9 w-9 animate-pulse rounded-full border-2 border-border bg-muted" />
+              <div className="h-9 w-9 animate-pulse rounded-full border-2 border-border bg-muted" />
             </div>
           ) : (
             <>
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
-                className="shrink-0 rounded-full hover:bg-muted/50"
+                className="h-9 w-9 shrink-0 rounded-full border-2 border-border p-0 hover:bg-muted/50"
                 aria-label="Support chat"
                 onClick={() => {
                   void openBusinessSupport()
                 }}
               >
-                <MessageCircle className="h-5 w-5 text-primary" />
+                <MessageCircle className="size-5 text-primary" strokeWidth={2} />
               </Button>
               <BusinessDropdown
                 businessName={businessName}

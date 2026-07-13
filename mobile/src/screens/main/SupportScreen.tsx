@@ -13,7 +13,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { presentIntercomMessenger } from '../../lib/intercom'
+import { intercomPresentErrorMessage, presentIntercomMessenger, prepareIntercomMessenger } from '../../lib/intercom'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
@@ -25,19 +25,14 @@ export default function SupportScreen({ navigation }: NavigationProps) {
   useFocusEffect(
     useCallback(() => {
       analytics.trackScreenView('Support')
+      void prepareIntercomMessenger()
     }, []),
   )
 
   const handleLiveChat = () => {
     analytics.trackSupportLiveChatOpened()
     void presentIntercomMessenger().catch((e) => {
-      const message =
-        e instanceof Error && e.message === 'INTERCOM_NOT_CONFIGURED'
-          ? 'Live chat is not available in this build. Set Intercom env and rebuild, or use email support.'
-          : e instanceof Error && e.message === 'INTERCOM_JWT_UNAVAILABLE'
-            ? 'Could not refresh chat login. Check your connection and that the Easner API can mint Intercom tokens (INTERCOM_MESSENGER_API_SECRET on the server).'
-            : 'Could not open chat. Please try again or use email support.'
-      Alert.alert('Live chat', message)
+      Alert.alert('Live chat', intercomPresentErrorMessage(e))
     })
   }
 
