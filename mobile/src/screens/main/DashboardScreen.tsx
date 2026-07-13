@@ -29,6 +29,7 @@ import {
   Receipt,
 } from 'lucide-react-native'
 import { useAuth } from '../../contexts/AuthContext'
+import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { NavigationProps } from '../../types'
 import {
   useThemeColors,
@@ -110,6 +111,7 @@ interface DashboardTransaction {
 export default function DashboardScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
+  const { showSidebarShell } = useResponsiveLayout()
   const scrollBottomPadding = useScrollBottomPadding(spacing[4])
   const footerPadding = useFixedFooterPadding(spacing[4])
   const styles = useMemo(
@@ -625,14 +627,17 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     )
   }
 
+  const showInScreenChrome = !showSidebarShell
+  const showDashboardHeader = showInScreenChrome || showVerifyIdentityBanner
+
   return (
     <View style={styles.container}>
-      {/* Header: avatar | verify banner (if needed) | support */}
+      {/* Header: avatar | verify banner (if needed) | support — avatar/support stay in-screen on small; web shell moves them to DesktopHeader */}
+      {showDashboardHeader ? (
       <View style={[styles.headerWrapper, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.header}>
-          {/* Header Content */}
           <View style={styles.headerContent}>
-            {/* Profile avatar */}
+            {showInScreenChrome ? (
             <View style={styles.greetingContainer}>
               <Pressable
                android_ripple={ripple.neutral}
@@ -653,6 +658,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 )}
               </Pressable>
             </View>
+            ) : (
+              <View style={styles.headerSideSlot} />
+            )}
 
             {showVerifyIdentityBanner ? (
               <View style={styles.verifyAccountBannerSlot}>
@@ -675,6 +683,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               </View>
             ) : null}
 
+            {showInScreenChrome ? (
             <Pressable
              android_ripple={ripple.neutral}
               style={styles.supportHeaderButton}
@@ -691,9 +700,13 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             >
               <MessageCircle size={22} color={palette.primary.main} strokeWidth={2} />
             </Pressable>
+            ) : (
+              <View style={styles.headerSideSlot} />
+            )}
           </View>
         </View>
       </View>
+      ) : null}
 
       {/* Balance hero + quick actions */}
       <ScrollView 
@@ -1015,6 +1028,11 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
+    flexShrink: 0,
+  },
+  /** Keeps the verify banner centered when avatar/support live in the desktop header. */
+  headerSideSlot: {
+    width: 40,
     flexShrink: 0,
   },
   verifyAccountBannerSlot: {

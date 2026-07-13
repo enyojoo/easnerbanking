@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Settings,
   LogOut,
-  HelpCircle,
   Building2,
   User,
 } from "lucide-react"
@@ -22,7 +21,6 @@ import {
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { normalizeBusinessLogoUrl, normalizeProfileImageUrl } from "@/lib/image-cache"
-import { openBusinessSupport } from "@/lib/intercom-messenger"
 
 interface BusinessDropdownProps {
   businessName: string
@@ -145,17 +143,6 @@ export function BusinessDropdown({
             <DropdownMenuSeparator />
           </>
         )}
-        <DropdownMenuItem
-          className="gap-2 cursor-pointer"
-          onSelect={(event) => {
-            event.preventDefault()
-            setIsOpen(false)
-            void openBusinessSupport()
-          }}
-        >
-          <HelpCircle className="h-4 w-4" />
-          <span>Contact Support</span>
-        </DropdownMenuItem>
         <DropdownMenuItem asChild className="gap-2">
           <Link href="/settings">
             <Settings className="h-4 w-4" />

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, LogOut, User } from 'lucide-react-native'
+import { ChevronDown, LogOut, MessageCircle, User } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { navigateFromRoot } from '../../navigation/rootNavigationRef'
 import { useAuth } from '../../contexts/AuthContext'
@@ -60,31 +60,45 @@ export function DesktopHeader() {
   return (
     <View style={[styles.header, { paddingTop: insets.top > 0 ? 0 : spacing[2] }]}>
       <View style={styles.spacer} />
-      <View style={styles.menuAnchor}>
+      <View style={styles.actions}>
         <Pressable
-          style={styles.profileButton}
+          style={styles.supportButton}
           onPress={() => {
             haptics.tap()
-            setMenuOpen((v) => !v)
+            navigateTo('Support')
           }}
           android_ripple={ripple.neutral}
           accessibilityRole="button"
-          accessibilityLabel="Account menu"
+          accessibilityLabel="Support chat"
         >
-          {avatarUri ? (
-            <AvatarImage avatarUrl={userProfile?.profile?.avatar_url} style={userAvatarStyles.image} />
-          ) : (
-            <Text style={userAvatarStyles.initials}>{initialsFromFullName(fullName)}</Text>
-          )}
-          <Text style={styles.profileName} numberOfLines={1}>
-            {fullName || 'Account'}
-          </Text>
-          <ChevronDown size={16} color={palette.text.secondary} strokeWidth={2} />
+          <MessageCircle size={20} color={palette.primary.main} strokeWidth={2} />
         </Pressable>
+        <View style={styles.menuAnchor}>
+          <Pressable
+            style={styles.profileButton}
+            onPress={() => {
+              haptics.tap()
+              setMenuOpen((v) => !v)
+            }}
+            android_ripple={ripple.neutral}
+            accessibilityRole="button"
+            accessibilityLabel="Account menu"
+          >
+            {avatarUri ? (
+              <AvatarImage avatarUrl={userProfile?.profile?.avatar_url} style={userAvatarStyles.image} />
+            ) : (
+              <Text style={userAvatarStyles.initials}>{initialsFromFullName(fullName)}</Text>
+            )}
+            <Text style={styles.profileName} numberOfLines={1}>
+              {fullName || 'Account'}
+            </Text>
+            <ChevronDown size={16} color={palette.text.secondary} strokeWidth={2} />
+          </Pressable>
 
-        {menuOpen && !useCenteredModal ? (
-          <View style={styles.dropdown}>{menuItems}</View>
-        ) : null}
+          {menuOpen && !useCenteredModal ? (
+            <View style={styles.dropdown}>{menuItems}</View>
+          ) : null}
+        </View>
       </View>
       {useCenteredModal ? (
         <Modal
@@ -134,6 +148,21 @@ function createStyles(palette: ReturnType<typeof useThemeColors>) {
     },
     spacer: {
       flex: 1,
+    },
+    actions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[2],
+    },
+    supportButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: palette.semantic.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: palette.border.default,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     menuAnchor: {
       position: 'relative',

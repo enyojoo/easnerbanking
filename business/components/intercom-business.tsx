@@ -53,7 +53,7 @@ function bootPayload(
   const base = {
     app_id: appId,
     region,
-    /** Only open from profile → Contact Support; no persistent launcher bubble. */
+    /** Only open from header Support chat; no persistent launcher bubble. */
     hide_default_launcher: true,
   }
   if (auth.mode === "jwt") {

@@ -5,12 +5,15 @@ import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 import Link from "next/link"
+import { MessageCircle } from "lucide-react"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { BusinessDropdown } from "@/components/business-dropdown"
 import { AppLockProvider } from "@/components/app-lock/app-lock-provider"
+import { Button } from "@/components/ui/button"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useBusinessNoahSync } from "@/hooks/use-business-noah-sync"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
+import { openBusinessSupport } from "@/lib/intercom-messenger"
 import { cn } from "@/lib/utils"
 
 interface DashboardShellProps {
@@ -99,21 +102,35 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
       <div className="min-h-screen bg-background text-foreground">
         <DashboardNav />
         <div className="ml-64 flex min-h-screen flex-col">
-          <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-4 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+          <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
           {showProfileChromeSkeleton ? (
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
-              <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 animate-pulse rounded-full bg-muted" />
+              <div className="h-9 w-9 animate-pulse rounded-full bg-muted" />
             </div>
           ) : (
-            <BusinessDropdown
-              businessName={businessName}
-              profileImageUrl={profileImageUrl}
-              adminName={ownerName || "Admin"}
-              adminEmail={user?.email || ""}
-              onSignOut={logout}
-              variant="header"
-            />
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0 rounded-full hover:bg-muted/50"
+                aria-label="Support chat"
+                onClick={() => {
+                  void openBusinessSupport()
+                }}
+              >
+                <MessageCircle className="h-5 w-5 text-primary" />
+              </Button>
+              <BusinessDropdown
+                businessName={businessName}
+                profileImageUrl={profileImageUrl}
+                adminName={ownerName || "Admin"}
+                adminEmail={user?.email || ""}
+                onSignOut={logout}
+                variant="header"
+              />
+            </>
           )}
           </header>
           {showTier1Banner ? (
