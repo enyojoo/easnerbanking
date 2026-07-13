@@ -11,8 +11,6 @@ import {
   BANK_VERIFICATION_COMPLETED_DESCRIPTION,
   isVerificationDepositMetadata,
 } from "./verification-deposit"
-import { appendLifecycleDuration } from "./transaction-timing-display"
-
 export type BankDepositLifecycleStepId = "processing" | "completed" | "failed"
 export type BankDepositLifecycleStepState = "complete" | "current" | "upcoming"
 
@@ -157,9 +155,7 @@ export function buildBankDepositLifecycle(
     {
       id: "completed",
       title: "Completed",
-      description: fundsAvailable
-        ? appendLifecycleDuration(completedDescription(meta), processingAt, completedAt)
-        : completedDescription(meta),
+      description: completedDescription(meta),
       state: completedState,
       occurredAt: fundsAvailable ? completedAt : null,
     },

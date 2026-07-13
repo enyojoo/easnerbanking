@@ -3,8 +3,6 @@
  * bank deposit tracker copy/voice for a consistent deposit UX.
  */
 
-import { appendLifecycleDuration } from "./transaction-timing-display"
-
 export type StablecoinDepositLifecycleStepId = "processing" | "completed" | "failed"
 export type StablecoinDepositLifecycleStepState = "complete" | "current" | "upcoming"
 
@@ -93,13 +91,7 @@ export function buildStablecoinDepositLifecycle(
     {
       id: "completed",
       title: "Completed",
-      description: isSettled
-        ? appendLifecycleDuration(
-            STABLECOIN_DEPOSIT_COMPLETED_DESCRIPTION,
-            processingAt,
-            completedAt,
-          )
-        : STABLECOIN_DEPOSIT_COMPLETED_DESCRIPTION,
+      description: STABLECOIN_DEPOSIT_COMPLETED_DESCRIPTION,
       state: completedState,
       occurredAt: isSettled ? completedAt : null,
     },

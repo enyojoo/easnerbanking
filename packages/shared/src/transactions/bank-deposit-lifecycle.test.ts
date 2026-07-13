@@ -68,9 +68,7 @@ describe("buildBankDepositLifecycle", () => {
     expect(steps[0].description).toBe(
       "We've received your Wire deposit and confirming it.",
     )
-    expect(steps[1].description).toBe(
-      "Funds are now available in your account balance. · Took 56 seconds",
-    )
+    expect(steps[1].description).toBe("Funds are now available in your account balance.")
   })
 
   it("returns failed terminal step when cancelled", () => {
