@@ -39,6 +39,7 @@ import { ResponsiveLayoutProvider } from './src/contexts/ResponsiveLayoutContext
 import { ShellAwareSafeArea } from './src/components/layout/ShellAwareSafeArea'
 import { WebViewportFrame } from './src/components/layout/WebViewportFrame'
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
+import { WebIntercomMessenger } from './src/components/WebIntercomMessenger'
 import {
   ThemePaletteProvider,
   useThemeColors,
@@ -386,6 +387,7 @@ export default function App() {
               <AuthProvider>
                 <QueryProvider>
                   <PushNotificationBootstrap />
+                  <WebIntercomMessenger />
                   <BalanceProvider>
                     <NotificationsProvider>
                       <ToastProvider>

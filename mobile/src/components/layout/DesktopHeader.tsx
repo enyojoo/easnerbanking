@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react'
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { MessageCircle } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { navigateFromRoot } from '../../navigation/rootNavigationRef'
@@ -11,8 +11,6 @@ import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { haptics } from '../../lib/haptics'
 import { ripple } from '../../lib/androidRipple'
-import { analytics } from '../../lib/analytics'
-import { intercomPresentErrorMessage, presentIntercomMessenger } from '../../lib/intercom'
 
 export function DesktopHeader() {
   const palette = useThemeColors()
@@ -41,10 +39,7 @@ export function DesktopHeader() {
           style={styles.supportButton}
           onPress={() => {
             haptics.tap()
-            analytics.trackSupportLiveChatOpened()
-            void presentIntercomMessenger().catch((e) => {
-              Alert.alert('Live chat', intercomPresentErrorMessage(e))
-            })
+            navigateFromRoot('Support')
           }}
           android_ripple={ripple.neutral}
           accessibilityRole="button"

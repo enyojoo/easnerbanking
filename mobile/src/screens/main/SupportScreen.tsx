@@ -6,14 +6,13 @@ import {
   ScrollView,
   Pressable,
   Linking,
-  Alert,
 } from 'react-native'
 import { ArrowLeft, ChevronRight } from 'lucide-react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { intercomPresentErrorMessage, presentIntercomMessenger, prepareIntercomMessenger } from '../../lib/intercom'
+import { alertIntercomError, intercomPresentErrorMessage, presentIntercomMessenger, prepareIntercomMessenger } from '../../lib/intercom'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
@@ -32,7 +31,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
   const handleLiveChat = () => {
     analytics.trackSupportLiveChatOpened()
     void presentIntercomMessenger().catch((e) => {
-      Alert.alert('Live chat', intercomPresentErrorMessage(e))
+      alertIntercomError('Live chat', intercomPresentErrorMessage(e))
     })
   }
 

@@ -1,9 +1,10 @@
-import { Platform } from 'react-native'
+import { Alert, Platform } from 'react-native'
 import Constants from 'expo-constants'
-import type { Session } from '@supabase/supabase-js'
+import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { getApiBaseUrl } from './apiClient'
 import { isExpoGo } from './expoGo'
+import { intercomJwtPayloadFromUser } from './intercomUserAttributes'
 
 declare global {
   interface Window {
@@ -70,9 +71,15 @@ type IntercomExtra = {
 
 type IntercomRegion = 'us' | 'eu' | 'ap'
 
+type IntercomAuthResult =
+  | { ok: true; mode: 'jwt'; token: string }
+  | { ok: true; mode: 'legacy' }
+  | { ok: false; status: number }
+
 let webIntercomReady = false
 let webIntercomReadyWaiters: Array<() => void> = []
 let webHideListenerRegistered = false
+let webIntercomStyleInjected = false
 
 function parseIntercomRegion(raw: string | undefined): IntercomRegion {
   const r = (raw ?? 'us').trim().toLowerCase()
@@ -92,39 +99,36 @@ function markWebIntercomNotReady(): void {
 }
 
 function whenWebIntercomReady(timeoutMs = 8_000): Promise<boolean> {
-  if (webIntercomReady && typeof window !== 'undefined' && window.Intercom) {
-    return Promise.resolve(true)
-  }
+  if (webIntercomReady) return Promise.resolve(true)
+  if (typeof window === 'undefined') return Promise.resolve(false)
 
   return new Promise((resolve) => {
-    const finish = (ready: boolean) => {
-      webIntercomReadyWaiters = webIntercomReadyWaiters.filter((fn) => fn !== done)
-      resolve(ready)
+    const done = () => {
+      webIntercomReadyWaiters = webIntercomReadyWaiters.filter((fn) => fn !== onReady)
+      resolve(webIntercomReady)
     }
-    const done = () => finish(webIntercomReady && typeof window !== 'undefined' && Boolean(window.Intercom))
-    webIntercomReadyWaiters.push(done)
-
-    const startedAt = Date.now()
-    const poll = () => {
-      if (typeof window !== 'undefined' && window.Intercom) {
-        markWebIntercomReady()
-        finish(true)
-        return
-      }
-      if (Date.now() - startedAt >= timeoutMs) {
-        finish(false)
-        return
-      }
-      window.setTimeout(poll, 100)
-    }
-
-    if (typeof window !== 'undefined') {
-      window.setTimeout(poll, 0)
-      window.setTimeout(() => finish(false), timeoutMs)
-    } else {
-      finish(false)
-    }
+    const onReady = () => done()
+    webIntercomReadyWaiters.push(onReady)
+    window.setTimeout(() => {
+      webIntercomReadyWaiters = webIntercomReadyWaiters.filter((fn) => fn !== onReady)
+      resolve(webIntercomReady)
+    }, timeoutMs)
   })
+}
+
+function ensureWebIntercomStyles(): void {
+  if (webIntercomStyleInjected || typeof document === 'undefined') return
+  webIntercomStyleInjected = true
+  const style = document.createElement('style')
+  style.id = 'easner-intercom-zfix'
+  style.textContent = `
+    #intercom-container,
+    .intercom-lightweight-app,
+    iframe[name="intercom-messenger-frame"] {
+      z-index: 2147483000 !important;
+    }
+  `
+  document.head.appendChild(style)
 }
 
 function registerWebIntercomHideOnClose(): void {
@@ -214,21 +218,32 @@ export async function ensureIntercomInitialized(): Promise<boolean> {
   }
 }
 
-async function fetchIntercomMessengerJwt(accessToken: string): Promise<string | null> {
+async function fetchIntercomAuth(accessToken: string): Promise<IntercomAuthResult> {
   try {
     const base = getApiBaseUrl()
     const res = await fetch(`${base}/api/intercom/jwt`, {
+      method: 'GET',
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
+      cache: 'no-store',
     })
-    if (!res.ok) return null
+    if (res.status === 503) return { ok: true, mode: 'legacy' }
+    if (res.status === 401) return { ok: false, status: 401 }
+    if (!res.ok) return { ok: false, status: res.status }
     const data = (await res.json()) as { token?: string }
-    return typeof data.token === 'string' ? data.token : null
+    if (typeof data.token !== 'string') return { ok: false, status: 500 }
+    return { ok: true, mode: 'jwt', token: data.token }
   } catch (e) {
-    console.warn('[Intercom] JWT fetch failed', e)
-    return null
+    console.warn('[Intercom] auth fetch failed', e)
+    return { ok: false, status: 0 }
   }
+}
+
+async function fetchIntercomMessengerJwt(accessToken: string): Promise<string | null> {
+  const auth = await fetchIntercomAuth(accessToken)
+  if (auth.ok && auth.mode === 'jwt') return auth.token
+  return null
 }
 
 async function resolveMessengerJwt(
@@ -298,7 +313,45 @@ async function applyIntercomIdentity(session: Session | null): Promise<void> {
  * Initialize SDK + identity once (shared by login sync, PIN unlock, Support mount, and present).
  * Returns true when messenger can be presented without another JWT/login pass.
  */
-async function bootWebIntercom(session: Session | null): Promise<boolean> {
+function buildWebBootPayload(
+  appId: string,
+  region: IntercomRegion,
+  user: User,
+  auth: Extract<IntercomAuthResult, { ok: true }>,
+) {
+  const base = {
+    app_id: appId,
+    region,
+    hide_default_launcher: true,
+    session_duration: 86_400_000,
+  }
+  if (auth.mode === 'jwt') {
+    return {
+      ...base,
+      intercom_user_jwt: auth.token,
+    }
+  }
+  return {
+    ...base,
+    ...intercomJwtPayloadFromUser(user),
+  }
+}
+
+function buildWebUpdatePayload(user: User, auth: Extract<IntercomAuthResult, { ok: true }>) {
+  if (auth.mode === 'jwt') {
+    return {
+      intercom_user_jwt: auth.token,
+      hide_default_launcher: true,
+      session_duration: 86_400_000,
+    }
+  }
+  return {
+    ...intercomJwtPayloadFromUser(user),
+    hide_default_launcher: true,
+  }
+}
+
+async function bootWebIntercom(session: Session | null, options?: { updateOnly?: boolean }): Promise<boolean> {
   const mod = getWebIntercom()
   const extra = intercomExtra()
   if (!mod || !extra?.intercomAppId) return false
@@ -310,35 +363,55 @@ async function bootWebIntercom(session: Session | null): Promise<boolean> {
     return false
   }
 
-  const jwt = await resolveMessengerJwt(session.access_token, session.user.id)
-  if (!jwt) return false
+  const auth = await fetchIntercomAuth(session.access_token)
+  if (!auth.ok) {
+    console.warn('[Intercom] web auth unavailable', auth.status)
+    return false
+  }
+
+  if (auth.mode === 'jwt') {
+    cachedMessengerJwt = {
+      token: auth.token,
+      userId: session.user.id,
+      fetchedAt: Date.now(),
+    }
+  }
 
   const region = parseIntercomRegion(extra.intercomRegion)
-  const bootPayload = {
-    app_id: extra.intercomAppId,
-    region,
-    intercom_user_jwt: jwt,
-    hide_default_launcher: true,
-    session_duration: 86_400_000,
+  const updateOnly = options?.updateOnly === true && webIntercomBooted
+
+  ensureWebIntercomStyles()
+
+  if (updateOnly && lastIntercomUserId === session.user.id) {
+    mod.update(buildWebUpdatePayload(session.user, auth))
+    markWebIntercomReady()
+    return true
   }
 
-  if (!webIntercomBooted) {
-    Intercom(bootPayload)
-    registerWebIntercomHideOnClose()
-    webIntercomBooted = true
-  } else {
-    mod.update(bootPayload)
+  if (webIntercomBooted && lastIntercomUserId && lastIntercomUserId !== session.user.id) {
+    mod.shutdown()
+    resetWebIntercomSession()
   }
 
-  const ready = await whenWebIntercomReady()
-  if (!ready) return false
-
+  Intercom(buildWebBootPayload(extra.intercomAppId, region, session.user, auth))
+  registerWebIntercomHideOnClose()
+  webIntercomBooted = true
   mod.hide()
   markWebIntercomReady()
+
   lastIntercomUserId = session.user.id
   intercomIdentityReady = true
   intercomInitialized = true
   return true
+}
+
+/** Web-only: boot or update Intercom for the signed-in user (used by `WebIntercomMessenger`). */
+export async function syncWebIntercomForUser(
+  session: Session | null,
+  options?: { updateOnly?: boolean },
+): Promise<void> {
+  if (Platform.OS !== 'web') return
+  await bootWebIntercom(session, options)
 }
 
 async function warmIntercomMessenger(session?: Session | null): Promise<boolean> {
@@ -420,6 +493,12 @@ async function warmIntercomMessenger(session?: Session | null): Promise<boolean>
  */
 export async function syncIntercomSession(session: Session | null): Promise<void> {
   if (!isIntercomEnabled()) return
+  if (Platform.OS === 'web') {
+    await syncWebIntercomForUser(session, {
+      updateOnly: Boolean(session?.user && lastIntercomUserId === session.user.id),
+    })
+    return
+  }
   await warmIntercomMessenger(session)
 }
 
@@ -449,8 +528,10 @@ export async function presentIntercomMessenger(): Promise<void> {
     if (Platform.OS === 'web') {
       const webMod = getWebIntercom()
       if (!webMod) throw new Error('INTERCOM_NOT_CONFIGURED')
-      const ready = await warmIntercomMessenger(session)
-      if (!ready) throw new Error('INTERCOM_JWT_UNAVAILABLE')
+      if (!webIntercomReady) {
+        const booted = await bootWebIntercom(session)
+        if (!booted) throw new Error('INTERCOM_JWT_UNAVAILABLE')
+      }
       const messengerReady = await whenWebIntercomReady()
       if (!messengerReady) throw new Error('INTERCOM_NOT_READY')
       webMod.show()
@@ -492,13 +573,21 @@ export async function presentIntercomMessenger(): Promise<void> {
 
 export function intercomPresentErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message === 'INTERCOM_NOT_CONFIGURED') {
-    return 'Live chat is not available in this build. Set Intercom env and rebuild, or use email support.'
+    return 'Live chat is not available in this build. Set EXPO_PUBLIC_INTERCOM_APP_ID and rebuild, or use email support.'
   }
   if (error instanceof Error && error.message === 'INTERCOM_JWT_UNAVAILABLE') {
-    return 'Could not refresh chat login. Check your connection and that the Easner API can mint Intercom tokens (INTERCOM_MESSENGER_API_SECRET on the server).'
+    return 'Could not open live chat. Check your connection and that the Easner API can authenticate Intercom (INTERCOM_MESSENGER_API_SECRET on the server).'
   }
   if (error instanceof Error && error.message === 'INTERCOM_NOT_READY') {
     return 'Chat is still loading. Wait a moment and try again, or use email support.'
   }
   return 'Could not open chat. Please try again or use email support.'
+}
+
+export function alertIntercomError(title: string, message: string): void {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.alert(`${title}\n\n${message}`)
+    return
+  }
+  Alert.alert(title, message)
 }
