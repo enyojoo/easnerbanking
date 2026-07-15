@@ -99,7 +99,7 @@ export function YcFundBalanceReview({
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
   const transferMethod = payInRail === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
   const processingFee = quote?.processingFee ?? 0
-  const customerRate = quote?.customerRate ?? ycFlow.customerRate ?? 1
+  const customerRate = quote?.customerRate ?? ycFlow.customerRate
   const quoteReady = Boolean(quote?.transferId)
   const displayId = quote?.transactionId?.toUpperCase() ?? ''
 
@@ -149,12 +149,12 @@ export function YcFundBalanceReview({
               {customerRate > 0 ? (
                 <Row
                   label="Exchange rate"
-                  value={formatSendRateLabel(localPayInCurrency, 'USD', customerRate)}
+                  value={formatSendRateLabel('USD', localPayInCurrency, customerRate)}
                 />
               ) : null}
               <Row label="You receive" value={formatMoneyDisplay(quote?.usdCredit ?? usdCredit, 'USD')} bold />
               <View style={styles.creditRow}>
-                <Text style={styles.rowLabel}>Credit to</Text>
+                <Text style={styles.rowLabel}>To:</Text>
                 <View style={styles.creditValue}>
                   <CurrencyFlag currency="USD" size={20} />
                   <Text style={styles.rowValue}>USD Balance</Text>

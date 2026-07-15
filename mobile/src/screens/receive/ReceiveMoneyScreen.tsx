@@ -170,7 +170,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   })
 
   const showLocalTab =
-    Boolean(receiveRails?.anyAvailable) && verificationComplete && currency === 'USD'
+    Boolean(localPayInCurrency) &&
+    verificationComplete &&
+    currency === 'USD' &&
+    !(receiveRails != null && !receiveRailsLoading && !receiveRails.anyAvailable)
   const showTabBar = [showBankTab, showLocalTab, showStablecoinTab].filter(Boolean).length > 1
 
   const handleStartLocalDeposit = () => {

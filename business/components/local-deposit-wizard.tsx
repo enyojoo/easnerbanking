@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   ArrowUpDown,
   Check,
-  ChevronRight,
   Copy,
   Landmark,
   Loader2,
@@ -19,8 +18,11 @@ import {
   formatMoneyDisplay,
   formatSendRateLabel,
   mapResidenceToLocalPayInCurrency,
+  YC_PAY_IN_RATES_DESTINATION,
+  resolveYcPayInCustomerRate,
   ycFundBalanceQuoteErrorMessage,
   type NgLocalIdType,
+  type YcRateClientRow,
 } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
@@ -57,11 +59,7 @@ type FundBalanceQuote = {
   payInNotice?: string
 }
 
-type YcRateRow = {
-  from_currency: string
-  to_currency: string
-  rate: number
-}
+type YcRateRow = YcRateClientRow
 
 type Props = {
   residenceCountry: string
@@ -96,14 +94,10 @@ export function LocalDepositWizard({
   const usdBalance = parseFloat(String(walletQuery.data?.balances?.USD ?? "0").replace(/,/g, "")) || 0
   const enteredAmount = Number.parseFloat(amountStr.replace(/,/g, "")) || 0
 
-  const payInLeg = useMemo(
-    () =>
-      rates.find(
-        (r) => r.from_currency === localPayInCurrency && r.to_currency === "USDC",
-      ) ?? null,
+  const customerRate = useMemo(
+    () => resolveYcPayInCustomerRate(rates, localPayInCurrency),
     [rates, localPayInCurrency],
   )
-  const customerRate = payInLeg?.rate && payInLeg.rate > 0 ? payInLeg.rate : null
 
   const preview = useMemo(() => {
     if (!customerRate || enteredAmount <= 0) {
@@ -150,7 +144,7 @@ export function LocalDepositWizard({
     void (async () => {
       try {
         const res = await fetchWithSession(
-          `/api/fx/yc-rates?destinations=${encodeURIComponent(localPayInCurrency)}`,
+          `/api/fx/yc-rates?destinations=${encodeURIComponent(YC_PAY_IN_RATES_DESTINATION)}`,
         )
         const data = (await res.json().catch(() => ({}))) as { rates?: YcRateRow[] }
         if (!cancelled) setRates(data.rates ?? [])
@@ -273,44 +267,47 @@ export function LocalDepositWizard({
   }
 
   if (step === "rail") {
+    const useGrid = bankAvailable && momoAvailable
     return (
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground text-center">
           Choose how you want to pay in {localPayInCurrency}
         </p>
-        <div className="space-y-3">
+        <div className={useGrid ? "grid grid-cols-2 gap-3" : "grid grid-cols-1 gap-3 max-w-xs mx-auto"}>
           {bankAvailable ? (
             <button
               type="button"
-              className="w-full flex items-center gap-3 rounded-xl border border-border p-4 text-left hover:bg-muted/50 transition-colors"
+              className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border p-6 min-h-[148px] aspect-square hover:bg-muted/50 transition-colors text-center"
               onClick={() => {
                 setRail("bank_transfer")
                 setStep("amount")
               }}
             >
-              <Landmark className="h-5 w-5 text-primary shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium">Bank transfer</p>
-                <p className="text-sm text-muted-foreground">Pay from your bank account</p>
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                <Landmark className="h-7 w-7 text-primary" />
               </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+              <div>
+                <p className="font-medium">Bank transfer</p>
+                <p className="text-sm text-muted-foreground mt-1">Pay from your bank</p>
+              </div>
             </button>
           ) : null}
           {momoAvailable ? (
             <button
               type="button"
-              className="w-full flex items-center gap-3 rounded-xl border border-border p-4 text-left hover:bg-muted/50 transition-colors"
+              className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border p-6 min-h-[148px] aspect-square hover:bg-muted/50 transition-colors text-center"
               onClick={() => {
                 setRail("mobile_money")
                 setStep("amount")
               }}
             >
-              <Smartphone className="h-5 w-5 text-primary shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium">Mobile money</p>
-                <p className="text-sm text-muted-foreground">Pay from your mobile wallet</p>
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                <Smartphone className="h-7 w-7 text-primary" />
               </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+              <div>
+                <p className="font-medium">Mobile money</p>
+                <p className="text-sm text-muted-foreground mt-1">Pay from your wallet</p>
+              </div>
             </button>
           ) : null}
         </div>
@@ -334,7 +331,7 @@ export function LocalDepositWizard({
         <div className="rounded-xl border border-border p-4 flex items-center gap-3">
           <CurrencyFlagCircle currency="USD" size={28} />
           <div>
-            <p className="text-xs text-muted-foreground">Credit to</p>
+            <p className="text-xs text-muted-foreground">To:</p>
             <p className="font-medium">
               USD Balance • ${usdBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
@@ -445,14 +442,14 @@ export function LocalDepositWizard({
               ) : null}
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Exchange rate</span>
-                <span>{formatSendRateLabel(localPayInCurrency, "USD", quote.customerRate)}</span>
+                <span>{formatSendRateLabel("USD", localPayInCurrency, quote.customerRate)}</span>
               </div>
               <div className="flex justify-between gap-4 font-medium">
                 <span>You receive</span>
                 <span>{formatMoneyDisplay(quote.usdCredit, "USD")}</span>
               </div>
               <div className="flex justify-between gap-4 items-center">
-                <span className="text-muted-foreground">Credit to</span>
+                <span className="text-muted-foreground">To:</span>
                 <span className="flex items-center gap-2">
                   <CurrencyFlagCircle currency="USD" size={18} />
                   USD Balance

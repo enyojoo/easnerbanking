@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ycFundBalanceQuoteErrorMessage } from '@easner/shared'
+import {
+  ycFundBalanceQuoteErrorMessage,
+  YC_PAY_IN_RATES_DESTINATION,
+  resolveYcPayInCustomerRate,
+  type YcRateClientRow,
+} from '@easner/shared'
 import { ApiError, apiFetch } from '../query/api-client'
 import type { YcPayInRail } from './useYcCrossBorderFlow'
 
@@ -28,10 +33,22 @@ export type YcFundBalanceQuoteResult = {
   payInNotice?: string
 }
 
-type YcRateRow = {
-  from_currency: string
-  to_currency: string
-  rate: number
+const RECEIVE_RAILS_CACHE_TTL_MS = 5 * 60_000
+const receiveRailsCache = new Map<string, { data: YcReceiveRailsResponse; at: number }>()
+
+function receiveRailsCacheKey(country: string, currency: string): string {
+  return `${country.trim().toUpperCase()}:${currency.trim().toUpperCase()}`
+}
+
+function readCachedReceiveRails(country: string, currency: string): YcReceiveRailsResponse | null {
+  const key = receiveRailsCacheKey(country, currency)
+  const hit = receiveRailsCache.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.at > RECEIVE_RAILS_CACHE_TTL_MS) {
+    receiveRailsCache.delete(key)
+    return null
+  }
+  return hit.data
 }
 
 export function useYcReceiveRails(input: {
@@ -39,25 +56,37 @@ export function useYcReceiveRails(input: {
   currency: string | null
   enabled: boolean
 }) {
-  const [rails, setRails] = useState<YcReceiveRailsResponse | null>(null)
-  const [loading, setLoading] = useState(false)
+  const country = input.country?.trim().toUpperCase() ?? ''
+  const currency = input.currency?.trim().toUpperCase() ?? ''
+  const cacheKey = country && currency ? receiveRailsCacheKey(country, currency) : ''
+
+  const [rails, setRails] = useState<YcReceiveRailsResponse | null>(() =>
+    country && currency ? readCachedReceiveRails(country, currency) : null,
+  )
+  const [loading, setLoading] = useState(() =>
+    Boolean(input.enabled && country && currency && !readCachedReceiveRails(country, currency)),
+  )
 
   useEffect(() => {
-    if (!input.enabled || !input.country || !input.currency) {
+    if (!input.enabled || !country || !currency) {
       setRails(null)
       setLoading(false)
       return
     }
     let cancelled = false
-    setLoading(true)
+    const cached = readCachedReceiveRails(country, currency)
+    if (!cached) setLoading(true)
     void (async () => {
       try {
         const data = await apiFetch<YcReceiveRailsResponse>('/api/yellowcard/receive-rails', {
-          query: { country: input.country!, currency: input.currency! },
+          query: { country, currency },
         })
-        if (!cancelled) setRails(data)
+        if (!cancelled) {
+          setRails(data)
+          receiveRailsCache.set(cacheKey, { data, at: Date.now() })
+        }
       } catch {
-        if (!cancelled) setRails(null)
+        if (!cancelled && !cached) setRails(null)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -65,7 +94,7 @@ export function useYcReceiveRails(input: {
     return () => {
       cancelled = true
     }
-  }, [input.enabled, input.country, input.currency])
+  }, [input.enabled, country, currency, cacheKey])
 
   return { rails, loading }
 }
@@ -78,7 +107,7 @@ export function useYcFundBalanceFlow(input: {
   amountEntryMode: 'usd' | 'local'
   enteredAmount: number
 }) {
-  const [rates, setRates] = useState<YcRateRow[]>([])
+  const [rates, setRates] = useState<YcRateClientRow[]>([])
   const [ratesLoading, setRatesLoading] = useState(false)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
@@ -89,13 +118,12 @@ export function useYcFundBalanceFlow(input: {
       setRatesLoading(false)
       return
     }
-    const cur = input.currency.trim().toUpperCase()
     let cancelled = false
     setRatesLoading(true)
     void (async () => {
       try {
-        const data = await apiFetch<{ rates?: YcRateRow[] }>('/api/fx/yc-rates', {
-          query: { destinations: cur },
+        const data = await apiFetch<{ rates?: YcRateClientRow[] }>('/api/fx/yc-rates', {
+          query: { destinations: YC_PAY_IN_RATES_DESTINATION },
         })
         if (!cancelled) setRates(data.rates ?? [])
       } catch {
@@ -109,13 +137,10 @@ export function useYcFundBalanceFlow(input: {
     }
   }, [input.enabled, input.currency])
 
-  const payInLeg = useMemo(() => {
-    if (!input.currency) return null
-    const from = input.currency.trim().toUpperCase()
-    return rates.find((r) => r.from_currency === from && r.to_currency === 'USDC') ?? null
-  }, [rates, input.currency])
-
-  const customerRate = payInLeg?.rate && payInLeg.rate > 0 ? payInLeg.rate : null
+  const customerRate = useMemo(
+    () => (input.currency ? resolveYcPayInCustomerRate(rates, input.currency) : null),
+    [rates, input.currency],
+  )
 
   const preview = useMemo(() => {
     if (!customerRate || input.enteredAmount <= 0) {

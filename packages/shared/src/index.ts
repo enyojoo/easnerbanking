@@ -520,4 +520,9 @@ export {
   ycFundBalanceQuoteErrorMessage,
 } from "./yc-fund-balance-errors"
 export type { YcFundBalanceQuoteErrorCode } from "./yc-fund-balance-errors"
+export {
+  YC_PAY_IN_RATES_DESTINATION,
+  resolveYcPayInCustomerRate,
+} from "./yc-pay-in-rates"
+export type { YcRateClientRow } from "./yc-pay-in-rates"
 /** Mobile-only: import from `@easner/shared/warm-flags` (uses expo-image; not for Next.js). */

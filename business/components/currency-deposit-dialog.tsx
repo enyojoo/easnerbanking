@@ -98,6 +98,24 @@ type ReceiveRailsResponse = {
   anyAvailable: boolean
 }
 
+const RECEIVE_RAILS_CACHE_TTL_MS = 5 * 60_000
+const receiveRailsCache = new Map<string, { data: ReceiveRailsResponse; at: number }>()
+
+function receiveRailsCacheKey(country: string, currency: string): string {
+  return `${country.trim().toUpperCase()}:${currency.trim().toUpperCase()}`
+}
+
+function readCachedReceiveRails(country: string, currency: string): ReceiveRailsResponse | null {
+  const key = receiveRailsCacheKey(country, currency)
+  const hit = receiveRailsCache.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.at > RECEIVE_RAILS_CACHE_TTL_MS) {
+    receiveRailsCache.delete(key)
+    return null
+  }
+  return hit.data
+}
+
 interface CurrencyDepositDialogProps {
   account: Account
   copiedField: string | null
@@ -126,7 +144,20 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
   const [residenceCountry, setResidenceCountry] = useState<string | null>(null)
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
-  const [receiveRails, setReceiveRails] = useState<ReceiveRailsResponse | null>(null)
+
+  const effectiveResidence =
+    residenceCountry || String(countryCode ?? "").trim().toUpperCase() || null
+  const localPayInCurrency = useMemo(
+    () => (effectiveResidence ? mapResidenceToLocalPayInCurrency(effectiveResidence) : null),
+    [effectiveResidence],
+  )
+
+  const [receiveRails, setReceiveRails] = useState<ReceiveRailsResponse | null>(() =>
+    effectiveResidence && localPayInCurrency
+      ? readCachedReceiveRails(effectiveResidence, localPayInCurrency)
+      : null,
+  )
+  const [receiveRailsLoading, setReceiveRailsLoading] = useState(false)
 
   useEffect(() => {
     if (account.currency !== "USD") return
@@ -161,28 +192,34 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     }
   }, [account.currency])
 
-  const effectiveResidence =
-    residenceCountry || String(countryCode ?? "").trim().toUpperCase() || null
-  const localPayInCurrency = useMemo(
-    () => (effectiveResidence ? mapResidenceToLocalPayInCurrency(effectiveResidence) : null),
-    [effectiveResidence],
-  )
-
   useEffect(() => {
     if (account.currency !== "USD" || !effectiveResidence || !localPayInCurrency) {
       setReceiveRails(null)
+      setReceiveRailsLoading(false)
       return
     }
+    const cacheKey = receiveRailsCacheKey(effectiveResidence, localPayInCurrency)
+    const cached = readCachedReceiveRails(effectiveResidence, localPayInCurrency)
     let cancelled = false
+    if (!cached) setReceiveRailsLoading(true)
     void (async () => {
       try {
         const res = await fetchWithSession(
           `/api/yellowcard/receive-rails?country=${encodeURIComponent(effectiveResidence)}&currency=${encodeURIComponent(localPayInCurrency)}`,
         )
         const data = (await res.json().catch(() => ({}))) as ReceiveRailsResponse
-        if (!cancelled) setReceiveRails(res.ok ? data : null)
+        if (!cancelled) {
+          if (res.ok) {
+            setReceiveRails(data)
+            receiveRailsCache.set(cacheKey, { data, at: Date.now() })
+          } else if (!cached) {
+            setReceiveRails(null)
+          }
+        }
       } catch {
-        if (!cancelled) setReceiveRails(null)
+        if (!cancelled && !cached) setReceiveRails(null)
+      } finally {
+        if (!cancelled) setReceiveRailsLoading(false)
       }
     })()
     return () => {
@@ -191,7 +228,9 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   }, [account.currency, effectiveResidence, localPayInCurrency])
 
   const showLocalTab =
-    account.currency === "USD" && Boolean(receiveRails?.anyAvailable)
+    account.currency === "USD" &&
+    Boolean(localPayInCurrency) &&
+    !(receiveRails != null && !receiveRailsLoading && !receiveRails.anyAvailable)
 
   const visibleTabCount = [showBankTab, showLocalTab, showStablecoinTab].filter(Boolean).length
   const showTabBar = visibleTabCount > 1

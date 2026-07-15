@@ -4,28 +4,48 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  useWindowDimensions,
-  KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native'
-import { ArrowLeft, ArrowUpDown, ChevronRight } from 'lucide-react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
+import { ArrowLeft, ArrowUpDown, ChevronDown, Delete } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { formatMoneyDisplay } from '@easner/shared'
+import {
+  formatMoneyDisplay,
+  formatSendRateLabel,
+  isWideSendAmountSymbol,
+  scaleSendAmountPrefixFontSize,
+  scaleSendAmountPrefixLineHeight,
+} from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, spacing, textStyles, borderRadius, surfaceFrameStyle, fontFamily } from '../../theme'
+import {
+  colors,
+  spacing,
+  textStyles,
+  borderRadius,
+  surfaceFrameStyle,
+  surfaceChromeCircleStyle,
+  fontFamily,
+  computeKeypadCellSize,
+  getContentWidth,
+} from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { useYcFundBalanceFlow } from '../../hooks/useYcFundBalanceFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { haptics } from '../../lib/haptics'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
-import { AmountKeypad } from '../../components/receive/AmountKeypad'
+import { formatKeypadAmount } from '../../components/receive/AmountKeypad'
 import { useBalance } from '../../contexts/BalanceContext'
 import { getCurrencySymbol } from '../../utils/formatters'
+import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
+import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib/dynamicAmountFontSize'
 import type { NgLocalIdType } from '@easner/shared'
 import { NgLocalVerificationNotice } from '../../components/compliance/NgLocalVerificationNotice'
+import SkeletonLoader from '../../components/SkeletonLoader'
 
 type RouteParams = {
   localPayInCurrency: string
@@ -38,8 +58,13 @@ type RouteParams = {
 
 export default function ReceiveLocalAmountScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
-  const footerPadding = useFixedFooterPadding(spacing[5])
-  const { width } = useWindowDimensions()
+  const { width: windowWidth } = useWindowDimensions()
+  const footerPadding = useFixedFooterPadding(spacing[4])
+  const keypadSizing = computeKeypadCellSize(getContentWidth(windowWidth, spacing[5]), {
+    gap: spacing[2],
+    minSize: 90,
+    maxSize: 114,
+  })
   const { balances } = useBalance()
   const params = (route.params || {}) as Partial<RouteParams>
 
@@ -68,31 +93,44 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   })
 
   const usdBalance = parseFloat(balances.USD || '0')
-  const railLabel = payInRail === 'mobile_money' ? 'Mobile money' : 'Bank transfer'
+  const railLabel = payInRail === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
   const amountPositive = enteredAmount > 0
-  const canContinue = amountPositive && !ycFlow.ratesLoading
+  const canContinue = amountPositive && !ycFlow.ratesLoading && Boolean(ycFlow.customerRate)
 
-  const amountSymbol =
-    amountEntryMode === 'usd' ? getCurrencySymbol('USD') : getCurrencySymbol(localPayInCurrency)
+  const displayCurrency = amountEntryMode === 'usd' ? 'USD' : localPayInCurrency
+  const amountDisplaySymbol = getSendAmountFieldSymbol(displayCurrency)
+  const dynamicAmountFontSize = getDynamicAmountFontSize(amountStr)
+  const dynamicAmountLineHeight = Math.round(dynamicAmountFontSize * 1.12)
+  const amountTextStyle = buildDynamicAmountTextStyle(textStyles.balanceDisplay, amountStr)
+  const wideAmountSymbol = isWideSendAmountSymbol(amountDisplaySymbol)
+  const amountPrefixStyle = wideAmountSymbol
+    ? {
+        fontSize: scaleSendAmountPrefixFontSize(dynamicAmountFontSize, amountDisplaySymbol),
+        lineHeight: scaleSendAmountPrefixLineHeight(dynamicAmountLineHeight, amountDisplaySymbol),
+      }
+    : null
+  const amountRowHeight = Math.max(
+    Platform.select({ ios: 108, default: 116 }) ?? 116,
+    dynamicAmountLineHeight + spacing[2],
+  )
+
+  const showExchangePreviewSkeleton = amountPositive && ycFlow.ratesLoading
+  const exchangePreviewReady = amountPositive && !ycFlow.ratesLoading && Boolean(ycFlow.customerRate)
+
+  const toSwitchInputAmount = (amount: number): string => {
+    const roundedAmount = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100
+    const fractionalPart = Math.abs(roundedAmount - Math.trunc(roundedAmount))
+    return fractionalPart >= 0.01 ? roundedAmount.toFixed(2) : String(Math.trunc(roundedAmount))
+  }
 
   const toggleAmountDirection = () => {
     haptics.tap()
     if (amountEntryMode === 'usd' && ycFlow.preview.localPayIn > 0) {
       setAmountEntryMode('local')
-      setAmountStr(
-        ycFlow.preview.localPayIn.toLocaleString('en-US', {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 2,
-        }),
-      )
+      setAmountStr(formatKeypadAmount(toSwitchInputAmount(ycFlow.preview.localPayIn)))
     } else if (amountEntryMode === 'local' && ycFlow.preview.usdCredit > 0) {
       setAmountEntryMode('usd')
-      setAmountStr(
-        ycFlow.preview.usdCredit.toLocaleString('en-US', {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 2,
-        }),
-      )
+      setAmountStr(formatKeypadAmount(toSwitchInputAmount(ycFlow.preview.usdCredit)))
     } else {
       setAmountEntryMode(amountEntryMode === 'usd' ? 'local' : 'usd')
     }
@@ -101,11 +139,36 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   const changeRail = () => {
     if (!bankAvailable || !momoAvailable) return
     haptics.tap()
-    navigation.replace('ReceiveLocalRail' as never, {
+    navigation.navigate('ReceiveLocalRail' as never, {
       localPayInCurrency,
       residenceCountry,
       ngMissingType,
     } as never)
+  }
+
+  const handleKeypadPress = (value: string) => {
+    haptics.tap()
+    let raw = amountStr.replace(/,/g, '')
+
+    if (value === 'backspace') {
+      setAmountStr(formatKeypadAmount(raw.slice(0, -1)))
+      return
+    }
+
+    if (value === '.') {
+      if (raw.includes('.')) return
+      setAmountStr(formatKeypadAmount(`${raw}.`))
+      return
+    }
+
+    if (!/^\d$/.test(value)) return
+    if (raw.includes('.')) {
+      const decimals = raw.split('.')[1] ?? ''
+      if (decimals.length >= 2) return
+    }
+    if (raw === '0') raw = value
+    else raw += value
+    setAmountStr(formatKeypadAmount(raw))
   }
 
   const onContinue = () => {
@@ -126,87 +189,173 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     return (
       <ScreenWrapper>
         <View style={[styles.blocked, { paddingTop: insets.top }]}>
-          <Pressable android_ripple={ripple.neutral} style={styles.backRow} onPress={() => navigation.goBack()}>
-            <ArrowLeft size={20} color={colors.text.secondary} strokeWidth={2} />
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
+          <View style={styles.header}>
+            <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
+            </Pressable>
+            <Text style={styles.title}>Add money</Text>
+          </View>
           <NgLocalVerificationNotice missingType={ngMissingType} onSaved={() => navigation.goBack()} />
         </View>
       </ScreenWrapper>
     )
   }
 
-  const headlineSize = width < 360 ? 40 : 48
-
   return (
     <ScreenWrapper>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <Pressable android_ripple={ripple.neutral} style={styles.backRow} onPress={() => navigation.goBack()}>
-            <ArrowLeft size={20} color={colors.text.secondary} strokeWidth={2} />
-            <Text style={styles.backText}>Back</Text>
+      <KeyboardAvoidingView style={styles.mainColumn} behavior="padding">
+        <View style={[styles.header, { paddingTop: spacing[4] + insets.top }]}>
+          <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
-          <Text style={styles.title}>Add money</Text>
-        </View>
-
-        <View style={[styles.creditBar, surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl })]}>
-          <Text style={styles.creditLabel}>Credit to:</Text>
-          <View style={styles.creditRow}>
-            <CurrencyFlag currency="USD" size={22} />
-            <Text style={styles.creditText}>
-              USD Balance • ${usdBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Text>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Add money</Text>
           </View>
         </View>
 
-        <View style={styles.amountSection}>
-          <Text style={styles.amountLabel}>
-            {amountEntryMode === 'usd' ? 'Amount (USD)' : `Amount (${localPayInCurrency})`}
-          </Text>
-          <Text style={[styles.amountDisplay, { fontSize: headlineSize }]}>
-            {amountSymbol}
-            {amountStr}
-          </Text>
-          {amountPositive ? (
-            <Pressable android_ripple={ripple.neutral} style={styles.rateRow} onPress={toggleAmountDirection}>
-              <ArrowUpDown size={13} color={colors.primary.main} strokeWidth={2.5} />
-              <Text style={styles.rateText}>
-                {amountEntryMode === 'usd'
-                  ? `Pay ≈ ${formatMoneyDisplay(ycFlow.preview.localPayIn, localPayInCurrency)}`
-                  : `Receive ≈ ${formatMoneyDisplay(ycFlow.preview.usdCredit, 'USD')}`}
+        <View style={styles.content}>
+          <View style={styles.formTop}>
+            <View style={styles.creditBar}>
+              <Text style={styles.creditLabel}>To:</Text>
+              <View style={styles.flagContainer}>
+                <CurrencyFlag currency="USD" size={24} style={styles.flagImage} />
+              </View>
+              <Text style={styles.creditText} numberOfLines={1}>
+                USD Balance • {getCurrencySymbol('USD')}
+                {usdBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
-            </Pressable>
-          ) : (
-            <Text style={styles.ratePlaceholder}> </Text>
-          )}
+            </View>
+
+            <View style={styles.amountSection}>
+              <View style={[styles.amountInputWrapper, { height: amountRowHeight }]}>
+                <View style={styles.amountInputContainer}>
+                  <Text
+                    style={[styles.amountInput, amountTextStyle, styles.amountUnified]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.5}
+                    accessibilityRole="text"
+                    accessibilityLabel={`Amount ${amountDisplaySymbol}${amountStr}`}
+                  >
+                    {wideAmountSymbol && amountPrefixStyle ? (
+                      <Text style={amountPrefixStyle}>{amountDisplaySymbol}</Text>
+                    ) : (
+                      amountDisplaySymbol
+                    )}
+                    {amountStr}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.exchangeInfoSlot}>
+                {!amountPositive ? (
+                  <Text style={[styles.exchangeInfoText, styles.exchangeInfoPlaceholder]}> </Text>
+                ) : showExchangePreviewSkeleton ? (
+                  <SkeletonLoader width={220} height={14} borderRadius={7} />
+                ) : exchangePreviewReady ? (
+                  <View style={styles.exchangeInfoInline}>
+                    <Pressable android_ripple={ripple.neutral} onPress={toggleAmountDirection} style={styles.exchangeToggleTouchArea}>
+                      <ArrowUpDown size={13} color={colors.primary.main} strokeWidth={2.5} />
+                      <Text style={styles.exchangeInfoText}>
+                        {amountEntryMode === 'usd'
+                          ? `Paying: ${formatMoneyDisplay(ycFlow.preview.localPayIn, localPayInCurrency)}`
+                          : `Receiving: ${formatMoneyDisplay(ycFlow.preview.usdCredit, 'USD')}`}
+                      </Text>
+                    </Pressable>
+                    {ycFlow.customerRate ? (
+                      <Text style={styles.exchangeInfoText}>
+                        {' • '}
+                        {`Rate: ${formatSendRateLabel('USD', localPayInCurrency, ycFlow.customerRate)}`}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>
+                    Exchange rate unavailable. Try again shortly.
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.methodKeypadFill}>
+            <View style={styles.methodKeypadGroup}>
+              <View style={styles.balanceSection}>
+                <Pressable
+                  android_ripple={ripple.neutral}
+                  style={styles.balanceSelector}
+                  onPress={changeRail}
+                  disabled={!bankAvailable || !momoAvailable}
+                >
+                  <View style={styles.flagContainer}>
+                    <CurrencyFlag currency={localPayInCurrency} size={24} style={styles.flagImage} />
+                  </View>
+                  <Text style={styles.balanceSelectorText} numberOfLines={1}>
+                    {localPayInCurrency} • {railLabel}
+                  </Text>
+                  {bankAvailable && momoAvailable ? (
+                    <ChevronDown size={16} color={colors.text.primary} strokeWidth={2} />
+                  ) : null}
+                </Pressable>
+              </View>
+
+              <View style={styles.keypadContainer}>
+                <View
+                  style={[
+                    styles.keypadGrid,
+                    { width: keypadSizing.rowWidth, gap: keypadSizing.gap, rowGap: keypadSizing.gap },
+                  ]}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                    <Pressable
+                      android_ripple={ripple.neutral}
+                      key={num}
+                      style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
+                      onPress={() => handleKeypadPress(num.toString())}
+                      onPressIn={() => haptics.tap()}
+                    >
+                      <Text style={styles.keypadButtonText}>{num}</Text>
+                    </Pressable>
+                  ))}
+                  <Pressable
+                    android_ripple={ripple.neutral}
+                    style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
+                    onPress={() => handleKeypadPress('.')}
+                    onPressIn={() => haptics.tap()}
+                  >
+                    <Text style={styles.keypadButtonText}>.</Text>
+                  </Pressable>
+                  <Pressable
+                    android_ripple={ripple.neutral}
+                    style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
+                    onPress={() => handleKeypadPress('0')}
+                    onPressIn={() => haptics.tap()}
+                  >
+                    <Text style={styles.keypadButtonText}>0</Text>
+                  </Pressable>
+                  <Pressable
+                    android_ripple={ripple.neutral}
+                    style={[styles.keypadButton, { width: keypadSizing.buttonWidth }]}
+                    onPress={() => handleKeypadPress('backspace')}
+                    onPressIn={() => haptics.tap()}
+                    disabled={!amountStr || amountStr === '0'}
+                  >
+                    <Delete
+                      size={24}
+                      color={!amountStr || amountStr === '0' ? colors.text.secondary : colors.text.primary}
+                      strokeWidth={2}
+                    />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </View>
         </View>
 
-        <Pressable
-          android_ripple={ripple.neutral}
-          style={[styles.sourcePill, surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full })]}
-          onPress={changeRail}
-          disabled={!bankAvailable || !momoAvailable}
-        >
-          <CurrencyFlag currency={localPayInCurrency} size={20} />
-          <Text style={styles.sourceText}>
-            {localPayInCurrency} • {railLabel}
-          </Text>
-          {bankAvailable && momoAvailable ? (
-            <ChevronRight size={18} color={colors.text.secondary} strokeWidth={2} />
-          ) : null}
-        </Pressable>
-
-        <View style={styles.keypadWrap}>
-          <AmountKeypad value={amountStr} onChange={setAmountStr} />
-        </View>
-
-        <View style={[styles.footer, { paddingBottom: footerPadding }]}>
+        <View style={[styles.bottomContainer, { paddingBottom: footerPadding }]}>
           <Pressable
             android_ripple={ripple.neutral}
-            style={[styles.cta, !canContinue && styles.ctaDisabled]}
+            style={[styles.sendButton, !canContinue && styles.sendButtonDisabled]}
             onPress={onContinue}
             disabled={!canContinue}
           >
@@ -214,9 +363,13 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
               colors={!canContinue ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={styles.ctaGradient}
+              style={styles.sendButtonGradient}
             >
-              <Text style={styles.ctaText}>Continue</Text>
+              {ycFlow.ratesLoading && amountPositive ? (
+                <ActivityIndicator color={colors.text.inverse} />
+              ) : (
+                <Text style={styles.sendButtonText}>Continue</Text>
+              )}
             </LinearGradient>
           </Pressable>
         </View>
@@ -226,48 +379,219 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
+  mainColumn: { flex: 1 },
   blocked: { flex: 1, paddingHorizontal: spacing[5] },
-  header: { paddingHorizontal: spacing[5] },
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1], marginBottom: spacing[2] },
-  backText: { ...textStyles.body, color: colors.text.secondary },
-  title: { ...textStyles.screenTitle, marginBottom: spacing[3] },
-  creditBar: {
-    marginHorizontal: spacing[5],
-    padding: spacing[4],
-    borderRadius: borderRadius.xl,
-    marginBottom: spacing[4],
-  },
-  creditLabel: { ...textStyles.caption, color: colors.text.secondary, marginBottom: spacing[1] },
-  creditRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  creditText: { ...textStyles.body, fontFamily: fontFamily.semibold },
-  amountSection: { alignItems: 'center', paddingHorizontal: spacing[5], marginBottom: spacing[3] },
-  amountLabel: { ...textStyles.caption, color: colors.text.secondary, marginBottom: spacing[2] },
-  amountDisplay: {
-    fontFamily: fontFamily.semibold,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing[2],
-  },
-  rateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
-  rateText: { ...textStyles.caption, color: colors.text.secondary },
-  ratePlaceholder: { ...textStyles.caption, opacity: 0 },
-  sourcePill: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    marginHorizontal: spacing[5],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.full,
-    alignSelf: 'center',
-    marginBottom: spacing[4],
+    paddingHorizontal: spacing[5],
+    paddingBottom: spacing[4],
   },
-  sourceText: { ...textStyles.body, flex: 1 },
-  keypadWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing[5] },
-  footer: { paddingHorizontal: spacing[5], paddingTop: spacing[2] },
-  cta: { borderRadius: borderRadius.lg, overflow: 'hidden' },
-  ctaDisabled: { opacity: 0.7 },
-  ctaGradient: { paddingVertical: spacing[4], alignItems: 'center' },
-  ctaText: { ...textStyles.button, color: colors.text.inverse },
+  backButton: {
+    ...surfaceChromeCircleStyle(colors, 44),
+    marginRight: spacing[3],
+  },
+  headerContent: { flex: 1, justifyContent: 'center' },
+  title: { ...textStyles.headlineMedium, color: colors.text.primary },
+  content: {
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[2],
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  formTop: { flexShrink: 0 },
+  creditBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: 24 }),
+    height: 56,
+    width: '85%',
+    alignSelf: 'center',
+    paddingHorizontal: spacing[4],
+    marginBottom: 25,
+    gap: spacing[3],
+  },
+  creditLabel: {
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    fontFamily: fontFamily.medium,
+  },
+  creditText: {
+    flex: 1,
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    fontFamily: fontFamily.medium,
+  },
+  flagContainer: {
+    ...surfaceChromeCircleStyle(colors, 24, { shadow: 'none' }),
+    overflow: 'hidden',
+  },
+  flagImage: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  amountSection: {
+    marginTop: 8,
+    marginBottom: spacing[2],
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  amountInputWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 0,
+    width: '100%',
+    paddingVertical: spacing[1],
+  },
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    maxWidth: '100%',
+  },
+  amountUnified: {
+    flexShrink: 1,
+    textAlign: 'center',
+    maxWidth: '100%',
+    width: '100%',
+    ...Platform.select({
+      android: { includeFontPadding: false },
+      ios: { includeFontPadding: false },
+      default: {},
+    }),
+  },
+  amountInput: {
+    fontSize: 50,
+    fontWeight: '900',
+    color: colors.text.primary,
+    fontFamily: fontFamily.black,
+    textAlign: 'center',
+    padding: 0,
+    marginVertical: 0,
+    flexShrink: 1,
+    flexGrow: 0,
+    includeFontPadding: false,
+  },
+  exchangeInfoSlot: {
+    marginTop: 0,
+    minHeight: 58,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing[2],
+  },
+  exchangeInfoPlaceholder: { opacity: 0 },
+  exchangeInfoUnavailable: {
+    color: colors.semantic.destructive,
+    textAlign: 'center',
+  },
+  exchangeInfoInline: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exchangeToggleTouchArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 2,
+    gap: 4,
+  },
+  exchangeInfoText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: colors.primary.main,
+    fontFamily: fontFamily.medium,
+    textAlign: 'center',
+  },
+  methodKeypadFill: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    width: '100%',
+    minHeight: 0,
+  },
+  methodKeypadGroup: {
+    marginTop: 0,
+    marginBottom: spacing[2],
+    flexShrink: 0,
+    width: '100%',
+  },
+  balanceSection: {
+    alignItems: 'center',
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  balanceSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: 100 }),
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    marginBottom: spacing[2],
+    gap: spacing[2],
+    minWidth: 180,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  balanceSelectorText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text.primary,
+    fontFamily: fontFamily.medium,
+  },
+  keypadContainer: {
+    width: '100%',
+    paddingHorizontal: spacing[5],
+    paddingTop: 0,
+    paddingBottom: spacing[2],
+    backgroundColor: colors.background.primary,
+    alignItems: 'center',
+  },
+  keypadGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    width: '100%',
+    gap: spacing[2],
+    rowGap: spacing[2],
+  },
+  keypadButton: {
+    width: 113,
+    height: 50,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: 20 }),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  keypadButtonText: {
+    fontSize: 28,
+    lineHeight: 34,
+    color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+    fontWeight: '600',
+  },
+  bottomContainer: {
+    paddingHorizontal: spacing[5],
+    paddingTop: 0,
+    backgroundColor: colors.background.primary,
+  },
+  sendButton: {
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+    marginTop: spacing[2],
+  },
+  sendButtonDisabled: { opacity: 0.85 },
+  sendButtonGradient: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[4],
+    minHeight: 52,
+  },
+  sendButtonText: {
+    fontFamily: fontFamily.semibold,
+    fontSize: 16,
+    color: colors.text.inverse,
+  },
 })

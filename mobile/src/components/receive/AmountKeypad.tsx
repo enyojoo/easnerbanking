@@ -37,8 +37,8 @@ export function AmountKeypad({ value, onChange, disabled }: Props) {
   const { width } = useWindowDimensions()
   const keypadSizing = computeKeypadCellSize(getContentWidth(width, spacing[5]), {
     gap: spacing[2],
-    minSize: 50,
-    maxSize: 113,
+    minSize: 90,
+    maxSize: 114,
   })
 
   const handlePress = (key: string) => {
@@ -79,7 +79,7 @@ export function AmountKeypad({ value, onChange, disabled }: Props) {
           <Pressable
             key={num}
             android_ripple={ripple.neutral}
-            style={[styles.button, cellStyle, surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl })]}
+            style={[styles.button, cellStyle, surfaceFrameStyle(colors, { shadow: 'none', radius: 20 })]}
             onPress={() => handlePress(String(num))}
             disabled={disabled}
           >
@@ -88,7 +88,7 @@ export function AmountKeypad({ value, onChange, disabled }: Props) {
         ))}
         <Pressable
           android_ripple={ripple.neutral}
-          style={[styles.button, cellStyle, surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl })]}
+          style={[styles.button, cellStyle, surfaceFrameStyle(colors, { shadow: 'none', radius: 20 })]}
           onPress={() => handlePress('.')}
           disabled={disabled}
         >
@@ -96,7 +96,7 @@ export function AmountKeypad({ value, onChange, disabled }: Props) {
         </Pressable>
         <Pressable
           android_ripple={ripple.neutral}
-          style={[styles.button, cellStyle, surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl })]}
+          style={[styles.button, cellStyle, surfaceFrameStyle(colors, { shadow: 'none', radius: 20 })]}
           onPress={() => handlePress('0')}
           disabled={disabled}
         >
@@ -104,7 +104,7 @@ export function AmountKeypad({ value, onChange, disabled }: Props) {
         </Pressable>
         <Pressable
           android_ripple={ripple.neutral}
-          style={[styles.button, cellStyle, surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl })]}
+          style={[styles.button, cellStyle, surfaceFrameStyle(colors, { shadow: 'none', radius: 20 })]}
           onPress={() => handlePress('backspace')}
           disabled={disabled || !value || value === '0'}
         >
