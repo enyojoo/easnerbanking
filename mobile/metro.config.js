@@ -74,4 +74,30 @@ config.resolver.extraNodeModules = {
   ...extraNodeModules,
 }
 
+// Web export: some deps import `@noble/hashes/crypto.js` (not in package exports). Resolve explicitly.
+const nobleHashesCrypto = (() => {
+  try {
+    const nobleDir = path.dirname(
+      require.resolve('@noble/hashes/package.json', { paths: [projectRoot, monorepoRoot] }),
+    )
+    return path.join(nobleDir, 'crypto.js')
+  } catch {
+    return null
+  }
+})()
+
+const defaultResolveRequest = config.resolver.resolveRequest
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (
+    nobleHashesCrypto &&
+    (moduleName === '@noble/hashes/crypto.js' || moduleName === '@noble/hashes/crypto')
+  ) {
+    return { type: 'sourceFile', filePath: nobleHashesCrypto }
+  }
+  if (defaultResolveRequest) {
+    return defaultResolveRequest(context, moduleName, platform)
+  }
+  return context.resolveRequest(context, moduleName, platform)
+}
+
 module.exports = config

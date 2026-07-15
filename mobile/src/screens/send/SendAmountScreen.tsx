@@ -1149,8 +1149,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
         } as never)
         return
-      }
-
       } else if (
         selectedPaymentMethod === 'otherCurrency' &&
         selectedOtherCurrency &&
