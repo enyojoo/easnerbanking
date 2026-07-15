@@ -300,6 +300,41 @@ export const textStyles: Record<string, TextStyle> = {
       default: {},
     }),
   },
+
+  /**
+   * Shorthand aliases — align with `@easner/shared` typeScale names used in
+   * send / YC screens (`caption`, `body`, `screenTitle`, etc.).
+   */
+  caption: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.regular,
+    lineHeight: fontSize.xs * lineHeight.relaxed,
+  },
+  body: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.regular,
+    lineHeight: fontSize.base * lineHeight.relaxed,
+  },
+  screenTitle: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
+    lineHeight: fontSize.xl * lineHeight.snug,
+  },
+  sectionTitle: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    lineHeight: fontSize.lg * lineHeight.snug,
+  },
+  button: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    lineHeight: fontSize.base * lineHeight.normal,
+  },
 }
 
 export type Typography = typeof textStyles
