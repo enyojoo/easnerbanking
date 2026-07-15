@@ -6,6 +6,9 @@
   "scripts": {
     "build": "next build --webpack",
     "dev": "next dev --port 3001 --turbo",
+    "sync:flags": "mkdir -p public && cp -R ../business/public/flags public/flags",
+    "predev": "test -d public/flags || npm run sync:flags",
+    "prebuild": "test -d public/flags || npm run sync:flags",
     "lint": "eslint .",
     "start": "next start --port 3002"
   },

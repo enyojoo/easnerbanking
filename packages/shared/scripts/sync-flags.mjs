@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Download flag PNGs from flagcdn.com, normalize to uniform 3:2 (country-flag-icons),
- * copy to business/public/flags, and regenerate manifests.
+ * copy to business/public/flags and office/public/flags, and regenerate manifests.
  */
 import fs from 'fs'
 import path from 'path'
@@ -15,6 +15,7 @@ const isoCodesOut = path.join(sharedRoot, 'src', 'flags', 'flag-iso-codes.ts')
 const manifestOut = path.join(sharedRoot, 'src', 'flags', 'flag-assets.manifest.ts')
 const webManifestOut = path.join(sharedRoot, 'src', 'flags', 'flag-assets.web.manifest.ts')
 const businessFlagsDir = path.resolve(sharedRoot, '../../business/public/flags')
+const officeFlagsDir = path.resolve(sharedRoot, '../../office/public/flags')
 
 /** flagcdn width (w320 is sharp on retina). */
 const FLAGCDN_WIDTH = Number.parseInt(process.env.FLAGCDN_WIDTH || '320', 10) || 320
@@ -139,17 +140,19 @@ export function getFlagBundledSrc(_iso: string): string | undefined {
   )
 }
 
-function copyToBusiness(codes) {
-  fs.mkdirSync(businessFlagsDir, { recursive: true })
-  for (const iso of codes) {
-    const lower = iso.toLowerCase()
-    const src = path.join(assetsDir, `${lower}.png`)
-    if (!fs.existsSync(src)) {
-      console.warn(`Skip copy ${iso}: missing ${src}`)
-      continue
+function copyToPublicApps(codes) {
+  for (const destDir of [businessFlagsDir, officeFlagsDir]) {
+    fs.mkdirSync(destDir, { recursive: true })
+    for (const iso of codes) {
+      const lower = iso.toLowerCase()
+      const src = path.join(assetsDir, `${lower}.png`)
+      if (!fs.existsSync(src)) {
+        console.warn(`Skip copy ${iso}: missing ${src}`)
+        continue
+      }
+      const dest = path.join(destDir, `${lower}.png`)
+      fs.copyFileSync(src, dest)
     }
-    const dest = path.join(businessFlagsDir, `${lower}.png`)
-    fs.copyFileSync(src, dest)
   }
 }
 
@@ -200,8 +203,8 @@ async function main() {
   writeIsoCodesFile(codes)
   writeManifest(codes)
   writeWebManifest()
-  copyToBusiness(codes)
-  console.log('Copied to', businessFlagsDir)
+  copyToPublicApps(codes)
+  console.log('Copied to', businessFlagsDir, 'and', officeFlagsDir)
   console.log('Wrote', isoCodesOut, manifestOut, webManifestOut)
 }
 
