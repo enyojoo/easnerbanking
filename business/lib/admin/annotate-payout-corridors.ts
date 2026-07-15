@@ -30,6 +30,7 @@ export async function annotateAdminCorridorsWithProviderHealth<T extends AdminCo
       provider_health?: Record<string, ProviderHealthStatus>
       yc_send_available?: boolean
       yc_receive_available?: boolean
+      noah_sell_available?: boolean
     }
   >
 > {
@@ -39,25 +40,26 @@ export async function annotateAdminCorridorsWithProviderHealth<T extends AdminCo
       provider_health?: Record<string, ProviderHealthStatus>
       yc_send_available?: boolean
       yc_receive_available?: boolean
+      noah_sell_available?: boolean
     }
   > = []
 
   for (const row of ycAnnotated) {
     const routing = parseRouting(row.provider_routing)
-    const hasNoah = routing.some((r) => r.provider === "noah") || routing.length === 0
     const hasYc =
       routing.some((r) => r.provider === "yellowcard") ||
       row.yc_send_available === true ||
       row.yc_receive_available === true
 
     const provider_health: Record<string, ProviderHealthStatus> = {}
-    if (hasNoah) {
-      const ok = await hasNoahSellChannel({
-        country: row.country_code,
-        fiatCurrency: row.currency_code,
-      })
-      provider_health.noah = ok ? "ok" : "unavailable"
-    }
+
+    // Probe Noah sell regardless of current routing (YC-only rows may still overlap Noah).
+    const noahOk = await hasNoahSellChannel({
+      country: row.country_code,
+      fiatCurrency: row.currency_code,
+    })
+    provider_health.noah = noahOk ? "ok" : "unavailable"
+
     if (hasYc) {
       provider_health.yellowcard =
         row.yc_send_available === true || row.yc_receive_available === true ? "ok" : "unavailable"
@@ -65,6 +67,7 @@ export async function annotateAdminCorridorsWithProviderHealth<T extends AdminCo
 
     out.push({
       ...row,
+      ...(noahOk ? { noah_sell_available: true } : {}),
       ...(Object.keys(provider_health).length ? { provider_health } : {}),
     })
   }

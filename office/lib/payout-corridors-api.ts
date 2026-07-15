@@ -18,6 +18,8 @@ export type PayoutCorridorAdminRow = {
   yc_send_available?: boolean
   /** Live or synced Yellowcard deposit channel on this corridor rail. */
   yc_receive_available?: boolean
+  /** Live Noah sell channel for this country + currency. */
+  noah_sell_available?: boolean
   /** Optional ops hint (e.g. noah); null = unspecified. Does not replace runtime capability checks. */
   settlement_backend: string | null
   metadata: unknown

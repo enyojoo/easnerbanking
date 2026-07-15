@@ -56,13 +56,24 @@ function parsePrimaryProvider(routing: unknown): ProviderId {
   return p === "yellowcard" ? "yellowcard" : "noah"
 }
 
+function routingPrimaryProvider(routing: unknown): ProviderId | null {
+  const sorted = [...parseRouting(routing)].sort((a, b) => a.priority - b.priority)
+  const p = sorted[0]?.provider
+  if (p === "yellowcard" || p === "noah") return p
+  return null
+}
+
 function rowMetadata(row: PayoutCorridorAdminRow): Record<string, unknown> {
   return (row.metadata ?? {}) as Record<string, unknown>
 }
 
 function rowSupportsYcPayout(row: PayoutCorridorAdminRow): boolean {
   const meta = rowMetadata(row)
-  return meta.yc_send === true || row.yc_send_available === true
+  return (
+    meta.yc_send === true ||
+    row.yc_send_available === true ||
+    routingPrimaryProvider(row.provider_routing) === "yellowcard"
+  )
 }
 
 function rowSupportsYcPayIn(row: PayoutCorridorAdminRow): boolean {
@@ -72,7 +83,10 @@ function rowSupportsYcPayIn(row: PayoutCorridorAdminRow): boolean {
 
 function rowSupportsNoahPayout(row: PayoutCorridorAdminRow): boolean {
   return (
-    row.provider_health?.noah === "ok" || String(row.settlement_backend ?? "").toLowerCase() === "noah"
+    row.noah_sell_available === true ||
+    row.provider_health?.noah === "ok" ||
+    String(row.settlement_backend ?? "").toLowerCase() === "noah" ||
+    routingPrimaryProvider(row.provider_routing) === "noah"
   )
 }
 
@@ -89,10 +103,6 @@ function rowPayInEnabledForProvider(row: PayoutCorridorAdminRow, provider: Provi
 
 function providerLabel(provider: ProviderId): string {
   return provider === "yellowcard" ? "Yellowcard" : "Noah"
-}
-
-function providerBadge(provider: ProviderId): string {
-  return provider === "yellowcard" ? "YC" : "Noah"
 }
 
 function resolvePayInProvider(input: {
@@ -178,48 +188,38 @@ type CountryCurrencyCaps = {
   supportNoahPayIn: boolean
 }
 
-function buildCountryCurrencyCaps(rows: PayoutCorridorAdminRow[]): Map<string, CountryCurrencyCaps> {
-  const map = new Map<string, CountryCurrencyCaps>()
-  for (const row of rows) {
-    const key = `${row.country_code}:${row.currency_code}`
-    const caps = {
-      supportNoahPayout: rowSupportsNoahPayout(row),
-      supportYcPayout: rowSupportsYcPayout(row),
-      supportYcPayIn: rowSupportsYcPayIn(row),
-      supportNoahPayIn: rowSupportsNoahPayIn(row),
-    }
-
-    const existing = map.get(key)
-    if (!existing) {
-      map.set(key, caps)
-      continue
-    }
-    existing.supportNoahPayout = existing.supportNoahPayout || caps.supportNoahPayout
-    existing.supportYcPayout = existing.supportYcPayout || caps.supportYcPayout
-    existing.supportYcPayIn = existing.supportYcPayIn || caps.supportYcPayIn
-    existing.supportNoahPayIn = existing.supportNoahPayIn || caps.supportNoahPayIn
-  }
-  return map
+function corridorHasAnyCapability(row: PayoutCorridorAdminRow): boolean {
+  return (
+    rowSupportsNoahPayout(row) ||
+    rowSupportsYcPayout(row) ||
+    rowSupportsYcPayIn(row) ||
+    rowSupportsNoahPayIn(row)
+  )
 }
 
-function corridorIdsForCountryCurrency(
-  allRows: PayoutCorridorAdminRow[],
-  countryCode: string,
-  currencyCode: string,
-): string[] {
-  return allRows
-    .filter((r) => r.country_code === countryCode && r.currency_code === currencyCode)
-    .map((r) => r.id)
+function rowCaps(row: PayoutCorridorAdminRow): CountryCurrencyCaps {
+  return {
+    supportNoahPayout: rowSupportsNoahPayout(row),
+    supportYcPayout: rowSupportsYcPayout(row),
+    supportYcPayIn: rowSupportsYcPayIn(row),
+    supportNoahPayIn: rowSupportsNoahPayIn(row),
+  }
+}
+
+function mergeCaps(a: CountryCurrencyCaps, b: CountryCurrencyCaps): CountryCurrencyCaps {
+  return {
+    supportNoahPayout: a.supportNoahPayout || b.supportNoahPayout,
+    supportYcPayout: a.supportYcPayout || b.supportYcPayout,
+    supportYcPayIn: a.supportYcPayIn || b.supportYcPayIn,
+    supportNoahPayIn: a.supportNoahPayIn || b.supportNoahPayIn,
+  }
 }
 
 function payInCorridorIdsForProvider(
-  allRows: PayoutCorridorAdminRow[],
-  countryCode: string,
-  currencyCode: string,
+  railRows: PayoutCorridorAdminRow[],
   provider: ProviderId,
 ): string[] {
-  return allRows
-    .filter((r) => r.country_code === countryCode && r.currency_code === currencyCode)
+  return railRows
     .filter((r) => {
       if (provider === "yellowcard") return rowSupportsYcPayIn(r)
       return rowSupportsNoahPayIn(r)
@@ -227,20 +227,30 @@ function payInCorridorIdsForProvider(
     .map((r) => r.id)
 }
 
-function groupFiatDestinations(
-  filteredRows: PayoutCorridorAdminRow[],
-  allRows: PayoutCorridorAdminRow[],
-): FiatDestinationRow[] {
-  const mergedCaps = buildCountryCurrencyCaps(allRows)
+function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDestinationRow[] {
   const map = new Map<string, FiatDestinationRow>()
 
   for (const r of filteredRows) {
+    if (!corridorHasAnyCapability(r)) continue
+
     const key = `${r.country_code}:${r.currency_code}`
-    const caps = mergedCaps.get(key)
-    const supportNoahPayout = caps?.supportNoahPayout ?? rowSupportsNoahPayout(r)
-    const supportYcPayout = caps?.supportYcPayout ?? rowSupportsYcPayout(r)
-    const supportYcPayIn = caps?.supportYcPayIn ?? rowSupportsYcPayIn(r)
-    const supportNoahPayIn = caps?.supportNoahPayIn ?? rowSupportsNoahPayIn(r)
+    const existing = map.get(key)
+    const caps = existing
+      ? mergeCaps(
+          {
+            supportNoahPayout: existing.supportNoahPayout,
+            supportYcPayout: existing.supportYcPayout,
+            supportYcPayIn: existing.supportYcPayIn,
+            supportNoahPayIn: existing.supportNoahPayIn,
+          },
+          rowCaps(r),
+        )
+      : rowCaps(r)
+
+    const supportNoahPayout = caps.supportNoahPayout
+    const supportYcPayout = caps.supportYcPayout
+    const supportYcPayIn = caps.supportYcPayIn
+    const supportNoahPayIn = caps.supportNoahPayIn
     const payoutLocked: ProviderId | null =
       supportNoahPayout && !supportYcPayout
         ? "noah"
@@ -255,14 +265,14 @@ function groupFiatDestinations(
       supportNoahPayIn,
     })
     const payInSupported = payInProvider !== null
+    const railRows = filteredRows.filter(
+      (row) => row.country_code === r.country_code && row.currency_code === r.currency_code,
+    )
     const payInEnabled =
       payInProvider !== null
-        ? allRows
-            .filter((row) => row.country_code === r.country_code && row.currency_code === r.currency_code)
-            .some((row) => rowPayInEnabledForProvider(row, payInProvider))
+        ? railRows.some((row) => rowPayInEnabledForProvider(row, payInProvider))
         : false
 
-    const existing = map.get(key)
     if (!existing) {
       map.set(key, {
         key,
@@ -272,9 +282,7 @@ function groupFiatDestinations(
         currency_name: r.currency_name,
         corridorIds: [r.id],
         payInCorridorIds:
-          payInProvider !== null
-            ? payInCorridorIdsForProvider(allRows, r.country_code, r.currency_code, payInProvider)
-            : [],
+          payInProvider !== null ? payInCorridorIdsForProvider(railRows, payInProvider) : [],
         enabled: r.enabled,
         payoutProvider,
         payInProvider,
@@ -292,6 +300,16 @@ function groupFiatDestinations(
 
     existing.corridorIds.push(r.id)
     existing.enabled = existing.enabled && r.enabled
+    existing.supportNoahPayout = supportNoahPayout
+    existing.supportYcPayout = supportYcPayout
+    existing.supportYcPayIn = supportYcPayIn
+    existing.supportNoahPayIn = supportNoahPayIn
+    existing.payInProvider = payInProvider
+    existing.payInSupported = payInSupported
+    existing.payInEnabled = payInEnabled || existing.payInEnabled
+    existing.payoutLocked = payoutLocked
+    existing.payInCorridorIds =
+      payInProvider !== null ? payInCorridorIdsForProvider(railRows, payInProvider) : []
   }
 
   return [...map.values()].sort(
@@ -310,7 +328,7 @@ export function PayoutCorridorsAdminPanel() {
     () => rows.filter((r) => r.rail === railTab || (!r.rail && railTab === "bank_transfer")),
     [rows, railTab],
   )
-  const fiatRows = useMemo(() => groupFiatDestinations(filteredRows, rows), [filteredRows, rows])
+  const fiatRows = useMemo(() => groupFiatDestinations(filteredRows), [filteredRows])
   const showTableSkeleton = corridorsQuery.isPending && fiatRows.length === 0
   const refreshing = corridorsQuery.isFetching && fiatRows.length > 0
 
@@ -337,9 +355,8 @@ export function PayoutCorridorsAdminPanel() {
     setSavingKey(row.key)
     try {
       const routing = buildProviderRouting(provider, row)
-      const targetIds = corridorIdsForCountryCurrency(rows, row.country_code, row.currency_code)
       const updates = await Promise.all(
-        targetIds.map((id) => payoutCorridorsApi.patch(id, { provider_routing: routing })),
+        row.corridorIds.map((id) => payoutCorridorsApi.patch(id, { provider_routing: routing })),
       )
       queryClient.setQueryData<PayoutCorridorAdminRow[]>(officeKeys.payoutCorridors(), (prev) => {
         const list = prev ?? []
@@ -450,8 +467,8 @@ export function PayoutCorridorsAdminPanel() {
                   <TableHead className="w-[220px]">Country</TableHead>
                   <TableHead className="w-[120px]">Currency</TableHead>
                   <TableHead className="w-[140px]">Providers</TableHead>
-                  <TableHead className="w-[160px]">Payout provider</TableHead>
-                  <TableHead className="w-[140px]">Local pay-in</TableHead>
+                  <TableHead className="w-[160px]">Payout</TableHead>
+                  <TableHead className="w-[140px]">Payin</TableHead>
                   <TableHead className="w-[100px] text-right">Live</TableHead>
                 </TableRow>
               </TableHeader>
@@ -467,7 +484,6 @@ export function PayoutCorridorsAdminPanel() {
                         <div className="flex items-center gap-2 min-w-0">
                           <CountryFlag code={r.country_code} size={20} />
                           <span className="truncate font-medium">{r.country_name}</span>
-                          <span className="text-muted-foreground text-xs shrink-0">{r.country_code}</span>
                         </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-sm">
@@ -495,7 +511,7 @@ export function PayoutCorridorsAdminPanel() {
                             className="h-8 w-full max-w-[148px] rounded-md border bg-background px-2 text-xs"
                             value={r.payoutProvider}
                             disabled={savingKey === r.key}
-                            aria-label="Payout provider"
+                            aria-label="Payout"
                             onChange={(e) =>
                               void setPayoutProvider(
                                 r,
@@ -516,16 +532,11 @@ export function PayoutCorridorsAdminPanel() {
                         {!r.payInSupported || !r.payInProvider ? (
                           <span className="text-xs text-muted-foreground">—</span>
                         ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium shrink-0">
-                              {providerBadge(r.payInProvider)}
-                            </span>
-                            <Switch
-                              checked={r.payInEnabled}
-                              disabled={savingKey === r.key}
-                              onCheckedChange={(v) => void setLocalPayIn(r, v)}
-                            />
-                          </div>
+                          <Switch
+                            checked={r.payInEnabled}
+                            disabled={savingKey === r.key}
+                            onCheckedChange={(v) => void setLocalPayIn(r, v)}
+                          />
                         )}
                       </TableCell>
                       <TableCell className="text-right">

@@ -31,6 +31,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/sync-yc-rates",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/process-deposit-splits",
       "schedule": "*/2 * * * *"
     },
