@@ -28,6 +28,7 @@ export interface RecipientData {
   city?: string
   state?: string
   postalCode?: string
+  metadata?: Record<string, unknown> | null
   /** Client-only Easenet snapshot — not written to Supabase. */
   payeeAvatarUrl?: string | null
   payeeAccountKind?: 'personal' | 'business'
@@ -250,9 +251,10 @@ export const recipientService = {
       checkingOrSavings?: "checking" | "savings"
       addressLine1?: string
       city?: string
-      state?: string
-      postalCode?: string
-      /** Client-only Easenet snapshot — not written to Supabase. */
+  state?: string
+  postalCode?: string
+  metadata?: Record<string, unknown> | null
+  /** Client-only Easenet snapshot — not written to Supabase. */
       payeeAvatarUrl?: string | null
       payeeAccountKind?: 'personal' | 'business'
     },

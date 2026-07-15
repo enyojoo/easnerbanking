@@ -86,6 +86,16 @@ export type PayoutQuoteResult = {
   pricingQuoteId: string
   expiresAt: string
   executionModel: "turnkey_workflow"
+  /** Payout rail provider when not Noah. */
+  provider?: "noah" | "yellowcard"
+  /** Yellowcard-specific locked send fields (balance_payout). */
+  yc?: {
+    sequenceId: string
+    sendId?: string
+    channelId: string
+    cryptoAmount: number
+    walletAddress?: string
+  }
 }
 
 const QUOTE_TTL_MS = 15 * 60 * 1000
@@ -188,6 +198,7 @@ export async function buildPayoutQuote(input: {
   const cryptoCurrency = settlementCryptoForBalance(sourceBalanceCurrency)
 
   const countryCode = resolveRecipientPayoutCountry(row)
+  let selectedProviderId = "noah"
   if (countryCode) {
     try {
       const provider = await selectProviderForCorridor(admin, {
@@ -196,6 +207,58 @@ export async function buildPayoutQuote(input: {
         mobileProvider: row.mobile_provider,
         bankName: row.bank_name,
       })
+      selectedProviderId = provider.id
+      if (provider.id === "yellowcard") {
+        const { buildYcPayoutQuote } = await import("@/lib/yellowcard/payout-quote")
+        const { data: userRow } = await admin
+          .from("users")
+          .select(
+            "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+          )
+          .eq("id", input.userId)
+          .maybeSingle()
+        const { getWalletOwnerId } = await import("@/lib/wallet/resolve-wallet-owner")
+        const walletOwnerId = await getWalletOwnerId(admin, "individual", input.userId)
+        const { data: walletRow } = walletOwnerId
+          ? await admin
+              .from("wallet_accounts")
+              .select("address")
+              .eq("wallet_owner_id", walletOwnerId)
+              .eq("ledger_currency", "USD")
+              .eq("asset", "USDC")
+              .eq("status", "active")
+              .maybeSingle()
+          : { data: null }
+        const turnkeyAddr = String(walletRow?.address ?? "").trim()
+        if (!turnkeyAddr) {
+          throw new Error("User Solana wallet is required for Yellowcard payout refund routing.")
+        }
+        return buildYcPayoutQuote({
+          userId: input.userId,
+          customerUID: input.noahCustomerId || input.userId,
+          recipientId: input.recipientId,
+          recipient: row,
+          receiveFiatAmount: input.receiveFiatAmount,
+          sourceBalanceCurrency: input.sourceBalanceCurrency,
+          amountEntryMode: input.amountEntryMode,
+          sendBudget: input.sendBudget,
+          userTurnkeyAddress: turnkeyAddr,
+          senderProfile: {
+            residenceCountry: userRow?.residence_country,
+            kycIdType: userRow?.kyc_id_type,
+            kycIdNumber: userRow?.kyc_id_number,
+            ngLocalIdType: userRow?.ng_local_id_type,
+            ngLocalIdNumber: userRow?.ng_local_id_number,
+            fullName: userRow?.full_name,
+            phone: userRow?.phone,
+            email: userRow?.email,
+            dateOfBirth: userRow?.date_of_birth,
+            addressStreet: userRow?.kyc_address_street,
+            addressCity: userRow?.kyc_address_city,
+            addressCountry: userRow?.kyc_address_country,
+          },
+        })
+      }
       if (provider.id !== "noah") {
         throw new Error(`Payout provider "${provider.id}" is not wired for quotes yet.`)
       }
@@ -208,6 +271,7 @@ export async function buildPayoutQuote(input: {
       throw e
     }
   }
+  void selectedProviderId
 
   const runPrepare = (fiatAmount: number) =>
     prepareSellFromRecipientRow({

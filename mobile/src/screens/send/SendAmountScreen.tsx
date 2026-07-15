@@ -44,10 +44,9 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
-import { useNoahSendExchangeRates, useManualSendCatalog, useManualQuote, prefetchNoahSendExchangeRates } from '../../hooks/queries'
+import { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from '../../hooks/queries'
 import { useQueryClient } from '@tanstack/react-query'
-import { pickDefaultManualPayInOption } from '@easner/shared'
-import { resolveManualPayInNavigation } from '../../lib/manual-send-navigation'
+import { useYcCrossBorderFlow, type YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { useAuth } from '../../contexts/AuthContext'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
 import { generateTransactionId } from '../../lib/transactionId'
@@ -127,11 +126,6 @@ function initialAmountEntryModeFromRouteParams(
   return params?.initialAmountEntryMode === 'send' ? 'send' : 'receive'
 }
 
-function isManualStablecoinCurrencyCode(code: string): boolean {
-  const c = code.trim().toUpperCase()
-  return c === 'USDC' || c === 'USDT' || c === 'STABLE'
-}
-
 // Landmark/Bank Icon Component
 function LandmarkIcon({ size = 24, color = colors.text.primary }: { size?: number; color?: string }) {
   return (
@@ -171,8 +165,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const preferredBalanceCurrencyFromRoute = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
   const selectedPaymentMethodFromRoute = (route.params as any)?.selectedPaymentMethod as
     | 'balance'
-    | 'linkBank'
-    | 'virtualBank'
     | 'otherCurrency'
     | undefined
   const selectedOtherCurrencyFromRoute = (route.params as any)?.selectedOtherCurrency as string | undefined
@@ -204,7 +196,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [showPurposePicker, setShowPurposePicker] = useState(false)
   const [selectedBalanceCurrency, setSelectedBalanceCurrency] = useState<string>('USD')
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'balance' | 'linkBank' | 'virtualBank' | 'otherCurrency'>(
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'balance' | 'otherCurrency'>(
     selectedPaymentMethodFromRoute ?? 'balance'
   )
   const [selectedOtherCurrency, setSelectedOtherCurrency] = useState<string | null>(
@@ -297,49 +289,39 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     receiveCurrency: isEasetagRecipient ? selectedBalanceCurrency : recipient?.currency,
   })
 
-  const { data: manualCatalog } = useManualSendCatalog(true)
-  const manualSendAvailable = (manualCatalog?.sendCurrencies?.length ?? 0) > 0
-  /** Easetag P2P is balance-only; manual pay-in rails are not supported. */
-  const showManualSendPaymentOptions = manualSendAvailable && !isEasetagRecipient
+  const ycFlow = useYcCrossBorderFlow({
+    recipientId: recipient?.id ?? null,
+    enabled: !isEasetagRecipient && !isWalletRecipient,
+    receiveCurrency: recipient?.currency || 'USD',
+    amountEntryMode,
+    enteredAmount,
+  })
+
+  const showThroughLocalCurrency = ycFlow.available && !isEasetagRecipient
 
   const otherCurrencies = useMemo(() => {
-    return manualCatalog?.sendCurrencyOptions ?? []
-  }, [manualCatalog?.sendCurrencyOptions])
-
-  const paymentMethodIcons: { [key: string]: any } = {
-    mtn: require('../../../assets/flags/mtn.png'),
-    mpesa: require('../../../assets/flags/mpesa.png'),
-    sbp: require('../../../assets/flags/sbp.png'),
-  }
+    if (!showThroughLocalCurrency || !ycFlow.payInCurrency) return []
+    return [{ code: ycFlow.payInCurrency, name: ycFlow.payInCurrency }]
+  }, [showThroughLocalCurrency, ycFlow.payInCurrency])
 
   const currencyPaymentMethods = useMemo(() => {
-    const by = manualCatalog?.paymentMethodsByCurrency ?? {}
-    const out: Record<
-      string,
-      Array<{ code: string; name: string; type?: string; icon?: string; displayLogoUrl?: string | null }>
-    > = {}
-    for (const code of manualCatalog?.sendCurrencies ?? []) {
-      const opts = by[code] ?? []
-      if (opts.length > 0) {
-        out[code] = opts.map((o) => ({
-          code: o.id,
-          name: o.name,
-          type: o.type,
-          displayLogoUrl: o.display_logo_url,
-        }))
-      }
+    if (!showThroughLocalCurrency || !ycFlow.payInCurrency) return {}
+    return {
+      [ycFlow.payInCurrency]: [
+        { code: 'bank_transfer', name: 'Bank Transfer', type: 'bank_account' },
+        { code: 'mobile_money', name: 'Mobile Money', type: 'mobile_money' },
+      ],
     }
-    return out
-  }, [manualCatalog?.paymentMethodsByCurrency, manualCatalog?.sendCurrencies])
+  }, [showThroughLocalCurrency, ycFlow.payInCurrency])
 
   useEffect(() => {
-    if (manualSendAvailable) return
+    if (showThroughLocalCurrency) return
     if (selectedPaymentMethod === 'otherCurrency' || selectedOtherCurrency || selectedOtherPaymentMethod) {
       setSelectedPaymentMethod('balance')
       setSelectedOtherCurrency(null)
       setSelectedOtherPaymentMethod(null)
     }
-  }, [manualSendAvailable, selectedPaymentMethod, selectedOtherCurrency, selectedOtherPaymentMethod])
+  }, [showThroughLocalCurrency, selectedPaymentMethod, selectedOtherCurrency, selectedOtherPaymentMethod])
 
   useEffect(() => {
     if (!isEasetagRecipient) return
@@ -358,27 +340,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     if (selectedPaymentMethod !== 'otherCurrency' || !selectedOtherCurrency) return
     const opts = currencyPaymentMethods[selectedOtherCurrency] ?? []
     if (opts.length === 0) return
-    const mapped = opts.map((o) => ({
-      id: o.code,
-      currency: selectedOtherCurrency,
-      name: o.name,
-      type: o.type ?? 'bank_account',
-      is_default: false,
-    }))
-    const def = pickDefaultManualPayInOption(
-      manualCatalog?.paymentMethodsByCurrency?.[selectedOtherCurrency] ??
-        mapped.map((m) => ({ ...m, is_default: false })),
-    )
-    if (def && !selectedOtherPaymentMethod) {
-      setSelectedOtherPaymentMethod(def.id)
+    if (!selectedOtherPaymentMethod) {
+      setSelectedOtherPaymentMethod(opts[0].code)
     }
-  }, [
-    selectedPaymentMethod,
-    selectedOtherCurrency,
-    currencyPaymentMethods,
-    manualCatalog,
-    selectedOtherPaymentMethod,
-  ])
+  }, [selectedPaymentMethod, selectedOtherCurrency, currencyPaymentMethods, selectedOtherPaymentMethod])
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -557,26 +522,21 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     exchangeRatesFromContext,
   ])
 
-  const manualQuoteEnabled =
-    !isEasetagRecipient &&
-    selectedPaymentMethod === 'otherCurrency' &&
-    !!selectedOtherCurrency &&
-    showCrossCurrencyExchangeUi &&
-    enteredAmount > 0
-
-  const { data: manualQuote, isFetching: manualQuoteFetching } = useManualQuote({
-    enabled: manualQuoteEnabled,
-    direction: amountEntryMode,
-    amount: enteredAmount,
-    fromCurrency: sendCurrency,
-    toCurrency: receiveCurrency,
-  })
-
   const needsNoahRateForSend =
     selectedPaymentMethod === 'balance' &&
     !isEasetagRecipient &&
     !isWalletRecipient &&
     showCrossCurrencyExchangeUi
+
+  const ycQuoteEnabled =
+    !isEasetagRecipient &&
+    showThroughLocalCurrency &&
+    selectedPaymentMethod === 'otherCurrency' &&
+    !!selectedOtherCurrency &&
+    showCrossCurrencyExchangeUi &&
+    enteredAmount > 0
+
+  const ycRateLoading = ycQuoteEnabled && ycFlow.ratesLoading && !ycFlow.customerRate
 
   const walletMinReceive = useMemo(() => {
     if (!isWalletRecipient || !resolvedWalletNetwork) {
@@ -598,25 +558,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !hasNoahRateForPair &&
     !noahRatesFetched
 
-  const manualQuoteLoading = manualQuoteEnabled && !manualQuote && manualQuoteFetching
-
   const exchangePreviewReady =
     !showCrossCurrencyExchangeUi ||
     isWalletRecipient ||
-    (selectedPaymentMethod === 'otherCurrency'
-      ? !manualQuoteEnabled || Boolean(manualQuote)
-      : !needsNoahRateForSend || hasNoahRateForPair)
+    (ycQuoteEnabled ? Boolean(ycFlow.customerRate) : !needsNoahRateForSend || hasNoahRateForPair)
 
   const flowAmounts = useMemo(() => {
     if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) {
       return { sendAmount: enteredAmount, receiveAmount: enteredAmount, forwardRate: 1 }
     }
-    if (selectedPaymentMethod === 'otherCurrency' && manualQuote) {
-      return {
-        sendAmount: manualQuote.sendAmount,
-        receiveAmount: manualQuote.receiveAmount,
-        forwardRate: manualQuote.exchangeRate,
-      }
+    if (selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency && ycFlow.customerRate) {
+      return ycFlow.preview
     }
     if (!hasNoahRateForPair) {
       const fallback = convertNoahSendFlowAmounts({
@@ -647,7 +599,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     receiveCurrency,
     noahRateMap,
     selectedPaymentMethod,
-    manualQuote,
+    showThroughLocalCurrency,
+    ycFlow.preview,
+    ycFlow.customerRate,
     hasNoahRateForPair,
   ])
 
@@ -670,13 +624,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     [recipient, isEasetagRecipient, payoutHints, receiveCurrency, payoutRail],
   )
 
-  const manualFxRateMap = useMemo(
-    () => exchangeRatesToRateMap(manualCatalog?.exchangeRates ?? []),
-    [manualCatalog?.exchangeRates],
-  )
+  const ycFxRateMap = useMemo(() => {
+    const from = ycFlow.payInCurrency?.trim().toUpperCase()
+    const to = receiveCurrency.trim().toUpperCase()
+    if (!from || !to || !ycFlow.customerRate) return {}
+    return { [`${from}_${to}`]: ycFlow.customerRate }
+  }, [ycFlow.payInCurrency, ycFlow.customerRate, receiveCurrency])
 
   const payoutEnforcementRateMap =
-    selectedPaymentMethod === 'otherCurrency' ? manualFxRateMap : noahRateMap
+    selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency ? ycFxRateMap : noahRateMap
 
   const payoutMinEnforcementEnabled =
     Boolean(recipient) &&
@@ -698,12 +654,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendCurrency,
     receiveCurrency,
     rateMap: payoutEnforcementRateMap,
-    manualQuote: manualQuote ?? null,
-    useManualQuote:
-      selectedPaymentMethod === 'otherCurrency' &&
-      Boolean(selectedOtherCurrency) &&
-      showCrossCurrencyExchangeUi &&
-      Boolean(manualQuote),
     onApplyEnteredAmount: (amount) => {
       setSendAmount(formatAmount(amount.toFixed(2)))
     },
@@ -731,11 +681,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     },
   })
 
-  const feeAmount =
-    selectedPaymentMethod === 'otherCurrency' && manualQuote ? manualQuote.feeAmount : 0
+  const feeAmount = 0
   const totalAmount =
-    selectedPaymentMethod === 'otherCurrency' && manualQuote
-      ? manualQuote.totalAmount
+    selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency
+      ? sendingAmount
       : sendingAmount
 
   const walletQuoteStashMeta = useMemo(
@@ -793,13 +742,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const ctaTopPadding = showVerificationNotice ? spacing[2] : spacing[2]
   const verificationBlocksSend =
     receiveAmount > 0 &&
-    (selectedPaymentMethod === 'balance' ||
-    selectedPaymentMethod === 'linkBank' ||
-    selectedPaymentMethod === 'virtualBank'
+    (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency'
       ? !tier1Ok
-      : selectedPaymentMethod === 'otherCurrency'
-        ? !tier1Ok
-        : false)
+      : false)
 
   const needsBackgroundPayoutQuote =
     selectedPaymentMethod === 'balance' &&
@@ -922,7 +867,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     exchangeInfoAmountPositive &&
     showCrossCurrencyExchangeUi &&
     !exchangePreviewReady &&
-    (noahRatesLoading || manualQuoteLoading)
+    (noahRatesLoading || ycRateLoading)
 
   const displayBalanceForSource =
     selectedPaymentMethod === 'balance'
@@ -948,8 +893,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       )
       return `${selectedOtherCurrency} • ${method?.name ?? selectedOtherPaymentMethod}`
     }
-    if (selectedPaymentMethod === 'linkBank') return 'Link Bank'
-    if (selectedPaymentMethod === 'virtualBank') return 'Bank Transfer'
     if (selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency) {
       return `${selectedOtherCurrency} - Select Method`
     }
@@ -1208,66 +1151,29 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         return
       }
 
-      if (selectedPaymentMethod === 'linkBank') {
-        const transactionId = generateTransactionId()
-        navigation.navigate('OpenBanking' as never, {
-          transactionId: transactionId,
-          sendAmount: calculatedSendingAmount,
-          receiveAmount: receiveAmountValue,
-          sendCurrency: selectedBalanceCurrency,
-          receiveCurrency: recipient.currency,
-          recipient: recipient,
-          feeAmount: calculatedFeeAmount,
-          totalAmount: calculatedTotalAmount,
-        } as never)
-      } else if (selectedPaymentMethod === 'virtualBank') {
-        const transactionId = generateTransactionId()
-        navigation.navigate('VirtualBankAccount' as never, {
-          transactionId: transactionId,
-          sendAmount: calculatedSendingAmount,
-          receiveAmount: receiveAmountValue,
-          sendCurrency: selectedBalanceCurrency,
-          receiveCurrency: recipient.currency,
-          recipient: recipient,
-          feeAmount: calculatedFeeAmount,
-          totalAmount: calculatedTotalAmount,
-        } as never)
       } else if (
         selectedPaymentMethod === 'otherCurrency' &&
         selectedOtherCurrency &&
-        selectedOtherPaymentMethod
+        selectedOtherPaymentMethod &&
+        showThroughLocalCurrency
       ) {
-        const transactionId = generateTransactionId()
-        const pmOption =
-          manualCatalog?.paymentMethodsByCurrency?.[selectedOtherCurrency]?.find(
-            (o) => o.id === selectedOtherPaymentMethod,
-          ) ??
-          currencyPaymentMethods[selectedOtherCurrency]?.find(
-            (m) => m.code === selectedOtherPaymentMethod,
-          )
-        const pmType =
-          pmOption && 'type' in pmOption
-            ? String((pmOption as { type?: string }).type ?? '')
-            : ''
-        const screen =
-          manualCatalog && pmType
-            ? resolveManualPayInNavigation(pmType)
-            : selectedOtherPaymentMethod === 'sbp'
-              ? 'OpenBanking'
-              : selectedOtherPaymentMethod === 'bankTransfer'
-                ? 'VirtualBankAccount'
-                : 'MobileMoney'
-        navigation.navigate(screen as never, {
-          transactionId,
-          sendAmount: calculatedSendingAmount,
-          receiveAmount: receiveAmountValue,
-          sendCurrency,
-          receiveCurrency: recipient.currency,
+        const rail = (selectedOtherPaymentMethod === 'mobile_money'
+          ? 'mobile_money'
+          : 'bank_transfer') as YcPayInRail
+        navigation.navigate('SendConfirm' as never, {
           recipient,
-          paymentMethodId: selectedOtherPaymentMethod,
-          feeAmount: calculatedFeeAmount,
-          totalAmount: calculatedTotalAmount,
-          manualQuote: manualQuote ?? null,
+          paymentMethod: 'otherCurrency',
+          ycPayInCurrency: selectedOtherCurrency,
+          ycPayInRail: rail,
+          receiveAmountValue,
+          receiveCurrency: recipient.currency,
+          amountEntryMode,
+          amountScreenSendAmount: navAmounts.sendAmount,
+          calculatedSendingAmount: sendingAmount,
+          calculatedTotalAmount: sendingAmount,
+          transactionId: generateTransactionId(),
+          ...(note.trim() ? { note: note.trim() } : {}),
+          ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
         } as never)
       }
     } catch (e) {
@@ -1433,7 +1339,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       needsCryptoRateForSend={false}
                       noahRatesLoading={noahRatesLoading}
                       cryptoRatesLoading={false}
-                      manualQuoteLoading={manualQuoteLoading}
+                      manualQuoteLoading={ycRateLoading}
                       hasNoahRateForPair={hasNoahRateForPair}
                       hasValidCryptoRateForPair
                       isContinueLoading={isContinueLoading}
@@ -1567,26 +1473,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   <View style={styles.flagContainer}>
                     {selectedPaymentMethod === 'balance' ? (
                       <CurrencyFlag currency={selectedBalanceCurrency} size={24} style={styles.flagImage} />
-                    ) : selectedPaymentMethod === 'linkBank' ? (
-                      <Link size={20} color={colors.text.primary} strokeWidth={2} />
-                    ) : selectedPaymentMethod === 'virtualBank' ? (
-                      <LandmarkIcon size={20} color={colors.text.primary} />
                     ) : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency ? (
-                      isManualStablecoinCurrencyCode(selectedOtherCurrency) ? (
-                          getTokenIconUrl(selectedOtherCurrency) || getTokenIconUrl(selectedOtherPaymentMethod ?? '') ? (
-                            <CachedImage
-                              uri={
-                                getTokenIconUrl(selectedOtherCurrency) ??
-                                getTokenIconUrl(selectedOtherPaymentMethod ?? '')!
-                              }
-                              style={styles.flagImage}
-                              contentFit="cover"
-                            />
-                          ) : (
-                            <Coins size={20} color={colors.text.primary} strokeWidth={2} />
-                          )
-                        )
-                        : <CurrencyFlag currency={selectedOtherCurrency} size={24} style={styles.flagImage} />
+                      <CurrencyFlag currency={selectedOtherCurrency} size={24} style={styles.flagImage} />
                     ) : null}
               </View>
                   {selectedPaymentMethod === 'balance' ? (
@@ -1595,16 +1483,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     </Text>
                   ) : (
                     <Text style={styles.balanceSelectorText} numberOfLines={1}>
-                      {selectedPaymentMethod === 'linkBank'
-                        ? 'Link Bank'
-                        : selectedPaymentMethod === 'virtualBank'
-                          ? 'Bank Transfer'
-                          : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
-                            ? currencyPaymentMethods[selectedOtherCurrency]?.find((m) => m.code === selectedOtherPaymentMethod)
-                                ?.name || 'Select Method'
-                            : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
-                              ? `${selectedOtherCurrency} - Select Method`
-                              : 'Select Method'}
+                      {selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
+                        ? currencyPaymentMethods[selectedOtherCurrency]?.find((m) => m.code === selectedOtherPaymentMethod)
+                            ?.name || 'Select Method'
+                        : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
+                          ? `${selectedOtherCurrency} - Select Method`
+                          : 'Select Method'}
                     </Text>
                   )}
                   <ChevronDown size={16} color={colors.text.primary} strokeWidth={2} />
@@ -1877,9 +1761,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   })}
                 </View>
 
-                {showManualSendPaymentOptions ? (
+                {showThroughLocalCurrency ? (
                 <View style={styles.paymentSection}>
-                  <Text style={styles.paymentSectionTitle}>Through Another Currency</Text>
+                  <Text style={styles.paymentSectionTitle}>Through Local Currency</Text>
                   
                   {/* Currency Selector */}
                   {!selectedOtherCurrency ? (
@@ -1955,26 +1839,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                                   uri={method.displayLogoUrl}
                                   style={styles.flagImageSmall}
                                   contentFit="contain"
-                                />
-                              ) : isManualStablecoinCurrencyCode(selectedOtherCurrency) ? (
-                                getTokenIconUrl(selectedOtherCurrency) || getTokenIconUrl(method.code) ? (
-                                  <CachedImage
-                                    uri={
-                                      getTokenIconUrl(selectedOtherCurrency) ??
-                                      getTokenIconUrl(method.code)!
-                                    }
-                                    style={styles.flagImageSmall}
-                                    contentFit="cover"
-                                  />
-                                ) : (
-                                  <Coins size={16} color={colors.text.primary} strokeWidth={2} />
-                                )
-                              ) : method.icon && paymentMethodIcons[method.icon] ? (
-                                <CachedImage
-                                  source={paymentMethodIcons[method.icon]}
-                                  style={styles.flagImageSmall}
-                                  contentFit="cover"
-                                  prefetch={false}
                                 />
                               ) : (
                                 <LandmarkIcon size={16} color={colors.text.primary} />

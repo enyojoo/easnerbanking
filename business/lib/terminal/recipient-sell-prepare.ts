@@ -36,6 +36,7 @@ export type RecipientSellPrepareRow = {
   sort_code?: string | null
   swift_bic?: string | null
   email?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 /** Quote-time fields from send amount screen (not always on recipient row). */

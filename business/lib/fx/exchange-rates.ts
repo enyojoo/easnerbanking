@@ -1,11 +1,39 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { getFxRatesRefreshTtlMs, syncP2pExchangeRatesSafe } from "@/lib/fx/p2p-rate-sync"
+import {
+  isReportingFxPair,
+  REPORTING_FX_CURRENCY_CODES,
+} from "@/lib/fx/reporting-fx"
+import { getFxRatesRefreshTtlMs, syncReportingFxRatesSafe } from "@/lib/fx/p2p-rate-sync"
 
 export type ExchangeRateRow = {
   from_currency: string
   to_currency: string
   rate: number
   as_of: string
+}
+
+export async function listReportingFxRates(admin: SupabaseClient): Promise<ExchangeRateRow[]> {
+  const codes = [...REPORTING_FX_CURRENCY_CODES]
+  const { data, error } = await admin
+    .from("exchange_rates")
+    .select("from_currency,to_currency,rate,as_of")
+    .eq("status", "active")
+    .in("from_currency", codes)
+    .in("to_currency", codes)
+
+  if (error) {
+    console.warn("[exchange_rates] list reporting:", error.message)
+    return []
+  }
+
+  return (data ?? [])
+    .map((row) => ({
+      from_currency: String(row.from_currency ?? "").toUpperCase(),
+      to_currency: String(row.to_currency ?? "").toUpperCase(),
+      rate: Number(row.rate ?? 0),
+      as_of: String(row.as_of ?? new Date().toISOString()),
+    }))
+    .filter((row) => isReportingFxPair(row.from_currency, row.to_currency) && row.rate > 0)
 }
 
 export async function listExchangeRates(admin: SupabaseClient): Promise<ExchangeRateRow[]> {
@@ -50,7 +78,7 @@ export function triggerExchangeRatesBackgroundRefresh(
   if (backgroundSyncInFlight) return
   backgroundSyncInFlight = (async () => {
     try {
-      await syncP2pExchangeRatesSafe()
+      await syncReportingFxRatesSafe()
     } catch {
       // Best-effort background refresh only.
     } finally {
@@ -84,7 +112,7 @@ export async function ensureExchangeRatesFresh(admin: SupabaseClient): Promise<E
     return current
   }
 
-  const synced = await syncP2pExchangeRatesSafe()
+  const synced = await syncReportingFxRatesSafe()
   if (!synced.ok) return current
   return listExchangeRates(admin)
 }

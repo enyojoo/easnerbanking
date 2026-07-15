@@ -42,6 +42,11 @@ export function mapPayoutQuoteToFlowState(
       ...(q.noah.scheduleFee != null ? { scheduleFee: q.noah.scheduleFee } : {}),
       ...(q.noah.prepareChannelFee != null ? { prepareChannelFee: q.noah.prepareChannelFee } : {}),
       ...(q.noah.quoteNoahMid != null ? { quoteNoahMid: q.noah.quoteNoahMid } : {}),
+      ...(q.provider ? { provider: q.provider } : {}),
+      ...(q.yc?.sequenceId ? { ycSequenceId: q.yc.sequenceId } : {}),
+      ...(q.yc?.sendId ? { ycSendId: q.yc.sendId } : {}),
+      ...(q.yc?.walletAddress ? { ycWalletAddress: q.yc.walletAddress } : {}),
+      ...(q.yc?.cryptoAmount != null ? { ycCryptoAmount: q.yc.cryptoAmount } : {}),
     },
   }
 }

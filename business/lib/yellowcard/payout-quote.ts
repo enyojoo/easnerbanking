@@ -1,0 +1,224 @@
+import { randomUUID } from "crypto"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { findYcRate, listYcRates } from "@/lib/fx/yc-rates"
+import {
+  computeYcBalancePayoutPricing,
+  normalizeGlobalPayoutQuoteReceiveAmount,
+  normalizePayoutReceiveAmount,
+  normalizePayoutReceiveAmountForCurrency,
+  validateYcRecipientForCorridor,
+  YC_QUOTE_TTL_MS,
+} from "@easner/shared"
+import {
+  resolveRecipientPayoutCountry,
+  type RecipientSellPrepareRow,
+} from "@/lib/terminal/recipient-sell-prepare"
+import { resolveYcSendChannelId } from "@/lib/payout-providers/yellowcard-provider"
+import { mapRecipientToYcSend } from "@/lib/yellowcard/map-recipient-to-yc-send"
+import { submitYcSend, type YcSendSubmitResult } from "@/lib/yellowcard/send-submit"
+import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
+import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
+
+/**
+ * Build a YC balance payout quote by locking a POST /send (forceAccept) response.
+ * Uses yellowcard_rates customer rate + POST response fees.
+ */
+export async function buildYcPayoutQuote(input: {
+  userId: string
+  customerUID: string
+  recipientId?: string
+  recipient?: RecipientSellPrepareRow
+  receiveFiatAmount: number
+  sourceBalanceCurrency: string
+  amountEntryMode?: "send" | "receive"
+  sendBudget?: number
+  userTurnkeyAddress: string
+  senderProfile: Parameters<typeof buildYcKycPersonMetadata>[0]["profile"]
+}): Promise<PayoutQuoteResult & { yc: { sendId?: string; channelId: string; cryptoAmount: number; walletAddress?: string } }> {
+  const receiveAmountRaw = normalizePayoutReceiveAmount(Number(input.receiveFiatAmount))
+  if (!Number.isFinite(receiveAmountRaw) || receiveAmountRaw <= 0) {
+    throw new Error("receiveFiatAmount must be positive.")
+  }
+  const sourceBalanceCurrency = input.sourceBalanceCurrency.trim().toUpperCase()
+  if (sourceBalanceCurrency !== "USD") {
+    throw new Error("Yellowcard balance payout supports USD source balance only.")
+  }
+
+  const admin = createSupabaseAdmin()
+  let row = input.recipient
+  if (input.recipientId) {
+    const { data, error } = await admin
+      .from("recipients")
+      .select("*")
+      .eq("id", input.recipientId)
+      .eq("user_id", input.userId)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    if (!data) throw new Error("Recipient not found.")
+    row = data as RecipientSellPrepareRow
+  }
+  if (!row) throw new Error("recipientId or recipient row is required.")
+
+  const receiveCurrency = String(row.currency || "").trim().toUpperCase()
+  const countryCode = resolveRecipientPayoutCountry(row)
+  if (!countryCode) throw new Error("Recipient country is required for Yellowcard payout.")
+
+  const rail =
+    row.mobile_provider || String(row.bank_name || "").toLowerCase().includes("mobile money")
+      ? ("mobile_money" as const)
+      : ("bank_transfer" as const)
+
+  const channelId = await resolveYcSendChannelId({
+    countryCode,
+    currencyCode: receiveCurrency,
+    rail,
+  })
+  if (!channelId) {
+    throw new Error("No Yellowcard send channel for this corridor.")
+  }
+
+  const { data: corridorRow } = await admin
+    .from("payout_corridors")
+    .select("fields_schema")
+    .eq("country_code", countryCode)
+    .eq("currency_code", receiveCurrency)
+    .eq("rail", rail)
+    .maybeSingle()
+
+  const ycRecipientCheck = validateYcRecipientForCorridor({
+    countryCode,
+    currencyCode: receiveCurrency,
+    fieldsSchema: corridorRow?.fields_schema,
+    row,
+  })
+  if (!ycRecipientCheck.ok) {
+    throw new Error(ycRecipientCheck.message)
+  }
+
+  const rates = await listYcRates(admin, { destinations: [receiveCurrency], status: "active" })
+  // Prefer USD→local cross row; fall back to local→USDC easner_buy as local per USD
+  let customerRate =
+    findYcRate(rates, "USD", receiveCurrency)?.rate ??
+    findYcRate(rates, receiveCurrency, "USDC")?.easner_buy ??
+    findYcRate(rates, receiveCurrency, "USDC")?.rate ??
+    0
+  if (!customerRate || customerRate <= 0) {
+    throw new Error(
+      `Exchange rate for USD → ${receiveCurrency} is unavailable. Try again shortly.`,
+    )
+  }
+
+  const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
+  const sendBudget =
+    input.sendBudget != null && Number.isFinite(input.sendBudget) && input.sendBudget > 0
+      ? input.sendBudget
+      : undefined
+
+  const quoteReceiveAmount = normalizeGlobalPayoutQuoteReceiveAmount({
+    amountEntryMode,
+    receiveFiatAmount: receiveAmountRaw,
+    sendBudget,
+    customerRate,
+    receiveCurrency,
+    normalizeReceive: normalizePayoutReceiveAmountForCurrency,
+  })
+
+  const recipientMapped = await mapRecipientToYcSend(row)
+  const sender = buildYcKycPersonMetadata({
+    profile: input.senderProfile,
+    requireNgIds: true,
+  })
+
+  const sequenceId = `yc_quote_${randomUUID()}`
+  const sendRes: YcSendSubmitResult = await submitYcSend({
+    sequenceId,
+    customerUID: input.customerUID,
+    customerType: "retail",
+    channelId,
+    currency: receiveCurrency,
+    country: countryCode,
+    localAmount: quoteReceiveAmount,
+    refundMode: "balance_payout",
+    userTurnkeyAddress: input.userTurnkeyAddress,
+    sender,
+    destination: recipientMapped.destination,
+    sendExtras: recipientMapped.root,
+    reason: "balance_payout_quote",
+  })
+
+  const cryptoAmount = Number(sendRes.settlementInfo?.cryptoAmount ?? sendRes.convertedAmount ?? 0)
+  if (!Number.isFinite(cryptoAmount) || cryptoAmount <= 0) {
+    throw new Error("Yellowcard send response missing cryptoAmount.")
+  }
+
+  const pricing = computeYcBalancePayoutPricing({
+    receiveAmount: quoteReceiveAmount,
+    customerRate,
+    ycFloorUsd: cryptoAmount,
+    networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
+    serviceFeeAmountUsd: Number(sendRes.serviceFeeAmountUSD ?? 0),
+  })
+
+  const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
+  const quoteId = String(sendRes.id ?? sequenceId)
+
+  return {
+    receiveAmount: quoteReceiveAmount,
+    receiveCurrency,
+    customerPrincipal: pricing.customerPrincipal,
+    sendAmount: pricing.customerPrincipal,
+    sendCurrency: sourceBalanceCurrency,
+    totalDebited: pricing.totalDebited,
+    channelCost: pricing.channelCost,
+    marginAmount: pricing.marginAmount,
+    processingFee: pricing.processingFee,
+    displayChannelCost: pricing.displayChannelCost,
+    channelId,
+    noah: {
+      totalFee: pricing.channelCost,
+      feeCurrency: "USD",
+      cryptoAuthorizedAmount: String(cryptoAmount),
+      noahFloor: String(cryptoAmount),
+      noahSendAmount: String(cryptoAmount),
+      cryptoCurrency: "USDC",
+      formSessionId: quoteId,
+      rate: customerRate,
+      noahMid: customerRate / 0.995,
+      effectiveRate: customerRate,
+      marginCaptureMode: "surplus_send",
+      channelCost: pricing.channelCost,
+      marginAmount: pricing.marginAmount,
+      customerPrincipal: pricing.customerPrincipal,
+    },
+    easner: {
+      quoteId,
+      expiresAt,
+      providerRate: customerRate,
+      effectiveRate: customerRate,
+      destinationAmount: quoteReceiveAmount,
+      fxMarkupBps: 50,
+      payinFeeAmount: 0,
+      payoutFeeAmount: pricing.channelCost,
+      totalFeeAmount: pricing.marginAmount + pricing.channelCost,
+      sourceAmount: pricing.customerPrincipal,
+      sourceCurrency: sourceBalanceCurrency,
+      destinationCurrency: receiveCurrency,
+      pricingTotals: {
+        total_easner_fee: pricing.marginAmount,
+        total_user_fee: pricing.marginAmount + pricing.channelCost,
+        total_recipient_amount: quoteReceiveAmount,
+      },
+    },
+    pricingQuoteId: quoteId,
+    expiresAt,
+    executionModel: "turnkey_workflow",
+    provider: "yellowcard",
+    yc: {
+      sequenceId,
+      sendId: sendRes.id,
+      channelId,
+      cryptoAmount,
+      walletAddress: sendRes.settlementInfo?.walletAddress,
+    },
+  }
+}

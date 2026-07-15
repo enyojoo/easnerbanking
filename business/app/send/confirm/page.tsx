@@ -41,9 +41,18 @@ import {
 } from "@/lib/wallet-send/map-wallet-quote-to-flow"
 import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
+import { residenceCountryFromPayInCurrency } from "@/hooks/use-yc-cross-border-flow"
 import { ArrowLeft, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY_LOCAL = SEND_FLOW_STATE_KEY
+
+function isYcCrossBorderFlow(state: SendFlowState | null): boolean {
+  return (
+    state?.paymentMethod === "otherCurrency" &&
+    Boolean(state.otherCurrency) &&
+    Boolean(state.otherPaymentMethod)
+  )
+}
 
 function isEasenetRecipient(recipient: Beneficiary): boolean {
   return Boolean(recipient.payeeEasetag?.trim())
@@ -78,7 +87,10 @@ export default function SendConfirmPage() {
   const [authorizeError, setAuthorizeError] = useState<string | null>(null)
   const [payoutQuoteError, setPayoutQuoteError] = useState<string | null>(null)
   const [walletQuoteError, setWalletQuoteError] = useState<string | null>(null)
+  const [ycQuoteError, setYcQuoteError] = useState<string | null>(null)
   const displayIdFallbackRef = useRef<string | null>(null)
+
+  const isYcCrossBorder = isYcCrossBorderFlow(state)
 
   const displayTransactionId = useMemo(() => {
     const s = state?.transactionId?.trim()
@@ -117,7 +129,10 @@ export default function SendConfirmPage() {
     : null
 
   const needPinChallenge =
-    !!user?.id && isLoginPinModuleAvailable() && hasPin(user.id)
+    !isYcCrossBorder &&
+    !!user?.id &&
+    isLoginPinModuleAvailable() &&
+    hasPin(user.id)
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -134,6 +149,13 @@ export default function SendConfirmPage() {
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as SendFlowState
+        if (parsed.paymentMethod === "otherCurrency" && parsed.otherCurrency) {
+          setState({
+            ...parsed,
+            recipient: coerceBeneficiaryEasenetDisplay(parsed.recipient),
+          })
+          return
+        }
         if (parsed.paymentMethod && parsed.paymentMethod !== "balance") {
           router.replace("/send")
           return
@@ -162,7 +184,7 @@ export default function SendConfirmPage() {
   }, [profileLoading, tier1Complete, state, router])
 
   useEffect(() => {
-    if (!state || isEasenetRecipient(state.recipient) || isWalletRecipient(state.recipient) || !(state.amount > 0))
+    if (!state || isYcCrossBorderFlow(state) || isEasenetRecipient(state.recipient) || isWalletRecipient(state.recipient) || !(state.amount > 0))
       return
     if (isPayoutQuoteFresh(state.payoutQuote, state.amount, state.recipient.id)) return
     let cancelled = false
@@ -222,6 +244,85 @@ export default function SendConfirmPage() {
   }, [state?.recipient.id, state?.amount, state?.sendAmount, state?.amountEntryMode, state?.sendCurrency, state?.note, state?.paymentPurpose, businessId])
 
   useEffect(() => {
+    if (!state || !isYcCrossBorderFlow(state) || !(state.amount > 0)) return
+    if (state.ycCrossBorder?.transferId) return
+    let cancelled = false
+    setYcQuoteError(null)
+    const payInCurrency = state.otherCurrency!.toUpperCase()
+    const payInCountry = residenceCountryFromPayInCurrency(payInCurrency)
+    const payInRail =
+      state.otherPaymentMethod === "mobile_money" ? "mobile_money" : "bank_transfer"
+    if (!payInCountry) {
+      setYcQuoteError("Pay-in country could not be resolved.")
+      return
+    }
+    void (async () => {
+      try {
+        const res = await fetchWithSession("/api/yellowcard/cross-border/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientId: state.recipient.id,
+            receiveAmount: state.amount,
+            payInCurrency,
+            payInCountry,
+            payInRail,
+          }),
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          error?: string
+          transferId?: string
+          transactionId?: string
+          localPayIn?: number
+          customerRate?: number
+          processingFee?: number
+          bankInfo?: Record<string, unknown> | null
+          expiresAt?: string
+          payInNotice?: string
+        }
+        if (!res.ok || !data.ok || !data.transferId) {
+          throw new Error(data.error || "Could not load cross-border quote")
+        }
+        if (cancelled) return
+        const next: SendFlowState = {
+          ...state,
+          sendAmount: data.localPayIn ?? state.sendAmount,
+          sendCurrency: payInCurrency,
+          totalAmount: data.localPayIn ?? state.totalAmount,
+          transactionId: data.transactionId || state.transactionId,
+          ycCrossBorder: {
+            transferId: data.transferId,
+            transactionId: data.transactionId || state.transactionId,
+            localPayIn: data.localPayIn ?? state.sendAmount,
+            customerRate: data.customerRate ?? 1,
+            processingFee: data.processingFee,
+            bankInfo: data.bankInfo ?? null,
+            expiresAt: data.expiresAt ?? new Date(Date.now() + 15 * 60_000).toISOString(),
+            payInNotice: data.payInNotice,
+            payInRail,
+          },
+        }
+        setState(next)
+        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
+      } catch (e) {
+        if (!cancelled) {
+          setYcQuoteError(e instanceof Error ? e.message : "Cross-border quote failed")
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    state?.recipient.id,
+    state?.amount,
+    state?.otherCurrency,
+    state?.otherPaymentMethod,
+    state?.ycCrossBorder?.transferId,
+  ])
+
+  useEffect(() => {
     if (!state || isEasenetRecipient(state.recipient) || !isWalletRecipient(state.recipient) || !(state.amount > 0))
       return
     if (isWalletQuoteFresh(state.walletQuote, state.amount, state.recipient.id)) return
@@ -274,7 +375,7 @@ export default function SendConfirmPage() {
   ])
 
   const quoteCountdown = useQuoteCountdown(
-    state?.walletQuote?.expiresAt ?? state?.payoutQuote?.expiresAt,
+    state?.ycCrossBorder?.expiresAt ?? state?.walletQuote?.expiresAt ?? state?.payoutQuote?.expiresAt,
   )
 
   const finishSend = (transactionId: string) => {
@@ -287,6 +388,16 @@ export default function SendConfirmPage() {
   const handleAuthorizeSuccess = async () => {
     if (!state) return
     setAuthorizeError(null)
+
+    if (isYcCrossBorderFlow(state)) {
+      if (!state.ycCrossBorder?.transferId) {
+        setAuthorizeError(ycQuoteError || "Cross-border quote is not ready. Go back and try again.")
+        return
+      }
+      sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(state))
+      router.push("/send/authorize/yc-pay-in")
+      return
+    }
 
     if (isEasenetRecipient(state.recipient)) {
       setIsAuthorizing(true)
@@ -501,6 +612,14 @@ export default function SendConfirmPage() {
         ...(pq.marginCaptureMode ? { marginCaptureMode: pq.marginCaptureMode } : {}),
         ...(pq.midRate != null ? { customerRate: pq.midRate } : {}),
         ...(pq.noahMid != null ? { noahMid: pq.noahMid } : {}),
+        ...(pq.processingFee != null ? { processingFee: String(pq.processingFee) } : {}),
+        ...(pq.channelCost != null ? { channelCost: String(pq.channelCost) } : {}),
+        ...(pq.customerPrincipal != null ? { customerPrincipal: String(pq.customerPrincipal) } : {}),
+        ...(pq.provider ? { payoutProvider: pq.provider } : {}),
+        ...(pq.ycSequenceId ? { ycSequenceId: pq.ycSequenceId } : {}),
+        ...(pq.ycSendId ? { ycSendId: pq.ycSendId } : {}),
+        ...(pq.ycWalletAddress ? { ycWalletAddress: pq.ycWalletAddress } : {}),
+        ...(pq.ycCryptoAmount != null ? { ycCryptoAmount: pq.ycCryptoAmount } : {}),
         reviewSnapshot,
       }
 
@@ -581,41 +700,55 @@ export default function SendConfirmPage() {
       : state.receiveCurrency.toUpperCase() !== state.sendCurrency.toUpperCase()
   const pq = state.payoutQuote
   const wq = state.walletQuote
-  const quoteReady =
-    easenetSend ||
-    (walletSend
-      ? isWalletQuoteFresh(wq, state.amount, state.recipient.id)
-      : isPayoutQuoteFresh(pq, state.amount, state.recipient.id))
-  const easnerFee = walletSend
-    ? (wq?.processingFee ?? wq?.marginAmount ?? 0)
-    : (pq?.processingFee ?? pq?.easnerFee ?? 0)
-  const easnerFeeCurrency = walletSend
+  const yc = state.ycCrossBorder
+  const quoteReady = isYcCrossBorder
+    ? Boolean(yc?.transferId)
+    : easenetSend ||
+      (walletSend
+        ? isWalletQuoteFresh(wq, state.amount, state.recipient.id)
+        : isPayoutQuoteFresh(pq, state.amount, state.recipient.id))
+  const easnerFee = isYcCrossBorder
+    ? (yc?.processingFee ?? 0)
+    : walletSend
+      ? (wq?.processingFee ?? wq?.marginAmount ?? 0)
+      : (pq?.processingFee ?? pq?.easnerFee ?? 0)
+  const easnerFeeCurrency = isYcCrossBorder
     ? state.sendCurrency
-    : (pq?.easnerFeeCurrency ?? state.sendCurrency)
-  const youSendAmount = walletSend
-    ? (wq?.sendAmount ?? state.sendAmount)
-    : (pq?.customerPrincipal ?? pq?.sendAmount ?? state.sendAmount)
-  const exchangeRate =
-    hasFx && (walletSend ? wq?.customerRate : pq?.midRate) &&
-    (walletSend ? wq!.customerRate : pq!.midRate!) > 0
+    : walletSend
+      ? state.sendCurrency
+      : (pq?.easnerFeeCurrency ?? state.sendCurrency)
+  const youSendAmount = isYcCrossBorder
+    ? (yc?.localPayIn ?? state.sendAmount)
+    : walletSend
+      ? (wq?.sendAmount ?? state.sendAmount)
+      : (pq?.customerPrincipal ?? pq?.sendAmount ?? state.sendAmount)
+  const exchangeRate = isYcCrossBorder
+    ? (yc?.customerRate ?? 1)
+    : hasFx && (walletSend ? wq?.customerRate : pq?.midRate) &&
+        (walletSend ? wq!.customerRate : pq!.midRate!) > 0
       ? walletSend
         ? wq!.customerRate
         : pq!.midRate!
       : 1
-  const exchangeFee = walletSend
+  const exchangeFee = isYcCrossBorder ? 0 : walletSend
     ? (wq?.displayChannelCost ?? wq?.channelCost ?? 0)
     : (pq?.displayChannelCost ?? 0)
   const networkFee = walletSend ? (wq?.networkFee ?? 0) : 0
-  const totalDebited = walletSend
-    ? (wq?.totalDebited ?? state.sendAmount)
-    : (pq?.totalDebited ?? state.sendAmount)
+  const totalDebited = isYcCrossBorder
+    ? (yc?.localPayIn ?? state.sendAmount)
+    : walletSend
+      ? (wq?.totalDebited ?? state.sendAmount)
+      : (pq?.totalDebited ?? state.sendAmount)
   const walletTransferMethod = walletSend
     ? `${state.receiveCurrency} on ${state.recipient.walletNetwork?.trim() || wq?.receiveNetwork || "wallet"}`
     : transferMethod
-  const authorizeDisabled =
-    isAuthorizing ||
-    Boolean((walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend) ||
-    (!easenetSend && (!quoteReady || quoteCountdown.expired))
+  const ycTransferMethod =
+    state.otherPaymentMethod === "mobile_money" ? "Mobile Money" : "Bank Transfer"
+  const authorizeDisabled = isYcCrossBorder
+    ? isAuthorizing || Boolean(ycQuoteError) || !yc?.transferId || quoteCountdown.expired
+    : isAuthorizing ||
+      Boolean((walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend) ||
+      (!easenetSend && (!quoteReady || quoteCountdown.expired))
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -635,7 +768,7 @@ export default function SendConfirmPage() {
           send_currency: state.sendCurrency,
           receive_amount: state.amount,
           receive_currency: state.receiveCurrency,
-          transfer_method: walletTransferMethod,
+          transfer_method: isYcCrossBorder ? ycTransferMethod : walletTransferMethod,
           processing_time: arrivalHint ?? "",
           ...(walletSend && wq?.executionModel
             ? { execution_model: wq.executionModel }
@@ -654,16 +787,19 @@ export default function SendConfirmPage() {
         copiedKey={copiedKey}
         onCopy={handleCopy}
         showFeeBreakdown={!easenetSend && quoteReady}
-        globalFiatPayout={!walletSend && !easenetSend}
+        globalFiatPayout={isYcCrossBorder || (!walletSend && !easenetSend)}
         receiveNetwork={walletSend ? walletNetwork : undefined}
         walletSendExecutionModel={walletSend ? wq?.executionModel : undefined}
         mode="confirm"
       />
 
-      {(walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend ? (
-        <p className="text-sm text-destructive">{walletSend ? walletQuoteError : payoutQuoteError}</p>
+      {(isYcCrossBorder ? ycQuoteError : walletSend ? walletQuoteError : payoutQuoteError) &&
+      !easenetSend ? (
+        <p className="text-sm text-destructive">
+          {isYcCrossBorder ? ycQuoteError : walletSend ? walletQuoteError : payoutQuoteError}
+        </p>
       ) : null}
-      {!easenetSend && (wq?.expiresAt || pq?.expiresAt) ? (
+      {!easenetSend && (yc?.expiresAt || wq?.expiresAt || pq?.expiresAt) ? (
         <div className="text-xs text-muted-foreground">
           {quoteCountdown.expired
             ? "Quote expired — go back and continue again for a fresh quote."
@@ -697,6 +833,8 @@ export default function SendConfirmPage() {
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Sending…
             </>
+          ) : isYcCrossBorder ? (
+            "Continue"
           ) : (
             "Authorize transfer"
           )}

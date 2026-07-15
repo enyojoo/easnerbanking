@@ -39,10 +39,7 @@ const ROUTE_TITLES: Record<string, string> = {
   Onboarding: 'Welcome',
   OpenCurrencyAccount: 'Open Account',
   TransactionCard: 'Card Transactions',
-  Stablecoin: 'Send',
-  OpenBanking: 'Send',
-  VirtualBankAccount: 'Send',
-  MobileMoney: 'Send',
+  YcPayIn: 'Send',
   ScanWalletAddress: 'Scan Address',
 }
 

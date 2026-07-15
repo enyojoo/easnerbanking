@@ -45,13 +45,13 @@ import {
   SEND_FLOW_STATE_KEY,
   persistSendFlowState,
 } from "@/lib/send-flow-session"
-import { useManualSendFlow } from "@/hooks/use-manual-send-flow"
+import {
+  useYcCrossBorderFlow,
+} from "@/hooks/use-yc-cross-border-flow"
 import { PaymentMethodDisplayLogo } from "@/components/send/payment-method-display-logo"
-import { pickDefaultManualPayInOption } from "@easner/shared"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import {
-  exchangeRatesToRateMap,
   resolveRecipientPayoutRail,
   resolveEffectivePayoutMin,
   resolveEffectiveWalletSendMin,
@@ -106,7 +106,6 @@ export default function SendPage() {
   const isBalanceSource = paymentMethod === "balance"
   const [otherCurrency, setOtherCurrency] = useState<string | null>(null)
   const [otherPaymentMethod, setOtherPaymentMethod] = useState<string | null>(null)
-  const [manualPaymentMethodId, setManualPaymentMethodId] = useState<string | null>(null)
   const [note, setNote] = useState("")
   const [paymentPurpose, setPaymentPurpose] = useState("")
   const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
@@ -153,45 +152,33 @@ export default function SendPage() {
   /** Bank/wallet receive currency from the recipient; easetag overrides after sendCurrency. */
   const recipientReceiveCurrency = recipient?.currency ?? "USD"
 
-  const manualSend = useManualSendFlow({
-    enabled: !isEasetagRecipient,
-    otherCurrency,
+  const ycFlow = useYcCrossBorderFlow({
+    recipientId: recipient?.id ?? null,
+    enabled: !isEasetagRecipient && !isWalletRecipient,
     receiveCurrency: recipientReceiveCurrency,
     amountEntryMode,
     enteredAmount,
   })
 
-  const manualSendAvailable = manualSend.sendCurrencies.length > 0
-  /** Easetag P2P is balance-only; manual pay-in rails are not supported. */
-  const showManualSendPaymentOptions = manualSendAvailable && !isEasetagRecipient
+  const showThroughLocalCurrency = ycFlow.available && !isEasetagRecipient
 
-  const otherCurrencies = useMemo(
-    () => manualSend.sendCurrencyOptions,
-    [manualSend.sendCurrencyOptions],
-  )
+  const otherCurrencies = useMemo(() => {
+    if (!showThroughLocalCurrency || !ycFlow.payInCurrency) return []
+    return [{ code: ycFlow.payInCurrency, name: ycFlow.payInCurrency }]
+  }, [showThroughLocalCurrency, ycFlow.payInCurrency])
 
   const currencyPaymentMethods = useMemo(() => {
-    const by = manualSend.paymentMethodsByCurrency
-    const out: Record<
-      string,
-      Array<{ code: string; name: string; type: string; displayLogoUrl?: string | null }>
-    > = {}
-    for (const code of manualSend.sendCurrencies) {
-      const opts = by[code] ?? []
-      if (opts.length > 0) {
-        out[code] = opts.map((o) => ({
-          code: o.id,
-          name: o.name,
-          type: o.type,
-          displayLogoUrl: o.display_logo_url,
-        }))
-      }
+    if (!showThroughLocalCurrency || !ycFlow.payInCurrency) return {}
+    return {
+      [ycFlow.payInCurrency]: [
+        { code: "bank_transfer", name: "Bank Transfer", type: "bank_account" },
+        { code: "mobile_money", name: "Mobile Money", type: "mobile_money" },
+      ],
     }
-    return out
-  }, [manualSend.paymentMethodsByCurrency, manualSend.sendCurrencies])
+  }, [showThroughLocalCurrency, ycFlow.payInCurrency])
 
   useEffect(() => {
-    if (manualSendAvailable) return
+    if (showThroughLocalCurrency) return
     if (
       paymentMethod === "otherCurrency" ||
       otherCurrency ||
@@ -201,38 +188,29 @@ export default function SendPage() {
       setPaymentMethod("balance")
       setOtherCurrency(null)
       setOtherPaymentMethod(null)
-      setManualPaymentMethodId(null)
     }
-  }, [manualSendAvailable, paymentMethod, otherCurrency])
+  }, [showThroughLocalCurrency, paymentMethod, otherCurrency])
 
   useEffect(() => {
     if (!isEasetagRecipient) return
     if (
       paymentMethod === "otherCurrency" ||
       otherCurrency ||
-      otherPaymentMethod ||
-      manualPaymentMethodId
+      otherPaymentMethod
     ) {
       setPaymentMethod("balance")
       setOtherCurrency(null)
       setOtherPaymentMethod(null)
-      setManualPaymentMethodId(null)
     }
-  }, [isEasetagRecipient, paymentMethod, otherCurrency, otherPaymentMethod, manualPaymentMethodId])
+  }, [isEasetagRecipient, paymentMethod, otherCurrency, otherPaymentMethod])
 
   useEffect(() => {
     if (!otherCurrency) return
     const opts = currencyPaymentMethods[otherCurrency] ?? []
-    if (!manualPaymentMethodId && opts.length > 0) {
-      const def = pickDefaultManualPayInOption(
-        manualSend.paymentMethodsByCurrency[otherCurrency] ?? [],
-      )
-      if (def) {
-        setManualPaymentMethodId(def.id)
-        setOtherPaymentMethod(def.id)
-      }
+    if (!otherPaymentMethod && opts.length > 0) {
+      setOtherPaymentMethod(opts[0].code)
     }
-  }, [otherCurrency, currencyPaymentMethods, manualPaymentMethodId, manualSend.paymentMethodsByCurrency])
+  }, [otherCurrency, currencyPaymentMethods, otherPaymentMethod])
 
   useEffect(() => {
     const dest = (recipient?.currency || "").trim().toUpperCase()
@@ -287,16 +265,8 @@ export default function SendPage() {
       return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
     }
     const crossCurrency = sendCurrency !== receiveCurrency
-    if (otherCurrency && crossCurrency) {
-      if (manualSend.quote) {
-        return {
-          sendAmount: manualSend.quote.sendAmount,
-          receiveAmount: manualSend.quote.receiveAmount,
-          forwardRate: manualSend.quote.exchangeRate,
-        }
-      }
-      // Don't preview Noah/reference rates while the manual quote is in flight.
-      return { sendAmount: 0, receiveAmount: 0, forwardRate: 1 }
+    if (otherCurrency && crossCurrency && showThroughLocalCurrency) {
+      return ycFlow.preview
     }
     if (isWalletRecipient) {
       return { sendAmount: enteredAmount, receiveAmount: enteredAmount, forwardRate: 1 }
@@ -317,7 +287,8 @@ export default function SendPage() {
     noahFxRates,
     isWalletRecipient,
     otherCurrency,
-    manualSend.quote,
+    showThroughLocalCurrency,
+    ycFlow.preview,
   ])
 
   const sendAmount = flowAmounts.sendAmount
@@ -353,19 +324,20 @@ export default function SendPage() {
   const hasValidNoahRateForPair =
     !needsNoahRateForSend || hasNoahSendRateRow(activeNoahRateRow)
 
-  const manualQuoteEnabled =
+  const ycQuoteEnabled =
+    showThroughLocalCurrency &&
     paymentMethod === "otherCurrency" &&
     Boolean(otherCurrency) &&
     sendCurrency !== receiveCurrency &&
     enteredAmount > 0
 
-  const manualQuoteLoading = manualQuoteEnabled && manualSend.quoteLoading && !manualSend.quote
+  const ycRateLoading = ycQuoteEnabled && ycFlow.ratesLoading && !ycFlow.customerRate
 
   const exchangePreviewReady =
     sendCurrency === receiveCurrency ||
     isWalletRecipient ||
-    (manualQuoteEnabled
-      ? Boolean(manualSend.quote)
+    (ycQuoteEnabled
+      ? Boolean(ycFlow.customerRate)
       : !needsNoahRateForSend || hasValidNoahRateForPair)
 
   const displayBalanceForSource =
@@ -407,10 +379,10 @@ export default function SendPage() {
     recipient !== null &&
     Boolean(recipient.payeeEasetag?.trim())
   const hasValidOtherCurrencySelection =
-    showManualSendPaymentOptions &&
+    showThroughLocalCurrency &&
     Boolean(otherCurrency) &&
     paymentMethod === "otherCurrency" &&
-    Boolean(manualPaymentMethodId || otherPaymentMethod)
+    Boolean(otherPaymentMethod)
 
   const payoutRail = recipient
     ? resolveRecipientPayoutRail({
@@ -442,13 +414,15 @@ export default function SendPage() {
     [recipient, isEasetagRecipient, payoutHints, receiveCurrency, payoutRail],
   )
 
-  const manualFxRateMap = useMemo(
-    () => exchangeRatesToRateMap(manualSend.catalog?.exchangeRates ?? []),
-    [manualSend.catalog?.exchangeRates],
-  )
+  const ycFxRateMap = useMemo(() => {
+    const from = ycFlow.payInCurrency?.trim().toUpperCase()
+    const to = receiveCurrency.trim().toUpperCase()
+    if (!from || !to || !ycFlow.customerRate) return {}
+    return { [`${from}_${to}`]: ycFlow.customerRate }
+  }, [ycFlow.payInCurrency, ycFlow.customerRate, receiveCurrency])
 
   const payoutEnforcementRateMap =
-    paymentMethod === "otherCurrency" ? manualFxRateMap : noahFxRates
+    paymentMethod === "otherCurrency" && showThroughLocalCurrency ? ycFxRateMap : noahFxRates
 
   const payoutMinEnforcementEnabled =
     Boolean(recipient) &&
@@ -470,12 +444,6 @@ export default function SendPage() {
     sendCurrency,
     receiveCurrency,
     rateMap: payoutEnforcementRateMap,
-    manualQuote: manualSend.quote,
-    useManualQuote:
-      paymentMethod === "otherCurrency" &&
-      Boolean(otherCurrency) &&
-      receiveCurrency !== sendCurrency &&
-      Boolean(manualSend.quote),
     onApplyEnteredAmount: (amount) => {
       setAmountStr(formatAmountForDisplay(amount.toFixed(2)))
     },
@@ -533,14 +501,6 @@ export default function SendPage() {
   const walletReceiveBelowMin =
     isWalletRecipient && receiveAmount > 0 && receiveAmount < walletMinReceive
 
-  const manualAmountOutOfRange =
-    Boolean(
-      otherCurrency &&
-        manualSend.quote &&
-        ((manualSend.quote.minAmount != null && sendAmount < manualSend.quote.minAmount) ||
-          (manualSend.quote.maxAmount != null && sendAmount > manualSend.quote.maxAmount)),
-    )
-
   const canContinueBalance =
     recipient !== null &&
     receiveAmount > 0 &&
@@ -559,7 +519,6 @@ export default function SendPage() {
     receiveAmount > 0 &&
     hasValidOtherCurrencySelection &&
     tier1Complete &&
-    !manualAmountOutOfRange &&
     !payoutReceiveBelowMin &&
     exchangePreviewReady
 
@@ -816,8 +775,8 @@ export default function SendPage() {
     setAmountFieldError(null)
     const transactionId = generateTransactionId()
 
-    const feeAmount = otherCurrency && manualSend.quote ? manualSend.quote.feeAmount : 0
-    const totalAmount = otherCurrency && manualSend.quote ? manualSend.quote.totalAmount : sendAmount
+    const feeAmount = 0
+    const totalAmount = showThroughLocalCurrency ? sendAmount : sendAmount
 
     const walletAmountEntryMode = isWalletRecipient ? ("receive" as const) : amountEntryMode
 
@@ -832,8 +791,6 @@ export default function SendPage() {
       paymentMethod,
       otherCurrency: otherCurrency ?? undefined,
       otherPaymentMethod: otherPaymentMethod ?? undefined,
-      manualPaymentMethodId: manualPaymentMethodId ?? undefined,
-      manualQuote: manualSend.quote ?? undefined,
       feeAmount,
       totalAmount,
       note: isWalletRecipient ? "" : note.trim(),
@@ -847,11 +804,19 @@ export default function SendPage() {
         walletQuoteCacheRef.current?.key === walletQuoteCacheKey) ||
       (needsPayoutQuoteBeforeConfirm &&
         payoutQuoteCacheRef.current?.key === payoutQuoteCacheKey)
-    if (needsQuoteAwait && !quoteAlreadyWarm) {
+    if (
+      (needsQuoteAwait && !quoteAlreadyWarm)
+    ) {
       setIsContinuePending(true)
       continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
     }
     try {
+      if (showThroughLocalCurrency && paymentMethod === "otherCurrency") {
+        persistSendFlowState(state)
+        router.push("/send/confirm")
+        return
+      }
+
       if (needsPayoutQuoteBeforeConfirm) {
         const quote = await fetchPayoutQuote()
         if (!quote?.noah?.formSessionId) {
@@ -872,11 +837,6 @@ export default function SendPage() {
 
       if (isBalanceSource) {
         router.push("/send/confirm")
-        return
-      }
-
-      if (paymentMethod === "otherCurrency" && manualPaymentMethodId) {
-        router.push(manualSend.authorizePathForPaymentMethodId(manualPaymentMethodId))
         return
       }
 
@@ -917,11 +877,11 @@ export default function SendPage() {
             </Label>
             {receiveCurrency !== sendCurrency && !isWalletRecipient ? (
               <div className="flex min-w-0 flex-1 items-center justify-end text-sm text-muted-foreground">
-                {manualQuoteLoading ? (
+                {ycRateLoading ? (
                   <Skeleton className="h-4 w-52 max-w-full" />
-                ) : manualQuoteEnabled && !manualSend.quote ? (
+                ) : ycQuoteEnabled && !ycFlow.customerRate ? (
                   <span className="text-destructive text-xs">
-                    {manualSend.quoteError ?? "Exchange rate unavailable. Try again shortly."}
+                    {ycFlow.quoteError ?? "Exchange rate unavailable. Try again shortly."}
                   </span>
                 ) : needsNoahRateForSend && noahRatesLoading ? (
                   <Skeleton className="h-4 w-52 max-w-full" />
@@ -1134,9 +1094,9 @@ export default function SendPage() {
                 </div>
               </div>
 
-              {showManualSendPaymentOptions ? (
+              {showThroughLocalCurrency ? (
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Through Another Currency</p>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Through Local Currency</p>
                 {!otherCurrency ? (
                   <div className="space-y-1">
                     {otherCurrencies.map((currency) => (
@@ -1153,7 +1113,11 @@ export default function SendPage() {
                       >
                         <div className="flex items-center gap-3">
                           <CurrencyFlag currency={currency.code} size={24} className="shrink-0" />
-                          <p className="font-medium">{currency.name}</p>
+                          <p className="font-medium">
+                            {"name" in currency && currency.name !== currency.code
+                              ? currency.name
+                              : `${currency.code} Deposit`}
+                          </p>
                         </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </button>
@@ -1172,7 +1136,8 @@ export default function SendPage() {
                     >
                       <ArrowLeft className="h-4 w-4" />
                       <p className="font-medium">
-                        {otherCurrencies.find((c) => c.code === otherCurrency)?.name}
+                        {otherCurrencies.find((c) => c.code === otherCurrency)?.name ??
+                          `${otherCurrency} Deposit`}
                       </p>
                     </button>
                     {currencyPaymentMethods[otherCurrency]?.map((method) => {
@@ -1185,7 +1150,6 @@ export default function SendPage() {
                             setPaymentMethod("otherCurrency")
                             setSourceAccountId(null)
                             setOtherPaymentMethod(method.code)
-                            setManualPaymentMethodId(method.code)
                             setSourceSheetOpen(false)
                           }}
                           className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50 ${

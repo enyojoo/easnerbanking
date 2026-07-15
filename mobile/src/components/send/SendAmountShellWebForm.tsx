@@ -13,14 +13,12 @@ import { LinearGradient } from 'expo-linear-gradient'
 import {
   MessageSquareText,
   ChevronDown,
-  Coins,
   Link,
   ArrowUpDown,
   AlertCircle,
 } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import SkeletonLoader from '../SkeletonLoader'
-import { CachedImage } from '../CachedImage'
 import {
   colors,
   surfaceFrameStyle,
@@ -31,7 +29,6 @@ import {
 } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { CurrencyFlag } from '../flags/CurrencyFlag'
-import { getTokenIconUrl } from '../../lib/cryptoIcons'
 import { getCurrencySymbol } from '../../utils/formatters'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
 import { formatMoneyDisplay, formatSendRateLabel } from '@easner/shared'
@@ -47,11 +44,6 @@ function LandmarkIcon({ size = 20, color = colors.text.primary }: { size?: numbe
       <Path d="M6 18v-7" />
     </Svg>
   )
-}
-
-function isManualStablecoinCurrencyCode(code: string): boolean {
-  const c = code.trim().toUpperCase()
-  return c === 'USDC' || c === 'USDT' || c === 'STABLE'
 }
 
 export type SendAmountShellWebFormProps = {
@@ -268,22 +260,7 @@ export function SendAmountShellWebForm({
               ) : selectedPaymentMethod === 'virtualBank' ? (
                 <LandmarkIcon size={20} color={colors.text.primary} />
               ) : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency ? (
-                isManualStablecoinCurrencyCode(selectedOtherCurrency) ? (
-                  getTokenIconUrl(selectedOtherCurrency) || getTokenIconUrl(selectedOtherPaymentMethod ?? '') ? (
-                    <CachedImage
-                      uri={
-                        getTokenIconUrl(selectedOtherCurrency) ??
-                        getTokenIconUrl(selectedOtherPaymentMethod ?? '')!
-                      }
-                      style={styles.sourceFlag}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <Coins size={20} color={colors.text.primary} strokeWidth={2} />
-                  )
-                ) : (
-                  <CurrencyFlag currency={selectedOtherCurrency} size={22} style={styles.sourceFlag} />
-                )
+                <CurrencyFlag currency={selectedOtherCurrency} size={22} style={styles.sourceFlag} />
               ) : (
                 <LandmarkIcon size={20} color={colors.text.secondary} />
               )}

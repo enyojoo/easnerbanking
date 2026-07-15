@@ -11,7 +11,13 @@ import {
   recipientFormNeedsAddress,
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
+  normalizeRecipientYcMetadata,
+  resolveYcCorridorSchema,
   sortByEasnerCountryPickerOrder,
+  unwrapNoahFieldsSchema,
+  validateYcRecipientForCorridor,
+  ycAccountNumberLabel,
+  type RecipientYcMetadata,
 } from "@easner/shared"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { CountryFlag } from "@/components/flags"
@@ -38,6 +44,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { resolveInferredWalletAssetNetwork } from "@easner/shared"
 import { inferWalletAddressFromApi } from "@/lib/wallet-send/infer-wallet-address-client"
+import { YcRecipientExtraFields } from "@/components/recipients/yc-recipient-extra-fields"
 
 const RECIPIENT_TYPE_TABS = [
   { id: "bank" as const, label: "Bank Account" },
@@ -135,6 +142,7 @@ export function RecipientForm({
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [ycMetadata, setYcMetadata] = useState<RecipientYcMetadata>({})
   const [countryOpen, setCountryOpen] = useState(false)
   const [walletAssetOpen, setWalletAssetOpen] = useState(false)
   const [walletNetworkOpen, setWalletNetworkOpen] = useState(false)
@@ -250,6 +258,7 @@ export function RecipientForm({
         postalCode: bene.postalCode || "",
         easenetTag: inferredType === "easenet" ? bene.payeeEasetag || bene.accountNumber || "" : "",
       })
+      setYcMetadata(normalizeRecipientYcMetadata(bene.ycMetadata))
     }
   }, [recipient, isEdit, bankCorridors, mobileCorridors])
 
@@ -397,8 +406,19 @@ export function RecipientForm({
       ) ?? null
     )
   }, [selectedCountry, payoutRail, bankCorridors, mobileCorridors])
-  const payoutFormHints = selectedCorridorRow?.fields_schema ?? null
-  const bankEnumOptions = payoutFormHints?.bank_enum ?? []
+  const payoutFormHints = unwrapNoahFieldsSchema(selectedCorridorRow?.fields_schema)
+  const ycCorridorSchema = useMemo(() => {
+    if (!selectedCountry) return null
+    return resolveYcCorridorSchema({
+      countryCode: selectedCountry.code,
+      currencyCode: currency,
+      fieldsSchema: selectedCorridorRow?.fields_schema,
+    })
+  }, [selectedCountry, currency, selectedCorridorRow])
+  const bankEnumOptions =
+    ycCorridorSchema?.bank_enum?.length
+      ? ycCorridorSchema.bank_enum
+      : (payoutFormHints?.bank_enum ?? [])
 
   const mobileProviderChoices = useMemo(() => {
     if (formData.recipientType !== "mobile") return [] as string[]
@@ -549,6 +569,26 @@ export function RecipientForm({
       }
     }
 
+    if (formData.recipientType === "bank" && selectedCountry && ycCorridorSchema?.status === "ready") {
+      const ycCheck = validateYcRecipientForCorridor({
+        countryCode: selectedCountry.code,
+        currencyCode: currency,
+        fieldsSchema: selectedCorridorRow?.fields_schema,
+        row: {
+          country_code: selectedCountry.code,
+          currency,
+          full_name: formData.name,
+          account_number: formData.accountNumber,
+          bank_name: formData.bankName,
+          phone_number: formData.phone,
+          metadata: ycMetadata,
+        },
+      })
+      if (!ycCheck.ok) {
+        newErrors.accountNumber = ycCheck.message
+      }
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -641,6 +681,7 @@ export function RecipientForm({
         recipientFormNeedsAddress({ hints: payoutFormHints, currencyCode: currency })
           ? formData.postalCode.trim()
           : undefined,
+      ycMetadata: formData.recipientType === "bank" ? normalizeRecipientYcMetadata(ycMetadata) : undefined,
     }
 
     try {
@@ -665,6 +706,8 @@ export function RecipientForm({
   }
 
   const getAccountIdentifierLabel = (currency: string) => {
+    const ycLabel = ycAccountNumberLabel(ycCorridorSchema)
+    if (ycLabel) return ycLabel
     switch (currency) {
       case "EUR":
         return "IBAN"
@@ -1358,16 +1401,23 @@ export function RecipientForm({
         {formData.recipientType === "bank" && !["USD", "EUR", "GBP", "CAD"].includes(currency) && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs text-muted-foreground">Account Number</label>
+              <label className="text-xs text-muted-foreground">{getAccountIdentifierLabel(currency)}</label>
               <Input
                 value={formData.accountNumber}
                 onChange={(e) => handleInputChange("accountNumber", e.target.value)}
-                placeholder="1234567890"
+                placeholder={ycCorridorSchema?.account_number_hint || "1234567890"}
                 className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
                 required
               />
               {errors.accountNumber && <p className="text-xs text-red-500">{errors.accountNumber}</p>}
             </div>
+            <YcRecipientExtraFields
+              schema={ycCorridorSchema}
+              values={ycMetadata}
+              onChange={(patch) => setYcMetadata((prev) => ({ ...prev, ...patch }))}
+              errors={errors}
+              disabled={isSubmitting}
+            />
             {recipientFormNeedsBankCode(payoutFormHints) ? (
               <div className="space-y-2">
                 <label className="text-xs text-muted-foreground">SWIFT/BIC</label>

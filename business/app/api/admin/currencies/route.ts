@@ -4,9 +4,10 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import {
   filterOfficeFiatCurrencies,
-  filterOfficeRatesCurrencies,
+  filterOfficeReportingFxCurrencies,
 } from "@/lib/admin/office-catalog-currencies"
-import { addCurrencyWithRateMatrix, ensureCurrenciesFromExchangeRates } from "@/lib/admin/rates-service"
+import { ensureCurrenciesFromExchangeRates, ensureReportingFxMatrix } from "@/lib/admin/rates-service"
+import { isReportingFxCurrencyCode } from "@/lib/fx/reporting-fx"
 
 export async function GET(request: Request) {
   const auth = await requireOfficeAdmin(request)
@@ -47,14 +48,8 @@ export async function GET(request: Request) {
 
   if (scope === "fiat") {
     currencies = filterOfficeFiatCurrencies(currencies)
-  } else if (scope === "rates" || scope === "payment-methods") {
-    const { data: pmRows } = await admin.from("payment_methods").select("currency")
-    const paymentMethodCodes = new Set(
-      (pmRows ?? []).map((r) => String((r as { currency?: string }).currency ?? "").toUpperCase()).filter(Boolean),
-    )
-    currencies = filterOfficeRatesCurrencies(currencies, {
-      paymentMethodCodes: scope === "rates" ? paymentMethodCodes : undefined,
-    })
+  } else if (scope === "rates") {
+    currencies = filterOfficeReportingFxCurrencies(currencies)
   }
 
   const normalized = currencies.map((row) => {
@@ -73,25 +68,29 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
-  if (!body?.code || !body?.name || !body?.symbol) {
-    return NextResponse.json({ error: "code, name, and symbol are required" }, { status: 400 })
+  const code = String(body?.code ?? "").trim().toUpperCase()
+  if (!code || !isReportingFxCurrencyCode(code)) {
+    return NextResponse.json(
+      {
+        error:
+          "Reporting FX uses fixed base currencies (USD, EUR, GBP, NGN). Use Platform → Reporting FX → Sync rates.",
+      },
+      { status: 400 },
+    )
   }
 
   try {
     const admin = createSupabaseAdmin()
-    const currency = await addCurrencyWithRateMatrix(admin, {
-      code: String(body.code),
-      name: String(body.name),
-      symbol: String(body.symbol),
-      flag_svg: body.flag_svg != null ? String(body.flag_svg) : null,
-      status: body.status != null ? String(body.status) : "active",
-      can_send: body.can_send !== false,
-      can_receive: body.can_receive !== false,
-    })
-    return NextResponse.json({ currency })
+    await ensureReportingFxMatrix(admin)
+    const { data, error } = await admin.from("currencies").select("*").eq("code", code).maybeSingle()
+    if (error) throw error
+    if (!data) {
+      return NextResponse.json({ error: "Currency bootstrap failed" }, { status: 500 })
+    }
+    return NextResponse.json({ currency: data })
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Failed to add currency" },
+      { error: e instanceof Error ? e.message : "Failed to ensure reporting currency" },
       { status: 400 },
     )
   }

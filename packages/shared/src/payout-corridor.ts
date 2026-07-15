@@ -42,8 +42,8 @@ export type PayoutCorridorPublic = {
   noah_sell_available?: boolean
   provider_routing?: ProviderRoutingEntry[]
   provider_health?: Record<string, ProviderHealthStatus>
-  /** From Noah GET /channels/sell — bank enums, reference rules, purpose list. */
-  fields_schema?: PayoutFieldsSchemaHint | null
+  /** Noah hints and/or nested `yellowcard` schema — see yc-recipient-schema. */
+  fields_schema?: PayoutFieldsSchemaHint | import("./yc-recipient-schema").PayoutCorridorFieldsSchema | null
 }
 
 export function corridorDisplayLabel(c: Pick<PayoutCorridorPublic, "country_name" | "currency_code" | "currency_name">): string {

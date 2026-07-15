@@ -271,6 +271,7 @@ export function OfficeCryptoRatesPanel() {
   return (
     <PlatformControlTabShell
       title="Crypto rates"
+      description="Customer FX for wallet send (USD/EUR balance → stablecoin). Sync pulls LiFi mid rates; margin is applied per corridor."
       actions={
         <Button type="button" size="sm" onClick={() => void handleSyncRates()} disabled={syncing || loading}>
           {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

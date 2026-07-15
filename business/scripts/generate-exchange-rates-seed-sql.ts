@@ -76,7 +76,7 @@ function escapeSqlString(s: string): string {
 
 function buildSeedSql(rows: ParsedRow[]): string {
   const lines: string[] = [
-    "-- Seed exchange_rates from Ciuna platform (manual send / Rates tab)",
+    "-- Seed exchange_rates from Ciuna platform (Office Rates tab)",
     "-- Only Easner columns; no logistics_fee, bank_receive, or cash_receive.",
     "",
     "INSERT INTO public.exchange_rates (",

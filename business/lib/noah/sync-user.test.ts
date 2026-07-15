@@ -6,6 +6,7 @@ vi.mock("./map-kyc", () => ({
 
 vi.mock("./rejection-reasons", () => ({
   extractNoahRejectionReasons: vi.fn().mockReturnValue(null),
+  pickNoahRejectionReasonsToStore: vi.fn().mockReturnValue(null),
 }))
 
 vi.mock("./parse-noah-customer-for-business", () => ({
@@ -20,6 +21,20 @@ vi.mock("./parse-noah-customer-for-users", () => ({
   }),
 }))
 
+vi.mock("./parse-noah-associate-for-users", () => ({
+  parseNoahBusinessPersonForOwnerUsers: vi.fn().mockReturnValue({
+    full_name: "Jane Owner",
+    kyc_verified_at: "2025-01-01T00:00:00Z",
+    kyc_id_type: "Passport",
+    kyc_id_number: "P123",
+  }),
+}))
+
+vi.mock("@/lib/notifications/verification-notify", () => ({
+  notifyBusinessKybStatusChange: vi.fn().mockResolvedValue(undefined),
+  notifyIndividualKycStatusChange: vi.fn().mockResolvedValue(undefined),
+}))
+
 const mockUsersUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
 const mockBusinessUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
 
@@ -28,13 +43,22 @@ const mockFrom = vi.fn((table: string) => {
     return {
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({ data: { noah_kyc_status: "not_started" } }),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { noah_kyc_status: "not_started", email: "owner@x.com" },
+          }),
         }),
       }),
       update: mockUsersUpdate,
     }
   }
-  return { update: mockBusinessUpdate }
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({ data: { noah_kyb_status: "not_started" } }),
+      }),
+    }),
+    update: mockBusinessUpdate,
+  }
 })
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -46,8 +70,8 @@ vi.mock("@/lib/business/org-owner", () => ({
 }))
 
 import { syncNoahCustomerToSupabase } from "./sync-user"
-import { parseNoahCustomerForUsers } from "./parse-noah-customer-for-users"
 import { parseNoahCustomerForBusiness } from "./parse-noah-customer-for-business"
+import { parseNoahBusinessPersonForOwnerUsers } from "./parse-noah-associate-for-users"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 
 describe("syncNoahCustomerToSupabase business branch", () => {
@@ -88,7 +112,7 @@ describe("syncNoahCustomerToSupabase business branch", () => {
     expect(mockFrom).toHaveBeenCalledWith("businesses")
     expect(mockFrom).toHaveBeenCalledWith("users")
     expect(parseNoahCustomerForBusiness).toHaveBeenCalled()
-    expect(parseNoahCustomerForUsers).toHaveBeenCalled()
+    expect(parseNoahBusinessPersonForOwnerUsers).toHaveBeenCalled()
     expect(resolveOrgOwnerUserId).toHaveBeenCalled()
     expect(mockBusinessUpdate).toHaveBeenCalled()
     expect(mockUsersUpdate).toHaveBeenCalled()

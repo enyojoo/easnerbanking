@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
-import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone } from "@easner/shared"
+import { validateRecipientYcExtrasForSave } from "@/lib/recipients-yc-validation"
+import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone, resolveYcCorridorSchema, unwrapNoahFieldsSchema } from "@easner/shared"
 import {
   looksLikeMissingStructuredColumn,
   toRecipientLegacyPayload,
@@ -61,9 +62,15 @@ export async function POST(request: Request) {
       .eq("currency_code", cur)
       .eq("rail", rail)
       .maybeSingle()
-    const bankEnum = (
-      corridor?.fields_schema as { bank_enum?: string[] } | null | undefined
-    )?.bank_enum
+    const ycSchema = resolveYcCorridorSchema({
+      countryCode: cc,
+      currencyCode: cur,
+      fieldsSchema: corridor?.fields_schema,
+    })
+    const bankEnum =
+      ycSchema?.bank_enum?.length
+        ? ycSchema.bank_enum
+        : unwrapNoahFieldsSchema(corridor?.fields_schema)?.bank_enum
     if (
       !isMobile &&
       Array.isArray(bankEnum) &&
@@ -76,10 +83,7 @@ export async function POST(request: Request) {
         { status: 400 },
       )
     }
-    const fieldsSchema = corridor?.fields_schema as
-      | { needs_email?: boolean; needs_phone?: boolean; needs_bank_code?: boolean }
-      | null
-      | undefined
+    const fieldsSchema = unwrapNoahFieldsSchema(corridor?.fields_schema)
     if (!isMobile && recipientFormNeedsEmail(fieldsSchema ?? null)) {
       const em = String(payload.email || "").trim()
       if (!em) {
@@ -112,6 +116,11 @@ export async function POST(request: Request) {
       if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) {
         return NextResponse.json({ error: "Invalid SWIFT/BIC code." }, { status: 400 })
       }
+    }
+
+    const ycErr = await validateRecipientYcExtrasForSave(admin, payload)
+    if (ycErr) {
+      return NextResponse.json({ error: ycErr }, { status: 400 })
     }
   }
 

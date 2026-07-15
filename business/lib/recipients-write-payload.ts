@@ -19,6 +19,7 @@ export type RecipientWritePayload = {
   postal_code?: string | null
   mobile_provider?: string | null
   wallet_network?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 /** Subset for DBs missing newer recipient columns — still keeps corridor-critical fields. */

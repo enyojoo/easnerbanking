@@ -16,20 +16,6 @@ export interface SendFlowState {
   paymentMethod: PaymentMethodCode
   otherCurrency?: OtherCurrencyCode | "STABLECOIN"
   otherPaymentMethod?: string
-  /** Selected `payment_methods.id` for manual through-another-currency flow. */
-  manualPaymentMethodId?: string
-  manualQuote?: {
-    sendAmount: number
-    receiveAmount: number
-    exchangeRate: number
-    feeAmount: number
-    feeType: string
-    totalAmount: number
-    fromCurrency: string
-    toCurrency: string
-    direction: "send" | "receive"
-    inputAmount: number
-  }
   feeAmount?: number
   totalAmount?: number
   note: string
@@ -75,6 +61,24 @@ export interface SendFlowState {
     prepareChannelFee?: number
     /** Ticket-sized Noah mid used for pricing at quote time. */
     quoteNoahMid?: number
+    /** Payout rail when corridor routes to Yellowcard. */
+    provider?: "noah" | "yellowcard"
+    ycSequenceId?: string
+    ycSendId?: string
+    ycWalletAddress?: string
+    ycCryptoAmount?: number
+  }
+  /** Yellowcard Through Local Currency pay-in session (cross-border). */
+  ycCrossBorder?: {
+    transferId: string
+    transactionId: string
+    localPayIn: number
+    customerRate: number
+    processingFee?: number
+    bankInfo: Record<string, unknown> | null
+    expiresAt: string
+    payInNotice?: string
+    payInRail?: "bank_transfer" | "mobile_money"
   }
   /** Executable wallet send quote from confirm (Turnkey direct or LI.FI). */
   walletQuote?: {

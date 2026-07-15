@@ -28,5 +28,6 @@ export function buildRecipientInsertPayload(
     postal_code: recipientData.postalCode || null,
     mobile_provider: recipientData.mobileProvider || null,
     wallet_network: recipientData.walletNetwork || null,
+    metadata: recipientData.metadata ?? {},
   }
 }

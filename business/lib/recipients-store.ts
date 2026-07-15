@@ -27,6 +27,7 @@ type RecipientRow = {
   postal_code?: string | null
   mobile_provider?: string | null
   wallet_network?: string | null
+  metadata?: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }
@@ -55,6 +56,8 @@ export type RecipientUpsertInput = {
   postalCode?: string
   /** Normalized easetag (no @); required for easenet */
   payeeEasetag?: string
+  /** Yellowcard LatAm extras (pix_key_type, cuit, …) */
+  ycMetadata?: Record<string, unknown>
 }
 
 const countryByCurrency: Record<string, string> = {
@@ -128,6 +131,7 @@ function toWritePayload(input: RecipientUpsertInput) {
     postal_code: input.postalCode || null,
     mobile_provider: input.mobileProvider || null,
     wallet_network: input.walletNetwork || null,
+    metadata: input.ycMetadata ?? {},
   }
 }
 
@@ -234,6 +238,7 @@ export function toBeneficiary(row: RecipientRow): Beneficiary {
     mobileProvider: row.mobile_provider || mobileProvider || undefined,
     walletAsset: walletAssetFromLabel || undefined,
     walletNetwork: row.wallet_network || walletNetworkFromLabel || undefined,
+    ycMetadata: (row.metadata as Record<string, unknown> | undefined) ?? undefined,
   }
 }
 

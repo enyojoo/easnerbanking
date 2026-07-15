@@ -7,6 +7,8 @@ import { turnkeyBalanceDepositProviderTransactionId } from "@/lib/turnkey/turnke
 import { resolveTurnkeyWalletScopeFromEvent } from "@/lib/turnkey/resolve-turnkey-wallet-scope"
 import { isDepositOmnibusAddress } from "@/lib/deposit-omnibus/config"
 import { handleDepositOmnibusInbound } from "@/lib/deposit-omnibus/handle-omnibus-inbound"
+import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
+import { findYcCrossBorderFeeWalletRefundSuppression } from "@/lib/yellowcard/yc-ledger"
 
 function mapAssetToCurrency(asset: string): string {
   const a = asset.trim().toUpperCase()
@@ -28,6 +30,42 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
 
   if (isDepositOmnibusAddress(deposit.address)) {
     return handleDepositOmnibusInbound(admin, deposit, eventId)
+  }
+
+  // Cross-border leg2 fail refunds land on fee wallet — suppress + mark transfer.
+  const feeUsd = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: "USD" })
+  const feeEur = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: "EUR" })
+  const addr = String(deposit.address || "").trim()
+  if (addr && (addr === feeUsd || addr === feeEur)) {
+    const match = await findYcCrossBorderFeeWalletRefundSuppression(admin, {
+      amount: deposit.amount,
+      currency: mapAssetToCurrency(deposit.asset),
+    })
+    if (match) {
+      const { data: t } = await admin
+        .from("yc_transfers")
+        .select("metadata")
+        .eq("id", match.transferId)
+        .maybeSingle()
+      const prior = (t?.metadata && typeof t.metadata === "object" ? t.metadata : {}) as Record<
+        string,
+        unknown
+      >
+      await admin
+        .from("yc_transfers")
+        .update({
+          metadata: {
+            ...prior,
+            yc_fee_wallet_refund_suppressed: true,
+            yc_fee_wallet_refund_tx_hash: deposit.txHash,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", match.transferId)
+      return true
+    }
+    // Unmatched fee-wallet inbound — do not create user ledger rows.
+    return true
   }
 
   const scope = await resolveTurnkeyWalletScopeFromEvent(admin, {

@@ -81,10 +81,7 @@ import ScanWalletAddressScreen from '../screens/recipients/ScanWalletAddressScre
 import SelectRecipientScreen from '../screens/send/SelectRecipientScreen'
 import SendConfirmScreen from '../screens/send/SendConfirmScreen'
 import SendPinScreen from '../screens/send/SendPinScreen'
-import StablecoinScreen from '../screens/send/StablecoinScreen'
-import OpenBankingScreen from '../screens/send/OpenBankingScreen'
-import VirtualBankAccountScreen from '../screens/send/VirtualBankAccountScreen'
-import MobileMoneyScreen from '../screens/send/MobileMoneyScreen'
+import YcPayInScreen from '../screens/send/YcPayInScreen'
 
 // Receive Money Flow Screens
 import ReceiveMoneyScreen from '../screens/receive/ReceiveMoneyScreen'
@@ -451,34 +448,10 @@ function MainStack() {
           ...sendFlowStandardPreset(),
         }}
       />
-      <Stack.Screen 
-        name="Stablecoin" 
-        component={StablecoinScreen}
-        options={{ 
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="OpenBanking" 
-        component={OpenBankingScreen}
-        options={{ 
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="VirtualBankAccount" 
-        component={VirtualBankAccountScreen}
-        options={{ 
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
       <Stack.Screen
-        name="MobileMoney" 
-        component={MobileMoneyScreen}
-        options={{ 
+        name="YcPayIn"
+        component={YcPayInScreen}
+        options={{
           headerShown: false,
           ...sendFlowStandardPreset(),
         }}

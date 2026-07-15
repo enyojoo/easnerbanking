@@ -1,42 +1,31 @@
 import { describe, expect, it } from "vitest"
 import {
   filterOfficeFiatCurrencies,
-  filterOfficeRatesCurrencies,
+  filterOfficeReportingFxCurrencies,
   isFiatCurrencyCode,
-  isManualPayInCurrencyCode,
-  isOfficeManualRatesCurrencyCode,
 } from "./office-catalog-currencies"
+import { isReportingFxCurrencyCode } from "@/lib/fx/reporting-fx"
 
 describe("office-catalog-currencies", () => {
-  it("excludes non-manual crypto from fiat helper", () => {
+  it("excludes crypto from fiat helpers", () => {
     expect(isFiatCurrencyCode("KES")).toBe(true)
     expect(isFiatCurrencyCode("USDC")).toBe(false)
     expect(isFiatCurrencyCode("BTC")).toBe(false)
   })
 
-  it("includes USDC/USDT for manual rates scope", () => {
-    expect(isManualPayInCurrencyCode("USDC")).toBe(true)
-    expect(isOfficeManualRatesCurrencyCode("USDC")).toBe(true)
-    expect(isOfficeManualRatesCurrencyCode("BTC")).toBe(false)
+  it("reporting FX scope is base currencies only", () => {
+    expect(isReportingFxCurrencyCode("USD")).toBe(true)
+    expect(isReportingFxCurrencyCode("KES")).toBe(false)
+    expect(isReportingFxCurrencyCode("NGN")).toBe(true)
   })
 
-  it("rates scope keeps payment-method currencies and can_send fiat", () => {
-    const rows = [
-      { code: "KES", can_send: false },
-      { code: "GHS", can_send: true },
-      { code: "USDC", can_send: true },
-      { code: "BTC", can_send: true },
-    ]
-    const pm = new Set(["KES"])
-    expect(filterOfficeRatesCurrencies(rows, { paymentMethodCodes: pm }).map((r) => r.code)).toEqual([
-      "KES",
-      "GHS",
-      "USDC",
-    ])
+  it("reporting filter keeps USD/EUR/GBP/NGN only", () => {
+    const rows = [{ code: "USD" }, { code: "KES" }, { code: "GBP" }, { code: "USDC" }]
+    expect(filterOfficeReportingFxCurrencies(rows).map((r) => r.code)).toEqual(["USD", "GBP"])
   })
 
-  it("fiat filter excludes stablecoins", () => {
-    const rows = [{ code: "KES" }, { code: "USDC" }]
-    expect(filterOfficeFiatCurrencies(rows).map((r) => r.code)).toEqual(["KES"])
+  it("fiat filter keeps all fiat codes", () => {
+    const rows = [{ code: "KES" }, { code: "USD" }, { code: "USDC" }]
+    expect(filterOfficeFiatCurrencies(rows).map((r) => r.code)).toEqual(["KES", "USD"])
   })
 })

@@ -1,0 +1,81 @@
+/**
+ * Unit tests for Yellowcard ledger helpers.
+ */
+import { describe, expect, it } from "vitest"
+import {
+  buildYcBalancePayoutOutMetadata,
+  buildYcFundBalanceReceiveMetadata,
+  buildYcOmnibusCryptoDepositMetadata,
+  buildYcRefundExpectedPatch,
+  isYcBalancePayoutRow,
+  isYcFundBalanceRow,
+  isYcInternalCryptoLeg,
+  mergeYcPayoutLifecycle,
+} from "./yc-ledger"
+
+describe("yc-ledger metadata builders", () => {
+  it("builds fund_balance receive metadata with bank_onramp flow", () => {
+    const meta = buildYcFundBalanceReceiveMetadata({
+      sequenceId: "yc_fb_1",
+      transferId: "tr-1",
+      localPayIn: 100000,
+      localCurrency: "NGN",
+      usdCredit: 65,
+      processingFee: 0.65,
+    })
+    expect(meta.yc_mode).toBe("fund_balance")
+    expect(meta.flow).toBe("bank_onramp")
+    expect(meta.yc_sequence_id).toBe("yc_fb_1")
+    expect(meta.usd_credit).toBe(65)
+    expect(isYcFundBalanceRow(meta)).toBe(true)
+  })
+
+  it("builds balance_payout OUT metadata with global_fiat shape", () => {
+    const meta = buildYcBalancePayoutOutMetadata({
+      easnerPayoutId: "payout-1",
+      easnerTransactionId: "ETID12345678",
+      sequenceId: "yc_quote_abc",
+      totalDebited: 50,
+      cryptoAuthorizedAmount: 48.5,
+      processingFee: 0.5,
+      receiveAmount: 75000,
+      receiveCurrency: "NGN",
+      channelId: "ch-1",
+    })
+    expect(meta.payout_type).toBe("global_fiat")
+    expect(meta.payout_provider).toBe("yellowcard")
+    expect(meta.yc_mode).toBe("balance_payout")
+    expect(meta.processing_fee_pending).toBe(true)
+    expect(meta.easner_payout_id).toBe("payout-1")
+    expect(isYcBalancePayoutRow(meta)).toBe(true)
+  })
+
+  it("marks omnibus crypto deposit legs for feed suppression", () => {
+    const meta = buildYcOmnibusCryptoDepositMetadata({
+      ycMode: "balance_payout",
+      easnerPayoutId: "payout-1",
+      txHash: "sig123",
+    })
+    expect(meta.suppress_in_feed).toBe(true)
+    expect(meta.yc_crypto_deposit_leg).toBe(true)
+    expect(isYcInternalCryptoLeg(meta)).toBe(true)
+  })
+
+  it("sets yc + noah refund expected flags on failure", () => {
+    const patch = buildYcRefundExpectedPatch({ foo: 1 }, { refundAmount: 48.5, refundTxHash: "ref1" })
+    expect(patch.yc_refund_expected).toBe(true)
+    expect(patch.noah_refund_expected).toBe(true)
+    expect(patch.yc_refund_amount).toBe(48.5)
+    expect(patch.yc_refund_tx_hash).toBe("ref1")
+  })
+
+  it("merges payout lifecycle timestamps without overwriting completed_at", () => {
+    const first = mergeYcPayoutLifecycle({}, { processing_at: "2026-01-01T00:00:00Z" })
+    const second = mergeYcPayoutLifecycle(first, {
+      completed_at: "2026-01-01T01:00:00Z",
+      processing_at: "2026-01-01T00:30:00Z",
+    })
+    expect(second.processing_at).toBe("2026-01-01T00:00:00Z")
+    expect(second.completed_at).toBe("2026-01-01T01:00:00Z")
+  })
+})

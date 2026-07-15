@@ -30,6 +30,10 @@ import {
 } from "@/hooks/use-business-account-rows"
 import { useFxRates } from "@/hooks/queries"
 import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
+import {
+  hasHistoricalBaseCurrencyMismatch,
+  REPORTING_FX_BASE_CHANGE_NOTE,
+} from "@/lib/fx/base-currency-display"
 
 export function DashboardPageClient() {
   const { data: rows } = useTransactionsCached()
@@ -95,6 +99,11 @@ export function DashboardPageClient() {
   const moneyOut = filteredTransactions
     .filter((t) => t.direction === "debit")
     .reduce((sum, t) => sum + amountInBase(t, baseCurrency), 0)
+
+  const showBaseChangeNote = useMemo(
+    () => hasHistoricalBaseCurrencyMismatch(filteredTransactions, baseCurrency),
+    [filteredTransactions, baseCurrency],
+  )
 
   const recentTransactions = useMemo(() => {
     return [...rows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 6)
@@ -237,6 +246,11 @@ export function DashboardPageClient() {
               onCustomDateRangeChange={setCustomDateRange}
             />
           </div>
+          {showBaseChangeNote ? (
+            <p className="text-xs text-muted-foreground mt-4 border-t border-border pt-3">
+              {REPORTING_FX_BASE_CHANGE_NOTE}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

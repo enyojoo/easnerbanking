@@ -37,33 +37,52 @@ function createPayoutAdmin(initialMeta: Record<string, unknown> = {}) {
     from(_table: string) {
       return {
         select(_cols: string) {
+          const buildEqChain = (col: string) => {
+            const secondEq = {
+              eq(_col2: string, _val2: unknown) {
+                return {
+                  maybeSingle: async () => {
+                    if (col === "provider" || col === "provider_transaction_id") {
+                      return { data: pendingRow, error: null }
+                    }
+                    return { data: null, error: null }
+                  },
+                }
+              },
+              contains: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+              maybeSingle: async () => {
+                if (col === "id") {
+                  return { data: fullRow, error: null }
+                }
+                if (col === "currency") {
+                  return { data: { available_balance: 100, version: 1 }, error: null }
+                }
+                if (col === "provider_transaction_id") {
+                  return { data: pendingRow, error: null }
+                }
+                return { data: null, error: null }
+              },
+            }
+            return secondEq
+          }
           return {
-            eq(col: string, _val: unknown) {
-              const secondEq = {
-                eq(_col2: string, _val2: unknown) {
-                  return {
-                    maybeSingle: async () => {
-                      if (col === "provider") {
-                        return { data: pendingRow, error: null }
-                      }
-                      return { data: null, error: null }
-                    },
-                  }
+            in(_col: string, _vals: unknown) {
+              return {
+                eq(col: string, val: unknown) {
+                  return buildEqChain(col === "provider_transaction_id" ? col : "provider").eq
+                    ? buildEqChain(col)
+                    : buildEqChain(col)
                 },
                 contains: () => ({
                   maybeSingle: async () => ({ data: null, error: null }),
                 }),
-                maybeSingle: async () => {
-                  if (col === "id") {
-                    return { data: fullRow, error: null }
-                  }
-                  if (col === "currency") {
-                    return { data: { available_balance: 100, version: 1 }, error: null }
-                  }
-                  return { data: null, error: null }
-                },
+                maybeSingle: async () => ({ data: pendingRow, error: null }),
               }
-              return secondEq
+            },
+            eq(col: string, _val: unknown) {
+              return buildEqChain(col)
             },
           }
         },

@@ -20,7 +20,7 @@ async function asJson<T>(response: Response): Promise<T> {
 }
 
 export const currenciesApi = {
-  async list(opts?: { scope?: "fiat" | "rates" | "payment-methods" }): Promise<CurrencyAdminRow[]> {
+  async list(opts?: { scope?: "fiat" | "rates" }): Promise<CurrencyAdminRow[]> {
     const q = opts?.scope ? `?scope=${opts.scope}` : ""
     const res = await officeFetch(`/api/admin/currencies${q}`)
     const data = await asJson<{ currencies?: CurrencyAdminRow[] }>(res)

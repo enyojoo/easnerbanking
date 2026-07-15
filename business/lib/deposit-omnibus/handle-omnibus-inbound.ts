@@ -6,24 +6,65 @@ import {
 } from "@/lib/deposit-omnibus/config"
 import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-in-transaction"
 import { triggerDepositSplit } from "@/lib/deposit-omnibus/execute-deposit-split"
-
-function ledgerCurrencyFromAsset(asset: string): "USD" | "EUR" {
-  return String(asset || "").toUpperCase().includes("EURC") ? "EUR" : "USD"
-}
+import { findYcTransferForOmnibusInbound } from "@/lib/yellowcard/yc-ledger"
+import { creditFundBalanceFromYcReceive } from "@/lib/yellowcard/fund-balance-credit"
 
 /**
- * Omnibus Turnkey balance webhook — enqueue and run split immediately.
+ * Omnibus Turnkey balance webhook — Noah deposit split or YC fund_balance / cross-border routing.
  */
 export async function handleDepositOmnibusInbound(
   admin: SupabaseClient,
   deposit: NormalizedTurnkeyBalanceDeposit,
   _eventId: string,
 ): Promise<boolean> {
-  if (!isDepositSplitEnabled()) return false
   if (!isDepositOmnibusAddress(deposit.address)) return false
 
   const txHash = deposit.txHash ? String(deposit.txHash).trim() : null
   if (!txHash) return false
+
+  // YC fund_balance / cross_border leg1 — match before Noah (YC USDC lands on same omnibus).
+  const ycTransfer = await findYcTransferForOmnibusInbound(admin, {
+    txHash,
+    amount: deposit.amount,
+  })
+  if (ycTransfer) {
+    if (ycTransfer.mode === "fund_balance") {
+      await creditFundBalanceFromYcReceive(admin, {
+        transferId: ycTransfer.id,
+        transactionId: ycTransfer.transaction_id,
+        payload: { settlementInfo: { cryptoAmount: deposit.amount } },
+        omnibusTxHash: txHash,
+      })
+      return true
+    }
+    if (ycTransfer.mode === "cross_border_send") {
+      // Pass-through only — mark omnibus received; do not credit user balance.
+      await admin
+        .from("yc_transfers")
+        .update({
+          omnibus_in_actual: deposit.amount,
+          leg1_status: "complete",
+          status: String(ycTransfer.status) === "completed" ? ycTransfer.status : "leg1_settled",
+          metadata: {
+            ...ycTransfer.metadata,
+            leg1_omnibus_tx_hash: txHash,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", ycTransfer.id)
+      try {
+        const { maybeExecuteCrossBorderLeg2 } = await import(
+          "@/lib/yellowcard/cross-border-orchestrator"
+        )
+        await maybeExecuteCrossBorderLeg2(admin, ycTransfer.id)
+      } catch (e) {
+        console.error("[handleDepositOmnibusInbound] yc cross-border leg2 trigger failed", e)
+      }
+      return true
+    }
+  }
+
+  if (!isDepositSplitEnabled()) return false
 
   let q = admin
     .from("transactions")

@@ -29,14 +29,6 @@ export const exchangeRatesApi = {
     return data.rates ?? []
   },
 
-  async upsert(rates: Omit<ExchangeRateAdminRow, "id" | "updated_at">[]): Promise<void> {
-    const res = await officeFetch("/api/admin/exchange-rates", {
-      method: "PUT",
-      body: JSON.stringify({ rates }),
-    })
-    await asJson<{ ok?: boolean }>(res)
-  },
-
   async syncFromModel(): Promise<{ updated: number; skipped: number }> {
     const res = await officeFetch("/api/admin/exchange-rates/sync", { method: "POST" })
     const data = await asJson<{ updated?: number; skipped?: number }>(res)

@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { defaultCurrencyMeta } from "@/lib/admin/currency-catalog-defaults"
-import { isOfficeManualRatesCurrencyCode } from "@/lib/admin/office-catalog-currencies"
+import {
+  isReportingFxCurrencyCode,
+  isReportingFxPair,
+  REPORTING_FX_CURRENCY_CODES,
+  reportingFxDirectedPairs,
+} from "@/lib/fx/reporting-fx"
 
 export type ExchangeRateUpsertRow = {
   from_currency: string
@@ -23,30 +28,33 @@ export type CurrencyInsertRow = {
   can_receive?: boolean
 }
 
-const DEFAULT_MIN = 10
-const DEFAULT_MAX = 1_000_000
-
-function assertManualRatesPair(from: string, to: string) {
+function assertReportingFxPair(from: string, to: string) {
   const f = from.trim().toUpperCase()
   const t = to.trim().toUpperCase()
-  if (!isOfficeManualRatesCurrencyCode(f) || !isOfficeManualRatesCurrencyCode(t)) {
-    throw new Error(`Invalid manual rates pair: ${f} → ${t}`)
+  if (!isReportingFxPair(f, t)) {
+    throw new Error(`Invalid reporting FX pair: ${f} → ${t}`)
   }
   return { from: f, to: t }
 }
 
-export async function listExchangeRatesAdmin(admin: SupabaseClient) {
+export async function listReportingFxRatesAdmin(admin: SupabaseClient) {
+  const codes = [...REPORTING_FX_CURRENCY_CODES]
   const { data, error } = await admin
     .from("exchange_rates")
     .select("*")
+    .in("from_currency", codes)
+    .in("to_currency", codes)
     .order("from_currency")
     .order("to_currency")
   if (error) throw error
-  return (data ?? []).filter(
-    (r) =>
-      isOfficeManualRatesCurrencyCode(String(r.from_currency ?? "")) &&
-      isOfficeManualRatesCurrencyCode(String(r.to_currency ?? "")),
+  return (data ?? []).filter((r) =>
+    isReportingFxPair(String(r.from_currency ?? ""), String(r.to_currency ?? "")),
   )
+}
+
+/** @deprecated Use listReportingFxRatesAdmin */
+export async function listExchangeRatesAdmin(admin: SupabaseClient) {
+  return listReportingFxRatesAdmin(admin)
 }
 
 export async function upsertExchangeRatesAdmin(
@@ -55,15 +63,15 @@ export async function upsertExchangeRatesAdmin(
 ) {
   const now = new Date().toISOString()
   const payload = rows.map((row) => {
-    const { from, to } = assertManualRatesPair(row.from_currency, row.to_currency)
+    const { from, to } = assertReportingFxPair(row.from_currency, row.to_currency)
     return {
       from_currency: from,
       to_currency: to,
       rate: Number(row.rate) || 0,
-      fee_type: row.fee_type ?? "free",
-      fee_amount: Number(row.fee_amount) || 0,
-      min_amount: row.min_amount == null ? null : Number(row.min_amount),
-      max_amount: row.max_amount == null ? null : Number(row.max_amount),
+      fee_type: "free" as const,
+      fee_amount: 0,
+      min_amount: null,
+      max_amount: null,
       status: row.status ?? "active",
       source: "office",
       as_of: now,
@@ -79,106 +87,63 @@ export async function upsertExchangeRatesAdmin(
   if (error) throw error
 }
 
-export async function addCurrencyWithRateMatrix(
-  admin: SupabaseClient,
-  input: CurrencyInsertRow,
-) {
-  const code = input.code.trim().toUpperCase()
-  if (!isOfficeManualRatesCurrencyCode(code)) {
-    throw new Error(`Currency code not allowed on Rates: ${code}`)
-  }
+/** Ensure currency rows + exchange-rate matrix exist for reporting base currencies. */
+export async function ensureReportingFxMatrix(admin: SupabaseClient): Promise<number> {
+  const now = new Date().toISOString()
+  let inserted = 0
 
-  const { data: currency, error: curErr } = await admin
-    .from("currencies")
-    .insert({
+  const currencyPayload = REPORTING_FX_CURRENCY_CODES.map((code) => {
+    const meta = defaultCurrencyMeta(code)
+    return {
       code,
-      name: input.name,
-      symbol: input.symbol,
-      flag_svg: input.flag_svg ?? null,
-      status: input.status ?? "active",
-      can_send: input.can_send ?? true,
-      can_receive: input.can_receive ?? true,
-    })
-    .select("*")
-    .single()
+      name: meta.name,
+      symbol: meta.symbol,
+      can_send: true,
+      can_receive: true,
+      status: "active",
+      updated_at: now,
+    }
+  })
+
+  const { error: curErr } = await admin.from("currencies").upsert(currencyPayload, {
+    onConflict: "code",
+  })
   if (curErr) throw curErr
 
-  const { data: existing } = await admin.from("currencies").select("code").neq("code", code)
-  const others = (existing ?? []).map((c) => String(c.code ?? "").toUpperCase()).filter(Boolean)
-
-  const newRates: ExchangeRateUpsertRow[] = []
-  for (const other of others) {
-    if (!isOfficeManualRatesCurrencyCode(other)) continue
-    newRates.push(
-      {
-        from_currency: code,
-        to_currency: other,
-        rate: 1,
-        fee_type: "free",
-        fee_amount: 0,
-        min_amount: DEFAULT_MIN,
-        max_amount: DEFAULT_MAX,
-        status: "active",
-      },
-      {
-        from_currency: other,
-        to_currency: code,
-        rate: 1,
-        fee_type: "free",
-        fee_amount: 0,
-        min_amount: DEFAULT_MIN,
-        max_amount: DEFAULT_MAX,
-        status: "active",
-      },
-    )
-  }
-
-  if (newRates.length > 0) {
-    await upsertExchangeRatesAdmin(admin, newRates)
-  }
-
-  return currency
-}
-
-export async function updateCurrencyAdmin(
-  admin: SupabaseClient,
-  currencyId: string,
-  updates: { can_send?: boolean; can_receive?: boolean; status?: string },
-) {
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  if (typeof updates.can_send === "boolean") patch.can_send = updates.can_send
-  if (typeof updates.can_receive === "boolean") patch.can_receive = updates.can_receive
-  if (typeof updates.status === "string") patch.status = updates.status
-
-  const { data, error } = await admin
-    .from("currencies")
-    .update(patch)
-    .eq("id", currencyId)
-    .select("*")
-    .single()
-  if (error) throw error
-  return data
-}
-
-export async function deleteCurrencyAndRates(admin: SupabaseClient, currencyId: string) {
-  const { data: currency, error: findErr } = await admin
-    .from("currencies")
-    .select("id,code")
-    .eq("id", currencyId)
-    .maybeSingle()
-  if (findErr) throw findErr
-  if (!currency) throw new Error("Currency not found")
-
-  const code = String(currency.code ?? "").toUpperCase()
-
-  const { error: ratesErr } = await admin
+  const { data: existingRates, error: ratesErr } = await admin
     .from("exchange_rates")
-    .delete()
-    .or(`from_currency.eq.${code},to_currency.eq.${code}`)
+    .select("from_currency, to_currency")
+    .in("from_currency", [...REPORTING_FX_CURRENCY_CODES])
+    .in("to_currency", [...REPORTING_FX_CURRENCY_CODES])
   if (ratesErr) throw ratesErr
 
-  const { error: delErr } = await admin.from("currencies").delete().eq("id", currencyId)
-  if (delErr) throw delErr
+  const have = new Set(
+    (existingRates ?? []).map(
+      (r) => `${String(r.from_currency ?? "").toUpperCase()}_${String(r.to_currency ?? "").toUpperCase()}`,
+    ),
+  )
+
+  const missing = reportingFxDirectedPairs().filter(({ from, to }) => !have.has(`${from}_${to}`))
+  if (missing.length === 0) return 0
+
+  const bootstrap = missing.map(({ from, to }) => ({
+    from_currency: from,
+    to_currency: to,
+    rate: 1,
+    fee_type: "free" as const,
+    fee_amount: 0,
+    min_amount: null,
+    max_amount: null,
+    status: "active",
+    source: "reporting_fx_bootstrap",
+    as_of: now,
+    updated_at: now,
+  }))
+
+  const { error: insertErr } = await admin.from("exchange_rates").insert(bootstrap)
+  if (insertErr) throw insertErr
+  inserted = bootstrap.length
+  return inserted
 }
 
 /** Map Ciuna / legacy row shape → Easner `exchange_rates` upsert payload. */
@@ -210,8 +175,7 @@ export function mapLegacyExchangeRateRow(row: {
 }
 
 /**
- * Insert missing `currencies` rows for every code appearing in `exchange_rates`.
- * Safe when rates were seeded before the currencies table existed.
+ * Insert missing `currencies` rows for reporting FX codes appearing in `exchange_rates`.
  */
 export async function ensureCurrenciesFromExchangeRates(admin: SupabaseClient): Promise<number> {
   const { data: rateRows, error: ratesErr } = await admin
@@ -223,8 +187,8 @@ export async function ensureCurrenciesFromExchangeRates(admin: SupabaseClient): 
   for (const row of rateRows ?? []) {
     const from = String(row.from_currency ?? "").toUpperCase()
     const to = String(row.to_currency ?? "").toUpperCase()
-    if (from && isOfficeManualRatesCurrencyCode(from)) codes.add(from)
-    if (to && isOfficeManualRatesCurrencyCode(to)) codes.add(to)
+    if (from && isReportingFxCurrencyCode(from)) codes.add(from)
+    if (to && isReportingFxCurrencyCode(to)) codes.add(to)
   }
 
   if (codes.size === 0) return 0
@@ -265,15 +229,15 @@ export async function seedExchangeRatesFromLegacyRows(
   const payload = rows
     .map((row) => {
       try {
-        const { from, to } = assertManualRatesPair(row.from_currency, row.to_currency)
+        const { from, to } = assertReportingFxPair(row.from_currency, row.to_currency)
         return {
           from_currency: from,
           to_currency: to,
           rate: Number(row.rate) || 0,
-          fee_type: row.fee_type,
-          fee_amount: Number(row.fee_amount) || 0,
-          min_amount: row.min_amount == null ? null : Number(row.min_amount),
-          max_amount: row.max_amount == null ? null : Number(row.max_amount),
+          fee_type: "free" as const,
+          fee_amount: 0,
+          min_amount: null,
+          max_amount: null,
           status: row.status ?? "active",
           source,
           as_of: now,

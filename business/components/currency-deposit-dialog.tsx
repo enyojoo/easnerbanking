@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   Dialog,
@@ -10,8 +11,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowRight, Copy, Check, Plus, Share2, ShieldCheck } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { ArrowRight, Copy, Check, Plus, Share2, ShieldCheck, Loader2 } from "lucide-react"
 import type { Account } from "@/lib/finance-types"
 import { QRCodeSVG } from "qrcode.react"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
@@ -21,6 +31,11 @@ import {
   getPaymentInstructions,
   getStablecoinPaymentInstructions,
 } from "@/lib/payment-instructions"
+import { fetchWithSession } from "@/lib/fetch-with-session"
+import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
+import { resolveNgLocalVerification, type NgLocalIdType } from "@easner/shared"
+import { mapResidenceToLocalCurrency } from "@/hooks/use-yc-cross-border-flow"
+import { ycBankInfoFields } from "@/lib/yc-bank-info-fields"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -84,6 +99,21 @@ function PaymentInstructions({
   )
 }
 
+type LocalRail = "bank_transfer" | "mobile_money"
+type LocalAmountMode = "usd" | "local"
+
+type FundBalanceQuote = {
+  ok: true
+  localPayIn: number
+  usdCredit: number
+  customerRate: number
+  bankInfo: Record<string, unknown> | null
+  processingFee: number
+  expiresAt: string
+  transactionId: string | null
+  payInNotice?: string
+}
+
 interface CurrencyDepositDialogProps {
   account: Account
   copiedField: string | null
@@ -91,7 +121,12 @@ interface CurrencyDepositDialogProps {
 }
 
 export function CurrencyDepositDialog({ account, copiedField, onCopy }: CurrencyDepositDialogProps) {
-  const { tier1Complete, tier1VerificationStatus } = useBusinessProfile()
+  const {
+    tier1Complete,
+    tier1VerificationStatus,
+    countryCode,
+    businessId,
+  } = useBusinessProfile()
   const stablecoinAccount =
     account.stablecoinAddress && account.stablecoinToken
       ? {
@@ -105,8 +140,63 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const hasStablecoin = stablecoinAccount !== undefined
   const showBankTab = account.showBankDepositTab ?? !tier1Complete
   const showStablecoinTab = hasStablecoin
-  const showTabBar = showBankTab && showStablecoinTab
-  const defaultTab = showBankTab ? "bank" : "stablecoin"
+
+  const [residenceCountry, setResidenceCountry] = useState<string | null>(null)
+  const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
+
+  useEffect(() => {
+    if (account.currency !== "USD") return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetchWithSession("/api/compliance/ng-local-verification")
+        const data = (await res.json().catch(() => ({}))) as {
+          residenceCountry?: string | null
+          kycIdType?: string | null
+          kycIdNumber?: string | null
+          ngLocalIdType?: string | null
+          ngLocalIdNumber?: string | null
+        }
+        if (cancelled || !res.ok) return
+        const residence = String(data.residenceCountry ?? "").trim().toUpperCase() || null
+        setResidenceCountry(residence)
+        const state = resolveNgLocalVerification({
+          residenceCountry: residence,
+          kycIdType: data.kycIdType,
+          kycIdNumber: data.kycIdNumber,
+          ngLocalIdType: data.ngLocalIdType,
+          ngLocalIdNumber: data.ngLocalIdNumber,
+        })
+        setNgMissingType(state.missingType)
+      } catch {
+        // fall back to business countryCode below
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [account.currency])
+
+  const effectiveResidence =
+    residenceCountry || String(countryCode ?? "").trim().toUpperCase() || null
+  const localPayInCurrency = useMemo(
+    () => (effectiveResidence ? mapResidenceToLocalCurrency(effectiveResidence) : null),
+    [effectiveResidence],
+  )
+  const showLocalTab = account.currency === "USD" && Boolean(localPayInCurrency)
+
+  const visibleTabCount = [showBankTab, showLocalTab, showStablecoinTab].filter(Boolean).length
+  const showTabBar = visibleTabCount > 1
+  const defaultTab = showBankTab ? "bank" : showLocalTab ? "local" : "stablecoin"
+  const tabColsClass =
+    visibleTabCount === 3 ? "grid-cols-3" : visibleTabCount === 2 ? "grid-cols-2" : "grid-cols-1"
+
+  const [localAmountMode, setLocalAmountMode] = useState<LocalAmountMode>("usd")
+  const [localAmountStr, setLocalAmountStr] = useState("")
+  const [localRail, setLocalRail] = useState<LocalRail>("bank_transfer")
+  const [localLoading, setLocalLoading] = useState(false)
+  const [localError, setLocalError] = useState<string | null>(null)
+  const [localQuote, setLocalQuote] = useState<FundBalanceQuote | null>(null)
 
   const isNgn = account.currency === "NGN"
   const blockedByAfricanTier = isNgn && !TIER2_COMPLETE_PLACEHOLDER
@@ -121,36 +211,47 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const showVerifyCta = blockedByGlobalTier && !kybInReview
 
   const blockedTitle = blockedByAfricanTier
-    ? "African banking verification required"
+    ? "Nigeria local verification required"
     : kybInReview
       ? "Verification in Review"
       : "Complete Verification to get an account"
 
   const blockedBody = blockedByAfricanTier
-    ? "Please complete African banking setup for your organization to receive NGN pay-in details and local pay-in/pay-out. This is separate from global account verification."
+    ? "Complete Nigeria local verification (NIN + BVN) to unlock local deposits. This is separate from global account verification."
     : kybInReview
       ? "Your business verification is currently being reviewed."
       : kybRejected
         ? "Your verification was not approved. Please complete business verification again to receive your account details."
         : "Please complete your business verification to receive bank and stablecoin deposit information."
 
-  const handleShare = async (type: "bank" | "stablecoin") => {
-    const bankDetails = type === "bank"
-      ? [
-          `Account Name: ${account.accountName}`,
-          account.iban && `IBAN: ${account.iban}`,
-          account.bic && `BIC/SWIFT: ${account.bic}`,
-          !account.iban && account.fullAccountNumber && `Account Number: ${account.fullAccountNumber}`,
-          account.routingNumber && `Routing Number: ${account.routingNumber}`,
-          account.sortCode && `Sort Code: ${account.sortCode}`,
-          `Bank Name: ${account.bankName}`,
-        ].filter(Boolean).join("\n")
-      : stablecoinAccount
+  const handleShare = async (type: "bank" | "stablecoin" | "local") => {
+    const bankDetails =
+      type === "bank"
         ? [
-            `Network: SOL • Solana`,
-            `${stablecoinAccount.stablecoin} Address: ${stablecoinAccount.address}`,
-          ].filter(Boolean).join("\n")
-        : ""
+            `Account Name: ${account.accountName}`,
+            account.iban && `IBAN: ${account.iban}`,
+            account.bic && `BIC/SWIFT: ${account.bic}`,
+            !account.iban &&
+              account.fullAccountNumber &&
+              `Account Number: ${account.fullAccountNumber}`,
+            account.routingNumber && `Routing Number: ${account.routingNumber}`,
+            account.sortCode && `Sort Code: ${account.sortCode}`,
+            `Bank Name: ${account.bankName}`,
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : type === "local" && localQuote?.bankInfo
+          ? ycBankInfoFields(localQuote.bankInfo)
+              .map((f) => `${f.label}: ${f.value}`)
+              .join("\n")
+          : stablecoinAccount
+            ? [
+                `Network: SOL • Solana`,
+                `${stablecoinAccount.stablecoin} Address: ${stablecoinAccount.address}`,
+              ]
+                .filter(Boolean)
+                .join("\n")
+            : ""
 
     if (navigator.share) {
       try {
@@ -168,6 +269,53 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     }
   }
 
+  const handleGetLocalPaymentDetails = async () => {
+    if (!localPayInCurrency || !effectiveResidence) return
+    const amount = Number.parseFloat(localAmountStr.replace(/,/g, ""))
+    if (!(amount > 0)) {
+      setLocalError("Enter a valid amount")
+      return
+    }
+    setLocalLoading(true)
+    setLocalError(null)
+    setLocalQuote(null)
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" }
+      if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+      const body =
+        localAmountMode === "usd"
+          ? {
+              currency: localPayInCurrency,
+              country: effectiveResidence,
+              usdCredit: amount,
+              rail: localRail,
+            }
+          : {
+              currency: localPayInCurrency,
+              country: effectiveResidence,
+              localPayIn: amount,
+              rail: localRail,
+            }
+      const res = await fetchWithSession("/api/yellowcard/fund-balance/quote", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      })
+      const data = (await res.json().catch(() => ({}))) as FundBalanceQuote & { error?: string }
+      if (!res.ok || !data.ok) {
+        setLocalError(typeof data.error === "string" ? data.error : "Could not get payment details")
+        return
+      }
+      setLocalQuote(data)
+    } catch {
+      setLocalError("Could not get payment details")
+    } finally {
+      setLocalLoading(false)
+    }
+  }
+
+  const localBankFields = ycBankInfoFields(localQuote?.bankInfo)
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -184,7 +332,9 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
           </DialogTitle>
           {!depositDetailsBlocked ? (
             <DialogDescription>
-              {`Deposit funds via bank transfer or stablecoin. Both methods credit your ${account.currency} balance.`}
+              {showLocalTab
+                ? `Deposit funds via bank transfer, local currency, or stablecoin. Credits your ${account.currency} balance.`
+                : `Deposit funds via bank transfer or stablecoin. Both methods credit your ${account.currency} balance.`}
             </DialogDescription>
           ) : (
             <DialogDescription className="sr-only">
@@ -210,151 +360,315 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             ) : null}
           </div>
         ) : (
-        <Tabs defaultValue={defaultTab} className="w-full">
-          {showTabBar ? (
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="bank">
-                {account.currency === "USD" ? "US Bank Account" : account.currency === "EUR" ? "EU Bank Account" : "Bank transfer"}
-              </TabsTrigger>
-              <TabsTrigger value="stablecoin">Stablecoin</TabsTrigger>
-            </TabsList>
-          ) : null}
+          <Tabs defaultValue={defaultTab} className="w-full">
+            {showTabBar ? (
+              <TabsList className={`grid w-full ${tabColsClass}`}>
+                {showBankTab ? (
+                  <TabsTrigger value="bank">
+                    {account.currency === "USD"
+                      ? "US Bank Account"
+                      : account.currency === "EUR"
+                        ? "EU Bank Account"
+                        : "Bank transfer"}
+                  </TabsTrigger>
+                ) : null}
+                {showLocalTab ? (
+                  <TabsTrigger value="local">{localPayInCurrency} Deposit</TabsTrigger>
+                ) : null}
+                {showStablecoinTab ? (
+                  <TabsTrigger value="stablecoin">Stablecoin</TabsTrigger>
+                ) : null}
+              </TabsList>
+            ) : null}
 
-          {showBankTab ? (
-          <TabsContent value="bank" className="space-y-4 mt-4">
-            <div className="space-y-4">
-              <CopyableField
-                label="Account Name"
-                value={account.accountName}
-                copiedField={copiedField}
-                fieldId={`bank-name-${account.id}`}
-                onCopy={onCopy}
-              />
-
-              {account.currency === "EUR" && account.iban ? (
-                <>
+            {showBankTab ? (
+              <TabsContent value="bank" className="space-y-4 mt-4">
+                <div className="space-y-4">
                   <CopyableField
-                    label="IBAN"
-                    value={account.iban}
+                    label="Account Name"
+                    value={account.accountName}
                     copiedField={copiedField}
-                    fieldId={`bank-iban-${account.id}`}
+                    fieldId={`bank-name-${account.id}`}
                     onCopy={onCopy}
                   />
-                  {account.bic && (
-                    <CopyableField
-                      label="BIC/SWIFT"
-                      value={account.bic}
-                      copiedField={copiedField}
-                      fieldId={`bank-bic-${account.id}`}
-                      onCopy={onCopy}
-                    />
+
+                  {account.currency === "EUR" && account.iban ? (
+                    <>
+                      <CopyableField
+                        label="IBAN"
+                        value={account.iban}
+                        copiedField={copiedField}
+                        fieldId={`bank-iban-${account.id}`}
+                        onCopy={onCopy}
+                      />
+                      {account.bic && (
+                        <CopyableField
+                          label="BIC/SWIFT"
+                          value={account.bic}
+                          copiedField={copiedField}
+                          fieldId={`bank-bic-${account.id}`}
+                          onCopy={onCopy}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <CopyableField
+                        label="Account Number"
+                        value={account.fullAccountNumber}
+                        copiedField={copiedField}
+                        fieldId={`bank-acc-${account.id}`}
+                        onCopy={onCopy}
+                      />
+                      {account.routingNumber && (
+                        <CopyableField
+                          label="Routing Number"
+                          value={account.routingNumber}
+                          copiedField={copiedField}
+                          fieldId={`bank-routing-${account.id}`}
+                          onCopy={onCopy}
+                        />
+                      )}
+                      {account.sortCode && (
+                        <CopyableField
+                          label="Sort Code"
+                          value={account.sortCode}
+                          copiedField={copiedField}
+                          fieldId={`bank-sort-${account.id}`}
+                          onCopy={onCopy}
+                        />
+                      )}
+                    </>
                   )}
-                </>
-              ) : (
-                <>
+
                   <CopyableField
-                    label="Account Number"
-                    value={account.fullAccountNumber}
+                    label="Bank Name"
+                    value={account.bankName}
                     copiedField={copiedField}
-                    fieldId={`bank-acc-${account.id}`}
+                    fieldId={`bank-bank-${account.id}`}
                     onCopy={onCopy}
                   />
-                  {account.routingNumber && (
-                    <CopyableField
-                      label="Routing Number"
-                      value={account.routingNumber}
-                      copiedField={copiedField}
-                      fieldId={`bank-routing-${account.id}`}
-                      onCopy={onCopy}
-                    />
-                  )}
-                  {account.sortCode && (
-                    <CopyableField
-                      label="Sort Code"
-                      value={account.sortCode}
-                      copiedField={copiedField}
-                      fieldId={`bank-sort-${account.id}`}
-                      onCopy={onCopy}
-                    />
-                  )}
-                </>
-              )}
-
-              <CopyableField
-                label="Bank Name"
-                value={account.bankName}
-                copiedField={copiedField}
-                fieldId={`bank-bank-${account.id}`}
-                onCopy={onCopy}
-              />
-            </div>
-
-            <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => handleShare("bank")}>
-              <Share2 className="h-4 w-4" />
-              Share Account Details
-            </Button>
-
-            <div className="pt-4 border-t">
-              <p className="text-sm font-medium mb-2">Payment Instructions</p>
-              <PaymentInstructions currency={account.currency} type="bank" />
-            </div>
-          </TabsContent>
-          ) : null}
-
-          <TabsContent value="stablecoin" className="space-y-4 mt-4">
-            {hasStablecoin && stablecoinAccount ? (
-              <>
-                <div className="flex flex-col items-center">
-                  <div className="p-4 bg-white rounded-xl border">
-                    <QRCodeSVG value={stablecoinAccount.address} size={200} level="M" />
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Scan to send {stablecoinAccount.stablecoin}
-                  </p>
                 </div>
 
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Network</p>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <span className="text-sm font-medium">
-                      {stablecoinAccount.chain === "Solana" ? "SOL" : stablecoinAccount.chain === "Ethereum" ? "ETH" : stablecoinAccount.chain}
-                    </span>
-                    <span className="text-sm text-muted-foreground"> • </span>
-                    <span className="text-sm text-muted-foreground">{stablecoinAccount.chain}</span>
-                  </div>
-                </div>
-
-                <CopyableField
-                  label="Address"
-                  value={stablecoinAccount.address}
-                  copiedField={copiedField}
-                  fieldId={`stable-addr-${account.id}`}
-                  onCopy={onCopy}
-                />
-
-                <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => handleShare("stablecoin")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => handleShare("bank")}
+                >
                   <Share2 className="h-4 w-4" />
-                  Share {stablecoinAccount.stablecoin} Details
+                  Share Account Details
                 </Button>
 
                 <div className="pt-4 border-t">
                   <p className="text-sm font-medium mb-2">Payment Instructions</p>
-                  <PaymentInstructions
-                    currency={account.currency}
-                    type="stablecoin"
-                    stablecoinToken={stablecoinAccount?.stablecoin}
+                  <PaymentInstructions currency={account.currency} type="bank" />
+                </div>
+              </TabsContent>
+            ) : null}
+
+            {showLocalTab && localPayInCurrency ? (
+              <TabsContent value="local" className="space-y-4 mt-4">
+                <p className="text-sm text-muted-foreground">
+                  Pay in {localPayInCurrency} to credit your USD balance. You&apos;ll get one-time
+                  bank or mobile money details for this amount.
+                </p>
+
+                {localPayInCurrency === "NGN" && ngMissingType ? (
+                  <NgLocalVerificationNotice
+                    missingType={ngMissingType}
+                    onSaved={() => setNgMissingType(null)}
+                  />
+                ) : null}
+
+                <div className="space-y-2">
+                  <Label>Amount type</Label>
+                  <Select
+                    value={localAmountMode}
+                    onValueChange={(v: string) => {
+                      setLocalAmountMode(v as LocalAmountMode)
+                      setLocalQuote(null)
+                      setLocalError(null)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="usd">USD credit</SelectItem>
+                      <SelectItem value="local">{localPayInCurrency} to pay</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor={`local-amt-${account.id}`}>
+                    {localAmountMode === "usd" ? "USD to credit" : `${localPayInCurrency} to pay`}
+                  </Label>
+                  <Input
+                    id={`local-amt-${account.id}`}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={localAmountStr}
+                    onChange={(e) => {
+                      setLocalAmountStr(e.target.value)
+                      setLocalQuote(null)
+                      setLocalError(null)
+                    }}
                   />
                 </div>
-              </>
-            ) : (
-              <div className="py-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Stablecoin deposits for {account.currency} are coming soon.
-                </p>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+
+                <div className="space-y-2">
+                  <Label>Payment method</Label>
+                  <Select
+                    value={localRail}
+                    onValueChange={(v: string) => {
+                      setLocalRail(v as LocalRail)
+                      setLocalQuote(null)
+                      setLocalError(null)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bank_transfer">Bank transfer</SelectItem>
+                      <SelectItem value="mobile_money">Mobile money</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button
+                  className="w-full gap-2"
+                  disabled={localLoading}
+                  onClick={() => void handleGetLocalPaymentDetails()}
+                >
+                  {localLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Getting details…
+                    </>
+                  ) : (
+                    "Get payment details"
+                  )}
+                </Button>
+
+                {localError ? <p className="text-sm text-destructive">{localError}</p> : null}
+
+                {localQuote ? (
+                  <div className="space-y-4 pt-2 border-t">
+                    {localQuote.payInNotice ? (
+                      <p className="text-sm text-muted-foreground">{localQuote.payInNotice}</p>
+                    ) : null}
+                    <p className="text-sm text-muted-foreground">
+                      Pay{" "}
+                      <span className="font-medium text-foreground">
+                        {localQuote.localPayIn.toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        {localPayInCurrency}
+                      </span>{" "}
+                      to credit{" "}
+                      <span className="font-medium text-foreground">
+                        ${localQuote.usdCredit.toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        USD
+                      </span>
+                    </p>
+                    <div className="space-y-3">
+                      {localBankFields.map((f) => (
+                        <CopyableField
+                          key={f.id}
+                          label={f.label}
+                          value={f.value}
+                          copiedField={copiedField}
+                          fieldId={`local-${f.id}-${account.id}`}
+                          onCopy={onCopy}
+                        />
+                      ))}
+                    </div>
+                    {localBankFields.length > 0 ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-2"
+                        onClick={() => void handleShare("local")}
+                      >
+                        <Share2 className="h-4 w-4" />
+                        Share Payment Details
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </TabsContent>
+            ) : null}
+
+            <TabsContent value="stablecoin" className="space-y-4 mt-4">
+              {hasStablecoin && stablecoinAccount ? (
+                <>
+                  <div className="flex flex-col items-center">
+                    <div className="p-4 bg-white rounded-xl border">
+                      <QRCodeSVG value={stablecoinAccount.address} size={200} level="M" />
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Scan to send {stablecoinAccount.stablecoin}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Network</p>
+                    <div className="p-3 bg-muted rounded-lg">
+                      <span className="text-sm font-medium">
+                        {stablecoinAccount.chain === "Solana"
+                          ? "SOL"
+                          : stablecoinAccount.chain === "Ethereum"
+                            ? "ETH"
+                            : stablecoinAccount.chain}
+                      </span>
+                      <span className="text-sm text-muted-foreground"> • </span>
+                      <span className="text-sm text-muted-foreground">{stablecoinAccount.chain}</span>
+                    </div>
+                  </div>
+
+                  <CopyableField
+                    label="Address"
+                    value={stablecoinAccount.address}
+                    copiedField={copiedField}
+                    fieldId={`stable-addr-${account.id}`}
+                    onCopy={onCopy}
+                  />
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={() => handleShare("stablecoin")}
+                  >
+                    <Share2 className="h-4 w-4" />
+                    Share {stablecoinAccount.stablecoin} Details
+                  </Button>
+
+                  <div className="pt-4 border-t">
+                    <p className="text-sm font-medium mb-2">Payment Instructions</p>
+                    <PaymentInstructions
+                      currency={account.currency}
+                      type="stablecoin"
+                      stablecoinToken={stablecoinAccount?.stablecoin}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Stablecoin deposits for {account.currency} are coming soon.
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         )}
       </DialogContent>
     </Dialog>

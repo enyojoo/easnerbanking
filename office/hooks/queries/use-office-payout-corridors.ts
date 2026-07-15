@@ -13,6 +13,6 @@ export function useOfficePayoutCorridors() {
     queryKey: officeKeys.payoutCorridors(),
     enabled,
     staleTime: OFFICE_REFERENCE_STALE_MS,
-    queryFn: (): Promise<PayoutCorridorAdminRow[]> => payoutCorridorsApi.list(),
+    queryFn: (): Promise<PayoutCorridorAdminRow[]> => payoutCorridorsApi.list({ annotateProviders: true }),
   })
 }

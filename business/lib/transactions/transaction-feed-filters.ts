@@ -25,6 +25,8 @@ export function isTurnkeyTransactionHiddenFromFeed(
   if (m.noah_orchestration_settlement_leg === true) return true
   if (m.noah_orchestration_settlement_in_leg === true) return true
   if (m.global_payout_refund_mirror === true) return true
+  if (m.yc_crypto_deposit_leg === true || m.yc_settlement_leg === true) return true
+  if (m.yc_fee_wallet_refund_mirror === true) return true
   if (payload && typeof payload === "object" && isNoahBankOnrampOrchestrationOutLeg(payload as Record<string, unknown>)) {
     return true
   }

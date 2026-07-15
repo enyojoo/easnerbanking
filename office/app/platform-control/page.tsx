@@ -7,19 +7,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   PlatformConfigPanel,
   RatesPanel,
-  PaymentMethodsPanel,
   FiatPanel,
   CryptoPanel,
   NoahRatesPanel,
+  YcRatesPanel,
   CryptoRatesPanel,
   WebhookInboxPanel,
 } from "@/components/platform-control/platform-control-panels"
 
-const TABS = ["platform", "rates", "noah-rates", "crypto-rates", "payment-methods", "fiat", "crypto", "webhooks"] as const
+const TABS = ["platform", "rates", "noah-rates", "yc-rates", "crypto-rates", "fiat", "crypto", "webhooks"] as const
 type PlatformControlTab = (typeof TABS)[number]
 
 function normalizeTab(raw: string | null): string | null {
-  if (raw === "send-destinations") return "fiat"
   if (raw === "balance-currencies") return "platform"
   return raw
 }
@@ -62,11 +61,11 @@ function PlatformControlHubBody() {
         <Tabs value={activeTab} onValueChange={onTabChange} className="space-y-6">
           <TabsList className="flex flex-wrap h-auto gap-1 justify-start">
             <TabsTrigger value="platform">Platform</TabsTrigger>
-            <TabsTrigger value="rates">P2P rates</TabsTrigger>
+            <TabsTrigger value="rates">Reporting FX</TabsTrigger>
             <TabsTrigger value="noah-rates">Noah rates</TabsTrigger>
+            <TabsTrigger value="yc-rates">Yellowcard rates</TabsTrigger>
             <TabsTrigger value="crypto-rates">Crypto rates</TabsTrigger>
-            <TabsTrigger value="payment-methods">Payment methods</TabsTrigger>
-            <TabsTrigger value="fiat">Fiat</TabsTrigger>
+            <TabsTrigger value="fiat">Fiat corridors</TabsTrigger>
             <TabsTrigger value="crypto">Crypto</TabsTrigger>
             <TabsTrigger value="webhooks">Webhook inbox</TabsTrigger>
           </TabsList>
@@ -79,11 +78,11 @@ function PlatformControlHubBody() {
           <TabsContent value="noah-rates" forceMount className={TAB_CONTENT_CLASS}>
             <NoahRatesPanel />
           </TabsContent>
+          <TabsContent value="yc-rates" forceMount className={TAB_CONTENT_CLASS}>
+            <YcRatesPanel />
+          </TabsContent>
           <TabsContent value="crypto-rates" forceMount className={TAB_CONTENT_CLASS}>
             <CryptoRatesPanel />
-          </TabsContent>
-          <TabsContent value="payment-methods" forceMount className={TAB_CONTENT_CLASS}>
-            <PaymentMethodsPanel />
           </TabsContent>
           <TabsContent value="fiat" forceMount className={TAB_CONTENT_CLASS}>
             <FiatPanel />

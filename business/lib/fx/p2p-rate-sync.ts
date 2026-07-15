@@ -1,4 +1,5 @@
 import { syncExchangeRatesFromModel, type SyncResult } from "@easner/rate-sync"
+import { REPORTING_FX_CURRENCY_CODES } from "@/lib/fx/reporting-fx"
 
 export type { SyncResult }
 
@@ -17,23 +18,35 @@ function getSupabaseServiceConfig(): { supabaseUrl: string; serviceRoleKey: stri
   return { supabaseUrl, serviceRoleKey }
 }
 
-/** Recompute all existing `exchange_rates` rows from the Easner P2P pricing model. */
-export async function syncP2pExchangeRates(options?: { dryRun?: boolean }): Promise<SyncResult> {
+/** Recompute reporting FX rows from the Easner P2P pricing model (USD/EUR/GBP/NGN crosses only). */
+export async function syncReportingFxRates(options?: { dryRun?: boolean }): Promise<SyncResult> {
   const { supabaseUrl, serviceRoleKey } = getSupabaseServiceConfig()
   return syncExchangeRatesFromModel({
     supabaseUrl,
     serviceRoleKey,
     dryRun: options?.dryRun,
+    currencyCodes: [...REPORTING_FX_CURRENCY_CODES],
   })
+}
+
+/** @deprecated Use syncReportingFxRates */
+export async function syncP2pExchangeRates(options?: { dryRun?: boolean }): Promise<SyncResult> {
+  return syncReportingFxRates(options)
+}
+
+export async function syncReportingFxRatesSafe(
+  options?: { dryRun?: boolean },
+): Promise<{ ok: true; result: SyncResult } | { ok: false; reason: string }> {
+  try {
+    const result = await syncReportingFxRates(options)
+    return { ok: true, result }
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 export async function syncP2pExchangeRatesSafe(
   options?: { dryRun?: boolean },
 ): Promise<{ ok: true; result: SyncResult } | { ok: false; reason: string }> {
-  try {
-    const result = await syncP2pExchangeRates(options)
-    return { ok: true, result }
-  } catch (e) {
-    return { ok: false, reason: e instanceof Error ? e.message : String(e) }
-  }
+  return syncReportingFxRatesSafe(options)
 }

@@ -26,6 +26,10 @@ import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "
 import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
 import { TransactionDetailPrefetchLink } from "@/components/transactions/transaction-detail-prefetch-link"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
+import {
+  hasHistoricalBaseCurrencyMismatch,
+  REPORTING_FX_BASE_CHANGE_NOTE,
+} from "@/lib/fx/base-currency-display"
 
 function exportToCsv(
   transactions: {
@@ -172,6 +176,11 @@ export default function TransactionsPage() {
 
   const summaryCurrency = baseCurrencyCode
 
+  const showBaseChangeNote = useMemo(
+    () => hasHistoricalBaseCurrencyMismatch(filteredTransactions, baseCurrencyCode),
+    [filteredTransactions, baseCurrencyCode],
+  )
+
   const handleFilterChange = (setter: (value: string) => void) => (value: string) => {
     setter(value)
     setDisplayCount(10)
@@ -277,6 +286,11 @@ export default function TransactionsPage() {
               </div>
             </div>
           )}
+          {!listLoading && showBaseChangeNote ? (
+            <p className="text-xs text-muted-foreground mt-6 border-t border-border pt-4">
+              {REPORTING_FX_BASE_CHANGE_NOTE}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

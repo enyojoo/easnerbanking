@@ -103,12 +103,17 @@ import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import {
   getCountryCodeForCurrency,
+  normalizeRecipientYcMetadata,
   recipientFormNeedsAddress,
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
+  resolveYcCorridorSchema,
+  validateYcRecipientForCorridor,
+  ycAccountNumberLabel,
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
+import { YcRecipientExtraFields } from '../../components/recipients/YcRecipientExtraFields'
 import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
 import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import { haptics } from '../../lib/haptics'
@@ -169,6 +174,42 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     catalogRevision,
     refresh: refreshCatalog,
   } = useSendDestinations()
+
+  const selectedBankCorridor = useMemo(() => {
+    if (!selectedCountryCurrency || selectedRecipientType !== 'bank') return null
+    return (
+      bankCorridors.find(
+        (c) =>
+          c.country_code === selectedCountryCurrency.countryCode &&
+          c.currency_code === selectedCountryCurrency.currencyCode,
+      ) ?? null
+    )
+  }, [bankCorridors, selectedCountryCurrency, selectedRecipientType])
+
+  const ycCorridorSchema = useMemo(() => {
+    if (!selectedCountryCurrency) return null
+    return resolveYcCorridorSchema({
+      countryCode: selectedCountryCurrency.countryCode,
+      currencyCode: selectedCountryCurrency.currencyCode,
+      fieldsSchema: selectedBankCorridor?.fields_schema,
+    })
+  }, [selectedCountryCurrency, selectedBankCorridor])
+
+  const buildFormYcMetadata = useCallback(() => {
+    return normalizeRecipientYcMetadata({
+      pix_key_type: newRecipient.ycPixKeyType,
+      cuit: newRecipient.ycCuit,
+      identification_type: newRecipient.ycIdentificationType,
+      identification_number: newRecipient.ycIdentificationNumber,
+      account_type: newRecipient.ycAccountType,
+    })
+  }, [
+    newRecipient.ycPixKeyType,
+    newRecipient.ycCuit,
+    newRecipient.ycIdentificationType,
+    newRecipient.ycIdentificationNumber,
+    newRecipient.ycAccountType,
+  ])
 
   useFocusEffect(
     useCallback(() => {
@@ -240,6 +281,11 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     postalCode: '',
     email: '',
     payeeEasetag: '',
+    ycPixKeyType: '',
+    ycCuit: '',
+    ycIdentificationType: '',
+    ycIdentificationNumber: '',
+    ycAccountType: '',
   })
 
   // Track screen view
@@ -547,6 +593,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
           selectedCountryCurrency?.countryCode === 'US' || needsAddr
             ? newRecipient.postalCode || undefined
             : undefined,
+        metadata: selectedRecipientType === 'bank' ? buildFormYcMetadata() : undefined,
       })
       setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
 
@@ -659,6 +706,15 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         (inferredType === 'easenet' ? recipient.account_number : '') ||
         ''
       ).replace(/^@+/, ''),
+      ycPixKeyType: String((recipient.metadata as Record<string, unknown> | undefined)?.pix_key_type ?? ''),
+      ycCuit: String((recipient.metadata as Record<string, unknown> | undefined)?.cuit ?? ''),
+      ycIdentificationType: String(
+        (recipient.metadata as Record<string, unknown> | undefined)?.identification_type ?? '',
+      ),
+      ycIdentificationNumber: String(
+        (recipient.metadata as Record<string, unknown> | undefined)?.identification_number ?? '',
+      ),
+      ycAccountType: String((recipient.metadata as Record<string, unknown> | undefined)?.account_type ?? ''),
     })
     setShowBankAccountForm(true)
   }
@@ -765,6 +821,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
           selectedCountryCurrency?.countryCode === 'US' || needsAddr
             ? newRecipient.postalCode || undefined
             : undefined,
+        metadata: selectedRecipientType === 'bank' ? buildFormYcMetadata() : undefined,
       })
       setUiRecipients((prev) => prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)))
 
@@ -873,13 +930,15 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     }
 
     const bankEnum =
-      selectedCountryCurrency && selectedRecipientType === 'bank'
-        ? getPayoutFieldsSchemaForCorridor({
-            countryCode: selectedCountryCurrency.countryCode,
-            currencyCode: selectedCountryCurrency.currencyCode,
-            rail: 'bank_transfer',
-          })?.bank_enum ?? []
-        : []
+      ycCorridorSchema?.bank_enum?.length
+        ? ycCorridorSchema.bank_enum
+        : selectedCountryCurrency && selectedRecipientType === 'bank'
+          ? getPayoutFieldsSchemaForCorridor({
+              countryCode: selectedCountryCurrency.countryCode,
+              currencyCode: selectedCountryCurrency.currencyCode,
+              rail: 'bank_transfer',
+            })?.bank_enum ?? []
+          : []
     if (
       bankEnum.length > 0 &&
       newRecipient.bankName.trim() &&
@@ -912,6 +971,28 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       if (!newRecipient.postalCode.trim()) return false
     }
 
+    if (
+      selectedRecipientType === 'bank' &&
+      selectedCountryCurrency &&
+      ycCorridorSchema?.status === 'ready'
+    ) {
+      const ycCheck = validateYcRecipientForCorridor({
+        countryCode: selectedCountryCurrency.countryCode,
+        currencyCode: selectedCountryCurrency.currencyCode,
+        fieldsSchema: selectedBankCorridor?.fields_schema,
+        row: {
+          country_code: selectedCountryCurrency.countryCode,
+          currency: newRecipient.currency,
+          full_name: newRecipient.fullName,
+          account_number: newRecipient.accountNumber,
+          bank_name: newRecipient.bankName,
+          phone_number: newRecipient.phoneNumber,
+          metadata: buildFormYcMetadata(),
+        },
+      })
+      if (!ycCheck.ok) return false
+    }
+
     return true
   }
 
@@ -936,6 +1017,11 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       postalCode: '',
       email: '',
       payeeEasetag: '',
+      ycPixKeyType: '',
+      ycCuit: '',
+      ycIdentificationType: '',
+      ycIdentificationNumber: '',
+      ycAccountType: '',
     })
     setError('')
     setFieldErrors({})
@@ -2229,7 +2315,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                             validateField('accountNumber', formatted)
                           }}
                           onBlur={() => validateField('accountNumber', newRecipient.accountNumber)}
-                          placeholder={`${accountConfig.fieldLabels.account_number} *`}
+                          placeholder={`${ycAccountNumberLabel(ycCorridorSchema) || accountConfig.fieldLabels.account_number} *`}
                           placeholderTextColor={colors.text.secondary}
                           keyboardType="number-pad"
                           autoComplete="off"
@@ -2240,6 +2326,30 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                         {fieldErrors.accountNumber && (
                           <Text style={styles.errorText}>{fieldErrors.accountNumber}</Text>
                         )}
+                        <YcRecipientExtraFields
+                          schema={ycCorridorSchema}
+                          values={buildFormYcMetadata()}
+                          onChange={(patch) =>
+                            setNewRecipient((prev) => ({
+                              ...prev,
+                              ...(patch.pix_key_type != null
+                                ? { ycPixKeyType: patch.pix_key_type }
+                                : {}),
+                              ...(patch.cuit != null ? { ycCuit: patch.cuit } : {}),
+                              ...(patch.identification_type != null
+                                ? { ycIdentificationType: patch.identification_type }
+                                : {}),
+                              ...(patch.identification_number != null
+                                ? { ycIdentificationNumber: patch.identification_number }
+                                : {}),
+                              ...(patch.account_type != null
+                                ? { ycAccountType: patch.account_type }
+                                : {}),
+                            }))
+                          }
+                          fieldErrors={fieldErrors}
+                          isSubmitting={isSubmitting}
+                        />
                         {selectedCountryCurrency && selectedRecipientType === 'bank' &&
                         recipientFormNeedsBankCode(
                           getPayoutFieldsSchemaForCorridor({

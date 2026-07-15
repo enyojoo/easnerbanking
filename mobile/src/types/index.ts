@@ -55,6 +55,7 @@ export interface Recipient {
   checking_or_savings?: "checking" | "savings"
   mobile_provider?: string
   wallet_network?: string
+  metadata?: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }

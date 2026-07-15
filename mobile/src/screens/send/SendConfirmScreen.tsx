@@ -74,6 +74,8 @@ import {
   type WalletPrepareSession,
 } from '../../lib/sendFlowWalletQuote'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
+import { YcCrossBorderSendConfirm } from '../../components/send/YcCrossBorderSendConfirm'
+import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { haptics } from '../../lib/haptics'
 
 function payoutSessionMatchesRecipient(
@@ -140,7 +142,15 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     amountEntryMode?: 'send' | 'receive'
     amountScreenSendAmount?: number
     isWalletSend?: boolean
+    paymentMethod?: 'balance' | 'otherCurrency'
+    ycPayInCurrency?: string
+    ycPayInRail?: YcPayInRail
   }
+
+  const isYcCrossBorder =
+    params.paymentMethod === 'otherCurrency' &&
+    Boolean(params.ycPayInCurrency) &&
+    Boolean(params.ycPayInRail)
 
   const recipient = params.recipient
   const isWalletRecipient =
@@ -685,6 +695,24 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             <Text style={{ color: colors.primary.main }}>Go back</Text>
           </Pressable>
         </View>
+      </ScreenWrapper>
+    )
+  }
+
+  if (isYcCrossBorder) {
+    return (
+      <ScreenWrapper>
+        <YcCrossBorderSendConfirm
+          navigation={navigation}
+          recipient={recipient}
+          receiveAmount={params.receiveAmountValue ?? 0}
+          receiveCurrency={params.receiveCurrency ?? recipient.currency ?? ''}
+          payInCurrency={params.ycPayInCurrency!}
+          payInRail={params.ycPayInRail!}
+          transactionId={paramTransactionId || ''}
+          footerPadding={footerPadding}
+          listBottomPadding={listBottomPadding}
+        />
       </ScreenWrapper>
     )
   }

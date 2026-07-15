@@ -14,6 +14,11 @@ import {
 } from "@/lib/noah/turnkey-offramp-orchestration"
 import { normalizePayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
+import { selectProviderForCorridor } from "@/lib/payout-providers"
+import {
+  executeYcBalancePayout,
+  isYcBalancePayoutQuote,
+} from "@/lib/yellowcard/balance-payout-execute"
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -58,6 +63,14 @@ export async function POST(request: Request) {
         marginCaptureMode?: "surplus_send" | "split_debit"
         customerRate?: number
         noahMid?: number
+        payoutProvider?: "noah" | "yellowcard"
+        ycSequenceId?: string
+        ycSendId?: string
+        ycWalletAddress?: string
+        ycCryptoAmount?: number
+        processingFee?: string | number
+        channelCost?: string | number
+        customerPrincipal?: string | number
       }
     | null
 
@@ -154,7 +167,117 @@ export async function POST(request: Request) {
       : null
   const txUserId = orgOwner ?? user.id
 
+  // Resolve payout provider: explicit body → corridor routing → quote heuristics.
+  let payoutProvider: "noah" | "yellowcard" = "noah"
+  const bodyProvider = String(body?.payoutProvider || "").toLowerCase()
+  if (bodyProvider === "yellowcard") {
+    payoutProvider = "yellowcard"
+  } else if (
+    isYcBalancePayoutQuote({
+      payoutProvider: body?.payoutProvider,
+      formSessionId,
+      ycSequenceId: body?.ycSequenceId,
+      ycWalletAddress: body?.ycWalletAddress,
+    })
+  ) {
+    payoutProvider = "yellowcard"
+  } else {
+    try {
+      const bankLabel = String(rec.bank_name || "").toLowerCase()
+      const rail =
+        rec.mobile_provider || bankLabel.includes("mobile money")
+          ? ("mobile_money" as const)
+          : ("bank_transfer" as const)
+      const provider = await selectProviderForCorridor(admin, {
+        countryCode,
+        currencyCode: fiatCurrency,
+        mobileProvider: rec.mobile_provider,
+        bankName: rec.bank_name,
+        rail,
+      })
+      if (provider.id === "yellowcard") payoutProvider = "yellowcard"
+    } catch {
+      // keep noah default
+    }
+  }
+
   try {
+    if (payoutProvider === "yellowcard") {
+      const walletAddress = String(body?.ycWalletAddress || "").trim()
+      const sequenceId = String(body?.ycSequenceId || formSessionId || "").trim()
+      const cryptoAmount = Number(body?.ycCryptoAmount ?? cryptoAuthorizedAmount)
+      const totalDebited = Number(body?.totalDebited ?? 0)
+      const marginAmount = Number(body?.marginAmount ?? 0)
+      const processingFee = Number(body?.processingFee ?? 0)
+      const channelCost = Number(body?.channelCost ?? 0)
+      const customerPrincipal = Number(body?.customerPrincipal ?? totalDebited)
+
+      if (!walletAddress || !sequenceId || !(cryptoAmount > 0) || !(totalDebited > 0)) {
+        return NextResponse.json(
+          {
+            error:
+              "Yellowcard payout quote is incomplete. Go back and refresh the quote before authorizing.",
+          },
+          { status: 400 },
+        )
+      }
+
+      const result = await executeYcBalancePayout({
+        admin,
+        userId: txUserId,
+        businessId: noahCtx.businessId,
+        recipientRow,
+        recipientId,
+        fiatAmount: amount,
+        fiatCurrency,
+        countryCode,
+        channelId: channelId || undefined,
+        reviewSnapshot: reviewSnapshot ?? undefined,
+        sendNote: sendNote || undefined,
+        idempotencyKey: idempotencyKey || undefined,
+        yc: {
+          sequenceId,
+          sendId: body?.ycSendId ?? formSessionId,
+          cryptoAmount,
+          walletAddress,
+          channelId: channelId || String(body?.channelId || ""),
+        },
+        pricing: {
+          totalDebited,
+          customerPrincipal,
+          marginAmount,
+          processingFee,
+          channelCost,
+          customerRate: body?.customerRate != null ? Number(body.customerRate) : undefined,
+        },
+      })
+
+      if (!result.ok) {
+        if (result.error === "insufficient_balance") {
+          return NextResponse.json({ error: "Insufficient balance for this payout." }, { status: 400 })
+        }
+        logNoahPayoutFailure("transfers_yc_offramp", new Error(result.error), {
+          recipientId,
+          countryCode,
+          fiatCurrency,
+          fiatAmount: amount,
+          userId: user.id,
+          scope: noahCtx.scope,
+        })
+        return NextResponse.json({ error: result.error || "Yellowcard payout failed." }, { status: 400 })
+      }
+
+      return NextResponse.json({
+        id: result.easnerTransactionId,
+        transaction_id: result.easnerTransactionId,
+        easner_transaction_id: result.easnerTransactionId,
+        amount: amount.toFixed(2),
+        currency: fiatCurrency.toLowerCase(),
+        status: "pending",
+        provider: "yellowcard",
+      })
+    }
+
     const result = await executeTurnkeyOfframpPayout({
       admin,
       ctx: acc.ctx,

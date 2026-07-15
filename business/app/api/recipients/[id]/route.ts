@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
+import { validateRecipientYcExtrasForSave } from "@/lib/recipients-yc-validation"
 import {
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
+  resolveYcCorridorSchema,
+  unwrapNoahFieldsSchema,
 } from "@easner/shared"
 import {
   looksLikeMissingStructuredColumn,
@@ -29,7 +32,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   const admin = createSupabaseAdmin()
   const { data: existing } = await admin
     .from("recipients")
-    .select("country_code,currency,mobile_provider,wallet_network,bank_name,swift_bic,phone_number,email")
+    .select(
+      "country_code,currency,mobile_provider,wallet_network,bank_name,swift_bic,phone_number,email,full_name,account_number,checking_or_savings,metadata",
+    )
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle()
@@ -62,9 +67,15 @@ export async function PATCH(request: Request, context: RouteContext) {
       .eq("currency_code", cur)
       .eq("rail", rail)
       .maybeSingle()
-    const bankEnum = (
-      corridor?.fields_schema as { bank_enum?: string[] } | null | undefined
-    )?.bank_enum
+    const ycSchema = resolveYcCorridorSchema({
+      countryCode: cc,
+      currencyCode: cur,
+      fieldsSchema: corridor?.fields_schema,
+    })
+    const bankEnum =
+      ycSchema?.bank_enum?.length
+        ? ycSchema.bank_enum
+        : unwrapNoahFieldsSchema(corridor?.fields_schema)?.bank_enum
     const bankName = String(payload.bank_name ?? existing.bank_name ?? "").trim()
     if (
       !isMobile &&
@@ -78,10 +89,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         { status: 400 },
       )
     }
-    const fieldsSchema = corridor?.fields_schema as
-      | { needs_email?: boolean; needs_phone?: boolean; needs_bank_code?: boolean }
-      | null
-      | undefined
+    const fieldsSchema = unwrapNoahFieldsSchema(corridor?.fields_schema)
     if (!isMobile && recipientFormNeedsEmail(fieldsSchema ?? null)) {
       const em = String(payload.email ?? existing.email ?? "").trim()
       if (!em) {
@@ -114,6 +122,21 @@ export async function PATCH(request: Request, context: RouteContext) {
       if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) {
         return NextResponse.json({ error: "Invalid SWIFT/BIC code." }, { status: 400 })
       }
+    }
+
+    const ycErr = await validateRecipientYcExtrasForSave(admin, {
+      country_code: merged.country_code,
+      currency: merged.currency,
+      full_name: payload.full_name ?? existing.full_name ?? "",
+      account_number: payload.account_number ?? existing.account_number ?? "",
+      bank_name: payload.bank_name ?? existing.bank_name ?? "",
+      phone_number: payload.phone_number ?? existing.phone_number ?? null,
+      mobile_provider: merged.mobile_provider,
+      checking_or_savings: payload.checking_or_savings ?? existing.checking_or_savings ?? null,
+      metadata: payload.metadata ?? existing.metadata ?? {},
+    })
+    if (ycErr) {
+      return NextResponse.json({ error: ycErr }, { status: 400 })
     }
   }
 

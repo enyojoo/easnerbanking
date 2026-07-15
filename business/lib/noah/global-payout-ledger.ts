@@ -8,6 +8,8 @@ import {
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { normalizeDirection } from "@/lib/ledger/transactions"
 
+const GLOBAL_PAYOUT_PROVIDERS = ["noah", "yellowcard"] as const
+
 export function pendingGlobalPayoutProviderTransactionId(easnerPayoutId: string): string {
   return `global_payout_pending:${easnerPayoutId}`
 }
@@ -81,6 +83,7 @@ export function pickRefundAmountCandidatesFromGlobalPayoutMeta(
     if (!candidates.some((c) => amountsRoughlyEqual(c, v))) candidates.push(v)
   }
   push(meta.noah_refund_amount)
+  push(meta.yc_refund_amount)
   push(meta.noah_send_amount)
   push(meta.crypto_authorized_amount)
   push(meta.noah_floor)
@@ -118,6 +121,7 @@ export async function persistGlobalPayoutRefundTxHashOnOutRow(
   const prior = row.metadata as Record<string, unknown>
   if (String(prior.noah_refund_tx_hash ?? "").trim() === txHash) return
 
+  const isYc = prior.payout_provider === "yellowcard" || prior.yc_mode === "balance_payout"
   await admin
     .from("transactions")
     .update({
@@ -125,6 +129,12 @@ export async function persistGlobalPayoutRefundTxHashOnOutRow(
         ...prior,
         noah_refund_expected: true,
         noah_refund_tx_hash: txHash,
+        ...(isYc
+          ? {
+              yc_refund_expected: true,
+              yc_refund_tx_hash: txHash,
+            }
+          : {}),
       },
       updated_at: new Date().toISOString(),
     })
@@ -202,20 +212,22 @@ export async function findGlobalPayoutRefundForInboundSuppression(
   const select = "id, metadata, amount, currency, status"
 
   if (txHash) {
-    let byRefundHash = admin
-      .from("transactions")
-      .select(select)
-      .eq("provider", "noah")
-      .eq("direction", "out")
-      .in("status", ["failed", "cancelled"])
-      .filter("metadata->>noah_refund_tx_hash", "eq", txHash)
-    byRefundHash = applyLedgerScope(byRefundHash, scope)
-    const { data: hashRow } = await byRefundHash.maybeSingle()
-    if (hashRow?.id) {
-      const meta = (hashRow.metadata || {}) as Record<string, unknown>
-      const easnerPayoutId = readEasnerPayoutIdFromNoahMeta(meta)
-      if (easnerPayoutId && isGlobalPayoutNoahOutRow(meta)) {
-        return { easnerPayoutId, outRowId: String(hashRow.id) }
+    for (const hashKey of ["noah_refund_tx_hash", "yc_refund_tx_hash"] as const) {
+      let byRefundHash = admin
+        .from("transactions")
+        .select(select)
+        .in("provider", [...GLOBAL_PAYOUT_PROVIDERS])
+        .eq("direction", "out")
+        .in("status", ["failed", "cancelled"])
+        .filter(`metadata->>${hashKey}`, "eq", txHash)
+      byRefundHash = applyLedgerScope(byRefundHash, scope)
+      const { data: hashRow } = await byRefundHash.maybeSingle()
+      if (hashRow?.id) {
+        const meta = (hashRow.metadata || {}) as Record<string, unknown>
+        const easnerPayoutId = readEasnerPayoutIdFromNoahMeta(meta)
+        if (easnerPayoutId && isGlobalPayoutOutRow(meta)) {
+          return { easnerPayoutId, outRowId: String(hashRow.id) }
+        }
       }
     }
   }
@@ -227,7 +239,7 @@ export async function findGlobalPayoutRefundForInboundSuppression(
   let recentQ = admin
     .from("transactions")
     .select(select)
-    .eq("provider", "noah")
+    .in("provider", [...GLOBAL_PAYOUT_PROVIDERS])
     .eq("direction", "out")
     .in("status", ["failed", "cancelled"])
     .gte("created_at", sinceIso)
@@ -236,20 +248,23 @@ export async function findGlobalPayoutRefundForInboundSuppression(
   const { data: failedRows } = await recentQ.limit(20)
 
   const sortedRows = [...(failedRows ?? [])].sort((a, b) => {
-    const aExpected = (a.metadata as Record<string, unknown> | undefined)?.noah_refund_expected === true
-    const bExpected = (b.metadata as Record<string, unknown> | undefined)?.noah_refund_expected === true
+    const aMeta = (a.metadata as Record<string, unknown> | undefined) ?? {}
+    const bMeta = (b.metadata as Record<string, unknown> | undefined) ?? {}
+    const aExpected = aMeta.noah_refund_expected === true || aMeta.yc_refund_expected === true
+    const bExpected = bMeta.noah_refund_expected === true || bMeta.yc_refund_expected === true
     if (aExpected === bExpected) return 0
     return aExpected ? -1 : 1
   })
 
   for (const row of sortedRows) {
     const meta = (row.metadata || {}) as Record<string, unknown>
-    if (!isGlobalPayoutNoahOutRow(meta)) continue
+    if (!isGlobalPayoutOutRow(meta)) continue
     const easnerPayoutId = readEasnerPayoutIdFromNoahMeta(meta)
     if (!easnerPayoutId) continue
 
     if (txHash) {
-      const expected = String(meta.noah_refund_tx_hash ?? "").trim()
+      const expected =
+        String(meta.noah_refund_tx_hash ?? "").trim() || String(meta.yc_refund_tx_hash ?? "").trim()
       if (expected && expected === txHash) {
         return { easnerPayoutId, outRowId: String(row.id) }
       }
@@ -262,7 +277,9 @@ export async function findGlobalPayoutRefundForInboundSuppression(
 
     if (!inboundMatchesGlobalPayoutRefundAmount(inboundAmount, meta, Number(row.amount ?? 0))) continue
 
-    const outboundHash = String(meta.turnkey_tx_hash ?? meta.noah_on_chain_tx_hash ?? "").trim()
+    const outboundHash = String(
+      meta.turnkey_tx_hash ?? meta.noah_on_chain_tx_hash ?? meta.yc_crypto_deposit_tx_hash ?? "",
+    ).trim()
     if (txHash && outboundHash && txHash === outboundHash) continue
 
     return { easnerPayoutId, outRowId: String(row.id) }
@@ -363,7 +380,7 @@ export async function listGlobalPayoutsFailedWithoutReversal(
   const { data, error } = await admin
     .from("transactions")
     .select("id, user_id, business_id, metadata")
-    .eq("provider", "noah")
+    .in("provider", [...GLOBAL_PAYOUT_PROVIDERS])
     .eq("direction", "out")
     .in("status", ["failed", "cancelled"])
     .or("metadata->>payout_type.eq.global_fiat,metadata->>flow.eq.global_fiat_offramp")
@@ -644,9 +661,9 @@ export async function resolveGlobalPayoutOutRowForOrchestrationIn(
     let outByHashQ = admin
       .from("transactions")
       .select("id, metadata")
-      .eq("provider", "noah")
+      .in("provider", [...GLOBAL_PAYOUT_PROVIDERS])
       .eq("direction", "out")
-      .filter("metadata->>turnkey_tx_hash", "eq", solanaTxHash)
+      .or(`metadata->>turnkey_tx_hash.eq.${solanaTxHash},metadata->>yc_crypto_deposit_tx_hash.eq.${solanaTxHash}`)
     outByHashQ = applyLedgerScope(outByHashQ, scope)
     const { data: outByHash } = await outByHashQ.maybeSingle()
     if (outByHash?.id) {
@@ -903,7 +920,7 @@ export async function findPendingGlobalPayoutByExternalId(
   const { data: byPtid } = await admin
     .from("transactions")
     .select("id, metadata")
-    .eq("provider", "noah")
+    .in("provider", [...GLOBAL_PAYOUT_PROVIDERS])
     .eq("provider_transaction_id", pendingPtid)
     .maybeSingle()
   if (byPtid?.id) {
@@ -913,7 +930,7 @@ export async function findPendingGlobalPayoutByExternalId(
   const { data: byMeta } = await admin
     .from("transactions")
     .select("id, metadata")
-    .eq("provider", "noah")
+    .in("provider", [...GLOBAL_PAYOUT_PROVIDERS])
     .contains("metadata", { easner_payout_id: key })
     .maybeSingle()
   if (byMeta?.id) {
@@ -928,8 +945,14 @@ function readEasnerPayoutIdFromNoahMeta(meta: Record<string, unknown>): string |
   return id || null
 }
 
-function isGlobalPayoutNoahOutRow(meta: Record<string, unknown>): boolean {
+/** User-facing global payout OUT row (Noah or Yellowcard). */
+export function isGlobalPayoutOutRow(meta: Record<string, unknown>): boolean {
   return meta.payout_type === "global_fiat" || meta.flow === "global_fiat_offramp"
+}
+
+/** @deprecated Prefer {@link isGlobalPayoutOutRow} — kept for existing call sites/tests. */
+function isGlobalPayoutNoahOutRow(meta: Record<string, unknown>): boolean {
+  return isGlobalPayoutOutRow(meta)
 }
 
 /** User-facing global payout Noah OUT row (pending or settled). */
@@ -982,7 +1005,7 @@ export async function findGlobalPayoutNoahRowByTurnkeySendId(
   const { data: byMain } = await admin
     .from("transactions")
     .select(select)
-    .eq("provider", "noah")
+    .in("provider", [...GLOBAL_PAYOUT_PROVIDERS])
     .eq("direction", "out")
     .filter("metadata->>turnkey_send_id", "eq", tid)
     .maybeSingle()
@@ -1002,7 +1025,7 @@ export async function findGlobalPayoutNoahRowByTurnkeySendId(
   const { data: byMargin } = await admin
     .from("transactions")
     .select(select)
-    .eq("provider", "noah")
+    .in("provider", [...GLOBAL_PAYOUT_PROVIDERS])
     .eq("direction", "out")
     .filter("metadata->>margin_turnkey_send_id", "eq", tid)
     .maybeSingle()

@@ -131,19 +131,6 @@ export type { CurrencyCatalogEntry } from "./currencies/catalog"
 export * from "./types"
 export { fxEngine, type OrderAmounts } from "./fx-engine"
 export {
-  buildManualSendPayInCurrencies,
-  buildManualSendPayInCurrencyOptions,
-  listManualPayInOptionsForCurrency,
-  pickDefaultManualPayInOption,
-  routeManualPayInScreen,
-  groupManualPayInOptionsByCurrency,
-  type ManualPayInPaymentMethodOption,
-  type ManualPayInPaymentMethodRow,
-  type ManualPayInScreenRoute,
-  type ManualSendCurrencyOption,
-  type CurrencyNameRow,
-} from "./manual-send-catalog"
-export {
   sendFlowReferenceUsdPerUnit,
   referenceConversionRate,
 } from "./send-flow-reference-rates"
@@ -169,6 +156,25 @@ export {
 export { isVaAnswerSettled, shouldShowBankDepositTab } from "./noah/bank-deposit-tab-visibility"
 export type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from "./payout-corridor"
 export { corridorDisplayLabel, corridorMatchesCountryCurrency, flagCodeFromCorridor } from "./payout-corridor"
+export {
+  buildYcSendMappingFromRecipient,
+  isNestedPayoutFieldsSchema,
+  mergeYcNetworksIntoSchema,
+  normalizeRecipientYcMetadata,
+  resolveYcCorridorSchema,
+  unwrapNoahFieldsSchema,
+  unwrapYcFieldsSchema,
+  validateYcRecipientForCorridor,
+  ycAccountNumberLabel,
+  ycCorridorSchemaKey,
+  YC_STATIC_CORRIDOR_SCHEMAS,
+  type PayoutCorridorFieldsSchema,
+  type RecipientYcMetadata,
+  type YcCorridorSchemaHint,
+  type YcRecipientFieldDef,
+  type YcRecipientRowLike,
+  type YcSendMapping,
+} from "./yc-recipient-schema"
 export {
   findPayoutFieldsSchema,
   NG_BANK_ARRIVAL_PROCESSING_SECONDS,
@@ -477,4 +483,36 @@ export type {
   VerifiedCountryRef,
   VerifiedIdentityPayload,
 } from "./verified-identity"
+export {
+  NG_LOCAL_VERIFICATION_COPY,
+  buildNgYcIdPair,
+  isValidNgLocalIdNumber,
+  mapNoahKycIdTypeToNgLocal,
+  ngLocalVerificationComplete,
+  ngSupplementInlinePrompt,
+  normalizeNgLocalIdType,
+  resolveNgLocalVerification,
+  showNgSupplementPrompt,
+  ycLocalRailsOfferedForNg,
+} from "./ng-local-verification"
+export type {
+  NgLocalIdType,
+  NgLocalVerificationProfile,
+  NgLocalVerificationState,
+} from "./ng-local-verification"
+export {
+  YC_QUOTE_TTL_MS,
+  computeYcBalancePayoutPricing,
+  computeYcCrossBorderPricing,
+  computeYcFundBalancePricing,
+} from "./yc-pricing"
+export type {
+  ComputeYcBalancePayoutPricingInput,
+  ComputeYcCrossBorderPricingInput,
+  ComputeYcFundBalancePricingInput,
+  YcBalancePayoutPricing,
+  YcCrossBorderPricing,
+  YcFundBalancePricing,
+  YcLegFeeInputs,
+} from "./yc-pricing"
 /** Mobile-only: import from `@easner/shared/warm-flags` (uses expo-image; not for Next.js). */

@@ -31,6 +31,7 @@ export interface Beneficiary {
   mobileProvider?: string
   walletAsset?: string
   walletNetwork?: string
+  ycMetadata?: Record<string, unknown>
   createdAt: string
   lastUsed: string
 }

@@ -94,8 +94,110 @@ export function resolveBankDepositPayInDetail(
   const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
   const payload = (row.payload as Record<string, unknown> | null | undefined) ?? {}
   const isFiatDepositPayload = isNoahFiatDepositWebhookPayload(payload)
-  if (!isNoahBankOnrampFiatPayIn(payload) && !isBankOnrampDepositFlow(meta) && !isFiatDepositPayload) {
+  const isYcFundBalance =
+    String(row.provider ?? "").toLowerCase() === "yellowcard" &&
+    (meta.yc_mode === "fund_balance" || meta.flow === "bank_onramp")
+  if (
+    !isNoahBankOnrampFiatPayIn(payload) &&
+    !isBankOnrampDepositFlow(meta) &&
+    !isFiatDepositPayload &&
+    !isYcFundBalance
+  ) {
     return null
+  }
+
+  if (isYcFundBalance) {
+    const ledgerStatus = String(row.status ?? "")
+    const depositAmount =
+      roundFiat(typeof meta.local_pay_in === "number" ? meta.local_pay_in : Number(meta.local_pay_in)) ??
+      0
+    const postedAmount =
+      roundFiat(typeof meta.usd_credit === "number" ? meta.usd_credit : Number(meta.usd_credit)) ??
+      roundFiat(typeof row.amount === "number" ? row.amount : Number(row.amount))
+    const feeAmount = roundFiat(
+      typeof meta.processing_fee === "number" ? meta.processing_fee : Number(meta.processing_fee),
+    )
+    const fiatCurrency = String(meta.local_currency ?? "NGN").toUpperCase()
+    const processingAt = pickIso(meta.processing_at, row.occurred_at)
+    const completedAt = pickIso(meta.completed_at, row.settled_at)
+    const failedAt = pickIso(meta.failed_at)
+    const schemeCtx = {
+      metadata: {
+        ...meta,
+        flow: "bank_onramp",
+        fiat_deposit_currency: fiatCurrency,
+        source_payment_rail: "local_bank",
+      },
+      payload,
+    }
+    const sourcePaymentRail = deriveBankDepositPaymentRail(schemeCtx) || "local_bank"
+    const depositSchemeLabel = deriveBankDepositSchemeLabel({
+      metadata: { ...schemeCtx.metadata, source_payment_rail: sourcePaymentRail },
+      payload,
+    })
+    const effectiveMetadata = mergeBankDepositLifecycleMetadata(
+      {
+        ...meta,
+        flow: "bank_onramp",
+        fiat_deposit_amount: depositAmount,
+        fiat_deposit_currency: fiatCurrency,
+        fee_amount: feeAmount,
+        settled_amount: postedAmount,
+        posted_amount: postedAmount,
+        settled_currency: "USD",
+        source_payment_rail: sourcePaymentRail,
+        deposit_scheme_label: depositSchemeLabel,
+        payment_reference: meta.yc_sequence_id != null ? String(meta.yc_sequence_id) : null,
+      },
+      {
+        processing_at: processingAt,
+        completed_at: completedAt,
+      },
+    )
+    const lifecycle = buildBankDepositLifecycle({
+      status: ledgerStatus,
+      metadata: effectiveMetadata,
+      payload,
+      occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
+      settledAt: row.settled_at != null ? String(row.settled_at) : null,
+      createdAt: row.created_at != null ? String(row.created_at) : null,
+    })
+    const timingAnchors = resolveTransactionTimingAnchors({
+      createdAt: row.created_at != null ? String(row.created_at) : null,
+      metadata: effectiveMetadata,
+      webhookProcessingAt: processingAt,
+      webhookCompletedAt: completedAt,
+      webhookFailedAt: failedAt,
+      lifecycle,
+    })
+    const transactionTiming = buildTransactionTimingRows({
+      status: ledgerStatus,
+      startedAt: timingAnchors.startedAt,
+      completedAt: timingAnchors.completedAt,
+      failedAt: timingAnchors.failedAt,
+      showExpectedWhileInFlight: false,
+      showStartedWhileInFlight: false,
+      showTerminalDuration: false,
+    })
+    return {
+      effectiveMetadata,
+      lifecycle,
+      depositAmount,
+      feeAmount,
+      postedAmount,
+      postedCurrency: "USD",
+      depositSchemeLabel,
+      sourcePaymentRail,
+      senderName: null,
+      narration: null,
+      reference: meta.yc_sequence_id != null ? String(meta.yc_sequence_id) : null,
+      processingAt,
+      completedAt,
+      transactionStartedAt: processingAt,
+      ledgerCreatedAt: row.created_at != null ? String(row.created_at) : null,
+      transactionTiming,
+      fiatDepositId: meta.yc_sequence_id != null ? String(meta.yc_sequence_id) : null,
+    }
   }
 
   const txEnrichment = isFiatDepositPayload ? null : extractNoahBankPayInEnrichment(payload)
@@ -300,7 +402,7 @@ export function resolveBankDepositPayInDetail(
     depositSchemeLabel,
     sourcePaymentRail,
     senderName,
-    narration,
+    narration: narration ?? null,
     reference: narration ?? paymentReference,
     processingAt,
     completedAt,

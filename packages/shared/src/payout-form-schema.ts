@@ -4,6 +4,7 @@ import {
   type PayoutFieldsSchemaHint,
   type PayoutRail,
 } from "./payout-corridor"
+import { unwrapNoahFieldsSchema } from "./yc-recipient-schema"
 import { getCountryCodeForCurrency } from "./flags/currency-mapping"
 import { parsePayoutMinAmount, resolveEffectivePayoutMin } from "./payout-business-limits"
 
@@ -69,7 +70,7 @@ export function findPayoutFieldsSchema(
       rail: input.rail,
     }),
   )
-  const schema = row?.fields_schema ?? null
+  const schema = unwrapNoahFieldsSchema(row?.fields_schema)
   if (!schema) return null
   const processing_seconds = resolvePayoutProcessingSeconds({
     countryCode: input.countryCode,

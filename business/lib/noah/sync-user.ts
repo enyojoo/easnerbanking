@@ -2,6 +2,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { mapNoahVerificationToKycStatus } from "./map-kyc"
 import { parseNoahCustomerForBusiness } from "./parse-noah-customer-for-business"
+import { parseNoahBusinessPersonForOwnerUsers } from "./parse-noah-associate-for-users"
 import { parseNoahCustomerForUsers } from "./parse-noah-customer-for-users"
 import { extractNoahRejectionReasons, pickNoahRejectionReasonsToStore } from "./rejection-reasons"
 import {
@@ -71,13 +72,34 @@ export async function syncNoahCustomerToSupabase(
       if (ownerUserId) {
         const { data: ownerRow } = await admin
           .from("users")
-          .select("noah_kyc_status")
+          .select("noah_kyc_status, email")
           .eq("id", ownerUserId)
           .maybeSingle()
         const individualApproved =
           String(ownerRow?.noah_kyc_status ?? "").toLowerCase() === "approved"
         if (!individualApproved) {
-          const personUpdate = parseNoahCustomerForUsers(customer, { occurredAt: options?.occurredAt })
+          // Prefer top-level Identities; else Associates[] representative (KYB-only owners).
+          if (Array.isArray(customer.Associates) || Array.isArray(customer.associates)) {
+            console.info("[noah-kyb] approved business customer has Associates[]", {
+              businessId: target.businessId,
+              customerId,
+              associateCount: Array.isArray(customer.Associates)
+                ? customer.Associates.length
+                : Array.isArray(customer.associates)
+                  ? customer.associates.length
+                  : 0,
+            })
+          } else {
+            console.info("[noah-kyb] approved business customer payload shape (no Associates)", {
+              businessId: target.businessId,
+              customerId,
+              topKeys: Object.keys(customer).slice(0, 40),
+            })
+          }
+          const personUpdate = parseNoahBusinessPersonForOwnerUsers(customer, {
+            occurredAt: options?.occurredAt,
+            ownerEmail: typeof ownerRow?.email === "string" ? ownerRow.email : null,
+          })
           if (Object.keys(personUpdate).length > 1) {
             await admin
               .from("users")
