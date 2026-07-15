@@ -15,7 +15,6 @@ export const officeKeys = {
   terminalSessions: () => [...officeKeys.root, "terminal-sessions"] as const,
   currencies: (scope: OfficeCurrencyScope | "all" = "all") =>
     [...officeKeys.root, "currencies", scope] as const,
-  exchangeRates: () => [...officeKeys.root, "exchange-rates"] as const,
   noahRates: () => [...officeKeys.root, "noah-rates"] as const,
   ycRates: () => [...officeKeys.root, "yc-rates"] as const,
   cryptoRates: () => [...officeKeys.root, "crypto-rates"] as const,

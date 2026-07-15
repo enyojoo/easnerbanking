@@ -1,7 +1,6 @@
 export { OFFICE_LIST_STALE_MS, OFFICE_REFERENCE_STALE_MS } from "./constants"
 export { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 export { useOfficeCurrencies } from "./use-office-currencies"
-export { useOfficeExchangeRates } from "./use-office-exchange-rates"
 export { useOfficeNoahRates } from "./use-office-noah-rates"
 export { useOfficeYcRates } from "./use-office-yc-rates"
 export { useOfficeCryptoRates } from "./use-office-crypto-rates"

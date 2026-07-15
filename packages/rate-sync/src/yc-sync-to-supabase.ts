@@ -1,5 +1,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import {
+  isYcStoredRatePair,
+} from "./yc-fiat-currencies"
+import {
   applyYcCustomerBuy,
   applyYcCustomerCrossRate,
   applyYcCustomerSell,
@@ -23,6 +26,7 @@ export type YcCrossPairInput = {
 export type YcRateSyncResult = {
   updated: number
   skipped: number
+  pruned: number
   pairs: Array<{
     from_currency: string
     to_currency: string
@@ -37,8 +41,72 @@ type ExistingRow = {
   source: string | null
 }
 
+function pushLegRow(
+  updates: Array<Record<string, unknown>>,
+  existingByKey: Map<string, ExistingRow>,
+  nowIso: string,
+  marginBps: number,
+  row: {
+    from_currency: string
+    to_currency: string
+    country_code?: string | null
+    yc_buy?: number | null
+    yc_sell?: number | null
+    easner_buy?: number | null
+    easner_sell?: number | null
+    yc_cross_mid?: number | null
+    rate: number
+  },
+) {
+  const key = `${row.from_currency}_${row.to_currency}`
+  const existing = existingByKey.get(key)
+  updates.push({
+    from_currency: row.from_currency,
+    to_currency: row.to_currency,
+    country_code: row.country_code ?? null,
+    yc_buy: row.yc_buy ?? null,
+    yc_sell: row.yc_sell ?? null,
+    easner_buy: row.easner_buy ?? null,
+    easner_sell: row.easner_sell ?? null,
+    yc_cross_mid: row.yc_cross_mid ?? null,
+    rate: row.rate,
+    margin_bps: marginBps,
+    source: existing?.source === "office" ? "office" : "yc_rates_sync",
+    as_of: nowIso,
+    updated_at: nowIso,
+    status: "active",
+  })
+}
+
+async function pruneExcludedYcRates(
+  supabase: SupabaseClient,
+  existingRows: ExistingRow[],
+  dryRun?: boolean,
+): Promise<number> {
+  const toRemove = (existingRows ?? []).filter((row) => {
+    if (String(row.source ?? "").toLowerCase() === "office") return false
+    const from = String(row.from_currency).toUpperCase()
+    const to = String(row.to_currency).toUpperCase()
+    return !isYcStoredRatePair(from, to)
+  })
+  if (toRemove.length === 0 || dryRun) return toRemove.length
+
+  for (const row of toRemove) {
+    const from = String(row.from_currency).toUpperCase()
+    const to = String(row.to_currency).toUpperCase()
+    const { error } = await supabase
+      .from("yellowcard_rates")
+      .delete()
+      .eq("from_currency", from)
+      .eq("to_currency", to)
+    if (error) throw error
+  }
+  return toRemove.length
+}
+
 /**
- * Upsert per-currency USDC legs + derived cross pairs into yellowcard_rates.
+ * Upsert fiat local↔USD/USDC legs + derived cross pairs into yellowcard_rates.
+ * Skips stablecoin/crypto codes from YC /rates (CUSD, ETH, SOL, etc.).
  * Preserves rows with source = 'office'.
  */
 export async function syncYcRatesToSupabase(options: {
@@ -94,25 +162,47 @@ export async function syncYcRatesToSupabase(options: {
       easnerSell,
     })
 
-    const key = `${ccy}_USDC`
-    const existing = existingByKey.get(key)
-    const payload: Record<string, unknown> = {
+    const countryCode = input.country_code?.trim().toUpperCase() || null
+    const ycBuy = Number(input.yc_buy.toPrecision(14))
+    const ycSell = Number(input.yc_sell.toPrecision(14))
+    const easnerBuyPrec = Number(easnerBuy.toPrecision(14))
+    const easnerSellPrec = Number(easnerSell.toPrecision(14))
+
+    // Local → USDC (settlement leg; easner_buy = customer payout rate basis)
+    pushLegRow(updates, existingByKey, nowIso, marginBps, {
       from_currency: ccy,
       to_currency: "USDC",
-      country_code: input.country_code?.trim().toUpperCase() || null,
-      yc_buy: Number(input.yc_buy.toPrecision(14)),
-      yc_sell: Number(input.yc_sell.toPrecision(14)),
-      easner_buy: Number(easnerBuy.toPrecision(14)),
-      easner_sell: Number(easnerSell.toPrecision(14)),
-      yc_cross_mid: null,
-      rate: Number(easnerBuy.toPrecision(14)),
-      margin_bps: marginBps,
-      source: existing?.source === "office" ? "office" : "yc_rates_sync",
-      as_of: nowIso,
-      updated_at: nowIso,
-      status: "active",
-    }
-    updates.push(payload)
+      country_code: countryCode,
+      yc_buy: ycBuy,
+      yc_sell: ycSell,
+      easner_buy: easnerBuyPrec,
+      easner_sell: easnerSellPrec,
+      rate: easnerBuyPrec,
+    })
+
+    // USD → local (balance payout)
+    pushLegRow(updates, existingByKey, nowIso, marginBps, {
+      from_currency: "USD",
+      to_currency: ccy,
+      country_code: countryCode,
+      yc_buy: ycBuy,
+      yc_sell: ycSell,
+      easner_buy: easnerBuyPrec,
+      easner_sell: easnerSellPrec,
+      rate: easnerBuyPrec,
+    })
+
+    // USDC → local (local pay-in / fund balance)
+    pushLegRow(updates, existingByKey, nowIso, marginBps, {
+      from_currency: "USDC",
+      to_currency: ccy,
+      country_code: countryCode,
+      yc_buy: ycBuy,
+      yc_sell: ycSell,
+      easner_buy: easnerBuyPrec,
+      easner_sell: easnerSellPrec,
+      rate: easnerSellPrec,
+    })
   }
 
   for (const pair of crossPairs) {
@@ -129,27 +219,17 @@ export async function syncYcRatesToSupabase(options: {
       continue
     }
     const { ycCrossMid, rate } = applyYcCustomerCrossRate(b.buy, a.sell, margin)
-    const key = `${from}_${to}`
-    const existing = existingByKey.get(key)
-    updates.push({
+    pushLegRow(updates, existingByKey, nowIso, marginBps, {
       from_currency: from,
       to_currency: to,
       country_code: pair.country_code?.trim().toUpperCase() || null,
-      yc_buy: null,
-      yc_sell: null,
       easner_buy: Number(b.easnerBuy.toPrecision(14)),
       easner_sell: Number(a.easnerSell.toPrecision(14)),
       yc_cross_mid: ycCrossMid,
       rate,
-      margin_bps: marginBps,
-      source: existing?.source === "office" ? "office" : "yc_rates_sync",
-      as_of: nowIso,
-      updated_at: nowIso,
-      status: "active",
     })
   }
 
-  // Deduplicate by unique (from_currency, to_currency) — YC API can return multiple rows per ccy.
   const dedupedByKey = new Map<string, Record<string, unknown>>()
   for (const u of updates) {
     const key = `${String(u.from_currency).toUpperCase()}_${String(u.to_currency).toUpperCase()}`
@@ -164,9 +244,12 @@ export async function syncYcRatesToSupabase(options: {
     if (upErr) throw upErr
   }
 
+  const pruned = await pruneExcludedYcRates(supabase, (existingRows ?? []) as ExistingRow[], dryRun)
+
   return {
     updated: deduped.length,
     skipped: skippedPairs.length,
+    pruned,
     pairs: deduped.map((u) => ({
       from_currency: String(u.from_currency),
       to_currency: String(u.to_currency),

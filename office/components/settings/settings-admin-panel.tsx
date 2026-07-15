@@ -17,7 +17,6 @@ import {
   type OfficeSystemSetting,
 } from "@/hooks/queries"
 import { CurrencyFlag } from "@/components/flags"
-import { OfficeRatesPanel } from "@/components/settings/office-rates-panel"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 
 interface SystemSetting extends OfficeSystemSetting {}
@@ -33,7 +32,7 @@ interface Currency {
   updated_at: string
 }
 
-export type SettingsAdminSection = "platform" | "rates"
+export type SettingsAdminSection = "platform"
 
 const GLOBAL_CURRENCY_CONTROL_LABELS: Record<"USD" | "EUR" | "GBP" | "NGN", string> = {
   USD: "US Dollar",
@@ -45,9 +44,6 @@ const GLOBAL_CURRENCY_CONTROL_LABELS: Record<"USD" | "EUR" | "GBP" | "NGN", stri
 const SECTION_COPY: Record<SettingsAdminSection, { title: string }> = {
   platform: {
     title: "Platform",
-  },
-  rates: {
-    title: "Reporting FX",
   },
 }
 
@@ -455,10 +451,6 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
         {securityCard}
       </PlatformControlTabShell>
     )
-  }
-
-  if (section === "rates") {
-    return <OfficeRatesPanel />
   }
 
   return null

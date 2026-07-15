@@ -14,12 +14,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.reason }, { status: 500 })
   }
 
-  const { updated, skipped, pairs, skippedPairs } = result.result
+  const { updated, skipped, pairs, skippedPairs, pruned } = result.result
   return NextResponse.json({
     ok: true,
     updated,
     skipped,
-    pairs: pairs.slice(0, 30),
-    skippedPairs: skippedPairs.slice(0, 30),
+    pruned,
+    pairs: pairs.slice(0, 30).map((p) => `${p.from_currency}→${p.to_currency}`),
+    skippedPairs: skippedPairs.slice(0, 30).map((p) => `${p.from_currency}→${p.to_currency} (${p.reason})`),
   })
 }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { isYcStoredRatePair } from "@easner/rate-sync"
 
 export type YcRateRow = {
   from_currency: string
@@ -48,7 +49,8 @@ export async function listYcRates(
     return []
   }
 
-  return (data ?? []).map((row) => ({
+  return (data ?? [])
+    .map((row) => ({
     from_currency: String(row.from_currency ?? "").toUpperCase(),
     to_currency: String(row.to_currency ?? "").toUpperCase(),
     country_code: row.country_code != null ? String(row.country_code).toUpperCase() : null,
@@ -63,6 +65,7 @@ export async function listYcRates(
     as_of: String(row.as_of ?? new Date().toISOString()),
     status: String(row.status ?? ""),
   }))
+    .filter((row) => isYcStoredRatePair(row.from_currency, row.to_currency))
 }
 
 export function findYcRate(

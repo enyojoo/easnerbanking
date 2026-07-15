@@ -6,7 +6,6 @@ import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layo
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   PlatformConfigPanel,
-  RatesPanel,
   FiatPanel,
   CryptoPanel,
   NoahRatesPanel,
@@ -15,11 +14,12 @@ import {
   WebhookInboxPanel,
 } from "@/components/platform-control/platform-control-panels"
 
-const TABS = ["platform", "rates", "noah-rates", "yc-rates", "crypto-rates", "fiat", "crypto", "webhooks"] as const
+const TABS = ["platform", "noah-rates", "yc-rates", "crypto-rates", "fiat", "crypto", "webhooks"] as const
 type PlatformControlTab = (typeof TABS)[number]
 
 function normalizeTab(raw: string | null): string | null {
   if (raw === "balance-currencies") return "platform"
+  if (raw === "rates") return "platform"
   return raw
 }
 
@@ -61,7 +61,6 @@ function PlatformControlHubBody() {
         <Tabs value={activeTab} onValueChange={onTabChange} className="space-y-6">
           <TabsList className="flex flex-wrap h-auto gap-1 justify-start">
             <TabsTrigger value="platform">Platform</TabsTrigger>
-            <TabsTrigger value="rates">Reporting FX</TabsTrigger>
             <TabsTrigger value="noah-rates">Noah rates</TabsTrigger>
             <TabsTrigger value="yc-rates">Yellowcard rates</TabsTrigger>
             <TabsTrigger value="crypto-rates">Crypto rates</TabsTrigger>
@@ -71,9 +70,6 @@ function PlatformControlHubBody() {
           </TabsList>
           <TabsContent value="platform" forceMount className={TAB_CONTENT_CLASS}>
             <PlatformConfigPanel />
-          </TabsContent>
-          <TabsContent value="rates" forceMount className={TAB_CONTENT_CLASS}>
-            <RatesPanel />
           </TabsContent>
           <TabsContent value="noah-rates" forceMount className={TAB_CONTENT_CLASS}>
             <NoahRatesPanel />

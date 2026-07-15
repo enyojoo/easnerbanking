@@ -1,4 +1,5 @@
 import { yellowcardFetch } from "./http"
+import { isYcFiatCurrency } from "@easner/rate-sync"
 
 export type YcRateRow = {
   currency?: string
@@ -28,6 +29,7 @@ export function normalizeYcRateRow(row: YcRateRow): {
   const currency = String(row.currency ?? row.code ?? "")
     .trim()
     .toUpperCase()
+  if (!isYcFiatCurrency(currency)) return null
   const buy = Number(row.buy ?? row.rateBuy ?? 0)
   const sell = Number(row.sell ?? row.rateSell ?? 0)
   if (!currency || !Number.isFinite(buy) || buy <= 0 || !Number.isFinite(sell) || sell <= 0) {

@@ -34,6 +34,7 @@ export const ycRatesApi = {
   async syncFromYellowcard(): Promise<{
     updated: number
     skipped: number
+    pruned: number
     pairs: string[]
     skippedPairs: string[]
   }> {
@@ -41,14 +42,34 @@ export const ycRatesApi = {
     const data = await asJson<{
       updated?: number
       skipped?: number
+      pruned?: number
       pairs?: string[]
       skippedPairs?: string[]
     }>(res)
     return {
       updated: data.updated ?? 0,
       skipped: data.skipped ?? 0,
+      pruned: data.pruned ?? 0,
       pairs: data.pairs ?? [],
       skippedPairs: data.skippedPairs ?? [],
     }
+  },
+
+  async upsert(
+    rates: Array<{
+      from_currency: string
+      to_currency: string
+      rate: number
+      yc_buy?: number | null
+      yc_sell?: number | null
+      margin_bps?: number
+      status: string
+    }>,
+  ): Promise<void> {
+    const res = await officeFetch("/api/admin/yc-rates", {
+      method: "PUT",
+      body: JSON.stringify({ rates }),
+    })
+    await asJson<{ ok?: boolean }>(res)
   },
 }

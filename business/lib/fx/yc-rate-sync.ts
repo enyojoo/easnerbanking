@@ -1,6 +1,8 @@
 import {
   parseYcPayoutMarginFromEnv,
   syncYcRatesToSupabase,
+  buildYcCrossPairsFromFiats,
+  isYcFiatCurrency,
   type YcCrossPairInput,
   type YcRateSyncResult,
 } from "@easner/rate-sync"
@@ -8,8 +10,8 @@ import { listYellowcardRates, normalizeYcRateRow } from "@/lib/yellowcard/rates"
 
 export type { YcRateSyncResult }
 
-/** Default cross pairs for Through Local Currency (extend via env YC_CROSS_PAIRS=NGN:KES,NGN:GHS). */
-function defaultCrossPairs(): YcCrossPairInput[] {
+/** Optional override: YC_CROSS_PAIRS=NGN:KES,NGN:GHS — otherwise all fiat crosses are generated. */
+function resolveCrossPairs(fiatCodes: string[]): YcCrossPairInput[] {
   const fromEnv = (process.env.YC_CROSS_PAIRS || "").trim()
   if (fromEnv) {
     return fromEnv
@@ -22,12 +24,7 @@ function defaultCrossPairs(): YcCrossPairInput[] {
       })
       .filter((p) => p.from_currency && p.to_currency)
   }
-  return [
-    { from_currency: "NGN", to_currency: "KES" },
-    { from_currency: "NGN", to_currency: "GHS" },
-    { from_currency: "KES", to_currency: "NGN" },
-    { from_currency: "GHS", to_currency: "NGN" },
-  ]
+  return buildYcCrossPairsFromFiats(fiatCodes)
 }
 
 function getSupabaseServiceConfig(): { supabaseUrl: string; serviceRoleKey: string } {
@@ -49,6 +46,7 @@ export async function syncYcExchangeRates(options?: {
   const currencies = rawRates
     .map(normalizeYcRateRow)
     .filter((r): r is NonNullable<typeof r> => Boolean(r))
+    .filter((r) => isYcFiatCurrency(r.currency))
     .map((r) => ({
       currency: r.currency,
       yc_buy: r.buy,
@@ -56,14 +54,23 @@ export async function syncYcExchangeRates(options?: {
     }))
 
   if (currencies.length === 0) {
-    return { updated: 0, skipped: 0, pairs: [], skippedPairs: [] }
+    return syncYcRatesToSupabase({
+      supabaseUrl,
+      serviceRoleKey,
+      currencies: [],
+      crossPairs: [],
+      dryRun: options?.dryRun,
+      margin,
+    })
   }
+
+  const fiatCodes = currencies.map((c) => c.currency)
 
   return syncYcRatesToSupabase({
     supabaseUrl,
     serviceRoleKey,
     currencies,
-    crossPairs: defaultCrossPairs(),
+    crossPairs: resolveCrossPairs(fiatCodes),
     dryRun: options?.dryRun,
     margin,
   })

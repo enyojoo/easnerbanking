@@ -29,4 +29,4 @@ create index if not exists yellowcard_rates_to_currency_idx
   on public.yellowcard_rates (to_currency);
 
 comment on table public.yellowcard_rates is
-  'YC provider buy/sell + Easner customer rates (0.5% margin). Cross pairs store rate = easner_buy_to / easner_sell_from.';
+  'YC fiat customer rates: local↔USD/USDC legs + fiat cross pairs. Excludes stablecoin/crypto codes (CUSD, ETH, SOL, etc.).';
