@@ -40,6 +40,15 @@ export function depositOmnibusSolanaAddressUsd(): string | null {
   return v || null
 }
 
+/** YC receive / local pay-in settlement wallet (USDC on Solana). */
+export function requireDepositOmnibusSolanaAddressUsd(): string {
+  const wallet = depositOmnibusSolanaAddressUsd()
+  if (!wallet) {
+    throw new Error("deposit_omnibus_solana_address_usd_required")
+  }
+  return wallet
+}
+
 export function depositOmnibusSolanaAddressEur(): string | null {
   const v = String(process.env.DEPOSIT_OMNIBUS_SOLANA_ADDRESS_EUR || "").trim()
   return v || null

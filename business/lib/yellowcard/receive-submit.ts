@@ -1,5 +1,5 @@
 import { yellowcardFetch } from "./http"
-import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
+import { requireDepositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
 
 export type YcReceiveSubmitInput = {
   sequenceId: string
@@ -41,10 +41,7 @@ export type YcReceiveSubmitResult = {
 
 export function buildYcReceiveSubmitBody(input: YcReceiveSubmitInput): Record<string, unknown> {
   const wallet =
-    input.settlementWalletAddress?.trim() || depositOmnibusSolanaAddressUsd() || undefined
-  if (!wallet) {
-    throw new Error("deposit_omnibus_solana_address_usd_required")
-  }
+    input.settlementWalletAddress?.trim() || requireDepositOmnibusSolanaAddressUsd()
 
   const body: Record<string, unknown> = {
     sequenceId: input.sequenceId,

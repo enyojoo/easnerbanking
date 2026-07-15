@@ -78,9 +78,17 @@ export async function POST(request: Request) {
       payInNotice: `Complete your transfer to send this payment.`,
     })
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Cross-border quote failed" },
-      { status: 400 },
-    )
+    const message = e instanceof Error ? e.message : "Cross-border quote failed"
+    if (message === "deposit_omnibus_solana_address_usd_required") {
+      return NextResponse.json(
+        {
+          error: message,
+          code: "yc_settlement_wallet_not_configured",
+          hint: "Set DEPOSIT_OMNIBUS_SOLANA_ADDRESS_USD on the business API (USDC Solana omnibus for YC pay-in settlement).",
+        },
+        { status: 503 },
+      )
+    }
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 }

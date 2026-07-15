@@ -10,8 +10,20 @@ import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 import { buildYcFundBalanceReceiveMetadata } from "@/lib/yellowcard/yc-ledger"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
+import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
 
 export const runtime = "nodejs"
+
+function ycSettlementConfigErrorResponse(message: string) {
+  return NextResponse.json(
+    {
+      error: message,
+      code: "yc_settlement_wallet_not_configured",
+      hint: "Set DEPOSIT_OMNIBUS_SOLANA_ADDRESS_USD on the business API (USDC Solana omnibus for YC pay-in settlement).",
+    },
+    { status: 503 },
+  )
+}
 
 /**
  * Create a YC local fund_balance receive session (dynamic VA / MoMo).
@@ -72,6 +84,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Local pay-in is not enabled for this corridor" }, { status: 403 })
   }
 
+  if (!depositOmnibusSolanaAddressUsd()) {
+    return ycSettlementConfigErrorResponse("deposit_omnibus_solana_address_usd_required")
+  }
+
   const channels = await listYellowcardChannels()
   const channel = channels.find((ch) => {
     if (String(ch.country ?? "").toUpperCase() !== country) return false
@@ -120,16 +136,25 @@ export async function POST(request: Request) {
   })
 
   const sequenceId = `yc_fb_${randomUUID()}`
-  const receiveRes = await submitYcReceive({
-    sequenceId,
-    customerUID: kycUserId,
-    channelId,
-    currency,
-    country,
-    localAmount: provisional.localPayIn,
-    sender,
-    reason: "fund_balance",
-  })
+  let receiveRes
+  try {
+    receiveRes = await submitYcReceive({
+      sequenceId,
+      customerUID: kycUserId,
+      channelId,
+      currency,
+      country,
+      localAmount: provisional.localPayIn,
+      sender,
+      reason: "fund_balance",
+    })
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "YC receive submit failed"
+    if (message === "deposit_omnibus_solana_address_usd_required") {
+      return ycSettlementConfigErrorResponse(message)
+    }
+    return NextResponse.json({ error: message }, { status: 400 })
+  }
 
   const pricing = computeYcFundBalancePricing({
     localPayIn: Number(receiveRes.localAmount ?? provisional.localPayIn),
