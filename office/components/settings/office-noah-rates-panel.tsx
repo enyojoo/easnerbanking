@@ -237,7 +237,6 @@ export function OfficeNoahRatesPanel() {
   return (
     <PlatformControlTabShell
       title="Noah rates"
-      description="Customer FX for Noah balance payouts and sell flows. Sync pulls provider mid rates; margin is applied per corridor."
       actions={
         <Button type="button" size="sm" onClick={() => void handleSyncRates()} disabled={syncing || loading}>
           {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

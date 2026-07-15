@@ -2,19 +2,41 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 type CorridorMeta = Record<string, unknown>
 
-/** Provider capability: Yellowcard supports local pay-in on this corridor. */
+/** Provider capability: Yellowcard supports local pay-in on this corridor (from YC sync). */
 export function corridorSupportsYcReceive(metadata: unknown): boolean {
   const meta = (metadata ?? {}) as CorridorMeta
-  if (meta.yc_receive === true) return true
-  // Legacy rows: receive sync used to set yc_receive_enabled before yc_receive existed.
-  if (meta.yc_receive == null && meta.yc_receive_enabled === true) return true
-  return false
+  return meta.yc_receive === true
+}
+
+/** Provider capability: Noah supports local pay-in on this corridor (when synced). */
+export function corridorSupportsNoahReceive(metadata: unknown): boolean {
+  const meta = (metadata ?? {}) as CorridorMeta
+  return meta.noah_receive === true
+}
+
+/** True when any provider supports local fiat pay-in on this corridor. */
+export function corridorSupportsLocalPayIn(metadata: unknown): boolean {
+  return corridorSupportsYcReceive(metadata) || corridorSupportsNoahReceive(metadata)
 }
 
 /** Office toggle: local pay-in is enabled for customers on this corridor. */
 export function corridorYcReceiveEnabled(metadata: unknown): boolean {
   const meta = (metadata ?? {}) as CorridorMeta
   return meta.yc_receive_enabled === true
+}
+
+/** Office toggle: Noah local pay-in enabled (when corridor has noah_receive). */
+export function corridorNoahReceiveEnabled(metadata: unknown): boolean {
+  const meta = (metadata ?? {}) as CorridorMeta
+  return meta.noah_receive_enabled === true
+}
+
+/** Office toggle on for any supported local pay-in provider. */
+export function corridorLocalPayInEnabled(metadata: unknown): boolean {
+  const meta = (metadata ?? {}) as CorridorMeta
+  if (meta.yc_receive === true && meta.yc_receive_enabled === true) return true
+  if (meta.noah_receive === true && meta.noah_receive_enabled === true) return true
+  return false
 }
 
 /**

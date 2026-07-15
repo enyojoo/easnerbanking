@@ -285,7 +285,6 @@ export function OfficeYcRatesPanel() {
   return (
     <PlatformControlTabShell
       title="Yellowcard rates"
-      description="Product rates use USD and local fiat (same as Noah). On-chain settlement is USDC behind the USD balance. Sync pulls Yellowcard buy/sell for corridor fiats; margin is applied per pair."
       actions={
         <Button type="button" size="sm" onClick={() => void handleSyncRates()} disabled={syncing || loading}>
           {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

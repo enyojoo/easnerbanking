@@ -19,7 +19,7 @@ function corridorHasYcCapability(row: {
     row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
       ? (row.metadata as Record<string, unknown>)
       : {}
-  if (meta.yc_send === true || meta.yc_receive === true || meta.yc_receive_enabled === true) {
+  if (meta.yc_send === true || meta.yc_receive === true) {
     return true
   }
   return routingHasYellowcard(row.provider_routing)
