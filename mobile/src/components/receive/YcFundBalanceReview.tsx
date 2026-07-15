@@ -100,8 +100,9 @@ export function YcFundBalanceReview({
   const transferMethod = payInRail === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
   const processingFee = quote?.processingFee ?? 0
   const customerRate = quote?.customerRate ?? ycFlow.customerRate
+  const displayTransactionId =
+    quote?.easnerTransactionId ?? quote?.transactionId ?? ''
   const quoteReady = Boolean(quote?.transferId)
-  const displayId = quote?.transactionId?.toUpperCase() ?? ''
 
   const onContinue = () => {
     if (!quote || submitting) return
@@ -109,7 +110,7 @@ export function YcFundBalanceReview({
     setSubmitting(true)
     navigation.navigate('YcPayIn', {
       flowMode: 'fund_balance',
-      transactionId: quote.transactionId,
+      transactionId: displayTransactionId || quote.transactionId,
       sendCurrency: localPayInCurrency,
       receiveAmount: quote.usdCredit,
       receiveCurrency: 'USD',
@@ -137,7 +138,9 @@ export function YcFundBalanceReview({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {displayId ? <Row label="Transaction ID" value={displayId} /> : null}
+          {displayTransactionId ? (
+            <Row label="Transaction ID" value={displayTransactionId.toUpperCase()} />
+          ) : null}
           {!quoteReady && !quoteError ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : (

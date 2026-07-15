@@ -11,6 +11,7 @@ import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 import { buildYcFundBalanceReceiveMetadata } from "@/lib/yellowcard/yc-ledger"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
 import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
+import { generateTransactionId } from "@/lib/transaction-id"
 import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
 import {
   mapKycErrorToCode,
@@ -197,6 +198,7 @@ export async function POST(request: Request) {
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const businessId = noahCtx.scope === "business" ? noahCtx.businessId : null
+  const easnerTransactionId = generateTransactionId()
   const metadata = buildYcFundBalanceReceiveMetadata({
     sequenceId,
     localPayIn: pricing.localPayIn,
@@ -215,7 +217,8 @@ export async function POST(request: Request) {
       amount: pricing.usdCredit,
       currency: "USD",
       direction: "in",
-      metadata,
+      easner_transaction_id: easnerTransactionId,
+      metadata: { ...metadata, easner_transaction_id: easnerTransactionId },
     })
     .select("id")
     .single()
@@ -253,7 +256,8 @@ export async function POST(request: Request) {
     bankInfo: receiveRes.bankInfo ?? null,
     processingFee: pricing.processingFee,
     expiresAt,
-    transactionId: tx?.id ?? null,
+    transactionId: easnerTransactionId,
+    easnerTransactionId,
     transferId: transferRow?.id ?? receiveRes.id ?? null,
     payInNotice: `Complete your transfer using the payment details below.`,
   })

@@ -10,6 +10,7 @@ import {
   Pressable, Platform,
   Image,
   Share,
+  ActivityIndicator,
 } from 'react-native'
 import {
   AlertTriangle,
@@ -21,6 +22,7 @@ import {
   Info,
   Share2,
   ShieldCheck,
+  Smartphone,
   Wallet,
 } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -47,6 +49,8 @@ import { haptics } from '../../lib/haptics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { NgLocalVerificationNotice } from '../../components/compliance/NgLocalVerificationNotice'
 import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
+import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
+import { ReceiveLocalRailCard } from '../../components/receive/ReceiveLocalRailCard'
 
 type TabType = 'bank' | 'local' | 'stablecoin'
 
@@ -176,28 +180,21 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     !(receiveRails != null && !receiveRailsLoading && !receiveRails.anyAvailable)
   const showTabBar = [showBankTab, showLocalTab, showStablecoinTab].filter(Boolean).length > 1
 
-  const handleStartLocalDeposit = () => {
-    if (!localPayInCurrency || !residenceCountry) return
-    if (localPayInCurrency === 'NGN' && ngMissingType) return
+  const bankAvailable = receiveRails?.rails.bank_transfer.available ?? false
+  const momoAvailable = receiveRails?.rails.mobile_money.available ?? false
+  const localDepositBlocked = Boolean(localPayInCurrency === 'NGN' && ngMissingType)
+
+  const navigateToLocalDeposit = (payInRail: YcPayInRail) => {
+    if (!localPayInCurrency || !residenceCountry || localDepositBlocked) return
     haptics.medium()
-    const bankAvailable = receiveRails?.rails.bank_transfer.available ?? false
-    const momoAvailable = receiveRails?.rails.mobile_money.available ?? false
-    const count = (bankAvailable ? 1 : 0) + (momoAvailable ? 1 : 0)
-    const baseParams = {
+    navigation.navigate('ReceiveLocalAmount' as never, {
       localPayInCurrency,
       residenceCountry,
+      payInRail,
+      bankAvailable,
+      momoAvailable,
       ngMissingType,
-    }
-    if (count === 1) {
-      navigation.navigate('ReceiveLocalAmount' as never, {
-        ...baseParams,
-        payInRail: bankAvailable ? 'bank_transfer' : 'mobile_money',
-        bankAvailable,
-        momoAvailable,
-      } as never)
-    } else {
-      navigation.navigate('ReceiveLocalRail' as never, baseParams as never)
-    }
+    } as never)
   }
 
   useEffect(() => {
@@ -769,8 +766,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             {activeTab === 'local' && showLocalTab ? (
               <View style={{ gap: spacing[4] }}>
                 <Text style={styles.fieldLabel}>
-                  Pay in {localPayInCurrency} to credit your USD balance via bank transfer or mobile
-                  money.
+                  Pay in {localPayInCurrency} to credit your USD balance.
                 </Text>
 
                 {localPayInCurrency === 'NGN' && ngMissingType ? (
@@ -783,30 +779,35 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   />
                 ) : null}
 
-                <Pressable
-                  android_ripple={ripple.neutral}
-                  style={styles.localEntryCta}
-                  disabled={
-                    receiveRailsLoading ||
-                    Boolean(localPayInCurrency === 'NGN' && ngMissingType)
-                  }
-                  onPress={handleStartLocalDeposit}
-                >
-                  <LinearGradient
-                    colors={
-                      receiveRailsLoading || (localPayInCurrency === 'NGN' && ngMissingType)
-                        ? [colors.neutral[400], colors.neutral[400]]
-                        : colors.primary.gradient
-                    }
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.localEntryCtaGradient}
-                  >
-                    <Text style={styles.localEntryCtaText}>
-                      {receiveRailsLoading ? 'Checking availability…' : 'Add money'}
-                    </Text>
-                  </LinearGradient>
-                </Pressable>
+                {receiveRailsLoading && !receiveRails ? (
+                  <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[6] }} />
+                ) : (
+                  <View style={styles.localRailList}>
+                    {bankAvailable ? (
+                      <ReceiveLocalRailCard
+                        title="Bank"
+                        subtitle="Deposit via Bank Transfer"
+                        icon={<Landmark size={24} color={colors.primary.main} strokeWidth={2} />}
+                        onPress={() => navigateToLocalDeposit('bank_transfer')}
+                        disabled={localDepositBlocked}
+                      />
+                    ) : null}
+                    {momoAvailable ? (
+                      <ReceiveLocalRailCard
+                        title="Mobile money"
+                        subtitle="Deposit via Mobile Money"
+                        icon={<Smartphone size={24} color={colors.primary.main} strokeWidth={2} />}
+                        onPress={() => navigateToLocalDeposit('mobile_money')}
+                        disabled={localDepositBlocked}
+                      />
+                    ) : null}
+                    {receiveRails && !bankAvailable && !momoAvailable ? (
+                      <Text style={styles.localUnavailable}>
+                        Local pay-in is not available for your country right now.
+                      </Text>
+                    ) : null}
+                  </View>
+                )}
               </View>
             ) : null}
             {activeTab === 'bank' && showBankTab ? (
@@ -1446,17 +1447,13 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     lineHeight: 22,
   },
-  localEntryCta: {
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    marginTop: spacing[2],
+  localRailList: {
+    gap: spacing[3],
   },
-  localEntryCtaGradient: {
-    paddingVertical: spacing[4],
-    alignItems: 'center',
-  },
-  localEntryCtaText: {
-    ...textStyles.button,
-    color: colors.text.inverse,
+  localUnavailable: {
+    ...textStyles.body,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginTop: spacing[4],
   },
 })

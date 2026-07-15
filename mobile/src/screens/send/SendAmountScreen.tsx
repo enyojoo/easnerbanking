@@ -19,9 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
-import { SendAmountShellWebForm } from '../../components/send/SendAmountShellWebForm'
-import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
-import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
+import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { WebAwareModal } from '../../components/WebAwareModal'
 import SkeletonLoader from '../../components/SkeletonLoader'
 import { CachedImage } from '../../components/CachedImage'
@@ -110,8 +108,6 @@ import { formatSendAgainKeypadAmount } from '../../lib/resolveSendAgainRecipient
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
 import { getCurrencySymbol } from '../../utils/formatters'
 
-const SHELL_WEB_SEND_FORM_MAX_WIDTH = 672
-
 function initialSendAmountFromRouteParams(params: Record<string, unknown> | undefined): string {
   const formatted = String(params?.initialSendAmount ?? '').trim()
   if (formatted && formatted !== '0') return formatted
@@ -142,9 +138,6 @@ function LandmarkIcon({ size = 24, color = colors.text.primary }: { size?: numbe
 
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
-  const { showSidebarShell } = useResponsiveLayout()
-  const useWebSendAmountLayout = showSidebarShell
-  const scrollBottomPadding = useScrollBottomPadding(spacing[6])
   const keypadSizing = computeKeypadCellSize(getContentWidth(windowWidth, spacing[5]), {
     gap: spacing[2],
     minSize: 90,
@@ -900,15 +893,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     return 'Select method'
   })()
 
-  const handleWebAmountTextChange = (text: string) => {
-    if (!recipient) return
-    const v = text.replace(/,/g, '').replace(/[^0-9.]/g, '')
-    const parts = v.split('.')
-    if (parts.length > 2) return
-    if (parts[1] && parts[1].length > 2) return
-    setSendAmount(formatAmount(v || '0'))
-  }
-
   const handleSendContinue = async () => {
     if (isContinuePending || isContinueLoading) return
     try {
@@ -1296,83 +1280,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             </View>
             </Animated.View>
 
-            {useWebSendAmountLayout ? (
-              <ScrollView
-                style={styles.shellWebScroll}
-                contentContainerStyle={[
-                  styles.shellWebScrollContent,
-                  { paddingBottom: scrollBottomPadding },
-                ]}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                <Animated.View
-                  style={[
-                    styles.content,
-                    styles.shellWebContent,
-                    {
-                      opacity: contentAnim,
-                      transform: [{
-                        translateY: contentAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [motion.screenEnterTranslateY, 0],
-                        })
-                      }]
-                    }
-                  ]}
-                >
-                  <View style={styles.sendFormTop}>{recipientSection}</View>
-                  {recipient ? (
-                    <SendAmountShellWebForm
-                      amountEntryMode={amountEntryMode}
-                      sendAmount={sendAmount}
-                      sendCurrency={sendCurrency}
-                      receiveCurrency={receiveCurrency}
-                      sendingAmount={sendingAmount}
-                      receiveAmount={receiveAmount}
-                      exchangeRate={exchangeRate}
-                      showCrossCurrencyExchangeUi={showCrossCurrencyExchangeUi}
-                      exchangePreviewReady={exchangePreviewReady}
-                      showExchangePreviewSkeleton={showExchangePreviewSkeleton}
-                      needsNoahRateForSend={needsNoahRateForSend}
-                      needsCryptoRateForSend={false}
-                      noahRatesLoading={noahRatesLoading}
-                      cryptoRatesLoading={false}
-                      manualQuoteLoading={ycRateLoading}
-                      hasNoahRateForPair={hasNoahRateForPair}
-                      hasValidCryptoRateForPair
-                      isContinueLoading={isContinueLoading}
-                      selectedPaymentMethod={selectedPaymentMethod}
-                      selectedBalanceCurrency={selectedBalanceCurrency}
-                      selectedOtherCurrency={selectedOtherCurrency}
-                      selectedOtherPaymentMethod={selectedOtherPaymentMethod}
-                      currencyPaymentMethods={currencyPaymentMethods}
-                      sourceDisplayLabel={sourceDisplayLabel}
-                      hasInsufficientBalance={hasInsufficientBalance}
-                      shortfallAmount={shortfallAmount}
-                      isWalletRecipient={isWalletRecipient}
-                      amountFieldMode={amountFieldMode}
-                      noteFieldUi={noteFieldUi}
-                      note={note}
-                      paymentPurpose={paymentPurpose}
-                      amountFieldError={amountFieldError}
-                      tier1Ok={tier1Ok}
-                      sendButtonDisabled={sendButtonDisabled}
-                      onAmountChange={handleWebAmountTextChange}
-                      onToggleAmountDirection={toggleAmountDirection}
-                      onOpenPaymentMethodPicker={() => {
-                        haptics.tap()
-                        setShowCurrencyPicker(true)
-                      }}
-                      onOpenPurposePicker={() => setShowPurposePicker(true)}
-                      onNoteChange={setNote}
-                      onVerifyPress={() => navigation.navigate('AccountVerification' as never)}
-                      onContinue={handleSendContinue}
-                    />
-                  ) : null}
-                </Animated.View>
-              </ScrollView>
-            ) : (
             <Animated.View 
               style={[
                 styles.content,
@@ -1608,11 +1515,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
               </View>
             </Animated.View>
-            )}
           </View>
         </KeyboardAvoidingView>
 
-        {!useWebSendAmountLayout ? (
         <View
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height
@@ -1667,7 +1572,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             </LinearGradient>
           </Pressable>
         </View>
-        ) : null}
 
         {/* Sending Method Modal */}
         <WebAwareModal
@@ -1931,18 +1835,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing[2],
     flex: 1,
     justifyContent: 'flex-start',
-  },
-  shellWebScroll: {
-    flex: 1,
-  },
-  shellWebScrollContent: {
-    flexGrow: 1,
-  },
-  shellWebContent: {
-    maxWidth: SHELL_WEB_SEND_FORM_MAX_WIDTH,
-    alignSelf: 'center',
-    width: '100%',
-    flex: undefined,
   },
   sendFormTop: {
     flexShrink: 0,

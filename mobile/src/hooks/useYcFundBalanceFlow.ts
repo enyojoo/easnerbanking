@@ -28,7 +28,9 @@ export type YcFundBalanceQuoteResult = {
   processingFee?: number
   bankInfo: Record<string, unknown> | null
   expiresAt: string
+  /** Canonical display id (`ETID` + 8 digits), same as payout. */
   transactionId: string | null
+  easnerTransactionId?: string | null
   transferId: string | null
   payInNotice?: string
 }
@@ -96,7 +98,7 @@ export function useYcReceiveRails(input: {
     }
   }, [input.enabled, country, currency, cacheKey])
 
-  return { rails, loading }
+  return { rails, loading, blocking: loading && !rails }
 }
 
 export function useYcFundBalanceFlow(input: {

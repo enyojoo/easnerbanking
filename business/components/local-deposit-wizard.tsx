@@ -55,6 +55,7 @@ type FundBalanceQuote = {
   bankInfo: Record<string, unknown> | null
   expiresAt: string
   transactionId: string | null
+  easnerTransactionId?: string | null
   transferId: string | null
   payInNotice?: string
 }
@@ -267,46 +268,45 @@ export function LocalDepositWizard({
   }
 
   if (step === "rail") {
-    const useGrid = bankAvailable && momoAvailable
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground text-center">
           Choose how you want to pay in {localPayInCurrency}
         </p>
-        <div className={useGrid ? "grid grid-cols-2 gap-3" : "grid grid-cols-1 gap-3 max-w-xs mx-auto"}>
+        <div className="flex flex-col gap-3">
           {bankAvailable ? (
             <button
               type="button"
-              className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border p-6 min-h-[148px] aspect-square hover:bg-muted/50 transition-colors text-center"
+              className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left"
               onClick={() => {
                 setRail("bank_transfer")
                 setStep("amount")
               }}
             >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                <Landmark className="h-7 w-7 text-primary" />
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <Landmark className="h-6 w-6 text-primary" />
               </div>
-              <div>
-                <p className="font-medium">Bank transfer</p>
-                <p className="text-sm text-muted-foreground mt-1">Pay from your bank</p>
+              <div className="min-w-0">
+                <p className="font-medium">Bank</p>
+                <p className="text-sm text-muted-foreground mt-0.5">Deposit via Bank Transfer</p>
               </div>
             </button>
           ) : null}
           {momoAvailable ? (
             <button
               type="button"
-              className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border p-6 min-h-[148px] aspect-square hover:bg-muted/50 transition-colors text-center"
+              className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left"
               onClick={() => {
                 setRail("mobile_money")
                 setStep("amount")
               }}
             >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                <Smartphone className="h-7 w-7 text-primary" />
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <Smartphone className="h-6 w-6 text-primary" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="font-medium">Mobile money</p>
-                <p className="text-sm text-muted-foreground mt-1">Pay from your wallet</p>
+                <p className="text-sm text-muted-foreground mt-0.5">Deposit via Mobile Money</p>
               </div>
             </button>
           ) : null}
@@ -424,10 +424,12 @@ export function LocalDepositWizard({
             </div>
           ) : quote ? (
             <>
-              {quote.transactionId ? (
+              {(quote.easnerTransactionId ?? quote.transactionId) ? (
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">Transaction ID</span>
-                  <span className="font-mono text-right">{quote.transactionId.toUpperCase()}</span>
+                  <span className="font-mono text-right">
+                    {(quote.easnerTransactionId ?? quote.transactionId)!.toUpperCase()}
+                  </span>
                 </div>
               ) : null}
               <div className="flex justify-between gap-4">

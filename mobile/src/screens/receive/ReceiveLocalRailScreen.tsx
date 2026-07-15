@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native'
 import { ArrowLeft, Landmark, Smartphone } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -36,7 +36,6 @@ export default function ReceiveLocalRailScreen({ navigation, route }: Navigation
 
   const bankAvailable = rails?.rails.bank_transfer.available ?? false
   const momoAvailable = rails?.rails.mobile_money.available ?? false
-  const railCount = (bankAvailable ? 1 : 0) + (momoAvailable ? 1 : 0)
 
   const navigateToAmount = (rail: YcPayInRail) => {
     haptics.medium()
@@ -49,14 +48,6 @@ export default function ReceiveLocalRailScreen({ navigation, route }: Navigation
       ngMissingType,
     } as never)
   }
-
-  useEffect(() => {
-    if (loading || !rails) return
-    if (railCount === 1) {
-      navigateToAmount(bankAvailable ? 'bank_transfer' : 'mobile_money')
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, rails, bankAvailable, momoAvailable, railCount])
 
   if (ngMissingType) {
     return (
@@ -92,32 +83,30 @@ export default function ReceiveLocalRailScreen({ navigation, route }: Navigation
         >
           <Text style={styles.subtitle}>Choose how you want to pay in {localPayInCurrency}</Text>
 
-          {loading ? (
+          {loading && !rails ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginTop: spacing[8] }} />
           ) : (
-            <View style={[styles.cardRow, railCount === 1 && styles.cardRowSingle]}>
+            <View style={styles.cardList}>
               {bankAvailable ? (
                 <ReceiveLocalRailCard
-                  fullWidth={railCount === 1}
-                  title="Bank transfer"
-                  subtitle="Pay from your bank"
-                  icon={<Landmark size={26} color={colors.primary.main} strokeWidth={2} />}
+                  title="Bank"
+                  subtitle="Deposit via Bank Transfer"
+                  icon={<Landmark size={24} color={colors.primary.main} strokeWidth={2} />}
                   onPress={() => navigateToAmount('bank_transfer')}
                 />
               ) : null}
               {momoAvailable ? (
                 <ReceiveLocalRailCard
-                  fullWidth={railCount === 1}
                   title="Mobile money"
-                  subtitle="Pay from your wallet"
-                  icon={<Smartphone size={26} color={colors.primary.main} strokeWidth={2} />}
+                  subtitle="Deposit via Mobile Money"
+                  icon={<Smartphone size={24} color={colors.primary.main} strokeWidth={2} />}
                   onPress={() => navigateToAmount('mobile_money')}
                 />
               ) : null}
             </View>
           )}
 
-          {!loading && !bankAvailable && !momoAvailable ? (
+          {!loading && rails && !bankAvailable && !momoAvailable ? (
             <Text style={styles.unavailable}>
               Local pay-in is not available for your country right now.
             </Text>
@@ -151,15 +140,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing[5],
     textAlign: 'center',
   },
-  cardRow: {
-    flexDirection: 'row',
+  cardList: {
     gap: spacing[3],
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-  },
-  cardRowSingle: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
   },
   unavailable: {
     ...textStyles.body,
