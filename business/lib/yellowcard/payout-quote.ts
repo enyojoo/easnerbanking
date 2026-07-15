@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { findYcRate, listYcRates } from "@/lib/fx/yc-rates"
+import { findYcBalancePayoutRate, listYcRates } from "@/lib/fx/yc-rates"
 import {
   computeYcBalancePayoutPricing,
   normalizeGlobalPayoutQuoteReceiveAmount,
@@ -96,12 +96,8 @@ export async function buildYcPayoutQuote(input: {
   }
 
   const rates = await listYcRates(admin, { destinations: [receiveCurrency], status: "active" })
-  // Prefer USD→local cross row; fall back to local→USDC easner_buy as local per USD
-  let customerRate =
-    findYcRate(rates, "USD", receiveCurrency)?.rate ??
-    findYcRate(rates, receiveCurrency, "USDC")?.easner_buy ??
-    findYcRate(rates, receiveCurrency, "USDC")?.rate ??
-    0
+  const payoutRate = findYcBalancePayoutRate(rates, receiveCurrency)
+  const customerRate = payoutRate?.rate ?? 0
   if (!customerRate || customerRate <= 0) {
     throw new Error(
       `Exchange rate for USD → ${receiveCurrency} is unavailable. Try again shortly.`,

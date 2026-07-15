@@ -87,6 +87,37 @@ export function findYcRate(
   )
 }
 
+/** Balance payout: USD → receiveFiat only (Noah-parity product label). */
+export function findYcBalancePayoutRate(
+  rates: YcRateRow[],
+  receiveFiat: string,
+): YcRateRow | null {
+  const to = receiveFiat.trim().toUpperCase()
+  if (!to) return null
+  return findYcRate(rates, "USD", to)
+}
+
+/**
+ * Local pay-in / fund balance leg: localFiat → USDC.
+ * Requires easner_sell (customer pay-in rate).
+ */
+export function findYcPayInLeg(rates: YcRateRow[], localFiat: string): YcRateRow | null {
+  const from = localFiat.trim().toUpperCase()
+  if (!from) return null
+  const row = findYcRate(rates, from, "USDC")
+  if (!row?.easner_sell || row.easner_sell <= 0) return null
+  return row
+}
+
+/** Cross-border customer rate: fromFiat → toFiat. */
+export function findYcCrossRate(
+  rates: YcRateRow[],
+  fromFiat: string,
+  toFiat: string,
+): YcRateRow | null {
+  return findYcRate(rates, fromFiat, toFiat)
+}
+
 export function isYcRateFresh(row: YcRateRow, maxAgeMs = getYcRatesRefreshTtlMs()): boolean {
   if (row.status !== "active" || row.rate <= 0) return false
   const asOfMs = new Date(row.as_of).getTime()

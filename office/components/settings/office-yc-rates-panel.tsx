@@ -44,7 +44,7 @@ import { Edit, Loader2, MoreHorizontal } from "lucide-react"
 
 const BRIDGE_CODES = new Set(["USD", "USDC"])
 
-type YcRateSourceId = "USD" | "USDC" | "LOCAL" | "CROSS"
+type YcRateSourceId = "USD" | "LOCAL" | "CROSS"
 
 type CurrencyRow = {
   id: string
@@ -74,19 +74,13 @@ const YC_RATE_SOURCES: Array<{
 }> = [
   {
     id: "USD",
-    name: "US Dollar",
+    name: "Balance payout",
     code: "USD",
     filter: (r) => r.from_currency === "USD",
   },
   {
-    id: "USDC",
-    name: "USDC settlement",
-    code: "USDC",
-    filter: (r) => r.from_currency === "USDC",
-  },
-  {
     id: "LOCAL",
-    name: "Local → USDC",
+    name: "Local pay-in",
     code: "LOCAL",
     filter: (r) =>
       r.to_currency === "USDC" &&
@@ -95,7 +89,7 @@ const YC_RATE_SOURCES: Array<{
   },
   {
     id: "CROSS",
-    name: "Fiat cross",
+    name: "Cross-border",
     code: "CROSS",
     filter: (r) =>
       !BRIDGE_CODES.has(r.from_currency) &&
@@ -113,19 +107,41 @@ function formatAsOf(raw: string | undefined): string {
   return t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 }
 
+/**
+ * Customer rate from YC buy/sell + margin, by pair type:
+ * - USD → local (payout): easner_buy from yc_buy
+ * - local → USDC (pay-in): easner_sell from yc_sell
+ * - cross: prefer existing rate / yc_cross_mid; recalc from buy_to/sell_from when present
+ */
 function customerRateFromYcLegs(
-  row: Pick<YcRateAdminRow, "from_currency" | "yc_buy" | "yc_sell" | "margin_bps">,
+  row: Pick<
+    YcRateAdminRow,
+    "from_currency" | "to_currency" | "yc_buy" | "yc_sell" | "margin_bps" | "rate" | "yc_cross_mid"
+  >,
 ): number {
   const margin = (Number(row.margin_bps) || 0) / 10_000
   if (margin < 0 || margin >= 1) return 0
-  if (row.from_currency === "USDC") {
+
+  // Balance payout: USD → local
+  if (row.from_currency === "USD") {
+    const buy = Number(row.yc_buy) || 0
+    if (buy <= 0) return 0
+    return Number((buy * (1 - margin)).toPrecision(14))
+  }
+
+  // Local pay-in: local → USDC
+  if (row.to_currency === "USDC") {
     const sell = Number(row.yc_sell) || 0
     if (sell <= 0) return 0
     return Number((sell / (1 - margin)).toPrecision(14))
   }
-  const buy = Number(row.yc_buy) || 0
-  if (buy <= 0) return 0
-  return Number((buy * (1 - margin)).toPrecision(14))
+
+  // Cross-border: keep mid × (1 − margin) when yc_cross_mid present
+  const mid = Number(row.yc_cross_mid) || 0
+  if (mid > 0) {
+    return Number((mid * (1 - margin)).toPrecision(14))
+  }
+  return Number(row.rate) || 0
 }
 
 function buildDraftForSource(sourceId: YcRateSourceId, rates: YcRateAdminRow[]): EditableYcRate[] {
@@ -269,7 +285,7 @@ export function OfficeYcRatesPanel() {
   return (
     <PlatformControlTabShell
       title="Yellowcard rates"
-      description="Fiat local ↔ USD/USDC legs and cross pairs for Yellowcard pay-in, fund balance, and send. Sync pulls provider buy/sell; margin is applied per corridor."
+      description="Product rates use USD and local fiat (same as Noah). On-chain settlement is USDC behind the USD balance. Sync pulls Yellowcard buy/sell for corridor fiats; margin is applied per pair."
       actions={
         <Button type="button" size="sm" onClick={() => void handleSyncRates()} disabled={syncing || loading}>
           {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -312,8 +328,8 @@ export function OfficeYcRatesPanel() {
                   <TableRow key={source.id}>
                     <TableCell>
                       <span className="flex items-center gap-2 font-medium">
-                        {source.id === "USD" || source.id === "USDC" ? (
-                          <CurrencyFlag currency={source.id} size={16} />
+                        {source.id === "USD" ? (
+                          <CurrencyFlag currency="USD" size={16} />
                         ) : (
                           <span className="inline-flex h-4 w-6 items-center justify-center rounded-sm bg-muted text-[9px] font-medium text-muted-foreground">
                             {source.code.slice(0, 2)}

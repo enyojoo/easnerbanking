@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { YC_QUOTE_TTL_MS, computeYcCrossBorderPricing, validateYcRecipientForCorridor } from "@easner/shared"
-import { findYcRate, listYcRates } from "@/lib/fx/yc-rates"
+import { findYcCrossRate, findYcPayInLeg, findYcRate, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { submitYcSend } from "@/lib/yellowcard/send-submit"
 import { executeYcCryptoDeposit } from "@/lib/yellowcard/execute-yc-crypto-deposit"
@@ -72,7 +72,7 @@ export async function createCrossBorderTransfer(input: {
   }
 
   const rates = await listYcRates(admin, { status: "active" })
-  const cross = findYcRate(rates, payInCurrency, receiveCurrency)
+  const cross = findYcCrossRate(rates, payInCurrency, receiveCurrency)
   if (!cross?.rate) {
     throw new Error(`No Yellowcard cross rate for ${payInCurrency}→${receiveCurrency}`)
   }
@@ -133,8 +133,8 @@ export async function createCrossBorderTransfer(input: {
     reason: "cross_border_leg2_quote",
   })
 
-  const fromLeg = findYcRate(rates, payInCurrency, "USDC")
-  const toLeg = findYcRate(rates, receiveCurrency, "USDC")
+  const fromLeg = findYcPayInLeg(rates, payInCurrency) ?? findYcRate(rates, payInCurrency, "USDC")
+  const toLeg = findYcPayInLeg(rates, receiveCurrency) ?? findYcRate(rates, receiveCurrency, "USDC")
   const pricing = computeYcCrossBorderPricing({
     receiveAmount: input.receiveAmount,
     customerRate: cross.rate,

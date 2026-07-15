@@ -1,7 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import {
-  isYcStoredRatePair,
-} from "./yc-fiat-currencies"
+import { isYcStoredRatePairForAllowlist } from "./yc-fiat-currencies"
 import {
   applyYcCustomerBuy,
   applyYcCustomerCrossRate,
@@ -82,12 +80,13 @@ async function pruneExcludedYcRates(
   supabase: SupabaseClient,
   existingRows: ExistingRow[],
   dryRun?: boolean,
+  allowlist?: ReadonlySet<string> | null,
 ): Promise<number> {
   const toRemove = (existingRows ?? []).filter((row) => {
     if (String(row.source ?? "").toLowerCase() === "office") return false
     const from = String(row.from_currency).toUpperCase()
     const to = String(row.to_currency).toUpperCase()
-    return !isYcStoredRatePair(from, to)
+    return !isYcStoredRatePairForAllowlist(from, to, allowlist)
   })
   if (toRemove.length === 0 || dryRun) return toRemove.length
 
@@ -105,9 +104,11 @@ async function pruneExcludedYcRates(
 }
 
 /**
- * Upsert fiat local↔USD/USDC legs + derived cross pairs into yellowcard_rates.
- * Skips stablecoin/crypto codes from YC /rates (CUSD, ETH, SOL, etc.).
- * Preserves rows with source = 'office'.
+ * Upsert canonical yellowcard_rates pairs:
+ * - USD → local (balance payout, Noah-parity product label)
+ * - local → USDC (pay-in / fund balance + cross leg refs)
+ * - local → local cross pairs
+ * Does not store USDC → local. Preserves rows with source = 'office'.
  */
 export async function syncYcRatesToSupabase(options: {
   supabaseUrl: string
@@ -116,6 +117,8 @@ export async function syncYcRatesToSupabase(options: {
   crossPairs?: YcCrossPairInput[]
   dryRun?: boolean
   margin?: number
+  /** Corridor fiat allowlist; when set, prune non-allowlisted pairs. */
+  allowlist?: ReadonlySet<string> | string[] | null
 }): Promise<YcRateSyncResult> {
   const {
     supabaseUrl,
@@ -124,7 +127,15 @@ export async function syncYcRatesToSupabase(options: {
     crossPairs = [],
     dryRun,
     margin = YC_PAYOUT_MARGIN,
+    allowlist: allowlistInput,
   } = options
+  const allowlist =
+    allowlistInput == null
+      ? null
+      : allowlistInput instanceof Set
+        ? allowlistInput
+        : new Set([...allowlistInput].map((c) => c.trim().toUpperCase()).filter(Boolean))
+
   const supabase: SupabaseClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
@@ -153,6 +164,10 @@ export async function syncYcRatesToSupabase(options: {
       skippedPairs.push({ from_currency: ccy, to_currency: "USDC", reason: "invalid buy/sell" })
       continue
     }
+    if (allowlist && allowlist.size > 0 && !allowlist.has(ccy)) {
+      skippedPairs.push({ from_currency: ccy, to_currency: "USDC", reason: "not_in_corridor_allowlist" })
+      continue
+    }
     const easnerBuy = applyYcCustomerBuy(input.yc_buy, margin)
     const easnerSell = applyYcCustomerSell(input.yc_sell, margin)
     byCcy.set(ccy, {
@@ -168,7 +183,7 @@ export async function syncYcRatesToSupabase(options: {
     const easnerBuyPrec = Number(easnerBuy.toPrecision(14))
     const easnerSellPrec = Number(easnerSell.toPrecision(14))
 
-    // Local → USDC (settlement leg; easner_buy = customer payout rate basis)
+    // Local → USDC (pay-in / fund balance; stores both buy+sell for cross leg refs)
     pushLegRow(updates, existingByKey, nowIso, marginBps, {
       from_currency: ccy,
       to_currency: "USDC",
@@ -177,10 +192,10 @@ export async function syncYcRatesToSupabase(options: {
       yc_sell: ycSell,
       easner_buy: easnerBuyPrec,
       easner_sell: easnerSellPrec,
-      rate: easnerBuyPrec,
+      rate: easnerSellPrec,
     })
 
-    // USD → local (balance payout)
+    // USD → local (balance payout — Noah-parity product label; chain settles USDC 1:1)
     pushLegRow(updates, existingByKey, nowIso, marginBps, {
       from_currency: "USD",
       to_currency: ccy,
@@ -190,18 +205,6 @@ export async function syncYcRatesToSupabase(options: {
       easner_buy: easnerBuyPrec,
       easner_sell: easnerSellPrec,
       rate: easnerBuyPrec,
-    })
-
-    // USDC → local (local pay-in / fund balance)
-    pushLegRow(updates, existingByKey, nowIso, marginBps, {
-      from_currency: "USDC",
-      to_currency: ccy,
-      country_code: countryCode,
-      yc_buy: ycBuy,
-      yc_sell: ycSell,
-      easner_buy: easnerBuyPrec,
-      easner_sell: easnerSellPrec,
-      rate: easnerSellPrec,
     })
   }
 
@@ -244,7 +247,12 @@ export async function syncYcRatesToSupabase(options: {
     if (upErr) throw upErr
   }
 
-  const pruned = await pruneExcludedYcRates(supabase, (existingRows ?? []) as ExistingRow[], dryRun)
+  const pruned = await pruneExcludedYcRates(
+    supabase,
+    (existingRows ?? []) as ExistingRow[],
+    dryRun,
+    allowlist,
+  )
 
   return {
     updated: deduped.length,

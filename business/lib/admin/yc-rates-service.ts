@@ -5,7 +5,6 @@ import {
   easnerYcMarginBps,
   isYcStoredRatePair,
   parseYcPayoutMarginFromEnv,
-  YC_PAYOUT_MARGIN,
 } from "@easner/rate-sync"
 import { listYcRates, type YcRateRow } from "@/lib/fx/yc-rates"
 
@@ -59,10 +58,18 @@ export async function upsertYcRatesAdmin(admin: SupabaseClient, rows: YcRateUpse
     if (ycBuy != null) easnerBuy = applyYcCustomerBuy(ycBuy, margin)
     if (ycSell != null) easnerSell = applyYcCustomerSell(ycSell, margin)
 
+    // Derive customer rate by pair type when not provided
     let rate = Number(row.rate) || 0
     if (rate <= 0) {
-      if (from === "USDC" && easnerSell != null) rate = easnerSell
-      else if (easnerBuy != null) rate = easnerBuy
+      if (from === "USD" && easnerBuy != null) {
+        // Balance payout
+        rate = easnerBuy
+      } else if (to === "USDC" && easnerSell != null) {
+        // Local pay-in
+        rate = easnerSell
+      } else if (easnerBuy != null) {
+        rate = easnerBuy
+      }
     }
 
     return {

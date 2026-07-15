@@ -1,9 +1,14 @@
--- Yellowcard rates: per-currency legs + cross pairs (Noah-parity customer rates).
+-- Yellowcard rates: canonical pairs only (Noah-parity product labels).
+--
+-- Pair types:
+--   USD → local fiat   balance payout (product); chain settles USDC 1:1
+--   local → USDC       local pay-in / fund balance + cross leg refs
+--   local → local      cross-border customer rate
+--
+-- Do not store USDC → local or stablecoin/crypto codes from YC /rates.
 
 create table if not exists public.yellowcard_rates (
   id uuid primary key default gen_random_uuid(),
-  -- Per-currency row: from_currency = local, to_currency = 'USDC' (or leave cross nulls)
-  -- Cross-pair row: from_currency / to_currency both local (e.g. NGN, KES)
   from_currency text not null,
   to_currency text not null,
   country_code text,
@@ -29,4 +34,4 @@ create index if not exists yellowcard_rates_to_currency_idx
   on public.yellowcard_rates (to_currency);
 
 comment on table public.yellowcard_rates is
-  'YC fiat customer rates: local↔USD/USDC legs + fiat cross pairs. Excludes stablecoin/crypto codes (CUSD, ETH, SOL, etc.).';
+  'YC customer rates: USD→local (payout), local→USDC (pay-in), local→local (cross). Product uses USD; chain settles USDC. Excludes USDC→local and crypto codes.';

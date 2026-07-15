@@ -4,7 +4,7 @@ import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS } from "@easner/shared"
-import { findYcRate, listYcRates } from "@/lib/fx/yc-rates"
+import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     .maybeSingle()
 
   const rates = await listYcRates(admin, { status: "active" })
-  const leg = findYcRate(rates, currency, "USDC")
+  const leg = findYcPayInLeg(rates, currency)
   if (!leg?.easner_sell || !leg.yc_sell) {
     return NextResponse.json({ error: "YC rate unavailable for currency" }, { status: 400 })
   }

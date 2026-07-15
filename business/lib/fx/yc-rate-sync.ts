@@ -3,9 +3,11 @@ import {
   syncYcRatesToSupabase,
   buildYcCrossPairsFromFiats,
   isYcFiatCurrency,
+  loadYcFiatCurrenciesFromSupabase,
   type YcCrossPairInput,
   type YcRateSyncResult,
 } from "@easner/rate-sync"
+import { createClient } from "@supabase/supabase-js"
 import { listYellowcardRates, normalizeYcRateRow } from "@/lib/yellowcard/rates"
 
 export type { YcRateSyncResult }
@@ -42,11 +44,18 @@ export async function syncYcExchangeRates(options?: {
   const { supabaseUrl, serviceRoleKey } = getSupabaseServiceConfig()
   const margin = parseYcPayoutMarginFromEnv(process.env.YC_PAYOUT_MARGIN)
 
+  const admin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const corridorFiats = await loadYcFiatCurrenciesFromSupabase(admin)
+  const allowlist = new Set(corridorFiats)
+
   const rawRates = await listYellowcardRates()
   const currencies = rawRates
     .map(normalizeYcRateRow)
     .filter((r): r is NonNullable<typeof r> => Boolean(r))
     .filter((r) => isYcFiatCurrency(r.currency))
+    .filter((r) => allowlist.size === 0 || allowlist.has(r.currency))
     .map((r) => ({
       currency: r.currency,
       yc_buy: r.buy,
@@ -61,6 +70,7 @@ export async function syncYcExchangeRates(options?: {
       crossPairs: [],
       dryRun: options?.dryRun,
       margin,
+      allowlist: allowlist.size > 0 ? allowlist : null,
     })
   }
 
@@ -73,6 +83,7 @@ export async function syncYcExchangeRates(options?: {
     crossPairs: resolveCrossPairs(fiatCodes),
     dryRun: options?.dryRun,
     margin,
+    allowlist: allowlist.size > 0 ? allowlist : null,
   })
 }
 

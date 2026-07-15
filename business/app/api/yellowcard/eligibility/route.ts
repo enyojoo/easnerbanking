@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { selectProviderForCorridor } from "@/lib/payout-providers"
-import { findYcRate, listYcRates } from "@/lib/fx/yc-rates"
+import { findYcCrossRate, listYcRates } from "@/lib/fx/yc-rates"
 import { isYcLocalPayInEnabledForCountry } from "@/lib/yellowcard/yc-receive-gate"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
 
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
     throughLocalCurrency = { payInCurrency, available: false, reason: "same_currency" }
   } else {
     const rates = await listYcRates(admin, { status: "active" })
-    const cross = findYcRate(rates, payInCurrency, receiveCurrency)
+    const cross = findYcCrossRate(rates, payInCurrency, receiveCurrency)
     const { data: corridor } = await admin
       .from("payout_corridors")
       .select("enabled,metadata")
