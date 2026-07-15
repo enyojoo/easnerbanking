@@ -515,4 +515,9 @@ export type {
   YcFundBalancePricing,
   YcLegFeeInputs,
 } from "./yc-pricing"
+export {
+  mapResidenceToLocalPayInCurrency,
+  ycFundBalanceQuoteErrorMessage,
+} from "./yc-fund-balance-errors"
+export type { YcFundBalanceQuoteErrorCode } from "./yc-fund-balance-errors"
 /** Mobile-only: import from `@easner/shared/warm-flags` (uses expo-image; not for Next.js). */

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { mapResidenceToLocalPayInCurrency } from "@easner/shared"
 
 export type YcPayInRail = "bank_transfer" | "mobile_money"
 
@@ -39,22 +40,7 @@ type YcRateRow = {
 }
 
 function mapResidenceToLocalCurrency(residence: string): string | null {
-  const cc = residence.trim().toUpperCase()
-  const map: Record<string, string> = {
-    NG: "NGN",
-    KE: "KES",
-    GH: "GHS",
-    ZA: "ZAR",
-    UG: "UGX",
-    TZ: "TZS",
-    RW: "RWF",
-    MX: "MXN",
-    BR: "BRL",
-    AR: "ARS",
-    CO: "COP",
-    CL: "CLP",
-  }
-  return map[cc] ?? null
+  return mapResidenceToLocalPayInCurrency(residence)
 }
 
 export function residenceCountryFromPayInCurrency(currency: string): string | null {

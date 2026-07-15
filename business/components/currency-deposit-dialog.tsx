@@ -11,17 +11,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { ArrowRight, Copy, Check, Plus, Share2, ShieldCheck, Loader2 } from "lucide-react"
+import { ArrowRight, Copy, Check, Plus, Share2, ShieldCheck } from "lucide-react"
 import type { Account } from "@/lib/finance-types"
 import { QRCodeSVG } from "qrcode.react"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
@@ -32,10 +23,8 @@ import {
   getStablecoinPaymentInstructions,
 } from "@/lib/payment-instructions"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
-import { resolveNgLocalVerification, type NgLocalIdType } from "@easner/shared"
-import { mapResidenceToLocalCurrency } from "@/hooks/use-yc-cross-border-flow"
-import { ycBankInfoFields } from "@/lib/yc-bank-info-fields"
+import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType } from "@easner/shared"
+import { LocalDepositWizard } from "@/components/local-deposit-wizard"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -99,19 +88,14 @@ function PaymentInstructions({
   )
 }
 
-type LocalRail = "bank_transfer" | "mobile_money"
-type LocalAmountMode = "usd" | "local"
 
-type FundBalanceQuote = {
-  ok: true
-  localPayIn: number
-  usdCredit: number
-  customerRate: number
-  bankInfo: Record<string, unknown> | null
-  processingFee: number
-  expiresAt: string
-  transactionId: string | null
-  payInNotice?: string
+type ReceiveRailsResponse = {
+  ok: boolean
+  rails: {
+    bank_transfer: { available: boolean }
+    mobile_money: { available: boolean }
+  }
+  anyAvailable: boolean
 }
 
 interface CurrencyDepositDialogProps {
@@ -125,7 +109,6 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     tier1Complete,
     tier1VerificationStatus,
     countryCode,
-    businessId,
   } = useBusinessProfile()
   const stablecoinAccount =
     account.stablecoinAddress && account.stablecoinToken
@@ -143,6 +126,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
   const [residenceCountry, setResidenceCountry] = useState<string | null>(null)
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
+  const [receiveRails, setReceiveRails] = useState<ReceiveRailsResponse | null>(null)
 
   useEffect(() => {
     if (account.currency !== "USD") return
@@ -180,23 +164,40 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const effectiveResidence =
     residenceCountry || String(countryCode ?? "").trim().toUpperCase() || null
   const localPayInCurrency = useMemo(
-    () => (effectiveResidence ? mapResidenceToLocalCurrency(effectiveResidence) : null),
+    () => (effectiveResidence ? mapResidenceToLocalPayInCurrency(effectiveResidence) : null),
     [effectiveResidence],
   )
-  const showLocalTab = account.currency === "USD" && Boolean(localPayInCurrency)
+
+  useEffect(() => {
+    if (account.currency !== "USD" || !effectiveResidence || !localPayInCurrency) {
+      setReceiveRails(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetchWithSession(
+          `/api/yellowcard/receive-rails?country=${encodeURIComponent(effectiveResidence)}&currency=${encodeURIComponent(localPayInCurrency)}`,
+        )
+        const data = (await res.json().catch(() => ({}))) as ReceiveRailsResponse
+        if (!cancelled) setReceiveRails(res.ok ? data : null)
+      } catch {
+        if (!cancelled) setReceiveRails(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [account.currency, effectiveResidence, localPayInCurrency])
+
+  const showLocalTab =
+    account.currency === "USD" && Boolean(receiveRails?.anyAvailable)
 
   const visibleTabCount = [showBankTab, showLocalTab, showStablecoinTab].filter(Boolean).length
   const showTabBar = visibleTabCount > 1
   const defaultTab = showBankTab ? "bank" : showLocalTab ? "local" : "stablecoin"
   const tabColsClass =
     visibleTabCount === 3 ? "grid-cols-3" : visibleTabCount === 2 ? "grid-cols-2" : "grid-cols-1"
-
-  const [localAmountMode, setLocalAmountMode] = useState<LocalAmountMode>("usd")
-  const [localAmountStr, setLocalAmountStr] = useState("")
-  const [localRail, setLocalRail] = useState<LocalRail>("bank_transfer")
-  const [localLoading, setLocalLoading] = useState(false)
-  const [localError, setLocalError] = useState<string | null>(null)
-  const [localQuote, setLocalQuote] = useState<FundBalanceQuote | null>(null)
 
   const isNgn = account.currency === "NGN"
   const blockedByAfricanTier = isNgn && !TIER2_COMPLETE_PLACEHOLDER
@@ -240,10 +241,8 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
           ]
             .filter(Boolean)
             .join("\n")
-        : type === "local" && localQuote?.bankInfo
-          ? ycBankInfoFields(localQuote.bankInfo)
-              .map((f) => `${f.label}: ${f.value}`)
-              .join("\n")
+        : type === "local" && effectiveResidence
+          ? `Local ${localPayInCurrency} deposit to USD balance`
           : stablecoinAccount
             ? [
                 `Network: SOL • Solana`,
@@ -268,53 +267,6 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
       onCopy(bankDetails, "share")
     }
   }
-
-  const handleGetLocalPaymentDetails = async () => {
-    if (!localPayInCurrency || !effectiveResidence) return
-    const amount = Number.parseFloat(localAmountStr.replace(/,/g, ""))
-    if (!(amount > 0)) {
-      setLocalError("Enter a valid amount")
-      return
-    }
-    setLocalLoading(true)
-    setLocalError(null)
-    setLocalQuote(null)
-    try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (businessId) headers["X-Easner-Noah-Scope"] = "business"
-      const body =
-        localAmountMode === "usd"
-          ? {
-              currency: localPayInCurrency,
-              country: effectiveResidence,
-              usdCredit: amount,
-              rail: localRail,
-            }
-          : {
-              currency: localPayInCurrency,
-              country: effectiveResidence,
-              localPayIn: amount,
-              rail: localRail,
-            }
-      const res = await fetchWithSession("/api/yellowcard/fund-balance/quote", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-      })
-      const data = (await res.json().catch(() => ({}))) as FundBalanceQuote & { error?: string }
-      if (!res.ok || !data.ok) {
-        setLocalError(typeof data.error === "string" ? data.error : "Could not get payment details")
-        return
-      }
-      setLocalQuote(data)
-    } catch {
-      setLocalError("Could not get payment details")
-    } finally {
-      setLocalLoading(false)
-    }
-  }
-
-  const localBankFields = ycBankInfoFields(localQuote?.bankInfo)
 
   return (
     <Dialog>
@@ -467,142 +419,15 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
               </TabsContent>
             ) : null}
 
-            {showLocalTab && localPayInCurrency ? (
+            {showLocalTab && localPayInCurrency && effectiveResidence ? (
               <TabsContent value="local" className="space-y-4 mt-4">
-                <p className="text-sm text-muted-foreground">
-                  Pay in {localPayInCurrency} to credit your USD balance. You&apos;ll get one-time
-                  bank or mobile money details for this amount.
-                </p>
-
-                {localPayInCurrency === "NGN" && ngMissingType ? (
-                  <NgLocalVerificationNotice
-                    missingType={ngMissingType}
-                    onSaved={() => setNgMissingType(null)}
-                  />
-                ) : null}
-
-                <div className="space-y-2">
-                  <Label>Amount type</Label>
-                  <Select
-                    value={localAmountMode}
-                    onValueChange={(v: string) => {
-                      setLocalAmountMode(v as LocalAmountMode)
-                      setLocalQuote(null)
-                      setLocalError(null)
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="usd">USD credit</SelectItem>
-                      <SelectItem value="local">{localPayInCurrency} to pay</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`local-amt-${account.id}`}>
-                    {localAmountMode === "usd" ? "USD to credit" : `${localPayInCurrency} to pay`}
-                  </Label>
-                  <Input
-                    id={`local-amt-${account.id}`}
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={localAmountStr}
-                    onChange={(e) => {
-                      setLocalAmountStr(e.target.value)
-                      setLocalQuote(null)
-                      setLocalError(null)
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Payment method</Label>
-                  <Select
-                    value={localRail}
-                    onValueChange={(v: string) => {
-                      setLocalRail(v as LocalRail)
-                      setLocalQuote(null)
-                      setLocalError(null)
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="bank_transfer">Bank transfer</SelectItem>
-                      <SelectItem value="mobile_money">Mobile money</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Button
-                  className="w-full gap-2"
-                  disabled={localLoading}
-                  onClick={() => void handleGetLocalPaymentDetails()}
-                >
-                  {localLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Getting details…
-                    </>
-                  ) : (
-                    "Get payment details"
-                  )}
-                </Button>
-
-                {localError ? <p className="text-sm text-destructive">{localError}</p> : null}
-
-                {localQuote ? (
-                  <div className="space-y-4 pt-2 border-t">
-                    {localQuote.payInNotice ? (
-                      <p className="text-sm text-muted-foreground">{localQuote.payInNotice}</p>
-                    ) : null}
-                    <p className="text-sm text-muted-foreground">
-                      Pay{" "}
-                      <span className="font-medium text-foreground">
-                        {localQuote.localPayIn.toLocaleString("en-US", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{" "}
-                        {localPayInCurrency}
-                      </span>{" "}
-                      to credit{" "}
-                      <span className="font-medium text-foreground">
-                        ${localQuote.usdCredit.toLocaleString("en-US", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{" "}
-                        USD
-                      </span>
-                    </p>
-                    <div className="space-y-3">
-                      {localBankFields.map((f) => (
-                        <CopyableField
-                          key={f.id}
-                          label={f.label}
-                          value={f.value}
-                          copiedField={copiedField}
-                          fieldId={`local-${f.id}-${account.id}`}
-                          onCopy={onCopy}
-                        />
-                      ))}
-                    </div>
-                    {localBankFields.length > 0 ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full gap-2"
-                        onClick={() => void handleShare("local")}
-                      >
-                        <Share2 className="h-4 w-4" />
-                        Share Payment Details
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
+                <LocalDepositWizard
+                  residenceCountry={effectiveResidence}
+                  ngMissingType={localPayInCurrency === "NGN" ? ngMissingType : null}
+                  onNgSaved={() => setNgMissingType(null)}
+                  copiedField={copiedField}
+                  onCopy={onCopy}
+                />
               </TabsContent>
             ) : null}
 

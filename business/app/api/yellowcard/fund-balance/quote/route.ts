@@ -11,17 +11,22 @@ import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 import { buildYcFundBalanceReceiveMetadata } from "@/lib/yellowcard/yc-ledger"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
 import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
+import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
+import {
+  mapKycErrorToCode,
+  ycFundBalanceQuoteError,
+} from "@/lib/yellowcard/fund-balance-quote-errors"
 
 export const runtime = "nodejs"
 
 function ycSettlementConfigErrorResponse(message: string) {
-  return NextResponse.json(
+  return ycFundBalanceQuoteError(
+    "yc_settlement_wallet_not_configured",
+    message,
+    503,
     {
-      error: message,
-      code: "yc_settlement_wallet_not_configured",
       hint: "Set DEPOSIT_OMNIBUS_SOLANA_ADDRESS_USD on the business API (USDC Solana omnibus for YC pay-in settlement).",
     },
-    { status: 503 },
   )
 }
 
@@ -49,7 +54,12 @@ export async function POST(request: Request) {
   const currency = String(body?.currency ?? "").trim().toUpperCase()
   const country = String(body?.country ?? "").trim().toUpperCase()
   if (!currency || !country) {
-    return NextResponse.json({ error: "currency and country required" }, { status: 400 })
+    return ycFundBalanceQuoteError(
+      "currency_country_required",
+      "currency and country required",
+      400,
+      { userId: user.id },
+    )
   }
 
   const admin = createSupabaseAdmin()
@@ -70,7 +80,12 @@ export async function POST(request: Request) {
   const rates = await listYcRates(admin, { status: "active" })
   const leg = findYcPayInLeg(rates, currency)
   if (!leg?.easner_sell || !leg.yc_sell) {
-    return NextResponse.json({ error: "YC rate unavailable for currency" }, { status: 400 })
+    return ycFundBalanceQuoteError(
+      "yc_rate_unavailable",
+      "YC rate unavailable for currency",
+      400,
+      { userId: kycUserId, currency, country },
+    )
   }
 
   const rail = body?.rail === "mobile_money" ? "mobile_money" : "bank_transfer"
@@ -81,7 +96,12 @@ export async function POST(request: Request) {
     rail,
   })
   if (!payInEnabled) {
-    return NextResponse.json({ error: "Local pay-in is not enabled for this corridor" }, { status: 403 })
+    return ycFundBalanceQuoteError(
+      "yc_corridor_disabled",
+      "Local pay-in is not enabled for this corridor",
+      403,
+      { userId: kycUserId, currency, country, rail },
+    )
   }
 
   if (!depositOmnibusSolanaAddressUsd()) {
@@ -89,17 +109,15 @@ export async function POST(request: Request) {
   }
 
   const channels = await listYellowcardChannels()
-  const channel = channels.find((ch) => {
-    if (String(ch.country ?? "").toUpperCase() !== country) return false
-    if (String(ch.currency ?? "").toUpperCase() !== currency) return false
-    const ramp = String(ch.rampType ?? "").toLowerCase()
-    if (ramp.includes("withdraw") || ramp.includes("send")) return false
-    const t = String(ch.channelType ?? "").toLowerCase()
-    return rail === "mobile_money" ? t.includes("momo") : t.includes("bank") || !t.includes("momo")
-  })
+  const channel = findYcReceiveChannel(channels, { country, currency, rail })
   const channelId = String(channel?.id ?? channel?.channelId ?? "").trim()
   if (!channelId) {
-    return NextResponse.json({ error: "No YC receive channel" }, { status: 400 })
+    return ycFundBalanceQuoteError(
+      "yc_channel_missing",
+      "No YC receive channel",
+      400,
+      { userId: kycUserId, currency, country, rail },
+    )
   }
 
   let sender
@@ -121,9 +139,12 @@ export async function POST(request: Request) {
       },
     })
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "KYC metadata failed" },
-      { status: 400 },
+    const message = e instanceof Error ? e.message : "KYC metadata failed"
+    return ycFundBalanceQuoteError(
+      mapKycErrorToCode(message),
+      message,
+      400,
+      { userId: kycUserId, currency, country, rail },
     )
   }
 
@@ -145,7 +166,9 @@ export async function POST(request: Request) {
       currency,
       country,
       localAmount: provisional.localPayIn,
-      sender,
+      recipient: sender,
+      payInRail: rail,
+      sourcePhone: userRow?.phone,
       reason: "fund_balance",
     })
   } catch (e) {
@@ -153,7 +176,12 @@ export async function POST(request: Request) {
     if (message === "deposit_omnibus_solana_address_usd_required") {
       return ycSettlementConfigErrorResponse(message)
     }
-    return NextResponse.json({ error: message }, { status: 400 })
+    return ycFundBalanceQuoteError("yc_receive_rejected", message, 400, {
+      userId: kycUserId,
+      currency,
+      country,
+      rail,
+    })
   }
 
   const pricing = computeYcFundBalancePricing({
@@ -192,25 +220,29 @@ export async function POST(request: Request) {
     .select("id")
     .single()
 
-  await admin.from("yc_transfers").insert({
-    transaction_id: tx?.id ?? null,
-    user_id: kycUserId,
-    business_id: businessId,
-    mode: "fund_balance",
-    status: "awaiting_pay_in",
-    pay_in_currency: currency,
-    receive_currency: "USD",
-    quoted_pay_in: pricing.localPayIn,
-    quoted_receive: pricing.usdCredit,
-    customer_rate: Number(leg.easner_sell),
-    leg1_sequence_id: sequenceId,
-    leg1_yc_id: receiveRes.id ?? null,
-    leg1_channel_id: channelId,
-    bank_info: receiveRes.bankInfo ?? null,
-    settlement_info: receiveRes.settlementInfo ?? null,
-    metadata: { processing_fee: pricing.processingFee, usd_credit: pricing.usdCredit },
-    expires_at: expiresAt,
-  })
+  const { data: transferRow } = await admin
+    .from("yc_transfers")
+    .insert({
+      transaction_id: tx?.id ?? null,
+      user_id: kycUserId,
+      business_id: businessId,
+      mode: "fund_balance",
+      status: "awaiting_pay_in",
+      pay_in_currency: currency,
+      receive_currency: "USD",
+      quoted_pay_in: pricing.localPayIn,
+      quoted_receive: pricing.usdCredit,
+      customer_rate: Number(leg.easner_sell),
+      leg1_sequence_id: sequenceId,
+      leg1_yc_id: receiveRes.id ?? null,
+      leg1_channel_id: channelId,
+      bank_info: receiveRes.bankInfo ?? null,
+      settlement_info: receiveRes.settlementInfo ?? null,
+      metadata: { processing_fee: pricing.processingFee, usd_credit: pricing.usdCredit },
+      expires_at: expiresAt,
+    })
+    .select("id")
+    .single()
 
   return NextResponse.json({
     ok: true,
@@ -222,6 +254,7 @@ export async function POST(request: Request) {
     processingFee: pricing.processingFee,
     expiresAt,
     transactionId: tx?.id ?? null,
+    transferId: transferRow?.id ?? receiveRes.id ?? null,
     payInNotice: `Complete your transfer using the payment details below.`,
   })
 }

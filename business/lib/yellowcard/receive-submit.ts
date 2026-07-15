@@ -1,5 +1,14 @@
 import { yellowcardFetch } from "./http"
 import { requireDepositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
+import { getYellowcardEnvironment } from "./config"
+
+export type YcReceiveRail = "bank_transfer" | "mobile_money"
+
+export type YcReceiveSource = {
+  accountType: "bank" | "momo"
+  accountNumber?: string
+  networkId?: string
+}
 
 export type YcReceiveSubmitInput = {
   sequenceId: string
@@ -13,8 +22,16 @@ export type YcReceiveSubmitInput = {
   amount?: number
   forceAccept?: boolean
   directSettlement?: boolean
+  /** @deprecated Receive uses `recipient`, not `sender`. */
   sender?: Record<string, unknown>
+  /** Customer KYC for receive (required for direct settlement). */
   recipient?: Record<string, unknown>
+  /** Payer bank/momo source (required for direct settlement). */
+  source?: YcReceiveSource
+  /** Build source from rail when `source` omitted. */
+  payInRail?: YcReceiveRail
+  /** MoMo phone when rail is mobile_money (production). */
+  sourcePhone?: string | null
   settlementWalletAddress?: string
   reason?: string
 }
@@ -39,6 +56,23 @@ export type YcReceiveSubmitResult = {
   [key: string]: unknown
 }
 
+/** YC `/receive` requires `source.accountType` (bank | momo). */
+export function buildYcReceiveSource(input: {
+  rail: YcReceiveRail
+  phone?: string | null
+}): YcReceiveSource {
+  const accountType = input.rail === "mobile_money" ? "momo" : "bank"
+  const source: YcReceiveSource = { accountType }
+  const phone = String(input.phone ?? "").trim()
+  if (getYellowcardEnvironment() === "sandbox") {
+    // Sandbox success simulation per YC docs.
+    source.accountNumber = "1111111111"
+  } else if (accountType === "momo" && phone) {
+    source.accountNumber = phone
+  }
+  return source
+}
+
 export function buildYcReceiveSubmitBody(input: YcReceiveSubmitInput): Record<string, unknown> {
   const wallet =
     input.settlementWalletAddress?.trim() || requireDepositOmnibusSolanaAddressUsd()
@@ -60,8 +94,14 @@ export function buildYcReceiveSubmitBody(input: YcReceiveSubmitInput): Record<st
   }
   if (input.localAmount != null) body.localAmount = input.localAmount
   if (input.amount != null) body.amount = input.amount
-  if (input.sender) body.sender = input.sender
-  if (input.recipient) body.recipient = input.recipient
+  const recipient = input.recipient ?? input.sender
+  if (recipient) body.recipient = recipient
+  const source =
+    input.source ??
+    (input.payInRail
+      ? buildYcReceiveSource({ rail: input.payInRail, phone: input.sourcePhone })
+      : null)
+  if (source) body.source = source
   if (input.reason) body.reason = input.reason
   return body
 }

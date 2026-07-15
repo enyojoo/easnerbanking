@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, isVaAnswerSettled, shouldShowBankDepositTab, resolveNgLocalVerification, type NgLocalIdType } from '@easner/shared'
+import { qk, isVaAnswerSettled, shouldShowBankDepositTab, resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType } from '@easner/shared'
 import {
   View,
   Text,
@@ -10,8 +10,6 @@ import {
   Pressable, Platform,
   Image,
   Share,
-  TextInput,
-  ActivityIndicator,
 } from 'react-native'
 import {
   AlertTriangle,
@@ -25,6 +23,7 @@ import {
   ShieldCheck,
   Wallet,
 } from 'lucide-react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -34,7 +33,7 @@ import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { EasnerAlertSheet, PremiumModalSheet } from '../../components/premium'
-import { getApiBaseUrl, apiPost, apiGet } from '../../lib/apiClient'
+import { getApiBaseUrl, apiGet } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useScope } from '../../query/scope'
@@ -47,49 +46,9 @@ import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { haptics } from '../../lib/haptics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { NgLocalVerificationNotice } from '../../components/compliance/NgLocalVerificationNotice'
+import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
 
 type TabType = 'bank' | 'local' | 'stablecoin'
-type LocalRail = 'bank_transfer' | 'mobile_money'
-type LocalAmountMode = 'usd' | 'local'
-
-type FundBalanceQuote = {
-  ok: true
-  localPayIn: number
-  usdCredit: number
-  bankInfo: Record<string, unknown> | null
-  payInNotice?: string
-}
-
-const BANK_INFO_LABELS: Record<string, string> = {
-  accountName: 'Account Name',
-  account_name: 'Account Name',
-  accountNumber: 'Account Number',
-  account_number: 'Account Number',
-  bankName: 'Bank Name',
-  bank_name: 'Bank Name',
-  bankCode: 'Bank Code',
-  bank_code: 'Bank Code',
-  reference: 'Reference',
-  paymentReference: 'Payment Reference',
-  phoneNumber: 'Phone Number',
-  phone_number: 'Phone Number',
-}
-
-function flattenBankInfo(bankInfo: Record<string, unknown> | null | undefined) {
-  if (!bankInfo) return [] as Array<{ key: string; label: string; value: string }>
-  const out: Array<{ key: string; label: string; value: string }> = []
-  for (const [key, raw] of Object.entries(bankInfo)) {
-    if (raw == null || typeof raw === 'object') continue
-    const value = String(raw).trim()
-    if (!value) continue
-    out.push({
-      key,
-      label: BANK_INFO_LABELS[key] ?? key.replace(/_/g, ' '),
-      value,
-    })
-  }
-  return out
-}
 
 export default function ReceiveMoneyScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
@@ -108,12 +67,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const [accountCreationError, setAccountCreationError] = useState<string | null>(null)
   const [tosTermsSheetMessage, setTosTermsSheetMessage] = useState<string | null>(null)
   const [aboutSheetOpen, setAboutSheetOpen] = useState(false)
-  const [localAmountMode, setLocalAmountMode] = useState<LocalAmountMode>('usd')
-  const [localAmountStr, setLocalAmountStr] = useState('')
-  const [localRail, setLocalRail] = useState<LocalRail>('bank_transfer')
-  const [localLoading, setLocalLoading] = useState(false)
-  const [localError, setLocalError] = useState<string | null>(null)
-  const [localQuote, setLocalQuote] = useState<FundBalanceQuote | null>(null)
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
 
   const currency = ((route.params as any)?.currency || 'USD') as 'USD' | 'EUR'
@@ -205,22 +158,44 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const showStablecoinTab = supportsStablecoins
   const localPayInCurrency = useMemo(() => {
     const cc = String(userProfile?.residence_country ?? '').trim().toUpperCase()
-    const map: Record<string, string> = {
-      NG: 'NGN',
-      KE: 'KES',
-      GH: 'GHS',
-      ZA: 'ZAR',
-      UG: 'UGX',
-      TZ: 'TZS',
-      MX: 'MXN',
-      BR: 'BRL',
-    }
-    return map[cc] ?? null
+    return mapResidenceToLocalPayInCurrency(cc)
   }, [userProfile?.residence_country])
-  const showLocalTab = Boolean(localPayInCurrency) && verificationComplete && currency === 'USD'
-  const showTabBar = [showBankTab, showLocalTab, showStablecoinTab].filter(Boolean).length > 1
 
   const residenceCountry = String(userProfile?.residence_country ?? '').trim().toUpperCase()
+
+  const { rails: receiveRails, loading: receiveRailsLoading } = useYcReceiveRails({
+    country: residenceCountry || null,
+    currency: localPayInCurrency,
+    enabled: Boolean(localPayInCurrency) && verificationComplete && currency === 'USD',
+  })
+
+  const showLocalTab =
+    Boolean(receiveRails?.anyAvailable) && verificationComplete && currency === 'USD'
+  const showTabBar = [showBankTab, showLocalTab, showStablecoinTab].filter(Boolean).length > 1
+
+  const handleStartLocalDeposit = () => {
+    if (!localPayInCurrency || !residenceCountry) return
+    if (localPayInCurrency === 'NGN' && ngMissingType) return
+    haptics.medium()
+    const bankAvailable = receiveRails?.rails.bank_transfer.available ?? false
+    const momoAvailable = receiveRails?.rails.mobile_money.available ?? false
+    const count = (bankAvailable ? 1 : 0) + (momoAvailable ? 1 : 0)
+    const baseParams = {
+      localPayInCurrency,
+      residenceCountry,
+      ngMissingType,
+    }
+    if (count === 1) {
+      navigation.navigate('ReceiveLocalAmount' as never, {
+        ...baseParams,
+        payInRail: bankAvailable ? 'bank_transfer' : 'mobile_money',
+        bankAvailable,
+        momoAvailable,
+      } as never)
+    } else {
+      navigation.navigate('ReceiveLocalRail' as never, baseParams as never)
+    }
+  }
 
   useEffect(() => {
     if (!showLocalTab || localPayInCurrency !== 'NGN') {
@@ -255,50 +230,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       cancelled = true
     }
   }, [showLocalTab, localPayInCurrency, residenceCountry])
-
-  const handleGetLocalPaymentDetails = async () => {
-    if (!localPayInCurrency || !residenceCountry) {
-      setLocalError('Residence country required for local deposit')
-      return
-    }
-    const amount = Number.parseFloat(localAmountStr.replace(/,/g, ''))
-    if (!(amount > 0)) {
-      setLocalError('Enter a valid amount')
-      return
-    }
-    setLocalLoading(true)
-    setLocalError(null)
-    setLocalQuote(null)
-    haptics.medium()
-    try {
-      const body =
-        localAmountMode === 'usd'
-          ? {
-              currency: localPayInCurrency,
-              country: residenceCountry,
-              usdCredit: amount,
-              rail: localRail,
-            }
-          : {
-              currency: localPayInCurrency,
-              country: residenceCountry,
-              localPayIn: amount,
-              rail: localRail,
-            }
-      const res = await apiPost('/api/yellowcard/fund-balance/quote', body)
-      const data = (await res.json().catch(() => ({}))) as FundBalanceQuote & { error?: string }
-      if (!res.ok || !data.ok) {
-        setLocalError(typeof data.error === 'string' ? data.error : 'Could not get payment details')
-        return
-      }
-      setLocalQuote(data)
-      haptics.success()
-    } catch (e: any) {
-      setLocalError(e?.message || 'Could not get payment details')
-    } finally {
-      setLocalLoading(false)
-    }
-  }
 
   const accountReady = hasAccountData
 
@@ -833,10 +764,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         >
           <View style={styles.content}>
             {activeTab === 'local' && showLocalTab ? (
-              <View style={{ gap: spacing[3] }}>
+              <View style={{ gap: spacing[4] }}>
                 <Text style={styles.fieldLabel}>
-                  Pay in {localPayInCurrency} to credit your USD balance. Get one-time bank or mobile
-                  money details for this amount.
+                  Pay in {localPayInCurrency} to credit your USD balance via bank transfer or mobile
+                  money.
                 </Text>
 
                 {localPayInCurrency === 'NGN' && ngMissingType ? (
@@ -849,133 +780,30 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   />
                 ) : null}
 
-                <View style={styles.fieldContainer}>
-                  <Text style={styles.fieldLabel}>Amount type</Text>
-                  <View style={styles.localRailRow}>
-                    {(
-                      [
-                        { id: 'usd' as const, label: 'USD credit' },
-                        { id: 'local' as const, label: `${localPayInCurrency} to pay` },
-                      ] as const
-                    ).map((opt) => (
-                      <Pressable
-                        key={opt.id}
-                        android_ripple={ripple.neutral}
-                        style={[
-                          styles.localChip,
-                          localAmountMode === opt.id && styles.localChipActive,
-                        ]}
-                        onPress={() => {
-                          haptics.tap()
-                          setLocalAmountMode(opt.id)
-                          setLocalQuote(null)
-                          setLocalError(null)
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.localChipText,
-                            localAmountMode === opt.id && styles.localChipTextActive,
-                          ]}
-                        >
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={styles.fieldContainer}>
-                  <Text style={styles.fieldLabel}>
-                    {localAmountMode === 'usd' ? 'USD to credit' : `${localPayInCurrency} to pay`}
-                  </Text>
-                  <TextInput
-                    style={styles.localAmountInput}
-                    keyboardType="decimal-pad"
-                    placeholder="0.00"
-                    placeholderTextColor={colors.text.tertiary}
-                    value={localAmountStr}
-                    onChangeText={(t) => {
-                      setLocalAmountStr(t)
-                      setLocalQuote(null)
-                      setLocalError(null)
-                    }}
-                  />
-                </View>
-
-                <View style={styles.fieldContainer}>
-                  <Text style={styles.fieldLabel}>Payment method</Text>
-                  <View style={styles.localRailRow}>
-                    {(
-                      [
-                        { id: 'bank_transfer' as const, label: 'Bank' },
-                        { id: 'mobile_money' as const, label: 'Mobile money' },
-                      ] as const
-                    ).map((opt) => (
-                      <Pressable
-                        key={opt.id}
-                        android_ripple={ripple.neutral}
-                        style={[styles.localChip, localRail === opt.id && styles.localChipActive]}
-                        onPress={() => {
-                          haptics.tap()
-                          setLocalRail(opt.id)
-                          setLocalQuote(null)
-                          setLocalError(null)
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.localChipText,
-                            localRail === opt.id && styles.localChipTextActive,
-                          ]}
-                        >
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
                 <Pressable
                   android_ripple={ripple.neutral}
-                  style={[styles.kycNoticeButton, localLoading && styles.kycNoticeButtonDisabled]}
-                  disabled={localLoading}
-                  onPress={() => void handleGetLocalPaymentDetails()}
+                  style={styles.localEntryCta}
+                  disabled={
+                    receiveRailsLoading ||
+                    Boolean(localPayInCurrency === 'NGN' && ngMissingType)
+                  }
+                  onPress={handleStartLocalDeposit}
                 >
-                  {localLoading ? (
-                    <ActivityIndicator color={colors.text.inverse} />
-                  ) : (
-                    <Text style={styles.kycNoticeButtonText}>Get payment details</Text>
-                  )}
-                </Pressable>
-
-                {localError ? <Text style={styles.errorText}>{localError}</Text> : null}
-
-                {localQuote ? (
-                  <View style={styles.section}>
-                    {localQuote.payInNotice ? (
-                      <Text style={[styles.fieldLabel, { marginBottom: spacing[3] }]}>
-                        {localQuote.payInNotice}
-                      </Text>
-                    ) : null}
-                    <Text style={[styles.fieldLabel, { marginBottom: spacing[3] }]}>
-                      Pay{' '}
-                      {localQuote.localPayIn.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}{' '}
-                      {localPayInCurrency} to credit $
-                      {localQuote.usdCredit.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}{' '}
-                      USD
+                  <LinearGradient
+                    colors={
+                      receiveRailsLoading || (localPayInCurrency === 'NGN' && ngMissingType)
+                        ? [colors.neutral[400], colors.neutral[400]]
+                        : colors.primary.gradient
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.localEntryCtaGradient}
+                  >
+                    <Text style={styles.localEntryCtaText}>
+                      {receiveRailsLoading ? 'Checking availability…' : 'Add money'}
                     </Text>
-                    {flattenBankInfo(localQuote.bankInfo).map((f) =>
-                      renderCopyableField(f.label, f.value, `local-${f.key}`),
-                    )}
-                  </View>
-                ) : null}
+                  </LinearGradient>
+                </Pressable>
               </View>
             ) : null}
             {activeTab === 'bank' && showBankTab ? (
@@ -1615,35 +1443,17 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     lineHeight: 22,
   },
-  localRailRow: {
-    flexDirection: 'row',
-    gap: spacing[2],
+  localEntryCta: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    marginTop: spacing[2],
   },
-  localChip: {
-    flex: 1,
-    paddingVertical: spacing[3],
+  localEntryCtaGradient: {
+    paddingVertical: spacing[4],
     alignItems: 'center',
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
   },
-  localChipActive: {
-    backgroundColor: colors.primary.main,
-    borderColor: colors.primary.main,
-  },
-  localChipText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-    fontFamily: fontFamily.medium,
-  },
-  localChipTextActive: {
+  localEntryCtaText: {
+    ...textStyles.button,
     color: colors.text.inverse,
-    fontFamily: fontFamily.semibold,
-  },
-  localAmountInput: {
-    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    ...textStyles.bodyLarge,
-    color: colors.text.primary,
-    fontFamily: fontFamily.medium,
   },
 })

@@ -85,6 +85,9 @@ import YcPayInScreen from '../screens/send/YcPayInScreen'
 
 // Receive Money Flow Screens
 import ReceiveMoneyScreen from '../screens/receive/ReceiveMoneyScreen'
+import ReceiveLocalRailScreen from '../screens/receive/ReceiveLocalRailScreen'
+import ReceiveLocalAmountScreen from '../screens/receive/ReceiveLocalAmountScreen'
+import ReceiveLocalReviewScreen from '../screens/receive/ReceiveLocalReviewScreen'
 import ReceiveTransactionDetailsScreen from '../screens/receive/ReceiveTransactionDetailsScreen'
 
 // Verification Screens
@@ -462,6 +465,30 @@ function MainStack() {
         options={{ 
           headerShown: false,
           ...mainStackPreset(),
+        }}
+      />
+      <Stack.Screen
+        name="ReceiveLocalRail"
+        component={ReceiveLocalRailScreen}
+        options={{
+          headerShown: false,
+          ...sendFlowStandardPreset(),
+        }}
+      />
+      <Stack.Screen
+        name="ReceiveLocalAmount"
+        component={ReceiveLocalAmountScreen}
+        options={{
+          headerShown: false,
+          ...sendFlowStandardPreset(),
+        }}
+      />
+      <Stack.Screen
+        name="ReceiveLocalReview"
+        component={ReceiveLocalReviewScreen}
+        options={{
+          headerShown: false,
+          ...sendFlowStandardPreset(),
         }}
       />
       <Stack.Screen

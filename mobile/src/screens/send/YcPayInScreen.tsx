@@ -21,6 +21,7 @@ import { haptics } from '../../lib/haptics'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 
 type RouteParams = {
+  flowMode?: 'fund_balance' | 'cross_border_send'
   transactionId: string
   sendAmount: number
   sendCurrency: string
@@ -44,6 +45,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
 
   const params = (route.params || {}) as Partial<RouteParams>
   const {
+    flowMode = 'cross_border_send',
     transactionId,
     sendCurrency = 'NGN',
     receiveAmount = 0,
@@ -56,7 +58,12 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   } = params
 
   const fields = ycBankInfoFields(bankInfo)
-  const notice = payInNotice || 'Complete your transfer to send this payment.'
+  const isFundBalance = flowMode === 'fund_balance'
+  const notice =
+    payInNotice ||
+    (isFundBalance
+      ? 'Complete your transfer to credit your USD balance.'
+      : 'Complete your transfer to send this payment.')
 
   const handleCopy = async (text: string, key: string) => {
     haptics.tap()
@@ -92,11 +99,23 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
 
         <Text style={styles.title}>Complete payment</Text>
         <Text style={styles.subtitle}>
-          Pay {getCurrencySymbol(sendCurrency)}
-          {localPayIn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-          {sendCurrency} so {recipientName} receives {getCurrencySymbol(receiveCurrency)}
-          {receiveAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-          {receiveCurrency}
+          {isFundBalance ? (
+            <>
+              Pay {getCurrencySymbol(sendCurrency)}
+              {localPayIn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+              {sendCurrency} to credit {getCurrencySymbol(receiveCurrency)}
+              {receiveAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+              {receiveCurrency} to your balance
+            </>
+          ) : (
+            <>
+              Pay {getCurrencySymbol(sendCurrency)}
+              {localPayIn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+              {sendCurrency} so {recipientName} receives {getCurrencySymbol(receiveCurrency)}
+              {receiveAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+              {receiveCurrency}
+            </>
+          )}
         </Text>
 
         <View style={styles.noticeBox}>
@@ -180,7 +199,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
   },
   noticeBox: {
-    backgroundColor: colors.background.muted,
+    backgroundColor: colors.semantic.muted,
     borderRadius: borderRadius.lg,
     padding: spacing[4],
     marginBottom: spacing[4],

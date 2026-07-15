@@ -156,7 +156,9 @@ export async function createCrossBorderTransfer(input: {
     currency: payInCurrency,
     country: input.payInCountry.toUpperCase(),
     localAmount: pricing.localPayIn,
-    sender,
+    recipient: sender,
+    payInRail: input.payInRail,
+    sourcePhone: input.senderProfile.phone,
     reason: "cross_border_leg1",
   })
 
