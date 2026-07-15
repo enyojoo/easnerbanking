@@ -20,14 +20,14 @@ type FiatDestinationRow = {
   currency_code: string
   currency_name: string
   corridorIds: string[]
+  payInCorridorIds: string[]
   enabled: boolean
   payoutProvider: "noah" | "yellowcard"
   payInSupported: boolean
   payInEnabled: boolean
-  ycPayInSupported: boolean
-  noahPayInSupported: boolean
   supportNoahPayout: boolean
   supportYcPayout: boolean
+  supportYcPayIn: boolean
   payoutLocked: "noah" | "yellowcard" | null
   sample: PayoutCorridorAdminRow
 }
@@ -41,36 +41,116 @@ function parsePrimaryProvider(routing: unknown): "noah" | "yellowcard" {
   return p === "yellowcard" ? "yellowcard" : "noah"
 }
 
-function corridorSupportsYcPayIn(meta: Record<string, unknown>): boolean {
-  return meta.yc_receive === true
+function routingHasYellowcard(routing: unknown): boolean {
+  if (!Array.isArray(routing)) return false
+  return routing.some((item) => {
+    if (!item || typeof item !== "object") return false
+    return String((item as { provider?: string }).provider ?? "").toLowerCase() === "yellowcard"
+  })
 }
 
-function corridorSupportsNoahPayIn(meta: Record<string, unknown>): boolean {
-  return meta.noah_receive === true
+function rowMetadata(row: PayoutCorridorAdminRow): Record<string, unknown> {
+  return (row.metadata ?? {}) as Record<string, unknown>
 }
 
-function corridorPayInEnabled(meta: Record<string, unknown>): boolean {
-  if (meta.yc_receive === true && meta.yc_receive_enabled === true) return true
+function rowSupportsYcPayout(row: PayoutCorridorAdminRow): boolean {
+  const meta = rowMetadata(row)
+  return (
+    meta.yc_send === true ||
+    row.yc_send_available === true ||
+    routingHasYellowcard(row.provider_routing) ||
+    row.provider_health?.yellowcard === "ok"
+  )
+}
+
+function rowSupportsYcPayIn(row: PayoutCorridorAdminRow): boolean {
+  const meta = rowMetadata(row)
+  return meta.yc_receive === true || row.yc_receive_available === true
+}
+
+function rowSupportsNoahPayout(row: PayoutCorridorAdminRow): boolean {
+  return (
+    row.provider_health?.noah === "ok" || String(row.settlement_backend ?? "").toLowerCase() === "noah"
+  )
+}
+
+function rowPayInEnabled(row: PayoutCorridorAdminRow): boolean {
+  const meta = rowMetadata(row)
+  if (rowSupportsYcPayIn(row) && meta.yc_receive_enabled === true) return true
   if (meta.noah_receive === true && meta.noah_receive_enabled === true) return true
   return false
 }
 
-function groupFiatDestinations(rows: PayoutCorridorAdminRow[]): FiatDestinationRow[] {
+type CountryCurrencyCaps = {
+  supportNoahPayout: boolean
+  supportYcPayout: boolean
+  supportYcPayIn: boolean
+  payInSupported: boolean
+  payInEnabled: boolean
+}
+
+function buildCountryCurrencyCaps(rows: PayoutCorridorAdminRow[]): Map<string, CountryCurrencyCaps> {
+  const map = new Map<string, CountryCurrencyCaps>()
+  for (const row of rows) {
+    const key = `${row.country_code}:${row.currency_code}`
+    const supportNoahPayout = rowSupportsNoahPayout(row)
+    const supportYcPayout = rowSupportsYcPayout(row)
+    const supportYcPayIn = rowSupportsYcPayIn(row)
+    const payInSupported = supportYcPayIn || rowMetadata(row).noah_receive === true
+    const payInEnabled = rowPayInEnabled(row)
+
+    const existing = map.get(key)
+    if (!existing) {
+      map.set(key, {
+        supportNoahPayout,
+        supportYcPayout,
+        supportYcPayIn,
+        payInSupported,
+        payInEnabled,
+      })
+      continue
+    }
+    existing.supportNoahPayout = existing.supportNoahPayout || supportNoahPayout
+    existing.supportYcPayout = existing.supportYcPayout || supportYcPayout
+    existing.supportYcPayIn = existing.supportYcPayIn || supportYcPayIn
+    existing.payInSupported = existing.payInSupported || payInSupported
+    existing.payInEnabled = existing.payInEnabled || payInEnabled
+  }
+  return map
+}
+
+function payInCorridorIdsForDestination(
+  allRows: PayoutCorridorAdminRow[],
+  countryCode: string,
+  currencyCode: string,
+): string[] {
+  return allRows
+    .filter((r) => r.country_code === countryCode && r.currency_code === currencyCode)
+    .filter((r) => rowSupportsYcPayIn(r) || rowMetadata(r).noah_receive === true)
+    .map((r) => r.id)
+}
+
+function groupFiatDestinations(
+  filteredRows: PayoutCorridorAdminRow[],
+  allRows: PayoutCorridorAdminRow[],
+): FiatDestinationRow[] {
+  const mergedCaps = buildCountryCurrencyCaps(allRows)
   const map = new Map<string, FiatDestinationRow>()
-  for (const r of rows) {
+
+  for (const r of filteredRows) {
     const key = `${r.country_code}:${r.currency_code}`
-    const meta = (r.metadata ?? {}) as Record<string, unknown>
-    const routing = r.provider_routing
-    const primary = parsePrimaryProvider(routing)
-    const supportNoahPayout =
-      r.provider_health?.noah === "ok" || String(r.settlement_backend ?? "").toLowerCase() === "noah"
-    const supportYcPayout = meta.yc_send === true || meta.yellowcard_send === true
-    const ycPayInSupported = corridorSupportsYcPayIn(meta)
-    const noahPayInSupported = corridorSupportsNoahPayIn(meta)
-    const payInSupported = ycPayInSupported || noahPayInSupported
-    const payInEnabled = corridorPayInEnabled(meta)
+    const caps = mergedCaps.get(key)
+    const supportNoahPayout = caps?.supportNoahPayout ?? rowSupportsNoahPayout(r)
+    const supportYcPayout = caps?.supportYcPayout ?? rowSupportsYcPayout(r)
+    const supportYcPayIn = caps?.supportYcPayIn ?? rowSupportsYcPayIn(r)
+    const payInSupported = caps?.payInSupported ?? false
+    const payInEnabled = caps?.payInEnabled ?? false
     const payoutLocked: "noah" | "yellowcard" | null =
-      supportNoahPayout && !supportYcPayout ? "noah" : !supportNoahPayout && supportYcPayout ? "yellowcard" : null
+      supportNoahPayout && !supportYcPayout
+        ? "noah"
+        : !supportNoahPayout && supportYcPayout
+          ? "yellowcard"
+          : null
 
     const existing = map.get(key)
     if (!existing) {
@@ -81,29 +161,24 @@ function groupFiatDestinations(rows: PayoutCorridorAdminRow[]): FiatDestinationR
         currency_code: r.currency_code,
         currency_name: r.currency_name,
         corridorIds: [r.id],
+        payInCorridorIds: payInCorridorIdsForDestination(allRows, r.country_code, r.currency_code),
         enabled: r.enabled,
-        payoutProvider: primary,
+        payoutProvider: parsePrimaryProvider(r.provider_routing),
         payInSupported,
         payInEnabled,
-        ycPayInSupported,
-        noahPayInSupported,
-        payoutLocked,
         supportNoahPayout,
         supportYcPayout,
+        supportYcPayIn,
+        payoutLocked,
         sample: r,
       })
       continue
     }
+
     existing.corridorIds.push(r.id)
     existing.enabled = existing.enabled && r.enabled
-    existing.supportNoahPayout = existing.supportNoahPayout || supportNoahPayout
-    existing.supportYcPayout = existing.supportYcPayout || supportYcPayout
-    existing.ycPayInSupported = existing.ycPayInSupported || ycPayInSupported
-    existing.noahPayInSupported = existing.noahPayInSupported || noahPayInSupported
-    existing.payInSupported = existing.payInSupported || payInSupported
-    existing.payInEnabled = existing.payInEnabled || payInEnabled
-    if (!existing.payoutLocked && payoutLocked) existing.payoutLocked = payoutLocked
   }
+
   return [...map.values()].sort(
     (a, b) => a.country_name.localeCompare(b.country_name) || a.currency_code.localeCompare(b.currency_code),
   )
@@ -120,7 +195,7 @@ export function PayoutCorridorsAdminPanel() {
     () => rows.filter((r) => r.rail === railTab || (!r.rail && railTab === "bank_transfer")),
     [rows, railTab],
   )
-  const fiatRows = useMemo(() => groupFiatDestinations(filteredRows), [filteredRows])
+  const fiatRows = useMemo(() => groupFiatDestinations(filteredRows, rows), [filteredRows, rows])
   const showTableSkeleton = corridorsQuery.isPending && fiatRows.length === 0
   const refreshing = corridorsQuery.isFetching && fiatRows.length > 0
 
@@ -166,12 +241,16 @@ export function PayoutCorridorsAdminPanel() {
   const setLocalPayIn = async (row: FiatDestinationRow, enabled: boolean) => {
     setSavingKey(row.key)
     try {
+      const targetIds = row.payInCorridorIds.length > 0 ? row.payInCorridorIds : row.corridorIds
       const updates = await Promise.all(
-        row.corridorIds.map((id) => {
+        targetIds.map((id) => {
           const existing = rows.find((r) => r.id === id)
-          const meta = { ...((existing?.metadata as object) ?? {}) } as Record<string, unknown>
+          const meta = { ...rowMetadata(existing ?? row.sample) }
           const metadata = { ...meta }
-          if (meta.yc_receive === true) metadata.yc_receive_enabled = enabled
+          if (rowSupportsYcPayIn(existing ?? row.sample)) {
+            metadata.yc_receive_enabled = enabled
+            if (enabled && meta.yc_receive !== true) metadata.yc_receive = true
+          }
           if (meta.noah_receive === true) metadata.noah_receive_enabled = enabled
           return payoutCorridorsApi.patch(id, { metadata })
         }),
@@ -256,83 +335,87 @@ export function PayoutCorridorsAdminPanel() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {fiatRows.map((r) => (
-                  <TableRow key={r.key}>
-                    <TableCell>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <CountryFlag code={r.country_code} size={20} />
-                        <span className="truncate">{r.country_name}</span>
-                        <span className="text-muted-foreground text-xs shrink-0">({r.country_code})</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {r.currency_name}{" "}
-                      <span className="text-muted-foreground text-xs">({r.currency_code})</span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex gap-1 flex-wrap">
-                          {r.supportNoahPayout ? (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">Noah</span>
-                          ) : null}
-                          {r.supportYcPayout ? (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
-                              Yellowcard
-                            </span>
-                          ) : null}
-                          {!r.supportNoahPayout && !r.supportYcPayout ? (
-                            <span className="text-muted-foreground text-xs">—</span>
+                {fiatRows.map((r) => {
+                  const showNoah = r.supportNoahPayout
+                  const showYc = r.supportYcPayout || r.supportYcPayIn
+                  return (
+                    <TableRow key={r.key}>
+                      <TableCell>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <CountryFlag code={r.country_code} size={20} />
+                          <span className="truncate">{r.country_name}</span>
+                          <span className="text-muted-foreground text-xs shrink-0">({r.country_code})</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {r.currency_name}{" "}
+                        <span className="text-muted-foreground text-xs">({r.currency_code})</span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex gap-1 flex-wrap">
+                            {showNoah ? (
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">Noah</span>
+                            ) : null}
+                            {showYc ? (
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                                Yellowcard
+                              </span>
+                            ) : null}
+                            {!showNoah && !showYc ? (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            ) : null}
+                          </div>
+                          {r.enabled && !r.payoutLocked && r.supportNoahPayout && r.supportYcPayout ? (
+                            <select
+                              className="h-7 w-fit rounded-md border bg-background px-2 text-[10px]"
+                              value={r.payoutProvider}
+                              disabled={savingKey === r.key}
+                              aria-label="Payout provider"
+                              onChange={(e) =>
+                                void setPayoutProvider(
+                                  r,
+                                  e.target.value === "yellowcard" ? "yellowcard" : "noah",
+                                )
+                              }
+                            >
+                              <option value="noah">Payout: Noah</option>
+                              <option value="yellowcard">Payout: Yellowcard</option>
+                            </select>
                           ) : null}
                         </div>
-                        {r.enabled && !r.payoutLocked && r.supportNoahPayout && r.supportYcPayout ? (
-                          <select
-                            className="h-7 w-fit rounded-md border bg-background px-2 text-[10px]"
-                            value={r.payoutProvider}
-                            disabled={savingKey === r.key}
-                            aria-label="Payout provider"
-                            onChange={(e) =>
-                              void setPayoutProvider(
-                                r,
-                                e.target.value === "yellowcard" ? "yellowcard" : "noah",
-                              )
-                            }
-                          >
-                            <option value="noah">Payout: Noah</option>
-                            <option value="yellowcard">Payout: Yellowcard</option>
-                          </select>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {!r.payInSupported ? (
-                        <span className="text-xs text-muted-foreground">Not supported</span>
-                      ) : (
+                      </TableCell>
+                      <TableCell>
+                        {!r.payInSupported ? (
+                          <span className="text-xs text-muted-foreground">Not supported</span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={r.payInEnabled}
+                              disabled={savingKey === r.key}
+                              onCheckedChange={(v) => void setLocalPayIn(r, v)}
+                            />
+                            {!r.enabled && r.payInEnabled ? (
+                              <span className="text-xs text-muted-foreground">Off until live</span>
+                            ) : null}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <Switch
-                            checked={r.payInEnabled}
+                            checked={r.enabled}
                             disabled={savingKey === r.key}
-                            onCheckedChange={(v) => void setLocalPayIn(r, v)}
+                            onCheckedChange={(v) => void toggleEnabled(r, v)}
                           />
-                          {!r.enabled && r.payInEnabled ? (
-                            <span className="text-xs text-muted-foreground">Off until live</span>
+                          {savingKey === r.key ? (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                           ) : null}
                         </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={r.enabled}
-                          disabled={savingKey === r.key}
-                          onCheckedChange={(v) => void toggleEnabled(r, v)}
-                        />
-                        {savingKey === r.key ? (
-                          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                        ) : null}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}

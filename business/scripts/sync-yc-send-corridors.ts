@@ -59,6 +59,7 @@ async function main() {
   }
 
   let updated = 0
+  const capsByCorridor = new Map<string, { yc_send: boolean; yc_receive: boolean }>()
   for (const ch of channels) {
     const country = String(ch.country ?? "").toUpperCase()
     const currency = String(ch.currency ?? "").toUpperCase()
@@ -66,9 +67,16 @@ async function main() {
     const channelType = String(ch.channelType ?? "").toLowerCase()
     const rail = channelType.includes("momo") ? "mobile_money" : "bank_transfer"
     const ramp = String(ch.rampType ?? "").toLowerCase()
-    const isSend = ramp.includes("withdraw") || ramp.includes("send") || !ramp.includes("deposit")
-    if (!isSend) continue
+    const key = `${country}:${currency}:${rail}`
+    const existing = capsByCorridor.get(key) ?? { yc_send: false, yc_receive: false }
+    if (ramp === "withdraw" || ramp.includes("send")) existing.yc_send = true
+    if (ramp === "deposit") existing.yc_receive = true
+    capsByCorridor.set(key, existing)
+  }
 
+  for (const [key, caps] of capsByCorridor) {
+    if (!caps.yc_send && !caps.yc_receive) continue
+    const [country, currency, rail] = key.split(":")
     const { data: existing } = await admin
       .from("payout_corridors")
       .select("id,metadata")
@@ -80,7 +88,8 @@ async function main() {
 
     const metadata = {
       ...((existing.metadata as object) ?? {}),
-      yc_send: true,
+      ...(caps.yc_send ? { yc_send: true } : {}),
+      ...(caps.yc_receive ? { yc_receive: true } : {}),
     }
     await admin
       .from("payout_corridors")
