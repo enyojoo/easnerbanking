@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   backButton: { padding: spacing[1] },
   title: { ...textStyles.screenTitle },
   card: {
-    backgroundColor: colors.background.card,
+    backgroundColor: colors.semantic.card,
     borderRadius: borderRadius.xl,
     padding: spacing[4],
     gap: spacing[1],
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     paddingVertical: spacing[2],
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.subtle,
+    borderBottomColor: colors.border.light,
   },
   rowLabel: { ...textStyles.caption, color: colors.text.secondary, flex: 1 },
   rowValue: { ...textStyles.body, textAlign: 'right', flex: 1 },
@@ -212,5 +212,5 @@ const styles = StyleSheet.create({
   cta: { borderRadius: borderRadius.lg, overflow: 'hidden', marginTop: spacing[3] },
   ctaDisabled: { opacity: 0.7 },
   ctaGradient: { paddingVertical: spacing[4], alignItems: 'center' },
-  ctaText: { ...textStyles.button, color: colors.text.onPrimary },
+  ctaText: { ...textStyles.button, color: colors.text.inverse },
 })

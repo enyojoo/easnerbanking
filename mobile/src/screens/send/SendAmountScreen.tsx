@@ -289,6 +289,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     receiveCurrency: isEasetagRecipient ? selectedBalanceCurrency : recipient?.currency,
   })
 
+  const enteredAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
+
   const ycFlow = useYcCrossBorderFlow({
     recipientId: recipient?.id ?? null,
     enabled: !isEasetagRecipient && !isWalletRecipient,
@@ -460,7 +462,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const currentBalance = Number.parseFloat(
     String(balances[selectedBalanceCurrency as 'USD' | 'EUR'] || '0').replace(/,/g, ''),
   ) || 0
-  const enteredAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
   const sendCurrency =
     selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
       ? selectedOtherCurrency

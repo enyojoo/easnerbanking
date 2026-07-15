@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   fieldRow: {
     paddingVertical: spacing[3],
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.subtle,
+    borderBottomColor: colors.border.light,
   },
   fieldLabel: {
     ...textStyles.caption,
@@ -239,6 +239,6 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...textStyles.button,
-    color: colors.text.onPrimary,
+    color: colors.text.inverse,
   },
 })
