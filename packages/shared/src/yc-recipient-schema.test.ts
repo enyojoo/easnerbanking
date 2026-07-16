@@ -141,6 +141,18 @@ describe("buildYcSendMappingFromRecipient", () => {
     expect(mapped.root?.identificationNumber).toBe("12345")
     expect(mapped.root?.accountType).toBe("ch")
   })
+
+  it("strips spaces from NG NUBAN before YC send", () => {
+    const mapped = buildYcSendMappingFromRecipient({
+      country_code: "NG",
+      currency: "NGN",
+      full_name: "Test account",
+      account_number: "2020 0303 022",
+      bank_name: "Paga",
+    })
+    expect(mapped.destination.accountNumber).toBe("20200303022")
+    expect(mapped.destination.accountBank).toBe("Paga")
+  })
 })
 
 describe("normalizeRecipientYcMetadata", () => {

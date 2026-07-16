@@ -294,6 +294,27 @@ function digitsOnly(value: string): string {
   return String(value || "").replace(/\D/g, "")
 }
 
+/** YC bank sends require digits-only account numbers (or +phone for rare cases). */
+function normalizeYcDestinationAccountNumber(input: {
+  country: string
+  currency: string
+  accountNumber: string
+  metadata: RecipientYcMetadata
+}): string {
+  let accountNumber = String(input.accountNumber ?? "").trim()
+  if (!accountNumber) return accountNumber
+
+  const pixType = input.metadata.pix_key_type || ""
+  if (input.country === "BR" && input.currency === "BRL") {
+    if (pixType === "EMAIL" || pixType === "RANDOM_KEY") return accountNumber
+    if (pixType === "CPF" || pixType === "CNPJ" || pixType === "PHONE") return digitsOnly(accountNumber)
+    return accountNumber
+  }
+
+  if (accountNumber.startsWith("+")) return accountNumber
+  return digitsOnly(accountNumber)
+}
+
 function validatePixKey(type: string, value: string): string | null {
   const t = type.toUpperCase()
   const v = value.trim()
@@ -446,16 +467,12 @@ export function buildYcSendMappingFromRecipient(
     return { destination }
   }
 
-  if (country === "MX" && currency === "MXN") {
-    accountNumber = digitsOnly(accountNumber)
-  } else if (country === "AR" && currency === "ARS") {
-    accountNumber = digitsOnly(accountNumber)
-  } else if (country === "BR" && currency === "BRL") {
-    const pixType = metadata.pix_key_type || ""
-    if (pixType === "CPF" || pixType === "CNPJ" || pixType === "PHONE") {
-      accountNumber = digitsOnly(accountNumber)
-    }
-  }
+  accountNumber = normalizeYcDestinationAccountNumber({
+    country,
+    currency,
+    accountNumber,
+    metadata,
+  })
 
   const destination: Record<string, unknown> = {
     accountName: name || undefined,
