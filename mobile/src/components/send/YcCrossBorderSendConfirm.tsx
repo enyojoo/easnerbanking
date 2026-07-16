@@ -24,7 +24,10 @@ import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSu
 import { useYcCrossBorderFlow, type YcPayInRail, type YcCrossBorderQuoteResult } from '../../hooks/useYcCrossBorderFlow'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
-import { fetchPayInNetworks } from '../../lib/sendFlowFundBalanceQuote'
+import {
+  ensurePayInNetworksCached,
+  readCachedPayInNetworks,
+} from '../../lib/sendFlowFundBalanceQuote'
 import { useAuth } from '../../contexts/AuthContext'
 
 type Props = {
@@ -58,10 +61,18 @@ export function YcCrossBorderSendConfirm({
   const isMobileMoney = payInRail === 'mobile_money'
   const defaultPhone = userProfile?.phone ?? userProfile?.profile?.phone ?? ''
 
+  const cachedNetworks = isMobileMoney
+    ? readCachedPayInNetworks(payInCountry, payInCurrency)
+    : null
+
   const [phone, setPhone] = useState(defaultPhone)
-  const [networks, setNetworks] = useState<PayInNetwork[]>([])
-  const [networkId, setNetworkId] = useState('')
-  const [networksLoading, setNetworksLoading] = useState(isMobileMoney)
+  const [networks, setNetworks] = useState<PayInNetwork[]>(() => cachedNetworks ?? [])
+  const [networkId, setNetworkId] = useState(() =>
+    cachedNetworks?.length === 1 ? cachedNetworks[0].id : '',
+  )
+  const [networksLoading, setNetworksLoading] = useState(
+    isMobileMoney && !cachedNetworks?.length,
+  )
   const [networksError, setNetworksError] = useState<string | null>(null)
 
   const [quote, setQuote] = useState<YcCrossBorderQuoteResult | null>(null)
@@ -79,11 +90,14 @@ export function YcCrossBorderSendConfirm({
   useEffect(() => {
     if (!isMobileMoney) return
     let cancelled = false
-    setNetworksLoading(true)
+    const hadCache = Boolean(cachedNetworks?.length)
+    if (!hadCache) {
+      setNetworksLoading(true)
+    }
     setNetworksError(null)
     void (async () => {
       try {
-        const rows = await fetchPayInNetworks(payInCountry, payInCurrency)
+        const rows = await ensurePayInNetworksCached(payInCountry, payInCurrency)
         if (cancelled) return
         setNetworks(rows)
         if (rows.length === 1) setNetworkId(rows[0].id)
@@ -98,7 +112,7 @@ export function YcCrossBorderSendConfirm({
     return () => {
       cancelled = true
     }
-  }, [isMobileMoney, payInCountry, payInCurrency])
+  }, [isMobileMoney, payInCountry, payInCurrency, cachedNetworks?.length])
 
   useEffect(() => {
     if (isMobileMoney) return

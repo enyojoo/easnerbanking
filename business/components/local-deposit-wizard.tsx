@@ -43,9 +43,10 @@ type AmountMode = "usd" | "local"
 
 import {
   prefetchYcReceiveRails,
-  fetchYcPayInNetworks,
+  prefetchYcPayInNetworks,
   prefetchYcPayInRates,
   readCachedReceiveRails,
+  readCachedYcPayInNetworks,
   readCachedYcPayInRates,
   type ReceiveRailsResponse,
 } from "@/lib/yc-local-deposit-cache"
@@ -118,8 +119,14 @@ export function LocalDepositWizard({
   const [defaultPhone, setDefaultPhone] = useState("")
   const [momoPhone, setMomoPhone] = useState("")
   const [momoNetworkId, setMomoNetworkId] = useState("")
-  const [momoNetworks, setMomoNetworks] = useState<{ id: string; name: string }[]>([])
-  const [momoNetworksLoading, setMomoNetworksLoading] = useState(false)
+  const [momoNetworks, setMomoNetworks] = useState<{ id: string; name: string }[]>(() => {
+    const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
+    return cached ?? []
+  })
+  const [momoNetworksLoading, setMomoNetworksLoading] = useState(() => {
+    const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
+    return rail === "mobile_money" && !cached?.length
+  })
 
   const isMomo = rail === "mobile_money"
 
@@ -211,6 +218,12 @@ export function LocalDepositWizard({
   }, [localPayInCurrency])
 
   useEffect(() => {
+    if (!isMomo || !residenceCountry || !localPayInCurrency) return
+    if (readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)?.length) return
+    void prefetchYcPayInNetworks(residenceCountry, localPayInCurrency)
+  }, [isMomo, residenceCountry, localPayInCurrency])
+
+  useEffect(() => {
     if (initialStep === "amount" && initialRail) return
     if (railsLoading || !rails) return
     const bank = rails.rails.bank_transfer.available
@@ -289,10 +302,16 @@ export function LocalDepositWizard({
   useEffect(() => {
     if (step !== "review" || !isMomo) return
     let cancelled = false
-    setMomoNetworksLoading(true)
+    const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
+    if (cached?.length) {
+      setMomoNetworks(cached)
+      if (cached.length === 1) setMomoNetworkId(cached[0].id)
+    } else {
+      setMomoNetworksLoading(true)
+    }
     void (async () => {
       try {
-        const res = await fetchYcPayInNetworks(residenceCountry, localPayInCurrency)
+        const res = await prefetchYcPayInNetworks(residenceCountry, localPayInCurrency)
         if (!cancelled) {
           setMomoNetworks(res)
           if (res.length === 1) setMomoNetworkId(res[0].id)
@@ -555,6 +574,18 @@ export function LocalDepositWizard({
           onClick={async () => {
             setQuoteError(null)
             if (isMomo) {
+              const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
+              if (!cached?.length) setMomoNetworksLoading(true)
+              try {
+                const res = await prefetchYcPayInNetworks(residenceCountry, localPayInCurrency)
+                setMomoNetworks(res)
+                if (res.length === 1) setMomoNetworkId(res[0].id)
+              } catch {
+                setQuoteError("Could not load mobile money networks")
+                return
+              } finally {
+                setMomoNetworksLoading(false)
+              }
               setQuote(null)
               setStep("review")
               return
@@ -639,10 +670,12 @@ export function LocalDepositWizard({
                   USD Balance
                 </span>
               </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
-                <span>{transferMethod}</span>
-              </div>
+              {!isMomo ? (
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
+                  <span>{transferMethod}</span>
+                </div>
+              ) : null}
               {!isMomo && quote?.expiresAt ? (
                 <p className="text-xs text-muted-foreground pt-1">
                   {quoteCountdown.expired
@@ -655,7 +688,7 @@ export function LocalDepositWizard({
           {isMomo ? (
             <div className="pt-4 mt-4 border-t space-y-3">
               <div>
-                <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.mobileNumber}</Label>
+                <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.momoNumberPrompt}</Label>
                 <Input
                   id="momo-phone"
                   value={momoPhone}
@@ -665,7 +698,7 @@ export function LocalDepositWizard({
                 />
               </div>
               <div>
-                <Label>{REVIEW_ROW_LABELS.paymentNetwork}</Label>
+                <Label>{REVIEW_ROW_LABELS.momoNetworkPrompt}</Label>
                 {momoNetworksLoading ? (
                   <div className="flex justify-center py-3">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

@@ -46,8 +46,13 @@ import {
   persistSendFlowState,
 } from "@/lib/send-flow-session"
 import {
+  residenceCountryFromPayInCurrency,
   useYcCrossBorderFlow,
 } from "@/hooks/use-yc-cross-border-flow"
+import {
+  prefetchYcPayInNetworks,
+  readCachedYcPayInNetworks,
+} from "@/lib/yc-local-deposit-cache"
 import { PaymentMethodDisplayLogo } from "@/components/send/payment-method-display-logo"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
@@ -220,6 +225,21 @@ export default function SendPage() {
       setOtherPaymentMethod(opts[0].code)
     }
   }, [otherCurrency, currencyPaymentMethods, otherPaymentMethod])
+
+  useEffect(() => {
+    if (
+      !showThroughLocalCurrency ||
+      paymentMethod !== "otherCurrency" ||
+      otherPaymentMethod !== "mobile_money" ||
+      !otherCurrency
+    ) {
+      return
+    }
+    const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
+    if (!payInCountry) return
+    if (readCachedYcPayInNetworks(payInCountry, otherCurrency)?.length) return
+    void prefetchYcPayInNetworks(payInCountry, otherCurrency)
+  }, [showThroughLocalCurrency, paymentMethod, otherPaymentMethod, otherCurrency])
 
   useEffect(() => {
     const dest = (recipient?.currency || "").trim().toUpperCase()
@@ -947,6 +967,31 @@ export default function SendPage() {
     }
     try {
       if (showThroughLocalCurrency && paymentMethod === "otherCurrency") {
+        if (otherPaymentMethod === "mobile_money" && otherCurrency) {
+          const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
+          if (!payInCountry) {
+            setAmountFieldError("Could not resolve pay-in country for mobile money.")
+            return
+          }
+          const networksCached = readCachedYcPayInNetworks(payInCountry, otherCurrency)
+          if (!networksCached?.length) {
+            setIsContinuePending(true)
+            continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+          }
+          try {
+            await prefetchYcPayInNetworks(payInCountry, otherCurrency)
+          } catch {
+            setAmountFieldError("Could not load mobile money networks. Try again.")
+            return
+          } finally {
+            if (continueSpinnerTimerRef.current) {
+              clearTimeout(continueSpinnerTimerRef.current)
+              continueSpinnerTimerRef.current = null
+            }
+            setIsContinuePending(false)
+            setIsContinueLoading(false)
+          }
+        }
         persistSendFlowState(state)
         router.push("/send/confirm")
         return

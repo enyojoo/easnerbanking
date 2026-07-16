@@ -41,6 +41,9 @@ export const REVIEW_ROW_LABELS = {
   paymentAmount: "Payment amount",
   mobileNumber: "Mobile number",
   paymentNetwork: "Network",
+  /** Fund-balance MoMo deposit review — phone / network prompts. */
+  momoNumberPrompt: "Enter your MOMO number",
+  momoNetworkPrompt: "Select MOMO Network",
 } as const
 
 export type ReviewRowLabel = (typeof REVIEW_ROW_LABELS)[keyof typeof REVIEW_ROW_LABELS]

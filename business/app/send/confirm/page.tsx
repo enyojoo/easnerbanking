@@ -42,7 +42,10 @@ import {
 import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import { residenceCountryFromPayInCurrency, useYcCrossBorderFlow } from "@/hooks/use-yc-cross-border-flow"
-import { fetchYcPayInNetworks } from "@/lib/yc-local-deposit-cache"
+import {
+  prefetchYcPayInNetworks,
+  readCachedYcPayInNetworks,
+} from "@/lib/yc-local-deposit-cache"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { REVIEW_ROW_LABELS } from "@easner/shared"
@@ -207,10 +210,16 @@ export default function SendConfirmPage() {
     const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
     if (!payInCountry || !payInCurrency) return
     let cancelled = false
-    setMomoNetworksLoading(true)
+    const cached = readCachedYcPayInNetworks(payInCountry, payInCurrency)
+    if (cached?.length) {
+      setMomoNetworks(cached)
+      if (cached.length === 1) setMomoNetworkId(cached[0].id)
+    } else {
+      setMomoNetworksLoading(true)
+    }
     void (async () => {
       try {
-        const rows = await fetchYcPayInNetworks(payInCountry, payInCurrency)
+        const rows = await prefetchYcPayInNetworks(payInCountry, payInCurrency)
         if (!cancelled) {
           setMomoNetworks(rows)
           if (rows.length === 1) setMomoNetworkId(rows[0].id)

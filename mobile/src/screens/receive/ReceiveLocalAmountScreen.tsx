@@ -53,10 +53,12 @@ import { useToast } from '../../components/ToastProvider'
 import {
   clearFundBalanceQuote,
   ensureFundBalanceQuoteStashed,
+  ensurePayInNetworksCached,
   isCompleteFundBalanceQuote,
   isStashedFundBalanceQuoteFresh,
   peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
+  readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches } from '../../lib/warmYcLocalDepositCaches'
 
@@ -244,6 +246,17 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     void ensureFundBalanceQuoteStashed(quoteStashMeta)
   }, [quotePrefetchKey, quoteStashMeta, payInRail])
 
+  const momoNetworksPrefetchKey =
+    payInRail === 'mobile_money' && residenceCountry && localPayInCurrency
+      ? `${residenceCountry}:${localPayInCurrency}`
+      : ''
+
+  useEffect(() => {
+    if (!momoNetworksPrefetchKey) return
+    if (readCachedPayInNetworks(residenceCountry, localPayInCurrency)?.length) return
+    void ensurePayInNetworksCached(residenceCountry, localPayInCurrency)
+  }, [momoNetworksPrefetchKey, residenceCountry, localPayInCurrency])
+
   const toSwitchInputAmount = (amount: number): string => {
     const roundedAmount = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100
     const fractionalPart = Math.abs(roundedAmount - Math.trunc(roundedAmount))
@@ -303,16 +316,33 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     haptics.medium()
 
     if (payInRail === 'mobile_money') {
-      navigation.navigate('ReceiveLocalReview' as never, {
-        localPayInCurrency,
-        residenceCountry,
-        payInRail,
-        amountEntryMode,
-        enteredAmount,
-        usdCredit: ycFlow.preview.usdCredit,
-        localPayIn: ycFlow.preview.localPayIn,
-        customerRate: ycFlow.customerRate ?? 0,
-      } as never)
+      const networksCached = readCachedPayInNetworks(residenceCountry, localPayInCurrency)
+      if (!networksCached?.length) {
+        setIsContinuePending(true)
+        continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+      }
+      try {
+        await ensurePayInNetworksCached(residenceCountry, localPayInCurrency)
+        navigation.navigate('ReceiveLocalReview' as never, {
+          localPayInCurrency,
+          residenceCountry,
+          payInRail,
+          amountEntryMode,
+          enteredAmount,
+          usdCredit: ycFlow.preview.usdCredit,
+          localPayIn: ycFlow.preview.localPayIn,
+          customerRate: ycFlow.customerRate ?? 0,
+        } as never)
+      } catch (e) {
+        showError(e instanceof Error ? e.message : 'Could not load mobile money networks. Try again.')
+      } finally {
+        if (continueSpinnerTimerRef.current) {
+          clearTimeout(continueSpinnerTimerRef.current)
+          continueSpinnerTimerRef.current = null
+        }
+        setIsContinuePending(false)
+        setIsContinueLoading(false)
+      }
       return
     }
 

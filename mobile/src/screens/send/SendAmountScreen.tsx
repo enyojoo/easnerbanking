@@ -44,7 +44,7 @@ import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
 import { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from '../../hooks/queries'
 import { useQueryClient } from '@tanstack/react-query'
-import { useYcCrossBorderFlow, type YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
+import { useYcCrossBorderFlow, type YcPayInRail, residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
 import { useAuth } from '../../contexts/AuthContext'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
 import { generateTransactionId } from '../../lib/transactionId'
@@ -96,6 +96,10 @@ import {
   peekSendWalletQuote,
   clearSendWalletQuote,
 } from '../../lib/sendFlowWalletQuote'
+import {
+  ensurePayInNetworksCached,
+  readCachedPayInNetworks,
+} from '../../lib/sendFlowFundBalanceQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
   getCachedSendDestinations,
@@ -347,6 +351,26 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       setSelectedOtherPaymentMethod(opts[0].code)
     }
   }, [selectedPaymentMethod, selectedOtherCurrency, currencyPaymentMethods, selectedOtherPaymentMethod])
+
+  useEffect(() => {
+    if (
+      selectedPaymentMethod !== 'otherCurrency' ||
+      !showThroughLocalCurrency ||
+      selectedOtherPaymentMethod !== 'mobile_money' ||
+      !selectedOtherCurrency
+    ) {
+      return
+    }
+    const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
+    if (!payInCountry) return
+    if (readCachedPayInNetworks(payInCountry, selectedOtherCurrency)?.length) return
+    void ensurePayInNetworksCached(payInCountry, selectedOtherCurrency)
+  }, [
+    selectedPaymentMethod,
+    showThroughLocalCurrency,
+    selectedOtherPaymentMethod,
+    selectedOtherCurrency,
+  ])
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -1255,6 +1279,33 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         const rail = (selectedOtherPaymentMethod === 'mobile_money'
           ? 'mobile_money'
           : 'bank_transfer') as YcPayInRail
+        if (rail === 'mobile_money') {
+          const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
+          if (!payInCountry) {
+            showError('Could not resolve pay-in country for mobile money.')
+            return
+          }
+          const networksCached = readCachedPayInNetworks(payInCountry, selectedOtherCurrency)
+          if (!networksCached?.length) {
+            setIsContinuePending(true)
+            continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+          }
+          try {
+            await ensurePayInNetworksCached(payInCountry, selectedOtherCurrency)
+          } catch (e) {
+            showError(
+              e instanceof Error ? e.message : 'Could not load mobile money networks. Try again.',
+            )
+            return
+          } finally {
+            if (continueSpinnerTimerRef.current) {
+              clearTimeout(continueSpinnerTimerRef.current)
+              continueSpinnerTimerRef.current = null
+            }
+            setIsContinuePending(false)
+            setIsContinueLoading(false)
+          }
+        }
         navigation.navigate('SendConfirm' as never, {
           recipient,
           paymentMethod: 'otherCurrency',

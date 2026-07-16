@@ -33,6 +33,10 @@ let payInRatesCache: { rates: YcRateClientRow[]; at: number } | null = null
 const receiveRailsInflight = new Map<string, Promise<ReceiveRailsResponse | null>>()
 let payInRatesInflight: Promise<YcRateClientRow[] | null> | null = null
 
+const PAY_IN_NETWORKS_CACHE_TTL_MS = 5 * 60_000
+const payInNetworksCache = new Map<string, { networks: { id: string; name: string }[]; at: number }>()
+const payInNetworksInflight = new Map<string, Promise<{ id: string; name: string }[]>>()
+
 export function receiveRailsCacheKey(country: string, currency: string): string {
   return `${country.trim().toUpperCase()}:${currency.trim().toUpperCase()}`
 }
@@ -57,6 +61,41 @@ function writeReceiveRailsCache(
   data: ReceiveRailsResponse,
 ): void {
   receiveRailsCache.set(receiveRailsCacheKey(country, currency), { data, at: Date.now() })
+  if (data.momoNetworks?.length) {
+    seedCachedYcPayInNetworks(country, currency, data.momoNetworks)
+  }
+}
+
+export function seedCachedYcPayInNetworks(
+  country: string,
+  currency: string,
+  networks: { id: string; name: string }[],
+): void {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  if (!cc || !cur) return
+  payInNetworksCache.set(receiveRailsCacheKey(cc, cur), { networks, at: Date.now() })
+}
+
+/** Returns cached networks, or null when nothing is cached yet. */
+export function readCachedYcPayInNetworks(
+  country: string,
+  currency: string,
+): { id: string; name: string }[] | null {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  if (!cc || !cur) return null
+
+  const key = receiveRailsCacheKey(cc, cur)
+  const hit = payInNetworksCache.get(key)
+  if (hit) {
+    if (Date.now() - hit.at <= PAY_IN_NETWORKS_CACHE_TTL_MS) return hit.networks
+    payInNetworksCache.delete(key)
+  }
+
+  const rails = readCachedReceiveRails(cc, cur)
+  if (rails?.momoNetworks?.length) return rails.momoNetworks
+  return null
 }
 
 export function readCachedYcPayInRates(): YcRateClientRow[] | null {
@@ -109,8 +148,7 @@ export async function prefetchYcReceiveRails(
   return task
 }
 
-/** MoMo networks for pay-in review — falls back to receive-rails when pay-in-networks is absent. */
-export async function fetchYcPayInNetworks(
+async function loadYcPayInNetworks(
   country: string,
   currency: string,
 ): Promise<{ id: string; name: string }[]> {
@@ -139,6 +177,43 @@ export async function fetchYcPayInNetworks(
       return (await res.json().catch(() => null)) as ReceiveRailsResponse | null
     })())
   return rails?.momoNetworks ?? []
+}
+
+/** Idempotent prefetch — dedupes in-flight requests and writes cache on success. */
+export async function prefetchYcPayInNetworks(
+  country: string,
+  currency: string,
+): Promise<{ id: string; name: string }[]> {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  if (!cc || !cur) return []
+
+  const cached = readCachedYcPayInNetworks(cc, cur)
+  if (cached) return cached
+
+  const key = receiveRailsCacheKey(cc, cur)
+  const inflight = payInNetworksInflight.get(key)
+  if (inflight) return inflight
+
+  const task = loadYcPayInNetworks(cc, cur)
+    .then((networks) => {
+      seedCachedYcPayInNetworks(cc, cur, networks)
+      return networks
+    })
+    .finally(() => {
+      payInNetworksInflight.delete(key)
+    })
+
+  payInNetworksInflight.set(key, task)
+  return task
+}
+
+/** MoMo networks for pay-in review — falls back to receive-rails when pay-in-networks is absent. */
+export async function fetchYcPayInNetworks(
+  country: string,
+  currency: string,
+): Promise<{ id: string; name: string }[]> {
+  return prefetchYcPayInNetworks(country, currency)
 }
 
 export async function prefetchYcPayInRates(): Promise<YcRateClientRow[] | null> {
@@ -174,7 +249,11 @@ export async function warmYcLocalDepositCaches(input: {
   const currency = input.localPayInCurrency.trim().toUpperCase()
   if (!country || !currency) return
   await Promise.allSettled([
-    prefetchYcReceiveRails(country, currency),
+    prefetchYcReceiveRails(country, currency).then((rails) => {
+      if (!rails?.rails.mobile_money.available) return rails
+      if (rails.momoNetworks?.length) return rails
+      return prefetchYcPayInNetworks(country, currency).then(() => rails)
+    }),
     prefetchYcPayInRates(),
   ])
 }

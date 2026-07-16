@@ -25,11 +25,12 @@ import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
 import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
 import {
   ensureFundBalanceQuoteStashed,
-  fetchPayInNetworks,
+  ensurePayInNetworksCached,
   isCompleteFundBalanceQuote,
   isStashedFundBalanceQuoteFresh,
   peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
+  readCachedPayInNetworks,
   type YcFundBalanceQuote,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { useAuth } from '../../contexts/AuthContext'
@@ -67,10 +68,18 @@ export function YcFundBalanceReview({
   const isMobileMoney = payInRail === 'mobile_money'
   const defaultPhone = userProfile?.phone ?? userProfile?.profile?.phone ?? ''
 
+  const cachedNetworks = isMobileMoney
+    ? readCachedPayInNetworks(residenceCountry, localPayInCurrency)
+    : null
+
   const [phone, setPhone] = useState(defaultPhone)
-  const [networks, setNetworks] = useState<PayInNetwork[]>([])
-  const [networkId, setNetworkId] = useState('')
-  const [networksLoading, setNetworksLoading] = useState(isMobileMoney)
+  const [networks, setNetworks] = useState<PayInNetwork[]>(() => cachedNetworks ?? [])
+  const [networkId, setNetworkId] = useState(() =>
+    cachedNetworks?.length === 1 ? cachedNetworks[0].id : '',
+  )
+  const [networksLoading, setNetworksLoading] = useState(
+    isMobileMoney && !cachedNetworks?.length,
+  )
   const [networksError, setNetworksError] = useState<string | null>(null)
 
   const quoteMeta = useMemo(
@@ -108,11 +117,14 @@ export function YcFundBalanceReview({
   useEffect(() => {
     if (!isMobileMoney) return
     let cancelled = false
-    setNetworksLoading(true)
+    const hadCache = Boolean(cachedNetworks?.length)
+    if (!hadCache) {
+      setNetworksLoading(true)
+    }
     setNetworksError(null)
     void (async () => {
       try {
-        const rows = await fetchPayInNetworks(residenceCountry, localPayInCurrency)
+        const rows = await ensurePayInNetworksCached(residenceCountry, localPayInCurrency)
         if (cancelled) return
         setNetworks(rows)
         if (rows.length === 1) setNetworkId(rows[0].id)
@@ -127,7 +139,7 @@ export function YcFundBalanceReview({
     return () => {
       cancelled = true
     }
-  }, [isMobileMoney, residenceCountry, localPayInCurrency])
+  }, [isMobileMoney, residenceCountry, localPayInCurrency, cachedNetworks?.length])
 
   useEffect(() => {
     if (isMobileMoney) return
@@ -274,17 +286,19 @@ export function YcFundBalanceReview({
                 currency="USD"
                 balanceLabel="USD Balance"
               />
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.transferMethod}
-                value={transferMethod}
-                last={!isMobileMoney}
-              />
+              {!isMobileMoney ? (
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.transferMethod}
+                  value={transferMethod}
+                  last
+                />
+              ) : null}
             </>
           )}
 
           {isMobileMoney ? (
             <View style={styles.momoSection}>
-              <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.mobileNumber}</Text>
+              <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.momoNumberPrompt}</Text>
               <TextInput
                 value={phone}
                 onChangeText={setPhone}
@@ -295,7 +309,7 @@ export function YcFundBalanceReview({
                 autoComplete="tel"
               />
               <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>
-                {REVIEW_ROW_LABELS.paymentNetwork}
+                {REVIEW_ROW_LABELS.momoNetworkPrompt}
               </Text>
               {networksLoading ? (
                 <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[3] }} />

@@ -170,13 +170,54 @@ export async function ensureFundBalanceQuoteStashed(
   return inflightQuote
 }
 
-export async function fetchPayInNetworks(country: string, currency: string): Promise<
-  { id: string; name: string }[]
-> {
+export type PayInNetworkRow = { id: string; name: string }
+
+const PAY_IN_NETWORKS_CACHE_TTL_MS = 5 * 60_000
+const payInNetworksCache = new Map<string, { networks: PayInNetworkRow[]; at: number }>()
+const payInNetworksInflight = new Map<string, Promise<PayInNetworkRow[]>>()
+
+export function payInNetworksCacheKey(country: string, currency: string): string {
+  return `${country.trim().toUpperCase()}:${currency.trim().toUpperCase()}`
+}
+
+export function seedCachedPayInNetworks(
+  country: string,
+  currency: string,
+  networks: PayInNetworkRow[],
+): void {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  if (!cc || !cur) return
+  payInNetworksCache.set(payInNetworksCacheKey(cc, cur), { networks, at: Date.now() })
+}
+
+/** Returns cached networks, or null when nothing is cached yet. */
+export function readCachedPayInNetworks(
+  country: string,
+  currency: string,
+): PayInNetworkRow[] | null {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  if (!cc || !cur) return null
+
+  const key = payInNetworksCacheKey(cc, cur)
+  const hit = payInNetworksCache.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.at > PAY_IN_NETWORKS_CACHE_TTL_MS) {
+    payInNetworksCache.delete(key)
+    return null
+  }
+  return hit.networks
+}
+
+async function loadPayInNetworks(country: string, currency: string): Promise<PayInNetworkRow[]> {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+
   try {
-    const data = await apiFetch<{ networks?: { id: string; name: string }[] }>(
+    const data = await apiFetch<{ networks?: PayInNetworkRow[] }>(
       '/api/yellowcard/pay-in-networks',
-      { query: { country, currency } },
+      { query: { country: cc, currency: cur } },
     )
     return data.networks ?? []
   } catch (e) {
@@ -184,8 +225,44 @@ export async function fetchPayInNetworks(country: string, currency: string): Pro
   }
 
   const rails = await apiFetch<{
-    momoNetworks?: { id: string; name: string }[]
-    networks?: { id: string; name: string }[]
-  }>('/api/yellowcard/receive-rails', { query: { country, currency } })
+    momoNetworks?: PayInNetworkRow[]
+    networks?: PayInNetworkRow[]
+  }>('/api/yellowcard/receive-rails', { query: { country: cc, currency: cur } })
   return rails.momoNetworks ?? rails.networks ?? []
+}
+
+/** Idempotent prefetch — dedupes in-flight requests and writes cache on success. */
+export async function ensurePayInNetworksCached(
+  country: string,
+  currency: string,
+): Promise<PayInNetworkRow[]> {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  if (!cc || !cur) return []
+
+  const cached = readCachedPayInNetworks(cc, cur)
+  if (cached) return cached
+
+  const key = payInNetworksCacheKey(cc, cur)
+  const inflight = payInNetworksInflight.get(key)
+  if (inflight) return inflight
+
+  const task = loadPayInNetworks(cc, cur)
+    .then((networks) => {
+      seedCachedPayInNetworks(cc, cur, networks)
+      return networks
+    })
+    .finally(() => {
+      payInNetworksInflight.delete(key)
+    })
+
+  payInNetworksInflight.set(key, task)
+  return task
+}
+
+export async function fetchPayInNetworks(
+  country: string,
+  currency: string,
+): Promise<PayInNetworkRow[]> {
+  return ensurePayInNetworksCached(country, currency)
 }

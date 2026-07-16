@@ -7,6 +7,7 @@ import {
 } from '@easner/shared'
 import { apiFetch } from '../query/api-client'
 import { isTier1Complete } from './compliance'
+import { ensurePayInNetworksCached, seedCachedPayInNetworks } from './sendFlowFundBalanceQuote'
 
 export type YcReceiveRailsResponse = {
   ok: boolean
@@ -214,7 +215,14 @@ export async function warmYcLocalDepositCaches(input: WarmYcLocalDepositInput): 
   if (!input.kycApproved || !country || !currency) return
 
   const tasks: Promise<unknown>[] = [
-    prefetchYcReceiveRails(country, currency),
+    prefetchYcReceiveRails(country, currency).then((rails) => {
+      if (!rails?.rails.mobile_money.available) return rails
+      if (rails.momoNetworks?.length) {
+        seedCachedPayInNetworks(country, currency, rails.momoNetworks)
+        return rails
+      }
+      return ensurePayInNetworksCached(country, currency).then(() => rails)
+    }),
     prefetchYcPayInRates(),
   ]
   if (currency === 'NGN') {
