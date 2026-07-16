@@ -23,7 +23,7 @@ import {
   normalizeYcFundBalanceDepositReview,
   resolveNoahVaFundingNotificationActivityLabel,
   resolveNoahVaFundingDepositTitleFromMeta,
-  resolveYcFundBalanceNotificationActivityLabel,
+  resolveYcFundBalanceNotificationActivityLabelFromMetadata,
 } from "./yc-deposit-display"
 import {
   deriveVerificationBankName,
@@ -363,14 +363,9 @@ export function deriveTransactionNotification(
       )
     }
 
-    if (direction === "in" && isYcFundBalanceDepositMetadata(meta)) {
+    if (direction === "in" && meta && isYcFundBalanceDepositMetadata(meta)) {
       const review = normalizeYcFundBalanceDepositReview(meta.deposit_review)
-      const activityLabel = resolveYcFundBalanceNotificationActivityLabel({
-        depositDisplayTitle: meta.deposit_display_title,
-        residenceCountry: review?.residence_country ?? meta.residence_country,
-        payInRail: review?.pay_in_rail ?? meta.pay_in_rail,
-        localCurrency: review?.local_currency ?? meta.local_currency,
-      })
+      const activityLabel = resolveYcFundBalanceNotificationActivityLabelFromMetadata(meta, review)
       const body = input.failureReason
         ? `Your ${activityLabel} could not be completed. ${input.failureReason}`
         : `Your ${activityLabel} could not be completed.`
@@ -653,14 +648,12 @@ export function deriveTransactionNotification(
       { successUsesCompleteSuffix: false },
     )
     }
-    if (isYcFundBalanceDepositMetadata(meta) || normalizeYcFundBalanceDepositReview(meta.deposit_review)) {
+    if (
+      meta &&
+      (isYcFundBalanceDepositMetadata(meta) || normalizeYcFundBalanceDepositReview(meta.deposit_review))
+    ) {
       const review = normalizeYcFundBalanceDepositReview(meta.deposit_review)
-      const activityLabel = resolveYcFundBalanceNotificationActivityLabel({
-        depositDisplayTitle: meta.deposit_display_title,
-        residenceCountry: review?.residence_country ?? meta.residence_country,
-        payInRail: review?.pay_in_rail ?? meta.pay_in_rail,
-        localCurrency: review?.local_currency ?? meta.local_currency,
-      })
+      const activityLabel = resolveYcFundBalanceNotificationActivityLabelFromMetadata(meta, review)
       const usdCredit = review?.usd_credit ?? Number(meta.usd_credit ?? input.amount)
       const pushBody =
         review && Number.isFinite(usdCredit) && usdCredit > 0
@@ -678,6 +671,7 @@ export function deriveTransactionNotification(
       )
     }
     if (
+      meta &&
       isNoahVaFundingDeposit({
         provider: input.provider,
         direction: "in",

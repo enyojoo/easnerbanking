@@ -61,6 +61,14 @@ export function resolveYcFundBalanceDepositTitle(input: {
   return `${countryName} Bank Deposit`
 }
 
+function readMetaString(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    if (trimmed) return trimmed
+  }
+  return undefined
+}
+
 /** Push/email activity label — sentence case from deposit title. */
 export function resolveYcFundBalanceNotificationActivityLabel(input: {
   depositDisplayTitle?: string | null
@@ -78,6 +86,18 @@ export function resolveYcFundBalanceNotificationActivityLabel(input: {
   return title
     .replace(/\sBank\sDeposit$/i, " bank deposit")
     .replace(/\sMOMO\sDeposit$/i, " MOMO deposit")
+}
+
+export function resolveYcFundBalanceNotificationActivityLabelFromMetadata(
+  meta: Record<string, unknown>,
+  review?: YcFundBalanceDepositReviewSnapshot | null,
+): string {
+  return resolveYcFundBalanceNotificationActivityLabel({
+    depositDisplayTitle: readMetaString(meta.deposit_display_title),
+    residenceCountry: review?.residence_country ?? readMetaString(meta.residence_country),
+    payInRail: review?.pay_in_rail ?? readMetaString(meta.pay_in_rail),
+    localCurrency: review?.local_currency ?? readMetaString(meta.local_currency),
+  })
 }
 
 export function isYcFundBalanceDepositMetadata(meta: Record<string, unknown> | null | undefined): boolean {
@@ -188,14 +208,17 @@ export function reconstructYcFundBalanceDepositReview(
   })
 }
 
-export function resolveYcFundBalanceDepositDisplayTitle(meta: Record<string, unknown>): string {
-  const cached = String(meta.deposit_display_title ?? "").trim()
+export function resolveYcFundBalanceDepositDisplayTitle(
+  meta: Record<string, unknown> | null | undefined,
+): string {
+  const record = meta ?? {}
+  const cached = String(record.deposit_display_title ?? "").trim()
   if (cached) return cached
-  const review = normalizeYcFundBalanceDepositReview(meta.deposit_review)
+  const review = normalizeYcFundBalanceDepositReview(record.deposit_review)
   return resolveYcFundBalanceDepositTitle({
-    residenceCountry: review?.residence_country ?? meta.residence_country,
-    payInRail: review?.pay_in_rail ?? meta.pay_in_rail,
-    localCurrency: review?.local_currency ?? meta.local_currency,
+    residenceCountry: review?.residence_country ?? readMetaString(record.residence_country),
+    payInRail: review?.pay_in_rail ?? readMetaString(record.pay_in_rail),
+    localCurrency: review?.local_currency ?? readMetaString(record.local_currency),
   })
 }
 
@@ -225,9 +248,12 @@ export function isNoahVaFundingDeposit(input: {
   return isBankOnrampDepositFlow(meta)
 }
 
-export function resolveNoahVaFundingDepositTitleFromMeta(meta: Record<string, unknown>): string {
+export function resolveNoahVaFundingDepositTitleFromMeta(
+  meta: Record<string, unknown> | null | undefined,
+): string {
+  const record = meta ?? {}
   const currency = String(
-    meta.fiat_deposit_currency ?? meta.settled_currency ?? meta.currency ?? "USD",
+    record.fiat_deposit_currency ?? record.settled_currency ?? record.currency ?? "USD",
   )
     .trim()
     .toUpperCase()
