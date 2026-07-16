@@ -146,6 +146,7 @@ export async function creditFundBalanceFromYcReceive(
         status: "settled",
         amount: creditAmt,
         settled_at: now,
+        occurred_at: now,
         metadata: {
           ...prior,
           ...lifecycleMeta,
