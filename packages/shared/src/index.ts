@@ -581,6 +581,14 @@ export {
 } from "./yc-fund-balance-errors"
 export type { YcFundBalanceQuoteErrorCode } from "./yc-fund-balance-errors"
 export {
+  buildYcMomoPhoneFromLocal,
+  normalizeYcMomoPhone,
+  parseYcMomoLocalPhone,
+  resolveYcMomoCallingCode,
+  resolveYcMomoCallingCodeLabel,
+  sanitizeYcMomoLocalPhoneInput,
+} from "./yc-momo-phone"
+export {
   YC_PAY_IN_RATES_DESTINATION,
   resolveYcPayInCustomerRate,
 } from "./yc-pay-in-rates"

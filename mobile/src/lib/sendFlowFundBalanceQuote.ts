@@ -1,5 +1,5 @@
 import { apiFetch, ApiError } from '../query/api-client'
-import { ycFundBalanceQuoteErrorMessage } from '@easner/shared'
+import { ycFundBalanceQuoteErrorMessage, normalizeYcMomoPhone } from '@easner/shared'
 import type { YcPayInRail } from '../hooks/useYcCrossBorderFlow'
 
 export type YcFundBalanceQuote = {
@@ -123,7 +123,7 @@ function buildFundBalanceAmountBody(meta: FundBalanceQuoteStashMeta): Record<str
     if (!meta.sourcePhone?.trim() || !meta.networkId?.trim()) {
       throw new Error('Mobile number and network are required')
     }
-    body.sourcePhone = meta.sourcePhone.trim()
+    body.sourcePhone = normalizeYcMomoPhone(meta.sourcePhone.trim(), meta.country)
     body.networkId = meta.networkId.trim()
     if (meta.sourceNetworkName) body.sourceNetworkName = meta.sourceNetworkName
   }

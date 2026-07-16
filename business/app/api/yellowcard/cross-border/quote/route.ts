@@ -3,7 +3,7 @@ import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createCrossBorderTransfer } from "@/lib/yellowcard/cross-border-orchestrator"
 import { expireStalePendingAuthorizeTransfers } from "@/lib/yellowcard/expire-pending-authorize"
-import { ycPayInInstructionNotice } from "@easner/shared"
+import { ycPayInInstructionNotice, normalizeYcMomoPhone } from "@easner/shared"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 
 export const runtime = "nodejs"
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
   const payInRail = body?.payInRail === "mobile_money" ? "mobile_money" : "bank_transfer"
   if (payInRail === "mobile_money") {
-    const sourcePhone = String(body?.sourcePhone ?? "").trim()
+    const sourcePhone = normalizeYcMomoPhone(String(body?.sourcePhone ?? "").trim(), payInCountry)
     const networkId = String(body?.networkId ?? "").trim()
     if (!sourcePhone || !networkId) {
       return NextResponse.json(
@@ -75,7 +75,9 @@ export async function POST(request: Request) {
       payInRail,
       receiveAmount,
       recipient: recipient as RecipientSellPrepareRow,
-      sourcePhone: body?.sourcePhone,
+      sourcePhone: payInRail === "mobile_money"
+        ? normalizeYcMomoPhone(String(body?.sourcePhone ?? "").trim(), payInCountry)
+        : body?.sourcePhone,
       sourceNetworkId: body?.networkId,
       sourceNetworkName: body?.sourceNetworkName,
       senderProfile: {

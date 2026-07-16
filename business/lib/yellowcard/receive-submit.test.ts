@@ -28,12 +28,13 @@ describe("buildYcReceiveSource", () => {
     expect(
       buildYcReceiveSource({
         rail: "mobile_money",
-        phone: "+2348012345678",
+        phone: "1111111111",
         networkId: "net-sandbox",
+        country: "KE",
       }),
     ).toEqual({
       accountType: "momo",
-      accountNumber: "1111111111",
+      accountNumber: "+2541111111111",
       networkId: "net-sandbox",
     })
   })

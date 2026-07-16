@@ -16,6 +16,7 @@ import {
   resolvePayoutCountryCode,
   resolveRecipientPayoutRail,
   resolveSendConfirmArrivalHint,
+  normalizeYcMomoPhone,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -46,6 +47,7 @@ import {
   prefetchYcPayInNetworks,
   readCachedYcPayInNetworks,
 } from "@/lib/yc-local-deposit-cache"
+import { YcMomoPhoneInput } from "@/components/yc-momo-phone-input"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { REVIEW_ROW_LABELS } from "@easner/shared"
@@ -234,7 +236,10 @@ export default function SendConfirmPage() {
         const data = (await res.json().catch(() => ({}))) as { personal?: { phone?: string | null } }
         if (!cancelled && res.ok) {
           const phone = String(data.personal?.phone ?? "").trim()
-          setMomoPhone((prev) => prev || phone)
+          setMomoPhone((prev) =>
+            prev ||
+            (phone && payInCountry ? normalizeYcMomoPhone(phone, payInCountry) : phone),
+          )
         }
       } catch {
         // optional prefill
@@ -847,6 +852,9 @@ export default function SendConfirmPage() {
   const pq = state.payoutQuote
   const wq = state.walletQuote
   const yc = state.ycCrossBorder
+  const ycPayInCountry = state.otherCurrency
+    ? residenceCountryFromPayInCurrency(state.otherCurrency.trim().toUpperCase())
+    : null
   const quoteReady = isYcCrossBorder
     ? isYcMomo
       ? Boolean(ycPreviewFlow.customerRate && ycPreviewFlow.preview.sendAmount > 0)
@@ -959,13 +967,24 @@ export default function SendConfirmPage() {
         <div className="rounded-xl border border-border p-4 space-y-3">
           <div>
             <Label htmlFor="send-momo-phone">{REVIEW_ROW_LABELS.mobileNumber}</Label>
-            <Input
-              id="send-momo-phone"
-              value={momoPhone}
-              onChange={(e) => setMomoPhone(e.target.value)}
-              placeholder="+254712345678"
-              className="mt-1"
-            />
+            {ycPayInCountry ? (
+              <YcMomoPhoneInput
+                id="send-momo-phone"
+                countryCode={ycPayInCountry}
+                value={momoPhone}
+                onChange={setMomoPhone}
+                className="mt-1"
+                placeholder="712345678"
+              />
+            ) : (
+              <Input
+                id="send-momo-phone"
+                value={momoPhone}
+                onChange={(e) => setMomoPhone(e.target.value)}
+                placeholder="+254712345678"
+                className="mt-1"
+              />
+            )}
           </div>
           <div>
             <Label>{REVIEW_ROW_LABELS.paymentNetwork}</Label>

@@ -37,6 +37,9 @@ export function ycFundBalanceQuoteErrorMessage(
       if (fallback?.toLowerCase().includes("disabled")) {
         return "This payment method is temporarily unavailable. Try again later or contact support."
       }
+      if (fallback?.toLowerCase().includes("international format")) {
+        return "Enter your mobile number without the country code — the + prefix is added automatically."
+      }
       return fallback || "Could not create payment details. Check your amount and try again."
     default:
       return fallback || "Could not get payment details"

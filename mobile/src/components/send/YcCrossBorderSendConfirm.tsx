@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  TextInput,
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -15,12 +14,14 @@ import {
   formatReviewRowMoneyDisplay,
   formatSendRateLabel,
   REVIEW_ROW_LABELS,
+  normalizeYcMomoPhone,
 } from '@easner/shared'
 import type { Recipient } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { SendSelectedRecipientSummary } from './SendSelectedRecipientSummary'
 import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
+import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
 import { useYcCrossBorderFlow, type YcPayInRail, type YcCrossBorderQuoteResult } from '../../hooks/useYcCrossBorderFlow'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
@@ -65,7 +66,9 @@ export function YcCrossBorderSendConfirm({
     ? readCachedPayInNetworks(payInCountry, payInCurrency)
     : null
 
-  const [phone, setPhone] = useState(defaultPhone)
+  const [phone, setPhone] = useState(() =>
+    defaultPhone ? normalizeYcMomoPhone(defaultPhone, payInCountry) : '',
+  )
   const [networks, setNetworks] = useState<PayInNetwork[]>(() => cachedNetworks ?? [])
   const [networkId, setNetworkId] = useState(() =>
     cachedNetworks?.length === 1 ? cachedNetworks[0].id : '',
@@ -256,14 +259,11 @@ export function YcCrossBorderSendConfirm({
           {isMobileMoney ? (
             <View style={styles.momoSection}>
               <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.mobileNumber}</Text>
-              <TextInput
+              <YcMomoPhoneInput
+                countryCode={payInCountry}
                 value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                placeholder="+2348012345678"
-                placeholderTextColor={colors.text.secondary}
-                style={styles.input}
-                autoComplete="tel"
+                onChange={setPhone}
+                placeholder="712345678"
               />
               <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>
                 {REVIEW_ROW_LABELS.paymentNetwork}

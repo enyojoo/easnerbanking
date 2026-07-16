@@ -1,6 +1,7 @@
 import {
   buildNgYcIdPair,
   ngLocalVerificationComplete,
+  normalizeYcMomoPhone,
   type NgLocalVerificationProfile,
 } from "@easner/shared"
 
@@ -41,7 +42,9 @@ export function buildYcKycPersonMetadata(input: {
   const meta: YcPersonMetadata = {
     name: input.profile.fullName?.trim() || undefined,
     country: residence || undefined,
-    phone: input.profile.phone?.trim() || undefined,
+    phone: input.profile.phone?.trim()
+      ? normalizeYcMomoPhone(input.profile.phone, residence)
+      : undefined,
     email: input.profile.email?.trim() || undefined,
     dob: input.profile.dateOfBirth?.trim() || undefined,
   }

@@ -26,12 +26,14 @@ import {
   formatYcPayInMinHint,
   validateYcFundBalancePayInAmount,
   REVIEW_ROW_LABELS,
+  normalizeYcMomoPhone,
   type NgLocalIdType,
   type YcRateClientRow,
 } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import { YcCompleteDepositPanel } from "@/components/yc-complete-deposit-panel"
+import { YcMomoPhoneInput } from "@/components/yc-momo-phone-input"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
@@ -328,7 +330,9 @@ export function LocalDepositWizard({
         if (!cancelled && res.ok) {
           const phone = String(data.personal?.phone ?? "").trim()
           setDefaultPhone(phone)
-          setMomoPhone((prev) => prev || phone)
+          setMomoPhone((prev) =>
+            prev || (phone ? normalizeYcMomoPhone(phone, residenceCountry) : ""),
+          )
         }
       } catch {
         // optional prefill
@@ -710,12 +714,13 @@ export function LocalDepositWizard({
             <div className="pt-4 space-y-3">
               <div>
                 <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.momoNumberPrompt}</Label>
-                <Input
+                <YcMomoPhoneInput
                   id="momo-phone"
+                  countryCode={residenceCountry}
                   value={momoPhone}
-                  onChange={(e) => setMomoPhone(e.target.value)}
-                  placeholder="+254712345678"
+                  onChange={setMomoPhone}
                   className="mt-1"
+                  placeholder="712345678"
                 />
               </div>
               <div>

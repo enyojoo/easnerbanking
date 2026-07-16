@@ -1,7 +1,7 @@
 import { yellowcardFetch } from "./http"
 import { requireDepositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
 import { getYellowcardEnvironment } from "./config"
-import { resolveYcPaymentReason } from "@easner/shared"
+import { normalizeYcMomoPhone, resolveYcPaymentReason } from "@easner/shared"
 
 export type YcReceiveRail = "bank_transfer" | "mobile_money"
 
@@ -64,19 +64,25 @@ export function buildYcReceiveSource(input: {
   rail: YcReceiveRail
   phone?: string | null
   networkId?: string | null
+  country?: string | null
 }): YcReceiveSource {
   const accountType = input.rail === "mobile_money" ? "momo" : "bank"
   const source: YcReceiveSource = { accountType }
   const phone = String(input.phone ?? "").trim()
   const networkId = String(input.networkId ?? "").trim()
+  const country = String(input.country ?? "").trim().toUpperCase()
+  const normalizedPhone = phone && country ? normalizeYcMomoPhone(phone, country) : phone
   if (getYellowcardEnvironment() === "sandbox") {
-    // Sandbox success simulation per YC docs.
-    source.accountNumber = "1111111111"
+    const sandboxDigits = phone || "1111111111"
+    source.accountNumber =
+      country && sandboxDigits
+        ? normalizeYcMomoPhone(sandboxDigits, country)
+        : "1111111111"
     if (accountType === "momo" && networkId) {
       source.networkId = networkId
     }
   } else if (accountType === "momo") {
-    if (phone) source.accountNumber = phone
+    if (normalizedPhone) source.accountNumber = normalizedPhone
     if (networkId) source.networkId = networkId
   }
   return source
@@ -112,6 +118,7 @@ export function buildYcReceiveSubmitBody(input: YcReceiveSubmitInput): Record<st
           rail: input.payInRail,
           phone: input.sourcePhone,
           networkId: input.sourceNetworkId,
+          country: input.country,
         })
       : null)
   if (source) body.source = source

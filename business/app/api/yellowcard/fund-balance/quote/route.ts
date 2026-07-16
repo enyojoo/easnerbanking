@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount, buildYcFundBalanceDepositReviewSnapshot, resolveYcFundBalanceDepositTitle, ycPayInInstructionNotice } from "@easner/shared"
+import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount, buildYcFundBalanceDepositReviewSnapshot, resolveYcFundBalanceDepositTitle, ycPayInInstructionNotice, normalizeYcMomoPhone } from "@easner/shared"
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
@@ -98,7 +98,10 @@ export async function POST(request: Request) {
   const rail = body?.rail === "mobile_money" ? "mobile_money" : "bank_transfer"
 
   if (rail === "mobile_money") {
-    const sourcePhone = String(body?.sourcePhone ?? "").trim()
+    const sourcePhone = normalizeYcMomoPhone(
+      String(body?.sourcePhone ?? "").trim(),
+      country,
+    )
     const networkId = String(body?.networkId ?? "").trim()
     if (!sourcePhone || !networkId) {
       return ycFundBalanceQuoteError(
@@ -214,7 +217,10 @@ export async function POST(request: Request) {
   const sequenceId = `yc_fb_${randomUUID()}`
   const sourcePhone =
     rail === "mobile_money"
-      ? String(body?.sourcePhone ?? userRow?.phone ?? "").trim()
+      ? normalizeYcMomoPhone(
+          String(body?.sourcePhone ?? userRow?.phone ?? "").trim(),
+          country,
+        )
       : undefined
   const sourceNetworkId =
     rail === "mobile_money" ? String(body?.networkId ?? "").trim() : undefined
