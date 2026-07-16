@@ -1,6 +1,8 @@
 "use client"
 
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
+import { cn } from "@/lib/utils"
+import { transactionDetailRowClassName } from "@/components/transactions/transaction-detail-summary-row"
 
 type Props = {
   label: string
@@ -16,7 +18,7 @@ export function CreditDestinationRow({
   flagSize = 22,
 }: Props) {
   return (
-    <div className="flex items-center justify-between border-b pb-4">
+    <div className={cn(transactionDetailRowClassName, "items-center")}>
       <span className="text-sm text-muted-foreground">{label}</span>
       <div className="flex shrink-0 items-center gap-2 font-medium whitespace-nowrap">
         <CurrencyFlagCircle currency={currency} size={flagSize} />

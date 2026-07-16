@@ -69,28 +69,21 @@ import {
   scopeKey,
   buildTransactionEmailDetailRows,
   filterTransactionReceiptDetailRows,
-  formatMoneyDisplay,
-  formatSendRateLabel,
-  formatPayoutRecipientSubtitle,
   formatTransactionDetailHeroTitle,
   computeDisplayProcessingFee,
-  normalizeTransferMethodLabel,
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
   shouldShowPayoutReviewFeeRow,
   REVIEW_ROW_LABELS,
-  reviewPrimaryAmountLabel,
   resolveInboundReceiveDetail,
   resolvePayoutReviewFlow,
-  shouldShowReviewTotalDebited,
-  formatAccountBalanceLabel,
-  formatReviewRowMoneyDisplay,
   type GlobalPayoutReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
   type YcFundBalanceDepositReviewSnapshot,
 } from '@easner/shared'
 import { InboundReceiveDetailRows } from '../../components/transactions/InboundReceiveDetailRows'
-import { CreditDestinationRow } from '../../components/transactions/CreditDestinationRow'
+import { PayoutReviewDetailRows } from '../../components/transactions/PayoutReviewDetailRows'
+import { TransactionDetailSummaryRow } from '../../components/transactions/TransactionDetailSummaryRow'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { haptics } from '../../lib/haptics'
@@ -595,12 +588,12 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     const isCopied = copiedStates[fieldName]
 
     return (
-      <View style={styles.summaryRow}>
-        <Text style={styles.summaryLabel}>{label}</Text>
+      <TransactionDetailSummaryRow label={label}>
         <Pressable
-         android_ripple={ripple.neutral}
+          android_ripple={ripple.neutral}
           style={styles.copyableValueRow}
-          onPress={() => handleCopy(value, fieldName)} >
+          onPress={() => handleCopy(value, fieldName)}
+        >
           <Text style={styles.summaryValue} numberOfLines={1}>
             {value}
           </Text>
@@ -612,7 +605,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             )}
           </View>
         </Pressable>
-      </View>
+      </TransactionDetailSummaryRow>
     )
   }
 
@@ -1006,14 +999,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             {/* Transaction Summary — rows render from existing transaction metadata only. */}
             <SectionCard style={styles.card}>
               <View style={styles.summaryRows}>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.transactionId}</Text>
+                <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
                   <Pressable
                     android_ripple={ripple.neutral}
                     style={styles.copyableValueRow}
                     onPress={() => handleCopy(transaction.transaction_id, 'transactionId')}
                   >
-                    <Text style={[styles.summaryValue, styles.summaryMonoValue]} selectable>
+                    <Text style={[styles.summaryMonoValue]} selectable>
                       {transaction.transaction_id}
                     </Text>
                     <View style={[styles.copyIcon, copiedStates.transactionId && styles.copyIconSuccess]}>
@@ -1024,7 +1016,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       )}
                     </View>
                   </Pressable>
-                </View>
+                </TransactionDetailSummaryRow>
 
                 {inboundReceive ? <InboundReceiveDetailRows snapshot={inboundReceive} /> : null}
 
@@ -1034,10 +1026,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 !isStablecoinReceive &&
                 !isYcFundBalanceDeposit &&
                 transaction.sender_display_name ? (
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.sender}</Text>
-                    <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
-                  </View>
+                  <TransactionDetailSummaryRow
+                    label={REVIEW_ROW_LABELS.sender}
+                    value={transaction.sender_display_name}
+                  />
                 ) : null}
 
                 {!inboundReceive &&
@@ -1048,239 +1040,111 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   transaction.source_type === 'virtual_account' && (
                   <>
                     {transaction.fee_amount != null && transaction.fee_amount > 0 && (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Fee</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatAmount(transaction.fee_amount, transaction.currency, false)}
-                        </Text>
-                      </View>
+                      <TransactionDetailSummaryRow
+                        label={REVIEW_ROW_LABELS.processingFee}
+                        value={formatAmount(transaction.fee_amount, transaction.currency, false)}
+                      />
                     )}
                     {transaction.settled_amount != null && transaction.settled_amount > 0 && (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.amountCredited}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatAmount(
-                            transaction.settled_amount,
-                            transaction.settled_currency || transaction.currency,
-                            true,
-                          )}
-                        </Text>
-                      </View>
+                      <TransactionDetailSummaryRow
+                        label={REVIEW_ROW_LABELS.amountCredited}
+                        value={formatAmount(
+                          transaction.settled_amount,
+                          transaction.settled_currency || transaction.currency,
+                          true,
+                        )}
+                        valueBold
+                      />
                     )}
                     {transaction.source_payment_rail && (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.scheme}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatScheme(transaction, transaction.source_payment_rail)}
-                        </Text>
-                      </View>
+                      <TransactionDetailSummaryRow
+                        label={REVIEW_ROW_LABELS.scheme}
+                        value={formatScheme(transaction, transaction.source_payment_rail)}
+                      />
                     )}
                     {transaction.reference && (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.narration}</Text>
-                        <Text style={styles.summaryValue}>{transaction.reference}</Text>
-                      </View>
+                      <TransactionDetailSummaryRow
+                        label={REVIEW_ROW_LABELS.narration}
+                        value={transaction.reference}
+                      />
                     )}
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>When</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatTimestamp(whenTs)}
-                      </Text>
-                    </View>
+                    <TransactionDetailSummaryRow
+                      label={REVIEW_ROW_LABELS.when}
+                      value={formatTimestamp(whenTs)}
+                    />
                   </>
                 )}
 
                 {/* Global payout send — review snapshot rows */}
                 {isGlobalPayoutSend && transaction.payout_review ? (
-                  <>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.sent}</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatMoneyDisplay(
-                          transaction.payout_review.you_send_amount,
-                          transaction.payout_review.send_currency,
-                        )}
-                      </Text>
-                    </View>
-                    {showPayoutProcessingFee ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.processingFee}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatReviewRowMoneyDisplay(
-                            REVIEW_ROW_LABELS.processingFee,
-                            payoutDisplayProcessingFee,
-                            transaction.payout_review!.send_currency,
-                          )}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {payoutReviewHasFx ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.exchangeRate}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatSendRateLabel(
-                            transaction.payout_review!.send_currency,
-                            transaction.payout_review!.receive_currency,
-                            transaction.payout_review!.exchange_rate,
-                          )}
-                        </Text>
-                      </View>
-                    ) : null}
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.totalDebited}</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatReviewRowMoneyDisplay(
-                          REVIEW_ROW_LABELS.totalDebited,
-                          transaction.payout_review.total_debited,
-                          transaction.payout_review.send_currency,
-                        )}
-                      </Text>
-                    </View>
-                    {shouldShowReviewTotalDebited(payoutReviewFlow) &&
-                    transaction.payout_review.send_currency ? (
-                      <CreditDestinationRow
-                        label={REVIEW_ROW_LABELS.debitedFrom}
-                        currency={transaction.payout_review.send_currency}
-                        balanceLabel={formatAccountBalanceLabel(
-                          transaction.payout_review.send_currency,
-                        )}
-                      />
-                    ) : null}
-                    {transaction.recipient_snapshot ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.recipient}</Text>
-                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                          <Text style={styles.summaryValue}>
-                            {transaction.recipient_snapshot.full_name}
-                          </Text>
-                          {formatPayoutRecipientSubtitle({
-                            bankName: transaction.recipient_snapshot.bank_name,
-                            phone: transaction.recipient_snapshot.phone,
-                            mobileProvider: transaction.recipient_snapshot.mobile_provider,
-                            accountNumber: transaction.recipient_snapshot.account_number,
-                            fullAccountNumber: transaction.recipient_snapshot.account_number,
-                            walletNetwork:
-                              walletSendReceiveNetwork ||
-                              transaction.metadata?.receive_network ||
-                              transaction.metadata?.chain,
-                          }) ? (
-                            <Text style={[styles.summaryValue, { fontSize: 13, color: colors.text.secondary }]}>
-                              {formatPayoutRecipientSubtitle({
-                                bankName: transaction.recipient_snapshot.bank_name,
-                                phone: transaction.recipient_snapshot.phone,
-                                mobileProvider: transaction.recipient_snapshot.mobile_provider,
-                                accountNumber: transaction.recipient_snapshot.account_number,
-                                fullAccountNumber: transaction.recipient_snapshot.account_number,
-                                walletNetwork:
-                                  walletSendReceiveNetwork ||
-                                  transaction.metadata?.receive_network ||
-                                  transaction.metadata?.chain,
-                              })}
-                            </Text>
-                          ) : null}
-                        </View>
-                      </View>
-                    ) : isWalletSendReview ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.recipient}</Text>
-                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                          <Text style={styles.summaryValue}>
-                            {String(
-                              transaction.display_description ||
-                                transaction.name ||
-                                transaction.metadata?.counterparty_name ||
-                                'Wallet transfer',
-                            )}
-                          </Text>
-                          {formatPayoutRecipientSubtitle({
-                            bankName: transaction.recipient_snapshot?.bank_name || 'Wallet',
-                            accountNumber:
-                              transaction.metadata?.counterparty_address ||
-                              transaction.metadata?.destination_address,
-                            fullAccountNumber:
-                              transaction.metadata?.counterparty_address ||
-                              transaction.metadata?.destination_address,
-                            walletNetwork: walletSendReceiveNetwork,
-                          }) ? (
-                            <Text style={[styles.summaryValue, { fontSize: 13, color: colors.text.secondary }]}>
-                              {formatPayoutRecipientSubtitle({
-                                bankName: transaction.recipient_snapshot?.bank_name || 'Wallet',
-                                accountNumber:
-                                  transaction.metadata?.counterparty_address ||
-                                  transaction.metadata?.destination_address,
-                                fullAccountNumber:
-                                  transaction.metadata?.counterparty_address ||
-                                  transaction.metadata?.destination_address,
-                                walletNetwork: walletSendReceiveNetwork,
-                              })}
-                            </Text>
-                          ) : null}
-                        </View>
-                      </View>
-                    ) : null}
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.transferMethod}</Text>
-                      <Text style={styles.summaryValue}>
-                        {normalizeTransferMethodLabel(transaction.payout_review.transfer_method)}
-                      </Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>When</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatTimestamp(whenTs)}
-                      </Text>
-                    </View>
-                    {transaction.send_note || transaction.metadata?.send_note ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Note</Text>
-                        <Text style={styles.summaryValue}>
-                          {String(transaction.send_note || transaction.metadata?.send_note || '')}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </>
+                  <PayoutReviewDetailRows
+                    payoutReview={transaction.payout_review}
+                    payoutReviewFlow={payoutReviewFlow}
+                    recipientSnapshot={transaction.recipient_snapshot}
+                    showProcessingFee={showPayoutProcessingFee}
+                    displayProcessingFee={payoutDisplayProcessingFee}
+                    hasFx={!!payoutReviewHasFx}
+                    walletSendReceiveNetwork={walletSendReceiveNetwork}
+                    isWalletSendReview={isWalletSendReview}
+                    displayDescription={transaction.display_description}
+                    name={transaction.name}
+                    counterpartyName={
+                      typeof transaction.metadata?.counterparty_name === 'string'
+                        ? transaction.metadata.counterparty_name
+                        : null
+                    }
+                    counterpartyAddress={
+                      typeof transaction.metadata?.counterparty_address === 'string'
+                        ? transaction.metadata.counterparty_address
+                        : null
+                    }
+                    destinationAddress={
+                      typeof transaction.metadata?.destination_address === 'string'
+                        ? transaction.metadata.destination_address
+                        : null
+                    }
+                    whenTs={whenTs}
+                    sendNote={String(
+                      transaction.send_note || transaction.metadata?.send_note || '',
+                    ).trim() || null}
+                    formatTimestamp={formatTimestamp}
+                  />
                 ) : null}
 
                 {/* Send flows (non–Easetag P2P, non–global payout) */}
                 {!isEasetagP2p && !isGlobalPayoutSend && transaction.transaction_type === 'send' && (
                   <>
                     {transaction.final_amount && transaction.final_amount !== transaction.amount && (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Final Amount</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatAmount(transaction.final_amount, transaction.currency, isReceived)}
-                        </Text>
-                      </View>
+                      <TransactionDetailSummaryRow
+                        label="Final Amount"
+                        value={formatAmount(transaction.final_amount, transaction.currency, isReceived)}
+                      />
                     )}
 
                     {transaction.source_payment_rail && (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.scheme}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatScheme(transaction, transaction.source_payment_rail)}
-                        </Text>
-                      </View>
+                      <TransactionDetailSummaryRow
+                        label={REVIEW_ROW_LABELS.scheme}
+                        value={formatScheme(transaction, transaction.source_payment_rail)}
+                      />
                     )}
 
                     {transaction.recipient_name && (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.recipient}</Text>
-                        <Text style={styles.summaryValue}>{transaction.recipient_name}</Text>
-                      </View>
+                      <TransactionDetailSummaryRow
+                        label={REVIEW_ROW_LABELS.recipient}
+                        value={transaction.recipient_name}
+                      />
                     )}
 
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>When</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatTimestamp(whenTs)}
-                      </Text>
-                    </View>
+                    <TransactionDetailSummaryRow
+                      label={REVIEW_ROW_LABELS.when}
+                      value={formatTimestamp(whenTs)}
+                    />
 
                     {depositSendNote ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Note</Text>
-                        <Text style={styles.summaryValue}>{depositSendNote}</Text>
-                      </View>
+                      <TransactionDetailSummaryRow
+                        label={REVIEW_ROW_LABELS.note}
+                        value={depositSendNote}
+                      />
                     ) : null}
                   </>
                 )}
@@ -1567,39 +1431,20 @@ const styles = StyleSheet.create({
   copyIconSuccess: {
     backgroundColor: colors.success.background,
   },
-  summaryRows: {
-    gap: spacing[3],
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-  },
+  summaryRows: {},
   summaryValue: {
     ...textStyles.titleSmall,
     color: colors.text.primary,
-    flex: 1,
     textAlign: 'right',
-    marginLeft: spacing[2],
-  },
-  summaryValueBold: {
-    fontWeight: '700',
-  },
-  creditToRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
     flex: 1,
-    justifyContent: 'flex-end',
   },
   summaryMonoValue: {
     fontFamily: fontFamily.mono,
     fontSize: 13,
     fontWeight: '500',
+    color: colors.text.primary,
+    textAlign: 'right',
+    flex: 1,
   },
   copyableValueRow: {
     flexDirection: 'row',

@@ -15,8 +15,9 @@ import { TransactionDetailHero } from "@/components/transactions/transaction-det
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
 import { DepositReviewDetailsRows } from "@/components/transactions/deposit-review-details-rows"
 import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
+import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
+import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
 import { REVIEW_ROW_LABELS, isVerificationDepositMetadata, resolvePayoutReviewFlow, shouldShowReviewTotalDebited, formatReviewRowMoneyDisplay } from "@easner/shared"
-import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
@@ -122,9 +123,8 @@ function TransactionSummaryDetails({
 
   return (
     <Card className="border-border shadow-sm">
-      <CardContent className="space-y-3 p-6">
-        <div className="flex justify-between gap-4 border-b pb-4 text-sm">
-          <span className="shrink-0 text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
+      <CardContent className="p-6">
+        <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-medium">{transaction.id}</span>
             <Button
@@ -141,101 +141,75 @@ function TransactionSummaryDetails({
               )}
             </Button>
           </div>
-        </div>
+        </TransactionDetailSummaryRow>
 
-        <div className="flex justify-between gap-4 text-sm">
-          <span className="shrink-0 text-muted-foreground">When</span>
-          <span className="text-right font-medium">
-            {new Date(transaction.ledgerCreatedAt ?? transaction.date).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
-        </div>
+        <TransactionDetailSummaryRow
+          label={REVIEW_ROW_LABELS.when}
+          value={new Date(transaction.ledgerCreatedAt ?? transaction.date).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        />
 
         {transaction.paymentScheme ? (
-          <div className="flex justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">Scheme</span>
-            <span className="text-right font-medium">{transaction.paymentScheme}</span>
-          </div>
+          <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.scheme} value={transaction.paymentScheme} />
         ) : null}
 
         {isCard && cardLast4 ? (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Card</span>
-            <span className="font-medium">•••• {cardLast4}</span>
-          </div>
+          <TransactionDetailSummaryRow label="Card" value={`•••• ${cardLast4}`} />
         ) : transaction.category ? (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Category</span>
-            <span className="font-medium">{transaction.category}</span>
-          </div>
+          <TransactionDetailSummaryRow label="Category" value={transaction.category} />
         ) : null}
 
         {showParty ? (
-          <div className="flex justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">{partyLabel}</span>
-            <span className="text-right font-medium">{transaction.counterpartyName}</span>
-          </div>
+          <TransactionDetailSummaryRow label={partyLabel} value={transaction.counterpartyName} />
         ) : null}
 
         {transaction.narration ? (
-          <div className="flex justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">Narration</span>
-            <span className="text-right font-medium">{transaction.narration}</span>
-          </div>
+          <TransactionDetailSummaryRow label="Narration" value={transaction.narration} />
         ) : null}
 
-        {transaction.fee !== undefined && transaction.fee > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
-            <span className="font-medium">
-              {formatReviewRowMoneyDisplay(
-                REVIEW_ROW_LABELS.processingFee,
-                transaction.fee,
-                transaction.displayCurrency || "USD",
-              )}
-            </span>
-          </div>
-        )}
+        {transaction.fee !== undefined && transaction.fee > 0 ? (
+          <TransactionDetailSummaryRow
+            label={REVIEW_ROW_LABELS.processingFee}
+            value={formatReviewRowMoneyDisplay(
+              REVIEW_ROW_LABELS.processingFee,
+              transaction.fee,
+              transaction.displayCurrency || "USD",
+            )}
+          />
+        ) : null}
 
         {transaction.postedAmount != null && transaction.postedAmount > 0 ? (
-          <div className="flex justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">{REVIEW_ROW_LABELS.amountCredited}</span>
-            <span className="text-right font-medium">
-              {formatReviewRowMoneyDisplay(
-                REVIEW_ROW_LABELS.amountCredited,
-                transaction.postedAmount,
-                displayCurrency,
-              )}
-            </span>
-          </div>
+          <TransactionDetailSummaryRow
+            label={REVIEW_ROW_LABELS.amountCredited}
+            value={formatReviewRowMoneyDisplay(
+              REVIEW_ROW_LABELS.amountCredited,
+              transaction.postedAmount,
+              displayCurrency,
+            )}
+          />
         ) : null}
 
         {isDeposit && transaction.postedAmount != null && transaction.postedAmount > 0 ? (
-          <div className="flex items-center justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">
-              {isVerificationDepositMetadata(
+          <CreditDestinationRow
+            label={
+              isVerificationDepositMetadata(
                 (transaction as { metadata?: Record<string, unknown> }).metadata,
               )
                 ? REVIEW_ROW_LABELS.creditFor
-                : REVIEW_ROW_LABELS.creditTo}
-            </span>
-            <div className="flex shrink-0 items-center gap-2 font-medium whitespace-nowrap">
-              <CurrencyFlagCircle currency={displayCurrency} size={22} />
-              <span className="whitespace-nowrap">{displayCurrency} Balance</span>
-            </div>
-          </div>
+                : REVIEW_ROW_LABELS.creditTo
+            }
+            currency={displayCurrency}
+            balanceLabel={`${displayCurrency} Balance`}
+          />
         ) : null}
 
         {transaction.sendNote ? (
-          <div className="flex justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">Note</span>
-            <span className="text-right font-medium">{transaction.sendNote}</span>
-          </div>
+          <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.note} value={transaction.sendNote} />
         ) : null}
       </CardContent>
     </Card>

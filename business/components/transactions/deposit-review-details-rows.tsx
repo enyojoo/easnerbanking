@@ -11,6 +11,7 @@ import {
   type YcFundBalanceDepositReviewSnapshot,
 } from "@easner/shared"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
+import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { formatTransactionRowDateTime } from "@/lib/transaction-row-present"
 import { Card, CardContent } from "@/components/ui/card"
@@ -44,12 +45,13 @@ export function DepositReviewDetailsRows({
     exchangeFee: depositReview.exchange_fee,
   })
   const hasFx = depositReview.exchange_rate > 0
+  const creditLabel =
+    mode === "detail" ? REVIEW_ROW_LABELS.amountCredited : REVIEW_ROW_LABELS.amountToCredit
 
   return (
     <Card className="border-border shadow-sm">
-      <CardContent className="space-y-4 p-6">
-        <div className="flex items-center justify-between gap-2 border-b pb-4">
-          <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
+      <CardContent className="p-6">
+        <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
           {onCopy ? (
             <button
               type="button"
@@ -67,51 +69,43 @@ export function DepositReviewDetailsRows({
           ) : (
             <span className="font-mono text-sm font-medium">{transactionId}</span>
           )}
-        </div>
+        </TransactionDetailSummaryRow>
 
-        <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">
-            {reviewPrimaryAmountLabel("local_pay_in", mode)}
-          </span>
-          <span className="text-xl font-semibold">
-            {formatReviewRowMoneyDisplay(
-              reviewPrimaryAmountLabel("local_pay_in", mode),
-              depositReview.local_pay_in,
-              depositReview.local_currency,
-            )}
-          </span>
-        </div>
+        <TransactionDetailSummaryRow
+          label={reviewPrimaryAmountLabel("local_pay_in", mode)}
+          value={formatReviewRowMoneyDisplay(
+            reviewPrimaryAmountLabel("local_pay_in", mode),
+            depositReview.local_pay_in,
+            depositReview.local_currency,
+          )}
+          valueClassName="text-xl font-semibold"
+        />
 
         {showProcessingFee ? (
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
-            <span className="font-semibold">
-              {formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.processingFee, displayProcessingFee, "USD")}
-            </span>
-          </div>
+          <TransactionDetailSummaryRow
+            label={REVIEW_ROW_LABELS.processingFee}
+            value={formatReviewRowMoneyDisplay(
+              REVIEW_ROW_LABELS.processingFee,
+              displayProcessingFee,
+              "USD",
+            )}
+            valueClassName="font-semibold"
+          />
         ) : null}
 
         {hasFx ? (
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
-            <span className="font-semibold">
-              {formatSendRateLabel("USD", depositReview.local_currency, depositReview.exchange_rate)}
-            </span>
-          </div>
+          <TransactionDetailSummaryRow
+            label={REVIEW_ROW_LABELS.exchangeRate}
+            value={formatSendRateLabel("USD", depositReview.local_currency, depositReview.exchange_rate)}
+            valueClassName="font-semibold"
+          />
         ) : null}
 
-        <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">
-            {mode === "detail" ? REVIEW_ROW_LABELS.amountCredited : REVIEW_ROW_LABELS.amountToCredit}
-          </span>
-          <span className="text-xl font-semibold">
-            {formatReviewRowMoneyDisplay(
-              mode === "detail" ? REVIEW_ROW_LABELS.amountCredited : REVIEW_ROW_LABELS.amountToCredit,
-              depositReview.usd_credit,
-              "USD",
-            )}
-          </span>
-        </div>
+        <TransactionDetailSummaryRow
+          label={creditLabel}
+          value={formatReviewRowMoneyDisplay(creditLabel, depositReview.usd_credit, "USD")}
+          valueClassName="text-xl font-semibold"
+        />
 
         <CreditDestinationRow
           label={REVIEW_ROW_LABELS.creditTo}
@@ -119,18 +113,16 @@ export function DepositReviewDetailsRows({
           balanceLabel={depositReview.credit_to}
         />
 
-        <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">
-            {mode === "detail" ? REVIEW_ROW_LABELS.scheme : REVIEW_ROW_LABELS.transferMethod}
-          </span>
-          <span className="font-medium">{depositReview.transfer_method}</span>
-        </div>
+        <TransactionDetailSummaryRow
+          label={mode === "detail" ? REVIEW_ROW_LABELS.scheme : REVIEW_ROW_LABELS.transferMethod}
+          value={depositReview.transfer_method}
+        />
 
         {whenAt ? (
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.when}</span>
-            <span className="font-medium">{formatTransactionRowDateTime(whenAt)}</span>
-          </div>
+          <TransactionDetailSummaryRow
+            label={REVIEW_ROW_LABELS.when}
+            value={formatTransactionRowDateTime(whenAt)}
+          />
         ) : null}
 
         {timingRows?.length ? <TransactionTimingRows rows={timingRows} /> : null}

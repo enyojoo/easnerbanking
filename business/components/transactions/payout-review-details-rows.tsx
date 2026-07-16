@@ -21,6 +21,7 @@ import {
   type TransactionTimingRow,
 } from "@easner/shared"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
+import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { formatTransactionRowDateTime } from "@/lib/transaction-row-present"
 import { Card, CardContent } from "@/components/ui/card"
@@ -36,23 +37,15 @@ type Props = {
   copiedKey?: string | null
   onCopy?: (text: string, key: string) => void
   showFeeBreakdown?: boolean
-  /** Detail view: hero already shows receive amount. Confirm/review keeps this row. */
   showRecipientGets?: boolean
-  /** Dynamic timing (Arrived after / Failed after). Omit on send confirm. */
   timingRows?: TransactionTimingRow[] | null
-  /** Confirm shows Arrival estimate; detail uses whenAt + timingRows only. */
   mode?: "confirm" | "detail"
-  /** Local pay-in (YC cross-border) vs balance debit payout. */
   reviewFlow?: ReviewFlowKind
-  /** When true, Noah global fiat — margin is in customer rate; hide processing fee row. */
   globalFiatPayout?: boolean
-  /** When set, uses wallet-send FX rules (direct Turnkey Solana stables hide rate). */
   receiveNetwork?: string | null
   walletSendExecutionModel?: "direct_turnkey" | "lifi_bridge" | null
-  /** Wallet send fallback when snapshot is missing (older rows). */
   recipientDisplayName?: string | null
   counterpartyAddress?: string | null
-  /** Settled / occurred timestamp for detail "When" row (wallet send, etc.). */
   whenAt?: string | null
 }
 
@@ -95,9 +88,7 @@ export function PayoutReviewDetailsRows({
   showFeeBreakdown = true,
   showRecipientGets = true,
   timingRows,
-  globalFiatPayout,
   receiveNetwork,
-  walletSendExecutionModel,
   recipientDisplayName,
   counterpartyAddress,
   whenAt,
@@ -123,9 +114,8 @@ export function PayoutReviewDetailsRows({
 
   return (
     <Card className="border-border shadow-sm">
-      <CardContent className="space-y-4 p-6">
-        <div className="flex items-center justify-between gap-2 border-b pb-4">
-          <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
+      <CardContent className="p-6">
+        <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
           {onCopy ? (
             <button
               type="button"
@@ -143,56 +133,50 @@ export function PayoutReviewDetailsRows({
           ) : (
             <span className="font-mono text-sm font-medium">{transactionId}</span>
           )}
-        </div>
+        </TransactionDetailSummaryRow>
 
-        <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">
-            {reviewPrimaryAmountLabel(reviewFlow, mode)}
-          </span>
-          <span className="text-xl font-semibold">
-            {formatMoneyDisplay(payoutReview.you_send_amount, payoutReview.send_currency)}
-          </span>
-        </div>
+        <TransactionDetailSummaryRow
+          label={reviewPrimaryAmountLabel(reviewFlow, mode)}
+          value={formatMoneyDisplay(payoutReview.you_send_amount, payoutReview.send_currency)}
+          valueClassName="text-xl font-semibold"
+        />
 
         {showFeeBreakdown ? (
           <>
             {showProcessingFee ? (
-              <div className="flex items-center justify-between border-b pb-4">
-                <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
-                <span className="font-semibold">
-                  {formatReviewRowMoneyDisplay(
-                    REVIEW_ROW_LABELS.processingFee,
-                    displayProcessingFee,
-                    payoutReview.send_currency,
-                  )}
-                </span>
-              </div>
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.processingFee}
+                value={formatReviewRowMoneyDisplay(
+                  REVIEW_ROW_LABELS.processingFee,
+                  displayProcessingFee,
+                  payoutReview.send_currency,
+                )}
+                valueClassName="font-semibold"
+              />
             ) : null}
 
             {hasFx ? (
-              <div className="flex items-center justify-between border-b pb-4">
-                <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
-                <span className="font-semibold">
-                  {formatSendRateLabel(
-                    payoutReview.send_currency,
-                    payoutReview.receive_currency,
-                    payoutReview.exchange_rate,
-                  )}
-                </span>
-              </div>
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.exchangeRate}
+                value={formatSendRateLabel(
+                  payoutReview.send_currency,
+                  payoutReview.receive_currency,
+                  payoutReview.exchange_rate,
+                )}
+                valueClassName="font-semibold"
+              />
             ) : null}
 
             {shouldShowReviewTotalDebited(reviewFlow) ? (
-            <div className="flex items-center justify-between border-b pb-4">
-              <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.totalDebited}</span>
-              <span className="text-xl font-semibold">
-                {formatReviewRowMoneyDisplay(
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.totalDebited}
+                value={formatReviewRowMoneyDisplay(
                   REVIEW_ROW_LABELS.totalDebited,
                   payoutReview.total_debited,
                   payoutReview.send_currency,
                 )}
-              </span>
-            </div>
+                valueClassName="text-xl font-semibold"
+              />
             ) : null}
           </>
         ) : null}
@@ -206,16 +190,14 @@ export function PayoutReviewDetailsRows({
         ) : null}
 
         {showRecipientGets ? (
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.recipientGets}</span>
-            <span className="font-semibold">
-              {formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency)}
-            </span>
-          </div>
+          <TransactionDetailSummaryRow
+            label={REVIEW_ROW_LABELS.recipientGets}
+            value={formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency)}
+            valueClassName="font-semibold"
+          />
         ) : null}
 
-        <div className="flex items-center justify-between gap-3 border-b pb-4">
-          <span className="shrink-0 text-sm text-muted-foreground">{REVIEW_ROW_LABELS.recipient}</span>
+        <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.recipient}>
           {recipientNode ? (
             recipientNode
           ) : recipientSnapshot ? (
@@ -229,9 +211,7 @@ export function PayoutReviewDetailsRows({
             </div>
           ) : recipientDisplayName || counterpartyAddress ? (
             <div className="min-w-0 max-w-[70%] shrink-0 text-right">
-              {recipientDisplayName ? (
-                <p className="font-medium">{recipientDisplayName}</p>
-              ) : null}
+              {recipientDisplayName ? <p className="font-medium">{recipientDisplayName}</p> : null}
               {walletRecipientFallbackSubtitle({
                 bankName: "Wallet",
                 accountNumber: counterpartyAddress,
@@ -247,34 +227,35 @@ export function PayoutReviewDetailsRows({
               ) : null}
             </div>
           ) : null}
-        </div>
+        </TransactionDetailSummaryRow>
 
-        <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
-          <span className="font-medium">{transferMethodLabel}</span>
-        </div>
+        <TransactionDetailSummaryRow
+          label={REVIEW_ROW_LABELS.transferMethod}
+          value={transferMethodLabel}
+        />
 
         {whenAt ? (
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.when}</span>
-            <span className="font-medium">{formatTransactionRowDateTime(whenAt)}</span>
-          </div>
+          <TransactionDetailSummaryRow
+            label={REVIEW_ROW_LABELS.when}
+            value={formatTransactionRowDateTime(whenAt)}
+          />
         ) : null}
 
         {timingRows?.length ? (
           <TransactionTimingRows rows={timingRows} />
         ) : mode === "confirm" && payoutReview.processing_time ? (
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.arrival}</span>
-            <span className="font-medium">{payoutReview.processing_time}</span>
-          </div>
+          <TransactionDetailSummaryRow
+            label={REVIEW_ROW_LABELS.arrival}
+            value={payoutReview.processing_time}
+          />
         ) : null}
 
         {sendNote ? (
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.note}</span>
-            <span className="max-w-[70%] text-right text-sm font-medium">{sendNote}</span>
-          </div>
+          <TransactionDetailSummaryRow
+            label={REVIEW_ROW_LABELS.note}
+            value={sendNote}
+            valueClassName="max-w-[70%] text-sm"
+          />
         ) : null}
       </CardContent>
     </Card>

@@ -1,4 +1,5 @@
 import type { TransactionTimingRow } from "@easner/shared"
+import { transactionDetailRowClassName } from "@/components/transactions/transaction-detail-summary-row"
 
 type Props = {
   rows?: TransactionTimingRow[] | null
@@ -13,10 +14,7 @@ export function TransactionTimingRows({ rows, className }: Props) {
       {rows.map((row) => (
         <div
           key={row.label}
-          className={
-            className ??
-            "flex items-center justify-between gap-4 border-b pb-4 text-sm last:border-b-0 last:pb-0"
-          }
+          className={className ?? transactionDetailRowClassName}
         >
           <span className="shrink-0 text-muted-foreground">{row.label}</span>
           <span className="text-right font-medium">{row.value}</span>

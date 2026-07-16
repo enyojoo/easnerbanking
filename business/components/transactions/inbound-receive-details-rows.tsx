@@ -7,6 +7,7 @@ import {
   type TransactionTimingRow,
 } from "@easner/shared"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
+import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { Card, CardContent } from "@/components/ui/card"
 import { Copy, Check } from "lucide-react"
@@ -33,9 +34,8 @@ export function InboundReceiveDetailsRows({
   return (
     <>
       <Card className="border-border shadow-sm">
-        <CardContent className="space-y-3 p-6">
-          <div className="flex justify-between gap-4 border-b pb-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
+        <CardContent className="p-6">
+          <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
             {onCopy ? (
               <button
                 type="button"
@@ -53,12 +53,12 @@ export function InboundReceiveDetailsRows({
             ) : (
               <span className="font-mono text-sm font-medium">{transactionId}</span>
             )}
-          </div>
+          </TransactionDetailSummaryRow>
 
           {rows.map((row, index) => {
             if (row.isVerificationHint) {
               return (
-                <p key={`hint-${index}`} className="text-sm text-muted-foreground">
+                <p key={`hint-${index}`} className="py-2 text-sm text-muted-foreground">
                   {row.value}
                 </p>
               )
@@ -80,18 +80,14 @@ export function InboundReceiveDetailsRows({
             }
 
             return (
-              <div key={`${row.label}-${index}`} className="flex justify-between gap-4 border-b pb-4 text-sm">
-                <span className="shrink-0 text-muted-foreground">{row.label}</span>
-                <span
-                  className={
-                    row.label === REVIEW_ROW_LABELS.amountCredited
-                      ? "text-right text-xl font-semibold"
-                      : "text-right font-medium"
-                  }
-                >
-                  {row.value}
-                </span>
-              </div>
+              <TransactionDetailSummaryRow
+                key={`${row.label}-${index}`}
+                label={row.label}
+                value={row.value}
+                valueClassName={
+                  row.label === REVIEW_ROW_LABELS.amountCredited ? "text-xl font-semibold" : undefined
+                }
+              />
             )
           })}
 
