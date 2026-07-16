@@ -2,8 +2,10 @@ import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   YC_QUOTE_TTL_MS,
+  TLC_LOCAL_TRANSFER_METHOD,
   computeYcCrossBorderPricing,
   computeYcCrossBorderPricingBeforeReceive,
+  computeYcFundBalancePrincipalLocalPayIn,
   getGlobalPayoutProcessingTime,
   validateYcRecipientForCorridor,
 } from "@easner/shared"
@@ -18,8 +20,12 @@ import { mapRecipientToYcSend } from "@/lib/yellowcard/map-recipient-to-yc-send"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
-import { isYcLocalPayInEnabledForCountry } from "@/lib/yellowcard/yc-receive-gate"
+import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
 import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
+import { generateTransactionId } from "@/lib/transaction-id"
+import { buildRecipientSnapshotFromRow } from "@/lib/noah/build-payout-execute-snapshot"
+import { buildYcCrossBorderOutMetadata } from "@/lib/yellowcard/yc-ledger"
+import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 
 async function resolveYcReceiveChannelId(input: {
   countryCode: string
@@ -55,6 +61,7 @@ export async function createCrossBorderTransfer(input: {
 }): Promise<{
   transferId: string
   transactionId: string
+  easnerTransactionId: string
   localPayIn: number
   customerRate: number
   processingFee: number
@@ -88,9 +95,13 @@ export async function createCrossBorderTransfer(input: {
     throw new Error("Through Local Currency requires cross-currency corridors")
   }
 
-  const payInEnabled = await isYcLocalPayInEnabledForCountry(admin, input.payInCountry)
+  const payInEnabled = await isYcLocalPayInEnabledForCorridor(admin, {
+    countryCode: input.payInCountry,
+    currencyCode: payInCurrency,
+    rail: input.payInRail,
+  })
   if (!payInEnabled) {
-    throw new Error("Local pay-in is not enabled for your country")
+    throw new Error("Local pay-in is not enabled for this corridor")
   }
 
   const rates = await listYcRates(admin, { status: "active" })
@@ -181,6 +192,21 @@ export async function createCrossBorderTransfer(input: {
     sendLeg,
   })
 
+  const amountCheck = await validateFundBalancePayInAmountLimits({
+    admin,
+    countryCode: input.payInCountry,
+    currencyCode: payInCurrency,
+    rail: input.payInRail,
+    localPayIn: pricing.localPayIn,
+  })
+  if (!amountCheck.ok) {
+    throw new Error(
+      amountCheck.message.toLowerCase().includes("minimum")
+        ? "yc_amount_below_min"
+        : amountCheck.message,
+    )
+  }
+
   const leg1Seq = `yc_cb_l1_${randomUUID()}`
   const receiveRes = await submitYcReceive({
     sequenceId: leg1Seq,
@@ -216,6 +242,9 @@ export async function createCrossBorderTransfer(input: {
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const startedAt = new Date().toISOString()
+  const easnerTransactionId = generateTransactionId()
+  const recipientSnapshot = buildRecipientSnapshotFromRow(input.recipient)
+  const recipientId = String(input.recipient.id ?? "").trim() || null
   const { data: tx, error: txErr } = await admin
     .from("transactions")
     .insert({
@@ -226,16 +255,16 @@ export async function createCrossBorderTransfer(input: {
       amount: pricingFinal.localPayIn,
       currency: payInCurrency,
       direction: "out",
+      easner_transaction_id: easnerTransactionId,
       occurred_at: startedAt,
-      metadata: {
-        yc_mode: "cross_border_send",
-        yc_sequence_id: leg1Seq,
-        receive_amount: input.receiveAmount,
-        receive_currency: receiveCurrency,
-        customer_rate: cross.rate,
-        processing_at: startedAt,
-        transaction_started_at: startedAt,
-      },
+      metadata: buildYcCrossBorderOutMetadata({
+        sequenceId: leg1Seq,
+        localPayIn: pricingFinal.localPayIn,
+        receiveAmount: input.receiveAmount,
+        payInCurrency,
+        receiveCurrency,
+        customerRate: cross.rate,
+      }),
     })
     .select("id")
     .single()
@@ -286,14 +315,47 @@ export async function createCrossBorderTransfer(input: {
     customerRate: cross.rate,
     rail: input.payInRail,
     expiresAt,
-    transactionId: String(tx.id),
+    transactionId: easnerTransactionId,
     transferId: String(transfer.id),
     bankInfo: (receiveRes.bankInfo as Record<string, unknown>) ?? null,
     sourcePhone: input.sourcePhone,
     sourceNetworkId: input.sourceNetworkId,
     sourceNetworkName: input.sourceNetworkName,
     easnerSellFrom,
+    easnerTransactionId,
   })
+
+  const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
+  const payoutReview = {
+    you_send_amount: pricingFinal.localPayIn,
+    total_debited: pricingFinal.localPayIn,
+    exchange_fee: pricingFinal.ycLegFeesUsd,
+    processing_fee: pricingFinal.processingFee,
+    exchange_rate: cross.rate,
+    send_currency: payInCurrency,
+    receive_amount: input.receiveAmount,
+    receive_currency: receiveCurrency,
+    transfer_method: TLC_LOCAL_TRANSFER_METHOD,
+    processing_time: processingTime,
+    display_processing_fee_local: quoteSummary.displayProcessingFeeLocal ?? 0,
+  }
+  const payInReview = {
+    local_pay_in: pricingFinal.localPayIn,
+    principal_local_pay_in: computeYcFundBalancePrincipalLocalPayIn({
+      usdCredit: input.receiveAmount,
+      exchangeRate: cross.rate,
+    }),
+    local_currency: payInCurrency,
+    processing_fee: pricingFinal.processingFee,
+    exchange_fee: pricingFinal.ycLegFeesUsd,
+    exchange_rate: cross.rate,
+    transfer_method: TLC_LOCAL_TRANSFER_METHOD,
+    pay_in_rail: input.payInRail,
+    ...(quoteSummary.displayProcessingFeeLocal != null &&
+    quoteSummary.displayProcessingFeeLocal > 0
+      ? { display_processing_fee_local: quoteSummary.displayProcessingFeeLocal }
+      : {}),
+  }
 
   await admin
     .from("yc_transfers")
@@ -314,34 +376,32 @@ export async function createCrossBorderTransfer(input: {
     })
     .eq("id", transfer.id)
 
-  const transferMethod =
-    input.payInRail === "mobile_money" ? "Mobile Money" : "Bank Transfer"
-  const payoutReview = {
-    you_send_amount: pricingFinal.localPayIn,
-    total_debited: pricingFinal.localPayIn,
-    exchange_fee: pricingFinal.ycLegFeesUsd,
-    processing_fee: pricingFinal.processingFee,
-    exchange_rate: cross.rate,
-    send_currency: payInCurrency,
-    receive_amount: input.receiveAmount,
-    receive_currency: receiveCurrency,
-    transfer_method: transferMethod,
-    processing_time: getGlobalPayoutProcessingTime(transferMethod),
-    display_processing_fee_local: quoteSummary.displayProcessingFeeLocal ?? 0,
-  }
-
   await admin
     .from("transactions")
     .update({
       amount: pricingFinal.localPayIn,
       currency: payInCurrency,
       metadata: {
-        yc_mode: "cross_border_send",
-        yc_sequence_id: leg1Seq,
+        ...buildYcCrossBorderOutMetadata({
+          prior: {
+            yc_mode: "cross_border_send",
+            yc_sequence_id: leg1Seq,
+            receive_amount: input.receiveAmount,
+            receive_currency: receiveCurrency,
+            customer_rate: cross.rate,
+            processing_at: startedAt,
+            transaction_started_at: startedAt,
+          },
+          sequenceId: leg1Seq,
+          transferId: transfer.id,
+          localPayIn: pricingFinal.localPayIn,
+          receiveAmount: input.receiveAmount,
+          payInCurrency,
+          receiveCurrency,
+          customerRate: cross.rate,
+        }),
+        easner_transaction_id: easnerTransactionId,
         yc_transfer_id: transfer.id,
-        receive_amount: input.receiveAmount,
-        receive_currency: receiveCurrency,
-        customer_rate: cross.rate,
         local_pay_in: pricingFinal.localPayIn,
         local_currency: payInCurrency,
         send_currency: payInCurrency,
@@ -354,9 +414,14 @@ export async function createCrossBorderTransfer(input: {
         display_processing_fee_local: quoteSummary.displayProcessingFeeLocal,
         provisional_pay_in: pricingFinal.provisionalPayIn,
         pay_in_rail: input.payInRail,
+        recipient_id: recipientId,
+        recipient_snapshot: recipientSnapshot,
         payout_review: payoutReview,
+        pay_in_review: payInReview,
         processing_at: startedAt,
         transaction_started_at: startedAt,
+        leg1_status: receiveRes.status ?? "pending",
+        leg2_status: "quoted",
         ...(input.sourcePhone
           ? {
               source_phone: input.sourcePhone,
@@ -371,6 +436,7 @@ export async function createCrossBorderTransfer(input: {
   return {
     transferId: String(transfer.id),
     transactionId: String(tx.id),
+    easnerTransactionId,
     localPayIn: pricingFinal.localPayIn,
     customerRate: cross.rate,
     processingFee: pricingFinal.processingFee,

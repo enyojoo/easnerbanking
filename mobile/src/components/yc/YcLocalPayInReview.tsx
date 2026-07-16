@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -11,58 +11,48 @@ import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
   buildYcLocalPayInReviewRows,
-  computeDisplayProcessingFee,
-  computeYcFundBalancePrincipalLocalPayIn,
+  getGlobalPayoutProcessingTime,
   REVIEW_ROW_LABELS,
+  TLC_LOCAL_TRANSFER_METHOD,
   normalizeYcMomoPhone,
 } from '@easner/shared'
+import type { Recipient } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
-import type { YcFundBalanceQuoteResult } from '../../hooks/useYcFundBalanceFlow'
-import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
-import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
-import { haptics } from '../../lib/haptics'
-import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
+import { SendSelectedRecipientSummary } from '../send/SendSelectedRecipientSummary'
 import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
 import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
+import { useYcCrossBorderFlow, type YcPayInRail, type YcCrossBorderQuoteResult } from '../../hooks/useYcCrossBorderFlow'
+import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
+import { haptics } from '../../lib/haptics'
 import {
-  ensureFundBalanceQuoteStashed,
   ensurePayInNetworksCached,
-  isCompleteFundBalanceQuote,
-  isStashedFundBalanceQuoteFresh,
-  peekFundBalanceQuote,
-  peekLastFundBalanceQuoteError,
   readCachedPayInNetworks,
-  type YcFundBalanceQuote,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { useAuth } from '../../contexts/AuthContext'
 
 type Props = {
   navigation: { goBack: () => void; navigate: (name: string, params?: object) => void }
-  localPayInCurrency: string
-  residenceCountry: string
+  recipient: Recipient
+  receiveAmount: number
+  receiveCurrency: string
+  payInCurrency: string
+  payInCountry: string
   payInRail: YcPayInRail
-  amountEntryMode: 'usd' | 'local'
-  enteredAmount: number
-  usdCredit: number
-  localPayIn: number
-  customerRate: number
   footerPadding: number
   listBottomPadding: number
 }
 
 type PayInNetwork = { id: string; name: string }
 
-export function YcFundBalanceReview({
+export function YcLocalPayInReview({
   navigation,
-  localPayInCurrency,
-  residenceCountry,
+  recipient,
+  receiveAmount,
+  receiveCurrency,
+  payInCurrency,
+  payInCountry,
   payInRail,
-  amountEntryMode,
-  enteredAmount,
-  usdCredit,
-  localPayIn,
-  customerRate: previewCustomerRate,
   footerPadding,
   listBottomPadding,
 }: Props) {
@@ -71,11 +61,11 @@ export function YcFundBalanceReview({
   const defaultPhone = userProfile?.phone ?? userProfile?.profile?.phone ?? ''
 
   const cachedNetworks = isMobileMoney
-    ? readCachedPayInNetworks(residenceCountry, localPayInCurrency)
+    ? readCachedPayInNetworks(payInCountry, payInCurrency)
     : null
 
   const [phone, setPhone] = useState(() =>
-    defaultPhone ? normalizeYcMomoPhone(defaultPhone, residenceCountry) : '',
+    defaultPhone ? normalizeYcMomoPhone(defaultPhone, payInCountry) : '',
   )
   const [networks, setNetworks] = useState<PayInNetwork[]>(() => cachedNetworks ?? [])
   const [networkId, setNetworkId] = useState(() =>
@@ -86,49 +76,27 @@ export function YcFundBalanceReview({
   )
   const [networksError, setNetworksError] = useState<string | null>(null)
 
-  const quoteMeta = useMemo(
-    () => ({
-      country: residenceCountry,
-      currency: localPayInCurrency,
-      rail: payInRail,
-      amountEntryMode,
-      enteredAmount,
-      sourcePhone: isMobileMoney ? phone.trim() : undefined,
-      networkId: isMobileMoney ? networkId : undefined,
-      sourceNetworkName: isMobileMoney
-        ? networks.find((n) => n.id === networkId)?.name
-        : undefined,
-    }),
-    [
-      residenceCountry,
-      localPayInCurrency,
-      payInRail,
-      amountEntryMode,
-      enteredAmount,
-      isMobileMoney,
-      phone,
-      networkId,
-      networks,
-    ],
-  )
-
-  const [quote, setQuote] = useState<YcFundBalanceQuoteResult | null>(() =>
-    !isMobileMoney && isStashedFundBalanceQuoteFresh(quoteMeta) ? peekFundBalanceQuote() : null,
-  )
+  const [quote, setQuote] = useState<YcCrossBorderQuoteResult | null>(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  const ycFlow = useYcCrossBorderFlow({
+    recipientId: recipient.id,
+    enabled: true,
+    receiveCurrency,
+    amountEntryMode: 'receive',
+    enteredAmount: receiveAmount,
+  })
 
   useEffect(() => {
     if (!isMobileMoney) return
     let cancelled = false
     const hadCache = Boolean(cachedNetworks?.length)
-    if (!hadCache) {
-      setNetworksLoading(true)
-    }
+    if (!hadCache) setNetworksLoading(true)
     setNetworksError(null)
     void (async () => {
       try {
-        const rows = await ensurePayInNetworksCached(residenceCountry, localPayInCurrency)
+        const rows = await ensurePayInNetworksCached(payInCountry, payInCurrency)
         if (cancelled) return
         setNetworks(rows)
         if (rows.length === 1) setNetworkId(rows[0].id)
@@ -143,118 +111,79 @@ export function YcFundBalanceReview({
     return () => {
       cancelled = true
     }
-  }, [isMobileMoney, residenceCountry, localPayInCurrency, cachedNetworks?.length])
+  }, [isMobileMoney, payInCountry, payInCurrency, cachedNetworks?.length])
 
   useEffect(() => {
     if (isMobileMoney) return
-
-    if (isStashedFundBalanceQuoteFresh(quoteMeta)) {
-      const stashed = peekFundBalanceQuote()
-      if (stashed) {
-        setQuote(stashed)
-        setQuoteError(null)
-      }
-      return
-    }
-
     let cancelled = false
     setQuoteError(null)
     void (async () => {
-      const result = await ensureFundBalanceQuoteStashed(quoteMeta)
-      if (cancelled) return
-      if (isCompleteFundBalanceQuote(result)) {
-        setQuote(result)
-        return
+      try {
+        const result = await ycFlow.createQuote({ receiveAmount, payInRail })
+        if (!cancelled) setQuote(result)
+      } catch (e) {
+        if (!cancelled) {
+          setQuote(null)
+          setQuoteError(e instanceof Error ? e.message : 'Could not load quote')
+        }
       }
-      setQuote(null)
-      setQuoteError(peekLastFundBalanceQuoteError() || 'Could not load quote')
     })()
-
     return () => {
       cancelled = true
     }
-  }, [quoteMeta, isMobileMoney])
+  }, [recipient.id, receiveAmount, payInCurrency, payInRail, isMobileMoney])
 
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
-  const customerRate = quote?.customerRate ?? previewCustomerRate
+  const estimatedPayIn = ycFlow.preview.sendAmount
+  const customerRate = quote?.customerRate ?? ycFlow.customerRate ?? 1
+  const momoReady = Boolean(phone.trim() && networkId)
+  const quoteReady = isMobileMoney
+    ? Boolean(ycFlow.customerRate && estimatedPayIn > 0 && momoReady)
+    : Boolean(quote?.transferId)
+  const lockedLocalPayIn = quote?.localPayIn ?? estimatedPayIn
   const displayTransactionId = quote?.easnerTransactionId ?? quote?.transactionId ?? ''
-  const estimatedPayIn = localPayIn
-  const estimatedCredit = usdCredit
-  const resolvedLocalPayIn = quote?.localPayIn ?? estimatedPayIn
-  const resolvedUsdCredit = quote?.usdCredit ?? estimatedCredit
-
-  const reviewFeeLocal =
-    !isMobileMoney && quote
-      ? quote.displayProcessingFeeLocal ??
-        (quote.displayProcessingFee != null && customerRate > 0
-          ? Math.round(quote.displayProcessingFee * customerRate * 100) / 100
-          : computeDisplayProcessingFee({
-              processingFee: quote.processingFee ?? 0,
-              exchangeFee: quote.ycChannelFeeUsd ?? quote.ycLegFeesUsd ?? 0,
-            }) * (customerRate || 1))
-      : isMobileMoney && customerRate > 0 && resolvedLocalPayIn > 0
-        ? Math.max(
-            0,
-            Math.round((resolvedLocalPayIn - resolvedUsdCredit * customerRate) * 100) / 100,
-          )
-        : 0
-  const reviewPrincipalLocal = computeYcFundBalancePrincipalLocalPayIn({
-    usdCredit: resolvedUsdCredit,
-    exchangeRate: customerRate,
-  })
+  const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
 
   const reviewRows = buildYcLocalPayInReviewRows({
-    mode: 'fund_balance',
+    mode: 'cross_border_send',
     phase: isMobileMoney ? 'preview' : 'locked',
     rail: payInRail,
-    payInCurrency: localPayInCurrency,
-    receiveCurrency: 'USD',
+    payInCurrency,
+    receiveCurrency,
     customerRate,
-    localPayIn: isMobileMoney ? estimatedPayIn : resolvedLocalPayIn,
-    receiveAmount: resolvedUsdCredit,
-    processingFeeLocal: reviewFeeLocal,
+    localPayIn: lockedLocalPayIn,
+    receiveAmount,
+    processingFeeLocal: quote?.displayProcessingFeeLocal,
     processingFeeUsd: quote?.processingFee,
-    exchangeFeeUsd: quote?.ycChannelFeeUsd ?? quote?.ycLegFeesUsd,
-    principalLocal: reviewPrincipalLocal,
-    usdCredit: resolvedUsdCredit,
+    exchangeFeeUsd: quote?.ycLegFeesUsd,
     transactionId: displayTransactionId,
+    processingTime,
   })
 
-  const momoReady = Boolean(phone.trim() && networkId)
-  const bankQuoteReady = Boolean(quote?.transferId)
-  const quoteReady = isMobileMoney ? previewCustomerRate > 0 && estimatedPayIn > 0 && momoReady : bankQuoteReady
-
-  const navigateToPayIn = (q: YcFundBalanceQuote) => {
+  const navigateToPayIn = (q: YcCrossBorderQuoteResult) => {
     const selectedNetwork = networks.find((n) => n.id === networkId)
-    const baseParams = {
-      flowMode: 'fund_balance' as const,
-      transactionId: q.easnerTransactionId ?? q.transactionId,
-      sendCurrency: localPayInCurrency,
+    const etid = q.easnerTransactionId ?? q.transactionId
+    navigation.navigate('YcPayIn', {
+      flowMode: 'cross_border_send',
+      transactionId: etid,
+      sendAmount: q.localPayIn,
+      sendCurrency: payInCurrency,
+      receiveAmount,
+      receiveCurrency,
+      recipientName: recipient.full_name || recipient.name || 'Recipient',
       transferId: q.transferId,
       localPayIn: q.localPayIn,
-      bankInfo: q.bankInfo ?? null,
+      customerRate: q.customerRate,
+      bankInfo: q.bankInfo,
       payInNotice: q.payInNotice,
       payInRail,
+      processingFeeLocal: q.displayProcessingFeeLocal,
+      displayProcessingFee: q.displayProcessingFee,
+      processingFee: q.processingFee,
+      ycChannelFeeUsd: q.ycLegFeesUsd,
       sourcePhone: q.sourcePhone ?? phone.trim(),
       sourceNetworkId: q.sourceNetworkId ?? networkId,
       sourceNetworkName: q.sourceNetworkName ?? selectedNetwork?.name,
-    }
-    if (isMobileMoney) {
-      navigation.navigate('YcPayIn', {
-        ...baseParams,
-        receiveAmount: q.usdCredit,
-        receiveCurrency: 'USD',
-        recipientName: 'your USD balance',
-        customerRate: q.customerRate,
-        processingFeeLocal: q.displayProcessingFeeLocal,
-        displayProcessingFee: q.displayProcessingFee,
-      })
-      return
-    }
-    navigation.navigate('YcPayIn', {
-      ...baseParams,
-      receiveAmount: q.usdCredit,
-      receiveCurrency: 'USD',
     })
   }
 
@@ -263,18 +192,19 @@ export function YcFundBalanceReview({
     haptics.medium()
     setSubmitting(true)
     setQuoteError(null)
-
     try {
       if (isMobileMoney) {
-        const result = await ensureFundBalanceQuoteStashed(quoteMeta)
-        if (!isCompleteFundBalanceQuote(result)) {
-          setQuoteError(peekLastFundBalanceQuoteError() || 'Could not load quote')
-          return
-        }
+        const selectedNetwork = networks.find((n) => n.id === networkId)
+        const result = await ycFlow.createQuote({
+          receiveAmount,
+          payInRail,
+          sourcePhone: phone.trim(),
+          networkId,
+          sourceNetworkName: selectedNetwork?.name,
+        })
         navigateToPayIn(result)
         return
       }
-
       if (!quote) return
       navigateToPayIn(quote)
     } catch (e) {
@@ -293,24 +223,27 @@ export function YcFundBalanceReview({
         <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
         </Pressable>
-        <Text style={styles.title}>Review deposit</Text>
+        <Text style={styles.title}>Review transfer</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {!isMobileMoney && displayTransactionId ? (
-            <TransactionDetailSummaryRow
-              label={REVIEW_ROW_LABELS.transactionId}
-              value={displayTransactionId.toUpperCase()}
-              valueMono
-            />
-          ) : null}
           {!quoteReady && !quoteError && !isMobileMoney ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : (
             <>
               {reviewRows.map((row, index) => {
-                if (row.id === 'amount-to-credit') {
+                if (row.id === 'transfer-method') {
+                  return (
+                    <TransactionDetailSummaryRow
+                      key={row.id}
+                      label={row.label}
+                      value={row.value}
+                      last={!isMobileMoney && index === reviewRows.length - 1}
+                    />
+                  )
+                }
+                if (row.id === 'recipient-gets') {
                   return (
                     <React.Fragment key={row.id}>
                       <TransactionDetailSummaryRow
@@ -318,11 +251,11 @@ export function YcFundBalanceReview({
                         value={row.value}
                         valueBold={row.valueBold}
                       />
-                      <CreditDestinationRow
-                        label={REVIEW_ROW_LABELS.creditTo}
-                        currency="USD"
-                        balanceLabel="USD Balance"
-                      />
+                      <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.recipient}>
+                        <View style={styles.recipientSummaryWrap}>
+                          <SendSelectedRecipientSummary recipient={recipient} alignEnd />
+                        </View>
+                      </TransactionDetailSummaryRow>
                     </React.Fragment>
                   )
                 }
@@ -333,7 +266,6 @@ export function YcFundBalanceReview({
                     value={row.value}
                     valueBold={row.valueBold}
                     valueMono={row.valueMono}
-                    last={row.id === 'transfer-method' && !isMobileMoney && index === reviewRows.length - 1}
                   />
                 )
               })}
@@ -342,15 +274,15 @@ export function YcFundBalanceReview({
 
           {isMobileMoney ? (
             <View style={styles.momoSection}>
-              <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.momoNumberPrompt}</Text>
+              <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.mobileNumber}</Text>
               <YcMomoPhoneInput
-                countryCode={residenceCountry}
+                countryCode={payInCountry}
                 value={phone}
                 onChange={setPhone}
                 placeholder="712345678"
               />
               <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>
-                {REVIEW_ROW_LABELS.momoNetworkPrompt}
+                {REVIEW_ROW_LABELS.paymentNetwork}
               </Text>
               {networksLoading ? (
                 <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[3] }} />
@@ -429,15 +361,6 @@ const styles = StyleSheet.create({
   momoSection: { paddingTop: spacing[4] },
   fieldLabel: { ...textStyles.caption, color: colors.text.secondary, marginBottom: spacing[2] },
   fieldLabelSpaced: { marginTop: spacing[4] },
-  input: {
-    ...textStyles.body,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
-    color: colors.text.primary,
-  },
   networkList: { gap: spacing[2] },
   networkOption: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -452,6 +375,14 @@ const styles = StyleSheet.create({
   },
   networkOptionText: { ...textStyles.body, color: colors.text.primary },
   networkOptionTextSelected: { fontFamily: textStyles.sectionTitle.fontFamily },
+  recipientSummaryWrap: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '72%',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+  },
   error: { ...textStyles.caption, color: colors.semantic.destructive, marginTop: spacing[2] },
   hint: { ...textStyles.caption, color: colors.text.secondary, marginTop: spacing[2] },
   cta: { borderRadius: borderRadius.lg, overflow: 'hidden', marginTop: spacing[3] },

@@ -38,6 +38,7 @@ export async function handleDepositOmnibusInbound(
       return true
     }
     if (ycTransfer.mode === "cross_border_send") {
+      const occurredAt = new Date().toISOString()
       // Pass-through only — mark omnibus received; do not credit user balance.
       await admin
         .from("yc_transfers")
@@ -48,10 +49,35 @@ export async function handleDepositOmnibusInbound(
           metadata: {
             ...ycTransfer.metadata,
             leg1_omnibus_tx_hash: txHash,
+            leg1_settled_at: occurredAt,
           },
-          updated_at: new Date().toISOString(),
+          updated_at: occurredAt,
         })
         .eq("id", ycTransfer.id)
+      if (ycTransfer.transaction_id) {
+        const { data: txRow } = await admin
+          .from("transactions")
+          .select("metadata")
+          .eq("id", ycTransfer.transaction_id)
+          .maybeSingle()
+        const prior =
+          txRow?.metadata && typeof txRow.metadata === "object"
+            ? (txRow.metadata as Record<string, unknown>)
+            : {}
+        await admin
+          .from("transactions")
+          .update({
+            status: "processing",
+            metadata: {
+              ...prior,
+              leg1_settled_at: occurredAt,
+              leg1_status: "complete",
+              processing_at: prior.processing_at ?? occurredAt,
+            },
+            updated_at: occurredAt,
+          })
+          .eq("id", ycTransfer.transaction_id)
+      }
       try {
         const { maybeExecuteCrossBorderLeg2 } = await import(
           "@/lib/yellowcard/cross-border-orchestrator"

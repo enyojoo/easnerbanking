@@ -73,6 +73,7 @@ export function buildCrossBorderQuoteSummary(input: {
   sourceNetworkId?: string
   sourceNetworkName?: string
   easnerSellFrom: number
+  easnerTransactionId?: string
 }): YcQuoteSummary & {
   ok: true
   localPayIn: number
@@ -106,6 +107,7 @@ export function buildCrossBorderQuoteSummary(input: {
     sourcePhone: input.sourcePhone,
     sourceNetworkId: input.sourceNetworkId,
     sourceNetworkName: input.sourceNetworkName,
+    ...(input.easnerTransactionId ? { easnerTransactionId: input.easnerTransactionId } : {}),
   }
 }
 

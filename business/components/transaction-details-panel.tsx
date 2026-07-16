@@ -13,11 +13,19 @@ import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { TransactionLifecycleTracker } from "@/components/transactions/transaction-lifecycle-tracker"
 import { TransactionDetailHero } from "@/components/transactions/transaction-detail-hero"
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
+import { CrossBorderSendDetailRows } from "@/components/transactions/cross-border-send-detail-rows"
 import { DepositReviewDetailsRows } from "@/components/transactions/deposit-review-details-rows"
 import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
 import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
-import { REVIEW_ROW_LABELS, isVerificationDepositMetadata, resolvePayoutReviewFlow, shouldShowReviewTotalDebited, formatReviewRowMoneyDisplay } from "@easner/shared"
+import {
+  REVIEW_ROW_LABELS,
+  computeDisplayProcessingFee,
+  isVerificationDepositMetadata,
+  resolvePayoutReviewFlow,
+  shouldShowReviewTotalDebited,
+  formatReviewRowMoneyDisplay,
+} from "@easner/shared"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
@@ -278,11 +286,33 @@ export function TransactionDetailsPanel({
 
   const etidForLink = transactionWebDetailPath(transaction.id)
 
+  const tlcDetailFee =
+    payoutReviewFlow === "local_pay_in" && transaction.payoutReview
+      ? transaction.payoutReview.display_processing_fee_local != null &&
+        transaction.payoutReview.display_processing_fee_local > 0
+        ? transaction.payoutReview.display_processing_fee_local
+        : computeDisplayProcessingFee({
+            processingFee: transaction.payoutReview.processing_fee,
+            exchangeFee: transaction.payoutReview.exchange_fee,
+          })
+      : 0
+
   return (
     <div className="space-y-4">
       <TransactionDetailHero transaction={transaction} />
 
-      {isGlobalPayout && transaction.payoutReview ? (
+      {isGlobalPayout && transaction.payoutReview && payoutReviewFlow === "local_pay_in" ? (
+        <Card className="border-border shadow-sm">
+          <CardContent className="p-6 space-y-1">
+            <CrossBorderSendDetailRows
+              payoutReview={transaction.payoutReview}
+              recipientSnapshot={transaction.recipientSnapshot}
+              displayProcessingFee={tlcDetailFee}
+              whenAt={transaction.ledgerCreatedAt ?? transaction.date}
+            />
+          </CardContent>
+        </Card>
+      ) : isGlobalPayout && transaction.payoutReview ? (
         <PayoutReviewDetailsRows
           transactionId={transaction.id}
           payoutReview={transaction.payoutReview}

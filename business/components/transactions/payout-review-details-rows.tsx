@@ -123,25 +123,27 @@ export function PayoutReviewDetailsRows({
   return (
     <Card className="border-border shadow-sm">
       <CardContent className="p-6">
-        <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
-          {onCopy ? (
-            <button
-              type="button"
-              className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
-              onClick={() => onCopy(transactionId, "transactionId")}
-              aria-label="Copy transaction id"
-            >
-              {transactionId}
-              {copiedKey === "transactionId" ? (
-                <Check className="h-4 w-4 shrink-0 text-primary" />
-              ) : (
-                <Copy className="h-4 w-4 shrink-0" />
-              )}
-            </button>
-          ) : (
-            <span className="font-mono text-sm font-medium">{transactionId}</span>
-          )}
-        </TransactionDetailSummaryRow>
+        {transactionId ? (
+          <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
+            {onCopy ? (
+              <button
+                type="button"
+                className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
+                onClick={() => onCopy(transactionId, "transactionId")}
+                aria-label="Copy transaction id"
+              >
+                {transactionId}
+                {copiedKey === "transactionId" ? (
+                  <Check className="h-4 w-4 shrink-0 text-primary" />
+                ) : (
+                  <Copy className="h-4 w-4 shrink-0" />
+                )}
+              </button>
+            ) : (
+              <span className="font-mono text-sm font-medium">{transactionId}</span>
+            )}
+          </TransactionDetailSummaryRow>
+        ) : null}
 
         <TransactionDetailSummaryRow
           label={reviewPrimaryAmountLabel(reviewFlow, mode)}

@@ -8,6 +8,7 @@ import {
   getGlobalPayoutTransferMethod,
   getGlobalPayoutProcessingTime,
   isGlobalPayoutOffRampOutRow,
+  TLC_LOCAL_TRANSFER_METHOD,
   type GlobalPayoutLifecycleStep,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
@@ -134,14 +135,7 @@ function derivePayoutReview(
         roundFiat(fromMeta?.exchange_rate) ??
         roundFiat(Number(meta.customer_rate ?? meta.customerRate)) ??
         1
-      const payInRail = String(meta.pay_in_rail ?? "")
-      const transferMethod =
-        payInRail === "mobile_money"
-          ? "Mobile Money"
-          : getGlobalPayoutTransferMethod({
-              currency: receiveCurrency,
-              countryCode: String(meta.country_code ?? "").trim().toUpperCase() || undefined,
-            })
+      const transferMethod = TLC_LOCAL_TRANSFER_METHOD
       const displayFeeLocal = roundFiat(Number(meta.display_processing_fee_local))
       return {
         you_send_amount: localPayIn,
@@ -359,11 +353,14 @@ export function resolveGlobalPayoutOffRampDetail(
     String(meta.send_currency || ledgerCurrency).toUpperCase()
 
   const displayDescription = recipientName || "Transfer"
-  const displayHeroTitle = formatTransactionDetailHeroTitle({
-    direction: "out",
-    counterpartyName: recipientName,
-    productFallback: "Transfer",
-  })
+  const isCrossBorder = String(meta.yc_mode ?? "") === "cross_border_send"
+  const displayHeroTitle = isCrossBorder && recipientName
+    ? `Send to ${formatDisplayPersonName(recipientName) || recipientName}`
+    : formatTransactionDetailHeroTitle({
+        direction: "out",
+        counterpartyName: recipientName,
+        productFallback: "Transfer",
+      })
 
   const processingAt = pickIso(webhook?.processingAt, meta.processing_at)
   const completedAt = pickIso(webhook?.completedAt, meta.completed_at)

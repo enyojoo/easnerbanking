@@ -24,6 +24,7 @@ import type { Beneficiary } from "@/lib/recipient-types"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { SendSelectedRecipientSummary } from "@/components/send/send-selected-recipient-summary"
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
+import { YcLocalPayInReview } from "@/components/yc-local-pay-in-review"
 import { generateTransactionId, isEasnerClientTransactionIdFormat } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS, requestBusinessAccountsRefresh } from "@/lib/cache"
@@ -116,11 +117,16 @@ export default function SendConfirmPage() {
   })
 
   const displayTransactionId = useMemo(() => {
+    if (isYcCrossBorder) {
+      const etid = state?.ycCrossBorder?.easnerTransactionId?.trim()
+      if (etid) return etid.toUpperCase()
+      if (isYcMomo) return ""
+    }
     const s = state?.transactionId?.trim()
     if (s) return s.toUpperCase()
     if (!displayIdFallbackRef.current) displayIdFallbackRef.current = generateTransactionId()
     return displayIdFallbackRef.current
-  }, [state?.transactionId])
+  }, [isYcCrossBorder, isYcMomo, state?.transactionId, state?.ycCrossBorder?.easnerTransactionId])
 
   const payoutRail =
     state
@@ -342,6 +348,7 @@ export default function SendConfirmPage() {
           error?: string
           transferId?: string
           transactionId?: string
+          easnerTransactionId?: string
           localPayIn?: number
           customerRate?: number
           processingFee?: number
@@ -359,10 +366,11 @@ export default function SendConfirmPage() {
           sendAmount: data.localPayIn ?? state.sendAmount,
           sendCurrency: payInCurrency,
           totalAmount: data.localPayIn ?? state.totalAmount,
-          transactionId: data.transactionId || state.transactionId,
+          transactionId: data.easnerTransactionId || data.transactionId || state.transactionId,
           ycCrossBorder: {
             transferId: data.transferId,
             transactionId: data.transactionId || state.transactionId,
+            easnerTransactionId: data.easnerTransactionId,
             localPayIn: data.localPayIn ?? state.sendAmount,
             customerRate: data.customerRate ?? 1,
             processingFee: data.processingFee,
@@ -904,8 +912,6 @@ export default function SendConfirmPage() {
   const walletTransferMethod = walletSend
     ? `${state.receiveCurrency} on ${state.recipient.walletNetwork?.trim() || wq?.receiveNetwork || "wallet"}`
     : transferMethod
-  const ycTransferMethod =
-    state.otherPaymentMethod === "mobile_money" ? "Mobile Money" : "Bank Transfer"
   const authorizeDisabled = isYcCrossBorder
     ? isYcMomo
       ? isAuthorizing ||
@@ -925,43 +931,76 @@ export default function SendConfirmPage() {
         <h1 className="text-2xl font-semibold text-foreground">Review transfer</h1>
       </div>
 
-      <PayoutReviewDetailsRows
-        transactionId={displayTransactionId}
-        payoutReview={{
-          you_send_amount: youSendAmount,
-          total_debited: totalDebited,
-          exchange_fee: exchangeFee,
-          processing_fee: easnerFee,
-          network_fee: networkFee,
-          exchange_rate: exchangeRate,
-          send_currency: state.sendCurrency,
-          receive_amount: state.amount,
-          receive_currency: state.receiveCurrency,
-          transfer_method: isYcCrossBorder ? ycTransferMethod : walletTransferMethod,
-          processing_time: arrivalHint ?? "",
-          ...(walletSend && wq?.executionModel
-            ? { execution_model: wq.executionModel }
-            : {}),
-        }}
-        recipientNode={
-          <SendSelectedRecipientSummary
-            beneficiary={state.recipient}
-            alignEnd
-            className="min-w-0 max-w-[70%] shrink-0"
-          />
-        }
-        sourceAccountCurrency={
-          sourceAccount && state.paymentMethod === "balance" ? sourceAccount.currency : null
-        }
-        copiedKey={copiedKey}
-        onCopy={handleCopy}
-        showFeeBreakdown={!easenetSend && !isYcCrossBorder && quoteReady}
-        globalFiatPayout={isYcCrossBorder || (!walletSend && !easenetSend)}
-        receiveNetwork={walletSend ? walletNetwork : undefined}
-        walletSendExecutionModel={walletSend ? wq?.executionModel : undefined}
-        mode="confirm"
-        reviewFlow={isYcCrossBorder ? "local_pay_in" : "balance_payout"}
-      />
+      {isYcCrossBorder ? (
+        <YcLocalPayInReview
+          mode="cross_border_send"
+          phase={isYcMomo ? "preview" : yc?.transferId ? "locked" : "preview"}
+          rail={state.otherPaymentMethod === "mobile_money" ? "mobile_money" : "bank_transfer"}
+          payInCurrency={state.sendCurrency}
+          receiveCurrency={state.receiveCurrency}
+          customerRate={exchangeRate}
+          localPayIn={totalDebited}
+          receiveAmount={state.amount}
+          processingFeeLocal={yc?.displayProcessingFeeLocal}
+          processingFeeUsd={yc?.processingFee}
+          transactionId={displayTransactionId || undefined}
+          processingTime={arrivalHint ?? undefined}
+          recipientNode={
+            <SendSelectedRecipientSummary
+              beneficiary={state.recipient}
+              alignEnd
+              className="min-w-0 max-w-[70%] shrink-0"
+            />
+          }
+          quoteHint={
+            !isYcMomo && yc?.expiresAt ? (
+              <p className="text-xs text-muted-foreground pt-1">
+                {quoteCountdown.expired
+                  ? "Quote expired — go back and continue again."
+                  : `Quote valid for ${quoteCountdown.label}`}
+              </p>
+            ) : null
+          }
+        />
+      ) : (
+        <PayoutReviewDetailsRows
+          transactionId={displayTransactionId}
+          payoutReview={{
+            you_send_amount: youSendAmount,
+            total_debited: totalDebited,
+            exchange_fee: exchangeFee,
+            processing_fee: easnerFee,
+            network_fee: networkFee,
+            exchange_rate: exchangeRate,
+            send_currency: state.sendCurrency,
+            receive_amount: state.amount,
+            receive_currency: state.receiveCurrency,
+            transfer_method: walletTransferMethod,
+            processing_time: arrivalHint ?? "",
+            ...(walletSend && wq?.executionModel
+              ? { execution_model: wq.executionModel }
+              : {}),
+          }}
+          recipientNode={
+            <SendSelectedRecipientSummary
+              beneficiary={state.recipient}
+              alignEnd
+              className="min-w-0 max-w-[70%] shrink-0"
+            />
+          }
+          sourceAccountCurrency={
+            sourceAccount && state.paymentMethod === "balance" ? sourceAccount.currency : null
+          }
+          copiedKey={copiedKey}
+          onCopy={handleCopy}
+          showFeeBreakdown={!easenetSend && quoteReady}
+          globalFiatPayout={!walletSend && !easenetSend}
+          receiveNetwork={walletSend ? walletNetwork : undefined}
+          walletSendExecutionModel={walletSend ? wq?.executionModel : undefined}
+          mode="confirm"
+          reviewFlow="balance_payout"
+        />
+      )}
 
       {isYcMomo ? (
         <div className="rounded-xl border border-border p-4 space-y-3">

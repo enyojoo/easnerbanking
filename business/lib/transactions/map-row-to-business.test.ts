@@ -47,6 +47,8 @@ vi.mock("@easner/shared", () => ({
     failedAt: null,
   }),
   buildTransactionTimingRows: () => [],
+  resolvePayoutReviewFlow: (meta?: Record<string, unknown> | null) =>
+    meta && String(meta.yc_mode ?? "") === "cross_border_send" ? "local_pay_in" : "balance_payout",
 }))
 
 vi.mock("@/lib/transactions/resolve-global-payout-off-ramp", () => ({

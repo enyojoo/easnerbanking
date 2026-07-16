@@ -10,6 +10,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
 import {
   formatSendRateLabel,
+  formatMoneyDisplay,
+  formatYcPayInMinHint,
+  validateYcFundBalancePayInAmount,
   resolveReceiveCountryName,
   sendLocalPayInBankTitle,
   sendLocalPayInMomoTitle,
@@ -87,6 +90,7 @@ import {
 import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { usePayoutMinEnforcement } from "@/hooks/use-payout-min-enforcement"
 import { useYcPayoutMinEnforcement } from "@/hooks/use-yc-payout-min-enforcement"
+import { useYcPayInMinEnforcement } from "@/hooks/use-yc-pay-in-min-enforcement"
 import {
   Select,
   SelectContent,
@@ -390,6 +394,82 @@ export default function SendPage() {
     enteredAmount > 0
 
   const ycRateLoading = ycQuoteEnabled && ycFlow.ratesLoading && !ycFlow.customerRate
+
+  const tlcPayInRail =
+    otherPaymentMethod === "mobile_money" ? ("mobile_money" as const) : ("bank_transfer" as const)
+
+  const tlcPayInLimits = useMemo(() => {
+    if (!payInRails || paymentMethod !== "otherCurrency") {
+      return { minLocalPayIn: null as number | null, maxLocalPayIn: null as number | null }
+    }
+    const railInfo =
+      tlcPayInRail === "mobile_money"
+        ? payInRails.rails.mobile_money
+        : payInRails.rails.bank_transfer
+    return {
+      minLocalPayIn: railInfo?.minLocalPayIn ?? null,
+      maxLocalPayIn: railInfo?.maxLocalPayIn ?? null,
+    }
+  }, [payInRails, paymentMethod, tlcPayInRail])
+
+  const tlcMinHint =
+    tlcPayInLimits.minLocalPayIn != null &&
+    ycFlow.customerRate &&
+    showThroughLocalCurrency &&
+    paymentMethod === "otherCurrency"
+      ? formatYcPayInMinHint({
+          minLocalPayIn: tlcPayInLimits.minLocalPayIn,
+          currency: otherCurrency ?? payInCurrency ?? "",
+          customerSellRate: ycFlow.customerRate,
+        })
+      : null
+
+  const tlcMinSeedKey =
+    showThroughLocalCurrency &&
+    paymentMethod === "otherCurrency" &&
+    otherCurrency &&
+    otherPaymentMethod &&
+    ycFlow.customerRate
+      ? `${otherCurrency}:${tlcPayInRail}:${amountEntryMode}`
+      : null
+
+  useYcPayInMinEnforcement({
+    enabled:
+      showThroughLocalCurrency &&
+      paymentMethod === "otherCurrency" &&
+      Boolean(otherCurrency && otherPaymentMethod && ycFlow.customerRate),
+    seedKey: tlcMinSeedKey,
+    minLocalPayIn: tlcPayInLimits.minLocalPayIn,
+    amountEntryMode: amountEntryMode === "receive" ? "usd" : "local",
+    enteredAmount,
+    customerSellRate: ycFlow.customerRate,
+    onApplyEnteredAmount: (amount) => {
+      const rounded = Math.round(amount * 100) / 100
+      setAmountStr(Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2))
+    },
+  })
+
+  const tlcAmountLimitOk = useMemo(() => {
+    if (paymentMethod !== "otherCurrency" || !showThroughLocalCurrency) return true
+    if (!enteredAmount || !ycFlow.customerRate) return true
+    return validateYcFundBalancePayInAmount({
+      amountEntryMode: amountEntryMode === "receive" ? "usd" : "local",
+      enteredAmount,
+      previewLocalPayIn: ycFlow.preview.sendAmount,
+      currency: otherCurrency ?? payInCurrency ?? "",
+      limits: tlcPayInLimits,
+    }).ok
+  }, [
+    paymentMethod,
+    showThroughLocalCurrency,
+    enteredAmount,
+    ycFlow.customerRate,
+    ycFlow.preview.sendAmount,
+    amountEntryMode,
+    otherCurrency,
+    payInCurrency,
+    tlcPayInLimits,
+  ])
 
   const exchangePreviewReady =
     sendCurrency === receiveCurrency ||
@@ -704,7 +784,8 @@ export default function SendPage() {
     hasValidOtherCurrencySelection &&
     tier1Complete &&
     !payoutReceiveBelowMin &&
-    exchangePreviewReady
+    exchangePreviewReady &&
+    tlcAmountLimitOk
 
   const canContinue = isBalanceSource ? canContinueBalance : canContinueOtherCurrency
 
@@ -961,7 +1042,8 @@ export default function SendPage() {
       }
     }
     setAmountFieldError(null)
-    const transactionId = generateTransactionId()
+    const isTlcSend = showThroughLocalCurrency && paymentMethod === "otherCurrency"
+    const transactionId = isTlcSend ? "" : generateTransactionId()
 
     const feeAmount = 0
     const totalAmount = showThroughLocalCurrency ? sendAmount : sendAmount
@@ -1103,29 +1185,42 @@ export default function SendPage() {
                     Exchange rate unavailable. Try again shortly.
                   </span>
                 ) : hasFx && rateDisplay ? (
-                  <div className="flex max-w-full items-center justify-end gap-x-1 whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={handleToggleAmountDirection}
-                      className="inline-flex min-w-0 max-w-full items-center gap-1 hover:text-foreground"
-                    >
-                      <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
-                      <span className="min-w-0 truncate">
-                        {amountEntryMode === "receive" ? "Sending" : "Receiving"}:{" "}
-                        {getSendAmountFieldSymbol(
-                          amountEntryMode === "receive" ? sendCurrency : receiveCurrency,
-                        )}
-                        {(amountEntryMode === "receive" ? sendAmount : receiveAmount).toLocaleString("en-US", {
-                          minimumFractionDigits:
-                            Math.abs((amountEntryMode === "receive" ? sendAmount : receiveAmount) % 1) >= 0.01
-                              ? 2
-                              : 0,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
-                    </button>
-                    <span className="shrink-0">• Rate: {rateDisplay}</span>
+                  <div className="flex max-w-full flex-col items-end gap-0.5 text-sm text-muted-foreground">
+                    <div className="flex max-w-full items-center justify-end gap-x-1 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={handleToggleAmountDirection}
+                        className="inline-flex min-w-0 max-w-full items-center gap-1 hover:text-foreground"
+                      >
+                        <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
+                        <span className="min-w-0 truncate">
+                          {amountEntryMode === "receive" ? "Sending" : "Receiving"}:{" "}
+                          {getSendAmountFieldSymbol(
+                            amountEntryMode === "receive" ? sendCurrency : receiveCurrency,
+                          )}
+                          {(amountEntryMode === "receive" ? sendAmount : receiveAmount).toLocaleString("en-US", {
+                            minimumFractionDigits:
+                              Math.abs((amountEntryMode === "receive" ? sendAmount : receiveAmount) % 1) >= 0.01
+                                ? 2
+                                : 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
+                      </button>
+                      <span className="shrink-0">• Rate: {rateDisplay}</span>
+                    </div>
+                    {showThroughLocalCurrency &&
+                    paymentMethod === "otherCurrency" &&
+                    amountEntryMode === "receive" &&
+                    sendAmount > 0 ? (
+                      <span>{`You'll pay ~${formatMoneyDisplay(sendAmount, sendCurrency)}`}</span>
+                    ) : null}
+                    {tlcMinHint && paymentMethod === "otherCurrency" ? (
+                      <span>{tlcMinHint}</span>
+                    ) : null}
                   </div>
+                ) : tlcMinHint && paymentMethod === "otherCurrency" ? (
+                  <span className="text-sm text-muted-foreground">{tlcMinHint}</span>
                 ) : (
                   <span className="pointer-events-none select-none text-sm leading-none opacity-0" aria-hidden>
                     .

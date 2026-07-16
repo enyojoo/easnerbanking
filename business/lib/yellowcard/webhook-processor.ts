@@ -214,7 +214,11 @@ export async function handleYcCrossBorderWebhook(
         .eq("id", transactionId)
         .maybeSingle()
       const prior = asMeta(txRow?.metadata)
-      const meta = mergeYcPayoutLifecycle(prior, { processing_at: occurredAt })
+      const meta = mergeYcPayoutLifecycle(prior, {
+        processing_at: occurredAt,
+        leg1_settled_at: occurredAt,
+        leg1_status: "complete",
+      })
       await admin
         .from("transactions")
         .update({ status: "processing", metadata: meta, updated_at: occurredAt })
@@ -273,6 +277,8 @@ export async function handleYcCrossBorderWebhook(
             status: "failed",
             metadata: mergeYcPayoutLifecycle(buildYcRefundExpectedPatch(prior), {
               failed_at: occurredAt,
+              failure_leg: "leg2",
+              leg2_status: "failed",
             }),
             updated_at: occurredAt,
           })
@@ -293,9 +299,23 @@ export async function handleYcCrossBorderWebhook(
         .update({ status: "failed", leg1_status: "failed", updated_at: occurredAt })
         .eq("id", transfer.id)
       if (transactionId) {
+        const { data: txRow } = await admin
+          .from("transactions")
+          .select("metadata")
+          .eq("id", transactionId)
+          .maybeSingle()
+        const prior = asMeta(txRow?.metadata)
         await admin
           .from("transactions")
-          .update({ status: "failed", updated_at: occurredAt })
+          .update({
+            status: "failed",
+            metadata: mergeYcPayoutLifecycle(prior, {
+              failed_at: occurredAt,
+              failure_leg: "leg1",
+              leg1_status: "failed",
+            }),
+            updated_at: occurredAt,
+          })
           .eq("id", transactionId)
       }
       return

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import { TLC_LOCAL_TRANSFER_METHOD } from "@easner/shared"
 
 vi.mock("@/lib/fx/yc-rates", () => ({
   listYcRates: vi.fn(),
@@ -23,9 +24,13 @@ vi.mock("@/lib/yellowcard/kyc-metadata", () => ({
   buildYcKycPersonMetadata: vi.fn(),
 }))
 
-vi.mock("@/lib/payout-providers/yellowcard-provider", () => ({
-  resolveYcSendChannelId: vi.fn(),
-}))
+vi.mock("@/lib/payout-providers/yellowcard-provider", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/payout-providers/yellowcard-provider")>()
+  return {
+    ...actual,
+    resolveYcSendChannelId: vi.fn(),
+  }
+})
 
 vi.mock("@/lib/yellowcard/map-recipient-to-yc-send", () => ({
   mapRecipientToYcSend: vi.fn(),
@@ -36,7 +41,11 @@ vi.mock("@/lib/yellowcard/channels", () => ({
 }))
 
 vi.mock("@/lib/yellowcard/yc-receive-gate", () => ({
-  isYcLocalPayInEnabledForCountry: vi.fn(),
+  isYcLocalPayInEnabledForCorridor: vi.fn(async () => true),
+}))
+
+vi.mock("@/lib/pay-in-limit-check", () => ({
+  validateFundBalancePayInAmountLimits: vi.fn(async () => ({ ok: true })),
 }))
 
 vi.mock("@/lib/terminal/recipient-sell-prepare", () => ({
@@ -66,5 +75,11 @@ describe("createCrossBorderTransfer", () => {
 describe("createCrossBorderDraft", () => {
   it("is exported for legacy ops recovery", () => {
     expect(typeof createCrossBorderDraft).toBe("function")
+  })
+})
+
+describe("TLC payout_review invariant", () => {
+  it("uses Local Transfer constant for cross-border transfer method", () => {
+    expect(TLC_LOCAL_TRANSFER_METHOD).toBe("Local Transfer")
   })
 })

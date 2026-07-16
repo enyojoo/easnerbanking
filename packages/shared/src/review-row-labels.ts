@@ -3,6 +3,9 @@
  * Keep in-app review, transaction detail, and email rows aligned.
  */
 
+/** Cross-border Through Local Currency — review, complete, and detail transfer-method row. */
+export const TLC_LOCAL_TRANSFER_METHOD = "Local Transfer"
+
 export const REVIEW_ROW_LABELS = {
   transactionId: "Transaction ID",
   /** Balance outbound (confirm). */

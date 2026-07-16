@@ -72,6 +72,7 @@ export interface SendFlowState {
   ycCrossBorder?: {
     transferId: string
     transactionId: string
+    easnerTransactionId?: string
     localPayIn: number
     customerRate: number
     processingFee?: number

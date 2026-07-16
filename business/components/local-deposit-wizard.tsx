@@ -15,8 +15,6 @@ import {
 } from "lucide-react"
 import {
   formatMoneyDisplay,
-  formatReviewRowMoneyDisplay,
-  formatSendRateLabel,
   computeDisplayProcessingFee,
   mapResidenceToLocalPayInCurrency,
   resolveYcPayInCustomerRate,
@@ -27,7 +25,6 @@ import {
   validateYcFundBalancePayInAmount,
   REVIEW_ROW_LABELS,
   computeYcFundBalancePrincipalLocalPayIn,
-  shouldShowPayoutReviewFeeRow,
   normalizeYcMomoPhone,
   type NgLocalIdType,
   type YcRateClientRow,
@@ -35,9 +32,9 @@ import {
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import { YcCompleteDepositPanel } from "@/components/yc-complete-deposit-panel"
+import { YcLocalPayInReview } from "@/components/yc-local-pay-in-review"
 import { YcMomoPhoneInput } from "@/components/yc-momo-phone-input"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
-import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
@@ -616,7 +613,6 @@ export function LocalDepositWizard({
   }
 
   if (step === "review") {
-    const transferMethod = rail === "mobile_money" ? "Mobile Money" : "Bank Transfer"
     const reviewLocalPayIn = isMomo ? preview.localPayIn : (quote?.localPayIn ?? 0)
     const reviewUsdCredit = isMomo ? preview.usdCredit : (quote?.usdCredit ?? 0)
     const reviewCustomerRate = isMomo ? customerRate : (quote?.customerRate ?? customerRate)
@@ -639,15 +635,6 @@ export function LocalDepositWizard({
       usdCredit: reviewUsdCredit,
       exchangeRate: reviewCustomerRate,
     })
-    const payAmountLabel = isMomo ? REVIEW_ROW_LABELS.estimatedToPay : REVIEW_ROW_LABELS.totalToPay
-    const creditAmountLabel = REVIEW_ROW_LABELS.amountToCredit
-    const showReviewFee =
-      reviewFeeLocal > 0 ||
-      (!isMomo &&
-        shouldShowPayoutReviewFeeRow({
-          processingFee: quote?.processingFee ?? 0,
-          exchangeFee: quote?.ycChannelFeeUsd ?? quote?.ycLegFeesUsd ?? 0,
-        }))
     const momoReady = Boolean((momoPhone.trim() || defaultPhone.trim()) && momoNetworkId)
     const reviewReady = isMomo
       ? Boolean(reviewCustomerRate && reviewLocalPayIn > 0 && momoReady)
@@ -663,114 +650,85 @@ export function LocalDepositWizard({
           Back
         </button>
 
-        <div className="rounded-xl border border-border p-4 space-y-3 text-sm">
-          {!isMomo && quoteLoading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : reviewReady ? (
-            <>
-              {!isMomo && (quote?.easnerTransactionId ?? quote?.transactionId) ? (
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.transactionId}
-                  value={(quote!.easnerTransactionId ?? quote!.transactionId)!.toUpperCase()}
-                  valueClassName="font-mono"
-                />
-              ) : null}
-              {reviewCustomerRate ? (
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.exchangeRate}
-                  value={formatSendRateLabel("USD", localPayInCurrency, reviewCustomerRate)}
-                />
-              ) : null}
-              {reviewPrincipalLocal > 0 ? (
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.depositAmount}
-                  value={formatReviewRowMoneyDisplay(
-                    REVIEW_ROW_LABELS.depositAmount,
-                    reviewPrincipalLocal,
-                    localPayInCurrency,
-                  )}
-                />
-              ) : null}
-              {showReviewFee && reviewFeeLocal > 0 ? (
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.processingFee}
-                  value={formatReviewRowMoneyDisplay(
-                    REVIEW_ROW_LABELS.processingFee,
-                    reviewFeeLocal,
-                    localPayInCurrency,
-                  )}
-                />
-              ) : null}
-              <TransactionDetailSummaryRow
-                label={payAmountLabel}
-                value={formatReviewRowMoneyDisplay(payAmountLabel, reviewLocalPayIn, localPayInCurrency)}
-                valueClassName="font-semibold"
-              />
-              <TransactionDetailSummaryRow
-                label={creditAmountLabel}
-                value={formatReviewRowMoneyDisplay(creditAmountLabel, reviewUsdCredit, "USD")}
-                valueClassName="font-semibold"
-              />
+        {!isMomo && quoteLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : reviewReady ? (
+          <YcLocalPayInReview
+            mode="fund_balance"
+            phase={isMomo ? "preview" : "locked"}
+            rail={rail}
+            payInCurrency={localPayInCurrency}
+            receiveCurrency="USD"
+            customerRate={reviewCustomerRate}
+            localPayIn={reviewLocalPayIn}
+            receiveAmount={reviewUsdCredit}
+            processingFeeLocal={reviewFeeLocal}
+            processingFeeUsd={quote?.processingFee}
+            exchangeFeeUsd={quote?.ycChannelFeeUsd}
+            principalLocal={reviewPrincipalLocal}
+            usdCredit={reviewUsdCredit}
+            transactionId={quote?.easnerTransactionId ?? quote?.transactionId ?? undefined}
+            creditDestinationNode={
               <CreditDestinationRow
                 label={REVIEW_ROW_LABELS.creditTo}
                 currency="USD"
                 balanceLabel="USD Balance"
               />
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.transferMethod}
-                value={transferMethod}
-              />
-              {!isMomo && quote?.expiresAt ? (
+            }
+            quoteHint={
+              !isMomo && quote?.expiresAt ? (
                 <p className="text-xs text-muted-foreground pt-1">
                   {quoteCountdown.expired
                     ? "Quote expired — go back and continue again."
                     : `Quote valid for ${quoteCountdown.label}`}
                 </p>
-              ) : null}
-            </>
-          ) : null}
-          {isMomo ? (
-            <div className="pt-4 space-y-3">
-              <div>
-                <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.momoNumberPrompt}</Label>
-                <YcMomoPhoneInput
-                  id="momo-phone"
-                  countryCode={residenceCountry}
-                  value={momoPhone}
-                  onChange={setMomoPhone}
-                  className="mt-1"
-                  placeholder="712345678"
-                />
-              </div>
-              <div>
-                <Label>{REVIEW_ROW_LABELS.momoNetworkPrompt}</Label>
-                {momoNetworksLoading ? (
-                  <div className="flex justify-center py-3">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : null
+            }
+            footer={
+              isMomo ? (
+                <div className="pt-4 space-y-3">
+                  <div>
+                    <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.momoNumberPrompt}</Label>
+                    <YcMomoPhoneInput
+                      id="momo-phone"
+                      countryCode={residenceCountry}
+                      value={momoPhone}
+                      onChange={setMomoPhone}
+                      className="mt-1"
+                      placeholder="712345678"
+                    />
                   </div>
-                ) : (
-                  <div className="flex flex-col gap-2 mt-2">
-                    {momoNetworks.map((network) => (
-                      <button
-                        key={network.id}
-                        type="button"
-                        className={`rounded-lg border px-3 py-2 text-left text-sm ${
-                          momoNetworkId === network.id ? "border-primary bg-primary/5" : "border-border"
-                        }`}
-                        onClick={() => setMomoNetworkId(network.id)}
-                      >
-                        {network.name}
-                      </button>
-                    ))}
+                  <div>
+                    <Label>{REVIEW_ROW_LABELS.momoNetworkPrompt}</Label>
+                    {momoNetworksLoading ? (
+                      <div className="flex justify-center py-3">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 mt-2">
+                        {momoNetworks.map((network) => (
+                          <button
+                            key={network.id}
+                            type="button"
+                            className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                              momoNetworkId === network.id ? "border-primary bg-primary/5" : "border-border"
+                            }`}
+                            onClick={() => setMomoNetworkId(network.id)}
+                          >
+                            {network.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          ) : null}
-          {quoteError ? <p className="text-sm text-destructive">{quoteError}</p> : null}
-        </div>
+                </div>
+              ) : null
+            }
+          />
+        ) : null}
+        {quoteError ? <p className="text-sm text-destructive">{quoteError}</p> : null}
 
         <Button
           className="w-full"

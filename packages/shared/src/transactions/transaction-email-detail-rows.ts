@@ -90,8 +90,10 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
     ? hasWalletSendFxDisplay(review.send_currency, review.receive_currency, receiveNetwork)
     : hasPayoutCrossCurrencyFx(review.send_currency, review.receive_currency)
 
-  // Emails describe what has happened (a detail view), so use the past-tense "Sent".
-  pushIf(rows, REVIEW_ROW_LABELS.sent, formatMoneyDisplay(review.you_send_amount, sendCurrency))
+  // Emails describe settled detail — TLC uses Amount paid, not Sent / Total debited.
+  const primaryLabel =
+    reviewFlow === "local_pay_in" ? REVIEW_ROW_LABELS.amountPaid : REVIEW_ROW_LABELS.sent
+  pushIf(rows, primaryLabel, formatMoneyDisplay(review.you_send_amount, sendCurrency))
   if (isPayoutReviewFeeVisible(feeAmount)) {
     pushIf(
       rows,
@@ -110,17 +112,19 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
       formatSendRateLabel(review.send_currency, review.receive_currency, review.exchange_rate),
     )
   }
-  pushIf(
-    rows,
-    REVIEW_ROW_LABELS.totalDebited,
-    formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.totalDebited, review.total_debited, sendCurrency),
-  )
-  if (shouldShowReviewTotalDebited(reviewFlow)) {
+  if (reviewFlow !== "local_pay_in") {
     pushIf(
       rows,
-      REVIEW_ROW_LABELS.debitedFrom,
-      formatAccountBalanceLabel(sendCurrency),
+      REVIEW_ROW_LABELS.totalDebited,
+      formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.totalDebited, review.total_debited, sendCurrency),
     )
+    if (shouldShowReviewTotalDebited(reviewFlow)) {
+      pushIf(
+        rows,
+        REVIEW_ROW_LABELS.debitedFrom,
+        formatAccountBalanceLabel(sendCurrency),
+      )
+    }
   }
   pushIf(
     rows,

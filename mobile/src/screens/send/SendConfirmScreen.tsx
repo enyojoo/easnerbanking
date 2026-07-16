@@ -78,7 +78,7 @@ import {
   type WalletPrepareSession,
 } from '../../lib/sendFlowWalletQuote'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
-import { YcCrossBorderSendConfirm } from '../../components/send/YcCrossBorderSendConfirm'
+import { YcLocalPayInReview } from '../../components/yc/YcLocalPayInReview'
 import { residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { haptics } from '../../lib/haptics'
@@ -707,7 +707,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   if (isYcCrossBorder) {
     return (
       <ScreenWrapper>
-        <YcCrossBorderSendConfirm
+        <YcLocalPayInReview
           navigation={navigation}
           recipient={recipient}
           receiveAmount={params.receiveAmountValue ?? 0}
@@ -717,7 +717,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             residenceCountryFromPayInCurrency(params.ycPayInCurrency!) ?? ''
           }
           payInRail={params.ycPayInRail!}
-          transactionId={paramTransactionId || ''}
           footerPadding={footerPadding}
           listBottomPadding={listBottomPadding}
         />

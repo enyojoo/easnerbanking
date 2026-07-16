@@ -71,6 +71,7 @@ export function getGlobalPayoutProcessingTime(method: string): string {
       return "Within minutes"
     case "Faster Payments":
     case "Local transfer":
+    case "Local Transfer":
     case "Mobile money":
     case "Bank transfer":
       return "Within minutes"

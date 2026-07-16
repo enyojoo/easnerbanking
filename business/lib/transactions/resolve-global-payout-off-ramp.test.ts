@@ -40,6 +40,7 @@ vi.mock("@easner/shared", () => ({
   isGlobalPayoutOffRampOutRow: (row: { direction?: unknown; metadata?: Record<string, unknown> | null }) =>
     String(row.direction ?? "").toLowerCase() === "out" &&
     String(row.metadata?.payout_type ?? "").toLowerCase() === "global_fiat",
+  TLC_LOCAL_TRANSFER_METHOD: "Local Transfer",
 }))
 
 vi.mock("@/lib/noah/global-payout-ledger", () => ({
@@ -74,5 +75,45 @@ describe("resolveGlobalPayoutOffRampDetail", () => {
     expect(resolved?.payoutReview?.you_send_amount).toBeLessThanOrEqual(4.52)
     expect(resolved?.payoutReview?.exchange_rate).toBeGreaterThan(1)
     expect(resolved?.lifecycle).toHaveLength(2)
+  })
+
+  it("resolves cross-border TLC hero and Local Transfer in payout_review", () => {
+    const resolved = resolveGlobalPayoutOffRampDetail({
+      direction: "out",
+      status: "pending",
+      amount: 95000,
+      currency: "NGN",
+      metadata: {
+        payout_type: "global_fiat",
+        yc_mode: "cross_border_send",
+        receive_amount: 100,
+        receive_currency: "USD",
+        local_pay_in: 95000,
+        beneficiary_name: "Jane Doe",
+        payout_review: {
+          you_send_amount: 95000,
+          total_debited: 95000,
+          receive_amount: 100,
+          receive_currency: "USD",
+          send_currency: "NGN",
+          transfer_method: "Local Transfer",
+          exchange_rate: 950,
+          processing_fee: 0,
+          exchange_fee: 0,
+          processing_time: "Within minutes",
+        },
+        recipient_snapshot: {
+          full_name: "Jane Doe",
+          bank_name: "Chase",
+        },
+      },
+    })
+
+    expect(resolved).not.toBeNull()
+    expect(resolved?.displayHeroTitle).toBe("Send to Jane Doe")
+    expect(resolved?.displayAmount).toBe(100)
+    expect(resolved?.displayCurrency).toBe("USD")
+    expect(resolved?.payoutReview?.transfer_method).toBe("Local Transfer")
+    expect(resolved?.payoutReview?.you_send_amount).toBe(95000)
   })
 })

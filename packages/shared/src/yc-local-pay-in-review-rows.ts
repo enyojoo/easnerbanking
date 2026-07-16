@@ -1,0 +1,147 @@
+import { formatMoneyDisplay } from "./format-money-display"
+import { formatReviewRowMoneyDisplay } from "./format-review-row-money"
+import { formatSendRateLabel } from "./format-exchange-rate"
+import { shouldShowPayoutReviewFeeRow } from "./payout-review-display"
+import {
+  REVIEW_ROW_LABELS,
+  TLC_LOCAL_TRANSFER_METHOD,
+} from "./review-row-labels"
+import { resolveYcFundBalanceTransferMethod } from "./transactions/yc-deposit-display"
+import type { YcPayInRail } from "./yc-quote-summary"
+
+export type YcLocalPayInReviewMode = "fund_balance" | "cross_border_send"
+export type YcLocalPayInReviewPhase = "preview" | "locked"
+
+export type YcLocalPayInReviewRow = {
+  id: string
+  label: string
+  value: string
+  valueBold?: boolean
+  valueMono?: boolean
+}
+
+export function buildYcLocalPayInReviewRows(input: {
+  mode: YcLocalPayInReviewMode
+  phase: YcLocalPayInReviewPhase
+  rail: YcPayInRail
+  payInCurrency: string
+  receiveCurrency: string
+  customerRate: number
+  localPayIn: number
+  receiveAmount: number
+  processingFeeLocal?: number
+  processingFeeUsd?: number
+  exchangeFeeUsd?: number
+  principalLocal?: number
+  usdCredit?: number
+  transactionId?: string
+  processingTime?: string
+}): YcLocalPayInReviewRow[] {
+  const rows: YcLocalPayInReviewRow[] = []
+  const isFundBalance = input.mode === "fund_balance"
+  const isLocked = input.phase === "locked"
+  const isMomo = input.rail === "mobile_money"
+  const transferMethod = isFundBalance
+    ? resolveYcFundBalanceTransferMethod(input.rail)
+    : TLC_LOCAL_TRANSFER_METHOD
+
+  if (isLocked && input.transactionId) {
+    rows.push({
+      id: "transaction-id",
+      label: REVIEW_ROW_LABELS.transactionId,
+      value: input.transactionId.toUpperCase(),
+      valueMono: true,
+    })
+  }
+
+  if (input.customerRate > 0) {
+    const rateLabel = isFundBalance
+      ? formatSendRateLabel("USD", input.payInCurrency, input.customerRate)
+      : formatSendRateLabel(input.payInCurrency, input.receiveCurrency, input.customerRate)
+    rows.push({
+      id: "exchange-rate",
+      label: REVIEW_ROW_LABELS.exchangeRate,
+      value: rateLabel,
+    })
+  }
+
+  const showFee =
+    (input.processingFeeLocal ?? 0) > 0 ||
+    shouldShowPayoutReviewFeeRow({
+      processingFee: input.processingFeeUsd ?? 0,
+      exchangeFee: input.exchangeFeeUsd ?? 0,
+    })
+
+  if (isFundBalance && !isMomo && (input.principalLocal ?? 0) > 0) {
+    rows.push({
+      id: "deposit-amount",
+      label: REVIEW_ROW_LABELS.depositAmount,
+      value: formatReviewRowMoneyDisplay(
+        REVIEW_ROW_LABELS.depositAmount,
+        input.principalLocal!,
+        input.payInCurrency,
+      ),
+    })
+  }
+
+  if (showFee && (input.processingFeeLocal ?? 0) > 0) {
+    rows.push({
+      id: "processing-fee",
+      label: REVIEW_ROW_LABELS.processingFee,
+      value: formatReviewRowMoneyDisplay(
+        REVIEW_ROW_LABELS.processingFee,
+        input.processingFeeLocal!,
+        input.payInCurrency,
+      ),
+    })
+  }
+
+  const payLabel = isFundBalance
+    ? isMomo
+      ? REVIEW_ROW_LABELS.estimatedToPay
+      : REVIEW_ROW_LABELS.totalToPay
+    : isLocked
+      ? REVIEW_ROW_LABELS.amountToPay
+      : isMomo
+        ? REVIEW_ROW_LABELS.estimatedToPay
+        : REVIEW_ROW_LABELS.amountToPay
+
+  rows.push({
+    id: "pay-amount",
+    label: payLabel,
+    value: formatReviewRowMoneyDisplay(payLabel, input.localPayIn, input.payInCurrency),
+    valueBold: isLocked && !isMomo,
+  })
+
+  if (isFundBalance && !isMomo && (input.usdCredit ?? 0) > 0) {
+    rows.push({
+      id: "amount-to-credit",
+      label: REVIEW_ROW_LABELS.amountToCredit,
+      value: formatMoneyDisplay(input.usdCredit!, "USD"),
+    })
+  } else {
+    rows.push({
+      id: "recipient-gets",
+      label: REVIEW_ROW_LABELS.recipientGets,
+      value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
+      valueBold: true,
+    })
+  }
+
+  rows.push({
+    id: "transfer-method",
+    label: REVIEW_ROW_LABELS.transferMethod,
+    value: transferMethod,
+    ...(isFundBalance && isMomo ? {} : { valueBold: false }),
+  })
+
+  if (isLocked && input.processingTime) {
+    rows.push({
+      id: "arrival",
+      label: REVIEW_ROW_LABELS.arrival,
+      value: input.processingTime,
+    })
+  }
+
+  return rows
+}

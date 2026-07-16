@@ -11,10 +11,7 @@ import { ArrowLeft, Check, Copy, Landmark, Smartphone } from 'lucide-react-nativ
 import { LinearGradient } from 'expo-linear-gradient'
 import {
   computeDisplayProcessingFee,
-  computeYcFundBalancePrincipalLocalPayIn,
   formatMoneyDisplay,
-  formatReviewRowMoneyDisplay,
-  formatSendRateLabel,
   ycPayInCompleteNotice,
   YC_PAY_IN_MOMO_AUTHORIZE_CTA,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
@@ -30,11 +27,7 @@ import { ycBankInfoFields } from '../../lib/yc-bank-info-fields'
 import { haptics } from '../../lib/haptics'
 import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transactionDetailNavigation'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
-import {
-  TransactionDetailSummaryRow,
-  TransactionDetailCopyableValue,
-} from '../../components/transactions/TransactionDetailSummaryRow'
-import { CreditDestinationRow } from '../../components/transactions/CreditDestinationRow'
+import { YcLocalPayInCompleteSummary } from '../../components/yc/YcLocalPayInCompleteSummary'
 
 type RouteParams = {
   flowMode?: 'fund_balance' | 'cross_border_send'
@@ -105,18 +98,8 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   const isMobileMoney = payInRail === 'mobile_money'
   const fields = ycBankInfoFields(bankInfo)
   const isFundBalance = flowMode === 'fund_balance'
-  const showFundBalanceQuoteSummary = isFundBalance && isMobileMoney
-  const showFundBalanceBankCredit = isFundBalance && !isMobileMoney
   const screenTitle = isFundBalance ? 'Complete deposit' : 'Complete payment'
   const formattedSendAmount = formatMoneyDisplay(localPayIn, sendCurrency)
-  const formattedCreditAmount = formatMoneyDisplay(receiveAmount, receiveCurrency)
-  const principalLocal =
-    isFundBalance && customerRate > 0
-      ? computeYcFundBalancePrincipalLocalPayIn({
-          usdCredit: receiveAmount,
-          exchangeRate: customerRate,
-        })
-      : 0
   const completeNotice = ycPayInCompleteNotice(payInRail)
   const displayTransactionId = transactionId?.toUpperCase() ?? ''
   const feeLocal =
@@ -127,7 +110,6 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
           processingFee: processingFee ?? 0,
           exchangeFee: ycChannelFeeUsd ?? 0,
         }) * (customerRate || 1))
-  const transferMethod = isMobileMoney ? 'Mobile Money' : 'Bank Transfer'
   const ctaLabel = isMobileMoney ? YC_PAY_IN_MOMO_AUTHORIZE_CTA : "I've made the payment"
 
   const handleCopy = async (text: string, key: string) => {
@@ -166,120 +148,30 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.summaryCard}>
-            {displayTransactionId ? (
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.transactionId}
-                last={!showFundBalanceQuoteSummary && !showFundBalanceBankCredit}
-              >
-                <TransactionDetailCopyableValue
-                  value={displayTransactionId}
-                  copied={copiedKey === 'transactionId'}
-                  onPress={() => void handleCopy(displayTransactionId, 'transactionId')}
-                  mono
-                />
-              </TransactionDetailSummaryRow>
-            ) : null}
-            {showFundBalanceBankCredit ? (
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.amountToCredit}
-                value={formattedCreditAmount}
-                valueBold
-                last
-              />
-            ) : null}
-            {showFundBalanceQuoteSummary ? (
-              <>
-                {customerRate > 0 ? (
-                  <TransactionDetailSummaryRow
-                    label={REVIEW_ROW_LABELS.exchangeRate}
-                    value={formatSendRateLabel('USD', sendCurrency, customerRate)}
-                  />
-                ) : null}
-                {principalLocal > 0 ? (
-                  <TransactionDetailSummaryRow
-                    label={REVIEW_ROW_LABELS.depositAmount}
-                    value={formatReviewRowMoneyDisplay(
-                      REVIEW_ROW_LABELS.depositAmount,
-                      principalLocal,
-                      sendCurrency,
-                    )}
-                  />
-                ) : null}
-                {feeLocal > 0 ? (
-                  <TransactionDetailSummaryRow
-                    label={REVIEW_ROW_LABELS.processingFee}
-                    value={formatReviewRowMoneyDisplay(
-                      REVIEW_ROW_LABELS.processingFee,
-                      feeLocal,
-                      sendCurrency,
-                    )}
-                  />
-                ) : null}
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.totalToPay}
-                  value={formattedSendAmount}
-                  valueBold
-                />
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.amountToCredit}
-                  value={formattedCreditAmount}
-                  valueBold
-                />
-                <CreditDestinationRow
-                  label={REVIEW_ROW_LABELS.creditTo}
-                  currency="USD"
-                  balanceLabel="USD Balance"
-                />
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.transferMethod}
-                  value={transferMethod}
-                  last
-                />
-              </>
-            ) : !isFundBalance ? (
-              <>
-                {feeLocal > 0 ? (
-                  <TransactionDetailSummaryRow
-                    label={REVIEW_ROW_LABELS.processingFee}
-                    value={formatReviewRowMoneyDisplay(
-                      REVIEW_ROW_LABELS.processingFee,
-                      feeLocal,
-                      sendCurrency,
-                    )}
-                  />
-                ) : null}
-                {customerRate > 0 ? (
-                  <TransactionDetailSummaryRow
-                    label={REVIEW_ROW_LABELS.exchangeRate}
-                    value={formatSendRateLabel(sendCurrency, receiveCurrency, customerRate)}
-                  />
-                ) : null}
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.recipientGets}
-                  value={formattedCreditAmount}
-                  valueBold
-                />
-                {recipientName ? (
-                  <TransactionDetailSummaryRow
-                    label={REVIEW_ROW_LABELS.recipient}
-                    value={recipientName}
-                  />
-                ) : null}
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.transferMethod}
-                  value={transferMethod}
-                  last
-                />
-              </>
-            ) : null}
+            <YcLocalPayInCompleteSummary
+              mode={flowMode}
+              rail={payInRail}
+              transactionId={displayTransactionId}
+              payInCurrency={sendCurrency}
+              receiveCurrency={receiveCurrency}
+              localPayIn={localPayIn}
+              receiveAmount={receiveAmount}
+              customerRate={customerRate}
+              processingFeeLocal={feeLocal}
+              processingFeeUsd={processingFee}
+              exchangeFeeUsd={ycChannelFeeUsd}
+              recipientName={recipientName}
+              copiedKey={copiedKey}
+              onCopyTransactionId={(text) => void handleCopy(text, 'transactionId')}
+            />
           </View>
 
-          {(completeNotice || !isMobileMoney) ? (
+          {(completeNotice || !isMobileMoney || !isFundBalance) ? (
           <View style={styles.payInCopySection}>
             {completeNotice ? (
               <Text style={[styles.noticeText, styles.noticeTextCentered]}>{completeNotice}</Text>
             ) : null}
-            {!isMobileMoney ? (
+            {!isMobileMoney || !isFundBalance ? (
               <SendExactlyAmount amount={formattedSendAmount} centered />
             ) : null}
           </View>

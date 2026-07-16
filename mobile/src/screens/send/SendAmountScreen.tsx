@@ -81,9 +81,12 @@ import {
   sendLocalPayInMomoTitle,
   SEND_LOCAL_PAY_IN_BANK_CHIP,
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
+  formatYcPayInMinHint,
+  validateYcFundBalancePayInAmount,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
+import { useYcPayInMinEnforcement } from '../../hooks/useYcPayInMinEnforcement'
 import { useYcSendExchangeRates } from '../../hooks/queries/use-yc-send-exchange-rates'
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
@@ -550,6 +553,77 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     showCrossCurrencyExchangeUi &&
     enteredAmount > 0
 
+  const tlcPayInRail = (selectedOtherPaymentMethod === 'mobile_money'
+    ? 'mobile_money'
+    : 'bank_transfer') as YcPayInRail
+  const tlcPayInLimits = useMemo(() => {
+    if (!payInRails || selectedPaymentMethod !== 'otherCurrency') {
+      return { minLocalPayIn: null as number | null, maxLocalPayIn: null as number | null }
+    }
+    const railInfo =
+      tlcPayInRail === 'mobile_money'
+        ? payInRails.rails.mobile_money
+        : payInRails.rails.bank_transfer
+    return {
+      minLocalPayIn: railInfo?.minLocalPayIn ?? null,
+      maxLocalPayIn: railInfo?.maxLocalPayIn ?? null,
+    }
+  }, [payInRails, selectedPaymentMethod, tlcPayInRail])
+
+  const tlcMinHint =
+    tlcPayInLimits.minLocalPayIn != null && ycFlow.customerRate
+      ? formatYcPayInMinHint({
+          minLocalPayIn: tlcPayInLimits.minLocalPayIn,
+          currency: selectedOtherCurrency ?? payInCurrency ?? '',
+          customerSellRate: ycFlow.customerRate,
+        })
+      : null
+
+  const tlcMinSeedKey =
+    selectedPaymentMethod === 'otherCurrency' &&
+    selectedOtherCurrency &&
+    selectedOtherPaymentMethod &&
+    ycFlow.customerRate
+      ? `${selectedOtherCurrency}:${tlcPayInRail}:${amountEntryMode}`
+      : null
+
+  useYcPayInMinEnforcement({
+    enabled:
+      selectedPaymentMethod === 'otherCurrency' &&
+      showThroughLocalCurrency &&
+      Boolean(selectedOtherCurrency && selectedOtherPaymentMethod && ycFlow.customerRate),
+    seedKey: tlcMinSeedKey,
+    minLocalPayIn: tlcPayInLimits.minLocalPayIn,
+    amountEntryMode: amountEntryMode === 'receive' ? 'usd' : 'local',
+    enteredAmount,
+    customerSellRate: ycFlow.customerRate,
+    onApplyEnteredAmount: (amount) => {
+      setSendAmount(formatAmount(amount.toFixed(2)))
+    },
+  })
+
+  const tlcAmountLimitOk = useMemo(() => {
+    if (selectedPaymentMethod !== 'otherCurrency' || !showThroughLocalCurrency) return true
+    if (!enteredAmount || !ycFlow.customerRate) return true
+    return validateYcFundBalancePayInAmount({
+      amountEntryMode: amountEntryMode === 'receive' ? 'usd' : 'local',
+      enteredAmount,
+      previewLocalPayIn: ycFlow.preview.sendAmount,
+      currency: selectedOtherCurrency ?? payInCurrency ?? '',
+      limits: tlcPayInLimits,
+    }).ok
+  }, [
+    selectedPaymentMethod,
+    showThroughLocalCurrency,
+    enteredAmount,
+    ycFlow.customerRate,
+    ycFlow.preview.sendAmount,
+    amountEntryMode,
+    selectedOtherCurrency,
+    payInCurrency,
+    tlcPayInLimits,
+  ])
+
   const ycRateLoading = ycQuoteEnabled && ycFlow.ratesLoading && !ycFlow.customerRate
 
   const walletMinReceive = useMemo(() => {
@@ -979,6 +1053,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       receiveAmount > 0 &&
       receiveAmount < walletMinReceive) ||
     payoutReceiveBelowMin ||
+    !tlcAmountLimitOk ||
     (exchangeInfoAmountPositive && showCrossCurrencyExchangeUi && !exchangePreviewReady)
 
   const showExchangePreviewSkeleton =
@@ -1308,7 +1383,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           amountScreenSendAmount: navAmounts.sendAmount,
           calculatedSendingAmount: sendingAmount,
           calculatedTotalAmount: sendingAmount,
-          transactionId: generateTransactionId(),
           ...(note.trim() ? { note: note.trim() } : {}),
           ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
         } as never)
@@ -1503,6 +1577,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           {`Rate: ${formatSendRateLabel(sendCurrency, receiveCurrency, exchangeRate)}`}
                         </Text>
                       </View>
+                      {selectedPaymentMethod === 'otherCurrency' &&
+                      showThroughLocalCurrency &&
+                      amountEntryMode === 'receive' &&
+                      sendingAmount > 0 ? (
+                        <Text style={styles.exchangeInfoText}>
+                          {`You'll pay ~${formatMoneyDisplay(sendingAmount, sendCurrency)}`}
+                        </Text>
+                      ) : null}
+                      {tlcMinHint ? (
+                        <Text style={styles.exchangeInfoText}>{tlcMinHint}</Text>
+                      ) : null}
                     </View>
                   ) : needsNoahRateForSend && !noahRatesLoading && !hasNoahRateForPair ? (
                     <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>

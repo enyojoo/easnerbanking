@@ -32,6 +32,32 @@ function readIso(meta: Record<string, unknown>, key: string): string | null {
   return s || null
 }
 
+function isCrossBorderSend(meta: Record<string, unknown>): boolean {
+  return String(meta.yc_mode ?? "") === "cross_border_send"
+}
+
+function crossBorderProcessingDescription(meta: Record<string, unknown>): string {
+  const leg2 = String(meta.leg2_status ?? "").toLowerCase()
+  if (leg2 === "in_progress" || leg2 === "complete") {
+    return "Your payment was received. We're completing the transfer to the recipient."
+  }
+  if (readIso(meta, "leg1_settled_at") || String(meta.leg1_status ?? "").toLowerCase() === "complete") {
+    return "Your payment was received. We're completing the transfer."
+  }
+  return "Your transfer is being processed."
+}
+
+function crossBorderFailedDescription(meta: Record<string, unknown>): string {
+  const leg = String(meta.failure_leg ?? "").toLowerCase()
+  if (leg === "leg1") {
+    return "We couldn't receive your local payment. Please try again or contact support with your transaction reference."
+  }
+  if (leg === "leg2") {
+    return "We received your payment but couldn't complete the transfer to the recipient. Our team will follow up — contact support with your transaction reference."
+  }
+  return "This transfer could not be completed. Please contact support with your transaction reference."
+}
+
 function normalizeLedgerStatus(status: string): string {
   const s = String(status || "").trim().toLowerCase()
   if (s === "settled") return "settled"
@@ -63,21 +89,27 @@ export function buildGlobalPayoutLifecycle(
     input.payoutReview,
     input.recipientName,
   )
+  const crossBorder = isCrossBorderSend(meta)
+  const processingDescription = crossBorder
+    ? crossBorderProcessingDescription(meta)
+    : "Your transfer is being processed."
+  const failedDescription = crossBorder
+    ? crossBorderFailedDescription(meta)
+    : "This transfer could not be completed. Please contact support with your transaction reference."
 
   if (ledgerStatus === "failed") {
     return [
       {
         id: "processing",
         title: "Processing",
-        description: "Your transfer is being processed.",
+        description: processingDescription,
         state: "complete",
         occurredAt: processingAt,
       },
       {
         id: "failed",
         title: "Failed",
-        description:
-          "This transfer could not be completed. Please contact support with your transaction reference.",
+        description: failedDescription,
         state: "current",
         occurredAt: failedAt,
       },
@@ -92,7 +124,7 @@ export function buildGlobalPayoutLifecycle(
     {
       id: "processing",
       title: "Processing",
-      description: "Your transfer is being processed.",
+      description: processingDescription,
       state: processingState,
       occurredAt: processingAt,
     },

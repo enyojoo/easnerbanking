@@ -19,6 +19,7 @@ export type YcCrossBorderQuoteResult = {
   ok: true
   transferId: string
   transactionId: string
+  easnerTransactionId?: string
   localPayIn: number
   customerRate: number
   processingFee?: number

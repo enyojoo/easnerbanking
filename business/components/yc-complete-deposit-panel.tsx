@@ -5,19 +5,15 @@ import { Check, Copy, Landmark, Smartphone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   formatMoneyDisplay,
-  formatReviewRowMoneyDisplay,
-  formatSendRateLabel,
   REVIEW_ROW_LABELS,
-  computeYcFundBalancePrincipalLocalPayIn,
-  shouldShowPayoutReviewFeeRow,
   YC_PAY_IN_MOMO_AUTHORIZE_CTA,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
   ycPayInCompleteNotice,
   type YcPayInRail,
 } from "@easner/shared"
 import { ycBankInfoFields } from "@/lib/yc-bank-info-fields"
-import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
+import { YcLocalPayInCompleteSummary } from "@/components/yc-local-pay-in-complete-summary"
 
 export type YcCompleteDepositPanelProps = {
   flowMode: "fund_balance" | "cross_border_send"
@@ -61,22 +57,8 @@ export function YcCompleteDepositPanel({
 }: YcCompleteDepositPanelProps) {
   const isFundBalance = flowMode === "fund_balance"
   const isMomo = payInRail === "mobile_money"
-  const showFundBalanceQuoteSummary = isFundBalance && isMomo
-  const showFundBalanceBankCredit = isFundBalance && !isMomo
   const title = isFundBalance ? "Complete deposit" : "Complete payment"
   const payInAmount = formatMoneyDisplay(localPayIn, localCurrency)
-  const creditAmount = formatMoneyDisplay(creditOrReceiveAmount, creditOrReceiveCurrency)
-  const principalLocal =
-    showFundBalanceQuoteSummary && customerRate > 0
-      ? computeYcFundBalancePrincipalLocalPayIn({
-          usdCredit: creditOrReceiveAmount,
-          exchangeRate: customerRate,
-        })
-      : 0
-  const showProcessingFee =
-    showFundBalanceQuoteSummary &&
-    (processingFeeLocal > 0 ||
-      shouldShowPayoutReviewFeeRow({ processingFee: processingFeeLocal, exchangeFee: 0 }))
   const completeNotice = ycPayInCompleteNotice(payInRail)
   const bankFields = ycBankInfoFields(bankInfo)
   const PaymentIcon = isMomo ? Smartphone : Landmark
@@ -86,129 +68,28 @@ export function YcCompleteDepositPanel({
       <h2 className="text-2xl font-semibold">{title}</h2>
 
       <div className="rounded-xl border border-border p-4 space-y-1 text-sm">
-        <div
-          className={`flex justify-between items-center gap-4 py-2 ${showFundBalanceQuoteSummary || showFundBalanceBankCredit || !isFundBalance ? "border-b" : ""}`}
-        >
-          <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
-          {onCopy ? (
-            <button
-              type="button"
-              onClick={() => void onCopy(transactionId.toUpperCase(), "yc-complete-txid")}
-              className="flex items-center gap-2 font-mono text-sm hover:text-primary transition-colors text-right"
-            >
-              <span className="break-all">{transactionId.toUpperCase()}</span>
-              {copiedField === "yc-complete-txid" ? (
-                <Check className="h-4 w-4 text-primary shrink-0" />
-              ) : (
-                <Copy className="h-4 w-4 text-muted-foreground shrink-0" />
-              )}
-            </button>
-          ) : (
-            <span className="font-mono">{transactionId.toUpperCase()}</span>
-          )}
-        </div>
-        {showFundBalanceBankCredit ? (
-          <div className="flex justify-between gap-4 py-2">
-            <span className="text-muted-foreground">{REVIEW_ROW_LABELS.amountToCredit}</span>
-            <span className="font-medium">{creditAmount}</span>
-          </div>
-        ) : null}
-        {showFundBalanceQuoteSummary ? (
-          <>
-            {customerRate > 0 ? (
-              <div className="flex justify-between gap-4 py-2 border-b">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
-                <span>{formatSendRateLabel("USD", localCurrency, customerRate)}</span>
-              </div>
-            ) : null}
-            {principalLocal > 0 ? (
-              <div className="flex justify-between gap-4 py-2 border-b">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.depositAmount}</span>
-                <span>
-                  {formatReviewRowMoneyDisplay(
-                    REVIEW_ROW_LABELS.depositAmount,
-                    principalLocal,
-                    localCurrency,
-                  )}
-                </span>
-              </div>
-            ) : null}
-            {showProcessingFee ? (
-              <div className="flex justify-between gap-4 py-2 border-b">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
-                <span>
-                  {formatReviewRowMoneyDisplay(
-                    REVIEW_ROW_LABELS.processingFee,
-                    processingFeeLocal,
-                    localCurrency,
-                  )}
-                </span>
-              </div>
-            ) : null}
-            <div className="flex justify-between gap-4 py-2 border-b">
-              <span className="text-muted-foreground">{REVIEW_ROW_LABELS.totalToPay}</span>
-              <span className="font-semibold">{payInAmount}</span>
-            </div>
-            <div className="flex justify-between gap-4 py-2 border-b">
-              <span className="text-muted-foreground">{REVIEW_ROW_LABELS.amountToCredit}</span>
-              <span className="font-medium">{creditAmount}</span>
-            </div>
-            <CreditDestinationRow
-              label={REVIEW_ROW_LABELS.creditTo}
-              currency="USD"
-              balanceLabel="USD Balance"
-            />
-            <div className="flex justify-between gap-4 py-2">
-              <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
-              <span>{isMomo ? "Mobile Money" : "Bank Transfer"}</span>
-            </div>
-          </>
-        ) : !isFundBalance ? (
-          <>
-            {processingFeeLocal > 0 ? (
-              <div className="flex justify-between gap-4 py-2 border-b">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
-                <span>
-                  {formatReviewRowMoneyDisplay(
-                    REVIEW_ROW_LABELS.processingFee,
-                    processingFeeLocal,
-                    localCurrency,
-                  )}
-                </span>
-              </div>
-            ) : null}
-            {customerRate > 0 ? (
-              <div className="flex justify-between gap-4 py-2 border-b">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
-                <span>
-                  {formatSendRateLabel(localCurrency, creditOrReceiveCurrency, customerRate)}
-                </span>
-              </div>
-            ) : null}
-            <div className="flex justify-between gap-4 py-2 border-b">
-              <span className="text-muted-foreground">{REVIEW_ROW_LABELS.recipientGets}</span>
-              <span className="font-medium">{creditAmount}</span>
-            </div>
-            {recipientName ? (
-              <div className="flex justify-between gap-4 py-2 border-b">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.recipient}</span>
-                <span>{recipientName}</span>
-              </div>
-            ) : null}
-            <div className="flex justify-between gap-4 py-2">
-              <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
-              <span>{isMomo ? "Mobile Money" : "Bank Transfer"}</span>
-            </div>
-          </>
-        ) : null}
+        <YcLocalPayInCompleteSummary
+          flowMode={flowMode}
+          transactionId={transactionId}
+          localPayIn={localPayIn}
+          localCurrency={localCurrency}
+          creditOrReceiveAmount={creditOrReceiveAmount}
+          creditOrReceiveCurrency={creditOrReceiveCurrency}
+          customerRate={customerRate}
+          processingFeeLocal={processingFeeLocal}
+          payInRail={payInRail}
+          recipientName={recipientName}
+          copiedField={copiedField}
+          onCopy={onCopy}
+        />
       </div>
 
-      {(completeNotice || !isMomo) ? (
+      {(completeNotice || !isMomo || !isFundBalance) ? (
       <div className="space-y-4">
         {completeNotice ? (
           <p className="text-sm text-center text-muted-foreground px-2">{completeNotice}</p>
         ) : null}
-        {!isMomo ? (
+        {!isMomo || !isFundBalance ? (
           <p className="text-sm text-center text-foreground">
             {YC_PAY_IN_SEND_EXACTLY_LABEL}{" "}
             <span className="text-xl font-semibold">{payInAmount}</span>

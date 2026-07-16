@@ -81,6 +81,7 @@ import {
   type YcFundBalanceDepositReviewSnapshot,
 } from '@easner/shared'
 import { InboundReceiveDetailRows } from '../../components/transactions/InboundReceiveDetailRows'
+import { CrossBorderSendDetailRows } from '../../components/transactions/CrossBorderSendDetailRows'
 import { PayoutReviewDetailRows } from '../../components/transactions/PayoutReviewDetailRows'
 import { TransactionDetailSummaryRow, TransactionDetailCopyableValue } from '../../components/transactions/TransactionDetailSummaryRow'
 import { ApiError } from '../../query/api-client'
@@ -1077,6 +1078,15 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
                 {/* Global payout send — review snapshot rows */}
                 {isGlobalPayoutSend && transaction.payout_review ? (
+                  payoutReviewFlow === 'local_pay_in' ? (
+                    <CrossBorderSendDetailRows
+                      payoutReview={transaction.payout_review}
+                      recipientSnapshot={transaction.recipient_snapshot}
+                      displayProcessingFee={payoutDisplayProcessingFee}
+                      whenTs={whenTs}
+                      formatTimestamp={formatTimestamp}
+                    />
+                  ) : (
                   <PayoutReviewDetailRows
                     payoutReview={transaction.payout_review}
                     payoutReviewFlow={payoutReviewFlow}
@@ -1109,6 +1119,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     ).trim() || null}
                     formatTimestamp={formatTimestamp}
                   />
+                  )
                 ) : null}
 
                 {/* Send flows (non–Easetag P2P, non–global payout) */}

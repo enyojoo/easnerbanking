@@ -22,6 +22,8 @@ export type YcQuoteSummary = {
   displayProcessingFeeCurrency?: string
   expiresAt: string
   transactionId: string
+  /** Server-generated ETID when available (preferred for UI). */
+  easnerTransactionId?: string
   transferId: string
   payInRail: YcPayInRail
   bankInfo?: Record<string, unknown> | null
