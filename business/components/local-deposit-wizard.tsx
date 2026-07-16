@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import {
   formatMoneyDisplay,
+  formatReviewRowMoneyDisplay,
   formatSendRateLabel,
   mapResidenceToLocalPayInCurrency,
   resolveYcPayInCustomerRate,
@@ -554,12 +555,24 @@ export function LocalDepositWizard({
               ) : null}
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">{REVIEW_ROW_LABELS.amountToPay}</span>
-                <span>{formatMoneyDisplay(quote.localPayIn, localPayInCurrency)}</span>
+                <span>
+                  {formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.amountToPay,
+                    quote.localPayIn,
+                    localPayInCurrency,
+                  )}
+                </span>
               </div>
               {(showProcessingFee && displayProcessingFee > 0) ? (
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
-                  <span>{formatMoneyDisplay(displayProcessingFee, "USD")}</span>
+                  <span>
+                    {formatReviewRowMoneyDisplay(
+                      REVIEW_ROW_LABELS.processingFee,
+                      displayProcessingFee,
+                      "USD",
+                    )}
+                  </span>
                 </div>
               ) : null}
               <div className="flex justify-between gap-4">
@@ -567,8 +580,10 @@ export function LocalDepositWizard({
                 <span>{formatSendRateLabel("USD", localPayInCurrency, quote.customerRate)}</span>
               </div>
               <div className="flex justify-between gap-4 font-medium">
-                <span>{REVIEW_ROW_LABELS.creditAmount}</span>
-                <span>{formatMoneyDisplay(quote.usdCredit, "USD")}</span>
+                <span>{REVIEW_ROW_LABELS.amountToCredit}</span>
+                <span>
+                  {formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.amountToCredit, quote.usdCredit, "USD")}
+                </span>
               </div>
               <div className="flex justify-between gap-4 items-center">
                 <span className="text-muted-foreground">{REVIEW_ROW_LABELS.creditTo}</span>
@@ -631,7 +646,7 @@ export function LocalDepositWizard({
           </div>
         ) : null}
         <div className="flex justify-between gap-4 py-2">
-          <span className="text-muted-foreground">{REVIEW_ROW_LABELS.creditAmount}</span>
+          <span className="text-muted-foreground">{REVIEW_ROW_LABELS.amountToCredit}</span>
           <span className="font-medium text-right">{creditAmount}</span>
         </div>
       </div>

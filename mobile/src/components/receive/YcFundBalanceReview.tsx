@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import {
   computeDisplayProcessingFee,
   formatMoneyDisplay,
+  formatReviewRowMoneyDisplay,
   formatSendRateLabel,
   REVIEW_ROW_LABELS,
   shouldShowPayoutReviewFeeRow,
@@ -183,11 +184,22 @@ export function YcFundBalanceReview({
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : (
             <>
-              <Row label={REVIEW_ROW_LABELS.amountToPay} value={formatMoneyDisplay(quote?.localPayIn ?? localPayIn, localPayInCurrency)} />
+              <Row
+                label={REVIEW_ROW_LABELS.amountToPay}
+                value={formatReviewRowMoneyDisplay(
+                  REVIEW_ROW_LABELS.amountToPay,
+                  quote?.localPayIn ?? localPayIn,
+                  localPayInCurrency,
+                )}
+              />
               {showProcessingFee ? (
                 <Row
                   label={REVIEW_ROW_LABELS.processingFee}
-                  value={formatMoneyDisplay(displayProcessingFee, 'USD')}
+                  value={formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.processingFee,
+                    displayProcessingFee,
+                    'USD',
+                  )}
                 />
               ) : null}
               {customerRate > 0 ? (
@@ -196,7 +208,15 @@ export function YcFundBalanceReview({
                   value={formatSendRateLabel('USD', localPayInCurrency, customerRate)}
                 />
               ) : null}
-              <Row label={REVIEW_ROW_LABELS.creditAmount} value={formatMoneyDisplay(quote?.usdCredit ?? usdCredit, 'USD')} bold />
+              <Row
+                label={REVIEW_ROW_LABELS.amountToCredit}
+                value={formatReviewRowMoneyDisplay(
+                  REVIEW_ROW_LABELS.amountToCredit,
+                  quote?.usdCredit ?? usdCredit,
+                  'USD',
+                )}
+                bold
+              />
               <CreditDestinationRow
                 label={REVIEW_ROW_LABELS.creditTo}
                 currency="USD"

@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { formatMoneyDisplay, formatSendRateLabel, REVIEW_ROW_LABELS } from '@easner/shared'
+import { formatMoneyDisplay, formatReviewRowMoneyDisplay, formatSendRateLabel, REVIEW_ROW_LABELS } from '@easner/shared'
 import type { Recipient } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -128,9 +128,19 @@ export function YcCrossBorderSendConfirm({
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : (
             <>
-              <Row label={REVIEW_ROW_LABELS.amountToPay} value={formatMoneyDisplay(youSend, payInCurrency)} />
+              <Row
+                label={REVIEW_ROW_LABELS.amountToPay}
+                value={formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.amountToPay, youSend, payInCurrency)}
+              />
               {processingFee > 0 ? (
-                <Row label={REVIEW_ROW_LABELS.processingFee} value={formatMoneyDisplay(processingFee, payInCurrency)} />
+                <Row
+                  label={REVIEW_ROW_LABELS.processingFee}
+                  value={formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.processingFee,
+                    processingFee,
+                    payInCurrency,
+                  )}
+                />
               ) : null}
               {customerRate > 0 ? (
                 <Row

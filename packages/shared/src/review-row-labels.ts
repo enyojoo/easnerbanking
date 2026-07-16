@@ -16,8 +16,8 @@ export const REVIEW_ROW_LABELS = {
   amountToPay: "Amount to pay",
   /** Settled local pay-in (transaction detail). */
   amountPaid: "Amount paid",
-  /** USD balance credit (live deposit review / complete deposit summary). */
-  creditAmount: "Credit amount",
+  /** USD balance credit (live deposit review — mirrors Amount to pay). */
+  amountToCredit: "Amount to credit",
   creditTo: "Credited to",
   /** Verification microdeposits — settled detail only (not spendable balance). */
   creditFor: "Credit for",
@@ -27,7 +27,8 @@ export const REVIEW_ROW_LABELS = {
   exchangeRate: "Exchange rate",
   transferMethod: "Transfer method",
   arrival: "Arrival",
-  from: "From",
+  /** Balance outbound — source account (confirm / detail / email). */
+  debitedFrom: "Debited from",
   when: "When",
   note: "Note",
   scheme: "Scheme",
@@ -56,4 +57,20 @@ export function reviewPrimaryAmountLabel(
 /** Whether the review card should show Total debited (balance payouts only). */
 export function shouldShowReviewTotalDebited(flow: ReviewFlowKind): boolean {
   return flow === "balance_payout"
+}
+
+/** Balance debit vs local pay-in (YC cross-border send). */
+export function resolvePayoutReviewFlow(
+  metadata: Record<string, unknown> | null | undefined,
+): ReviewFlowKind {
+  if (metadata && String(metadata.yc_mode ?? "") === "cross_border_send") {
+    return "local_pay_in"
+  }
+  return "balance_payout"
+}
+
+/** e.g. USD → "USD Balance" */
+export function formatAccountBalanceLabel(currency: string): string {
+  const c = String(currency ?? "").trim().toUpperCase()
+  return c ? `${c} Balance` : "Balance"
 }

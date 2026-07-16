@@ -9,10 +9,12 @@
  */
 
 import { formatMoneyDisplay } from "../format-money-display"
+import { formatReviewRowMoneyDisplay } from "../format-review-row-money"
 import { formatSendRateLabel } from "../format-exchange-rate"
 import { formatPayoutRecipientSubtitle } from "../payout-recipient-subtitle"
 import { computeDisplayProcessingFee } from "../payout-processing-fee"
-import { REVIEW_ROW_LABELS } from "../review-row-labels"
+import type { ReviewFlowKind } from "../review-row-labels"
+import { REVIEW_ROW_LABELS, formatAccountBalanceLabel, shouldShowReviewTotalDebited } from "../review-row-labels"
 import {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
@@ -53,6 +55,8 @@ export type TransactionEmailDetailInput = {
   depositReview?: YcFundBalanceDepositReviewSnapshot | null
   /** Unified inbound receive snapshot (YC, Noah VA, verification, stablecoin, Easetag). */
   inboundReceive?: InboundReceiveDetailSnapshot | null
+  /** Balance debit vs local pay-in (YC cross-border send). */
+  payoutReviewFlow?: ReviewFlowKind
 }
 
 function pushIf(
@@ -78,8 +82,24 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
 
   // Emails describe what has happened (a detail view), so use the past-tense "Sent".
   pushIf(rows, REVIEW_ROW_LABELS.sent, formatMoneyDisplay(review.you_send_amount, sendCurrency))
+  const reviewFlow = input.payoutReviewFlow ?? "balance_payout"
+  if (shouldShowReviewTotalDebited(reviewFlow)) {
+    pushIf(
+      rows,
+      REVIEW_ROW_LABELS.debitedFrom,
+      formatAccountBalanceLabel(sendCurrency),
+    )
+  }
   if (isPayoutReviewFeeVisible(displayProcessingFee)) {
-    pushIf(rows, REVIEW_ROW_LABELS.processingFee, formatMoneyDisplay(displayProcessingFee, sendCurrency))
+    pushIf(
+      rows,
+      REVIEW_ROW_LABELS.processingFee,
+      formatReviewRowMoneyDisplay(
+        REVIEW_ROW_LABELS.processingFee,
+        displayProcessingFee,
+        sendCurrency,
+      ),
+    )
   }
   if (hasFx) {
     pushIf(
@@ -88,7 +108,11 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
       formatSendRateLabel(review.send_currency, review.receive_currency, review.exchange_rate),
     )
   }
-  pushIf(rows, REVIEW_ROW_LABELS.totalDebited, formatMoneyDisplay(review.total_debited, sendCurrency))
+  pushIf(
+    rows,
+    REVIEW_ROW_LABELS.totalDebited,
+    formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.totalDebited, review.total_debited, sendCurrency),
+  )
   pushIf(
     rows,
     REVIEW_ROW_LABELS.recipientGets,
@@ -120,7 +144,11 @@ function buildDepositRows(deposit: NonNullable<TransactionEmailDetailInput["depo
     pushIf(
       rows,
       REVIEW_ROW_LABELS.processingFee,
-      formatMoneyDisplay(deposit.feeAmount, deposit.feeCurrency || "USD"),
+      formatReviewRowMoneyDisplay(
+        REVIEW_ROW_LABELS.processingFee,
+        deposit.feeAmount,
+        deposit.feeCurrency || "USD",
+      ),
     )
   }
   if (deposit.postedAmount != null && deposit.postedAmount > 0) {
@@ -128,7 +156,11 @@ function buildDepositRows(deposit: NonNullable<TransactionEmailDetailInput["depo
     pushIf(
       rows,
       REVIEW_ROW_LABELS.amountCredited,
-      formatMoneyDisplay(deposit.postedAmount, postedCurrency),
+      formatReviewRowMoneyDisplay(
+        REVIEW_ROW_LABELS.amountCredited,
+        deposit.postedAmount,
+        postedCurrency,
+      ),
     )
     pushIf(rows, REVIEW_ROW_LABELS.creditTo, `${postedCurrency.toUpperCase()} Balance`)
   }
@@ -147,10 +179,18 @@ function buildYcFundBalanceDepositRows(
   pushIf(
     rows,
     REVIEW_ROW_LABELS.amountPaid,
-    formatMoneyDisplay(review.local_pay_in, review.local_currency),
+    formatReviewRowMoneyDisplay(
+      REVIEW_ROW_LABELS.amountPaid,
+      review.local_pay_in,
+      review.local_currency,
+    ),
   )
   if (isPayoutReviewFeeVisible(displayProcessingFee)) {
-    pushIf(rows, REVIEW_ROW_LABELS.processingFee, formatMoneyDisplay(displayProcessingFee, "USD"))
+    pushIf(
+      rows,
+      REVIEW_ROW_LABELS.processingFee,
+      formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.processingFee, displayProcessingFee, "USD"),
+    )
   }
   if (review.exchange_rate > 0) {
     pushIf(
@@ -159,7 +199,11 @@ function buildYcFundBalanceDepositRows(
       formatSendRateLabel("USD", review.local_currency, review.exchange_rate),
     )
   }
-  pushIf(rows, REVIEW_ROW_LABELS.amountCredited, formatMoneyDisplay(review.usd_credit, "USD"))
+  pushIf(
+    rows,
+    REVIEW_ROW_LABELS.amountCredited,
+    formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.amountCredited, review.usd_credit, "USD"),
+  )
   pushIf(rows, REVIEW_ROW_LABELS.creditTo, review.credit_to)
   pushIf(rows, REVIEW_ROW_LABELS.scheme, review.transfer_method)
   return rows

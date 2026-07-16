@@ -138,6 +138,7 @@ function buildReceiptDetailRows(transaction: Transaction, cardLast4?: string): R
       buildTransactionEmailDetailRows({
         direction: "out",
         payoutReview: transaction.payoutReview,
+        payoutReviewFlow: transaction.payoutReviewFlow ?? "balance_payout",
         receiveNetwork: transaction.chain,
         recipient: snap
           ? {

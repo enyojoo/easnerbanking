@@ -28,9 +28,10 @@ describe("buildTransactionEmailDetailRows", () => {
     })
     const map = rowMap(rows)
     expect(map["Sent"]).toBe("$100")
+    expect(map["Debited from"]).toBe("USD Balance")
     // Combined Processing fee = 1 + 2.32 = 3.32, and 100 + 3.32 = 103.32 (Total debited).
-    expect(map["Processing fee"]).toBe("$3.32")
-    expect(map["Total debited"]).toBe("$103.32")
+    expect(map["Processing fee"]).toBe("-$3.32")
+    expect(map["Total debited"]).toBe("-$103.32")
     expect(map["Exchange rate"]).toBeDefined()
     expect(map["Transfer method"]).toBe("Local transfer")
     expect(map["Recipient"]).toContain("Samuel Odiba")
@@ -57,7 +58,7 @@ describe("buildTransactionEmailDetailRows", () => {
       receiveNetwork: "Solana",
     })
     const map = rowMap(rows)
-    expect(map["Processing fee"]).toBe("$0.01")
+    expect(map["Processing fee"]).toBe("-$0.01")
     expect(map["Transfer method"]).toBe("USDC on SOL")
     // 1:1 stablecoin parity: no Exchange rate row.
     expect(map["Exchange rate"]).toBeUndefined()
@@ -79,8 +80,8 @@ describe("buildTransactionEmailDetailRows", () => {
     const map = rowMap(rows)
     expect(map["Scheme"]).toBe("Wire")
     expect(map["Sender"]).toBe("ACME CORP")
-    expect(map["Processing fee"]).toBe("$0.05")
-    expect(map["Amount credited"]).toBe("$9.95")
+    expect(map["Processing fee"]).toBe("-$0.05")
+    expect(map["Amount credited"]).toBe("+$9.95")
     expect(map["Sender"]).toBe("ACME CORP")
     expect(map["Narration"]).toBe("Invoice 42")
   })
@@ -98,7 +99,7 @@ describe("buildTransactionEmailDetailRows", () => {
     })
     const map = rowMap(rows)
     expect(map["Processing fee"]).toBeUndefined()
-    expect(map["Amount credited"]).toBe("$50")
+    expect(map["Amount credited"]).toBe("+$50")
   })
 
   it("YC fund_balance deposit_review rows mirror review screen", () => {
@@ -121,11 +122,11 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(map["Amount paid"]).toBe("₦100,000")
     expect(map["Processing fee"]).toBeDefined()
     expect(map["Exchange rate"]).toBeDefined()
-    expect(map["Amount credited"]).toBe("$65")
+    expect(map["Amount credited"]).toBe("+$65")
     expect(map["Credited to"]).toBe("USD Balance")
     expect(map["Scheme"]).toBe("Bank Transfer")
     expect(map["Transfer method"]).toBeUndefined()
-    expect(map["Credit amount"]).toBeUndefined()
+    expect(map["Amount to credit"]).toBeUndefined()
     expect(map["Narration"]).toBeUndefined()
   })
 
@@ -148,7 +149,7 @@ describe("buildTransactionEmailDetailRows", () => {
     const rows = buildTransactionEmailDetailRows({ direction: "in", inboundReceive: snapshot! })
     const map = rowMap(rows)
     expect(map["Scheme"]).toBe("Mobile Money")
-    expect(map["Amount credited"]).toBe("$65")
+    expect(map["Amount credited"]).toBe("+$65")
   })
 
   it("filterTransactionReceiptDetailRows omits narration", () => {

@@ -17,6 +17,7 @@ import {
   isNoahVaFundingDeposit,
   resolveNoahVaFundingDepositTitleFromMeta,
   resolveInboundReceiveDetail,
+  resolvePayoutReviewFlow,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
@@ -318,6 +319,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           ledgerAmount: globalPayoutDetail.ledgerAmount,
           ledgerCurrency: globalPayoutDetail.ledgerCurrency,
           payoutReview: globalPayoutDetail.payoutReview ?? undefined,
+          payoutReviewFlow: resolvePayoutReviewFlow(meta),
           recipientSnapshot: globalPayoutDetail.recipientSnapshot ?? undefined,
           lifecycle: globalPayoutDetail.lifecycle,
           transactionTiming: globalPayoutDetail.transactionTiming,
@@ -329,6 +331,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             ledgerAmount: walletSendPayoutReview.total_debited,
             ledgerCurrency: walletSendPayoutReview.send_currency,
             payoutReview: walletSendPayoutReview,
+            payoutReviewFlow: resolvePayoutReviewFlow(meta),
             recipientSnapshot:
               meta?.recipient_snapshot && typeof meta.recipient_snapshot === "object"
                 ? (meta.recipient_snapshot as TransactionWithSource["recipientSnapshot"])

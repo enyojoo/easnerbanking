@@ -22,8 +22,8 @@ export const txSettledFixture: TransactionEmailData = {
   detailRows: [
     { label: "Scheme", value: "ACH" },
     { label: "Sender", value: "Chase" },
-    { label: "Processing fee", value: "$0.05" },
-    { label: "Amount credited", value: "$99.95" },
+    { label: "Processing fee", value: "-$0.05" },
+    { label: "Amount credited", value: "+$99.95" },
   ],
   audience: "personal",
 }
@@ -39,9 +39,9 @@ export const txFailedFixture: TransactionEmailData = {
   failureReason: "Recipient bank rejected the transfer.",
   detailRows: [
     { label: "Sent", value: "$100.00" },
-    { label: "Processing fee", value: "$1.40" },
+    { label: "Processing fee", value: "-$1.40" },
     { label: "Exchange rate", value: "1 USD = 1,584 NGN" },
-    { label: "Total debited", value: "$101.40" },
+    { label: "Total debited", value: "-$101.40" },
     { label: "Recipient gets", value: "₦159,200" },
     { label: "Recipient", value: "Samuel Odiba (Kuda • 1234567890)" },
     { label: "Transfer method", value: "Local transfer" },
@@ -57,7 +57,7 @@ export const txReversedFixture: TransactionEmailData = {
   status: "reversed",
   detailRows: [
     { label: "Sent", value: "$25.00" },
-    { label: "Total debited", value: "$25.00" },
+    { label: "Total debited", value: "-$25.00" },
     { label: "Recipient gets", value: "$25.00" },
     { label: "Recipient", value: "@jordan" },
     { label: "Transfer method", value: "Easetag (wallet-to-wallet)" },

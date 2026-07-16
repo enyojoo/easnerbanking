@@ -3,6 +3,8 @@ import {
   REVIEW_ROW_LABELS,
   reviewPrimaryAmountLabel,
   shouldShowReviewTotalDebited,
+  resolvePayoutReviewFlow,
+  formatAccountBalanceLabel,
 } from "./review-row-labels"
 
 describe("review-row-labels", () => {
@@ -28,5 +30,14 @@ describe("review-row-labels", () => {
   it("hides Total debited for local pay-in", () => {
     expect(shouldShowReviewTotalDebited("local_pay_in")).toBe(false)
     expect(shouldShowReviewTotalDebited("balance_payout")).toBe(true)
+  })
+
+  it("resolves YC cross-border send as local pay-in", () => {
+    expect(resolvePayoutReviewFlow({ yc_mode: "cross_border_send" })).toBe("local_pay_in")
+    expect(resolvePayoutReviewFlow({ payout_type: "global_fiat" })).toBe("balance_payout")
+  })
+
+  it("formats account balance labels", () => {
+    expect(formatAccountBalanceLabel("usd")).toBe("USD Balance")
   })
 })

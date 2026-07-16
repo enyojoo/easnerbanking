@@ -121,7 +121,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
               <SummaryRow label={REVIEW_ROW_LABELS.transactionId} value={displayTransactionId} />
             ) : null}
             {isFundBalance ? (
-              <SummaryRow label={REVIEW_ROW_LABELS.creditAmount} value={formattedCreditAmount} />
+              <SummaryRow label={REVIEW_ROW_LABELS.amountToCredit} value={formattedCreditAmount} />
             ) : (
               <SummaryRow label={REVIEW_ROW_LABELS.paymentAmount} value={formattedSendAmount} />
             )}

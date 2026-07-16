@@ -14,6 +14,7 @@ import {
   normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
   resolveInboundReceiveDetail,
+  resolvePayoutReviewFlow,
 } from "@easner/shared"
 import type { TransactionEmailData } from "@easner/server"
 import { isLedgerTransactionEmailEnabled } from "@/lib/notifications/email-rollout"
@@ -84,6 +85,7 @@ function buildEmailDetailRows(
     const rows = buildTransactionEmailDetailRows({
       direction,
       payoutReview,
+      payoutReviewFlow: resolvePayoutReviewFlow(meta),
       receiveNetwork: firstString([meta.receive_network, meta.chain, meta.receive_asset_network]),
       recipient: snap
         ? {

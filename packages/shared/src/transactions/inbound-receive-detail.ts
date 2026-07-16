@@ -4,6 +4,7 @@
  */
 
 import { formatMoneyDisplay } from "../format-money-display"
+import { formatReviewRowMoneyDisplay } from "../format-review-row-money"
 import { formatSendRateLabel } from "../format-exchange-rate"
 import { computeDisplayProcessingFee } from "../payout-processing-fee"
 import { REVIEW_ROW_LABELS } from "../review-row-labels"
@@ -458,14 +459,22 @@ export function buildInboundReceiveDetailRows(
         pushIf(
           rows,
           REVIEW_ROW_LABELS.amountPaid,
-          formatMoneyDisplay(snapshot.amountPaid.amount, snapshot.amountPaid.currency),
+          formatReviewRowMoneyDisplay(
+            REVIEW_ROW_LABELS.amountPaid,
+            snapshot.amountPaid.amount,
+            snapshot.amountPaid.currency,
+          ),
         )
       }
       if (snapshot.processingFee) {
         pushIf(
           rows,
           REVIEW_ROW_LABELS.processingFee,
-          formatMoneyDisplay(snapshot.processingFee.amount, snapshot.processingFee.currency),
+          formatReviewRowMoneyDisplay(
+            REVIEW_ROW_LABELS.processingFee,
+            snapshot.processingFee.amount,
+            snapshot.processingFee.currency,
+          ),
         )
       }
       if (snapshot.exchangeRate && snapshot.exchangeRate.rate > 0) {
@@ -482,7 +491,11 @@ export function buildInboundReceiveDetailRows(
       pushIf(
         rows,
         REVIEW_ROW_LABELS.amountCredited,
-        formatMoneyDisplay(snapshot.amountCredited.amount, snapshot.amountCredited.currency),
+        formatReviewRowMoneyDisplay(
+          REVIEW_ROW_LABELS.amountCredited,
+          snapshot.amountCredited.amount,
+          snapshot.amountCredited.currency,
+        ),
       )
       pushCreditDestination(rows, snapshot.creditDestination)
       pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
@@ -497,13 +510,21 @@ export function buildInboundReceiveDetailRows(
         pushIf(
           rows,
           REVIEW_ROW_LABELS.processingFee,
-          formatMoneyDisplay(snapshot.processingFee.amount, snapshot.processingFee.currency),
+          formatReviewRowMoneyDisplay(
+            REVIEW_ROW_LABELS.processingFee,
+            snapshot.processingFee.amount,
+            snapshot.processingFee.currency,
+          ),
         )
       }
       pushIf(
         rows,
         REVIEW_ROW_LABELS.amountCredited,
-        formatMoneyDisplay(snapshot.amountCredited.amount, snapshot.amountCredited.currency),
+        formatReviewRowMoneyDisplay(
+          REVIEW_ROW_LABELS.amountCredited,
+          snapshot.amountCredited.amount,
+          snapshot.amountCredited.currency,
+        ),
       )
       pushCreditDestination(rows, snapshot.creditDestination)
       if (surface !== "receipt") pushIf(rows, REVIEW_ROW_LABELS.narration, snapshot.narration)
@@ -516,7 +537,11 @@ export function buildInboundReceiveDetailRows(
       pushIf(
         rows,
         REVIEW_ROW_LABELS.amountCredited,
-        formatMoneyDisplay(snapshot.amountCredited.amount, snapshot.amountCredited.currency),
+        formatReviewRowMoneyDisplay(
+          REVIEW_ROW_LABELS.amountCredited,
+          snapshot.amountCredited.amount,
+          snapshot.amountCredited.currency,
+        ),
       )
       pushCreditDestination(rows, snapshot.creditDestination)
       if (includeVerificationHint && snapshot.creditDestination?.hint) {
@@ -536,7 +561,11 @@ export function buildInboundReceiveDetailRows(
         pushIf(
           rows,
           REVIEW_ROW_LABELS.processingFee,
-          formatMoneyDisplay(snapshot.processingFee.amount, snapshot.processingFee.currency),
+          formatReviewRowMoneyDisplay(
+            REVIEW_ROW_LABELS.processingFee,
+            snapshot.processingFee.amount,
+            snapshot.processingFee.currency,
+          ),
         )
       }
       pushCreditDestination(rows, snapshot.creditDestination)

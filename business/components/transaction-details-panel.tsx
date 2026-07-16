@@ -4,7 +4,6 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
 import type { Transaction } from "@/lib/finance-types"
-import { formatCurrency } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Copy, Check, Download, FileText, Activity } from "lucide-react"
 import { downloadTransactionReceiptPdf } from "@/lib/use-transaction-receipt-pdf"
@@ -16,7 +15,7 @@ import { TransactionDetailHero } from "@/components/transactions/transaction-det
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
 import { DepositReviewDetailsRows } from "@/components/transactions/deposit-review-details-rows"
 import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
-import { REVIEW_ROW_LABELS, isVerificationDepositMetadata } from "@easner/shared"
+import { REVIEW_ROW_LABELS, isVerificationDepositMetadata, resolvePayoutReviewFlow, shouldShowReviewTotalDebited, formatReviewRowMoneyDisplay } from "@easner/shared"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 
 export interface TransactionDetailsPanelProps {
@@ -194,7 +193,11 @@ function TransactionSummaryDetails({
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
             <span className="font-medium">
-              {formatCurrency(transaction.fee, transaction.displayCurrency || "USD")}
+              {formatReviewRowMoneyDisplay(
+                REVIEW_ROW_LABELS.processingFee,
+                transaction.fee,
+                transaction.displayCurrency || "USD",
+              )}
             </span>
           </div>
         )}
@@ -203,7 +206,11 @@ function TransactionSummaryDetails({
           <div className="flex justify-between gap-4 text-sm">
             <span className="shrink-0 text-muted-foreground">{REVIEW_ROW_LABELS.amountCredited}</span>
             <span className="text-right font-medium">
-              {formatCurrency(transaction.postedAmount, displayCurrency)}
+              {formatReviewRowMoneyDisplay(
+                REVIEW_ROW_LABELS.amountCredited,
+                transaction.postedAmount,
+                displayCurrency,
+              )}
             </span>
           </div>
         ) : null}
@@ -260,6 +267,11 @@ export function TransactionDetailsPanel({
         "",
     ).trim() ||
     undefined
+  const payoutReviewFlow =
+    transaction.payoutReviewFlow ??
+    resolvePayoutReviewFlow(
+      (transaction as { metadata?: Record<string, unknown> }).metadata,
+    )
   // Stablecoin deposits settle on-chain in a single event, so the Processing → Completed
   // tracker would always render both steps complete. Skip it (bank deposits keep it).
   const isStablecoinDeposit =
@@ -309,6 +321,12 @@ export function TransactionDetailsPanel({
           globalFiatPayout={isGlobalPayout && !isWalletSendPayout}
           receiveNetwork={walletReceiveNetwork}
           walletSendExecutionModel={walletSendExecutionModel}
+          sourceAccountCurrency={
+            shouldShowReviewTotalDebited(payoutReviewFlow) && transaction.payoutReview?.send_currency
+              ? transaction.payoutReview.send_currency
+              : null
+          }
+          reviewFlow={payoutReviewFlow}
           recipientDisplayName={
             isWalletSendPayout
               ? transaction.counterpartyName ?? transaction.description

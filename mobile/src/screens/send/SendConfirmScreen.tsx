@@ -20,7 +20,10 @@ import {
   resolvePayoutCountryCode,
   resolveRecipientPayoutRail,
   REVIEW_ROW_LABELS,
+  formatAccountBalanceLabel,
+  formatReviewRowMoneyDisplay,
 } from '@easner/shared'
+import { CreditDestinationRow } from '../../components/transactions/CreditDestinationRow'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
 import { NavigationProps } from '../../types'
@@ -53,7 +56,6 @@ import { noahService } from '../../lib/noahService'
 import type { PayoutPrepareSession } from '../../lib/payoutPrepareSession'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
-import { CurrencyFlagCircle } from '../../components/flags/CurrencyFlagCircle'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
 import { getSendDestinationsMemory } from '../../lib/sendDestinations'
 import { isWalletSendRecipient } from '../../lib/recipientWalletMeta'
@@ -779,12 +781,20 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 value={formatMoneyDisplay(youSendAmount, selectedBalanceCurrency)}
               />
               {selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR' ? (
-                <FromBalanceRow currency={selectedBalanceCurrency} />
+                <CreditDestinationRow
+                  label={REVIEW_ROW_LABELS.debitedFrom}
+                  currency={selectedBalanceCurrency}
+                  balanceLabel={formatAccountBalanceLabel(selectedBalanceCurrency)}
+                />
               ) : null}
               {!easetagUi && quoteReady && showProcessingFee ? (
                 <Row
                   label={REVIEW_ROW_LABELS.processingFee}
-                  value={formatMoneyDisplay(displayProcessingFee, selectedBalanceCurrency)}
+                  value={formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.processingFee,
+                    displayProcessingFee,
+                    selectedBalanceCurrency,
+                  )}
                 />
               ) : null}
               {hasFx && customerRate > 0 ? (
@@ -800,7 +810,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               {!easetagUi && calculatedTotalAmount > 0 ? (
                 <Row
                   label={REVIEW_ROW_LABELS.totalDebited}
-                  value={formatMoneyDisplay(calculatedTotalAmount, selectedBalanceCurrency)}
+                  value={formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.totalDebited,
+                    calculatedTotalAmount,
+                    selectedBalanceCurrency,
+                  )}
                   bold
                 />
               ) : null}
@@ -882,20 +896,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 }
 
 const TRANSFER_FAIL_MESSAGE = "We couldn't send this transfer, please try again."
-
-function FromBalanceRow({ currency }: { currency: string }) {
-  return (
-    <View style={styles.fromRow}>
-      <Text style={styles.rowLabel}>From</Text>
-      <View style={styles.fromBalanceInline}>
-        <CurrencyFlagCircle currency={currency} size={22} />
-        <Text style={styles.fromBalanceText} numberOfLines={1}>
-          {currency} Balance
-        </Text>
-      </View>
-    </View>
-  )
-}
 
 function Row({ label, value, bold, last }: { label: string; value: string; bold?: boolean; last?: boolean }) {
   return (
@@ -983,30 +983,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     textAlign: 'right',
     flex: 1,
-  },
-  fromRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-    paddingBottom: spacing[3],
-    marginBottom: spacing[3],
-  },
-  fromBalanceInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    flexShrink: 0,
-    maxWidth: '72%',
-    justifyContent: 'flex-end',
-  },
-  fromBalanceText: {
-    flexShrink: 1,
-    fontSize: 14,
-    color: colors.text.primary,
-    fontFamily: fontFamily.semibold,
   },
   rowValueBold: {
     fontFamily: fontFamily.semibold,

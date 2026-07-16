@@ -96,7 +96,7 @@ describe("buildInboundReceiveDetailRows", () => {
       REVIEW_ROW_LABELS.when,
     ])
     const map = rowMap(rows)
-    expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("$65")
+    expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$65")
     expect(map[REVIEW_ROW_LABELS.scheme]).toBe("Bank Transfer")
   })
 
@@ -120,7 +120,7 @@ describe("buildInboundReceiveDetailRows", () => {
     const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
     expect(map[REVIEW_ROW_LABELS.scheme]).toBe("Wire")
     expect(map[REVIEW_ROW_LABELS.sender]).toBe("Acme Corp")
-    expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("$50")
+    expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$50")
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
     expect(map[REVIEW_ROW_LABELS.narration]).toBe("Invoice 42")
   })

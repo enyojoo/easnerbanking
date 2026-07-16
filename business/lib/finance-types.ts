@@ -92,6 +92,8 @@ export interface Transaction {
   ledgerAmount?: number
   ledgerCurrency?: string
   payoutReview?: import("@easner/shared").GlobalPayoutReviewSnapshot
+  /** Balance debit vs YC cross-border local pay-in. */
+  payoutReviewFlow?: import("@easner/shared").ReviewFlowKind
   depositReview?: import("@easner/shared").YcFundBalanceDepositReviewSnapshot
   inboundReceive?: import("@easner/shared").InboundReceiveDetailSnapshot
   recipientSnapshot?: import("@easner/shared").GlobalPayoutRecipientSnapshot

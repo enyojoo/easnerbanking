@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import {
   computeDisplayProcessingFee,
   formatMoneyDisplay,
+  formatReviewRowMoneyDisplay,
   formatPayoutRecipientSubtitle,
   formatSendRateLabel,
   hasPayoutCrossCurrencyFx,
@@ -13,12 +14,13 @@ import {
   REVIEW_ROW_LABELS,
   reviewPrimaryAmountLabel,
   shouldShowReviewTotalDebited,
+  formatAccountBalanceLabel,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
   type ReviewFlowKind,
   type TransactionTimingRow,
 } from "@easner/shared"
-import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
+import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { formatTransactionRowDateTime } from "@/lib/transaction-row-present"
 import { Card, CardContent } from "@/components/ui/card"
@@ -152,14 +154,12 @@ export function PayoutReviewDetailsRows({
           </span>
         </div>
 
-        {sourceAccountCurrency ? (
-          <div className="flex items-center justify-between border-b pb-4">
-            <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.from}</span>
-            <div className="flex shrink-0 items-center gap-2 font-medium whitespace-nowrap">
-              <CurrencyFlagCircle currency={sourceAccountCurrency} size={22} />
-              <span className="whitespace-nowrap">{sourceAccountCurrency} Balance</span>
-            </div>
-          </div>
+        {sourceAccountCurrency && shouldShowReviewTotalDebited(reviewFlow) ? (
+          <CreditDestinationRow
+            label={REVIEW_ROW_LABELS.debitedFrom}
+            currency={sourceAccountCurrency}
+            balanceLabel={formatAccountBalanceLabel(sourceAccountCurrency)}
+          />
         ) : null}
 
         {showFeeBreakdown ? (
@@ -168,7 +168,11 @@ export function PayoutReviewDetailsRows({
               <div className="flex items-center justify-between border-b pb-4">
                 <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
                 <span className="font-semibold">
-                  {formatMoneyDisplay(displayProcessingFee, payoutReview.send_currency)}
+                  {formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.processingFee,
+                    displayProcessingFee,
+                    payoutReview.send_currency,
+                  )}
                 </span>
               </div>
             ) : null}
@@ -190,7 +194,11 @@ export function PayoutReviewDetailsRows({
             <div className="flex items-center justify-between border-b pb-4">
               <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.totalDebited}</span>
               <span className="text-xl font-semibold">
-                {formatMoneyDisplay(payoutReview.total_debited, payoutReview.send_currency)}
+                {formatReviewRowMoneyDisplay(
+                  REVIEW_ROW_LABELS.totalDebited,
+                  payoutReview.total_debited,
+                  payoutReview.send_currency,
+                )}
               </span>
             </div>
             ) : null}

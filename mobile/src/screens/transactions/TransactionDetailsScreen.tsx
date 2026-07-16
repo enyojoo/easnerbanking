@@ -81,11 +81,16 @@ import {
   REVIEW_ROW_LABELS,
   reviewPrimaryAmountLabel,
   resolveInboundReceiveDetail,
+  resolvePayoutReviewFlow,
+  shouldShowReviewTotalDebited,
+  formatAccountBalanceLabel,
+  formatReviewRowMoneyDisplay,
   type GlobalPayoutReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
   type YcFundBalanceDepositReviewSnapshot,
 } from '@easner/shared'
 import { InboundReceiveDetailRows } from '../../components/transactions/InboundReceiveDetailRows'
+import { CreditDestinationRow } from '../../components/transactions/CreditDestinationRow'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { haptics } from '../../lib/haptics'
@@ -774,6 +779,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         transaction.metadata?.payout_type === 'global_fiat' ||
         transaction.metadata?.activity_type === 'wallet_send',
     )
+  const payoutReviewFlow = resolvePayoutReviewFlow(transaction.metadata)
   const depositSendNote = String(
     transaction.send_note ??
       transaction.metadata?.send_note ??
@@ -839,6 +845,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         ? buildTransactionEmailDetailRows({
             direction: 'out',
             payoutReview: transaction.payout_review,
+            payoutReviewFlow: resolvePayoutReviewFlow(transaction.metadata),
             receiveNetwork: isWalletSendReview ? walletSendReceiveNetwork : undefined,
             recipient: transaction.recipient_snapshot
               ? {
@@ -1095,11 +1102,22 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         )}
                       </Text>
                     </View>
+                    {shouldShowReviewTotalDebited(payoutReviewFlow) &&
+                    transaction.payout_review.send_currency ? (
+                      <CreditDestinationRow
+                        label={REVIEW_ROW_LABELS.debitedFrom}
+                        currency={transaction.payout_review.send_currency}
+                        balanceLabel={formatAccountBalanceLabel(
+                          transaction.payout_review.send_currency,
+                        )}
+                      />
+                    ) : null}
                     {showPayoutProcessingFee ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.processingFee}</Text>
                         <Text style={styles.summaryValue}>
-                          {formatMoneyDisplay(
+                          {formatReviewRowMoneyDisplay(
+                            REVIEW_ROW_LABELS.processingFee,
                             payoutDisplayProcessingFee,
                             transaction.payout_review!.send_currency,
                           )}
@@ -1121,7 +1139,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.totalDebited}</Text>
                       <Text style={styles.summaryValue}>
-                        {formatMoneyDisplay(
+                        {formatReviewRowMoneyDisplay(
+                          REVIEW_ROW_LABELS.totalDebited,
                           transaction.payout_review.total_debited,
                           transaction.payout_review.send_currency,
                         )}

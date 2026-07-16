@@ -2,7 +2,7 @@
 
 import {
   computeDisplayProcessingFee,
-  formatMoneyDisplay,
+  formatReviewRowMoneyDisplay,
   formatSendRateLabel,
   REVIEW_ROW_LABELS,
   reviewPrimaryAmountLabel,
@@ -74,14 +74,20 @@ export function DepositReviewDetailsRows({
             {reviewPrimaryAmountLabel("local_pay_in", mode)}
           </span>
           <span className="text-xl font-semibold">
-            {formatMoneyDisplay(depositReview.local_pay_in, depositReview.local_currency)}
+            {formatReviewRowMoneyDisplay(
+              reviewPrimaryAmountLabel("local_pay_in", mode),
+              depositReview.local_pay_in,
+              depositReview.local_currency,
+            )}
           </span>
         </div>
 
         {showProcessingFee ? (
           <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
-            <span className="font-semibold">{formatMoneyDisplay(displayProcessingFee, "USD")}</span>
+            <span className="font-semibold">
+              {formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.processingFee, displayProcessingFee, "USD")}
+            </span>
           </div>
         ) : null}
 
@@ -96,10 +102,14 @@ export function DepositReviewDetailsRows({
 
         <div className="flex items-center justify-between border-b pb-4">
           <span className="text-sm text-muted-foreground">
-            {mode === "detail" ? REVIEW_ROW_LABELS.amountCredited : REVIEW_ROW_LABELS.creditAmount}
+            {mode === "detail" ? REVIEW_ROW_LABELS.amountCredited : REVIEW_ROW_LABELS.amountToCredit}
           </span>
           <span className="text-xl font-semibold">
-            {formatMoneyDisplay(depositReview.usd_credit, "USD")}
+            {formatReviewRowMoneyDisplay(
+              mode === "detail" ? REVIEW_ROW_LABELS.amountCredited : REVIEW_ROW_LABELS.amountToCredit,
+              depositReview.usd_credit,
+              "USD",
+            )}
           </span>
         </div>
 
