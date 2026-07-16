@@ -1,4 +1,4 @@
-import { apiFetch } from '../query/api-client'
+import { apiFetch, ApiError } from '../query/api-client'
 import type { YcPayInRail } from '../hooks/useYcCrossBorderFlow'
 
 export type YcFundBalanceQuote = {
@@ -173,9 +173,19 @@ export async function ensureFundBalanceQuoteStashed(
 export async function fetchPayInNetworks(country: string, currency: string): Promise<
   { id: string; name: string }[]
 > {
-  const data = await apiFetch<{ networks?: { id: string; name: string }[] }>(
-    '/api/yellowcard/pay-in-networks',
-    { query: { country, currency } },
-  )
-  return data.networks ?? []
+  try {
+    const data = await apiFetch<{ networks?: { id: string; name: string }[] }>(
+      '/api/yellowcard/pay-in-networks',
+      { query: { country, currency } },
+    )
+    return data.networks ?? []
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status !== 404) throw e
+  }
+
+  const rails = await apiFetch<{
+    momoNetworks?: { id: string; name: string }[]
+    networks?: { id: string; name: string }[]
+  }>('/api/yellowcard/receive-rails', { query: { country, currency } })
+  return rails.momoNetworks ?? rails.networks ?? []
 }

@@ -43,6 +43,7 @@ type AmountMode = "usd" | "local"
 
 import {
   prefetchYcReceiveRails,
+  fetchYcPayInNetworks,
   prefetchYcPayInRates,
   readCachedReceiveRails,
   readCachedYcPayInRates,
@@ -291,13 +292,10 @@ export function LocalDepositWizard({
     setMomoNetworksLoading(true)
     void (async () => {
       try {
-        const res = await fetchWithSession(
-          `/api/yellowcard/pay-in-networks?country=${encodeURIComponent(residenceCountry)}&currency=${encodeURIComponent(localPayInCurrency)}`,
-        )
-        const data = (await res.json().catch(() => ({}))) as { networks?: { id: string; name: string }[] }
+        const res = await fetchYcPayInNetworks(residenceCountry, localPayInCurrency)
         if (!cancelled) {
-          setMomoNetworks(data.networks ?? [])
-          if ((data.networks?.length ?? 0) === 1) setMomoNetworkId(data.networks![0].id)
+          setMomoNetworks(res)
+          if (res.length === 1) setMomoNetworkId(res[0].id)
         }
       } finally {
         if (!cancelled) setMomoNetworksLoading(false)

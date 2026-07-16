@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveYcReceiveRailAvailability } from "@/lib/yellowcard/receive-rails"
+import { resolveYcPayInNetworks } from "@/lib/yellowcard/pay-in-networks"
 import { mapResidenceToLocalPayInCurrency } from "@easner/shared"
 
 export const runtime = "nodejs"
@@ -34,6 +35,9 @@ export async function GET(request: Request) {
   })
 
   const anyAvailable = rails.bank_transfer.available || rails.mobile_money.available
+  const momoNetworks = rails.mobile_money.available
+    ? await resolveYcPayInNetworks({ country, currency })
+    : []
 
   return NextResponse.json({
     ok: true,
@@ -41,5 +45,6 @@ export async function GET(request: Request) {
     currency,
     rails,
     anyAvailable,
+    momoNetworks,
   })
 }

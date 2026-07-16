@@ -25,6 +25,8 @@ export type YcReceiveRailsResponse = {
     }
   }
   anyAvailable: boolean
+  /** Present when mobile_money pay-in is available (also on receive-rails for older clients). */
+  momoNetworks?: { id: string; name: string }[]
 }
 
 const RECEIVE_RAILS_CACHE_TTL_MS = 5 * 60_000

@@ -21,6 +21,7 @@ export type ReceiveRailsResponse = {
     }
   }
   anyAvailable: boolean
+  momoNetworks?: { id: string; name: string }[]
 }
 
 const RECEIVE_RAILS_CACHE_TTL_MS = 5 * 60_000
@@ -106,6 +107,38 @@ export async function prefetchYcReceiveRails(
 
   receiveRailsInflight.set(key, task)
   return task
+}
+
+/** MoMo networks for pay-in review — falls back to receive-rails when pay-in-networks is absent. */
+export async function fetchYcPayInNetworks(
+  country: string,
+  currency: string,
+): Promise<{ id: string; name: string }[]> {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  const networksRes = await fetchWithSession(
+    `/api/yellowcard/pay-in-networks?country=${encodeURIComponent(cc)}&currency=${encodeURIComponent(cur)}`,
+  )
+  if (networksRes.ok) {
+    const data = (await networksRes.json().catch(() => ({}))) as {
+      networks?: { id: string; name: string }[]
+    }
+    return data.networks ?? []
+  }
+  if (networksRes.status !== 404) {
+    throw new Error('Could not load mobile money networks')
+  }
+
+  const rails =
+    (await prefetchYcReceiveRails(cc, cur)) ??
+    (await (async () => {
+      const res = await fetchWithSession(
+        `/api/yellowcard/receive-rails?country=${encodeURIComponent(cc)}&currency=${encodeURIComponent(cur)}`,
+      )
+      if (!res.ok) return null
+      return (await res.json().catch(() => null)) as ReceiveRailsResponse | null
+    })())
+  return rails?.momoNetworks ?? []
 }
 
 export async function prefetchYcPayInRates(): Promise<YcRateClientRow[] | null> {

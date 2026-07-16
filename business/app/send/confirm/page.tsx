@@ -42,6 +42,7 @@ import {
 import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import { residenceCountryFromPayInCurrency, useYcCrossBorderFlow } from "@/hooks/use-yc-cross-border-flow"
+import { fetchYcPayInNetworks } from "@/lib/yc-local-deposit-cache"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { REVIEW_ROW_LABELS } from "@easner/shared"
@@ -209,13 +210,10 @@ export default function SendConfirmPage() {
     setMomoNetworksLoading(true)
     void (async () => {
       try {
-        const res = await fetchWithSession(
-          `/api/yellowcard/pay-in-networks?country=${encodeURIComponent(payInCountry)}&currency=${encodeURIComponent(payInCurrency)}`,
-        )
-        const data = (await res.json().catch(() => ({}))) as { networks?: { id: string; name: string }[] }
+        const rows = await fetchYcPayInNetworks(payInCountry, payInCurrency)
         if (!cancelled) {
-          setMomoNetworks(data.networks ?? [])
-          if ((data.networks?.length ?? 0) === 1) setMomoNetworkId(data.networks![0].id)
+          setMomoNetworks(rows)
+          if (rows.length === 1) setMomoNetworkId(rows[0].id)
         }
       } finally {
         if (!cancelled) setMomoNetworksLoading(false)
