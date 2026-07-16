@@ -263,7 +263,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
                   last
                 />
               </>
-            )}
+            ) : null}
           </View>
 
           <View style={styles.payInCopySection}>
