@@ -5,6 +5,12 @@
 import { formatDisplayPersonName } from "../format-display-name"
 import { deriveBankDepositInboundDisplayLabel } from "./bank-deposit-inbound-label"
 import {
+  isNoahVaFundingDeposit,
+  isYcFundBalanceDepositMetadata,
+  resolveNoahVaFundingDepositTitleFromMeta,
+  resolveYcFundBalanceDepositDisplayTitle,
+} from "./yc-deposit-display"
+import {
   ACCOUNT_VERIFICATION_LIST_LABEL,
   VERIFICATION_DEPOSIT_LIST_LABEL,
   VERIFICATION_DEPOSIT_PRODUCT_LABEL,
@@ -185,6 +191,19 @@ export function toEasnerTransactionProductCategory(input: {
   if (direction === "in" && isVerificationDepositMetadata(meta)) {
     return VERIFICATION_DEPOSIT_PRODUCT_LABEL
   }
+  if (direction === "in" && isYcFundBalanceDepositMetadata(meta)) {
+    return resolveYcFundBalanceDepositDisplayTitle(meta)
+  }
+  if (
+    direction === "in" &&
+    isNoahVaFundingDeposit({
+      provider: input.provider,
+      direction: "in",
+      metadata: meta,
+    })
+  ) {
+    return resolveNoahVaFundingDepositTitleFromMeta(meta)
+  }
   if (direction === "in") return "Bank Deposit"
   return "Bank Transfer"
 }
@@ -236,6 +255,19 @@ export function toEasnerTransactionPrimaryLabel(input: {
   if (direction === "in" && isVerificationDepositMetadata(meta)) {
     return VERIFICATION_DEPOSIT_LIST_LABEL
   }
+  if (direction === "in" && isYcFundBalanceDepositMetadata(meta)) {
+    return resolveYcFundBalanceDepositDisplayTitle(meta)
+  }
+  if (
+    direction === "in" &&
+    isNoahVaFundingDeposit({
+      provider: input.provider,
+      direction: "in",
+      metadata: meta,
+    })
+  ) {
+    return resolveNoahVaFundingDepositTitleFromMeta(meta)
+  }
   if (direction === "in") {
     return deriveEasnerInboundRemitterDisplayName({
       metadata: input.metadata,
@@ -260,13 +292,16 @@ export function toEasnerProductTransactionLabel(input: {
 /** Inbound titles when no remitter was resolved (generic product labels). */
 export function isEasnerProductReceiveTitle(name: string | null | undefined): boolean {
   const n = String(name ?? "").trim()
-  return (
+  if (
     n === "Stablecoin Deposit" ||
     n === "Bank Deposit" ||
     n === ACCOUNT_VERIFICATION_LIST_LABEL ||
     n === VERIFICATION_DEPOSIT_LIST_LABEL ||
     n === VERIFICATION_DEPOSIT_PRODUCT_LABEL
-  )
+  ) {
+    return true
+  }
+  return / Bank Deposit$/i.test(n) || / MOMO Deposit$/i.test(n)
 }
 
 /** Outbound titles from {@link toEasnerTransactionPrimaryLabel}. */

@@ -450,6 +450,26 @@ export type {
   GlobalPayoutRecipientSnapshot,
   GlobalPayoutReviewSnapshot,
 } from "./transactions/global-payout-types"
+export type {
+  YcFundBalanceDepositReviewSnapshot,
+  YcPayInRail,
+} from "./transactions/global-deposit-types"
+export {
+  buildYcFundBalanceDepositReviewSnapshot,
+  inferResidenceCountryFromLocalCurrency,
+  isNoahVaFundingDeposit,
+  isYcFundBalanceDepositMetadata,
+  normalizeYcFundBalanceDepositReview,
+  normalizeYcPayInRail,
+  reconstructYcFundBalanceDepositReview,
+  resolveNoahVaFundingDepositTitle,
+  resolveNoahVaFundingDepositTitleFromMeta,
+  resolveNoahVaFundingNotificationActivityLabel,
+  resolveYcFundBalanceDepositDisplayTitle,
+  resolveYcFundBalanceDepositTitle,
+  resolveYcFundBalanceNotificationActivityLabel,
+  resolveYcFundBalanceTransferMethod,
+} from "./transactions/yc-deposit-display"
 export {
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,

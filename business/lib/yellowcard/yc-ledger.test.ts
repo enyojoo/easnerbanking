@@ -3,6 +3,10 @@
  */
 import { describe, expect, it } from "vitest"
 import {
+  buildYcFundBalanceDepositReviewSnapshot,
+  resolveYcFundBalanceDepositTitle,
+} from "@easner/shared"
+import {
   buildYcBalancePayoutOutMetadata,
   buildYcFundBalanceReceiveMetadata,
   buildYcOmnibusCryptoDepositMetadata,
@@ -28,6 +32,41 @@ describe("yc-ledger metadata builders", () => {
     expect(meta.yc_sequence_id).toBe("yc_fb_1")
     expect(meta.usd_credit).toBe(65)
     expect(isYcFundBalanceRow(meta)).toBe(true)
+  })
+
+  it("includes deposit_review when provided at quote time", () => {
+    const depositReview = buildYcFundBalanceDepositReviewSnapshot({
+      localPayIn: 100000,
+      localCurrency: "NGN",
+      usdCredit: 65,
+      processingFee: 0.65,
+      exchangeRate: 1538,
+      residenceCountry: "NG",
+      payInRail: "bank_transfer",
+    })
+    const depositDisplayTitle = resolveYcFundBalanceDepositTitle({
+      residenceCountry: "NG",
+      payInRail: "bank_transfer",
+      localCurrency: "NGN",
+    })
+    const meta = buildYcFundBalanceReceiveMetadata({
+      sequenceId: "yc_fb_2",
+      localPayIn: 100000,
+      localCurrency: "NGN",
+      usdCredit: 65,
+      processingFee: 0.65,
+      residenceCountry: "NG",
+      payInRail: "bank_transfer",
+      customerRate: 1538,
+      depositReview,
+      depositDisplayTitle,
+      displayHeroTitle: depositDisplayTitle,
+    })
+    expect(meta.deposit_review).toEqual(depositReview)
+    expect(meta.deposit_display_title).toBe("Nigeria Bank Deposit")
+    expect(meta.display_hero_title).toBe("Nigeria Bank Deposit")
+    expect(meta.residence_country).toBe("NG")
+    expect(meta.pay_in_rail).toBe("bank_transfer")
   })
 
   it("builds balance_payout OUT metadata with global_fiat shape", () => {

@@ -10,6 +10,9 @@ import {
   type DeriveTransactionNotificationInput,
   type GlobalPayoutReviewSnapshot,
   type NotificationOutcome,
+  isYcFundBalanceDepositMetadata,
+  normalizeYcFundBalanceDepositReview,
+  reconstructYcFundBalanceDepositReview,
 } from "@easner/shared"
 import type { TransactionEmailData } from "@easner/server"
 import { isLedgerTransactionEmailEnabled } from "@/lib/notifications/email-rollout"
@@ -93,6 +96,22 @@ function buildEmailDetailRows(
   }
 
   if (direction === "in") {
+    if (isYcFundBalanceDepositMetadata(meta)) {
+      const depositReview =
+        normalizeYcFundBalanceDepositReview(meta.deposit_review) ??
+        reconstructYcFundBalanceDepositReview(
+          meta,
+          typeof meta.customer_rate === "number" ? meta.customer_rate : Number(meta.customer_rate),
+        )
+      if (depositReview) {
+        const rows = buildTransactionEmailDetailRows({
+          direction,
+          depositReview,
+        })
+        return rows.length ? rows : undefined
+      }
+    }
+
     const senderDisplay =
       descriptor.counterpartyName ||
       formatMaskedSenderDisplay({

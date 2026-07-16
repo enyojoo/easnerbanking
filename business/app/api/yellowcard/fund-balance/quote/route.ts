@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, computeDisplayProcessingFee, ycPayInInstructionNotice, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount } from "@easner/shared"
+import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, computeDisplayProcessingFee, ycPayInInstructionNotice, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount, buildYcFundBalanceDepositReviewSnapshot, resolveYcFundBalanceDepositTitle } from "@easner/shared"
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
@@ -249,12 +249,36 @@ export async function POST(request: Request) {
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const businessId = noahCtx.scope === "business" ? noahCtx.businessId : null
   const easnerTransactionId = generateTransactionId()
+  const startedAt = new Date().toISOString()
+  const residenceCountry = String(userRow?.residence_country ?? country).trim().toUpperCase()
+  const customerRate = Number(leg.easner_sell)
+  const depositReview = buildYcFundBalanceDepositReviewSnapshot({
+    localPayIn: pricing.localPayIn,
+    localCurrency: currency,
+    usdCredit: pricing.usdCredit,
+    processingFee: pricing.processingFee,
+    exchangeFee: pricing.ycLegFeesUsd,
+    exchangeRate: customerRate,
+    residenceCountry,
+    payInRail: rail,
+  })
+  const depositDisplayTitle = resolveYcFundBalanceDepositTitle({
+    residenceCountry,
+    payInRail: rail,
+    localCurrency: currency,
+  })
   const metadata = buildYcFundBalanceReceiveMetadata({
     sequenceId,
     localPayIn: pricing.localPayIn,
     localCurrency: currency,
     usdCredit: pricing.usdCredit,
     processingFee: pricing.processingFee,
+    residenceCountry,
+    payInRail: rail,
+    customerRate,
+    depositReview,
+    depositDisplayTitle,
+    displayHeroTitle: depositDisplayTitle,
   })
 
   const { data: tx } = await admin
@@ -268,7 +292,13 @@ export async function POST(request: Request) {
       currency: "USD",
       direction: "in",
       easner_transaction_id: easnerTransactionId,
-      metadata: { ...metadata, easner_transaction_id: easnerTransactionId },
+      occurred_at: startedAt,
+      metadata: {
+        ...metadata,
+        easner_transaction_id: easnerTransactionId,
+        processing_at: startedAt,
+        transaction_started_at: startedAt,
+      },
     })
     .select("id")
     .single()

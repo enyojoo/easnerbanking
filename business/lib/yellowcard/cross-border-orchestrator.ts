@@ -190,6 +190,7 @@ export async function createCrossBorderTransfer(input: {
   })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
+  const startedAt = new Date().toISOString()
   const { data: tx, error: txErr } = await admin
     .from("transactions")
     .insert({
@@ -200,12 +201,15 @@ export async function createCrossBorderTransfer(input: {
       amount: pricingFinal.localPayIn,
       currency: payInCurrency,
       direction: "out",
+      occurred_at: startedAt,
       metadata: {
         yc_mode: "cross_border_send",
         yc_sequence_id: leg1Seq,
         receive_amount: input.receiveAmount,
         receive_currency: receiveCurrency,
         customer_rate: cross.rate,
+        processing_at: startedAt,
+        transaction_started_at: startedAt,
       },
     })
     .select("id")

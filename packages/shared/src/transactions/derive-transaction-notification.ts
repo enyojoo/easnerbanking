@@ -18,6 +18,14 @@ import {
   toEasnerTransactionProductCategory,
 } from "./product-label"
 import {
+  isNoahVaFundingDeposit,
+  isYcFundBalanceDepositMetadata,
+  normalizeYcFundBalanceDepositReview,
+  resolveNoahVaFundingNotificationActivityLabel,
+  resolveNoahVaFundingDepositTitleFromMeta,
+  resolveYcFundBalanceNotificationActivityLabel,
+} from "./yc-deposit-display"
+import {
   deriveVerificationBankName,
   formatVerificationDepositPushBody,
   isVerificationDepositMetadata,
@@ -355,6 +363,56 @@ export function deriveTransactionNotification(
       )
     }
 
+    if (direction === "in" && isYcFundBalanceDepositMetadata(meta)) {
+      const review = normalizeYcFundBalanceDepositReview(meta.deposit_review)
+      const activityLabel = resolveYcFundBalanceNotificationActivityLabel({
+        depositDisplayTitle: meta.deposit_display_title,
+        residenceCountry: review?.residence_country ?? meta.residence_country,
+        payInRail: review?.pay_in_rail ?? meta.pay_in_rail,
+        localCurrency: review?.local_currency ?? meta.local_currency,
+      })
+      const body = input.failureReason
+        ? `Your ${activityLabel} could not be completed. ${input.failureReason}`
+        : `Your ${activityLabel} could not be completed.`
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "bank_deposit",
+          body,
+          pushBody: body,
+          category: String(meta.deposit_display_title ?? activityLabel),
+        },
+        activityLabel,
+      )
+    }
+
+    if (
+      direction === "in" &&
+      isNoahVaFundingDeposit({
+        provider: input.provider,
+        direction: "in",
+        metadata: meta,
+      })
+    ) {
+      const currency = String(
+        meta?.fiat_deposit_currency ?? meta?.settled_currency ?? input.currency ?? "USD",
+      )
+      const activityLabel = resolveNoahVaFundingNotificationActivityLabel(currency)
+      const body = input.failureReason
+        ? `Your ${activityLabel} could not be completed. ${input.failureReason}`
+        : `Your ${activityLabel} could not be completed.`
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "bank_deposit",
+          body,
+          pushBody: body,
+          category: resolveNoahVaFundingDepositTitleFromMeta(meta ?? {}),
+        },
+        activityLabel,
+      )
+    }
+
     const category = toEasnerTransactionProductCategory({
       provider,
       direction: direction ?? "out",
@@ -594,6 +652,52 @@ export function deriveTransactionNotification(
       activityLabelForNotification("bank_verification_credit", "Bank verification"),
       { successUsesCompleteSuffix: false },
     )
+    }
+    if (isYcFundBalanceDepositMetadata(meta) || normalizeYcFundBalanceDepositReview(meta.deposit_review)) {
+      const review = normalizeYcFundBalanceDepositReview(meta.deposit_review)
+      const activityLabel = resolveYcFundBalanceNotificationActivityLabel({
+        depositDisplayTitle: meta.deposit_display_title,
+        residenceCountry: review?.residence_country ?? meta.residence_country,
+        payInRail: review?.pay_in_rail ?? meta.pay_in_rail,
+        localCurrency: review?.local_currency ?? meta.local_currency,
+      })
+      const usdCredit = review?.usd_credit ?? Number(meta.usd_credit ?? input.amount)
+      const pushBody =
+        review && Number.isFinite(usdCredit) && usdCredit > 0
+          ? `${formatMoneyDisplay(usdCredit, "USD")} credited to your USD balance`
+          : BANK_DEPOSIT_COMPLETED_DESCRIPTION
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "bank_deposit",
+          body: pushBody,
+          pushBody,
+          category: String(meta.deposit_display_title ?? activityLabel),
+        },
+        activityLabel,
+      )
+    }
+    if (
+      isNoahVaFundingDeposit({
+        provider: input.provider,
+        direction: "in",
+        metadata: meta,
+      })
+    ) {
+      const currency = String(
+        meta.fiat_deposit_currency ?? meta.settled_currency ?? input.currency ?? "USD",
+      )
+      const activityLabel = resolveNoahVaFundingNotificationActivityLabel(currency)
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "bank_deposit",
+          body: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
+          pushBody: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
+          category: resolveNoahVaFundingDepositTitleFromMeta(meta),
+        },
+        activityLabel,
+      )
     }
     if (isBankOnrampDepositFlow(meta)) {
       return finalizeDescriptor(

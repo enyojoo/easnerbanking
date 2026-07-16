@@ -1,5 +1,5 @@
 import { formatDisplayPersonName } from "../format-display-name"
-import { isEasetagReceiveTitle, isEasnerProductSendTitle } from "./product-label"
+import { isEasetagReceiveTitle, isEasnerProductReceiveTitle, isEasnerProductSendTitle } from "./product-label"
 
 export type TransactionDetailHeroTitleInput = {
   direction: "in" | "out"
@@ -17,7 +17,10 @@ export function formatTransactionDetailHeroTitle(input: TransactionDetailHeroTit
   if (input.direction === "out") {
     return name ? `Transfer to ${name}` : String(input.productFallback || "Transfer").trim() || "Transfer"
   }
-  return name
-    ? `Deposit from ${name}`
-    : String(input.productFallback || "Bank Deposit").trim() || "Bank Deposit"
+  const productFallback = String(input.productFallback || "Bank Deposit").trim() || "Bank Deposit"
+  if (name && !isEasnerProductReceiveTitle(input.counterpartyName)) {
+    return `Deposit from ${name}`
+  }
+  if (isEasnerProductReceiveTitle(productFallback)) return productFallback
+  return productFallback
 }

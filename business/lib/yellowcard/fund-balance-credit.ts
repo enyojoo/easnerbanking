@@ -7,6 +7,7 @@ import {
   buildYcFundBalanceReceiveMetadata,
   mergeYcFundBalanceLifecycle,
 } from "@/lib/yellowcard/yc-ledger"
+import { resolveLedgerOccurredAt } from "@/lib/ledger/ledger-occurred-at"
 
 const MARGIN_SEND_MIN = 0.01
 
@@ -230,10 +231,15 @@ export async function patchYcFundBalanceReceiveStatus(
 
   const { data: txRow } = await admin
     .from("transactions")
-    .select("metadata")
+    .select("metadata, occurred_at, created_at")
     .eq("id", input.transactionId)
     .maybeSingle()
   const prior = asMeta(txRow?.metadata)
+  const occurredAt = resolveLedgerOccurredAt({
+    occurredAt: txRow?.occurred_at != null ? String(txRow.occurred_at) : null,
+    createdAt: txRow?.created_at != null ? String(txRow.created_at) : null,
+    fallback: now,
+  })
   let meta = buildYcFundBalanceReceiveMetadata({
     prior,
     sequenceId: input.sequenceId,
@@ -255,6 +261,7 @@ export async function patchYcFundBalanceReceiveStatus(
     .update({
       status: input.status === "failed" ? "failed" : input.status === "processing" ? "processing" : "pending",
       metadata: meta,
+      occurred_at: occurredAt,
       updated_at: now,
     })
     .eq("id", input.transactionId)

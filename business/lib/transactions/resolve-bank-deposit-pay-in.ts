@@ -9,9 +9,13 @@ import {
   deriveVerificationDepositNarrationLabel,
   isBankOnrampDepositFlow,
   isVerificationDepositMetadata,
-  resolveTransactionTimingAnchors,
+  isYcFundBalanceDepositMetadata,
+  reconstructYcFundBalanceDepositReview,
+  resolveYcFundBalanceDepositDisplayTitle,
   type BankDepositLifecycleStep,
   type TransactionTimingRow,
+  type YcFundBalanceDepositReviewSnapshot,
+  resolveTransactionTimingAnchors,
 } from "@easner/shared"
 import {
   deriveNoahBankPayInRemitterName,
@@ -79,6 +83,9 @@ export type ResolvedBankDepositPayIn = {
   ledgerCreatedAt: string | null
   transactionTiming: TransactionTimingRow[]
   fiatDepositId: string | null
+  depositReview?: YcFundBalanceDepositReviewSnapshot | null
+  depositDisplayTitle?: string | null
+  displayHeroTitle?: string | null
 }
 
 export function resolveBankDepositPayInDetail(
@@ -96,7 +103,7 @@ export function resolveBankDepositPayInDetail(
   const isFiatDepositPayload = isNoahFiatDepositWebhookPayload(payload)
   const isYcFundBalance =
     String(row.provider ?? "").toLowerCase() === "yellowcard" &&
-    (meta.yc_mode === "fund_balance" || meta.flow === "bank_onramp")
+    (isYcFundBalanceDepositMetadata(meta) || meta.flow === "bank_onramp")
   if (
     !isNoahBankOnrampFiatPayIn(payload) &&
     !isBankOnrampDepositFlow(meta) &&
@@ -118,19 +125,30 @@ export function resolveBankDepositPayInDetail(
       typeof meta.processing_fee === "number" ? meta.processing_fee : Number(meta.processing_fee),
     )
     const fiatCurrency = String(meta.local_currency ?? "NGN").toUpperCase()
+    const payInRail =
+      String(meta.pay_in_rail ?? "").trim().toLowerCase() === "mobile_money"
+        ? "mobile_money"
+        : "bank_transfer"
     const processingAt = pickIso(meta.processing_at, row.occurred_at)
     const completedAt = pickIso(meta.completed_at, row.settled_at)
     const failedAt = pickIso(meta.failed_at)
+    const depositReview = reconstructYcFundBalanceDepositReview(
+      meta,
+      typeof meta.customer_rate === "number" ? meta.customer_rate : Number(meta.customer_rate),
+    )
+    const depositDisplayTitle = resolveYcFundBalanceDepositDisplayTitle(meta)
+    const displayHeroTitle =
+      String(meta.display_hero_title ?? "").trim() || depositDisplayTitle
+    const sourcePaymentRail = payInRail === "mobile_money" ? "mobile_money" : "local_bank"
     const schemeCtx = {
       metadata: {
         ...meta,
         flow: "bank_onramp",
         fiat_deposit_currency: fiatCurrency,
-        source_payment_rail: "local_bank",
+        source_payment_rail: sourcePaymentRail,
       },
       payload,
     }
-    const sourcePaymentRail = deriveBankDepositPaymentRail(schemeCtx) || "local_bank"
     const depositSchemeLabel = deriveBankDepositSchemeLabel({
       metadata: { ...schemeCtx.metadata, source_payment_rail: sourcePaymentRail },
       payload,
@@ -147,7 +165,9 @@ export function resolveBankDepositPayInDetail(
         settled_currency: "USD",
         source_payment_rail: sourcePaymentRail,
         deposit_scheme_label: depositSchemeLabel,
-        payment_reference: meta.yc_sequence_id != null ? String(meta.yc_sequence_id) : null,
+        deposit_display_title: depositDisplayTitle,
+        display_hero_title: displayHeroTitle,
+        ...(depositReview ? { deposit_review: depositReview } : {}),
       },
       {
         processing_at: processingAt,
@@ -190,13 +210,16 @@ export function resolveBankDepositPayInDetail(
       sourcePaymentRail,
       senderName: null,
       narration: null,
-      reference: meta.yc_sequence_id != null ? String(meta.yc_sequence_id) : null,
+      reference: null,
       processingAt,
       completedAt,
       transactionStartedAt: processingAt,
       ledgerCreatedAt: row.created_at != null ? String(row.created_at) : null,
       transactionTiming,
       fiatDepositId: meta.yc_sequence_id != null ? String(meta.yc_sequence_id) : null,
+      depositReview,
+      depositDisplayTitle,
+      displayHeroTitle,
     }
   }
 

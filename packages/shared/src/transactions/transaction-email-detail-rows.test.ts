@@ -100,6 +100,33 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(map["Amount credited"]).toBe("$50")
   })
 
+  it("YC fund_balance deposit_review rows mirror review screen", () => {
+    const rows = buildTransactionEmailDetailRows({
+      direction: "in",
+      depositReview: {
+        local_pay_in: 100000,
+        local_currency: "NGN",
+        usd_credit: 65,
+        processing_fee: 0.65,
+        exchange_fee: 0.1,
+        exchange_rate: 1538.46,
+        transfer_method: "Bank Transfer",
+        credit_to: "USD Balance",
+        residence_country: "NG",
+        pay_in_rail: "bank_transfer",
+      },
+    })
+    const map = rowMap(rows)
+    expect(map["Amount paid"]).toBe("₦100,000")
+    expect(map["Processing fee"]).toBeDefined()
+    expect(map["Exchange rate"]).toBeDefined()
+    expect(map["Credit amount"]).toBe("$65")
+    expect(map["Credit to"]).toBe("USD Balance")
+    expect(map["Transfer method"]).toBe("Bank Transfer")
+    expect(map["Scheme"]).toBeUndefined()
+    expect(map["Narration"]).toBeUndefined()
+  })
+
   it("returns no rows for shapes without enrichment (e.g. Easetag)", () => {
     expect(buildTransactionEmailDetailRows({ direction: "out" })).toEqual([])
     expect(buildTransactionEmailDetailRows({ direction: "in" })).toEqual([])

@@ -92,6 +92,7 @@ export interface Transaction {
   ledgerAmount?: number
   ledgerCurrency?: string
   payoutReview?: import("@easner/shared").GlobalPayoutReviewSnapshot
+  depositReview?: import("@easner/shared").YcFundBalanceDepositReviewSnapshot
   recipientSnapshot?: import("@easner/shared").GlobalPayoutRecipientSnapshot
   transactionTiming?: import("@easner/shared").TransactionTimingRow[]
 }

@@ -1,0 +1,140 @@
+import { describe, expect, it } from "vitest"
+import {
+  buildYcFundBalanceDepositReviewSnapshot,
+  inferResidenceCountryFromLocalCurrency,
+  isNoahVaFundingDeposit,
+  normalizeYcFundBalanceDepositReview,
+  reconstructYcFundBalanceDepositReview,
+  resolveNoahVaFundingDepositTitle,
+  resolveYcFundBalanceDepositTitle,
+  resolveYcFundBalanceNotificationActivityLabel,
+} from "./yc-deposit-display"
+
+describe("resolveYcFundBalanceDepositTitle", () => {
+  it("NG bank → Nigeria Bank Deposit", () => {
+    expect(
+      resolveYcFundBalanceDepositTitle({
+        residenceCountry: "NG",
+        payInRail: "bank_transfer",
+        localCurrency: "NGN",
+      }),
+    ).toBe("Nigeria Bank Deposit")
+  })
+
+  it("NG MOMO → Nigeria MOMO Deposit", () => {
+    expect(
+      resolveYcFundBalanceDepositTitle({
+        residenceCountry: "NG",
+        payInRail: "mobile_money",
+        localCurrency: "NGN",
+      }),
+    ).toBe("Nigeria MOMO Deposit")
+  })
+
+  it("USD international → US Bank Deposit", () => {
+    expect(
+      resolveYcFundBalanceDepositTitle({
+        residenceCountry: "US",
+        payInRail: "bank_transfer",
+        localCurrency: "USD",
+      }),
+    ).toBe("US Bank Deposit")
+  })
+
+  it("infers country from local currency when residence missing", () => {
+    expect(
+      resolveYcFundBalanceDepositTitle({
+        payInRail: "bank_transfer",
+        localCurrency: "NGN",
+      }),
+    ).toBe("Nigeria Bank Deposit")
+  })
+})
+
+describe("resolveYcFundBalanceNotificationActivityLabel", () => {
+  it("sentence-cases bank deposit title", () => {
+    expect(
+      resolveYcFundBalanceNotificationActivityLabel({
+        depositDisplayTitle: "Nigeria Bank Deposit",
+      }),
+    ).toBe("Nigeria bank deposit")
+  })
+
+  it("preserves MOMO in activity label", () => {
+    expect(
+      resolveYcFundBalanceNotificationActivityLabel({
+        depositDisplayTitle: "Nigeria MOMO Deposit",
+      }),
+    ).toBe("Nigeria MOMO deposit")
+  })
+})
+
+describe("inferResidenceCountryFromLocalCurrency", () => {
+  it("maps NGN to NG", () => {
+    expect(inferResidenceCountryFromLocalCurrency("NGN")).toBe("NG")
+  })
+})
+
+describe("Noah VA funding titles", () => {
+  it("USD → US Bank Deposit", () => {
+    expect(resolveNoahVaFundingDepositTitle("USD")).toBe("US Bank Deposit")
+  })
+
+  it("EUR → EU Bank Deposit", () => {
+    expect(resolveNoahVaFundingDepositTitle("EUR")).toBe("EU Bank Deposit")
+  })
+
+  it("detects Noah VA funding rows", () => {
+    expect(
+      isNoahVaFundingDeposit({
+        provider: "noah",
+        direction: "in",
+        metadata: { flow: "bank_onramp", fiat_deposit_currency: "USD" },
+      }),
+    ).toBe(true)
+  })
+
+  it("excludes YC fund_balance", () => {
+    expect(
+      isNoahVaFundingDeposit({
+        provider: "noah",
+        direction: "in",
+        metadata: { flow: "bank_onramp", yc_mode: "fund_balance" },
+      }),
+    ).toBe(false)
+  })
+})
+
+describe("deposit review snapshot", () => {
+  it("builds and normalizes review snapshot", () => {
+    const snapshot = buildYcFundBalanceDepositReviewSnapshot({
+      localPayIn: 100000,
+      localCurrency: "NGN",
+      usdCredit: 65,
+      processingFee: 0.65,
+      exchangeFee: 0.1,
+      exchangeRate: 1538.46,
+      residenceCountry: "NG",
+      payInRail: "bank_transfer",
+    })
+    expect(snapshot.transfer_method).toBe("Bank Transfer")
+    expect(snapshot.credit_to).toBe("USD Balance")
+    expect(normalizeYcFundBalanceDepositReview(snapshot)?.local_pay_in).toBe(100000)
+  })
+
+  it("reconstructs legacy metadata without deposit_review", () => {
+    const review = reconstructYcFundBalanceDepositReview(
+      {
+        local_pay_in: 50000,
+        local_currency: "NGN",
+        usd_credit: 32.5,
+        processing_fee: 0.33,
+        pay_in_rail: "mobile_money",
+        residence_country: "NG",
+      },
+      1538,
+    )
+    expect(review?.transfer_method).toBe("Mobile Money")
+    expect(review?.pay_in_rail).toBe("mobile_money")
+  })
+})

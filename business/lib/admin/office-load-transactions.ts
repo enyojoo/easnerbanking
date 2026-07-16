@@ -107,23 +107,36 @@ export async function loadOfficeLedgerTransactions(
   opts: { userId?: string; limit?: number } = {},
 ): Promise<{ data: OfficeLedgerTransaction[]; error: { message: string } | null }> {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 150)
+  const fetchLimit = Math.min(limit * 3, 450)
   let q = admin
     .from("transactions")
     .select(OFFICE_LEDGER_LIST_SELECT)
     .eq("hidden_from_feed", false)
     .order("occurred_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
 
   if (opts.userId) {
     q = q.eq("user_id", opts.userId)
   }
 
-  const txRes = await q.limit(limit)
+  const txRes = await q.limit(fetchLimit)
 
   if (txRes.error) {
     return { data: [], error: txRes.error }
   }
 
-  const rows = (txRes.data || []) as Omit<OfficeLedgerTransaction, "user" | "business">[]
+  const rows = [...((txRes.data || []) as Omit<OfficeLedgerTransaction, "user" | "business">[])].sort(
+    (a, b) => {
+      const da = new Date(a.occurred_at || a.created_at || 0).getTime()
+      const db = new Date(b.occurred_at || b.created_at || 0).getTime()
+      if (db !== da) return db - da
+      const ca = new Date(a.created_at || 0).getTime()
+      const cb = new Date(b.created_at || 0).getTime()
+      if (cb !== ca) return cb - ca
+      return String(b.id).localeCompare(String(a.id))
+    },
+  ).slice(0, limit)
   const userIds = [...new Set(rows.map((t) => t.user_id).filter((id): id is string => Boolean(id)))]
   const businessIds = [...new Set(rows.map((t) => t.business_id).filter((id): id is string => Boolean(id)))]
 

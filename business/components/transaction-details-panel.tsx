@@ -14,6 +14,7 @@ import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { TransactionLifecycleTracker } from "@/components/transactions/transaction-lifecycle-tracker"
 import { TransactionDetailHero } from "@/components/transactions/transaction-detail-hero"
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
+import { DepositReviewDetailsRows } from "@/components/transactions/deposit-review-details-rows"
 import { REVIEW_ROW_LABELS } from "@easner/shared"
 
 export interface TransactionDetailsPanelProps {
@@ -229,6 +230,7 @@ export function TransactionDetailsPanel({
   if (!transaction) return null
 
   const isGlobalPayout = Boolean(transaction.payoutReview)
+  const isYcFundBalanceDeposit = Boolean(transaction.depositReview)
   const isWalletSendPayout =
     transaction.payoutReview?.execution_model === "direct_turnkey" ||
     transaction.payoutReview?.execution_model === "lifi_bridge"
@@ -295,6 +297,16 @@ export function TransactionDetailsPanel({
               ? transaction.counterpartyAddress ?? transaction.walletAddress
               : undefined
           }
+          whenAt={transaction.ledgerCreatedAt ?? transaction.date}
+          mode="detail"
+        />
+      ) : isYcFundBalanceDeposit && transaction.depositReview ? (
+        <DepositReviewDetailsRows
+          transactionId={transaction.id}
+          depositReview={transaction.depositReview}
+          timingRows={transaction.transactionTiming}
+          copiedKey={copiedKey}
+          onCopy={handleCopy}
           whenAt={transaction.ledgerCreatedAt ?? transaction.date}
           mode="detail"
         />

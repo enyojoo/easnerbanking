@@ -79,9 +79,12 @@ import {
   hasWalletSendFxDisplay,
   shouldShowPayoutReviewFeeRow,
   REVIEW_ROW_LABELS,
+  reviewPrimaryAmountLabel,
   type GlobalPayoutReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
+  type YcFundBalanceDepositReviewSnapshot,
 } from '@easner/shared'
+import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { haptics } from '../../lib/haptics'
@@ -134,6 +137,7 @@ interface LedgerTransaction {
   ledger_amount?: number
   ledger_currency?: string
   payout_review?: GlobalPayoutReviewSnapshot
+  deposit_review?: YcFundBalanceDepositReviewSnapshot
   recipient_snapshot?: GlobalPayoutRecipientSnapshot
   send_note?: string
   transaction_timing?: Array<{ label: string; value: string }>
@@ -724,7 +728,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const isStablecoinReceive =
     transaction.transaction_type === 'receive' &&
     transaction.source_type === 'liquidation_address'
+  const isYcFundBalanceDeposit =
+    transaction.transaction_type === 'receive' && Boolean(transaction.deposit_review)
   const isBankOnrampReceive =
+    !isYcFundBalanceDeposit &&
     !isStablecoinReceive &&
     transaction.transaction_type === 'receive' &&
     (Boolean(transaction.lifecycle?.length) ||
@@ -780,6 +787,19 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         exchangeFee: transaction.payout_review.exchange_fee,
       })
     : 0
+  const ycDepositReview = transaction.deposit_review
+  const ycDisplayProcessingFee = ycDepositReview
+    ? computeDisplayProcessingFee({
+        processingFee: ycDepositReview.processing_fee,
+        exchangeFee: ycDepositReview.exchange_fee,
+      })
+    : 0
+  const showYcDepositProcessingFee =
+    !!ycDepositReview &&
+    shouldShowPayoutReviewFeeRow({
+      processingFee: ycDepositReview.processing_fee,
+      exchangeFee: ycDepositReview.exchange_fee,
+    })
   const easetagWhenTs = whenTs
 
   // Downloadable receipt (image) — completed, non-Easetag transactions. Reuses the same
@@ -816,6 +836,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   }
                 : undefined,
           })
+        : isYcFundBalanceDeposit && ycDepositReview
+          ? buildTransactionEmailDetailRows({
+              direction: 'in',
+              depositReview: ycDepositReview,
+            })
         : isBankOnrampReceive || isStablecoinReceive
           ? buildTransactionEmailDetailRows({
               direction: 'in',
@@ -995,6 +1020,63 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.sender}</Text>
                     <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
                   </View>
+                ) : null}
+
+                {!isEasetagP2p && isYcFundBalanceDeposit && ycDepositReview ? (
+                  <>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>
+                        {reviewPrimaryAmountLabel('local_pay_in', 'detail')}
+                      </Text>
+                      <Text style={styles.summaryValue}>
+                        {formatMoneyDisplay(
+                          ycDepositReview.local_pay_in,
+                          ycDepositReview.local_currency,
+                        )}
+                      </Text>
+                    </View>
+                    {showYcDepositProcessingFee ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.processingFee}</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatMoneyDisplay(ycDisplayProcessingFee, 'USD')}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {ycDepositReview.exchange_rate > 0 ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.exchangeRate}</Text>
+                        <Text style={styles.summaryValue}>
+                          {formatSendRateLabel(
+                            'USD',
+                            ycDepositReview.local_currency,
+                            ycDepositReview.exchange_rate,
+                          )}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.creditAmount}</Text>
+                      <Text style={[styles.summaryValue, styles.summaryValueBold]}>
+                        {formatMoneyDisplay(ycDepositReview.usd_credit, 'USD')}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.creditTo}</Text>
+                      <View style={styles.creditToRow}>
+                        <CurrencyFlag currency="USD" size={20} />
+                        <Text style={styles.summaryValue}>{ycDepositReview.credit_to}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.transferMethod}</Text>
+                      <Text style={styles.summaryValue}>{ycDepositReview.transfer_method}</Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.when}</Text>
+                      <Text style={styles.summaryValue}>{formatTimestamp(whenTs)}</Text>
+                    </View>
+                  </>
                 ) : null}
 
                 {!isEasetagP2p && isBankOnrampReceive ? (
@@ -1638,6 +1720,16 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
     marginLeft: spacing[2],
+  },
+  summaryValueBold: {
+    fontWeight: '700',
+  },
+  creditToRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   summaryMonoValue: {
     fontFamily: fontFamily.mono,

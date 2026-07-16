@@ -36,7 +36,16 @@ export function attachBankDepositDetailFields(
     transactionStartedAt,
     ledgerCreatedAt,
     transactionTiming,
+    depositReview,
+    depositDisplayTitle,
+    displayHeroTitle,
   } = detail
+
+  const isYcFundBalance = Boolean(depositReview)
+  const transactionProduct =
+    depositDisplayTitle ??
+    (transaction.transaction_product as string | undefined) ??
+    "Bank Deposit"
 
   return {
     ...transaction,
@@ -46,18 +55,32 @@ export function attachBankDepositDetailFields(
       detail.sourcePaymentRail ??
       transaction.source_payment_rail ??
       "ach",
-    payment_scheme:
-      detail.depositSchemeLabel ??
-      (effectiveMetadata.deposit_scheme_label as string | undefined),
-    transaction_product: transaction.transaction_product ?? "Bank Deposit",
+    ...(isYcFundBalance
+      ? {}
+      : {
+          payment_scheme:
+            detail.depositSchemeLabel ??
+            (effectiveMetadata.deposit_scheme_label as string | undefined),
+        }),
+    transaction_product: transactionProduct,
+    ...(displayHeroTitle ? { display_hero_title: displayHeroTitle } : {}),
+    ...(depositReview ? { deposit_review: depositReview } : {}),
     metadata: {
       ...((transaction.metadata as Record<string, unknown> | undefined) ?? {}),
       ...effectiveMetadata,
     },
     ...(senderName
       ? { sender_display_name: senderName, name: senderName }
-      : {}),
-    ...(narration ? { reference: narration, narration } : reference ? { reference } : {}),
+      : isYcFundBalance && depositDisplayTitle
+        ? { name: depositDisplayTitle }
+        : {}),
+    ...(isYcFundBalance
+      ? {}
+      : narration
+        ? { reference: narration, narration }
+        : reference
+          ? { reference }
+          : {}),
     deposit_amount: depositAmount,
     ...(feeAmount != null ? { fee_amount: feeAmount } : {}),
     ...(postedAmount != null

@@ -20,6 +20,7 @@ import {
 } from "../payout-review-display"
 import { normalizeTransferMethodLabel } from "./payout-transfer-method"
 import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
+import type { YcFundBalanceDepositReviewSnapshot } from "./global-deposit-types"
 
 export type TransactionEmailDetailRow = { label: string; value: string }
 
@@ -47,6 +48,7 @@ export type TransactionEmailDetailInput = {
     postedCurrency?: string | null
     narration?: string | null
   } | null
+  depositReview?: YcFundBalanceDepositReviewSnapshot | null
 }
 
 function pushIf(
@@ -128,6 +130,35 @@ function buildDepositRows(deposit: NonNullable<TransactionEmailDetailInput["depo
   return rows
 }
 
+function buildYcFundBalanceDepositRows(
+  review: YcFundBalanceDepositReviewSnapshot,
+): TransactionEmailDetailRow[] {
+  const rows: TransactionEmailDetailRow[] = []
+  const displayProcessingFee = computeDisplayProcessingFee({
+    processingFee: review.processing_fee,
+    exchangeFee: review.exchange_fee,
+  })
+  pushIf(
+    rows,
+    REVIEW_ROW_LABELS.amountPaid,
+    formatMoneyDisplay(review.local_pay_in, review.local_currency),
+  )
+  if (isPayoutReviewFeeVisible(displayProcessingFee)) {
+    pushIf(rows, REVIEW_ROW_LABELS.processingFee, formatMoneyDisplay(displayProcessingFee, "USD"))
+  }
+  if (review.exchange_rate > 0) {
+    pushIf(
+      rows,
+      REVIEW_ROW_LABELS.exchangeRate,
+      formatSendRateLabel("USD", review.local_currency, review.exchange_rate),
+    )
+  }
+  pushIf(rows, REVIEW_ROW_LABELS.creditAmount, formatMoneyDisplay(review.usd_credit, "USD"))
+  pushIf(rows, REVIEW_ROW_LABELS.creditTo, review.credit_to)
+  pushIf(rows, REVIEW_ROW_LABELS.transferMethod, review.transfer_method)
+  return rows
+}
+
 /**
  * Canonical email detail rows (excluding Transaction ID / Status / Date, which the template owns).
  * Returns `[]` for shapes without enrichment (e.g. Easetag, which has no Processing fee row).
@@ -136,6 +167,7 @@ export function buildTransactionEmailDetailRows(
   input: TransactionEmailDetailInput,
 ): TransactionEmailDetailRow[] {
   if (input.payoutReview) return buildPayoutRows(input.payoutReview, input)
+  if (input.depositReview) return buildYcFundBalanceDepositRows(input.depositReview)
   if (input.direction === "in" && input.deposit) return buildDepositRows(input.deposit)
   return []
 }

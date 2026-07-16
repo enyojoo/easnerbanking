@@ -12,6 +12,10 @@ import {
   resolveGlobalPayoutListDisplay,
   resolveWalletSendListDisplay,
   toEasnerTransactionPrimaryLabel,
+  isYcFundBalanceDepositMetadata,
+  resolveYcFundBalanceDepositDisplayTitle,
+  isNoahVaFundingDeposit,
+  resolveNoahVaFundingDepositTitleFromMeta,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
@@ -90,6 +94,15 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const status = mapLedgerStatusForUserFeed(String(row.status ?? "")) as TransactionWithSource["status"]
 
   const isVerification = isVerificationDepositMetadata(meta)
+  const isYcFundBalance = isYcFundBalanceDepositMetadata(meta)
+  const ycDepositTitle = isYcFundBalance ? resolveYcFundBalanceDepositDisplayTitle(meta ?? {}) : undefined
+  const noahVaDepositTitle =
+    !isVerification &&
+    !isYcFundBalance &&
+    dirRaw === "in" &&
+    isNoahVaFundingDeposit({ provider, direction: "in", metadata: meta })
+      ? resolveNoahVaFundingDepositTitleFromMeta(meta ?? {})
+      : undefined
   const globalPayoutDetail = resolveGlobalPayoutOffRampDetail(row)
   const ledgerAmountForReview =
     typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
@@ -113,7 +126,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     globalPayoutDetail || walletSendPayoutReview ? null : resolveWalletSendListDisplay(row)
   const globalPayout = globalPayoutDetail ?? globalPayoutList
   const bankLabel =
-    !isVerification && !globalPayout && (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
+    !isVerification && !isYcFundBalance && !globalPayout && (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
       ? deriveBankDepositInboundDisplayLabel({ metadata: meta, payload: payload ?? undefined })
       : undefined
   const counterpartyNameRaw = deriveCounterpartyName({ metadata: meta, payload })
@@ -151,6 +164,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const displaySource = globalPayout ?? walletSendDisplay ?? walletSendListDisplay
   const description =
     displaySource?.displayDescription ??
+    ycDepositTitle ??
     bankLabel ??
     toEasnerTransactionPrimaryLabel({
       provider,
@@ -211,13 +225,19 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const displayHeroTitle =
     displaySource?.displayHeroTitle ??
-    (bankLabel && dirRaw === "in"
-      ? formatTransactionDetailHeroTitle({
-          direction: "in",
-          counterpartyName: bankLabel,
-          productFallback: "Bank Deposit",
-        })
-      : undefined)
+    (bankDepositDetail?.displayHeroTitle
+      ? bankDepositDetail.displayHeroTitle
+      : ycDepositTitle
+        ? ycDepositTitle
+        : noahVaDepositTitle
+          ? noahVaDepositTitle
+          : bankLabel && dirRaw === "in"
+            ? formatTransactionDetailHeroTitle({
+                direction: "in",
+                counterpartyName: bankLabel,
+                productFallback: noahVaDepositTitle ?? "Bank Deposit",
+              })
+            : undefined)
   const sendNote =
     typeof meta?.send_note === "string"
       ? meta.send_note.trim()
@@ -287,8 +307,15 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             depositAmount: bankDepositDetail.depositAmount,
             postedAmount: bankDepositDetail.postedAmount ?? undefined,
             postedCurrency: bankDepositDetail.postedCurrency,
-            paymentScheme: bankDepositDetail.depositSchemeLabel,
-            narration: bankDepositDetail.narration ?? undefined,
+            ...(bankDepositDetail.depositReview
+              ? {
+                  depositReview: bankDepositDetail.depositReview,
+                  displayHeroTitle: bankDepositDetail.displayHeroTitle ?? ycDepositTitle,
+                }
+              : {
+                  paymentScheme: bankDepositDetail.depositSchemeLabel,
+                  narration: bankDepositDetail.narration ?? undefined,
+                }),
             fee: bankDepositDetail.feeAmount || undefined,
             ledgerCreatedAt: bankDepositDetail.ledgerCreatedAt ?? ledgerCreatedAt,
           }

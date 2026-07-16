@@ -252,4 +252,23 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.ledger_currency).toBe("USD")
     expect(item.display_hero_title).toBe("Transfer to External Wallet")
   })
+
+  it("maps YC fund_balance list name from deposit_display_title", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        provider: "yellowcard",
+        metadata: {
+          yc_mode: "fund_balance",
+          flow: "bank_onramp",
+          deposit_display_title: "Nigeria Bank Deposit",
+          local_pay_in: 100000,
+          local_currency: "NGN",
+          usd_credit: 65,
+        },
+      }),
+    )
+    expect(item.name).toBe("Nigeria Bank Deposit")
+    expect(item.display_hero_title).toBe("Nigeria Bank Deposit")
+    expect(item.transaction_product).toBe("Nigeria Bank Deposit")
+  })
 })

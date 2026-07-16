@@ -2,6 +2,7 @@
  * Yellowcard ledger helpers — Noah-parity metadata, lookups, and refund flags.
  */
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { YcFundBalanceDepositReviewSnapshot } from "@easner/shared"
 import { mergeBankDepositLifecycleMetadata, mergeGlobalPayoutLifecycleMetadata } from "@/lib/noah/bank-onramp-tx"
 import { pendingGlobalPayoutProviderTransactionId } from "@/lib/noah/global-payout-ledger"
 
@@ -155,6 +156,12 @@ export function buildYcFundBalanceReceiveMetadata(input: {
   localCurrency?: string | null
   usdCredit?: number | null
   processingFee?: number | null
+  residenceCountry?: string | null
+  payInRail?: "bank_transfer" | "mobile_money" | null
+  customerRate?: number | null
+  depositReview?: YcFundBalanceDepositReviewSnapshot | null
+  depositDisplayTitle?: string | null
+  displayHeroTitle?: string | null
 }): Record<string, unknown> {
   return {
     ...(input.prior ?? {}),
@@ -167,6 +174,14 @@ export function buildYcFundBalanceReceiveMetadata(input: {
     ...(input.localCurrency ? { local_currency: input.localCurrency } : {}),
     ...(input.usdCredit != null ? { usd_credit: input.usdCredit } : {}),
     ...(input.processingFee != null ? { processing_fee: input.processingFee } : {}),
+    ...(input.residenceCountry ? { residence_country: String(input.residenceCountry).trim().toUpperCase() } : {}),
+    ...(input.payInRail ? { pay_in_rail: input.payInRail } : {}),
+    ...(input.customerRate != null && Number.isFinite(input.customerRate)
+      ? { customer_rate: input.customerRate }
+      : {}),
+    ...(input.depositReview ? { deposit_review: input.depositReview } : {}),
+    ...(input.depositDisplayTitle ? { deposit_display_title: input.depositDisplayTitle } : {}),
+    ...(input.displayHeroTitle ? { display_hero_title: input.displayHeroTitle } : {}),
     ...(input.payload ? { yc_webhook_payload_keys: Object.keys(input.payload).slice(0, 40) } : {}),
   }
 }

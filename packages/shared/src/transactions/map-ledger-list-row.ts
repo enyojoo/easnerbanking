@@ -26,6 +26,10 @@ import {
   toEasnerTransactionPrimaryLabel,
 } from "./product-label"
 import {
+  isYcFundBalanceDepositMetadata,
+  resolveYcFundBalanceDepositDisplayTitle,
+} from "./yc-deposit-display"
+import {
   isVerificationDepositMetadata,
   VERIFICATION_DEPOSIT_LIST_LABEL,
 } from "./verification-deposit"
@@ -287,14 +291,17 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
   const currency = String(row.currency ?? "USD")
 
   const isVerification = isVerificationDepositMetadata(meta)
+  const isYcFundBalance = isYcFundBalanceDepositMetadata(meta)
+  const ycDepositTitle = isYcFundBalance ? resolveYcFundBalanceDepositDisplayTitle(meta ?? {}) : undefined
   const bankLabel =
-    !isVerification && isBankOnrampDepositFlow(meta)
+    !isVerification && !isYcFundBalance && isBankOnrampDepositFlow(meta)
       ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
       : undefined
 
   const name = isVerification
     ? VERIFICATION_DEPOSIT_LIST_LABEL
-    : bankLabel ??
+    : ycDepositTitle ??
+      bankLabel ??
       toEasnerTransactionPrimaryLabel({
         provider: String(row.provider ?? "noah"),
         direction: dirRaw === "in" ? "in" : "out",
@@ -334,7 +341,13 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
             ? { transaction_product: payoutDisplay.transactionProduct }
             : {}),
         }
-      : {}),
+      : isYcFundBalance
+        ? {
+            display_hero_title:
+              String(meta?.display_hero_title ?? "").trim() || ycDepositTitle,
+            transaction_product: ycDepositTitle,
+          }
+        : {}),
     status: st,
     created_at: created,
     noah_created_at: created,
