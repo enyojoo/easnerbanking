@@ -16,7 +16,7 @@ describe('ycPayInInstructionNotice', () => {
 
   it('returns mobile money copy', () => {
     expect(ycPayInInstructionNotice('mobile_money')).toBe(
-      'Click authorize, check your phone and approve the payment prompt from your network provider.',
+      'Click authorize, check your phone and approve the payment prompt.',
     )
   })
 })
@@ -24,7 +24,7 @@ describe('ycPayInInstructionNotice', () => {
 describe('ycPayInMomoAuthorizeNotice', () => {
   it('returns MoMo authorize screen notice', () => {
     expect(ycPayInMomoAuthorizeNotice()).toBe(
-      'Click authorize, check your phone and approve the payment prompt from your network provider.',
+      'Click authorize, check your phone and approve the payment prompt.',
     )
   })
 })

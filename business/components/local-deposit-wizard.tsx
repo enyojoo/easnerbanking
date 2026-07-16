@@ -26,6 +26,8 @@ import {
   formatYcPayInMinHint,
   validateYcFundBalancePayInAmount,
   REVIEW_ROW_LABELS,
+  computeYcFundBalancePrincipalLocalPayIn,
+  shouldShowPayoutReviewFeeRow,
   normalizeYcMomoPhone,
   type NgLocalIdType,
   type YcRateClientRow,
@@ -627,11 +629,25 @@ export function LocalDepositWizard({
                 processingFee: quote.processingFee ?? 0,
                 exchangeFee: quote.ycChannelFeeUsd ?? 0,
               }) * (reviewCustomerRate || 1))
-        : 0
-    const payAmountLabel = isMomo ? REVIEW_ROW_LABELS.estimatedToPay : REVIEW_ROW_LABELS.amountToPay
-    const creditAmountLabel = isMomo
-      ? REVIEW_ROW_LABELS.estimatedToCredit
-      : REVIEW_ROW_LABELS.amountToCredit
+        : isMomo && reviewCustomerRate > 0 && reviewLocalPayIn > 0
+          ? Math.max(
+              0,
+              Math.round((reviewLocalPayIn - reviewUsdCredit * reviewCustomerRate) * 100) / 100,
+            )
+          : 0
+    const reviewPrincipalLocal = computeYcFundBalancePrincipalLocalPayIn({
+      usdCredit: reviewUsdCredit,
+      exchangeRate: reviewCustomerRate,
+    })
+    const payAmountLabel = isMomo ? REVIEW_ROW_LABELS.estimatedToPay : REVIEW_ROW_LABELS.totalToPay
+    const creditAmountLabel = REVIEW_ROW_LABELS.amountToCredit
+    const showReviewFee =
+      reviewFeeLocal > 0 ||
+      (!isMomo &&
+        shouldShowPayoutReviewFeeRow({
+          processingFee: quote?.processingFee ?? 0,
+          exchangeFee: quote?.ycChannelFeeUsd ?? quote?.ycLegFeesUsd ?? 0,
+        }))
     const momoReady = Boolean((momoPhone.trim() || defaultPhone.trim()) && momoNetworkId)
     const reviewReady = isMomo
       ? Boolean(reviewCustomerRate && reviewLocalPayIn > 0 && momoReady)
@@ -661,17 +677,23 @@ export function LocalDepositWizard({
                   valueClassName="font-mono"
                 />
               ) : null}
-              <TransactionDetailSummaryRow
-                label={payAmountLabel}
-                value={formatReviewRowMoneyDisplay(payAmountLabel, reviewLocalPayIn, localPayInCurrency)}
-              />
               {reviewCustomerRate ? (
                 <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.exchangeRate}
                   value={formatSendRateLabel("USD", localPayInCurrency, reviewCustomerRate)}
                 />
               ) : null}
-              {!isMomo && reviewFeeLocal > 0 ? (
+              {reviewPrincipalLocal > 0 ? (
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.depositAmount}
+                  value={formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.depositAmount,
+                    reviewPrincipalLocal,
+                    localPayInCurrency,
+                  )}
+                />
+              ) : null}
+              {showReviewFee && reviewFeeLocal > 0 ? (
                 <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.processingFee}
                   value={formatReviewRowMoneyDisplay(
@@ -681,6 +703,11 @@ export function LocalDepositWizard({
                   )}
                 />
               ) : null}
+              <TransactionDetailSummaryRow
+                label={payAmountLabel}
+                value={formatReviewRowMoneyDisplay(payAmountLabel, reviewLocalPayIn, localPayInCurrency)}
+                valueClassName="font-semibold"
+              />
               <TransactionDetailSummaryRow
                 label={creditAmountLabel}
                 value={formatReviewRowMoneyDisplay(creditAmountLabel, reviewUsdCredit, "USD")}

@@ -456,6 +456,7 @@ export type {
   GlobalPayoutRecipientSnapshot,
   GlobalPayoutReviewSnapshot,
 } from "./transactions/global-payout-types"
+export type { YcFundBalanceLocalPayInBreakdown } from "./transactions/yc-deposit-display"
 export type {
   YcFundBalanceDepositReviewSnapshot,
   YcPayInRail,
@@ -479,6 +480,8 @@ export type {
 } from "./transactions/inbound-receive-detail"
 export {
   buildYcFundBalanceDepositReviewSnapshot,
+  computeYcFundBalancePrincipalLocalPayIn,
+  resolveYcFundBalanceLocalPayInBreakdown,
   inferResidenceCountryFromLocalCurrency,
   isNoahVaFundingDeposit,
   isYcFundBalanceDepositMetadata,

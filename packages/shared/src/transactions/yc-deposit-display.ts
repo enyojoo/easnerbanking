@@ -1,3 +1,4 @@
+import { computeDisplayProcessingFee } from "../payout-processing-fee"
 import { resolveReceiveCountryName } from "../receive-cash-method-labels"
 import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
 import { isVerificationDepositMetadata } from "./verification-deposit"
@@ -16,6 +17,78 @@ const LOCAL_CURRENCY_TO_COUNTRY: Record<string, string> = {
   COP: "CO",
   CLP: "CL",
   RWF: "RW",
+}
+
+function roundLocal(n: number): number {
+  if (!Number.isFinite(n)) return 0
+  return Math.round(n * 100) / 100
+}
+
+/** Local principal at quoted rate before processing fees. */
+export function computeYcFundBalancePrincipalLocalPayIn(input: {
+  usdCredit: number
+  exchangeRate: number
+}): number {
+  const usdCredit = Number(input.usdCredit)
+  const exchangeRate = Number(input.exchangeRate)
+  if (!Number.isFinite(usdCredit) || usdCredit <= 0) return 0
+  if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) return 0
+  return roundLocal(usdCredit * exchangeRate)
+}
+
+export type YcFundBalanceLocalPayInBreakdown = {
+  principalLocal: number
+  feeLocal: number
+  totalLocal: number
+  localCurrency: string
+}
+
+export function resolveYcFundBalanceLocalPayInBreakdown(
+  review: Pick<
+    YcFundBalanceDepositReviewSnapshot,
+    | "local_pay_in"
+    | "local_currency"
+    | "usd_credit"
+    | "exchange_rate"
+    | "principal_local_pay_in"
+    | "display_processing_fee_local"
+    | "processing_fee"
+    | "exchange_fee"
+  >,
+): YcFundBalanceLocalPayInBreakdown {
+  const principalLocal =
+    review.principal_local_pay_in != null &&
+    Number.isFinite(review.principal_local_pay_in) &&
+    review.principal_local_pay_in > 0
+      ? roundLocal(review.principal_local_pay_in)
+      : computeYcFundBalancePrincipalLocalPayIn({
+          usdCredit: review.usd_credit,
+          exchangeRate: review.exchange_rate,
+        })
+  const feeFromDisplay =
+    review.display_processing_fee_local != null &&
+    Number.isFinite(review.display_processing_fee_local) &&
+    review.display_processing_fee_local > 0
+      ? roundLocal(review.display_processing_fee_local)
+      : null
+  const feeLocal =
+    feeFromDisplay ??
+    (() => {
+      const displayUsd = computeDisplayProcessingFee({
+        processingFee: review.processing_fee,
+        exchangeFee: review.exchange_fee,
+      })
+      if (displayUsd > 0 && review.exchange_rate > 0) {
+        return roundLocal(displayUsd * review.exchange_rate)
+      }
+      return roundLocal(Math.max(0, review.local_pay_in - principalLocal))
+    })()
+  return {
+    principalLocal,
+    feeLocal,
+    totalLocal: roundLocal(review.local_pay_in),
+    localCurrency: review.local_currency,
+  }
 }
 
 export function inferResidenceCountryFromLocalCurrency(localCurrency: string): string | null {
@@ -159,6 +232,10 @@ export function buildYcFundBalanceDepositReviewSnapshot(input: {
     ""
   return {
     local_pay_in: input.localPayIn,
+    principal_local_pay_in: computeYcFundBalancePrincipalLocalPayIn({
+      usdCredit: input.usdCredit,
+      exchangeRate: input.exchangeRate,
+    }),
     local_currency: localCurrency,
     usd_credit: input.usdCredit,
     processing_fee: input.processingFee,

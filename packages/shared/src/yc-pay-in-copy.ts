@@ -16,7 +16,7 @@ export function ycPayInInstructionNotice(rail: YcPayInRail): string {
 
 /** Instruction on the MoMo authorize screen (before user submits phone + network). */
 export function ycPayInMomoAuthorizeNotice(): string {
-  return 'Click authorize, check your phone and approve the payment prompt from your network provider.'
+  return 'Click authorize, check your phone and approve the payment prompt.'
 }
 
 /** Full pay-in amount reminder (prefix + amount) for plain-text contexts. */

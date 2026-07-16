@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest"
 import {
   buildYcFundBalanceDepositReviewSnapshot,
+  computeYcFundBalancePrincipalLocalPayIn,
   inferResidenceCountryFromLocalCurrency,
   isNoahVaFundingDeposit,
   normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
   resolveNoahVaFundingDepositTitle,
   resolveYcFundBalanceDepositTitle,
+  resolveYcFundBalanceLocalPayInBreakdown,
   resolveYcFundBalanceNotificationActivityLabel,
 } from "./yc-deposit-display"
 
@@ -119,7 +121,28 @@ describe("deposit review snapshot", () => {
     })
     expect(snapshot.transfer_method).toBe("Bank Transfer")
     expect(snapshot.credit_to).toBe("USD Balance")
+    expect(snapshot.principal_local_pay_in).toBe(
+      computeYcFundBalancePrincipalLocalPayIn({ usdCredit: 65, exchangeRate: 1538.46 }),
+    )
     expect(normalizeYcFundBalanceDepositReview(snapshot)?.local_pay_in).toBe(100000)
+  })
+
+  it("resolveYcFundBalanceLocalPayInBreakdown foots principal + fee = total", () => {
+    const snapshot = buildYcFundBalanceDepositReviewSnapshot({
+      localPayIn: 13000,
+      localCurrency: "KES",
+      usdCredit: 100,
+      processingFee: 1,
+      exchangeFee: 0.5,
+      exchangeRate: 128.68,
+      residenceCountry: "KE",
+      payInRail: "mobile_money",
+      displayProcessingFeeLocal: 132,
+    })
+    const breakdown = resolveYcFundBalanceLocalPayInBreakdown(snapshot)
+    expect(breakdown.principalLocal).toBe(12868)
+    expect(breakdown.feeLocal).toBe(132)
+    expect(breakdown.totalLocal).toBe(13000)
   })
 
   it("reconstructs legacy metadata without deposit_review", () => {

@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount, buildYcFundBalanceDepositReviewSnapshot, resolveYcFundBalanceDepositTitle, ycPayInInstructionNotice, normalizeYcMomoPhone, estimateYcFundBalanceReceiveLegFeesUsd } from "@easner/shared"
+import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount, buildYcFundBalanceDepositReviewSnapshot, buildYcFundBalanceDisplayFees, resolveYcFundBalanceDepositTitle, ycPayInInstructionNotice, normalizeYcMomoPhone, estimateYcFundBalanceReceiveLegFeesUsd } from "@easner/shared"
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
@@ -305,6 +305,13 @@ export async function POST(request: Request) {
   const startedAt = new Date().toISOString()
   const residenceCountry = String(userRow?.residence_country ?? country).trim().toUpperCase()
   const customerRate = Number(leg.easner_sell)
+  const displayFees = buildYcFundBalanceDisplayFees({
+    usdCredit: pricing.usdCredit,
+    processingFee: pricing.processingFee,
+    ycLegFeesUsd: pricing.ycLegFeesUsd,
+    easnerSellRate: customerRate,
+    payInCurrency: currency,
+  })
   const depositReview = buildYcFundBalanceDepositReviewSnapshot({
     localPayIn: pricing.localPayIn,
     localCurrency: currency,
@@ -314,6 +321,7 @@ export async function POST(request: Request) {
     exchangeRate: customerRate,
     residenceCountry,
     payInRail: rail,
+    displayProcessingFeeLocal: displayFees.displayProcessingFeeLocal,
   })
   const depositDisplayTitle = resolveYcFundBalanceDepositTitle({
     residenceCountry,

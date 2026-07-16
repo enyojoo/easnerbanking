@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   YC_QUOTE_TTL_MS,
   buildYcFundBalanceDepositReviewSnapshot,
+  buildYcFundBalanceDisplayFees,
   computeDisplayProcessingFee,
   computeYcFundBalancePricing,
   estimateYcFundBalanceReceiveLegFeesUsd,
@@ -222,6 +223,13 @@ function buildFundBalanceMetadata(input: {
     exchangeRate: input.customerRate,
     residenceCountry: input.residenceCountry,
     payInRail: input.rail,
+    displayProcessingFeeLocal: buildYcFundBalanceDisplayFees({
+      usdCredit: input.pricing.usdCredit,
+      processingFee: input.pricing.processingFee,
+      ycLegFeesUsd: input.pricing.ycLegFeesUsd,
+      easnerSellRate: input.customerRate,
+      payInCurrency: input.currency,
+    }).displayProcessingFeeLocal,
   })
   const depositDisplayTitle = resolveYcFundBalanceDepositTitle({
     residenceCountry: input.residenceCountry,

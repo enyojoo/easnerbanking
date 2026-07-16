@@ -11,6 +11,7 @@ import { ArrowLeft, Check, Copy, Landmark, Smartphone } from 'lucide-react-nativ
 import { LinearGradient } from 'expo-linear-gradient'
 import {
   computeDisplayProcessingFee,
+  computeYcFundBalancePrincipalLocalPayIn,
   formatMoneyDisplay,
   formatReviewRowMoneyDisplay,
   formatSendRateLabel,
@@ -104,10 +105,16 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   const isMobileMoney = payInRail === 'mobile_money'
   const fields = ycBankInfoFields(bankInfo)
   const isFundBalance = flowMode === 'fund_balance'
-  const compactBankFundBalance = isFundBalance && !isMobileMoney
   const screenTitle = isFundBalance ? 'Complete deposit' : 'Complete payment'
   const formattedSendAmount = formatMoneyDisplay(localPayIn, sendCurrency)
   const formattedCreditAmount = formatMoneyDisplay(receiveAmount, receiveCurrency)
+  const principalLocal =
+    isFundBalance && customerRate > 0
+      ? computeYcFundBalancePrincipalLocalPayIn({
+          usdCredit: receiveAmount,
+          exchangeRate: customerRate,
+        })
+      : 0
   const notice = payInNotice || ycPayInInstructionNotice(payInRail)
   const displayTransactionId = transactionId?.toUpperCase() ?? ''
   const feeLocal =
@@ -167,13 +174,55 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
                 />
               </TransactionDetailSummaryRow>
             ) : null}
-            {compactBankFundBalance ? (
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.amountToCredit}
-                value={formattedCreditAmount}
-                valueBold
-                last
-              />
+            {isFundBalance ? (
+              <>
+                {customerRate > 0 ? (
+                  <TransactionDetailSummaryRow
+                    label={REVIEW_ROW_LABELS.exchangeRate}
+                    value={formatSendRateLabel('USD', sendCurrency, customerRate)}
+                  />
+                ) : null}
+                {principalLocal > 0 ? (
+                  <TransactionDetailSummaryRow
+                    label={REVIEW_ROW_LABELS.depositAmount}
+                    value={formatReviewRowMoneyDisplay(
+                      REVIEW_ROW_LABELS.depositAmount,
+                      principalLocal,
+                      sendCurrency,
+                    )}
+                  />
+                ) : null}
+                {feeLocal > 0 ? (
+                  <TransactionDetailSummaryRow
+                    label={REVIEW_ROW_LABELS.processingFee}
+                    value={formatReviewRowMoneyDisplay(
+                      REVIEW_ROW_LABELS.processingFee,
+                      feeLocal,
+                      sendCurrency,
+                    )}
+                  />
+                ) : null}
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.totalToPay}
+                  value={formattedSendAmount}
+                  valueBold
+                />
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.amountToCredit}
+                  value={formattedCreditAmount}
+                  valueBold
+                />
+                <CreditDestinationRow
+                  label={REVIEW_ROW_LABELS.creditTo}
+                  currency="USD"
+                  balanceLabel="USD Balance"
+                />
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.transferMethod}
+                  value={transferMethod}
+                  last
+                />
+              </>
             ) : (
               <>
                 {feeLocal > 0 ? (
@@ -189,33 +238,15 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
                 {customerRate > 0 ? (
                   <TransactionDetailSummaryRow
                     label={REVIEW_ROW_LABELS.exchangeRate}
-                    value={
-                      isFundBalance
-                        ? formatSendRateLabel('USD', sendCurrency, customerRate)
-                        : formatSendRateLabel(sendCurrency, receiveCurrency, customerRate)
-                    }
+                    value={formatSendRateLabel(sendCurrency, receiveCurrency, customerRate)}
                   />
                 ) : null}
-                {isFundBalance ? (
-                  <TransactionDetailSummaryRow
-                    label={REVIEW_ROW_LABELS.amountToCredit}
-                    value={formattedCreditAmount}
-                    valueBold
-                  />
-                ) : (
-                  <TransactionDetailSummaryRow
-                    label={REVIEW_ROW_LABELS.recipientGets}
-                    value={formattedCreditAmount}
-                    valueBold
-                  />
-                )}
-                {isFundBalance ? (
-                  <CreditDestinationRow
-                    label={REVIEW_ROW_LABELS.creditTo}
-                    currency="USD"
-                    balanceLabel="USD Balance"
-                  />
-                ) : recipientName ? (
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.recipientGets}
+                  value={formattedCreditAmount}
+                  valueBold
+                />
+                {recipientName ? (
                   <TransactionDetailSummaryRow
                     label={REVIEW_ROW_LABELS.recipient}
                     value={recipientName}

@@ -25,6 +25,7 @@ import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
 import type { YcFundBalanceDepositReviewSnapshot } from "./global-deposit-types"
 import type { InboundReceiveDetailSnapshot } from "./inbound-receive-detail"
 import { buildInboundReceiveEmailDetailRows } from "./inbound-receive-detail"
+import { resolveYcFundBalanceLocalPayInBreakdown } from "./yc-deposit-display"
 
 export type TransactionEmailDetailRow = { label: string; value: string }
 
@@ -181,23 +182,33 @@ function buildYcFundBalanceDepositRows(
   feeLocalOverride?: number | null,
 ): TransactionEmailDetailRow[] {
   const rows: TransactionEmailDetailRow[] = []
-  const displayProcessingFee = computeDisplayProcessingFee({
-    processingFee: review.processing_fee,
-    exchangeFee: review.exchange_fee,
-  })
+  const breakdown = resolveYcFundBalanceLocalPayInBreakdown(review)
   const feeLocal =
     feeLocalOverride ??
     (review.display_processing_fee_local != null && review.display_processing_fee_local > 0
       ? review.display_processing_fee_local
-      : null)
+      : breakdown.feeLocal > 0
+        ? breakdown.feeLocal
+        : null)
+  const displayProcessingFee = computeDisplayProcessingFee({
+    processingFee: review.processing_fee,
+    exchangeFee: review.exchange_fee,
+  })
   const feeAmount = feeLocal ?? displayProcessingFee
   const feeCurrency = feeLocal != null ? review.local_currency : "USD"
+  if (review.exchange_rate > 0) {
+    pushIf(
+      rows,
+      REVIEW_ROW_LABELS.exchangeRate,
+      formatSendRateLabel("USD", review.local_currency, review.exchange_rate),
+    )
+  }
   pushIf(
     rows,
-    REVIEW_ROW_LABELS.amountPaid,
+    REVIEW_ROW_LABELS.depositAmount,
     formatReviewRowMoneyDisplay(
-      REVIEW_ROW_LABELS.amountPaid,
-      review.local_pay_in,
+      REVIEW_ROW_LABELS.depositAmount,
+      breakdown.principalLocal,
       review.local_currency,
     ),
   )
@@ -208,13 +219,15 @@ function buildYcFundBalanceDepositRows(
       formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.processingFee, feeAmount, feeCurrency),
     )
   }
-  if (review.exchange_rate > 0) {
-    pushIf(
-      rows,
-      REVIEW_ROW_LABELS.exchangeRate,
-      formatSendRateLabel("USD", review.local_currency, review.exchange_rate),
-    )
-  }
+  pushIf(
+    rows,
+    REVIEW_ROW_LABELS.amountPaid,
+    formatReviewRowMoneyDisplay(
+      REVIEW_ROW_LABELS.amountPaid,
+      breakdown.totalLocal,
+      review.local_currency,
+    ),
+  )
   pushIf(
     rows,
     REVIEW_ROW_LABELS.amountCredited,

@@ -14,6 +14,10 @@ export const REVIEW_ROW_LABELS = {
   recipient: "Recipient",
   /** External rail pay-in (local deposit + YC cross-border send). */
   amountToPay: "Amount to pay",
+  /** Local principal at quoted rate before processing fees (YC fund balance pay-in). */
+  depositAmount: "Deposit amount",
+  /** All-in local pay-in including fees (YC fund balance confirm). */
+  totalToPay: "Total to pay",
   /** Settled local pay-in (transaction detail). */
   amountPaid: "Amount paid",
   /** USD balance credit (live deposit review — mirrors Amount to pay). */
@@ -57,7 +61,7 @@ export function reviewPrimaryAmountLabel(
   phase: ReviewPhase,
 ): string {
   if (flow === "local_pay_in") {
-    return phase === "detail" ? REVIEW_ROW_LABELS.amountPaid : REVIEW_ROW_LABELS.amountToPay
+    return phase === "detail" ? REVIEW_ROW_LABELS.amountPaid : REVIEW_ROW_LABELS.totalToPay
   }
   return phase === "confirm" ? REVIEW_ROW_LABELS.sending : REVIEW_ROW_LABELS.sent
 }

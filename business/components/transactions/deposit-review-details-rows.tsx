@@ -1,12 +1,12 @@
 "use client"
 
 import {
-  computeDisplayProcessingFee,
   formatAccountBalanceLabel,
   formatReviewRowMoneyDisplay,
   formatSendRateLabel,
   REVIEW_ROW_LABELS,
   reviewPrimaryAmountLabel,
+  resolveYcFundBalanceLocalPayInBreakdown,
   shouldShowPayoutReviewFeeRow,
   type TransactionTimingRow,
   type YcFundBalanceDepositReviewSnapshot,
@@ -37,17 +37,7 @@ export function DepositReviewDetailsRows({
   whenAt,
   mode = "detail",
 }: Props) {
-  const displayProcessingFee = computeDisplayProcessingFee({
-    processingFee: depositReview.processing_fee,
-    exchangeFee: depositReview.exchange_fee,
-  })
-  const feeLocalRaw = depositReview.display_processing_fee_local
-  const feeLocal =
-    feeLocalRaw != null && Number.isFinite(feeLocalRaw) && feeLocalRaw > 0
-      ? feeLocalRaw
-      : null
-  const feeAmount = feeLocal ?? displayProcessingFee
-  const feeCurrency = feeLocal != null ? depositReview.local_currency : "USD"
+  const breakdown = resolveYcFundBalanceLocalPayInBreakdown(depositReview)
   const showProcessingFee = shouldShowPayoutReviewFeeRow({
     processingFee: depositReview.processing_fee,
     exchangeFee: depositReview.exchange_fee,
@@ -55,6 +45,7 @@ export function DepositReviewDetailsRows({
   const hasFx = depositReview.exchange_rate > 0
   const creditLabel =
     mode === "detail" ? REVIEW_ROW_LABELS.amountCredited : REVIEW_ROW_LABELS.amountToCredit
+  const totalLabel = reviewPrimaryAmountLabel("local_pay_in", mode)
 
   return (
     <Card className="border-border shadow-sm">
@@ -79,28 +70,6 @@ export function DepositReviewDetailsRows({
           )}
         </TransactionDetailSummaryRow>
 
-        <TransactionDetailSummaryRow
-          label={reviewPrimaryAmountLabel("local_pay_in", mode)}
-          value={formatReviewRowMoneyDisplay(
-            reviewPrimaryAmountLabel("local_pay_in", mode),
-            depositReview.local_pay_in,
-            depositReview.local_currency,
-          )}
-          valueClassName="text-xl font-semibold"
-        />
-
-        {showProcessingFee ? (
-          <TransactionDetailSummaryRow
-            label={REVIEW_ROW_LABELS.processingFee}
-            value={formatReviewRowMoneyDisplay(
-              REVIEW_ROW_LABELS.processingFee,
-              feeAmount,
-              feeCurrency,
-            )}
-            valueClassName="font-semibold"
-          />
-        ) : null}
-
         {hasFx ? (
           <TransactionDetailSummaryRow
             label={REVIEW_ROW_LABELS.exchangeRate}
@@ -108,6 +77,37 @@ export function DepositReviewDetailsRows({
             valueClassName="font-semibold"
           />
         ) : null}
+
+        <TransactionDetailSummaryRow
+          label={REVIEW_ROW_LABELS.depositAmount}
+          value={formatReviewRowMoneyDisplay(
+            REVIEW_ROW_LABELS.depositAmount,
+            breakdown.principalLocal,
+            depositReview.local_currency,
+          )}
+        />
+
+        {showProcessingFee ? (
+          <TransactionDetailSummaryRow
+            label={REVIEW_ROW_LABELS.processingFee}
+            value={formatReviewRowMoneyDisplay(
+              REVIEW_ROW_LABELS.processingFee,
+              breakdown.feeLocal,
+              depositReview.local_currency,
+            )}
+            valueClassName="font-semibold"
+          />
+        ) : null}
+
+        <TransactionDetailSummaryRow
+          label={totalLabel}
+          value={formatReviewRowMoneyDisplay(
+            totalLabel,
+            breakdown.totalLocal,
+            depositReview.local_currency,
+          )}
+          valueClassName="text-xl font-semibold"
+        />
 
         <TransactionDetailSummaryRow
           label={creditLabel}

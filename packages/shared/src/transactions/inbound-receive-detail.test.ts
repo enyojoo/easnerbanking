@@ -87,9 +87,10 @@ describe("buildInboundReceiveDetailRows", () => {
     const rows = buildInboundReceiveDetailRows(snapshot!, { surface: "detail" })
     const labels = rows.filter((r) => r.label).map((r) => r.label)
     expect(labels).toEqual([
-      REVIEW_ROW_LABELS.amountPaid,
-      REVIEW_ROW_LABELS.processingFee,
       REVIEW_ROW_LABELS.exchangeRate,
+      REVIEW_ROW_LABELS.depositAmount,
+      REVIEW_ROW_LABELS.processingFee,
+      REVIEW_ROW_LABELS.amountPaid,
       REVIEW_ROW_LABELS.amountCredited,
       REVIEW_ROW_LABELS.creditTo,
       REVIEW_ROW_LABELS.scheme,

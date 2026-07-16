@@ -21,6 +21,7 @@ import {
   isYcFundBalanceDepositMetadata,
   normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
+  resolveYcFundBalanceLocalPayInBreakdown,
   resolveNoahVaFundingDepositTitleFromMeta,
   resolveNoahVaFundingNotificationActivityLabel,
   resolveYcFundBalanceDepositDisplayTitle,
@@ -57,6 +58,7 @@ export type InboundReceiveDetailSnapshot = {
   scheme?: string
   sender?: string
   amountPaid?: { amount: number; currency: string }
+  depositAmount?: { amount: number; currency: string }
   processingFee?: { amount: number; currency: string }
   exchangeRate?: { from: string; to: string; rate: number }
   narration?: string
@@ -276,15 +278,16 @@ export function resolveInboundReceiveDetail(
       )
     if (!review) return null
 
+    const breakdown = resolveYcFundBalanceLocalPayInBreakdown(review)
     const displayProcessingFeeUsd = computeDisplayProcessingFee({
       processingFee: review.processing_fee,
       exchangeFee: review.exchange_fee,
     })
     const feeLocalRaw = Number(meta.display_processing_fee_local)
     const feeLocal =
-      Number.isFinite(feeLocalRaw) && feeLocalRaw > 0 ? feeLocalRaw : null
-    const feeAmount = feeLocal ?? displayProcessingFeeUsd
-    const feeCurrency = feeLocal != null ? review.local_currency : "USD"
+      Number.isFinite(feeLocalRaw) && feeLocalRaw > 0 ? feeLocalRaw : breakdown.feeLocal
+    const feeAmount = feeLocal > 0 ? feeLocal : displayProcessingFeeUsd
+    const feeCurrency = feeLocal > 0 ? review.local_currency : "USD"
 
     return {
       kind,
@@ -298,7 +301,8 @@ export function resolveInboundReceiveDetail(
       amountCredited: { amount: review.usd_credit, currency: "USD" },
       creditDestination: resolveCreditDestination("USD", kind),
       scheme: review.transfer_method,
-      amountPaid: { amount: review.local_pay_in, currency: review.local_currency },
+      depositAmount: { amount: breakdown.principalLocal, currency: review.local_currency },
+      amountPaid: { amount: breakdown.totalLocal, currency: review.local_currency },
       ...(isPayoutReviewFeeVisible(feeAmount)
         ? { processingFee: { amount: feeAmount, currency: feeCurrency } }
         : {}),
@@ -460,14 +464,25 @@ export function buildInboundReceiveDetailRows(
 
   switch (snapshot.kind) {
     case "yc_fund_balance": {
-      if (snapshot.amountPaid) {
+      if (snapshot.exchangeRate && snapshot.exchangeRate.rate > 0) {
         pushIf(
           rows,
-          REVIEW_ROW_LABELS.amountPaid,
+          REVIEW_ROW_LABELS.exchangeRate,
+          formatSendRateLabel(
+            snapshot.exchangeRate.from,
+            snapshot.exchangeRate.to,
+            snapshot.exchangeRate.rate,
+          ),
+        )
+      }
+      if (snapshot.depositAmount) {
+        pushIf(
+          rows,
+          REVIEW_ROW_LABELS.depositAmount,
           formatReviewRowMoneyDisplay(
-            REVIEW_ROW_LABELS.amountPaid,
-            snapshot.amountPaid.amount,
-            snapshot.amountPaid.currency,
+            REVIEW_ROW_LABELS.depositAmount,
+            snapshot.depositAmount.amount,
+            snapshot.depositAmount.currency,
           ),
         )
       }
@@ -482,14 +497,14 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
-      if (snapshot.exchangeRate && snapshot.exchangeRate.rate > 0) {
+      if (snapshot.amountPaid) {
         pushIf(
           rows,
-          REVIEW_ROW_LABELS.exchangeRate,
-          formatSendRateLabel(
-            snapshot.exchangeRate.from,
-            snapshot.exchangeRate.to,
-            snapshot.exchangeRate.rate,
+          REVIEW_ROW_LABELS.amountPaid,
+          formatReviewRowMoneyDisplay(
+            REVIEW_ROW_LABELS.amountPaid,
+            snapshot.amountPaid.amount,
+            snapshot.amountPaid.currency,
           ),
         )
       }

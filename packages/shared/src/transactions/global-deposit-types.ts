@@ -2,6 +2,8 @@ export type YcPayInRail = "bank_transfer" | "mobile_money"
 
 export type YcFundBalanceDepositReviewSnapshot = {
   local_pay_in: number
+  /** Local principal at exchange rate before processing fees. */
+  principal_local_pay_in?: number
   local_currency: string
   usd_credit: number
   processing_fee: number

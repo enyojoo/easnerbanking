@@ -8,15 +8,15 @@ import {
 } from "./review-row-labels"
 
 describe("review-row-labels", () => {
-  it("uses Amount paid on settled local pay-in detail", () => {
-    expect(reviewPrimaryAmountLabel("local_pay_in", "detail")).toBe(
-      REVIEW_ROW_LABELS.amountPaid,
+  it("uses Total to pay for local pay-in confirm", () => {
+    expect(reviewPrimaryAmountLabel("local_pay_in", "confirm")).toBe(
+      REVIEW_ROW_LABELS.totalToPay,
     )
   })
 
-  it("uses Amount to pay for local pay-in confirm", () => {
-    expect(reviewPrimaryAmountLabel("local_pay_in", "confirm")).toBe(
-      REVIEW_ROW_LABELS.amountToPay,
+  it("uses Amount paid on settled local pay-in detail", () => {
+    expect(reviewPrimaryAmountLabel("local_pay_in", "detail")).toBe(
+      REVIEW_ROW_LABELS.amountPaid,
     )
   })
 

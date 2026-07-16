@@ -11,9 +11,11 @@ import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
   computeDisplayProcessingFee,
+  computeYcFundBalancePrincipalLocalPayIn,
   formatReviewRowMoneyDisplay,
   formatSendRateLabel,
   REVIEW_ROW_LABELS,
+  shouldShowPayoutReviewFeeRow,
   normalizeYcMomoPhone,
 } from '@easner/shared'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
@@ -193,14 +195,28 @@ export function YcFundBalanceReview({
               processingFee: quote.processingFee ?? 0,
               exchangeFee: quote.ycChannelFeeUsd ?? quote.ycLegFeesUsd ?? 0,
             }) * (customerRate || 1))
-      : 0
+      : isMobileMoney && customerRate > 0 && resolvedLocalPayIn > 0
+        ? Math.max(
+            0,
+            Math.round((resolvedLocalPayIn - resolvedUsdCredit * customerRate) * 100) / 100,
+          )
+        : 0
+  const reviewPrincipalLocal = computeYcFundBalancePrincipalLocalPayIn({
+    usdCredit: resolvedUsdCredit,
+    exchangeRate: customerRate,
+  })
 
   const payAmountLabel = isMobileMoney
     ? REVIEW_ROW_LABELS.estimatedToPay
-    : REVIEW_ROW_LABELS.amountToPay
-  const creditAmountLabel = isMobileMoney
-    ? REVIEW_ROW_LABELS.estimatedToCredit
-    : REVIEW_ROW_LABELS.amountToCredit
+    : REVIEW_ROW_LABELS.totalToPay
+  const creditAmountLabel = REVIEW_ROW_LABELS.amountToCredit
+  const showReviewFee =
+    reviewFeeLocal > 0 ||
+    (!isMobileMoney &&
+      shouldShowPayoutReviewFeeRow({
+        processingFee: quote?.processingFee ?? 0,
+        exchangeFee: quote?.ycChannelFeeUsd ?? quote?.ycLegFeesUsd ?? 0,
+      }))
 
   const momoReady = Boolean(phone.trim() && networkId)
   const bankQuoteReady = Boolean(quote?.transferId)
@@ -286,7 +302,17 @@ export function YcFundBalanceReview({
                   value={formatSendRateLabel('USD', localPayInCurrency, customerRate)}
                 />
               ) : null}
-              {!isMobileMoney && reviewFeeLocal > 0 ? (
+              {reviewPrincipalLocal > 0 ? (
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.depositAmount}
+                  value={formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.depositAmount,
+                    reviewPrincipalLocal,
+                    localPayInCurrency,
+                  )}
+                />
+              ) : null}
+              {showReviewFee && reviewFeeLocal > 0 ? (
                 <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.processingFee}
                   value={formatReviewRowMoneyDisplay(
@@ -303,6 +329,7 @@ export function YcFundBalanceReview({
                   isMobileMoney ? estimatedPayIn : resolvedLocalPayIn,
                   localPayInCurrency,
                 )}
+                valueBold
               />
               <TransactionDetailSummaryRow
                 label={creditAmountLabel}
