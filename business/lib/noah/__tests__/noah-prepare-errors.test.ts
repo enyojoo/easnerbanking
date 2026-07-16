@@ -3,6 +3,7 @@ import { NoahHttpError } from "@/lib/noah/http"
 import {
   mapNoahPayoutUserError,
   parseNoahChannelLimitHints,
+  shouldTryAlternatePayoutProvider,
 } from "@/lib/noah/noah-prepare-errors"
 
 describe("mapNoahPayoutUserError", () => {
@@ -72,5 +73,43 @@ describe("mapNoahPayoutUserError", () => {
     )
     expect(msg).toContain("outside the allowed range")
     expect(msg).not.toContain("couldn't price")
+  })
+
+  it("surfaces Noah RequestExtension validation before generic invalid request", () => {
+    const msg = mapNoahPayoutUserError(
+      new NoahHttpError("invalid request", 400, "invalid request", "InvalidMessage", {
+        Action: "confirmation of beneficiary(cob)",
+        RequestExtension: {
+          Body: [
+            {
+              Description: "Account could not be verified at the selected bank",
+              Field: "Form.BankDetails.AccountNumber",
+              Reason: "IntegrityValidation",
+            },
+          ],
+        },
+      }),
+      "quote",
+    )
+    expect(msg).toBe("Account could not be verified at the selected bank")
+    expect(msg).not.toContain("couldn't price")
+  })
+
+  it("flags Noah COB prepare failures for alternate provider fallback", () => {
+    expect(
+      shouldTryAlternatePayoutProvider(
+        new NoahHttpError("invalid request", 400, "invalid request", "InvalidMessage", {
+          Action: "confirmation of beneficiary(cob)",
+          RequestExtension: {
+            Body: [
+              {
+                Description: "Account could not be verified at the selected bank",
+                Reason: "IntegrityValidation",
+              },
+            ],
+          },
+        }),
+      ),
+    ).toBe(true)
   })
 })

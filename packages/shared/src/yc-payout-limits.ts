@@ -2,6 +2,7 @@ import type { PayoutRail } from "./payout-corridor"
 import { formatMoneyDisplay } from "./format-money-display"
 import { normalizePayoutReceiveAmountForCurrency } from "./noah-send-rates"
 import { parseYcChannelPayInLimits } from "./yc-pay-in-limits"
+import { YC_SEND_LIMITS_FALLBACK, ycCorridorLimitKey } from "./yc-corridor-limit-fallbacks"
 
 /** YC direct-settlement disbursement requires cryptoAmount strictly above 1 USD. */
 export const YC_DIRECT_SETTLEMENT_MIN_SEND_USDC_EXCLUSIVE = 1.01
@@ -13,21 +14,7 @@ export type YcPayoutLimits = {
 }
 
 /** Published send limits — fallback when channel omits min/max. */
-const YC_SEND_LIMITS_FALLBACK: Record<string, { min?: number; max?: number }> = {
-  "NG:NGN:bank_transfer": { min: 2000, max: 30_000_000 },
-  "NG:NGN:mobile_money": { min: 2000, max: 30_000_000 },
-  "KE:KES:bank_transfer": { min: 500, max: 999_999 },
-  "KE:KES:mobile_money": { min: 500, max: 250_000 },
-  "RW:RWF:bank_transfer": { min: 1500, max: 10_000_000 },
-  "RW:RWF:mobile_money": { min: 1500, max: 10_000_000 },
-  "ZA:ZAR:bank_transfer": { min: 200, max: 500_000 },
-  "TZ:TZS:bank_transfer": { min: 2500, max: 150_000_000 },
-  "TZ:TZS:mobile_money": { min: 2500, max: 10_000_000 },
-  "UG:UGX:bank_transfer": { min: 15_000, max: 36_000_000 },
-  "UG:UGX:mobile_money": { min: 15_000, max: 3_000_000 },
-  "ZM:ZMW:bank_transfer": { min: 50_000, max: 15_000_000 },
-  "ZM:ZMW:mobile_money": { min: 100, max: 20_000 },
-}
+const YC_SEND_LIMITS_FALLBACK_LOCAL = YC_SEND_LIMITS_FALLBACK
 
 /**
  * Easner minimum receive amounts for YC balance payouts (bank + mobile money).
@@ -36,21 +23,42 @@ const YC_SEND_LIMITS_FALLBACK: Record<string, { min?: number; max?: number }> = 
 const YC_PAYOUT_BUSINESS_MIN_BANK: Record<string, number> = {
   NGN: 2000,
   KES: 500,
+  GHS: 20,
   RWF: 6000,
   ZAR: 200,
   TZS: 2500,
   UGX: 15_000,
   ZMW: 50_000,
+  XOF: 500,
+  XAF: 1000,
+  MWK: 2000,
+  BWP: 150,
+  CDF: 10_000,
+  MXN: 100,
+  BRL: 50,
+  ARS: 5000,
+  COP: 20_000,
+  PEN: 20,
+  USD: 20,
+  EUR: 10,
+  GBP: 10,
+  LKR: 500,
 }
 
 const YC_PAYOUT_BUSINESS_MIN_MOBILE: Record<string, number> = {
   NGN: 2000,
   KES: 500,
+  GHS: 20,
   RWF: 6000,
   ZAR: 200,
   TZS: 2500,
   UGX: 15_000,
   ZMW: 100,
+  XOF: 500,
+  XAF: 1000,
+  MWK: 2000,
+  BWP: 150,
+  CDF: 10_000,
 }
 
 /** Product minimum for a YC payout currency/rail, or null when no policy is defined. */
@@ -69,7 +77,19 @@ export function getYcBusinessPayoutMin(
 }
 
 function corridorLimitKey(country: string, currency: string, rail: PayoutRail): string {
-  return `${country.trim().toUpperCase()}:${currency.trim().toUpperCase()}:${rail}`
+  return ycCorridorLimitKey(country, currency, rail)
+}
+
+function mergePayoutMin(
+  channelMin: number | null,
+  fallbackMin: number | undefined,
+  businessMin: number | null,
+): number | null {
+  const candidates = [channelMin, fallbackMin, businessMin].filter(
+    (n): n is number => n != null && Number.isFinite(n) && n > 0,
+  )
+  if (!candidates.length) return null
+  return Math.max(...candidates)
 }
 
 export function resolveYcPayoutLimits(input: {
@@ -79,10 +99,11 @@ export function resolveYcPayoutLimits(input: {
   channel?: Record<string, unknown> | null
 }): YcPayoutLimits {
   const fromChannel = parseYcChannelPayInLimits(input.channel)
-  const fallback = YC_SEND_LIMITS_FALLBACK[corridorLimitKey(input.country, input.currency, input.rail)]
+  const fallback = YC_SEND_LIMITS_FALLBACK_LOCAL[corridorLimitKey(input.country, input.currency, input.rail)]
+  const businessMin = getYcBusinessPayoutMin(input.currency, input.rail)
   return {
     minSendUsd: YC_DIRECT_SETTLEMENT_MIN_SEND_USDC_EXCLUSIVE,
-    minLocalReceive: fromChannel.minLocalPayIn ?? fallback?.min ?? null,
+    minLocalReceive: mergePayoutMin(fromChannel.minLocalPayIn, fallback?.min, businessMin),
     maxLocalReceive: fromChannel.maxLocalPayIn ?? fallback?.max ?? null,
   }
 }

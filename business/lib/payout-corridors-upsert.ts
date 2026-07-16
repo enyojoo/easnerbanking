@@ -14,10 +14,16 @@ export type PayoutCorridorUpsertRow = {
   metadata?: unknown
 }
 
+export type PayoutCorridorUpsertOptions = {
+  /** When true, overwrite provider_routing on existing rows (Office/admin only). Default false. */
+  overwriteProviderRouting?: boolean
+}
+
 /** Insert or update by natural key (works even before unique index migration is applied). */
 export async function upsertPayoutCorridor(
   admin: SupabaseClient,
   row: PayoutCorridorUpsertRow,
+  options?: PayoutCorridorUpsertOptions,
 ): Promise<{ ok: boolean; error?: string }> {
   const { data: existing, error: findErr } = await admin
     .from("payout_corridors")
@@ -37,7 +43,9 @@ export async function upsertPayoutCorridor(
         currency_code: row.currency_code,
         currency_name: row.currency_name,
         ...(row.enabled !== undefined ? { enabled: row.enabled } : {}),
-        ...(row.provider_routing !== undefined ? { provider_routing: row.provider_routing } : {}),
+        ...(options?.overwriteProviderRouting && row.provider_routing !== undefined
+          ? { provider_routing: row.provider_routing }
+          : {}),
         ...(row.providers !== undefined ? { providers: row.providers } : {}),
         ...(row.sort_order !== undefined ? { sort_order: row.sort_order } : {}),
         ...(row.fields_schema !== undefined ? { fields_schema: row.fields_schema } : {}),

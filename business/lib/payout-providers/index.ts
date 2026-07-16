@@ -1,6 +1,7 @@
 export { noahPayoutProvider } from "./noah-provider"
 export { yellowcardPayoutProvider } from "./yellowcard-provider"
 export {
+  corridorHasYellowcardPayout,
   loadCorridorRouting,
   selectProvider,
   selectProviderForCorridor,

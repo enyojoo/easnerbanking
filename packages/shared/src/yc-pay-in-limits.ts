@@ -1,5 +1,6 @@
 import type { PayoutRail } from "./payout-corridor"
 import { formatMoneyDisplay } from "./format-money-display"
+import { YC_RECEIVE_LIMITS_FALLBACK, ycCorridorLimitKey } from "./yc-corridor-limit-fallbacks"
 
 export type YcPayInRail = PayoutRail
 
@@ -8,25 +9,71 @@ export type YcPayInLimits = {
   maxLocalPayIn: number | null
 }
 
-/** YC published receive limits — fallback when channel object omits min/max. */
-const YC_RECEIVE_LIMITS_FALLBACK: Record<string, { min: number; max?: number }> = {
-  "NG:NGN:bank_transfer": { min: 2500, max: 30_000_000 },
-  "NG:NGN:mobile_money": { min: 2500, max: 30_000_000 },
-  "KE:KES:bank_transfer": { min: 500, max: 999_999 },
-  "KE:KES:mobile_money": { min: 500, max: 250_000 },
-  "RW:RWF:bank_transfer": { min: 1500, max: 10_000_000 },
-  "RW:RWF:mobile_money": { min: 1500, max: 10_000_000 },
-  "ZA:ZAR:bank_transfer": { min: 200, max: 500_000 },
-  "TZ:TZS:bank_transfer": { min: 2500, max: 150_000_000 },
-  "TZ:TZS:mobile_money": { min: 2500, max: 10_000_000 },
-  "UG:UGX:bank_transfer": { min: 15_000, max: 36_000_000 },
-  "UG:UGX:mobile_money": { min: 15_000, max: 3_000_000 },
-  "ZM:ZMW:bank_transfer": { min: 50_000, max: 15_000_000 },
-  "ZM:ZMW:mobile_money": { min: 100, max: 20_000 },
+/** Easner minimum local pay-in when YC channel omits a floor. */
+const YC_PAYIN_BUSINESS_MIN_BANK: Record<string, number> = {
+  NGN: 2500,
+  KES: 300,
+  GHS: 20,
+  RWF: 100,
+  ZAR: 100,
+  TZS: 2500,
+  UGX: 15_000,
+  ZMW: 100,
+  XOF: 500,
+  XAF: 1000,
+  MWK: 2000,
+  BWP: 150,
+  CDF: 10_000,
+  MXN: 100,
+  BRL: 50,
+  ARS: 5000,
+  COP: 20_000,
+  PEN: 20,
+  USD: 20,
+  EUR: 10,
+  GBP: 10,
+  LKR: 500,
 }
 
-function corridorLimitKey(country: string, currency: string, rail: YcPayInRail): string {
-  return `${country.trim().toUpperCase()}:${currency.trim().toUpperCase()}:${rail}`
+const YC_PAYIN_BUSINESS_MIN_MOBILE: Record<string, number> = {
+  NGN: 2500,
+  KES: 150,
+  GHS: 20,
+  RWF: 1500,
+  ZAR: 100,
+  TZS: 2500,
+  UGX: 15_000,
+  ZMW: 100,
+  XOF: 500,
+  XAF: 1000,
+  MWK: 2000,
+  BWP: 150,
+  CDF: 10_000,
+}
+
+export function getYcBusinessPayInMin(
+  currencyCode: string,
+  rail: YcPayInRail = "bank_transfer",
+): number | null {
+  const cur = String(currencyCode || "").trim().toUpperCase()
+  if (!cur) return null
+  if (rail === "mobile_money") {
+    const mobile = YC_PAYIN_BUSINESS_MIN_MOBILE[cur]
+    if (mobile != null) return mobile
+  }
+  return YC_PAYIN_BUSINESS_MIN_BANK[cur] ?? null
+}
+
+function mergeMin(
+  channelMin: number | null,
+  fallbackMin: number | undefined,
+  businessMin: number | null,
+): number | null {
+  const candidates = [channelMin, fallbackMin, businessMin].filter(
+    (n): n is number => n != null && Number.isFinite(n) && n > 0,
+  )
+  if (!candidates.length) return null
+  return Math.max(...candidates)
 }
 
 function parsePositiveLimit(raw: unknown): number | null {
@@ -88,10 +135,11 @@ export function resolveYcPayInLimits(input: {
   channel?: Record<string, unknown> | null
 }): YcPayInLimits {
   const fromChannel = parseYcChannelPayInLimits(input.channel)
-  const fallback = YC_RECEIVE_LIMITS_FALLBACK[corridorLimitKey(input.country, input.currency, input.rail)]
+  const fallback = YC_RECEIVE_LIMITS_FALLBACK[ycCorridorLimitKey(input.country, input.currency, input.rail)]
+  const businessMin = getYcBusinessPayInMin(input.currency, input.rail)
 
   return {
-    minLocalPayIn: fromChannel.minLocalPayIn ?? fallback?.min ?? null,
+    minLocalPayIn: mergeMin(fromChannel.minLocalPayIn, fallback?.min, businessMin),
     maxLocalPayIn: fromChannel.maxLocalPayIn ?? fallback?.max ?? null,
   }
 }

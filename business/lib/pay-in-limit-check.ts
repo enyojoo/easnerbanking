@@ -1,0 +1,72 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+import {
+  resolvePayInProvider,
+  resolveYcPayInLimits,
+  unwrapNoahFieldsSchema,
+  validatePayInAmountForProvider,
+  type PayoutRail,
+} from "@easner/shared"
+import { loadCorridorRouting } from "@/lib/payout-providers"
+import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
+import { listYellowcardChannels } from "@/lib/yellowcard/channels"
+
+export async function validateFundBalancePayInAmountLimits(input: {
+  admin: SupabaseClient
+  countryCode: string
+  currencyCode: string
+  rail: PayoutRail
+  localPayIn: number
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const countryCode = input.countryCode.trim().toUpperCase()
+  const currencyCode = input.currencyCode.trim().toUpperCase()
+  const rail = input.rail
+
+  const providerRouting = await loadCorridorRouting(input.admin, {
+    countryCode,
+    currencyCode,
+    rail,
+  })
+
+  const { data: corridor } = await input.admin
+    .from("payout_corridors")
+    .select("fields_schema,provider_routing,metadata")
+    .eq("country_code", countryCode)
+    .eq("currency_code", currencyCode)
+    .eq("rail", rail)
+    .maybeSingle()
+
+  const routing = providerRouting.length
+    ? providerRouting
+    : ((corridor?.provider_routing as typeof providerRouting | null) ?? [])
+  const metadata = (corridor?.metadata ?? {}) as Record<string, unknown>
+  const provider = resolvePayInProvider({ providerRouting: routing, metadata })
+  const noahHints = unwrapNoahFieldsSchema(corridor?.fields_schema)
+
+  let ycLimits = null
+  if (provider === "yellowcard") {
+    const channels = await listYellowcardChannels()
+    const channel = findYcReceiveChannel(channels, {
+      country: countryCode,
+      currency: currencyCode,
+      rail,
+    })
+    ycLimits = resolveYcPayInLimits({
+      country: countryCode,
+      currency: currencyCode,
+      rail,
+      channel: (channel as Record<string, unknown> | null) ?? null,
+    })
+  }
+
+  const check = validatePayInAmountForProvider({
+    providerRouting: routing,
+    metadata,
+    localPayIn: input.localPayIn,
+    currency: currencyCode,
+    rail,
+    noahHints,
+    ycLimits,
+  })
+
+  return check.ok ? { ok: true } : { ok: false, message: check.message }
+}

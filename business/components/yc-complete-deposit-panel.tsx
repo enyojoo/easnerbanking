@@ -12,7 +12,7 @@ import {
   shouldShowPayoutReviewFeeRow,
   YC_PAY_IN_MOMO_AUTHORIZE_CTA,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
-  ycPayInInstructionNotice,
+  ycPayInCompleteNotice,
   type YcPayInRail,
 } from "@easner/shared"
 import { ycBankInfoFields } from "@/lib/yc-bank-info-fields"
@@ -62,6 +62,7 @@ export function YcCompleteDepositPanel({
   const isFundBalance = flowMode === "fund_balance"
   const isMomo = payInRail === "mobile_money"
   const showFundBalanceQuoteSummary = isFundBalance && isMomo
+  const showFundBalanceBankCredit = isFundBalance && !isMomo
   const title = isFundBalance ? "Complete deposit" : "Complete payment"
   const payInAmount = formatMoneyDisplay(localPayIn, localCurrency)
   const creditAmount = formatMoneyDisplay(creditOrReceiveAmount, creditOrReceiveCurrency)
@@ -76,7 +77,7 @@ export function YcCompleteDepositPanel({
     showFundBalanceQuoteSummary &&
     (processingFeeLocal > 0 ||
       shouldShowPayoutReviewFeeRow({ processingFee: processingFeeLocal, exchangeFee: 0 }))
-  const notice = payInNotice ?? ycPayInInstructionNotice(payInRail)
+  const completeNotice = ycPayInCompleteNotice(payInRail)
   const bankFields = ycBankInfoFields(bankInfo)
   const PaymentIcon = isMomo ? Smartphone : Landmark
 
@@ -86,7 +87,7 @@ export function YcCompleteDepositPanel({
 
       <div className="rounded-xl border border-border p-4 space-y-1 text-sm">
         <div
-          className={`flex justify-between items-center gap-4 py-2 ${showFundBalanceQuoteSummary || !isFundBalance ? "border-b" : ""}`}
+          className={`flex justify-between items-center gap-4 py-2 ${showFundBalanceQuoteSummary || showFundBalanceBankCredit || !isFundBalance ? "border-b" : ""}`}
         >
           <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
           {onCopy ? (
@@ -106,6 +107,12 @@ export function YcCompleteDepositPanel({
             <span className="font-mono">{transactionId.toUpperCase()}</span>
           )}
         </div>
+        {showFundBalanceBankCredit ? (
+          <div className="flex justify-between gap-4 py-2">
+            <span className="text-muted-foreground">{REVIEW_ROW_LABELS.amountToCredit}</span>
+            <span className="font-medium">{creditAmount}</span>
+          </div>
+        ) : null}
         {showFundBalanceQuoteSummary ? (
           <>
             {customerRate > 0 ? (
@@ -196,13 +203,19 @@ export function YcCompleteDepositPanel({
         ) : null}
       </div>
 
+      {(completeNotice || !isMomo) ? (
       <div className="space-y-4">
-        <p className="text-sm text-center text-muted-foreground px-2">{notice}</p>
-        <p className="text-sm text-center text-foreground">
-          {YC_PAY_IN_SEND_EXACTLY_LABEL}{" "}
-          <span className="text-xl font-semibold">{payInAmount}</span>
-        </p>
+        {completeNotice ? (
+          <p className="text-sm text-center text-muted-foreground px-2">{completeNotice}</p>
+        ) : null}
+        {!isMomo ? (
+          <p className="text-sm text-center text-foreground">
+            {YC_PAY_IN_SEND_EXACTLY_LABEL}{" "}
+            <span className="text-xl font-semibold">{payInAmount}</span>
+          </p>
+        ) : null}
       </div>
+      ) : null}
 
       <div className="rounded-xl border border-border p-4 space-y-1">
         <div className="flex items-center gap-2 mb-3">

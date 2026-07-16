@@ -89,3 +89,28 @@ export async function selectProviderForCorridor(
     providerRouting,
   })
 }
+
+/** True when Yellowcard is routed and has an active send channel for this corridor. */
+export async function corridorHasYellowcardPayout(
+  admin: SupabaseClient,
+  input: {
+    countryCode: string
+    currencyCode: string
+    rail: PayoutRailKind
+  },
+): Promise<boolean> {
+  const cc = input.countryCode.trim().toUpperCase()
+  const cur = input.currencyCode.trim().toUpperCase()
+  const routing = await loadCorridorRouting(admin, {
+    countryCode: cc,
+    currencyCode: cur,
+    rail: input.rail,
+  })
+  if (!routing.some((entry) => entry.provider === "yellowcard")) return false
+  return yellowcardPayoutProvider.supports({
+    countryCode: cc,
+    currencyCode: cur,
+    rail: input.rail,
+    providerRouting: routing,
+  })
+}

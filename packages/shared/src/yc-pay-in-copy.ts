@@ -14,9 +14,22 @@ export function ycPayInInstructionNotice(rail: YcPayInRail): string {
   return 'Use the payment details to complete transfer.'
 }
 
+/** Instruction on MoMo Complete deposit (network/phone + Authorize CTA — no duplicate authorize copy). */
+export function ycPayInMomoCompleteNotice(): string | null {
+  return null
+}
+
 /** Instruction on the MoMo authorize screen (before user submits phone + network). */
 export function ycPayInMomoAuthorizeNotice(): string {
   return 'Click authorize, check your phone and approve the payment prompt.'
+}
+
+/** Notice above pay-in details on Complete deposit. */
+export function ycPayInCompleteNotice(rail: YcPayInRail): string | null {
+  if (rail === 'mobile_money') {
+    return ycPayInMomoCompleteNotice()
+  }
+  return ycPayInInstructionNotice(rail)
 }
 
 /** Full pay-in amount reminder (prefix + amount) for plain-text contexts. */

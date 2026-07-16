@@ -14,8 +14,9 @@ import {
   type RecipientSellPrepareRow,
   type SellPrepareOverrides,
 } from "@/lib/terminal/recipient-sell-prepare"
-import { NoProviderForCorridorError, selectProviderForCorridor } from "@/lib/payout-providers"
-import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
+import { NoProviderForCorridorError, corridorHasYellowcardPayout, selectProviderForCorridor } from "@/lib/payout-providers"
+import { mapNoahPrepareError, shouldTryAlternatePayoutProvider } from "@/lib/noah/noah-prepare-errors"
+import { NoahHttpError } from "@/lib/noah/http"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { getGlobalPayoutMarginCaptureMode } from "@/lib/noah/margin-capture-mode"
 import { noahImpliedProviderRate } from "@/lib/noah/fx-prices"
@@ -99,6 +100,76 @@ export type PayoutQuoteResult = {
 }
 
 const QUOTE_TTL_MS = 15 * 60 * 1000
+
+async function buildYellowcardBalancePayoutQuoteFromRow(input: {
+  admin: ReturnType<typeof createSupabaseAdmin>
+  userId: string
+  noahCustomerId: string
+  recipientId?: string
+  row: RecipientSellPrepareRow
+  receiveFiatAmount: number
+  sourceBalanceCurrency: string
+  amountEntryMode?: "send" | "receive"
+  sendBudget?: number
+  paymentPurpose?: string
+}) {
+  const { buildYcPayoutQuote } = await import("@/lib/yellowcard/payout-quote")
+  const { data: userRow } = await input.admin
+    .from("users")
+    .select(
+      "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+    )
+    .eq("id", input.userId)
+    .maybeSingle()
+  const { getWalletOwnerId } = await import("@/lib/wallet/resolve-wallet-owner")
+  const walletOwnerId = await getWalletOwnerId(input.admin, "individual", input.userId)
+  const { data: walletRow } = walletOwnerId
+    ? await input.admin
+        .from("wallet_accounts")
+        .select("address")
+        .eq("wallet_owner_id", walletOwnerId)
+        .eq("ledger_currency", "USD")
+        .eq("asset", "USDC")
+        .eq("status", "active")
+        .maybeSingle()
+    : { data: null }
+  const turnkeyAddr = String(walletRow?.address ?? "").trim()
+  if (!turnkeyAddr) {
+    throw new Error("User Solana wallet is required for Yellowcard payout refund routing.")
+  }
+  return buildYcPayoutQuote({
+    userId: input.userId,
+    customerUID: input.noahCustomerId || input.userId,
+    recipientId: input.recipientId,
+    recipient: input.row,
+    receiveFiatAmount: input.receiveFiatAmount,
+    sourceBalanceCurrency: input.sourceBalanceCurrency,
+    amountEntryMode: input.amountEntryMode,
+    sendBudget: input.sendBudget,
+    userTurnkeyAddress: turnkeyAddr,
+    paymentPurpose: input.paymentPurpose,
+    senderProfile: {
+      residenceCountry: userRow?.residence_country,
+      kycIdType: userRow?.kyc_id_type,
+      kycIdNumber: userRow?.kyc_id_number,
+      ngLocalIdType: userRow?.ng_local_id_type,
+      ngLocalIdNumber: userRow?.ng_local_id_number,
+      fullName: userRow?.full_name,
+      phone: userRow?.phone,
+      email: userRow?.email,
+      dateOfBirth: userRow?.date_of_birth,
+      addressStreet: userRow?.kyc_address_street,
+      addressCity: userRow?.kyc_address_city,
+      addressCountry: userRow?.kyc_address_country,
+    },
+  })
+}
+
+function payoutRailForRecipient(row: RecipientSellPrepareRow): "bank_transfer" | "mobile_money" {
+  return row.mobile_provider || String(row.bank_name || "").toLowerCase().includes("mobile money")
+    ? "mobile_money"
+    : "bank_transfer"
+}
 
 function buildEasnerSlice(params: {
   sourceAmount: number
@@ -209,55 +280,17 @@ export async function buildPayoutQuote(input: {
       })
       selectedProviderId = provider.id
       if (provider.id === "yellowcard") {
-        const { buildYcPayoutQuote } = await import("@/lib/yellowcard/payout-quote")
-        const { data: userRow } = await admin
-          .from("users")
-          .select(
-            "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
-          )
-          .eq("id", input.userId)
-          .maybeSingle()
-        const { getWalletOwnerId } = await import("@/lib/wallet/resolve-wallet-owner")
-        const walletOwnerId = await getWalletOwnerId(admin, "individual", input.userId)
-        const { data: walletRow } = walletOwnerId
-          ? await admin
-              .from("wallet_accounts")
-              .select("address")
-              .eq("wallet_owner_id", walletOwnerId)
-              .eq("ledger_currency", "USD")
-              .eq("asset", "USDC")
-              .eq("status", "active")
-              .maybeSingle()
-          : { data: null }
-        const turnkeyAddr = String(walletRow?.address ?? "").trim()
-        if (!turnkeyAddr) {
-          throw new Error("User Solana wallet is required for Yellowcard payout refund routing.")
-        }
-        return buildYcPayoutQuote({
+        return buildYellowcardBalancePayoutQuoteFromRow({
+          admin,
           userId: input.userId,
-          customerUID: input.noahCustomerId || input.userId,
+          noahCustomerId: input.noahCustomerId,
           recipientId: input.recipientId,
-          recipient: row,
+          row,
           receiveFiatAmount: input.receiveFiatAmount,
           sourceBalanceCurrency: input.sourceBalanceCurrency,
           amountEntryMode: input.amountEntryMode,
           sendBudget: input.sendBudget,
-          userTurnkeyAddress: turnkeyAddr,
           paymentPurpose: input.prepareOverrides?.paymentPurpose,
-          senderProfile: {
-            residenceCountry: userRow?.residence_country,
-            kycIdType: userRow?.kyc_id_type,
-            kycIdNumber: userRow?.kyc_id_number,
-            ngLocalIdType: userRow?.ng_local_id_type,
-            ngLocalIdNumber: userRow?.ng_local_id_number,
-            fullName: userRow?.full_name,
-            phone: userRow?.phone,
-            email: userRow?.email,
-            dateOfBirth: userRow?.date_of_birth,
-            addressStreet: userRow?.kyc_address_street,
-            addressCity: userRow?.kyc_address_city,
-            addressCountry: userRow?.kyc_address_country,
-          },
         })
       }
       if (provider.id !== "noah") {
@@ -329,6 +362,9 @@ export async function buildPayoutQuote(input: {
         accountSuffix: String(row.account_number ?? "").slice(-4) || null,
         bankName: row.bank_name ?? null,
       })
+      if (shouldTryAlternatePayoutProvider(e)) {
+        throw e
+      }
       const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase()
       const expired =
         msg.includes("formsession") || (msg.includes("session") && msg.includes("expired"))
@@ -348,6 +384,35 @@ export async function buildPayoutQuote(input: {
     prep = prepared.prep
     channelId = prepared.channelId
   } catch (e) {
+    if (
+      countryCode &&
+      sourceBalanceCurrency === "USD" &&
+      shouldTryAlternatePayoutProvider(e) &&
+      (await corridorHasYellowcardPayout(admin, {
+        countryCode,
+        currencyCode: receiveCurrency,
+        rail: payoutRailForRecipient(row),
+      }))
+    ) {
+      console.info("[noah_payout_quote] fallback_to_yellowcard", {
+        recipientId: input.recipientId ?? null,
+        countryCode,
+        receiveCurrency,
+        reason: e instanceof NoahHttpError ? e.detail || e.message : String(e),
+      })
+      return buildYellowcardBalancePayoutQuoteFromRow({
+        admin,
+        userId: input.userId,
+        noahCustomerId: input.noahCustomerId,
+        recipientId: input.recipientId,
+        row,
+        receiveFiatAmount: input.receiveFiatAmount,
+        sourceBalanceCurrency: input.sourceBalanceCurrency,
+        amountEntryMode: input.amountEntryMode,
+        sendBudget: input.sendBudget,
+        paymentPurpose: input.prepareOverrides?.paymentPurpose,
+      })
+    }
     throw e instanceof Error ? e : new Error(mapNoahPrepareError(e))
   }
 

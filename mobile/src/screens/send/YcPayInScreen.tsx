@@ -15,7 +15,7 @@ import {
   formatMoneyDisplay,
   formatReviewRowMoneyDisplay,
   formatSendRateLabel,
-  ycPayInInstructionNotice,
+  ycPayInCompleteNotice,
   YC_PAY_IN_MOMO_AUTHORIZE_CTA,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
   REVIEW_ROW_LABELS,
@@ -93,7 +93,6 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
     localPayIn = 0,
     customerRate = 0,
     bankInfo,
-    payInNotice,
     payInRail = 'bank_transfer',
     processingFeeLocal,
     displayProcessingFee,
@@ -107,6 +106,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   const fields = ycBankInfoFields(bankInfo)
   const isFundBalance = flowMode === 'fund_balance'
   const showFundBalanceQuoteSummary = isFundBalance && isMobileMoney
+  const showFundBalanceBankCredit = isFundBalance && !isMobileMoney
   const screenTitle = isFundBalance ? 'Complete deposit' : 'Complete payment'
   const formattedSendAmount = formatMoneyDisplay(localPayIn, sendCurrency)
   const formattedCreditAmount = formatMoneyDisplay(receiveAmount, receiveCurrency)
@@ -117,7 +117,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
           exchangeRate: customerRate,
         })
       : 0
-  const notice = payInNotice || ycPayInInstructionNotice(payInRail)
+  const completeNotice = ycPayInCompleteNotice(payInRail)
   const displayTransactionId = transactionId?.toUpperCase() ?? ''
   const feeLocal =
     processingFeeLocal ??
@@ -169,7 +169,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
             {displayTransactionId ? (
               <TransactionDetailSummaryRow
                 label={REVIEW_ROW_LABELS.transactionId}
-                last={isFundBalance && !isMobileMoney}
+                last={!showFundBalanceQuoteSummary && !showFundBalanceBankCredit}
               >
                 <TransactionDetailCopyableValue
                   value={displayTransactionId}
@@ -178,6 +178,14 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
                   mono
                 />
               </TransactionDetailSummaryRow>
+            ) : null}
+            {showFundBalanceBankCredit ? (
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.amountToCredit}
+                value={formattedCreditAmount}
+                valueBold
+                last
+              />
             ) : null}
             {showFundBalanceQuoteSummary ? (
               <>
@@ -266,10 +274,16 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
             ) : null}
           </View>
 
+          {(completeNotice || !isMobileMoney) ? (
           <View style={styles.payInCopySection}>
-            <Text style={[styles.noticeText, styles.noticeTextCentered]}>{notice}</Text>
-            <SendExactlyAmount amount={formattedSendAmount} centered />
+            {completeNotice ? (
+              <Text style={[styles.noticeText, styles.noticeTextCentered]}>{completeNotice}</Text>
+            ) : null}
+            {!isMobileMoney ? (
+              <SendExactlyAmount amount={formattedSendAmount} centered />
+            ) : null}
           </View>
+          ) : null}
 
           <View style={[styles.paymentCard, surfaceFrameStyle(colors)]}>
             <View style={styles.paymentCardHeader}>

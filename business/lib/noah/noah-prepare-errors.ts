@@ -102,7 +102,7 @@ function formatChannelLimitUserError(hints: NoahChannelLimitHints): string {
   return "This amount is outside the allowed range for this transfer. Try a smaller or larger amount."
 }
 
-function noahValidationDescriptions(body: unknown): string[] {
+export function noahValidationDescriptions(body: unknown): string[] {
   if (!body || typeof body !== "object") return []
   const ext = (body as Record<string, unknown>).RequestExtension
   if (!ext || typeof ext !== "object") return []
@@ -114,6 +114,38 @@ function noahValidationDescriptions(body: unknown): string[] {
       return String((item as Record<string, unknown>).Description || "").trim()
     })
     .filter(Boolean)
+}
+
+/** When Noah prepare fails for recipient/channel reasons, try the next routed payout provider. */
+export function shouldTryAlternatePayoutProvider(e: unknown): boolean {
+  if (!(e instanceof NoahHttpError)) return false
+  if (e.status !== 400) return false
+
+  const validations = noahValidationDescriptions(e.body)
+  const validationBlob = validations.join(" ").toLowerCase()
+  if (
+    validationBlob.includes("account could not be verified") ||
+    validationBlob.includes("integrityvalidation") ||
+    validationBlob.includes("could not be verified")
+  ) {
+    return true
+  }
+
+  const action =
+    typeof e.body === "object" && e.body && "Action" in e.body
+      ? String((e.body as { Action?: unknown }).Action || "").toLowerCase()
+      : ""
+  if (action.includes("confirmation of beneficiary") || action.includes("(cob)")) {
+    return true
+  }
+
+  const msg = (e.detail || e.message).toLowerCase()
+  if (msg.includes("missing step") && msg.includes("cob")) return true
+  if (msg.includes("bank") && (msg.includes("enum") || msg.includes("invalid"))) return true
+  if (isChannelLimitMessage(msg) || validations.some((v) => isChannelLimitMessage(v))) {
+    return false
+  }
+  return false
 }
 
 /** Map Noah prepare/sell API errors to user-facing copy. */
@@ -191,6 +223,12 @@ export function mapNoahPayoutUserError(
     }
     if (e.status === 401 || e.status === 403) {
       return "Transfer authorization failed. Check your account verification status."
+    }
+    if (validations.length === 1) {
+      return validations[0]
+    }
+    if (validations.length > 1) {
+      return validations.join(" ")
     }
     if (msg.includes("invalid request") || msg === "bad request") {
       if (stage === "sell") {

@@ -31,7 +31,7 @@ describe("resolveYcPayInLimits", () => {
         rail: "bank_transfer",
         channel: { country: "NG", currency: "NGN" },
       }),
-    ).toEqual({ minLocalPayIn: 2500, maxLocalPayIn: 30_000_000 })
+    ).toEqual({ minLocalPayIn: 2500, maxLocalPayIn: 5_000_000 })
   })
 
   it("prefers channel limits over fallback", () => {
@@ -43,6 +43,17 @@ describe("resolveYcPayInLimits", () => {
         channel: { minAmount: 3000, maxAmount: 5000 },
       }),
     ).toEqual({ minLocalPayIn: 3000, maxLocalPayIn: 5000 })
+  })
+
+  it("falls back to EUR corridor minimum when channel has no limits", () => {
+    expect(
+      resolveYcPayInLimits({
+        country: "FR",
+        currency: "EUR",
+        rail: "bank_transfer",
+        channel: { country: "FR", currency: "EUR" },
+      }),
+    ).toEqual({ minLocalPayIn: 10, maxLocalPayIn: null })
   })
 })
 

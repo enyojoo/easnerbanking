@@ -6,11 +6,10 @@ import { buildPayoutQuote } from "@/lib/noah/payout-quote"
 import { mapNoahPayoutUserError } from "@/lib/noah/noah-prepare-errors"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
+import { validatePayoutQuoteAmountLimits } from "@/lib/payout-quote-limit-check"
 import {
   normalizePayoutReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
-  validatePayoutAmountAgainstLimits,
-  type PayoutFieldsSchemaHint,
 } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
@@ -100,28 +99,13 @@ export async function POST(request: Request) {
     )
     if (gate) return gate
 
-    const isMobile =
-      Boolean(gateRow.mobile_provider) ||
-      String(gateRow.bank_name || "").toLowerCase().includes("mobile money")
-    const rail = isMobile ? ("mobile_money" as const) : ("bank_transfer" as const)
-    const cc = String(gateRow.country_code || "").trim().toUpperCase()
-    const cur = String(gateRow.currency || "").trim().toUpperCase()
-    let corridorHints = null
-    if (cc && cur) {
-      const { data: corridor } = await admin
-        .from("payout_corridors")
-        .select("fields_schema")
-        .eq("country_code", cc)
-        .eq("currency_code", cur)
-        .eq("rail", rail)
-        .maybeSingle()
-      corridorHints = (corridor?.fields_schema as PayoutFieldsSchemaHint | null) ?? null
-    }
-    const limitCheck = validatePayoutAmountAgainstLimits({
-      amount: receiveAmount,
-      hints: corridorHints,
-      currencyCode: gateRow.currency,
-      rail,
+    const limitCheck = await validatePayoutQuoteAmountLimits({
+      admin,
+      gateRow,
+      receiveAmount,
+      sourceBalanceCurrency,
+      amountEntryMode,
+      sendBudget,
     })
     if (!limitCheck.ok) {
       return NextResponse.json({ error: limitCheck.message }, { status: 400 })

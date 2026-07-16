@@ -13,6 +13,16 @@ describe("getBusinessPayoutMin", () => {
     expect(getBusinessPayoutMin("NGN")).toBe(1000)
   })
 
+  it("returns policy floors for disabled Noah corridors", () => {
+    expect(getBusinessPayoutMin("AED")).toBe(20)
+    expect(getBusinessPayoutMin("AUD")).toBe(10)
+    expect(getBusinessPayoutMin("HKD")).toBe(50)
+    expect(getBusinessPayoutMin("INR")).toBe(100)
+    expect(getBusinessPayoutMin("PHP", "mobile_money")).toBe(50)
+    expect(getBusinessPayoutMin("TRY")).toBe(100)
+    expect(getBusinessPayoutMin("VUV")).toBe(500)
+  })
+
   it("uses KES 150 for bank and mobile", () => {
     expect(getBusinessPayoutMin("KES", "bank_transfer")).toBe(150)
     expect(getBusinessPayoutMin("KES", "mobile_money")).toBe(150)

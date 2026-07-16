@@ -66,7 +66,7 @@ import {
   isWideSendAmountSymbol,
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
-  validatePayoutAmountAgainstLimitsForEntry,
+  validateBalancePayoutAmountForProvider,
   validateSendAmountFields,
   validateWalletSendReceiveAmount,
   resolveEffectiveWalletSendMin,
@@ -1109,14 +1109,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency') &&
         receiveAmountValue > 0
       ) {
-        const limitCheck = validatePayoutAmountAgainstLimitsForEntry({
+        const limitCheck = validateBalancePayoutAmountForProvider({
+          providerRouting: payoutCorridorRow?.provider_routing,
+          sourceBalanceCurrency: sendCurrency,
           amountEntryMode,
           receiveAmount: receiveAmountValue,
+          sendAmount: navAmounts.sendAmount,
           customerRate: exchangeRate,
           sendCurrency,
-          hints: payoutHints,
-          currencyCode: receiveCurrency,
+          receiveCurrency,
           rail: payoutRail,
+          noahHints: payoutHints,
+          ycLimits: ycPayoutLimits,
         })
         if (!limitCheck.ok) {
           setAmountFieldError(limitCheck.message)

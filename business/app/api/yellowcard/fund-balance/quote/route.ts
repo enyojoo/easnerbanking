@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount, buildYcFundBalanceDepositReviewSnapshot, buildYcFundBalanceDisplayFees, resolveYcFundBalanceDepositTitle, ycPayInInstructionNotice, normalizeYcMomoPhone, estimateYcFundBalanceReceiveLegFeesUsd } from "@easner/shared"
+import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, parseYcReceiveRejectedMinError, resolveYcPayInLimits, buildYcFundBalanceDepositReviewSnapshot, buildYcFundBalanceDisplayFees, resolveYcFundBalanceDepositTitle, ycPayInInstructionNotice, normalizeYcMomoPhone, estimateYcFundBalanceReceiveLegFeesUsd } from "@easner/shared"
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
@@ -19,6 +19,7 @@ import {
 } from "@/lib/yellowcard/fund-balance-quote-errors"
 import { buildFundBalanceQuoteSummary } from "@/lib/yellowcard/build-yc-quote-response"
 import { expireStalePendingAuthorizeTransfers } from "@/lib/yellowcard/expire-pending-authorize"
+import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 
 export const runtime = "nodejs"
 
@@ -200,13 +201,12 @@ export async function POST(request: Request) {
       : { cryptoAmountUsd: 0 },
   })
 
-  const amountCheck = validateYcPayInLocalAmount({
+  const amountCheck = await validateFundBalancePayInAmountLimits({
+    admin,
+    countryCode: country,
+    currencyCode: currency,
+    rail,
     localPayIn: provisional.localPayIn,
-    currency,
-    limits: {
-      minLocalPayIn: payInLimits.minLocalPayIn,
-      maxLocalPayIn: payInLimits.maxLocalPayIn,
-    },
   })
   if (!amountCheck.ok) {
     const belowMin =

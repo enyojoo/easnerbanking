@@ -249,7 +249,11 @@ export function YcFundBalanceReview({
       })
       return
     }
-    navigation.navigate('YcPayIn', baseParams)
+    navigation.navigate('YcPayIn', {
+      ...baseParams,
+      receiveAmount: q.usdCredit,
+      receiveCurrency: 'USD',
+    })
   }
 
   const onContinue = async () => {

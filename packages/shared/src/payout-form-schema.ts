@@ -7,6 +7,8 @@ import {
 import { unwrapNoahFieldsSchema } from "./yc-recipient-schema"
 import { getCountryCodeForCurrency } from "./flags/currency-mapping"
 import { parsePayoutMinAmount, resolveEffectivePayoutMin } from "./payout-business-limits"
+import { formatMoneyDisplay } from "./format-money-display"
+import type { YcPayInAmountValidation } from "./yc-pay-in-limits"
 
 export type { PayoutFieldsSchemaHint }
 
@@ -276,6 +278,33 @@ export function validatePayoutAmountAgainstLimitsForEntry(input: {
   }
 
   return receiveCheck
+}
+
+/** Validate local-currency pay-in amount against Noah fields_schema + business policy mins. */
+export function validateNoahPayInLocalAmount(input: {
+  localPayIn: number
+  currency: string
+  hints?: PayoutFieldsSchemaHint | null
+  rail?: PayoutRail
+}): YcPayInAmountValidation {
+  const currency = input.currency.trim().toUpperCase()
+  const rail = input.rail ?? "bank_transfer"
+  const amount = input.localPayIn
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { ok: false, message: "Enter a valid amount." }
+  }
+  const effectiveMin = resolveEffectivePayoutMin({
+    hints: input.hints,
+    currencyCode: currency,
+    rail,
+  })
+  if (effectiveMin != null && amount < effectiveMin) {
+    return {
+      ok: false,
+      message: `Minimum deposit is ${formatMoneyDisplay(effectiveMin, currency)}.`,
+    }
+  }
+  return { ok: true }
 }
 
 function formatPayoutLimitLabel(amount: number): string {

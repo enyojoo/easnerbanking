@@ -1,5 +1,17 @@
 import type { ProviderHealthStatus, ProviderRoutingEntry } from "./send-destinations"
 
+export type PayoutProviderId = "noah" | "yellowcard"
+
+export function resolvePrimaryPayoutProvider(
+  routing: ProviderRoutingEntry[] | null | undefined,
+): PayoutProviderId {
+  const sorted = [...(routing ?? [])].sort((a, b) => a.priority - b.priority)
+  const provider = String(sorted[0]?.provider ?? "")
+    .trim()
+    .toLowerCase()
+  return provider === "yellowcard" ? "yellowcard" : "noah"
+}
+
 export type PayoutRail = "bank_transfer" | "mobile_money"
 
 /** Normalized Noah FormSchema hints for recipient + send UI. */
@@ -76,9 +88,11 @@ export function isYcBalancePayoutCorridor(
   corridor: Pick<PayoutCorridorPublic, "provider_routing" | "noah_sell_available"> | null | undefined,
 ): boolean {
   if (!corridor) return false
-  const routing = corridor.provider_routing ?? []
-  if (routing[0]?.provider === "yellowcard") return true
-  if (corridor.noah_sell_available === false && routing.some((r) => r.provider === "yellowcard")) {
+  if (resolvePrimaryPayoutProvider(corridor.provider_routing) === "yellowcard") return true
+  if (
+    corridor.noah_sell_available === false &&
+    (corridor.provider_routing ?? []).some((r) => r.provider === "yellowcard")
+  ) {
     return true
   }
   return false
