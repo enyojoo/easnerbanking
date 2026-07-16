@@ -1102,16 +1102,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         )}
                       </Text>
                     </View>
-                    {shouldShowReviewTotalDebited(payoutReviewFlow) &&
-                    transaction.payout_review.send_currency ? (
-                      <CreditDestinationRow
-                        label={REVIEW_ROW_LABELS.debitedFrom}
-                        currency={transaction.payout_review.send_currency}
-                        balanceLabel={formatAccountBalanceLabel(
-                          transaction.payout_review.send_currency,
-                        )}
-                      />
-                    ) : null}
                     {showPayoutProcessingFee ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.processingFee}</Text>
@@ -1146,6 +1136,16 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         )}
                       </Text>
                     </View>
+                    {shouldShowReviewTotalDebited(payoutReviewFlow) &&
+                    transaction.payout_review.send_currency ? (
+                      <CreditDestinationRow
+                        label={REVIEW_ROW_LABELS.debitedFrom}
+                        currency={transaction.payout_review.send_currency}
+                        balanceLabel={formatAccountBalanceLabel(
+                          transaction.payout_review.send_currency,
+                        )}
+                      />
+                    ) : null}
                     {transaction.recipient_snapshot ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.recipient}</Text>

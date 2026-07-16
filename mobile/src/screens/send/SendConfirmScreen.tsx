@@ -780,13 +780,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 label={REVIEW_ROW_LABELS.sending}
                 value={formatMoneyDisplay(youSendAmount, selectedBalanceCurrency)}
               />
-              {selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR' ? (
-                <CreditDestinationRow
-                  label={REVIEW_ROW_LABELS.debitedFrom}
-                  currency={selectedBalanceCurrency}
-                  balanceLabel={formatAccountBalanceLabel(selectedBalanceCurrency)}
-                />
-              ) : null}
               {!easetagUi && quoteReady && showProcessingFee ? (
                 <Row
                   label={REVIEW_ROW_LABELS.processingFee}
@@ -816,6 +809,13 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                     selectedBalanceCurrency,
                   )}
                   bold
+                />
+              ) : null}
+              {selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR' ? (
+                <CreditDestinationRow
+                  label={REVIEW_ROW_LABELS.debitedFrom}
+                  currency={selectedBalanceCurrency}
+                  balanceLabel={formatAccountBalanceLabel(selectedBalanceCurrency)}
                 />
               ) : null}
               <Row

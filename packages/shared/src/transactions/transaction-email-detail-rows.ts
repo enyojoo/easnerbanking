@@ -83,13 +83,6 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
   // Emails describe what has happened (a detail view), so use the past-tense "Sent".
   pushIf(rows, REVIEW_ROW_LABELS.sent, formatMoneyDisplay(review.you_send_amount, sendCurrency))
   const reviewFlow = input.payoutReviewFlow ?? "balance_payout"
-  if (shouldShowReviewTotalDebited(reviewFlow)) {
-    pushIf(
-      rows,
-      REVIEW_ROW_LABELS.debitedFrom,
-      formatAccountBalanceLabel(sendCurrency),
-    )
-  }
   if (isPayoutReviewFeeVisible(displayProcessingFee)) {
     pushIf(
       rows,
@@ -113,6 +106,13 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
     REVIEW_ROW_LABELS.totalDebited,
     formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.totalDebited, review.total_debited, sendCurrency),
   )
+  if (shouldShowReviewTotalDebited(reviewFlow)) {
+    pushIf(
+      rows,
+      REVIEW_ROW_LABELS.debitedFrom,
+      formatAccountBalanceLabel(sendCurrency),
+    )
+  }
   pushIf(
     rows,
     REVIEW_ROW_LABELS.recipientGets,

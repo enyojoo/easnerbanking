@@ -154,14 +154,6 @@ export function PayoutReviewDetailsRows({
           </span>
         </div>
 
-        {sourceAccountCurrency && shouldShowReviewTotalDebited(reviewFlow) ? (
-          <CreditDestinationRow
-            label={REVIEW_ROW_LABELS.debitedFrom}
-            currency={sourceAccountCurrency}
-            balanceLabel={formatAccountBalanceLabel(sourceAccountCurrency)}
-          />
-        ) : null}
-
         {showFeeBreakdown ? (
           <>
             {showProcessingFee ? (
@@ -203,6 +195,14 @@ export function PayoutReviewDetailsRows({
             </div>
             ) : null}
           </>
+        ) : null}
+
+        {sourceAccountCurrency && shouldShowReviewTotalDebited(reviewFlow) ? (
+          <CreditDestinationRow
+            label={REVIEW_ROW_LABELS.debitedFrom}
+            currency={sourceAccountCurrency}
+            balanceLabel={formatAccountBalanceLabel(sourceAccountCurrency)}
+          />
         ) : null}
 
         {showRecipientGets ? (

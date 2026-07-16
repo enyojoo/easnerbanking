@@ -29,6 +29,9 @@ describe("buildTransactionEmailDetailRows", () => {
     const map = rowMap(rows)
     expect(map["Sent"]).toBe("$100")
     expect(map["Debited from"]).toBe("USD Balance")
+    const debitedFromIdx = rows.findIndex((r) => r.label === "Debited from")
+    const totalDebitedIdx = rows.findIndex((r) => r.label === "Total debited")
+    expect(debitedFromIdx).toBeGreaterThan(totalDebitedIdx)
     // Combined Processing fee = 1 + 2.32 = 3.32, and 100 + 3.32 = 103.32 (Total debited).
     expect(map["Processing fee"]).toBe("-$3.32")
     expect(map["Total debited"]).toBe("-$103.32")
