@@ -95,7 +95,9 @@ export function DepositReviewDetailsRows({
         ) : null}
 
         <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.creditAmount}</span>
+          <span className="text-sm text-muted-foreground">
+            {mode === "detail" ? REVIEW_ROW_LABELS.amountCredited : REVIEW_ROW_LABELS.creditAmount}
+          </span>
           <span className="text-xl font-semibold">
             {formatMoneyDisplay(depositReview.usd_credit, "USD")}
           </span>
@@ -110,7 +112,9 @@ export function DepositReviewDetailsRows({
         </div>
 
         <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
+          <span className="text-sm text-muted-foreground">
+            {mode === "detail" ? REVIEW_ROW_LABELS.scheme : REVIEW_ROW_LABELS.transferMethod}
+          </span>
           <span className="font-medium">{depositReview.transfer_method}</span>
         </div>
 

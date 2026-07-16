@@ -13,6 +13,7 @@ import {
   isYcFundBalanceDepositMetadata,
   normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
+  resolveInboundReceiveDetail,
 } from "@easner/shared"
 import type { TransactionEmailData } from "@easner/server"
 import { isLedgerTransactionEmailEnabled } from "@/lib/notifications/email-rollout"
@@ -96,6 +97,34 @@ function buildEmailDetailRows(
   }
 
   if (direction === "in") {
+    const inboundReceive = resolveInboundReceiveDetail({
+      provider: input.provider,
+      direction: input.direction,
+      metadata: meta,
+      payload: input.payload ?? null,
+      source_type: firstString([meta.source_type]),
+      chain: firstString([meta.chain, meta.receive_network]),
+      currency: input.currency,
+      amount: input.amount,
+      deposit_review: normalizeYcFundBalanceDepositReview(meta.deposit_review),
+      sender_display_name: firstString([meta.sender_display_name, meta.sender_name]),
+      source_payment_rail: firstString([meta.source_payment_rail, meta.payment_rail]),
+      reference: firstString([meta.reference, meta.narration]),
+      fee_amount: Number(meta.fee_amount ?? meta.fee ?? 0) || null,
+      posted_amount: Number(meta.posted_amount ?? meta.settled_amount ?? 0) || null,
+      posted_currency: firstString([meta.posted_currency, meta.settled_currency, meta.currency]),
+      settled_amount: Number(meta.settled_amount ?? 0) || null,
+      settled_currency: firstString([meta.settled_currency, meta.currency]),
+      created_at: firstString([meta.created_at]),
+      ledger_created_at: firstString([meta.ledger_created_at, meta.created_at]),
+      easner_transaction_id: input.easnerTransactionId ?? input.transactionId,
+      send_note: firstString([meta.send_note, meta.note]),
+    })
+    if (inboundReceive) {
+      const rows = buildTransactionEmailDetailRows({ direction, inboundReceive })
+      return rows.length ? rows : undefined
+    }
+
     if (isYcFundBalanceDepositMetadata(meta)) {
       const depositReview =
         normalizeYcFundBalanceDepositReview(meta.deposit_review) ??

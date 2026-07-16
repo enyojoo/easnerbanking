@@ -26,6 +26,10 @@ import {
   resolveYcFundBalanceNotificationActivityLabelFromMetadata,
 } from "./yc-deposit-display"
 import {
+  resolveInboundReceiveDetail,
+  resolveInboundReceiveNotification,
+} from "./inbound-receive-detail"
+import {
   deriveVerificationBankName,
   formatVerificationDepositPushBody,
   isVerificationDepositMetadata,
@@ -521,6 +525,39 @@ export function deriveTransactionNotification(
   })
 
   if (category === "Stablecoin Deposit") {
+    const metaRecord = meta ?? {}
+    const inboundSnapshot = resolveInboundReceiveDetail({
+      provider: input.provider,
+      direction: input.direction,
+      metadata: metaRecord,
+      payload: input.payload ?? null,
+      currency: input.currency,
+      amount: input.amount,
+      chain: metaRecord.chain != null ? String(metaRecord.chain) : undefined,
+      source_type: metaRecord.source_type != null ? String(metaRecord.source_type) : undefined,
+      source_payment_rail:
+        metaRecord.source_payment_rail != null ? String(metaRecord.source_payment_rail) : undefined,
+      posted_amount: Number(metaRecord.posted_amount ?? metaRecord.settled_amount ?? input.amount),
+      posted_currency: String(
+        metaRecord.posted_currency ?? metaRecord.settled_currency ?? input.currency ?? "USD",
+      ),
+      fee_amount: Number(metaRecord.fee_amount ?? metaRecord.fee ?? 0) || null,
+      sender_display_name:
+        metaRecord.sender_display_name != null ? String(metaRecord.sender_display_name) : undefined,
+    })
+    if (inboundSnapshot?.kind === "stablecoin") {
+      const notification = resolveInboundReceiveNotification(inboundSnapshot)
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "stablecoin_deposit",
+          body: notification.successBody,
+          pushBody: notification.successBody,
+          category: notification.activityLabel,
+        },
+        notification.activityLabel,
+      )
+    }
     const body = `Received ${amountText} via address`
     return finalizeDescriptor(
       {
@@ -629,6 +666,52 @@ export function deriveTransactionNotification(
   }
 
   if (direction === "in") {
+    const metaRecord = meta ?? {}
+    const inboundSnapshot = resolveInboundReceiveDetail({
+      provider: input.provider,
+      direction: input.direction,
+      metadata: metaRecord,
+      payload: input.payload ?? null,
+      currency: input.currency,
+      amount: input.amount,
+      deposit_review: normalizeYcFundBalanceDepositReview(metaRecord.deposit_review),
+      chain: metaRecord.chain != null ? String(metaRecord.chain) : undefined,
+      source_type: metaRecord.source_type != null ? String(metaRecord.source_type) : undefined,
+      source_payment_rail:
+        metaRecord.source_payment_rail != null ? String(metaRecord.source_payment_rail) : undefined,
+      reference: metaRecord.reference != null ? String(metaRecord.reference) : undefined,
+      fee_amount: Number(metaRecord.fee_amount ?? metaRecord.fee ?? 0) || null,
+      posted_amount: Number(metaRecord.posted_amount ?? metaRecord.settled_amount ?? 0) || null,
+      posted_currency: String(
+        metaRecord.posted_currency ?? metaRecord.settled_currency ?? input.currency ?? "USD",
+      ),
+      settled_amount: Number(metaRecord.settled_amount ?? 0) || null,
+      settled_currency:
+        metaRecord.settled_currency != null ? String(metaRecord.settled_currency) : undefined,
+      sender_display_name:
+        metaRecord.sender_display_name != null ? String(metaRecord.sender_display_name) : undefined,
+      send_note: metaRecord.send_note != null ? String(metaRecord.send_note) : undefined,
+    })
+    if (inboundSnapshot && inboundSnapshot.kind !== "easetag_receive" && inboundSnapshot.kind !== "stablecoin") {
+      const notification = resolveInboundReceiveNotification(inboundSnapshot)
+      const kind =
+        inboundSnapshot.kind === "noah_verification" ? "bank_verification_credit" : "bank_deposit"
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind,
+          body: notification.successBody,
+          pushBody: notification.successBody,
+          category: notification.activityLabel,
+          ...(inboundSnapshot.sender
+            ? { counterpartyLabel: "Sender", counterpartyName: inboundSnapshot.sender }
+            : {}),
+        },
+        notification.activityLabel,
+        inboundSnapshot.kind === "noah_verification" ? { successUsesCompleteSuffix: false } : undefined,
+      )
+    }
+
     if (isVerificationDepositMetadata(meta)) {
       const bank = deriveVerificationBankName({ metadata: meta, payload: input.payload ?? null })
       const body = formatVerificationDepositPushBody({

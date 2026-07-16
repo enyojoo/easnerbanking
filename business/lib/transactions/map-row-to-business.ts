@@ -16,6 +16,7 @@ import {
   resolveYcFundBalanceDepositDisplayTitle,
   isNoahVaFundingDeposit,
   resolveNoahVaFundingDepositTitleFromMeta,
+  resolveInboundReceiveDetail,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
@@ -113,8 +114,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       : null
   const bankDepositDetail =
     !globalPayoutDetail &&
-    !isVerification &&
-    (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
+    (isVerification ||
+      isBankOnrampDepositFlow(meta) ||
+      (payload && isNoahBankOnrampFiatPayIn(payload)))
       ? resolveBankDepositPayInDetail(row)
       : null
   const stablecoinDepositDetail =
@@ -252,6 +254,47 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     row.tx_hash != null ||
     row.wallet_address != null
   const type = hasStablecoinSignals ? ("stablecoin" as const) : ("book" as const)
+
+  const inboundReceive =
+    dirRaw === "in"
+      ? resolveInboundReceiveDetail({
+          provider: row.provider,
+          direction: row.direction,
+          metadata: meta,
+          payload: payload ?? null,
+          source_type: meta?.source_type != null ? String(meta.source_type) : undefined,
+          chain: row.chain != null ? String(row.chain) : undefined,
+          currency: row.currency != null ? String(row.currency) : undefined,
+          amount: typeof row.amount === "number" ? row.amount : Number(row.amount) || null,
+          deposit_review: bankDepositDetail?.depositReview ?? undefined,
+          sender_display_name:
+            bankDepositDetail?.senderName ??
+            stablecoinDepositDetail?.senderDisplay ??
+            counterpartyNameRaw ??
+            undefined,
+          source_payment_rail: bankDepositDetail?.sourcePaymentRail ?? paymentRail,
+          reference:
+            bankDepositDetail?.reference ??
+            (row.reference != null ? String(row.reference) : undefined),
+          fee_amount: bankDepositDetail?.feeAmount ?? stablecoinDepositDetail?.feeAmount ?? null,
+          posted_amount:
+            bankDepositDetail?.postedAmount ?? stablecoinDepositDetail?.postedAmount ?? null,
+          posted_currency:
+            bankDepositDetail?.postedCurrency ?? stablecoinDepositDetail?.postedCurrency ?? undefined,
+          settled_amount:
+            typeof row.settled_amount === "number" ? row.settled_amount : Number(row.settled_amount) || null,
+          settled_currency: row.settled_currency != null ? String(row.settled_currency) : undefined,
+          created_at: row.created_at != null ? String(row.created_at) : undefined,
+          ledger_created_at:
+            bankDepositDetail?.ledgerCreatedAt ??
+            stablecoinDepositDetail?.ledgerCreatedAt ??
+            ledgerCreatedAt,
+          easner_transaction_id: easnerId,
+          send_note: sendNote || undefined,
+          display_description: description,
+        })
+      : null
+
   return {
     id: easnerId,
     type,
@@ -355,5 +398,6 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     settledAt: row.settled_at != null ? String(row.settled_at) : undefined,
     ledgerCreatedAt,
     ...(sendNote ? { sendNote } : {}),
+    ...(inboundReceive ? { inboundReceive } : {}),
   }
 }

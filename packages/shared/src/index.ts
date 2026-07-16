@@ -455,6 +455,23 @@ export type {
   YcPayInRail,
 } from "./transactions/global-deposit-types"
 export {
+  buildInboundReceiveDetailRows,
+  buildInboundReceiveEmailDetailRows,
+  classifyInboundReceiveKind,
+  resolveCreditDestination,
+  resolveInboundReceiveDetail,
+  resolveInboundReceiveNotification,
+} from "./transactions/inbound-receive-detail"
+export type {
+  InboundReceiveCreditDestination,
+  InboundReceiveDetailRow,
+  InboundReceiveDetailSnapshot,
+  InboundReceiveKind,
+  InboundReceiveNotification,
+  InboundReceiveResolveInput,
+  InboundReceiveRowSurface,
+} from "./transactions/inbound-receive-detail"
+export {
   buildYcFundBalanceDepositReviewSnapshot,
   inferResidenceCountryFromLocalCurrency,
   isNoahVaFundingDeposit,

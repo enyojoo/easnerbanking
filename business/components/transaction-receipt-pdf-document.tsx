@@ -119,6 +119,19 @@ function formatReceiptTimestamp(dateInput: string | Date): string {
  * matching the mobile `TransactionReceiptCard` layout.
  */
 function buildReceiptDetailRows(transaction: Transaction, cardLast4?: string): ReceiptRow[] {
+  if (transaction.inboundReceive?.kind === "easetag_receive") {
+    return []
+  }
+
+  if (transaction.inboundReceive) {
+    return filterTransactionReceiptDetailRows(
+      buildTransactionEmailDetailRows({
+        direction: "in",
+        inboundReceive: transaction.inboundReceive,
+      }),
+    )
+  }
+
   if (transaction.payoutReview) {
     const snap = transaction.recipientSnapshot
     return filterTransactionReceiptDetailRows(

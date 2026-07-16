@@ -21,6 +21,8 @@ import {
 import { normalizeTransferMethodLabel } from "./payout-transfer-method"
 import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
 import type { YcFundBalanceDepositReviewSnapshot } from "./global-deposit-types"
+import type { InboundReceiveDetailSnapshot } from "./inbound-receive-detail"
+import { buildInboundReceiveEmailDetailRows } from "./inbound-receive-detail"
 
 export type TransactionEmailDetailRow = { label: string; value: string }
 
@@ -49,6 +51,8 @@ export type TransactionEmailDetailInput = {
     narration?: string | null
   } | null
   depositReview?: YcFundBalanceDepositReviewSnapshot | null
+  /** Unified inbound receive snapshot (YC, Noah VA, verification, stablecoin, Easetag). */
+  inboundReceive?: InboundReceiveDetailSnapshot | null
 }
 
 function pushIf(
@@ -120,11 +124,13 @@ function buildDepositRows(deposit: NonNullable<TransactionEmailDetailInput["depo
     )
   }
   if (deposit.postedAmount != null && deposit.postedAmount > 0) {
+    const postedCurrency = deposit.postedCurrency || "USD"
     pushIf(
       rows,
       REVIEW_ROW_LABELS.amountCredited,
-      formatMoneyDisplay(deposit.postedAmount, deposit.postedCurrency || "USD"),
+      formatMoneyDisplay(deposit.postedAmount, postedCurrency),
     )
+    pushIf(rows, REVIEW_ROW_LABELS.creditTo, `${postedCurrency.toUpperCase()} Balance`)
   }
   pushIf(rows, REVIEW_ROW_LABELS.narration, deposit.narration)
   return rows
@@ -153,9 +159,9 @@ function buildYcFundBalanceDepositRows(
       formatSendRateLabel("USD", review.local_currency, review.exchange_rate),
     )
   }
-  pushIf(rows, REVIEW_ROW_LABELS.creditAmount, formatMoneyDisplay(review.usd_credit, "USD"))
+  pushIf(rows, REVIEW_ROW_LABELS.amountCredited, formatMoneyDisplay(review.usd_credit, "USD"))
   pushIf(rows, REVIEW_ROW_LABELS.creditTo, review.credit_to)
-  pushIf(rows, REVIEW_ROW_LABELS.transferMethod, review.transfer_method)
+  pushIf(rows, REVIEW_ROW_LABELS.scheme, review.transfer_method)
   return rows
 }
 
@@ -166,6 +172,7 @@ function buildYcFundBalanceDepositRows(
 export function buildTransactionEmailDetailRows(
   input: TransactionEmailDetailInput,
 ): TransactionEmailDetailRow[] {
+  if (input.inboundReceive) return buildInboundReceiveEmailDetailRows(input.inboundReceive)
   if (input.payoutReview) return buildPayoutRows(input.payoutReview, input)
   if (input.depositReview) return buildYcFundBalanceDepositRows(input.depositReview)
   if (input.direction === "in" && input.deposit) return buildDepositRows(input.deposit)
@@ -176,6 +183,7 @@ export function buildTransactionEmailDetailRows(
 const RECEIPT_OMITTED_ROW_LABELS: ReadonlySet<string> = new Set([
   REVIEW_ROW_LABELS.exchangeRate,
   REVIEW_ROW_LABELS.transferMethod,
+  REVIEW_ROW_LABELS.narration,
 ])
 
 /** Receipts reuse canonical rows but hide ops-oriented payout fields. */

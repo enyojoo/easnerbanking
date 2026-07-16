@@ -10,6 +10,11 @@ vi.mock("@easner/shared", () => ({
   formatTransactionDetailHeroTitle: () => undefined,
   isBankOnrampDepositFlow: () => false,
   isVerificationDepositMetadata: () => false,
+  isYcFundBalanceDepositMetadata: () => false,
+  isNoahVaFundingDeposit: () => false,
+  resolveYcFundBalanceDepositDisplayTitle: () => undefined,
+  resolveNoahVaFundingDepositTitleFromMeta: () => undefined,
+  resolveInboundReceiveDetail: () => null,
   mapLedgerStatusForUserFeed: (st: string) => (st === "settled" ? "completed" : st),
   resolveGlobalPayoutListDisplay: (row: Record<string, unknown>) => {
     const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}

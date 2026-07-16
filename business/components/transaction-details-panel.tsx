@@ -15,7 +15,8 @@ import { TransactionLifecycleTracker } from "@/components/transactions/transacti
 import { TransactionDetailHero } from "@/components/transactions/transaction-detail-hero"
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
 import { DepositReviewDetailsRows } from "@/components/transactions/deposit-review-details-rows"
-import { REVIEW_ROW_LABELS } from "@easner/shared"
+import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
+import { REVIEW_ROW_LABELS, CurrencyFlag, isVerificationDepositMetadata } from "@easner/shared"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
@@ -206,6 +207,22 @@ function TransactionSummaryDetails({
           </div>
         ) : null}
 
+        {isDeposit && transaction.postedAmount != null && transaction.postedAmount > 0 ? (
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <span className="shrink-0 text-muted-foreground">
+              {isVerificationDepositMetadata(
+                (transaction as { metadata?: Record<string, unknown> }).metadata,
+              )
+                ? REVIEW_ROW_LABELS.creditFor
+                : REVIEW_ROW_LABELS.creditTo}
+            </span>
+            <div className="flex shrink-0 items-center gap-2 font-medium">
+              <CurrencyFlag currency={displayCurrency} size={22} className="shrink-0" />
+              <span>{displayCurrency} Balance</span>
+            </div>
+          </div>
+        ) : null}
+
         {transaction.sendNote ? (
           <div className="flex justify-between gap-4 text-sm">
             <span className="shrink-0 text-muted-foreground">Note</span>
@@ -246,7 +263,11 @@ export function TransactionDetailsPanel({
   // tracker would always render both steps complete. Skip it (bank deposits keep it).
   const isStablecoinDeposit =
     transaction.type === "stablecoin" && transaction.direction === "credit"
-  const showLifecycleTracker = Boolean(transaction.lifecycle?.length) && !isStablecoinDeposit
+  const isEasetagReceive =
+    transaction.paymentScheme === "Easetag" ||
+    transaction.inboundReceive?.kind === "easetag_receive"
+  const showLifecycleTracker =
+    Boolean(transaction.lifecycle?.length) && !isStablecoinDeposit && !isEasetagReceive
   const lifecycleTitle = isGlobalPayout ? "Transfer status" : "Deposit status"
 
   const handleCopy = async (text: string, key: string) => {
@@ -299,6 +320,14 @@ export function TransactionDetailsPanel({
           }
           whenAt={transaction.ledgerCreatedAt ?? transaction.date}
           mode="detail"
+        />
+      ) : transaction.inboundReceive ? (
+        <InboundReceiveDetailsRows
+          transactionId={transaction.id}
+          snapshot={transaction.inboundReceive}
+          timingRows={transaction.transactionTiming}
+          copiedKey={copiedKey}
+          onCopy={handleCopy}
         />
       ) : isYcFundBalanceDeposit && transaction.depositReview ? (
         <DepositReviewDetailsRows

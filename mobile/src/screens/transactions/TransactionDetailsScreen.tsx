@@ -80,11 +80,13 @@ import {
   shouldShowPayoutReviewFeeRow,
   REVIEW_ROW_LABELS,
   reviewPrimaryAmountLabel,
+  resolveInboundReceiveDetail,
   type GlobalPayoutReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
   type YcFundBalanceDepositReviewSnapshot,
 } from '@easner/shared'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
+import { InboundReceiveDetailRows } from '../../components/transactions/InboundReceiveDetailRows'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { haptics } from '../../lib/haptics'
@@ -142,6 +144,8 @@ interface LedgerTransaction {
   send_note?: string
   transaction_timing?: Array<{ label: string; value: string }>
   ledger_created_at?: string
+  provider?: string
+  chain?: string
 }
 
 type StatusInfo = {
@@ -261,6 +265,33 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     const hasTransactionId =
       typeof transaction.transaction_id === 'string' && transaction.transaction_id.trim().length > 0
     return hasAmount && hasCurrency && hasStatus && hasType && hasCreated && hasTransactionId
+  }, [transaction])
+
+  const inboundReceive = useMemo(() => {
+    if (!transaction || transaction.transaction_type !== 'receive') return null
+    return resolveInboundReceiveDetail({
+      provider: transaction.provider ?? transaction.metadata?.provider,
+      direction: 'in',
+      metadata: transaction.metadata,
+      source_type: transaction.source_type,
+      chain: transaction.chain ?? transaction.metadata?.chain,
+      currency: transaction.currency,
+      amount: transaction.amount,
+      deposit_review: transaction.deposit_review,
+      sender_display_name: transaction.sender_display_name,
+      source_payment_rail: transaction.source_payment_rail,
+      reference: transaction.reference,
+      fee_amount: transaction.fee_amount,
+      posted_amount: transaction.posted_amount,
+      posted_currency: transaction.posted_currency,
+      settled_amount: transaction.settled_amount,
+      settled_currency: transaction.settled_currency,
+      created_at: transaction.created_at,
+      ledger_created_at: transaction.ledger_created_at,
+      easner_transaction_id: transaction.transaction_id,
+      send_note: transaction.send_note,
+      display_description: transaction.display_description,
+    })
   }, [transaction])
 
   // Animation refs
@@ -802,8 +833,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     })
   const easetagWhenTs = whenTs
 
-  // Downloadable receipt (image) — completed, non-Easetag transactions. Reuses the same
-  // canonical rows as the in-app view / business PDF so all surfaces foot identically.
+  // Downloadable receipt (image) — completed, non-Easetag. Same canonical rows as business PDF.
   const receiptRows = filterTransactionReceiptDetailRows(
     transaction.status === 'completed' && !isEasetagP2p
       ? isGlobalPayoutSend && transaction.payout_review
@@ -836,6 +866,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   }
                 : undefined,
           })
+        : inboundReceive && inboundReceive.kind !== 'easetag_receive'
+          ? buildTransactionEmailDetailRows({
+              direction: 'in',
+              inboundReceive,
+            })
         : isYcFundBalanceDeposit && ycDepositReview
           ? buildTransactionEmailDetailRows({
               direction: 'in',
@@ -985,36 +1020,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   </Pressable>
                 </View>
 
-                {isEasetagP2p ? (
-                  <>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.scheme}</Text>
-                      <Text style={styles.summaryValue}>Easetag</Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>When</Text>
-                      <Text style={styles.summaryValue}>{formatTimestamp(easetagWhenTs)}</Text>
-                    </View>
-                    {(() => {
-                      const sendNote = String(
-                        transaction.metadata?.send_note ??
-                          transaction.metadata?.note ??
-                          '',
-                      ).trim()
-                      if (!sendNote) return null
-                      return (
-                        <View style={styles.summaryRow}>
-                          <Text style={styles.summaryLabel}>Note</Text>
-                          <Text style={styles.summaryValue}>{sendNote}</Text>
-                        </View>
-                      )
-                    })()}
-                  </>
-                ) : null}
+                {inboundReceive ? <InboundReceiveDetailRows snapshot={inboundReceive} /> : null}
 
-                {!isEasetagP2p &&
+                {!inboundReceive &&
+                !isEasetagP2p &&
                 !isBankOnrampReceive &&
                 !isStablecoinReceive &&
+                !isYcFundBalanceDeposit &&
                 transaction.sender_display_name ? (
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.sender}</Text>
@@ -1022,123 +1034,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   </View>
                 ) : null}
 
-                {!isEasetagP2p && isYcFundBalanceDeposit && ycDepositReview ? (
-                  <>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>
-                        {reviewPrimaryAmountLabel('local_pay_in', 'detail')}
-                      </Text>
-                      <Text style={styles.summaryValue}>
-                        {formatMoneyDisplay(
-                          ycDepositReview.local_pay_in,
-                          ycDepositReview.local_currency,
-                        )}
-                      </Text>
-                    </View>
-                    {showYcDepositProcessingFee ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.processingFee}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatMoneyDisplay(ycDisplayProcessingFee, 'USD')}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {ycDepositReview.exchange_rate > 0 ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.exchangeRate}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatSendRateLabel(
-                            'USD',
-                            ycDepositReview.local_currency,
-                            ycDepositReview.exchange_rate,
-                          )}
-                        </Text>
-                      </View>
-                    ) : null}
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.creditAmount}</Text>
-                      <Text style={[styles.summaryValue, styles.summaryValueBold]}>
-                        {formatMoneyDisplay(ycDepositReview.usd_credit, 'USD')}
-                      </Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.creditTo}</Text>
-                      <View style={styles.creditToRow}>
-                        <CurrencyFlag currency="USD" size={20} />
-                        <Text style={styles.summaryValue}>{ycDepositReview.credit_to}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.transferMethod}</Text>
-                      <Text style={styles.summaryValue}>{ycDepositReview.transfer_method}</Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.when}</Text>
-                      <Text style={styles.summaryValue}>{formatTimestamp(whenTs)}</Text>
-                    </View>
-                  </>
-                ) : null}
-
-                {!isEasetagP2p && isBankOnrampReceive ? (
-                  <>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>When</Text>
-                      <Text style={styles.summaryValue}>{formatTimestamp(whenTs)}</Text>
-                    </View>
-                    {transaction.source_payment_rail ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.scheme}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatScheme(transaction, transaction.source_payment_rail)}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {transaction.sender_display_name ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.sender}</Text>
-                        <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
-                      </View>
-                    ) : null}
-                    {transaction.reference ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.narration}</Text>
-                        <Text style={styles.summaryValue}>{transaction.reference}</Text>
-                      </View>
-                    ) : null}
-                    {transaction.fee_amount != null && transaction.fee_amount > 0 ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.processingFee}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatAmount(transaction.fee_amount, transaction.currency, false)}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {(transaction.posted_amount ?? transaction.settled_amount) != null &&
-                    (transaction.posted_amount ?? transaction.settled_amount)! > 0 ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.amountCredited}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatAmount(
-                            transaction.posted_amount ?? transaction.settled_amount!,
-                            transaction.posted_currency ||
-                              transaction.settled_currency ||
-                              transaction.currency,
-                            true,
-                          )}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {depositSendNote ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Note</Text>
-                        <Text style={styles.summaryValue}>{depositSendNote}</Text>
-                      </View>
-                    ) : null}
-                  </>
-                ) : null}
-
-                {!isEasetagP2p &&
+                {!inboundReceive &&
+                  !isEasetagP2p &&
                   !isBankOnrampReceive &&
+                  !isYcFundBalanceDeposit &&
                   transaction.transaction_type === 'receive' &&
                   transaction.source_type === 'virtual_account' && (
                   <>
@@ -1182,64 +1081,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         {formatTimestamp(whenTs)}
                       </Text>
                     </View>
-                  </>
-                )}
-
-                {/* Stablecoin deposits */}
-                {!isEasetagP2p && isStablecoinReceive && (
-                  <>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>When</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatTimestamp(whenTs)}
-                      </Text>
-                    </View>
-
-                    {/* Scheme - always show "USDC on SOL" or "EURC on SOL" */}
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.scheme}</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatScheme(transaction, transaction.source_payment_rail || 'solana')}
-                      </Text>
-                    </View>
-
-                    {transaction.sender_display_name ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.sender}</Text>
-                        <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
-                      </View>
-                    ) : null}
-
-                    {transaction.fee_amount != null && transaction.fee_amount > 0 ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.processingFee}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatAmount(transaction.fee_amount, transaction.currency, false)}
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    {(transaction.posted_amount ?? transaction.settled_amount) != null &&
-                    (transaction.posted_amount ?? transaction.settled_amount)! > 0 ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.amountCredited}</Text>
-                        <Text style={styles.summaryValue}>
-                          {formatAmount(
-                            transaction.posted_amount ?? transaction.settled_amount!,
-                            transaction.posted_currency ||
-                              transaction.settled_currency ||
-                              transaction.currency,
-                            true,
-                          )}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {depositSendNote ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Note</Text>
-                        <Text style={styles.summaryValue}>{depositSendNote}</Text>
-                      </View>
-                    ) : null}
                   </>
                 )}
 
@@ -1430,9 +1271,15 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
             {/* Stablecoin deposits settle on-chain in a single event, so the Processing → Completed
                 tracker would always render both steps complete. Skip it (bank deposits keep it). */}
-            {(isBankOnrampReceive || isGlobalPayoutSend) &&
+            {(inboundReceive ||
+              isGlobalPayoutSend ||
+              isBankOnrampReceive ||
+              isYcFundBalanceDeposit) &&
             transaction.lifecycle &&
-            transaction.lifecycle.length > 0 ? (
+            transaction.lifecycle.length > 0 &&
+            (!inboundReceive ||
+              (inboundReceive.kind !== 'stablecoin' &&
+                inboundReceive.kind !== 'easetag_receive')) ? (
               <SectionCard style={styles.card}>
                 <TransactionLifecycleTracker
                   steps={transaction.lifecycle}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { buildTransactionEmailDetailRows, filterTransactionReceiptDetailRows } from "./transaction-email-detail-rows"
+import { resolveInboundReceiveDetail } from "./inbound-receive-detail"
 import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
 
 function rowMap(rows: { label: string; value: string }[]): Record<string, string> {
@@ -120,11 +121,53 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(map["Amount paid"]).toBe("₦100,000")
     expect(map["Processing fee"]).toBeDefined()
     expect(map["Exchange rate"]).toBeDefined()
-    expect(map["Credit amount"]).toBe("$65")
+    expect(map["Amount credited"]).toBe("$65")
     expect(map["Credit to"]).toBe("USD Balance")
-    expect(map["Transfer method"]).toBe("Bank Transfer")
-    expect(map["Scheme"]).toBeUndefined()
+    expect(map["Scheme"]).toBe("Bank Transfer")
+    expect(map["Transfer method"]).toBeUndefined()
+    expect(map["Credit amount"]).toBeUndefined()
     expect(map["Narration"]).toBeUndefined()
+  })
+
+  it("unified inboundReceive snapshot rows", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      deposit_review: {
+        local_pay_in: 100000,
+        local_currency: "NGN",
+        usd_credit: 65,
+        processing_fee: 0.65,
+        exchange_fee: 0.1,
+        exchange_rate: 1538.46,
+        transfer_method: "Mobile Money",
+        credit_to: "USD Balance",
+        residence_country: "NG",
+        pay_in_rail: "mobile_money",
+      },
+    })
+    const rows = buildTransactionEmailDetailRows({ direction: "in", inboundReceive: snapshot! })
+    const map = rowMap(rows)
+    expect(map["Scheme"]).toBe("Mobile Money")
+    expect(map["Amount credited"]).toBe("$65")
+  })
+
+  it("filterTransactionReceiptDetailRows omits narration", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "noah",
+      metadata: {
+        flow: "bank_onramp",
+        posted_amount: 10,
+        posted_currency: "USD",
+        deposit_scheme_label: "ACH",
+        narration: "Ref 1",
+      },
+    })
+    const filtered = filterTransactionReceiptDetailRows(
+      buildTransactionEmailDetailRows({ direction: "in", inboundReceive: snapshot! }),
+    )
+    expect(filtered.map((r) => r.label)).not.toContain("Narration")
+    expect(filtered.map((r) => r.label)).toContain("Amount credited")
   })
 
   it("returns no rows for shapes without enrichment (e.g. Easetag)", () => {
