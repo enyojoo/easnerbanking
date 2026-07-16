@@ -19,6 +19,8 @@ export const REVIEW_ROW_LABELS = {
   amountToPay: "Amount to pay",
   /** Local principal at quoted rate before processing fees (YC fund balance pay-in). */
   depositAmount: "Deposit amount",
+  /** Local principal for cross-border send pay-in (TLC bank / MoMo). */
+  transferAmount: "Transfer amount",
   /** All-in local pay-in including fees (YC fund balance confirm). */
   totalToPay: "Total to pay",
   /** Settled local pay-in (transaction detail). */

@@ -81,12 +81,11 @@ import {
   sendLocalPayInMomoTitle,
   SEND_LOCAL_PAY_IN_BANK_CHIP,
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
-  formatYcPayInMinHint,
-  validateYcFundBalancePayInAmount,
+  validateYcCrossBorderSendAmount,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
-import { useYcPayInMinEnforcement } from '../../hooks/useYcPayInMinEnforcement'
+import { useYcCrossBorderSendMinEnforcement } from '../../hooks/useYcCrossBorderSendMinEnforcement'
 import { useYcSendExchangeRates } from '../../hooks/queries/use-yc-send-exchange-rates'
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
@@ -578,15 +577,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     }
   }, [payInRails, selectedPaymentMethod, tlcPayInRail])
 
-  const tlcMinHint =
-    tlcPayInLimits.minLocalPayIn != null && ycFlow.customerRate
-      ? formatYcPayInMinHint({
-          minLocalPayIn: tlcPayInLimits.minLocalPayIn,
-          currency: selectedOtherCurrency ?? payInCurrency ?? '',
-          customerSellRate: ycFlow.customerRate,
-        })
-      : null
-
   const tlcMinSeedKey =
     selectedPaymentMethod === 'otherCurrency' &&
     selectedOtherCurrency &&
@@ -595,16 +585,16 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       ? `${selectedOtherCurrency}:${tlcPayInRail}:${amountEntryMode}`
       : null
 
-  useYcPayInMinEnforcement({
+  useYcCrossBorderSendMinEnforcement({
     enabled:
       selectedPaymentMethod === 'otherCurrency' &&
       showThroughLocalCurrency &&
       Boolean(selectedOtherCurrency && selectedOtherPaymentMethod && ycFlow.customerRate),
     seedKey: tlcMinSeedKey,
     minLocalPayIn: tlcPayInLimits.minLocalPayIn,
-    amountEntryMode: amountEntryMode === 'receive' ? 'usd' : 'local',
+    amountEntryMode,
     enteredAmount,
-    customerSellRate: ycFlow.customerRate,
+    customerRate: ycFlow.customerRate,
     onApplyEnteredAmount: (amount) => {
       setSendAmount(formatAmount(amount.toFixed(2)))
     },
@@ -613,11 +603,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const tlcAmountLimitOk = useMemo(() => {
     if (selectedPaymentMethod !== 'otherCurrency' || !showThroughLocalCurrency) return true
     if (!enteredAmount || !ycFlow.customerRate) return true
-    return validateYcFundBalancePayInAmount({
-      amountEntryMode: amountEntryMode === 'receive' ? 'usd' : 'local',
+    return validateYcCrossBorderSendAmount({
+      amountEntryMode,
       enteredAmount,
-      previewLocalPayIn: ycFlow.preview.sendAmount,
-      currency: selectedOtherCurrency ?? payInCurrency ?? '',
+      customerRate: ycFlow.customerRate,
+      payInCurrency: selectedOtherCurrency ?? payInCurrency ?? '',
       limits: tlcPayInLimits,
     }).ok
   }, [
@@ -625,7 +615,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     showThroughLocalCurrency,
     enteredAmount,
     ycFlow.customerRate,
-    ycFlow.preview.sendAmount,
     amountEntryMode,
     selectedOtherCurrency,
     payInCurrency,
@@ -1665,17 +1654,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           {`Rate: ${formatSendRateLabel(sendCurrency, receiveCurrency, exchangeRate)}`}
                         </Text>
                       </View>
-                      {selectedPaymentMethod === 'otherCurrency' &&
-                      showThroughLocalCurrency &&
-                      amountEntryMode === 'receive' &&
-                      sendingAmount > 0 ? (
-                        <Text style={styles.exchangeInfoText}>
-                          {`You'll pay ~${formatMoneyDisplay(sendingAmount, sendCurrency)}`}
-                        </Text>
-                      ) : null}
-                      {tlcMinHint ? (
-                        <Text style={styles.exchangeInfoText}>{tlcMinHint}</Text>
-                      ) : null}
                     </View>
                   ) : needsNoahRateForSend && !noahRatesLoading && !hasNoahRateForPair ? (
                     <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>

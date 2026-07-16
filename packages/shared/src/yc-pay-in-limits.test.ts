@@ -4,7 +4,11 @@ import {
   parseYcReceiveRejectedMinError,
   resolveYcPayInLimits,
   validateYcPayInLocalAmount,
+  validateYcCrossBorderSendAmount,
   computeEnteredAmountForLocalPayInMin,
+  computeCrossBorderSendEnteredAmountForMin,
+  computeCrossBorderSendLocalPayIn,
+  formatYcCrossBorderSendMinHint,
 } from "./yc-pay-in-limits"
 
 describe("parseYcChannelPayInLimits", () => {
@@ -84,6 +88,62 @@ describe("computeEnteredAmountForLocalPayInMin", () => {
       customerSellRate: 1600,
     })
     expect(usd * 1600).toBeGreaterThanOrEqual(2500)
+  })
+})
+
+describe("computeCrossBorderSendEnteredAmountForMin", () => {
+  it("returns KES minimum in send entry mode", () => {
+    expect(
+      computeCrossBorderSendEnteredAmountForMin({
+        minLocalPayIn: 150,
+        amountEntryMode: "send",
+        customerRate: 10.74,
+      }),
+    ).toBe(150)
+  })
+
+  it("bumps receive currency until implied KES pay-in meets minimum", () => {
+    const receive = computeCrossBorderSendEnteredAmountForMin({
+      minLocalPayIn: 150,
+      amountEntryMode: "receive",
+      customerRate: 10.74,
+    })
+    expect(
+      computeCrossBorderSendLocalPayIn({
+        amountEntryMode: "receive",
+        enteredAmount: receive,
+        customerRate: 10.74,
+      }),
+    ).toBeGreaterThanOrEqual(150)
+    expect(receive).toBeGreaterThanOrEqual(150 * 10.74)
+  })
+
+  it("formats TLC min hint in receive currency", () => {
+    const hint = formatYcCrossBorderSendMinHint({
+      minLocalPayIn: 150,
+      payInCurrency: "KES",
+      receiveCurrency: "NGN",
+      customerRate: 10.74,
+    })
+    expect(hint).toContain("KSh150")
+    expect(hint).toContain("₦")
+    expect(hint).not.toContain("USD")
+  })
+})
+
+describe("validateYcCrossBorderSendAmount", () => {
+  it("rejects receive amount below KES minimum after conversion", () => {
+    const result = validateYcCrossBorderSendAmount({
+      amountEntryMode: "receive",
+      enteredAmount: 1000,
+      customerRate: 10.74,
+      payInCurrency: "KES",
+      limits: { minLocalPayIn: 150, maxLocalPayIn: null },
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toContain("Minimum transfer")
+    }
   })
 })
 

@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   formatMoneyDisplay,
   formatSendRateLabel,
-  formatYcPayInMinHint,
   isWideSendAmountSymbol,
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
@@ -156,15 +155,6 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     ycFlow.customerRate,
     ycFlow.preview.localPayIn,
   ])
-
-  const minDepositHint =
-    payInLimits.minLocalPayIn != null && ycFlow.customerRate
-      ? formatYcPayInMinHint({
-          minLocalPayIn: payInLimits.minLocalPayIn,
-          currency: localPayInCurrency,
-          customerSellRate: ycFlow.customerRate,
-        })
-      : null
 
   const minEnforcementSeedKey =
     residenceCountry && localPayInCurrency && ycFlow.customerRate
@@ -444,11 +434,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
               <View style={styles.exchangeInfoSlot}>
                 {!amountPositive ? (
-                  minDepositHint ? (
-                    <Text style={styles.exchangeInfoText}>{minDepositHint}</Text>
-                  ) : (
-                    <Text style={[styles.exchangeInfoText, styles.exchangeInfoPlaceholder]}> </Text>
-                  )
+                  <Text style={[styles.exchangeInfoText, styles.exchangeInfoPlaceholder]}> </Text>
                 ) : showExchangePreviewSkeleton ? (
                   <SkeletonLoader width={220} height={14} borderRadius={7} />
                 ) : !amountLimitCheck.ok ? (

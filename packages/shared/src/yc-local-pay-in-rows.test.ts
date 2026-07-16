@@ -32,7 +32,7 @@ describe("buildCrossBorderSendDetailRows", () => {
 })
 
 describe("buildYcLocalPayInReviewRows", () => {
-  it("locks TLC bank review with deposit amount and Total to pay", () => {
+  it("locks TLC bank review with transfer amount and Total to pay", () => {
     const rows = buildYcLocalPayInReviewRows({
       mode: "cross_border_send",
       phase: "locked",
@@ -47,7 +47,7 @@ describe("buildYcLocalPayInReviewRows", () => {
       processingTime: "Within minutes",
     })
     expect(rows.some((r) => r.id === "transaction-id")).toBe(true)
-    expect(rows.find((r) => r.id === "deposit-amount")).toBeTruthy()
+    expect(rows.find((r) => r.id === "deposit-amount")?.label).toBe("Transfer amount")
     expect(rows.find((r) => r.id === "transfer-method")?.value).toBe(TLC_LOCAL_TRANSFER_METHOD)
     expect(rows.find((r) => r.id === "pay-amount")?.label).toBe("Total to pay")
     expect(rows.find((r) => r.id === "pay-amount")?.valueBold).toBe(true)
@@ -120,6 +120,7 @@ describe("buildYcLocalPayInCompleteRows", () => {
     const ids = rows.map((r) => r.id)
     expect(ids).toContain("exchange-rate")
     expect(ids).toContain("deposit-amount")
+    expect(rows.find((r) => r.id === "deposit-amount")?.label).toBe("Transfer amount")
     expect(ids).toContain("processing-fee")
     expect(ids).toContain("total-to-pay")
     expect(ids).toContain("recipient-gets")

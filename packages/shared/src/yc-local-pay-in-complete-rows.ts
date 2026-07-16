@@ -111,9 +111,9 @@ export function buildYcLocalPayInCompleteRows(input: {
     if ((input.principalLocal ?? 0) > 0) {
       rows.push({
         id: "deposit-amount",
-        label: REVIEW_ROW_LABELS.depositAmount,
+        label: REVIEW_ROW_LABELS.transferAmount,
         value: formatReviewRowMoneyDisplay(
-          REVIEW_ROW_LABELS.depositAmount,
+          REVIEW_ROW_LABELS.transferAmount,
           input.principalLocal!,
           input.payInCurrency,
         ),

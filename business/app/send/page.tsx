@@ -11,8 +11,7 @@ import { SendRecipientPicker } from "@/components/send-recipient-picker"
 import {
   formatSendRateLabel,
   formatMoneyDisplay,
-  formatYcPayInMinHint,
-  validateYcFundBalancePayInAmount,
+  validateYcCrossBorderSendAmount,
   resolveReceiveCountryName,
   sendLocalPayInBankTitle,
   sendLocalPayInMomoTitle,
@@ -99,7 +98,7 @@ import {
 import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { usePayoutMinEnforcement } from "@/hooks/use-payout-min-enforcement"
 import { useYcPayoutMinEnforcement } from "@/hooks/use-yc-payout-min-enforcement"
-import { useYcPayInMinEnforcement } from "@/hooks/use-yc-pay-in-min-enforcement"
+import { useYcCrossBorderSendMinEnforcement } from "@/hooks/use-yc-cross-border-send-min-enforcement"
 import {
   Select,
   SelectContent,
@@ -468,18 +467,6 @@ export default function SendPage() {
     }
   }, [payInRails, paymentMethod, tlcPayInRail])
 
-  const tlcMinHint =
-    tlcPayInLimits.minLocalPayIn != null &&
-    ycFlow.customerRate &&
-    showThroughLocalCurrency &&
-    paymentMethod === "otherCurrency"
-      ? formatYcPayInMinHint({
-          minLocalPayIn: tlcPayInLimits.minLocalPayIn,
-          currency: otherCurrency ?? payInCurrency ?? "",
-          customerSellRate: ycFlow.customerRate,
-        })
-      : null
-
   const tlcMinSeedKey =
     showThroughLocalCurrency &&
     paymentMethod === "otherCurrency" &&
@@ -489,16 +476,16 @@ export default function SendPage() {
       ? `${otherCurrency}:${tlcPayInRail}:${amountEntryMode}`
       : null
 
-  useYcPayInMinEnforcement({
+  useYcCrossBorderSendMinEnforcement({
     enabled:
       showThroughLocalCurrency &&
       paymentMethod === "otherCurrency" &&
       Boolean(otherCurrency && otherPaymentMethod && ycFlow.customerRate),
     seedKey: tlcMinSeedKey,
     minLocalPayIn: tlcPayInLimits.minLocalPayIn,
-    amountEntryMode: amountEntryMode === "receive" ? "usd" : "local",
+    amountEntryMode,
     enteredAmount,
-    customerSellRate: ycFlow.customerRate,
+    customerRate: ycFlow.customerRate,
     onApplyEnteredAmount: (amount) => {
       const rounded = Math.round(amount * 100) / 100
       setAmountStr(Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2))
@@ -508,11 +495,11 @@ export default function SendPage() {
   const tlcAmountLimitOk = useMemo(() => {
     if (paymentMethod !== "otherCurrency" || !showThroughLocalCurrency) return true
     if (!enteredAmount || !ycFlow.customerRate) return true
-    return validateYcFundBalancePayInAmount({
-      amountEntryMode: amountEntryMode === "receive" ? "usd" : "local",
+    return validateYcCrossBorderSendAmount({
+      amountEntryMode,
       enteredAmount,
-      previewLocalPayIn: ycFlow.preview.sendAmount,
-      currency: otherCurrency ?? payInCurrency ?? "",
+      customerRate: ycFlow.customerRate,
+      payInCurrency: otherCurrency ?? payInCurrency ?? "",
       limits: tlcPayInLimits,
     }).ok
   }, [
@@ -520,7 +507,6 @@ export default function SendPage() {
     showThroughLocalCurrency,
     enteredAmount,
     ycFlow.customerRate,
-    ycFlow.preview.sendAmount,
     amountEntryMode,
     otherCurrency,
     payInCurrency,
@@ -1309,18 +1295,7 @@ export default function SendPage() {
                       </button>
                       <span className="shrink-0">• Rate: {rateDisplay}</span>
                     </div>
-                    {showThroughLocalCurrency &&
-                    paymentMethod === "otherCurrency" &&
-                    amountEntryMode === "receive" &&
-                    sendAmount > 0 ? (
-                      <span>{`You'll pay ~${formatMoneyDisplay(sendAmount, sendCurrency)}`}</span>
-                    ) : null}
-                    {tlcMinHint && paymentMethod === "otherCurrency" ? (
-                      <span>{tlcMinHint}</span>
-                    ) : null}
                   </div>
-                ) : tlcMinHint && paymentMethod === "otherCurrency" ? (
-                  <span className="text-sm text-muted-foreground">{tlcMinHint}</span>
                 ) : (
                   <span className="pointer-events-none select-none text-sm leading-none opacity-0" aria-hidden>
                     .

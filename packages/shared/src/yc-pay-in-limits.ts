@@ -221,6 +221,109 @@ export function formatYcPayInMinHint(input: {
   return `Minimum deposit ${local}`
 }
 
+/** Local pay-in (send currency) implied by the active TLC send amount box. */
+export function computeCrossBorderSendLocalPayIn(input: {
+  amountEntryMode: "send" | "receive"
+  enteredAmount: number
+  customerRate: number
+}): number {
+  if (input.enteredAmount <= 0) return 0
+  const rate = input.customerRate
+  if (!Number.isFinite(rate) || rate <= 0) return 0
+  if (input.amountEntryMode === "send") return input.enteredAmount
+  return Math.round((input.enteredAmount / rate) * 100) / 100
+}
+
+export function crossBorderSendLocalPayInMeetsMin(input: {
+  amountEntryMode: "send" | "receive"
+  enteredAmount: number
+  customerRate: number
+  minLocalPayIn: number
+}): boolean {
+  const localPayIn = computeCrossBorderSendLocalPayIn({
+    amountEntryMode: input.amountEntryMode,
+    enteredAmount: input.enteredAmount,
+    customerRate: input.customerRate,
+  })
+  return localPayIn > 0 && localPayIn >= input.minLocalPayIn
+}
+
+/**
+ * Entered amount for the active TLC box so implied local pay-in is at least `minLocalPayIn`.
+ * Send mode bumps pay-in currency; receive mode bumps recipient currency using the cross rate.
+ */
+export function computeCrossBorderSendEnteredAmountForMin(input: {
+  minLocalPayIn: number
+  amountEntryMode: "send" | "receive"
+  customerRate: number
+}): number {
+  if (input.minLocalPayIn <= 0) return 0
+  const rate = input.customerRate
+  if (!Number.isFinite(rate) || rate <= 0) return 0
+
+  if (input.amountEntryMode === "send") return input.minLocalPayIn
+
+  let receive = Math.round(input.minLocalPayIn * rate * 100) / 100
+  if (receive <= 0) receive = 0.01
+
+  let iterations = 0
+  while (
+    computeCrossBorderSendLocalPayIn({
+      amountEntryMode: "receive",
+      enteredAmount: receive,
+      customerRate: rate,
+    }) < input.minLocalPayIn &&
+    iterations < MAX_USD_BUMP_ITERATIONS
+  ) {
+    receive = Math.round((receive + 0.01) * 100) / 100
+    iterations += 1
+  }
+
+  return receive
+}
+
+export function validateYcCrossBorderSendAmount(input: {
+  amountEntryMode: "send" | "receive"
+  enteredAmount: number
+  customerRate: number
+  payInCurrency: string
+  limits: YcPayInLimits
+}): YcPayInAmountValidation {
+  const localPayIn = computeCrossBorderSendLocalPayIn({
+    amountEntryMode: input.amountEntryMode,
+    enteredAmount: input.enteredAmount,
+    customerRate: input.customerRate,
+  })
+  const result = validateYcPayInLocalAmount({
+    localPayIn,
+    currency: input.payInCurrency,
+    limits: input.limits,
+  })
+  if (!result.ok && result.message.includes("Minimum deposit")) {
+    return {
+      ok: false,
+      message: result.message.replace("Minimum deposit", "Minimum transfer"),
+    }
+  }
+  return result
+}
+
+export function formatYcCrossBorderSendMinHint(input: {
+  minLocalPayIn: number
+  payInCurrency: string
+  receiveCurrency: string
+  customerRate: number
+}): string {
+  const local = formatMoneyDisplay(input.minLocalPayIn, input.payInCurrency)
+  const minReceive = computeCrossBorderSendEnteredAmountForMin({
+    minLocalPayIn: input.minLocalPayIn,
+    amountEntryMode: "receive",
+    customerRate: input.customerRate,
+  })
+  const receive = formatMoneyDisplay(minReceive, input.receiveCurrency)
+  return `Minimum transfer ${local} (~${receive})`
+}
+
 export function computePreviewLocalPayIn(input: {
   amountEntryMode: "usd" | "local"
   enteredAmount: number

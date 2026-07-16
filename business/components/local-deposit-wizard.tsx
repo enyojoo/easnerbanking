@@ -21,7 +21,6 @@ import {
   ycFundBalanceQuoteErrorMessage,
   ycPayInInstructionNotice,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
-  formatYcPayInMinHint,
   validateYcFundBalancePayInAmount,
   REVIEW_ROW_LABELS,
   computeYcFundBalancePrincipalLocalPayIn,
@@ -488,14 +487,6 @@ export function LocalDepositWizard({
             limits: payInLimits,
           })
         : { ok: true as const }
-    const minDepositHint =
-      payInLimits.minLocalPayIn != null && customerRate
-        ? formatYcPayInMinHint({
-            minLocalPayIn: payInLimits.minLocalPayIn,
-            currency: localPayInCurrency,
-            customerSellRate: customerRate,
-          })
-        : null
     const canContinue = enteredAmount > 0 && Boolean(customerRate) && amountLimitCheck.ok
     return (
       <div className="space-y-4">
@@ -550,8 +541,6 @@ export function LocalDepositWizard({
                 ? `Pay ≈ ${formatMoneyDisplay(preview.localPayIn, localPayInCurrency)}`
                 : `Receive ≈ ${formatMoneyDisplay(preview.usdCredit, "USD")}`}
             </button>
-          ) : minDepositHint ? (
-            <p className="text-sm text-muted-foreground">{minDepositHint}</p>
           ) : null}
           {!amountLimitCheck.ok ? (
             <p className="text-sm text-destructive">{amountLimitCheck.message}</p>

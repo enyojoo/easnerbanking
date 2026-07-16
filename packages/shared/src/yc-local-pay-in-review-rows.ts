@@ -75,11 +75,14 @@ export function buildYcLocalPayInReviewRows(input: {
     })
 
   if ((isFundBalance && !isMomo || isCrossBorderBankLocked) && (input.principalLocal ?? 0) > 0) {
+    const principalLabel = isCrossBorder
+      ? REVIEW_ROW_LABELS.transferAmount
+      : REVIEW_ROW_LABELS.depositAmount
     rows.push({
       id: "deposit-amount",
-      label: REVIEW_ROW_LABELS.depositAmount,
+      label: principalLabel,
       value: formatReviewRowMoneyDisplay(
-        REVIEW_ROW_LABELS.depositAmount,
+        principalLabel,
         input.principalLocal!,
         input.payInCurrency,
       ),
