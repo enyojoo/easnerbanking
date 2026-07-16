@@ -536,6 +536,11 @@ export {
   resolveYcPayInLimits,
   validateYcFundBalancePayInAmount,
   validateYcPayInLocalAmount,
+  computeEnteredAmountForLocalPayInMin,
+  computePreviewLocalPayIn,
+  localPayInMeetsMin,
+  YC_PAY_IN_MIN_ENFORCE_DEBOUNCE_MS,
 } from "./yc-pay-in-limits"
 export type { YcPayInLimits, YcPayInAmountValidation } from "./yc-pay-in-limits"
+export { useYcPayInMinEnforcement } from "./hooks/use-yc-pay-in-min-enforcement"
 /** Mobile-only: import from `@easner/shared/warm-flags` (uses expo-image; not for Next.js). */

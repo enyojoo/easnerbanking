@@ -4,6 +4,7 @@ import {
   parseYcReceiveRejectedMinError,
   resolveYcPayInLimits,
   validateYcPayInLocalAmount,
+  computeEnteredAmountForLocalPayInMin,
 } from "./yc-pay-in-limits"
 
 describe("parseYcChannelPayInLimits", () => {
@@ -51,6 +52,27 @@ describe("parseYcReceiveRejectedMinError", () => {
       minLocalPayIn: 2500,
       currency: "NGN",
     })
+  })
+})
+
+describe("computeEnteredAmountForLocalPayInMin", () => {
+  it("returns local minimum in local entry mode", () => {
+    expect(
+      computeEnteredAmountForLocalPayInMin({
+        minLocalPayIn: 2500,
+        amountEntryMode: "local",
+        customerSellRate: 1600,
+      }),
+    ).toBe(2500)
+  })
+
+  it("bumps USD until preview local meets minimum", () => {
+    const usd = computeEnteredAmountForLocalPayInMin({
+      minLocalPayIn: 2500,
+      amountEntryMode: "usd",
+      customerSellRate: 1600,
+    })
+    expect(usd * 1600).toBeGreaterThanOrEqual(2500)
   })
 })
 

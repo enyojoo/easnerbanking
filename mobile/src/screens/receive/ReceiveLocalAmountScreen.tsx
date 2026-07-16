@@ -37,6 +37,7 @@ import {
 import { ripple } from '../../lib/androidRipple'
 import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { useYcFundBalanceFlow, useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
+import { useYcPayInMinEnforcement } from '../../hooks/useYcPayInMinEnforcement'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { haptics } from '../../lib/haptics'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
@@ -152,6 +153,27 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
           customerSellRate: ycFlow.customerRate,
         })
       : null
+
+  const minEnforcementSeedKey =
+    residenceCountry && localPayInCurrency && ycFlow.customerRate
+      ? `${residenceCountry}:${localPayInCurrency}:${payInRail}:${amountEntryMode}`
+      : null
+
+  useYcPayInMinEnforcement({
+    enabled: Boolean(residenceCountry && localPayInCurrency && ycFlow.customerRate),
+    seedKey: minEnforcementSeedKey,
+    minLocalPayIn: payInLimits.minLocalPayIn,
+    amountEntryMode,
+    enteredAmount,
+    customerSellRate: ycFlow.customerRate,
+    onApplyEnteredAmount: (amount) => {
+      const roundedAmount = Math.round(amount * 100) / 100
+      const fractionalPart = Math.abs(roundedAmount - Math.trunc(roundedAmount))
+      const next =
+        fractionalPart >= 0.01 ? roundedAmount.toFixed(2) : String(Math.trunc(roundedAmount))
+      setAmountStr(formatKeypadAmount(next))
+    },
+  })
 
   const usdBalance = parseFloat(balances.USD || '0')
   const railLabel = payInRail === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'

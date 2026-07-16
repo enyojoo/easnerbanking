@@ -172,3 +172,59 @@ export function formatYcPayInMinHint(input: {
   }
   return `Minimum deposit ${local}`
 }
+
+export function computePreviewLocalPayIn(input: {
+  amountEntryMode: "usd" | "local"
+  enteredAmount: number
+  customerSellRate: number
+}): number {
+  if (input.enteredAmount <= 0) return 0
+  if (input.amountEntryMode === "local") return input.enteredAmount
+  if (!Number.isFinite(input.customerSellRate) || input.customerSellRate <= 0) return 0
+  return Math.round(input.enteredAmount * input.customerSellRate * 100) / 100
+}
+
+export function localPayInMeetsMin(input: {
+  previewLocalPayIn: number
+  minLocalPayIn: number
+}): boolean {
+  return input.previewLocalPayIn > 0 && input.previewLocalPayIn >= input.minLocalPayIn
+}
+
+const MAX_USD_BUMP_ITERATIONS = 5000
+
+/**
+ * Entered amount for the active box so preview local pay-in is at least `minLocalPayIn`.
+ * USD mode bumps in 0.01 steps when rate rounding would otherwise land below min.
+ */
+export function computeEnteredAmountForLocalPayInMin(input: {
+  minLocalPayIn: number
+  amountEntryMode: "usd" | "local"
+  customerSellRate: number
+}): number {
+  if (input.minLocalPayIn <= 0) return 0
+  if (input.amountEntryMode === "local") return input.minLocalPayIn
+
+  const rate = input.customerSellRate
+  if (!Number.isFinite(rate) || rate <= 0) return 0
+
+  let usd = Math.round((input.minLocalPayIn / rate) * 100) / 100
+  if (usd <= 0) usd = 0.01
+
+  let iterations = 0
+  while (
+    computePreviewLocalPayIn({
+      amountEntryMode: "usd",
+      enteredAmount: usd,
+      customerSellRate: rate,
+    }) < input.minLocalPayIn &&
+    iterations < MAX_USD_BUMP_ITERATIONS
+  ) {
+    usd = Math.round((usd + 0.01) * 100) / 100
+    iterations += 1
+  }
+
+  return usd
+}
+
+export const YC_PAY_IN_MIN_ENFORCE_DEBOUNCE_MS = 3000

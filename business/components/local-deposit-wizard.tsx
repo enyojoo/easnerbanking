@@ -38,6 +38,7 @@ import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import { useYcPayInMinEnforcement } from "@/hooks/use-yc-pay-in-min-enforcement"
 
 type LocalRail = "bank_transfer" | "mobile_money"
 type WizardStep = "rail" | "amount" | "review" | "payin"
@@ -134,6 +135,32 @@ export function LocalDepositWizard({
   }, [customerRate, amountMode, enteredAmount])
 
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
+
+  const payInLimits = useMemo(
+    () => ({
+      minLocalPayIn: rails?.rails[rail]?.minLocalPayIn ?? null,
+      maxLocalPayIn: rails?.rails[rail]?.maxLocalPayIn ?? null,
+    }),
+    [rails, rail],
+  )
+
+  const minEnforcementSeedKey =
+    customerRate && localPayInCurrency
+      ? `${residenceCountry}:${localPayInCurrency}:${rail}:${amountMode}`
+      : null
+
+  useYcPayInMinEnforcement({
+    enabled: step === "amount" && Boolean(customerRate && payInLimits.minLocalPayIn),
+    seedKey: minEnforcementSeedKey,
+    minLocalPayIn: payInLimits.minLocalPayIn,
+    amountEntryMode: amountMode,
+    enteredAmount,
+    customerSellRate: customerRate,
+    onApplyEnteredAmount: (amount) => {
+      const rounded = Math.round(amount * 100) / 100
+      setAmountStr(Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2))
+    },
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -367,11 +394,6 @@ export function LocalDepositWizard({
   }
 
   if (step === "amount") {
-    const railLimits = rails?.rails[rail]
-    const payInLimits = {
-      minLocalPayIn: railLimits?.minLocalPayIn ?? null,
-      maxLocalPayIn: railLimits?.maxLocalPayIn ?? null,
-    }
     const amountLimitCheck =
       enteredAmount > 0 && customerRate
         ? validateYcFundBalancePayInAmount({
