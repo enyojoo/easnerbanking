@@ -7,6 +7,8 @@ export type YcFundBalanceQuoteErrorCode =
   | "ng_local_verification_incomplete"
   | "kyc_metadata_incomplete"
   | "yc_receive_rejected"
+  | "yc_amount_below_min"
+  | "yc_amount_above_max"
 
 /** User-facing copy for fund-balance quote failures (mobile + business). */
 export function ycFundBalanceQuoteErrorMessage(
@@ -28,6 +30,9 @@ export function ycFundBalanceQuoteErrorMessage(
       return "Complete NIN and BVN verification before using NGN pay-in."
     case "kyc_metadata_incomplete":
       return "Complete your identity verification before using local pay-in."
+    case "yc_amount_below_min":
+    case "yc_amount_above_max":
+      return fallback || "Amount is outside the allowed range for this deposit."
     case "yc_receive_rejected":
       return fallback || "Could not create payment details. Check your amount and try again."
     default:

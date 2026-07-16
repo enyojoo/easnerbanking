@@ -23,6 +23,10 @@ import {
   computeDisplayProcessingFee,
   shouldShowPayoutReviewFeeRow,
   ycFundBalanceQuoteErrorMessage,
+  ycPayInInstructionNotice,
+  ycPayInSendingExactlyCopy,
+  formatYcPayInMinHint,
+  validateYcFundBalancePayInAmount,
   type NgLocalIdType,
   type YcRateClientRow,
 } from "@easner/shared"
@@ -42,8 +46,16 @@ type AmountMode = "usd" | "local"
 type ReceiveRailsResponse = {
   ok: boolean
   rails: {
-    bank_transfer: { available: boolean }
-    mobile_money: { available: boolean }
+    bank_transfer: {
+      available: boolean
+      minLocalPayIn?: number | null
+      maxLocalPayIn?: number | null
+    }
+    mobile_money: {
+      available: boolean
+      minLocalPayIn?: number | null
+      maxLocalPayIn?: number | null
+    }
   }
   anyAvailable: boolean
 }
@@ -187,13 +199,13 @@ export function LocalDepositWizard({
           ? {
               currency: localPayInCurrency,
               country: residenceCountry,
-              usdCredit: preview.usdCredit,
+              usdCredit: enteredAmount,
               rail,
             }
           : {
               currency: localPayInCurrency,
               country: residenceCountry,
-              localPayIn: preview.localPayIn,
+              localPayIn: enteredAmount,
               rail,
             }
       const res = await fetchWithSession("/api/yellowcard/fund-balance/quote", {
@@ -221,9 +233,8 @@ export function LocalDepositWizard({
   }, [
     amountMode,
     businessId,
+    enteredAmount,
     localPayInCurrency,
-    preview.localPayIn,
-    preview.usdCredit,
     rail,
     residenceCountry,
   ])
@@ -235,8 +246,7 @@ export function LocalDepositWizard({
           localPayInCurrency,
           rail,
           amountMode,
-          preview.usdCredit,
-          preview.localPayIn,
+          enteredAmount,
         ].join("|")
       : ""
 
@@ -357,7 +367,30 @@ export function LocalDepositWizard({
   }
 
   if (step === "amount") {
-    const canContinue = enteredAmount > 0 && Boolean(customerRate)
+    const railLimits = rails?.rails[rail]
+    const payInLimits = {
+      minLocalPayIn: railLimits?.minLocalPayIn ?? null,
+      maxLocalPayIn: railLimits?.maxLocalPayIn ?? null,
+    }
+    const amountLimitCheck =
+      enteredAmount > 0 && customerRate
+        ? validateYcFundBalancePayInAmount({
+            amountEntryMode: amountMode,
+            enteredAmount,
+            previewLocalPayIn: preview.localPayIn,
+            currency: localPayInCurrency,
+            limits: payInLimits,
+          })
+        : { ok: true as const }
+    const minDepositHint =
+      payInLimits.minLocalPayIn != null && customerRate
+        ? formatYcPayInMinHint({
+            minLocalPayIn: payInLimits.minLocalPayIn,
+            currency: localPayInCurrency,
+            customerSellRate: customerRate,
+          })
+        : null
+    const canContinue = enteredAmount > 0 && Boolean(customerRate) && amountLimitCheck.ok
     return (
       <div className="space-y-4">
         <button
@@ -411,6 +444,11 @@ export function LocalDepositWizard({
                 ? `Pay ≈ ${formatMoneyDisplay(preview.localPayIn, localPayInCurrency)}`
                 : `Receive ≈ ${formatMoneyDisplay(preview.usdCredit, "USD")}`}
             </button>
+          ) : minDepositHint ? (
+            <p className="text-sm text-muted-foreground">{minDepositHint}</p>
+          ) : null}
+          {!amountLimitCheck.ok ? (
+            <p className="text-sm text-destructive">{amountLimitCheck.message}</p>
           ) : null}
         </div>
 
@@ -541,6 +579,11 @@ export function LocalDepositWizard({
     )
   }
 
+  const payInAmount = formatMoneyDisplay(quote?.localPayIn ?? preview.localPayIn, localPayInCurrency)
+  const payInNotice = quote?.payInNotice ?? ycPayInInstructionNotice(rail)
+  const PaymentDetailsIcon = rail === "mobile_money" ? Smartphone : Landmark
+  const paymentDetailsTitle = rail === "mobile_money" ? "Mobile Money" : "Bank Account"
+
   return (
     <div className="space-y-4">
       <button
@@ -552,28 +595,31 @@ export function LocalDepositWizard({
         Back
       </button>
 
-      <p className="text-sm text-muted-foreground">
-        Pay{" "}
-        <span className="font-medium text-foreground">
-          {formatMoneyDisplay(quote?.localPayIn ?? preview.localPayIn, localPayInCurrency)}
-        </span>{" "}
-        to credit{" "}
-        <span className="font-medium text-foreground">
-          {formatMoneyDisplay(quote?.usdCredit ?? preview.usdCredit, "USD")}
-        </span>{" "}
-        to your USD balance.
-      </p>
+      <h2 className="text-2xl font-semibold">Complete deposit</h2>
 
-      {quote?.payInNotice ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          {quote.payInNotice}
+      <div className="rounded-xl border border-border p-4 space-y-1 text-sm">
+        {quote?.transactionId ? (
+          <div className="flex justify-between gap-4 py-2 border-b">
+            <span className="text-muted-foreground">Transaction ID</span>
+            <span className="font-medium text-right">{quote.transactionId.toUpperCase()}</span>
+          </div>
+        ) : null}
+        <div className="flex justify-between gap-4 py-2">
+          <span className="text-muted-foreground">Deposit amount</span>
+          <span className="font-medium text-right">{payInAmount}</span>
         </div>
-      ) : null}
+      </div>
+
+      <p className="text-sm text-foreground">{ycPayInSendingExactlyCopy(payInAmount)}</p>
+
+      <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+        {payInNotice}
+      </div>
 
       <div className="rounded-xl border border-border p-4 space-y-1">
         <div className="flex items-center gap-2 mb-3">
-          <Landmark className="h-5 w-5 text-primary" />
-          <p className="font-medium">Payment details</p>
+          <PaymentDetailsIcon className="h-5 w-5 text-primary" />
+          <p className="font-medium">{paymentDetailsTitle}</p>
         </div>
         {payInFields.length === 0 ? (
           <p className="text-sm text-muted-foreground py-2">

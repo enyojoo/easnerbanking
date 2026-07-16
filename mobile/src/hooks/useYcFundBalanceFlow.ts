@@ -14,8 +14,16 @@ export type YcReceiveRailsResponse = {
   country: string
   currency: string
   rails: {
-    bank_transfer: { available: boolean }
-    mobile_money: { available: boolean }
+    bank_transfer: {
+      available: boolean
+      minLocalPayIn?: number | null
+      maxLocalPayIn?: number | null
+    }
+    mobile_money: {
+      available: boolean
+      minLocalPayIn?: number | null
+      maxLocalPayIn?: number | null
+    }
   }
   anyAvailable: boolean
 }
@@ -160,13 +168,13 @@ export function useYcFundBalanceFlow(input: {
         const mode = opts.amountEntryMode ?? input.amountEntryMode
         const usdCredit = opts.usdCredit ?? 0
         const localPayIn = opts.localPayIn ?? 0
+        const enteredAmount = mode === 'usd' ? usdCredit : localPayIn
         const data = await fetchFundBalanceQuote({
           country: input.country,
           currency: input.currency,
           rail: input.rail,
           amountEntryMode: mode,
-          usdCredit,
-          localPayIn,
+          enteredAmount,
         })
         return data
       } catch (e) {

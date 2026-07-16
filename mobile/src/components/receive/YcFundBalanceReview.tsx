@@ -70,46 +70,49 @@ export function YcFundBalanceReview({
   residenceCountry,
   payInRail,
   amountEntryMode,
+  enteredAmount,
   usdCredit,
   localPayIn,
   footerPadding,
   listBottomPadding,
 }: Props) {
-  const [quote, setQuote] = useState<YcFundBalanceQuoteResult | null>(() => {
-    const meta = {
-      country: residenceCountry,
-      currency: localPayInCurrency,
-      rail: payInRail,
-      amountEntryMode,
-      usdCredit,
-      localPayIn,
-    }
-    return isStashedFundBalanceQuoteFresh(meta) ? peekFundBalanceQuote() : null
-  })
-  const [quoteError, setQuoteError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-
   const quoteMeta = useMemo(
     () => ({
       country: residenceCountry,
       currency: localPayInCurrency,
       rail: payInRail,
       amountEntryMode,
-      usdCredit,
-      localPayIn,
+      enteredAmount,
     }),
-    [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, usdCredit, localPayIn],
+    [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, enteredAmount],
   )
 
-  useEffect(() => {
-    let cancelled = false
-    setQuoteError(null)
+  const [quote, setQuote] = useState<YcFundBalanceQuoteResult | null>(() =>
+    isStashedFundBalanceQuoteFresh({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: payInRail,
+      amountEntryMode,
+      enteredAmount,
+    })
+      ? peekFundBalanceQuote()
+      : null,
+  )
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
+  useEffect(() => {
     if (isStashedFundBalanceQuoteFresh(quoteMeta)) {
-      setQuote(peekFundBalanceQuote())
+      const stashed = peekFundBalanceQuote()
+      if (stashed) {
+        setQuote(stashed)
+        setQuoteError(null)
+      }
       return
     }
 
+    let cancelled = false
+    setQuoteError(null)
     void (async () => {
       const result = await ensureFundBalanceQuoteStashed(quoteMeta)
       if (cancelled) return

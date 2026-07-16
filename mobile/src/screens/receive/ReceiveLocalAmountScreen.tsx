@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -15,9 +15,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   formatMoneyDisplay,
   formatSendRateLabel,
+  formatYcPayInMinHint,
   isWideSendAmountSymbol,
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
+  validateYcFundBalancePayInAmount,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -34,7 +36,7 @@ import {
 } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
-import { useYcFundBalanceFlow } from '../../hooks/useYcFundBalanceFlow'
+import { useYcFundBalanceFlow, useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { haptics } from '../../lib/haptics'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
@@ -52,6 +54,7 @@ import {
   ensureFundBalanceQuoteStashed,
   isCompleteFundBalanceQuote,
   isStashedFundBalanceQuoteFresh,
+  peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
 
@@ -86,12 +89,15 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
   const [amountEntryMode, setAmountEntryMode] = useState<'usd' | 'local'>('usd')
   const [amountStr, setAmountStr] = useState('0')
-  const [continueLoading, setContinueLoading] = useState(false)
+  const [isContinuePending, setIsContinuePending] = useState(false)
+  const [isContinueLoading, setIsContinueLoading] = useState(false)
+  const continueSpinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const enteredAmount = useMemo(
     () => Number.parseFloat(amountStr.replace(/,/g, '')) || 0,
     [amountStr],
   )
+  const amountPositive = enteredAmount > 0
 
   const ycFlow = useYcFundBalanceFlow({
     country: residenceCountry,
@@ -102,10 +108,58 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     enteredAmount,
   })
 
+  const { rails: receiveRails } = useYcReceiveRails({
+    country: residenceCountry,
+    currency: localPayInCurrency,
+    enabled: Boolean(residenceCountry && localPayInCurrency),
+  })
+
+  const payInLimits = useMemo(() => {
+    const railInfo =
+      payInRail === 'mobile_money'
+        ? receiveRails?.rails.mobile_money
+        : receiveRails?.rails.bank_transfer
+    return {
+      minLocalPayIn: railInfo?.minLocalPayIn ?? null,
+      maxLocalPayIn: railInfo?.maxLocalPayIn ?? null,
+    }
+  }, [receiveRails, payInRail])
+
+  const amountLimitCheck = useMemo(() => {
+    if (!amountPositive || !ycFlow.customerRate) return { ok: true as const }
+    return validateYcFundBalancePayInAmount({
+      amountEntryMode,
+      enteredAmount,
+      previewLocalPayIn: ycFlow.preview.localPayIn,
+      currency: localPayInCurrency,
+      limits: payInLimits,
+    })
+  }, [
+    amountEntryMode,
+    amountPositive,
+    enteredAmount,
+    localPayInCurrency,
+    payInLimits,
+    ycFlow.customerRate,
+    ycFlow.preview.localPayIn,
+  ])
+
+  const minDepositHint =
+    payInLimits.minLocalPayIn != null && ycFlow.customerRate
+      ? formatYcPayInMinHint({
+          minLocalPayIn: payInLimits.minLocalPayIn,
+          currency: localPayInCurrency,
+          customerSellRate: ycFlow.customerRate,
+        })
+      : null
+
   const usdBalance = parseFloat(balances.USD || '0')
   const railLabel = payInRail === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
-  const amountPositive = enteredAmount > 0
-  const canContinue = amountPositive && !ycFlow.ratesLoading && Boolean(ycFlow.customerRate)
+  const canContinue =
+    amountPositive &&
+    !ycFlow.ratesLoading &&
+    Boolean(ycFlow.customerRate) &&
+    amountLimitCheck.ok
 
   const displayCurrency = amountEntryMode === 'usd' ? 'USD' : localPayInCurrency
   const amountDisplaySymbol = getSendAmountFieldSymbol(displayCurrency)
@@ -133,17 +187,9 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       currency: localPayInCurrency,
       rail: payInRail,
       amountEntryMode,
-      usdCredit: ycFlow.preview.usdCredit,
-      localPayIn: ycFlow.preview.localPayIn,
+      enteredAmount,
     }),
-    [
-      residenceCountry,
-      localPayInCurrency,
-      payInRail,
-      amountEntryMode,
-      ycFlow.preview.usdCredit,
-      ycFlow.preview.localPayIn,
-    ],
+    [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, enteredAmount],
   )
 
   const quotePrefetchKey = useMemo(() => {
@@ -153,8 +199,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       quoteStashMeta.currency,
       quoteStashMeta.rail,
       quoteStashMeta.amountEntryMode,
-      quoteStashMeta.usdCredit,
-      quoteStashMeta.localPayIn,
+      quoteStashMeta.enteredAmount,
     ].join('|')
   }, [canContinue, quoteStashMeta])
 
@@ -222,12 +267,19 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   }
 
   const onContinue = async () => {
-    if (!canContinue || continueLoading) return
+    if (!canContinue || isContinuePending || isContinueLoading) return
     haptics.medium()
+
     const quoteAlreadyWarm = isStashedFundBalanceQuoteFresh(quoteStashMeta)
-    if (!quoteAlreadyWarm) setContinueLoading(true)
+    if (!quoteAlreadyWarm) {
+      setIsContinuePending(true)
+      continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+    }
+
     try {
-      const quote = await ensureFundBalanceQuoteStashed(quoteStashMeta)
+      const quote = quoteAlreadyWarm
+        ? peekFundBalanceQuote()
+        : await ensureFundBalanceQuoteStashed(quoteStashMeta)
       if (!isCompleteFundBalanceQuote(quote)) {
         showError(peekLastFundBalanceQuoteError() || 'Could not load deposit quote. Try again.')
         return
@@ -238,11 +290,16 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
         payInRail,
         amountEntryMode,
         enteredAmount,
-        usdCredit: quote.usdCredit,
-        localPayIn: quote.localPayIn,
+        usdCredit: ycFlow.preview.usdCredit,
+        localPayIn: ycFlow.preview.localPayIn,
       } as never)
     } finally {
-      setContinueLoading(false)
+      if (continueSpinnerTimerRef.current) {
+        clearTimeout(continueSpinnerTimerRef.current)
+        continueSpinnerTimerRef.current = null
+      }
+      setIsContinuePending(false)
+      setIsContinueLoading(false)
     }
   }
 
@@ -310,9 +367,17 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
               <View style={styles.exchangeInfoSlot}>
                 {!amountPositive ? (
-                  <Text style={[styles.exchangeInfoText, styles.exchangeInfoPlaceholder]}> </Text>
+                  minDepositHint ? (
+                    <Text style={styles.exchangeInfoText}>{minDepositHint}</Text>
+                  ) : (
+                    <Text style={[styles.exchangeInfoText, styles.exchangeInfoPlaceholder]}> </Text>
+                  )
                 ) : showExchangePreviewSkeleton ? (
                   <SkeletonLoader width={220} height={14} borderRadius={7} />
+                ) : !amountLimitCheck.ok ? (
+                  <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>
+                    {amountLimitCheck.message}
+                  </Text>
                 ) : exchangePreviewReady ? (
                   <View style={styles.exchangeInfoInline}>
                     <Pressable android_ripple={ripple.neutral} onPress={toggleAmountDirection} style={styles.exchangeToggleTouchArea}>
@@ -416,17 +481,17 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
         <View style={[styles.bottomContainer, { paddingBottom: footerPadding }]}>
           <Pressable
             android_ripple={ripple.neutral}
-            style={[styles.sendButton, (!canContinue || continueLoading) && styles.sendButtonDisabled]}
+            style={[styles.sendButton, (!canContinue || isContinuePending || isContinueLoading) && styles.sendButtonDisabled]}
             onPress={onContinue}
-            disabled={!canContinue || continueLoading}
+            disabled={!canContinue || isContinuePending || isContinueLoading}
           >
             <LinearGradient
-              colors={!canContinue || continueLoading ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
+              colors={!canContinue || isContinuePending || isContinueLoading ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sendButtonGradient}
             >
-              {continueLoading || (ycFlow.ratesLoading && amountPositive) ? (
+              {isContinueLoading ? (
                 <ActivityIndicator color={colors.text.inverse} />
               ) : (
                 <Text style={styles.sendButtonText}>Continue</Text>

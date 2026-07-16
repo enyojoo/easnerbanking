@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, computeDisplayProcessingFee } from "@easner/shared"
+import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, computeDisplayProcessingFee, ycPayInInstructionNotice, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount } from "@easner/shared"
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
@@ -121,6 +121,13 @@ export async function POST(request: Request) {
     )
   }
 
+  const payInLimits = resolveYcPayInLimits({
+    country,
+    currency,
+    rail,
+    channel: channel as Record<string, unknown>,
+  })
+
   let sender
   try {
     sender = buildYcKycPersonMetadata({
@@ -157,6 +164,34 @@ export async function POST(request: Request) {
     receiveLeg: { cryptoAmountUsd: 0 },
   })
 
+  const amountCheck = validateYcPayInLocalAmount({
+    localPayIn: provisional.localPayIn,
+    currency,
+    limits: {
+      minLocalPayIn: payInLimits.minLocalPayIn,
+      maxLocalPayIn: payInLimits.maxLocalPayIn,
+    },
+  })
+  if (!amountCheck.ok) {
+    const belowMin =
+      payInLimits.minLocalPayIn != null && provisional.localPayIn < payInLimits.minLocalPayIn
+    const aboveMax =
+      payInLimits.maxLocalPayIn != null && provisional.localPayIn > payInLimits.maxLocalPayIn
+    return ycFundBalanceQuoteError(
+      belowMin ? "yc_amount_below_min" : aboveMax ? "yc_amount_above_max" : "yc_receive_rejected",
+      amountCheck.message,
+      400,
+      {
+        userId: kycUserId,
+        currency,
+        country,
+        rail,
+        minLocalPayIn: payInLimits.minLocalPayIn,
+        maxLocalPayIn: payInLimits.maxLocalPayIn,
+      },
+    )
+  }
+
   const sequenceId = `yc_fb_${randomUUID()}`
   let receiveRes
   try {
@@ -176,6 +211,16 @@ export async function POST(request: Request) {
     const message = e instanceof Error ? e.message : "YC receive submit failed"
     if (message === "deposit_omnibus_solana_address_usd_required") {
       return ycSettlementConfigErrorResponse(message)
+    }
+    const parsedMin = parseYcReceiveRejectedMinError(message)
+    if (parsedMin) {
+      return ycFundBalanceQuoteError("yc_amount_below_min", message, 400, {
+        userId: kycUserId,
+        currency: parsedMin.currency,
+        country,
+        rail,
+        minLocalPayIn: parsedMin.minLocalPayIn,
+      })
     }
     return ycFundBalanceQuoteError("yc_receive_rejected", message, 400, {
       userId: kycUserId,
@@ -266,6 +311,6 @@ export async function POST(request: Request) {
     transactionId: easnerTransactionId,
     easnerTransactionId,
     transferId: transferRow?.id ?? receiveRes.id ?? null,
-    payInNotice: `Complete your transfer using the payment details below.`,
+    payInNotice: ycPayInInstructionNotice(rail),
   })
 }

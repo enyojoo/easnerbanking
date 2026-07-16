@@ -1,12 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { resolveYcPayInLimits } from "@easner/shared"
 import { listYellowcardChannels, type YcChannel } from "@/lib/yellowcard/channels"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
 
 export type YcReceiveRail = "bank_transfer" | "mobile_money"
 
+export type YcReceiveRailInfo = {
+  available: boolean
+  minLocalPayIn: number | null
+  maxLocalPayIn: number | null
+}
+
 export type YcReceiveRailAvailability = {
-  bank_transfer: { available: boolean }
-  mobile_money: { available: boolean }
+  bank_transfer: YcReceiveRailInfo
+  mobile_money: YcReceiveRailInfo
 }
 
 function channelMatchesReceiveRail(
@@ -41,8 +48,8 @@ export async function resolveYcReceiveRailAvailability(
   const country = input.countryCode.trim().toUpperCase()
   const currency = input.currencyCode.trim().toUpperCase()
   const out: YcReceiveRailAvailability = {
-    bank_transfer: { available: false },
-    mobile_money: { available: false },
+    bank_transfer: { available: false, minLocalPayIn: null, maxLocalPayIn: null },
+    mobile_money: { available: false, minLocalPayIn: null, maxLocalPayIn: null },
   }
   if (!country || !currency) return out
 
@@ -58,7 +65,17 @@ export async function resolveYcReceiveRailAvailability(
     if (!corridorOk) continue
     const channel = findYcReceiveChannel(channels, { country, currency, rail })
     if (channel) {
-      out[rail].available = true
+      const limits = resolveYcPayInLimits({
+        country,
+        currency,
+        rail,
+        channel: channel as Record<string, unknown>,
+      })
+      out[rail] = {
+        available: true,
+        minLocalPayIn: limits.minLocalPayIn,
+        maxLocalPayIn: limits.maxLocalPayIn,
+      }
     }
   }
 

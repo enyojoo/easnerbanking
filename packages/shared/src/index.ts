@@ -525,4 +525,17 @@ export {
   resolveYcPayInCustomerRate,
 } from "./yc-pay-in-rates"
 export type { YcRateClientRow } from "./yc-pay-in-rates"
+export {
+  ycPayInInstructionNotice,
+  ycPayInSendingExactlyCopy,
+} from "./yc-pay-in-copy"
+export {
+  formatYcPayInMinHint,
+  parseYcChannelPayInLimits,
+  parseYcReceiveRejectedMinError,
+  resolveYcPayInLimits,
+  validateYcFundBalancePayInAmount,
+  validateYcPayInLocalAmount,
+} from "./yc-pay-in-limits"
+export type { YcPayInLimits, YcPayInAmountValidation } from "./yc-pay-in-limits"
 /** Mobile-only: import from `@easner/shared/warm-flags` (uses expo-image; not for Next.js). */

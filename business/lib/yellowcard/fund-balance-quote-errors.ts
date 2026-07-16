@@ -9,6 +9,8 @@ export type YcFundBalanceQuoteErrorCode =
   | "ng_local_verification_incomplete"
   | "kyc_metadata_incomplete"
   | "yc_receive_rejected"
+  | "yc_amount_below_min"
+  | "yc_amount_above_max"
 
 export function ycFundBalanceQuoteError(
   code: YcFundBalanceQuoteErrorCode,

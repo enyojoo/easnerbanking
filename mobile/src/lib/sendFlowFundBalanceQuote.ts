@@ -18,13 +18,13 @@ export type YcFundBalanceQuote = {
   payInNotice?: string
 }
 
+/** User-entered amount anchor — solved pay-in/credit from YC may differ from preview. */
 export type FundBalanceQuoteStashMeta = {
   country: string
   currency: string
   rail: YcPayInRail
   amountEntryMode: 'usd' | 'local'
-  usdCredit: number
-  localPayIn: number
+  enteredAmount: number
 }
 
 let stashed: YcFundBalanceQuote | null = null
@@ -37,7 +37,7 @@ function roundMoney(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-function amountsMatch(a: number, b: number): boolean {
+function entryAmountsMatch(a: number, b: number): boolean {
   return roundMoney(a) === roundMoney(b)
 }
 
@@ -82,28 +82,19 @@ export function isStashedFundBalanceQuoteFresh(meta: FundBalanceQuoteStashMeta):
   if (stashedMeta.currency.trim().toUpperCase() !== meta.currency.trim().toUpperCase()) return false
   if (stashedMeta.rail !== meta.rail) return false
   if (stashedMeta.amountEntryMode !== meta.amountEntryMode) return false
-  if (!amountsMatch(stashedMeta.usdCredit, meta.usdCredit)) return false
-  if (!amountsMatch(stashedMeta.localPayIn, meta.localPayIn)) return false
-  return true
+  return entryAmountsMatch(stashedMeta.enteredAmount, meta.enteredAmount)
 }
 
-export async function fetchFundBalanceQuote(input: {
-  country: string
-  currency: string
-  rail: YcPayInRail
-  amountEntryMode: 'usd' | 'local'
-  usdCredit: number
-  localPayIn: number
-}): Promise<YcFundBalanceQuote> {
+export async function fetchFundBalanceQuote(meta: FundBalanceQuoteStashMeta): Promise<YcFundBalanceQuote> {
   const body: Record<string, unknown> = {
-    currency: input.currency,
-    country: input.country,
-    rail: input.rail,
+    currency: meta.currency,
+    country: meta.country,
+    rail: meta.rail,
   }
-  if (input.amountEntryMode === 'usd' && input.usdCredit > 0) {
-    body.usdCredit = input.usdCredit
-  } else if (input.localPayIn > 0) {
-    body.localPayIn = input.localPayIn
+  if (meta.amountEntryMode === 'usd' && meta.enteredAmount > 0) {
+    body.usdCredit = meta.enteredAmount
+  } else if (meta.enteredAmount > 0) {
+    body.localPayIn = meta.enteredAmount
   } else {
     throw new Error('Enter a valid amount')
   }
@@ -126,8 +117,7 @@ export async function ensureFundBalanceQuoteStashed(
     meta.currency,
     meta.rail,
     meta.amountEntryMode,
-    meta.usdCredit,
-    meta.localPayIn,
+    meta.enteredAmount,
   ].join('|')
   if (inflightQuote && inflightQuoteKey === key) return inflightQuote
 
