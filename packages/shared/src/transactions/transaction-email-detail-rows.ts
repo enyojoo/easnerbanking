@@ -141,7 +141,7 @@ export function buildTransactionEmailDetailRows(
 }
 
 /** Row labels omitted from downloadable receipts (mobile image + business PDF). */
-const RECEIPT_OMITTED_ROW_LABELS = new Set([
+const RECEIPT_OMITTED_ROW_LABELS: ReadonlySet<string> = new Set([
   REVIEW_ROW_LABELS.exchangeRate,
   REVIEW_ROW_LABELS.transferMethod,
 ])
