@@ -122,7 +122,7 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(map["Processing fee"]).toBeDefined()
     expect(map["Exchange rate"]).toBeDefined()
     expect(map["Amount credited"]).toBe("$65")
-    expect(map["Credit to"]).toBe("USD Balance")
+    expect(map["Credited to"]).toBe("USD Balance")
     expect(map["Scheme"]).toBe("Bank Transfer")
     expect(map["Transfer method"]).toBeUndefined()
     expect(map["Credit amount"]).toBeUndefined()

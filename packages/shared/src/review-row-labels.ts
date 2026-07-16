@@ -18,7 +18,7 @@ export const REVIEW_ROW_LABELS = {
   amountPaid: "Amount paid",
   /** USD balance credit (live deposit review / complete deposit summary). */
   creditAmount: "Credit amount",
-  creditTo: "Credit to",
+  creditTo: "Credited to",
   /** Verification microdeposits — settled detail only (not spendable balance). */
   creditFor: "Credit for",
   /** Settled inbound bank / stablecoin deposit (detail / email). */

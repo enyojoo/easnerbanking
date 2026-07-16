@@ -11,7 +11,7 @@ type Props = {
   valueStyle?: TextStyle
 }
 
-/** Credit to / Credit for row — circular flag + balance label (payout review parity). */
+/** Credited to / Credit for row — circular flag + balance label (payout review parity). */
 export function CreditDestinationRow({
   label,
   currency,
