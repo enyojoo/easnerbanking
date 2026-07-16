@@ -114,6 +114,10 @@ export default function SendConfirmPage() {
     receiveCurrency: state?.receiveCurrency ?? "",
     amountEntryMode: "receive",
     enteredAmount: state?.amount ?? 0,
+    payInCurrencyOverride: state?.otherCurrency ?? null,
+    payInCountryOverride: state?.otherCurrency
+      ? residenceCountryFromPayInCurrency(state.otherCurrency) ?? null
+      : null,
   })
 
   const displayTransactionId = useMemo(() => {

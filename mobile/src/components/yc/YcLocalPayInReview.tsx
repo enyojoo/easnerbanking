@@ -86,6 +86,8 @@ export function YcLocalPayInReview({
     receiveCurrency,
     amountEntryMode: 'receive',
     enteredAmount: receiveAmount,
+    payInCurrencyOverride: payInCurrency,
+    payInCountryOverride: payInCountry,
   })
 
   useEffect(() => {
@@ -115,11 +117,16 @@ export function YcLocalPayInReview({
 
   useEffect(() => {
     if (isMobileMoney) return
+    if (!payInCurrency || !payInCountry) return
     let cancelled = false
     setQuoteError(null)
     void (async () => {
       try {
-        const result = await ycFlow.createQuote({ receiveAmount, payInRail })
+        const result = await ycFlow.createQuote({
+          receiveAmount,
+          payInRail,
+          payInCountry,
+        })
         if (!cancelled) setQuote(result)
       } catch (e) {
         if (!cancelled) {
@@ -131,7 +138,7 @@ export function YcLocalPayInReview({
     return () => {
       cancelled = true
     }
-  }, [recipient.id, receiveAmount, payInCurrency, payInRail, isMobileMoney])
+  }, [recipient.id, receiveAmount, payInCurrency, payInCountry, payInRail, isMobileMoney, ycFlow.createQuote])
 
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
   const estimatedPayIn = ycFlow.preview.sendAmount
@@ -198,6 +205,7 @@ export function YcLocalPayInReview({
         const result = await ycFlow.createQuote({
           receiveAmount,
           payInRail,
+          payInCountry,
           sourcePhone: phone.trim(),
           networkId,
           sourceNetworkName: selectedNetwork?.name,

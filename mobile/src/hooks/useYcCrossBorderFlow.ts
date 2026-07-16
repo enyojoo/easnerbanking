@@ -70,6 +70,9 @@ export function useYcCrossBorderFlow(input: {
   receiveCurrency: string
   amountEntryMode: 'send' | 'receive'
   enteredAmount: number
+  /** User-selected pay-in currency from the amount screen (skips waiting on eligibility). */
+  payInCurrencyOverride?: string | null
+  payInCountryOverride?: string | null
 }) {
   const [eligibility, setEligibility] = useState<YcEligibilityResponse | null>(null)
   const [eligibilityLoading, setEligibilityLoading] = useState(false)
@@ -78,8 +81,14 @@ export function useYcCrossBorderFlow(input: {
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
 
-  const payInCurrency = eligibility?.throughLocalCurrency.payInCurrency ?? null
-  const available = Boolean(eligibility?.throughLocalCurrency.available && payInCurrency)
+  const payInCurrencyOverride = input.payInCurrencyOverride?.trim().toUpperCase() || null
+  const payInCountryOverride = input.payInCountryOverride?.trim().toUpperCase() || null
+  const payInCurrency =
+    payInCurrencyOverride ?? eligibility?.throughLocalCurrency.payInCurrency?.trim().toUpperCase() ?? null
+  const available = Boolean(
+    payInCurrency &&
+      (payInCurrencyOverride || eligibility?.throughLocalCurrency.available),
+  )
 
   useEffect(() => {
     if (!input.enabled || !input.recipientId) {
@@ -108,7 +117,7 @@ export function useYcCrossBorderFlow(input: {
   }, [input.enabled, input.recipientId])
 
   useEffect(() => {
-    if (!available || !payInCurrency) {
+    if (!payInCurrency) {
       setRates([])
       setRatesLoading(false)
       return
@@ -132,7 +141,7 @@ export function useYcCrossBorderFlow(input: {
     return () => {
       cancelled = true
     }
-  }, [available, payInCurrency, input.receiveCurrency])
+  }, [payInCurrency, input.receiveCurrency])
 
   const crossRate = useMemo(() => {
     if (!payInCurrency) return null
@@ -161,6 +170,7 @@ export function useYcCrossBorderFlow(input: {
     async (opts: {
       receiveAmount: number
       payInRail: YcPayInRail
+      payInCountry?: string
       sourcePhone?: string
       networkId?: string
       sourceNetworkName?: string
@@ -168,7 +178,10 @@ export function useYcCrossBorderFlow(input: {
       if (!input.recipientId || !payInCurrency) {
         throw new Error('Through Local Currency is not available')
       }
-      const payInCountry = residenceCountryFromPayInCurrency(payInCurrency)
+      const payInCountry =
+        opts.payInCountry?.trim().toUpperCase() ||
+        payInCountryOverride ||
+        residenceCountryFromPayInCurrency(payInCurrency)
       if (!payInCountry) {
         throw new Error('Pay-in country could not be resolved')
       }
@@ -204,7 +217,7 @@ export function useYcCrossBorderFlow(input: {
         setQuoteLoading(false)
       }
     },
-    [input.recipientId, payInCurrency],
+    [input.recipientId, payInCurrency, payInCountryOverride],
   )
 
   return {

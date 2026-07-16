@@ -388,6 +388,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   /** Refresh quote only when not preloaded on amount screen. */
   useEffect(() => {
+    if (isYcCrossBorder) return
     if (!recipient || easetagUi) return
     if (!recipient.id || !(receiveAmountValue > 0)) return
     if (isWalletRecipient) {
@@ -528,7 +529,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     return () => {
       cancelled = true
     }
-  }, [easetagUi, isWalletRecipient, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue, quoteStashMeta, amountScreenSendAmount, sendNote, sendPaymentPurpose, walletSession?.formSessionId, payoutSession?.formSessionId, amountEntryMode])
+  }, [easetagUi, isYcCrossBorder, isWalletRecipient, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue, quoteStashMeta, amountScreenSendAmount, sendNote, sendPaymentPurpose, walletSession?.formSessionId, payoutSession?.formSessionId, amountEntryMode])
 
   useFocusEffect(
     useCallback(() => {
