@@ -3,6 +3,7 @@
 import {
   REVIEW_ROW_LABELS,
   buildInboundReceiveDetailRows,
+  formatAccountBalanceLabel,
   type InboundReceiveDetailSnapshot,
   type TransactionTimingRow,
 } from "@easner/shared"
@@ -69,12 +70,16 @@ export function InboundReceiveDetailsRows({
             const creditCurrency = row.creditCurrency ?? snapshot.creditDestination?.currency
 
             if (isCreditRow && creditCurrency) {
+              const balanceLabel =
+                row.value ||
+                snapshot.creditDestination?.balanceLabel ||
+                formatAccountBalanceLabel(creditCurrency)
               return (
                 <CreditDestinationRow
                   key={`${row.label}-${index}`}
                   label={row.label}
                   currency={creditCurrency}
-                  balanceLabel={row.value}
+                  balanceLabel={balanceLabel}
                 />
               )
             }

@@ -2,7 +2,7 @@ import React from 'react'
 import { View, Text, StyleSheet, type TextStyle } from 'react-native'
 import { CurrencyFlagCircle } from '../flags/CurrencyFlagCircle'
 import { transactionDetailRowStyles } from './TransactionDetailSummaryRow'
-import { fontFamily } from '../../theme'
+import { colors, spacing, textStyles, fontFamily } from '../../theme'
 
 type Props = {
   label: string
@@ -12,7 +12,7 @@ type Props = {
   valueStyle?: TextStyle
 }
 
-/** Credited to / Credit for row — circular flag + balance label (payout review parity). */
+/** Credited to / Debited from row — circular flag + balance label (payout review parity). */
 export function CreditDestinationRow({
   label,
   currency,
@@ -25,10 +25,7 @@ export function CreditDestinationRow({
       <Text style={transactionDetailRowStyles.label}>{label}</Text>
       <View style={styles.creditValue}>
         <CurrencyFlagCircle currency={currency} size={flagSize} />
-        <Text
-          style={[transactionDetailRowStyles.value, styles.creditValueText, valueStyle]}
-          numberOfLines={1}
-        >
+        <Text style={[styles.balanceLabel, valueStyle]} numberOfLines={1}>
           {balanceLabel}
         </Text>
       </View>
@@ -43,16 +40,17 @@ const styles = StyleSheet.create({
   creditValue: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flexShrink: 0,
+    gap: spacing[2],
+    flexShrink: 1,
+    minWidth: 0,
     maxWidth: '72%',
     justifyContent: 'flex-end',
-    flex: 1,
-    marginLeft: 8,
   },
-  creditValueText: {
-    flex: 0,
-    flexShrink: 1,
+  balanceLabel: {
+    ...textStyles.body,
+    color: colors.text.primary,
     fontFamily: fontFamily.semibold,
+    flexShrink: 1,
+    textAlign: 'right',
   },
 })

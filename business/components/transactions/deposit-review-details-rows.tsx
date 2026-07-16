@@ -2,6 +2,7 @@
 
 import {
   computeDisplayProcessingFee,
+  formatAccountBalanceLabel,
   formatReviewRowMoneyDisplay,
   formatSendRateLabel,
   REVIEW_ROW_LABELS,
@@ -110,7 +111,7 @@ export function DepositReviewDetailsRows({
         <CreditDestinationRow
           label={REVIEW_ROW_LABELS.creditTo}
           currency="USD"
-          balanceLabel={depositReview.credit_to}
+          balanceLabel={depositReview.credit_to || formatAccountBalanceLabel("USD")}
         />
 
         <TransactionDetailSummaryRow
