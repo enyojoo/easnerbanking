@@ -1,6 +1,7 @@
 import { yellowcardFetch } from "./http"
 import { requireDepositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
 import { getYellowcardEnvironment } from "./config"
+import { resolveYcPaymentReason } from "@easner/shared"
 
 export type YcReceiveRail = "bank_transfer" | "mobile_money"
 
@@ -102,7 +103,7 @@ export function buildYcReceiveSubmitBody(input: YcReceiveSubmitInput): Record<st
       ? buildYcReceiveSource({ rail: input.payInRail, phone: input.sourcePhone })
       : null)
   if (source) body.source = source
-  if (input.reason) body.reason = input.reason
+  body.reason = resolveYcPaymentReason(input.reason)
   return body
 }
 

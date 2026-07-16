@@ -243,6 +243,7 @@ export async function buildPayoutQuote(input: {
           amountEntryMode: input.amountEntryMode,
           sendBudget: input.sendBudget,
           userTurnkeyAddress: turnkeyAddr,
+          paymentPurpose: input.prepareOverrides?.paymentPurpose,
           senderProfile: {
             residenceCountry: userRow?.residence_country,
             kycIdType: userRow?.kyc_id_type,

@@ -1,6 +1,7 @@
 import { yellowcardFetch } from "./http"
 import { resolveYcSendRefundAddress, type YcSendRefundMode } from "./refund-address"
 import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
+import { resolveYcPaymentReason } from "@easner/shared"
 
 export type YcSendSubmitInput = {
   sequenceId: string
@@ -78,7 +79,7 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
       if (value != null && value !== "") body[key] = value
     }
   }
-  if (input.reason) body.reason = input.reason
+  body.reason = resolveYcPaymentReason(input.reason)
   return body
 }
 

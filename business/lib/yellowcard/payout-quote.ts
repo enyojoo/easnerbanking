@@ -34,6 +34,7 @@ export async function buildYcPayoutQuote(input: {
   sendBudget?: number
   userTurnkeyAddress: string
   senderProfile: Parameters<typeof buildYcKycPersonMetadata>[0]["profile"]
+  paymentPurpose?: string
 }): Promise<PayoutQuoteResult & { yc: { sendId?: string; channelId: string; cryptoAmount: number; walletAddress?: string } }> {
   const receiveAmountRaw = normalizePayoutReceiveAmount(Number(input.receiveFiatAmount))
   if (!Number.isFinite(receiveAmountRaw) || receiveAmountRaw <= 0) {
@@ -144,7 +145,7 @@ export async function buildYcPayoutQuote(input: {
     sender,
     destination: recipientMapped.destination,
     sendExtras: recipientMapped.root,
-    reason: "balance_payout_quote",
+    reason: input.paymentPurpose,
   })
 
   const cryptoAmount = Number(sendRes.settlementInfo?.cryptoAmount ?? sendRes.convertedAmount ?? 0)
