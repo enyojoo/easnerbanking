@@ -115,7 +115,12 @@ export async function createCrossBorderTransfer(input: {
   }
 
   const sender = buildYcKycPersonMetadata({ profile: input.senderProfile, requireNgIds: true })
-  const recipientMapped = await mapRecipientToYcSend(input.recipient)
+  const recipientMapped = await mapRecipientToYcSend(input.recipient, { channelId: sendChannelId })
+  if (!recipientMapped.destination.networkId) {
+    throw new Error(
+      "Yellowcard could not resolve a payout network for this recipient. Re-save the recipient with a bank from the corridor list.",
+    )
+  }
 
   // Provisional send lock for fee/crypto sizing
   const leg2Seq = `yc_cb_l2_${randomUUID()}`

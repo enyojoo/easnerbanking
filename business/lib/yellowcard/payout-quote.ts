@@ -119,7 +119,12 @@ export async function buildYcPayoutQuote(input: {
     normalizeReceive: normalizePayoutReceiveAmountForCurrency,
   })
 
-  const recipientMapped = await mapRecipientToYcSend(row)
+  const recipientMapped = await mapRecipientToYcSend(row, { channelId })
+  if (!recipientMapped.destination.networkId) {
+    throw new Error(
+      "Yellowcard could not resolve a payout network for this recipient. Re-save the recipient with a bank from the corridor list.",
+    )
+  }
   const sender = buildYcKycPersonMetadata({
     profile: input.senderProfile,
     requireNgIds: true,
