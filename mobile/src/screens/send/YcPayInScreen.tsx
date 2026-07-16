@@ -7,15 +7,15 @@ import {
   Pressable,
   ActivityIndicator,
 } from 'react-native'
-import { ArrowLeft, Check, Copy, Landmark } from 'lucide-react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { ArrowLeft, Check, Copy } from 'lucide-react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { formatMoneyDisplay } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { NavigationProps } from '../../types'
-import { colors, spacing, textStyles, borderRadius, surfaceFrameStyle } from '../../theme'
+import { colors, spacing, textStyles, borderRadius } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
-import { getCurrencySymbol } from '../../utils/formatters'
 import { ycBankInfoFields } from '../../lib/yc-bank-info-fields'
 import { haptics } from '../../lib/haptics'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
@@ -36,8 +36,42 @@ type RouteParams = {
   payInRail: YcPayInRail
 }
 
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={[styles.rowValue, bold && styles.rowValueBold]}>{value}</Text>
+    </View>
+  )
+}
+
+function CopyRow({
+  label,
+  value,
+  copied,
+  onCopy,
+}: {
+  label: string
+  value: string
+  copied: boolean
+  onCopy: () => void
+}) {
+  return (
+    <Pressable android_ripple={ripple.neutral} style={styles.row} onPress={onCopy}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <View style={styles.copyValueRow}>
+        <Text style={styles.copyValue}>{value}</Text>
+        {copied ? (
+          <Check size={16} color={colors.primary.main} strokeWidth={2} />
+        ) : (
+          <Copy size={16} color={colors.text.secondary} strokeWidth={2} />
+        )}
+      </View>
+    </Pressable>
+  )
+}
+
 export default function YcPayInScreen({ navigation, route }: NavigationProps) {
-  const insets = useSafeAreaInsets()
   const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const footerPadding = useFixedFooterPadding(spacing[5])
   const copyToClipboard = useCopyToClipboard()
@@ -55,15 +89,19 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
     localPayIn = 0,
     bankInfo,
     payInNotice,
+    payInRail,
   } = params
 
   const fields = ycBankInfoFields(bankInfo)
   const isFundBalance = flowMode === 'fund_balance'
+  const transferMethod = payInRail === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
+  const screenTitle = isFundBalance ? 'Complete deposit' : 'Complete payment'
   const notice =
     payInNotice ||
     (isFundBalance
-      ? 'Complete your transfer to credit your USD balance.'
-      : 'Complete your transfer to send this payment.')
+      ? 'Transfer the exact amount below to credit your USD balance.'
+      : 'Transfer the exact amount below to complete this payment.')
+  const displayTransactionId = transactionId?.toUpperCase() ?? ''
 
   const handleCopy = async (text: string, key: string) => {
     haptics.tap()
@@ -75,7 +113,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   if (!transactionId || !transferId) {
     return (
       <ScreenWrapper>
-        <View style={[styles.centered, { paddingTop: insets.top }]}>
+        <View style={styles.centered}>
           <ActivityIndicator color={colors.primary.main} />
         </View>
       </ScreenWrapper>
@@ -84,85 +122,73 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
 
   return (
     <ScreenWrapper>
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottomPadding }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <Pressable
-          android_ripple={ripple.neutral}
-          style={styles.backRow}
-          onPress={() => navigation.goBack()}
+      <View style={[styles.container, { paddingBottom: footerPadding }]}>
+        <View style={styles.header}>
+          <Pressable
+            android_ripple={ripple.neutral}
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
+          </Pressable>
+          <Text style={styles.title}>{screenTitle}</Text>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
+          showsVerticalScrollIndicator={false}
         >
-          <ArrowLeft size={20} color={colors.text.secondary} strokeWidth={2} />
-          <Text style={styles.backText}>Back</Text>
-        </Pressable>
+          <View style={styles.card}>
+            {displayTransactionId ? (
+              <Row label="Transaction ID" value={displayTransactionId} />
+            ) : null}
+            <Row label="You pay" value={formatMoneyDisplay(localPayIn, sendCurrency)} bold />
+            {isFundBalance ? (
+              <Row label="You receive" value={formatMoneyDisplay(receiveAmount, receiveCurrency)} />
+            ) : (
+              <>
+                <Row label="Recipient gets" value={formatMoneyDisplay(receiveAmount, receiveCurrency)} />
+                <Row label="Recipient" value={recipientName} />
+              </>
+            )}
+            {payInRail ? <Row label="Transfer method" value={transferMethod} /> : null}
 
-        <Text style={styles.title}>Complete payment</Text>
-        <Text style={styles.subtitle}>
-          {isFundBalance ? (
-            <>
-              Pay {getCurrencySymbol(sendCurrency)}
-              {localPayIn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-              {sendCurrency} to credit {getCurrencySymbol(receiveCurrency)}
-              {receiveAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-              {receiveCurrency} to your balance
-            </>
-          ) : (
-            <>
-              Pay {getCurrencySymbol(sendCurrency)}
-              {localPayIn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-              {sendCurrency} so {recipientName} receives {getCurrencySymbol(receiveCurrency)}
-              {receiveAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-              {receiveCurrency}
-            </>
-          )}
-        </Text>
+            {fields.length === 0 ? (
+              <Text style={styles.error}>
+                Payment details unavailable. Contact support with reference {displayTransactionId}.
+              </Text>
+            ) : (
+              fields.map((field) => (
+                <CopyRow
+                  key={field.id}
+                  label={field.label}
+                  value={field.value}
+                  copied={copiedKey === field.id}
+                  onCopy={() => void handleCopy(field.value, field.id)}
+                />
+              ))
+            )}
 
-        <View style={styles.noticeBox}>
-          <Text style={styles.noticeText}>{notice}</Text>
-        </View>
-
-        <View style={[styles.card, surfaceFrameStyle]}>
-          <View style={styles.cardHeader}>
-            <Landmark size={20} color={colors.primary.main} strokeWidth={2} />
-            <Text style={styles.cardTitle}>Payment details</Text>
+            <Text style={styles.hint}>{notice}</Text>
           </View>
-          {fields.length === 0 ? (
-            <Text style={styles.emptyFields}>
-              Payment details unavailable. Contact support with reference {transactionId}.
-            </Text>
-          ) : (
-            fields.map((f) => (
-              <Pressable
-                key={f.id}
-                android_ripple={ripple.neutral}
-                style={styles.fieldRow}
-                onPress={() => void handleCopy(f.value, f.id)}
-              >
-                <Text style={styles.fieldLabel}>{f.label}</Text>
-                <View style={styles.fieldValueRow}>
-                  <Text style={styles.fieldValue}>{f.value}</Text>
-                  {copiedKey === f.id ? (
-                    <Check size={16} color={colors.primary.main} strokeWidth={2} />
-                  ) : (
-                    <Copy size={16} color={colors.text.secondary} strokeWidth={2} />
-                  )}
-                </View>
-              </Pressable>
-            ))
-          )}
-        </View>
-      </ScrollView>
+        </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: footerPadding }]}>
         <Pressable
           android_ripple={ripple.neutral}
-          style={styles.primaryButton}
+          style={styles.cta}
           onPress={() => {
+            haptics.medium()
             navigation.navigate('TransactionDetails' as never, { transactionId } as never)
           }}
         >
-          <Text style={styles.primaryButtonText}>I've made the payment</Text>
+          <LinearGradient
+            colors={colors.primary.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.ctaGradient}
+          >
+            <Text style={styles.ctaText}>I've made the payment</Text>
+          </LinearGradient>
         </Pressable>
       </View>
     </ScreenWrapper>
@@ -170,93 +196,88 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
 }
 
 const styles = StyleSheet.create({
-  scroll: {
+  container: {
+    flex: 1,
     paddingHorizontal: spacing[5],
-    paddingTop: spacing[2],
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
+    gap: spacing[3],
     marginBottom: spacing[4],
   },
-  backText: {
-    ...textStyles.body,
-    color: colors.text.secondary,
+  backButton: {
+    padding: spacing[1],
   },
   title: {
     ...textStyles.screenTitle,
-    marginBottom: spacing[2],
-  },
-  subtitle: {
-    ...textStyles.body,
-    color: colors.text.secondary,
-    marginBottom: spacing[4],
-  },
-  noticeBox: {
-    backgroundColor: colors.semantic.muted,
-    borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    marginBottom: spacing[4],
-  },
-  noticeText: {
-    ...textStyles.body,
-    color: colors.text.primary,
   },
   card: {
-    padding: spacing[4],
+    backgroundColor: colors.semantic.card,
     borderRadius: borderRadius.xl,
+    padding: spacing[4],
+    gap: spacing[1],
   },
-  cardHeader: {
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    marginBottom: spacing[3],
-  },
-  cardTitle: {
-    ...textStyles.sectionTitle,
-  },
-  emptyFields: {
-    ...textStyles.body,
-    color: colors.text.secondary,
-  },
-  fieldRow: {
-    paddingVertical: spacing[3],
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: spacing[3],
+    paddingVertical: spacing[2],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.light,
   },
-  fieldLabel: {
+  rowLabel: {
     ...textStyles.caption,
     color: colors.text.secondary,
-    marginBottom: spacing[1],
-  },
-  fieldValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing[2],
-  },
-  fieldValue: {
-    ...textStyles.body,
-    fontFamily: 'monospace',
     flex: 1,
   },
-  footer: {
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[3],
+  rowValue: {
+    ...textStyles.body,
+    textAlign: 'right',
+    flex: 1,
   },
-  primaryButton: {
-    backgroundColor: colors.primary.main,
+  rowValueBold: {
+    fontFamily: textStyles.sectionTitle.fontFamily,
+  },
+  copyValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing[2],
+    flex: 1,
+  },
+  copyValue: {
+    ...textStyles.body,
+    fontFamily: 'monospace',
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  error: {
+    ...textStyles.caption,
+    color: colors.semantic.destructive,
+    marginTop: spacing[2],
+  },
+  hint: {
+    ...textStyles.caption,
+    color: colors.text.secondary,
+    marginTop: spacing[2],
+  },
+  cta: {
     borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    marginTop: spacing[3],
+  },
+  ctaGradient: {
     paddingVertical: spacing[4],
     alignItems: 'center',
   },
-  primaryButtonText: {
+  ctaText: {
     ...textStyles.button,
     color: colors.text.inverse,
   },

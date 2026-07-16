@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -46,6 +46,14 @@ import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib
 import type { NgLocalIdType } from '@easner/shared'
 import { NgLocalVerificationNotice } from '../../components/compliance/NgLocalVerificationNotice'
 import SkeletonLoader from '../../components/SkeletonLoader'
+import { useToast } from '../../components/ToastProvider'
+import {
+  clearFundBalanceQuote,
+  ensureFundBalanceQuoteStashed,
+  isCompleteFundBalanceQuote,
+  isStashedFundBalanceQuoteFresh,
+  peekLastFundBalanceQuoteError,
+} from '../../lib/sendFlowFundBalanceQuote'
 
 type RouteParams = {
   localPayInCurrency: string
@@ -66,6 +74,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     maxSize: 114,
   })
   const { balances } = useBalance()
+  const { showError } = useToast()
   const params = (route.params || {}) as Partial<RouteParams>
 
   const localPayInCurrency = params.localPayInCurrency ?? ''
@@ -77,6 +86,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
   const [amountEntryMode, setAmountEntryMode] = useState<'usd' | 'local'>('usd')
   const [amountStr, setAmountStr] = useState('0')
+  const [continueLoading, setContinueLoading] = useState(false)
 
   const enteredAmount = useMemo(
     () => Number.parseFloat(amountStr.replace(/,/g, '')) || 0,
@@ -116,6 +126,46 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
   const showExchangePreviewSkeleton = amountPositive && ycFlow.ratesLoading
   const exchangePreviewReady = amountPositive && !ycFlow.ratesLoading && Boolean(ycFlow.customerRate)
+
+  const quoteStashMeta = useMemo(
+    () => ({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: payInRail,
+      amountEntryMode,
+      usdCredit: ycFlow.preview.usdCredit,
+      localPayIn: ycFlow.preview.localPayIn,
+    }),
+    [
+      residenceCountry,
+      localPayInCurrency,
+      payInRail,
+      amountEntryMode,
+      ycFlow.preview.usdCredit,
+      ycFlow.preview.localPayIn,
+    ],
+  )
+
+  const quotePrefetchKey = useMemo(() => {
+    if (!canContinue) return ''
+    return [
+      quoteStashMeta.country,
+      quoteStashMeta.currency,
+      quoteStashMeta.rail,
+      quoteStashMeta.amountEntryMode,
+      quoteStashMeta.usdCredit,
+      quoteStashMeta.localPayIn,
+    ].join('|')
+  }, [canContinue, quoteStashMeta])
+
+  useEffect(() => {
+    clearFundBalanceQuote()
+  }, [localPayInCurrency, residenceCountry, payInRail])
+
+  useEffect(() => {
+    if (!quotePrefetchKey) return
+    void ensureFundBalanceQuoteStashed(quoteStashMeta)
+  }, [quotePrefetchKey, quoteStashMeta])
 
   const toSwitchInputAmount = (amount: number): string => {
     const roundedAmount = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100
@@ -171,18 +221,29 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     setAmountStr(formatKeypadAmount(raw))
   }
 
-  const onContinue = () => {
-    if (!canContinue) return
+  const onContinue = async () => {
+    if (!canContinue || continueLoading) return
     haptics.medium()
-    navigation.navigate('ReceiveLocalReview' as never, {
-      localPayInCurrency,
-      residenceCountry,
-      payInRail,
-      amountEntryMode,
-      enteredAmount,
-      usdCredit: ycFlow.preview.usdCredit,
-      localPayIn: ycFlow.preview.localPayIn,
-    } as never)
+    const quoteAlreadyWarm = isStashedFundBalanceQuoteFresh(quoteStashMeta)
+    if (!quoteAlreadyWarm) setContinueLoading(true)
+    try {
+      const quote = await ensureFundBalanceQuoteStashed(quoteStashMeta)
+      if (!isCompleteFundBalanceQuote(quote)) {
+        showError(peekLastFundBalanceQuoteError() || 'Could not load deposit quote. Try again.')
+        return
+      }
+      navigation.navigate('ReceiveLocalReview' as never, {
+        localPayInCurrency,
+        residenceCountry,
+        payInRail,
+        amountEntryMode,
+        enteredAmount,
+        usdCredit: quote.usdCredit,
+        localPayIn: quote.localPayIn,
+      } as never)
+    } finally {
+      setContinueLoading(false)
+    }
   }
 
   if (ngMissingType) {
@@ -355,17 +416,17 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
         <View style={[styles.bottomContainer, { paddingBottom: footerPadding }]}>
           <Pressable
             android_ripple={ripple.neutral}
-            style={[styles.sendButton, !canContinue && styles.sendButtonDisabled]}
+            style={[styles.sendButton, (!canContinue || continueLoading) && styles.sendButtonDisabled]}
             onPress={onContinue}
-            disabled={!canContinue}
+            disabled={!canContinue || continueLoading}
           >
             <LinearGradient
-              colors={!canContinue ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
+              colors={!canContinue || continueLoading ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sendButtonGradient}
             >
-              {ycFlow.ratesLoading && amountPositive ? (
+              {continueLoading || (ycFlow.ratesLoading && amountPositive) ? (
                 <ActivityIndicator color={colors.text.inverse} />
               ) : (
                 <Text style={styles.sendButtonText}>Continue</Text>

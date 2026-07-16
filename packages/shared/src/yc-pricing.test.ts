@@ -46,18 +46,19 @@ describe("computeYcCrossBorderPricing", () => {
 })
 
 describe("computeYcFundBalancePricing", () => {
-  it("solves local pay-in for target USD credit", () => {
+  it("applies Easner 1% processing fee on USD credit target", () => {
     const p = computeYcFundBalancePricing({
-      usdCredit: 50,
+      usdCredit: 100,
       customerSellRate: 1600,
       ycSellRate: 1590,
       receiveLeg: {
-        cryptoAmountUsd: 51.5,
+        cryptoAmountUsd: 101.5,
         networkFeeAmountUsd: 1,
         serviceFeeAmountUsd: 0.5,
       },
     })
-    expect(p.localPayIn).toBeGreaterThan(50 * 1600)
-    expect(p.usdCredit).toBe(50)
+    expect(p.processingFee).toBeCloseTo(1, 4)
+    expect(p.ycLegFeesUsd).toBeCloseTo(1.5, 4)
+    expect(p.usdCredit).toBe(100)
   })
 })

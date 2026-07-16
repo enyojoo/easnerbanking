@@ -20,6 +20,8 @@ import {
   mapResidenceToLocalPayInCurrency,
   YC_PAY_IN_RATES_DESTINATION,
   resolveYcPayInCustomerRate,
+  computeDisplayProcessingFee,
+  shouldShowPayoutReviewFeeRow,
   ycFundBalanceQuoteErrorMessage,
   type NgLocalIdType,
   type YcRateClientRow,
@@ -52,6 +54,8 @@ type FundBalanceQuote = {
   usdCredit: number
   customerRate: number
   processingFee?: number
+  ycChannelFeeUsd?: number
+  displayProcessingFee?: number
   bankInfo: Record<string, unknown> | null
   expiresAt: string
   transactionId: string | null
@@ -89,6 +93,7 @@ export function LocalDepositWizard({
   const [amountStr, setAmountStr] = useState("")
   const [rates, setRates] = useState<YcRateRow[]>([])
   const [quote, setQuote] = useState<FundBalanceQuote | null>(null)
+  const [prefetchedQuote, setPrefetchedQuote] = useState<FundBalanceQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
 
@@ -169,9 +174,11 @@ export function LocalDepositWizard({
     }
   }, [railsLoading, rails])
 
-  const createQuote = useCallback(async () => {
-    setQuoteLoading(true)
-    setQuoteError(null)
+  const createQuote = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setQuoteLoading(true)
+      setQuoteError(null)
+    }
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" }
       if (businessId) headers["X-Easner-Noah-Scope"] = "business"
@@ -200,16 +207,16 @@ export function LocalDepositWizard({
       }
       if (!res.ok || !data.ok) {
         const msg = ycFundBalanceQuoteErrorMessage(data.code, data.error)
-        setQuoteError(msg)
+        if (!opts?.silent) setQuoteError(msg)
         return null
       }
-      setQuote(data)
+      if (!opts?.silent) setQuote(data)
       return data
     } catch {
-      setQuoteError("Could not get payment details")
+      if (!opts?.silent) setQuoteError("Could not get payment details")
       return null
     } finally {
-      setQuoteLoading(false)
+      if (!opts?.silent) setQuoteLoading(false)
     }
   }, [
     amountMode,
@@ -221,8 +228,42 @@ export function LocalDepositWizard({
     residenceCountry,
   ])
 
+  const quotePrefetchKey =
+    step === "amount" && enteredAmount > 0 && customerRate
+      ? [
+          residenceCountry,
+          localPayInCurrency,
+          rail,
+          amountMode,
+          preview.usdCredit,
+          preview.localPayIn,
+        ].join("|")
+      : ""
+
+  useEffect(() => {
+    if (!quotePrefetchKey) {
+      setPrefetchedQuote(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const result = await createQuote({ silent: true })
+      if (!cancelled && result) setPrefetchedQuote(result)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [quotePrefetchKey, createQuote])
+
   useEffect(() => {
     if (step !== "review") return
+    if (quote?.transferId) return
+    if (prefetchedQuote?.transferId) {
+      setQuote(prefetchedQuote)
+      setQuoteError(null)
+      setQuoteLoading(false)
+      return
+    }
     let cancelled = false
     void (async () => {
       const result = await createQuote()
@@ -231,7 +272,7 @@ export function LocalDepositWizard({
     return () => {
       cancelled = true
     }
-  }, [step, createQuote])
+  }, [step, quote?.transferId, prefetchedQuote, createQuote])
 
   if (ngMissingType) {
     return (
@@ -392,10 +433,16 @@ export function LocalDepositWizard({
         <Button
           className="w-full"
           disabled={!canContinue}
-          onClick={() => {
-            setQuote(null)
+          onClick={async () => {
             setQuoteError(null)
-            setStep("review")
+            if (prefetchedQuote?.transferId) {
+              setQuote(prefetchedQuote)
+              setStep("review")
+              return
+            }
+            setQuote(null)
+            const result = await createQuote()
+            if (result) setStep("review")
           }}
         >
           Continue
@@ -406,6 +453,16 @@ export function LocalDepositWizard({
 
   if (step === "review") {
     const transferMethod = rail === "mobile_money" ? "Mobile Money" : "Bank Transfer"
+    const displayProcessingFee =
+      quote?.displayProcessingFee ??
+      computeDisplayProcessingFee({
+        processingFee: quote?.processingFee ?? 0,
+        exchangeFee: quote?.ycChannelFeeUsd ?? 0,
+      })
+    const showProcessingFee = shouldShowPayoutReviewFeeRow({
+      processingFee: quote?.processingFee ?? 0,
+      exchangeFee: quote?.ycChannelFeeUsd ?? 0,
+    })
     return (
       <div className="space-y-4">
         <button
@@ -436,10 +493,10 @@ export function LocalDepositWizard({
                 <span className="text-muted-foreground">You pay</span>
                 <span>{formatMoneyDisplay(quote.localPayIn, localPayInCurrency)}</span>
               </div>
-              {(quote.processingFee ?? 0) > 0 ? (
+              {(showProcessingFee && displayProcessingFee > 0) ? (
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">Processing fee</span>
-                  <span>{formatMoneyDisplay(quote.processingFee ?? 0, localPayInCurrency)}</span>
+                  <span>{formatMoneyDisplay(displayProcessingFee, "USD")}</span>
                 </div>
               ) : null}
               <div className="flex justify-between gap-4">

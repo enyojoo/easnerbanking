@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -9,18 +9,27 @@ import {
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { formatMoneyDisplay, formatSendRateLabel, ycFundBalanceQuoteErrorMessage } from '@easner/shared'
+import {
+  computeDisplayProcessingFee,
+  formatMoneyDisplay,
+  formatSendRateLabel,
+  shouldShowPayoutReviewFeeRow,
+} from '@easner/shared'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
-import {
-  useYcFundBalanceFlow,
-  type YcFundBalanceQuoteResult,
-} from '../../hooks/useYcFundBalanceFlow'
+import type { YcFundBalanceQuoteResult } from '../../hooks/useYcFundBalanceFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
-import { ApiError } from '../../query/api-client'
 import { CurrencyFlag } from '../flags/CurrencyFlag'
+import {
+  ensureFundBalanceQuoteStashed,
+  isCompleteFundBalanceQuote,
+  isStashedFundBalanceQuoteFresh,
+  peekFundBalanceQuote,
+  peekLastFundBalanceQuoteError,
+  type YcFundBalanceQuote,
+} from '../../lib/sendFlowFundBalanceQuote'
 
 type Props = {
   navigation: { goBack: () => void; navigate: (name: string, params?: object) => void }
@@ -44,62 +53,87 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
   )
 }
 
+function resolveDisplayProcessingFee(quote: YcFundBalanceQuote | YcFundBalanceQuoteResult | null): number {
+  if (!quote) return 0
+  if (quote.displayProcessingFee != null && quote.displayProcessingFee > 0) {
+    return quote.displayProcessingFee
+  }
+  return computeDisplayProcessingFee({
+    processingFee: quote.processingFee ?? 0,
+    exchangeFee: quote.ycChannelFeeUsd ?? 0,
+  })
+}
+
 export function YcFundBalanceReview({
   navigation,
   localPayInCurrency,
   residenceCountry,
   payInRail,
   amountEntryMode,
-  enteredAmount,
   usdCredit,
   localPayIn,
   footerPadding,
   listBottomPadding,
 }: Props) {
-  const [quote, setQuote] = useState<YcFundBalanceQuoteResult | null>(null)
+  const [quote, setQuote] = useState<YcFundBalanceQuoteResult | null>(() => {
+    const meta = {
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: payInRail,
+      amountEntryMode,
+      usdCredit,
+      localPayIn,
+    }
+    return isStashedFundBalanceQuoteFresh(meta) ? peekFundBalanceQuote() : null
+  })
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const ycFlow = useYcFundBalanceFlow({
-    country: residenceCountry,
-    currency: localPayInCurrency,
-    rail: payInRail,
-    enabled: true,
-    amountEntryMode,
-    enteredAmount,
-  })
+  const quoteMeta = useMemo(
+    () => ({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: payInRail,
+      amountEntryMode,
+      usdCredit,
+      localPayIn,
+    }),
+    [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, usdCredit, localPayIn],
+  )
 
   useEffect(() => {
     let cancelled = false
     setQuoteError(null)
+
+    if (isStashedFundBalanceQuoteFresh(quoteMeta)) {
+      setQuote(peekFundBalanceQuote())
+      return
+    }
+
     void (async () => {
-      try {
-        const result = await ycFlow.createQuote(
-          amountEntryMode === 'usd' ? { usdCredit } : { localPayIn },
-        )
-        if (!cancelled) setQuote(result)
-      } catch (e) {
-        if (!cancelled) {
-          setQuote(null)
-          const msg =
-            e instanceof ApiError
-              ? ycFundBalanceQuoteErrorMessage(e.code ?? undefined, e.message)
-              : e instanceof Error
-                ? e.message
-                : 'Could not load quote'
-          setQuoteError(msg)
-        }
+      const result = await ensureFundBalanceQuoteStashed(quoteMeta)
+      if (cancelled) return
+      if (isCompleteFundBalanceQuote(result)) {
+        setQuote(result)
+        return
       }
+      setQuote(null)
+      setQuoteError(peekLastFundBalanceQuoteError() || 'Could not load quote')
     })()
+
     return () => {
       cancelled = true
     }
-  }, [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, usdCredit, localPayIn])
+  }, [quoteMeta])
 
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
   const transferMethod = payInRail === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
-  const processingFee = quote?.processingFee ?? 0
-  const customerRate = quote?.customerRate ?? ycFlow.customerRate
+  const displayProcessingFee = resolveDisplayProcessingFee(quote)
+  const showProcessingFee = shouldShowPayoutReviewFeeRow({
+    processingFee: quote?.processingFee ?? 0,
+    exchangeFee: quote?.ycChannelFeeUsd ?? 0,
+  })
+  const customerRate = quote?.customerRate ?? 0
   const displayTransactionId =
     quote?.easnerTransactionId ?? quote?.transactionId ?? ''
   const quoteReady = Boolean(quote?.transferId)
@@ -146,8 +180,11 @@ export function YcFundBalanceReview({
           ) : (
             <>
               <Row label="You pay" value={formatMoneyDisplay(quote?.localPayIn ?? localPayIn, localPayInCurrency)} />
-              {processingFee > 0 ? (
-                <Row label="Processing fee" value={formatMoneyDisplay(processingFee, localPayInCurrency)} />
+              {showProcessingFee ? (
+                <Row
+                  label="Processing fee"
+                  value={formatMoneyDisplay(displayProcessingFee, 'USD')}
+                />
               ) : null}
               {customerRate > 0 ? (
                 <Row

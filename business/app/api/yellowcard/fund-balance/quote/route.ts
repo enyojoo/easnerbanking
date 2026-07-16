@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS } from "@easner/shared"
+import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, computeDisplayProcessingFee } from "@easner/shared"
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
@@ -196,6 +196,11 @@ export async function POST(request: Request) {
     },
   })
 
+  const displayProcessingFee = computeDisplayProcessingFee({
+    processingFee: pricing.processingFee,
+    exchangeFee: pricing.ycLegFeesUsd,
+  })
+
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const businessId = noahCtx.scope === "business" ? noahCtx.businessId : null
   const easnerTransactionId = generateTransactionId()
@@ -241,7 +246,7 @@ export async function POST(request: Request) {
       leg1_channel_id: channelId,
       bank_info: receiveRes.bankInfo ?? null,
       settlement_info: receiveRes.settlementInfo ?? null,
-      metadata: { processing_fee: pricing.processingFee, usd_credit: pricing.usdCredit },
+      metadata: { processing_fee: pricing.processingFee, yc_channel_fee_usd: pricing.ycLegFeesUsd, usd_credit: pricing.usdCredit },
       expires_at: expiresAt,
     })
     .select("id")
@@ -255,6 +260,8 @@ export async function POST(request: Request) {
     customerRate: Number(leg.easner_sell),
     bankInfo: receiveRes.bankInfo ?? null,
     processingFee: pricing.processingFee,
+    ycChannelFeeUsd: pricing.ycLegFeesUsd,
+    displayProcessingFee,
     expiresAt,
     transactionId: easnerTransactionId,
     easnerTransactionId,

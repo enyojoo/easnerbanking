@@ -6,6 +6,7 @@ import {
   type YcRateClientRow,
 } from '@easner/shared'
 import { ApiError, apiFetch } from '../query/api-client'
+import { fetchFundBalanceQuote, type YcFundBalanceQuote } from '../lib/sendFlowFundBalanceQuote'
 import type { YcPayInRail } from './useYcCrossBorderFlow'
 
 export type YcReceiveRailsResponse = {
@@ -19,21 +20,7 @@ export type YcReceiveRailsResponse = {
   anyAvailable: boolean
 }
 
-export type YcFundBalanceQuoteResult = {
-  ok: true
-  sequenceId: string
-  localPayIn: number
-  usdCredit: number
-  customerRate: number
-  processingFee?: number
-  bankInfo: Record<string, unknown> | null
-  expiresAt: string
-  /** Canonical display id (`ETID` + 8 digits), same as payout. */
-  transactionId: string | null
-  easnerTransactionId?: string | null
-  transferId: string | null
-  payInNotice?: string
-}
+export type YcFundBalanceQuoteResult = YcFundBalanceQuote
 
 const RECEIVE_RAILS_CACHE_TTL_MS = 5 * 60_000
 const receiveRailsCache = new Map<string, { data: YcReceiveRailsResponse; at: number }>()
@@ -162,6 +149,7 @@ export function useYcFundBalanceFlow(input: {
     async (opts: {
       usdCredit?: number
       localPayIn?: number
+      amountEntryMode?: 'usd' | 'local'
     }): Promise<YcFundBalanceQuoteResult> => {
       if (!input.country || !input.currency) {
         throw new Error('Residence country required')
@@ -169,27 +157,17 @@ export function useYcFundBalanceFlow(input: {
       setQuoteLoading(true)
       setQuoteError(null)
       try {
-        const body: Record<string, unknown> = {
-          currency: input.currency,
+        const mode = opts.amountEntryMode ?? input.amountEntryMode
+        const usdCredit = opts.usdCredit ?? 0
+        const localPayIn = opts.localPayIn ?? 0
+        const data = await fetchFundBalanceQuote({
           country: input.country,
+          currency: input.currency,
           rail: input.rail,
-        }
-        if (opts.usdCredit != null && opts.usdCredit > 0) {
-          body.usdCredit = opts.usdCredit
-        } else if (opts.localPayIn != null && opts.localPayIn > 0) {
-          body.localPayIn = opts.localPayIn
-        } else {
-          throw new Error('Enter a valid amount')
-        }
-        const data = await apiFetch<YcFundBalanceQuoteResult, Record<string, unknown>>(
-          '/api/yellowcard/fund-balance/quote',
-          { method: 'POST', body },
-        )
-        if (!data.ok) {
-          const msg = 'Fund balance quote failed'
-          setQuoteError(msg)
-          throw new Error(msg)
-        }
+          amountEntryMode: mode,
+          usdCredit,
+          localPayIn,
+        })
         return data
       } catch (e) {
         const msg =
@@ -204,7 +182,7 @@ export function useYcFundBalanceFlow(input: {
         setQuoteLoading(false)
       }
     },
-    [input.country, input.currency, input.rail],
+    [input.country, input.currency, input.rail, input.amountEntryMode],
   )
 
   return {
