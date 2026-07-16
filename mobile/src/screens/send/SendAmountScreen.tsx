@@ -51,7 +51,6 @@ import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/complianc
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
-import { CountryFlag } from '../../components/flags/CountryFlag'
 import {
   convertNoahSendFlowAmounts,
   exchangeRatesToRateMap,
