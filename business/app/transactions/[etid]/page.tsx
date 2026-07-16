@@ -1,11 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { TransactionDetailsPanel } from "@/components/transaction-details-panel"
 import { useTransactionDetail } from "@/hooks/queries/use-transactions"
-import { normalizeEasnerTransactionIdForLookup } from "@/lib/easner-transaction-id"
+import {
+  normalizeEasnerTransactionIdForLookup,
+  resolveTransactionDetailReturnPath,
+} from "@/lib/easner-transaction-id"
 import { ArrowLeft, Loader2 } from "lucide-react"
 
 export default function TransactionDetailByEtidPage() {
@@ -16,13 +19,19 @@ export default function TransactionDetailByEtidPage() {
   const lookupId = normalizeEasnerTransactionIdForLookup(decoded) ?? decoded
   const idForQuery = lookupId.trim() || null
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const returnPath = resolveTransactionDetailReturnPath(searchParams.get("returnTo"))
+  const handleBack = () => {
+    if (returnPath) router.replace(returnPath)
+    else router.back()
+  }
   const { data, isError, error } = useTransactionDetail(idForQuery)
 
   if (!decoded.trim() || !idForQuery) {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" type="button" onClick={() => router.back()} aria-label="Back">
+          <Button variant="ghost" size="icon" type="button" onClick={handleBack} aria-label="Back">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-2xl font-semibold text-foreground">Transaction</h1>
@@ -40,7 +49,7 @@ export default function TransactionDetailByEtidPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" type="button" onClick={() => router.back()} aria-label="Back">
+        <Button variant="ghost" size="icon" type="button" onClick={handleBack} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>

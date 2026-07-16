@@ -108,7 +108,7 @@ export default function TransactionsPage() {
     const qs = next.toString()
     router.replace(qs ? `/transactions?${qs}` : "/transactions", { scroll: false })
     if (match) {
-      router.push(transactionWebDetailPath(match.id))
+      router.push(transactionWebDetailPath(match.id, { returnTo: "transactions" }))
     }
   }, [listLoading, rows, searchParams, router])
 
@@ -320,7 +320,7 @@ export default function TransactionsPage() {
                   return (
                     <TransactionDetailPrefetchLink
                       key={txn.id}
-                      href={transactionWebDetailPath(txn.id)}
+                      href={transactionWebDetailPath(txn.id, { returnTo: "transactions" })}
                       txId={txn.id}
                       className="flex min-w-0 items-center gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer"
                     >

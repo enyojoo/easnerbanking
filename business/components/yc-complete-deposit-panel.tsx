@@ -36,6 +36,8 @@ export type YcCompleteDepositPanelProps = {
   payInNotice?: string
   copiedField?: string | null
   onCopy?: (text: string, field: string) => void
+  /** Where transaction detail back should land after YC pay-in complete. */
+  returnTo?: "dashboard" | "transactions"
 }
 
 export function YcCompleteDepositPanel({
@@ -55,21 +57,23 @@ export function YcCompleteDepositPanel({
   payInNotice,
   copiedField,
   onCopy,
+  returnTo = "dashboard",
 }: YcCompleteDepositPanelProps) {
   const isFundBalance = flowMode === "fund_balance"
   const isMomo = payInRail === "mobile_money"
+  const showFundBalanceQuoteSummary = isFundBalance && isMomo
   const title = isFundBalance ? "Complete deposit" : "Complete payment"
   const payInAmount = formatMoneyDisplay(localPayIn, localCurrency)
   const creditAmount = formatMoneyDisplay(creditOrReceiveAmount, creditOrReceiveCurrency)
   const principalLocal =
-    isFundBalance && customerRate > 0
+    showFundBalanceQuoteSummary && customerRate > 0
       ? computeYcFundBalancePrincipalLocalPayIn({
           usdCredit: creditOrReceiveAmount,
           exchangeRate: customerRate,
         })
       : 0
   const showProcessingFee =
-    isFundBalance &&
+    showFundBalanceQuoteSummary &&
     (processingFeeLocal > 0 ||
       shouldShowPayoutReviewFeeRow({ processingFee: processingFeeLocal, exchangeFee: 0 }))
   const notice = payInNotice ?? ycPayInInstructionNotice(payInRail)
@@ -81,7 +85,9 @@ export function YcCompleteDepositPanel({
       <h2 className="text-2xl font-semibold">{title}</h2>
 
       <div className="rounded-xl border border-border p-4 space-y-1 text-sm">
-        <div className="flex justify-between items-center gap-4 py-2 border-b">
+        <div
+          className={`flex justify-between items-center gap-4 py-2 ${showFundBalanceQuoteSummary || !isFundBalance ? "border-b" : ""}`}
+        >
           <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
           {onCopy ? (
             <button
@@ -100,14 +106,15 @@ export function YcCompleteDepositPanel({
             <span className="font-mono">{transactionId.toUpperCase()}</span>
           )}
         </div>
-        <>
-          {isFundBalance && customerRate > 0 ? (
+        {showFundBalanceQuoteSummary ? (
+          <>
+            {customerRate > 0 ? (
               <div className="flex justify-between gap-4 py-2 border-b">
                 <span className="text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
                 <span>{formatSendRateLabel("USD", localCurrency, customerRate)}</span>
               </div>
             ) : null}
-            {isFundBalance && principalLocal > 0 ? (
+            {principalLocal > 0 ? (
               <div className="flex justify-between gap-4 py-2 border-b">
                 <span className="text-muted-foreground">{REVIEW_ROW_LABELS.depositAmount}</span>
                 <span>
@@ -131,13 +138,27 @@ export function YcCompleteDepositPanel({
                 </span>
               </div>
             ) : null}
-            {isFundBalance ? (
-              <div className="flex justify-between gap-4 py-2 border-b">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.totalToPay}</span>
-                <span className="font-semibold">{payInAmount}</span>
-              </div>
-            ) : null}
-            {!isFundBalance && processingFeeLocal > 0 ? (
+            <div className="flex justify-between gap-4 py-2 border-b">
+              <span className="text-muted-foreground">{REVIEW_ROW_LABELS.totalToPay}</span>
+              <span className="font-semibold">{payInAmount}</span>
+            </div>
+            <div className="flex justify-between gap-4 py-2 border-b">
+              <span className="text-muted-foreground">{REVIEW_ROW_LABELS.amountToCredit}</span>
+              <span className="font-medium">{creditAmount}</span>
+            </div>
+            <CreditDestinationRow
+              label={REVIEW_ROW_LABELS.creditTo}
+              currency="USD"
+              balanceLabel="USD Balance"
+            />
+            <div className="flex justify-between gap-4 py-2">
+              <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
+              <span>{isMomo ? "Mobile Money" : "Bank Transfer"}</span>
+            </div>
+          </>
+        ) : !isFundBalance ? (
+          <>
+            {processingFeeLocal > 0 ? (
               <div className="flex justify-between gap-4 py-2 border-b">
                 <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
                 <span>
@@ -149,7 +170,7 @@ export function YcCompleteDepositPanel({
                 </span>
               </div>
             ) : null}
-            {!isFundBalance && customerRate > 0 ? (
+            {customerRate > 0 ? (
               <div className="flex justify-between gap-4 py-2 border-b">
                 <span className="text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
                 <span>
@@ -158,19 +179,10 @@ export function YcCompleteDepositPanel({
               </div>
             ) : null}
             <div className="flex justify-between gap-4 py-2 border-b">
-              <span className="text-muted-foreground">
-                {isFundBalance ? REVIEW_ROW_LABELS.amountToCredit : REVIEW_ROW_LABELS.recipientGets}
-              </span>
+              <span className="text-muted-foreground">{REVIEW_ROW_LABELS.recipientGets}</span>
               <span className="font-medium">{creditAmount}</span>
             </div>
-            {isFundBalance ? (
-              <CreditDestinationRow
-                label={REVIEW_ROW_LABELS.creditTo}
-                currency="USD"
-                balanceLabel="USD Balance"
-              />
-            ) : null}
-            {!isFundBalance && recipientName ? (
+            {recipientName ? (
               <div className="flex justify-between gap-4 py-2 border-b">
                 <span className="text-muted-foreground">{REVIEW_ROW_LABELS.recipient}</span>
                 <span>{recipientName}</span>
@@ -181,6 +193,7 @@ export function YcCompleteDepositPanel({
               <span>{isMomo ? "Mobile Money" : "Bank Transfer"}</span>
             </div>
           </>
+        ) : null}
       </div>
 
       <div className="space-y-4">
@@ -241,7 +254,10 @@ export function YcCompleteDepositPanel({
       </div>
 
       <Button className="w-full" asChild>
-        <Link href={transactionWebDetailPath(transactionId)}>
+        <Link
+          href={transactionWebDetailPath(transactionId, { returnTo })}
+          replace
+        >
           {isMomo ? YC_PAY_IN_MOMO_AUTHORIZE_CTA : "I've made the payment"}
         </Link>
       </Button>

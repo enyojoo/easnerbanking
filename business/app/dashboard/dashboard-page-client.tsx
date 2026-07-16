@@ -275,7 +275,7 @@ export function DashboardPageClient() {
                       className="flex min-w-0 items-center gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer"
                     >
                       <TransactionDetailPrefetchLink
-                        href={transactionWebDetailPath(txn.id)}
+                        href={transactionWebDetailPath(txn.id, { returnTo: "dashboard" })}
                         txId={txn.id}
                         className="flex min-w-0 flex-1 items-center gap-3"
                       >

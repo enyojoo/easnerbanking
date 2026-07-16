@@ -224,25 +224,32 @@ export function YcFundBalanceReview({
 
   const navigateToPayIn = (q: YcFundBalanceQuote) => {
     const selectedNetwork = networks.find((n) => n.id === networkId)
-    navigation.navigate('YcPayIn', {
-      flowMode: 'fund_balance',
+    const baseParams = {
+      flowMode: 'fund_balance' as const,
       transactionId: q.easnerTransactionId ?? q.transactionId,
       sendCurrency: localPayInCurrency,
-      receiveAmount: q.usdCredit,
-      receiveCurrency: 'USD',
-      recipientName: 'your USD balance',
       transferId: q.transferId,
       localPayIn: q.localPayIn,
-      customerRate: q.customerRate,
       bankInfo: q.bankInfo ?? null,
       payInNotice: q.payInNotice,
       payInRail,
-      processingFeeLocal: q.displayProcessingFeeLocal,
-      displayProcessingFee: q.displayProcessingFee,
       sourcePhone: q.sourcePhone ?? phone.trim(),
       sourceNetworkId: q.sourceNetworkId ?? networkId,
       sourceNetworkName: q.sourceNetworkName ?? selectedNetwork?.name,
-    })
+    }
+    if (isMobileMoney) {
+      navigation.navigate('YcPayIn', {
+        ...baseParams,
+        receiveAmount: q.usdCredit,
+        receiveCurrency: 'USD',
+        recipientName: 'your USD balance',
+        customerRate: q.customerRate,
+        processingFeeLocal: q.displayProcessingFeeLocal,
+        displayProcessingFee: q.displayProcessingFee,
+      })
+      return
+    }
+    navigation.navigate('YcPayIn', baseParams)
   }
 
   const onContinue = async () => {

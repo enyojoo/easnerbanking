@@ -28,6 +28,7 @@ import { ripple } from '../../lib/androidRipple'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ycBankInfoFields } from '../../lib/yc-bank-info-fields'
 import { haptics } from '../../lib/haptics'
+import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transactionDetailNavigation'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import {
   TransactionDetailSummaryRow,
@@ -105,6 +106,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   const isMobileMoney = payInRail === 'mobile_money'
   const fields = ycBankInfoFields(bankInfo)
   const isFundBalance = flowMode === 'fund_balance'
+  const showFundBalanceQuoteSummary = isFundBalance && isMobileMoney
   const screenTitle = isFundBalance ? 'Complete deposit' : 'Complete payment'
   const formattedSendAmount = formatMoneyDisplay(localPayIn, sendCurrency)
   const formattedCreditAmount = formatMoneyDisplay(receiveAmount, receiveCurrency)
@@ -165,7 +167,10 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
         >
           <View style={styles.summaryCard}>
             {displayTransactionId ? (
-              <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.transactionId}
+                last={isFundBalance && !isMobileMoney}
+              >
                 <TransactionDetailCopyableValue
                   value={displayTransactionId}
                   copied={copiedKey === 'transactionId'}
@@ -174,7 +179,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
                 />
               </TransactionDetailSummaryRow>
             ) : null}
-            {isFundBalance ? (
+            {showFundBalanceQuoteSummary ? (
               <>
                 {customerRate > 0 ? (
                   <TransactionDetailSummaryRow
@@ -223,7 +228,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
                   last
                 />
               </>
-            ) : (
+            ) : !isFundBalance ? (
               <>
                 {feeLocal > 0 ? (
                   <TransactionDetailSummaryRow
@@ -324,7 +329,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
           style={styles.cta}
           onPress={() => {
             haptics.medium()
-            navigation.navigate('TransactionDetails' as never, { transactionId } as never)
+            navigateToTransactionDetailAfterPayIn(navigation, transactionId)
           }}
         >
           <LinearGradient

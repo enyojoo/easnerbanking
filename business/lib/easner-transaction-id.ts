@@ -43,10 +43,25 @@ export function easnerTransactionDisplayToUrlSegment(displayOrRawId: string): st
   return displayOrRawId
 }
 
+export type TransactionDetailReturnTo = "dashboard" | "transactions"
+
 /** Next.js route `/transactions/...` — ETIDs use lowercase `etid` in the URL; UI copy stays uppercase `ETID`. */
-export function transactionWebDetailPath(transactionId: string): string {
+export function transactionWebDetailPath(
+  transactionId: string,
+  opts?: { returnTo?: TransactionDetailReturnTo },
+): string {
   const seg = easnerTransactionDisplayToUrlSegment(transactionId)
-  return `/transactions/${encodeURIComponent(seg)}`
+  const base = `/transactions/${encodeURIComponent(seg)}`
+  if (opts?.returnTo) return `${base}?returnTo=${opts.returnTo}`
+  return base
+}
+
+export function resolveTransactionDetailReturnPath(
+  returnTo: string | null | undefined,
+): "/dashboard" | "/transactions" | null {
+  if (returnTo === "dashboard") return "/dashboard"
+  if (returnTo === "transactions") return "/transactions"
+  return null
 }
 
 export function ensureEasnerTransactionId(

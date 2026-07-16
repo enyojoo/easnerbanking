@@ -6,6 +6,7 @@ import {
   ScrollView,
   Pressable,
   Platform,
+  BackHandler,
   RefreshControl,
   Animated,
 } from 'react-native'
@@ -85,6 +86,10 @@ import { TransactionDetailSummaryRow, TransactionDetailCopyableValue } from '../
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { haptics } from '../../lib/haptics'
+import {
+  navigateBackFromTransactionDetail,
+  usesCustomTransactionDetailBack,
+} from '../../navigation/transactionDetailNavigation'
 import { buildDynamicAmountTextStyle } from '../../lib/dynamicAmountFontSize'
 
 interface LedgerTransaction {
@@ -190,6 +195,18 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     fromScreen?: string
     initialTransaction?: LedgerTransaction | null
   }
+  const handleBack = useCallback(() => {
+    haptics.tap()
+    navigateBackFromTransactionDetail(navigation, fromScreen)
+  }, [navigation, fromScreen])
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !usesCustomTransactionDetailBack(fromScreen)) return
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBack()
+      return true
+    })
+    return () => sub.remove()
+  }, [fromScreen, handleBack])
   const insets = useSafeAreaInsets()
   const qc = useQueryClient()
   const { scope } = useScope()
@@ -656,10 +673,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       >
         <Pressable
          android_ripple={ripple.neutral}
-          onPress={async () => {
-            haptics.tap()
-            navigation.goBack()
-          }}
+          onPress={handleBack}
           style={styles.backButton} >
           <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
         </Pressable>
@@ -711,10 +725,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
           >
             <Pressable
              android_ripple={ripple.neutral}
-              onPress={async () => {
-                haptics.tap()
-                navigation.goBack()
-              }}
+              onPress={handleBack}
               style={styles.backButton} >
               <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
@@ -921,10 +932,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         >
           <Pressable
            android_ripple={ripple.neutral}
-            onPress={async () => {
-              haptics.tap()
-              navigation.goBack()
-            }}
+            onPress={handleBack}
             style={styles.backButton} >
             <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
