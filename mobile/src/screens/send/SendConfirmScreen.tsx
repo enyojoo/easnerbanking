@@ -821,6 +821,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               <Row
                 label={REVIEW_ROW_LABELS.recipientGets}
                 value={formatMoneyDisplay(quotedReceiveAmount, receiveCurrency)}
+                bold
               />
               {recipient ? (
                 <View style={styles.recipientRow}>

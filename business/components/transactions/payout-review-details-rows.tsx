@@ -193,7 +193,7 @@ export function PayoutReviewDetailsRows({
           <TransactionDetailSummaryRow
             label={REVIEW_ROW_LABELS.recipientGets}
             value={formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency)}
-            valueClassName="font-semibold"
+            valueClassName="text-xl font-semibold"
           />
         ) : null}
 

@@ -89,7 +89,7 @@ export const transactionDetailRowStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     alignSelf: 'stretch',
     width: '100%',
     gap: spacing[3],

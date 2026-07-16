@@ -291,7 +291,7 @@ export function TransactionDetailsPanel({
           timingRows={transaction.transactionTiming}
           copiedKey={copiedKey}
           onCopy={handleCopy}
-          showRecipientGets={false}
+          showRecipientGets
           globalFiatPayout={isGlobalPayout && !isWalletSendPayout}
           receiveNetwork={walletReceiveNetwork}
           walletSendExecutionModel={walletSendExecutionModel}

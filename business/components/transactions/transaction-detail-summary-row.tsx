@@ -28,4 +28,4 @@ export function TransactionDetailSummaryRow({
 }
 
 export const transactionDetailRowClassName =
-  "flex items-start justify-between gap-4 border-b border-border py-2 text-sm"
+  "flex items-center justify-between gap-4 border-b border-border py-2 text-sm"

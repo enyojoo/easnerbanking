@@ -37,6 +37,7 @@ type Props = {
   whenTs: string
   sendNote?: string | null
   formatTimestamp: (ts: string) => string
+  showRecipientGets?: boolean
 }
 
 export function PayoutReviewDetailRows({
@@ -56,6 +57,7 @@ export function PayoutReviewDetailRows({
   whenTs,
   sendNote,
   formatTimestamp,
+  showRecipientGets = true,
 }: Props) {
   const sendCurrency = payoutReview.send_currency
 
@@ -99,6 +101,13 @@ export function PayoutReviewDetailRows({
           label={REVIEW_ROW_LABELS.debitedFrom}
           currency={sendCurrency}
           balanceLabel={formatAccountBalanceLabel(sendCurrency)}
+        />
+      ) : null}
+      {showRecipientGets ? (
+        <TransactionDetailSummaryRow
+          label={REVIEW_ROW_LABELS.recipientGets}
+          value={formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency)}
+          valueBold
         />
       ) : null}
       {recipientSnapshot ? (
