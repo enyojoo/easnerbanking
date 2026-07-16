@@ -84,12 +84,12 @@ export function YcCompleteDepositPanel({
         />
       </div>
 
-      {(completeNotice || !isMomo || !isFundBalance) ? (
+      {(completeNotice || !isMomo) ? (
       <div className="space-y-4">
         {completeNotice ? (
           <p className="text-sm text-center text-muted-foreground px-2">{completeNotice}</p>
         ) : null}
-        {!isMomo || !isFundBalance ? (
+        {!isMomo ? (
           <p className="text-sm text-center text-foreground">
             {YC_PAY_IN_SEND_EXACTLY_LABEL}{" "}
             <span className="text-xl font-semibold">{payInAmount}</span>

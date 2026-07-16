@@ -29,8 +29,10 @@ describe('ycPayInCompleteNotice', () => {
     )
   })
 
-  it('returns no MoMo notice on complete deposit', () => {
-    expect(ycPayInCompleteNotice('mobile_money')).toBeNull()
+  it('returns MoMo authorize notice on complete deposit', () => {
+    expect(ycPayInCompleteNotice('mobile_money')).toBe(
+      'Click authorize, check your phone and approve the payment prompt.',
+    )
   })
 })
 

@@ -166,12 +166,12 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
             />
           </View>
 
-          {(completeNotice || !isMobileMoney || !isFundBalance) ? (
+          {(completeNotice || !isMobileMoney) ? (
           <View style={styles.payInCopySection}>
             {completeNotice ? (
               <Text style={[styles.noticeText, styles.noticeTextCentered]}>{completeNotice}</Text>
             ) : null}
-            {!isMobileMoney || !isFundBalance ? (
+            {!isMobileMoney ? (
               <SendExactlyAmount amount={formattedSendAmount} centered />
             ) : null}
           </View>

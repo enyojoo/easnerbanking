@@ -14,9 +14,9 @@ export function ycPayInInstructionNotice(rail: YcPayInRail): string {
   return 'Use the payment details to complete transfer.'
 }
 
-/** Instruction on MoMo Complete deposit (network/phone + Authorize CTA — no duplicate authorize copy). */
+/** Instruction on MoMo Complete deposit (shown above the Authorize CTA). */
 export function ycPayInMomoCompleteNotice(): string | null {
-  return null
+  return ycPayInMomoAuthorizeNotice()
 }
 
 /** Instruction on the MoMo authorize screen (before user submits phone + network). */

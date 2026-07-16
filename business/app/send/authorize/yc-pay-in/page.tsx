@@ -50,7 +50,9 @@ export default function YcPayInPage() {
   const payInRail = yc.payInRail ?? "bank_transfer"
   const payIn = yc.localPayIn
   const payInCurrency = state.sendCurrency
-  const displayTransactionId = (yc.transactionId || state.transactionId).toUpperCase()
+  const displayTransactionId = (
+    yc.easnerTransactionId || yc.transactionId || state.transactionId
+  ).toUpperCase()
   const feeLocal =
     yc.displayProcessingFeeLocal ??
     (yc.processingFee != null && yc.customerRate

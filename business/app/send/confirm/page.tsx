@@ -504,6 +504,7 @@ export default function SendConfirmPage() {
             error?: string
             transferId?: string
             transactionId?: string
+            easnerTransactionId?: string
             localPayIn?: number
             customerRate?: number
             processingFee?: number
@@ -519,6 +520,7 @@ export default function SendConfirmPage() {
           const yc = {
             transferId: data.transferId,
             transactionId: data.transactionId || state.transactionId || "",
+            easnerTransactionId: data.easnerTransactionId,
             localPayIn: data.localPayIn ?? ycPreviewFlow.preview.sendAmount,
             customerRate: data.customerRate ?? ycPreviewFlow.customerRate ?? 1,
             processingFee: data.processingFee,
@@ -535,7 +537,7 @@ export default function SendConfirmPage() {
             sendAmount: yc.localPayIn,
             sendCurrency: payInCurrency,
             totalAmount: yc.localPayIn,
-            transactionId: yc.transactionId,
+            transactionId: yc.easnerTransactionId || yc.transactionId,
             ycCrossBorder: yc,
           }
           setState(next)
