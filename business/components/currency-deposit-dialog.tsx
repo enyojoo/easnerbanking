@@ -23,7 +23,7 @@ import {
   getStablecoinPaymentInstructions,
 } from "@/lib/payment-instructions"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveLocalBankTitle, receiveLocalMomoTitle, RECEIVE_CASH_BANK_SUBTITLE, RECEIVE_CASH_MOMO_SUBTITLE } from "@easner/shared"
+import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, RECEIVE_CASH_BANK_SUBTITLE } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import {
@@ -311,6 +311,9 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const momoAvailable = receiveRails?.rails.mobile_money.available ?? false
   const localDepositBlocked = Boolean(localPayInCurrency === "NGN" && ngMissingType)
   const countryName = effectiveResidence ? resolveReceiveCountryName(effectiveResidence) : ""
+  const localDepositSubtitle = localPayInCurrency
+    ? receiveLocalDepositSubtitle(localPayInCurrency)
+    : ""
   const intlBankTitle =
     account.currency === "USD" || account.currency === "EUR"
       ? receiveInternationalBankTitle(account.currency as "USD" | "EUR")
@@ -464,12 +467,6 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
                 {cashView === "list" ? (
                   <div className="space-y-4">
-                    {showLocalTab && localPayInCurrency ? (
-                      <p className="text-sm text-muted-foreground">
-                        Pay in {localPayInCurrency} to credit your USD balance.
-                      </p>
-                    ) : null}
-
                     {localPayInCurrency === "NGN" && ngMissingType ? (
                       <NgLocalVerificationNotice
                         missingType={ngMissingType}
@@ -513,7 +510,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                           <div className="min-w-0 flex-1">
                             <p className="font-medium">{receiveLocalBankTitle(countryName)}</p>
                             <p className="text-sm text-muted-foreground mt-0.5">
-                              {RECEIVE_CASH_BANK_SUBTITLE}
+                              {localDepositSubtitle}
                             </p>
                           </div>
                           <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -536,7 +533,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                           <div className="min-w-0 flex-1">
                             <p className="font-medium">{receiveLocalMomoTitle(countryName)}</p>
                             <p className="text-sm text-muted-foreground mt-0.5">
-                              {RECEIVE_CASH_MOMO_SUBTITLE}
+                              {localDepositSubtitle}
                             </p>
                           </div>
                           <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />

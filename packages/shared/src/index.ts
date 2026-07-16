@@ -162,6 +162,7 @@ export {
   mergeYcNetworksIntoSchema,
   normalizeRecipientYcMetadata,
   resolveYcCorridorSchema,
+  synthesizeYcSchemaFromNoah,
   unwrapNoahFieldsSchema,
   unwrapYcFieldsSchema,
   validateYcRecipientForCorridor,
@@ -544,6 +545,7 @@ export {
   receiveInternationalBankTitle,
   receiveLocalBankTitle,
   receiveLocalMomoTitle,
+  receiveLocalDepositSubtitle,
 } from "./receive-cash-method-labels"
 export {
   formatYcPayInMinHint,

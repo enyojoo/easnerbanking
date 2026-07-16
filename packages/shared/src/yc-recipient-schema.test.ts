@@ -158,10 +158,69 @@ describe("normalizeRecipientYcMetadata", () => {
 })
 
 describe("YC_STATIC_CORRIDOR_SCHEMAS", () => {
-  it("includes MX BR AR CO", () => {
+  it("includes MX BR AR CO and NG", () => {
     expect(YC_STATIC_CORRIDOR_SCHEMAS["MX:MXN"]?.status).toBe("ready")
     expect(YC_STATIC_CORRIDOR_SCHEMAS["BR:BRL"]?.extra_fields?.length).toBeGreaterThan(0)
     expect(YC_STATIC_CORRIDOR_SCHEMAS["AR:ARS"]?.extra_fields?.length).toBeGreaterThan(0)
     expect(YC_STATIC_CORRIDOR_SCHEMAS["CO:COP"]?.extra_fields?.length).toBeGreaterThan(0)
+    expect(YC_STATIC_CORRIDOR_SCHEMAS["NG:NGN"]?.status).toBe("ready")
+  })
+})
+
+describe("validateYcRecipientForCorridor — Noah-only schema", () => {
+  const noahNgSchema = {
+    channel_id: "ae1f871a-f2cd-5eab-84bf-5240091d9767",
+    payment_method_type: "BankLocal",
+    amount_field_mode: "note_optional_only" as const,
+    bank_enum: ["Access Bank", "GTBank"],
+  }
+
+  it("accepts NG bank recipient when corridor has flat Noah fields_schema only", () => {
+    const res = validateYcRecipientForCorridor({
+      countryCode: "NG",
+      currencyCode: "NGN",
+      fieldsSchema: noahNgSchema,
+      row: {
+        full_name: "Jane Doe",
+        account_number: "0123456789",
+        bank_name: "Access Bank",
+        currency: "NGN",
+        country_code: "NG",
+      },
+    })
+    expect(res.ok).toBe(true)
+  })
+
+  it("rejects when Noah bank is not in bank_enum", () => {
+    const res = validateYcRecipientForCorridor({
+      countryCode: "NG",
+      currencyCode: "NGN",
+      fieldsSchema: noahNgSchema,
+      row: {
+        full_name: "Jane Doe",
+        account_number: "0123456789",
+        bank_name: "Unknown Bank",
+        currency: "NGN",
+        country_code: "NG",
+      },
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.message).toMatch(/corridor list/)
+  })
+
+  it("accepts NG mobile money recipient with static schema fallback", () => {
+    const res = validateYcRecipientForCorridor({
+      countryCode: "NG",
+      currencyCode: "NGN",
+      row: {
+        full_name: "Jane Doe",
+        phone_number: "+2348012345678",
+        mobile_provider: "MTN",
+        bank_name: "Mobile Money",
+        currency: "NGN",
+        country_code: "NG",
+      },
+    })
+    expect(res.ok).toBe(true)
   })
 })

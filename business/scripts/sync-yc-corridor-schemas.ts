@@ -7,6 +7,7 @@
 import { createClient } from "@supabase/supabase-js"
 import {
   mergeYcNetworksIntoSchema,
+  synthesizeYcSchemaFromNoah,
   unwrapNoahFieldsSchema,
   YC_STATIC_CORRIDOR_SCHEMAS,
   ycCorridorSchemaKey,
@@ -15,6 +16,11 @@ import {
 import { listYellowcardNetworks } from "../lib/yellowcard/networks"
 
 const LATAM = new Set(["MX", "BR", "AR", "CO", "CL", "PE"])
+
+function corridorUsesYcSend(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object") return false
+  return Boolean((metadata as { yc_send?: boolean }).yc_send)
+}
 
 function genericBankSchema(countryCode: string, currencyCode: string): YcCorridorSchemaHint {
   return {
@@ -38,21 +44,27 @@ async function main() {
   const { data: rows, error } = await admin
     .from("payout_corridors")
     .select("id,country_code,currency_code,rail,fields_schema,metadata,enabled")
-    .in("country_code", [...LATAM])
     .eq("rail", "bank_transfer")
 
   if (error) throw error
 
+  const targetRows = (rows ?? []).filter((row) => {
+    const cc = String(row.country_code || "").trim().toUpperCase()
+    return LATAM.has(cc) || corridorUsesYcSend(row.metadata)
+  })
+
   let updated = 0
   let networksFetched = 0
 
-  for (const row of rows ?? []) {
+  for (const row of targetRows) {
     const cc = String(row.country_code || "").trim().toUpperCase()
     const cur = String(row.currency_code || "").trim().toUpperCase()
     const key = ycCorridorSchemaKey(cc, cur)
 
     let ycSchema: YcCorridorSchemaHint =
-      YC_STATIC_CORRIDOR_SCHEMAS[key] ?? genericBankSchema(cc, cur)
+      YC_STATIC_CORRIDOR_SCHEMAS[key] ??
+      synthesizeYcSchemaFromNoah(unwrapNoahFieldsSchema(row.fields_schema)) ??
+      genericBankSchema(cc, cur)
 
     try {
       const networks = await listYellowcardNetworks({ country: cc, currency: cur })

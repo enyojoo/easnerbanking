@@ -36,3 +36,8 @@ export function receiveLocalBankTitle(countryName: string): string {
 export function receiveLocalMomoTitle(countryName: string): string {
   return `${countryName} Mobile Money`
 }
+
+export function receiveLocalDepositSubtitle(localPayInCurrency: string): string {
+  const cur = String(localPayInCurrency ?? "").trim().toUpperCase()
+  return `Pay in ${cur} to credit your USD balance.`
+}

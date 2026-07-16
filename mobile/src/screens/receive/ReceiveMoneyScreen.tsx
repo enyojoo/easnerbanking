@@ -570,12 +570,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           <View style={styles.content}>
             {effectiveTab === 'cash' && showCashTab ? (
               <View style={{ gap: spacing[4] }}>
-                {showLocalTab && localPayInCurrency ? (
-                  <Text style={styles.fieldLabel}>
-                    Pay in {localPayInCurrency} to credit your USD balance.
-                  </Text>
-                ) : null}
-
                 {localPayInCurrency === 'NGN' && ngMissingType ? (
                   <NgLocalVerificationNotice
                     missingType={ngMissingType}
@@ -591,6 +585,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   residenceCountry={residenceCountry}
                   showBankRow={showBankTab}
                   showLocalRows={showLocalTab}
+                  localPayInCurrency={localPayInCurrency}
                   bankAvailable={bankAvailable}
                   momoAvailable={momoAvailable}
                   localDepositBlocked={localDepositBlocked}

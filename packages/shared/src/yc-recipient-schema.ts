@@ -84,6 +84,49 @@ const COP_ACCOUNT_TYPES: { value: string; label: string }[] = [
 
 /** Static YC field defs per corridor — used by sync script and runtime fallback. */
 export const YC_STATIC_CORRIDOR_SCHEMAS: Record<string, YcCorridorSchemaHint> = {
+  "NG:NGN": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    account_number_hint: "10-digit NUBAN",
+    extra_fields: [],
+  },
+  "KE:KES": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [],
+  },
+  "GH:GHS": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [],
+  },
+  "ZA:ZAR": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [],
+  },
+  "UG:UGX": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [],
+  },
+  "TZ:TZS": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [],
+  },
+  "RW:RWF": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [],
+  },
   "MX:MXN": {
     status: "ready",
     channel_type: "bank",
@@ -180,6 +223,24 @@ export function unwrapYcFieldsSchema(fieldsSchema: unknown): YcCorridorSchemaHin
   return yc && typeof yc === "object" ? (yc as YcCorridorSchemaHint) : null
 }
 
+/**
+ * Build a ready YC corridor schema from Noah payout hints when the corridor row
+ * only has Noah configuration (common for NG/KE/etc. switched to YC payout).
+ */
+export function synthesizeYcSchemaFromNoah(
+  noah: PayoutFieldsSchemaHint | null,
+): YcCorridorSchemaHint | null {
+  if (!noah) return null
+  return {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [],
+    bank_enum: noah.bank_enum?.length ? noah.bank_enum : undefined,
+    note: "Derived from Noah corridor hints for Yellowcard payout",
+  }
+}
+
 export function resolveYcCorridorSchema(input: {
   countryCode: string
   currencyCode: string
@@ -187,8 +248,20 @@ export function resolveYcCorridorSchema(input: {
 }): YcCorridorSchemaHint | null {
   const fromDb = unwrapYcFieldsSchema(input.fieldsSchema)
   if (fromDb?.status === "ready") return fromDb
+
+  const fromNoah = synthesizeYcSchemaFromNoah(unwrapNoahFieldsSchema(input.fieldsSchema))
+  if (fromNoah?.bank_enum?.length) return fromNoah
+
   const key = ycCorridorSchemaKey(input.countryCode, input.currencyCode)
-  return YC_STATIC_CORRIDOR_SCHEMAS[key] ?? null
+  const staticSchema = YC_STATIC_CORRIDOR_SCHEMAS[key]
+  if (staticSchema?.status === "ready") {
+    return {
+      ...staticSchema,
+      bank_enum: staticSchema.bank_enum ?? fromNoah?.bank_enum,
+    }
+  }
+
+  return fromNoah ?? null
 }
 
 export function ycAccountNumberLabel(schema: YcCorridorSchemaHint | null | undefined): string | undefined {

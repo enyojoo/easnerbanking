@@ -3,10 +3,10 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import { Landmark, Smartphone } from 'lucide-react-native'
 import {
   RECEIVE_CASH_BANK_SUBTITLE,
-  RECEIVE_CASH_MOMO_SUBTITLE,
   receiveInternationalBankTitle,
   receiveLocalBankTitle,
   receiveLocalMomoTitle,
+  receiveLocalDepositSubtitle,
 } from '@easner/shared'
 import { colors, spacing, textStyles } from '../../theme'
 import { getCountryName } from '../../lib/countryService'
@@ -17,6 +17,7 @@ type Props = {
   residenceCountry: string
   showBankRow: boolean
   showLocalRows: boolean
+  localPayInCurrency: string | null
   bankAvailable: boolean
   momoAvailable: boolean
   localDepositBlocked: boolean
@@ -31,6 +32,7 @@ export function ReceiveCashMethodList({
   residenceCountry,
   showBankRow,
   showLocalRows,
+  localPayInCurrency,
   bankAvailable,
   momoAvailable,
   localDepositBlocked,
@@ -40,6 +42,9 @@ export function ReceiveCashMethodList({
   onLocalMomoPress,
 }: Props) {
   const countryName = getCountryName(residenceCountry)
+  const localSubtitle = localPayInCurrency
+    ? receiveLocalDepositSubtitle(localPayInCurrency)
+    : ''
 
   if (loading && showLocalRows && !bankAvailable && !momoAvailable) {
     return <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[6] }} />
@@ -70,7 +75,7 @@ export function ReceiveCashMethodList({
       {showLocalRows && bankAvailable ? (
         <ReceiveLocalRailCard
           title={receiveLocalBankTitle(countryName)}
-          subtitle={RECEIVE_CASH_BANK_SUBTITLE}
+          subtitle={localSubtitle}
           icon={<Landmark size={24} color={colors.primary.main} strokeWidth={2} />}
           onPress={onLocalBankPress}
           disabled={localDepositBlocked}
@@ -80,7 +85,7 @@ export function ReceiveCashMethodList({
       {showLocalRows && momoAvailable ? (
         <ReceiveLocalRailCard
           title={receiveLocalMomoTitle(countryName)}
-          subtitle={RECEIVE_CASH_MOMO_SUBTITLE}
+          subtitle={localSubtitle}
           icon={<Smartphone size={24} color={colors.primary.main} strokeWidth={2} />}
           onPress={onLocalMomoPress}
           disabled={localDepositBlocked}
