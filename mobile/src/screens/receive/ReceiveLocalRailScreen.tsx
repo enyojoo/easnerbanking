@@ -1,152 +1,50 @@
-import React from 'react'
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native'
-import { ArrowLeft, Landmark, Smartphone } from 'lucide-react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import React, { useEffect } from 'react'
+import { View, ActivityIndicator, StyleSheet } from 'react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
-import { colors, spacing, textStyles, surfaceChromeCircleStyle } from '../../theme'
-import { ripple } from '../../lib/androidRipple'
-import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
-import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
-import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
-import { haptics } from '../../lib/haptics'
-import { NgLocalVerificationNotice } from '../../components/compliance/NgLocalVerificationNotice'
-import { ReceiveLocalRailCard } from '../../components/receive/ReceiveLocalRailCard'
+import { colors } from '../../theme'
 import type { NgLocalIdType } from '@easner/shared'
+import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 
 type RouteParams = {
-  localPayInCurrency: string
-  residenceCountry: string
+  localPayInCurrency?: string
+  residenceCountry?: string
+  payInRail?: YcPayInRail
   ngMissingType?: NgLocalIdType | null
 }
 
+/** Deprecated rail picker — redirects to Receive Cash hub or amount entry when deep-linked. */
 export default function ReceiveLocalRailScreen({ navigation, route }: NavigationProps) {
-  const insets = useSafeAreaInsets()
-  const scrollBottomPadding = useScrollBottomPadding(spacing[5])
-  const params = (route.params || {}) as Partial<RouteParams>
-  const localPayInCurrency = params.localPayInCurrency ?? ''
-  const residenceCountry = params.residenceCountry ?? ''
-  const ngMissingType = params.ngMissingType ?? null
+  useEffect(() => {
+    const params = (route.params || {}) as Partial<RouteParams>
+    const { localPayInCurrency, residenceCountry, payInRail } = params
 
-  const { rails, loading } = useYcReceiveRails({
-    country: residenceCountry,
-    currency: localPayInCurrency,
-    enabled: Boolean(residenceCountry && localPayInCurrency),
-  })
+    if (localPayInCurrency && residenceCountry && payInRail) {
+      navigation.replace('ReceiveLocalAmount' as never, {
+        localPayInCurrency,
+        residenceCountry,
+        payInRail,
+        ngMissingType: params.ngMissingType ?? null,
+      } as never)
+      return
+    }
 
-  const bankAvailable = rails?.rails.bank_transfer.available ?? false
-  const momoAvailable = rails?.rails.mobile_money.available ?? false
-
-  const navigateToAmount = (rail: YcPayInRail) => {
-    haptics.medium()
-    navigation.navigate('ReceiveLocalAmount' as never, {
-      localPayInCurrency,
-      residenceCountry,
-      payInRail: rail,
-      bankAvailable,
-      momoAvailable,
-      ngMissingType,
-    } as never)
-  }
-
-  if (ngMissingType) {
-    return (
-      <ScreenWrapper>
-        <View style={[styles.blocked, { paddingTop: insets.top }]}>
-          <View style={styles.header}>
-            <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
-              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-            </Pressable>
-            <Text style={styles.title}>Add money</Text>
-          </View>
-          <NgLocalVerificationNotice missingType={ngMissingType} onSaved={() => navigation.goBack()} />
-        </View>
-      </ScreenWrapper>
-    )
-  }
+    navigation.replace('ReceiveMoney' as never, { currency: 'USD' } as never)
+  }, [navigation, route.params])
 
   return (
     <ScreenWrapper>
-      <View style={[styles.main, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-          </Pressable>
-          <View style={styles.headerContent}>
-            <Text style={styles.title}>Add money</Text>
-          </View>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottomPadding }]}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.subtitle}>Choose how you want to pay in {localPayInCurrency}</Text>
-
-          {loading && !rails ? (
-            <ActivityIndicator color={colors.primary.main} style={{ marginTop: spacing[8] }} />
-          ) : (
-            <View style={styles.cardList}>
-              {bankAvailable ? (
-                <ReceiveLocalRailCard
-                  title="Bank"
-                  subtitle="Deposit via Bank Transfer"
-                  icon={<Landmark size={24} color={colors.primary.main} strokeWidth={2} />}
-                  onPress={() => navigateToAmount('bank_transfer')}
-                />
-              ) : null}
-              {momoAvailable ? (
-                <ReceiveLocalRailCard
-                  title="Mobile money"
-                  subtitle="Deposit via Mobile Money"
-                  icon={<Smartphone size={24} color={colors.primary.main} strokeWidth={2} />}
-                  onPress={() => navigateToAmount('mobile_money')}
-                />
-              ) : null}
-            </View>
-          )}
-
-          {!loading && rails && !bankAvailable && !momoAvailable ? (
-            <Text style={styles.unavailable}>
-              Local pay-in is not available for your country right now.
-            </Text>
-          ) : null}
-        </ScrollView>
+      <View style={styles.loader}>
+        <ActivityIndicator color={colors.primary.main} />
       </View>
     </ScreenWrapper>
   )
 }
 
 const styles = StyleSheet.create({
-  main: { flex: 1 },
-  blocked: { flex: 1, paddingHorizontal: spacing[5] },
-  header: {
-    flexDirection: 'row',
+  loader: {
+    flex: 1,
     alignItems: 'center',
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[4],
-  },
-  backButton: {
-    ...surfaceChromeCircleStyle(colors, 44),
-    marginRight: spacing[3],
-  },
-  headerContent: { flex: 1, justifyContent: 'center' },
-  title: { ...textStyles.headlineMedium, color: colors.text.primary },
-  scroll: { paddingHorizontal: spacing[5], paddingTop: spacing[2] },
-  subtitle: {
-    ...textStyles.body,
-    color: colors.text.secondary,
-    marginBottom: spacing[5],
-    textAlign: 'center',
-  },
-  cardList: {
-    gap: spacing[3],
-  },
-  unavailable: {
-    ...textStyles.body,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginTop: spacing[6],
+    justifyContent: 'center',
   },
 })

@@ -210,6 +210,11 @@ export function getCountryFlag(countryCode: string): string {
   return country?.flag_emoji || "🌍"
 }
 
+export function getCountryName(countryCode: string): string {
+  const country = countriesList.find((c) => c.code === countryCode.toUpperCase())
+  return country?.name ?? countryCode.toUpperCase()
+}
+
 
 
 

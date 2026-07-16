@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowRight, Copy, Check, Plus, Share2, ShieldCheck } from "lucide-react"
+import { ArrowRight, ArrowLeft, Copy, Check, Plus, Share2, ShieldCheck, Landmark, Smartphone } from "lucide-react"
 import type { Account } from "@/lib/finance-types"
 import { QRCodeSVG } from "qrcode.react"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
@@ -23,8 +23,9 @@ import {
   getStablecoinPaymentInstructions,
 } from "@/lib/payment-instructions"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType } from "@easner/shared"
+import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveLocalBankTitle, receiveLocalMomoTitle, RECEIVE_CASH_BANK_SUBTITLE, RECEIVE_CASH_MOMO_SUBTITLE } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
+import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import {
   prefetchYcReceiveRails,
   readCachedReceiveRails,
@@ -100,6 +101,100 @@ interface CurrencyDepositDialogProps {
   onCopy: (text: string, field: string) => void
 }
 
+type CashView = "list" | "bank" | "local"
+type LocalRail = "bank_transfer" | "mobile_money"
+
+function BankDepositDetailsPanel({
+  account,
+  copiedField,
+  onCopy,
+  onShare,
+}: {
+  account: Account
+  copiedField: string | null
+  onCopy: (text: string, field: string) => void
+  onShare: () => void
+}) {
+  return (
+    <div className="space-y-4">
+      <CopyableField
+        label="Account Name"
+        value={account.accountName}
+        copiedField={copiedField}
+        fieldId={`bank-name-${account.id}`}
+        onCopy={onCopy}
+      />
+
+      {account.currency === "EUR" && account.iban ? (
+        <>
+          <CopyableField
+            label="IBAN"
+            value={account.iban}
+            copiedField={copiedField}
+            fieldId={`bank-iban-${account.id}`}
+            onCopy={onCopy}
+          />
+          {account.bic ? (
+            <CopyableField
+              label="BIC/SWIFT"
+              value={account.bic}
+              copiedField={copiedField}
+              fieldId={`bank-bic-${account.id}`}
+              onCopy={onCopy}
+            />
+          ) : null}
+        </>
+      ) : (
+        <>
+          <CopyableField
+            label="Account Number"
+            value={account.fullAccountNumber}
+            copiedField={copiedField}
+            fieldId={`bank-acc-${account.id}`}
+            onCopy={onCopy}
+          />
+          {account.routingNumber ? (
+            <CopyableField
+              label="Routing Number"
+              value={account.routingNumber}
+              copiedField={copiedField}
+              fieldId={`bank-routing-${account.id}`}
+              onCopy={onCopy}
+            />
+          ) : null}
+          {account.sortCode ? (
+            <CopyableField
+              label="Sort Code"
+              value={account.sortCode}
+              copiedField={copiedField}
+              fieldId={`bank-sort-${account.id}`}
+              onCopy={onCopy}
+            />
+          ) : null}
+        </>
+      )}
+
+      <CopyableField
+        label="Bank Name"
+        value={account.bankName}
+        copiedField={copiedField}
+        fieldId={`bank-bank-${account.id}`}
+        onCopy={onCopy}
+      />
+
+      <Button variant="outline" size="sm" className="w-full gap-2" onClick={onShare}>
+        <Share2 className="h-4 w-4" />
+        Share Account Details
+      </Button>
+
+      <div className="pt-4 border-t">
+        <p className="text-sm font-medium mb-2">Payment Instructions</p>
+        <PaymentInstructions currency={account.currency} type="bank" />
+      </div>
+    </div>
+  )
+}
+
 export function CurrencyDepositDialog({ account, copiedField, onCopy }: CurrencyDepositDialogProps) {
   const {
     tier1Complete,
@@ -122,6 +217,9 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
   const [residenceCountry, setResidenceCountry] = useState<string | null>(null)
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [cashView, setCashView] = useState<CashView>("list")
+  const [localRail, setLocalRail] = useState<LocalRail | null>(null)
 
   const effectiveResidence =
     residenceCountry || String(countryCode ?? "").trim().toUpperCase() || null
@@ -205,11 +303,28 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     Boolean(localPayInCurrency) &&
     !(receiveRails != null && !receiveRailsLoading && !receiveRails.anyAvailable)
 
-  const visibleTabCount = [showBankTab, showLocalTab, showStablecoinTab].filter(Boolean).length
-  const showTabBar = visibleTabCount > 1
-  const defaultTab = showBankTab ? "bank" : showLocalTab ? "local" : "stablecoin"
-  const tabColsClass =
-    visibleTabCount === 3 ? "grid-cols-3" : visibleTabCount === 2 ? "grid-cols-2" : "grid-cols-1"
+  const showCashTab = showBankTab || showLocalTab
+  const showTabBar = showCashTab && showStablecoinTab
+  const defaultTab = showCashTab ? "cash" : "stablecoin"
+
+  const bankAvailable = receiveRails?.rails.bank_transfer.available ?? false
+  const momoAvailable = receiveRails?.rails.mobile_money.available ?? false
+  const localDepositBlocked = Boolean(localPayInCurrency === "NGN" && ngMissingType)
+  const countryName = effectiveResidence ? resolveReceiveCountryName(effectiveResidence) : ""
+  const intlBankTitle =
+    account.currency === "USD" || account.currency === "EUR"
+      ? receiveInternationalBankTitle(account.currency as "USD" | "EUR")
+      : "Bank Account"
+
+  const resetCashView = () => {
+    setCashView("list")
+    setLocalRail(null)
+  }
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setDialogOpen(open)
+    if (!open) resetCashView()
+  }
 
   const isNgn = account.currency === "NGN"
   const blockedByAfricanTier = isNgn && !TIER2_COMPLETE_PLACEHOLDER
@@ -281,7 +396,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   }
 
   return (
-    <Dialog>
+    <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="flex-1 bg-transparent gap-2">
           <Plus className="h-4 w-4" />
@@ -326,120 +441,142 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
         ) : (
           <Tabs defaultValue={defaultTab} className="w-full">
             {showTabBar ? (
-              <TabsList className={`grid w-full ${tabColsClass}`}>
-                {showBankTab ? (
-                  <TabsTrigger value="bank">
-                    {account.currency === "USD"
-                      ? "US Bank Account"
-                      : account.currency === "EUR"
-                        ? "EU Bank Account"
-                        : "Bank transfer"}
-                  </TabsTrigger>
-                ) : null}
-                {showLocalTab ? (
-                  <TabsTrigger value="local">{localPayInCurrency} Deposit</TabsTrigger>
-                ) : null}
-                {showStablecoinTab ? (
-                  <TabsTrigger value="stablecoin">Stablecoin</TabsTrigger>
-                ) : null}
+              <TabsList className="grid w-full grid-cols-2">
+                {showCashTab ? <TabsTrigger value="cash">Cash</TabsTrigger> : null}
+                {showStablecoinTab ? <TabsTrigger value="stablecoin">Stablecoin</TabsTrigger> : null}
               </TabsList>
             ) : null}
 
-            {showBankTab ? (
-              <TabsContent value="bank" className="space-y-4 mt-4">
-                <div className="space-y-4">
-                  <CopyableField
-                    label="Account Name"
-                    value={account.accountName}
-                    copiedField={copiedField}
-                    fieldId={`bank-name-${account.id}`}
-                    onCopy={onCopy}
-                  />
+            {showCashTab ? (
+              <TabsContent value="cash" className="space-y-4 mt-4">
+                {cashView !== "list" ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2 -ml-2 w-fit"
+                    onClick={resetCashView}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                  </Button>
+                ) : null}
 
-                  {account.currency === "EUR" && account.iban ? (
-                    <>
-                      <CopyableField
-                        label="IBAN"
-                        value={account.iban}
-                        copiedField={copiedField}
-                        fieldId={`bank-iban-${account.id}`}
-                        onCopy={onCopy}
+                {cashView === "list" ? (
+                  <div className="space-y-4">
+                    {showLocalTab && localPayInCurrency ? (
+                      <p className="text-sm text-muted-foreground">
+                        Pay in {localPayInCurrency} to credit your USD balance.
+                      </p>
+                    ) : null}
+
+                    {localPayInCurrency === "NGN" && ngMissingType ? (
+                      <NgLocalVerificationNotice
+                        missingType={ngMissingType}
+                        onSaved={() => setNgMissingType(null)}
                       />
-                      {account.bic && (
-                        <CopyableField
-                          label="BIC/SWIFT"
-                          value={account.bic}
-                          copiedField={copiedField}
-                          fieldId={`bank-bic-${account.id}`}
-                          onCopy={onCopy}
-                        />
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <CopyableField
-                        label="Account Number"
-                        value={account.fullAccountNumber}
-                        copiedField={copiedField}
-                        fieldId={`bank-acc-${account.id}`}
-                        onCopy={onCopy}
-                      />
-                      {account.routingNumber && (
-                        <CopyableField
-                          label="Routing Number"
-                          value={account.routingNumber}
-                          copiedField={copiedField}
-                          fieldId={`bank-routing-${account.id}`}
-                          onCopy={onCopy}
-                        />
-                      )}
-                      {account.sortCode && (
-                        <CopyableField
-                          label="Sort Code"
-                          value={account.sortCode}
-                          copiedField={copiedField}
-                          fieldId={`bank-sort-${account.id}`}
-                          onCopy={onCopy}
-                        />
-                      )}
-                    </>
-                  )}
+                    ) : null}
 
-                  <CopyableField
-                    label="Bank Name"
-                    value={account.bankName}
+                    <div className="flex flex-col gap-3">
+                      {showBankTab ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left"
+                          onClick={() => setCashView("bank")}
+                        >
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                            <Landmark className="h-6 w-6 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium">{intlBankTitle}</p>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              {RECEIVE_CASH_BANK_SUBTITLE}
+                            </p>
+                          </div>
+                          <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                        </button>
+                      ) : null}
+
+                      {showLocalTab && bankAvailable ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left disabled:opacity-55"
+                          disabled={localDepositBlocked}
+                          onClick={() => {
+                            setLocalRail("bank_transfer")
+                            setCashView("local")
+                          }}
+                        >
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                            <Landmark className="h-6 w-6 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium">{receiveLocalBankTitle(countryName)}</p>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              {RECEIVE_CASH_BANK_SUBTITLE}
+                            </p>
+                          </div>
+                          <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                        </button>
+                      ) : null}
+
+                      {showLocalTab && momoAvailable ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left disabled:opacity-55"
+                          disabled={localDepositBlocked}
+                          onClick={() => {
+                            setLocalRail("mobile_money")
+                            setCashView("local")
+                          }}
+                        >
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                            <Smartphone className="h-6 w-6 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium">{receiveLocalMomoTitle(countryName)}</p>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              {RECEIVE_CASH_MOMO_SUBTITLE}
+                            </p>
+                          </div>
+                          <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                        </button>
+                      ) : null}
+
+                      {showLocalTab &&
+                      !receiveRailsLoading &&
+                      receiveRails &&
+                      !bankAvailable &&
+                      !momoAvailable ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Local pay-in is not available for your country right now.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {cashView === "bank" ? (
+                  <BankDepositDetailsPanel
+                    account={account}
                     copiedField={copiedField}
-                    fieldId={`bank-bank-${account.id}`}
                     onCopy={onCopy}
+                    onShare={() => handleShare("bank")}
                   />
-                </div>
+                ) : null}
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-2"
-                  onClick={() => handleShare("bank")}
-                >
-                  <Share2 className="h-4 w-4" />
-                  Share Account Details
-                </Button>
-
-                <div className="pt-4 border-t">
-                  <p className="text-sm font-medium mb-2">Payment Instructions</p>
-                  <PaymentInstructions currency={account.currency} type="bank" />
-                </div>
-              </TabsContent>
-            ) : null}
-
-            {showLocalTab && localPayInCurrency && effectiveResidence ? (
-              <TabsContent value="local" className="space-y-4 mt-4">
-                <LocalDepositWizard
-                  residenceCountry={effectiveResidence}
-                  ngMissingType={localPayInCurrency === "NGN" ? ngMissingType : null}
-                  onNgSaved={() => setNgMissingType(null)}
-                  copiedField={copiedField}
-                  onCopy={onCopy}
-                />
+                {cashView === "local" && localPayInCurrency && effectiveResidence && localRail ? (
+                  <LocalDepositWizard
+                    residenceCountry={effectiveResidence}
+                    ngMissingType={localPayInCurrency === "NGN" ? ngMissingType : null}
+                    onNgSaved={() => setNgMissingType(null)}
+                    copiedField={copiedField}
+                    onCopy={onCopy}
+                    initialRail={localRail}
+                    initialStep="amount"
+                    onExitToCashList={resetCashView}
+                  />
+                ) : null}
               </TabsContent>
             ) : null}
 

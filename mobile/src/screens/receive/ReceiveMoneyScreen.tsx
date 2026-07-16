@@ -7,14 +7,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable, Platform,
-  Image,
+  Pressable,
+  Platform,
   Share,
-  ActivityIndicator,
 } from 'react-native'
 import {
   AlertTriangle,
-  Landmark,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -22,20 +20,16 @@ import {
   Info,
   Share2,
   ShieldCheck,
-  Smartphone,
   Wallet,
 } from 'lucide-react-native'
-import { LinearGradient } from 'expo-linear-gradient'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontSize, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
-import { useToast } from '../../components/ToastProvider'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
-import { EasnerAlertSheet, PremiumModalSheet } from '../../components/premium'
-import { getApiBaseUrl, apiGet } from '../../lib/apiClient'
+import { PremiumModalSheet } from '../../components/premium'
+import { getApiBaseUrl } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useScope } from '../../query/scope'
@@ -50,7 +44,7 @@ import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { NgLocalVerificationNotice } from '../../components/compliance/NgLocalVerificationNotice'
 import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
-import { ReceiveLocalRailCard } from '../../components/receive/ReceiveLocalRailCard'
+import { ReceiveCashMethodList } from '../../components/receive/ReceiveCashMethodList'
 import {
   prefetchNgLocalVerification,
   readCachedNgLocalMissingType,
@@ -58,24 +52,19 @@ import {
   warmYcLocalDepositCaches,
 } from '../../lib/warmYcLocalDepositCaches'
 
-type TabType = 'bank' | 'local' | 'stablecoin'
+type TabType = 'cash' | 'stablecoin'
 
 export default function ReceiveMoneyScreen({ navigation, route }: NavigationProps) {
-  const insets = useSafeAreaInsets()
   const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const { user, userProfile, refreshUserProfile } = useAuth()
-  const { showSuccess, showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
   const queryClient = useQueryClient()
   const { scope } = useScope()
   const vaQuery = useConsumerVirtualAccounts()
   const depositQuery = useConsumerDepositAddresses()
 
-  const [activeTab, setActiveTab] = useState<TabType>('bank')
+  const [activeTab, setActiveTab] = useState<TabType>('cash')
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
-  const [creatingAccounts, setCreatingAccounts] = useState(false)
-  const [accountCreationError, setAccountCreationError] = useState<string | null>(null)
-  const [tosTermsSheetMessage, setTosTermsSheetMessage] = useState<string | null>(null)
   const [aboutSheetOpen, setAboutSheetOpen] = useState(false)
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
 
@@ -157,8 +146,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     hasCachedEntry: vaRecord != null,
   })
   const verificationComplete = kycStatus === 'approved'
-  /** Deposit rails only when KYC is approved — balances stay visible elsewhere. */
-  const showBankDepositDetails = verificationComplete && hasAccountData
   const showStablecoinDepositDetails = verificationComplete && hasStablecoinData
   const showBankTab = shouldShowBankDepositTab({
     verificationComplete,
@@ -194,11 +181,17 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     verificationComplete &&
     currency === 'USD' &&
     !(receiveRails != null && !receiveRailsLoading && !receiveRails.anyAvailable)
-  const showTabBar = [showBankTab, showLocalTab, showStablecoinTab].filter(Boolean).length > 1
+  const showCashTab = showBankTab || showLocalTab
+  const showTabBar = showCashTab && showStablecoinTab
 
   const bankAvailable = receiveRails?.rails.bank_transfer.available ?? false
   const momoAvailable = receiveRails?.rails.mobile_money.available ?? false
   const localDepositBlocked = Boolean(localPayInCurrency === 'NGN' && ngMissingType)
+
+  const navigateToBankDetails = () => {
+    haptics.medium()
+    navigation.navigate('ReceiveBankDetails' as never, { currency } as never)
+  }
 
   const navigateToLocalDeposit = (payInRail: YcPayInRail) => {
     if (!localPayInCurrency || !residenceCountry || localDepositBlocked) return
@@ -371,26 +364,16 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     }, [kycStatus, queryClient, refreshUserProfile, scope]),
   )
   
-  // Set default tab based on currency support and bank tab availability
+  // Set default tab based on cash vs stablecoin availability
   useEffect(() => {
-    if (!supportsStablecoins) {
-      setActiveTab('bank')
-      return
-    }
-    if (!showBankTab && showStablecoinTab) {
+    if (!showCashTab && showStablecoinTab) {
       setActiveTab('stablecoin')
       return
     }
-    if (showBankTab && !showStablecoinTab) {
-      setActiveTab('bank')
+    if (showCashTab) {
+      setActiveTab('cash')
     }
-  }, [supportsStablecoins, showBankTab, showStablecoinTab])
-
-  const getCurrencyName = (curr: string): string => {
-    return curr === 'USD' ? 'US Dollar'
-      : curr === 'EUR' ? 'Euro'
-      : curr
-  }
+  }, [showCashTab, showStablecoinTab])
 
   const handleCopy = async (text: string, key: string) => {
     const ok = await copyToClipboard(text)
@@ -405,44 +388,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const handleShare = async () => {
     try {
       haptics.medium()
-      
-      if (activeTab === 'bank' && bankAccountDetails) {
-        // Format bank account details for sharing
-        const currencyName = currency === 'USD' ? 'US' : 'EUR'
-        let shareText = `Your ${currencyName} Bank Account Details\n\n`
-        
-        if (bankAccountDetails.accountName) {
-          shareText += `Account Name: ${bankAccountDetails.accountName}\n`
-        }
-        
-        if (currency === 'USD') {
-          if (bankAccountDetails.accountNumber) {
-            shareText += `Account Number: ${bankAccountDetails.accountNumber}\n`
-          }
-          if (bankAccountDetails.routingNumber) {
-            shareText += `Routing Number: ${bankAccountDetails.routingNumber}\n`
-          }
-        } else {
-          if (bankAccountDetails.iban) {
-            shareText += `IBAN: ${bankAccountDetails.iban}\n`
-          }
-          if (bankAccountDetails.swiftBic) {
-            shareText += `SWIFT/BIC: ${bankAccountDetails.swiftBic}\n`
-          }
-        }
-        
-        if (bankAccountDetails.bankName) {
-          shareText += `Bank Name: ${bankAccountDetails.bankName}\n`
-        }
-        if (bankAccountDetails.bankAddress) {
-          shareText += `Bank Address: ${bankAccountDetails.bankAddress}\n`
-        }
-        
-        await Share.share({
-          message: shareText,
-          title: `${currencyName} Bank Account Details`,
-        })
-      } else if (activeTab === 'stablecoin' && stablecoinData.address) {
+
+      if (stablecoinData.address) {
         // Format stablecoin details for sharing
         const stablecoinName = currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'
         const networkTicker = stablecoinData.network === 'Solana' ? 'SOL' : stablecoinData.network.toUpperCase()
@@ -469,33 +416,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     }
   }
 
-  // Get bank account details from virtual account (memoized to prevent unnecessary recalculations)
-  const bankAccountDetails = useMemo(() => {
-    if (virtualAccount && (virtualAccount.hasAccount || virtualAccount.accountNumber || virtualAccount.iban)) {
-      if (currency === 'USD') {
-        return {
-          accountName: virtualAccount.accountHolderName,
-          accountNumber: virtualAccount.accountNumber,
-          routingNumber: virtualAccount.routingNumber,
-          iban: undefined,
-          swiftBic: undefined,
-          bankName: virtualAccount.bankName,
-          bankAddress: virtualAccount.bankAddress,
-        }
-      }
-      return {
-        accountName: virtualAccount.accountHolderName,
-        accountNumber: undefined,
-        routingNumber: undefined,
-        iban: virtualAccount.iban,
-        swiftBic: virtualAccount.bic,
-        bankName: virtualAccount.bankName,
-        bankAddress: virtualAccount.bankAddress,
-      }
-    }
-    return null
-  }, [virtualAccount, currency])
-
   /** Turnkey Solana vault for this currency tab. */
   const getStablecoinAddress = () => {
     const raw = turnkeyDepositAddress || ''
@@ -514,118 +434,22 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const stablecoinData = getStablecoinAddress()
   const stablecoinName = currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'
-  const activePaymentKind = activeTab === 'bank' ? 'account' : 'address'
+  const effectiveTab: TabType = showTabBar ? activeTab : showCashTab ? 'cash' : 'stablecoin'
 
-  const aboutSheetTitle =
-    activeTab === 'bank'
-      ? `About your ${currency} Account`
-      : `About your ${stablecoinName} Address`
-  const aboutSheetIntro =
-    activeTab === 'bank'
-      ? `Please, take note of the following when sending money to your ${currency} account:`
-      : `Please, take note of the following when sending ${stablecoinName} to your address:`
+  const aboutSheetTitle = `About your ${stablecoinName} Address`
+  const aboutSheetIntro = `Please, take note of the following when sending ${stablecoinName} to your address:`
 
-  const aboutPaymentNotes = useMemo(() => {
-    if (activeTab === 'bank') {
-      return currency === 'USD'
-        ? [
-            'Only send ACH or Fedwire.',
-            'SWIFT is not supported.',
-            'Processing time: within a few minutes and up to 48 hours.',
-          ]
-        : [
-            'Only send SEPA and SEPA Instant.',
-            'Processing time: within a few minutes and up to 48 hours.',
-          ]
-    }
-
-    return [
+  const aboutPaymentNotes = useMemo(
+    () => [
       `Only send ${stablecoinName} on Solana to this address.`,
       'Sending other assets or networks may result in permanent loss.',
       'Processing time: within seconds.',
-    ]
-  }, [activeTab, currency, stablecoinName])
-
-  // Handle manual account creation (fallback if automatic creation didn't trigger)
-  const handleCreateAccounts = async () => {
-    try {
-      setCreatingAccounts(true)
-      setAccountCreationError(null)
-      haptics.medium()
-      
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        throw new Error('Not authenticated')
-      }
-
-      // Add timeout to create-accounts request
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 seconds for account creation
-      
-      let response: Response
-      try {
-        response = await fetch(`${getApiBaseUrl()}/api/noah/create-accounts`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-        })
-        clearTimeout(timeoutId)
-      } catch (fetchError: any) {
-        clearTimeout(timeoutId)
-        if (fetchError.name === 'AbortError') {
-          throw new Error('Request timed out. Please try again.')
-        }
-        throw fetchError
-      }
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        const errorMessage = result.error || result.message || 'Failed to create accounts'
-        
-        // If error mentions TOS, provide helpful message
-        if (errorMessage.toLowerCase().includes('tos') || errorMessage.toLowerCase().includes('terms of service')) {
-          throw new Error(
-            `${errorMessage}\n\nIf you just accepted TOS, please wait a few seconds and try again. The provider may need a moment to process your acceptance.`
-          )
-        }
-        
-        throw new Error(errorMessage)
-      }
-
-      if (result.errors && result.errors.length > 0) {
-        console.warn('Account creation completed with some errors:', result.errors)
-      }
-
-      // Toast + refresh (no blocking OK alert)
-      showSuccess(
-        `USD ${result.usdAccountCreated ? 'created' : result.usdAccountId ? 'exists' : 'pending'} · EUR ${result.eurAccountCreated ? 'created' : result.eurAccountId ? 'exists' : 'pending'}`,
-        4500,
-      )
-      if (scope) {
-        void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
-      }
-    } catch (error: any) {
-      console.error('Error creating accounts:', error)
-      const errorMessage = error.message || 'Failed to create accounts'
-      setAccountCreationError(errorMessage)
-      
-      // If error mentions TOS, provide helpful message with retry option
-      if (errorMessage.toLowerCase().includes('tos') || errorMessage.toLowerCase().includes('terms of service')) {
-        setTosTermsSheetMessage(errorMessage)
-      } else {
-        showError(errorMessage)
-      }
-    } finally {
-      setCreatingAccounts(false)
-    }
-  }
+    ],
+    [stablecoinName],
+  )
 
   const shouldWrapCopyableValue = (value: string, key: string) =>
-    key === 'stablecoinAddress' || key === 'iban' || key === 'bankAddress' || value.length > 28
+    key === 'stablecoinAddress' || value.length > 28
 
   const renderCopyableField = (label: string, value: string, key: string) => {
     const wrapValue = shouldWrapCopyableValue(value, key)
@@ -663,7 +487,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         style={styles.detailActionButton}
         onPress={handleShare}
         accessibilityRole="button"
-        accessibilityLabel={`Share ${activePaymentKind} detail`}
+        accessibilityLabel="Share address detail"
       >
         <Share2 size={20} color={colors.primary.main} strokeWidth={2} />
         <Text style={styles.detailActionText}>Share Detail</Text>
@@ -677,12 +501,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           setAboutSheetOpen(true)
         }}
         accessibilityRole="button"
-        accessibilityLabel={`About ${activePaymentKind}`}
+        accessibilityLabel="About address"
       >
         <Info size={20} color={colors.primary.main} strokeWidth={2} />
-        <Text style={styles.detailActionText}>
-          {activeTab === 'bank' ? 'About Account' : 'About Address'}
-        </Text>
+        <Text style={styles.detailActionText}>About Address</Text>
       </Pressable>
     </View>
   )
@@ -710,52 +532,34 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           </View>
         </View>
 
-        {showTabBar && (
+        {showTabBar ? (
           <View style={styles.tabsContainer}>
-            {showBankTab ? (
-              <Pressable
-                android_ripple={ripple.neutral}
-                style={[styles.tab, activeTab === 'bank' && styles.tabActive]}
-                onPress={() => {
-                  haptics.tap()
-                  setActiveTab('bank')
-                }}
-              >
-                <Text style={[styles.tabText, activeTab === 'bank' && styles.tabTextActive]}>
-                  {currency === 'USD' ? 'US Bank Account' : 'EU Bank Account'}
-                </Text>
-              </Pressable>
-            ) : null}
-            {showLocalTab ? (
-              <Pressable
-                android_ripple={ripple.neutral}
-                style={[styles.tab, activeTab === 'local' && styles.tabActive]}
-                onPress={() => {
-                  haptics.tap()
-                  setActiveTab('local')
-                }}
-              >
-                <Text style={[styles.tabText, activeTab === 'local' && styles.tabTextActive]}>
-                  {localPayInCurrency} Deposit
-                </Text>
-              </Pressable>
-            ) : null}
-            {showStablecoinTab ? (
-              <Pressable
-                android_ripple={ripple.neutral}
-                style={[styles.tab, activeTab === 'stablecoin' && styles.tabActive]}
-                onPress={() => {
-                  haptics.tap()
-                  setActiveTab('stablecoin')
-                }}
-              >
-                <Text style={[styles.tabText, activeTab === 'stablecoin' && styles.tabTextActive]}>
-                  Stablecoin
-                </Text>
-              </Pressable>
-            ) : null}
+            <Pressable
+              android_ripple={ripple.neutral}
+              style={[styles.tab, activeTab === 'cash' && styles.tabActive]}
+              onPress={() => {
+                haptics.tap()
+                setActiveTab('cash')
+              }}
+            >
+              <Text style={[styles.tabText, activeTab === 'cash' && styles.tabTextActive]}>
+                Cash
+              </Text>
+            </Pressable>
+            <Pressable
+              android_ripple={ripple.neutral}
+              style={[styles.tab, activeTab === 'stablecoin' && styles.tabActive]}
+              onPress={() => {
+                haptics.tap()
+                setActiveTab('stablecoin')
+              }}
+            >
+              <Text style={[styles.tabText, activeTab === 'stablecoin' && styles.tabTextActive]}>
+                Stablecoin
+              </Text>
+            </Pressable>
           </View>
-        )}
+        ) : null}
 
         {/* Content */}
         <ScrollView 
@@ -764,11 +568,13 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         >
           <View style={styles.content}>
-            {activeTab === 'local' && showLocalTab ? (
+            {effectiveTab === 'cash' && showCashTab ? (
               <View style={{ gap: spacing[4] }}>
-                <Text style={styles.fieldLabel}>
-                  Pay in {localPayInCurrency} to credit your USD balance.
-                </Text>
+                {showLocalTab && localPayInCurrency ? (
+                  <Text style={styles.fieldLabel}>
+                    Pay in {localPayInCurrency} to credit your USD balance.
+                  </Text>
+                ) : null}
 
                 {localPayInCurrency === 'NGN' && ngMissingType ? (
                   <NgLocalVerificationNotice
@@ -780,133 +586,21 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   />
                 ) : null}
 
-                {receiveRailsLoading && !receiveRails ? (
-                  <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[6] }} />
-                ) : (
-                  <View style={styles.localRailList}>
-                    {bankAvailable ? (
-                      <ReceiveLocalRailCard
-                        title="Bank"
-                        subtitle="Deposit via Bank Transfer"
-                        icon={<Landmark size={24} color={colors.primary.main} strokeWidth={2} />}
-                        onPress={() => navigateToLocalDeposit('bank_transfer')}
-                        disabled={localDepositBlocked}
-                      />
-                    ) : null}
-                    {momoAvailable ? (
-                      <ReceiveLocalRailCard
-                        title="Mobile money"
-                        subtitle="Deposit via Mobile Money"
-                        icon={<Smartphone size={24} color={colors.primary.main} strokeWidth={2} />}
-                        onPress={() => navigateToLocalDeposit('mobile_money')}
-                        disabled={localDepositBlocked}
-                      />
-                    ) : null}
-                    {receiveRails && !bankAvailable && !momoAvailable ? (
-                      <Text style={styles.localUnavailable}>
-                        Local pay-in is not available for your country right now.
-                      </Text>
-                    ) : null}
-                  </View>
-                )}
+                <ReceiveCashMethodList
+                  currency={currency}
+                  residenceCountry={residenceCountry}
+                  showBankRow={showBankTab}
+                  showLocalRows={showLocalTab}
+                  bankAvailable={bankAvailable}
+                  momoAvailable={momoAvailable}
+                  localDepositBlocked={localDepositBlocked}
+                  loading={receiveRailsLoading}
+                  onBankPress={navigateToBankDetails}
+                  onLocalBankPress={() => navigateToLocalDeposit('bank_transfer')}
+                  onLocalMomoPress={() => navigateToLocalDeposit('mobile_money')}
+                />
               </View>
-            ) : null}
-            {activeTab === 'bank' && showBankTab ? (
-              <>
-                {/* Bank rails only while KYC approved; otherwise verification notice. */}
-                {showBankDepositDetails && bankAccountDetails ? (
-                  /* Show account details when we have account data */
-                  <>
-                    {/* Bank Account Details */}
-                    <View style={styles.section}>
-                      {/* Display all fields returned by the provider */}
-                      <>
-                        {/* Account holder name */}
-                        {bankAccountDetails.accountName && (
-                          renderCopyableField('Account Name', bankAccountDetails.accountName, 'accountName')
-                        )}
-                        
-                        {/* USD account fields */}
-                        {currency === 'USD' && (
-                          <>
-                            {bankAccountDetails.accountNumber && (
-                              renderCopyableField('Account Number', bankAccountDetails.accountNumber, 'accountNumber')
-                            )}
-                            {bankAccountDetails.routingNumber && (
-                              renderCopyableField('Routing Number', bankAccountDetails.routingNumber, 'routingNumber')
-                            )}
-                          </>
-                        )}
-                        
-                        {/* EUR account fields */}
-                        {currency === 'EUR' && (
-                          <>
-                            {bankAccountDetails.iban && (
-                              renderCopyableField('IBAN', bankAccountDetails.iban, 'iban')
-                            )}
-                            {bankAccountDetails.swiftBic && (
-                              renderCopyableField('SWIFT/BIC', bankAccountDetails.swiftBic, 'swiftBic')
-                            )}
-                          </>
-                        )}
-                        
-                        {/* Bank name */}
-                        {bankAccountDetails.bankName && (
-                          renderCopyableField('Bank Name', bankAccountDetails.bankName, 'bankName')
-                        )}
-                        
-                        {/* Bank address */}
-                        {bankAccountDetails.bankAddress && (
-                          renderCopyableField('Bank Address', bankAccountDetails.bankAddress, 'bankAddress')
-                        )}
-                      </>
-                    </View>
-
-                    {renderDetailActions()}
-                  </>
-                ) : !verificationComplete || vaFetched ? (
-                  /* KYC notice when not approved, or setup notice when approved but VA missing */
-                  <View style={styles.kycNoticeContainer}>
-                    <View style={styles.kycNoticeIconContainer}>
-                      <ShieldCheck size={32} color={colors.primary.main} strokeWidth={2} />
-                    </View>
-                    <Text style={styles.kycNoticeTitle}>
-                      {kycStatus === 'approved' 
-                        ? 'Account Setup in Progress' 
-                        : kycStatus === 'in_review'
-                        ? 'Verification in Review'
-                        : 'Complete Verification to get an account'}
-                    </Text>
-                    <Text style={styles.kycNoticeText}>
-                      {kycStatus === 'in_review'
-                        ? 'Your verification is currently being reviewed.'
-                        : !kycStatus
-                        ? 'Please complete your identity verification to receive bank and stablecoin deposit information.'
-                        : kycStatus === 'rejected'
-                        ? 'Your verification was not approved. Please complete identity verification again to receive your account details.'
-                        : kycStatus === 'approved'
-                        ? 'Your account is being set up. This may take a few moments. Please check back shortly.'
-                        : 'Please complete your identity verification to receive bank and stablecoin deposit information.'}
-                    </Text>
-                    {kycStatus !== 'approved' && kycStatus !== 'in_review' && (
-                    <Pressable
-                     android_ripple={ripple.neutral}
-                      style={styles.kycNoticeButton}
-                      onPress={async () => {
-                        haptics.medium()
-                        navigation.navigate('AccountVerification' as any)
-                      }} >
-                      <Text style={styles.kycNoticeButtonText}>Complete Verification</Text>
-                      <ArrowRight size={18} color={colors.text.inverse} strokeWidth={2} />
-                    </Pressable>
-                    )}
-                    {accountCreationError && (
-                      <Text style={styles.errorText}>{accountCreationError}</Text>
-                    )}
-                  </View>
-                ) : null}
-              </>
-            ) : activeTab === 'stablecoin' ? (
+            ) : effectiveTab === 'stablecoin' && showStablecoinTab ? (
               <>
                 {/* Stablecoin rails only while KYC approved; otherwise verification notice. */}
                 {showStablecoinDepositDetails && stablecoinData.address ? (
@@ -1003,9 +697,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                       <ArrowRight size={18} color={colors.text.inverse} strokeWidth={2} />
                     </Pressable>
                     )}
-                    {accountCreationError && (
-                      <Text style={styles.errorText}>{accountCreationError}</Text>
-                    )}
                   </View>
                 ) : null}
               </>
@@ -1021,11 +712,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         <View style={styles.aboutSheetContent}>
           <View style={styles.aboutSheetHeader}>
             <View style={styles.aboutSheetIcon}>
-              {activeTab === 'bank' ? (
-                <Landmark size={22} color={colors.primary.main} strokeWidth={2} />
-              ) : (
-                <Wallet size={22} color={colors.primary.main} strokeWidth={2} />
-              )}
+              <Wallet size={22} color={colors.primary.main} strokeWidth={2} />
             </View>
             <Text style={styles.aboutSheetTitle}>{aboutSheetTitle}</Text>
           </View>
@@ -1045,23 +732,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           </ScrollView>
         </View>
       </PremiumModalSheet>
-
-      <EasnerAlertSheet
-        visible={tosTermsSheetMessage !== null}
-        onDismiss={() => setTosTermsSheetMessage(null)}
-        title="Terms of Service Required"
-        message={tosTermsSheetMessage ?? ''}
-        primaryLabel="Go to Verification"
-        onPrimary={() => {
-          setTosTermsSheetMessage(null)
-          navigation.navigate('AccountVerification' as never)
-        }}
-        secondaryLabel="Retry in 5s"
-        onSecondary={() => {
-          setTosTermsSheetMessage(null)
-          setTimeout(() => handleCreateAccounts(), 5000)
-        }}
-      />
     </ScreenWrapper>
   )
 }

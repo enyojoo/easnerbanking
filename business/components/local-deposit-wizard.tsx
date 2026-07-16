@@ -76,6 +76,9 @@ type Props = {
   onNgSaved: () => void
   copiedField: string | null
   onCopy: (text: string, field: string) => void
+  initialRail?: LocalRail
+  initialStep?: "amount"
+  onExitToCashList?: () => void
 }
 
 export function LocalDepositWizard({
@@ -84,19 +87,24 @@ export function LocalDepositWizard({
   onNgSaved,
   copiedField,
   onCopy,
+  initialRail,
+  initialStep,
+  onExitToCashList,
 }: Props) {
   const { businessId } = useBusinessProfile()
   const walletQuery = useWalletBalances()
   const localPayInCurrency = mapResidenceToLocalPayInCurrency(residenceCountry) ?? ""
 
-  const [step, setStep] = useState<WizardStep>("rail")
+  const [step, setStep] = useState<WizardStep>(
+    initialStep === "amount" && initialRail ? "amount" : "rail",
+  )
   const [rails, setRails] = useState<ReceiveRailsResponse | null>(() =>
     readCachedReceiveRails(residenceCountry, localPayInCurrency),
   )
   const [railsLoading, setRailsLoading] = useState(
     () => !readCachedReceiveRails(residenceCountry, localPayInCurrency),
   )
-  const [rail, setRail] = useState<LocalRail>("bank_transfer")
+  const [rail, setRail] = useState<LocalRail>(initialRail ?? "bank_transfer")
   const [amountMode, setAmountMode] = useState<AmountMode>("usd")
   const [amountStr, setAmountStr] = useState("")
   const [rates, setRates] = useState<YcRateRow[]>(() => readCachedYcPayInRates() ?? [])
@@ -193,6 +201,7 @@ export function LocalDepositWizard({
   }, [localPayInCurrency])
 
   useEffect(() => {
+    if (initialStep === "amount" && initialRail) return
     if (railsLoading || !rails) return
     const bank = rails.rails.bank_transfer.available
     const momo = rails.rails.mobile_money.available
@@ -201,7 +210,7 @@ export function LocalDepositWizard({
       setRail(bank ? "bank_transfer" : "mobile_money")
       setStep("amount")
     }
-  }, [railsLoading, rails])
+  }, [railsLoading, rails, initialStep, initialRail])
 
   const createQuote = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) {
@@ -329,6 +338,10 @@ export function LocalDepositWizard({
   const payInFields = ycBankInfoFields(quote?.bankInfo)
 
   const goBack = () => {
+    if (step === "amount" && initialStep === "amount" && onExitToCashList) {
+      onExitToCashList()
+      return
+    }
     if (step === "amount") setStep(bankAvailable && momoAvailable ? "rail" : "rail")
     else if (step === "review") setStep("amount")
     else if (step === "payin") setStep("review")

@@ -1,5 +1,6 @@
 import React from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
+import { ArrowRight } from 'lucide-react-native'
 import { colors, spacing, textStyles, borderRadius, surfaceFrameStyle, surfaceChromeCircleStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 
@@ -11,7 +12,7 @@ type Props = {
   disabled?: boolean
 }
 
-/** Full-width stacked rail row for local deposit (single column list). */
+/** Full-width stacked rail row for receive cash / local deposit (single column list). */
 export function ReceiveLocalRailCard({ title, subtitle, icon, onPress, disabled }: Props) {
   return (
     <Pressable
@@ -31,6 +32,7 @@ export function ReceiveLocalRailCard({ title, subtitle, icon, onPress, disabled 
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
       </View>
+      <ArrowRight size={20} color={colors.text.tertiary} strokeWidth={2} />
     </Pressable>
   )
 }
