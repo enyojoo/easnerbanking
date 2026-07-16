@@ -8,15 +8,20 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
-import { formatSendRateLabel } from "@easner/shared"
-import { getCurrencySymbol, getSendAmountFieldSymbol } from "@/lib/utils"
 import {
+  formatSendRateLabel,
+  resolveReceiveCountryName,
+  sendLocalPayInBankTitle,
+  sendLocalPayInMomoTitle,
+  SEND_LOCAL_PAY_IN_BANK_CHIP,
+  SEND_LOCAL_PAY_IN_MOMO_CHIP,
   convertNoahSendFlowAmounts,
   hasNoahSendRateRow,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
   type NoahWalletRateRow,
 } from "@easner/shared"
+import { getCurrencySymbol, getSendAmountFieldSymbol } from "@/lib/utils"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
@@ -24,7 +29,6 @@ import type { PaymentMethodCode } from "@/lib/send-payment-methods"
 import {
   ChevronDown,
   Check,
-  ChevronRight,
   ArrowLeft,
   ArrowUpDown,
   Landmark,
@@ -39,6 +43,7 @@ import {
 } from "@/components/ui/dialog"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { CurrencyFlag } from "@/components/flags"
+import { CountryFlag } from "@/components/flags"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
   type SendFlowState,
@@ -51,9 +56,11 @@ import {
 } from "@/hooks/use-yc-cross-border-flow"
 import {
   prefetchYcPayInNetworks,
+  prefetchYcReceiveRails,
+  readCachedReceiveRails,
   readCachedYcPayInNetworks,
+  type ReceiveRailsResponse,
 } from "@/lib/yc-local-deposit-cache"
-import { PaymentMethodDisplayLogo } from "@/components/send/payment-method-display-logo"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useSendDestinations } from "@/lib/use-send-destinations"
@@ -175,21 +182,51 @@ export default function SendPage() {
   })
 
   const showThroughLocalCurrency = ycFlow.available && !isEasetagRecipient
+  const payInCurrency = ycFlow.payInCurrency
+  const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
+  const payInCountryName = payInCountry ? resolveReceiveCountryName(payInCountry) : ""
 
-  const otherCurrencies = useMemo(() => {
-    if (!showThroughLocalCurrency || !ycFlow.payInCurrency) return []
-    return [{ code: ycFlow.payInCurrency, name: ycFlow.payInCurrency }]
-  }, [showThroughLocalCurrency, ycFlow.payInCurrency])
+  const [payInRails, setPayInRails] = useState<ReceiveRailsResponse | null>(() =>
+    payInCountry && payInCurrency ? readCachedReceiveRails(payInCountry, payInCurrency) : null,
+  )
+  const [payInRailsLoading, setPayInRailsLoading] = useState(false)
 
-  const currencyPaymentMethods = useMemo(() => {
-    if (!showThroughLocalCurrency || !ycFlow.payInCurrency) return {}
-    return {
-      [ycFlow.payInCurrency]: [
-        { code: "bank_transfer", name: "Bank Transfer", type: "bank_account" },
-        { code: "mobile_money", name: "Mobile Money", type: "mobile_money" },
-      ],
+  useEffect(() => {
+    if (!showThroughLocalCurrency || !payInCountry || !payInCurrency) {
+      setPayInRails(null)
+      setPayInRailsLoading(false)
+      return
     }
-  }, [showThroughLocalCurrency, ycFlow.payInCurrency])
+    let cancelled = false
+    const cached = readCachedReceiveRails(payInCountry, payInCurrency)
+    if (cached) {
+      setPayInRails(cached)
+      setPayInRailsLoading(false)
+    } else {
+      setPayInRailsLoading(true)
+    }
+    void prefetchYcReceiveRails(payInCountry, payInCurrency).then((data) => {
+      if (!cancelled) {
+        setPayInRails(data ?? cached)
+        setPayInRailsLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [showThroughLocalCurrency, payInCountry, payInCurrency])
+
+  const localPayInOptions = useMemo(() => {
+    if (!payInCurrency || !payInCountry || !payInRails) return []
+    const opts: Array<{ rail: "bank_transfer" | "mobile_money"; title: string }> = []
+    if (payInRails.rails.bank_transfer.available) {
+      opts.push({ rail: "bank_transfer", title: sendLocalPayInBankTitle(payInCountryName) })
+    }
+    if (payInRails.rails.mobile_money.available) {
+      opts.push({ rail: "mobile_money", title: sendLocalPayInMomoTitle(payInCountryName) })
+    }
+    return opts
+  }, [payInCurrency, payInCountry, payInCountryName, payInRails])
 
   useEffect(() => {
     if (showThroughLocalCurrency) return
@@ -217,14 +254,6 @@ export default function SendPage() {
       setOtherPaymentMethod(null)
     }
   }, [isEasetagRecipient, paymentMethod, otherCurrency, otherPaymentMethod])
-
-  useEffect(() => {
-    if (!otherCurrency) return
-    const opts = currencyPaymentMethods[otherCurrency] ?? []
-    if (!otherPaymentMethod && opts.length > 0) {
-      setOtherPaymentMethod(opts[0].code)
-    }
-  }, [otherCurrency, currencyPaymentMethods, otherPaymentMethod])
 
   useEffect(() => {
     if (
@@ -722,11 +751,11 @@ export default function SendPage() {
       return `${sourceAccount.currency} Balance • ${getCurrencySymbol(sourceAccount.currency)}${fig}`
     }
     if (otherCurrency && otherPaymentMethod) {
-      const method = currencyPaymentMethods[otherCurrency]?.find(
-        (m) => m.code === otherPaymentMethod
-      )
-      return `${otherCurrency} • ${method?.name ?? otherPaymentMethod}`
+      return otherPaymentMethod === "mobile_money"
+        ? SEND_LOCAL_PAY_IN_MOMO_CHIP
+        : SEND_LOCAL_PAY_IN_BANK_CHIP
     }
+    if (paymentMethod === "otherCurrency") return "Select method"
     return "Select method"
   }
 
@@ -1148,6 +1177,8 @@ export default function SendPage() {
               <span className="flex items-center">
                 {paymentMethod === "balance" && sourceAccount ? (
                   <CurrencyFlag currency={sourceAccount.currency} size={22} className="shrink-0" />
+                ) : payInCountry ? (
+                  <CountryFlag code={payInCountry} size={22} className="shrink-0" />
                 ) : otherCurrency ? (
                   <CurrencyFlag currency={otherCurrency} size={22} className="shrink-0" />
                 ) : (
@@ -1277,78 +1308,47 @@ export default function SendPage() {
               {showThroughLocalCurrency ? (
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Through Local Currency</p>
-                {!otherCurrency ? (
-                  <div className="space-y-1">
-                    {otherCurrencies.map((currency) => (
+                {payInRailsLoading && localPayInOptions.length === 0 ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : null}
+                <div className="space-y-1">
+                  {localPayInOptions.map((option) => {
+                    const isSelected =
+                      paymentMethod === "otherCurrency" &&
+                      otherCurrency === payInCurrency &&
+                      otherPaymentMethod === option.rail
+                    return (
                       <button
-                        key={currency.code}
+                        key={option.rail}
                         type="button"
                         onClick={() => {
+                          if (!payInCurrency) return
                           setPaymentMethod("otherCurrency")
-                          setOtherCurrency(currency.code)
+                          setOtherCurrency(payInCurrency)
                           setSourceAccountId(null)
-                          setOtherPaymentMethod(null)
+                          setOtherPaymentMethod(option.rail)
+                          setSourceSheetOpen(false)
                         }}
-                        className="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50"
+                        className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50 ${
+                          isSelected ? "bg-muted" : ""
+                        }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <CurrencyFlag currency={currency.code} size={24} className="shrink-0" />
-                          <p className="font-medium">
-                            {"name" in currency && currency.name !== currency.code
-                              ? currency.name
-                              : `${currency.code} Deposit`}
-                          </p>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        {payInCountry ? (
+                          <CountryFlag code={payInCountry} size={24} className="shrink-0" />
+                        ) : null}
+                        <p className="font-medium flex-1">{option.title}</p>
+                        {isSelected ? <Check className="h-5 w-5 text-primary shrink-0" /> : null}
                       </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtherCurrency(null)
-                        setOtherPaymentMethod(null)
-                        setPaymentMethod("otherCurrency")
-                      }}
-                      className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50"
-                    >
-                      <ArrowLeft className="h-4 w-4" />
-                      <p className="font-medium">
-                        {otherCurrencies.find((c) => c.code === otherCurrency)?.name ??
-                          `${otherCurrency} Deposit`}
-                      </p>
-                    </button>
-                    {currencyPaymentMethods[otherCurrency]?.map((method) => {
-                      const isSelected = otherPaymentMethod === method.code
-                      return (
-                        <button
-                          key={method.code}
-                          type="button"
-                          onClick={() => {
-                            setPaymentMethod("otherCurrency")
-                            setSourceAccountId(null)
-                            setOtherPaymentMethod(method.code)
-                            setSourceSheetOpen(false)
-                          }}
-                          className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/50 ${
-                            isSelected ? "bg-muted" : ""
-                          }`}
-                        >
-                          <PaymentMethodDisplayLogo
-                            name={method.name}
-                            type={method.type}
-                            currency={otherCurrency}
-                            displayLogoUrl={method.displayLogoUrl}
-                          />
-                          <p className="font-medium">{method.name}</p>
-                          {isSelected && <Check className="h-5 w-5 text-primary shrink-0 ml-auto" />}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
+                    )
+                  })}
+                </div>
+                {!payInRailsLoading && localPayInOptions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-3">
+                    Local pay-in is not available for your country right now.
+                  </p>
+                ) : null}
               </div>
               ) : null}
             </div>

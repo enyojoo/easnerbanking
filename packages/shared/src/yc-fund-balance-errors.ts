@@ -34,6 +34,9 @@ export function ycFundBalanceQuoteErrorMessage(
     case "yc_amount_above_max":
       return fallback || "Amount is outside the allowed range for this deposit."
     case "yc_receive_rejected":
+      if (fallback?.toLowerCase().includes("disabled")) {
+        return "This payment method is temporarily unavailable. Try again later or contact support."
+      }
       return fallback || "Could not create payment details. Check your amount and try again."
     default:
       return fallback || "Could not get payment details"

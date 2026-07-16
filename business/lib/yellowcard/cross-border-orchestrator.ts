@@ -13,6 +13,7 @@ import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
 import { isYcLocalPayInEnabledForCountry } from "@/lib/yellowcard/yc-receive-gate"
+import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
 
 async function resolveYcReceiveChannelId(input: {
   countryCode: string
@@ -20,17 +21,10 @@ async function resolveYcReceiveChannelId(input: {
   rail: "bank_transfer" | "mobile_money"
 }): Promise<string | null> {
   const channels = await listYellowcardChannels()
-  const match = channels.find((ch) => {
-    const country = String(ch.country ?? "").toUpperCase()
-    const currency = String(ch.currency ?? "").toUpperCase()
-    if (country !== input.countryCode || currency !== input.currencyCode) return false
-    const ramp = String(ch.rampType ?? "").toLowerCase()
-    if (ramp.includes("withdraw") || ramp.includes("send")) return false
-    const channelType = String(ch.channelType ?? "").toLowerCase()
-    if (input.rail === "mobile_money") {
-      return channelType.includes("momo") || channelType.includes("mobile")
-    }
-    return channelType.includes("bank") || !channelType.includes("momo")
+  const match = findYcReceiveChannel(channels, {
+    country: input.countryCode,
+    currency: input.currencyCode,
+    rail: input.rail,
   })
   return match ? String(match.id ?? match.channelId ?? "").trim() || null : null
 }

@@ -1,5 +1,5 @@
 /** Subtitles for receive cash deposit method rows. */
-export const RECEIVE_CASH_MOMO_SUBTITLE = "Deposit via Mobile Money Transfer"
+export const RECEIVE_CASH_MOMO_SUBTITLE = "Deposit via MOMO Transfer"
 
 function depositCreditSubtitle(depositCurrency: string, creditCurrency: string): string {
   const deposit = String(depositCurrency ?? "").trim().toUpperCase()
@@ -54,5 +54,18 @@ export function receiveLocalBankTitle(countryName: string): string {
 }
 
 export function receiveLocalMomoTitle(countryName: string): string {
-  return `${countryName} Mobile Money`
+  return `${countryName} MOMO Transfer`
 }
+
+/** Send → Through Local Currency pay-in rows (YC cross-border). */
+export function sendLocalPayInBankTitle(countryName: string): string {
+  return `${countryName} Bank Transfer`
+}
+
+export function sendLocalPayInMomoTitle(countryName: string): string {
+  return `${countryName} MOMO Transfer`
+}
+
+/** Selected send-source chip (country flag shown separately). */
+export const SEND_LOCAL_PAY_IN_BANK_CHIP = "Bank Transfer"
+export const SEND_LOCAL_PAY_IN_MOMO_CHIP = "MOMO Transfer"

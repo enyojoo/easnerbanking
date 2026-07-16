@@ -7,6 +7,8 @@ export type YcChannel = {
   country?: string
   currency?: string
   status?: string
+  apiStatus?: string
+  rampType?: string
   [key: string]: unknown
 }
 

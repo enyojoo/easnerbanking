@@ -104,6 +104,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   const isMobileMoney = payInRail === 'mobile_money'
   const fields = ycBankInfoFields(bankInfo)
   const isFundBalance = flowMode === 'fund_balance'
+  const compactBankFundBalance = isFundBalance && !isMobileMoney
   const screenTitle = isFundBalance ? 'Complete deposit' : 'Complete payment'
   const formattedSendAmount = formatMoneyDisplay(localPayIn, sendCurrency)
   const formattedCreditAmount = formatMoneyDisplay(receiveAmount, receiveCurrency)
@@ -166,56 +167,67 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
                 />
               </TransactionDetailSummaryRow>
             ) : null}
-            {feeLocal > 0 ? (
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.processingFee}
-                value={formatReviewRowMoneyDisplay(
-                  REVIEW_ROW_LABELS.processingFee,
-                  feeLocal,
-                  sendCurrency,
-                )}
-              />
-            ) : null}
-            {customerRate > 0 ? (
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.exchangeRate}
-                value={
-                  isFundBalance
-                    ? formatSendRateLabel('USD', sendCurrency, customerRate)
-                    : formatSendRateLabel(sendCurrency, receiveCurrency, customerRate)
-                }
-              />
-            ) : null}
-            {isFundBalance ? (
+            {compactBankFundBalance ? (
               <TransactionDetailSummaryRow
                 label={REVIEW_ROW_LABELS.amountToCredit}
                 value={formattedCreditAmount}
                 valueBold
+                last
               />
             ) : (
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.recipientGets}
-                value={formattedCreditAmount}
-                valueBold
-              />
+              <>
+                {feeLocal > 0 ? (
+                  <TransactionDetailSummaryRow
+                    label={REVIEW_ROW_LABELS.processingFee}
+                    value={formatReviewRowMoneyDisplay(
+                      REVIEW_ROW_LABELS.processingFee,
+                      feeLocal,
+                      sendCurrency,
+                    )}
+                  />
+                ) : null}
+                {customerRate > 0 ? (
+                  <TransactionDetailSummaryRow
+                    label={REVIEW_ROW_LABELS.exchangeRate}
+                    value={
+                      isFundBalance
+                        ? formatSendRateLabel('USD', sendCurrency, customerRate)
+                        : formatSendRateLabel(sendCurrency, receiveCurrency, customerRate)
+                    }
+                  />
+                ) : null}
+                {isFundBalance ? (
+                  <TransactionDetailSummaryRow
+                    label={REVIEW_ROW_LABELS.amountToCredit}
+                    value={formattedCreditAmount}
+                    valueBold
+                  />
+                ) : (
+                  <TransactionDetailSummaryRow
+                    label={REVIEW_ROW_LABELS.recipientGets}
+                    value={formattedCreditAmount}
+                    valueBold
+                  />
+                )}
+                {isFundBalance ? (
+                  <CreditDestinationRow
+                    label={REVIEW_ROW_LABELS.creditTo}
+                    currency="USD"
+                    balanceLabel="USD Balance"
+                  />
+                ) : recipientName ? (
+                  <TransactionDetailSummaryRow
+                    label={REVIEW_ROW_LABELS.recipient}
+                    value={recipientName}
+                  />
+                ) : null}
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.transferMethod}
+                  value={transferMethod}
+                  last
+                />
+              </>
             )}
-            {isFundBalance ? (
-              <CreditDestinationRow
-                label={REVIEW_ROW_LABELS.creditTo}
-                currency="USD"
-                balanceLabel="USD Balance"
-              />
-            ) : recipientName ? (
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.recipient}
-                value={recipientName}
-              />
-            ) : null}
-            <TransactionDetailSummaryRow
-              label={REVIEW_ROW_LABELS.transferMethod}
-              value={transferMethod}
-              last
-            />
           </View>
 
           <View style={styles.payInCopySection}>

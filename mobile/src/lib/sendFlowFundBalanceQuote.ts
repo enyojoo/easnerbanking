@@ -1,4 +1,5 @@
 import { apiFetch, ApiError } from '../query/api-client'
+import { ycFundBalanceQuoteErrorMessage } from '@easner/shared'
 import type { YcPayInRail } from '../hooks/useYcCrossBorderFlow'
 
 export type YcFundBalanceQuote = {
@@ -159,7 +160,12 @@ export async function ensureFundBalanceQuoteStashed(
       return quote
     })
     .catch((err) => {
-      lastQuoteError = err instanceof Error ? err.message : 'quote_failed'
+      lastQuoteError =
+        err instanceof ApiError
+          ? ycFundBalanceQuoteErrorMessage(err.code ?? undefined, err.message)
+          : err instanceof Error
+            ? err.message
+            : 'quote_failed'
       return null
     })
     .finally(() => {

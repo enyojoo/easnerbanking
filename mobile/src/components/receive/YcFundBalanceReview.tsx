@@ -11,6 +11,7 @@ import {
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
+  computeDisplayProcessingFee,
   formatReviewRowMoneyDisplay,
   formatSendRateLabel,
   REVIEW_ROW_LABELS,
@@ -180,6 +181,24 @@ export function YcFundBalanceReview({
   const resolvedLocalPayIn = quote?.localPayIn ?? estimatedPayIn
   const resolvedUsdCredit = quote?.usdCredit ?? estimatedCredit
 
+  const reviewFeeLocal =
+    !isMobileMoney && quote
+      ? quote.displayProcessingFeeLocal ??
+        (quote.displayProcessingFee != null && customerRate > 0
+          ? Math.round(quote.displayProcessingFee * customerRate * 100) / 100
+          : computeDisplayProcessingFee({
+              processingFee: quote.processingFee ?? 0,
+              exchangeFee: quote.ycChannelFeeUsd ?? quote.ycLegFeesUsd ?? 0,
+            }) * (customerRate || 1))
+      : 0
+
+  const payAmountLabel = isMobileMoney
+    ? REVIEW_ROW_LABELS.estimatedToPay
+    : REVIEW_ROW_LABELS.amountToPay
+  const creditAmountLabel = isMobileMoney
+    ? REVIEW_ROW_LABELS.estimatedToCredit
+    : REVIEW_ROW_LABELS.amountToCredit
+
   const momoReady = Boolean(phone.trim() && networkId)
   const bankQuoteReady = Boolean(quote?.transferId)
   const quoteReady = isMobileMoney ? previewCustomerRate > 0 && estimatedPayIn > 0 && momoReady : bankQuoteReady
@@ -264,18 +283,28 @@ export function YcFundBalanceReview({
                   value={formatSendRateLabel('USD', localPayInCurrency, customerRate)}
                 />
               ) : null}
+              {!isMobileMoney && reviewFeeLocal > 0 ? (
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.processingFee}
+                  value={formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.processingFee,
+                    reviewFeeLocal,
+                    localPayInCurrency,
+                  )}
+                />
+              ) : null}
               <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.estimatedToPay}
+                label={payAmountLabel}
                 value={formatReviewRowMoneyDisplay(
-                  REVIEW_ROW_LABELS.estimatedToPay,
+                  payAmountLabel,
                   isMobileMoney ? estimatedPayIn : resolvedLocalPayIn,
                   localPayInCurrency,
                 )}
               />
               <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.estimatedToCredit}
+                label={creditAmountLabel}
                 value={formatReviewRowMoneyDisplay(
-                  REVIEW_ROW_LABELS.estimatedToCredit,
+                  creditAmountLabel,
                   resolvedUsdCredit,
                   'USD',
                 )}
@@ -286,13 +315,11 @@ export function YcFundBalanceReview({
                 currency="USD"
                 balanceLabel="USD Balance"
               />
-              {!isMobileMoney ? (
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.transferMethod}
-                  value={transferMethod}
-                  last
-                />
-              ) : null}
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.transferMethod}
+                value={transferMethod}
+                last
+              />
             </>
           )}
 
@@ -385,7 +412,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing[4],
   },
-  momoSection: { marginTop: spacing[4], paddingTop: spacing[4], borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.light },
+  momoSection: { marginTop: spacing[4], paddingTop: spacing[4] },
   fieldLabel: { ...textStyles.caption, color: colors.text.secondary, marginBottom: spacing[2] },
   fieldLabelSpaced: { marginTop: spacing[4] },
   input: {

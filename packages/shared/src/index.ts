@@ -611,6 +611,10 @@ export {
   receiveLocalBankTitle,
   receiveLocalMomoTitle,
   receiveLocalDepositSubtitle,
+  sendLocalPayInBankTitle,
+  sendLocalPayInMomoTitle,
+  SEND_LOCAL_PAY_IN_BANK_CHIP,
+  SEND_LOCAL_PAY_IN_MOMO_CHIP,
 } from "./receive-cash-method-labels"
 export {
   formatYcPayInMinHint,

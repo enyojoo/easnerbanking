@@ -17,7 +17,6 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { MessageSquareText, ChevronDown, User, Coins, RotateCcw, ArrowLeft, ArrowUpDown, Link, Delete, X, ChevronRight } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Svg, { Path } from 'react-native-svg'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { WebAwareModal } from '../../components/WebAwareModal'
@@ -45,6 +44,8 @@ import { useToast } from '../../components/ToastProvider'
 import { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from '../../hooks/queries'
 import { useQueryClient } from '@tanstack/react-query'
 import { useYcCrossBorderFlow, type YcPayInRail, residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
+import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
+import { CountryFlag } from '../../components/flags/CountryFlag'
 import { useAuth } from '../../contexts/AuthContext'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
 import { generateTransactionId } from '../../lib/transactionId'
@@ -76,6 +77,11 @@ import {
   resolveYcPayoutLimits,
   getYcBusinessPayoutMin,
   YC_DIRECT_SETTLEMENT_MIN_SEND_USDC_EXCLUSIVE,
+  resolveReceiveCountryName,
+  sendLocalPayInBankTitle,
+  sendLocalPayInMomoTitle,
+  SEND_LOCAL_PAY_IN_BANK_CHIP,
+  SEND_LOCAL_PAY_IN_MOMO_CHIP,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
@@ -132,20 +138,6 @@ function initialAmountEntryModeFromRouteParams(
   params: Record<string, unknown> | undefined,
 ): 'receive' | 'send' {
   return params?.initialAmountEntryMode === 'send' ? 'send' : 'receive'
-}
-
-// Landmark/Bank Icon Component
-function LandmarkIcon({ size = 24, color = colors.text.primary }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <Path d="M10 18v-7"/>
-      <Path d="M11.12 2.198a2 2 0 0 1 1.76.006l7.866 3.847c.476.233.31.949-.22.949H3.474c-.53 0-.695-.716-.22-.949z"/>
-      <Path d="M14 18v-7"/>
-      <Path d="M18 18v-7"/>
-      <Path d="M3 22h18"/>
-      <Path d="M6 18v-7"/>
-    </Svg>
-  )
 }
 
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
@@ -305,21 +297,27 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   })
 
   const showThroughLocalCurrency = ycFlow.available && !isEasetagRecipient
+  const payInCurrency = ycFlow.payInCurrency
+  const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
+  const payInCountryName = payInCountry ? resolveReceiveCountryName(payInCountry) : ''
 
-  const otherCurrencies = useMemo(() => {
-    if (!showThroughLocalCurrency || !ycFlow.payInCurrency) return []
-    return [{ code: ycFlow.payInCurrency, name: ycFlow.payInCurrency }]
-  }, [showThroughLocalCurrency, ycFlow.payInCurrency])
+  const { rails: payInRails, loading: payInRailsLoading } = useYcReceiveRails({
+    country: payInCountry,
+    currency: payInCurrency,
+    enabled: showThroughLocalCurrency && Boolean(payInCountry && payInCurrency),
+  })
 
-  const currencyPaymentMethods = useMemo(() => {
-    if (!showThroughLocalCurrency || !ycFlow.payInCurrency) return {}
-    return {
-      [ycFlow.payInCurrency]: [
-        { code: 'bank_transfer', name: 'Bank Transfer', type: 'bank_account' },
-        { code: 'mobile_money', name: 'Mobile Money', type: 'mobile_money' },
-      ],
+  const localPayInOptions = useMemo(() => {
+    if (!payInCurrency || !payInCountry || !payInRails) return []
+    const opts: { rail: YcPayInRail; title: string }[] = []
+    if (payInRails.rails.bank_transfer.available) {
+      opts.push({ rail: 'bank_transfer', title: sendLocalPayInBankTitle(payInCountryName) })
     }
-  }, [showThroughLocalCurrency, ycFlow.payInCurrency])
+    if (payInRails.rails.mobile_money.available) {
+      opts.push({ rail: 'mobile_money', title: sendLocalPayInMomoTitle(payInCountryName) })
+    }
+    return opts
+  }, [payInCurrency, payInCountry, payInCountryName, payInRails])
 
   useEffect(() => {
     if (showThroughLocalCurrency) return
@@ -342,15 +340,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       setSelectedOtherPaymentMethod(null)
     }
   }, [isEasetagRecipient, selectedPaymentMethod, selectedOtherCurrency, selectedOtherPaymentMethod])
-
-  useEffect(() => {
-    if (selectedPaymentMethod !== 'otherCurrency' || !selectedOtherCurrency) return
-    const opts = currencyPaymentMethods[selectedOtherCurrency] ?? []
-    if (opts.length === 0) return
-    if (!selectedOtherPaymentMethod) {
-      setSelectedOtherPaymentMethod(opts[0].code)
-    }
-  }, [selectedPaymentMethod, selectedOtherCurrency, currencyPaymentMethods, selectedOtherPaymentMethod])
 
   useEffect(() => {
     if (
@@ -1018,13 +1007,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       return `${selectedBalanceCurrency} Balance • ${getCurrencySymbol(selectedBalanceCurrency)}${fig}`
     }
     if (selectedOtherCurrency && selectedOtherPaymentMethod) {
-      const method = currencyPaymentMethods[selectedOtherCurrency]?.find(
-        (m) => m.code === selectedOtherPaymentMethod,
-      )
-      return `${selectedOtherCurrency} • ${method?.name ?? selectedOtherPaymentMethod}`
+      return selectedOtherPaymentMethod === 'mobile_money'
+        ? SEND_LOCAL_PAY_IN_MOMO_CHIP
+        : SEND_LOCAL_PAY_IN_BANK_CHIP
     }
-    if (selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency) {
-      return `${selectedOtherCurrency} - Select Method`
+    if (selectedPaymentMethod === 'otherCurrency') {
+      return 'Select method'
     }
     return 'Select method'
   })()
@@ -1542,8 +1530,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   <View style={styles.flagContainer}>
                     {selectedPaymentMethod === 'balance' ? (
                       <CurrencyFlag currency={selectedBalanceCurrency} size={24} style={styles.flagImage} />
-                    ) : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency ? (
-                      <CurrencyFlag currency={selectedOtherCurrency} size={24} style={styles.flagImage} />
+                    ) : selectedPaymentMethod === 'otherCurrency' && payInCountry ? (
+                      <CountryFlag code={payInCountry} size={24} style={styles.flagImage} />
                     ) : null}
               </View>
                   {selectedPaymentMethod === 'balance' ? (
@@ -1552,12 +1540,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     </Text>
                   ) : (
                     <Text style={styles.balanceSelectorText} numberOfLines={1}>
-                      {selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
-                        ? currencyPaymentMethods[selectedOtherCurrency]?.find((m) => m.code === selectedOtherPaymentMethod)
-                            ?.name || 'Select Method'
-                        : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
-                          ? `${selectedOtherCurrency} - Select Method`
-                          : 'Select Method'}
+                      {selectedPaymentMethod === 'otherCurrency' && selectedOtherPaymentMethod
+                        ? selectedOtherPaymentMethod === 'mobile_money'
+                          ? SEND_LOCAL_PAY_IN_MOMO_CHIP
+                          : SEND_LOCAL_PAY_IN_BANK_CHIP
+                        : 'Select method'}
                     </Text>
                   )}
                   <ChevronDown size={16} color={colors.text.primary} strokeWidth={2} />
@@ -1830,102 +1817,54 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 {showThroughLocalCurrency ? (
                 <View style={styles.paymentSection}>
                   <Text style={styles.paymentSectionTitle}>Through Local Currency</Text>
-                  
-                  {/* Currency Selector */}
-                  {!selectedOtherCurrency ? (
-                    otherCurrencies.map((currency) => (
+                  {payInRailsLoading && localPayInOptions.length === 0 ? (
+                    <ActivityIndicator
+                      color={colors.primary.main}
+                      style={{ marginVertical: spacing[4] }}
+                    />
+                  ) : null}
+                  {localPayInOptions.map((option) => {
+                    const isSelected =
+                      selectedPaymentMethod === 'otherCurrency' &&
+                      selectedOtherCurrency === payInCurrency &&
+                      selectedOtherPaymentMethod === option.rail
+                    return (
                       <Pressable
-                       android_ripple={ripple.neutral}
-                        key={currency.code}
-                        style={styles.currencyItem}
-                        onPress={async () => {
+                        android_ripple={ripple.neutral}
+                        key={option.rail}
+                        style={[styles.currencyItem, isSelected && styles.currencyItemActive]}
+                        onPress={() => {
                           haptics.tap()
-                          setSelectedOtherCurrency(currency.code)
+                          if (!payInCurrency) return
+                          setSelectedOtherCurrency(payInCurrency)
+                          setSelectedOtherPaymentMethod(option.rail)
                           setSelectedPaymentMethod('otherCurrency')
-                          setSelectedOtherPaymentMethod(null)
+                          setShowCurrencyPicker(false)
                         }}
                       >
                         <View style={styles.flagContainerSmall}>
-                          {getTokenIconUrl(currency.code) ? (
-                            <CachedImage
-                              uri={getTokenIconUrl(currency.code)!}
+                          {payInCountry ? (
+                            <CountryFlag
+                              code={payInCountry}
+                              size={24}
                               style={styles.flagImageSmall}
-                              contentFit="cover"
                             />
-                          ) : (
-                            <CurrencyFlag currency={currency.code} size={24} style={styles.flagImageSmall} />
-                          )}
+                          ) : null}
                         </View>
                         <View style={styles.currencyItemInfo}>
-                          <Text style={styles.currencyItemCode}>{currency.name}</Text>
+                          <Text style={styles.currencyItemCode}>{option.title}</Text>
                         </View>
-                        <ChevronRight size={20} color={colors.text.secondary} strokeWidth={2} />
-                      </Pressable>
-                    ))
-                  ) : (
-                    <>
-                      {/* Back button to change currency */}
-                      <Pressable
-                       android_ripple={ripple.neutral}
-                        style={styles.currencyItem}
-                        onPress={async () => {
-                          haptics.tap()
-                          setSelectedOtherCurrency(null)
-                          setSelectedOtherPaymentMethod(null)
-                        }}
-                      >
-                        <ArrowLeft size={20} color={colors.primary.main} strokeWidth={2} />
-                        <View style={styles.currencyItemInfo}>
-                          <Text style={styles.currencyItemCode}>
-                            {otherCurrencies.find(c => c.code === selectedOtherCurrency)?.name}
-                          </Text>
+                        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                          {isSelected ? <View style={styles.checkboxInner} /> : null}
                         </View>
                       </Pressable>
-
-                      {/* Payment Methods for Selected Currency */}
-                      {currencyPaymentMethods[selectedOtherCurrency]?.map((method) => {
-                        const isSelected = selectedOtherPaymentMethod === method.code
-                        return (
-                          <Pressable
-                           android_ripple={ripple.neutral}
-                            key={method.code}
-                            style={[
-                              styles.currencyItem,
-                              isSelected && styles.currencyItemActive
-                            ]}
-                            onPress={async () => {
-                              haptics.tap()
-                              setSelectedOtherPaymentMethod(method.code)
-                              setShowCurrencyPicker(false)
-                            }}
-                          >
-                            <View style={styles.flagContainerSmall}>
-                              {method.displayLogoUrl ? (
-                                <CachedImage
-                                  uri={method.displayLogoUrl}
-                                  style={styles.flagImageSmall}
-                                  contentFit="contain"
-                                />
-                              ) : (
-                                <LandmarkIcon size={16} color={colors.text.primary} />
-                              )}
-                            </View>
-                            <View style={styles.currencyItemInfo}>
-                              <Text style={styles.currencyItemCode}>{method.name}</Text>
-                            </View>
-                            <View style={[
-                              styles.checkbox,
-                              isSelected && styles.checkboxSelected
-                            ]}>
-                              {isSelected && (
-                                <View style={styles.checkboxInner} />
-                              )}
-                            </View>
-                          </Pressable>
-                        )
-                      })}
-                    </>
-                  )}
+                    )
+                  })}
+                  {!payInRailsLoading && localPayInOptions.length === 0 ? (
+                    <Text style={styles.localPayInUnavailable}>
+                      Local pay-in is not available for your country right now.
+                    </Text>
+                  ) : null}
                 </View>
                 ) : null}
               </View>
@@ -2364,6 +2303,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  localPayInUnavailable: {
+    ...textStyles.body,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3],
   },
   modalScrollView: {
     flex: 1,

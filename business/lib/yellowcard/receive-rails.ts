@@ -26,6 +26,16 @@ function channelMatchesReceiveRail(
   return rail === "mobile_money" ? t.includes("momo") : t.includes("bank") || !t.includes("momo")
 }
 
+/** YC may return disabled corridor rows — never submit receive against them. */
+export function isYcReceiveChannelActive(ch: YcChannel): boolean {
+  const apiStatus = String(ch.apiStatus ?? "").trim().toLowerCase()
+  const status = String(ch.status ?? "").trim().toLowerCase()
+  if (apiStatus === "disabled" || status === "disabled") return false
+  if (apiStatus && apiStatus !== "active") return false
+  if (status && status !== "active" && status !== "enabled") return false
+  return true
+}
+
 export function findYcReceiveChannel(
   channels: YcChannel[],
   input: { country: string; currency: string; rail: YcReceiveRail },
@@ -34,6 +44,7 @@ export function findYcReceiveChannel(
   const currency = input.currency.trim().toUpperCase()
   return (
     channels.find((ch) => {
+      if (!isYcReceiveChannelActive(ch)) return false
       if (String(ch.country ?? "").toUpperCase() !== country) return false
       if (String(ch.currency ?? "").toUpperCase() !== currency) return false
       return channelMatchesReceiveRail(ch, input.rail)

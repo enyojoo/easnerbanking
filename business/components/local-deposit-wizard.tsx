@@ -17,6 +17,7 @@ import {
   formatMoneyDisplay,
   formatReviewRowMoneyDisplay,
   formatSendRateLabel,
+  computeDisplayProcessingFee,
   mapResidenceToLocalPayInCurrency,
   resolveYcPayInCustomerRate,
   ycFundBalanceQuoteErrorMessage,
@@ -611,6 +612,20 @@ export function LocalDepositWizard({
     const reviewLocalPayIn = isMomo ? preview.localPayIn : (quote?.localPayIn ?? 0)
     const reviewUsdCredit = isMomo ? preview.usdCredit : (quote?.usdCredit ?? 0)
     const reviewCustomerRate = isMomo ? customerRate : (quote?.customerRate ?? customerRate)
+    const reviewFeeLocal =
+      !isMomo && quote
+        ? quote.displayProcessingFeeLocal ??
+          (quote.displayProcessingFee != null && reviewCustomerRate
+            ? Math.round(quote.displayProcessingFee * reviewCustomerRate * 100) / 100
+            : computeDisplayProcessingFee({
+                processingFee: quote.processingFee ?? 0,
+                exchangeFee: quote.ycChannelFeeUsd ?? 0,
+              }) * (reviewCustomerRate || 1))
+        : 0
+    const payAmountLabel = isMomo ? REVIEW_ROW_LABELS.estimatedToPay : REVIEW_ROW_LABELS.amountToPay
+    const creditAmountLabel = isMomo
+      ? REVIEW_ROW_LABELS.estimatedToCredit
+      : REVIEW_ROW_LABELS.amountToCredit
     const momoReady = Boolean((momoPhone.trim() || defaultPhone.trim()) && momoNetworkId)
     const reviewReady = isMomo
       ? Boolean(reviewCustomerRate && reviewLocalPayIn > 0 && momoReady)
@@ -642,13 +657,9 @@ export function LocalDepositWizard({
                 </div>
               ) : null}
               <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.estimatedToPay}</span>
+                <span className="text-muted-foreground">{payAmountLabel}</span>
                 <span>
-                  {formatReviewRowMoneyDisplay(
-                    REVIEW_ROW_LABELS.estimatedToPay,
-                    reviewLocalPayIn,
-                    localPayInCurrency,
-                  )}
+                  {formatReviewRowMoneyDisplay(payAmountLabel, reviewLocalPayIn, localPayInCurrency)}
                 </span>
               </div>
               {reviewCustomerRate ? (
@@ -657,10 +668,22 @@ export function LocalDepositWizard({
                   <span>{formatSendRateLabel("USD", localPayInCurrency, reviewCustomerRate)}</span>
                 </div>
               ) : null}
+              {!isMomo && reviewFeeLocal > 0 ? (
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
+                  <span>
+                    {formatReviewRowMoneyDisplay(
+                      REVIEW_ROW_LABELS.processingFee,
+                      reviewFeeLocal,
+                      localPayInCurrency,
+                    )}
+                  </span>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-4 font-medium">
-                <span>{REVIEW_ROW_LABELS.estimatedToCredit}</span>
+                <span>{creditAmountLabel}</span>
                 <span>
-                  {formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.amountToCredit, reviewUsdCredit, "USD")}
+                  {formatReviewRowMoneyDisplay(creditAmountLabel, reviewUsdCredit, "USD")}
                 </span>
               </div>
               <div className="flex justify-between gap-4 items-center">
@@ -670,12 +693,10 @@ export function LocalDepositWizard({
                   USD Balance
                 </span>
               </div>
-              {!isMomo ? (
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
-                  <span>{transferMethod}</span>
-                </div>
-              ) : null}
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
+                <span>{transferMethod}</span>
+              </div>
               {!isMomo && quote?.expiresAt ? (
                 <p className="text-xs text-muted-foreground pt-1">
                   {quoteCountdown.expired
@@ -686,7 +707,7 @@ export function LocalDepositWizard({
             </>
           ) : null}
           {isMomo ? (
-            <div className="pt-4 mt-4 border-t space-y-3">
+            <div className="pt-4 space-y-3">
               <div>
                 <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.momoNumberPrompt}</Label>
                 <Input

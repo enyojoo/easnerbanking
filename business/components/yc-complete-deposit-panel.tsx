@@ -55,6 +55,7 @@ export function YcCompleteDepositPanel({
 }: YcCompleteDepositPanelProps) {
   const isFundBalance = flowMode === "fund_balance"
   const isMomo = payInRail === "mobile_money"
+  const compactBankFundBalance = isFundBalance && !isMomo
   const title = isFundBalance ? "Complete deposit" : "Complete payment"
   const payInAmount = formatMoneyDisplay(localPayIn, localCurrency)
   const creditAmount = formatMoneyDisplay(creditOrReceiveAmount, creditOrReceiveCurrency)
@@ -86,44 +87,53 @@ export function YcCompleteDepositPanel({
             <span className="font-mono">{transactionId.toUpperCase()}</span>
           )}
         </div>
-        {processingFeeLocal > 0 ? (
-          <div className="flex justify-between gap-4 py-2 border-b">
-            <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
-            <span>
-              {formatReviewRowMoneyDisplay(
-                REVIEW_ROW_LABELS.processingFee,
-                processingFeeLocal,
-                localCurrency,
-              )}
-            </span>
+        {compactBankFundBalance ? (
+          <div className="flex justify-between gap-4 py-2">
+            <span className="text-muted-foreground">{REVIEW_ROW_LABELS.amountToCredit}</span>
+            <span className="font-medium">{creditAmount}</span>
           </div>
-        ) : null}
-        {customerRate > 0 ? (
-          <div className="flex justify-between gap-4 py-2 border-b">
-            <span className="text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
-            <span>
-              {isFundBalance
-                ? formatSendRateLabel("USD", localCurrency, customerRate)
-                : formatSendRateLabel(localCurrency, creditOrReceiveCurrency, customerRate)}
-            </span>
-          </div>
-        ) : null}
-        <div className="flex justify-between gap-4 py-2 border-b">
-          <span className="text-muted-foreground">
-            {isFundBalance ? REVIEW_ROW_LABELS.amountToCredit : REVIEW_ROW_LABELS.recipientGets}
-          </span>
-          <span className="font-medium">{creditAmount}</span>
-        </div>
-        {!isFundBalance && recipientName ? (
-          <div className="flex justify-between gap-4 py-2 border-b">
-            <span className="text-muted-foreground">{REVIEW_ROW_LABELS.recipient}</span>
-            <span>{recipientName}</span>
-          </div>
-        ) : null}
-        <div className="flex justify-between gap-4 py-2">
-          <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
-          <span>{isMomo ? "Mobile Money" : "Bank Transfer"}</span>
-        </div>
+        ) : (
+          <>
+            {processingFeeLocal > 0 ? (
+              <div className="flex justify-between gap-4 py-2 border-b">
+                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
+                <span>
+                  {formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.processingFee,
+                    processingFeeLocal,
+                    localCurrency,
+                  )}
+                </span>
+              </div>
+            ) : null}
+            {customerRate > 0 ? (
+              <div className="flex justify-between gap-4 py-2 border-b">
+                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
+                <span>
+                  {isFundBalance
+                    ? formatSendRateLabel("USD", localCurrency, customerRate)
+                    : formatSendRateLabel(localCurrency, creditOrReceiveCurrency, customerRate)}
+                </span>
+              </div>
+            ) : null}
+            <div className="flex justify-between gap-4 py-2 border-b">
+              <span className="text-muted-foreground">
+                {isFundBalance ? REVIEW_ROW_LABELS.amountToCredit : REVIEW_ROW_LABELS.recipientGets}
+              </span>
+              <span className="font-medium">{creditAmount}</span>
+            </div>
+            {!isFundBalance && recipientName ? (
+              <div className="flex justify-between gap-4 py-2 border-b">
+                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.recipient}</span>
+                <span>{recipientName}</span>
+              </div>
+            ) : null}
+            <div className="flex justify-between gap-4 py-2">
+              <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
+              <span>{isMomo ? "Mobile Money" : "Bank Transfer"}</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="space-y-4">
