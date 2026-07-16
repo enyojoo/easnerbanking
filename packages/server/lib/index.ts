@@ -17,6 +17,13 @@ export {
   type TransactionDetailRow,
 } from "./email-generator"
 export {
+  customerGreetingParagraphHtml,
+  easnerUserGreetingParagraphHtml,
+  formatCustomerGreetingPlain,
+  formatEasnerUserGreetingHtml,
+  formatEasnerUserGreetingPlain,
+} from "./email-greeting"
+export {
   EASNER_COMPANY_LEGAL_NAME,
   EASNER_COMPANY_ADDRESS,
 } from "./email-theme"

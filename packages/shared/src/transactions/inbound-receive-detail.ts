@@ -539,11 +539,6 @@ export function buildInboundReceiveDetailRows(
           formatMoneyDisplay(snapshot.processingFee.amount, snapshot.processingFee.currency),
         )
       }
-      pushIf(
-        rows,
-        REVIEW_ROW_LABELS.amountCredited,
-        formatMoneyDisplay(snapshot.amountCredited.amount, snapshot.amountCredited.currency),
-      )
       pushCreditDestination(rows, snapshot.creditDestination)
       pushIf(rows, REVIEW_ROW_LABELS.note, snapshot.note)
       break

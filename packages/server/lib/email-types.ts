@@ -35,6 +35,8 @@ export interface TransactionEmailData {
   failureReason?: string
   detailUrl?: string
   createdAt?: string
+  /** Recipient first name for "Hey {firstName}," greeting in transaction emails. */
+  firstName?: string
   /**
    * Canonical detail rows (Sending / Processing fee / Total debited / Recipient / Transfer method
    * for payouts; Scheme / Sender / Processing fee / Amount credited for deposits). Built at dispatch

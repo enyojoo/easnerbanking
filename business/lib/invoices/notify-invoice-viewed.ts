@@ -1,4 +1,5 @@
 import { mapRowToInvoice, type B2bInvoiceRow } from "@/lib/b2b/map-invoice"
+import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import {
   fetchInvoiceIssuerForBusiness,
   resolveInvoiceReplyEmail,
@@ -45,10 +46,22 @@ export async function notifyMerchantInvoiceViewed(invoiceId: string): Promise<vo
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com"
   const manageInvoiceUrl = `${baseUrl.replace(/\/$/, "")}/invoices/${invoice.id}`
 
+  let recipientFirstName: string | undefined
+  const ownerUserId = await resolveOrgOwnerUserId(admin, b2b.business_id, "")
+  if (ownerUserId) {
+    const { data: owner } = await admin
+      .from("users")
+      .select("first_name")
+      .eq("id", ownerUserId)
+      .maybeSingle()
+    recipientFirstName = owner?.first_name?.trim() || undefined
+  }
+
   await sendInvoiceViewNotificationEmail({
     to: replyEmail.trim(),
     businessName: issuer.name?.trim() || (biz?.name as string | null)?.trim() || "Your business",
     invoice,
     manageInvoiceUrl,
+    recipientFirstName,
   })
 }

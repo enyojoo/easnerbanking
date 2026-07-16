@@ -75,8 +75,9 @@ describe("invoice email templates", () => {
       invoice: sampleInvoice,
       businessName: "Acme Ltd",
       manageInvoiceUrl: "https://business.easner.com/invoices/inv_1",
+      recipientFirstName: "Alex",
     })
-    expect(html).toContain("Hello Acme Ltd")
+    expect(html).toContain("Hey Alex,")
     expect(html).toContain("Jane Doe viewed invoice")
     expect(html).not.toContain('<h1 class="email-title">')
     expect(html).toContain("View invoice</a>")

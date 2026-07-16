@@ -2,6 +2,10 @@
 
 import { personalMobileTransactionUrl } from "@easner/shared/mobile-personal-links"
 import {
+  easnerUserGreetingParagraphHtml,
+  formatEasnerUserGreetingPlain,
+} from "./email-greeting"
+import {
   generateBaseEmailTemplate,
   generateTransactionDetailsTable,
   type TransactionDetailRow,
@@ -73,13 +77,32 @@ function transactionEmailSubject(data: TransactionEmailData): string {
   return data.emailSubject?.trim() || data.title
 }
 
+function escapeHtmlText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+function transactionEmailIntroHtml(data: TransactionEmailData): string {
+  return `
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
+        <p class="confirmation-text">${escapeHtmlText(data.body)}</p>
+      `
+}
+
+function transactionEmailIntroText(data: TransactionEmailData): string {
+  return `${formatEasnerUserGreetingPlain(data.firstName)}\n\n${data.body}`
+}
+
 function transactionSettledTemplate(): EmailTemplate {
   return {
     subject: (data: TransactionEmailData) => transactionEmailSubject(data),
     preheader: (data: TransactionEmailData) => data.body,
     html: (data: TransactionEmailData, audience = "personal") => {
       const content = `
-        <p class="confirmation-text">${data.body}</p>
+        ${transactionEmailIntroHtml(data)}
         ${generateTransactionDetailsTable(buildTransactionDetailRows(data))}
       `
       return generateBaseEmailTemplate(data.title, "", content, {
@@ -88,7 +111,7 @@ function transactionSettledTemplate(): EmailTemplate {
       }, { audience, preheader: data.body, showPreferencesLink: false })
     },
     text: (data: TransactionEmailData, audience = "personal") =>
-      `${data.title}\n\n${data.body}\n\nView transaction: ${txDetailUrl(data, audience)}`,
+      `${data.title}\n\n${transactionEmailIntroText(data)}\n\nView transaction: ${txDetailUrl(data, audience)}`,
   }
 }
 
@@ -101,7 +124,7 @@ function transactionFailedTemplate(): EmailTemplate {
         ? `<p class="confirmation-text"><strong>Reason:</strong> ${data.failureReason}</p>`
         : ""
       const content = `
-        <p class="confirmation-text">${data.body}</p>
+        ${transactionEmailIntroHtml(data)}
         ${reason}
         ${generateTransactionDetailsTable(buildTransactionDetailRows(data))}
         <div class="security-note"><h3>What happens next</h3><p>If funds were debited, we will restore your balance where applicable. Contact support if you need help.</p></div>
@@ -112,7 +135,7 @@ function transactionFailedTemplate(): EmailTemplate {
       }, { audience, preheader: data.body, showPreferencesLink: false })
     },
     text: (data: TransactionEmailData, audience = "personal") => {
-      return `${data.title}\n\n${data.body}${data.failureReason ? `\nReason: ${data.failureReason}` : ""}\n\nContact support: ${CONTACT_URL}`
+      return `${data.title}\n\n${transactionEmailIntroText(data)}${data.failureReason ? `\nReason: ${data.failureReason}` : ""}\n\nContact support: ${CONTACT_URL}`
     },
   }
 }
@@ -123,7 +146,7 @@ function transactionReversedTemplate(): EmailTemplate {
     preheader: (data: TransactionEmailData) => data.body,
     html: (data: TransactionEmailData, audience = "personal") => {
       const content = `
-        <p class="confirmation-text">${data.body}</p>
+        ${transactionEmailIntroHtml(data)}
         ${generateTransactionDetailsTable(buildTransactionDetailRows(data))}
       `
       return generateBaseEmailTemplate(data.title, "", content, {
@@ -132,7 +155,7 @@ function transactionReversedTemplate(): EmailTemplate {
       }, { audience, preheader: data.body, showPreferencesLink: false })
     },
     text: (data: TransactionEmailData, audience = "personal") =>
-      `${data.title}\n\n${data.body}\n\nView: ${txDetailUrl(data, audience)}`,
+      `${data.title}\n\n${transactionEmailIntroText(data)}\n\nView: ${txDetailUrl(data, audience)}`,
   }
 }
 
@@ -143,7 +166,7 @@ export const emailTemplates: Record<string, EmailTemplate> = {
     html: (data: WelcomeEmailData) => {
       const profile = getEmailAudienceProfile("business")
       const content = `
-        <p class="welcome-text">Dear ${data.firstName},</p>
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
         <p class="confirmation-text">
           Congratulations on creating your Easner Business account. We're excited to have you with us as you start managing multi-currency accounts, global payouts, collections, and more – all in one dashboard.
         </p>
@@ -178,7 +201,7 @@ export const emailTemplates: Record<string, EmailTemplate> = {
       const profile = getEmailAudienceProfile("business")
       return `Welcome to Easner Business Banking
 
-Dear ${data.firstName},
+${formatEasnerUserGreetingPlain(data.firstName)}
 
 Congratulations on creating your Easner Business account.
 
@@ -200,7 +223,7 @@ ${profile.signatureText ?? ""}`
     html: (data: WelcomeEmailData) => {
       const profile = getEmailAudienceProfile("personal")
       const content = `
-        <p class="welcome-text">Hi ${data.firstName},</p>
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
         <p class="confirmation-text">
           Congratulations on creating your Easner banking account. Send, receive, and track money in screens that feel like traditional banking, no complexity, no friction.
         </p>
@@ -229,7 +252,7 @@ ${profile.signatureText ?? ""}`
       const profile = getEmailAudienceProfile("personal")
       return `Welcome to Easner Banking
 
-Hi ${data.firstName},
+${formatEasnerUserGreetingPlain(data.firstName)}
 
 Congratulations on creating your Easner banking account. Send, receive, and track money in screens that feel like traditional banking, no complexity, no friction.
 
@@ -261,6 +284,7 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
       `You're invited to ${data.businessName} on Easner Business`,
     html: (data: TeamInviteEmailData) => {
       const content = `
+        ${easnerUserGreetingParagraphHtml(undefined)}
         <p class="confirmation-text">
           ${data.inviterName} invited you to join <strong>${data.businessName}</strong> on Easner Business as <strong>${data.role}</strong>.
         </p>
@@ -281,7 +305,7 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
       )
     },
     text: (data: TeamInviteEmailData) =>
-      `${data.inviterName} invited you to ${data.businessName} as ${data.role}.\n\nUse ${data.inviteeEmail} when you create an account or sign in.\n\nAccept: ${data.acceptUrl}`,
+      `${formatEasnerUserGreetingPlain(undefined)}\n\n${data.inviterName} invited you to ${data.businessName} as ${data.role}.\n\nUse ${data.inviteeEmail} when you create an account or sign in.\n\nAccept: ${data.acceptUrl}`,
   },
 
   passwordChanged: securityTemplate("password_changed"),
@@ -355,7 +379,7 @@ function verificationTemplate(
           : ""
       const profile = getEmailAudienceProfile(audience)
       const content = `
-        <p class="welcome-text">${data.firstName ? `Hi ${data.firstName},` : "Hello,"}</p>
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
         <p class="confirmation-text">${bodies[status]}</p>
         ${reasons}
       `
@@ -371,7 +395,7 @@ function verificationTemplate(
     },
     text: (data: VerificationEmailData) => {
       const profile = getEmailAudienceProfile(audience)
-      let t = `${subjectLine}\n\n${bodies[status]}`
+      let t = `${subjectLine}\n\n${formatEasnerUserGreetingPlain(data.firstName)}\n\n${bodies[status]}`
       if (status === "rejected" && data.rejectionReasons?.length) {
         t += `\n\nDetails: ${data.rejectionReasons.join("; ")}`
       }
@@ -450,6 +474,7 @@ function securityTemplate(alertType: SecurityAlertEmailData["alertType"]): Email
           ? `<p class="confirmation-text">Device: ${data.deviceLabel}</p>`
           : ""
       const content = `
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
         <p class="confirmation-text">${c.body}</p>
         ${device}
       `
@@ -460,7 +485,7 @@ function securityTemplate(alertType: SecurityAlertEmailData["alertType"]): Email
     },
     text: (data: SecurityAlertEmailData, audience = "personal") => {
       const subject = securityEmailSubject(alertType, audience)
-      return `${subject}\n\n${c.body}${data.deviceLabel ? `\nDevice: ${data.deviceLabel}` : ""}`
+      return `${subject}\n\n${formatEasnerUserGreetingPlain(data.firstName)}\n\n${c.body}${data.deviceLabel ? `\nDevice: ${data.deviceLabel}` : ""}`
     },
   }
 }

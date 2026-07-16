@@ -1,4 +1,8 @@
 import {
+  customerGreetingParagraphHtml,
+  easnerUserGreetingParagraphHtml,
+  formatCustomerGreetingPlain,
+  formatEasnerUserGreetingPlain,
   generateBaseEmailTemplate,
   generateTransactionDetailsTable,
   EASNER_COMPANY_ADDRESS,
@@ -98,6 +102,8 @@ export interface InvoiceViewedNotificationEmailData {
   invoice: Invoice
   businessName: string
   manageInvoiceUrl: string
+  /** Easner business owner / merchant first name for greeting. */
+  recipientFirstName?: string
 }
 
 export interface InvoiceReceiptEmailData {
@@ -120,7 +126,7 @@ export function generateInvoiceViewedNotificationHtml(
   const subject = getInvoiceViewedNotificationSubject(invoice.invoiceNumber)
 
   const content = `
-    <p class="welcome-text">Hello ${businessName},</p>
+    ${easnerUserGreetingParagraphHtml(data.recipientFirstName)}
     <p class="confirmation-text">${customer} viewed invoice <strong>${invoice.invoiceNumber}</strong>.</p>
     ${invoiceDetailsTable([
       ...invoiceSummaryRows(invoice),
@@ -153,7 +159,7 @@ export function generateInvoiceViewedNotificationText(
   const customer = invoice.customerName?.trim() || "A customer"
 
   return `
-Hello ${businessName},
+${formatEasnerUserGreetingPlain(data.recipientFirstName)}
 
 ${customer} viewed invoice ${invoice.invoiceNumber}.
 
@@ -178,7 +184,7 @@ export function generateInvoiceReceiptEmailHtml(data: InvoiceReceiptEmailData): 
   const subject = getInvoiceReceiptEmailSubject(invoice.invoiceNumber)
 
   const content = `
-    <p class="welcome-text">Dear ${invoice.customerName},</p>
+    ${customerGreetingParagraphHtml(invoice.customerName)}
     <p class="confirmation-text">Thank you — we received your payment for this invoice from ${businessName}.</p>
     ${invoiceDetailsTable([
       ...invoiceSummaryRows(invoice),
@@ -203,7 +209,7 @@ export function generateInvoiceReceiptEmailText(data: InvoiceReceiptEmailData): 
   const { invoice, invoiceViewUrl, businessName, businessReplyEmail } = data
 
   return `
-Dear ${invoice.customerName},
+${formatCustomerGreetingPlain(invoice.customerName)}
 
 Thank you — we received your payment for this invoice from ${businessName}.
 
@@ -305,7 +311,7 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
   const emailSubject = getInvoiceEmailSubject(data)
 
   const content = `
-    <p class="welcome-text">Dear ${invoice.customerName},</p>
+    ${customerGreetingParagraphHtml(invoice.customerName)}
     <p class="confirmation-text">${bodyIntro}</p>
     ${invoiceDetailsTable([
       ...invoiceSummaryRows(invoice),
@@ -332,7 +338,7 @@ export function generateInvoiceEmailText(data: InvoiceEmailData): string {
   const bodyIntro = getBodyIntroPlain(data)
 
   return `
-Dear ${invoice.customerName},
+${formatCustomerGreetingPlain(invoice.customerName)}
 
 ${bodyIntro}
 

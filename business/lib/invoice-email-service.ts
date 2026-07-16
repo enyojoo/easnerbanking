@@ -115,6 +115,7 @@ export async function sendInvoiceViewNotificationEmail(input: {
   businessName: string
   invoice: Invoice
   manageInvoiceUrl: string
+  recipientFirstName?: string
 }): Promise<SendInvoiceEmailResult> {
   try {
     ensureSendGridInitialized()
@@ -123,6 +124,7 @@ export async function sendInvoiceViewNotificationEmail(input: {
       invoice: input.invoice,
       businessName: input.businessName,
       manageInvoiceUrl: input.manageInvoiceUrl,
+      recipientFirstName: input.recipientFirstName,
     }
 
     await sgMail.send({

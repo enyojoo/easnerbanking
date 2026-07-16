@@ -29,9 +29,15 @@ export type DispatchTransactionNotificationInput = DeriveTransactionNotification
   sendPush?: boolean
 }
 
-async function fetchUserEmail(admin: SupabaseClient, userId: string): Promise<string | null> {
-  const { data } = await admin.from("users").select("email").eq("id", userId).maybeSingle()
-  return data?.email?.trim() || null
+async function fetchUserContact(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<{ email: string | null; firstName?: string }> {
+  const { data } = await admin.from("users").select("email, first_name").eq("id", userId).maybeSingle()
+  return {
+    email: data?.email?.trim() || null,
+    firstName: data?.first_name?.trim() || undefined,
+  }
 }
 
 async function fetchCommunicationPreferences(
@@ -174,6 +180,7 @@ function descriptorToEmailData(
   descriptor: ReturnType<typeof deriveTransactionNotification>,
   input: DispatchTransactionNotificationInput,
   audience: Awaited<ReturnType<typeof resolveEmailAudience>>,
+  firstName?: string,
 ): TransactionEmailData {
   const businessBase =
     process.env.NEXT_PUBLIC_BUSINESS_URL ||
@@ -206,6 +213,7 @@ function descriptorToEmailData(
         ? `${businessBase}/transactions/${encodeURIComponent(id)}`
         : personalMobileTransactionUrl(id, process.env.NEXT_PUBLIC_MOBILE_APP_URL),
     detailRows: buildEmailDetailRows(descriptor, input),
+    firstName,
     audience,
   }
 }
@@ -257,9 +265,10 @@ export async function dispatchTransactionNotification(
   }
 
   if (sendEmailChannel && parsed.channels.email) {
-    const email = input.userEmail?.trim() || (await fetchUserEmail(admin, input.userId))
+    const contact = await fetchUserContact(admin, input.userId)
+    const email = input.userEmail?.trim() || contact.email
     if (email) {
-      const emailData = descriptorToEmailData(descriptor, input, audience)
+      const emailData = descriptorToEmailData(descriptor, input, audience, contact.firstName)
       const { emailService } = await import("@easner/server")
       await emailService
         .sendTransactionSettledEmail(email, emailData, prefs)

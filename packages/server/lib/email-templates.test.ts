@@ -53,10 +53,11 @@ describe("emailTemplates", () => {
     })
   }
 
-  it("transaction settled html includes transaction id and credited amount", () => {
+  it("transaction settled html includes greeting, summary, transaction id, and credited amount", () => {
     const data = { ...templateFixtures.transactionSettled, emailSubject: "Bank deposit complete" }
     const html = emailTemplates.transactionSettled.html(data, "personal")
-    expect(html).toContain("$99.95")
+    expect(html).toContain("Hey Sam,")
+    expect(html).toContain("$99.95 credited to your USD Balance")
     expect(html).toContain("ET-1001")
     expect(html).toContain("https://app.easner.com/user/transactions/ET-1001")
   })
@@ -68,11 +69,12 @@ describe("emailTemplates", () => {
     expect(html).toContain("https://www.easner.com/contact")
   })
 
-  it("security alert contact CTA uses contact page", () => {
+  it("security alert emails use Hey greeting and contact page CTA", () => {
     const html = emailTemplates.mfaEnabled.html(
       templateFixtures.mfaEnabled as SecurityAlertEmailData,
       "personal",
     )
+    expect(html).toContain("Hey Sam,")
     expect(html).toContain("https://www.easner.com/contact")
   })
 
@@ -94,16 +96,18 @@ describe("emailTemplates", () => {
     expect(html).toContain("Amount credited")
   })
 
-  it("personal welcome uses mobile dashboard deep link", () => {
+  it("personal welcome uses Hey greeting and mobile dashboard deep link", () => {
     const html = emailTemplates.welcomePersonal.html(templateFixtures.welcomePersonal, "personal")
+    expect(html).toContain("Hey Sam,")
     expect(html).toContain("https://app.easner.com/user/dashboard")
     expect(html).not.toContain('class="email-subtitle">Easner Banking')
     expect(html).toContain("Enyo Sam")
     expect(html).toContain("Founder, Easner")
   })
 
-  it("personal KYC templates omit product name header subtitle", () => {
+  it("personal KYC templates use Hey greeting and omit product name header subtitle", () => {
     const html = emailTemplates.kycApproved.html(templateFixtures.kycApproved, "personal")
+    expect(html).toContain("Hey Sam,")
     expect(html).not.toContain('class="email-subtitle">Easner Banking')
   })
 
@@ -182,8 +186,9 @@ describe("emailTemplates", () => {
     expect(html).toContain("text-align: left !important;")
   })
 
-  it("business welcome omits product name header subtitle", () => {
+  it("business welcome uses Hey greeting", () => {
     const html = emailTemplates.welcomeBusiness.html(templateFixtures.welcomeBusiness, "business")
+    expect(html).toContain("Hey Alex,")
     expect(html).toContain("https://business.easner.com/dashboard")
     expect(html).not.toContain('class="email-subtitle">Easner Business Banking')
     expect(html).toContain("Complete KYB, fund your account, and explore global payouts and collections.")
@@ -194,8 +199,9 @@ describe("emailTemplates", () => {
     expect(html).not.toContain('class="email-subtitle">Easner Business Banking')
   })
 
-  it("team invitation omits business name header subtitle", () => {
+  it("team invitation uses Hey there greeting and omits business name header subtitle", () => {
     const html = emailTemplates.teamInvitation.html(templateFixtures.teamInvitation, "business")
+    expect(html).toContain("Hey there,")
     expect(html).not.toContain('class="email-subtitle">Acme LLC')
     expect(html).not.toContain('class="email-subtitle">')
     expect(html).toContain("Acme LLC")

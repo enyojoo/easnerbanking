@@ -31,11 +31,17 @@ export async function sendSecurityAlertEmail(
 ): Promise<void> {
   const audience = await resolveEmailAudience(admin, input.userId)
   const prefs = await fetchCommunicationPreferences(admin, input.userId)
+  const { data: user } = await admin
+    .from("users")
+    .select("first_name")
+    .eq("id", input.userId)
+    .maybeSingle()
   const data: SecurityAlertEmailData = {
     email: input.userEmail,
     alertType: input.alertType,
     deviceLabel: input.deviceLabel,
     occurredAt: new Date().toISOString(),
+    firstName: user?.first_name?.trim() || undefined,
     audience,
   }
   await emailService

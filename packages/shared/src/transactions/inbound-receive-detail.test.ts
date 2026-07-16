@@ -158,9 +158,9 @@ describe("buildInboundReceiveDetailRows", () => {
       posted_currency: "USD",
     })
     expect(stablecoin?.kind).toBe("stablecoin")
-    expect(rowMap(buildInboundReceiveDetailRows(stablecoin!, { surface: "email" }))[REVIEW_ROW_LABELS.creditTo]).toBe(
-      "USD Balance",
-    )
+    const stablecoinEmail = rowMap(buildInboundReceiveDetailRows(stablecoin!, { surface: "email" }))
+    expect(stablecoinEmail[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
+    expect(stablecoinEmail[REVIEW_ROW_LABELS.amountCredited]).toBeUndefined()
 
     const easetag = resolveInboundReceiveDetail({
       direction: "in",
