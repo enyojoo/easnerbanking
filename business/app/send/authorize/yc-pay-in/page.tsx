@@ -6,6 +6,10 @@ import { ArrowLeft } from "lucide-react"
 import { SEND_FLOW_STATE_KEY, type SendFlowState } from "@/lib/send-flow-session"
 import { YcCompleteDepositPanel } from "@/components/yc-complete-deposit-panel"
 import { getCurrencySymbol } from "@/lib/utils"
+import {
+  formatMoneyDisplay,
+  resolveYcCrossBorderLocalPayInBreakdown,
+} from "@easner/shared"
 
 export default function YcPayInPage() {
   const router = useRouter()
@@ -53,15 +57,16 @@ export default function YcPayInPage() {
   const displayTransactionId = (
     yc.easnerTransactionId || yc.transactionId || state.transactionId
   ).toUpperCase()
-  const feeLocal =
-    yc.displayProcessingFeeLocal ??
-    (yc.processingFee != null && yc.customerRate
-      ? Math.round(yc.processingFee * yc.customerRate * 100) / 100
-      : 0)
-  const formattedPayIn = `${getCurrencySymbol(payInCurrency)}${payIn.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} ${payInCurrency}`
+  const payInBreakdown = resolveYcCrossBorderLocalPayInBreakdown({
+    localPayIn: payIn,
+    payInCurrency,
+    receiveAmount: state.amount,
+    customerRate: yc.customerRate,
+    provisionalPayIn: yc.provisionalPayIn,
+    displayProcessingFeeLocal: yc.displayProcessingFeeLocal,
+  })
+  const feeLocal = payInBreakdown.feeLocal
+  const formattedPayIn = formatMoneyDisplay(payIn, payInCurrency)
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -94,6 +99,7 @@ export default function YcPayInPage() {
         creditOrReceiveAmount={state.amount}
         creditOrReceiveCurrency={state.receiveCurrency}
         customerRate={yc.customerRate}
+        provisionalPayIn={yc.provisionalPayIn}
         processingFeeLocal={feeLocal}
         payInRail={payInRail}
         bankInfo={yc.bankInfo}

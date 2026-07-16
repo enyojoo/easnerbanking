@@ -24,6 +24,7 @@ export type YcCompleteDepositPanelProps = {
   creditOrReceiveCurrency: string
   customerRate: number
   processingFeeLocal?: number
+  provisionalPayIn?: number
   payInRail: YcPayInRail
   bankInfo?: Record<string, unknown> | null
   sourcePhone?: string
@@ -45,6 +46,7 @@ export function YcCompleteDepositPanel({
   creditOrReceiveCurrency,
   customerRate,
   processingFeeLocal = 0,
+  provisionalPayIn,
   payInRail,
   bankInfo,
   sourcePhone,
@@ -76,6 +78,7 @@ export function YcCompleteDepositPanel({
           creditOrReceiveAmount={creditOrReceiveAmount}
           creditOrReceiveCurrency={creditOrReceiveCurrency}
           customerRate={customerRate}
+          provisionalPayIn={provisionalPayIn}
           processingFeeLocal={processingFeeLocal}
           payInRail={payInRail}
           recipientName={recipientName}

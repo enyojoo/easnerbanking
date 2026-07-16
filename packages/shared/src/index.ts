@@ -498,6 +498,7 @@ export {
   computeYcFundBalancePrincipalLocalPayIn,
   computeYcCrossBorderPrincipalLocalPayIn,
   resolveYcFundBalanceLocalPayInBreakdown,
+  resolveYcCrossBorderLocalPayInBreakdown,
   inferResidenceCountryFromLocalCurrency,
   isNoahVaFundingDeposit,
   isYcFundBalanceDepositMetadata,

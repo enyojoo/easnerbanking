@@ -36,16 +36,22 @@ export function computeYcFundBalancePrincipalLocalPayIn(input: {
   return roundLocal(usdCredit * exchangeRate)
 }
 
-/** Cross-border TLC local principal before fees (receive amount × pay-in rate). */
+/** Cross-border TLC local principal before fees (receive ÷ pay-in→receive rate). */
 export function computeYcCrossBorderPrincipalLocalPayIn(input: {
   receiveAmount: number
   customerRate: number
+  /** Authoritative principal from YC quote when available. */
+  provisionalPayIn?: number | null
 }): number {
+  const provisional = Number(input.provisionalPayIn)
+  if (Number.isFinite(provisional) && provisional > 0) {
+    return roundLocal(provisional)
+  }
   const receiveAmount = Number(input.receiveAmount)
   const customerRate = Number(input.customerRate)
   if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) return 0
   if (!Number.isFinite(customerRate) || customerRate <= 0) return 0
-  return roundLocal(receiveAmount * customerRate)
+  return roundLocal(receiveAmount / customerRate)
 }
 
 export type YcFundBalanceLocalPayInBreakdown = {
@@ -53,6 +59,53 @@ export type YcFundBalanceLocalPayInBreakdown = {
   feeLocal: number
   totalLocal: number
   localCurrency: string
+}
+
+function resolveFootingProcessingFeeLocal(input: {
+  principalLocal: number
+  totalLocal: number
+  displayProcessingFeeLocal?: number | null
+}): number {
+  const displayFee =
+    input.displayProcessingFeeLocal != null &&
+    Number.isFinite(input.displayProcessingFeeLocal) &&
+    input.displayProcessingFeeLocal > 0
+      ? roundLocal(input.displayProcessingFeeLocal)
+      : null
+  if (
+    displayFee != null &&
+    roundLocal(input.principalLocal + displayFee) === input.totalLocal
+  ) {
+    return displayFee
+  }
+  return roundLocal(Math.max(0, input.totalLocal - input.principalLocal))
+}
+
+export function resolveYcCrossBorderLocalPayInBreakdown(input: {
+  localPayIn: number
+  payInCurrency: string
+  receiveAmount: number
+  customerRate: number
+  provisionalPayIn?: number | null
+  displayProcessingFeeLocal?: number | null
+}): YcFundBalanceLocalPayInBreakdown {
+  const principalLocal = computeYcCrossBorderPrincipalLocalPayIn({
+    receiveAmount: input.receiveAmount,
+    customerRate: input.customerRate,
+    provisionalPayIn: input.provisionalPayIn,
+  })
+  const totalLocal = roundLocal(input.localPayIn)
+  const feeLocal = resolveFootingProcessingFeeLocal({
+    principalLocal,
+    totalLocal,
+    displayProcessingFeeLocal: input.displayProcessingFeeLocal,
+  })
+  return {
+    principalLocal,
+    feeLocal,
+    totalLocal,
+    localCurrency: input.payInCurrency,
+  }
 }
 
 export function resolveYcFundBalanceLocalPayInBreakdown(
@@ -83,22 +136,26 @@ export function resolveYcFundBalanceLocalPayInBreakdown(
     review.display_processing_fee_local > 0
       ? roundLocal(review.display_processing_fee_local)
       : null
+  const totalLocal = roundLocal(review.local_pay_in)
   const feeLocal =
-    feeFromDisplay ??
-    (() => {
-      const displayUsd = computeDisplayProcessingFee({
-        processingFee: review.processing_fee,
-        exchangeFee: review.exchange_fee,
-      })
-      if (displayUsd > 0 && review.exchange_rate > 0) {
-        return roundLocal(displayUsd * review.exchange_rate)
-      }
-      return roundLocal(Math.max(0, review.local_pay_in - principalLocal))
-    })()
+    feeFromDisplay != null &&
+    roundLocal(principalLocal + feeFromDisplay) === totalLocal
+      ? feeFromDisplay
+      : (() => {
+          const displayUsd = computeDisplayProcessingFee({
+            processingFee: review.processing_fee,
+            exchangeFee: review.exchange_fee,
+          })
+          if (displayUsd > 0 && review.exchange_rate > 0) {
+            const fromUsd = roundLocal(displayUsd * review.exchange_rate)
+            if (roundLocal(principalLocal + fromUsd) === totalLocal) return fromUsd
+          }
+          return roundLocal(Math.max(0, totalLocal - principalLocal))
+        })()
   return {
     principalLocal,
     feeLocal,
-    totalLocal: roundLocal(review.local_pay_in),
+    totalLocal,
     localCurrency: review.local_currency,
   }
 }

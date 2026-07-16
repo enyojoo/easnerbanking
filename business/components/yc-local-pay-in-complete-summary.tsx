@@ -2,8 +2,8 @@
 
 import {
   buildYcLocalPayInCompleteRows,
-  computeYcCrossBorderPrincipalLocalPayIn,
   computeYcFundBalancePrincipalLocalPayIn,
+  resolveYcCrossBorderLocalPayInBreakdown,
   REVIEW_ROW_LABELS,
   type YcPayInRail,
 } from "@easner/shared"
@@ -22,6 +22,7 @@ export type YcLocalPayInCompleteSummaryProps = {
   processingFeeLocal?: number
   processingFeeUsd?: number
   exchangeFeeUsd?: number
+  provisionalPayIn?: number
   payInRail: YcPayInRail
   recipientName?: string
   copiedField?: string | null
@@ -39,6 +40,7 @@ export function YcLocalPayInCompleteSummary({
   processingFeeLocal,
   processingFeeUsd,
   exchangeFeeUsd,
+  provisionalPayIn,
   payInRail,
   recipientName,
   copiedField,
@@ -47,18 +49,24 @@ export function YcLocalPayInCompleteSummary({
   const isFundBalance = flowMode === "fund_balance"
   const isCrossBorder = flowMode === "cross_border_send"
   const isMomo = payInRail === "mobile_money"
+  const crossBorderBreakdown =
+    isCrossBorder && isMomo && customerRate > 0 && localPayIn > 0
+      ? resolveYcCrossBorderLocalPayInBreakdown({
+          localPayIn,
+          payInCurrency: localCurrency,
+          receiveAmount: creditOrReceiveAmount,
+          customerRate,
+          provisionalPayIn,
+          displayProcessingFeeLocal: processingFeeLocal,
+        })
+      : null
   const principalLocal =
     isFundBalance && isMomo && customerRate > 0
       ? computeYcFundBalancePrincipalLocalPayIn({
           usdCredit: creditOrReceiveAmount,
           exchangeRate: customerRate,
         })
-      : isCrossBorder && isMomo && customerRate > 0
-        ? computeYcCrossBorderPrincipalLocalPayIn({
-            receiveAmount: creditOrReceiveAmount,
-            customerRate,
-          })
-        : undefined
+      : crossBorderBreakdown?.principalLocal
 
   const rows = buildYcLocalPayInCompleteRows({
     mode: flowMode,
@@ -69,7 +77,7 @@ export function YcLocalPayInCompleteSummary({
     localPayIn,
     receiveAmount: creditOrReceiveAmount,
     customerRate,
-    processingFeeLocal,
+    processingFeeLocal: crossBorderBreakdown?.feeLocal ?? processingFeeLocal,
     processingFeeUsd,
     exchangeFeeUsd,
     principalLocal,

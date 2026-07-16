@@ -17,8 +17,7 @@ import {
   resolveRecipientPayoutRail,
   resolveSendConfirmArrivalHint,
   normalizeYcMomoPhone,
-  computeDisplayProcessingFee,
-  computeYcCrossBorderPrincipalLocalPayIn,
+  resolveYcCrossBorderLocalPayInBreakdown,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -897,26 +896,16 @@ export default function SendConfirmPage() {
       Boolean((walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend) ||
       (!easenetSend && (!quoteReady || quoteCountdown.expired))
 
-  const tlcReviewPrincipalLocal = computeYcCrossBorderPrincipalLocalPayIn({
+  const tlcReviewBreakdown = resolveYcCrossBorderLocalPayInBreakdown({
+    localPayIn: totalDebited,
+    payInCurrency: state.sendCurrency,
     receiveAmount: state.amount,
     customerRate: exchangeRate,
+    provisionalPayIn: yc?.provisionalPayIn,
+    displayProcessingFeeLocal: yc?.displayProcessingFeeLocal,
   })
-  const tlcReviewFeeLocal =
-    !isYcMomo && yc
-      ? yc.displayProcessingFeeLocal ??
-        (yc.processingFee != null && exchangeRate > 0
-          ? Math.round(
-              computeDisplayProcessingFee({
-                processingFee: yc.processingFee ?? 0,
-                exchangeFee: 0,
-              }) *
-                exchangeRate *
-                100,
-            ) / 100
-          : undefined)
-      : isYcMomo && exchangeRate > 0 && totalDebited > 0
-        ? Math.max(0, Math.round((totalDebited - tlcReviewPrincipalLocal) * 100) / 100)
-        : 0
+  const tlcReviewPrincipalLocal = tlcReviewBreakdown.principalLocal
+  const tlcReviewFeeLocal = tlcReviewBreakdown.feeLocal
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

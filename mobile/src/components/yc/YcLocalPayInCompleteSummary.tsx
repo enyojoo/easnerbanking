@@ -1,8 +1,8 @@
 import React from 'react'
 import {
   buildYcLocalPayInCompleteRows,
-  computeYcCrossBorderPrincipalLocalPayIn,
   computeYcFundBalancePrincipalLocalPayIn,
+  resolveYcCrossBorderLocalPayInBreakdown,
   REVIEW_ROW_LABELS,
   type YcPayInRail,
 } from '@easner/shared'
@@ -24,6 +24,7 @@ export type YcLocalPayInCompleteSummaryProps = {
   processingFeeLocal?: number
   processingFeeUsd?: number
   exchangeFeeUsd?: number
+  provisionalPayIn?: number
   recipientName?: string
   copiedKey?: string | null
   onCopyTransactionId?: (text: string) => void
@@ -42,6 +43,7 @@ export function YcLocalPayInCompleteSummary({
   processingFeeLocal,
   processingFeeUsd,
   exchangeFeeUsd,
+  provisionalPayIn,
   recipientName,
   copiedKey,
   onCopyTransactionId,
@@ -49,18 +51,24 @@ export function YcLocalPayInCompleteSummary({
   const isFundBalance = mode === 'fund_balance'
   const isCrossBorder = mode === 'cross_border_send'
   const isMomo = rail === 'mobile_money'
+  const crossBorderBreakdown =
+    isCrossBorder && isMomo && customerRate > 0 && localPayIn > 0
+      ? resolveYcCrossBorderLocalPayInBreakdown({
+          localPayIn,
+          payInCurrency,
+          receiveAmount,
+          customerRate,
+          provisionalPayIn,
+          displayProcessingFeeLocal: processingFeeLocal,
+        })
+      : null
   const principalLocal =
     isFundBalance && isMomo && customerRate > 0
       ? computeYcFundBalancePrincipalLocalPayIn({
           usdCredit: receiveAmount,
           exchangeRate: customerRate,
         })
-      : isCrossBorder && isMomo && customerRate > 0
-        ? computeYcCrossBorderPrincipalLocalPayIn({
-            receiveAmount,
-            customerRate,
-          })
-        : undefined
+      : crossBorderBreakdown?.principalLocal
 
   const rows = buildYcLocalPayInCompleteRows({
     mode,
@@ -71,7 +79,7 @@ export function YcLocalPayInCompleteSummary({
     localPayIn,
     receiveAmount,
     customerRate,
-    processingFeeLocal,
+    processingFeeLocal: crossBorderBreakdown?.feeLocal ?? processingFeeLocal,
     processingFeeUsd,
     exchangeFeeUsd,
     principalLocal,

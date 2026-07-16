@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
   buildYcFundBalanceDepositReviewSnapshot,
+  computeYcCrossBorderPrincipalLocalPayIn,
+  resolveYcCrossBorderLocalPayInBreakdown,
   computeYcFundBalancePrincipalLocalPayIn,
   inferResidenceCountryFromLocalCurrency,
   isNoahVaFundingDeposit,
@@ -11,6 +13,44 @@ import {
   resolveYcFundBalanceLocalPayInBreakdown,
   resolveYcFundBalanceNotificationActivityLabel,
 } from "./yc-deposit-display"
+
+describe("computeYcCrossBorderPrincipalLocalPayIn", () => {
+  it("divides receive by pay-in rate (not multiply)", () => {
+    expect(
+      computeYcCrossBorderPrincipalLocalPayIn({
+        receiveAmount: 3221,
+        customerRate: 10.735227698797,
+      }),
+    ).toBe(300.04)
+  })
+
+  it("prefers provisionalPayIn from quote", () => {
+    expect(
+      computeYcCrossBorderPrincipalLocalPayIn({
+        receiveAmount: 3221,
+        customerRate: 10.74,
+        provisionalPayIn: 299.5,
+      }),
+    ).toBe(299.5)
+  })
+})
+
+describe("resolveYcCrossBorderLocalPayInBreakdown", () => {
+  it("foots transfer amount + processing fee = total to pay", () => {
+    const breakdown = resolveYcCrossBorderLocalPayInBreakdown({
+      localPayIn: 307.94,
+      payInCurrency: "KES",
+      receiveAmount: 3221,
+      customerRate: 10.735227698797,
+      provisionalPayIn: 300.04,
+      displayProcessingFeeLocal: 9.45,
+    })
+    expect(breakdown.principalLocal).toBe(300.04)
+    expect(breakdown.feeLocal).toBe(7.9)
+    expect(breakdown.totalLocal).toBe(307.94)
+    expect(breakdown.principalLocal + breakdown.feeLocal).toBe(breakdown.totalLocal)
+  })
+})
 
 describe("resolveYcFundBalanceDepositTitle", () => {
   it("NG bank → Nigeria Bank Deposit", () => {

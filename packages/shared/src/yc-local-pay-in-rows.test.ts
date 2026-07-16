@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { buildCrossBorderSendDetailRows } from "./yc-local-pay-in-detail-rows"
 import { buildYcLocalPayInCompleteRows } from "./yc-local-pay-in-complete-rows"
 import { buildYcLocalPayInReviewRows } from "./yc-local-pay-in-review-rows"
+import { resolveYcCrossBorderLocalPayInBreakdown } from "./transactions/yc-deposit-display"
 import { TLC_LOCAL_TRANSFER_METHOD } from "./review-row-labels"
 
 describe("buildCrossBorderSendDetailRows", () => {
@@ -104,18 +105,26 @@ describe("buildYcLocalPayInCompleteRows", () => {
     expect(rows.find((r) => r.id === "transfer-method")?.value).toBe(TLC_LOCAL_TRANSFER_METHOD)
   })
 
-  it("mirrors fund-balance MoMo breakdown for TLC MoMo complete", () => {
+  it("mirrors fund-balance MoMo breakdown for TLC MoMo complete with footed fee", () => {
+    const breakdown = resolveYcCrossBorderLocalPayInBreakdown({
+      localPayIn: 307.94,
+      payInCurrency: "KES",
+      receiveAmount: 3221,
+      customerRate: 10.735227698797,
+      provisionalPayIn: 300.04,
+      displayProcessingFeeLocal: 9.45,
+    })
     const rows = buildYcLocalPayInCompleteRows({
       mode: "cross_border_send",
       rail: "mobile_money",
       transactionId: "etid456",
       payInCurrency: "KES",
-      receiveCurrency: "USD",
-      localPayIn: 132_541,
-      receiveAmount: 1000,
-      customerRate: 128.66,
-      principalLocal: 128_663,
-      processingFeeLocal: 3878,
+      receiveCurrency: "NGN",
+      localPayIn: breakdown.totalLocal,
+      receiveAmount: 3221,
+      customerRate: 10.735227698797,
+      principalLocal: breakdown.principalLocal,
+      processingFeeLocal: breakdown.feeLocal,
     })
     const ids = rows.map((r) => r.id)
     expect(ids).toContain("exchange-rate")
@@ -124,6 +133,7 @@ describe("buildYcLocalPayInCompleteRows", () => {
     expect(ids).toContain("processing-fee")
     expect(ids).toContain("total-to-pay")
     expect(ids).toContain("recipient-gets")
+    expect(breakdown.principalLocal + breakdown.feeLocal).toBe(breakdown.totalLocal)
     expect(rows.find((r) => r.id === "total-to-pay")?.valueBold).toBe(true)
     expect(rows.find((r) => r.id === "transfer-method")?.value).toBe(TLC_LOCAL_TRANSFER_METHOD)
   })

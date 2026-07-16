@@ -11,12 +11,11 @@ import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
   buildYcLocalPayInReviewRows,
-  computeDisplayProcessingFee,
-  computeYcCrossBorderPrincipalLocalPayIn,
   getGlobalPayoutProcessingTime,
   REVIEW_ROW_LABELS,
   TLC_LOCAL_TRANSFER_METHOD,
   normalizeYcMomoPhone,
+  resolveYcCrossBorderLocalPayInBreakdown,
 } from '@easner/shared'
 import type { Recipient } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
@@ -175,25 +174,16 @@ export function YcLocalPayInReview({
   const displayTransactionId = quote?.easnerTransactionId ?? quote?.transactionId ?? ''
   const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
 
-  const reviewPrincipalLocal = computeYcCrossBorderPrincipalLocalPayIn({
+  const reviewBreakdown = resolveYcCrossBorderLocalPayInBreakdown({
+    localPayIn: isMobileMoney ? estimatedPayIn : lockedLocalPayIn,
+    payInCurrency,
     receiveAmount,
     customerRate,
+    provisionalPayIn: quote?.provisionalPayIn,
+    displayProcessingFeeLocal: quote?.displayProcessingFeeLocal,
   })
-  const reviewFeeLocal =
-    !isMobileMoney && quote
-      ? quote.displayProcessingFeeLocal ??
-        (quote.displayProcessingFee != null && customerRate > 0
-          ? Math.round(quote.displayProcessingFee * customerRate * 100) / 100
-          : computeDisplayProcessingFee({
-              processingFee: quote.processingFee ?? 0,
-              exchangeFee: quote.ycLegFeesUsd ?? 0,
-            }) * (customerRate || 1))
-      : isMobileMoney && customerRate > 0 && lockedLocalPayIn > 0
-        ? Math.max(
-            0,
-            Math.round((lockedLocalPayIn - reviewPrincipalLocal) * 100) / 100,
-          )
-        : 0
+  const reviewPrincipalLocal = reviewBreakdown.principalLocal
+  const reviewFeeLocal = reviewBreakdown.feeLocal
 
   const reviewRows = buildYcLocalPayInReviewRows({
     mode: 'cross_border_send',
@@ -226,6 +216,7 @@ export function YcLocalPayInReview({
       transferId: q.transferId,
       localPayIn: q.localPayIn,
       customerRate: q.customerRate,
+      provisionalPayIn: q.provisionalPayIn,
       bankInfo: q.bankInfo,
       payInNotice: q.payInNotice,
       payInRail,

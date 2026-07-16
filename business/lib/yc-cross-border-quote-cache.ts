@@ -183,6 +183,7 @@ export function crossBorderQuoteToFlowState(
     easnerTransactionId: quote.easnerTransactionId,
     localPayIn: quote.localPayIn,
     customerRate: quote.customerRate,
+    provisionalPayIn: quote.provisionalPayIn,
     processingFee: quote.processingFee,
     displayProcessingFeeLocal: quote.displayProcessingFeeLocal,
     bankInfo: quote.bankInfo ?? null,

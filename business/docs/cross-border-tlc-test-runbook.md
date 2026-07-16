@@ -15,7 +15,7 @@ End-to-end and staging checks for Yellowcard **Through Local Currency** (cross-b
 1. Send → recipient in foreign currency → **Through local currency** → bank rail.
 2. Amount screen: Sending/Rate preview only; quote prefetches silently while amount is valid. Entering receive currency below the KES min auto-bumps to the rate-adjusted floor (no min hint copy).
 3. **Continue** may show brief spinner when quote is not warm; navigates to review with stashed quote.
-4. Review (locked): **Transaction ID** (ETID), exchange rate, **Deposit amount**, processing fee, **Total to pay**, **Recipient gets**, **Transfer method: Local Transfer**, quote countdown.
+4. Review (locked): **Transaction ID** (ETID), exchange rate, **Transfer amount**, processing fee, **Total to pay**, **Recipient gets**, **Transfer method: Local Transfer**, quote countdown.
 5. Complete: minimal summary (ETID + **Recipient gets** + **Local Transfer**), **Send exactly {localPayIn}**, bank VA fields, **I've made the payment**.
 6. Transaction detail: hero **Send to {recipient}**, ledger **Amount paid**, status **Processing**, lifecycle single **Processing** step.
 

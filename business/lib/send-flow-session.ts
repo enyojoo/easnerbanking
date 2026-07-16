@@ -75,6 +75,7 @@ export interface SendFlowState {
     easnerTransactionId?: string
     localPayIn: number
     customerRate: number
+    provisionalPayIn?: number
     processingFee?: number
     bankInfo: Record<string, unknown> | null
     expiresAt: string

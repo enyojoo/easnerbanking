@@ -10,8 +10,8 @@ import {
 import { ArrowLeft, Check, Copy, Landmark, Smartphone } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
-  computeDisplayProcessingFee,
   formatMoneyDisplay,
+  resolveYcCrossBorderLocalPayInBreakdown,
   ycPayInCompleteNotice,
   YC_PAY_IN_MOMO_AUTHORIZE_CTA,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
@@ -40,6 +40,7 @@ type RouteParams = {
   transferId: string
   localPayIn: number
   customerRate: number
+  provisionalPayIn?: number
   bankInfo: Record<string, unknown> | null
   payInNotice?: string
   payInRail?: YcPayInRail
@@ -85,6 +86,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
     transferId,
     localPayIn = 0,
     customerRate = 0,
+    provisionalPayIn,
     bankInfo,
     payInRail = 'bank_transfer',
     processingFeeLocal,
@@ -102,14 +104,21 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   const formattedSendAmount = formatMoneyDisplay(localPayIn, sendCurrency)
   const completeNotice = ycPayInCompleteNotice(payInRail)
   const displayTransactionId = transactionId?.toUpperCase() ?? ''
+  const crossBorderBreakdown =
+    flowMode === 'cross_border_send' && customerRate > 0 && localPayIn > 0
+      ? resolveYcCrossBorderLocalPayInBreakdown({
+          localPayIn,
+          payInCurrency: sendCurrency,
+          receiveAmount,
+          customerRate,
+          provisionalPayIn,
+          displayProcessingFeeLocal: processingFeeLocal,
+        })
+      : null
   const feeLocal =
+    crossBorderBreakdown?.feeLocal ??
     processingFeeLocal ??
-    (displayProcessingFee != null && customerRate > 0
-      ? Math.round(displayProcessingFee * customerRate * 100) / 100
-      : computeDisplayProcessingFee({
-          processingFee: processingFee ?? 0,
-          exchangeFee: ycChannelFeeUsd ?? 0,
-        }) * (customerRate || 1))
+    0
   const ctaLabel = isMobileMoney ? YC_PAY_IN_MOMO_AUTHORIZE_CTA : "I've made the payment"
 
   const handleCopy = async (text: string, key: string) => {
@@ -157,6 +166,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
               localPayIn={localPayIn}
               receiveAmount={receiveAmount}
               customerRate={customerRate}
+              provisionalPayIn={provisionalPayIn}
               processingFeeLocal={feeLocal}
               processingFeeUsd={processingFee}
               exchangeFeeUsd={ycChannelFeeUsd}
