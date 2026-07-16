@@ -574,7 +574,7 @@ export type {
   YcFundBalancePricing,
   YcLegFeeInputs,
 } from "./yc-pricing"
-export type { YcPayInRail, YcQuoteSummary } from "./yc-quote-summary"
+export type { YcQuoteSummary } from "./yc-quote-summary"
 export {
   mapResidenceToLocalPayInCurrency,
   ycFundBalanceQuoteErrorMessage,
