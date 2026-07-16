@@ -305,7 +305,7 @@ export async function POST(request: Request) {
   const startedAt = new Date().toISOString()
   const residenceCountry = String(userRow?.residence_country ?? country).trim().toUpperCase()
   const customerRate = Number(leg.easner_sell)
-  const displayFees = buildYcFundBalanceDisplayFees({
+  const displayFeeBreakdown = buildYcFundBalanceDisplayFees({
     usdCredit: pricing.usdCredit,
     processingFee: pricing.processingFee,
     ycLegFeesUsd: pricing.ycLegFeesUsd,
@@ -321,7 +321,7 @@ export async function POST(request: Request) {
     exchangeRate: customerRate,
     residenceCountry,
     payInRail: rail,
-    displayProcessingFeeLocal: displayFees.displayProcessingFeeLocal,
+    displayProcessingFeeLocal: displayFeeBreakdown.displayProcessingFeeLocal,
   })
   const depositDisplayTitle = resolveYcFundBalanceDepositTitle({
     residenceCountry,
@@ -416,7 +416,7 @@ export async function POST(request: Request) {
     .select("id")
     .single()
 
-  const displayFees = buildFundBalanceQuoteSummary({
+  const quoteSummary = buildFundBalanceQuoteSummary({
     pricing,
     currency,
     customerRate,
@@ -431,7 +431,7 @@ export async function POST(request: Request) {
   })
 
   return NextResponse.json({
-    ...displayFees,
+    ...quoteSummary,
     sequenceId,
     easnerTransactionId,
     bankInfo: receiveRes.bankInfo ?? null,
