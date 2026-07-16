@@ -24,7 +24,7 @@ import {
   getStablecoinPaymentInstructions,
 } from "@/lib/payment-instructions"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, RECEIVE_CASH_BANK_SUBTITLE } from "@easner/shared"
+import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import {
@@ -490,7 +490,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                           <div className="min-w-0 flex-1">
                             <p className="font-medium">{intlBankTitle}</p>
                             <p className="text-sm text-muted-foreground mt-0.5">
-                              {RECEIVE_CASH_BANK_SUBTITLE}
+                              {receiveInternationalDepositSubtitle(account.currency)}
                             </p>
                           </div>
                           <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />

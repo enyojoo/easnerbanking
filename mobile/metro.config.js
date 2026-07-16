@@ -35,10 +35,12 @@ config.resolver.nodeModulesPaths = [
 ]
 
 const sharedRoot = path.resolve(monorepoRoot, 'packages/shared')
+const sharedCurrencyFlagNative = path.join(sharedRoot, 'src/components/CountryFlag.native.tsx')
 const extraNodeModules = {
   '@easner/shared': sharedRoot,
   // Metro extraNodeModules points at the package dir, not package.json exports subpaths.
   '@easner/shared/warm-flags': path.join(sharedRoot, 'src/flags/warm-flags.native.ts'),
+  '@easner/shared/currency-flag': path.join(sharedRoot, 'src/components/CountryFlag.native.tsx'),
 }
 
 // EAS monorepo: hoisted deps may only exist under ../node_modules; force resolution if present.
@@ -93,6 +95,20 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     (moduleName === '@noble/hashes/crypto.js' || moduleName === '@noble/hashes/crypto')
   ) {
     return { type: 'sourceFile', filePath: nobleHashesCrypto }
+  }
+  if (
+    moduleName === '@easner/shared/currency-flag' ||
+    moduleName === '@easner/shared/src/components/CountryFlag.native'
+  ) {
+    return { type: 'sourceFile', filePath: sharedCurrencyFlagNative }
+  }
+  const origin = context.originModulePath ?? ''
+  if (
+    origin.includes(`${path.sep}mobile${path.sep}`) &&
+    (moduleName === '@easner/shared/src/components/CountryFlag' ||
+      moduleName.endsWith('/components/CountryFlag'))
+  ) {
+    return { type: 'sourceFile', filePath: sharedCurrencyFlagNative }
   }
   if (defaultResolveRequest) {
     return defaultResolveRequest(context, moduleName, platform)

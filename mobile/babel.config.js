@@ -17,6 +17,10 @@ module.exports = function (api) {
               __dirname,
               '../packages/shared/src/flags/warm-flags.native',
             ),
+            '@easner/shared/currency-flag': path.resolve(
+              __dirname,
+              '../packages/shared/src/components/CountryFlag.native',
+            ),
             // @noble/hashes: do not alias here — subpath imports like `@noble/hashes/pbkdf2.js`
             // must resolve via package `exports` (see mobile/metro.config.js extraNodeModules).
           },

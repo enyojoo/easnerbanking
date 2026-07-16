@@ -22,7 +22,7 @@ import type { YcFundBalanceQuoteResult } from '../../hooks/useYcFundBalanceFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
-import { CurrencyFlag } from '../flags/CurrencyFlag'
+import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
 import {
   ensureFundBalanceQuoteStashed,
   isCompleteFundBalanceQuote,
@@ -197,13 +197,11 @@ export function YcFundBalanceReview({
                 />
               ) : null}
               <Row label={REVIEW_ROW_LABELS.creditAmount} value={formatMoneyDisplay(quote?.usdCredit ?? usdCredit, 'USD')} bold />
-              <View style={styles.creditRow}>
-                <Text style={styles.rowLabel}>{REVIEW_ROW_LABELS.creditTo}</Text>
-                <View style={styles.creditValue}>
-                  <CurrencyFlag currency="USD" size={20} />
-                  <Text style={styles.rowValue}>USD Balance</Text>
-                </View>
-              </View>
+              <CreditDestinationRow
+                label={REVIEW_ROW_LABELS.creditTo}
+                currency="USD"
+                balanceLabel="USD Balance"
+              />
               <Row label={REVIEW_ROW_LABELS.transferMethod} value={transferMethod} />
             </>
           )}
@@ -257,16 +255,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.light,
   },
-  creditRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing[3],
-    paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-  },
-  creditValue: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   rowLabel: { ...textStyles.caption, color: colors.text.secondary, flex: 1 },
   rowValue: { ...textStyles.body, textAlign: 'right', flex: 1 },
   rowValueBold: { fontFamily: textStyles.sectionTitle.fontFamily },

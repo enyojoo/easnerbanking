@@ -1,11 +1,11 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import {
-  CurrencyFlag,
   REVIEW_ROW_LABELS,
   buildInboundReceiveDetailRows,
   type InboundReceiveDetailSnapshot,
 } from '@easner/shared'
+import { CreditDestinationRow } from './CreditDestinationRow'
 import { colors, spacing, textStyles } from '../../theme'
 
 type Props = {
@@ -28,16 +28,16 @@ export function InboundReceiveDetailRows({ snapshot }: Props) {
 
         const isCreditRow =
           row.label === REVIEW_ROW_LABELS.creditTo || row.label === REVIEW_ROW_LABELS.creditFor
+        const creditCurrency = row.creditCurrency ?? snapshot.creditDestination?.currency
 
-        if (isCreditRow && row.creditCurrency) {
+        if (isCreditRow && creditCurrency) {
           return (
-            <View key={`${row.label}-${index}`} style={styles.creditRow}>
-              <Text style={styles.summaryLabel}>{row.label}</Text>
-              <View style={styles.creditValue}>
-                <CurrencyFlag currency={row.creditCurrency} size={20} />
-                <Text style={styles.summaryValue}>{row.value}</Text>
-              </View>
-            </View>
+            <CreditDestinationRow
+              key={`${row.label}-${index}`}
+              label={row.label}
+              currency={creditCurrency}
+              balanceLabel={row.value}
+            />
           )
         }
 
@@ -69,22 +69,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.light,
   },
-  creditRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing[3],
-    paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-  },
-  creditValue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
   summaryLabel: {
     ...textStyles.caption,
     color: colors.text.secondary,
@@ -93,7 +77,6 @@ const styles = StyleSheet.create({
   summaryValue: {
     ...textStyles.titleSmall,
     color: colors.text.primary,
-    flex: 1,
     textAlign: 'right',
   },
   summaryValueBold: {

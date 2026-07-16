@@ -588,6 +588,7 @@ export {
   RECEIVE_CASH_MOMO_SUBTITLE,
   resolveReceiveCountryName,
   receiveInternationalBankTitle,
+  receiveInternationalDepositSubtitle,
   receiveLocalBankTitle,
   receiveLocalMomoTitle,
   receiveLocalDepositSubtitle,

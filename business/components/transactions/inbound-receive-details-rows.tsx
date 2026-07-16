@@ -1,12 +1,12 @@
 "use client"
 
 import {
-  CurrencyFlag,
   REVIEW_ROW_LABELS,
   buildInboundReceiveDetailRows,
   type InboundReceiveDetailSnapshot,
   type TransactionTimingRow,
 } from "@easner/shared"
+import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { Card, CardContent } from "@/components/ui/card"
 import { Copy, Check } from "lucide-react"
@@ -66,16 +66,16 @@ export function InboundReceiveDetailsRows({
 
             const isCreditRow =
               row.label === REVIEW_ROW_LABELS.creditTo || row.label === REVIEW_ROW_LABELS.creditFor
+            const creditCurrency = row.creditCurrency ?? snapshot.creditDestination?.currency
 
-            if (isCreditRow && row.creditCurrency) {
+            if (isCreditRow && creditCurrency) {
               return (
-                <div key={`${row.label}-${index}`} className="flex items-center justify-between border-b pb-4">
-                  <span className="text-sm text-muted-foreground">{row.label}</span>
-                  <div className="flex shrink-0 items-center gap-2 font-medium">
-                    <CurrencyFlag currency={row.creditCurrency} size={22} className="shrink-0" />
-                    <span>{row.value}</span>
-                  </div>
-                </div>
+                <CreditDestinationRow
+                  key={`${row.label}-${index}`}
+                  label={row.label}
+                  currency={creditCurrency}
+                  balanceLabel={row.value}
+                />
               )
             }
 

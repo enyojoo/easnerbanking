@@ -1,8 +1,8 @@
 import React from 'react'
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import {
-  RECEIVE_CASH_BANK_SUBTITLE,
   receiveInternationalBankTitle,
+  receiveInternationalDepositSubtitle,
   receiveLocalBankTitle,
   receiveLocalMomoTitle,
   receiveLocalDepositSubtitle,
@@ -80,7 +80,7 @@ export function ReceiveCashMethodList({
       {showBankRow ? (
         <ReceiveLocalRailCard
           title={receiveInternationalBankTitle(currency)}
-          subtitle={RECEIVE_CASH_BANK_SUBTITLE}
+          subtitle={receiveInternationalDepositSubtitle(currency)}
           leading={<CashMethodFlag code={intlBankFlagCode} />}
           onPress={onBankPress}
         />

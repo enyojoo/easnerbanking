@@ -54,6 +54,11 @@
       "types": "./src/flags/warm-flags.native.ts",
       "import": "./src/flags/warm-flags.native.ts",
       "require": "./src/flags/warm-flags.native.ts"
+    },
+    "./currency-flag": {
+      "types": "./src/components/CountryFlag.native.tsx",
+      "import": "./src/components/CountryFlag.native.tsx",
+      "require": "./src/components/CountryFlag.native.tsx"
     }
   },
   "scripts": {

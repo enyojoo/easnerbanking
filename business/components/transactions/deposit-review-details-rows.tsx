@@ -2,7 +2,6 @@
 
 import {
   computeDisplayProcessingFee,
-  CurrencyFlag,
   formatMoneyDisplay,
   formatSendRateLabel,
   REVIEW_ROW_LABELS,
@@ -11,6 +10,7 @@ import {
   type TransactionTimingRow,
   type YcFundBalanceDepositReviewSnapshot,
 } from "@easner/shared"
+import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { formatTransactionRowDateTime } from "@/lib/transaction-row-present"
 import { Card, CardContent } from "@/components/ui/card"
@@ -103,13 +103,11 @@ export function DepositReviewDetailsRows({
           </span>
         </div>
 
-        <div className="flex items-center justify-between border-b pb-4">
-          <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.creditTo}</span>
-          <div className="flex shrink-0 items-center gap-2 font-medium">
-            <CurrencyFlag currency="USD" size={22} className="shrink-0" />
-            <span>{depositReview.credit_to}</span>
-          </div>
-        </div>
+        <CreditDestinationRow
+          label={REVIEW_ROW_LABELS.creditTo}
+          currency="USD"
+          balanceLabel={depositReview.credit_to}
+        />
 
         <div className="flex items-center justify-between border-b pb-4">
           <span className="text-sm text-muted-foreground">

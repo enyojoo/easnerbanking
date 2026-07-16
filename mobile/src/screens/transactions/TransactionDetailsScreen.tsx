@@ -85,7 +85,6 @@ import {
   type GlobalPayoutRecipientSnapshot,
   type YcFundBalanceDepositReviewSnapshot,
 } from '@easner/shared'
-import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { InboundReceiveDetailRows } from '../../components/transactions/InboundReceiveDetailRows'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'

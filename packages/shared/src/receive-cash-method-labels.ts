@@ -1,6 +1,26 @@
 /** Subtitles for receive cash deposit method rows. */
-export const RECEIVE_CASH_BANK_SUBTITLE = "Deposit via Bank Transfer"
 export const RECEIVE_CASH_MOMO_SUBTITLE = "Deposit via Mobile Money Transfer"
+
+function depositCreditSubtitle(depositCurrency: string, creditCurrency: string): string {
+  const deposit = String(depositCurrency ?? "").trim().toUpperCase()
+  const credit = String(creditCurrency ?? "").trim().toUpperCase()
+  return `Deposit ${deposit} to credit your ${credit} Balance`
+}
+
+/** US / EU bank transfer row (Noah VA) — deposit and credit use the same account currency. */
+export function receiveInternationalDepositSubtitle(accountCurrency: string): string {
+  const cur = String(accountCurrency ?? "").trim().toUpperCase()
+  return depositCreditSubtitle(cur, cur)
+}
+
+/** Local pay-in row (YC fund balance) — pay in local currency, credit USD balance. */
+export function receiveLocalDepositSubtitle(localPayInCurrency: string): string {
+  const cur = String(localPayInCurrency ?? "").trim().toUpperCase()
+  return depositCreditSubtitle(cur, "USD")
+}
+
+/** @deprecated Use receiveInternationalDepositSubtitle("USD") */
+export const RECEIVE_CASH_BANK_SUBTITLE = receiveInternationalDepositSubtitle("USD")
 
 /** ISO-2 → display name for local receive corridors (and common fallbacks). */
 const LOCAL_RECEIVE_COUNTRY_NAMES: Record<string, string> = {
@@ -35,9 +55,4 @@ export function receiveLocalBankTitle(countryName: string): string {
 
 export function receiveLocalMomoTitle(countryName: string): string {
   return `${countryName} Mobile Money`
-}
-
-export function receiveLocalDepositSubtitle(localPayInCurrency: string): string {
-  const cur = String(localPayInCurrency ?? "").trim().toUpperCase()
-  return `Pay in ${cur} to credit your USD balance.`
 }
