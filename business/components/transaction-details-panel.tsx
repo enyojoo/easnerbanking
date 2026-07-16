@@ -16,7 +16,8 @@ import { TransactionDetailHero } from "@/components/transactions/transaction-det
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
 import { DepositReviewDetailsRows } from "@/components/transactions/deposit-review-details-rows"
 import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
-import { REVIEW_ROW_LABELS, CurrencyFlag, isVerificationDepositMetadata } from "@easner/shared"
+import { REVIEW_ROW_LABELS, isVerificationDepositMetadata } from "@easner/shared"
+import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
@@ -216,9 +217,9 @@ function TransactionSummaryDetails({
                 ? REVIEW_ROW_LABELS.creditFor
                 : REVIEW_ROW_LABELS.creditTo}
             </span>
-            <div className="flex shrink-0 items-center gap-2 font-medium">
-              <CurrencyFlag currency={displayCurrency} size={22} className="shrink-0" />
-              <span>{displayCurrency} Balance</span>
+            <div className="flex shrink-0 items-center gap-2 font-medium whitespace-nowrap">
+              <CurrencyFlagCircle currency={displayCurrency} size={22} />
+              <span className="whitespace-nowrap">{displayCurrency} Balance</span>
             </div>
           </div>
         ) : null}

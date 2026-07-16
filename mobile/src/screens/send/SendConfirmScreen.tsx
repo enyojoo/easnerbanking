@@ -53,7 +53,7 @@ import { noahService } from '../../lib/noahService'
 import type { PayoutPrepareSession } from '../../lib/payoutPrepareSession'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
-import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
+import { CurrencyFlagCircle } from '../../components/flags/CurrencyFlagCircle'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
 import { getSendDestinationsMemory } from '../../lib/sendDestinations'
 import { isWalletSendRecipient } from '../../lib/recipientWalletMeta'
@@ -888,9 +888,7 @@ function FromBalanceRow({ currency }: { currency: string }) {
     <View style={styles.fromRow}>
       <Text style={styles.rowLabel}>From</Text>
       <View style={styles.fromBalanceInline}>
-        <View style={styles.fromFlagContainer}>
-          <CurrencyFlag currency={currency} size={22} style={styles.fromFlagImage} />
-        </View>
+        <CurrencyFlagCircle currency={currency} size={22} />
         <Text style={styles.fromBalanceText} numberOfLines={1}>
           {currency} Balance
         </Text>
@@ -1000,18 +998,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
-    flexShrink: 1,
+    flexShrink: 0,
     maxWidth: '72%',
     justifyContent: 'flex-end',
-  },
-  fromFlagContainer: {
-    ...surfaceChromeCircleStyle(colors, 22, { shadow: 'none' }),
-    overflow: 'hidden',
-  },
-  fromFlagImage: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
   },
   fromBalanceText: {
     flexShrink: 1,

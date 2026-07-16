@@ -3,7 +3,6 @@
 import type { ReactNode } from "react"
 import {
   computeDisplayProcessingFee,
-  CurrencyFlag,
   formatMoneyDisplay,
   formatPayoutRecipientSubtitle,
   formatSendRateLabel,
@@ -19,6 +18,7 @@ import {
   type ReviewFlowKind,
   type TransactionTimingRow,
 } from "@easner/shared"
+import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { formatTransactionRowDateTime } from "@/lib/transaction-row-present"
 import { Card, CardContent } from "@/components/ui/card"
@@ -155,9 +155,9 @@ export function PayoutReviewDetailsRows({
         {sourceAccountCurrency ? (
           <div className="flex items-center justify-between border-b pb-4">
             <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.from}</span>
-            <div className="flex shrink-0 items-center gap-2 font-medium">
-              <CurrencyFlag currency={sourceAccountCurrency} size={22} className="shrink-0" />
-              <span>{sourceAccountCurrency} Balance</span>
+            <div className="flex shrink-0 items-center gap-2 font-medium whitespace-nowrap">
+              <CurrencyFlagCircle currency={sourceAccountCurrency} size={22} />
+              <span className="whitespace-nowrap">{sourceAccountCurrency} Balance</span>
             </div>
           </div>
         ) : null}

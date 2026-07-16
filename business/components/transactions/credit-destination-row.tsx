@@ -1,6 +1,6 @@
 "use client"
 
-import { CurrencyFlag } from "@easner/shared"
+import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 
 type Props = {
   label: string
@@ -18,9 +18,9 @@ export function CreditDestinationRow({
   return (
     <div className="flex items-center justify-between border-b pb-4">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <div className="flex shrink-0 items-center gap-2 font-medium">
-        <CurrencyFlag currency={currency} size={flagSize} className="shrink-0" />
-        <span>{balanceLabel}</span>
+      <div className="flex shrink-0 items-center gap-2 font-medium whitespace-nowrap">
+        <CurrencyFlagCircle currency={currency} size={flagSize} />
+        <span className="whitespace-nowrap">{balanceLabel}</span>
       </div>
     </div>
   )
