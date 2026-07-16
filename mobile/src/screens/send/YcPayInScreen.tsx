@@ -10,9 +10,13 @@ import {
 import { ArrowLeft, Check, Copy, Landmark, Smartphone } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
+  computeDisplayProcessingFee,
   formatMoneyDisplay,
+  formatReviewRowMoneyDisplay,
+  formatSendRateLabel,
   ycPayInInstructionNotice,
-  ycPayInSendingExactlyCopy,
+  YC_PAY_IN_MOMO_AUTHORIZE_CTA,
+  YC_PAY_IN_SEND_EXACTLY_LABEL,
   REVIEW_ROW_LABELS,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -24,29 +28,48 @@ import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ycBankInfoFields } from '../../lib/yc-bank-info-fields'
 import { haptics } from '../../lib/haptics'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
+import {
+  TransactionDetailSummaryRow,
+  TransactionDetailCopyableValue,
+} from '../../components/transactions/TransactionDetailSummaryRow'
+import { CreditDestinationRow } from '../../components/transactions/CreditDestinationRow'
 
 type RouteParams = {
   flowMode?: 'fund_balance' | 'cross_border_send'
   transactionId: string
-  sendAmount: number
+  sendAmount?: number
   sendCurrency: string
   receiveAmount: number
   receiveCurrency: string
-  recipientName: string
+  recipientName?: string
   transferId: string
   localPayIn: number
   customerRate: number
   bankInfo: Record<string, unknown> | null
   payInNotice?: string
-  payInRail: YcPayInRail
+  payInRail?: YcPayInRail
+  residenceCountry?: string
+  processingFeeLocal?: number
+  displayProcessingFee?: number
+  processingFee?: number
+  ycChannelFeeUsd?: number
+  sourcePhone?: string
+  sourceNetworkId?: string
+  sourceNetworkName?: string
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SendExactlyAmount({
+  amount,
+  centered,
+}: {
+  amount: string
+  centered?: boolean
+}) {
   return (
-    <View style={styles.summaryRow}>
-      <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={styles.summaryValue}>{value}</Text>
-    </View>
+    <Text style={[styles.sendExactlyLine, centered && styles.sendExactlyLineCentered]}>
+      {YC_PAY_IN_SEND_EXACTLY_LABEL}{' '}
+      <Text style={styles.sendExactlyAmount}>{amount}</Text>
+    </Text>
   )
 }
 
@@ -63,23 +86,39 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
     sendCurrency = 'NGN',
     receiveAmount = 0,
     receiveCurrency = 'USD',
+    recipientName,
     transferId,
     localPayIn = 0,
+    customerRate = 0,
     bankInfo,
     payInNotice,
     payInRail = 'bank_transfer',
+    processingFeeLocal,
+    displayProcessingFee,
+    processingFee,
+    ycChannelFeeUsd,
+    sourcePhone,
+    sourceNetworkName,
   } = params
 
+  const isMobileMoney = payInRail === 'mobile_money'
   const fields = ycBankInfoFields(bankInfo)
   const isFundBalance = flowMode === 'fund_balance'
-  const isMobileMoney = payInRail === 'mobile_money'
   const screenTitle = isFundBalance ? 'Complete deposit' : 'Complete payment'
   const formattedSendAmount = formatMoneyDisplay(localPayIn, sendCurrency)
   const formattedCreditAmount = formatMoneyDisplay(receiveAmount, receiveCurrency)
   const notice = payInNotice || ycPayInInstructionNotice(payInRail)
   const displayTransactionId = transactionId?.toUpperCase() ?? ''
-  const paymentDetailsTitle = isMobileMoney ? 'Mobile Money' : 'Bank Account'
-  const PaymentIcon = isMobileMoney ? Smartphone : Landmark
+  const feeLocal =
+    processingFeeLocal ??
+    (displayProcessingFee != null && customerRate > 0
+      ? Math.round(displayProcessingFee * customerRate * 100) / 100
+      : computeDisplayProcessingFee({
+          processingFee: processingFee ?? 0,
+          exchangeFee: ycChannelFeeUsd ?? 0,
+        }) * (customerRate || 1))
+  const transferMethod = isMobileMoney ? 'Mobile Money' : 'Bank Transfer'
+  const ctaLabel = isMobileMoney ? YC_PAY_IN_MOMO_AUTHORIZE_CTA : "I've made the payment"
 
   const handleCopy = async (text: string, key: string) => {
     haptics.tap()
@@ -116,41 +155,101 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
           contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.summaryCard, isFundBalance && styles.summaryCardSpaced]}>
+          <View style={styles.summaryCard}>
             {displayTransactionId ? (
-              <SummaryRow label={REVIEW_ROW_LABELS.transactionId} value={displayTransactionId} />
+              <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
+                <TransactionDetailCopyableValue
+                  value={displayTransactionId}
+                  copied={copiedKey === 'transactionId'}
+                  onPress={() => void handleCopy(displayTransactionId, 'transactionId')}
+                  mono
+                />
+              </TransactionDetailSummaryRow>
+            ) : null}
+            {feeLocal > 0 ? (
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.processingFee}
+                value={formatReviewRowMoneyDisplay(
+                  REVIEW_ROW_LABELS.processingFee,
+                  feeLocal,
+                  sendCurrency,
+                )}
+              />
+            ) : null}
+            {customerRate > 0 ? (
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.exchangeRate}
+                value={
+                  isFundBalance
+                    ? formatSendRateLabel('USD', sendCurrency, customerRate)
+                    : formatSendRateLabel(sendCurrency, receiveCurrency, customerRate)
+                }
+              />
             ) : null}
             {isFundBalance ? (
-              <SummaryRow label={REVIEW_ROW_LABELS.amountToCredit} value={formattedCreditAmount} />
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.amountToCredit}
+                value={formattedCreditAmount}
+                valueBold
+              />
             ) : (
-              <SummaryRow label={REVIEW_ROW_LABELS.paymentAmount} value={formattedSendAmount} />
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.recipientGets}
+                value={formattedCreditAmount}
+                valueBold
+              />
             )}
+            {isFundBalance ? (
+              <CreditDestinationRow
+                label={REVIEW_ROW_LABELS.creditTo}
+                currency="USD"
+                balanceLabel="USD Balance"
+              />
+            ) : recipientName ? (
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.recipient}
+                value={recipientName}
+              />
+            ) : null}
+            <TransactionDetailSummaryRow
+              label={REVIEW_ROW_LABELS.transferMethod}
+              value={transferMethod}
+              last
+            />
           </View>
 
-          {isFundBalance ? (
-            <View style={styles.payInCopySection}>
-              <Text style={[styles.noticeText, styles.noticeTextCentered]}>{notice}</Text>
-              <Text style={[styles.sendingExactly, styles.sendingExactlyProminent]}>
-                {ycPayInSendingExactlyCopy(formattedSendAmount)}
-              </Text>
-            </View>
-          ) : (
-            <>
-              <View style={styles.noticeBox}>
-                <Text style={styles.noticeText}>{notice}</Text>
-              </View>
-              <Text style={styles.sendingExactly}>
-                {ycPayInSendingExactlyCopy(formattedSendAmount)}
-              </Text>
-            </>
-          )}
+          <View style={styles.payInCopySection}>
+            <Text style={[styles.noticeText, styles.noticeTextCentered]}>{notice}</Text>
+            <SendExactlyAmount amount={formattedSendAmount} centered />
+          </View>
 
           <View style={[styles.paymentCard, surfaceFrameStyle(colors)]}>
             <View style={styles.paymentCardHeader}>
-              <PaymentIcon size={20} color={colors.primary.main} strokeWidth={2} />
-              <Text style={styles.paymentCardTitle}>{paymentDetailsTitle}</Text>
+              {isMobileMoney ? (
+                <Smartphone size={20} color={colors.primary.main} strokeWidth={2} />
+              ) : (
+                <Landmark size={20} color={colors.primary.main} strokeWidth={2} />
+              )}
+              <Text style={styles.paymentCardTitle}>
+                {isMobileMoney ? 'Mobile Money' : 'Bank Account'}
+              </Text>
             </View>
-            {fields.length === 0 ? (
+            {isMobileMoney ? (
+              <>
+                {sourceNetworkName ? (
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.paymentNetwork}</Text>
+                    <Text style={styles.fieldValue}>{sourceNetworkName}</Text>
+                  </View>
+                ) : null}
+                {sourcePhone ? (
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.mobileNumber}</Text>
+                    <Text style={styles.fieldValue}>{sourcePhone}</Text>
+                  </View>
+                ) : null}
+              </>
+            ) : fields.length === 0 ? (
               <Text style={styles.emptyFields}>
                 Payment details unavailable. Contact support with reference {displayTransactionId}.
               </Text>
@@ -191,7 +290,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
           >
-            <Text style={styles.ctaText}>I've made the payment</Text>
+            <Text style={styles.ctaText}>{ctaLabel}</Text>
           </LinearGradient>
         </Pressable>
       </View>
@@ -228,48 +327,24 @@ const styles = StyleSheet.create({
     gap: spacing[1],
     marginBottom: spacing[4],
   },
-  summaryCardSpaced: {
-    marginBottom: spacing[8],
-  },
   payInCopySection: {
     gap: spacing[4],
     marginBottom: spacing[5],
   },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing[3],
-    paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-  },
-  summaryLabel: {
-    ...textStyles.caption,
-    color: colors.text.secondary,
-    flex: 1,
-  },
-  summaryValue: {
-    ...textStyles.body,
-    textAlign: 'right',
-    flex: 1,
-    fontFamily: textStyles.sectionTitle.fontFamily,
-  },
-  sendingExactly: {
+  sendExactlyLine: {
     ...textStyles.body,
     color: colors.text.primary,
     marginBottom: spacing[4],
   },
-  sendingExactlyProminent: {
-    ...textStyles.headlineMedium,
+  sendExactlyLineCentered: {
+    color: colors.text.secondary,
     textAlign: 'center',
+    paddingHorizontal: spacing[2],
     marginBottom: 0,
   },
-  noticeBox: {
-    backgroundColor: colors.semantic.muted,
-    borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    marginBottom: spacing[4],
+  sendExactlyAmount: {
+    ...textStyles.headlineMedium,
+    color: colors.text.primary,
   },
   noticeText: {
     ...textStyles.body,

@@ -18,6 +18,9 @@ export const REVIEW_ROW_LABELS = {
   amountPaid: "Amount paid",
   /** USD balance credit (live deposit review — mirrors Amount to pay). */
   amountToCredit: "Amount to credit",
+  /** Review estimate before YC quote lock. */
+  estimatedToPay: "Estimated to pay",
+  estimatedToCredit: "Estimated to credit",
   creditTo: "Credited to",
   /** Verification microdeposits — settled detail only (not spendable balance). */
   creditFor: "Credit for",
@@ -36,6 +39,8 @@ export const REVIEW_ROW_LABELS = {
   narration: "Narration",
   /** Cross-border pay-in completion (non fund-balance). */
   paymentAmount: "Payment amount",
+  mobileNumber: "Mobile number",
+  paymentNetwork: "Network",
 } as const
 
 export type ReviewRowLabel = (typeof REVIEW_ROW_LABELS)[keyof typeof REVIEW_ROW_LABELS]

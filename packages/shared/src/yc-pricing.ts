@@ -1,9 +1,18 @@
 /**
  * Yellowcard pricing — mirror Noah `computeGlobalPayoutPricing` for three YC products.
- * Customer rate is fixed; pay-in / debit solved for YC leg costs + Easner fees.
+ *
+ * Pricing model:
+ * - Customer rate = Easner rate (easner_sell / easner_buy / cross rate). FX margin (0.5%) is in the rate.
+ * - YC provider rates (yc_sell, yc_buy) = omnibus sizing + internal surplus — never customer-facing.
+ * - Display processing fee = Easner 1% leg + all YC leg fees (one row via computeDisplayProcessingFee).
+ * - Pay-in solve never shrinks credit/receive — local pay-in moves up for YC fees.
+ * - Easner 1% base = value customer buys/moves (usdCredit for fund balance; customerPrincipalUsd for cross-border).
+ *   Never apply 1% to gross localPayIn.
+ * - Pay-in fee display: local currency (Easner rate conversion, display-only).
+ * - Pay-out fee display: USD.
  */
 
-import { computePayoutProcessingFeeBps } from "./payout-processing-fee"
+import { computeDisplayProcessingFee, computePayoutProcessingFeeBps } from "./payout-processing-fee"
 
 function roundUsdc(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -17,6 +26,89 @@ function roundLocal(n: number): number {
 
 /** Quote TTL — YC receive locks ~10 minutes. */
 export const YC_QUOTE_TTL_MS = 10 * 60 * 1000
+
+/** Easner 1% leg in pay-in currency from USD credit (display-only). */
+export function easnerFeeLocalFromUsdCredit(usdCredit: number, easnerSellRate: number): number {
+  return roundLocal(usdCredit * easnerSellRate * 0.01)
+}
+
+/** Convert YC leg fees USD → pay-in currency for display (display-only). */
+export function ycLegFeesLocal(ycLegFeesUsd: number, easnerRate: number): number {
+  return roundLocal(ycLegFeesUsd * easnerRate)
+}
+
+export type BuildYcDisplayQuoteInput = {
+  processingFee: number
+  ycLegFeesUsd: number
+  /** easner_sell or cross-rate-derived pay-in rate for local display */
+  easnerRateForDisplay: number
+  payInCurrency?: string
+  /** When set (fund balance), Easner local leg uses credit value × rate × 1%. */
+  usdCredit?: number
+}
+
+export type YcDisplayQuoteFees = {
+  displayProcessingFee: number
+  displayProcessingFeeLocal: number
+  displayProcessingFeeCurrency?: string
+}
+
+/** Build canonical USD + local display processing fee (pay-in flows). */
+export function buildYcDisplayQuote(input: BuildYcDisplayQuoteInput): YcDisplayQuoteFees {
+  const displayProcessingFee = computeDisplayProcessingFee({
+    processingFee: input.processingFee,
+    exchangeFee: input.ycLegFeesUsd,
+  })
+  const easnerFeeLocal =
+    input.usdCredit != null && input.usdCredit > 0
+      ? easnerFeeLocalFromUsdCredit(input.usdCredit, input.easnerRateForDisplay)
+      : roundLocal(input.processingFee * input.easnerRateForDisplay)
+  const ycLocal = ycLegFeesLocal(input.ycLegFeesUsd, input.easnerRateForDisplay)
+  return {
+    displayProcessingFee,
+    displayProcessingFeeLocal: roundLocal(easnerFeeLocal + ycLocal),
+    displayProcessingFeeCurrency: input.payInCurrency,
+  }
+}
+
+/** Simpler helper when usdCredit is known (fund balance). */
+export function buildYcFundBalanceDisplayFees(input: {
+  usdCredit: number
+  processingFee: number
+  ycLegFeesUsd: number
+  easnerSellRate: number
+  payInCurrency: string
+}): YcDisplayQuoteFees {
+  const displayProcessingFee = computeDisplayProcessingFee({
+    processingFee: input.processingFee,
+    exchangeFee: input.ycLegFeesUsd,
+  })
+  const easnerFeeLocal = easnerFeeLocalFromUsdCredit(input.usdCredit, input.easnerSellRate)
+  const ycLocal = ycLegFeesLocal(input.ycLegFeesUsd, input.easnerSellRate)
+  return {
+    displayProcessingFee,
+    displayProcessingFeeLocal: roundLocal(easnerFeeLocal + ycLocal),
+    displayProcessingFeeCurrency: input.payInCurrency,
+  }
+}
+
+/** Cross-border pay-in display fees (Easner cross rate for local conversion). */
+export function buildYcCrossBorderDisplayFees(input: {
+  processingFee: number
+  ycLegFeesUsd: number
+  easnerSellFrom: number
+  payInCurrency: string
+}): YcDisplayQuoteFees {
+  const displayProcessingFee = computeDisplayProcessingFee({
+    processingFee: input.processingFee,
+    exchangeFee: input.ycLegFeesUsd,
+  })
+  return {
+    displayProcessingFee,
+    displayProcessingFeeLocal: roundLocal(displayProcessingFee * input.easnerSellFrom),
+    displayProcessingFeeCurrency: input.payInCurrency,
+  }
+}
 
 export type YcLegFeeInputs = {
   /** USDC crypto amount YC will settle / require */
@@ -155,19 +247,19 @@ export function computeYcFundBalancePricing(
 
   if (input.localPayIn != null && input.localPayIn > 0) {
     localPayIn = roundLocal(input.localPayIn)
+    const bps = input.processingFeeBps ?? 100
+    const grossUsd = roundUsdc(localPayIn / customerSellRate)
+    usdCredit = roundUsdc((grossUsd - ycLegFeesUsd) / (1 + bps / 10_000))
+    const processingFee = computePayoutProcessingFeeBps(usdCredit, {
+      bps: input.processingFeeBps,
+    })
     omnibusInUsd =
       omnibusFromResponse > 0
         ? omnibusFromResponse
-        : roundUsdc(localPayIn / ycSellRate - ycLegFeesUsd)
-    const processingFee = computePayoutProcessingFeeBps(omnibusInUsd + ycLegFeesUsd, {
-      bps: input.processingFeeBps,
-    })
+        : roundUsdc(usdCredit + processingFee)
     const marginAmount = roundUsdc(
-      Math.max(0, localPayIn / customerSellRate - (omnibusInUsd + ycLegFeesUsd)),
+      Math.max(0, localPayIn / customerSellRate - (usdCredit + processingFee + ycLegFeesUsd)),
     )
-    usdCredit = roundUsdc(Math.max(0, omnibusInUsd - processingFee - marginAmount * 0))
-    // User credit ≈ omnibus − processing (FX margin already in sell rate asymmetry)
-    usdCredit = roundUsdc(Math.max(0, omnibusInUsd - processingFee))
     return {
       localPayIn,
       usdCredit,

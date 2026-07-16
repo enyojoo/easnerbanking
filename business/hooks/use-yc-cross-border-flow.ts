@@ -25,9 +25,13 @@ export type YcCrossBorderQuoteResult = {
   localPayIn: number
   customerRate: number
   processingFee?: number
+  displayProcessingFeeLocal?: number
   bankInfo: Record<string, unknown> | null
   expiresAt: string
   payInNotice?: string
+  payInRail?: YcPayInRail
+  sourcePhone?: string
+  sourceNetworkName?: string
 }
 
 type YcRateRow = {
@@ -177,9 +181,15 @@ export function useYcCrossBorderFlow(input: {
       receiveAmount: number
       payInRail: YcPayInRail
       payInCountry?: string
+      sourcePhone?: string
+      networkId?: string
+      sourceNetworkName?: string
     }): Promise<YcCrossBorderQuoteResult> => {
       if (!input.recipientId || !payInCurrency) {
         throw new Error("Through Local Currency is not available")
+      }
+      if (opts.payInRail === "mobile_money" && (!opts.sourcePhone?.trim() || !opts.networkId?.trim())) {
+        throw new Error("Mobile number and network are required")
       }
       const payInCountry =
         opts.payInCountry?.trim().toUpperCase() ||
@@ -199,6 +209,9 @@ export function useYcCrossBorderFlow(input: {
             payInCurrency,
             payInCountry,
             payInRail: opts.payInRail,
+            sourcePhone: opts.sourcePhone,
+            networkId: opts.networkId,
+            sourceNetworkName: opts.sourceNetworkName,
           }),
         })
         const data = (await res.json().catch(() => ({}))) as YcCrossBorderQuoteResult & {

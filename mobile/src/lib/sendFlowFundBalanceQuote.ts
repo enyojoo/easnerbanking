@@ -3,19 +3,28 @@ import type { YcPayInRail } from '../hooks/useYcCrossBorderFlow'
 
 export type YcFundBalanceQuote = {
   ok: true
-  sequenceId: string
+  sequenceId?: string
   localPayIn: number
   usdCredit: number
   customerRate: number
   processingFee?: number
   ycChannelFeeUsd?: number
+  ycLegFeesUsd?: number
   displayProcessingFee?: number
-  bankInfo: Record<string, unknown> | null
+  displayProcessingFeeLocal?: number
+  displayProcessingFeeCurrency?: string
+  provisionalPayIn?: number
+  creditOrReceiveAmount?: number
+  bankInfo?: Record<string, unknown> | null
   expiresAt: string
   transactionId: string | null
   easnerTransactionId?: string | null
   transferId: string | null
   payInNotice?: string
+  payInRail?: YcPayInRail
+  sourcePhone?: string
+  sourceNetworkId?: string
+  sourceNetworkName?: string
 }
 
 /** User-entered amount anchor — solved pay-in/credit from YC may differ from preview. */
@@ -25,6 +34,9 @@ export type FundBalanceQuoteStashMeta = {
   rail: YcPayInRail
   amountEntryMode: 'usd' | 'local'
   enteredAmount: number
+  sourcePhone?: string
+  networkId?: string
+  sourceNetworkName?: string
 }
 
 let stashed: YcFundBalanceQuote | null = null
@@ -39,6 +51,18 @@ function roundMoney(n: number): number {
 
 function entryAmountsMatch(a: number, b: number): boolean {
   return roundMoney(a) === roundMoney(b)
+}
+
+function quoteMetaKey(meta: FundBalanceQuoteStashMeta): string {
+  return [
+    meta.country,
+    meta.currency,
+    meta.rail,
+    meta.amountEntryMode,
+    meta.enteredAmount,
+    meta.sourcePhone ?? '',
+    meta.networkId ?? '',
+  ].join('|')
 }
 
 export function isCompleteFundBalanceQuote(
@@ -78,14 +102,10 @@ export function clearFundBalanceQuote(): void {
 export function isStashedFundBalanceQuoteFresh(meta: FundBalanceQuoteStashMeta): boolean {
   if (!isCompleteFundBalanceQuote(stashed) || !stashedMeta) return false
   if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
-  if (stashedMeta.country.trim().toUpperCase() !== meta.country.trim().toUpperCase()) return false
-  if (stashedMeta.currency.trim().toUpperCase() !== meta.currency.trim().toUpperCase()) return false
-  if (stashedMeta.rail !== meta.rail) return false
-  if (stashedMeta.amountEntryMode !== meta.amountEntryMode) return false
-  return entryAmountsMatch(stashedMeta.enteredAmount, meta.enteredAmount)
+  return quoteMetaKey(stashedMeta) === quoteMetaKey(meta)
 }
 
-export async function fetchFundBalanceQuote(meta: FundBalanceQuoteStashMeta): Promise<YcFundBalanceQuote> {
+function buildFundBalanceAmountBody(meta: FundBalanceQuoteStashMeta): Record<string, unknown> {
   const body: Record<string, unknown> = {
     currency: meta.currency,
     country: meta.country,
@@ -98,9 +118,21 @@ export async function fetchFundBalanceQuote(meta: FundBalanceQuoteStashMeta): Pr
   } else {
     throw new Error('Enter a valid amount')
   }
+  if (meta.rail === 'mobile_money') {
+    if (!meta.sourcePhone?.trim() || !meta.networkId?.trim()) {
+      throw new Error('Mobile number and network are required')
+    }
+    body.sourcePhone = meta.sourcePhone.trim()
+    body.networkId = meta.networkId.trim()
+    if (meta.sourceNetworkName) body.sourceNetworkName = meta.sourceNetworkName
+  }
+  return body
+}
+
+export async function fetchFundBalanceQuote(meta: FundBalanceQuoteStashMeta): Promise<YcFundBalanceQuote> {
   const data = await apiFetch<YcFundBalanceQuote, Record<string, unknown>>(
     '/api/yellowcard/fund-balance/quote',
-    { method: 'POST', body },
+    { method: 'POST', body: buildFundBalanceAmountBody(meta) },
   )
   if (!data.ok) throw new Error('Fund balance quote failed')
   return data
@@ -112,13 +144,7 @@ export async function ensureFundBalanceQuoteStashed(
 ): Promise<YcFundBalanceQuote | null> {
   if (isStashedFundBalanceQuoteFresh(meta)) return peekFundBalanceQuote()
 
-  const key = [
-    meta.country,
-    meta.currency,
-    meta.rail,
-    meta.amountEntryMode,
-    meta.enteredAmount,
-  ].join('|')
+  const key = quoteMetaKey(meta)
   if (inflightQuote && inflightQuoteKey === key) return inflightQuote
 
   inflightQuoteKey = key
@@ -142,4 +168,14 @@ export async function ensureFundBalanceQuoteStashed(
     })
 
   return inflightQuote
+}
+
+export async function fetchPayInNetworks(country: string, currency: string): Promise<
+  { id: string; name: string }[]
+> {
+  const data = await apiFetch<{ networks?: { id: string; name: string }[] }>(
+    '/api/yellowcard/pay-in-networks',
+    { query: { country, currency } },
+  )
+  return data.networks ?? []
 }

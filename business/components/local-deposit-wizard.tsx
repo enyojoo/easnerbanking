@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,11 +19,9 @@ import {
   formatSendRateLabel,
   mapResidenceToLocalPayInCurrency,
   resolveYcPayInCustomerRate,
-  computeDisplayProcessingFee,
-  shouldShowPayoutReviewFeeRow,
   ycFundBalanceQuoteErrorMessage,
   ycPayInInstructionNotice,
-  ycPayInSendingExactlyCopy,
+  YC_PAY_IN_SEND_EXACTLY_LABEL,
   formatYcPayInMinHint,
   validateYcFundBalancePayInAmount,
   REVIEW_ROW_LABELS,
@@ -33,11 +30,10 @@ import {
 } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
-import { ycBankInfoFields } from "@/lib/yc-bank-info-fields"
+import { YcCompleteDepositPanel } from "@/components/yc-complete-deposit-panel"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
-import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useYcPayInMinEnforcement } from "@/hooks/use-yc-pay-in-min-enforcement"
 
@@ -61,6 +57,11 @@ type FundBalanceQuote = {
   processingFee?: number
   ycChannelFeeUsd?: number
   displayProcessingFee?: number
+  displayProcessingFeeLocal?: number
+  provisionalPayIn?: number
+  sourcePhone?: string
+  sourceNetworkId?: string
+  sourceNetworkName?: string
   bankInfo: Record<string, unknown> | null
   expiresAt: string
   transactionId: string | null
@@ -113,6 +114,13 @@ export function LocalDepositWizard({
   const [prefetchedQuote, setPrefetchedQuote] = useState<FundBalanceQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [defaultPhone, setDefaultPhone] = useState("")
+  const [momoPhone, setMomoPhone] = useState("")
+  const [momoNetworkId, setMomoNetworkId] = useState("")
+  const [momoNetworks, setMomoNetworks] = useState<{ id: string; name: string }[]>([])
+  const [momoNetworksLoading, setMomoNetworksLoading] = useState(false)
+
+  const isMomo = rail === "mobile_money"
 
   const usdBalance = parseFloat(String(walletQuery.data?.balances?.USD ?? "0").replace(/,/g, "")) || 0
   const enteredAmount = Number.parseFloat(amountStr.replace(/,/g, "")) || 0
@@ -221,7 +229,7 @@ export function LocalDepositWizard({
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" }
       if (businessId) headers["X-Easner-Noah-Scope"] = "business"
-      const body =
+      const body: Record<string, unknown> =
         amountMode === "usd"
           ? {
               currency: localPayInCurrency,
@@ -235,6 +243,12 @@ export function LocalDepositWizard({
               localPayIn: enteredAmount,
               rail,
             }
+      if (isMomo) {
+        body.sourcePhone = momoPhone.trim() || defaultPhone.trim()
+        body.networkId = momoNetworkId
+        const net = momoNetworks.find((n) => n.id === momoNetworkId)
+        if (net?.name) body.sourceNetworkName = net.name
+      }
       const res = await fetchWithSession("/api/yellowcard/fund-balance/quote", {
         method: "POST",
         headers,
@@ -264,10 +278,54 @@ export function LocalDepositWizard({
     localPayInCurrency,
     rail,
     residenceCountry,
+    isMomo,
+    momoPhone,
+    momoNetworkId,
+    momoNetworks,
+    defaultPhone,
   ])
 
+  useEffect(() => {
+    if (step !== "review" || !isMomo) return
+    let cancelled = false
+    setMomoNetworksLoading(true)
+    void (async () => {
+      try {
+        const res = await fetchWithSession(
+          `/api/yellowcard/pay-in-networks?country=${encodeURIComponent(residenceCountry)}&currency=${encodeURIComponent(localPayInCurrency)}`,
+        )
+        const data = (await res.json().catch(() => ({}))) as { networks?: { id: string; name: string }[] }
+        if (!cancelled) {
+          setMomoNetworks(data.networks ?? [])
+          if ((data.networks?.length ?? 0) === 1) setMomoNetworkId(data.networks![0].id)
+        }
+      } finally {
+        if (!cancelled) setMomoNetworksLoading(false)
+      }
+    })()
+    void (async () => {
+      try {
+        const res = await fetchWithSession("/api/settings/personal")
+        const data = (await res.json().catch(() => ({}))) as { personal?: { phone?: string | null } }
+        if (!cancelled && res.ok) {
+          const phone = String(data.personal?.phone ?? "").trim()
+          setDefaultPhone(phone)
+          setMomoPhone((prev) => prev || phone)
+        }
+      } catch {
+        // optional prefill
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [step, isMomo, residenceCountry, localPayInCurrency])
+
   const quotePrefetchKey =
-    step === "amount" && enteredAmount > 0 && customerRate
+    !isMomo &&
+    step === "amount" &&
+    enteredAmount > 0 &&
+    customerRate
       ? [
           residenceCountry,
           localPayInCurrency,
@@ -293,7 +351,7 @@ export function LocalDepositWizard({
   }, [quotePrefetchKey, createQuote])
 
   useEffect(() => {
-    if (step !== "review") return
+    if (step !== "review" || isMomo) return
     if (quote?.transferId) return
     if (prefetchedQuote?.transferId) {
       setQuote(prefetchedQuote)
@@ -309,7 +367,7 @@ export function LocalDepositWizard({
     return () => {
       cancelled = true
     }
-  }, [step, quote?.transferId, prefetchedQuote, createQuote])
+  }, [step, quote?.transferId, prefetchedQuote, createQuote, isMomo])
 
   if (ngMissingType) {
     return (
@@ -336,7 +394,6 @@ export function LocalDepositWizard({
   const bankAvailable = rails.rails.bank_transfer.available
   const momoAvailable = rails.rails.mobile_money.available
   const railLabel = rail === "mobile_money" ? "Mobile money" : "Bank transfer"
-  const payInFields = ycBankInfoFields(quote?.bankInfo)
 
   const goBack = () => {
     if (step === "amount" && initialStep === "amount" && onExitToCashList) {
@@ -499,6 +556,11 @@ export function LocalDepositWizard({
           disabled={!canContinue}
           onClick={async () => {
             setQuoteError(null)
+            if (isMomo) {
+              setQuote(null)
+              setStep("review")
+              return
+            }
             if (prefetchedQuote?.transferId) {
               setQuote(prefetchedQuote)
               setStep("review")
@@ -517,16 +579,13 @@ export function LocalDepositWizard({
 
   if (step === "review") {
     const transferMethod = rail === "mobile_money" ? "Mobile Money" : "Bank Transfer"
-    const displayProcessingFee =
-      quote?.displayProcessingFee ??
-      computeDisplayProcessingFee({
-        processingFee: quote?.processingFee ?? 0,
-        exchangeFee: quote?.ycChannelFeeUsd ?? 0,
-      })
-    const showProcessingFee = shouldShowPayoutReviewFeeRow({
-      processingFee: quote?.processingFee ?? 0,
-      exchangeFee: quote?.ycChannelFeeUsd ?? 0,
-    })
+    const reviewLocalPayIn = isMomo ? preview.localPayIn : (quote?.localPayIn ?? 0)
+    const reviewUsdCredit = isMomo ? preview.usdCredit : (quote?.usdCredit ?? 0)
+    const reviewCustomerRate = isMomo ? customerRate : (quote?.customerRate ?? customerRate)
+    const momoReady = Boolean((momoPhone.trim() || defaultPhone.trim()) && momoNetworkId)
+    const reviewReady = isMomo
+      ? Boolean(reviewCustomerRate && reviewLocalPayIn > 0 && momoReady)
+      : Boolean(quote?.transferId)
     return (
       <div className="space-y-4">
         <button
@@ -539,50 +598,40 @@ export function LocalDepositWizard({
         </button>
 
         <div className="rounded-xl border border-border p-4 space-y-3 text-sm">
-          {quoteLoading ? (
+          {!isMomo && quoteLoading ? (
             <div className="flex justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : quote ? (
+          ) : reviewReady ? (
             <>
-              {(quote.easnerTransactionId ?? quote.transactionId) ? (
+              {!isMomo && (quote?.easnerTransactionId ?? quote?.transactionId) ? (
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
                   <span className="font-mono text-right">
-                    {(quote.easnerTransactionId ?? quote.transactionId)!.toUpperCase()}
+                    {(quote!.easnerTransactionId ?? quote!.transactionId)!.toUpperCase()}
                   </span>
                 </div>
               ) : null}
               <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.amountToPay}</span>
+                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.estimatedToPay}</span>
                 <span>
                   {formatReviewRowMoneyDisplay(
-                    REVIEW_ROW_LABELS.amountToPay,
-                    quote.localPayIn,
+                    REVIEW_ROW_LABELS.estimatedToPay,
+                    reviewLocalPayIn,
                     localPayInCurrency,
                   )}
                 </span>
               </div>
-              {(showProcessingFee && displayProcessingFee > 0) ? (
+              {reviewCustomerRate ? (
                 <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
-                  <span>
-                    {formatReviewRowMoneyDisplay(
-                      REVIEW_ROW_LABELS.processingFee,
-                      displayProcessingFee,
-                      "USD",
-                    )}
-                  </span>
+                  <span className="text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
+                  <span>{formatSendRateLabel("USD", localPayInCurrency, reviewCustomerRate)}</span>
                 </div>
               ) : null}
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
-                <span>{formatSendRateLabel("USD", localPayInCurrency, quote.customerRate)}</span>
-              </div>
               <div className="flex justify-between gap-4 font-medium">
-                <span>{REVIEW_ROW_LABELS.amountToCredit}</span>
+                <span>{REVIEW_ROW_LABELS.estimatedToCredit}</span>
                 <span>
-                  {formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.amountToCredit, quote.usdCredit, "USD")}
+                  {formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.amountToCredit, reviewUsdCredit, "USD")}
                 </span>
               </div>
               <div className="flex justify-between gap-4 items-center">
@@ -596,7 +645,7 @@ export function LocalDepositWizard({
                 <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
                 <span>{transferMethod}</span>
               </div>
-              {quote.expiresAt ? (
+              {!isMomo && quote?.expiresAt ? (
                 <p className="text-xs text-muted-foreground pt-1">
                   {quoteCountdown.expired
                     ? "Quote expired — go back and continue again."
@@ -605,13 +654,61 @@ export function LocalDepositWizard({
               ) : null}
             </>
           ) : null}
+          {isMomo ? (
+            <div className="pt-4 mt-4 border-t space-y-3">
+              <div>
+                <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.mobileNumber}</Label>
+                <Input
+                  id="momo-phone"
+                  value={momoPhone}
+                  onChange={(e) => setMomoPhone(e.target.value)}
+                  placeholder="+254712345678"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>{REVIEW_ROW_LABELS.paymentNetwork}</Label>
+                {momoNetworksLoading ? (
+                  <div className="flex justify-center py-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 mt-2">
+                    {momoNetworks.map((network) => (
+                      <button
+                        key={network.id}
+                        type="button"
+                        className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                          momoNetworkId === network.id ? "border-primary bg-primary/5" : "border-border"
+                        }`}
+                        onClick={() => setMomoNetworkId(network.id)}
+                      >
+                        {network.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
           {quoteError ? <p className="text-sm text-destructive">{quoteError}</p> : null}
         </div>
 
         <Button
           className="w-full"
-          disabled={!quote?.transferId || quoteCountdown.expired || quoteLoading}
-          onClick={() => setStep("payin")}
+          disabled={
+            !reviewReady ||
+            quoteLoading ||
+            (!isMomo && (quoteCountdown.expired || !quote?.transferId))
+          }
+          onClick={async () => {
+            if (isMomo) {
+              const result = await createQuote()
+              if (result?.transferId) setStep("payin")
+              return
+            }
+            setStep("payin")
+          }}
         >
           Continue
         </Button>
@@ -619,11 +716,17 @@ export function LocalDepositWizard({
     )
   }
 
-  const payInAmount = formatMoneyDisplay(quote?.localPayIn ?? preview.localPayIn, localPayInCurrency)
-  const creditAmount = formatMoneyDisplay(quote?.usdCredit ?? preview.usdCredit, "USD")
+  if (step !== "payin") {
+    return null
+  }
+
+  const feeLocal =
+    quote?.displayProcessingFeeLocal ??
+    (quote?.displayProcessingFee != null && customerRate
+      ? Math.round(quote.displayProcessingFee * customerRate * 100) / 100
+      : 0)
+  const reviewCustomerRate = quote?.customerRate ?? customerRate
   const payInNotice = quote?.payInNotice ?? ycPayInInstructionNotice(rail)
-  const PaymentDetailsIcon = rail === "mobile_money" ? Smartphone : Landmark
-  const paymentDetailsTitle = rail === "mobile_money" ? "Mobile Money" : "Bank Account"
 
   return (
     <div className="space-y-4">
@@ -636,71 +739,26 @@ export function LocalDepositWizard({
         Back
       </button>
 
-      <h2 className="text-2xl font-semibold">Complete deposit</h2>
-
-      <div className="rounded-xl border border-border p-4 space-y-1 text-sm mb-8">
-        {quote?.transactionId ? (
-          <div className="flex justify-between gap-4 py-2 border-b">
-            <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
-            <span className="font-medium text-right">{quote.transactionId.toUpperCase()}</span>
-          </div>
-        ) : null}
-        <div className="flex justify-between gap-4 py-2">
-          <span className="text-muted-foreground">{REVIEW_ROW_LABELS.amountToCredit}</span>
-          <span className="font-medium text-right">{creditAmount}</span>
-        </div>
-      </div>
-
-      <div className="space-y-4 mb-5">
-        <p className="text-sm text-center text-muted-foreground px-2">{payInNotice}</p>
-        <p className="text-xl font-semibold text-center text-foreground">
-          {ycPayInSendingExactlyCopy(payInAmount)}
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-border p-4 space-y-1">
-        <div className="flex items-center gap-2 mb-3">
-          <PaymentDetailsIcon className="h-5 w-5 text-primary" />
-          <p className="font-medium">{paymentDetailsTitle}</p>
-        </div>
-        {payInFields.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">
-            Payment details unavailable. Contact support with reference {quote?.transactionId}.
-          </p>
-        ) : (
-          payInFields.map((f) => (
-            <div
-              key={f.id}
-              className="flex justify-between items-center gap-4 py-3 border-b last:border-0"
-            >
-              <span className="text-sm text-muted-foreground">{f.label}</span>
-              <button
-                type="button"
-                onClick={() => void onCopy(f.value, `local-wizard-${f.id}`)}
-                className="flex items-center gap-2 font-mono text-sm hover:text-primary transition-colors text-right"
-              >
-                <span className="break-all">{f.value}</span>
-                {copiedField === `local-wizard-${f.id}` ? (
-                  <Check className="h-4 w-4 text-primary shrink-0" />
-                ) : (
-                  <Copy className="h-4 w-4 text-muted-foreground shrink-0" />
-                )}
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-
       {quote?.transactionId ? (
-        <Button className="w-full" asChild>
-          <Link href={transactionWebDetailPath(quote.transactionId)}>
-            I&apos;ve made the payment
-          </Link>
-        </Button>
+        <YcCompleteDepositPanel
+          flowMode="fund_balance"
+          transactionId={quote.transactionId}
+          localPayIn={quote.localPayIn ?? preview.localPayIn}
+          localCurrency={localPayInCurrency}
+          creditOrReceiveAmount={quote.usdCredit ?? preview.usdCredit}
+          creditOrReceiveCurrency="USD"
+          customerRate={reviewCustomerRate ?? customerRate ?? 0}
+          processingFeeLocal={feeLocal}
+          payInRail={rail}
+          bankInfo={quote.bankInfo}
+          sourcePhone={quote.sourcePhone}
+          sourceNetworkName={quote.sourceNetworkName}
+          payInNotice={payInNotice}
+          copiedField={copiedField}
+          onCopy={onCopy}
+        />
       ) : (
-        <Button className="w-full" disabled>
-          I&apos;ve made the payment
-        </Button>
+        <p className="text-sm text-muted-foreground">Loading quote…</p>
       )}
     </div>
   )

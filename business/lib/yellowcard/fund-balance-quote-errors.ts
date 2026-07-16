@@ -11,6 +11,12 @@ export type YcFundBalanceQuoteErrorCode =
   | "yc_receive_rejected"
   | "yc_amount_below_min"
   | "yc_amount_above_max"
+  | "momo_source_required"
+  | "invalid_rail"
+  | "transfer_not_found"
+  | "invalid_transfer_status"
+  | "quote_expired"
+  | "draft_incomplete"
 
 export function ycFundBalanceQuoteError(
   code: YcFundBalanceQuoteErrorCode,

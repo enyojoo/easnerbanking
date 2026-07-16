@@ -82,6 +82,7 @@ import SelectRecipientScreen from '../screens/send/SelectRecipientScreen'
 import SendConfirmScreen from '../screens/send/SendConfirmScreen'
 import SendPinScreen from '../screens/send/SendPinScreen'
 import YcPayInScreen from '../screens/send/YcPayInScreen'
+import YcPayInAuthorizeScreen from '../screens/send/YcPayInAuthorizeScreen'
 
 // Receive Money Flow Screens
 import ReceiveMoneyScreen from '../screens/receive/ReceiveMoneyScreen'
@@ -455,6 +456,14 @@ function MainStack() {
       <Stack.Screen
         name="YcPayIn"
         component={YcPayInScreen}
+        options={{
+          headerShown: false,
+          ...sendFlowStandardPreset(),
+        }}
+      />
+      <Stack.Screen
+        name="YcPayInAuthorize"
+        component={YcPayInAuthorizeScreen}
         options={{
           headerShown: false,
           ...sendFlowStandardPreset(),

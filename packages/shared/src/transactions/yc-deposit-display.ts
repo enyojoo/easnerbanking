@@ -133,6 +133,10 @@ export function normalizeYcFundBalanceDepositReview(
       inferResidenceCountryFromLocalCurrency(localCurrency) ||
       "",
     pay_in_rail: payInRail,
+    ...(Number.isFinite(Number(o.display_processing_fee_local)) &&
+    Number(o.display_processing_fee_local) > 0
+      ? { display_processing_fee_local: Number(o.display_processing_fee_local) }
+      : {}),
   }
 }
 
@@ -145,6 +149,7 @@ export function buildYcFundBalanceDepositReviewSnapshot(input: {
   exchangeRate: number
   residenceCountry: string
   payInRail: YcPayInRail
+  displayProcessingFeeLocal?: number
 }): YcFundBalanceDepositReviewSnapshot {
   const payInRail = normalizeYcPayInRail(input.payInRail)
   const localCurrency = String(input.localCurrency).trim().toUpperCase()
@@ -165,6 +170,11 @@ export function buildYcFundBalanceDepositReviewSnapshot(input: {
     credit_to: "USD Balance",
     residence_country: residenceCountry,
     pay_in_rail: payInRail,
+    ...(input.displayProcessingFeeLocal != null &&
+    Number.isFinite(input.displayProcessingFeeLocal) &&
+    input.displayProcessingFeeLocal > 0
+      ? { display_processing_fee_local: input.displayProcessingFeeLocal }
+      : {}),
   }
 }
 
@@ -205,6 +215,9 @@ export function reconstructYcFundBalanceDepositReview(
     exchangeRate,
     residenceCountry,
     payInRail,
+    displayProcessingFeeLocal: Number.isFinite(Number(meta.display_processing_fee_local))
+      ? Number(meta.display_processing_fee_local)
+      : undefined,
   })
 }
 

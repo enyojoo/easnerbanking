@@ -46,6 +46,7 @@ export const webLinking: LinkingOptions<Record<string, unknown>> = {
       ReceiveLocalAmount: 'user/receive/local/amount',
       ReceiveLocalReview: 'user/receive/local/review',
       YcPayIn: 'user/receive/local/payin',
+      YcPayInAuthorize: 'user/receive/local/authorize',
       Recipients: 'user/recipients',
       Support: 'user/support',
       Profile: 'user/profile',

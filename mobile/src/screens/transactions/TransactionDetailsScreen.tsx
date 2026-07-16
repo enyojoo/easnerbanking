@@ -797,15 +797,30 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       processingFee: transaction.payout_review.processing_fee,
       exchangeFee: transaction.payout_review.exchange_fee,
     })
+  const payoutLocalFee =
+    payoutReviewFlow === 'local_pay_in' &&
+    transaction.payout_review?.display_processing_fee_local != null &&
+    transaction.payout_review.display_processing_fee_local > 0
+      ? transaction.payout_review.display_processing_fee_local
+      : null
   const payoutDisplayProcessingFee = transaction.payout_review
-    ? computeDisplayProcessingFee({
+    ? payoutLocalFee ??
+      computeDisplayProcessingFee({
         processingFee: transaction.payout_review.processing_fee,
         exchangeFee: transaction.payout_review.exchange_fee,
       })
     : 0
   const ycDepositReview = transaction.deposit_review
+  const ycFeeLocal =
+    ycDepositReview?.display_processing_fee_local != null &&
+    ycDepositReview.display_processing_fee_local > 0
+      ? ycDepositReview.display_processing_fee_local
+      : Number(transaction.metadata?.display_processing_fee_local) > 0
+        ? Number(transaction.metadata?.display_processing_fee_local)
+        : null
   const ycDisplayProcessingFee = ycDepositReview
-    ? computeDisplayProcessingFee({
+    ? ycFeeLocal ??
+      computeDisplayProcessingFee({
         processingFee: ycDepositReview.processing_fee,
         exchangeFee: ycDepositReview.exchange_fee,
       })

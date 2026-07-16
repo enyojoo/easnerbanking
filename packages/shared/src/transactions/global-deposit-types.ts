@@ -11,4 +11,6 @@ export type YcFundBalanceDepositReviewSnapshot = {
   credit_to: string
   residence_country: string
   pay_in_rail: YcPayInRail
+  /** Combined processing fee in pay-in currency (display-only). */
+  display_processing_fee_local?: number
 }

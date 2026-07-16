@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createCrossBorderTransfer } from "@/lib/yellowcard/cross-border-orchestrator"
+import { expireStalePendingAuthorizeTransfers } from "@/lib/yellowcard/expire-pending-authorize"
+import { ycPayInInstructionNotice } from "@easner/shared"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 
 export const runtime = "nodejs"
@@ -11,12 +13,18 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error
   const { user } = auth
 
+  const admin = createSupabaseAdmin()
+  void expireStalePendingAuthorizeTransfers(admin, { userId: user.id }).catch(() => {})
+
   const body = (await request.json().catch(() => null)) as {
     recipientId?: string
     receiveAmount?: number
     payInCurrency?: string
     payInCountry?: string
     payInRail?: "bank_transfer" | "mobile_money"
+    sourcePhone?: string
+    networkId?: string
+    sourceNetworkName?: string
   } | null
 
   const recipientId = body?.recipientId?.trim()
@@ -27,7 +35,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "recipientId, receiveAmount, payInCurrency, payInCountry required" }, { status: 400 })
   }
 
-  const admin = createSupabaseAdmin()
   const { data: recipient } = await admin
     .from("recipients")
     .select("*")
@@ -46,6 +53,18 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .maybeSingle()
 
+  const payInRail = body?.payInRail === "mobile_money" ? "mobile_money" : "bank_transfer"
+  if (payInRail === "mobile_money") {
+    const sourcePhone = String(body?.sourcePhone ?? "").trim()
+    const networkId = String(body?.networkId ?? "").trim()
+    if (!sourcePhone || !networkId) {
+      return NextResponse.json(
+        { error: "Mobile money cross-border requires sourcePhone and networkId", code: "momo_source_required" },
+        { status: 400 },
+      )
+    }
+  }
+
   try {
     const result = await createCrossBorderTransfer({
       admin,
@@ -53,9 +72,12 @@ export async function POST(request: Request) {
       customerUID: user.id,
       payInCurrency,
       payInCountry,
-      payInRail: body?.payInRail === "mobile_money" ? "mobile_money" : "bank_transfer",
+      payInRail,
       receiveAmount,
       recipient: recipient as RecipientSellPrepareRow,
+      sourcePhone: body?.sourcePhone,
+      sourceNetworkId: body?.networkId,
+      sourceNetworkName: body?.sourceNetworkName,
       senderProfile: {
         residenceCountry: userRow?.residence_country ?? payInCountry,
         kycIdType: userRow?.kyc_id_type,
@@ -75,7 +97,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       ...result,
-      payInNotice: `Complete your transfer to send this payment.`,
+      payInNotice: ycPayInInstructionNotice(payInRail),
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : "Cross-border quote failed"

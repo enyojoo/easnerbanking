@@ -41,6 +41,13 @@ export function DepositReviewDetailsRows({
     processingFee: depositReview.processing_fee,
     exchangeFee: depositReview.exchange_fee,
   })
+  const feeLocalRaw = depositReview.display_processing_fee_local
+  const feeLocal =
+    feeLocalRaw != null && Number.isFinite(feeLocalRaw) && feeLocalRaw > 0
+      ? feeLocalRaw
+      : null
+  const feeAmount = feeLocal ?? displayProcessingFee
+  const feeCurrency = feeLocal != null ? depositReview.local_currency : "USD"
   const showProcessingFee = shouldShowPayoutReviewFeeRow({
     processingFee: depositReview.processing_fee,
     exchangeFee: depositReview.exchange_fee,
@@ -87,8 +94,8 @@ export function DepositReviewDetailsRows({
             label={REVIEW_ROW_LABELS.processingFee}
             value={formatReviewRowMoneyDisplay(
               REVIEW_ROW_LABELS.processingFee,
-              displayProcessingFee,
-              "USD",
+              feeAmount,
+              feeCurrency,
             )}
             valueClassName="font-semibold"
           />

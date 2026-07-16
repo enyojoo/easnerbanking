@@ -106,6 +106,14 @@ export function PayoutReviewDetailsRows({
     processingFee: payoutReview.processing_fee,
     exchangeFee: payoutReview.exchange_fee,
   })
+  const localPayInFee =
+    reviewFlow === "local_pay_in" &&
+    payoutReview.display_processing_fee_local != null &&
+    payoutReview.display_processing_fee_local > 0
+      ? payoutReview.display_processing_fee_local
+      : null
+  const feeDisplayAmount = localPayInFee ?? displayProcessingFee
+  const feeDisplayCurrency = localPayInFee != null ? payoutReview.send_currency : payoutReview.send_currency
   const showProcessingFee = shouldShowPayoutReviewFeeRow({
     processingFee: payoutReview.processing_fee,
     exchangeFee: payoutReview.exchange_fee,
@@ -148,8 +156,8 @@ export function PayoutReviewDetailsRows({
                 label={REVIEW_ROW_LABELS.processingFee}
                 value={formatReviewRowMoneyDisplay(
                   REVIEW_ROW_LABELS.processingFee,
-                  displayProcessingFee,
-                  payoutReview.send_currency,
+                  feeDisplayAmount,
+                  feeDisplayCurrency,
                 )}
                 valueClassName="font-semibold"
               />

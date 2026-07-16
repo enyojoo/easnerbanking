@@ -78,6 +78,7 @@ import {
 } from '../../lib/sendFlowWalletQuote'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { YcCrossBorderSendConfirm } from '../../components/send/YcCrossBorderSendConfirm'
+import { residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { haptics } from '../../lib/haptics'
 
@@ -711,6 +712,9 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           receiveAmount={params.receiveAmountValue ?? 0}
           receiveCurrency={params.receiveCurrency ?? recipient.currency ?? ''}
           payInCurrency={params.ycPayInCurrency!}
+          payInCountry={
+            residenceCountryFromPayInCurrency(params.ycPayInCurrency!) ?? ''
+          }
           payInRail={params.ycPayInRail!}
           transactionId={paramTransactionId || ''}
           footerPadding={footerPadding}

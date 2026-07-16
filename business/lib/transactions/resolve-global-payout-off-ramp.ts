@@ -107,6 +107,60 @@ function derivePayoutReview(
     typeof meta.receive_amount === "number" ? meta.receive_amount : Number(meta.receive_amount),
   )
   const receiveCurrency = String(meta.receive_currency || meta.fiat_currency || "").toUpperCase()
+
+  if (
+    String(meta.yc_mode ?? "") === "cross_border_send" &&
+    receiveAmount != null &&
+    receiveAmount > 0 &&
+    receiveCurrency
+  ) {
+    const localPayIn =
+      roundFiat(Number(meta.local_pay_in)) ??
+      roundFiat(fromMeta?.you_send_amount) ??
+      ledgerAmount
+    if (localPayIn != null && localPayIn > 0) {
+      const sendCurrency = String(
+        meta.local_currency ?? meta.send_currency ?? ledgerCurrency,
+      ).toUpperCase()
+      const processingFee =
+        roundFiat(fromMeta?.processing_fee) ??
+        roundFiat(Number(meta.processing_fee)) ??
+        0
+      const exchangeFee =
+        roundFiat(fromMeta?.exchange_fee) ??
+        roundFiat(Number(meta.exchange_fee ?? meta.yc_leg_fees_usd)) ??
+        0
+      const exchangeRate =
+        roundFiat(fromMeta?.exchange_rate) ??
+        roundFiat(Number(meta.customer_rate ?? meta.customerRate)) ??
+        1
+      const payInRail = String(meta.pay_in_rail ?? "")
+      const transferMethod =
+        payInRail === "mobile_money"
+          ? "Mobile Money"
+          : getGlobalPayoutTransferMethod({
+              currency: receiveCurrency,
+              countryCode: String(meta.country_code ?? "").trim().toUpperCase() || undefined,
+            })
+      const displayFeeLocal = roundFiat(Number(meta.display_processing_fee_local))
+      return {
+        you_send_amount: localPayIn,
+        total_debited: localPayIn,
+        exchange_fee: exchangeFee ?? 0,
+        processing_fee: processingFee ?? 0,
+        exchange_rate: exchangeRate ?? 1,
+        send_currency: sendCurrency,
+        receive_amount: receiveAmount,
+        receive_currency: receiveCurrency,
+        transfer_method: transferMethod,
+        processing_time: getGlobalPayoutProcessingTime(transferMethod),
+        ...(displayFeeLocal != null && displayFeeLocal > 0
+          ? { display_processing_fee_local: displayFeeLocal }
+          : {}),
+      }
+    }
+  }
+
   if (receiveAmount == null || receiveAmount <= 0 || !receiveCurrency) {
     if (payload) {
       const enrichment = extractNoahGlobalPayoutPayOutEnrichment(payload)

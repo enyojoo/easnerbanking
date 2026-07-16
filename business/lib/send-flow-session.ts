@@ -79,6 +79,9 @@ export interface SendFlowState {
     expiresAt: string
     payInNotice?: string
     payInRail?: "bank_transfer" | "mobile_money"
+    displayProcessingFeeLocal?: number
+    sourcePhone?: string
+    sourceNetworkName?: string
   }
   /** Executable wallet send quote from confirm (Turnkey direct or LI.FI). */
   walletQuote?: {

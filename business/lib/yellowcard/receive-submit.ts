@@ -33,6 +33,8 @@ export type YcReceiveSubmitInput = {
   payInRail?: YcReceiveRail
   /** MoMo phone when rail is mobile_money (production). */
   sourcePhone?: string | null
+  /** MoMo network id from YC Get Networks (required for production MoMo pay-in). */
+  sourceNetworkId?: string | null
   settlementWalletAddress?: string
   reason?: string
 }
@@ -61,15 +63,21 @@ export type YcReceiveSubmitResult = {
 export function buildYcReceiveSource(input: {
   rail: YcReceiveRail
   phone?: string | null
+  networkId?: string | null
 }): YcReceiveSource {
   const accountType = input.rail === "mobile_money" ? "momo" : "bank"
   const source: YcReceiveSource = { accountType }
   const phone = String(input.phone ?? "").trim()
+  const networkId = String(input.networkId ?? "").trim()
   if (getYellowcardEnvironment() === "sandbox") {
     // Sandbox success simulation per YC docs.
     source.accountNumber = "1111111111"
-  } else if (accountType === "momo" && phone) {
-    source.accountNumber = phone
+    if (accountType === "momo" && networkId) {
+      source.networkId = networkId
+    }
+  } else if (accountType === "momo") {
+    if (phone) source.accountNumber = phone
+    if (networkId) source.networkId = networkId
   }
   return source
 }
@@ -100,7 +108,11 @@ export function buildYcReceiveSubmitBody(input: YcReceiveSubmitInput): Record<st
   const source =
     input.source ??
     (input.payInRail
-      ? buildYcReceiveSource({ rail: input.payInRail, phone: input.sourcePhone })
+      ? buildYcReceiveSource({
+          rail: input.payInRail,
+          phone: input.sourcePhone,
+          networkId: input.sourceNetworkId,
+        })
       : null)
   if (source) body.source = source
   body.reason = resolveYcPaymentReason(input.reason)

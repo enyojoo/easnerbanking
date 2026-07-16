@@ -240,9 +240,9 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   }, [localPayInCurrency, residenceCountry, payInRail])
 
   useEffect(() => {
-    if (!quotePrefetchKey) return
+    if (!quotePrefetchKey || payInRail === 'mobile_money') return
     void ensureFundBalanceQuoteStashed(quoteStashMeta)
-  }, [quotePrefetchKey, quoteStashMeta])
+  }, [quotePrefetchKey, quoteStashMeta, payInRail])
 
   const toSwitchInputAmount = (amount: number): string => {
     const roundedAmount = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100
@@ -302,6 +302,20 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     if (!canContinue || isContinuePending || isContinueLoading) return
     haptics.medium()
 
+    if (payInRail === 'mobile_money') {
+      navigation.navigate('ReceiveLocalReview' as never, {
+        localPayInCurrency,
+        residenceCountry,
+        payInRail,
+        amountEntryMode,
+        enteredAmount,
+        usdCredit: ycFlow.preview.usdCredit,
+        localPayIn: ycFlow.preview.localPayIn,
+        customerRate: ycFlow.customerRate ?? 0,
+      } as never)
+      return
+    }
+
     const quoteAlreadyWarm = isStashedFundBalanceQuoteFresh(quoteStashMeta)
     if (!quoteAlreadyWarm) {
       setIsContinuePending(true)
@@ -324,6 +338,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
         enteredAmount,
         usdCredit: ycFlow.preview.usdCredit,
         localPayIn: ycFlow.preview.localPayIn,
+        customerRate: ycFlow.customerRate ?? 0,
       } as never)
     } finally {
       if (continueSpinnerTimerRef.current) {

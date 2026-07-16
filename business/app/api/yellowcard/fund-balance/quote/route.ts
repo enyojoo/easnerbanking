@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, computeDisplayProcessingFee, ycPayInInstructionNotice, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount, buildYcFundBalanceDepositReviewSnapshot, resolveYcFundBalanceDepositTitle } from "@easner/shared"
+import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount, buildYcFundBalanceDepositReviewSnapshot, resolveYcFundBalanceDepositTitle, ycPayInInstructionNotice } from "@easner/shared"
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
@@ -17,6 +17,8 @@ import {
   mapKycErrorToCode,
   ycFundBalanceQuoteError,
 } from "@/lib/yellowcard/fund-balance-quote-errors"
+import { buildFundBalanceQuoteSummary } from "@/lib/yellowcard/build-yc-quote-response"
+import { expireStalePendingAuthorizeTransfers } from "@/lib/yellowcard/expire-pending-authorize"
 
 export const runtime = "nodejs"
 
@@ -50,6 +52,9 @@ export async function POST(request: Request) {
     usdCredit?: number
     localPayIn?: number
     rail?: "bank_transfer" | "mobile_money"
+    sourcePhone?: string
+    networkId?: string
+    sourceNetworkName?: string
   } | null
 
   const currency = String(body?.currency ?? "").trim().toUpperCase()
@@ -69,6 +74,7 @@ export async function POST(request: Request) {
       ? await resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId).catch(() => null)
       : null
   const kycUserId = orgOwnerId ?? user.id
+  void expireStalePendingAuthorizeTransfers(admin, { userId: kycUserId }).catch(() => {})
 
   const { data: userRow } = await admin
     .from("users")
@@ -90,6 +96,19 @@ export async function POST(request: Request) {
   }
 
   const rail = body?.rail === "mobile_money" ? "mobile_money" : "bank_transfer"
+
+  if (rail === "mobile_money") {
+    const sourcePhone = String(body?.sourcePhone ?? "").trim()
+    const networkId = String(body?.networkId ?? "").trim()
+    if (!sourcePhone || !networkId) {
+      return ycFundBalanceQuoteError(
+        "momo_source_required",
+        "Mobile money pay-in requires sourcePhone and networkId.",
+        400,
+        { userId: kycUserId, rail },
+      )
+    }
+  }
 
   const payInEnabled = await isYcLocalPayInEnabledForCorridor(admin, {
     countryCode: country,
@@ -193,6 +212,15 @@ export async function POST(request: Request) {
   }
 
   const sequenceId = `yc_fb_${randomUUID()}`
+  const sourcePhone =
+    rail === "mobile_money"
+      ? String(body?.sourcePhone ?? userRow?.phone ?? "").trim()
+      : undefined
+  const sourceNetworkId =
+    rail === "mobile_money" ? String(body?.networkId ?? "").trim() : undefined
+  const sourceNetworkName =
+    rail === "mobile_money" ? String(body?.sourceNetworkName ?? "").trim() || undefined : undefined
+
   let receiveRes
   try {
     receiveRes = await submitYcReceive({
@@ -204,7 +232,8 @@ export async function POST(request: Request) {
       localAmount: provisional.localPayIn,
       recipient: sender,
       payInRail: rail,
-      sourcePhone: userRow?.phone,
+      sourcePhone,
+      sourceNetworkId,
       reason: "fund_balance",
     })
   } catch (e) {
@@ -239,11 +268,6 @@ export async function POST(request: Request) {
       networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
       serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
     },
-  })
-
-  const displayProcessingFee = computeDisplayProcessingFee({
-    processingFee: pricing.processingFee,
-    exchangeFee: pricing.ycLegFeesUsd,
   })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
@@ -281,6 +305,20 @@ export async function POST(request: Request) {
     displayHeroTitle: depositDisplayTitle,
   })
 
+  const displayFeesPreview = buildFundBalanceQuoteSummary({
+    pricing,
+    currency,
+    customerRate,
+    rail,
+    expiresAt,
+    transactionId: "",
+    transferId: "",
+    bankInfo: null,
+    sourcePhone,
+    sourceNetworkId,
+    sourceNetworkName,
+  })
+
   const { data: tx } = await admin
     .from("transactions")
     .insert({
@@ -298,6 +336,12 @@ export async function POST(request: Request) {
         easner_transaction_id: easnerTransactionId,
         processing_at: startedAt,
         transaction_started_at: startedAt,
+        pay_in_rail: rail,
+        display_processing_fee: displayFeesPreview.displayProcessingFee,
+        display_processing_fee_local: displayFeesPreview.displayProcessingFeeLocal,
+        yc_leg_fees_usd: pricing.ycLegFeesUsd,
+        ...(sourcePhone ? { source_phone: sourcePhone } : {}),
+        ...(sourceNetworkId ? { source_network_id: sourceNetworkId } : {}),
       },
     })
     .select("id")
@@ -315,32 +359,45 @@ export async function POST(request: Request) {
       receive_currency: "USD",
       quoted_pay_in: pricing.localPayIn,
       quoted_receive: pricing.usdCredit,
-      customer_rate: Number(leg.easner_sell),
+      customer_rate: customerRate,
       leg1_sequence_id: sequenceId,
       leg1_yc_id: receiveRes.id ?? null,
       leg1_channel_id: channelId,
       bank_info: receiveRes.bankInfo ?? null,
       settlement_info: receiveRes.settlementInfo ?? null,
-      metadata: { processing_fee: pricing.processingFee, yc_channel_fee_usd: pricing.ycLegFeesUsd, usd_credit: pricing.usdCredit },
+      metadata: {
+        processing_fee: pricing.processingFee,
+        yc_channel_fee_usd: pricing.ycLegFeesUsd,
+        yc_leg_fees_usd: pricing.ycLegFeesUsd,
+        display_processing_fee: displayFeesPreview.displayProcessingFee,
+        display_processing_fee_local: displayFeesPreview.displayProcessingFeeLocal,
+        usd_credit: pricing.usdCredit,
+        ...(sourcePhone ? { source_phone: sourcePhone, source_network_id: sourceNetworkId } : {}),
+      },
       expires_at: expiresAt,
     })
     .select("id")
     .single()
 
-  return NextResponse.json({
-    ok: true,
-    sequenceId,
-    localPayIn: pricing.localPayIn,
-    usdCredit: pricing.usdCredit,
-    customerRate: Number(leg.easner_sell),
-    bankInfo: receiveRes.bankInfo ?? null,
-    processingFee: pricing.processingFee,
-    ycChannelFeeUsd: pricing.ycLegFeesUsd,
-    displayProcessingFee,
+  const displayFees = buildFundBalanceQuoteSummary({
+    pricing,
+    currency,
+    customerRate,
+    rail,
     expiresAt,
     transactionId: easnerTransactionId,
+    transferId: String(transferRow?.id ?? receiveRes.id ?? ""),
+    bankInfo: (receiveRes.bankInfo as Record<string, unknown>) ?? null,
+    sourcePhone,
+    sourceNetworkId,
+    sourceNetworkName,
+  })
+
+  return NextResponse.json({
+    ...displayFees,
+    sequenceId,
     easnerTransactionId,
-    transferId: transferRow?.id ?? receiveRes.id ?? null,
+    bankInfo: receiveRes.bankInfo ?? null,
     payInNotice: ycPayInInstructionNotice(rail),
   })
 }

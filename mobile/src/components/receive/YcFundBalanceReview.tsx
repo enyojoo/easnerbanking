@@ -6,16 +6,14 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TextInput,
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
-  computeDisplayProcessingFee,
-  formatMoneyDisplay,
   formatReviewRowMoneyDisplay,
   formatSendRateLabel,
   REVIEW_ROW_LABELS,
-  shouldShowPayoutReviewFeeRow,
 } from '@easner/shared'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -27,12 +25,14 @@ import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
 import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
 import {
   ensureFundBalanceQuoteStashed,
+  fetchPayInNetworks,
   isCompleteFundBalanceQuote,
   isStashedFundBalanceQuoteFresh,
   peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
   type YcFundBalanceQuote,
 } from '../../lib/sendFlowFundBalanceQuote'
+import { useAuth } from '../../contexts/AuthContext'
 
 type Props = {
   navigation: { goBack: () => void; navigate: (name: string, params?: object) => void }
@@ -43,20 +43,12 @@ type Props = {
   enteredAmount: number
   usdCredit: number
   localPayIn: number
+  customerRate: number
   footerPadding: number
   listBottomPadding: number
 }
 
-function resolveDisplayProcessingFee(quote: YcFundBalanceQuote | YcFundBalanceQuoteResult | null): number {
-  if (!quote) return 0
-  if (quote.displayProcessingFee != null && quote.displayProcessingFee > 0) {
-    return quote.displayProcessingFee
-  }
-  return computeDisplayProcessingFee({
-    processingFee: quote.processingFee ?? 0,
-    exchangeFee: quote.ycChannelFeeUsd ?? 0,
-  })
-}
+type PayInNetwork = { id: string; name: string }
 
 export function YcFundBalanceReview({
   navigation,
@@ -67,9 +59,20 @@ export function YcFundBalanceReview({
   enteredAmount,
   usdCredit,
   localPayIn,
+  customerRate: previewCustomerRate,
   footerPadding,
   listBottomPadding,
 }: Props) {
+  const { userProfile } = useAuth()
+  const isMobileMoney = payInRail === 'mobile_money'
+  const defaultPhone = userProfile?.phone ?? userProfile?.profile?.phone ?? ''
+
+  const [phone, setPhone] = useState(defaultPhone)
+  const [networks, setNetworks] = useState<PayInNetwork[]>([])
+  const [networkId, setNetworkId] = useState('')
+  const [networksLoading, setNetworksLoading] = useState(isMobileMoney)
+  const [networksError, setNetworksError] = useState<string | null>(null)
+
   const quoteMeta = useMemo(
     () => ({
       country: residenceCountry,
@@ -77,25 +80,58 @@ export function YcFundBalanceReview({
       rail: payInRail,
       amountEntryMode,
       enteredAmount,
+      sourcePhone: isMobileMoney ? phone.trim() : undefined,
+      networkId: isMobileMoney ? networkId : undefined,
+      sourceNetworkName: isMobileMoney
+        ? networks.find((n) => n.id === networkId)?.name
+        : undefined,
     }),
-    [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, enteredAmount],
+    [
+      residenceCountry,
+      localPayInCurrency,
+      payInRail,
+      amountEntryMode,
+      enteredAmount,
+      isMobileMoney,
+      phone,
+      networkId,
+      networks,
+    ],
   )
 
   const [quote, setQuote] = useState<YcFundBalanceQuoteResult | null>(() =>
-    isStashedFundBalanceQuoteFresh({
-      country: residenceCountry,
-      currency: localPayInCurrency,
-      rail: payInRail,
-      amountEntryMode,
-      enteredAmount,
-    })
-      ? peekFundBalanceQuote()
-      : null,
+    !isMobileMoney && isStashedFundBalanceQuoteFresh(quoteMeta) ? peekFundBalanceQuote() : null,
   )
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
+    if (!isMobileMoney) return
+    let cancelled = false
+    setNetworksLoading(true)
+    setNetworksError(null)
+    void (async () => {
+      try {
+        const rows = await fetchPayInNetworks(residenceCountry, localPayInCurrency)
+        if (cancelled) return
+        setNetworks(rows)
+        if (rows.length === 1) setNetworkId(rows[0].id)
+      } catch (e) {
+        if (!cancelled) {
+          setNetworksError(e instanceof Error ? e.message : 'Could not load networks')
+        }
+      } finally {
+        if (!cancelled) setNetworksLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isMobileMoney, residenceCountry, localPayInCurrency])
+
+  useEffect(() => {
+    if (isMobileMoney) return
+
     if (isStashedFundBalanceQuoteFresh(quoteMeta)) {
       const stashed = peekFundBalanceQuote()
       if (stashed) {
@@ -121,42 +157,72 @@ export function YcFundBalanceReview({
     return () => {
       cancelled = true
     }
-  }, [quoteMeta])
+  }, [quoteMeta, isMobileMoney])
 
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
-  const transferMethod = payInRail === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
-  const displayProcessingFee = resolveDisplayProcessingFee(quote)
-  const showProcessingFee = shouldShowPayoutReviewFeeRow({
-    processingFee: quote?.processingFee ?? 0,
-    exchangeFee: quote?.ycChannelFeeUsd ?? 0,
-  })
-  const customerRate = quote?.customerRate ?? 0
-  const displayTransactionId =
-    quote?.easnerTransactionId ?? quote?.transactionId ?? ''
-  const quoteReady = Boolean(quote?.transferId)
+  const transferMethod = isMobileMoney ? 'Mobile Money' : 'Bank Transfer'
+  const customerRate = quote?.customerRate ?? previewCustomerRate
+  const displayTransactionId = quote?.easnerTransactionId ?? quote?.transactionId ?? ''
+  const estimatedPayIn = localPayIn
+  const estimatedCredit = usdCredit
+  const resolvedLocalPayIn = quote?.localPayIn ?? estimatedPayIn
+  const resolvedUsdCredit = quote?.usdCredit ?? estimatedCredit
 
-  const onContinue = () => {
-    if (!quote || submitting) return
-    haptics.medium()
-    setSubmitting(true)
+  const momoReady = Boolean(phone.trim() && networkId)
+  const bankQuoteReady = Boolean(quote?.transferId)
+  const quoteReady = isMobileMoney ? previewCustomerRate > 0 && estimatedPayIn > 0 && momoReady : bankQuoteReady
+
+  const navigateToPayIn = (q: YcFundBalanceQuote) => {
+    const selectedNetwork = networks.find((n) => n.id === networkId)
     navigation.navigate('YcPayIn', {
       flowMode: 'fund_balance',
-      transactionId: displayTransactionId || quote.transactionId,
+      transactionId: q.easnerTransactionId ?? q.transactionId,
       sendCurrency: localPayInCurrency,
-      receiveAmount: quote.usdCredit,
+      receiveAmount: q.usdCredit,
       receiveCurrency: 'USD',
       recipientName: 'your USD balance',
-      transferId: quote.transferId,
-      localPayIn: quote.localPayIn,
-      customerRate: quote.customerRate,
-      bankInfo: quote.bankInfo,
-      payInNotice: quote.payInNotice,
+      transferId: q.transferId,
+      localPayIn: q.localPayIn,
+      customerRate: q.customerRate,
+      bankInfo: q.bankInfo ?? null,
+      payInNotice: q.payInNotice,
       payInRail,
+      processingFeeLocal: q.displayProcessingFeeLocal,
+      displayProcessingFee: q.displayProcessingFee,
+      sourcePhone: q.sourcePhone ?? phone.trim(),
+      sourceNetworkId: q.sourceNetworkId ?? networkId,
+      sourceNetworkName: q.sourceNetworkName ?? selectedNetwork?.name,
     })
-    setSubmitting(false)
   }
 
-  const ctaDisabled = !quoteReady || Boolean(quoteError) || quoteCountdown.expired || submitting
+  const onContinue = async () => {
+    if (submitting) return
+    haptics.medium()
+    setSubmitting(true)
+    setQuoteError(null)
+
+    try {
+      if (isMobileMoney) {
+        const result = await ensureFundBalanceQuoteStashed(quoteMeta)
+        if (!isCompleteFundBalanceQuote(result)) {
+          setQuoteError(peekLastFundBalanceQuoteError() || 'Could not load quote')
+          return
+        }
+        navigateToPayIn(result)
+        return
+      }
+
+      if (!quote) return
+      navigateToPayIn(quote)
+    } catch (e) {
+      setQuoteError(e instanceof Error ? e.message : 'Could not continue')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const ctaDisabled =
+    !quoteReady || Boolean(quoteError) || (!isMobileMoney && quoteCountdown.expired) || submitting
 
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>
@@ -169,35 +235,17 @@ export function YcFundBalanceReview({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {displayTransactionId ? (
+          {!isMobileMoney && displayTransactionId ? (
             <TransactionDetailSummaryRow
               label={REVIEW_ROW_LABELS.transactionId}
               value={displayTransactionId.toUpperCase()}
               valueMono
             />
           ) : null}
-          {!quoteReady && !quoteError ? (
+          {!quoteReady && !quoteError && !isMobileMoney ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : (
             <>
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.amountToPay}
-                value={formatReviewRowMoneyDisplay(
-                  REVIEW_ROW_LABELS.amountToPay,
-                  quote?.localPayIn ?? localPayIn,
-                  localPayInCurrency,
-                )}
-              />
-              {showProcessingFee ? (
-                <TransactionDetailSummaryRow
-                  label={REVIEW_ROW_LABELS.processingFee}
-                  value={formatReviewRowMoneyDisplay(
-                    REVIEW_ROW_LABELS.processingFee,
-                    displayProcessingFee,
-                    'USD',
-                  )}
-                />
-              ) : null}
               {customerRate > 0 ? (
                 <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.exchangeRate}
@@ -205,10 +253,18 @@ export function YcFundBalanceReview({
                 />
               ) : null}
               <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.amountToCredit}
+                label={REVIEW_ROW_LABELS.estimatedToPay}
                 value={formatReviewRowMoneyDisplay(
-                  REVIEW_ROW_LABELS.amountToCredit,
-                  quote?.usdCredit ?? usdCredit,
+                  REVIEW_ROW_LABELS.estimatedToPay,
+                  isMobileMoney ? estimatedPayIn : resolvedLocalPayIn,
+                  localPayInCurrency,
+                )}
+              />
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.estimatedToCredit}
+                value={formatReviewRowMoneyDisplay(
+                  REVIEW_ROW_LABELS.estimatedToCredit,
+                  resolvedUsdCredit,
                   'USD',
                 )}
                 valueBold
@@ -221,12 +277,62 @@ export function YcFundBalanceReview({
               <TransactionDetailSummaryRow
                 label={REVIEW_ROW_LABELS.transferMethod}
                 value={transferMethod}
-                last
+                last={!isMobileMoney}
               />
             </>
           )}
+
+          {isMobileMoney ? (
+            <View style={styles.momoSection}>
+              <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.mobileNumber}</Text>
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                placeholder="+254712345678"
+                placeholderTextColor={colors.text.secondary}
+                style={styles.input}
+                autoComplete="tel"
+              />
+              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>
+                {REVIEW_ROW_LABELS.paymentNetwork}
+              </Text>
+              {networksLoading ? (
+                <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[3] }} />
+              ) : networksError ? (
+                <Text style={styles.error}>{networksError}</Text>
+              ) : (
+                <View style={styles.networkList}>
+                  {networks.map((network) => {
+                    const selected = network.id === networkId
+                    return (
+                      <Pressable
+                        key={network.id}
+                        android_ripple={ripple.neutral}
+                        style={[styles.networkOption, selected && styles.networkOptionSelected]}
+                        onPress={() => {
+                          haptics.tap()
+                          setNetworkId(network.id)
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.networkOptionText,
+                            selected && styles.networkOptionTextSelected,
+                          ]}
+                        >
+                          {network.name}
+                        </Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              )}
+            </View>
+          ) : null}
+
           {quoteError ? <Text style={styles.error}>{quoteError}</Text> : null}
-          {quote?.expiresAt ? (
+          {!isMobileMoney && quote?.expiresAt ? (
             <Text style={styles.hint}>
               {quoteCountdown.expired
                 ? 'Quote expired — go back and continue again.'
@@ -239,7 +345,7 @@ export function YcFundBalanceReview({
       <Pressable
         android_ripple={ripple.neutral}
         style={[styles.cta, ctaDisabled && styles.ctaDisabled]}
-        onPress={onContinue}
+        onPress={() => void onContinue()}
         disabled={ctaDisabled}
       >
         <LinearGradient
@@ -265,6 +371,32 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing[4],
   },
+  momoSection: { marginTop: spacing[4], paddingTop: spacing[4], borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border.light },
+  fieldLabel: { ...textStyles.caption, color: colors.text.secondary, marginBottom: spacing[2] },
+  fieldLabelSpaced: { marginTop: spacing[4] },
+  input: {
+    ...textStyles.body,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.light,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    color: colors.text.primary,
+  },
+  networkList: { gap: spacing[2] },
+  networkOption: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.light,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[3],
+  },
+  networkOptionSelected: {
+    borderColor: colors.primary.main,
+    backgroundColor: colors.primary.main + '12',
+  },
+  networkOptionText: { ...textStyles.body, color: colors.text.primary },
+  networkOptionTextSelected: { fontFamily: textStyles.sectionTitle.fontFamily },
   error: { ...textStyles.caption, color: colors.semantic.destructive, marginTop: spacing[2] },
   hint: { ...textStyles.caption, color: colors.text.secondary, marginTop: spacing[2] },
   cta: { borderRadius: borderRadius.lg, overflow: 'hidden', marginTop: spacing[3] },

@@ -22,9 +22,20 @@ export type YcCrossBorderQuoteResult = {
   localPayIn: number
   customerRate: number
   processingFee?: number
+  ycLegFeesUsd?: number
+  displayProcessingFee?: number
+  displayProcessingFeeLocal?: number
+  displayProcessingFeeCurrency?: string
+  provisionalPayIn?: number
+  receiveAmount?: number
+  receiveCurrency?: string
   bankInfo: Record<string, unknown> | null
   expiresAt: string
   payInNotice?: string
+  payInRail?: YcPayInRail
+  sourcePhone?: string
+  sourceNetworkId?: string
+  sourceNetworkName?: string
 }
 
 type YcRateRow = {
@@ -33,7 +44,7 @@ type YcRateRow = {
   rate: number
 }
 
-function residenceCountryFromPayInCurrency(currency: string): string | null {
+export function residenceCountryFromPayInCurrency(currency: string): string | null {
   const cur = currency.trim().toUpperCase()
   const map: Record<string, string> = {
     NGN: 'NG',
@@ -149,6 +160,9 @@ export function useYcCrossBorderFlow(input: {
     async (opts: {
       receiveAmount: number
       payInRail: YcPayInRail
+      sourcePhone?: string
+      networkId?: string
+      sourceNetworkName?: string
     }): Promise<YcCrossBorderQuoteResult> => {
       if (!input.recipientId || !payInCurrency) {
         throw new Error('Through Local Currency is not available')
@@ -156,6 +170,9 @@ export function useYcCrossBorderFlow(input: {
       const payInCountry = residenceCountryFromPayInCurrency(payInCurrency)
       if (!payInCountry) {
         throw new Error('Pay-in country could not be resolved')
+      }
+      if (opts.payInRail === 'mobile_money' && (!opts.sourcePhone?.trim() || !opts.networkId?.trim())) {
+        throw new Error('Mobile number and network are required')
       }
       setQuoteLoading(true)
       setQuoteError(null)
@@ -170,6 +187,9 @@ export function useYcCrossBorderFlow(input: {
               payInCurrency,
               payInCountry,
               payInRail: opts.payInRail,
+              sourcePhone: opts.sourcePhone,
+              networkId: opts.networkId,
+              sourceNetworkName: opts.sourceNetworkName,
             },
           },
         )

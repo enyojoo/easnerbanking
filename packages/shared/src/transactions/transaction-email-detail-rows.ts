@@ -75,6 +75,15 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
     processingFee: review.processing_fee,
     exchangeFee: review.exchange_fee,
   })
+  const reviewFlow = input.payoutReviewFlow ?? "balance_payout"
+  const localPayInFee =
+    reviewFlow === "local_pay_in" &&
+    review.display_processing_fee_local != null &&
+    review.display_processing_fee_local > 0
+      ? review.display_processing_fee_local
+      : null
+  const feeAmount = localPayInFee ?? displayProcessingFee
+  const feeCurrency = sendCurrency
   const receiveNetwork = String(input.receiveNetwork || "").trim()
   const hasFx = receiveNetwork
     ? hasWalletSendFxDisplay(review.send_currency, review.receive_currency, receiveNetwork)
@@ -82,15 +91,14 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
 
   // Emails describe what has happened (a detail view), so use the past-tense "Sent".
   pushIf(rows, REVIEW_ROW_LABELS.sent, formatMoneyDisplay(review.you_send_amount, sendCurrency))
-  const reviewFlow = input.payoutReviewFlow ?? "balance_payout"
-  if (isPayoutReviewFeeVisible(displayProcessingFee)) {
+  if (isPayoutReviewFeeVisible(feeAmount)) {
     pushIf(
       rows,
       REVIEW_ROW_LABELS.processingFee,
       formatReviewRowMoneyDisplay(
         REVIEW_ROW_LABELS.processingFee,
-        displayProcessingFee,
-        sendCurrency,
+        feeAmount,
+        feeCurrency,
       ),
     )
   }
@@ -170,12 +178,20 @@ function buildDepositRows(deposit: NonNullable<TransactionEmailDetailInput["depo
 
 function buildYcFundBalanceDepositRows(
   review: YcFundBalanceDepositReviewSnapshot,
+  feeLocalOverride?: number | null,
 ): TransactionEmailDetailRow[] {
   const rows: TransactionEmailDetailRow[] = []
   const displayProcessingFee = computeDisplayProcessingFee({
     processingFee: review.processing_fee,
     exchangeFee: review.exchange_fee,
   })
+  const feeLocal =
+    feeLocalOverride ??
+    (review.display_processing_fee_local != null && review.display_processing_fee_local > 0
+      ? review.display_processing_fee_local
+      : null)
+  const feeAmount = feeLocal ?? displayProcessingFee
+  const feeCurrency = feeLocal != null ? review.local_currency : "USD"
   pushIf(
     rows,
     REVIEW_ROW_LABELS.amountPaid,
@@ -185,11 +201,11 @@ function buildYcFundBalanceDepositRows(
       review.local_currency,
     ),
   )
-  if (isPayoutReviewFeeVisible(displayProcessingFee)) {
+  if (isPayoutReviewFeeVisible(feeAmount)) {
     pushIf(
       rows,
       REVIEW_ROW_LABELS.processingFee,
-      formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.processingFee, displayProcessingFee, "USD"),
+      formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.processingFee, feeAmount, feeCurrency),
     )
   }
   if (review.exchange_rate > 0) {

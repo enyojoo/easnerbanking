@@ -276,10 +276,15 @@ export function resolveInboundReceiveDetail(
       )
     if (!review) return null
 
-    const displayProcessingFee = computeDisplayProcessingFee({
+    const displayProcessingFeeUsd = computeDisplayProcessingFee({
       processingFee: review.processing_fee,
       exchangeFee: review.exchange_fee,
     })
+    const feeLocalRaw = Number(meta.display_processing_fee_local)
+    const feeLocal =
+      Number.isFinite(feeLocalRaw) && feeLocalRaw > 0 ? feeLocalRaw : null
+    const feeAmount = feeLocal ?? displayProcessingFeeUsd
+    const feeCurrency = feeLocal != null ? review.local_currency : "USD"
 
     return {
       kind,
@@ -294,8 +299,8 @@ export function resolveInboundReceiveDetail(
       creditDestination: resolveCreditDestination("USD", kind),
       scheme: review.transfer_method,
       amountPaid: { amount: review.local_pay_in, currency: review.local_currency },
-      ...(isPayoutReviewFeeVisible(displayProcessingFee)
-        ? { processingFee: { amount: displayProcessingFee, currency: "USD" } }
+      ...(isPayoutReviewFeeVisible(feeAmount)
+        ? { processingFee: { amount: feeAmount, currency: feeCurrency } }
         : {}),
       ...(review.exchange_rate > 0
         ? { exchangeRate: { from: "USD", to: review.local_currency, rate: review.exchange_rate } }

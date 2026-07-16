@@ -554,19 +554,27 @@ export type {
 } from "./ng-local-verification"
 export {
   YC_QUOTE_TTL_MS,
+  buildYcCrossBorderDisplayFees,
+  buildYcDisplayQuote,
+  buildYcFundBalanceDisplayFees,
   computeYcBalancePayoutPricing,
   computeYcCrossBorderPricing,
   computeYcFundBalancePricing,
+  easnerFeeLocalFromUsdCredit,
+  ycLegFeesLocal,
 } from "./yc-pricing"
 export type {
+  BuildYcDisplayQuoteInput,
   ComputeYcBalancePayoutPricingInput,
   ComputeYcCrossBorderPricingInput,
   ComputeYcFundBalancePricingInput,
   YcBalancePayoutPricing,
   YcCrossBorderPricing,
+  YcDisplayQuoteFees,
   YcFundBalancePricing,
   YcLegFeeInputs,
 } from "./yc-pricing"
+export type { YcPayInRail, YcQuoteSummary } from "./yc-quote-summary"
 export {
   mapResidenceToLocalPayInCurrency,
   ycFundBalanceQuoteErrorMessage,
@@ -578,7 +586,10 @@ export {
 } from "./yc-pay-in-rates"
 export type { YcRateClientRow } from "./yc-pay-in-rates"
 export {
+  YC_PAY_IN_SEND_EXACTLY_LABEL,
+  YC_PAY_IN_MOMO_AUTHORIZE_CTA,
   ycPayInInstructionNotice,
+  ycPayInMomoAuthorizeNotice,
   ycPayInSendingExactlyCopy,
 } from "./yc-pay-in-copy"
 export {

@@ -15,6 +15,7 @@ type RouteParams = {
   enteredAmount: number
   usdCredit: number
   localPayIn: number
+  customerRate: number
 }
 
 export default function ReceiveLocalReviewScreen({ navigation, route }: NavigationProps) {
@@ -34,6 +35,7 @@ export default function ReceiveLocalReviewScreen({ navigation, route }: Navigati
           enteredAmount={params.enteredAmount ?? 0}
           usdCredit={params.usdCredit ?? 0}
           localPayIn={params.localPayIn ?? 0}
+          customerRate={params.customerRate ?? 0}
           footerPadding={footerPadding}
           listBottomPadding={scrollBottomPadding}
         />

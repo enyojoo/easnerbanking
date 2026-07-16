@@ -24,6 +24,8 @@ export type GlobalPayoutReviewSnapshot = {
   network_fee?: number
   /** Wallet send: hide processing fee row for `lifi_bridge` (margin is in customer rate). */
   execution_model?: "direct_turnkey" | "lifi_bridge"
+  /** Pay-in flows: combined fee in local currency for display (Easner 1% + YC legs). */
+  display_processing_fee_local?: number
 }
 
 export type GlobalPayoutRecipientSnapshot = {
