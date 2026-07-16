@@ -70,8 +70,16 @@ import {
   validateSendAmountFields,
   validateWalletSendReceiveAmount,
   resolveEffectiveWalletSendMin,
+  corridorMatchesCountryCurrency,
+  isYcBalancePayoutCorridor,
+  resolveEffectiveYcBalancePayoutMinReceive,
+  resolveYcPayoutLimits,
+  getYcBusinessPayoutMin,
+  YC_DIRECT_SETTLEMENT_MIN_SEND_USDC_EXCLUSIVE,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
+import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
+import { useYcSendExchangeRates } from '../../hooks/queries/use-yc-send-exchange-rates'
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
   ensureSendPayoutQuoteStashed,
@@ -618,6 +626,77 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     [recipient, isEasetagRecipient, payoutHints, receiveCurrency, payoutRail],
   )
 
+  const payoutCorridorRow = useMemo(() => {
+    if (!sendDestinations || !recipient || !payoutCountryCode) return null
+    const corridors =
+      payoutRail === 'mobile_money'
+        ? sendDestinations.fiat.mobile_money
+        : sendDestinations.fiat.bank_transfer
+    return (
+      corridors.find((c) =>
+        corridorMatchesCountryCurrency(c, {
+          countryCode: payoutCountryCode,
+          currencyCode: recipient.currency,
+          rail: payoutRail,
+        }),
+      ) ?? null
+    )
+  }, [sendDestinations, recipient, payoutCountryCode, payoutRail])
+
+  const isYcBalancePayout =
+    selectedPaymentMethod === 'balance' &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    isYcBalancePayoutCorridor(payoutCorridorRow)
+
+  const { data: ycSendRates = [] } = useYcSendExchangeRates(receiveCurrency, {
+    enabled: isYcBalancePayout,
+  })
+
+  const ycPayoutCustomerRate = useMemo(() => {
+    if (!isYcBalancePayout) return null
+    const send = String(sendCurrency || '').trim().toUpperCase()
+    const receive = String(receiveCurrency || '').trim().toUpperCase()
+    const row = ycSendRates.find(
+      (r) =>
+        String(r.from_currency || '').toUpperCase() === send &&
+        String(r.to_currency || '').toUpperCase() === receive,
+    )
+    return row?.rate ?? null
+  }, [isYcBalancePayout, ycSendRates, sendCurrency, receiveCurrency])
+
+  const ycPayoutRateMap = useMemo(() => {
+    if (!ycPayoutCustomerRate) return {}
+    const send = String(sendCurrency || '').trim().toUpperCase()
+    const receive = String(receiveCurrency || '').trim().toUpperCase()
+    return { [`${send}_${receive}`]: ycPayoutCustomerRate }
+  }, [sendCurrency, receiveCurrency, ycPayoutCustomerRate])
+
+  const ycPayoutLimits = useMemo(() => {
+    if (!isYcBalancePayout || !payoutCountryCode) return null
+    return resolveYcPayoutLimits({
+      country: payoutCountryCode,
+      currency: receiveCurrency,
+      rail: payoutRail,
+    })
+  }, [isYcBalancePayout, payoutCountryCode, receiveCurrency, payoutRail])
+
+  const ycPayoutMinReceive = useMemo(() => {
+    if (!isYcBalancePayout || !ycPayoutCustomerRate || !ycPayoutLimits) return null
+    return resolveEffectiveYcBalancePayoutMinReceive({
+      customerRate: ycPayoutCustomerRate,
+      receiveCurrency,
+      limits: ycPayoutLimits,
+      businessMinReceive: getYcBusinessPayoutMin(receiveCurrency, payoutRail),
+    })
+  }, [
+    isYcBalancePayout,
+    ycPayoutCustomerRate,
+    receiveCurrency,
+    ycPayoutLimits,
+    payoutRail,
+  ])
+
   const ycFxRateMap = useMemo(() => {
     const from = ycFlow.payInCurrency?.trim().toUpperCase()
     const to = receiveCurrency.trim().toUpperCase()
@@ -626,14 +705,26 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }, [ycFlow.payInCurrency, ycFlow.customerRate, receiveCurrency])
 
   const payoutEnforcementRateMap =
-    selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency ? ycFxRateMap : noahRateMap
+    isYcBalancePayout && ycPayoutCustomerRate
+      ? ycPayoutRateMap
+      : selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency
+        ? ycFxRateMap
+        : noahRateMap
 
   const payoutMinEnforcementEnabled =
     Boolean(recipient) &&
     !isEasetagRecipient &&
     !isWalletRecipient &&
+    !isYcBalancePayout &&
     (selectedPaymentMethod === 'balance' ||
       (selectedPaymentMethod === 'otherCurrency' && Boolean(selectedOtherCurrency)))
+
+  const ycPayoutMinEnforcementEnabled =
+    Boolean(recipient) &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    isYcBalancePayout &&
+    Boolean(ycPayoutCustomerRate && ycPayoutMinReceive)
 
   const payoutMinSeedKey = recipient
     ? `${recipient.id}:${receiveCurrency}:${payoutRail}:${selectedPaymentMethod}:${selectedOtherCurrency ?? ''}`
@@ -648,6 +739,22 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendCurrency,
     receiveCurrency,
     rateMap: payoutEnforcementRateMap,
+    onApplyEnteredAmount: (amount) => {
+      setSendAmount(formatAmount(amount.toFixed(2)))
+    },
+  })
+
+  useYcPayoutMinEnforcement({
+    enabled: ycPayoutMinEnforcementEnabled,
+    seedKey: payoutMinSeedKey,
+    minReceive: ycPayoutMinReceive,
+    minSendUsd: YC_DIRECT_SETTLEMENT_MIN_SEND_USDC_EXCLUSIVE,
+    amountEntryMode,
+    enteredAmount,
+    sendCurrency,
+    receiveCurrency,
+    customerRate: ycPayoutCustomerRate,
+    rateMap: ycPayoutRateMap,
     onApplyEnteredAmount: (amount) => {
       setSendAmount(formatAmount(amount.toFixed(2)))
     },
@@ -831,12 +938,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const exchangeInfoAmountPositive =
     !!(recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0)
 
+  const effectivePayoutMinReceive =
+    isYcBalancePayout && ycPayoutMinReceive != null
+      ? ycPayoutMinReceive
+      : payoutMinReceive
+
   const payoutReceiveBelowMin =
-    payoutMinReceive != null &&
+    effectivePayoutMinReceive != null &&
     !isEasetagRecipient &&
     !isWalletRecipient &&
     receiveAmount > 0 &&
-    receiveAmount < payoutMinReceive
+    receiveAmount < effectivePayoutMinReceive
 
   const sendButtonDisabled =
     isContinuePending ||

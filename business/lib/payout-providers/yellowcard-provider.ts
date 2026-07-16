@@ -57,6 +57,17 @@ export async function resolveYcSendChannelId(ctx: {
   currencyCode: string
   rail: "bank_transfer" | "mobile_money"
 }): Promise<string | null> {
+  const channel = await findYcSendChannel(ctx)
+  if (!channel) return null
+  return String(channel.id ?? channel.channelId ?? "").trim() || null
+}
+
+/** Full YC send channel row for corridor (limits, ids). */
+export async function findYcSendChannel(ctx: {
+  countryCode: string
+  currencyCode: string
+  rail: "bank_transfer" | "mobile_money"
+}): Promise<YcChannel | null> {
   const channels = await loadChannels()
   const match = channels.find(
     (ch) =>
@@ -68,6 +79,5 @@ export async function resolveYcSendChannelId(ctx: {
         providerRouting: [],
       }),
   )
-  if (!match) return null
-  return String(match.id ?? match.channelId ?? "").trim() || null
+  return match ?? null
 }

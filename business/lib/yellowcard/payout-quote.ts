@@ -13,11 +13,15 @@ import {
   resolveRecipientPayoutCountry,
   type RecipientSellPrepareRow,
 } from "@/lib/terminal/recipient-sell-prepare"
-import { resolveYcSendChannelId } from "@/lib/payout-providers/yellowcard-provider"
+import { resolveYcSendChannelId, findYcSendChannel } from "@/lib/payout-providers/yellowcard-provider"
 import { mapRecipientToYcSend } from "@/lib/yellowcard/map-recipient-to-yc-send"
 import { submitYcSend, type YcSendSubmitResult } from "@/lib/yellowcard/send-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
+import {
+  resolveYcPayoutLimits,
+  validateYcBalancePayoutAmount,
+} from "@easner/shared"
 
 function roundUsdc(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -82,6 +86,17 @@ export async function buildYcPayoutQuote(input: {
   if (!channelId) {
     throw new Error("No Yellowcard send channel for this corridor.")
   }
+  const sendChannel = await findYcSendChannel({
+    countryCode,
+    currencyCode: receiveCurrency,
+    rail,
+  })
+  const ycLimits = resolveYcPayoutLimits({
+    country: countryCode,
+    currency: receiveCurrency,
+    rail,
+    channel: sendChannel as Record<string, unknown> | null,
+  })
 
   const { data: corridorRow } = await admin
     .from("payout_corridors")
@@ -124,6 +139,23 @@ export async function buildYcPayoutQuote(input: {
     receiveCurrency,
     normalizeReceive: normalizePayoutReceiveAmountForCurrency,
   })
+
+  const impliedSendUsd =
+    amountEntryMode === "send" && sendBudget != null && sendBudget > 0
+      ? roundUsdc(sendBudget)
+      : roundUsdc(quoteReceiveAmount / customerRate)
+  const amountCheck = validateYcBalancePayoutAmount({
+    amountEntryMode,
+    receiveAmount: quoteReceiveAmount,
+    sendAmount: impliedSendUsd,
+    customerRate,
+    receiveCurrency,
+    limits: ycLimits,
+    rail,
+  })
+  if (!amountCheck.ok) {
+    throw new Error(amountCheck.message)
+  }
 
   const recipientMapped = await mapRecipientToYcSend(row, { channelId })
   if (!recipientMapped.destination.networkId) {

@@ -70,3 +70,16 @@ export function corridorMatchesCountryCurrency(
   if (input.rail != null && c.rail !== input.rail) return false
   return normCorridorToken(c.country_code) === cc && normCorridorToken(c.currency_code) === cur
 }
+
+/** True when balance payout routes through Yellowcard direct settlement. */
+export function isYcBalancePayoutCorridor(
+  corridor: Pick<PayoutCorridorPublic, "provider_routing" | "noah_sell_available"> | null | undefined,
+): boolean {
+  if (!corridor) return false
+  const routing = corridor.provider_routing ?? []
+  if (routing[0]?.provider === "yellowcard") return true
+  if (corridor.noah_sell_available === false && routing.some((r) => r.provider === "yellowcard")) {
+    return true
+  }
+  return false
+}
