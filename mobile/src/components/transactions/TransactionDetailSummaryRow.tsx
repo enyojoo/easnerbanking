@@ -1,6 +1,8 @@
 import React from 'react'
-import { View, Text, StyleSheet, type ReactNode } from 'react-native'
+import { View, Text, StyleSheet, Pressable, type ReactNode, type TextStyle } from 'react-native'
+import { Check, Copy } from 'lucide-react-native'
 import { colors, spacing, textStyles, fontFamily } from '../../theme'
+import { ripple } from '../../lib/androidRipple'
 
 type Props = {
   label: string
@@ -20,14 +22,14 @@ export function TransactionDetailSummaryRow({
   children,
 }: Props) {
   return (
-    <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
+    <View style={transactionDetailRowStyles.row}>
+      <Text style={transactionDetailRowStyles.label}>{label}</Text>
       {children ?? (
         <Text
           style={[
-            styles.value,
-            valueBold && styles.valueBold,
-            valueMono && styles.valueMono,
+            transactionDetailRowStyles.value,
+            valueBold && transactionDetailRowStyles.valueBold,
+            valueMono && transactionDetailRowStyles.valueMono,
           ]}
           numberOfLines={valueBold ? undefined : 3}
         >
@@ -38,11 +40,58 @@ export function TransactionDetailSummaryRow({
   )
 }
 
-const styles = StyleSheet.create({
+type CopyableValueProps = {
+  value: string
+  copied?: boolean
+  onPress: () => void
+  mono?: boolean
+  valueStyle?: TextStyle
+}
+
+/** Right-column copy control used for Transaction ID and other copyable detail values. */
+export function TransactionDetailCopyableValue({
+  value,
+  copied = false,
+  onPress,
+  mono = false,
+  valueStyle,
+}: CopyableValueProps) {
+  return (
+    <Pressable
+      android_ripple={ripple.neutral}
+      style={transactionDetailRowStyles.copyableValueRow}
+      onPress={onPress}
+    >
+      <Text
+        style={[
+          transactionDetailRowStyles.value,
+          mono && transactionDetailRowStyles.valueMono,
+          valueStyle,
+        ]}
+        selectable
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+      <View style={[transactionDetailRowStyles.copyIcon, copied && transactionDetailRowStyles.copyIconSuccess]}>
+        {copied ? (
+          <Check size={14} color={colors.success.main} strokeWidth={2.5} />
+        ) : (
+          <Copy size={14} color={colors.primary.main} strokeWidth={2} />
+        )}
+      </View>
+    </Pressable>
+  )
+}
+
+/** Shared row chrome — matches SendConfirm / YcFundBalanceReview review rows. */
+export const transactionDetailRowStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    alignSelf: 'stretch',
+    width: '100%',
     gap: spacing[3],
     paddingVertical: spacing[2],
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -54,18 +103,36 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   value: {
-    ...textStyles.titleSmall,
+    ...textStyles.body,
     color: colors.text.primary,
     textAlign: 'right',
     flex: 1,
     marginLeft: spacing[2],
   },
   valueBold: {
-    fontWeight: '700',
+    fontFamily: fontFamily.semibold,
   },
   valueMono: {
     fontFamily: fontFamily.mono,
-    fontSize: 13,
     fontWeight: '500',
+  },
+  copyableValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    flex: 1,
+    justifyContent: 'flex-end',
+    minWidth: 0,
+  },
+  copyIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary.main + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  copyIconSuccess: {
+    backgroundColor: colors.success.background,
   },
 })

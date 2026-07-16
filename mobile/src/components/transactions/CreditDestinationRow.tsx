@@ -1,7 +1,8 @@
 import React from 'react'
 import { View, Text, StyleSheet, type TextStyle } from 'react-native'
 import { CurrencyFlagCircle } from '../flags/CurrencyFlagCircle'
-import { colors, spacing, textStyles, fontFamily } from '../../theme'
+import { transactionDetailRowStyles } from './TransactionDetailSummaryRow'
+import { fontFamily } from '../../theme'
 
 type Props = {
   label: string
@@ -20,11 +21,14 @@ export function CreditDestinationRow({
   valueStyle,
 }: Props) {
   return (
-    <View style={styles.creditRow}>
-      <Text style={styles.rowLabel}>{label}</Text>
+    <View style={[transactionDetailRowStyles.row, styles.creditRow]}>
+      <Text style={transactionDetailRowStyles.label}>{label}</Text>
       <View style={styles.creditValue}>
         <CurrencyFlagCircle currency={currency} size={flagSize} />
-        <Text style={[styles.rowValue, valueStyle]} numberOfLines={1}>
+        <Text
+          style={[transactionDetailRowStyles.value, styles.creditValueText, valueStyle]}
+          numberOfLines={1}
+        >
           {balanceLabel}
         </Text>
       </View>
@@ -34,29 +38,20 @@ export function CreditDestinationRow({
 
 const styles = StyleSheet.create({
   creditRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing[3],
-    paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
   },
   creditValue: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
+    gap: 8,
     flexShrink: 0,
     maxWidth: '72%',
     justifyContent: 'flex-end',
+    flex: 1,
+    marginLeft: 8,
   },
-  rowLabel: {
-    ...textStyles.caption,
-    color: colors.text.secondary,
-    flexShrink: 1,
-  },
-  rowValue: {
-    ...textStyles.body,
+  creditValueText: {
+    flex: 0,
     flexShrink: 1,
     fontFamily: fontFamily.semibold,
   },

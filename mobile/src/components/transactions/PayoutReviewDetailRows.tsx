@@ -14,8 +14,11 @@ import {
   type ReviewFlowKind,
 } from '@easner/shared'
 import { CreditDestinationRow } from './CreditDestinationRow'
-import { TransactionDetailSummaryRow } from './TransactionDetailSummaryRow'
-import { colors, textStyles } from '../../theme'
+import {
+  TransactionDetailSummaryRow,
+  transactionDetailRowStyles,
+} from './TransactionDetailSummaryRow'
+import { colors } from '../../theme'
 
 type Props = {
   payoutReview: GlobalPayoutReviewSnapshot
@@ -171,14 +174,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   valuePrimary: {
-    ...textStyles.titleSmall,
-    color: colors.text.primary,
-    textAlign: 'right',
+    ...transactionDetailRowStyles.value,
+    flex: 0,
   },
   valueSecondary: {
-    ...textStyles.titleSmall,
+    ...transactionDetailRowStyles.value,
     fontSize: 13,
     color: colors.text.secondary,
-    textAlign: 'right',
+    flex: 0,
   },
 })

@@ -15,13 +15,11 @@ import {
   ArrowDownLeft,
   ArrowLeft,
   ArrowUpRight,
-  Check,
   CircleAlert,
   CircleCheck,
   CircleHelp,
   CircleX,
   Clock,
-  Copy,
   HelpCircle,
   Share2,
 } from 'lucide-react-native'
@@ -83,7 +81,7 @@ import {
 } from '@easner/shared'
 import { InboundReceiveDetailRows } from '../../components/transactions/InboundReceiveDetailRows'
 import { PayoutReviewDetailRows } from '../../components/transactions/PayoutReviewDetailRows'
-import { TransactionDetailSummaryRow } from '../../components/transactions/TransactionDetailSummaryRow'
+import { TransactionDetailSummaryRow, TransactionDetailCopyableValue } from '../../components/transactions/TransactionDetailSummaryRow'
 import { ApiError } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { haptics } from '../../lib/haptics'
@@ -589,22 +587,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
     return (
       <TransactionDetailSummaryRow label={label}>
-        <Pressable
-          android_ripple={ripple.neutral}
-          style={styles.copyableValueRow}
+        <TransactionDetailCopyableValue
+          value={value}
+          copied={isCopied}
           onPress={() => handleCopy(value, fieldName)}
-        >
-          <Text style={styles.summaryValue} numberOfLines={1}>
-            {value}
-          </Text>
-          <View style={[styles.copyIcon, isCopied && styles.copyIconSuccess]}>
-            {isCopied ? (
-              <Check size={14} color={colors.success.main} strokeWidth={2.5} />
-            ) : (
-              <Copy size={14} color={colors.primary.main} strokeWidth={2} />
-            )}
-          </View>
-        </Pressable>
+        />
       </TransactionDetailSummaryRow>
     )
   }
@@ -1000,22 +987,12 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             <SectionCard style={styles.card}>
               <View style={styles.summaryRows}>
                 <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
-                  <Pressable
-                    android_ripple={ripple.neutral}
-                    style={styles.copyableValueRow}
+                  <TransactionDetailCopyableValue
+                    value={transaction.transaction_id}
+                    copied={copiedStates.transactionId}
+                    mono
                     onPress={() => handleCopy(transaction.transaction_id, 'transactionId')}
-                  >
-                    <Text style={[styles.summaryMonoValue]} selectable>
-                      {transaction.transaction_id}
-                    </Text>
-                    <View style={[styles.copyIcon, copiedStates.transactionId && styles.copyIconSuccess]}>
-                      {copiedStates.transactionId ? (
-                        <Check size={14} color={colors.success.main} strokeWidth={2.5} />
-                      ) : (
-                        <Copy size={14} color={colors.primary.main} strokeWidth={2} />
-                      )}
-                    </View>
-                  </Pressable>
+                  />
                 </TransactionDetailSummaryRow>
 
                 {inboundReceive ? <InboundReceiveDetailRows snapshot={inboundReceive} /> : null}
@@ -1401,58 +1378,7 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: spacing[3],
   },
-  transactionIdRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  transactionIdLabel: {
-    ...textStyles.labelMedium,
-    color: colors.text.tertiary,
-  },
-  transactionIdValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  transactionIdValue: {
-    ...textStyles.titleSmall,
-    color: colors.text.primary,
-    fontFamily: fontFamily.mono,
-  },
-  copyIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.primary.main + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  copyIconSuccess: {
-    backgroundColor: colors.success.background,
-  },
   summaryRows: {},
-  summaryValue: {
-    ...textStyles.titleSmall,
-    color: colors.text.primary,
-    textAlign: 'right',
-    flex: 1,
-  },
-  summaryMonoValue: {
-    fontFamily: fontFamily.mono,
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.text.primary,
-    textAlign: 'right',
-    flex: 1,
-  },
-  copyableValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
   metadataText: {
     ...textStyles.bodySmall,
     color: colors.text.secondary,
