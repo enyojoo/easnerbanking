@@ -153,6 +153,7 @@ export async function POST(request: Request) {
       recipient: inlineRecipient,
       receiveFiatAmount: receiveAmount,
       sourceBalanceCurrency,
+      amountEntryMode,
       sendBudget,
       prepareOverrides,
     })

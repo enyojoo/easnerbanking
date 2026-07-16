@@ -19,6 +19,11 @@ import { submitYcSend, type YcSendSubmitResult } from "@/lib/yellowcard/send-sub
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 
+function roundUsdc(n: number): number {
+  if (!Number.isFinite(n)) return 0
+  return Math.round(n * 1_000_000) / 1_000_000
+}
+
 /**
  * Build a YC balance payout quote by locking a POST /send (forceAccept) response.
  * Uses yellowcard_rates customer rate + POST response fees.
@@ -132,6 +137,14 @@ export async function buildYcPayoutQuote(input: {
   })
 
   const sequenceId = `yc_quote_${randomUUID()}`
+  const provisionalCryptoUsd =
+    amountEntryMode === "send" && sendBudget != null && sendBudget > 0
+      ? roundUsdc(sendBudget)
+      : roundUsdc(quoteReceiveAmount / customerRate)
+  if (!(provisionalCryptoUsd > 0)) {
+    throw new Error("Could not derive USDC amount for Yellowcard payout quote.")
+  }
+
   const sendRes: YcSendSubmitResult = await submitYcSend({
     sequenceId,
     customerUID: input.customerUID,
@@ -139,7 +152,7 @@ export async function buildYcPayoutQuote(input: {
     channelId,
     currency: receiveCurrency,
     country: countryCode,
-    localAmount: quoteReceiveAmount,
+    settlementCryptoAmount: provisionalCryptoUsd,
     refundMode: "balance_payout",
     userTurnkeyAddress: input.userTurnkeyAddress,
     sender,
@@ -148,13 +161,21 @@ export async function buildYcPayoutQuote(input: {
     reason: input.paymentPurpose,
   })
 
+  const lockedReceiveAmount =
+    amountEntryMode === "send"
+      ? normalizePayoutReceiveAmountForCurrency(
+          receiveCurrency,
+          Number(sendRes.localAmount ?? sendRes.convertedAmount ?? quoteReceiveAmount),
+        )
+      : quoteReceiveAmount
+
   const cryptoAmount = Number(sendRes.settlementInfo?.cryptoAmount ?? sendRes.convertedAmount ?? 0)
   if (!Number.isFinite(cryptoAmount) || cryptoAmount <= 0) {
     throw new Error("Yellowcard send response missing cryptoAmount.")
   }
 
   const pricing = computeYcBalancePayoutPricing({
-    receiveAmount: quoteReceiveAmount,
+    receiveAmount: lockedReceiveAmount,
     customerRate,
     ycFloorUsd: cryptoAmount,
     networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
@@ -165,7 +186,7 @@ export async function buildYcPayoutQuote(input: {
   const quoteId = String(sendRes.id ?? sequenceId)
 
   return {
-    receiveAmount: quoteReceiveAmount,
+    receiveAmount: lockedReceiveAmount,
     receiveCurrency,
     customerPrincipal: pricing.customerPrincipal,
     sendAmount: pricing.customerPrincipal,
@@ -197,7 +218,7 @@ export async function buildYcPayoutQuote(input: {
       expiresAt,
       providerRate: customerRate,
       effectiveRate: customerRate,
-      destinationAmount: quoteReceiveAmount,
+      destinationAmount: lockedReceiveAmount,
       fxMarkupBps: 50,
       payinFeeAmount: 0,
       payoutFeeAmount: pricing.channelCost,
@@ -208,7 +229,7 @@ export async function buildYcPayoutQuote(input: {
       pricingTotals: {
         total_easner_fee: pricing.marginAmount,
         total_user_fee: pricing.marginAmount + pricing.channelCost,
-        total_recipient_amount: quoteReceiveAmount,
+        total_recipient_amount: lockedReceiveAmount,
       },
     },
     pricingQuoteId: quoteId,

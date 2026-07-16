@@ -23,6 +23,8 @@ export type YcSendSubmitInput = {
   refundMode: YcSendRefundMode
   userTurnkeyAddress?: string | null
   reason?: string
+  /** USDC notional for directSettlement disbursement (omit localAmount/amount). */
+  settlementCryptoAmount?: number
 }
 
 export type YcSendSubmitResult = {
@@ -52,6 +54,17 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
     ledgerCurrency: "USD",
   })
   const senderAddress = depositOmnibusSolanaAddressUsd() || undefined
+  const directSettlement = input.directSettlement ?? true
+
+  const settlementInfo: Record<string, unknown> = {
+    cryptoCurrency: "USDC",
+    cryptoNetwork: "SOL",
+    refundAddress,
+    ...(senderAddress ? { senderAddress } : {}),
+  }
+  if (directSettlement && input.settlementCryptoAmount != null) {
+    settlementInfo.cryptoAmount = input.settlementCryptoAmount
+  }
 
   const body: Record<string, unknown> = {
     sequenceId: input.sequenceId,
@@ -61,16 +74,13 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
     currency: input.currency.toUpperCase(),
     country: input.country.toUpperCase(),
     forceAccept: input.forceAccept ?? true,
-    directSettlement: input.directSettlement ?? true,
-    settlementInfo: {
-      cryptoCurrency: "USDC",
-      cryptoNetwork: "SOL",
-      refundAddress,
-      ...(senderAddress ? { senderAddress } : {}),
-    },
+    directSettlement,
+    settlementInfo,
   }
-  if (input.localAmount != null) body.localAmount = input.localAmount
-  if (input.amount != null) body.amount = input.amount
+  if (!directSettlement) {
+    if (input.localAmount != null) body.localAmount = input.localAmount
+    if (input.amount != null) body.amount = input.amount
+  }
   if (input.sender) body.sender = input.sender
   const destination = input.destination ?? input.recipient
   if (destination) body.destination = destination

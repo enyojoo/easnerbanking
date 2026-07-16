@@ -123,14 +123,20 @@ export async function createCrossBorderTransfer(input: {
   }
 
   // Provisional send lock for fee/crypto sizing
+  const fromLeg = findYcPayInLeg(rates, payInCurrency) ?? findYcRate(rates, payInCurrency, "USDC")
+  const toLeg = findYcPayInLeg(rates, receiveCurrency) ?? findYcRate(rates, receiveCurrency, "USDC")
+  const ycBuyTo = Number(toLeg?.yc_buy ?? 0)
+  if (!ycBuyTo) throw new Error("YC destination rate unavailable for cross-border send leg")
+
   const leg2Seq = `yc_cb_l2_${randomUUID()}`
+  const provisionalSendCrypto = Math.round((input.receiveAmount / ycBuyTo) * 1_000_000) / 1_000_000
   const sendRes = await submitYcSend({
     sequenceId: leg2Seq,
     customerUID: input.customerUID,
     channelId: sendChannelId,
     currency: receiveCurrency,
     country: receiveCountry,
-    localAmount: input.receiveAmount,
+    settlementCryptoAmount: provisionalSendCrypto,
     refundMode: "cross_border_send",
     sender,
     destination: recipientMapped.destination,
@@ -138,13 +144,11 @@ export async function createCrossBorderTransfer(input: {
     reason: "cross_border_leg2_quote",
   })
 
-  const fromLeg = findYcPayInLeg(rates, payInCurrency) ?? findYcRate(rates, payInCurrency, "USDC")
-  const toLeg = findYcPayInLeg(rates, receiveCurrency) ?? findYcRate(rates, receiveCurrency, "USDC")
   const pricing = computeYcCrossBorderPricing({
     receiveAmount: input.receiveAmount,
     customerRate: cross.rate,
     ycSellFrom: Number(fromLeg?.yc_sell ?? 0),
-    ycBuyTo: Number(toLeg?.yc_buy ?? 0),
+    ycBuyTo,
     receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
     sendLeg: {
       cryptoAmountUsd: Number(sendRes.settlementInfo?.cryptoAmount ?? 0),
