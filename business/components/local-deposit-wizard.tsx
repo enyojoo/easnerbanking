@@ -34,6 +34,8 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import { YcCompleteDepositPanel } from "@/components/yc-complete-deposit-panel"
 import { YcMomoPhoneInput } from "@/components/yc-momo-phone-input"
+import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
+import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
@@ -653,54 +655,46 @@ export function LocalDepositWizard({
           ) : reviewReady ? (
             <>
               {!isMomo && (quote?.easnerTransactionId ?? quote?.transactionId) ? (
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
-                  <span className="font-mono text-right">
-                    {(quote!.easnerTransactionId ?? quote!.transactionId)!.toUpperCase()}
-                  </span>
-                </div>
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.transactionId}
+                  value={(quote!.easnerTransactionId ?? quote!.transactionId)!.toUpperCase()}
+                  valueClassName="font-mono"
+                />
               ) : null}
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">{payAmountLabel}</span>
-                <span>
-                  {formatReviewRowMoneyDisplay(payAmountLabel, reviewLocalPayIn, localPayInCurrency)}
-                </span>
-              </div>
+              <TransactionDetailSummaryRow
+                label={payAmountLabel}
+                value={formatReviewRowMoneyDisplay(payAmountLabel, reviewLocalPayIn, localPayInCurrency)}
+              />
               {reviewCustomerRate ? (
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
-                  <span>{formatSendRateLabel("USD", localPayInCurrency, reviewCustomerRate)}</span>
-                </div>
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.exchangeRate}
+                  value={formatSendRateLabel("USD", localPayInCurrency, reviewCustomerRate)}
+                />
               ) : null}
               {!isMomo && reviewFeeLocal > 0 ? (
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
-                  <span>
-                    {formatReviewRowMoneyDisplay(
-                      REVIEW_ROW_LABELS.processingFee,
-                      reviewFeeLocal,
-                      localPayInCurrency,
-                    )}
-                  </span>
-                </div>
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.processingFee}
+                  value={formatReviewRowMoneyDisplay(
+                    REVIEW_ROW_LABELS.processingFee,
+                    reviewFeeLocal,
+                    localPayInCurrency,
+                  )}
+                />
               ) : null}
-              <div className="flex justify-between gap-4 font-medium">
-                <span>{creditAmountLabel}</span>
-                <span>
-                  {formatReviewRowMoneyDisplay(creditAmountLabel, reviewUsdCredit, "USD")}
-                </span>
-              </div>
-              <div className="flex justify-between gap-4 items-center">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.creditTo}</span>
-                <span className="flex items-center gap-2">
-                  <CurrencyFlagCircle currency="USD" size={18} />
-                  USD Balance
-                </span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
-                <span>{transferMethod}</span>
-              </div>
+              <TransactionDetailSummaryRow
+                label={creditAmountLabel}
+                value={formatReviewRowMoneyDisplay(creditAmountLabel, reviewUsdCredit, "USD")}
+                valueClassName="font-semibold"
+              />
+              <CreditDestinationRow
+                label={REVIEW_ROW_LABELS.creditTo}
+                currency="USD"
+                balanceLabel="USD Balance"
+              />
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.transferMethod}
+                value={transferMethod}
+              />
               {!isMomo && quote?.expiresAt ? (
                 <p className="text-xs text-muted-foreground pt-1">
                   {quoteCountdown.expired

@@ -1,6 +1,12 @@
 import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { YC_QUOTE_TTL_MS, computeYcCrossBorderPricing, getGlobalPayoutProcessingTime, validateYcRecipientForCorridor } from "@easner/shared"
+import {
+  YC_QUOTE_TTL_MS,
+  computeYcCrossBorderPricing,
+  computeYcCrossBorderPricingBeforeReceive,
+  getGlobalPayoutProcessingTime,
+  validateYcRecipientForCorridor,
+} from "@easner/shared"
 import { buildCrossBorderQuoteSummary } from "@/lib/yellowcard/build-yc-quote-response"
 import { findYcCrossRate, findYcPayInLeg, findYcRate, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
@@ -160,17 +166,19 @@ export async function createCrossBorderTransfer(input: {
     reason: "cross_border_leg2_quote",
   })
 
-  const pricing = computeYcCrossBorderPricing({
+  const easnerSellFrom = Number(fromLeg?.easner_sell ?? fromLeg?.yc_sell ?? 0)
+  const sendLeg = {
+    cryptoAmountUsd: Number(sendRes.settlementInfo?.cryptoAmount ?? 0),
+    networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
+    serviceFeeAmountUsd: Number(sendRes.serviceFeeAmountUSD ?? 0),
+  }
+  const pricing = computeYcCrossBorderPricingBeforeReceive({
     receiveAmount: input.receiveAmount,
     customerRate: cross.rate,
     ycSellFrom: Number(fromLeg?.yc_sell ?? 0),
     ycBuyTo,
-    receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
-    sendLeg: {
-      cryptoAmountUsd: Number(sendRes.settlementInfo?.cryptoAmount ?? 0),
-      networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
-      serviceFeeAmountUsd: Number(sendRes.serviceFeeAmountUSD ?? 0),
-    },
+    easnerSellFrom,
+    sendLeg,
   })
 
   const leg1Seq = `yc_cb_l1_${randomUUID()}`
@@ -203,11 +211,7 @@ export async function createCrossBorderTransfer(input: {
       networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
       serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
     },
-    sendLeg: {
-      cryptoAmountUsd: Number(sendRes.settlementInfo?.cryptoAmount ?? 0),
-      networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
-      serviceFeeAmountUsd: Number(sendRes.serviceFeeAmountUSD ?? 0),
-    },
+    sendLeg,
   })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
@@ -275,7 +279,6 @@ export async function createCrossBorderTransfer(input: {
     .single()
   if (trErr || !transfer) throw new Error(trErr?.message || "failed_to_create_yc_transfer")
 
-  const easnerSellFrom = Number(fromLeg?.easner_sell ?? fromLeg?.yc_sell ?? 0)
   const quoteSummary = buildCrossBorderQuoteSummary({
     pricing: pricingFinal,
     payInCurrency,
@@ -617,17 +620,19 @@ export async function authorizeCrossBorderDraft(input: {
     reason: "cross_border_leg2_quote",
   })
 
-  const pricing = computeYcCrossBorderPricing({
+  const easnerSellFrom = Number(fromLeg?.easner_sell ?? fromLeg?.yc_sell ?? 0)
+  const sendLeg = {
+    cryptoAmountUsd: Number(sendRes.settlementInfo?.cryptoAmount ?? 0),
+    networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
+    serviceFeeAmountUsd: Number(sendRes.serviceFeeAmountUSD ?? 0),
+  }
+  const pricing = computeYcCrossBorderPricingBeforeReceive({
     receiveAmount,
     customerRate: cross.rate,
     ycSellFrom: Number(fromLeg?.yc_sell ?? 0),
     ycBuyTo,
-    receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
-    sendLeg: {
-      cryptoAmountUsd: Number(sendRes.settlementInfo?.cryptoAmount ?? 0),
-      networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
-      serviceFeeAmountUsd: Number(sendRes.serviceFeeAmountUSD ?? 0),
-    },
+    easnerSellFrom,
+    sendLeg,
   })
 
   const leg1Seq = String(transfer.leg1_sequence_id ?? `yc_cb_l1_${randomUUID()}`)
@@ -655,11 +660,7 @@ export async function authorizeCrossBorderDraft(input: {
       networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
       serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
     },
-    sendLeg: {
-      cryptoAmountUsd: Number(sendRes.settlementInfo?.cryptoAmount ?? 0),
-      networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
-      serviceFeeAmountUsd: Number(sendRes.serviceFeeAmountUSD ?? 0),
-    },
+    sendLeg,
   })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()

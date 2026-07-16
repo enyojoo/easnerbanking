@@ -5,6 +5,7 @@ import {
   buildYcFundBalanceDepositReviewSnapshot,
   computeDisplayProcessingFee,
   computeYcFundBalancePricing,
+  estimateYcFundBalanceReceiveLegFeesUsd,
   resolveYcFundBalanceDepositTitle,
   resolveYcPayInLimits,
   validateYcPayInLocalAmount,
@@ -152,7 +153,18 @@ async function prepareFundBalanceSession(ctx: FundBalanceSessionContext) {
     localPayIn: ctx.localPayIn,
     customerSellRate: Number(leg.easner_sell),
     ycSellRate: Number(leg.yc_sell),
-    receiveLeg: { cryptoAmountUsd: 0 },
+    receiveLeg:
+      ctx.usdCredit != null && ctx.usdCredit > 0
+        ? {
+            cryptoAmountUsd: 0,
+            networkFeeAmountUsd: estimateYcFundBalanceReceiveLegFeesUsd({
+              usdCredit: ctx.usdCredit,
+              customerSellRate: Number(leg.easner_sell),
+              ycSellRate: Number(leg.yc_sell),
+            }),
+            serviceFeeAmountUsd: 0,
+          }
+        : { cryptoAmountUsd: 0 },
   })
 
   const amountCheck = validateYcPayInLocalAmount({
@@ -425,16 +437,25 @@ export async function authorizeFundBalanceDraft(input: {
     throw new FundBalanceSessionError("yc_receive_rejected", message, 400)
   }
 
-  const pricing = computeYcFundBalancePricing({
-    localPayIn: Number(receiveRes.localAmount ?? transfer.quoted_pay_in),
-    customerSellRate: Number(leg.easner_sell),
-    ycSellRate: Number(leg.yc_sell),
-    receiveLeg: {
-      cryptoAmountUsd: Number(receiveRes.settlementInfo?.cryptoAmount ?? 0),
-      networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
-      serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
-    },
-  })
+  const lockedUsdCredit = Number(transfer.quoted_receive ?? 0)
+  const receiveLeg = {
+    cryptoAmountUsd: Number(receiveRes.settlementInfo?.cryptoAmount ?? 0),
+    networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
+    serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
+  }
+  const pricing = lockedUsdCredit > 0
+    ? computeYcFundBalancePricing({
+        usdCredit: lockedUsdCredit,
+        customerSellRate: Number(leg.easner_sell),
+        ycSellRate: Number(leg.yc_sell),
+        receiveLeg,
+      })
+    : computeYcFundBalancePricing({
+        localPayIn: Number(receiveRes.localAmount ?? transfer.quoted_pay_in),
+        customerSellRate: Number(leg.easner_sell),
+        ycSellRate: Number(leg.yc_sell),
+        receiveLeg,
+      })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const residenceCountry = country

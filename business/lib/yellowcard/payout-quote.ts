@@ -193,13 +193,7 @@ export async function buildYcPayoutQuote(input: {
     reason: input.paymentPurpose,
   })
 
-  const lockedReceiveAmount =
-    amountEntryMode === "send"
-      ? normalizePayoutReceiveAmountForCurrency(
-          receiveCurrency,
-          Number(sendRes.localAmount ?? sendRes.convertedAmount ?? quoteReceiveAmount),
-        )
-      : quoteReceiveAmount
+  const lockedReceiveAmount = quoteReceiveAmount
 
   const cryptoAmount = Number(sendRes.settlementInfo?.cryptoAmount ?? sendRes.convertedAmount ?? 0)
   if (!Number.isFinite(cryptoAmount) || cryptoAmount <= 0) {

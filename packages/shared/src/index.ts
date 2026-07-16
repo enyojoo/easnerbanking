@@ -559,7 +559,11 @@ export {
   buildYcFundBalanceDisplayFees,
   computeYcBalancePayoutPricing,
   computeYcCrossBorderPricing,
+  computeYcCrossBorderPricingBeforeReceive,
   computeYcFundBalancePricing,
+  estimateYcFundBalanceReceiveLegFeesUsd,
+  estimateYcReceiveLegFeesUsd,
+  computeYcFundBalanceSendExactlyLocal,
   easnerFeeLocalFromUsdCredit,
   ycLegFeesLocal,
 } from "./yc-pricing"

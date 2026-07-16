@@ -196,6 +196,46 @@ export function computeYcBalancePayoutPricing(
   }
 }
 
+/** Conservative YC receive leg fee estimate before POST /receive returns actual fees. */
+export function estimateYcReceiveLegFeesUsd(input: {
+  omnibusUsd: number
+  customerSellRate: number
+  ycSellRate: number
+}): number {
+  const omnibusUsd = roundUsdc(input.omnibusUsd)
+  if (omnibusUsd <= 0) return 0
+  if (!Number.isFinite(input.ycSellRate) || input.ycSellRate <= 0) return 0
+  if (!Number.isFinite(input.customerSellRate) || input.customerSellRate <= 0) return 0
+  const spread = Math.max(0, input.customerSellRate / input.ycSellRate - 1)
+  return roundUsdc(Math.max(omnibusUsd * spread * 1.25, omnibusUsd * 0.02))
+}
+
+/** Fund balance receive leg estimate from locked USD credit target. */
+export function estimateYcFundBalanceReceiveLegFeesUsd(input: {
+  usdCredit: number
+  customerSellRate: number
+  ycSellRate: number
+  processingFeeBps?: number
+}): number {
+  const usdCredit = roundUsdc(input.usdCredit)
+  if (usdCredit <= 0) return 0
+  const processingFee = computePayoutProcessingFeeBps(usdCredit, { bps: input.processingFeeBps })
+  return estimateYcReceiveLegFeesUsd({
+    omnibusUsd: roundUsdc(usdCredit + processingFee),
+    customerSellRate: input.customerSellRate,
+    ycSellRate: input.ycSellRate,
+  })
+}
+
+/** Send exactly = locked USD credit at Easner rate + all processing fees (local). */
+export function computeYcFundBalanceSendExactlyLocal(input: {
+  usdCredit: number
+  customerSellRate: number
+  displayProcessingFeeLocal: number
+}): number {
+  return roundLocal(input.usdCredit * input.customerSellRate + input.displayProcessingFeeLocal)
+}
+
 export type ComputeYcFundBalancePricingInput = {
   /** Desired USD credit (user-facing) or omit and solve from pay-in */
   usdCredit?: number
@@ -247,12 +287,14 @@ export function computeYcFundBalancePricing(
 
   if (input.localPayIn != null && input.localPayIn > 0) {
     localPayIn = roundLocal(input.localPayIn)
+
     const bps = input.processingFeeBps ?? 100
     const grossUsd = roundUsdc(localPayIn / customerSellRate)
     usdCredit = roundUsdc((grossUsd - ycLegFeesUsd) / (1 + bps / 10_000))
     const processingFee = computePayoutProcessingFeeBps(usdCredit, {
       bps: input.processingFeeBps,
     })
+    const omnibusFromResponse = roundUsdc(input.receiveLeg.cryptoAmountUsd)
     omnibusInUsd =
       omnibusFromResponse > 0
         ? omnibusFromResponse
@@ -387,4 +429,48 @@ export function computeYcCrossBorderPricing(
     marginAmount,
     omnibusSurplusUsd,
   }
+}
+
+/**
+ * Cross-border pay-in before POST /receive: pad receive leg fees from send leg quote.
+ */
+export function computeYcCrossBorderPricingBeforeReceive(input: {
+  receiveAmount: number
+  customerRate: number
+  ycSellFrom: number
+  ycBuyTo: number
+  easnerSellFrom: number
+  sendLeg: YcLegFeeInputs
+  processingFeeBps?: number
+}): YcCrossBorderPricing {
+  const preview = computeYcCrossBorderPricing({
+    receiveAmount: input.receiveAmount,
+    customerRate: input.customerRate,
+    ycSellFrom: input.ycSellFrom,
+    ycBuyTo: input.ycBuyTo,
+    processingFeeBps: input.processingFeeBps,
+    receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    sendLeg: input.sendLeg,
+  })
+  const omnibusBase = roundUsdc(
+    preview.sendCryptoUsd + preview.ycLegFeesUsd + preview.processingFee + preview.marginAmount,
+  )
+  const estimatedReceiveFees = estimateYcReceiveLegFeesUsd({
+    omnibusUsd: omnibusBase,
+    customerSellRate: input.easnerSellFrom,
+    ycSellRate: input.ycSellFrom,
+  })
+  return computeYcCrossBorderPricing({
+    receiveAmount: input.receiveAmount,
+    customerRate: input.customerRate,
+    ycSellFrom: input.ycSellFrom,
+    ycBuyTo: input.ycBuyTo,
+    processingFeeBps: input.processingFeeBps,
+    receiveLeg: {
+      cryptoAmountUsd: 0,
+      networkFeeAmountUsd: estimatedReceiveFees,
+      serviceFeeAmountUsd: 0,
+    },
+    sendLeg: input.sendLeg,
+  })
 }

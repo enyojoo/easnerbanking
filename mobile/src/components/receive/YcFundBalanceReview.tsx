@@ -321,7 +321,7 @@ export function YcFundBalanceReview({
               <TransactionDetailSummaryRow
                 label={REVIEW_ROW_LABELS.transferMethod}
                 value={transferMethod}
-                last
+                last={!isMobileMoney}
               />
             </>
           )}
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing[4],
   },
-  momoSection: { marginTop: spacing[4], paddingTop: spacing[4] },
+  momoSection: { paddingTop: spacing[4] },
   fieldLabel: { ...textStyles.caption, color: colors.text.secondary, marginBottom: spacing[2] },
   fieldLabelSpaced: { marginTop: spacing[4] },
   input: {

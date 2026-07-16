@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount, buildYcFundBalanceDepositReviewSnapshot, resolveYcFundBalanceDepositTitle, ycPayInInstructionNotice, normalizeYcMomoPhone } from "@easner/shared"
+import { computeYcFundBalancePricing, YC_QUOTE_TTL_MS, parseYcReceiveRejectedMinError, resolveYcPayInLimits, validateYcPayInLocalAmount, buildYcFundBalanceDepositReviewSnapshot, resolveYcFundBalanceDepositTitle, ycPayInInstructionNotice, normalizeYcMomoPhone, estimateYcFundBalanceReceiveLegFeesUsd } from "@easner/shared"
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
@@ -178,12 +178,26 @@ export async function POST(request: Request) {
     )
   }
 
+  const customerSellRate = Number(leg.easner_sell)
+  const ycSellRate = Number(leg.yc_sell)
+  const usdCreditTarget = body?.usdCredit != null && Number(body.usdCredit) > 0
+
   const provisional = computeYcFundBalancePricing({
     usdCredit: body?.usdCredit,
     localPayIn: body?.localPayIn,
-    customerSellRate: Number(leg.easner_sell),
-    ycSellRate: Number(leg.yc_sell),
-    receiveLeg: { cryptoAmountUsd: 0 },
+    customerSellRate,
+    ycSellRate,
+    receiveLeg: usdCreditTarget
+      ? {
+          cryptoAmountUsd: 0,
+          networkFeeAmountUsd: estimateYcFundBalanceReceiveLegFeesUsd({
+            usdCredit: Number(body!.usdCredit),
+            customerSellRate,
+            ycSellRate,
+          }),
+          serviceFeeAmountUsd: 0,
+        }
+      : { cryptoAmountUsd: 0 },
   })
 
   const amountCheck = validateYcPayInLocalAmount({
@@ -265,16 +279,25 @@ export async function POST(request: Request) {
     })
   }
 
-  const pricing = computeYcFundBalancePricing({
-    localPayIn: Number(receiveRes.localAmount ?? provisional.localPayIn),
-    customerSellRate: Number(leg.easner_sell),
-    ycSellRate: Number(leg.yc_sell),
-    receiveLeg: {
-      cryptoAmountUsd: Number(receiveRes.settlementInfo?.cryptoAmount ?? 0),
-      networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
-      serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
-    },
-  })
+  const receiveLeg = {
+    cryptoAmountUsd: Number(receiveRes.settlementInfo?.cryptoAmount ?? 0),
+    networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
+    serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
+  }
+
+  const pricing = usdCreditTarget
+    ? computeYcFundBalancePricing({
+        usdCredit: provisional.usdCredit,
+        customerSellRate,
+        ycSellRate,
+        receiveLeg,
+      })
+    : computeYcFundBalancePricing({
+        localPayIn: Number(receiveRes.localAmount ?? provisional.localPayIn),
+        customerSellRate,
+        ycSellRate,
+        receiveLeg,
+      })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const businessId = noahCtx.scope === "business" ? noahCtx.businessId : null
