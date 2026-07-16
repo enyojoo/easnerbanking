@@ -24,6 +24,7 @@ import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
 import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
+import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
 import {
   ensureFundBalanceQuoteStashed,
   isCompleteFundBalanceQuote,
@@ -44,15 +45,6 @@ type Props = {
   localPayIn: number
   footerPadding: number
   listBottomPadding: number
-}
-
-function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, bold && styles.rowValueBold]}>{value}</Text>
-    </View>
-  )
 }
 
 function resolveDisplayProcessingFee(quote: YcFundBalanceQuote | YcFundBalanceQuoteResult | null): number {
@@ -178,13 +170,17 @@ export function YcFundBalanceReview({
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
           {displayTransactionId ? (
-            <Row label={REVIEW_ROW_LABELS.transactionId} value={displayTransactionId.toUpperCase()} />
+            <TransactionDetailSummaryRow
+              label={REVIEW_ROW_LABELS.transactionId}
+              value={displayTransactionId.toUpperCase()}
+              valueMono
+            />
           ) : null}
           {!quoteReady && !quoteError ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : (
             <>
-              <Row
+              <TransactionDetailSummaryRow
                 label={REVIEW_ROW_LABELS.amountToPay}
                 value={formatReviewRowMoneyDisplay(
                   REVIEW_ROW_LABELS.amountToPay,
@@ -193,7 +189,7 @@ export function YcFundBalanceReview({
                 )}
               />
               {showProcessingFee ? (
-                <Row
+                <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.processingFee}
                   value={formatReviewRowMoneyDisplay(
                     REVIEW_ROW_LABELS.processingFee,
@@ -203,26 +199,30 @@ export function YcFundBalanceReview({
                 />
               ) : null}
               {customerRate > 0 ? (
-                <Row
+                <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.exchangeRate}
                   value={formatSendRateLabel('USD', localPayInCurrency, customerRate)}
                 />
               ) : null}
-              <Row
+              <TransactionDetailSummaryRow
                 label={REVIEW_ROW_LABELS.amountToCredit}
                 value={formatReviewRowMoneyDisplay(
                   REVIEW_ROW_LABELS.amountToCredit,
                   quote?.usdCredit ?? usdCredit,
                   'USD',
                 )}
-                bold
+                valueBold
               />
               <CreditDestinationRow
                 label={REVIEW_ROW_LABELS.creditTo}
                 currency="USD"
                 balanceLabel="USD Balance"
               />
-              <Row label={REVIEW_ROW_LABELS.transferMethod} value={transferMethod} />
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.transferMethod}
+                value={transferMethod}
+                last
+              />
             </>
           )}
           {quoteError ? <Text style={styles.error}>{quoteError}</Text> : null}
@@ -264,20 +264,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.semantic.card,
     borderRadius: borderRadius.xl,
     padding: spacing[4],
-    gap: spacing[1],
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing[3],
-    paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-  },
-  rowLabel: { ...textStyles.caption, color: colors.text.secondary, flex: 1 },
-  rowValue: { ...textStyles.body, textAlign: 'right', flex: 1 },
-  rowValueBold: { fontFamily: textStyles.sectionTitle.fontFamily },
   error: { ...textStyles.caption, color: colors.semantic.destructive, marginTop: spacing[2] },
   hint: { ...textStyles.caption, color: colors.text.secondary, marginTop: spacing[2] },
   cta: { borderRadius: borderRadius.lg, overflow: 'hidden', marginTop: spacing[3] },

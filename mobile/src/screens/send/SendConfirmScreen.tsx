@@ -24,6 +24,7 @@ import {
   formatReviewRowMoneyDisplay,
 } from '@easner/shared'
 import { CreditDestinationRow } from '../../components/transactions/CreditDestinationRow'
+import { TransactionDetailSummaryRow } from '../../components/transactions/TransactionDetailSummaryRow'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
 import { NavigationProps } from '../../types'
@@ -35,7 +36,6 @@ import {
   borderRadius,
   spacing,
   motion,
-  fontFamily,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
@@ -774,14 +774,18 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           >
             <View style={styles.card}>
               {displayTransactionId ? (
-                <Row label={REVIEW_ROW_LABELS.transactionId} value={displayTransactionId} />
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.transactionId}
+                  value={displayTransactionId}
+                  valueMono
+                />
               ) : null}
-              <Row
+              <TransactionDetailSummaryRow
                 label={REVIEW_ROW_LABELS.sending}
                 value={formatMoneyDisplay(youSendAmount, selectedBalanceCurrency)}
               />
               {!easetagUi && quoteReady && showProcessingFee ? (
-                <Row
+                <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.processingFee}
                   value={formatReviewRowMoneyDisplay(
                     REVIEW_ROW_LABELS.processingFee,
@@ -791,7 +795,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 />
               ) : null}
               {hasFx && customerRate > 0 ? (
-                <Row
+                <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.exchangeRate}
                   value={formatSendRateLabel(
                     selectedBalanceCurrency,
@@ -801,14 +805,14 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 />
               ) : null}
               {!easetagUi && calculatedTotalAmount > 0 ? (
-                <Row
+                <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.totalDebited}
                   value={formatReviewRowMoneyDisplay(
                     REVIEW_ROW_LABELS.totalDebited,
                     calculatedTotalAmount,
                     selectedBalanceCurrency,
                   )}
-                  bold
+                  valueBold
                 />
               ) : null}
               {selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR' ? (
@@ -818,14 +822,13 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                   balanceLabel={formatAccountBalanceLabel(selectedBalanceCurrency)}
                 />
               ) : null}
-              <Row
+              <TransactionDetailSummaryRow
                 label={REVIEW_ROW_LABELS.recipientGets}
                 value={formatMoneyDisplay(quotedReceiveAmount, receiveCurrency)}
-                bold
+                valueBold
               />
               {recipient ? (
-                <View style={styles.recipientRow}>
-                  <Text style={styles.rowLabel}>{REVIEW_ROW_LABELS.recipient}</Text>
+                <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.recipient}>
                   <View style={styles.recipientSummaryWrap}>
                     <SendSelectedRecipientSummary
                       recipient={recipient}
@@ -833,16 +836,20 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                       alignEnd
                     />
                   </View>
-                </View>
+                </TransactionDetailSummaryRow>
               ) : null}
               {!easetagUi ? (
-                <Row
+                <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.transferMethod}
                   value={normalizeTransferMethodLabel(transferMethod)}
                 />
               ) : null}
               {arrivalHint ? (
-                <Row label={REVIEW_ROW_LABELS.arrival} value={arrivalHint} last={!pricingQuoteExpiry} />
+                <TransactionDetailSummaryRow
+                  label={REVIEW_ROW_LABELS.arrival}
+                  value={arrivalHint}
+                  last={!pricingQuoteExpiry}
+                />
               ) : null}
               {quoteError ? (
                 <Text style={styles.quoteError} accessibilityRole="alert">
@@ -898,17 +905,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
 const TRANSFER_FAIL_MESSAGE = "We couldn't send this transfer, please try again."
 
-function Row({ label, value, bold, last }: { label: string; value: string; bold?: boolean; last?: boolean }) {
-  return (
-    <View style={[styles.row, last && styles.rowLast]}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, bold && styles.rowValueBold]} numberOfLines={2}>
-        {value}
-      </Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -942,51 +938,13 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing[4],
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-    paddingBottom: spacing[3],
-    marginBottom: spacing[3],
-  },
-  rowLast: {
-    borderBottomWidth: 0,
-    marginBottom: 0,
-    paddingBottom: 0,
-  },
-  recipientRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-    paddingBottom: spacing[3],
-    marginBottom: spacing[3],
-  },
   recipientSummaryWrap: {
+    flex: 1,
     flexShrink: 1,
     minWidth: 0,
     maxWidth: '72%',
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
-  },
-  rowLabel: {
-    ...textStyles.caption,
-    color: colors.text.secondary,
-    flexShrink: 0,
-  },
-  rowValue: {
-    ...textStyles.body,
-    color: colors.text.primary,
-    textAlign: 'right',
-    flex: 1,
-  },
-  rowValueBold: {
-    fontFamily: fontFamily.semibold,
   },
   quoteHint: {
     ...textStyles.caption,

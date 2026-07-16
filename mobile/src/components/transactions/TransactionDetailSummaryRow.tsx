@@ -9,6 +9,8 @@ type Props = {
   value?: string
   valueBold?: boolean
   valueMono?: boolean
+  /** When true, omit the bottom hairline (last row before footnotes). */
+  last?: boolean
   /** Custom right column (copy control, recipient block, etc.). */
   children?: ReactNode
 }
@@ -19,10 +21,11 @@ export function TransactionDetailSummaryRow({
   value,
   valueBold,
   valueMono,
+  last,
   children,
 }: Props) {
   return (
-    <View style={transactionDetailRowStyles.row}>
+    <View style={[transactionDetailRowStyles.row, last && transactionDetailRowStyles.rowLast]}>
       <Text style={transactionDetailRowStyles.label}>{label}</Text>
       {children ?? (
         <Text
@@ -84,7 +87,7 @@ export function TransactionDetailCopyableValue({
   )
 }
 
-/** Shared row chrome — matches SendConfirm / YcFundBalanceReview review rows. */
+/** Shared row chrome — review confirm, transaction detail, and YC deposit cards. */
 export const transactionDetailRowStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
@@ -93,14 +96,18 @@ export const transactionDetailRowStyles = StyleSheet.create({
     alignSelf: 'stretch',
     width: '100%',
     gap: spacing[3],
-    paddingVertical: spacing[2],
+    paddingVertical: spacing[3],
+    minHeight: 22 + spacing[3] * 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.light,
+  },
+  rowLast: {
+    borderBottomWidth: 0,
   },
   label: {
     ...textStyles.caption,
     color: colors.text.secondary,
-    flexShrink: 1,
+    flexShrink: 0,
   },
   value: {
     ...textStyles.body,

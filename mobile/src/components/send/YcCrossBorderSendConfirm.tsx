@@ -14,6 +14,7 @@ import type { Recipient } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { SendSelectedRecipientSummary } from './SendSelectedRecipientSummary'
+import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
 import { useYcCrossBorderFlow, type YcPayInRail, type YcCrossBorderQuoteResult } from '../../hooks/useYcCrossBorderFlow'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
@@ -28,15 +29,6 @@ type Props = {
   transactionId: string
   footerPadding: number
   listBottomPadding: number
-}
-
-function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, bold && styles.rowValueBold]}>{value}</Text>
-    </View>
-  )
 }
 
 export function YcCrossBorderSendConfirm({
@@ -123,17 +115,19 @@ export function YcCrossBorderSendConfirm({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {displayId ? <Row label={REVIEW_ROW_LABELS.transactionId} value={displayId} /> : null}
+          {displayId ? (
+            <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId} value={displayId} valueMono />
+          ) : null}
           {!quoteReady && !quoteError ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : (
             <>
-              <Row
+              <TransactionDetailSummaryRow
                 label={REVIEW_ROW_LABELS.amountToPay}
                 value={formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.amountToPay, youSend, payInCurrency)}
               />
               {processingFee > 0 ? (
-                <Row
+                <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.processingFee}
                   value={formatReviewRowMoneyDisplay(
                     REVIEW_ROW_LABELS.processingFee,
@@ -143,17 +137,26 @@ export function YcCrossBorderSendConfirm({
                 />
               ) : null}
               {customerRate > 0 ? (
-                <Row
+                <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.exchangeRate}
                   value={formatSendRateLabel(payInCurrency, receiveCurrency, customerRate)}
                 />
               ) : null}
-              <Row label={REVIEW_ROW_LABELS.recipientGets} value={formatMoneyDisplay(receiveAmount, receiveCurrency)} bold />
-              <View style={styles.recipientRow}>
-                <Text style={styles.rowLabel}>{REVIEW_ROW_LABELS.recipient}</Text>
-                <SendSelectedRecipientSummary recipient={recipient} alignEnd />
-              </View>
-              <Row label={REVIEW_ROW_LABELS.transferMethod} value={transferMethod} />
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.recipientGets}
+                value={formatMoneyDisplay(receiveAmount, receiveCurrency)}
+                valueBold
+              />
+              <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.recipient}>
+                <View style={styles.recipientSummaryWrap}>
+                  <SendSelectedRecipientSummary recipient={recipient} alignEnd />
+                </View>
+              </TransactionDetailSummaryRow>
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.transferMethod}
+                value={transferMethod}
+                last
+              />
             </>
           )}
           {quoteError ? <Text style={styles.error}>{quoteError}</Text> : null}
@@ -195,26 +198,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.semantic.card,
     borderRadius: borderRadius.xl,
     padding: spacing[4],
-    gap: spacing[1],
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing[3],
-    paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-  },
-  rowLabel: { ...textStyles.caption, color: colors.text.secondary, flex: 1 },
-  rowValue: { ...textStyles.body, textAlign: 'right', flex: 1 },
-  rowValueBold: { fontFamily: textStyles.sectionTitle.fontFamily },
-  recipientRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing[3],
-    paddingVertical: spacing[2],
+  recipientSummaryWrap: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '72%',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
   },
   error: { ...textStyles.caption, color: colors.semantic.destructive, marginTop: spacing[2] },
   hint: { ...textStyles.caption, color: colors.text.secondary, marginTop: spacing[2] },
