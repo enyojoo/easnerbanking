@@ -2,6 +2,7 @@
 
 import {
   buildYcLocalPayInCompleteRows,
+  computeYcCrossBorderPrincipalLocalPayIn,
   computeYcFundBalancePrincipalLocalPayIn,
   REVIEW_ROW_LABELS,
   type YcPayInRail,
@@ -44,6 +45,7 @@ export function YcLocalPayInCompleteSummary({
   onCopy,
 }: YcLocalPayInCompleteSummaryProps) {
   const isFundBalance = flowMode === "fund_balance"
+  const isCrossBorder = flowMode === "cross_border_send"
   const isMomo = payInRail === "mobile_money"
   const principalLocal =
     isFundBalance && isMomo && customerRate > 0
@@ -51,7 +53,12 @@ export function YcLocalPayInCompleteSummary({
           usdCredit: creditOrReceiveAmount,
           exchangeRate: customerRate,
         })
-      : undefined
+      : isCrossBorder && isMomo && customerRate > 0
+        ? computeYcCrossBorderPrincipalLocalPayIn({
+            receiveAmount: creditOrReceiveAmount,
+            customerRate,
+          })
+        : undefined
 
   const rows = buildYcLocalPayInCompleteRows({
     mode: flowMode,

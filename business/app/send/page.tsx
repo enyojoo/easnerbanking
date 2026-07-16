@@ -64,6 +64,15 @@ import {
   readCachedYcPayInNetworks,
   type ReceiveRailsResponse,
 } from "@/lib/yc-local-deposit-cache"
+import {
+  clearCrossBorderQuote,
+  crossBorderQuoteToFlowState,
+  ensureCrossBorderQuoteStashed,
+  isCompleteCrossBorderQuote,
+  isStashedCrossBorderQuoteFresh,
+  peekLastCrossBorderQuoteError,
+  type CrossBorderQuoteStashMeta,
+} from "@/lib/yc-cross-border-quote-cache"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useSendDestinations } from "@/lib/use-send-destinations"
@@ -397,6 +406,53 @@ export default function SendPage() {
 
   const tlcPayInRail =
     otherPaymentMethod === "mobile_money" ? ("mobile_money" as const) : ("bank_transfer" as const)
+
+  const crossBorderBankQuoteMeta = useMemo((): CrossBorderQuoteStashMeta | null => {
+    if (
+      paymentMethod !== "otherCurrency" ||
+      !showThroughLocalCurrency ||
+      !otherCurrency ||
+      tlcPayInRail !== "bank_transfer" ||
+      !recipient?.id ||
+      !(receiveAmount > 0)
+    ) {
+      return null
+    }
+    const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
+    if (!payInCountry) return null
+    return {
+      recipientId: recipient.id,
+      payInCurrency: otherCurrency,
+      payInCountry,
+      payInRail: "bank_transfer",
+      receiveAmount,
+    }
+  }, [
+    paymentMethod,
+    showThroughLocalCurrency,
+    otherCurrency,
+    tlcPayInRail,
+    recipient?.id,
+    receiveAmount,
+  ])
+
+  const crossBorderBankPrefetchKey = crossBorderBankQuoteMeta
+    ? [
+        crossBorderBankQuoteMeta.recipientId,
+        crossBorderBankQuoteMeta.payInCurrency,
+        crossBorderBankQuoteMeta.payInCountry,
+        crossBorderBankQuoteMeta.receiveAmount,
+      ].join("|")
+    : ""
+
+  useEffect(() => {
+    clearCrossBorderQuote()
+  }, [recipient?.id, otherCurrency, tlcPayInRail])
+
+  useEffect(() => {
+    if (!crossBorderBankPrefetchKey || !crossBorderBankQuoteMeta) return
+    void ensureCrossBorderQuoteStashed(crossBorderBankQuoteMeta)
+  }, [crossBorderBankPrefetchKey, crossBorderBankQuoteMeta])
 
   const tlcPayInLimits = useMemo(() => {
     if (!payInRails || paymentMethod !== "otherCurrency") {
@@ -1107,7 +1163,51 @@ export default function SendPage() {
             setIsContinueLoading(false)
           }
         }
-        persistSendFlowState(state)
+        if (otherPaymentMethod === "bank_transfer" && otherCurrency && recipient) {
+          const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
+          if (!payInCountry) {
+            setAmountFieldError("Could not resolve pay-in country for bank transfer.")
+            return
+          }
+          const bankQuoteMeta: CrossBorderQuoteStashMeta = {
+            recipientId: recipient.id,
+            payInCurrency: otherCurrency,
+            payInCountry,
+            payInRail: "bank_transfer",
+            receiveAmount,
+          }
+          const quoteAlreadyWarm = isStashedCrossBorderQuoteFresh(bankQuoteMeta)
+          if (!quoteAlreadyWarm) {
+            setIsContinuePending(true)
+            continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+          }
+          try {
+            const quote = await ensureCrossBorderQuoteStashed(bankQuoteMeta)
+            if (!isCompleteCrossBorderQuote(quote)) {
+              setAmountFieldError(
+                peekLastCrossBorderQuoteError() || "Could not load cross-border quote. Try again.",
+              )
+              return
+            }
+            const yc = crossBorderQuoteToFlowState(quote, bankQuoteMeta)
+            flowState = {
+              ...state,
+              sendAmount: yc.localPayIn,
+              sendCurrency: otherCurrency.toUpperCase(),
+              totalAmount: yc.localPayIn,
+              transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
+              ycCrossBorder: yc,
+            }
+          } finally {
+            if (continueSpinnerTimerRef.current) {
+              clearTimeout(continueSpinnerTimerRef.current)
+              continueSpinnerTimerRef.current = null
+            }
+            setIsContinuePending(false)
+            setIsContinueLoading(false)
+          }
+        }
+        persistSendFlowState(flowState)
         router.push("/send/confirm")
         return
       }

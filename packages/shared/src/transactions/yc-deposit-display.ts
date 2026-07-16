@@ -36,6 +36,18 @@ export function computeYcFundBalancePrincipalLocalPayIn(input: {
   return roundLocal(usdCredit * exchangeRate)
 }
 
+/** Cross-border TLC local principal before fees (receive amount × pay-in rate). */
+export function computeYcCrossBorderPrincipalLocalPayIn(input: {
+  receiveAmount: number
+  customerRate: number
+}): number {
+  const receiveAmount = Number(input.receiveAmount)
+  const customerRate = Number(input.customerRate)
+  if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) return 0
+  if (!Number.isFinite(customerRate) || customerRate <= 0) return 0
+  return roundLocal(receiveAmount * customerRate)
+}
+
 export type YcFundBalanceLocalPayInBreakdown = {
   principalLocal: number
   feeLocal: number

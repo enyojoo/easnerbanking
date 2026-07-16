@@ -13,16 +13,19 @@ End-to-end and staging checks for Yellowcard **Through Local Currency** (cross-b
 ### Bank TLC
 
 1. Send → recipient in foreign currency → **Through local currency** → bank rail.
-2. Amount screen: min hint visible; preview shows `You'll pay ~{local}` under receive amount.
-3. Review (auto-quote): **Transaction ID** (ETID), **Amount to pay**, **Recipient gets**, **Transfer method: Local Transfer**, quote countdown.
-4. Complete: VA fields, **Send exactly {localPayIn}**, **Local Transfer** in summary.
-5. Transaction detail: hero **Send to {recipient}**, ledger **Amount paid**, status **Processing**, lifecycle single **Processing** step.
+2. Amount screen: min hint visible; preview shows `You'll pay ~{local}`; quote prefetches silently while amount is valid.
+3. **Continue** may show brief spinner when quote is not warm; navigates to review with stashed quote.
+4. Review (locked): **Transaction ID** (ETID), exchange rate, **Deposit amount**, processing fee, **Total to pay**, **Recipient gets**, **Transfer method: Local Transfer**, quote countdown.
+5. Complete: minimal summary (ETID + **Recipient gets** + **Local Transfer**), **Send exactly {localPayIn}**, bank VA fields, **I've made the payment**.
+6. Transaction detail: hero **Send to {recipient}**, ledger **Amount paid**, status **Processing**, lifecycle single **Processing** step.
 
 ### MoMo TLC
 
-1. Same through MoMo rail; review is preview until **Continue** (quote on continue).
-2. Complete: **Send exactly {localPayIn}**, network + phone, MoMo authorize CTA.
-3. Verify `POST /api/yellowcard/cross-border/quote` returns `easnerTransactionId` (not client-generated ETID).
+1. Same through MoMo rail; amount **Continue** prefetches networks only (no quote).
+2. Review (preview): rate, **Estimated to pay**, **Recipient gets**, recipient, **Local Transfer**, MoMo phone/network inputs inside review card (web footer).
+3. **Continue** on review creates quote (single POST, stash deduped) then navigates to complete.
+4. Complete: full breakdown (ETID, rate, deposit amount, fee, **Total to pay**, **Recipient gets**, **Local Transfer**); authorize notice; network + phone; **Authorize payment** (no Send exactly).
+5. Verify `POST /api/yellowcard/cross-border/quote` returns `easnerTransactionId` (not client-generated ETID).
 
 ### API parity checks
 

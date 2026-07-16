@@ -298,13 +298,6 @@ export function YcFundBalanceReview({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {!isMobileMoney && displayTransactionId ? (
-            <TransactionDetailSummaryRow
-              label={REVIEW_ROW_LABELS.transactionId}
-              value={displayTransactionId.toUpperCase()}
-              valueMono
-            />
-          ) : null}
           {!quoteReady && !quoteError && !isMobileMoney ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : (

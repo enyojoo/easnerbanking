@@ -36,6 +36,7 @@ export function buildYcLocalPayInCompleteRows(input: {
 }): YcLocalPayInCompleteRow[] {
   const rows: YcLocalPayInCompleteRow[] = []
   const isFundBalance = input.mode === "fund_balance"
+  const isCrossBorder = input.mode === "cross_border_send"
   const isMomo = input.rail === "mobile_money"
   const transferMethod = isFundBalance
     ? resolveYcFundBalanceTransferMethod(input.rail)
@@ -47,14 +48,6 @@ export function buildYcLocalPayInCompleteRows(input: {
     value: input.transactionId.toUpperCase(),
     valueMono: true,
   })
-
-  if (isFundBalance && !isMomo) {
-    rows.push({
-      id: "amount-to-credit",
-      label: REVIEW_ROW_LABELS.amountToCredit,
-      value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
-    })
-  }
 
   if (isFundBalance && isMomo && input.customerRate > 0) {
     rows.push({
@@ -105,7 +98,27 @@ export function buildYcLocalPayInCompleteRows(input: {
       label: REVIEW_ROW_LABELS.amountToCredit,
       value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
     })
-  } else if (!isFundBalance) {
+  } else if (isCrossBorder && isMomo && input.customerRate > 0) {
+    rows.push({
+      id: "exchange-rate",
+      label: REVIEW_ROW_LABELS.exchangeRate,
+      value: formatSendRateLabel(
+        input.payInCurrency,
+        input.receiveCurrency,
+        input.customerRate,
+      ),
+    })
+    if ((input.principalLocal ?? 0) > 0) {
+      rows.push({
+        id: "deposit-amount",
+        label: REVIEW_ROW_LABELS.depositAmount,
+        value: formatReviewRowMoneyDisplay(
+          REVIEW_ROW_LABELS.depositAmount,
+          input.principalLocal!,
+          input.payInCurrency,
+        ),
+      })
+    }
     const showFee = (input.processingFeeLocal ?? 0) > 0
     if (showFee) {
       rows.push({
@@ -118,22 +131,11 @@ export function buildYcLocalPayInCompleteRows(input: {
         ),
       })
     }
-    if (input.customerRate > 0) {
-      rows.push({
-        id: "exchange-rate",
-        label: REVIEW_ROW_LABELS.exchangeRate,
-        value: formatSendRateLabel(
-          input.payInCurrency,
-          input.receiveCurrency,
-          input.customerRate,
-        ),
-      })
-    }
     rows.push({
-      id: "amount-to-pay",
-      label: REVIEW_ROW_LABELS.amountToPay,
+      id: "total-to-pay",
+      label: REVIEW_ROW_LABELS.totalToPay,
       value: formatReviewRowMoneyDisplay(
-        REVIEW_ROW_LABELS.amountToPay,
+        REVIEW_ROW_LABELS.totalToPay,
         input.localPayIn,
         input.payInCurrency,
       ),
@@ -143,15 +145,19 @@ export function buildYcLocalPayInCompleteRows(input: {
       id: "recipient-gets",
       label: REVIEW_ROW_LABELS.recipientGets,
       value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
-      valueBold: true,
     })
-    if (input.recipientName) {
-      rows.push({
-        id: "recipient",
-        label: REVIEW_ROW_LABELS.recipient,
-        value: input.recipientName,
-      })
-    }
+  } else if (isFundBalance && !isMomo) {
+    rows.push({
+      id: "amount-to-credit",
+      label: REVIEW_ROW_LABELS.amountToCredit,
+      value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
+    })
+  } else if (isCrossBorder && !isMomo) {
+    rows.push({
+      id: "recipient-gets",
+      label: REVIEW_ROW_LABELS.recipientGets,
+      value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
+    })
   }
 
   rows.push({

@@ -108,6 +108,14 @@ import {
   ensurePayInNetworksCached,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
+import {
+  clearCrossBorderQuote,
+  ensureCrossBorderQuoteStashed,
+  isCompleteCrossBorderQuote,
+  isStashedCrossBorderQuoteFresh,
+  peekLastCrossBorderQuoteError,
+  type CrossBorderQuoteStashMeta,
+} from '../../lib/sendFlowCrossBorderQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
   getCachedSendDestinations,
@@ -699,6 +707,53 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   )
   const sendingAmount = flowAmounts.sendAmount
   const exchangeRate = flowAmounts.forwardRate
+
+  const crossBorderBankQuoteMeta = useMemo((): CrossBorderQuoteStashMeta | null => {
+    if (
+      selectedPaymentMethod !== 'otherCurrency' ||
+      !showThroughLocalCurrency ||
+      !selectedOtherCurrency ||
+      tlcPayInRail !== 'bank_transfer' ||
+      !recipient?.id ||
+      !(receiveAmount > 0)
+    ) {
+      return null
+    }
+    const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
+    if (!payInCountry) return null
+    return {
+      recipientId: recipient.id,
+      payInCurrency: selectedOtherCurrency,
+      payInCountry,
+      payInRail: 'bank_transfer',
+      receiveAmount,
+    }
+  }, [
+    selectedPaymentMethod,
+    showThroughLocalCurrency,
+    selectedOtherCurrency,
+    tlcPayInRail,
+    recipient?.id,
+    receiveAmount,
+  ])
+
+  const crossBorderBankPrefetchKey = crossBorderBankQuoteMeta
+    ? [
+        crossBorderBankQuoteMeta.recipientId,
+        crossBorderBankQuoteMeta.payInCurrency,
+        crossBorderBankQuoteMeta.payInCountry,
+        crossBorderBankQuoteMeta.receiveAmount,
+      ].join('|')
+    : ''
+
+  useEffect(() => {
+    clearCrossBorderQuote()
+  }, [recipient?.id, selectedOtherCurrency, tlcPayInRail])
+
+  useEffect(() => {
+    if (!crossBorderBankPrefetchKey || !crossBorderBankQuoteMeta) return
+    void ensureCrossBorderQuoteStashed(crossBorderBankQuoteMeta)
+  }, [crossBorderBankPrefetchKey, crossBorderBankQuoteMeta])
 
   const payoutMinReceive = useMemo(
     () =>
@@ -1363,6 +1418,39 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               e instanceof Error ? e.message : 'Could not load mobile money networks. Try again.',
             )
             return
+          } finally {
+            if (continueSpinnerTimerRef.current) {
+              clearTimeout(continueSpinnerTimerRef.current)
+              continueSpinnerTimerRef.current = null
+            }
+            setIsContinuePending(false)
+            setIsContinueLoading(false)
+          }
+        }
+        if (rail === 'bank_transfer') {
+          const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
+          if (!payInCountry) {
+            showError('Could not resolve pay-in country for bank transfer.')
+            return
+          }
+          const bankQuoteMeta: CrossBorderQuoteStashMeta = {
+            recipientId: recipient.id,
+            payInCurrency: selectedOtherCurrency,
+            payInCountry,
+            payInRail: 'bank_transfer',
+            receiveAmount: receiveAmountValue,
+          }
+          const quoteAlreadyWarm = isStashedCrossBorderQuoteFresh(bankQuoteMeta)
+          if (!quoteAlreadyWarm) {
+            setIsContinuePending(true)
+            continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+          }
+          try {
+            const quote = await ensureCrossBorderQuoteStashed(bankQuoteMeta)
+            if (!isCompleteCrossBorderQuote(quote)) {
+              showError(peekLastCrossBorderQuoteError() || 'Could not load cross-border quote. Try again.')
+              return
+            }
           } finally {
             if (continueSpinnerTimerRef.current) {
               clearTimeout(continueSpinnerTimerRef.current)

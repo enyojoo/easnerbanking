@@ -11,6 +11,8 @@ import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
   buildYcLocalPayInReviewRows,
+  computeDisplayProcessingFee,
+  computeYcCrossBorderPrincipalLocalPayIn,
   getGlobalPayoutProcessingTime,
   REVIEW_ROW_LABELS,
   TLC_LOCAL_TRANSFER_METHOD,
@@ -29,6 +31,14 @@ import {
   ensurePayInNetworksCached,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
+import {
+  ensureCrossBorderQuoteStashed,
+  isCompleteCrossBorderQuote,
+  isStashedCrossBorderQuoteFresh,
+  peekCrossBorderQuote,
+  peekLastCrossBorderQuoteError,
+  type CrossBorderQuoteStashMeta,
+} from '../../lib/sendFlowCrossBorderQuote'
 import { useAuth } from '../../contexts/AuthContext'
 
 type Props = {
@@ -118,27 +128,41 @@ export function YcLocalPayInReview({
   useEffect(() => {
     if (isMobileMoney) return
     if (!payInCurrency || !payInCountry) return
+
+    const meta: CrossBorderQuoteStashMeta = {
+      recipientId: recipient.id,
+      payInCurrency,
+      payInCountry,
+      payInRail,
+      receiveAmount,
+    }
+
+    if (isStashedCrossBorderQuoteFresh(meta)) {
+      const stashed = peekCrossBorderQuote()
+      if (stashed) {
+        setQuote(stashed)
+        setQuoteError(null)
+      }
+      return
+    }
+
     let cancelled = false
     setQuoteError(null)
     void (async () => {
-      try {
-        const result = await ycFlow.createQuote({
-          receiveAmount,
-          payInRail,
-          payInCountry,
-        })
-        if (!cancelled) setQuote(result)
-      } catch (e) {
-        if (!cancelled) {
-          setQuote(null)
-          setQuoteError(e instanceof Error ? e.message : 'Could not load quote')
-        }
+      const result = await ensureCrossBorderQuoteStashed(meta)
+      if (cancelled) return
+      if (isCompleteCrossBorderQuote(result)) {
+        setQuote(result)
+        return
       }
+      setQuote(null)
+      setQuoteError(peekLastCrossBorderQuoteError() || 'Could not load quote')
     })()
+
     return () => {
       cancelled = true
     }
-  }, [recipient.id, receiveAmount, payInCurrency, payInCountry, payInRail, isMobileMoney, ycFlow.createQuote])
+  }, [recipient.id, receiveAmount, payInCurrency, payInCountry, payInRail, isMobileMoney])
 
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
   const estimatedPayIn = ycFlow.preview.sendAmount
@@ -151,6 +175,26 @@ export function YcLocalPayInReview({
   const displayTransactionId = quote?.easnerTransactionId ?? quote?.transactionId ?? ''
   const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
 
+  const reviewPrincipalLocal = computeYcCrossBorderPrincipalLocalPayIn({
+    receiveAmount,
+    customerRate,
+  })
+  const reviewFeeLocal =
+    !isMobileMoney && quote
+      ? quote.displayProcessingFeeLocal ??
+        (quote.displayProcessingFee != null && customerRate > 0
+          ? Math.round(quote.displayProcessingFee * customerRate * 100) / 100
+          : computeDisplayProcessingFee({
+              processingFee: quote.processingFee ?? 0,
+              exchangeFee: quote.ycLegFeesUsd ?? 0,
+            }) * (customerRate || 1))
+      : isMobileMoney && customerRate > 0 && lockedLocalPayIn > 0
+        ? Math.max(
+            0,
+            Math.round((lockedLocalPayIn - reviewPrincipalLocal) * 100) / 100,
+          )
+        : 0
+
   const reviewRows = buildYcLocalPayInReviewRows({
     mode: 'cross_border_send',
     phase: isMobileMoney ? 'preview' : 'locked',
@@ -158,11 +202,12 @@ export function YcLocalPayInReview({
     payInCurrency,
     receiveCurrency,
     customerRate,
-    localPayIn: lockedLocalPayIn,
+    localPayIn: isMobileMoney ? estimatedPayIn : lockedLocalPayIn,
     receiveAmount,
-    processingFeeLocal: quote?.displayProcessingFeeLocal,
+    processingFeeLocal: reviewFeeLocal,
     processingFeeUsd: quote?.processingFee,
     exchangeFeeUsd: quote?.ycLegFeesUsd,
+    principalLocal: reviewPrincipalLocal,
     transactionId: displayTransactionId,
     processingTime,
   })
@@ -202,14 +247,21 @@ export function YcLocalPayInReview({
     try {
       if (isMobileMoney) {
         const selectedNetwork = networks.find((n) => n.id === networkId)
-        const result = await ycFlow.createQuote({
-          receiveAmount,
-          payInRail,
+        const meta: CrossBorderQuoteStashMeta = {
+          recipientId: recipient.id,
+          payInCurrency,
           payInCountry,
+          payInRail,
+          receiveAmount,
           sourcePhone: phone.trim(),
           networkId,
           sourceNetworkName: selectedNetwork?.name,
-        })
+        }
+        const result = await ensureCrossBorderQuoteStashed(meta)
+        if (!isCompleteCrossBorderQuote(result)) {
+          setQuoteError(peekLastCrossBorderQuoteError() || 'Could not load quote')
+          return
+        }
         navigateToPayIn(result)
         return
       }

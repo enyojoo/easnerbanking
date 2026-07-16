@@ -496,6 +496,7 @@ export type {
 export {
   buildYcFundBalanceDepositReviewSnapshot,
   computeYcFundBalancePrincipalLocalPayIn,
+  computeYcCrossBorderPrincipalLocalPayIn,
   resolveYcFundBalanceLocalPayInBreakdown,
   inferResidenceCountryFromLocalCurrency,
   isNoahVaFundingDeposit,
