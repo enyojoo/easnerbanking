@@ -610,7 +610,7 @@ export function LocalDepositWizard({
 
       <h2 className="text-2xl font-semibold">Complete deposit</h2>
 
-      <div className="rounded-xl border border-border p-4 space-y-1 text-sm">
+      <div className="rounded-xl border border-border p-4 space-y-1 text-sm mb-8">
         {quote?.transactionId ? (
           <div className="flex justify-between gap-4 py-2 border-b">
             <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
@@ -623,11 +623,12 @@ export function LocalDepositWizard({
         </div>
       </div>
 
-      <p className="text-xl font-semibold text-center text-foreground">
-        {ycPayInSendingExactlyCopy(payInAmount)}
-      </p>
-
-      <p className="text-sm text-center text-muted-foreground px-2">{payInNotice}</p>
+      <div className="space-y-4 mb-5">
+        <p className="text-sm text-center text-muted-foreground px-2">{payInNotice}</p>
+        <p className="text-xl font-semibold text-center text-foreground">
+          {ycPayInSendingExactlyCopy(payInAmount)}
+        </p>
+      </div>
 
       <div className="rounded-xl border border-border p-4 space-y-1">
         <div className="flex items-center gap-2 mb-3">

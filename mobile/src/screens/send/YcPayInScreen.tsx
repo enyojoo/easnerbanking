@@ -116,7 +116,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
           contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.summaryCard}>
+          <View style={[styles.summaryCard, isFundBalance && styles.summaryCardSpaced]}>
             {displayTransactionId ? (
               <SummaryRow label={REVIEW_ROW_LABELS.transactionId} value={displayTransactionId} />
             ) : null}
@@ -127,16 +127,22 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
             )}
           </View>
 
-          <Text style={[styles.sendingExactly, isFundBalance && styles.sendingExactlyProminent]}>
-            {ycPayInSendingExactlyCopy(formattedSendAmount)}
-          </Text>
-
           {isFundBalance ? (
-            <Text style={[styles.noticeText, styles.noticeTextCentered]}>{notice}</Text>
-          ) : (
-            <View style={styles.noticeBox}>
-              <Text style={styles.noticeText}>{notice}</Text>
+            <View style={styles.payInCopySection}>
+              <Text style={[styles.noticeText, styles.noticeTextCentered]}>{notice}</Text>
+              <Text style={[styles.sendingExactly, styles.sendingExactlyProminent]}>
+                {ycPayInSendingExactlyCopy(formattedSendAmount)}
+              </Text>
             </View>
+          ) : (
+            <>
+              <View style={styles.noticeBox}>
+                <Text style={styles.noticeText}>{notice}</Text>
+              </View>
+              <Text style={styles.sendingExactly}>
+                {ycPayInSendingExactlyCopy(formattedSendAmount)}
+              </Text>
+            </>
           )}
 
           <View style={[styles.paymentCard, surfaceFrameStyle(colors)]}>
@@ -222,6 +228,13 @@ const styles = StyleSheet.create({
     gap: spacing[1],
     marginBottom: spacing[4],
   },
+  summaryCardSpaced: {
+    marginBottom: spacing[8],
+  },
+  payInCopySection: {
+    gap: spacing[4],
+    marginBottom: spacing[5],
+  },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -250,7 +263,7 @@ const styles = StyleSheet.create({
   sendingExactlyProminent: {
     ...textStyles.headlineMedium,
     textAlign: 'center',
-    marginBottom: spacing[4],
+    marginBottom: 0,
   },
   noticeBox: {
     backgroundColor: colors.semantic.muted,
@@ -265,8 +278,8 @@ const styles = StyleSheet.create({
   noticeTextCentered: {
     color: colors.text.secondary,
     textAlign: 'center',
-    marginBottom: spacing[5],
     paddingHorizontal: spacing[2],
+    marginBottom: 0,
   },
   paymentCard: {
     padding: spacing[4],
