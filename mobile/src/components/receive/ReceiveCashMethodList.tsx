@@ -1,6 +1,5 @@
 import React from 'react'
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
-import { Landmark, Smartphone } from 'lucide-react-native'
 import {
   RECEIVE_CASH_BANK_SUBTITLE,
   receiveInternationalBankTitle,
@@ -10,7 +9,10 @@ import {
 } from '@easner/shared'
 import { colors, spacing, textStyles } from '../../theme'
 import { getCountryName } from '../../lib/countryService'
+import { CountryFlag } from '../flags/CountryFlag'
 import { ReceiveLocalRailCard } from './ReceiveLocalRailCard'
+
+const FLAG_SIZE = 48
 
 type Props = {
   currency: 'USD' | 'EUR'
@@ -25,6 +27,17 @@ type Props = {
   onBankPress: () => void
   onLocalBankPress: () => void
   onLocalMomoPress: () => void
+}
+
+function CashMethodFlag({ code }: { code: string }) {
+  return (
+    <CountryFlag
+      code={code}
+      size={FLAG_SIZE}
+      style={{ width: FLAG_SIZE, height: FLAG_SIZE }}
+      contentFit="cover"
+    />
+  )
 }
 
 export function ReceiveCashMethodList({
@@ -45,6 +58,7 @@ export function ReceiveCashMethodList({
   const localSubtitle = localPayInCurrency
     ? receiveLocalDepositSubtitle(localPayInCurrency)
     : ''
+  const intlBankFlagCode = currency === 'USD' ? 'US' : 'EU'
 
   if (loading && showLocalRows && !bankAvailable && !momoAvailable) {
     return <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[6] }} />
@@ -67,7 +81,7 @@ export function ReceiveCashMethodList({
         <ReceiveLocalRailCard
           title={receiveInternationalBankTitle(currency)}
           subtitle={RECEIVE_CASH_BANK_SUBTITLE}
-          icon={<Landmark size={24} color={colors.primary.main} strokeWidth={2} />}
+          leading={<CashMethodFlag code={intlBankFlagCode} />}
           onPress={onBankPress}
         />
       ) : null}
@@ -76,7 +90,7 @@ export function ReceiveCashMethodList({
         <ReceiveLocalRailCard
           title={receiveLocalBankTitle(countryName)}
           subtitle={localSubtitle}
-          icon={<Landmark size={24} color={colors.primary.main} strokeWidth={2} />}
+          leading={<CashMethodFlag code={residenceCountry} />}
           onPress={onLocalBankPress}
           disabled={localDepositBlocked}
         />
@@ -86,7 +100,7 @@ export function ReceiveCashMethodList({
         <ReceiveLocalRailCard
           title={receiveLocalMomoTitle(countryName)}
           subtitle={localSubtitle}
-          icon={<Smartphone size={24} color={colors.primary.main} strokeWidth={2} />}
+          leading={<CashMethodFlag code={residenceCountry} />}
           onPress={onLocalMomoPress}
           disabled={localDepositBlocked}
         />

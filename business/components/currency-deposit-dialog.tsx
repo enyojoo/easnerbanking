@@ -12,10 +12,11 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowRight, ArrowLeft, Copy, Check, Plus, Share2, ShieldCheck, Landmark, Smartphone } from "lucide-react"
+import { ArrowRight, ArrowLeft, Copy, Check, Plus, Share2, ShieldCheck } from "lucide-react"
 import type { Account } from "@/lib/finance-types"
 import { QRCodeSVG } from "qrcode.react"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
+import { CountryFlag } from "@/components/flags"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { TIER2_COMPLETE_PLACEHOLDER } from "@/lib/compliance-placeholders"
 import {
@@ -319,6 +320,8 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
       ? receiveInternationalBankTitle(account.currency as "USD" | "EUR")
       : "Bank Account"
 
+  const intlBankFlagCode = account.currency === "USD" ? "US" : "EU"
+
   const resetCashView = () => {
     setCashView("list")
     setLocalRail(null)
@@ -481,8 +484,8 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                           className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left"
                           onClick={() => setCashView("bank")}
                         >
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                            <Landmark className="h-6 w-6 text-primary" />
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
+                            <CountryFlag code={intlBankFlagCode} size={48} className="size-full rounded-full" />
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="font-medium">{intlBankTitle}</p>
@@ -504,8 +507,8 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                             setCashView("local")
                           }}
                         >
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                            <Landmark className="h-6 w-6 text-primary" />
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
+                            <CountryFlag code={effectiveResidence ?? ""} size={48} className="size-full rounded-full" />
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="font-medium">{receiveLocalBankTitle(countryName)}</p>
@@ -527,8 +530,8 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                             setCashView("local")
                           }}
                         >
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                            <Smartphone className="h-6 w-6 text-primary" />
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
+                            <CountryFlag code={effectiveResidence ?? ""} size={48} className="size-full rounded-full" />
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="font-medium">{receiveLocalMomoTitle(countryName)}</p>

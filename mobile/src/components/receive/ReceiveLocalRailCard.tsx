@@ -1,19 +1,21 @@
 import React from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { ArrowRight } from 'lucide-react-native'
-import { colors, spacing, textStyles, borderRadius, surfaceFrameStyle, surfaceChromeCircleStyle } from '../../theme'
+import { colors, spacing, textStyles, borderRadius, surfaceFrameStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+
+const FLAG_SIZE = 48
 
 type Props = {
   title: string
   subtitle: string
-  icon: React.ReactNode
+  leading: React.ReactNode
   onPress: () => void
   disabled?: boolean
 }
 
 /** Full-width stacked rail row for receive cash / local deposit (single column list). */
-export function ReceiveLocalRailCard({ title, subtitle, icon, onPress, disabled }: Props) {
+export function ReceiveLocalRailCard({ title, subtitle, leading, onPress, disabled }: Props) {
   return (
     <Pressable
       android_ripple={ripple.neutral}
@@ -25,9 +27,7 @@ export function ReceiveLocalRailCard({ title, subtitle, icon, onPress, disabled 
       onPress={onPress}
       disabled={disabled}
     >
-      <View style={[styles.iconWrap, surfaceChromeCircleStyle(colors, 48, { shadow: 'none' })]}>
-        {icon}
-      </View>
+      <View style={styles.flagWrap}>{leading}</View>
       <View style={styles.textCol}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
@@ -50,9 +50,16 @@ const styles = StyleSheet.create({
   cardDisabled: {
     opacity: 0.55,
   },
-  iconWrap: {
+  flagWrap: {
+    width: FLAG_SIZE,
+    height: FLAG_SIZE,
+    borderRadius: FLAG_SIZE / 2,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
+    backgroundColor: colors.primary.main + '10',
   },
   textCol: {
     flex: 1,
