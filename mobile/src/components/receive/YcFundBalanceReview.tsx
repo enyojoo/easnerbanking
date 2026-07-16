@@ -13,6 +13,7 @@ import {
   computeDisplayProcessingFee,
   formatMoneyDisplay,
   formatSendRateLabel,
+  REVIEW_ROW_LABELS,
   shouldShowPayoutReviewFeeRow,
 } from '@easner/shared'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
@@ -176,34 +177,34 @@ export function YcFundBalanceReview({
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
           {displayTransactionId ? (
-            <Row label="Transaction ID" value={displayTransactionId.toUpperCase()} />
+            <Row label={REVIEW_ROW_LABELS.transactionId} value={displayTransactionId.toUpperCase()} />
           ) : null}
           {!quoteReady && !quoteError ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : (
             <>
-              <Row label="You pay" value={formatMoneyDisplay(quote?.localPayIn ?? localPayIn, localPayInCurrency)} />
+              <Row label={REVIEW_ROW_LABELS.amountToPay} value={formatMoneyDisplay(quote?.localPayIn ?? localPayIn, localPayInCurrency)} />
               {showProcessingFee ? (
                 <Row
-                  label="Processing fee"
+                  label={REVIEW_ROW_LABELS.processingFee}
                   value={formatMoneyDisplay(displayProcessingFee, 'USD')}
                 />
               ) : null}
               {customerRate > 0 ? (
                 <Row
-                  label="Exchange rate"
+                  label={REVIEW_ROW_LABELS.exchangeRate}
                   value={formatSendRateLabel('USD', localPayInCurrency, customerRate)}
                 />
               ) : null}
-              <Row label="You receive" value={formatMoneyDisplay(quote?.usdCredit ?? usdCredit, 'USD')} bold />
+              <Row label={REVIEW_ROW_LABELS.creditAmount} value={formatMoneyDisplay(quote?.usdCredit ?? usdCredit, 'USD')} bold />
               <View style={styles.creditRow}>
-                <Text style={styles.rowLabel}>To:</Text>
+                <Text style={styles.rowLabel}>{REVIEW_ROW_LABELS.creditTo}</Text>
                 <View style={styles.creditValue}>
                   <CurrencyFlag currency="USD" size={20} />
                   <Text style={styles.rowValue}>USD Balance</Text>
                 </View>
               </View>
-              <Row label="Transfer method" value={transferMethod} />
+              <Row label={REVIEW_ROW_LABELS.transferMethod} value={transferMethod} />
             </>
           )}
           {quoteError ? <Text style={styles.error}>{quoteError}</Text> : null}

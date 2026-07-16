@@ -791,6 +791,7 @@ export default function SendConfirmPage() {
         receiveNetwork={walletSend ? walletNetwork : undefined}
         walletSendExecutionModel={walletSend ? wq?.executionModel : undefined}
         mode="confirm"
+        reviewFlow={isYcCrossBorder ? "local_pay_in" : "balance_payout"}
       />
 
       {(isYcCrossBorder ? ycQuoteError : walletSend ? walletQuoteError : payoutQuoteError) &&

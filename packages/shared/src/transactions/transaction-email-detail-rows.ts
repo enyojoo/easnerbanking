@@ -12,6 +12,7 @@ import { formatMoneyDisplay } from "../format-money-display"
 import { formatSendRateLabel } from "../format-exchange-rate"
 import { formatPayoutRecipientSubtitle } from "../payout-recipient-subtitle"
 import { computeDisplayProcessingFee } from "../payout-processing-fee"
+import { REVIEW_ROW_LABELS } from "../review-row-labels"
 import {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
@@ -70,21 +71,21 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
     : hasPayoutCrossCurrencyFx(review.send_currency, review.receive_currency)
 
   // Emails describe what has happened (a detail view), so use the past-tense "Sent".
-  pushIf(rows, "Sent", formatMoneyDisplay(review.you_send_amount, sendCurrency))
+  pushIf(rows, REVIEW_ROW_LABELS.sent, formatMoneyDisplay(review.you_send_amount, sendCurrency))
   if (isPayoutReviewFeeVisible(displayProcessingFee)) {
-    pushIf(rows, "Processing fee", formatMoneyDisplay(displayProcessingFee, sendCurrency))
+    pushIf(rows, REVIEW_ROW_LABELS.processingFee, formatMoneyDisplay(displayProcessingFee, sendCurrency))
   }
   if (hasFx) {
     pushIf(
       rows,
-      "Exchange rate",
+      REVIEW_ROW_LABELS.exchangeRate,
       formatSendRateLabel(review.send_currency, review.receive_currency, review.exchange_rate),
     )
   }
-  pushIf(rows, "Total debited", formatMoneyDisplay(review.total_debited, sendCurrency))
+  pushIf(rows, REVIEW_ROW_LABELS.totalDebited, formatMoneyDisplay(review.total_debited, sendCurrency))
   pushIf(
     rows,
-    "Recipient gets",
+    REVIEW_ROW_LABELS.recipientGets,
     formatMoneyDisplay(review.receive_amount, review.receive_currency),
   )
 
@@ -98,32 +99,32 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
       mobileProvider: recipient.mobileProvider ?? undefined,
       walletNetwork: recipient.walletNetwork ?? undefined,
     })
-    pushIf(rows, "Recipient", subtitle ? `${recipient.fullName} (${subtitle})` : recipient.fullName)
+    pushIf(rows, REVIEW_ROW_LABELS.recipient, subtitle ? `${recipient.fullName} (${subtitle})` : recipient.fullName)
   }
 
-  pushIf(rows, "Transfer method", normalizeTransferMethodLabel(review.transfer_method))
+  pushIf(rows, REVIEW_ROW_LABELS.transferMethod, normalizeTransferMethodLabel(review.transfer_method))
   return rows
 }
 
 function buildDepositRows(deposit: NonNullable<TransactionEmailDetailInput["deposit"]>): TransactionEmailDetailRow[] {
   const rows: TransactionEmailDetailRow[] = []
-  pushIf(rows, "Scheme", deposit.scheme)
-  pushIf(rows, "Sender", deposit.senderDisplay)
+  pushIf(rows, REVIEW_ROW_LABELS.scheme, deposit.scheme)
+  pushIf(rows, REVIEW_ROW_LABELS.sender, deposit.senderDisplay)
   if (deposit.feeAmount != null && deposit.feeAmount > 0) {
     pushIf(
       rows,
-      "Processing fee",
+      REVIEW_ROW_LABELS.processingFee,
       formatMoneyDisplay(deposit.feeAmount, deposit.feeCurrency || "USD"),
     )
   }
   if (deposit.postedAmount != null && deposit.postedAmount > 0) {
     pushIf(
       rows,
-      "Amount credited",
+      REVIEW_ROW_LABELS.amountCredited,
       formatMoneyDisplay(deposit.postedAmount, deposit.postedCurrency || "USD"),
     )
   }
-  pushIf(rows, "Narration", deposit.narration)
+  pushIf(rows, REVIEW_ROW_LABELS.narration, deposit.narration)
   return rows
 }
 
@@ -140,7 +141,10 @@ export function buildTransactionEmailDetailRows(
 }
 
 /** Row labels omitted from downloadable receipts (mobile image + business PDF). */
-const RECEIPT_OMITTED_ROW_LABELS = new Set(["Exchange rate", "Transfer method"])
+const RECEIPT_OMITTED_ROW_LABELS = new Set([
+  REVIEW_ROW_LABELS.exchangeRate,
+  REVIEW_ROW_LABELS.transferMethod,
+])
 
 /** Receipts reuse canonical rows but hide ops-oriented payout fields. */
 export function filterTransactionReceiptDetailRows(

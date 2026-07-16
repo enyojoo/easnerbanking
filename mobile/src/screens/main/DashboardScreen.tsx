@@ -62,6 +62,10 @@ import { noahService } from '../../lib/noahService'
 import { useTransactionsList, prefetchRecentTransactionDetailsInBackground, prefetchTransactionDetail, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-deposit-queries'
 import {
+  resolveWarmYcLocalDepositCorridor,
+  warmYcLocalDepositCaches,
+} from '../../lib/warmYcLocalDepositCaches'
+import {
   markRecentMoneyActivity,
   qk,
 } from '@easner/shared'
@@ -303,6 +307,14 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       scope,
     ])
   )
+
+  const warmReceiveLocalDeposit = useCallback(() => {
+    const corridor = resolveWarmYcLocalDepositCorridor(userProfile, {
+      kycApproved: isTier1Complete(userProfile),
+    })
+    if (!corridor) return
+    void warmYcLocalDepositCaches(corridor)
+  }, [userProfile])
 
   // Gate ledger refetch on focus: skip when realtime is healthy (rows arrive via prepend).
   useTransactionListFocusRefresh({
@@ -779,6 +791,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             <Pressable
               android_ripple={ripple.heroOnLight}
               style={({ pressed }) => [styles.heroReceiveButton, pressed && styles.heroBtnPressed]}
+              onPressIn={warmReceiveLocalDeposit}
               onPress={() => {
                 haptics.tap()
                 navigation.navigate('ReceiveMoney' as never, {

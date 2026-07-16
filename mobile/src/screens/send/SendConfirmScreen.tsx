@@ -19,6 +19,7 @@ import {
   qk,
   resolvePayoutCountryCode,
   resolveRecipientPayoutRail,
+  REVIEW_ROW_LABELS,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
@@ -771,10 +772,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           >
             <View style={styles.card}>
               {displayTransactionId ? (
-                <Row label="Transaction ID" value={displayTransactionId} />
+                <Row label={REVIEW_ROW_LABELS.transactionId} value={displayTransactionId} />
               ) : null}
               <Row
-                label="Sending"
+                label={REVIEW_ROW_LABELS.sending}
                 value={formatMoneyDisplay(youSendAmount, selectedBalanceCurrency)}
               />
               {selectedBalanceCurrency === 'USD' || selectedBalanceCurrency === 'EUR' ? (
@@ -782,13 +783,13 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               ) : null}
               {!easetagUi && quoteReady && showProcessingFee ? (
                 <Row
-                  label="Processing fee"
+                  label={REVIEW_ROW_LABELS.processingFee}
                   value={formatMoneyDisplay(displayProcessingFee, selectedBalanceCurrency)}
                 />
               ) : null}
               {hasFx && customerRate > 0 ? (
                 <Row
-                  label="Exchange rate"
+                  label={REVIEW_ROW_LABELS.exchangeRate}
                   value={formatSendRateLabel(
                     selectedBalanceCurrency,
                     receiveCurrency,
@@ -798,18 +799,18 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               ) : null}
               {!easetagUi && calculatedTotalAmount > 0 ? (
                 <Row
-                  label="Total debited"
+                  label={REVIEW_ROW_LABELS.totalDebited}
                   value={formatMoneyDisplay(calculatedTotalAmount, selectedBalanceCurrency)}
                   bold
                 />
               ) : null}
               <Row
-                label="Recipient gets"
+                label={REVIEW_ROW_LABELS.recipientGets}
                 value={formatMoneyDisplay(quotedReceiveAmount, receiveCurrency)}
               />
               {recipient ? (
                 <View style={styles.recipientRow}>
-                  <Text style={styles.rowLabel}>Recipient</Text>
+                  <Text style={styles.rowLabel}>{REVIEW_ROW_LABELS.recipient}</Text>
                   <View style={styles.recipientSummaryWrap}>
                     <SendSelectedRecipientSummary
                       recipient={recipient}
@@ -821,12 +822,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               ) : null}
               {!easetagUi ? (
                 <Row
-                  label="Transfer method"
+                  label={REVIEW_ROW_LABELS.transferMethod}
                   value={normalizeTransferMethodLabel(transferMethod)}
                 />
               ) : null}
               {arrivalHint ? (
-                <Row label="Arrival" value={arrivalHint} last={!pricingQuoteExpiry} />
+                <Row label={REVIEW_ROW_LABELS.arrival} value={arrivalHint} last={!pricingQuoteExpiry} />
               ) : null}
               {quoteError ? (
                 <Text style={styles.quoteError} accessibilityRole="alert">

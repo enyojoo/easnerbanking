@@ -96,11 +96,11 @@ export async function clearInvalidPersistedAuthSession(): Promise<void> {
 // Auth helper functions
 export const getCurrentUser = async () => {
   const {
-    data: { user },
+    data: { session },
     error,
-  } = await supabase.auth.getUser()
-  if (error) throw error
-  return user
+  } = await supabase.auth.getSession()
+  if (error || !session?.user) throw error ?? new Error('Not authenticated')
+  return session.user
 }
 
 export const signOut = async () => {

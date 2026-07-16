@@ -22,6 +22,7 @@ import {
   LOGIN_PIN_REGEX,
   LOGIN_PIN_SALT_BYTES,
 } from '@easner/shared'
+import { getAuthUserId } from './authSession'
 
 const STORAGE_PREFIX = 'easner_mobile_login_pin_v1_'
 const LOCKED_SUFFIX = '_locked'
@@ -288,12 +289,7 @@ export async function hasPin(userId: string): Promise<boolean> {
 }
 
 export async function isPinSetup(userId?: string): Promise<boolean> {
-  let uid = userId
-  if (!uid) {
-    const { supabase } = await import('./supabase')
-    const { data } = await supabase.auth.getUser()
-    uid = data.user?.id
-  }
+  const uid = await getAuthUserId(userId)
   if (!uid) return false
   return hasPin(uid)
 }
@@ -312,12 +308,7 @@ export async function setupPin(pin: string, userId?: string): Promise<PinAuthRes
     if (!LOGIN_PIN_REGEX.test(pin)) {
       return { success: false, error: 'PIN must be exactly 4 digits' }
     }
-    let uid = userId
-    if (!uid) {
-      const { supabase } = await import('./supabase')
-      const { data } = await supabase.auth.getUser()
-      uid = data.user?.id
-    }
+    const uid = await getAuthUserId(userId)
     if (!uid) {
       return { success: false, error: 'User not authenticated' }
     }
@@ -338,12 +329,7 @@ export async function setupPin(pin: string, userId?: string): Promise<PinAuthRes
 
 export async function verifyPin(pin: string, userId?: string): Promise<PinAuthResult> {
   try {
-    let uid = userId
-    if (!uid) {
-      const { supabase } = await import('./supabase')
-      const { data } = await supabase.auth.getUser()
-      uid = data.user?.id
-    }
+    const uid = await getAuthUserId(userId)
     if (!uid) {
       return { success: false, error: 'User not authenticated' }
     }
@@ -417,9 +403,7 @@ export async function clearPinAuth(): Promise<void> {
   try {
     clearWebPinSession()
     resetColdStartPinLockState()
-    const { supabase } = await import('./supabase')
-    const { data } = await supabase.auth.getUser()
-    const uid = data.user?.id
+    const uid = await getAuthUserId()
     if (uid) await removePin(uid)
     await AsyncStorage.removeItem(SESSION_LAST_ACTIVE_KEY)
     await AsyncStorage.removeItem(PIN_PROMPT_DISMISSED_KEY)
@@ -486,9 +470,7 @@ export async function isPinPromptDismissed(): Promise<boolean> {
 }
 
 export async function getPinLockTimeRemaining(): Promise<number> {
-  const { supabase } = await import('./supabase')
-  const { data } = await supabase.auth.getUser()
-  const uid = data.user?.id
+  const uid = await getAuthUserId()
   if (!uid) return 0
   const lock = await getLockoutState(uid)
   return lock.msRemaining

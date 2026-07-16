@@ -58,6 +58,7 @@ import {
   peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
+import { warmYcLocalDepositCaches } from '../../lib/warmYcLocalDepositCaches'
 
 type RouteParams = {
   localPayInCurrency: string
@@ -87,6 +88,15 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   const bankAvailable = params.bankAvailable ?? false
   const momoAvailable = params.momoAvailable ?? false
   const ngMissingType = params.ngMissingType ?? null
+
+  useEffect(() => {
+    if (!residenceCountry || !localPayInCurrency) return
+    void warmYcLocalDepositCaches({
+      residenceCountry,
+      localPayInCurrency,
+      kycApproved: true,
+    })
+  }, [residenceCountry, localPayInCurrency])
 
   const [amountEntryMode, setAmountEntryMode] = useState<'usd' | 'local'>('usd')
   const [amountStr, setAmountStr] = useState('0')

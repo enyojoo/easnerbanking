@@ -25,6 +25,12 @@ import {
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
+import {
+  prefetchYcReceiveRails,
+  readCachedReceiveRails,
+  warmYcLocalDepositCaches,
+  type ReceiveRailsResponse,
+} from "@/lib/yc-local-deposit-cache"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -86,34 +92,6 @@ function PaymentInstructions({
       ))}
     </ul>
   )
-}
-
-
-type ReceiveRailsResponse = {
-  ok: boolean
-  rails: {
-    bank_transfer: { available: boolean }
-    mobile_money: { available: boolean }
-  }
-  anyAvailable: boolean
-}
-
-const RECEIVE_RAILS_CACHE_TTL_MS = 5 * 60_000
-const receiveRailsCache = new Map<string, { data: ReceiveRailsResponse; at: number }>()
-
-function receiveRailsCacheKey(country: string, currency: string): string {
-  return `${country.trim().toUpperCase()}:${currency.trim().toUpperCase()}`
-}
-
-function readCachedReceiveRails(country: string, currency: string): ReceiveRailsResponse | null {
-  const key = receiveRailsCacheKey(country, currency)
-  const hit = receiveRailsCache.get(key)
-  if (!hit) return null
-  if (Date.now() - hit.at > RECEIVE_RAILS_CACHE_TTL_MS) {
-    receiveRailsCache.delete(key)
-    return null
-  }
-  return hit.data
 }
 
 interface CurrencyDepositDialogProps {
@@ -198,28 +176,23 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
       setReceiveRailsLoading(false)
       return
     }
-    const cacheKey = receiveRailsCacheKey(effectiveResidence, localPayInCurrency)
     const cached = readCachedReceiveRails(effectiveResidence, localPayInCurrency)
     let cancelled = false
-    if (!cached) setReceiveRailsLoading(true)
+    if (cached) {
+      setReceiveRails(cached)
+      setReceiveRailsLoading(false)
+    } else {
+      setReceiveRailsLoading(true)
+    }
+    void warmYcLocalDepositCaches({
+      residenceCountry: effectiveResidence,
+      localPayInCurrency,
+    })
     void (async () => {
-      try {
-        const res = await fetchWithSession(
-          `/api/yellowcard/receive-rails?country=${encodeURIComponent(effectiveResidence)}&currency=${encodeURIComponent(localPayInCurrency)}`,
-        )
-        const data = (await res.json().catch(() => ({}))) as ReceiveRailsResponse
-        if (!cancelled) {
-          if (res.ok) {
-            setReceiveRails(data)
-            receiveRailsCache.set(cacheKey, { data, at: Date.now() })
-          } else if (!cached) {
-            setReceiveRails(null)
-          }
-        }
-      } catch {
-        if (!cancelled && !cached) setReceiveRails(null)
-      } finally {
-        if (!cancelled) setReceiveRailsLoading(false)
+      const data = await prefetchYcReceiveRails(effectiveResidence, localPayInCurrency)
+      if (!cancelled) {
+        setReceiveRails(data ?? cached)
+        setReceiveRailsLoading(false)
       }
     })()
     return () => {

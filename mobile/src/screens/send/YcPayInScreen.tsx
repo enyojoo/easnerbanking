@@ -13,6 +13,7 @@ import {
   formatMoneyDisplay,
   ycPayInInstructionNotice,
   ycPayInSendingExactlyCopy,
+  REVIEW_ROW_LABELS,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
@@ -60,6 +61,8 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
     flowMode = 'cross_border_send',
     transactionId,
     sendCurrency = 'NGN',
+    receiveAmount = 0,
+    receiveCurrency = 'USD',
     transferId,
     localPayIn = 0,
     bankInfo,
@@ -71,8 +74,8 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   const isFundBalance = flowMode === 'fund_balance'
   const isMobileMoney = payInRail === 'mobile_money'
   const screenTitle = isFundBalance ? 'Complete deposit' : 'Complete payment'
-  const depositAmountLabel = isFundBalance ? 'Deposit amount' : 'Payment amount'
   const formattedSendAmount = formatMoneyDisplay(localPayIn, sendCurrency)
+  const formattedCreditAmount = formatMoneyDisplay(receiveAmount, receiveCurrency)
   const notice = payInNotice || ycPayInInstructionNotice(payInRail)
   const displayTransactionId = transactionId?.toUpperCase() ?? ''
   const paymentDetailsTitle = isMobileMoney ? 'Mobile Money' : 'Bank Account'
@@ -115,18 +118,26 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
         >
           <View style={styles.summaryCard}>
             {displayTransactionId ? (
-              <SummaryRow label="Transaction ID" value={displayTransactionId} />
+              <SummaryRow label={REVIEW_ROW_LABELS.transactionId} value={displayTransactionId} />
             ) : null}
-            <SummaryRow label={depositAmountLabel} value={formattedSendAmount} />
+            {isFundBalance ? (
+              <SummaryRow label={REVIEW_ROW_LABELS.creditAmount} value={formattedCreditAmount} />
+            ) : (
+              <SummaryRow label={REVIEW_ROW_LABELS.paymentAmount} value={formattedSendAmount} />
+            )}
           </View>
 
-          <Text style={styles.sendingExactly}>
+          <Text style={[styles.sendingExactly, isFundBalance && styles.sendingExactlyProminent]}>
             {ycPayInSendingExactlyCopy(formattedSendAmount)}
           </Text>
 
-          <View style={styles.noticeBox}>
-            <Text style={styles.noticeText}>{notice}</Text>
-          </View>
+          {isFundBalance ? (
+            <Text style={[styles.noticeText, styles.noticeTextCentered]}>{notice}</Text>
+          ) : (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeText}>{notice}</Text>
+            </View>
+          )}
 
           <View style={[styles.paymentCard, surfaceFrameStyle(colors)]}>
             <View style={styles.paymentCardHeader}>
@@ -236,6 +247,11 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing[4],
   },
+  sendingExactlyProminent: {
+    ...textStyles.headlineMedium,
+    textAlign: 'center',
+    marginBottom: spacing[4],
+  },
   noticeBox: {
     backgroundColor: colors.semantic.muted,
     borderRadius: borderRadius.lg,
@@ -245,6 +261,12 @@ const styles = StyleSheet.create({
   noticeText: {
     ...textStyles.body,
     color: colors.text.primary,
+  },
+  noticeTextCentered: {
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: spacing[5],
+    paddingHorizontal: spacing[2],
   },
   paymentCard: {
     padding: spacing[4],

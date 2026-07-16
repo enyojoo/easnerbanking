@@ -14,6 +14,7 @@ import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { TransactionLifecycleTracker } from "@/components/transactions/transaction-lifecycle-tracker"
 import { TransactionDetailHero } from "@/components/transactions/transaction-detail-hero"
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
+import { REVIEW_ROW_LABELS } from "@easner/shared"
 
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
@@ -121,7 +122,7 @@ function TransactionSummaryDetails({
     <Card className="border-border shadow-sm">
       <CardContent className="space-y-3 p-6">
         <div className="flex justify-between gap-4 border-b pb-4 text-sm">
-          <span className="shrink-0 text-muted-foreground">Transaction ID</span>
+          <span className="shrink-0 text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-medium">{transaction.id}</span>
             <Button
@@ -188,7 +189,7 @@ function TransactionSummaryDetails({
 
         {transaction.fee !== undefined && transaction.fee > 0 && (
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Processing fee</span>
+            <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
             <span className="font-medium">
               {formatCurrency(transaction.fee, transaction.displayCurrency || "USD")}
             </span>
@@ -197,7 +198,7 @@ function TransactionSummaryDetails({
 
         {transaction.postedAmount != null && transaction.postedAmount > 0 ? (
           <div className="flex justify-between gap-4 text-sm">
-            <span className="shrink-0 text-muted-foreground">Amount credited</span>
+            <span className="shrink-0 text-muted-foreground">{REVIEW_ROW_LABELS.amountCredited}</span>
             <span className="text-right font-medium">
               {formatCurrency(transaction.postedAmount, displayCurrency)}
             </span>

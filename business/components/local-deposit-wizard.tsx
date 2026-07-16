@@ -18,7 +18,6 @@ import {
   formatMoneyDisplay,
   formatSendRateLabel,
   mapResidenceToLocalPayInCurrency,
-  YC_PAY_IN_RATES_DESTINATION,
   resolveYcPayInCustomerRate,
   computeDisplayProcessingFee,
   shouldShowPayoutReviewFeeRow,
@@ -27,6 +26,7 @@ import {
   ycPayInSendingExactlyCopy,
   formatYcPayInMinHint,
   validateYcFundBalancePayInAmount,
+  REVIEW_ROW_LABELS,
   type NgLocalIdType,
   type YcRateClientRow,
 } from "@easner/shared"
@@ -44,22 +44,13 @@ type LocalRail = "bank_transfer" | "mobile_money"
 type WizardStep = "rail" | "amount" | "review" | "payin"
 type AmountMode = "usd" | "local"
 
-type ReceiveRailsResponse = {
-  ok: boolean
-  rails: {
-    bank_transfer: {
-      available: boolean
-      minLocalPayIn?: number | null
-      maxLocalPayIn?: number | null
-    }
-    mobile_money: {
-      available: boolean
-      minLocalPayIn?: number | null
-      maxLocalPayIn?: number | null
-    }
-  }
-  anyAvailable: boolean
-}
+import {
+  prefetchYcReceiveRails,
+  prefetchYcPayInRates,
+  readCachedReceiveRails,
+  readCachedYcPayInRates,
+  type ReceiveRailsResponse,
+} from "@/lib/yc-local-deposit-cache"
 
 type FundBalanceQuote = {
   ok: true
@@ -99,12 +90,16 @@ export function LocalDepositWizard({
   const localPayInCurrency = mapResidenceToLocalPayInCurrency(residenceCountry) ?? ""
 
   const [step, setStep] = useState<WizardStep>("rail")
-  const [rails, setRails] = useState<ReceiveRailsResponse | null>(null)
-  const [railsLoading, setRailsLoading] = useState(true)
+  const [rails, setRails] = useState<ReceiveRailsResponse | null>(() =>
+    readCachedReceiveRails(residenceCountry, localPayInCurrency),
+  )
+  const [railsLoading, setRailsLoading] = useState(
+    () => !readCachedReceiveRails(residenceCountry, localPayInCurrency),
+  )
   const [rail, setRail] = useState<LocalRail>("bank_transfer")
   const [amountMode, setAmountMode] = useState<AmountMode>("usd")
   const [amountStr, setAmountStr] = useState("")
-  const [rates, setRates] = useState<YcRateRow[]>([])
+  const [rates, setRates] = useState<YcRateRow[]>(() => readCachedYcPayInRates() ?? [])
   const [quote, setQuote] = useState<FundBalanceQuote | null>(null)
   const [prefetchedQuote, setPrefetchedQuote] = useState<FundBalanceQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
@@ -164,18 +159,18 @@ export function LocalDepositWizard({
 
   useEffect(() => {
     let cancelled = false
-    setRailsLoading(true)
+    const cached = readCachedReceiveRails(residenceCountry, localPayInCurrency)
+    if (cached) {
+      setRails(cached)
+      setRailsLoading(false)
+    } else {
+      setRailsLoading(true)
+    }
     void (async () => {
-      try {
-        const res = await fetchWithSession(
-          `/api/yellowcard/receive-rails?country=${encodeURIComponent(residenceCountry)}&currency=${encodeURIComponent(localPayInCurrency)}`,
-        )
-        const data = (await res.json().catch(() => ({}))) as ReceiveRailsResponse
-        if (!cancelled) setRails(res.ok ? data : null)
-      } catch {
-        if (!cancelled) setRails(null)
-      } finally {
-        if (!cancelled) setRailsLoading(false)
+      const data = await prefetchYcReceiveRails(residenceCountry, localPayInCurrency)
+      if (!cancelled) {
+        setRails(data ?? cached)
+        setRailsLoading(false)
       }
     })()
     return () => {
@@ -186,16 +181,11 @@ export function LocalDepositWizard({
   useEffect(() => {
     if (!localPayInCurrency) return
     let cancelled = false
+    const cached = readCachedYcPayInRates()
+    if (cached) setRates(cached)
     void (async () => {
-      try {
-        const res = await fetchWithSession(
-          `/api/fx/yc-rates?destinations=${encodeURIComponent(YC_PAY_IN_RATES_DESTINATION)}`,
-        )
-        const data = (await res.json().catch(() => ({}))) as { rates?: YcRateRow[] }
-        if (!cancelled) setRates(data.rates ?? [])
-      } catch {
-        if (!cancelled) setRates([])
-      }
+      const next = await prefetchYcPayInRates()
+      if (!cancelled) setRates(next ?? cached ?? [])
     })()
     return () => {
       cancelled = true
@@ -427,7 +417,7 @@ export function LocalDepositWizard({
         <div className="rounded-xl border border-border p-4 flex items-center gap-3">
           <CurrencyFlagCircle currency="USD" size={28} />
           <div>
-            <p className="text-xs text-muted-foreground">To:</p>
+            <p className="text-xs text-muted-foreground">{REVIEW_ROW_LABELS.creditTo}</p>
             <p className="font-medium">
               USD Balance • ${usdBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
@@ -543,39 +533,39 @@ export function LocalDepositWizard({
             <>
               {(quote.easnerTransactionId ?? quote.transactionId) ? (
                 <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">Transaction ID</span>
+                  <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
                   <span className="font-mono text-right">
                     {(quote.easnerTransactionId ?? quote.transactionId)!.toUpperCase()}
                   </span>
                 </div>
               ) : null}
               <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">You pay</span>
+                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.amountToPay}</span>
                 <span>{formatMoneyDisplay(quote.localPayIn, localPayInCurrency)}</span>
               </div>
               {(showProcessingFee && displayProcessingFee > 0) ? (
                 <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">Processing fee</span>
+                  <span className="text-muted-foreground">{REVIEW_ROW_LABELS.processingFee}</span>
                   <span>{formatMoneyDisplay(displayProcessingFee, "USD")}</span>
                 </div>
               ) : null}
               <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Exchange rate</span>
+                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.exchangeRate}</span>
                 <span>{formatSendRateLabel("USD", localPayInCurrency, quote.customerRate)}</span>
               </div>
               <div className="flex justify-between gap-4 font-medium">
-                <span>You receive</span>
+                <span>{REVIEW_ROW_LABELS.creditAmount}</span>
                 <span>{formatMoneyDisplay(quote.usdCredit, "USD")}</span>
               </div>
               <div className="flex justify-between gap-4 items-center">
-                <span className="text-muted-foreground">To:</span>
+                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.creditTo}</span>
                 <span className="flex items-center gap-2">
                   <CurrencyFlagCircle currency="USD" size={18} />
                   USD Balance
                 </span>
               </div>
               <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Transfer method</span>
+                <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transferMethod}</span>
                 <span>{transferMethod}</span>
               </div>
               {quote.expiresAt ? (
@@ -602,6 +592,7 @@ export function LocalDepositWizard({
   }
 
   const payInAmount = formatMoneyDisplay(quote?.localPayIn ?? preview.localPayIn, localPayInCurrency)
+  const creditAmount = formatMoneyDisplay(quote?.usdCredit ?? preview.usdCredit, "USD")
   const payInNotice = quote?.payInNotice ?? ycPayInInstructionNotice(rail)
   const PaymentDetailsIcon = rail === "mobile_money" ? Smartphone : Landmark
   const paymentDetailsTitle = rail === "mobile_money" ? "Mobile Money" : "Bank Account"
@@ -622,21 +613,21 @@ export function LocalDepositWizard({
       <div className="rounded-xl border border-border p-4 space-y-1 text-sm">
         {quote?.transactionId ? (
           <div className="flex justify-between gap-4 py-2 border-b">
-            <span className="text-muted-foreground">Transaction ID</span>
+            <span className="text-muted-foreground">{REVIEW_ROW_LABELS.transactionId}</span>
             <span className="font-medium text-right">{quote.transactionId.toUpperCase()}</span>
           </div>
         ) : null}
         <div className="flex justify-between gap-4 py-2">
-          <span className="text-muted-foreground">Deposit amount</span>
-          <span className="font-medium text-right">{payInAmount}</span>
+          <span className="text-muted-foreground">{REVIEW_ROW_LABELS.creditAmount}</span>
+          <span className="font-medium text-right">{creditAmount}</span>
         </div>
       </div>
 
-      <p className="text-sm text-foreground">{ycPayInSendingExactlyCopy(payInAmount)}</p>
+      <p className="text-xl font-semibold text-center text-foreground">
+        {ycPayInSendingExactlyCopy(payInAmount)}
+      </p>
 
-      <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-        {payInNotice}
-      </div>
+      <p className="text-sm text-center text-muted-foreground px-2">{payInNotice}</p>
 
       <div className="rounded-xl border border-border p-4 space-y-1">
         <div className="flex items-center gap-2 mb-3">

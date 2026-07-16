@@ -78,6 +78,7 @@ import {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
   shouldShowPayoutReviewFeeRow,
+  REVIEW_ROW_LABELS,
   type GlobalPayoutReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
 } from '@easner/shared'
@@ -940,7 +941,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             <SectionCard style={styles.card}>
               <View style={styles.summaryRows}>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Transaction ID</Text>
+                  <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.transactionId}</Text>
                   <Pressable
                     android_ripple={ripple.neutral}
                     style={styles.copyableValueRow}
@@ -962,7 +963,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 {isEasetagP2p ? (
                   <>
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Scheme</Text>
+                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.scheme}</Text>
                       <Text style={styles.summaryValue}>Easetag</Text>
                     </View>
                     <View style={styles.summaryRow}>
@@ -991,7 +992,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 !isStablecoinReceive &&
                 transaction.sender_display_name ? (
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Sender</Text>
+                    <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.sender}</Text>
                     <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
                   </View>
                 ) : null}
@@ -1004,7 +1005,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     </View>
                     {transaction.source_payment_rail ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Scheme</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.scheme}</Text>
                         <Text style={styles.summaryValue}>
                           {formatScheme(transaction, transaction.source_payment_rail)}
                         </Text>
@@ -1012,19 +1013,19 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     ) : null}
                     {transaction.sender_display_name ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Sender</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.sender}</Text>
                         <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
                       </View>
                     ) : null}
                     {transaction.reference ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Narration</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.narration}</Text>
                         <Text style={styles.summaryValue}>{transaction.reference}</Text>
                       </View>
                     ) : null}
                     {transaction.fee_amount != null && transaction.fee_amount > 0 ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Processing fee</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.processingFee}</Text>
                         <Text style={styles.summaryValue}>
                           {formatAmount(transaction.fee_amount, transaction.currency, false)}
                         </Text>
@@ -1033,7 +1034,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     {(transaction.posted_amount ?? transaction.settled_amount) != null &&
                     (transaction.posted_amount ?? transaction.settled_amount)! > 0 ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Amount credited</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.amountCredited}</Text>
                         <Text style={styles.summaryValue}>
                           {formatAmount(
                             transaction.posted_amount ?? transaction.settled_amount!,
@@ -1069,7 +1070,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     )}
                     {transaction.settled_amount != null && transaction.settled_amount > 0 && (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Amount credited</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.amountCredited}</Text>
                         <Text style={styles.summaryValue}>
                           {formatAmount(
                             transaction.settled_amount,
@@ -1081,7 +1082,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     )}
                     {transaction.source_payment_rail && (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Scheme</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.scheme}</Text>
                         <Text style={styles.summaryValue}>
                           {formatScheme(transaction, transaction.source_payment_rail)}
                         </Text>
@@ -1089,7 +1090,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     )}
                     {transaction.reference && (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Narration</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.narration}</Text>
                         <Text style={styles.summaryValue}>{transaction.reference}</Text>
                       </View>
                     )}
@@ -1114,7 +1115,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
                     {/* Scheme - always show "USDC on SOL" or "EURC on SOL" */}
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Scheme</Text>
+                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.scheme}</Text>
                       <Text style={styles.summaryValue}>
                         {formatScheme(transaction, transaction.source_payment_rail || 'solana')}
                       </Text>
@@ -1122,14 +1123,14 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
                     {transaction.sender_display_name ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Sender</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.sender}</Text>
                         <Text style={styles.summaryValue}>{transaction.sender_display_name}</Text>
                       </View>
                     ) : null}
 
                     {transaction.fee_amount != null && transaction.fee_amount > 0 ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Processing fee</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.processingFee}</Text>
                         <Text style={styles.summaryValue}>
                           {formatAmount(transaction.fee_amount, transaction.currency, false)}
                         </Text>
@@ -1139,7 +1140,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     {(transaction.posted_amount ?? transaction.settled_amount) != null &&
                     (transaction.posted_amount ?? transaction.settled_amount)! > 0 ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Amount credited</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.amountCredited}</Text>
                         <Text style={styles.summaryValue}>
                           {formatAmount(
                             transaction.posted_amount ?? transaction.settled_amount!,
@@ -1164,7 +1165,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 {isGlobalPayoutSend && transaction.payout_review ? (
                   <>
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Sent</Text>
+                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.sent}</Text>
                       <Text style={styles.summaryValue}>
                         {formatMoneyDisplay(
                           transaction.payout_review.you_send_amount,
@@ -1174,7 +1175,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     </View>
                     {showPayoutProcessingFee ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Processing fee</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.processingFee}</Text>
                         <Text style={styles.summaryValue}>
                           {formatMoneyDisplay(
                             payoutDisplayProcessingFee,
@@ -1185,7 +1186,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     ) : null}
                     {payoutReviewHasFx ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Exchange rate</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.exchangeRate}</Text>
                         <Text style={styles.summaryValue}>
                           {formatSendRateLabel(
                             transaction.payout_review!.send_currency,
@@ -1196,7 +1197,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       </View>
                     ) : null}
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Total debited</Text>
+                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.totalDebited}</Text>
                       <Text style={styles.summaryValue}>
                         {formatMoneyDisplay(
                           transaction.payout_review.total_debited,
@@ -1206,7 +1207,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     </View>
                     {transaction.recipient_snapshot ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Recipient</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.recipient}</Text>
                         <View style={{ flex: 1, alignItems: 'flex-end' }}>
                           <Text style={styles.summaryValue}>
                             {transaction.recipient_snapshot.full_name}
@@ -1240,7 +1241,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       </View>
                     ) : isWalletSendReview ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Recipient</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.recipient}</Text>
                         <View style={{ flex: 1, alignItems: 'flex-end' }}>
                           <Text style={styles.summaryValue}>
                             {String(
@@ -1277,7 +1278,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       </View>
                     ) : null}
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Transfer method</Text>
+                      <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.transferMethod}</Text>
                       <Text style={styles.summaryValue}>
                         {normalizeTransferMethodLabel(transaction.payout_review.transfer_method)}
                       </Text>
@@ -1313,7 +1314,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
                     {transaction.source_payment_rail && (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Scheme</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.scheme}</Text>
                         <Text style={styles.summaryValue}>
                           {formatScheme(transaction, transaction.source_payment_rail)}
                         </Text>
@@ -1322,7 +1323,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
                     {transaction.recipient_name && (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Recipient</Text>
+                        <Text style={styles.summaryLabel}>{REVIEW_ROW_LABELS.recipient}</Text>
                         <Text style={styles.summaryValue}>{transaction.recipient_name}</Text>
                       </View>
                     )}

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, isVaAnswerSettled, shouldShowBankDepositTab, resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType } from '@easner/shared'
+import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, type NgLocalIdType } from '@easner/shared'
 import {
   View,
   Text,
@@ -51,6 +51,12 @@ import { NgLocalVerificationNotice } from '../../components/compliance/NgLocalVe
 import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { ReceiveLocalRailCard } from '../../components/receive/ReceiveLocalRailCard'
+import {
+  prefetchNgLocalVerification,
+  readCachedNgLocalMissingType,
+  resolveWarmYcLocalDepositCorridor,
+  warmYcLocalDepositCaches,
+} from '../../lib/warmYcLocalDepositCaches'
 
 type TabType = 'bank' | 'local' | 'stablecoin'
 
@@ -167,6 +173,16 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const residenceCountry = String(userProfile?.residence_country ?? '').trim().toUpperCase()
 
+  useFocusEffect(
+    React.useCallback(() => {
+      const corridor = resolveWarmYcLocalDepositCorridor(userProfile, {
+        kycApproved: verificationComplete,
+      })
+      if (!corridor) return
+      void warmYcLocalDepositCaches(corridor)
+    }, [userProfile, verificationComplete]),
+  )
+
   const { rails: receiveRails, loading: receiveRailsLoading } = useYcReceiveRails({
     country: residenceCountry || null,
     currency: localPayInCurrency,
@@ -202,29 +218,14 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       setNgMissingType(null)
       return
     }
+    const cachedMissing = readCachedNgLocalMissingType(residenceCountry)
+    if (cachedMissing !== undefined) {
+      setNgMissingType(cachedMissing)
+    }
     let cancelled = false
     void (async () => {
-      try {
-        const res = await apiGet('/api/compliance/ng-local-verification')
-        const data = (await res.json().catch(() => ({}))) as {
-          residenceCountry?: string | null
-          kycIdType?: string | null
-          kycIdNumber?: string | null
-          ngLocalIdType?: string | null
-          ngLocalIdNumber?: string | null
-        }
-        if (cancelled || !res.ok) return
-        const state = resolveNgLocalVerification({
-          residenceCountry: data.residenceCountry ?? residenceCountry,
-          kycIdType: data.kycIdType,
-          kycIdNumber: data.kycIdNumber,
-          ngLocalIdType: data.ngLocalIdType,
-          ngLocalIdNumber: data.ngLocalIdNumber,
-        })
-        setNgMissingType(state.missingType)
-      } catch {
-        // ignore
-      }
+      const missingType = await prefetchNgLocalVerification(residenceCountry)
+      if (!cancelled) setNgMissingType(missingType)
     })()
     return () => {
       cancelled = true

@@ -13,6 +13,10 @@ import { prefetchReceiveDepositQueries } from '../hooks/queries/use-receive-depo
 import { prefetchRecipientsList, RECIPIENTS_STALE_MS } from '../hooks/queries/use-recipients'
 import { warmSendRateCachesFromRecipients } from '../lib/warmSendRateCaches'
 import { recipientService } from '../lib/recipientService'
+import {
+  resolveWarmYcLocalDepositCorridor,
+  warmYcLocalDepositCaches,
+} from '../lib/warmYcLocalDepositCaches'
 
 /**
  * Root Query provider for the mobile app. Owns:
@@ -80,6 +84,17 @@ function AuthGatedCacheReset({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function WarmYcLocalDepositCachesOnScope({ children }: { children: React.ReactNode }) {
+  const { userProfile, loading: authLoading } = useAuth()
+  React.useEffect(() => {
+    if (authLoading) return
+    const corridor = resolveWarmYcLocalDepositCorridor(userProfile)
+    if (!corridor) return
+    void warmYcLocalDepositCaches(corridor)
+  }, [userProfile?.residence_country, userProfile?.noah_kyc_status, authLoading])
+  return <>{children}</>
+}
+
 /**
  * As soon as personal scope exists (signed-in user), warm caches for screens that should feel instant:
  * Receive deposit lines + recipient list (both rarely change; recipients also persist to disk).
@@ -87,8 +102,9 @@ function AuthGatedCacheReset({ children }: { children: React.ReactNode }) {
  */
 function WarmOperationalCachesOnScope({ children }: { children: React.ReactNode }) {
   const { scope, isReady } = useScope()
+  const { loading: authLoading } = useAuth()
   React.useEffect(() => {
-    if (!isReady || !scope) return
+    if (!isReady || !scope || authLoading) return
     void prefetchReceiveDepositQueries(qc, scope)
     void prefetchRecipientsList(qc, scope)
     // Warm Noah + crypto send rates for each recipient corridor (same DB rows as quote).
@@ -104,7 +120,7 @@ function WarmOperationalCachesOnScope({ children }: { children: React.ReactNode 
         // Best-effort; SendAmount hooks refetch if cache miss.
       }
     })()
-  }, [isReady, scope])
+  }, [isReady, scope, authLoading])
   return <>{children}</>
 }
 
@@ -175,7 +191,9 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       <AuthGatedCacheReset>
         <PersonalScopeProvider>
           <WarmOperationalCachesOnScope>
-            <ScopeRealtimeBridge>{children}</ScopeRealtimeBridge>
+            <WarmYcLocalDepositCachesOnScope>
+              <ScopeRealtimeBridge>{children}</ScopeRealtimeBridge>
+            </WarmYcLocalDepositCachesOnScope>
           </WarmOperationalCachesOnScope>
         </PersonalScopeProvider>
       </AuthGatedCacheReset>

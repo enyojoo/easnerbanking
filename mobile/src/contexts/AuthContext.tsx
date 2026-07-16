@@ -10,7 +10,7 @@ import * as WebBrowser from 'expo-web-browser'
 import * as AppleAuthentication from 'expo-apple-authentication'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase, clearInvalidPersistedAuthSession } from '../lib/supabase'
-import { getSessionReliable } from '../lib/authSession'
+import { getSessionReliable, setAuthSessionCache, clearAuthSessionCache } from '../lib/authSession'
 import { User, AuthUser } from '../types'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { analytics } from '../lib/analytics'
@@ -667,6 +667,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const {
           data: { session },
         } = await supabase.auth.getSession()
+        setAuthSessionCache(session)
 
         if (mounted && clearedIncompleteMfa) {
           clearSessionUserHydrated()
@@ -731,6 +732,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
+      setAuthSessionCache(session)
 
       if (__DEV__) {
         console.log('AuthContext: Auth state change:', event, session?.user?.id)
@@ -1178,6 +1180,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false) // Also set loading to false to ensure AppNavigator doesn't wait
 
       await clearJurisdictionCountryPolicyCache()
+      clearAuthSessionCache()
 
       // Sign out from Supabase (this will trigger onAuthStateChange which also sets user to null)
       // Do this AFTER setting user to null so navigation happens first

@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { formatMoneyDisplay, formatSendRateLabel } from '@easner/shared'
+import { formatMoneyDisplay, formatSendRateLabel, REVIEW_ROW_LABELS } from '@easner/shared'
 import type { Recipient } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -123,28 +123,27 @@ export function YcCrossBorderSendConfirm({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {displayId ? <Row label="Transaction ID" value={displayId} /> : null}
+          {displayId ? <Row label={REVIEW_ROW_LABELS.transactionId} value={displayId} /> : null}
           {!quoteReady && !quoteError ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : (
             <>
-              <Row label="You pay" value={formatMoneyDisplay(youSend, payInCurrency)} />
+              <Row label={REVIEW_ROW_LABELS.amountToPay} value={formatMoneyDisplay(youSend, payInCurrency)} />
               {processingFee > 0 ? (
-                <Row label="Processing fee" value={formatMoneyDisplay(processingFee, payInCurrency)} />
+                <Row label={REVIEW_ROW_LABELS.processingFee} value={formatMoneyDisplay(processingFee, payInCurrency)} />
               ) : null}
               {customerRate > 0 ? (
                 <Row
-                  label="Exchange rate"
+                  label={REVIEW_ROW_LABELS.exchangeRate}
                   value={formatSendRateLabel(payInCurrency, receiveCurrency, customerRate)}
                 />
               ) : null}
-              <Row label="Total" value={formatMoneyDisplay(youSend, payInCurrency)} bold />
-              <Row label="Recipient gets" value={formatMoneyDisplay(receiveAmount, receiveCurrency)} />
+              <Row label={REVIEW_ROW_LABELS.recipientGets} value={formatMoneyDisplay(receiveAmount, receiveCurrency)} bold />
               <View style={styles.recipientRow}>
-                <Text style={styles.rowLabel}>Recipient</Text>
+                <Text style={styles.rowLabel}>{REVIEW_ROW_LABELS.recipient}</Text>
                 <SendSelectedRecipientSummary recipient={recipient} alignEnd />
               </View>
-              <Row label="Transfer method" value={transferMethod} />
+              <Row label={REVIEW_ROW_LABELS.transferMethod} value={transferMethod} />
             </>
           )}
           {quoteError ? <Text style={styles.error}>{quoteError}</Text> : null}

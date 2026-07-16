@@ -530,6 +530,14 @@ export {
   ycPayInSendingExactlyCopy,
 } from "./yc-pay-in-copy"
 export {
+  REVIEW_ROW_LABELS,
+  reviewPrimaryAmountLabel,
+  shouldShowReviewTotalDebited,
+  type ReviewFlowKind,
+  type ReviewPhase,
+  type ReviewRowLabel,
+} from "./review-row-labels"
+export {
   formatYcPayInMinHint,
   parseYcChannelPayInLimits,
   parseYcReceiveRejectedMinError,
