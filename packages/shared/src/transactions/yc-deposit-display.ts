@@ -193,7 +193,7 @@ export function resolveYcFundBalanceLocalPayInBreakdownForDisplay(input: {
       local_currency: input.localCurrency,
       usd_credit: input.usdCredit,
       exchange_rate: input.exchangeRate,
-      display_processing_fee_local: input.displayProcessingFeeLocal,
+      display_processing_fee_local: input.displayProcessingFeeLocal ?? undefined,
       processing_fee: input.processingFee ?? 0,
       exchange_fee: input.exchangeFee ?? 0,
     }),
