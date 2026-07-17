@@ -15,6 +15,7 @@ import {
   type TransactionTimingRow,
 } from "@easner/shared"
 import { extractNoahGlobalPayoutPayOutEnrichment } from "@/lib/noah/global-payout-ledger"
+import { resolveLedgerWhenAtFromRow } from "@/lib/ledger/ledger-occurred-at"
 import { normalizePayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
 import type { GlobalPayoutWebhookTimestamps } from "@/lib/noah/global-payout-webhook-timestamps"
 
@@ -272,9 +273,10 @@ function derivePayoutReview(
     fromMeta?.transfer_method ||
     getGlobalPayoutTransferMethod({
       currency: receiveCurrency,
-      countryCode: meta.country_code,
-      bankName: meta.bank_name,
-      mobileProvider: meta.mobile_provider,
+      countryCode: meta.country_code != null ? String(meta.country_code) : null,
+      bankName: meta.bank_name != null ? String(meta.bank_name) : null,
+      mobileProvider:
+        meta.mobile_provider != null ? String(meta.mobile_provider) : null,
     })
 
   return {
@@ -437,7 +439,7 @@ export function resolveGlobalPayoutOffRampDetail(
     completedAt,
     failedAt,
     transactionStartedAt,
-    ledgerCreatedAt: row.created_at != null ? String(row.created_at) : null,
+    ledgerCreatedAt: resolveLedgerWhenAtFromRow(row),
     transactionTiming,
     easnerPayoutId,
   }

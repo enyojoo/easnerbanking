@@ -9,6 +9,7 @@ import {
 describe("ledger list cursor", () => {
   it("round-trips cursor encoding", () => {
     const cursor = {
+      occurred_at: "2025-01-15T12:00:00.000Z",
       created_at: "2025-01-15T12:00:00.000Z",
       id: "tx-1",
     }
@@ -18,8 +19,8 @@ describe("ledger list cursor", () => {
 
   it("builds next cursor when more rows exist", () => {
     const rows = [
-      { id: "a", created_at: "2025-01-02T00:00:00.000Z" },
-      { id: "b", created_at: "2025-01-01T00:00:00.000Z" },
+      { id: "a", occurred_at: "2025-01-02T00:00:00.000Z", created_at: "2025-01-02T00:00:00.000Z" },
+      { id: "b", occurred_at: "2025-01-01T00:00:00.000Z", created_at: "2025-01-01T00:00:00.000Z" },
     ]
     const { visible, nextCursor } = buildNextLedgerListCursor(rows, 1)
     expect(visible).toHaveLength(1)
@@ -28,7 +29,7 @@ describe("ledger list cursor", () => {
   })
 
   it("returns null next cursor on final page", () => {
-    const rows = [{ id: "a", created_at: "2025-01-01T00:00:00.000Z" }]
+    const rows = [{ id: "a", occurred_at: null, created_at: "2025-01-01T00:00:00.000Z" }]
     const { nextCursor } = buildNextLedgerListCursor(rows, 50)
     expect(nextCursor).toBeNull()
   })

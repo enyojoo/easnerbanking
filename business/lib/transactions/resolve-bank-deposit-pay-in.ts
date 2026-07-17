@@ -28,6 +28,7 @@ import {
 } from "@/lib/noah/bank-onramp-tx"
 import type { BankOnrampOrchestrationOutTimestamps } from "@/lib/noah/bank-onramp-orchestration-out-webhook-timestamps"
 import type { FiatDepositWebhookTimestamps } from "@/lib/noah/fiat-deposit-webhook-timestamps"
+import { resolveLedgerWhenAtFromRow } from "@/lib/ledger/ledger-occurred-at"
 
 export type BankDepositPayInWebhookContext = {
   fiatDeposit?: FiatDepositWebhookTimestamps | null
@@ -214,7 +215,7 @@ export function resolveBankDepositPayInDetail(
       processingAt,
       completedAt,
       transactionStartedAt: processingAt,
-      ledgerCreatedAt: row.created_at != null ? String(row.created_at) : null,
+      ledgerCreatedAt: resolveLedgerWhenAtFromRow(row),
       transactionTiming,
       fiatDepositId: meta.yc_sequence_id != null ? String(meta.yc_sequence_id) : null,
       depositReview,
@@ -430,7 +431,7 @@ export function resolveBankDepositPayInDetail(
     processingAt,
     completedAt,
     transactionStartedAt: processingAt,
-    ledgerCreatedAt: row.created_at != null ? String(row.created_at) : null,
+    ledgerCreatedAt: resolveLedgerWhenAtFromRow(row),
     transactionTiming,
     fiatDepositId,
   }

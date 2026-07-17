@@ -45,6 +45,9 @@ export interface Transaction {
   amount: number
   baseAmount?: number
   baseCurrency?: string
+  /** Value that entered or left the Easner account before reporting-base conversion. */
+  accountImpactAmount?: number
+  accountImpactCurrency?: string
   description: string
   date: string
   status: "completed" | "pending" | "processing" | "failed"

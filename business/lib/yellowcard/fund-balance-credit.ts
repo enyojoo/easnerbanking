@@ -11,6 +11,7 @@ import {
   mergeYcFundBalanceLifecycle,
 } from "@/lib/yellowcard/yc-ledger"
 import { resolveLedgerOccurredAt } from "@/lib/ledger/ledger-occurred-at"
+import { buildWalletReportingSnapshot } from "@/lib/transactions/reporting-snapshot"
 
 function asMeta(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
@@ -155,6 +156,11 @@ export async function creditFundBalanceFromYcReceive(
         metadata: {
           ...prior,
           ...lifecycleMeta,
+          ...buildWalletReportingSnapshot({
+            amount: creditAmt,
+            currency: "USD",
+            fxRates: [],
+          }),
           wallet_balance_credit_key: creditKey,
           balance_delta_applied: true,
           ...(input.omnibusTxHash ? { yc_omnibus_tx_hash: input.omnibusTxHash } : {}),
@@ -175,6 +181,11 @@ export async function creditFundBalanceFromYcReceive(
       payload: input.payload,
       metadata: {
         ...lifecycleMeta,
+        ...buildWalletReportingSnapshot({
+          amount: creditAmt,
+          currency: "USD",
+          fxRates: [],
+        }),
         wallet_balance_credit_key: creditKey,
         balance_delta_applied: true,
       },

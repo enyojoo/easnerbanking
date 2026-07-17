@@ -220,6 +220,8 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.currency).toBe("NGN")
     expect(item.ledger_amount).toBe(25)
     expect(item.ledger_currency).toBe("USD")
+    expect(item.account_impact_amount).toBe(25)
+    expect(item.account_impact_currency).toBe("USD")
     expect(item.display_description).toBe("Jane Doe")
   })
 
@@ -250,6 +252,8 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.transaction_product).toBe("Stablecoin Transfer")
     expect(item.ledger_amount).toBe(1.01)
     expect(item.ledger_currency).toBe("USD")
+    expect(item.account_impact_amount).toBe(1.01)
+    expect(item.account_impact_currency).toBe("USD")
     expect(item.display_hero_title).toBe("Transfer to External Wallet")
   })
 

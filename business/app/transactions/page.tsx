@@ -30,6 +30,7 @@ import {
   hasHistoricalBaseCurrencyMismatch,
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
+import { resolveReportingAmountForFeed } from "@easner/shared"
 
 function exportToCsv(
   transactions: {
@@ -134,38 +135,15 @@ export default function TransactionsPage() {
   const hasMoreLocal = displayCount < filteredTransactions.length
   const hasMore = hasMoreLocal || Boolean(hasNextPage)
 
-  const getFxRate = (from: string, to: string): number | null => {
-    const f = from.toUpperCase()
-    const t = to.toUpperCase()
-    if (f === t) return 1
-    const direct = fxRates.find((r) => r.from_currency === f && r.to_currency === t)?.rate
-    if (direct && Number.isFinite(direct) && direct > 0) return direct
-    const inverse = fxRates.find((r) => r.from_currency === t && r.to_currency === f)?.rate
-    if (inverse && Number.isFinite(inverse) && inverse > 0) return 1 / inverse
-    return null
-  }
+  const reportingFor = (t: TransactionWithSource) =>
+    resolveReportingAmountForFeed(
+      t as unknown as Record<string, unknown>,
+      baseCurrencyCode,
+      fxRates,
+    )
 
-  const amountInBase = (t: TransactionWithSource): number => {
-    if (
-      typeof t.ledgerAmount === "number" &&
-      Number.isFinite(t.ledgerAmount) &&
-      String(t.ledgerCurrency || t.baseCurrency || "").toUpperCase() === baseCurrencyCode
-    ) {
-      return Math.abs(t.ledgerAmount)
-    }
-    if (
-      typeof t.baseAmount === "number" &&
-      Number.isFinite(t.baseAmount) &&
-      String(t.baseCurrency || "").toUpperCase() === baseCurrencyCode
-    ) {
-      return Math.abs(t.baseAmount)
-    }
-    const fromCurrency = String(t.displayCurrency || "USD").toUpperCase()
-    if (fromCurrency === baseCurrencyCode) return Math.abs(t.amount)
-    const rate = getFxRate(fromCurrency, baseCurrencyCode)
-    if (!rate) return Math.abs(t.amount)
-    return Math.abs(t.amount) * rate
-  }
+  const amountInBase = (t: TransactionWithSource): number =>
+    Math.abs(reportingFor(t)?.reportingAmount ?? 0)
 
   const totalCredit = filteredTransactions
     .filter((t) => t.direction === "credit")
@@ -315,7 +293,8 @@ export default function TransactionsPage() {
           : <>
               <div className="divide-y">
                 {displayedTransactions.map((txn) => {
-                  const cur = txn.displayCurrency || "USD"
+                  const reporting = reportingFor(txn)
+                  const cur = reporting?.reportingCurrency ?? baseCurrencyCode
                   const statusRow = transactionStatusRowPresentation(txn.status)
                   return (
                     <TransactionDetailPrefetchLink
@@ -344,7 +323,9 @@ export default function TransactionsPage() {
                           className={`text-sm font-semibold tabular-nums ${txn.direction === "credit" ? "text-primary" : "text-foreground"}`}
                         >
                           {txn.direction === "credit" ? "+" : "-"}
-                          {formatCurrency(Math.abs(txn.amount), cur)}
+                          {reporting
+                            ? formatCurrency(Math.abs(reporting.reportingAmount), cur)
+                            : "—"}
                         </p>
                         <p className={`text-xs font-medium ${statusRow.className}`}>{statusRow.label}</p>
                       </div>

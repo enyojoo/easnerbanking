@@ -20,6 +20,7 @@ export { usePaymentMethodsList } from './use-payment-methods'
 export { useCommunicationPreferences } from './use-communication-preferences'
 export { useCurrenciesCatalog } from './use-currencies'
 export { useExchangeRatesList } from './use-exchange-rates'
+export { useReportingFxRates } from './use-reporting-fx-rates'
 export { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from './use-noah-send-exchange-rates'
 export { useYcSendExchangeRates, prefetchYcSendExchangeRates } from './use-yc-send-exchange-rates'
 export {

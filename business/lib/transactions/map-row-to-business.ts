@@ -18,6 +18,8 @@ import {
   resolveNoahVaFundingDepositTitleFromMeta,
   resolveInboundReceiveDetail,
   resolvePayoutReviewFlow,
+  resolveLedgerWhenAt,
+  resolveAccountImpactAmount,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
@@ -130,7 +132,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const globalPayout = globalPayoutDetail ?? globalPayoutList
   const bankLabel =
     !isVerification && !isYcFundBalance && !globalPayout && (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
-      ? deriveBankDepositInboundDisplayLabel({ metadata: meta, payload: payload ?? undefined })
+      ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
       : undefined
   const counterpartyNameRaw = deriveCounterpartyName({ metadata: meta, payload })
   const walletSendDisplay = walletSendPayoutReview
@@ -165,6 +167,15 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       }
     : null
   const displaySource = globalPayout ?? walletSendDisplay ?? walletSendListDisplay
+  const accountImpact = resolveAccountImpactAmount({
+    ...row,
+    ...(displaySource
+      ? {
+          ledger_amount: displaySource.ledgerAmount,
+          ledger_currency: displaySource.ledgerCurrency,
+        }
+      : {}),
+  })
   const description =
     displaySource?.displayDescription ??
     ycDepositTitle ??
@@ -177,10 +188,12 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     })
 
   const ledgerCreatedAt =
-    row.created_at != null ? String(row.created_at) : undefined
+    resolveLedgerWhenAt({
+      occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
+      createdAt: row.created_at != null ? String(row.created_at) : null,
+    }) ?? undefined
 
-  const created =
-    row.created_at != null ? String(row.created_at) : new Date().toISOString()
+  const created = ledgerCreatedAt ?? new Date().toISOString()
 
   const currencyCode = displaySource
     ? displaySource.displayCurrency
@@ -255,8 +268,8 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const inboundReceive =
     dirRaw === "in"
       ? resolveInboundReceiveDetail({
-          provider: row.provider,
-          direction: row.direction,
+          provider: row.provider != null ? String(row.provider) : null,
+          direction: row.direction != null ? String(row.direction) : null,
           metadata: meta,
           payload: payload ?? null,
           source_type: meta?.source_type != null ? String(meta.source_type) : undefined,
@@ -282,6 +295,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             typeof row.settled_amount === "number" ? row.settled_amount : Number(row.settled_amount) || null,
           settled_currency: row.settled_currency != null ? String(row.settled_currency) : undefined,
           created_at: row.created_at != null ? String(row.created_at) : undefined,
+          occurred_at: row.occurred_at != null ? String(row.occurred_at) : undefined,
           ledger_created_at:
             bankDepositDetail?.ledgerCreatedAt ??
             stablecoinDepositDetail?.ledgerCreatedAt ??
@@ -296,6 +310,12 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     id: easnerId,
     type,
     amount: listAmount,
+    ...(accountImpact
+      ? {
+          accountImpactAmount: accountImpact.amount,
+          accountImpactCurrency: accountImpact.currency,
+        }
+      : {}),
     displayCurrency: currencyCode,
     description,
     date: created,

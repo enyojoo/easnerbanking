@@ -25,6 +25,7 @@ import {
   isEasnerProductReceiveTitle,
   toEasnerTransactionPrimaryLabel,
 } from "./product-label"
+import { resolveLedgerWhenAt } from "./transaction-timing-display"
 import {
   isYcFundBalanceDepositMetadata,
   resolveYcFundBalanceDepositDisplayTitle,
@@ -33,7 +34,7 @@ import {
   isVerificationDepositMetadata,
   VERIFICATION_DEPOSIT_LIST_LABEL,
 } from "./verification-deposit"
-import { resolveLedgerUserFacingCreatedAt } from "./ledger-display-time"
+import { resolveAccountImpactAmount } from "./account-impact-reporting"
 
 // ---------------------------------------------------------------------------
 // Display id helpers (pure — no generation dependency)
@@ -271,9 +272,11 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
   const dirRaw = String(row.direction ?? "").toLowerCase()
   const transaction_type = dirRaw === "in" ? "receive" : "send"
   const st = mapLedgerStatusForUserFeed(String(row.status ?? ""))
-  const created = resolveLedgerUserFacingCreatedAt({
-    createdAt: row.created_at != null ? String(row.created_at) : null,
-  })
+  const created =
+    resolveLedgerWhenAt({
+      occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
+      createdAt: row.created_at != null ? String(row.created_at) : null,
+    }) ?? new Date().toISOString()
 
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
   const meta = row.metadata as Record<string, unknown> | null | undefined
@@ -313,6 +316,15 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
   const displayAmount = payoutDisplay?.displayAmount ?? amount
   const displayCurrency = payoutDisplay?.displayCurrency ?? currency
   const displayName = payoutDisplay?.displayDescription ?? name
+  const accountImpact = resolveAccountImpactAmount({
+    ...row,
+    ...(payoutDisplay
+      ? {
+          ledger_amount: payoutDisplay.ledgerAmount,
+          ledger_currency: payoutDisplay.ledgerCurrency,
+        }
+      : {}),
+  })
 
   const listSenderName =
     !isVerification && bankLabel && !isEasnerProductReceiveTitle(bankLabel) ? bankLabel : undefined
@@ -330,6 +342,12 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
     display_amount: displayAmount,
     display_currency: displayCurrency,
     display_description: displayName,
+    ...(accountImpact
+      ? {
+          account_impact_amount: accountImpact.amount,
+          account_impact_currency: accountImpact.currency,
+        }
+      : {}),
     ...(payoutDisplay
       ? {
           ledger_amount: payoutDisplay.ledgerAmount,

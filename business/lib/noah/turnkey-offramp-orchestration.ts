@@ -118,11 +118,21 @@ async function markGlobalPayoutExecuteFailed(
     extraMetadata?: Record<string, unknown>
   },
 ): Promise<void> {
+  const { data: current } = await admin
+    .from("transactions")
+    .select("metadata")
+    .eq("provider", "noah")
+    .eq(
+      "provider_transaction_id",
+      pendingGlobalPayoutProviderTransactionId(input.easnerPayoutId),
+    )
+    .maybeSingle()
   await admin
     .from("transactions")
     .update({
       status: "failed",
       metadata: {
+        ...((current?.metadata as Record<string, unknown> | null) ?? {}),
         ...input.pendingMetadata,
         failure_reason: input.detail,
         ...input.extraMetadata,
@@ -421,10 +431,20 @@ export async function executeTurnkeyOfframpPayout(
     turnkeySendId = send.providerTransactionId
     turnkeySendStatus = send.status
 
+    const { data: current } = await admin
+      .from("transactions")
+      .select("metadata")
+      .eq("provider", "noah")
+      .eq(
+        "provider_transaction_id",
+        pendingProviderTransactionId(easnerPayoutId),
+      )
+      .maybeSingle()
     await admin
       .from("transactions")
       .update({
         metadata: {
+          ...((current?.metadata as Record<string, unknown> | null) ?? {}),
           ...pendingMetadata,
           turnkey_send_id: send.providerTransactionId,
           turnkey_tx_hash: send.txHash,

@@ -543,13 +543,13 @@ export {
   formatTransactionDetailHeroTitle,
 } from "./transactions/transaction-detail-hero-title"
 export type { TransactionDetailHeroTitleInput } from "./transactions/transaction-detail-hero-title"
-export { resolveLedgerUserFacingCreatedAt } from "./transactions/ledger-display-time"
 export {
   appendLifecycleDuration,
   buildTransactionTimingRows,
   formatTransactionDurationMs,
   resolveTransactionTimingAnchors,
   resolveTransactionWhenAt,
+  resolveLedgerWhenAt,
   type TransactionTimingStartAnchor,
 } from "./transactions/transaction-timing-display"
 export type {
@@ -557,6 +557,18 @@ export type {
   ResolveTransactionTimingAnchorsInput,
   TransactionTimingRow,
 } from "./transactions/transaction-timing-display"
+export {
+  convertWalletToReportingBase,
+  findReportingFxRate,
+  normalizeWalletReportingCurrency,
+  resolveAccountImpactAmount,
+  resolveReportingAmountForFeed,
+} from "./transactions/account-impact-reporting"
+export type {
+  AccountImpactAmount,
+  ReportingAmount,
+  ReportingFxRate,
+} from "./transactions/account-impact-reporting"
 export { formatDisplayPersonName } from "./format-display-name"
 export {
   buildVerifiedIdentityFromKycFields,

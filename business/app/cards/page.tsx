@@ -13,9 +13,14 @@ import { CardDetailsDialog } from "@/components/card-details-dialog"
 import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter"
 import { formatCurrency } from "@/lib/utils"
 import type { Card } from "@/lib/finance-types"
+import { useBusinessProfile } from "@/lib/use-business-profile"
+import { useFxRates } from "@/hooks/queries"
+import { resolveReportingAmountForFeed } from "@easner/shared"
 
 export default function CardsPage() {
   const { data: rows, loading: listLoading } = useTransactionsCached()
+  const { baseCurrency } = useBusinessProfile()
+  const { data: fxRates = [] } = useFxRates()
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -137,7 +142,12 @@ export default function CardsPage() {
                   No card transactions in this period.
                 </div>
               : filteredTransactions.map((transaction) => {
-                  const cur = transaction.displayCurrency || "USD"
+                  const reporting = resolveReportingAmountForFeed(
+                    transaction as unknown as Record<string, unknown>,
+                    baseCurrency || "USD",
+                    fxRates,
+                  )
+                  const cur = reporting?.reportingCurrency ?? baseCurrency ?? "USD"
                   return (
                     <TransactionDetailPrefetchLink
                       key={transaction.id}
@@ -172,7 +182,9 @@ export default function CardsPage() {
                         }`}
                       >
                         {transaction.direction === "credit" ? "+" : "-"}
-                        {formatCurrency(Math.abs(transaction.amount), cur)}
+                        {reporting
+                          ? formatCurrency(Math.abs(reporting.reportingAmount), cur)
+                          : "—"}
                       </p>
                     </TransactionDetailPrefetchLink>
                   )

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   buildTransactionTimingRows,
   formatTransactionDurationMs,
+  resolveLedgerWhenAt,
   resolveTransactionTimingAnchors,
   resolveTransactionWhenAt,
 } from "./transaction-timing-display"
@@ -15,6 +16,26 @@ describe("formatTransactionDurationMs", () => {
   it("formats minutes and hours with approximate prefix for hours", () => {
     expect(formatTransactionDurationMs(120_000)).toBe("2 minutes")
     expect(formatTransactionDurationMs(3_600_000)).toBe("~1 hour")
+  })
+})
+
+describe("resolveLedgerWhenAt", () => {
+  it("prefers occurred_at over created_at", () => {
+    expect(
+      resolveLedgerWhenAt({
+        occurredAt: "2026-06-01T15:00:00.000Z",
+        createdAt: "2026-06-01T14:00:00.000Z",
+      }),
+    ).toBe("2026-06-01T15:00:00.000Z")
+  })
+
+  it("falls back to created_at when occurred_at is missing", () => {
+    expect(
+      resolveLedgerWhenAt({
+        occurredAt: null,
+        createdAt: "2026-06-01T15:00:00.000Z",
+      }),
+    ).toBe("2026-06-01T15:00:00.000Z")
   })
 })
 

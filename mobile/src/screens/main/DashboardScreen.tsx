@@ -59,7 +59,7 @@ import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/f
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
-import { useTransactionsList, prefetchRecentTransactionDetailsInBackground, prefetchTransactionDetail, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
+import { useReportingFxRates, useTransactionsList, prefetchRecentTransactionDetailsInBackground, prefetchTransactionDetail, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-deposit-queries'
 import {
   resolveWarmYcLocalDepositCorridor,
@@ -68,6 +68,7 @@ import {
 import {
   markRecentMoneyActivity,
   qk,
+  resolveReportingAmountForFeed,
 } from '@easner/shared'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
@@ -95,6 +96,10 @@ interface DashboardTransaction {
   transaction_type?: 'send' | 'receive'
   amount: number
   currency: string
+  account_impact_amount?: number
+  account_impact_currency?: string
+  ledger_amount?: number
+  ledger_currency?: string
   name?: string
   display_description?: string
   status: string
@@ -132,6 +137,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const { scope } = useScope()
   const qc = useQueryClient()
   const txQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
+  const { data: reportingFxRates = [] } = useReportingFxRates()
   const realtimeHealth = useRealtimeHealth()
   const { balances, hasResolvedBalance, hasDefinitiveEmptyBalance, refreshBalances } = useBalance()
   const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD')
@@ -943,7 +949,20 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                           isReceived && styles.transactionAmountReceived,
                         ]}
                       >
-                        {formatAmount(transaction.amount, isReceived, transaction.currency)}
+                        {(() => {
+                          const reporting = resolveReportingAmountForFeed(
+                            transaction as unknown as Record<string, unknown>,
+                            'USD',
+                            reportingFxRates,
+                          )
+                          return reporting
+                            ? formatAmount(
+                                reporting.reportingAmount,
+                                isReceived,
+                                reporting.reportingCurrency,
+                              )
+                            : '—'
+                        })()}
                       </Text>
                       {statusDisplay ? (
                         <Text

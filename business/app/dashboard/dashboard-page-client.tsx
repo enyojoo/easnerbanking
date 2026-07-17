@@ -34,6 +34,7 @@ import {
   hasHistoricalBaseCurrencyMismatch,
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
+import { resolveReportingAmountForFeed } from "@easner/shared"
 
 export function DashboardPageClient() {
   const { data: rows } = useTransactionsCached()
@@ -82,15 +83,12 @@ export function DashboardPageClient() {
   }
 
   const amountInBase = (t: TransactionWithSource, targetBase: string): number => {
-    const absAmount = Math.abs(t.amount)
-    if (
-      typeof t.baseAmount === "number" &&
-      Number.isFinite(t.baseAmount) &&
-      String(t.baseCurrency || "").toUpperCase() === targetBase.toUpperCase()
-    ) {
-      return Math.abs(t.baseAmount)
-    }
-    return toBaseAmount(absAmount, t.displayCurrency || "USD", targetBase)
+    const reporting = resolveReportingAmountForFeed(
+      t as unknown as Record<string, unknown>,
+      targetBase,
+      fxRates,
+    )
+    return Math.abs(reporting?.reportingAmount ?? 0)
   }
 
   const moneyIn = filteredTransactions
@@ -267,7 +265,12 @@ export function DashboardPageClient() {
               <div className="py-8 text-center text-sm text-muted-foreground">No transactions yet</div>
             : <div className="divide-y">
                 {recentTransactions.map((txn) => {
-                  const cur = txn.displayCurrency || "USD"
+                  const reporting = resolveReportingAmountForFeed(
+                    txn as unknown as Record<string, unknown>,
+                    baseCurrency,
+                    fxRates,
+                  )
+                  const cur = reporting?.reportingCurrency ?? baseCurrency
                   const statusRow = transactionStatusRowPresentation(txn.status)
                   return (
                     <div
@@ -299,7 +302,9 @@ export function DashboardPageClient() {
                             className={`text-sm font-semibold tabular-nums ${txn.direction === "credit" ? "text-primary" : "text-foreground"}`}
                           >
                             {txn.direction === "credit" ? "+" : "-"}
-                            {formatCurrency(Math.abs(txn.amount), cur)}
+                            {reporting
+                              ? formatCurrency(Math.abs(reporting.reportingAmount), cur)
+                              : "—"}
                           </p>
                           <p className={`text-xs font-medium ${statusRow.className}`}>{statusRow.label}</p>
                         </div>

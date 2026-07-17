@@ -5,10 +5,10 @@ import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
 import type { Transaction } from "@/lib/finance-types"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Copy, Check, Download, FileText, Activity } from "lucide-react"
 import { downloadTransactionReceiptPdf } from "@/lib/use-transaction-receipt-pdf"
 import { currentLocationPath, withReturnTo } from "@/lib/invoice-navigation"
-import { Card, CardContent } from "@/components/ui/card"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { TransactionLifecycleTracker } from "@/components/transactions/transaction-lifecycle-tracker"
 import { TransactionDetailHero } from "@/components/transactions/transaction-detail-hero"
@@ -22,6 +22,7 @@ import {
   REVIEW_ROW_LABELS,
   computeDisplayProcessingFee,
   isVerificationDepositMetadata,
+  resolveLedgerWhenAt,
   resolvePayoutReviewFlow,
   shouldShowReviewTotalDebited,
   formatReviewRowMoneyDisplay,
@@ -129,6 +130,12 @@ function TransactionSummaryDetails({
     Boolean(transaction.counterpartyName) &&
     (isDeposit || !showLifecycleTracker)
 
+  const whenAt =
+    resolveLedgerWhenAt({
+      occurredAt: transaction.date,
+      createdAt: transaction.ledgerCreatedAt,
+    }) ?? transaction.ledgerCreatedAt ?? transaction.date
+
   return (
     <Card className="border-border shadow-sm">
       <CardContent className="p-6">
@@ -153,7 +160,7 @@ function TransactionSummaryDetails({
 
         <TransactionDetailSummaryRow
           label={REVIEW_ROW_LABELS.when}
-          value={new Date(transaction.ledgerCreatedAt ?? transaction.date).toLocaleDateString("en-US", {
+          value={new Date(whenAt).toLocaleDateString("en-US", {
             year: "numeric",
             month: "long",
             day: "numeric",
@@ -285,6 +292,11 @@ export function TransactionDetailsPanel({
   }
 
   const etidForLink = transactionWebDetailPath(transaction.id)
+  const whenAt =
+    resolveLedgerWhenAt({
+      occurredAt: transaction.date,
+      createdAt: transaction.ledgerCreatedAt,
+    }) ?? transaction.ledgerCreatedAt ?? transaction.date
 
   const tlcDetailFee =
     payoutReviewFlow === "local_pay_in" && transaction.payoutReview
@@ -308,7 +320,7 @@ export function TransactionDetailsPanel({
               payoutReview={transaction.payoutReview}
               recipientSnapshot={transaction.recipientSnapshot}
               displayProcessingFee={tlcDetailFee}
-              whenAt={transaction.ledgerCreatedAt ?? transaction.date}
+              whenAt={whenAt}
             />
           </CardContent>
         </Card>
@@ -341,7 +353,7 @@ export function TransactionDetailsPanel({
               ? transaction.counterpartyAddress ?? transaction.walletAddress
               : undefined
           }
-          whenAt={transaction.ledgerCreatedAt ?? transaction.date}
+          whenAt={whenAt}
           mode="detail"
         />
       ) : transaction.inboundReceive ? (
@@ -359,7 +371,7 @@ export function TransactionDetailsPanel({
           timingRows={transaction.transactionTiming}
           copiedKey={copiedKey}
           onCopy={handleCopy}
-          whenAt={transaction.ledgerCreatedAt ?? transaction.date}
+          whenAt={whenAt}
           mode="detail"
         />
       ) : (

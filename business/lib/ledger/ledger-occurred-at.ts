@@ -1,7 +1,9 @@
 /**
- * List feeds order by `created_at DESC` (ledger insert — when the user initiated / row entered DB).
- * `occurred_at` is provider rail time and may update on webhooks; do not use it for feed sort/display.
+ * List feeds order by `occurred_at DESC NULLS LAST, created_at DESC`.
+ * Rows without occurred_at sink below every dated row — set at insert for pending flows.
  */
+import { resolveLedgerWhenAt } from "@easner/shared"
+
 export function ledgerOccurredAtForNewRow(now: Date = new Date()): string {
   return now.toISOString()
 }
@@ -17,4 +19,15 @@ export function resolveLedgerOccurredAt(input: {
   const created = String(input.createdAt ?? "").trim()
   if (created) return created
   return input.fallback ?? ledgerOccurredAtForNewRow()
+}
+
+/** User-facing "When" from a ledger row — never updated_at / settled_at / webhook times. */
+export function resolveLedgerWhenAtFromRow(row: {
+  occurred_at?: unknown
+  created_at?: unknown
+}): string | null {
+  return resolveLedgerWhenAt({
+    occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
+    createdAt: row.created_at != null ? String(row.created_at) : null,
+  })
 }

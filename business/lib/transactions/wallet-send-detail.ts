@@ -11,6 +11,7 @@ import {
   isWalletSendOutRow,
   resolveWalletSendPayoutReview,
 } from "@/lib/wallet-send/build-wallet-send-payout-review"
+import { resolveLedgerWhenAtFromRow } from "@/lib/ledger/ledger-occurred-at"
 
 export function attachWalletSendDetailFields(
   row: Record<string, unknown>,
@@ -47,7 +48,7 @@ export function attachWalletSendDetailFields(
         ? meta.note.trim()
         : ""
   const ledgerStatus = String(row.status ?? "").trim().toLowerCase()
-  const ledgerCreatedAt = row.created_at != null ? String(row.created_at) : null
+  const ledgerCreatedAt = resolveLedgerWhenAtFromRow(row)
   const timingAnchors = resolveTransactionTimingAnchors({
     createdAt: ledgerCreatedAt,
     metadata: meta,

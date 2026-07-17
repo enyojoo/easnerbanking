@@ -9,6 +9,7 @@ import {
   isTurnkeyEasetagP2pChainMirror,
 } from "@/lib/transactions/transaction-feed-filters"
 import { resolveHiddenFromFeed } from "@/lib/transactions/ledger-list-cursor"
+import { buildWalletReportingSnapshot } from "@/lib/transactions/reporting-snapshot"
 
 export type LedgerDirection = "in" | "out"
 
@@ -161,6 +162,19 @@ export async function upsertLedgerTransaction(
     (existing?.metadata as Record<string, unknown> | undefined) ?? null,
     input.metadata,
   )
+  if (
+    !(Number(mergedMetadata.reporting_usd_amount) > 0) &&
+    mergedMetadata.yc_mode !== "cross_border_send"
+  ) {
+    Object.assign(
+      mergedMetadata,
+      buildWalletReportingSnapshot({
+        amount,
+        currency,
+        fxRates: rates,
+      }),
+    )
+  }
 
   const previousStatus = existing?.status ? String(existing.status) : null
   const isStatusDowngradeFromSettled =

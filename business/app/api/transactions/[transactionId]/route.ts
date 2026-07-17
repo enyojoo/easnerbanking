@@ -40,10 +40,21 @@ import {
   isEasnerProductReceiveTitle,
   toEasnerTransactionPrimaryLabel,
   toEasnerTransactionProductCategory,
+  resolveLedgerWhenAt,
+  resolveAccountImpactAmount,
 } from "@easner/shared"
 import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 import { LEDGER_DETAIL_SELECT } from "@/lib/ledger/ledger-select"
+
+function ledgerWhenAtFromRow(row: Record<string, unknown>): string {
+  return (
+    resolveLedgerWhenAt({
+      occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
+      createdAt: row.created_at != null ? String(row.created_at) : null,
+    }) ?? new Date().toISOString()
+  )
+}
 
 function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, unknown> {
   const dirRaw = String(row.direction ?? "").toLowerCase()
@@ -55,8 +66,7 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     : st === "failed" || st === "cancelled" ? "failed"
     : st === "unknown" ? "pending"
     : st || "unknown"
-  const created =
-    row.created_at != null ? String(row.created_at) : new Date().toISOString()
+  const created = ledgerWhenAtFromRow(row)
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
   const meta = row.metadata as Record<string, unknown> | null | undefined
   const easnerId = displayEasnerTransactionId({
@@ -70,6 +80,7 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const amount = typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
   const currency = String(row.currency ?? "USD")
   const ledger_row_id = ledgerId || undefined
+  const accountImpact = resolveAccountImpactAmount(row)
   const metaForName = row.metadata as Record<string, unknown> | null | undefined
   const payloadForName = row.payload as Record<string, unknown> | null | undefined
   const name =
@@ -91,6 +102,12 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     transaction_type,
     amount,
     currency,
+    ...(accountImpact
+      ? {
+          account_impact_amount: accountImpact.amount,
+          account_impact_currency: accountImpact.currency,
+        }
+      : {}),
     status,
     created_at: created,
     noah_created_at: created,
@@ -114,8 +131,7 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
   const dirRaw = String(row.direction ?? "").toLowerCase()
   const st = String(row.status ?? "").toLowerCase()
   const provider = String(row.provider ?? "noah").toLowerCase()
-  const created =
-    row.created_at != null ? String(row.created_at) : new Date().toISOString()
+  const created = ledgerWhenAtFromRow(row)
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const sourceType =
     isEasetagP2p
@@ -184,7 +200,7 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
         }
       : {}),
     updated_at: row.updated_at != null ? String(row.updated_at) : created,
-    ledger_created_at: row.created_at != null ? String(row.created_at) : created,
+    ledger_created_at: ledgerWhenAtFromRow(row),
     completed_at: row.settled_at != null ? String(row.settled_at) : st === "settled" ? created : undefined,
     tx_hash: row.tx_hash != null ? String(row.tx_hash) : undefined,
     base_amount: typeof row.base_amount === "number" ? row.base_amount : Number(row.base_amount) || undefined,
@@ -342,9 +358,6 @@ export async function GET(request: Request, routeCtx: Props) {
         id: transaction.id,
         transaction_id: transaction.transaction_id,
         ledger_row_id: transaction.ledger_row_id,
-        created_at: transaction.created_at,
-        noah_created_at: transaction.created_at,
-        ledger_created_at: transaction.ledger_created_at,
       },
       meta,
     )

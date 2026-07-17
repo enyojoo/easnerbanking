@@ -26,6 +26,14 @@ export function TransactionDetailHero({ transaction }: Props) {
   const { amount, currency } = resolveTransactionDetailHeroAmount(transaction)
   const amountText = formatMoneyDisplay(amount, currency)
   const signedAmount = `${isCredit ? "+" : "-"}${amountText}`
+  const impactAmount = Number(transaction.accountImpactAmount)
+  const impactCurrency = String(transaction.accountImpactCurrency ?? "").toUpperCase()
+  const showAccountImpact =
+    Number.isFinite(impactAmount) &&
+    impactAmount > 0 &&
+    impactCurrency &&
+    (impactCurrency !== String(currency).toUpperCase() ||
+      Math.abs(impactAmount - amount) > 0.000_001)
 
   return (
     <Card className="border-border shadow-sm">
@@ -45,6 +53,12 @@ export function TransactionDetailHero({ transaction }: Props) {
         >
           {signedAmount}
         </p>
+        {showAccountImpact ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isCredit ? "To" : "From"} your account: {isCredit ? "+" : "-"}
+            {formatMoneyDisplay(impactAmount, impactCurrency)}
+          </p>
+        ) : null}
         <Badge
           variant={
             transaction.status === "completed"

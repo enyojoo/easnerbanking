@@ -6,6 +6,7 @@ import {
   type StablecoinDepositLifecycleStep,
   type TransactionTimingRow,
 } from "@easner/shared"
+import { resolveLedgerWhenAtFromRow } from "@/lib/ledger/ledger-occurred-at"
 
 const CHAIN_ABBREVIATIONS: Record<string, string> = {
   solana: "SOL",
@@ -75,7 +76,7 @@ export function resolveStablecoinDepositPayInDetail(
 
   const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
   const ledgerStatus = String(row.status ?? "")
-  const createdAt = row.created_at != null ? String(row.created_at) : null
+  const createdAt = resolveLedgerWhenAtFromRow(row)
   const settledAt = row.settled_at != null ? String(row.settled_at) : null
 
   const amount =

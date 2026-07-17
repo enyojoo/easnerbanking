@@ -27,6 +27,8 @@ import { readPriorSweepFromMetadata, sweepEasnerRevenueFromDepositOmnibus } from
 import { buildRecipientSnapshotFromRow } from "@/lib/noah/build-payout-execute-snapshot"
 import { buildYcCrossBorderOutMetadata } from "@/lib/yellowcard/yc-ledger"
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
+import { buildYcCrossBorderReportingSnapshot } from "@/lib/transactions/reporting-snapshot"
+import { generateTransactionId } from "@/lib/transaction-id"
 
 async function resolveYcReceiveChannelId(input: {
   countryCode: string
@@ -179,6 +181,7 @@ export async function createCrossBorderTransfer(input: {
   })
 
   const easnerSellFrom = Number(fromLeg?.easner_sell ?? fromLeg?.yc_sell ?? 0)
+  const reportingSourceToUsdRate = Number(fromLeg?.easner_sell ?? 0)
   const sendLeg = {
     cryptoAmountUsd: Number(sendRes.settlementInfo?.cryptoAmount ?? 0),
     networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
@@ -240,12 +243,21 @@ export async function createCrossBorderTransfer(input: {
     },
     sendLeg,
   })
+  const reportingSnapshot = buildYcCrossBorderReportingSnapshot({
+    localPayIn: pricingFinal.localPayIn,
+    payInCurrency,
+    easnerSellFrom: reportingSourceToUsdRate,
+    receiveCryptoUsd: pricingFinal.receiveCryptoUsd,
+    sendCryptoUsd: pricingFinal.sendCryptoUsd,
+  })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const startedAt = new Date().toISOString()
   const easnerTransactionId = generateTransactionId()
   const recipientSnapshot = buildRecipientSnapshotFromRow(input.recipient)
-  const recipientId = String(input.recipient.id ?? "").trim() || null
+  const recipientId =
+    String((input.recipient as RecipientSellPrepareRow & { id?: string }).id ?? "").trim() ||
+    null
   const { data: tx, error: txErr } = await admin
     .from("transactions")
     .insert({
@@ -259,6 +271,7 @@ export async function createCrossBorderTransfer(input: {
       easner_transaction_id: easnerTransactionId,
       occurred_at: startedAt,
       metadata: buildYcCrossBorderOutMetadata({
+        prior: reportingSnapshot,
         sequenceId: leg1Seq,
         localPayIn: pricingFinal.localPayIn,
         receiveAmount: input.receiveAmount,
@@ -300,6 +313,7 @@ export async function createCrossBorderTransfer(input: {
       metadata: {
         processing_fee: pricingFinal.processingFee,
         margin_amount: pricingFinal.marginAmount,
+        ...reportingSnapshot,
         recipient: recipientMapped,
         sender,
       },
@@ -369,6 +383,7 @@ export async function createCrossBorderTransfer(input: {
         display_processing_fee_local: quoteSummary.displayProcessingFeeLocal,
         provisional_pay_in: pricingFinal.provisionalPayIn,
         margin_amount: pricingFinal.marginAmount,
+        ...reportingSnapshot,
         recipient: recipientMapped,
         sender,
         ...(input.sourcePhone
@@ -420,6 +435,7 @@ export async function createCrossBorderTransfer(input: {
         recipient_snapshot: recipientSnapshot,
         payout_review: payoutReview,
         pay_in_review: payInReview,
+        ...reportingSnapshot,
         processing_at: startedAt,
         transaction_started_at: startedAt,
         leg1_status: receiveRes.status ?? "pending",
@@ -573,7 +589,7 @@ export async function createCrossBorderDraft(input: {
         processing_fee: pricing.processingFee,
         margin_amount: pricing.marginAmount,
         sender,
-        recipient_id: input.recipient.id,
+        recipient_id: (input.recipient as RecipientSellPrepareRow & { id?: string }).id,
         pay_in_country: input.payInCountry.toUpperCase(),
         draft: true,
       },
@@ -689,6 +705,7 @@ export async function authorizeCrossBorderDraft(input: {
   })
 
   const easnerSellFrom = Number(fromLeg?.easner_sell ?? fromLeg?.yc_sell ?? 0)
+  const reportingSourceToUsdRate = Number(fromLeg?.easner_sell ?? 0)
   const sendLeg = {
     cryptoAmountUsd: Number(sendRes.settlementInfo?.cryptoAmount ?? 0),
     networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
@@ -730,6 +747,13 @@ export async function authorizeCrossBorderDraft(input: {
     },
     sendLeg,
   })
+  const reportingSnapshot = buildYcCrossBorderReportingSnapshot({
+    localPayIn: pricingFinal.localPayIn,
+    payInCurrency,
+    easnerSellFrom: reportingSourceToUsdRate,
+    receiveCryptoUsd: pricingFinal.receiveCryptoUsd,
+    sendCryptoUsd: pricingFinal.sendCryptoUsd,
+  })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const now = new Date().toISOString()
@@ -759,17 +783,24 @@ export async function authorizeCrossBorderDraft(input: {
         source_phone: phone,
         source_network_id: networkId,
         draft: false,
+        ...reportingSnapshot,
       },
       updated_at: now,
     })
     .eq("id", input.transferId)
 
   if (transfer.transaction_id) {
+    const { data: transactionRow } = await admin
+      .from("transactions")
+      .select("metadata")
+      .eq("id", transfer.transaction_id)
+      .maybeSingle()
     await admin
       .from("transactions")
       .update({
         amount: pricingFinal.localPayIn,
         metadata: {
+          ...((transactionRow?.metadata as Record<string, unknown> | null) ?? {}),
           yc_mode: "cross_border_send",
           yc_sequence_id: leg1Seq,
           receive_amount: receiveAmount,
@@ -778,6 +809,7 @@ export async function authorizeCrossBorderDraft(input: {
           pay_in_rail: "mobile_money",
           source_phone: phone,
           source_network_id: networkId,
+          ...reportingSnapshot,
         },
         updated_at: now,
       })

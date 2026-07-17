@@ -96,6 +96,7 @@ export type InboundReceiveResolveInput = {
   posted_currency?: string | null
   settled_amount?: number | null
   settled_currency?: string | null
+  occurred_at?: string | null
   created_at?: string | null
   ledger_created_at?: string | null
   easner_transaction_id?: string | null
@@ -265,7 +266,13 @@ export function resolveInboundReceiveDetail(
     meta.easner_transaction_id,
     meta.transaction_id,
   )
-  const whenAt = pickIso(input.ledger_created_at, input.created_at, meta.ledger_created_at, meta.created_at)
+  const whenAt = pickIso(
+    input.occurred_at,
+    input.ledger_created_at,
+    input.created_at,
+    meta.ledger_created_at,
+    meta.created_at,
+  )
   const note = pickIso(input.send_note, meta.send_note, meta.note)
 
   if (kind === "yc_fund_balance") {

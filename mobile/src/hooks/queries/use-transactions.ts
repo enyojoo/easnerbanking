@@ -34,6 +34,10 @@ export type MobileTransactionRow = {
   ledger_row_id?: string
   currency?: string
   amount?: string | number
+  account_impact_amount?: number
+  account_impact_currency?: string
+  ledger_amount?: number
+  ledger_currency?: string
   status?: string
   direction?: 'credit' | 'debit'
   transaction_type?: 'send' | 'receive' | string

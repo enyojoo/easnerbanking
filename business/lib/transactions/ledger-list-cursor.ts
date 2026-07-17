@@ -1,6 +1,7 @@
 import { isNoahBankOnrampOrchestrationOutLeg } from "@/lib/noah/bank-onramp-tx"
 
 export type LedgerListCursor = {
+  occurred_at: string | null
   created_at: string
   id: string
 }
@@ -13,12 +14,10 @@ export function decodeLedgerListCursor(raw: string | null | undefined): LedgerLi
   const trimmed = String(raw ?? "").trim()
   if (!trimmed) return null
   try {
-    const parsed = JSON.parse(Buffer.from(trimmed, "base64url").toString("utf8")) as LedgerListCursor & {
-      /** Legacy cursors from occurred_at ordering — ignored for pagination. */
-      occurred_at?: string | null
-    }
+    const parsed = JSON.parse(Buffer.from(trimmed, "base64url").toString("utf8")) as LedgerListCursor
     if (!parsed?.id || !parsed.created_at) return null
     return {
+      occurred_at: parsed.occurred_at ?? null,
       created_at: String(parsed.created_at),
       id: String(parsed.id),
     }
@@ -27,14 +26,20 @@ export function decodeLedgerListCursor(raw: string | null | undefined): LedgerLi
   }
 }
 
-/** Keyset filter for `(created_at DESC, id DESC)`. */
+/** Keyset filter for `(occurred_at DESC NULLS LAST, created_at DESC, id DESC)`. */
 export function applyLedgerListCursorFilter<T extends { or: (expr: string) => T }>(
   query: T,
   cursor: LedgerListCursor,
 ): T {
+  const occ = cursor.occurred_at
   const created = cursor.created_at
   const id = cursor.id
-  return query.or(`created_at.lt.${created},and(created_at.eq.${created},id.lt.${id})`)
+  if (occ) {
+    return query.or(
+      `occurred_at.lt.${occ},and(occurred_at.eq.${occ},created_at.lt.${created}),and(occurred_at.eq.${occ},created_at.eq.${created},id.lt.${id})`,
+    )
+  }
+  return query.or(`and(occurred_at.is.null,created_at.lt.${created}),and(occurred_at.is.null,created_at.eq.${created},id.lt.${id})`)
 }
 
 export function buildNextLedgerListCursor(
@@ -48,6 +53,7 @@ export function buildNextLedgerListCursor(
   }
   const last = visible[visible.length - 1]!
   const next: LedgerListCursor = {
+    occurred_at: last.occurred_at != null ? String(last.occurred_at) : null,
     created_at: String(last.created_at ?? new Date(0).toISOString()),
     id: String(last.id),
   }

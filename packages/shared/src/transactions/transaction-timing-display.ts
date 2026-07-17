@@ -148,12 +148,24 @@ function formatStartedDisplay(iso: string | null): string {
   return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
 }
 
-/** Ledger insert time for detail "When" — never settlement, webhook, or `updated_at`. */
+/**
+ * Immutable user-facing "When" for a ledger row.
+ * Prefer `occurred_at` (set at insert, preserved on webhook updates), then `created_at`.
+ * Never use `updated_at`, `settled_at`, or webhook lifecycle timestamps.
+ */
+export function resolveLedgerWhenAt(input: {
+  occurredAt?: string | null
+  createdAt?: string | null
+}): string | null {
+  return pickIso(input.occurredAt, input.createdAt)
+}
+
+/** @deprecated Prefer {@link resolveLedgerWhenAt} with `{ occurredAt, createdAt }`. */
 export function resolveTransactionWhenAt(
   createdAt?: string | null,
   ledgerCreatedAt?: string | null,
 ): string | null {
-  return pickIso(ledgerCreatedAt, createdAt)
+  return resolveLedgerWhenAt({ occurredAt: null, createdAt: ledgerCreatedAt ?? createdAt })
 }
 
 /**

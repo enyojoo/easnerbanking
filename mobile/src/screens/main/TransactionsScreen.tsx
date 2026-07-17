@@ -27,7 +27,7 @@ import { PremiumModalSheet } from '../../components/premium'
 import { GroupedListCardSkeleton } from '../../components/skeletons'
 import EmptyState from '../../components/EmptyState'
 import { FilterChip, SectionCard } from '../../components/ui'
-import { useCurrenciesCatalog, useTransactionsList, prefetchRecentTransactionDetailsInBackground, prefetchTransactionDetail, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
+import { useCurrenciesCatalog, useReportingFxRates, useTransactionsList, prefetchRecentTransactionDetailsInBackground, prefetchTransactionDetail, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { useBalance } from '../../contexts/BalanceContext'
@@ -56,6 +56,7 @@ import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/f
 import {
   markRecentMoneyActivity,
   qk,
+  resolveReportingAmountForFeed,
 } from '@easner/shared'
 import { getTransactionListName } from '../../lib/transactionListLabel'
 import { apiPost } from '../../lib/apiClient'
@@ -104,6 +105,10 @@ interface CombinedTransaction {
   destination_type?: 'bank' | 'card'
   amount?: number
   currency?: string
+  account_impact_amount?: number
+  account_impact_currency?: string
+  ledger_amount?: number
+  ledger_currency?: string
   merchant_name?: string
   description?: string
   direction?: 'credit' | 'debit'
@@ -198,6 +203,7 @@ const TransactionItem = React.memo(function TransactionItem({
   onPress,
   onPrefetch,
   formatAmount,
+  amountText,
   formatDate,
   skipRowEntranceAnim,
 }: { 
@@ -207,6 +213,7 @@ const TransactionItem = React.memo(function TransactionItem({
   onPress: () => void
   onPrefetch?: () => void
   formatAmount: (amount: number, currency: string, isReceived?: boolean) => string
+  amountText?: string
   formatDate: (dateString: string) => string
   skipRowEntranceAnim: boolean
 }) {
@@ -327,11 +334,12 @@ const TransactionItem = React.memo(function TransactionItem({
               transactionType === 'receive' && styles.transactionAmountReceived,
             ]}
           >
-            {formatAmount(
-              item.amount || item.send_amount || item.crypto_amount || item.fiat_amount || 0,
-              item.currency || item.send_currency || item.crypto_currency || item.fiat_currency || 'USD',
-              transactionType === 'receive'
-            )}
+            {amountText ??
+              formatAmount(
+                item.amount || item.send_amount || item.crypto_amount || item.fiat_amount || 0,
+                item.currency || item.send_currency || item.crypto_currency || item.fiat_currency || 'USD',
+                transactionType === 'receive'
+              )}
           </Text>
           {statusDisplay ? (
             <Text style={[styles.transactionStatusText, statusToneTextStyle(statusDisplay.tone)]}>
@@ -361,6 +369,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
   const qc = useQueryClient()
   const currencies = useCurrencies()
   const txQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
+  const { data: reportingFxRates = [] } = useReportingFxRates()
   const realtimeHealth = useRealtimeHealth()
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = txQuery
   const loadMoreInFlightRef = useRef(false)
@@ -546,6 +555,16 @@ function TransactionsContent({ navigation }: NavigationProps) {
     })
   }, [transactionsInRange, searchTerm, activeFilter])
 
+  const reportingAmountFor = React.useCallback(
+    (tx: CombinedTransaction) =>
+      resolveReportingAmountForFeed(
+        tx as unknown as Record<string, unknown>,
+        'USD',
+        reportingFxRates,
+      ),
+    [reportingFxRates],
+  )
+
   /** Same basis as the list: date range + search + All / Money in / Money out / Card (business sums credits+debits from its filtered set). */
   const summaryTotals = useMemo(() => {
     let inAmount = 0
@@ -557,27 +576,10 @@ function TransactionsContent({ navigation }: NavigationProps) {
       const dateStr = tx.noah_created_at || tx.created_at
       if (!dateStr) continue
       const txType = tx.transaction_type || tx.type
-      const amt = Math.abs(
-        Number(
-          txType === 'send' || txType === 'card_funding'
-            ? (tx.ledger_amount ?? tx.amount ?? tx.send_amount ?? tx.crypto_amount ?? tx.fiat_amount ?? 0)
-            : (tx.display_amount ?? tx.amount ?? tx.send_amount ?? tx.crypto_amount ?? tx.fiat_amount ?? 0),
-        ) || 0,
-      )
-      const cur =
-        txType === 'send' || txType === 'card_funding'
-          ? (tx.ledger_currency ??
-            tx.currency ??
-            tx.send_currency ??
-            tx.crypto_currency ??
-            tx.fiat_currency ??
-            'USD')
-          : (tx.display_currency ??
-            tx.currency ??
-            tx.send_currency ??
-            tx.crypto_currency ??
-            tx.fiat_currency ??
-            'USD')
+      const reporting = reportingAmountFor(tx)
+      if (!reporting) continue
+      const amt = Math.abs(reporting.reportingAmount)
+      const cur = reporting.reportingCurrency
       if (txType === 'receive') {
         inAmount += amt
         if (!inCurrency) inCurrency = cur
@@ -592,7 +594,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
       inCurrency: inCurrency || 'USD',
       outCurrency: outCurrency || inCurrency || 'USD',
     }
-  }, [filteredTransactions])
+  }, [filteredTransactions, reportingAmountFor])
 
   const groupedItems = useMemo(
     () => buildGroupedActivityItems(filteredTransactions),
@@ -619,6 +621,9 @@ function TransactionsContent({ navigation }: NavigationProps) {
     regularWidth && selectedTransactionId
       ? filteredTransactions.find((tx) => transactionDetailLookupId(tx) === selectedTransactionId) || null
       : null
+  const selectedReporting = selectedTransaction
+    ? reportingAmountFor(selectedTransaction)
+    : null
 
 
   return (
@@ -814,13 +819,21 @@ function TransactionsContent({ navigation }: NavigationProps) {
                     <View key={item.key} style={styles.groupCard}>
                       {item.rows.map((tx, rowIdx) => {
                         const isLast = rowIdx === item.rows.length - 1
+                        const reporting = reportingAmountFor(tx)
+                        const displayTx = reporting
+                          ? {
+                              ...tx,
+                              amount: reporting.reportingAmount,
+                              currency: reporting.reportingCurrency,
+                            }
+                          : tx
                         return (
                           <View
                             key={`${item.key}-${rowIdx}`}
                             style={!isLast ? styles.groupRowDivider : null}
                           >
                             <TransactionItem
-                              item={tx}
+                              item={displayTx}
                               index={rowIdx}
                               isLast={isLast}
                               skipRowEntranceAnim={skipRowEntranceAnim}
@@ -846,6 +859,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
                                 )
                               }}
                               formatAmount={formatAmount}
+                              amountText={reporting ? undefined : '—'}
                               formatDate={formatDate}
                             />
                           </View>
@@ -906,11 +920,14 @@ function TransactionsContent({ navigation }: NavigationProps) {
                           },
                         ]}
                       >
-                        {formatAmount(
-                          selectedTransaction.send_amount || selectedTransaction.amount || 0,
-                          selectedTransaction.send_currency || selectedTransaction.currency || 'USD',
-                          (selectedTransaction.transaction_type || selectedTransaction.type) === 'receive',
-                        )}
+                        {selectedReporting
+                          ? formatAmount(
+                              selectedReporting.reportingAmount,
+                              selectedReporting.reportingCurrency,
+                              (selectedTransaction.transaction_type ||
+                                selectedTransaction.type) === 'receive',
+                            )
+                          : '—'}
                       </Text>
                       <Pressable
                         android_ripple={ripple.neutral}
