@@ -7,6 +7,9 @@ import {
   normalizeGlobalPayoutQuoteReceiveAmount,
   normalizePayoutReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
+  buildLegacyNoahSettlementFromLeg,
+  computePayoutQuoteDisplayProcessingFee,
+  type PayoutSettlementLeg,
 } from "@easner/shared"
 import {
   prepareSellFromRecipientRow,
@@ -63,6 +66,9 @@ export type PayoutQuoteResult = {
   /** Channel component shown in the combined Processing fee row (foots with total). */
   displayChannelCost: number
   channelId?: string
+  /** Provider-neutral crypto settlement leg (Noah + Yellowcard). */
+  settlement: PayoutSettlementLeg
+  /** @deprecated Prefer `settlement`. Legacy Noah field names for older clients. */
   noah: {
     totalFee: number
     feeCurrency: string
@@ -97,6 +103,10 @@ export type PayoutQuoteResult = {
     cryptoAmount: number
     walletAddress?: string
   }
+  /** Explicit YC send leg fees from POST /send (USD). */
+  ycLegFeesUsd?: number
+  /** Easner 1% + channel/YC component shown as one Processing fee row (USD). */
+  displayProcessingFee?: number
 }
 
 const QUOTE_TTL_MS = 15 * 60 * 1000
@@ -554,6 +564,23 @@ export async function buildPayoutQuote(input: {
   const effectiveRate =
     pricing.totalDebited > 0 ? quoteReceiveAmount / pricing.totalDebited : providerRate
 
+  const settlement: PayoutSettlementLeg = {
+    totalFee: noahFee,
+    feeCurrency: sourceBalanceCurrency,
+    cryptoAuthorizedAmount,
+    cryptoFloor: cryptoAuthorizedAmount,
+    cryptoSendAmount: String(pricing.noahSendAmount),
+    cryptoCurrency,
+    sessionId: formSessionId,
+    customerRate: providerRate,
+    ...(noahMid != null && noahMid > 0 ? { providerMid: noahMid } : {}),
+    effectiveRate,
+    marginCaptureMode,
+    channelCost: pricing.channelCost,
+    marginAmount: pricing.marginAmount,
+    customerPrincipal: pricing.customerPrincipal,
+  }
+
   return {
     receiveAmount: quoteReceiveAmount,
     receiveCurrency,
@@ -566,29 +593,22 @@ export async function buildPayoutQuote(input: {
     processingFee: pricing.processingFee,
     displayChannelCost: pricing.displayChannelCost,
     channelId,
-    noah: {
-      totalFee: noahFee,
-      feeCurrency: sourceBalanceCurrency,
-      cryptoAuthorizedAmount,
-      noahFloor: cryptoAuthorizedAmount,
-      noahSendAmount: String(pricing.noahSendAmount),
-      cryptoCurrency,
-      formSessionId,
-      rate: providerRate,
-      ...(noahMid != null && noahMid > 0 ? { noahMid } : {}),
-      ...(pricingMid > 0 ? { quoteNoahMid: pricingMid } : {}),
-      effectiveRate,
-      marginCaptureMode,
-      channelCost: pricing.channelCost,
-      marginAmount: pricing.marginAmount,
-      customerPrincipal: pricing.customerPrincipal,
+    settlement,
+    noah: buildLegacyNoahSettlementFromLeg(settlement, {
       ...(scheduleFee != null ? { scheduleFee } : {}),
       ...(prep.channelFee != null ? { prepareChannelFee: prep.channelFee } : {}),
       ...(prep.remaining != null ? { prepareRemaining: prep.remaining } : {}),
-    },
+      ...(pricingMid > 0 ? { quoteNoahMid: pricingMid } : {}),
+    }),
+    displayProcessingFee: computePayoutQuoteDisplayProcessingFee({
+      processingFee: pricing.processingFee,
+      displayChannelCost: pricing.displayChannelCost,
+      channelCost: pricing.channelCost,
+    }),
     easner,
     pricingQuoteId: "",
     expiresAt: easner.expiresAt,
     executionModel: "turnkey_workflow",
+    provider: "noah",
   }
 }

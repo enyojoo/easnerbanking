@@ -35,6 +35,22 @@ describe("buildGlobalPayoutMarginReconciliationPatch", () => {
     expect(result.patch.margin_reconciliation_delta).toBe(0)
   })
 
+  it("records fee_wallet_deferred without legacy BusinessFee warn semantics", () => {
+    const result = buildGlobalPayoutMarginReconciliationPatch({
+      transactionId: "tx-fee-wallet",
+      priorMetadata: {
+        margin_amount: 0.057,
+        margin_capture_mode: "fee_wallet_deferred",
+        easner_payout_id: "payout-1",
+      },
+      txData: {
+        Breakdown: [{ Type: "BusinessFee", Amount: "0" }],
+      },
+    })
+    expect(result.patch.margin_reconciled).toBe(true)
+    expect(result.patch.margin_capture_note).toBe("fee_wallet_deferred_no_business_fee_expected")
+  })
+
   it("returns empty patch when margin_amount missing", () => {
     const result = buildGlobalPayoutMarginReconciliationPatch({
       transactionId: "tx-1",

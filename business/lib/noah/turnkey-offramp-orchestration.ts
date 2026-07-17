@@ -13,7 +13,7 @@ import {
   getGlobalPayoutMarginCaptureMode,
 } from "@/lib/noah/margin-capture-mode"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { resolvePooledSolanaSourceAddress } from "@/lib/liquidity/platform-pool"
+import { EASNER_REVENUE_FEE_WALLET_SWEEP_MIN } from "@easner/shared"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { generateTransactionId } from "@/lib/transaction-id"
 import {
@@ -255,14 +255,8 @@ export async function executeTurnkeyOfframpPayout(
     return { ok: false, error: "Invalid crypto authorized amount from prepare." }
   }
 
-  const marginCaptureMode =
-    quoted?.marginCaptureMode ?? getGlobalPayoutMarginCaptureMode()
-  try {
-    await assertMarginCaptureModeReady(admin, marginCaptureMode, walletCurrency)
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return { ok: false, error: msg }
-  }
+  const marginCaptureMode = getGlobalPayoutMarginCaptureMode()
+  await assertMarginCaptureModeReady(admin, marginCaptureMode, walletCurrency)
 
   const totalDebited =
     parsePositiveAmount(quoted?.totalDebited) ??
@@ -270,16 +264,13 @@ export async function executeTurnkeyOfframpPayout(
     noahFloor
   const marginAmount =
     parsePositiveAmount(quoted?.marginAmount) ?? Math.max(0, totalDebited - noahFloor)
-  // Explicit Easner 1% leg (uncapped). totalDebited = noahFloor + FX margin + processingFee,
-  // so the fee is whatever the customer paid beyond the Noah floor + hidden FX margin.
   const processingFee = Math.max(
     0,
     Math.round((totalDebited - noahFloor - marginAmount) * 1_000_000) / 1_000_000,
   )
-  const noahSendAmount =
-    marginCaptureMode === "split_debit"
-      ? noahFloor
-      : (parsePositiveAmount(quoted?.noahSendAmount) ?? Math.max(0, totalDebited - processingFee))
+  const noahSendAmount = noahFloor
+  const revenueSweepPending =
+    marginAmount + processingFee >= EASNER_REVENUE_FEE_WALLET_SWEEP_MIN
 
   const { available, err: balErr } = await readAvailableBalance(admin, {
     businessId,
@@ -355,7 +346,7 @@ export async function executeTurnkeyOfframpPayout(
     total_debited: totalDebited,
     margin_amount: marginAmount,
     processing_fee: processingFee,
-    ...(processingFee > 0.000_001 ? { processing_fee_pending: true } : {}),
+    ...(revenueSweepPending ? { processing_fee_pending: true } : {}),
     margin_capture_mode: marginCaptureMode,
     ...(quoted?.customerRate != null ? { customer_rate: quoted.customerRate } : {}),
     ...(quoted?.noahMid != null ? { noah_mid: quoted.noahMid } : {}),
@@ -430,30 +421,6 @@ export async function executeTurnkeyOfframpPayout(
     turnkeySendId = send.providerTransactionId
     turnkeySendStatus = send.status
 
-    let marginTurnkeySendId: string | undefined
-    if (marginCaptureMode === "split_debit" && marginAmount > 0.000_001) {
-      const poolAddress = await resolvePooledSolanaSourceAddress(admin, { ledgerCurrency: walletCurrency })
-      if (!poolAddress) {
-        throw new Error("Platform liquidity pool address is not configured for margin routing.")
-      }
-      const marginSend = await createTurnkeySend(admin, {
-        ctx,
-        asset,
-        chain: "solana",
-        destinationAddress: poolAddress,
-        amount: marginAmount,
-        settlementPollTimeoutMs: 0,
-        globalPayout: {
-          easnerPayoutId,
-          noahWorkflowId,
-          formSessionId,
-          walletDebitAmount: 0,
-          marginLeg: true,
-        },
-      })
-      marginTurnkeySendId = marginSend.providerTransactionId
-    }
-
     await admin
       .from("transactions")
       .update({
@@ -462,7 +429,6 @@ export async function executeTurnkeyOfframpPayout(
           turnkey_send_id: send.providerTransactionId,
           turnkey_tx_hash: send.txHash,
           turnkey_send_status: send.status,
-          ...(marginTurnkeySendId ? { margin_turnkey_send_id: marginTurnkeySendId } : {}),
         },
         updated_at: new Date().toISOString(),
       })

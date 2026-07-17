@@ -62,6 +62,15 @@ export {
   type PayoutProcessingFeeOpts,
 } from "./payout-processing-fee"
 export {
+  buildLegacyNoahSettlementFromLeg,
+  computePayoutQuoteDisplayProcessingFee,
+  payoutReviewFeesFromQuote,
+  resolvePayoutQuoteSettlement,
+  type LegacyNoahPayoutSettlementLeg,
+  type PayoutMarginCaptureMode,
+  type PayoutSettlementLeg,
+} from "./payout-quote-settlement"
+export {
   computeCustomerDepositFee,
   computeEasnerMarginFromOmnibus,
   isDepositSplitEconomicsValid,
@@ -71,6 +80,12 @@ export {
   type EasnerMarginFromOmnibusInput,
   type EasnerMarginFromOmnibusResult,
 } from "./deposit-fee-pricing"
+export {
+  computeEasnerRevenueFeeWalletSweepAmount,
+  computeYcBalancePayoutFeeWalletSweepAmount,
+  EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
+  type ComputeEasnerRevenueFeeWalletSweepInput,
+} from "./easner-revenue-sweep"
 export {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,

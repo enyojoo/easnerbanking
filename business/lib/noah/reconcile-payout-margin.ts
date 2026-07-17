@@ -42,7 +42,24 @@ export function buildGlobalPayoutMarginReconciliationPatch(
   }
 
   const delta = Math.round((noahBusinessFee - expectedMargin) * 1_000_000) / 1_000_000
-  const captureMode = String(input.priorMetadata.margin_capture_mode || "surplus_send")
+  const captureMode = String(input.priorMetadata.margin_capture_mode || "fee_wallet_deferred")
+
+  const feeWalletDeferred =
+    captureMode === "fee_wallet_deferred" || captureMode === "fee_wallet_omnibus"
+
+  if (feeWalletDeferred) {
+    return {
+      patch: {
+        margin_reconciled: true,
+        noah_business_fee: noahBusinessFee,
+        margin_reconciliation_delta: delta,
+        margin_capture_note: "fee_wallet_deferred_no_business_fee_expected",
+      },
+      expectedMargin,
+      noahBusinessFee,
+      delta,
+    }
+  }
 
   if (Math.abs(delta) > RECONCILE_WARN_TOLERANCE_USDC) {
     console.warn("[global_payout_margin_reconcile]", {

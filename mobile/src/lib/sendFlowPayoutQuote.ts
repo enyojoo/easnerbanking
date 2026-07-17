@@ -20,6 +20,42 @@ function sendEntryAmountsMatch(a: number, b: number): boolean {
   return norm(a) === norm(b)
 }
 
+function resolveSettlementLeg(quote: PayoutQuote) {
+  if (quote.settlement?.sessionId && quote.settlement.cryptoAuthorizedAmount) {
+    return quote.settlement
+  }
+  const n = quote.noah
+  if (!n?.formSessionId || !n.cryptoAuthorizedAmount) return null
+  return {
+    totalFee: n.totalFee,
+    feeCurrency: 'USD',
+    cryptoAuthorizedAmount: n.cryptoAuthorizedAmount,
+    cryptoFloor: n.noahFloor,
+    cryptoSendAmount: n.noahSendAmount,
+    cryptoCurrency: n.cryptoCurrency,
+    sessionId: n.formSessionId,
+    customerRate: n.rate ?? quote.easner?.providerRate,
+    providerMid: n.noahMid,
+    effectiveRate: n.rate,
+    marginCaptureMode: (n.marginCaptureMode ?? 'surplus_send') as 'surplus_send' | 'split_debit',
+    channelCost: n.channelCost ?? quote.channelCost,
+    marginAmount: n.marginAmount ?? quote.marginAmount,
+    customerPrincipal: n.customerPrincipal ?? quote.customerPrincipal,
+  }
+}
+
+function reviewFeesFromQuote(quote: PayoutQuote) {
+  const channelFee =
+    quote.displayChannelCost != null && Number.isFinite(quote.displayChannelCost)
+      ? quote.displayChannelCost
+      : quote.channelCost
+  const easnerProcessingFee = quote.processingFee ?? 0
+  const displayProcessingFee =
+    quote.displayProcessingFee ??
+    Math.round((easnerProcessingFee + channelFee) * 1_000_000) / 1_000_000
+  return { easnerProcessingFee, channelFee, displayProcessingFee }
+}
+
 export type SendPayoutQuoteStashMeta = {
   recipientId: string
   amountEntryMode: 'send' | 'receive'
@@ -33,12 +69,13 @@ let stashedMeta: SendPayoutQuoteStashMeta | null = null
 let lastPayoutQuoteError: string | null = null
 
 export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
+  const leg = quote ? resolveSettlementLeg(quote) : null
   const easnerRate = quote?.easner?.providerRate
   return Boolean(
     quote?.expiresAt &&
-      quote.noah?.formSessionId &&
-      quote.noah.cryptoAuthorizedAmount &&
-      quote.noah.cryptoCurrency &&
+      leg?.sessionId &&
+      leg.cryptoAuthorizedAmount &&
+      leg.cryptoCurrency &&
       quote.easner &&
       Number.isFinite(easnerRate) &&
       easnerRate > 0,
@@ -125,20 +162,25 @@ export function payoutPrepareSessionFromQuote(
   quote: PayoutQuote,
   recipientId: string,
 ): PayoutPrepareSession | undefined {
-  if (!isCompletePayoutQuote(quote)) return undefined
+  const leg = resolveSettlementLeg(quote)
+  if (!leg) return undefined
   return {
     recipientId,
-    formSessionId: quote.noah.formSessionId,
-    cryptoAuthorizedAmount: quote.noah.cryptoAuthorizedAmount,
-    cryptoCurrency: quote.noah.cryptoCurrency,
+    formSessionId: leg.sessionId,
+    cryptoAuthorizedAmount: leg.cryptoAuthorizedAmount,
+    cryptoCurrency: leg.cryptoCurrency,
     ...(quote.channelId ? { channelId: quote.channelId } : {}),
-    noahFloor: quote.noah.noahFloor,
-    noahSendAmount: quote.noah.noahSendAmount,
+    noahFloor: leg.cryptoFloor,
+    noahSendAmount: leg.cryptoSendAmount,
     totalDebited: String(quote.totalDebited),
     marginAmount: String(quote.marginAmount),
-    ...(quote.noah.marginCaptureMode ? { marginCaptureMode: quote.noah.marginCaptureMode } : {}),
-    ...(quote.noah.rate != null ? { customerRate: quote.noah.rate } : {}),
-    ...(quote.noah.noahMid != null ? { noahMid: quote.noah.noahMid } : {}),
+    ...(leg.marginCaptureMode ? { marginCaptureMode: leg.marginCaptureMode } : {}),
+    ...(leg.customerRate != null ? { customerRate: leg.customerRate } : {}),
+    ...(leg.providerMid != null ? { noahMid: leg.providerMid } : {}),
+    ...(quote.provider ? { payoutProvider: quote.provider } : {}),
+    ...(quote.yc?.sequenceId ? { ycSequenceId: quote.yc.sequenceId } : {}),
+    ...(quote.yc?.walletAddress ? { ycWalletAddress: quote.yc.walletAddress } : {}),
+    ...(quote.yc?.cryptoAmount != null ? { ycCryptoAmount: quote.yc.cryptoAmount } : {}),
   }
 }
 
@@ -148,20 +190,20 @@ export function payoutDisplayAmountsFromQuote(quote: PayoutQuote): {
   marginAmount: number
   processingFee: number
   displayChannelCost: number
+  displayProcessingFee: number
   totalDebited: number
   customerRate: number
 } {
-  const processingFee = quote.processingFee ?? 0
-  const displayChannelCost = quote.displayChannelCost ?? quote.channelCost
+  const fees = reviewFeesFromQuote(quote)
+  const leg = resolveSettlementLeg(quote)
   return {
     youSendAmount: quote.customerPrincipal,
-    // `exchangeFee` feeds the combined Processing fee row — use the footing display channel.
-    exchangeFee: displayChannelCost,
-    // `marginAmount` here is what the screen renders as the Easner processing fee leg.
-    marginAmount: processingFee,
-    processingFee,
-    displayChannelCost,
+    exchangeFee: fees.channelFee,
+    marginAmount: fees.easnerProcessingFee,
+    processingFee: fees.easnerProcessingFee,
+    displayChannelCost: fees.channelFee,
+    displayProcessingFee: fees.displayProcessingFee,
     totalDebited: quote.totalDebited,
-    customerRate: quote.noah?.rate ?? quote.easner?.providerRate ?? 0,
+    customerRate: leg?.customerRate ?? quote.easner?.providerRate ?? 0,
   }
 }

@@ -102,7 +102,36 @@ export interface PayoutQuote {
   processingFee?: number
   /** Channel component shown in the combined Processing fee row (foots with total). */
   displayChannelCost?: number
+  /** Easner 1% + channel/YC component (USD). */
+  displayProcessingFee?: number
+  /** Explicit YC send leg fees when provider is Yellowcard. */
+  ycLegFeesUsd?: number
   channelId?: string
+  provider?: 'noah' | 'yellowcard'
+  settlement?: {
+    totalFee: number
+    feeCurrency: string
+    cryptoAuthorizedAmount: string
+    cryptoFloor: string
+    cryptoSendAmount: string
+    cryptoCurrency: string
+    sessionId: string
+    customerRate?: number
+    providerMid?: number
+    effectiveRate?: number
+    marginCaptureMode?: 'surplus_send' | 'split_debit'
+    channelCost?: number
+    marginAmount?: number
+    customerPrincipal?: number
+  }
+  yc?: {
+    sequenceId: string
+    sendId?: string
+    channelId: string
+    cryptoAmount: number
+    walletAddress?: string
+  }
+  /** @deprecated Prefer `settlement`. Legacy Noah field names. */
   noah: {
     totalFee: number
     cryptoAuthorizedAmount: string

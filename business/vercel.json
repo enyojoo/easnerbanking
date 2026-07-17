@@ -43,6 +43,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/reconcile-stuck-payouts",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/internal/invoices/mark-past-due",
       "schedule": "0 6 * * *"
     },

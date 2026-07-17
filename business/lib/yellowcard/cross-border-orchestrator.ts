@@ -22,7 +22,8 @@ import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prep
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
 import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
-import { generateTransactionId } from "@/lib/transaction-id"
+import { computeEasnerRevenueFeeWalletSweepAmount } from "@easner/shared"
+import { readPriorSweepFromMetadata, sweepEasnerRevenueFromDepositOmnibus } from "@/lib/processing-fee/fee-wallet-sweep"
 import { buildRecipientSnapshotFromRow } from "@/lib/noah/build-payout-execute-snapshot"
 import { buildYcCrossBorderOutMetadata } from "@/lib/yellowcard/yc-ledger"
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
@@ -885,28 +886,21 @@ export async function completeCrossBorderOnSendSuccess(
   )
   const processingFee = Number(meta.processing_fee ?? 0)
   const marginAmount = Number(meta.margin_amount ?? 0)
-  // Surplus left in omnibus after leg2 crypto out = FX margin (+ any residual).
   const residual = omnibusIn > 0 && leg2Crypto > 0 ? Math.max(0, omnibusIn - leg2Crypto) : 0
-  const sweepAmt = Math.max(processingFee, marginAmount, residual)
+  const sweepAmt = computeEasnerRevenueFeeWalletSweepAmount({
+    marginAmount,
+    processingFee,
+    ledgerSurplus: residual,
+  })
 
   let feeWalletSweepTxHash: string | null = null
-  if (sweepAmt >= 0.01 && !meta.fee_wallet_sweep_tx_hash) {
-    const { resolveWalletSendFeeSolanaAddress } = await import("@/lib/wallet-send/fee-address")
-    const { sendStablecoinFromDepositOmnibus } = await import("@/lib/turnkey/send-from-omnibus")
-    const feeAddr = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: "USD" })
-    if (feeAddr) {
-      const marginSend = await sendStablecoinFromDepositOmnibus({
-        ledgerCurrency: "USD",
-        asset: "USDC",
-        destinationAddress: feeAddr,
-        amount: sweepAmt,
-        pollForSettlement: false,
-      }).catch((e) => {
-        console.warn("[yc-cross-border] margin sweep failed (non-fatal):", e)
-        return null
-      })
-      feeWalletSweepTxHash = marginSend?.txHash ?? null
-    }
+  if (sweepAmt > 0 && !readPriorSweepFromMetadata(meta).captured) {
+    const sweep = await sweepEasnerRevenueFromDepositOmnibus({
+      ledgerCurrency: "USD",
+      amount: sweepAmt,
+      logTag: "yc-cross-border",
+    })
+    feeWalletSweepTxHash = sweep.feeWalletSweepTxHash
   }
 
   await admin
@@ -917,6 +911,7 @@ export async function completeCrossBorderOnSendSuccess(
       fee_wallet_sweep: sweepAmt > 0 ? sweepAmt : transfer.fee_wallet_sweep,
       metadata: {
         ...meta,
+        margin_capture_mode: "fee_wallet_omnibus",
         ...(feeWalletSweepTxHash ? { fee_wallet_sweep_tx_hash: feeWalletSweepTxHash } : {}),
         completed_at: now,
       },

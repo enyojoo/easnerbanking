@@ -1326,10 +1326,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
         return
       }
+      const stashedRate =
+        stashedQuote?.settlement?.customerRate ?? stashedQuote?.noah?.rate ?? 0
       let calculatedSendingAmount =
-        stashedQuote?.noah?.rate && stashedQuote.noah.rate > 0
-          ? receiveAmountValue / stashedQuote.noah.rate
-          : navAmounts.sendAmount
+        stashedRate > 0 ? receiveAmountValue / stashedRate : navAmounts.sendAmount
       const calculatedFeeAmount = 0
       let calculatedTotalAmount =
         stashedQuote?.totalDebited && stashedQuote.totalDebited > 0

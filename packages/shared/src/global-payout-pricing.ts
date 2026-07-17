@@ -2,7 +2,11 @@
 
 import { computePayoutProcessingFeeBps } from "./payout-processing-fee"
 
-export type GlobalPayoutMarginCaptureMode = "surplus_send" | "split_debit"
+export type GlobalPayoutMarginCaptureMode =
+  | "surplus_send"
+  | "split_debit"
+  | "fee_wallet_deferred"
+  | "fee_wallet_omnibus"
 
 export type ComputeGlobalPayoutPricingInput = {
   receiveAmount: number
@@ -56,7 +60,7 @@ export function computeGlobalPayoutPricing(
   const customerRate = input.customerRate
   const noahMid = input.noahMid
   const noahFloor = roundUsdc(input.noahFloor)
-  const marginCaptureMode = input.marginCaptureMode ?? "surplus_send"
+  const marginCaptureMode: GlobalPayoutMarginCaptureMode = "fee_wallet_deferred"
 
   if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
     throw new Error("receiveAmount must be positive")
@@ -95,8 +99,7 @@ export function computeGlobalPayoutPricing(
   })
   const totalDebited = roundUsdc(baseTotalDebited + processingFee)
 
-  const noahSendAmount =
-    marginCaptureMode === "split_debit" ? noahFloor : baseTotalDebited
+  const noahSendAmount = noahFloor
 
   return {
     receiveAmount,

@@ -31,15 +31,17 @@ describe("computeGlobalPayoutPricing", () => {
       p.totalDebited,
       6,
     )
-    // Noah still receives floor + FX margin (pre-fee); only the 1% leg is skimmed to the fee wallet.
-    expect(p.noahSendAmount).toBeCloseTo(p.totalDebited - p.processingFee, 6)
+    // Noah receives floor only; FX margin + 1% deferred to fee wallet on settle.
+    expect(p.noahSendAmount).toBe(p.noahFloor)
+    expect(p.marginCaptureMode).toBe("fee_wallet_deferred")
     expect(p.triggerAmount).toBe(4.520121)
   })
 
-  it("split_debit sends noahFloor to Noah, not totalDebited", () => {
+  it("always sends noahFloor to Noah regardless of legacy marginCaptureMode input", () => {
     const p = computeGlobalPayoutPricing({ ...payout2, marginCaptureMode: "split_debit" })
     expect(p.noahSendAmount).toBe(4.520121)
     expect(p.totalDebited).toBeCloseTo(4.61368, 3)
+    expect(p.marginCaptureMode).toBe("fee_wallet_deferred")
   })
 
   it("same receive from send-entry normalization at customer rate", () => {

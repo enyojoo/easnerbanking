@@ -350,7 +350,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       return quoteDisplay.customerRate
     }
     const stashed = peekSendPayoutQuote()
-    const rate = stashed?.noah?.rate ?? pricingQuoteResult?.providerRate ?? 0
+    const rate =
+      stashed?.settlement?.customerRate ??
+      stashed?.noah?.rate ??
+      pricingQuoteResult?.providerRate ??
+      0
     return Number.isFinite(rate) && rate > 0 ? rate : 0
   }, [quoteDisplay?.customerRate, pricingQuoteResult?.providerRate])
   const youSendAmount = quoteDisplay?.youSendAmount ?? calculatedSendingAmount

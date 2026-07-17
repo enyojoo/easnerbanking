@@ -210,7 +210,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         metadata: {
           activity_type: "wallet_send",
           execution_model: "direct_turnkey",
-          margin_capture_mode: "split_debit",
+          margin_capture_mode: "fee_wallet_deferred",
           receive_asset: session.receive_asset,
           receive_network: session.receive_network,
           receive_amount: session.receive_amount,
@@ -313,7 +313,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     metadata: {
       activity_type: "wallet_send",
       execution_model: "lifi_bridge",
-      margin_capture_mode: "split_debit",
+      margin_capture_mode: "fee_wallet_deferred",
       receive_asset: session.receive_asset,
       receive_network: session.receive_network,
       receive_amount: session.receive_amount,

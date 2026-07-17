@@ -225,7 +225,7 @@ export function buildYcBalancePayoutOutMetadata(input: {
     margin_amount: input.marginAmount ?? 0,
     processing_fee: processingFee,
     ...(processingFee > 0.000_001 ? { processing_fee_pending: true } : {}),
-    margin_capture_mode: "surplus_send",
+    margin_capture_mode: "fee_wallet_omnibus",
     ...(input.channelId ? { channel_id: input.channelId } : {}),
     ...(input.receiveAmount != null ? { receive_amount: input.receiveAmount } : {}),
     ...(input.receiveCurrency ? { receive_currency: input.receiveCurrency, fiat_currency: input.receiveCurrency } : {}),

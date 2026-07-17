@@ -1,30 +1,23 @@
 import type { GlobalPayoutMarginCaptureMode } from "@easner/shared"
-import { resolvePooledSolanaSourceAddress } from "@/lib/liquidity/platform-pool"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-const VALID_MODES = new Set<GlobalPayoutMarginCaptureMode>(["surplus_send", "split_debit"])
-
+/** @deprecated Legacy env ignored — Noah payouts always use fee_wallet_deferred. */
 export function getGlobalPayoutMarginCaptureMode(): GlobalPayoutMarginCaptureMode {
-  const raw = String(process.env.GLOBAL_PAYOUT_MARGIN_CAPTURE_MODE || "surplus_send")
+  const raw = String(process.env.GLOBAL_PAYOUT_MARGIN_CAPTURE_MODE || "")
     .trim()
     .toLowerCase()
-  if (raw === "split_debit") return "split_debit"
-  return "surplus_send"
+  if (raw === "split_debit" || raw === "surplus_send") {
+    console.warn(
+      "[noah_global_payout] GLOBAL_PAYOUT_MARGIN_CAPTURE_MODE is deprecated; using fee_wallet_deferred",
+    )
+  }
+  return "fee_wallet_deferred"
 }
 
 export async function assertMarginCaptureModeReady(
-  admin: SupabaseClient,
-  mode: GlobalPayoutMarginCaptureMode,
-  ledgerCurrency: "USD" | "EUR",
+  _admin: SupabaseClient,
+  _mode: GlobalPayoutMarginCaptureMode,
+  _ledgerCurrency: "USD" | "EUR",
 ): Promise<void> {
-  if (mode !== "split_debit") return
-  if (!VALID_MODES.has(mode)) {
-    throw new Error(`Invalid GLOBAL_PAYOUT_MARGIN_CAPTURE_MODE: ${mode}`)
-  }
-  const pool = await resolvePooledSolanaSourceAddress(admin, { ledgerCurrency })
-  if (!pool) {
-    throw new Error(
-      `split_debit requires PLATFORM_LIQUIDITY_POOL_SOLANA_ADDRESS_${ledgerCurrency} for margin routing.`,
-    )
-  }
+  // Revenue is deferred to fee wallet on settle; no platform pool required at execute.
 }

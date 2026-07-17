@@ -9,7 +9,7 @@ import {
 
 function sampleQuote(overrides?: Partial<PayoutQuote>): PayoutQuote {
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
-  return {
+  const base = {
     receiveAmount: 1000,
     receiveCurrency: 'NGN',
     customerPrincipal: 1,
@@ -18,6 +18,20 @@ function sampleQuote(overrides?: Partial<PayoutQuote>): PayoutQuote {
     totalDebited: 1,
     channelCost: 0,
     marginAmount: 0,
+    settlement: {
+      totalFee: 0,
+      feeCurrency: 'USD',
+      cryptoAuthorizedAmount: '1',
+      cryptoFloor: '1',
+      cryptoSendAmount: '1',
+      cryptoCurrency: 'USDC_TEST',
+      sessionId: 'session-a',
+      customerRate: 1000,
+      marginCaptureMode: 'surplus_send' as const,
+      channelCost: 0,
+      marginAmount: 0,
+      customerPrincipal: 1,
+    },
     noah: {
       totalFee: 0,
       cryptoAuthorizedAmount: '1',
@@ -42,8 +56,8 @@ function sampleQuote(overrides?: Partial<PayoutQuote>): PayoutQuote {
     },
     pricingQuoteId: '',
     expiresAt,
-    ...overrides,
   }
+  return { ...base, ...overrides }
 }
 
 describe('sendFlowPayoutQuote stash', () => {

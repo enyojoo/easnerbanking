@@ -8,6 +8,9 @@ import {
   normalizePayoutReceiveAmountForCurrency,
   validateYcRecipientForCorridor,
   YC_QUOTE_TTL_MS,
+  buildLegacyNoahSettlementFromLeg,
+  computePayoutQuoteDisplayProcessingFee,
+  type PayoutSettlementLeg,
 } from "@easner/shared"
 import {
   resolveRecipientPayoutCountry,
@@ -200,16 +203,48 @@ export async function buildYcPayoutQuote(input: {
     throw new Error("Yellowcard send response missing cryptoAmount.")
   }
 
+  const networkFeeAmountUsd = Number(sendRes.networkFeeAmountUSD ?? 0)
+  const serviceFeeAmountUsd = Number(sendRes.serviceFeeAmountUSD ?? 0)
+  const ycLegFeesUsd = roundUsdc(networkFeeAmountUsd + serviceFeeAmountUsd)
+
   const pricing = computeYcBalancePayoutPricing({
     receiveAmount: lockedReceiveAmount,
     customerRate,
     ycFloorUsd: cryptoAmount,
-    networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
-    serviceFeeAmountUsd: Number(sendRes.serviceFeeAmountUSD ?? 0),
+    ycMidUsd:
+      payoutRate?.yc_buy != null && payoutRate.yc_buy > 0
+        ? roundUsdc(lockedReceiveAmount / payoutRate.yc_buy)
+        : undefined,
+    networkFeeAmountUsd,
+    serviceFeeAmountUsd,
   })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const quoteId = String(sendRes.id ?? sequenceId)
+  const displayProcessingFee = computePayoutQuoteDisplayProcessingFee({
+    processingFee: pricing.processingFee,
+    displayChannelCost: pricing.displayChannelCost,
+    channelCost: pricing.channelCost,
+  })
+
+  const settlement: PayoutSettlementLeg = {
+    totalFee: pricing.channelCost,
+    feeCurrency: "USD",
+    cryptoAuthorizedAmount: String(cryptoAmount),
+    cryptoFloor: String(cryptoAmount),
+    cryptoSendAmount: String(cryptoAmount),
+    cryptoCurrency: "USDC",
+    sessionId: quoteId,
+    customerRate,
+    ...(payoutRate?.yc_buy != null && payoutRate.yc_buy > 0
+      ? { providerMid: payoutRate.yc_buy }
+      : {}),
+    effectiveRate: customerRate,
+    marginCaptureMode: "fee_wallet_omnibus",
+    channelCost: pricing.channelCost,
+    marginAmount: pricing.marginAmount,
+    customerPrincipal: pricing.customerPrincipal,
+  }
 
   return {
     receiveAmount: lockedReceiveAmount,
@@ -222,23 +257,11 @@ export async function buildYcPayoutQuote(input: {
     marginAmount: pricing.marginAmount,
     processingFee: pricing.processingFee,
     displayChannelCost: pricing.displayChannelCost,
+    displayProcessingFee,
+    ycLegFeesUsd,
     channelId,
-    noah: {
-      totalFee: pricing.channelCost,
-      feeCurrency: "USD",
-      cryptoAuthorizedAmount: String(cryptoAmount),
-      noahFloor: String(cryptoAmount),
-      noahSendAmount: String(cryptoAmount),
-      cryptoCurrency: "USDC",
-      formSessionId: quoteId,
-      rate: customerRate,
-      noahMid: customerRate / 0.995,
-      effectiveRate: customerRate,
-      marginCaptureMode: "surplus_send",
-      channelCost: pricing.channelCost,
-      marginAmount: pricing.marginAmount,
-      customerPrincipal: pricing.customerPrincipal,
-    },
+    settlement,
+    noah: buildLegacyNoahSettlementFromLeg(settlement),
     easner: {
       quoteId,
       expiresAt,

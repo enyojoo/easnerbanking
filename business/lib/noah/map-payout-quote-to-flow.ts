@@ -1,4 +1,4 @@
-import { payoutReceiveAmountsMatch } from "@easner/shared"
+import { payoutReceiveAmountsMatch, resolvePayoutQuoteSettlement } from "@easner/shared"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import type { SendFlowState } from "@/lib/send-flow-session"
 
@@ -6,6 +6,7 @@ export function mapPayoutQuoteToFlowState(
   state: SendFlowState,
   q: PayoutQuoteResult,
 ): SendFlowState {
+  const leg = resolvePayoutQuoteSettlement(q) ?? q.settlement
   const easnerFee = q.processingFee
   const channelFee = q.channelCost
   return {
@@ -19,30 +20,32 @@ export function mapPayoutQuoteToFlowState(
       sendAmount: q.customerPrincipal,
       sendCurrency: q.sendCurrency,
       totalDebited: q.totalDebited,
-      midRate: q.noah.rate,
+      midRate: leg.customerRate,
       noahFee: channelFee,
       noahFeeCurrency: q.sendCurrency,
       easnerFee,
       easnerFeeCurrency: q.sendCurrency,
-      formSessionId: q.noah.formSessionId,
-      cryptoAuthorizedAmount: q.noah.cryptoAuthorizedAmount,
-      cryptoCurrency: q.noah.cryptoCurrency,
+      formSessionId: leg.sessionId,
+      cryptoAuthorizedAmount: leg.cryptoAuthorizedAmount,
+      cryptoCurrency: leg.cryptoCurrency,
       channelId: q.channelId,
       pricingQuoteId: q.pricingQuoteId,
       expiresAt: q.expiresAt,
-      noahFloor: q.noah.noahFloor,
-      noahSendAmount: q.noah.noahSendAmount,
+      noahFloor: leg.cryptoFloor,
+      noahSendAmount: leg.cryptoSendAmount,
       marginAmount: q.marginAmount,
       channelCost: q.channelCost,
       processingFee: q.processingFee,
       displayChannelCost: q.displayChannelCost,
       customerPrincipal: q.customerPrincipal,
-      marginCaptureMode: q.noah.marginCaptureMode,
-      noahMid: q.noah.noahMid,
+      marginCaptureMode: leg.marginCaptureMode,
+      ...(leg.providerMid != null ? { noahMid: leg.providerMid } : {}),
       ...(q.noah.scheduleFee != null ? { scheduleFee: q.noah.scheduleFee } : {}),
       ...(q.noah.prepareChannelFee != null ? { prepareChannelFee: q.noah.prepareChannelFee } : {}),
       ...(q.noah.quoteNoahMid != null ? { quoteNoahMid: q.noah.quoteNoahMid } : {}),
       ...(q.provider ? { provider: q.provider } : {}),
+      ...(q.displayProcessingFee != null ? { displayProcessingFee: q.displayProcessingFee } : {}),
+      ...(q.ycLegFeesUsd != null ? { ycLegFeesUsd: q.ycLegFeesUsd } : {}),
       ...(q.yc?.sequenceId ? { ycSequenceId: q.yc.sequenceId } : {}),
       ...(q.yc?.sendId ? { ycSendId: q.yc.sendId } : {}),
       ...(q.yc?.walletAddress ? { ycWalletAddress: q.yc.walletAddress } : {}),

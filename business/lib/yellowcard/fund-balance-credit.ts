@@ -1,15 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { computeEasnerRevenueFeeWalletSweepAmount } from "@easner/shared"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { sendStablecoinFromDepositOmnibus } from "@/lib/turnkey/send-from-omnibus"
-import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
+import {
+  readPriorSweepFromMetadata,
+  sweepEasnerRevenueFromDepositOmnibus,
+} from "@/lib/processing-fee/fee-wallet-sweep"
 import {
   buildYcFundBalanceReceiveMetadata,
   mergeYcFundBalanceLifecycle,
 } from "@/lib/yellowcard/yc-ledger"
 import { resolveLedgerOccurredAt } from "@/lib/ledger/ledger-occurred-at"
-
-const MARGIN_SEND_MIN = 0.01
 
 function asMeta(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
@@ -78,25 +79,21 @@ export async function creditFundBalanceFromYcReceive(
     delta: creditAmt,
   })
 
-  const marginAmount = Math.max(0, cryptoAmount - creditAmt - processingFee)
-  const feeSweep = processingFee > 0 ? processingFee : marginAmount
+  const marginAmount = Number(transferMeta.margin_amount ?? Math.max(0, cryptoAmount - creditAmt - processingFee))
+  const feeSweep = computeEasnerRevenueFeeWalletSweepAmount({
+    marginAmount,
+    processingFee,
+    ledgerSurplus: cryptoAmount - creditAmt,
+  })
 
   let feeWalletSweepTxHash: string | null = null
-  if (feeSweep >= MARGIN_SEND_MIN) {
-    const feeAddr = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: "USD" })
-    if (feeAddr) {
-      const marginSend = await sendStablecoinFromDepositOmnibus({
-        ledgerCurrency: "USD",
-        asset: "USDC",
-        destinationAddress: feeAddr,
-        amount: feeSweep,
-        pollForSettlement: false,
-      }).catch((e) => {
-        console.warn("[yc-fund-balance] margin sweep failed (non-fatal):", e)
-        return null
-      })
-      feeWalletSweepTxHash = marginSend?.txHash ?? null
-    }
+  if (!readPriorSweepFromMetadata(transferMeta).captured && feeSweep > 0) {
+    const sweep = await sweepEasnerRevenueFromDepositOmnibus({
+      ledgerCurrency: "USD",
+      amount: feeSweep,
+      logTag: "yc-fund-balance",
+    })
+    feeWalletSweepTxHash = sweep.feeWalletSweepTxHash
   }
 
   await admin
@@ -108,6 +105,9 @@ export async function creditFundBalanceFromYcReceive(
       fee_wallet_sweep: feeSweep > 0 ? feeSweep : null,
       metadata: {
         ...transferMeta,
+        margin_amount: marginAmount,
+        processing_fee: processingFee,
+        margin_capture_mode: "fee_wallet_omnibus",
         ...(input.omnibusTxHash ? { leg1_omnibus_tx_hash: input.omnibusTxHash } : {}),
         ...(feeWalletSweepTxHash ? { fee_wallet_sweep_tx_hash: feeWalletSweepTxHash } : {}),
         usd_credit_applied: creditAmt,
