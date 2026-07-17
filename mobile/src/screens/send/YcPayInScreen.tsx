@@ -11,7 +11,8 @@ import { ArrowLeft, Check, Copy, Landmark, Smartphone } from 'lucide-react-nativ
 import { LinearGradient } from 'expo-linear-gradient'
 import {
   formatMoneyDisplay,
-  resolveYcCrossBorderLocalPayInBreakdown,
+  resolveYcCrossBorderLocalPayInBreakdownForDisplay,
+  resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   ycPayInCompleteNotice,
   YC_PAY_IN_MOMO_AUTHORIZE_CTA,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
@@ -104,21 +105,30 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   const formattedSendAmount = formatMoneyDisplay(localPayIn, sendCurrency)
   const completeNotice = ycPayInCompleteNotice(payInRail)
   const displayTransactionId = transactionId?.toUpperCase() ?? ''
-  const crossBorderBreakdown =
-    flowMode === 'cross_border_send' && customerRate > 0 && localPayIn > 0
-      ? resolveYcCrossBorderLocalPayInBreakdown({
-          localPayIn,
-          payInCurrency: sendCurrency,
-          receiveAmount,
-          customerRate,
-          provisionalPayIn,
-          displayProcessingFeeLocal: processingFeeLocal,
-        })
+  const payInBreakdown =
+    customerRate > 0 && localPayIn > 0
+      ? flowMode === 'cross_border_send'
+        ? resolveYcCrossBorderLocalPayInBreakdownForDisplay({
+            localPayIn,
+            payInCurrency: sendCurrency,
+            receiveAmount,
+            customerRate,
+            provisionalPayIn,
+            displayProcessingFeeLocal: processingFeeLocal,
+          })
+        : isFundBalance && isMobileMoney
+          ? resolveYcFundBalanceLocalPayInBreakdownForDisplay({
+              localPayIn,
+              localCurrency: sendCurrency,
+              usdCredit: receiveAmount,
+              exchangeRate: customerRate,
+              displayProcessingFeeLocal: processingFeeLocal,
+              processingFee,
+              exchangeFee: ycChannelFeeUsd,
+            })
+          : null
       : null
-  const feeLocal =
-    crossBorderBreakdown?.feeLocal ??
-    processingFeeLocal ??
-    0
+  const feeLocal = payInBreakdown?.feeLocal ?? processingFeeLocal ?? 0
   const ctaLabel = isMobileMoney ? YC_PAY_IN_MOMO_AUTHORIZE_CTA : "I've made the payment"
 
   const handleCopy = async (text: string, key: string) => {

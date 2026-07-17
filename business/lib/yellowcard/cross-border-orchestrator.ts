@@ -5,7 +5,7 @@ import {
   TLC_LOCAL_TRANSFER_METHOD,
   computeYcCrossBorderPricing,
   computeYcCrossBorderPricingBeforeReceive,
-  computeYcFundBalancePrincipalLocalPayIn,
+  computeYcCrossBorderPrincipalLocalPayIn,
   getGlobalPayoutProcessingTime,
   validateYcRecipientForCorridor,
 } from "@easner/shared"
@@ -341,9 +341,10 @@ export async function createCrossBorderTransfer(input: {
   }
   const payInReview = {
     local_pay_in: pricingFinal.localPayIn,
-    principal_local_pay_in: computeYcFundBalancePrincipalLocalPayIn({
-      usdCredit: input.receiveAmount,
-      exchangeRate: cross.rate,
+    principal_local_pay_in: computeYcCrossBorderPrincipalLocalPayIn({
+      receiveAmount: input.receiveAmount,
+      customerRate: cross.rate,
+      provisionalPayIn: pricingFinal.provisionalPayIn,
     }),
     local_currency: payInCurrency,
     processing_fee: pricingFinal.processingFee,

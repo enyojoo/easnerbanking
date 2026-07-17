@@ -11,8 +11,8 @@ import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
   buildYcLocalPayInReviewRows,
-  computeDisplayProcessingFee,
   computeYcFundBalancePrincipalLocalPayIn,
+  resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   REVIEW_ROW_LABELS,
   normalizeYcMomoPhone,
 } from '@easner/shared'
@@ -183,25 +183,32 @@ export function YcFundBalanceReview({
   const resolvedLocalPayIn = quote?.localPayIn ?? estimatedPayIn
   const resolvedUsdCredit = quote?.usdCredit ?? estimatedCredit
 
+  const lockedReviewBreakdown =
+    !isMobileMoney && quote && resolvedLocalPayIn > 0
+      ? resolveYcFundBalanceLocalPayInBreakdownForDisplay({
+          localPayIn: resolvedLocalPayIn,
+          localCurrency: localPayInCurrency,
+          usdCredit: resolvedUsdCredit,
+          exchangeRate: customerRate,
+          displayProcessingFeeLocal: quote.displayProcessingFeeLocal,
+          processingFee: quote.processingFee,
+          exchangeFee: quote.ycChannelFeeUsd ?? quote.ycLegFeesUsd,
+        })
+      : null
+  const reviewPrincipalLocal =
+    lockedReviewBreakdown?.principalLocal ??
+    computeYcFundBalancePrincipalLocalPayIn({
+      usdCredit: resolvedUsdCredit,
+      exchangeRate: customerRate,
+    })
   const reviewFeeLocal =
-    !isMobileMoney && quote
-      ? quote.displayProcessingFeeLocal ??
-        (quote.displayProcessingFee != null && customerRate > 0
-          ? Math.round(quote.displayProcessingFee * customerRate * 100) / 100
-          : computeDisplayProcessingFee({
-              processingFee: quote.processingFee ?? 0,
-              exchangeFee: quote.ycChannelFeeUsd ?? quote.ycLegFeesUsd ?? 0,
-            }) * (customerRate || 1))
-      : isMobileMoney && customerRate > 0 && resolvedLocalPayIn > 0
-        ? Math.max(
-            0,
-            Math.round((resolvedLocalPayIn - resolvedUsdCredit * customerRate) * 100) / 100,
-          )
-        : 0
-  const reviewPrincipalLocal = computeYcFundBalancePrincipalLocalPayIn({
-    usdCredit: resolvedUsdCredit,
-    exchangeRate: customerRate,
-  })
+    lockedReviewBreakdown?.feeLocal ??
+    (isMobileMoney && customerRate > 0 && resolvedLocalPayIn > 0
+      ? Math.max(
+          0,
+          Math.round((resolvedLocalPayIn - resolvedUsdCredit * customerRate) * 100) / 100,
+        )
+      : 0)
 
   const reviewRows = buildYcLocalPayInReviewRows({
     mode: 'fund_balance',

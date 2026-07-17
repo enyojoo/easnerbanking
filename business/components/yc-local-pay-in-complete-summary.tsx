@@ -2,8 +2,8 @@
 
 import {
   buildYcLocalPayInCompleteRows,
-  computeYcFundBalancePrincipalLocalPayIn,
-  resolveYcCrossBorderLocalPayInBreakdown,
+  resolveYcCrossBorderLocalPayInBreakdownForDisplay,
+  resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   REVIEW_ROW_LABELS,
   type YcPayInRail,
 } from "@easner/shared"
@@ -51,7 +51,7 @@ export function YcLocalPayInCompleteSummary({
   const isMomo = payInRail === "mobile_money"
   const crossBorderBreakdown =
     isCrossBorder && isMomo && customerRate > 0 && localPayIn > 0
-      ? resolveYcCrossBorderLocalPayInBreakdown({
+      ? resolveYcCrossBorderLocalPayInBreakdownForDisplay({
           localPayIn,
           payInCurrency: localCurrency,
           receiveAmount: creditOrReceiveAmount,
@@ -60,13 +60,20 @@ export function YcLocalPayInCompleteSummary({
           displayProcessingFeeLocal: processingFeeLocal,
         })
       : null
-  const principalLocal =
-    isFundBalance && isMomo && customerRate > 0
-      ? computeYcFundBalancePrincipalLocalPayIn({
+  const fundBalanceBreakdown =
+    isFundBalance && isMomo && customerRate > 0 && localPayIn > 0
+      ? resolveYcFundBalanceLocalPayInBreakdownForDisplay({
+          localPayIn,
+          localCurrency,
           usdCredit: creditOrReceiveAmount,
           exchangeRate: customerRate,
+          displayProcessingFeeLocal: processingFeeLocal,
+          processingFee: processingFeeUsd,
+          exchangeFee: exchangeFeeUsd,
         })
-      : crossBorderBreakdown?.principalLocal
+      : null
+  const principalLocal =
+    fundBalanceBreakdown?.principalLocal ?? crossBorderBreakdown?.principalLocal
 
   const rows = buildYcLocalPayInCompleteRows({
     mode: flowMode,
@@ -77,7 +84,8 @@ export function YcLocalPayInCompleteSummary({
     localPayIn,
     receiveAmount: creditOrReceiveAmount,
     customerRate,
-    processingFeeLocal: crossBorderBreakdown?.feeLocal ?? processingFeeLocal,
+    processingFeeLocal:
+      fundBalanceBreakdown?.feeLocal ?? crossBorderBreakdown?.feeLocal ?? processingFeeLocal,
     processingFeeUsd,
     exchangeFeeUsd,
     principalLocal,

@@ -3,6 +3,8 @@ import {
   buildYcFundBalanceDepositReviewSnapshot,
   computeYcCrossBorderPrincipalLocalPayIn,
   resolveYcCrossBorderLocalPayInBreakdown,
+  resolveYcCrossBorderLocalPayInBreakdownForDisplay,
+  resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   computeYcFundBalancePrincipalLocalPayIn,
   inferResidenceCountryFromLocalCurrency,
   isNoahVaFundingDeposit,
@@ -48,6 +50,41 @@ describe("resolveYcCrossBorderLocalPayInBreakdown", () => {
     expect(breakdown.principalLocal).toBe(300.04)
     expect(breakdown.feeLocal).toBe(7.9)
     expect(breakdown.totalLocal).toBe(307.94)
+    expect(breakdown.principalLocal + breakdown.feeLocal).toBe(breakdown.totalLocal)
+  })
+})
+
+describe("resolveYcFundBalanceLocalPayInBreakdownForDisplay", () => {
+  it("aligns KES fund-balance bank rows so rounded principal + fee = rounded total", () => {
+    const breakdown = resolveYcFundBalanceLocalPayInBreakdownForDisplay({
+      localPayIn: 310.56,
+      localCurrency: "KES",
+      usdCredit: 2.34,
+      exchangeRate: 128.68341708543,
+      displayProcessingFeeLocal: 9.44,
+      processingFee: 0.0234,
+      exchangeFee: 0.05,
+    })
+    expect(breakdown.principalLocal).toBe(301)
+    expect(breakdown.feeLocal).toBe(10)
+    expect(breakdown.totalLocal).toBe(311)
+    expect(breakdown.principalLocal + breakdown.feeLocal).toBe(breakdown.totalLocal)
+  })
+})
+
+describe("resolveYcCrossBorderLocalPayInBreakdownForDisplay", () => {
+  it("aligns KES TLC rows so rounded principal + fee = rounded total", () => {
+    const breakdown = resolveYcCrossBorderLocalPayInBreakdownForDisplay({
+      localPayIn: 307.94,
+      payInCurrency: "KES",
+      receiveAmount: 3221,
+      customerRate: 10.735227698797,
+      provisionalPayIn: 300.04,
+      displayProcessingFeeLocal: 9.45,
+    })
+    expect(breakdown.principalLocal).toBe(300)
+    expect(breakdown.feeLocal).toBe(8)
+    expect(breakdown.totalLocal).toBe(308)
     expect(breakdown.principalLocal + breakdown.feeLocal).toBe(breakdown.totalLocal)
   })
 })

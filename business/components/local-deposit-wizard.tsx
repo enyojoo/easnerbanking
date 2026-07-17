@@ -15,7 +15,6 @@ import {
 } from "lucide-react"
 import {
   formatMoneyDisplay,
-  computeDisplayProcessingFee,
   mapResidenceToLocalPayInCurrency,
   resolveYcPayInCustomerRate,
   ycFundBalanceQuoteErrorMessage,
@@ -24,6 +23,7 @@ import {
   validateYcFundBalancePayInAmount,
   REVIEW_ROW_LABELS,
   computeYcFundBalancePrincipalLocalPayIn,
+  resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   normalizeYcMomoPhone,
   type NgLocalIdType,
   type YcRateClientRow,
@@ -605,25 +605,32 @@ export function LocalDepositWizard({
     const reviewLocalPayIn = isMomo ? preview.localPayIn : (quote?.localPayIn ?? 0)
     const reviewUsdCredit = isMomo ? preview.usdCredit : (quote?.usdCredit ?? 0)
     const reviewCustomerRate = isMomo ? customerRate : (quote?.customerRate ?? customerRate)
+    const lockedReviewBreakdown =
+      !isMomo && quote && reviewLocalPayIn > 0
+        ? resolveYcFundBalanceLocalPayInBreakdownForDisplay({
+            localPayIn: reviewLocalPayIn,
+            localCurrency: localPayInCurrency,
+            usdCredit: reviewUsdCredit,
+            exchangeRate: reviewCustomerRate,
+            displayProcessingFeeLocal: quote.displayProcessingFeeLocal,
+            processingFee: quote.processingFee,
+            exchangeFee: quote.ycChannelFeeUsd,
+          })
+        : null
+    const reviewPrincipalLocal =
+      lockedReviewBreakdown?.principalLocal ??
+      computeYcFundBalancePrincipalLocalPayIn({
+        usdCredit: reviewUsdCredit,
+        exchangeRate: reviewCustomerRate,
+      })
     const reviewFeeLocal =
-      !isMomo && quote
-        ? quote.displayProcessingFeeLocal ??
-          (quote.displayProcessingFee != null && reviewCustomerRate
-            ? Math.round(quote.displayProcessingFee * reviewCustomerRate * 100) / 100
-            : computeDisplayProcessingFee({
-                processingFee: quote.processingFee ?? 0,
-                exchangeFee: quote.ycChannelFeeUsd ?? 0,
-              }) * (reviewCustomerRate || 1))
-        : isMomo && reviewCustomerRate > 0 && reviewLocalPayIn > 0
-          ? Math.max(
-              0,
-              Math.round((reviewLocalPayIn - reviewUsdCredit * reviewCustomerRate) * 100) / 100,
-            )
-          : 0
-    const reviewPrincipalLocal = computeYcFundBalancePrincipalLocalPayIn({
-      usdCredit: reviewUsdCredit,
-      exchangeRate: reviewCustomerRate,
-    })
+      lockedReviewBreakdown?.feeLocal ??
+      (isMomo && reviewCustomerRate > 0 && reviewLocalPayIn > 0
+        ? Math.max(
+            0,
+            Math.round((reviewLocalPayIn - reviewUsdCredit * reviewCustomerRate) * 100) / 100,
+          )
+        : 0)
     const momoReady = Boolean((momoPhone.trim() || defaultPhone.trim()) && momoNetworkId)
     const reviewReady = isMomo
       ? Boolean(reviewCustomerRate && reviewLocalPayIn > 0 && momoReady)

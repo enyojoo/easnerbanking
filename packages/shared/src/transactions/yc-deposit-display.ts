@@ -1,4 +1,5 @@
 import { computeDisplayProcessingFee } from "../payout-processing-fee"
+import { isZeroDecimalPayoutCurrency } from "../noah-send-rates"
 import { resolveReceiveCountryName } from "../receive-cash-method-labels"
 import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
 import { isVerificationDepositMetadata } from "./verification-deposit"
@@ -158,6 +159,56 @@ export function resolveYcFundBalanceLocalPayInBreakdown(
     totalLocal,
     localCurrency: review.local_currency,
   }
+}
+
+/** Align principal/fee/total for zero-decimal pay-in currencies so displayed rows foot. */
+export function alignLocalPayInBreakdownForDisplay(
+  breakdown: YcFundBalanceLocalPayInBreakdown,
+): YcFundBalanceLocalPayInBreakdown {
+  if (!isZeroDecimalPayoutCurrency(breakdown.localCurrency)) {
+    return breakdown
+  }
+  const totalLocal = Math.round(breakdown.totalLocal)
+  const principalLocal = Math.round(breakdown.principalLocal)
+  return {
+    ...breakdown,
+    totalLocal,
+    principalLocal,
+    feeLocal: Math.max(0, totalLocal - principalLocal),
+  }
+}
+
+export function resolveYcFundBalanceLocalPayInBreakdownForDisplay(input: {
+  localPayIn: number
+  localCurrency: string
+  usdCredit: number
+  exchangeRate: number
+  displayProcessingFeeLocal?: number | null
+  processingFee?: number
+  exchangeFee?: number
+}): YcFundBalanceLocalPayInBreakdown {
+  return alignLocalPayInBreakdownForDisplay(
+    resolveYcFundBalanceLocalPayInBreakdown({
+      local_pay_in: input.localPayIn,
+      local_currency: input.localCurrency,
+      usd_credit: input.usdCredit,
+      exchange_rate: input.exchangeRate,
+      display_processing_fee_local: input.displayProcessingFeeLocal,
+      processing_fee: input.processingFee ?? 0,
+      exchange_fee: input.exchangeFee ?? 0,
+    }),
+  )
+}
+
+export function resolveYcCrossBorderLocalPayInBreakdownForDisplay(input: {
+  localPayIn: number
+  payInCurrency: string
+  receiveAmount: number
+  customerRate: number
+  provisionalPayIn?: number | null
+  displayProcessingFeeLocal?: number | null
+}): YcFundBalanceLocalPayInBreakdown {
+  return alignLocalPayInBreakdownForDisplay(resolveYcCrossBorderLocalPayInBreakdown(input))
 }
 
 export function inferResidenceCountryFromLocalCurrency(localCurrency: string): string | null {

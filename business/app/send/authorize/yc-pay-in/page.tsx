@@ -8,7 +8,7 @@ import { YcCompleteDepositPanel } from "@/components/yc-complete-deposit-panel"
 import { getCurrencySymbol } from "@/lib/utils"
 import {
   formatMoneyDisplay,
-  resolveYcCrossBorderLocalPayInBreakdown,
+  resolveYcCrossBorderLocalPayInBreakdownForDisplay,
 } from "@easner/shared"
 
 export default function YcPayInPage() {
@@ -57,7 +57,7 @@ export default function YcPayInPage() {
   const displayTransactionId = (
     yc.easnerTransactionId || yc.transactionId || state.transactionId
   ).toUpperCase()
-  const payInBreakdown = resolveYcCrossBorderLocalPayInBreakdown({
+  const payInBreakdown = resolveYcCrossBorderLocalPayInBreakdownForDisplay({
     localPayIn: payIn,
     payInCurrency,
     receiveAmount: state.amount,

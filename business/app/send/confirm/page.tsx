@@ -17,7 +17,7 @@ import {
   resolveRecipientPayoutRail,
   resolveSendConfirmArrivalHint,
   normalizeYcMomoPhone,
-  resolveYcCrossBorderLocalPayInBreakdown,
+  resolveYcCrossBorderLocalPayInBreakdownForDisplay,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -896,7 +896,7 @@ export default function SendConfirmPage() {
       Boolean((walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend) ||
       (!easenetSend && (!quoteReady || quoteCountdown.expired))
 
-  const tlcReviewBreakdown = resolveYcCrossBorderLocalPayInBreakdown({
+  const tlcReviewBreakdown = resolveYcCrossBorderLocalPayInBreakdownForDisplay({
     localPayIn: totalDebited,
     payInCurrency: state.sendCurrency,
     receiveAmount: state.amount,

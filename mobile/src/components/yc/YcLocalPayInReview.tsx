@@ -15,7 +15,7 @@ import {
   REVIEW_ROW_LABELS,
   TLC_LOCAL_TRANSFER_METHOD,
   normalizeYcMomoPhone,
-  resolveYcCrossBorderLocalPayInBreakdown,
+  resolveYcCrossBorderLocalPayInBreakdownForDisplay,
 } from '@easner/shared'
 import type { Recipient } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
@@ -174,7 +174,7 @@ export function YcLocalPayInReview({
   const displayTransactionId = quote?.easnerTransactionId ?? quote?.transactionId ?? ''
   const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
 
-  const reviewBreakdown = resolveYcCrossBorderLocalPayInBreakdown({
+  const reviewBreakdown = resolveYcCrossBorderLocalPayInBreakdownForDisplay({
     localPayIn: isMobileMoney ? estimatedPayIn : lockedLocalPayIn,
     payInCurrency,
     receiveAmount,
