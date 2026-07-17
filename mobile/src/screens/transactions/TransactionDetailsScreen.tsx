@@ -384,29 +384,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     return formatSignedCurrency(amount, currency, received)
   }, [transaction])
 
-  const accountImpactLabel = useMemo(() => {
-    if (!transaction) return ''
-    const impactAmount = Number(transaction.account_impact_amount)
-    const impactCurrency = String(transaction.account_impact_currency ?? '').toUpperCase()
-    if (!Number.isFinite(impactAmount) || impactAmount <= 0 || !impactCurrency) return ''
-    const displayAmount = Number(transaction.display_amount ?? transaction.amount)
-    const displayCurrency = String(
-      transaction.display_currency ?? transaction.currency ?? 'USD',
-    ).toUpperCase()
-    if (
-      impactCurrency === displayCurrency &&
-      Math.abs(impactAmount - displayAmount) <= 0.000001
-    ) {
-      return ''
-    }
-    const received = transaction.transaction_type === 'receive'
-    return `${received ? 'To' : 'From'} your account: ${formatSignedCurrency(
-      impactAmount,
-      impactCurrency,
-      received,
-    )}`
-  }, [transaction])
-
   const heroAmountTextStyle = useMemo(() => {
     const received = transaction?.transaction_type === 'receive'
     return buildDynamicAmountTextStyle(
@@ -1010,9 +987,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 >
                   {heroAmountLabel}
                 </Text>
-                {accountImpactLabel ? (
-                  <Text style={styles.heroAccountImpact}>{accountImpactLabel}</Text>
-                ) : null}
               </View>
               <StatusPill
                 label={statusInfo.label}
@@ -1433,12 +1407,6 @@ const styles = StyleSheet.create({
   },
   heroAmountOut: {
     color: colors.text.primary,
-  },
-  heroAccountImpact: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    marginTop: spacing[1],
-    textAlign: 'center',
   },
   heroStatus: {
     alignSelf: 'center',
