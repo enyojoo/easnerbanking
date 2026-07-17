@@ -148,7 +148,7 @@ function formatStartedDisplay(iso: string | null): string {
   return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
 }
 
-/** Ledger creation time for detail "When" — never settlement or webhook times. */
+/** Ledger insert time for detail "When" — never settlement, webhook, or `updated_at`. */
 export function resolveTransactionWhenAt(
   createdAt?: string | null,
   ledgerCreatedAt?: string | null,

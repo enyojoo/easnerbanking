@@ -33,6 +33,7 @@ import {
   isVerificationDepositMetadata,
   VERIFICATION_DEPOSIT_LIST_LABEL,
 } from "./verification-deposit"
+import { resolveLedgerUserFacingCreatedAt } from "./ledger-display-time"
 
 // ---------------------------------------------------------------------------
 // Display id helpers (pure — no generation dependency)
@@ -270,12 +271,9 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
   const dirRaw = String(row.direction ?? "").toLowerCase()
   const transaction_type = dirRaw === "in" ? "receive" : "send"
   const st = mapLedgerStatusForUserFeed(String(row.status ?? ""))
-  const created =
-    row.occurred_at != null
-      ? String(row.occurred_at)
-      : row.created_at != null
-        ? String(row.created_at)
-        : new Date().toISOString()
+  const created = resolveLedgerUserFacingCreatedAt({
+    createdAt: row.created_at != null ? String(row.created_at) : null,
+  })
 
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
   const meta = row.metadata as Record<string, unknown> | null | undefined

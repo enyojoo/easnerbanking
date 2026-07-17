@@ -180,11 +180,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     row.created_at != null ? String(row.created_at) : undefined
 
   const created =
-    row.occurred_at != null
-      ? String(row.occurred_at)
-      : row.created_at != null
-        ? String(row.created_at)
-        : new Date().toISOString()
+    row.created_at != null ? String(row.created_at) : new Date().toISOString()
 
   const currencyCode = displaySource
     ? displaySource.displayCurrency

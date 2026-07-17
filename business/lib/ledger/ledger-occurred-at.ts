@@ -1,6 +1,6 @@
 /**
- * List feeds order by `occurred_at DESC NULLS LAST, created_at DESC`.
- * Rows without occurred_at sink below every dated row — set at insert for pending flows.
+ * List feeds order by `created_at DESC` (ledger insert — when the user initiated / row entered DB).
+ * `occurred_at` is provider rail time and may update on webhooks; do not use it for feed sort/display.
  */
 export function ledgerOccurredAtForNewRow(now: Date = new Date()): string {
   return now.toISOString()

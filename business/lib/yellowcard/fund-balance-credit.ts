@@ -136,17 +136,22 @@ export async function creditFundBalanceFromYcReceive(
   if (transactionId) {
     const { data: txRow } = await admin
       .from("transactions")
-      .select("metadata")
+      .select("metadata, occurred_at, created_at")
       .eq("id", transactionId)
       .maybeSingle()
     const prior = asMeta(txRow?.metadata)
+    const occurredAt = resolveLedgerOccurredAt({
+      occurredAt: txRow?.occurred_at != null ? String(txRow.occurred_at) : null,
+      createdAt: txRow?.created_at != null ? String(txRow.created_at) : null,
+      fallback: now,
+    })
     await admin
       .from("transactions")
       .update({
         status: "settled",
         amount: creditAmt,
         settled_at: now,
-        occurred_at: now,
+        occurred_at: occurredAt,
         metadata: {
           ...prior,
           ...lifecycleMeta,

@@ -543,6 +543,7 @@ export {
   formatTransactionDetailHeroTitle,
 } from "./transactions/transaction-detail-hero-title"
 export type { TransactionDetailHeroTitleInput } from "./transactions/transaction-detail-hero-title"
+export { resolveLedgerUserFacingCreatedAt } from "./transactions/ledger-display-time"
 export {
   appendLifecycleDuration,
   buildTransactionTimingRows,

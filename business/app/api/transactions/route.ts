@@ -46,7 +46,6 @@ export async function GET(request: Request) {
     .from("transactions")
     .select(LEDGER_LIST_SELECT)
     .eq("hidden_from_feed", false)
-    .order("occurred_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(limit + 1)

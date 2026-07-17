@@ -56,7 +56,7 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     : st === "unknown" ? "pending"
     : st || "unknown"
   const created =
-    row.occurred_at != null ? String(row.occurred_at) : row.created_at != null ? String(row.created_at) : new Date().toISOString()
+    row.created_at != null ? String(row.created_at) : new Date().toISOString()
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
   const meta = row.metadata as Record<string, unknown> | null | undefined
   const easnerId = displayEasnerTransactionId({
@@ -115,7 +115,7 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
   const st = String(row.status ?? "").toLowerCase()
   const provider = String(row.provider ?? "noah").toLowerCase()
   const created =
-    row.occurred_at != null ? String(row.occurred_at) : row.created_at != null ? String(row.created_at) : new Date().toISOString()
+    row.created_at != null ? String(row.created_at) : new Date().toISOString()
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const sourceType =
     isEasetagP2p
@@ -342,6 +342,9 @@ export async function GET(request: Request, routeCtx: Props) {
         id: transaction.id,
         transaction_id: transaction.transaction_id,
         ledger_row_id: transaction.ledger_row_id,
+        created_at: transaction.created_at,
+        noah_created_at: transaction.created_at,
+        ledger_created_at: transaction.ledger_created_at,
       },
       meta,
     )
