@@ -15,6 +15,12 @@ vi.mock("@easner/shared", () => ({
   },
   formatDisplayPersonName: (n: string) =>
     n === "SAMUEL ODIBA ENYOJO" ? "Samuel Odiba Enyojo" : n,
+  formatOutboundTransferTitle: (recipientName?: string | null) =>
+    `Transfer to ${
+      recipientName === "SAMUEL ODIBA ENYOJO"
+        ? "Samuel Odiba Enyojo"
+        : recipientName || "Recipient"
+    }`,
   formatTransactionDetailHeroTitle: ({
     direction,
     counterpartyName,
@@ -27,6 +33,10 @@ vi.mock("@easner/shared", () => ({
       : "Transfer",
   getGlobalPayoutTransferMethod: () => "Bank transfer",
   getGlobalPayoutProcessingTime: () => "Within minutes",
+  resolveLedgerWhenAt: (input: {
+    occurredAt?: string | null
+    createdAt?: string | null
+  }) => input.occurredAt ?? input.createdAt ?? null,
   buildTransactionTimingRows: () => [{ label: "Expected", value: "Within minutes" }],
   resolveTransactionTimingAnchors: (input: {
     createdAt?: string | null
@@ -110,7 +120,8 @@ describe("resolveGlobalPayoutOffRampDetail", () => {
     })
 
     expect(resolved).not.toBeNull()
-    expect(resolved?.displayHeroTitle).toBe("Send to Jane Doe")
+    expect(resolved?.displayHeroTitle).toBe("Transfer to Jane Doe")
+    expect(resolved?.displayDescription).toBe("Transfer to Jane Doe")
     expect(resolved?.displayAmount).toBe(100)
     expect(resolved?.displayCurrency).toBe("USD")
     expect(resolved?.payoutReview?.transfer_method).toBe("Local Transfer")

@@ -3,6 +3,7 @@ import {
   deriveBankDepositInboundDisplayLabel,
   displayEasnerTransactionIdForList,
   formatDisplayPersonName,
+  formatOutboundTransferTitle,
   formatTransactionDetailHeroTitle,
   buildTransactionTimingRows,
   resolveTransactionTimingAnchors,
@@ -11,6 +12,7 @@ import {
   mapLedgerStatusForUserFeed,
   resolveGlobalPayoutListDisplay,
   resolveWalletSendListDisplay,
+  resolveYcCrossBorderListDisplay,
   toEasnerTransactionPrimaryLabel,
   isYcFundBalanceDepositMetadata,
   resolveYcFundBalanceDepositDisplayTitle,
@@ -68,6 +70,8 @@ function deriveCounterpartyName(input: {
     meta.sender_name,
     meta.originator_name,
     meta.beneficiary_name,
+    (meta.recipient_snapshot as Record<string, unknown> | undefined)?.full_name,
+    (meta.recipient_snapshot as Record<string, unknown> | undefined)?.name,
     (meta.source as Record<string, unknown> | undefined)?.sender_name,
     (meta.source as Record<string, unknown> | undefined)?.originator_name,
     (meta.destination as Record<string, unknown> | undefined)?.recipient_name,
@@ -129,31 +133,28 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const globalPayoutList = globalPayoutDetail ? null : resolveGlobalPayoutListDisplay(row)
   const walletSendList =
     globalPayoutDetail || walletSendPayoutReview ? null : resolveWalletSendListDisplay(row)
+  const ycCrossBorderList =
+    globalPayoutDetail || walletSendPayoutReview || walletSendList
+      ? null
+      : resolveYcCrossBorderListDisplay(row)
   const globalPayout = globalPayoutDetail ?? globalPayoutList
   const bankLabel =
     !isVerification && !isYcFundBalance && !globalPayout && (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
       ? deriveBankDepositInboundDisplayLabel({ metadata: meta })
       : undefined
   const counterpartyNameRaw = deriveCounterpartyName({ metadata: meta, payload })
+  const walletSendTitle = formatOutboundTransferTitle(
+    counterpartyNameRaw,
+    "External Wallet",
+  )
   const walletSendDisplay = walletSendPayoutReview
     ? {
         displayAmount: walletSendPayoutReview.receive_amount,
         displayCurrency: walletSendPayoutReview.receive_currency,
         ledgerAmount: walletSendPayoutReview.total_debited,
         ledgerCurrency: walletSendPayoutReview.send_currency,
-        displayDescription:
-          counterpartyNameRaw ||
-          toEasnerTransactionPrimaryLabel({
-            provider,
-            direction: dirRaw === "in" ? "in" : "out",
-            metadata: meta,
-            payload,
-          }),
-        displayHeroTitle: formatTransactionDetailHeroTitle({
-          direction: "out",
-          counterpartyName: counterpartyNameRaw || "Wallet transfer",
-          productFallback: "Transfer",
-        }),
+        displayDescription: walletSendTitle,
+        displayHeroTitle: walletSendTitle,
       }
     : null
   const walletSendListDisplay = walletSendList
@@ -166,7 +167,8 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
         displayHeroTitle: walletSendList.displayHeroTitle,
       }
     : null
-  const displaySource = globalPayout ?? walletSendDisplay ?? walletSendListDisplay
+  const displaySource =
+    globalPayout ?? walletSendDisplay ?? walletSendListDisplay ?? ycCrossBorderList
   const accountImpact = resolveAccountImpactAmount({
     ...row,
     ...(displaySource
@@ -195,16 +197,6 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
 
   const created = ledgerCreatedAt ?? new Date().toISOString()
 
-  const ycCrossBorderAmount =
-    String(meta?.yc_mode ?? "") === "cross_border_send"
-      ? Number(meta?.receive_amount ?? 0)
-      : 0
-  const ycCrossBorderCurrency =
-    ycCrossBorderAmount > 0
-      ? String(meta?.receive_currency ?? "").toUpperCase()
-      : ""
-  const hasYcCrossBorderPresentation =
-    ycCrossBorderAmount > 0 && Boolean(ycCrossBorderCurrency)
   const ycLocalPayIn = isYcFundBalance ? Number(meta?.local_pay_in ?? 0) : 0
   const ycLocalCurrency = isYcFundBalance
     ? String(meta?.local_currency ?? "").toUpperCase()
@@ -213,15 +205,11 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     ycLocalPayIn > 0 && Boolean(ycLocalCurrency)
   const currencyCode = displaySource
     ? displaySource.displayCurrency
-    : hasYcCrossBorderPresentation
-      ? ycCrossBorderCurrency
     : hasYcLocalPresentation
       ? ycLocalCurrency
     : String(row.currency ?? "USD")
   const listAmount = displaySource
     ? displaySource.displayAmount
-    : hasYcCrossBorderPresentation
-      ? ycCrossBorderAmount
     : hasYcLocalPresentation
       ? ycLocalPayIn
     : typeof row.amount === "number"

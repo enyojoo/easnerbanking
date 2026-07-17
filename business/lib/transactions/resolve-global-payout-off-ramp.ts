@@ -4,7 +4,7 @@ import {
   resolveTransactionTimingAnchors,
   computeBalancePayoutExchangeFee,
   formatDisplayPersonName,
-  formatTransactionDetailHeroTitle,
+  formatOutboundTransferTitle,
   getGlobalPayoutTransferMethod,
   getGlobalPayoutProcessingTime,
   isGlobalPayoutOffRampOutRow,
@@ -354,15 +354,8 @@ export function resolveGlobalPayoutOffRampDetail(
     payoutReview?.send_currency ??
     String(meta.send_currency || ledgerCurrency).toUpperCase()
 
-  const displayDescription = recipientName || "Transfer"
-  const isCrossBorder = String(meta.yc_mode ?? "") === "cross_border_send"
-  const displayHeroTitle = isCrossBorder && recipientName
-    ? `Send to ${formatDisplayPersonName(recipientName) || recipientName}`
-    : formatTransactionDetailHeroTitle({
-        direction: "out",
-        counterpartyName: recipientName,
-        productFallback: "Transfer",
-      })
+  const displayHeroTitle = formatOutboundTransferTitle(recipientName)
+  const displayDescription = displayHeroTitle
 
   const processingAt = pickIso(webhook?.processingAt, meta.processing_at)
   const completedAt = pickIso(webhook?.completedAt, meta.completed_at)

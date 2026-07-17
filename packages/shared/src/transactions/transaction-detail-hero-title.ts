@@ -7,6 +7,22 @@ export type TransactionDetailHeroTitleInput = {
   productFallback?: string | null
 }
 
+/** Canonical payout title used by both transaction lists and detail heroes. */
+export function formatOutboundTransferTitle(
+  recipientName?: string | null,
+  fallbackRecipient = "Recipient",
+): string {
+  const explicitRecipient =
+    recipientName && !isEasnerProductSendTitle(recipientName)
+      ? recipientName
+      : null
+  const name =
+    formatDisplayPersonName(explicitRecipient) ||
+    formatDisplayPersonName(fallbackRecipient) ||
+    "Recipient"
+  return `Transfer to ${name}`
+}
+
 /** Detail hero copy — web + mobile (not list rows or push body). */
 export function formatTransactionDetailHeroTitle(input: TransactionDetailHeroTitleInput): string {
   const raw = String(input.counterpartyName ?? "").trim()

@@ -42,6 +42,7 @@ import {
   toEasnerTransactionProductCategory,
   resolveLedgerWhenAt,
   resolveAccountImpactAmount,
+  resolveYcCrossBorderListDisplay,
 } from "@easner/shared"
 import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
@@ -81,6 +82,7 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const currency = String(row.currency ?? "USD")
   const ledger_row_id = ledgerId || undefined
   const accountImpact = resolveAccountImpactAmount(row)
+  const ycCrossBorderDisplay = resolveYcCrossBorderListDisplay(row)
   const ycLocalPayIn =
     String(meta?.yc_mode ?? "") === "fund_balance"
       ? Number(meta?.local_pay_in ?? 0)
@@ -130,6 +132,12 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
       ? {
           display_amount: presentationAmount,
           display_currency: presentationCurrency,
+        }
+      : {}),
+    ...(ycCrossBorderDisplay
+      ? {
+          display_description: ycCrossBorderDisplay.displayDescription,
+          display_hero_title: ycCrossBorderDisplay.displayHeroTitle,
         }
       : {}),
     ...(accountImpact

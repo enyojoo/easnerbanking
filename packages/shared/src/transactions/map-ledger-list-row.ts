@@ -35,6 +35,7 @@ import {
   VERIFICATION_DEPOSIT_LIST_LABEL,
 } from "./verification-deposit"
 import { resolveAccountImpactAmount } from "./account-impact-reporting"
+import { formatOutboundTransferTitle } from "./transaction-detail-hero-title"
 
 // ---------------------------------------------------------------------------
 // Display id helpers (pure — no generation dependency)
@@ -123,6 +124,32 @@ export type GlobalPayoutListDisplay = {
   transferMethod?: string
 }
 
+function resolveOutboundRecipientName(
+  meta: Record<string, unknown>,
+): string | undefined {
+  const recipientSnapshot =
+    meta.recipient_snapshot && typeof meta.recipient_snapshot === "object"
+      ? (meta.recipient_snapshot as Record<string, unknown>)
+      : null
+  return firstTruthy([
+    meta.beneficiary_name,
+    meta.recipient_name,
+    meta.counterparty_name,
+    recipientSnapshot?.full_name,
+    recipientSnapshot?.name,
+  ])
+}
+
+function transferToTitle(
+  meta: Record<string, unknown>,
+  fallbackRecipient: string,
+): string {
+  return formatOutboundTransferTitle(
+    resolveOutboundRecipientName(meta),
+    fallbackRecipient,
+  )
+}
+
 /**
  * Metadata-only global payout list display — used when `payload` is not loaded.
  * Recipient name, receive amount, and receive currency are denormalized at write time.
@@ -146,21 +173,15 @@ export function resolveGlobalPayoutListDisplay(
     meta.receive_currency ?? meta.fiat_currency ?? meta.display_currency ?? ledgerCurrency,
   ).toUpperCase()
 
-  const recipientName =
-    firstTruthy([
-      meta.beneficiary_name,
-      meta.recipient_name,
-      meta.counterparty_name,
-      (meta.recipient_snapshot as Record<string, unknown> | null | undefined)?.full_name,
-    ]) || "Transfer"
+  const title = transferToTitle(meta, "Recipient")
 
   return {
     displayAmount: Number.isFinite(displayAmount) ? displayAmount : ledgerAmount,
     displayCurrency,
     ledgerAmount,
     ledgerCurrency,
-    displayDescription: recipientName,
-    displayHeroTitle: `Transfer to ${recipientName}`,
+    displayDescription: title,
+    displayHeroTitle: title,
   }
 }
 
@@ -206,27 +227,55 @@ export function resolveWalletSendListDisplay(
     executionModel: executionModel || null,
   })
 
-  const recipientName =
-    firstTruthy([
-      meta.beneficiary_name,
-      meta.recipient_name,
-      meta.counterparty_name,
-      (meta.recipient_snapshot as Record<string, unknown> | null | undefined)?.full_name,
-    ]) || "Wallet transfer"
+  const title = transferToTitle(meta, "External Wallet")
 
   return {
     displayAmount: Number.isFinite(displayAmount) ? displayAmount : ledgerAmount,
     displayCurrency,
     ledgerAmount,
     ledgerCurrency,
-    displayDescription: walletSendListProductLabel(),
-    displayHeroTitle: `Transfer to ${recipientName}`,
+    displayDescription: title,
+    displayHeroTitle: title,
     transactionProduct: walletSendListProductLabel(),
     transferMethod: resolveWalletSendTransferMethod(
       String(payoutReview?.transfer_method ?? meta.transfer_method ?? ""),
       receiveCurrency,
       String(meta.receive_network ?? meta.chain ?? ""),
     ),
+  }
+}
+
+/** Destination-side list and hero display for YC local-to-local transfers. */
+export function resolveYcCrossBorderListDisplay(
+  row: Record<string, unknown>,
+): GlobalPayoutListDisplay | null {
+  const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
+  if (
+    String(row.direction ?? "").toLowerCase() !== "out" ||
+    String(meta.yc_mode ?? "") !== "cross_border_send"
+  ) {
+    return null
+  }
+
+  const ledgerAmount =
+    typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
+  const ledgerCurrency = String(
+    row.currency ?? row.base_currency ?? "USD",
+  ).toUpperCase()
+  const receiveAmount = Number(meta.receive_amount)
+  const receiveCurrency = String(meta.receive_currency ?? "").toUpperCase()
+  const title = transferToTitle(meta, "Recipient")
+
+  return {
+    displayAmount:
+      Number.isFinite(receiveAmount) && receiveAmount > 0
+        ? receiveAmount
+        : ledgerAmount,
+    displayCurrency: receiveCurrency || ledgerCurrency,
+    ledgerAmount,
+    ledgerCurrency,
+    displayDescription: title,
+    displayHeroTitle: title,
   }
 }
 
@@ -312,17 +361,9 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
 
   const globalPayout = resolveGlobalPayoutListDisplay(row)
   const walletSend = globalPayout ? null : resolveWalletSendListDisplay(row)
-  const payoutDisplay = globalPayout ?? walletSend
-  const ycCrossBorderAmount =
-    String(meta?.yc_mode ?? "") === "cross_border_send"
-      ? Number(meta?.receive_amount ?? 0)
-      : 0
-  const ycCrossBorderCurrency =
-    ycCrossBorderAmount > 0
-      ? String(meta?.receive_currency ?? "").toUpperCase()
-      : ""
-  const hasYcCrossBorderPresentation =
-    ycCrossBorderAmount > 0 && Boolean(ycCrossBorderCurrency)
+  const ycCrossBorder =
+    globalPayout || walletSend ? null : resolveYcCrossBorderListDisplay(row)
+  const payoutDisplay = globalPayout ?? walletSend ?? ycCrossBorder
   const ycLocalPayIn = isYcFundBalance ? Number(meta?.local_pay_in ?? 0) : 0
   const ycLocalCurrency = isYcFundBalance
     ? String(meta?.local_currency ?? "").toUpperCase()
@@ -331,11 +372,9 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
     ycLocalPayIn > 0 && Boolean(ycLocalCurrency)
   const displayAmount =
     payoutDisplay?.displayAmount ??
-    (hasYcCrossBorderPresentation ? ycCrossBorderAmount : undefined) ??
     (hasYcLocalPresentation ? ycLocalPayIn : amount)
   const displayCurrency =
     payoutDisplay?.displayCurrency ??
-    (hasYcCrossBorderPresentation ? ycCrossBorderCurrency : undefined) ??
     (hasYcLocalPresentation ? ycLocalCurrency : currency)
   const displayName = payoutDisplay?.displayDescription ?? name
   const accountImpact = resolveAccountImpactAmount({

@@ -7,7 +7,22 @@ vi.mock("@easner/shared", () => ({
     fallbackId?: string | null
   }) => input.easnerTransactionId || input.fallbackId || "",
   formatDisplayPersonName: (n: string) => n,
-  formatTransactionDetailHeroTitle: () => undefined,
+  formatOutboundTransferTitle: (
+    recipientName?: string | null,
+    fallbackRecipient = "Recipient",
+  ) => `Transfer to ${recipientName || fallbackRecipient}`,
+  formatTransactionDetailHeroTitle: ({
+    direction,
+    counterpartyName,
+    productFallback,
+  }: {
+    direction: "in" | "out"
+    counterpartyName?: string | null
+    productFallback?: string | null
+  }) =>
+    direction === "out" && counterpartyName
+      ? `Transfer to ${counterpartyName}`
+      : productFallback,
   isBankOnrampDepositFlow: () => false,
   isVerificationDepositMetadata: () => false,
   isYcFundBalanceDepositMetadata: (meta?: Record<string, unknown> | null) =>
@@ -31,8 +46,8 @@ vi.mock("@easner/shared", () => ({
       displayCurrency: String(meta.receive_currency ?? row.currency ?? "USD"),
       ledgerAmount: Number(row.amount ?? 0),
       ledgerCurrency: String(row.currency ?? "USD"),
-      displayDescription: String(meta.beneficiary_name ?? "Transfer"),
-      displayHeroTitle: `Transfer to ${meta.beneficiary_name ?? "Transfer"}`,
+      displayDescription: `Transfer to ${meta.beneficiary_name ?? "Recipient"}`,
+      displayHeroTitle: `Transfer to ${meta.beneficiary_name ?? "Recipient"}`,
     }
   },
   resolveWalletSendListDisplay: (row: Record<string, unknown>) => {
@@ -43,8 +58,26 @@ vi.mock("@easner/shared", () => ({
       displayCurrency: String(meta.receive_asset ?? row.currency ?? "USD"),
       ledgerAmount: Number(row.amount ?? 0),
       ledgerCurrency: String(row.currency ?? "USD"),
-      displayDescription: String(meta.counterparty_name ?? "Wallet transfer"),
+      displayDescription: `Transfer to ${meta.counterparty_name ?? "External Wallet"}`,
       displayHeroTitle: `Transfer to ${meta.counterparty_name ?? "Wallet transfer"}`,
+    }
+  },
+  resolveYcCrossBorderListDisplay: (row: Record<string, unknown>) => {
+    const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
+    if (String(meta.yc_mode ?? "") !== "cross_border_send") return null
+    const snapshot =
+      (meta.recipient_snapshot as Record<string, unknown> | undefined) ?? {}
+    const recipientName = String(
+      meta.recipient_name ?? snapshot.full_name ?? "Recipient",
+    )
+    const title = `Transfer to ${recipientName}`
+    return {
+      displayAmount: Number(meta.receive_amount ?? row.amount ?? 0),
+      displayCurrency: String(meta.receive_currency ?? row.currency ?? "USD"),
+      ledgerAmount: Number(row.amount ?? 0),
+      ledgerCurrency: String(row.currency ?? "USD"),
+      displayDescription: title,
+      displayHeroTitle: title,
     }
   },
   toEasnerTransactionPrimaryLabel: () => "Bank Deposit",
@@ -117,7 +150,7 @@ describe("mapRowToBusinessTransaction", () => {
 
     expect(item.amount).toBe(5000)
     expect(item.displayCurrency).toBe("NGN")
-    expect(item.description).toBe("Jane Doe")
+    expect(item.description).toBe("Transfer to Jane Doe")
     expect(item.baseAmount).toBe(25)
     expect(item.baseCurrency).toBe("USD")
   })
@@ -154,7 +187,7 @@ describe("mapRowToBusinessTransaction", () => {
 
     expect(item.amount).toBe(1)
     expect(item.displayCurrency).toBe("USDC")
-    expect(item.description).toBe("External Wallet")
+    expect(item.description).toBe("Transfer to External Wallet")
     expect(item.payoutReview?.transfer_method).toBe("USDC on SOL")
   })
 
@@ -194,11 +227,14 @@ describe("mapRowToBusinessTransaction", () => {
         receive_amount: 900,
         receive_currency: "GHS",
         reporting_usd_amount: 65,
+        recipient_snapshot: { full_name: "Ama Mensah" },
       },
       created_at: "2025-01-15T12:00:00.000Z",
     })
 
     expect(item.amount).toBe(900)
     expect(item.displayCurrency).toBe("GHS")
+    expect(item.description).toBe("Transfer to Ama Mensah")
+    expect(item.displayHeroTitle).toBe("Transfer to Ama Mensah")
   })
 })

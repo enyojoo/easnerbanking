@@ -425,6 +425,7 @@ export {
   mapLedgerStatusForUserFeed,
   resolveGlobalPayoutListDisplay,
   resolveWalletSendListDisplay,
+  resolveYcCrossBorderListDisplay,
   shouldIncludeRowInUserFeed,
 } from "./transactions/map-ledger-list-row"
 export {
@@ -540,6 +541,7 @@ export {
 } from "./transactions/payout-transfer-method"
 export type { PayoutTransferMethodInput } from "./transactions/payout-transfer-method"
 export {
+  formatOutboundTransferTitle,
   formatTransactionDetailHeroTitle,
 } from "./transactions/transaction-detail-hero-title"
 export type { TransactionDetailHeroTitleInput } from "./transactions/transaction-detail-hero-title"
