@@ -10,7 +10,7 @@ describe("format-review-row-money", () => {
   it("resolves credit and debit labels", () => {
     expect(resolveReviewRowMoneySign(REVIEW_ROW_LABELS.amountCredited)).toBe("credit")
     expect(resolveReviewRowMoneySign(REVIEW_ROW_LABELS.amountToCredit)).toBeNull()
-    expect(resolveReviewRowMoneySign(REVIEW_ROW_LABELS.processingFee)).toBe("debit")
+    expect(resolveReviewRowMoneySign(REVIEW_ROW_LABELS.processingFee)).toBeNull()
     expect(resolveReviewRowMoneySign(REVIEW_ROW_LABELS.totalDebited)).toBe("debit")
     expect(resolveReviewRowMoneySign(REVIEW_ROW_LABELS.amountToPay)).toBeNull()
     expect(resolveReviewRowMoneySign(REVIEW_ROW_LABELS.sent)).toBeNull()
@@ -27,7 +27,7 @@ describe("format-review-row-money", () => {
 
   it("formats by review row label", () => {
     expect(formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.amountCredited, 65, "USD")).toBe("+$65")
-    expect(formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.processingFee, 0.65, "USD")).toBe("-$0.65")
+    expect(formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.processingFee, 0.65, "USD")).toBe("$0.65")
     expect(formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.scheme, 0, "USD")).toBe("$0")
   })
 })

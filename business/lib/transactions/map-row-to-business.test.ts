@@ -10,11 +10,18 @@ vi.mock("@easner/shared", () => ({
   formatTransactionDetailHeroTitle: () => undefined,
   isBankOnrampDepositFlow: () => false,
   isVerificationDepositMetadata: () => false,
-  isYcFundBalanceDepositMetadata: () => false,
+  isYcFundBalanceDepositMetadata: (meta?: Record<string, unknown> | null) =>
+    String(meta?.yc_mode ?? "") === "fund_balance",
   isNoahVaFundingDeposit: () => false,
   resolveYcFundBalanceDepositDisplayTitle: () => undefined,
   resolveNoahVaFundingDepositTitleFromMeta: () => undefined,
   resolveInboundReceiveDetail: () => null,
+  resolveLedgerWhenAt: (input: { occurredAt?: string | null; createdAt?: string | null }) =>
+    input.occurredAt ?? input.createdAt ?? null,
+  resolveAccountImpactAmount: (row: Record<string, unknown>) => ({
+    amount: Number(row.ledger_amount ?? row.amount ?? 0),
+    currency: String(row.ledger_currency ?? row.currency ?? "USD"),
+  }),
   mapLedgerStatusForUserFeed: (st: string) => (st === "settled" ? "completed" : st),
   resolveGlobalPayoutListDisplay: (row: Record<string, unknown>) => {
     const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
@@ -149,5 +156,49 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.displayCurrency).toBe("USDC")
     expect(item.description).toBe("External Wallet")
     expect(item.payoutReview?.transfer_method).toBe("USDC on SOL")
+  })
+
+  it("presents a YC balance pay-in in the local currency", () => {
+    const item = mapRowToBusinessTransaction({
+      id: "db-uuid",
+      provider: "yellowcard",
+      status: "settled",
+      amount: 65,
+      currency: "USD",
+      direction: "in",
+      metadata: {
+        yc_mode: "fund_balance",
+        local_pay_in: 100000,
+        local_currency: "NGN",
+        usd_credit: 65,
+      },
+      created_at: "2025-01-15T12:00:00.000Z",
+    })
+
+    expect(item.amount).toBe(100000)
+    expect(item.displayCurrency).toBe("NGN")
+    expect(item.accountImpactAmount).toBe(65)
+    expect(item.accountImpactCurrency).toBe("USD")
+  })
+
+  it("presents the destination amount for a YC cross-border send", () => {
+    const item = mapRowToBusinessTransaction({
+      id: "db-uuid",
+      provider: "yellowcard",
+      status: "pending",
+      amount: 100000,
+      currency: "NGN",
+      direction: "out",
+      metadata: {
+        yc_mode: "cross_border_send",
+        receive_amount: 900,
+        receive_currency: "GHS",
+        reporting_usd_amount: 65,
+      },
+      created_at: "2025-01-15T12:00:00.000Z",
+    })
+
+    expect(item.amount).toBe(900)
+    expect(item.displayCurrency).toBe("GHS")
   })
 })

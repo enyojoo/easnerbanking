@@ -195,11 +195,35 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
 
   const created = ledgerCreatedAt ?? new Date().toISOString()
 
+  const ycCrossBorderAmount =
+    String(meta?.yc_mode ?? "") === "cross_border_send"
+      ? Number(meta?.receive_amount ?? 0)
+      : 0
+  const ycCrossBorderCurrency =
+    ycCrossBorderAmount > 0
+      ? String(meta?.receive_currency ?? "").toUpperCase()
+      : ""
+  const hasYcCrossBorderPresentation =
+    ycCrossBorderAmount > 0 && Boolean(ycCrossBorderCurrency)
+  const ycLocalPayIn = isYcFundBalance ? Number(meta?.local_pay_in ?? 0) : 0
+  const ycLocalCurrency = isYcFundBalance
+    ? String(meta?.local_currency ?? "").toUpperCase()
+    : ""
+  const hasYcLocalPresentation =
+    ycLocalPayIn > 0 && Boolean(ycLocalCurrency)
   const currencyCode = displaySource
     ? displaySource.displayCurrency
+    : hasYcCrossBorderPresentation
+      ? ycCrossBorderCurrency
+    : hasYcLocalPresentation
+      ? ycLocalCurrency
     : String(row.currency ?? "USD")
   const listAmount = displaySource
     ? displaySource.displayAmount
+    : hasYcCrossBorderPresentation
+      ? ycCrossBorderAmount
+    : hasYcLocalPresentation
+      ? ycLocalPayIn
     : typeof row.amount === "number"
       ? row.amount
       : Number(row.amount) || 0

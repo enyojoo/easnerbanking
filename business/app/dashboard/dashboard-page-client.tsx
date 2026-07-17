@@ -265,12 +265,6 @@ export function DashboardPageClient() {
               <div className="py-8 text-center text-sm text-muted-foreground">No transactions yet</div>
             : <div className="divide-y">
                 {recentTransactions.map((txn) => {
-                  const reporting = resolveReportingAmountForFeed(
-                    txn as unknown as Record<string, unknown>,
-                    baseCurrency,
-                    fxRates,
-                  )
-                  const cur = reporting?.reportingCurrency ?? baseCurrency
                   const statusRow = transactionStatusRowPresentation(txn.status)
                   return (
                     <div
@@ -302,9 +296,7 @@ export function DashboardPageClient() {
                             className={`text-sm font-semibold tabular-nums ${txn.direction === "credit" ? "text-primary" : "text-foreground"}`}
                           >
                             {txn.direction === "credit" ? "+" : "-"}
-                            {reporting
-                              ? formatCurrency(Math.abs(reporting.reportingAmount), cur)
-                              : "—"}
+                            {formatCurrency(Math.abs(txn.amount), txn.displayCurrency || "USD")}
                           </p>
                           <p className={`text-xs font-medium ${statusRow.className}`}>{statusRow.label}</p>
                         </div>

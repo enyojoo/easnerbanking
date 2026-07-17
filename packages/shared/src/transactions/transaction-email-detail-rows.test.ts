@@ -33,7 +33,7 @@ describe("buildTransactionEmailDetailRows", () => {
     const totalDebitedIdx = rows.findIndex((r) => r.label === "Total debited")
     expect(debitedFromIdx).toBeGreaterThan(totalDebitedIdx)
     // Combined Processing fee = 1 + 2.32 = 3.32, and 100 + 3.32 = 103.32 (Total debited).
-    expect(map["Processing fee"]).toBe("-$3.32")
+    expect(map["Processing fee"]).toBe("$3.32")
     expect(map["Total debited"]).toBe("-$103.32")
     expect(map["Exchange rate"]).toBeDefined()
     expect(map["Transfer method"]).toBe("Local transfer")
@@ -61,7 +61,7 @@ describe("buildTransactionEmailDetailRows", () => {
       receiveNetwork: "Solana",
     })
     const map = rowMap(rows)
-    expect(map["Processing fee"]).toBe("-$0.01")
+    expect(map["Processing fee"]).toBe("$0.01")
     expect(map["Transfer method"]).toBe("USDC on SOL")
     // 1:1 stablecoin parity: no Exchange rate row.
     expect(map["Exchange rate"]).toBeUndefined()
@@ -83,7 +83,7 @@ describe("buildTransactionEmailDetailRows", () => {
     const map = rowMap(rows)
     expect(map["Scheme"]).toBe("Wire")
     expect(map["Sender"]).toBe("ACME CORP")
-    expect(map["Processing fee"]).toBe("-$0.05")
+    expect(map["Processing fee"]).toBe("$0.05")
     expect(map["Amount credited"]).toBe("+$9.95")
     expect(map["Sender"]).toBe("ACME CORP")
     expect(map["Narration"]).toBe("Invoice 42")

@@ -1,6 +1,6 @@
 /**
  * Signed money values for transaction review / detail rows.
- * Only totals in/out and processing fee — not Sending/Sent or Recipient gets.
+ * Only debit and credit totals — not fees, Sending/Sent, or Recipient gets.
  */
 
 import { formatMoneyDisplay } from "./format-money-display"
@@ -13,7 +13,6 @@ const CREDIT_ROW_LABELS: ReadonlySet<string> = new Set([
 ])
 
 const DEBIT_ROW_LABELS: ReadonlySet<string> = new Set([
-  REVIEW_ROW_LABELS.processingFee,
   REVIEW_ROW_LABELS.totalDebited,
 ])
 

@@ -293,8 +293,6 @@ export default function TransactionsPage() {
           : <>
               <div className="divide-y">
                 {displayedTransactions.map((txn) => {
-                  const reporting = reportingFor(txn)
-                  const cur = reporting?.reportingCurrency ?? baseCurrencyCode
                   const statusRow = transactionStatusRowPresentation(txn.status)
                   return (
                     <TransactionDetailPrefetchLink
@@ -323,9 +321,7 @@ export default function TransactionsPage() {
                           className={`text-sm font-semibold tabular-nums ${txn.direction === "credit" ? "text-primary" : "text-foreground"}`}
                         >
                           {txn.direction === "credit" ? "+" : "-"}
-                          {reporting
-                            ? formatCurrency(Math.abs(reporting.reportingAmount), cur)
-                            : "—"}
+                          {formatCurrency(Math.abs(txn.amount), txn.displayCurrency || "USD")}
                         </p>
                         <p className={`text-xs font-medium ${statusRow.className}`}>{statusRow.label}</p>
                       </div>

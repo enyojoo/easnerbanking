@@ -621,9 +621,6 @@ function TransactionsContent({ navigation }: NavigationProps) {
     regularWidth && selectedTransactionId
       ? filteredTransactions.find((tx) => transactionDetailLookupId(tx) === selectedTransactionId) || null
       : null
-  const selectedReporting = selectedTransaction
-    ? reportingAmountFor(selectedTransaction)
-    : null
 
 
   return (
@@ -819,21 +816,13 @@ function TransactionsContent({ navigation }: NavigationProps) {
                     <View key={item.key} style={styles.groupCard}>
                       {item.rows.map((tx, rowIdx) => {
                         const isLast = rowIdx === item.rows.length - 1
-                        const reporting = reportingAmountFor(tx)
-                        const displayTx = reporting
-                          ? {
-                              ...tx,
-                              amount: reporting.reportingAmount,
-                              currency: reporting.reportingCurrency,
-                            }
-                          : tx
                         return (
                           <View
                             key={`${item.key}-${rowIdx}`}
                             style={!isLast ? styles.groupRowDivider : null}
                           >
                             <TransactionItem
-                              item={displayTx}
+                              item={tx}
                               index={rowIdx}
                               isLast={isLast}
                               skipRowEntranceAnim={skipRowEntranceAnim}
@@ -859,7 +848,6 @@ function TransactionsContent({ navigation }: NavigationProps) {
                                 )
                               }}
                               formatAmount={formatAmount}
-                              amountText={reporting ? undefined : '—'}
                               formatDate={formatDate}
                             />
                           </View>
@@ -920,14 +908,20 @@ function TransactionsContent({ navigation }: NavigationProps) {
                           },
                         ]}
                       >
-                        {selectedReporting
-                          ? formatAmount(
-                              selectedReporting.reportingAmount,
-                              selectedReporting.reportingCurrency,
-                              (selectedTransaction.transaction_type ||
-                                selectedTransaction.type) === 'receive',
-                            )
-                          : '—'}
+                        {formatAmount(
+                          selectedTransaction.amount ||
+                            selectedTransaction.send_amount ||
+                            selectedTransaction.crypto_amount ||
+                            selectedTransaction.fiat_amount ||
+                            0,
+                          selectedTransaction.currency ||
+                            selectedTransaction.send_currency ||
+                            selectedTransaction.crypto_currency ||
+                            selectedTransaction.fiat_currency ||
+                            'USD',
+                          (selectedTransaction.transaction_type ||
+                            selectedTransaction.type) === 'receive',
+                        )}
                       </Text>
                       <Pressable
                         android_ripple={ripple.neutral}
