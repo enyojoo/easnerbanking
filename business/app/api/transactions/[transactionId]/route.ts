@@ -83,12 +83,6 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const ledger_row_id = ledgerId || undefined
   const accountImpact = resolveAccountImpactAmount(row)
   const ycCrossBorderDisplay = resolveYcCrossBorderListDisplay(row)
-  const ycLocalPayIn =
-    String(meta?.yc_mode ?? "") === "fund_balance"
-      ? Number(meta?.local_pay_in ?? 0)
-      : 0
-  const ycLocalCurrency =
-    ycLocalPayIn > 0 ? String(meta?.local_currency ?? "").toUpperCase() : ""
   const ycCrossBorderReceive =
     String(meta?.yc_mode ?? "") === "cross_border_send"
       ? Number(meta?.receive_amount ?? 0)
@@ -100,13 +94,11 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
   const presentationAmount =
     ycCrossBorderReceive > 0 && ycCrossBorderCurrency
       ? ycCrossBorderReceive
-      : ycLocalPayIn > 0 && ycLocalCurrency
-        ? ycLocalPayIn
-        : null
+      : null
   const presentationCurrency =
     ycCrossBorderReceive > 0 && ycCrossBorderCurrency
       ? ycCrossBorderCurrency
-      : ycLocalCurrency
+      : ""
   const metaForName = row.metadata as Record<string, unknown> | null | undefined
   const payloadForName = row.payload as Record<string, unknown> | null | undefined
   const name =

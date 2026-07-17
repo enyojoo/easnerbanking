@@ -47,17 +47,6 @@ export function resolveTransactionDetailHeroAmount(transaction: Transaction): {
   currency: string
 } {
   const isCredit = transaction.direction === "credit"
-  const localPayIn = Number(transaction.depositReview?.local_pay_in ?? 0)
-  const localPayInCurrency = transaction.depositReview?.local_currency
-  if (
-    localPayIn > 0 &&
-    localPayInCurrency
-  ) {
-    return {
-      amount: localPayIn,
-      currency: localPayInCurrency,
-    }
-  }
   if (
     isCredit &&
     transaction.postedAmount != null &&

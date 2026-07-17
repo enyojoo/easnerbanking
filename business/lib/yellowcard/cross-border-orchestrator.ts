@@ -30,6 +30,24 @@ import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 import { buildYcCrossBorderReportingSnapshot } from "@/lib/transactions/reporting-snapshot"
 import { generateTransactionId } from "@/lib/transaction-id"
 
+function buildRecipientTransactionMetadata(
+  recipientId: string | null,
+  recipientSnapshot: { full_name?: string | null },
+): Record<string, unknown> {
+  const recipientName = String(recipientSnapshot.full_name ?? "").trim()
+  return {
+    ...(recipientId ? { recipient_id: recipientId } : {}),
+    recipient_snapshot: recipientSnapshot,
+    ...(recipientName
+      ? {
+          beneficiary_name: recipientName,
+          recipient_name: recipientName,
+          counterparty_name: recipientName,
+        }
+      : {}),
+  }
+}
+
 async function resolveYcReceiveChannelId(input: {
   countryCode: string
   currencyCode: string
@@ -271,7 +289,10 @@ export async function createCrossBorderTransfer(input: {
       easner_transaction_id: easnerTransactionId,
       occurred_at: startedAt,
       metadata: buildYcCrossBorderOutMetadata({
-        prior: reportingSnapshot,
+        prior: {
+          ...reportingSnapshot,
+          ...buildRecipientTransactionMetadata(recipientId, recipientSnapshot),
+        },
         sequenceId: leg1Seq,
         localPayIn: pricingFinal.localPayIn,
         receiveAmount: input.receiveAmount,
@@ -431,8 +452,7 @@ export async function createCrossBorderTransfer(input: {
         display_processing_fee_local: quoteSummary.displayProcessingFeeLocal,
         provisional_pay_in: pricingFinal.provisionalPayIn,
         pay_in_rail: input.payInRail,
-        recipient_id: recipientId,
-        recipient_snapshot: recipientSnapshot,
+        ...buildRecipientTransactionMetadata(recipientId, recipientSnapshot),
         payout_review: payoutReview,
         pay_in_review: payInReview,
         ...reportingSnapshot,
@@ -542,6 +562,10 @@ export async function createCrossBorderDraft(input: {
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const startedAt = new Date().toISOString()
   const sender = buildYcKycPersonMetadata({ profile: input.senderProfile, requireNgIds: true })
+  const recipientSnapshot = buildRecipientSnapshotFromRow(input.recipient)
+  const recipientId =
+    String((input.recipient as RecipientSellPrepareRow & { id?: string }).id ?? "").trim() ||
+    null
 
   const { data: tx, error: txErr } = await admin
     .from("transactions")
@@ -563,6 +587,7 @@ export async function createCrossBorderDraft(input: {
         processing_at: startedAt,
         transaction_started_at: startedAt,
         pay_in_rail: "mobile_money",
+        ...buildRecipientTransactionMetadata(recipientId, recipientSnapshot),
       },
     })
     .select("id")
@@ -589,7 +614,8 @@ export async function createCrossBorderDraft(input: {
         processing_fee: pricing.processingFee,
         margin_amount: pricing.marginAmount,
         sender,
-        recipient_id: (input.recipient as RecipientSellPrepareRow & { id?: string }).id,
+        recipient_id: recipientId,
+        recipient_snapshot: recipientSnapshot,
         pay_in_country: input.payInCountry.toUpperCase(),
         draft: true,
       },
@@ -660,6 +686,9 @@ export async function authorizeCrossBorderDraft(input: {
     .eq("user_id", input.userId)
     .maybeSingle()
   if (!recipient) throw new Error("Recipient not found")
+  const recipientSnapshot = buildRecipientSnapshotFromRow(
+    recipient as RecipientSellPrepareRow,
+  )
 
   const payInCurrency = String(transfer.pay_in_currency ?? "").toUpperCase()
   const receiveAmount = Number(transfer.quoted_receive)
@@ -779,6 +808,7 @@ export async function authorizeCrossBorderDraft(input: {
         processing_fee: pricingFinal.processingFee,
         margin_amount: pricingFinal.marginAmount,
         recipient: recipientMapped,
+        recipient_snapshot: recipientSnapshot,
         sender,
         source_phone: phone,
         source_network_id: networkId,
@@ -809,6 +839,7 @@ export async function authorizeCrossBorderDraft(input: {
           pay_in_rail: "mobile_money",
           source_phone: phone,
           source_network_id: networkId,
+          ...buildRecipientTransactionMetadata(recipientId, recipientSnapshot),
           ...reportingSnapshot,
         },
         updated_at: now,

@@ -65,13 +65,13 @@ function deriveCounterpartyName(input: {
   const meta = input.metadata || {}
   const payload = input.payload || {}
   const candidates: unknown[] = [
+    (meta.recipient_snapshot as Record<string, unknown> | undefined)?.full_name,
+    (meta.recipient_snapshot as Record<string, unknown> | undefined)?.name,
     meta.counterparty_name,
     meta.recipient_name,
     meta.sender_name,
     meta.originator_name,
     meta.beneficiary_name,
-    (meta.recipient_snapshot as Record<string, unknown> | undefined)?.full_name,
-    (meta.recipient_snapshot as Record<string, unknown> | undefined)?.name,
     (meta.source as Record<string, unknown> | undefined)?.sender_name,
     (meta.source as Record<string, unknown> | undefined)?.originator_name,
     (meta.destination as Record<string, unknown> | undefined)?.recipient_name,
@@ -197,21 +197,11 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
 
   const created = ledgerCreatedAt ?? new Date().toISOString()
 
-  const ycLocalPayIn = isYcFundBalance ? Number(meta?.local_pay_in ?? 0) : 0
-  const ycLocalCurrency = isYcFundBalance
-    ? String(meta?.local_currency ?? "").toUpperCase()
-    : ""
-  const hasYcLocalPresentation =
-    ycLocalPayIn > 0 && Boolean(ycLocalCurrency)
   const currencyCode = displaySource
     ? displaySource.displayCurrency
-    : hasYcLocalPresentation
-      ? ycLocalCurrency
     : String(row.currency ?? "USD")
   const listAmount = displaySource
     ? displaySource.displayAmount
-    : hasYcLocalPresentation
-      ? ycLocalPayIn
     : typeof row.amount === "number"
       ? row.amount
       : Number(row.amount) || 0

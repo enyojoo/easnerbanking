@@ -68,7 +68,7 @@ vi.mock("@easner/shared", () => ({
     const snapshot =
       (meta.recipient_snapshot as Record<string, unknown> | undefined) ?? {}
     const recipientName = String(
-      meta.recipient_name ?? snapshot.full_name ?? "Recipient",
+      snapshot.full_name ?? meta.recipient_name ?? "Recipient",
     )
     const title = `Transfer to ${recipientName}`
     return {
@@ -191,7 +191,7 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.payoutReview?.transfer_method).toBe("USDC on SOL")
   })
 
-  it("presents a YC balance pay-in in the local currency", () => {
+  it("presents a YC balance pay-in as the amount credited", () => {
     const item = mapRowToBusinessTransaction({
       id: "db-uuid",
       provider: "yellowcard",
@@ -208,8 +208,8 @@ describe("mapRowToBusinessTransaction", () => {
       created_at: "2025-01-15T12:00:00.000Z",
     })
 
-    expect(item.amount).toBe(100000)
-    expect(item.displayCurrency).toBe("NGN")
+    expect(item.amount).toBe(65)
+    expect(item.displayCurrency).toBe("USD")
     expect(item.accountImpactAmount).toBe(65)
     expect(item.accountImpactCurrency).toBe("USD")
   })
@@ -227,6 +227,7 @@ describe("mapRowToBusinessTransaction", () => {
         receive_amount: 900,
         receive_currency: "GHS",
         reporting_usd_amount: 65,
+        recipient_name: "Legacy Recipient",
         recipient_snapshot: { full_name: "Ama Mensah" },
       },
       created_at: "2025-01-15T12:00:00.000Z",

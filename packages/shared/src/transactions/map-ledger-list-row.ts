@@ -132,11 +132,11 @@ function resolveOutboundRecipientName(
       ? (meta.recipient_snapshot as Record<string, unknown>)
       : null
   return firstTruthy([
+    recipientSnapshot?.full_name,
+    recipientSnapshot?.name,
     meta.beneficiary_name,
     meta.recipient_name,
     meta.counterparty_name,
-    recipientSnapshot?.full_name,
-    recipientSnapshot?.name,
   ])
 }
 
@@ -364,18 +364,8 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
   const ycCrossBorder =
     globalPayout || walletSend ? null : resolveYcCrossBorderListDisplay(row)
   const payoutDisplay = globalPayout ?? walletSend ?? ycCrossBorder
-  const ycLocalPayIn = isYcFundBalance ? Number(meta?.local_pay_in ?? 0) : 0
-  const ycLocalCurrency = isYcFundBalance
-    ? String(meta?.local_currency ?? "").toUpperCase()
-    : ""
-  const hasYcLocalPresentation =
-    ycLocalPayIn > 0 && Boolean(ycLocalCurrency)
-  const displayAmount =
-    payoutDisplay?.displayAmount ??
-    (hasYcLocalPresentation ? ycLocalPayIn : amount)
-  const displayCurrency =
-    payoutDisplay?.displayCurrency ??
-    (hasYcLocalPresentation ? ycLocalCurrency : currency)
+  const displayAmount = payoutDisplay?.displayAmount ?? amount
+  const displayCurrency = payoutDisplay?.displayCurrency ?? currency
   const displayName = payoutDisplay?.displayDescription ?? name
   const accountImpact = resolveAccountImpactAmount({
     ...row,

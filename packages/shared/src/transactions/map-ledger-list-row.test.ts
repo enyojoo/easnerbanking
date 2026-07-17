@@ -262,6 +262,8 @@ describe("mapLedgerRowToMobileListItem", () => {
     const item = mapLedgerRowToMobileListItem(
       baseRow({
         provider: "yellowcard",
+        amount: 65,
+        currency: "USD",
         metadata: {
           yc_mode: "fund_balance",
           flow: "bank_onramp",
@@ -273,10 +275,10 @@ describe("mapLedgerRowToMobileListItem", () => {
       }),
     )
     expect(item.name).toBe("Nigeria Bank Deposit")
-    expect(item.amount).toBe(100000)
-    expect(item.currency).toBe("NGN")
-    expect(item.display_amount).toBe(100000)
-    expect(item.display_currency).toBe("NGN")
+    expect(item.amount).toBe(65)
+    expect(item.currency).toBe("USD")
+    expect(item.display_amount).toBe(65)
+    expect(item.display_currency).toBe("USD")
     expect(item.account_impact_amount).toBe(65)
     expect(item.account_impact_currency).toBe("USD")
     expect(item.display_hero_title).toBe("Nigeria Bank Deposit")
@@ -295,6 +297,7 @@ describe("mapLedgerRowToMobileListItem", () => {
           receive_amount: 900,
           receive_currency: "GHS",
           reporting_usd_amount: 65,
+          recipient_name: "Legacy Recipient",
           recipient_snapshot: { full_name: "Ama Mensah" },
         },
       }),
