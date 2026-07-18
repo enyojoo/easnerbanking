@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -20,6 +20,13 @@ import {
 } from "@/lib/yc-local-deposit-cache"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { normalizeYcMomoPhone, REVIEW_ROW_LABELS } from "@easner/shared"
+import {
+  crossBorderQuoteToFlowState,
+  ensureCrossBorderOrderConfirmed,
+  isCompleteCrossBorderQuote,
+  peekLastCrossBorderQuoteError,
+  type CrossBorderQuoteStashMeta,
+} from "@/lib/yc-cross-border-quote-cache"
 
 function isYcCrossBorderMomo(state: SendFlowState | null): boolean {
   return (
@@ -37,6 +44,8 @@ export default function SendMomoSetupPage() {
   const [momoNetworkId, setMomoNetworkId] = useState("")
   const [momoNetworks, setMomoNetworks] = useState<{ id: string; name: string }[]>([])
   const [momoNetworksLoading, setMomoNetworksLoading] = useState(false)
+  const [isContinueLoading, setIsContinueLoading] = useState(false)
+  const [continueError, setContinueError] = useState<string | null>(null)
 
   const payInCurrency = state?.otherCurrency?.trim().toUpperCase() ?? ""
   const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
@@ -122,19 +131,45 @@ export default function SendMomoSetupPage() {
     }
   }, [state, payInCountry])
 
-  const onContinue = () => {
-    if (!state || !momoReady) return
-    const next: SendFlowState = {
-      ...state,
-      ycMomoSetup: {
+  const onContinue = async () => {
+    if (!state || !momoReady || !payInCountry || !payInCurrency || isContinueLoading) return
+    setContinueError(null)
+    setIsContinueLoading(true)
+    try {
+      const meta: CrossBorderQuoteStashMeta = {
+        recipientId: state.recipient.id,
+        payInCurrency,
+        payInCountry,
+        payInRail: "mobile_money",
+        receiveAmount: state.amount,
         sourcePhone: momoPhone.trim(),
         networkId: momoNetworkId,
         sourceNetworkName: selectedNetwork?.name,
-      },
-      ycCrossBorder: undefined,
+      }
+      const quote = await ensureCrossBorderOrderConfirmed(meta)
+      if (!isCompleteCrossBorderQuote(quote)) {
+        setContinueError(peekLastCrossBorderQuoteError() || "Could not lock transfer details. Try again.")
+        return
+      }
+      const yc = crossBorderQuoteToFlowState(quote, meta)
+      const next: SendFlowState = {
+        ...state,
+        ycMomoSetup: {
+          sourcePhone: momoPhone.trim(),
+          networkId: momoNetworkId,
+          sourceNetworkName: selectedNetwork?.name,
+        },
+        sendAmount: yc.localPayIn,
+        sendCurrency: payInCurrency,
+        totalAmount: yc.localPayIn,
+        transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
+        ycCrossBorder: yc,
+      }
+      persistSendFlowState(next)
+      router.push("/send/confirm")
+    } finally {
+      setIsContinueLoading(false)
     }
-    persistSendFlowState(next)
-    router.push("/send/confirm")
   }
 
   if (!state) {
@@ -194,13 +229,31 @@ export default function SendMomoSetupPage() {
         </div>
       </div>
 
+      {continueError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {continueError}
+        </p>
+      ) : null}
+
       <div className="flex gap-3">
-        <Button variant="outline" size="lg" className="h-11" onClick={() => router.back()}>
+        <Button variant="outline" size="lg" className="h-11" onClick={() => router.back()} disabled={isContinueLoading}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button size="lg" className="h-11 flex-1" disabled={!momoReady} onClick={onContinue}>
-          Continue
+        <Button
+          size="lg"
+          className="h-11 flex-1"
+          disabled={!momoReady || isContinueLoading}
+          onClick={() => void onContinue()}
+        >
+          {isContinueLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Locking…
+            </>
+          ) : (
+            "Continue"
+          )}
         </Button>
       </div>
     </div>

@@ -232,6 +232,14 @@ export default function SendConfirmPage() {
     const setup = state.ycMomoSetup
     if (!setup?.sourcePhone || !setup.networkId) return
 
+    if (
+      state.ycCrossBorder?.transferId &&
+      state.ycCrossBorder.localPayIn > 0 &&
+      state.ycCrossBorder.customerRate > 0
+    ) {
+      return
+    }
+
     const payInCurrency = state.otherCurrency!.toUpperCase()
     const payInCountry = residenceCountryFromPayInCurrency(payInCurrency)
     if (!payInCountry) {
@@ -426,6 +434,14 @@ export default function SendConfirmPage() {
   useEffect(() => {
     if (!state || !isYcCrossBorderFlow(state) || !(state.amount > 0)) return
     if (state.otherPaymentMethod === "mobile_money") return
+
+    if (
+      state.ycCrossBorder?.transferId &&
+      state.ycCrossBorder.localPayIn > 0 &&
+      state.ycCrossBorder.customerRate > 0
+    ) {
+      return
+    }
 
     const payInCurrency = state.otherCurrency!.toUpperCase()
     const payInCountry = residenceCountryFromPayInCurrency(payInCurrency)

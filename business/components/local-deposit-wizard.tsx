@@ -119,6 +119,7 @@ export function LocalDepositWizard({
   const [rates, setRates] = useState<YcRateRow[]>(() => readCachedYcPayInRates() ?? [])
   const [quote, setQuote] = useState<FundBalanceQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
+  const [momoContinueLoading, setMomoContinueLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [defaultPhone, setDefaultPhone] = useState("")
   const [momoPhone, setMomoPhone] = useState("")
@@ -647,13 +648,28 @@ export function LocalDepositWizard({
 
         <Button
           className="w-full"
-          disabled={!momoReady}
+          disabled={!momoReady || momoContinueLoading}
           onClick={() => {
-            setQuoteError(null)
-            setStep("review")
+            void (async () => {
+              setQuoteError(null)
+              setMomoContinueLoading(true)
+              try {
+                const result = await confirmOrder()
+                if (result?.transferId) setStep("review")
+              } finally {
+                setMomoContinueLoading(false)
+              }
+            })()
           }}
         >
-          Continue
+          {momoContinueLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Locking…
+            </>
+          ) : (
+            "Continue"
+          )}
         </Button>
       </div>
     )

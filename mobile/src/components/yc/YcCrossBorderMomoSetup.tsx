@@ -19,6 +19,12 @@ import {
   ensurePayInNetworksCached,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
+import {
+  ensureCrossBorderOrderConfirmed,
+  isCompleteCrossBorderQuote,
+  peekLastCrossBorderQuoteError,
+  type CrossBorderQuoteStashMeta,
+} from '../../lib/sendFlowCrossBorderQuote'
 import { useAuth } from '../../contexts/AuthContext'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 
@@ -66,6 +72,8 @@ export function YcCrossBorderMomoSetup({
   )
   const [networksLoading, setNetworksLoading] = useState(!cachedNetworks?.length)
   const [networksError, setNetworksError] = useState<string | null>(null)
+  const [isContinueLoading, setIsContinueLoading] = useState(false)
+  const [continueError, setContinueError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -95,24 +103,45 @@ export function YcCrossBorderMomoSetup({
   const selectedNetwork = networks.find((n) => n.id === networkId)
   const rail: YcPayInRail = 'mobile_money'
 
-  const onContinue = () => {
-    if (!momoReady) return
-    haptics.medium()
-    navigation.navigate('SendConfirm' as never, {
-      recipient,
-      paymentMethod: 'otherCurrency',
-      ycPayInCurrency: payInCurrency,
-      ycPayInRail: rail,
-      receiveAmountValue: receiveAmount,
-      receiveCurrency,
-      amountEntryMode,
-      amountScreenSendAmount,
-      sourcePhone: phone.trim(),
-      networkId,
-      sourceNetworkName: selectedNetwork?.name,
-      ...(note?.trim() ? { note: note.trim() } : {}),
-      ...(paymentPurpose?.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-    } as never)
+  const onContinue = async () => {
+    if (!momoReady || isContinueLoading) return
+    setContinueError(null)
+    setIsContinueLoading(true)
+    try {
+      const meta: CrossBorderQuoteStashMeta = {
+        recipientId: recipient.id,
+        payInCurrency,
+        payInCountry,
+        payInRail: rail,
+        receiveAmount,
+        sourcePhone: phone.trim(),
+        networkId,
+        sourceNetworkName: selectedNetwork?.name,
+      }
+      const quote = await ensureCrossBorderOrderConfirmed(meta)
+      if (!isCompleteCrossBorderQuote(quote)) {
+        setContinueError(peekLastCrossBorderQuoteError() || 'Could not lock transfer details. Try again.')
+        return
+      }
+      haptics.medium()
+      navigation.navigate('SendConfirm' as never, {
+        recipient,
+        paymentMethod: 'otherCurrency',
+        ycPayInCurrency: payInCurrency,
+        ycPayInRail: rail,
+        receiveAmountValue: receiveAmount,
+        receiveCurrency,
+        amountEntryMode,
+        amountScreenSendAmount,
+        sourcePhone: phone.trim(),
+        networkId,
+        sourceNetworkName: selectedNetwork?.name,
+        ...(note?.trim() ? { note: note.trim() } : {}),
+        ...(paymentPurpose?.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+      } as never)
+    } finally {
+      setIsContinueLoading(false)
+    }
   }
 
   return (
@@ -170,19 +199,25 @@ export function YcCrossBorderMomoSetup({
         </View>
       </ScrollView>
 
+      {continueError ? <Text style={styles.error}>{continueError}</Text> : null}
+
       <Pressable
         android_ripple={ripple.neutral}
-        style={[styles.cta, !momoReady && styles.ctaDisabled]}
-        onPress={onContinue}
-        disabled={!momoReady}
+        style={[styles.cta, (!momoReady || isContinueLoading) && styles.ctaDisabled]}
+        onPress={() => void onContinue()}
+        disabled={!momoReady || isContinueLoading}
       >
         <LinearGradient
-          colors={!momoReady ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
+          colors={!momoReady || isContinueLoading ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.ctaGradient}
         >
-          <Text style={styles.ctaText}>Continue</Text>
+          {isContinueLoading ? (
+            <ActivityIndicator color={colors.text.inverse} />
+          ) : (
+            <Text style={styles.ctaText}>Continue</Text>
+          )}
         </LinearGradient>
       </Pressable>
     </View>
