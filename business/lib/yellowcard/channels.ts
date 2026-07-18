@@ -12,11 +12,18 @@ export type YcChannel = {
   [key: string]: unknown
 }
 
+const CHANNELS_CACHE_TTL_MS = 60_000
+let channelsCache: { at: number; channels: YcChannel[] } | null = null
+
 export async function listYellowcardChannels(): Promise<YcChannel[]> {
+  if (channelsCache && Date.now() - channelsCache.at < CHANNELS_CACHE_TTL_MS) {
+    return channelsCache.channels
+  }
   const res = await yellowcardFetch<{ channels?: YcChannel[] } | YcChannel[]>({
     method: "GET",
     path: "/channels",
   })
-  if (Array.isArray(res)) return res
-  return Array.isArray(res.channels) ? res.channels : []
+  const channels = Array.isArray(res) ? res : Array.isArray(res.channels) ? res.channels : []
+  channelsCache = { at: Date.now(), channels }
+  return channels
 }

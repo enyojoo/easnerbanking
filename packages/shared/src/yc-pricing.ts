@@ -32,11 +32,11 @@ function roundLocalUp(n: number): number {
 /** Default USDC tolerance when comparing YC settlement vs required economics. */
 export const YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC = 0.02
 
-/** Extra USDC padding on fund-balance pay-in solve before POST /receive (YC conversion slop). */
-export const YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC = 2
+/** Fund balance confirm/settle tolerance for YC conversion rounding (single POST /receive). */
+export const YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC = 1
 
-/** Max POST /receive attempts while sizing fund-balance pay-in to omnibus economics. */
-export const YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS = 5
+/** Extra USDC padding on fund-balance pay-in solve before POST /receive (YC conversion slop). */
+export const YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC = 3
 
 /** Quote TTL — YC receive locks ~10 minutes. */
 export const YC_QUOTE_TTL_MS = 10 * 60 * 1000
@@ -402,10 +402,13 @@ function applyYcFundBalanceBeforeReceiveBuffer(
   pricing: YcFundBalancePricing,
   customerSellRate: number,
 ): YcFundBalancePricing {
-  const bufferLocal = roundLocalUp(
-    YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC * customerSellRate,
+  const neededOmnibus = roundUsdc(pricing.usdCredit + pricing.processingFee)
+  const bufferUsd = Math.max(
+    YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
+    roundUsdc(neededOmnibus * 0.005),
   )
-  if (!(bufferLocal > 0)) return pricing
+  const bufferLocal = roundLocalUp(bufferUsd * customerSellRate)
+  if (!(bufferLocal > 0)) return { ...pricing, localPayIn: roundLocalUp(pricing.localPayIn) }
   return {
     ...pricing,
     localPayIn: roundLocalUp(pricing.localPayIn + bufferLocal),

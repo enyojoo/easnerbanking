@@ -3,6 +3,7 @@ import {
   checkYcFundBalanceOmnibusSufficient,
   computeEasnerRevenueFeeWalletSweepAmount,
   EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
+  YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
 } from "@easner/shared"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
@@ -62,6 +63,7 @@ export async function creditFundBalanceFromYcReceive(
     cryptoAmount,
     usdCredit: quotedCredit,
     processingFee,
+    tolerance: YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
   })
   const creditAmt =
     quotedCredit > 0 ? quotedCredit : Math.max(0, cryptoAmount - processingFee)

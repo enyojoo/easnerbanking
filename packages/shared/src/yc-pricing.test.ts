@@ -21,6 +21,7 @@ import {
   inferYcReceiveLegFeesUsd,
   bumpYcFundBalanceLocalPayInForOmnibusShortfall,
   YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
+  YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
 } from "./yc-pricing"
 
 describe("computeYcFundBalancePricing", () => {
@@ -200,6 +201,17 @@ describe("yc omnibus sufficiency checks", () => {
         processingFee: 1,
       }),
     ).toThrow(/yc_omnibus_below_required/)
+  })
+
+  it("fund balance tolerance accepts YC conversion slop on one receive call", () => {
+    expect(
+      checkYcFundBalanceOmnibusSufficient({
+        cryptoAmount: 1211.109,
+        usdCredit: 1200,
+        processingFee: 12,
+        tolerance: YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
+      }).ok,
+    ).toBe(true)
   })
 
   it("cross-border: requires receive crypto >= send + fee + margin", () => {

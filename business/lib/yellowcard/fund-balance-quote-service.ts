@@ -2,10 +2,9 @@ import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   YC_QUOTE_TTL_MS,
-  YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS,
+  YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
   buildYcFundBalanceDepositReviewSnapshot,
   buildYcFundBalanceDisplayFees,
-  bumpYcFundBalanceLocalPayInForOmnibusShortfall,
   checkYcFundBalanceOmnibusSufficient,
   computeYcFundBalancePricing,
   computeYcFundBalancePricingBeforeReceive,
@@ -75,7 +74,16 @@ export class FundBalanceQuoteServiceError extends Error {
 async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
   const { admin, kycUserId, currency, country, rail, userRow } = ctx
 
-  const rates = await listYcRates(admin, { status: "active" })
+  const [rates, payInEnabled, channels] = await Promise.all([
+    listYcRates(admin, { status: "active" }),
+    isYcLocalPayInEnabledForCorridor(admin, {
+      countryCode: country,
+      currencyCode: currency,
+      rail,
+    }),
+    listYellowcardChannels(),
+  ])
+
   const leg = findYcPayInLeg(rates, currency)
   if (!leg?.easner_sell || !leg.yc_sell) {
     throw new FundBalanceQuoteServiceError(
@@ -86,11 +94,6 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
     )
   }
 
-  const payInEnabled = await isYcLocalPayInEnabledForCorridor(admin, {
-    countryCode: country,
-    currencyCode: currency,
-    rail,
-  })
   if (!payInEnabled) {
     throw new FundBalanceQuoteServiceError(
       "yc_corridor_disabled",
@@ -111,7 +114,6 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
     )
   }
 
-  const channels = await listYellowcardChannels()
   const channel = findYcReceiveChannel(channels, { country, currency, rail })
   const channelId = String(channel?.id ?? channel?.channelId ?? "").trim()
   if (!channelId) {
@@ -272,78 +274,59 @@ async function submitFundBalanceYcReceive(input: {
   ctx: FundBalanceQuoteInput
   prepared: Awaited<ReturnType<typeof prepareFundBalanceQuote>>
 }): Promise<{ receiveRes: YcReceiveSubmitResult; pricing: ReturnType<typeof computeYcFundBalancePricing>; sequenceId: string }> {
-  let localAmount = input.prepared.provisional.localPayIn
-  let sequenceId = `yc_fb_${randomUUID()}`
-  let receiveRes: YcReceiveSubmitResult | null = null
-  let pricing: ReturnType<typeof computeYcFundBalancePricing> | null = null
+  const localAmount = input.prepared.provisional.localPayIn
+  const sequenceId = `yc_fb_${randomUUID()}`
 
-  for (let attempt = 0; attempt < YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) {
-      sequenceId = `yc_fb_${randomUUID()}`
-    }
-    try {
-      receiveRes = await submitYcReceive({
-        sequenceId,
-        customerUID: input.ctx.kycUserId,
-        channelId: input.prepared.channelId,
-        currency: input.ctx.currency,
-        country: input.ctx.country,
-        localAmount,
-        recipient: input.prepared.sender,
-        payInRail: input.ctx.rail,
-        sourcePhone: input.ctx.sourcePhone,
-        sourceNetworkId: input.ctx.sourceNetworkId,
-        reason: "fund_balance",
-      })
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "YC receive submit failed"
-      if (message === "deposit_omnibus_solana_address_usd_required") {
-        throw new FundBalanceQuoteServiceError("yc_settlement_wallet_not_configured", message, 503)
-      }
-      const parsedMin = parseYcReceiveRejectedMinError(message)
-      if (parsedMin) {
-        throw new FundBalanceQuoteServiceError("yc_amount_below_min", message, 400, {
-          minLocalPayIn: parsedMin.minLocalPayIn,
-          currency: parsedMin.currency,
-        })
-      }
-      throw new FundBalanceQuoteServiceError("yc_receive_rejected", message, 400, {
-        userId: input.ctx.kycUserId,
-        currency: input.ctx.currency,
-        country: input.ctx.country,
-        rail: input.ctx.rail,
-      })
-    }
-
-    pricing = computeFundBalancePricingFromReceive({
-      ctx: input.ctx,
-      prepared: input.prepared,
-      receiveRes,
+  let receiveRes: YcReceiveSubmitResult
+  try {
+    receiveRes = await submitYcReceive({
+      sequenceId,
+      customerUID: input.ctx.kycUserId,
+      channelId: input.prepared.channelId,
+      currency: input.ctx.currency,
+      country: input.ctx.country,
+      localAmount,
+      recipient: input.prepared.sender,
+      payInRail: input.ctx.rail,
+      sourcePhone: input.ctx.sourcePhone,
+      sourceNetworkId: input.ctx.sourceNetworkId,
+      reason: "fund_balance",
     })
-
-    const cryptoAmount = Number(receiveRes.settlementInfo?.cryptoAmount ?? 0)
-    const omnibusCheck = checkYcFundBalanceOmnibusSufficient({
-      cryptoAmount,
-      usdCredit: pricing.usdCredit,
-      processingFee: pricing.processingFee,
-    })
-    const ycLockedPayIn = Number(receiveRes.localAmount ?? localAmount)
-
-    if (omnibusCheck.ok) {
-      return { receiveRes, pricing, sequenceId }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "YC receive submit failed"
+    if (message === "deposit_omnibus_solana_address_usd_required") {
+      throw new FundBalanceQuoteServiceError("yc_settlement_wallet_not_configured", message, 503)
     }
-
-    if (attempt < YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS - 1) {
-      localAmount = bumpYcFundBalanceLocalPayInForOmnibusShortfall({
-        localPayIn: Math.max(localAmount, ycLockedPayIn, pricing.localPayIn),
-        customerSellRate: input.prepared.customerRate,
-        requiredOmnibus: omnibusCheck.requiredOmnibus,
-        cryptoAmount: omnibusCheck.cryptoAmount,
-        padRatio: 1.02 + attempt * 0.015,
+    const parsedMin = parseYcReceiveRejectedMinError(message)
+    if (parsedMin) {
+      throw new FundBalanceQuoteServiceError("yc_amount_below_min", message, 400, {
+        minLocalPayIn: parsedMin.minLocalPayIn,
+        currency: parsedMin.currency,
       })
-      continue
     }
+    throw new FundBalanceQuoteServiceError("yc_receive_rejected", message, 400, {
+      userId: input.ctx.kycUserId,
+      currency: input.ctx.currency,
+      country: input.ctx.country,
+      rail: input.ctx.rail,
+    })
+  }
 
+  const pricing = computeFundBalancePricingFromReceive({
+    ctx: input.ctx,
+    prepared: input.prepared,
+    receiveRes,
+  })
+
+  const cryptoAmount = Number(receiveRes.settlementInfo?.cryptoAmount ?? 0)
+  const omnibusCheck = checkYcFundBalanceOmnibusSufficient({
+    cryptoAmount,
+    usdCredit: pricing.usdCredit,
+    processingFee: pricing.processingFee,
+    tolerance: YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
+  })
+
+  if (!omnibusCheck.ok) {
     throw new FundBalanceQuoteServiceError(
       "yc_omnibus_below_required",
       `YC omnibus ${cryptoAmount} below required ${omnibusCheck.requiredOmnibus}`,
@@ -359,7 +342,7 @@ async function submitFundBalanceYcReceive(input: {
     )
   }
 
-  throw new FundBalanceQuoteServiceError("yc_receive_rejected", "YC receive submit failed", 400)
+  return { receiveRes, pricing, sequenceId }
 }
 
 function formatFundBalanceTransferResponse(input: {
