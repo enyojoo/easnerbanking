@@ -20,8 +20,11 @@ import {
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
   convertNoahSendFlowAmounts,
   hasNoahSendRateRow,
+  isWideSendAmountSymbol,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
+  scaleSendAmountPrefixFontSize,
+  scaleSendAmountPrefixLineHeight,
   useDebouncedValue,
   type NoahWalletRateRow,
 } from "@easner/shared"
@@ -837,6 +840,14 @@ export default function SendPage() {
   }
 
   const amountInputCurrency = amountEntryMode === "receive" ? receiveCurrency : sendCurrency
+  const amountFieldSymbol = getSendAmountFieldSymbol(amountInputCurrency)
+  const wideAmountFieldSymbol = isWideSendAmountSymbol(amountFieldSymbol)
+  const amountPrefixFontSize = wideAmountFieldSymbol
+    ? scaleSendAmountPrefixFontSize(48, amountFieldSymbol)
+    : 48
+  const amountPrefixLineHeight = wideAmountFieldSymbol
+    ? scaleSendAmountPrefixLineHeight(52, amountFieldSymbol)
+    : 52
   const shortfallAmount =
     hasInsufficientBalance && sourceAccount
       ? sendAmount - sourceAccount.availableBalance
@@ -1311,11 +1322,14 @@ export default function SendPage() {
             ) : null}
           </div>
           <div
-            className="flex h-[100px] shrink-0 items-center justify-center box-border rounded-xl border-2 border-input bg-background px-6 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-colors gap-0.5"
+            className="flex h-[100px] shrink-0 items-center justify-center box-border rounded-xl border-2 border-input bg-background px-6 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-colors gap-1"
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
-            <span className="font-black text-foreground select-none shrink-0 text-5xl">
-              {getSendAmountFieldSymbol(amountInputCurrency)}
+            <span
+              className="font-black text-foreground select-none shrink-0"
+              style={{ fontSize: amountPrefixFontSize, lineHeight: `${amountPrefixLineHeight}px` }}
+            >
+              {amountFieldSymbol}
             </span>
             <input
               type="text"

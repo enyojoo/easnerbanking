@@ -1712,26 +1712,35 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               <View style={styles.amountSection}>
                 <View style={[styles.amountInputWrapper, { height: amountRowHeight }]}>
                   <View style={styles.amountInputContainer}>
-                    <Text
-                      style={[
-                        styles.amountInput,
-                        amountTextStyle,
-                        styles.amountUnified,
-                        !recipient && styles.amountInputDisabled,
-                      ]}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.5}
-                      accessibilityRole="text"
-                      accessibilityLabel={`Amount ${amountDisplaySymbol}${recipient ? sendAmount : '0'}`}
-                    >
-                      {wideAmountSymbol && amountPrefixStyle ? (
-                        <Text style={amountPrefixStyle}>{amountDisplaySymbol}</Text>
-                      ) : (
-                        amountDisplaySymbol
-                      )}
-                      {recipient ? sendAmount : '0'}
-                    </Text>
+                    <View style={styles.amountInputRow}>
+                      <Text
+                        style={[
+                          styles.amountInput,
+                          amountTextStyle,
+                          wideAmountSymbol ? amountPrefixStyle : null,
+                          styles.amountPrefix,
+                          !recipient && styles.amountInputDisabled,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {amountDisplaySymbol}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.amountInput,
+                          amountTextStyle,
+                          styles.amountNumber,
+                          !recipient && styles.amountInputDisabled,
+                        ]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.5}
+                        accessibilityRole="text"
+                        accessibilityLabel={`Amount ${amountDisplaySymbol}${recipient ? sendAmount : '0'}`}
+                      >
+                        {recipient ? sendAmount : '0'}
+                      </Text>
+                    </View>
                   </View>
           </View>
 
@@ -2276,13 +2285,30 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[1],
   },
   amountInputContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
     maxWidth: '100%',
+    width: '100%',
+    paddingHorizontal: spacing[2],
   },
-  /** Single-line amount: same rendering path as dashboard balance Text (avoids iOS TextInput clip). */
+  amountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: '100%',
+  },
+  amountPrefix: {
+    flexShrink: 0,
+    textAlign: 'right',
+  },
+  amountNumber: {
+    flexShrink: 1,
+    minWidth: 0,
+    textAlign: 'left',
+    maxWidth: '100%',
+  },
+  /** @deprecated Use amountInputRow + amountPrefix/amountNumber split for wide currency symbols. */
   amountUnified: {
     flexShrink: 1,
     textAlign: 'center',

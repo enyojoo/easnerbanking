@@ -33,7 +33,7 @@ import { ripple } from '../../lib/androidRipple'
 import { CurrencyFlag } from '../flags/CurrencyFlag'
 import { getCurrencySymbol } from '../../utils/formatters'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
-import { formatMoneyDisplay, formatSendRateLabel, SEND_AMOUNT_CONTINUE_CTA } from '@easner/shared'
+import { formatMoneyDisplay, formatSendRateLabel, isWideSendAmountSymbol, scaleSendAmountPrefixFontSize, scaleSendAmountPrefixLineHeight, SEND_AMOUNT_CONTINUE_CTA } from '@easner/shared'
 import type { Recipient } from '../../types'
 import type { HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
 import { SendSelectedRecipientSummary } from './SendSelectedRecipientSummary'
@@ -151,6 +151,13 @@ export function SendAmountShellWebForm({
 }: SendAmountShellWebFormProps) {
   const amountInputCurrency = amountEntryMode === 'receive' ? receiveCurrency : sendCurrency
   const amountSymbol = getSendAmountFieldSymbol(amountInputCurrency)
+  const wideAmountSymbol = isWideSendAmountSymbol(amountSymbol)
+  const amountSymbolStyle = wideAmountSymbol
+    ? {
+        fontSize: scaleSendAmountPrefixFontSize(48, amountSymbol),
+        lineHeight: scaleSendAmountPrefixLineHeight(52, amountSymbol),
+      }
+    : null
   const showExchangeHeader = showCrossCurrencyExchangeUi
 
   const continueLabel = selectedPaymentMethod ? SEND_AMOUNT_CONTINUE_CTA : 'Select Method'
@@ -256,7 +263,7 @@ export function SendAmountShellWebForm({
         </View>
 
         <View style={styles.amountInputBox}>
-          <Text style={styles.amountSymbol}>{amountSymbol}</Text>
+          <Text style={[styles.amountSymbol, amountSymbolStyle]}>{amountSymbol}</Text>
           <TextInput
             style={styles.amountTextInput}
             value={sendAmount === '0' ? '' : sendAmount}
@@ -527,7 +534,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     backgroundColor: colors.background.primary,
     paddingHorizontal: spacing[6],
-    gap: spacing[1],
+    gap: spacing[2],
   },
   amountSymbol: {
     fontSize: 48,
@@ -535,6 +542,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.black,
     color: colors.text.primary,
     flexShrink: 0,
+    minWidth: 0,
   },
   amountTextInput: {
     flex: 1,
