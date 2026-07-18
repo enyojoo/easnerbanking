@@ -16,6 +16,8 @@ import {
   Link,
   ArrowUpDown,
   AlertCircle,
+  User,
+  RotateCcw,
 } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import SkeletonLoader from '../SkeletonLoader'
@@ -32,6 +34,9 @@ import { CurrencyFlag } from '../flags/CurrencyFlag'
 import { getCurrencySymbol } from '../../utils/formatters'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
 import { formatMoneyDisplay, formatSendRateLabel } from '@easner/shared'
+import type { Recipient } from '../../types'
+import type { HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
+import { SendSelectedRecipientSummary } from './SendSelectedRecipientSummary'
 
 function LandmarkIcon({ size = 20, color = colors.text.primary }: { size?: number; color?: string }) {
   return (
@@ -47,6 +52,11 @@ function LandmarkIcon({ size = 20, color = colors.text.primary }: { size?: numbe
 }
 
 export type SendAmountShellWebFormProps = {
+  pageTitle?: string
+  recipient: Recipient | null
+  easenetPreview?: HydratedEasenetProfile | null
+  showPayoutCorridorWarning?: boolean
+  onRecipientPress: () => void
   amountEntryMode: 'receive' | 'send'
   sendAmount: string
   sendCurrency: string
@@ -94,6 +104,11 @@ export type SendAmountShellWebFormProps = {
 }
 
 export function SendAmountShellWebForm({
+  pageTitle,
+  recipient,
+  easenetPreview,
+  showPayoutCorridorWarning = false,
+  onRecipientPress,
   amountEntryMode,
   sendAmount,
   sendCurrency,
@@ -199,6 +214,50 @@ export function SendAmountShellWebForm({
 
   return (
     <View style={styles.root}>
+      {pageTitle ? <Text style={styles.pageTitle}>{pageTitle}</Text> : null}
+
+      <View style={styles.section}>
+        <Text style={styles.fieldLabel}>Recipient</Text>
+        {recipient ? (
+          <Pressable
+            android_ripple={ripple.neutral}
+            style={styles.recipientSelector}
+            onPress={onRecipientPress}
+          >
+            <Text style={styles.recipientToLabel}>To:</Text>
+            <View style={styles.recipientSummaryWrap}>
+              <SendSelectedRecipientSummary recipient={recipient} easenetPreview={easenetPreview} />
+            </View>
+            <RotateCcw
+              size={17}
+              color={colors.text.primary}
+              strokeWidth={2}
+              accessibilityLabel="Change recipient"
+            />
+          </Pressable>
+        ) : (
+          <Pressable
+            android_ripple={ripple.neutral}
+            style={styles.recipientSelectorEmpty}
+            onPress={onRecipientPress}
+          >
+            <View style={styles.recipientEmptyIcon}>
+              <User size={20} color={colors.text.secondary} strokeWidth={2} />
+            </View>
+            <Text style={styles.recipientEmptyText}>Select Recipient</Text>
+            <ChevronDown size={16} color={colors.text.secondary} strokeWidth={2} />
+          </Pressable>
+        )}
+        {showPayoutCorridorWarning ? (
+          <View style={styles.recipientWarning}>
+            <Text style={styles.recipientWarningText}>
+              Fiat payouts to this recipient are not available on your account yet (Noah sell channel missing).
+              Choose another recipient or a US/EUR bank corridor.
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
       <View style={styles.section}>
         <View style={[styles.amountLabelRow, showExchangeHeader && styles.amountLabelRowTall]}>
           <Text style={styles.fieldLabel}>
@@ -361,11 +420,75 @@ export function SendAmountShellWebForm({
 const styles = StyleSheet.create({
   root: {
     width: '100%',
-    gap: spacing[6],
-    paddingTop: spacing[2],
+    gap: spacing[5],
+  },
+  pageTitle: {
+    ...textStyles.headlineMedium,
+    color: colors.text.primary,
+    textAlign: 'center',
+    marginBottom: spacing[1],
   },
   section: {
     gap: spacing[2],
+  },
+  recipientSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background.primary,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    minHeight: 56,
+    gap: spacing[3],
+  },
+  recipientSelectorEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background.primary,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    minHeight: 52,
+    gap: spacing[3],
+  },
+  recipientToLabel: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
+    fontFamily: fontFamily.medium,
+    flexShrink: 0,
+  },
+  recipientSummaryWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  recipientEmptyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background.secondary,
+  },
+  recipientEmptyText: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
+    fontFamily: fontFamily.medium,
+    flex: 1,
+  },
+  recipientWarning: {
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.warning.background,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+  recipientWarningText: {
+    ...textStyles.bodySmall,
+    color: colors.warning.dark,
+    lineHeight: 20,
   },
   fieldLabel: {
     ...textStyles.bodySmall,

@@ -136,8 +136,7 @@ import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
 import { getCurrencySymbol } from '../../utils/formatters'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { SendAmountShellWebForm } from '../../components/send/SendAmountShellWebForm'
-import { ResponsivePage } from '../../components/layout/ResponsivePage'
-import { SendFlowSplit } from '../../components/layout/SendFlowSplit'
+import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 
 function initialSendAmountFromRouteParams(params: Record<string, unknown> | undefined): string {
   const formatted = String(params?.initialSendAmount ?? '').trim()
@@ -152,8 +151,6 @@ function initialAmountEntryModeFromRouteParams(
 ): 'receive' | 'send' {
   return params?.initialAmountEntryMode === 'send' ? 'send' : 'receive'
 }
-
-const WEB_SHELL_MAX_WIDTH = 672
 
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
@@ -1592,14 +1589,33 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       >
         <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
       </Pressable>
-      <View style={styles.headerContent}>
-        <Text style={styles.title}>Send Money</Text>
-      </View>
+      {!useWebShellLayout ? (
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>Send Money</Text>
+        </View>
+      ) : null}
     </Animated.View>
   )
 
+  const handleRecipientPress = () => {
+    haptics.tap()
+    navigateToSendRecipientHub(navigation, {
+      preferredBalanceCurrency: selectedBalanceCurrency,
+      selectedPaymentMethod,
+      selectedOtherCurrency,
+      selectedOtherPaymentMethod,
+    })
+  }
+
   const webShellForm = (
     <SendAmountShellWebForm
+      pageTitle="Send Money"
+      recipient={recipient}
+      easenetPreview={easenetDisplay}
+      showPayoutCorridorWarning={
+        !!recipient && !isEasetagRecipient && !payoutCorridorActive
+      }
+      onRecipientPress={handleRecipientPress}
       amountEntryMode={amountEntryMode}
       sendAmount={sendAmount}
       sendCurrency={sendCurrency}
@@ -1675,12 +1691,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 }
               ]}
             >
-              <ResponsivePage contentContainerStyle={styles.webShellPage}>
-                <SendFlowSplit
-                  form={webShellForm}
-                  preview={<View style={styles.webShellPreview}>{recipientSection}</View>}
-                />
-              </ResponsivePage>
+              <CenteredWebFlowPage>{webShellForm}</CenteredWebFlowPage>
             </Animated.View>
           </View>
         ) : (
@@ -2235,15 +2246,6 @@ const styles = StyleSheet.create({
   webShellContent: {
     flex: 1,
     minHeight: 0,
-  },
-  webShellPage: {
-    maxWidth: WEB_SHELL_MAX_WIDTH,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  webShellPreview: {
-    width: '100%',
-    gap: spacing[3],
   },
   sendFormTop: {
     flexShrink: 0,

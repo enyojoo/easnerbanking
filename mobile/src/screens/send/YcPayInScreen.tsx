@@ -29,6 +29,9 @@ import { haptics } from '../../lib/haptics'
 import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transactionDetailNavigation'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { YcLocalPayInCompleteSummary } from '../../components/yc/YcLocalPayInCompleteSummary'
+import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
+import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
+import { YcPayInShellWebForm } from '../../components/yc/YcPayInShellWebForm'
 
 type RouteParams = {
   flowMode?: 'fund_balance' | 'cross_border_send'
@@ -71,6 +74,8 @@ function SendExactlyAmount({
 }
 
 export default function YcPayInScreen({ navigation, route }: NavigationProps) {
+  const { isWeb, mode } = useResponsiveLayout()
+  const useWebShellLayout = isWeb && (mode === 'tablet' || mode === 'desktop')
   const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const footerPadding = useFixedFooterPadding(spacing[5])
   const copyToClipboard = useCopyToClipboard()
@@ -138,6 +143,51 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
     setTimeout(() => setCopiedKey(null), 2000)
   }
 
+  const handleContinue = () => {
+    haptics.medium()
+    navigateToTransactionDetailAfterPayIn(navigation, transactionId)
+  }
+
+  const paymentDetails = isMobileMoney ? (
+    <>
+      {sourceNetworkName ? (
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.paymentNetwork}</Text>
+          <Text style={styles.fieldValue}>{sourceNetworkName}</Text>
+        </View>
+      ) : null}
+      {sourcePhone ? (
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.mobileNumber}</Text>
+          <Text style={styles.fieldValue}>{sourcePhone}</Text>
+        </View>
+      ) : null}
+    </>
+  ) : fields.length === 0 ? (
+    <Text style={styles.emptyFields}>
+      Payment details unavailable. Contact support with reference {displayTransactionId}.
+    </Text>
+  ) : (
+    fields.map((field) => (
+      <Pressable
+        key={field.id}
+        android_ripple={ripple.neutral}
+        style={styles.fieldRow}
+        onPress={() => void handleCopy(field.value, field.id)}
+      >
+        <Text style={styles.fieldLabel}>{field.label}</Text>
+        <View style={styles.fieldValueRow}>
+          <Text style={styles.fieldValue}>{field.value}</Text>
+          {copiedKey === field.id ? (
+            <Check size={16} color={colors.primary.main} strokeWidth={2} />
+          ) : (
+            <Copy size={16} color={colors.text.secondary} strokeWidth={2} />
+          )}
+        </View>
+      </Pressable>
+    ))
+  )
+
   if (!transactionId || !transferId) {
     return (
       <ScreenWrapper>
@@ -150,7 +200,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
 
   return (
     <ScreenWrapper>
-      <View style={[styles.container, { paddingBottom: footerPadding }]}>
+      <View style={[styles.container, useWebShellLayout && styles.containerWeb, { paddingBottom: useWebShellLayout ? spacing[4] : footerPadding }]}>
         <View style={styles.header}>
           <Pressable
             android_ripple={ripple.neutral}
@@ -159,9 +209,50 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
           >
             <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
-          <Text style={styles.title}>{screenTitle}</Text>
+          {!useWebShellLayout ? <Text style={styles.title}>{screenTitle}</Text> : null}
         </View>
 
+        {useWebShellLayout ? (
+          <CenteredWebFlowPage>
+            <YcPayInShellWebForm
+              screenTitle={screenTitle}
+              summary={
+                <YcLocalPayInCompleteSummary
+                  mode={flowMode}
+                  rail={payInRail}
+                  transactionId={displayTransactionId}
+                  payInCurrency={sendCurrency}
+                  receiveCurrency={receiveCurrency}
+                  localPayIn={localPayIn}
+                  receiveAmount={receiveAmount}
+                  customerRate={customerRate}
+                  provisionalPayIn={provisionalPayIn}
+                  processingFeeLocal={feeLocal}
+                  processingFeeUsd={processingFee}
+                  exchangeFeeUsd={ycChannelFeeUsd}
+                  recipientName={recipientName}
+                  copiedKey={copiedKey}
+                  onCopyTransactionId={(text) => void handleCopy(text, 'transactionId')}
+                />
+              }
+              sendExactlyLine={
+                !isMobileMoney ? (
+                  <SendExactlyAmount amount={formattedSendAmount} centered />
+                ) : (
+                  <Text style={styles.webMomoAmountHint}>
+                    Authorize the payment from your mobile money app using the details below.
+                  </Text>
+                )
+              }
+              noticeText={completeNotice}
+              isMobileMoney={isMobileMoney}
+              paymentDetails={paymentDetails}
+              ctaLabel={ctaLabel}
+              onContinue={handleContinue}
+            />
+          </CenteredWebFlowPage>
+        ) : (
+        <>
         <ScrollView
           contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
           showsVerticalScrollIndicator={false}
@@ -208,55 +299,14 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
                 {isMobileMoney ? 'Mobile Money' : 'Bank Account'}
               </Text>
             </View>
-            {isMobileMoney ? (
-              <>
-                {sourceNetworkName ? (
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.paymentNetwork}</Text>
-                    <Text style={styles.fieldValue}>{sourceNetworkName}</Text>
-                  </View>
-                ) : null}
-                {sourcePhone ? (
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.mobileNumber}</Text>
-                    <Text style={styles.fieldValue}>{sourcePhone}</Text>
-                  </View>
-                ) : null}
-              </>
-            ) : fields.length === 0 ? (
-              <Text style={styles.emptyFields}>
-                Payment details unavailable. Contact support with reference {displayTransactionId}.
-              </Text>
-            ) : (
-              fields.map((field) => (
-                <Pressable
-                  key={field.id}
-                  android_ripple={ripple.neutral}
-                  style={styles.fieldRow}
-                  onPress={() => void handleCopy(field.value, field.id)}
-                >
-                  <Text style={styles.fieldLabel}>{field.label}</Text>
-                  <View style={styles.fieldValueRow}>
-                    <Text style={styles.fieldValue}>{field.value}</Text>
-                    {copiedKey === field.id ? (
-                      <Check size={16} color={colors.primary.main} strokeWidth={2} />
-                    ) : (
-                      <Copy size={16} color={colors.text.secondary} strokeWidth={2} />
-                    )}
-                  </View>
-                </Pressable>
-              ))
-            )}
+            {paymentDetails}
           </View>
         </ScrollView>
 
         <Pressable
           android_ripple={ripple.neutral}
           style={styles.cta}
-          onPress={() => {
-            haptics.medium()
-            navigateToTransactionDetailAfterPayIn(navigation, transactionId)
-          }}
+          onPress={handleContinue}
         >
           <LinearGradient
             colors={colors.primary.gradient}
@@ -267,6 +317,8 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
             <Text style={styles.ctaText}>{ctaLabel}</Text>
           </LinearGradient>
         </Pressable>
+        </>
+        )}
       </View>
     </ScreenWrapper>
   )
@@ -276,6 +328,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: spacing[5],
+  },
+  containerWeb: {
+    paddingHorizontal: spacing[4],
   },
   centered: {
     flex: 1,
@@ -319,6 +374,12 @@ const styles = StyleSheet.create({
   sendExactlyAmount: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
+  },
+  webMomoAmountHint: {
+    ...textStyles.bodyMedium,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   noticeText: {
     ...textStyles.body,

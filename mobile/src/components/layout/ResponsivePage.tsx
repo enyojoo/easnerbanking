@@ -8,6 +8,7 @@ type ResponsivePageProps = {
   scroll?: boolean
   style?: StyleProp<ViewStyle>
   contentContainerStyle?: StyleProp<ViewStyle>
+  scrollContentStyle?: StyleProp<ViewStyle>
 }
 
 export function ResponsivePage({
@@ -15,6 +16,7 @@ export function ResponsivePage({
   scroll = true,
   style,
   contentContainerStyle,
+  scrollContentStyle,
 }: ResponsivePageProps) {
   const { mode } = useResponsiveLayout()
   const centered = mode === 'tablet' || mode === 'desktop'
@@ -38,7 +40,7 @@ export function ResponsivePage({
   return (
     <ScrollView
       style={[styles.root, style]}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[styles.scrollContent, scrollContentStyle]}
       showsVerticalScrollIndicator={false}
     >
       {inner}
