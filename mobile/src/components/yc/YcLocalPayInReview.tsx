@@ -220,7 +220,7 @@ export function YcLocalPayInReview({
     !quoteLocked ||
     Boolean(quoteError) ||
     quoteCountdown.expired ||
-    quoteLoading
+    (quoteLoading && !quoteLocked)
 
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>

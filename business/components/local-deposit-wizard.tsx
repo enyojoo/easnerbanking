@@ -359,15 +359,13 @@ export function LocalDepositWizard({
   )
 
   const reviewConfirmKey =
-    step === "review" && enteredAmount > 0 && (!isMomo || momoReady)
+    step === "review" && !isMomo && enteredAmount > 0
       ? [
           residenceCountry,
           localPayInCurrency,
           amountMode,
           enteredAmount,
           rail,
-          isMomo ? momoPhone.trim() || defaultPhone.trim() : "",
-          isMomo ? momoNetworkId : "",
         ].join("|")
       : ""
 
@@ -702,7 +700,7 @@ export function LocalDepositWizard({
     const showQuoteSpinner = quoteLoading && !isMomo && !quoteLocked
     const showLockedReview = quoteLocked
     const canConfirmReview =
-      quoteLocked && !quoteLoading && !quoteCountdown.expired && (!isMomo || momoReady)
+      quoteLocked && !quoteCountdown.expired && (!isMomo || momoReady)
     return (
       <div className="space-y-4">
         <button
@@ -755,10 +753,15 @@ export function LocalDepositWizard({
         {quoteError ? <p className="text-sm text-destructive">{quoteError}</p> : null}
 
         <Button
+          type="button"
           className="w-full"
           disabled={!canConfirmReview}
           onClick={() => {
-            if (quote?.transferId) setStep("payin")
+            if (!quote?.transferId) {
+              setQuoteError("Payment details are not ready yet. Wait a moment or go back and try again.")
+              return
+            }
+            setStep("payin")
           }}
         >
           Continue

@@ -313,6 +313,7 @@ export default function SendConfirmPage() {
 
     return () => {
       cancelled = true
+      setYcQuoteLoading(false)
     }
   }, [
     state?.recipient.id,
@@ -321,6 +322,7 @@ export default function SendConfirmPage() {
     state?.otherPaymentMethod,
     state?.ycMomoSetup?.sourcePhone,
     state?.ycMomoSetup?.networkId,
+    state?.ycCrossBorder?.transferId,
     state?.ycCrossBorder?.localPayIn,
     state?.ycCrossBorder?.customerRate,
   ])
@@ -513,6 +515,7 @@ export default function SendConfirmPage() {
 
     return () => {
       cancelled = true
+      setYcQuoteLoading(false)
     }
   }, [
     state?.recipient.id,
@@ -520,6 +523,8 @@ export default function SendConfirmPage() {
     state?.otherCurrency,
     state?.otherPaymentMethod,
     state?.ycCrossBorder?.transferId,
+    state?.ycCrossBorder?.localPayIn,
+    state?.ycCrossBorder?.customerRate,
   ])
 
   const quoteCountdown = useQuoteCountdown(
@@ -862,16 +867,11 @@ export default function SendConfirmPage() {
   const pq = state.payoutQuote
   const wq = state.walletQuote
   const yc = state.ycCrossBorder
-  const momoQuoteLocked = Boolean(
-    isYcMomo &&
-      yc?.transferId &&
-      yc.localPayIn > 0 &&
-      yc.customerRate > 0 &&
-      yc.expiresAt &&
-      !ycQuoteLoading,
+  const ycQuoteLocked = Boolean(
+    yc?.transferId && yc.localPayIn > 0 && yc.customerRate > 0,
   )
   const quoteReady = isYcCrossBorder
-    ? Boolean(yc?.transferId && yc?.localPayIn && yc?.customerRate && !ycQuoteLoading)
+    ? ycQuoteLocked
     : easenetSend ||
       (walletSend
         ? isWalletQuoteFresh(wq, state.amount, state.recipient.id) && !walletQuoteLoading
@@ -914,11 +914,15 @@ export default function SendConfirmPage() {
   const authorizeDisabled = isYcCrossBorder
     ? isYcMomo
       ? isAuthorizing ||
-        ycQuoteLoading ||
+        (ycQuoteLoading && !ycQuoteLocked) ||
         Boolean(ycQuoteError) ||
         !quoteReady ||
         quoteCountdown.expired
-      : isAuthorizing || Boolean(ycQuoteError) || !quoteReady || quoteCountdown.expired
+      : isAuthorizing ||
+        (ycQuoteLoading && !ycQuoteLocked) ||
+        Boolean(ycQuoteError) ||
+        !quoteReady ||
+        quoteCountdown.expired
     : isAuthorizing ||
       Boolean((walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend) ||
       (!easenetSend && (!quoteReady || quoteCountdown.expired))

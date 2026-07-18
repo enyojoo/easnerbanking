@@ -217,13 +217,13 @@ export function YcFundBalanceReview({
   }
 
   const onContinue = () => {
-    if (submitting || !isCompleteFundBalanceQuote(quote)) return
+    if (!isCompleteFundBalanceQuote(quote)) return
     haptics.medium()
     navigateToPayIn(quote)
   }
 
   const ctaDisabled =
-    !quoteLocked || quoteLoading || quoteCountdown.expired || Boolean(quoteError)
+    !quoteLocked || quoteCountdown.expired || Boolean(quoteError) || (quoteLoading && !quoteLocked)
 
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>
