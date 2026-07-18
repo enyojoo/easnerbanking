@@ -1,8 +1,10 @@
 import {
   formatMoneyDisplay,
   isVerificationDepositMetadata,
+  normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
   resolveAccountImpactAmount,
+  resolveInboundReceiveDetail,
   toEasnerTransactionPrimaryLabel,
   type ReportingFxRate,
 } from "@easner/shared"
@@ -124,6 +126,23 @@ export function resolveOfficeYcMode(tx: TxRow): OfficeYcMode {
   return null
 }
 
+/** YC fund-balance pay-in — broader than metadata.yc_mode (deposit_review / source / flow). */
+export function isOfficeYcFundBalancePayIn(tx: TxRow): boolean {
+  if (normalizeDirection(tx.direction) !== "in") return false
+  const meta = tx.metadata ?? {}
+  if (resolveOfficeYcMode(tx) === "fund_balance") return true
+  if (normalizeYcFundBalanceDepositReview(meta.deposit_review)) return true
+  if (String(meta.source ?? "").toLowerCase() === "api_yellowcard_fund_balance") return true
+  if (
+    String(tx.provider ?? "").toLowerCase() === "yellowcard" &&
+    meta.flow === "bank_onramp" &&
+    (meta.usd_credit != null || meta.local_pay_in != null || meta.deposit_review != null)
+  ) {
+    return true
+  }
+  return false
+}
+
 export function resolveOfficePayInRail(tx: TxRow): "bank_transfer" | "mobile_money" | null {
   const rail = String(tx.metadata?.pay_in_rail ?? "").trim()
   if (rail === "bank_transfer" || rail === "mobile_money") return rail
@@ -131,9 +150,9 @@ export function resolveOfficePayInRail(tx: TxRow): "bank_transfer" | "mobile_mon
 }
 
 export function resolveOfficeProductLabel(tx: TxRow): string {
+  if (isOfficeYcFundBalancePayIn(tx)) return "Fund balance"
   const ycMode = resolveOfficeYcMode(tx)
   const provider = String(tx.provider ?? "").trim().toLowerCase()
-  if (ycMode === "fund_balance") return "Fund balance"
   if (ycMode === "cross_border_send") return "Cross-border"
   if (ycMode === "balance_payout" && provider === "yellowcard") return "YC payout"
   if (provider === "yellowcard") return "Yellowcard"
@@ -158,7 +177,7 @@ export function resolveOfficeReportingEurAmount(tx: TxRow): number | null {
 
 export function formatOfficeTxImpactAmount(tx: TxRow): string {
   const meta = tx.metadata || {}
-  if (resolveOfficeYcMode(tx) === "fund_balance" && normalizeDirection(tx.direction) === "in") {
+  if (isOfficeYcFundBalancePayIn(tx)) {
     const impact = resolveOfficeAccountImpact(tx)
     if (impact && Number.isFinite(impact.amount) && impact.amount > 0) {
       const currency = asBalanceCurrency(impact.currency)
@@ -203,11 +222,33 @@ function readPayoutReview(meta: Record<string, unknown>) {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null
 }
 
-/** YC fund-balance pay-in: local pay-in primary, USD credit secondary (matches cross-border list UX). */
+/** YC fund-balance pay-in: local Amount paid primary, USD credit secondary (matches cross-border list UX). */
 function resolveOfficeFundBalanceInPresentation(
   tx: TxRow,
   meta: Record<string, unknown>,
 ): OfficeTxPresentation | null {
+  const inbound = resolveInboundReceiveDetail({
+    provider: tx.provider,
+    direction: tx.direction,
+    metadata: meta,
+    amount: tx.amount,
+    currency: tx.currency,
+    occurred_at: tx.occurred_at,
+    created_at: tx.created_at,
+    easner_transaction_id: tx.easner_transaction_id,
+  })
+  if (inbound?.kind === "yc_fund_balance") {
+    const amountPaid = inbound.amountPaid ?? inbound.depositAmount
+    if (amountPaid && Number.isFinite(amountPaid.amount) && amountPaid.amount > 0 && amountPaid.currency) {
+      return {
+        displayAmount: amountPaid.amount,
+        displayCurrency: String(amountPaid.currency).toUpperCase(),
+        balanceAmount: inbound.amountCredited.amount,
+        balanceCurrency: asBalanceCurrency(inbound.amountCredited.currency),
+      }
+    }
+  }
+
   const review = reconstructYcFundBalanceDepositReview(meta)
   if (review) {
     return {
@@ -218,7 +259,7 @@ function resolveOfficeFundBalanceInPresentation(
     }
   }
 
-  const localPayIn = Number(meta.local_pay_in)
+  const localPayIn = Number(meta.local_pay_in ?? meta.fiat_deposit_amount)
   const localCurrency = String(
     meta.local_currency ?? meta.pay_in_currency ?? meta.fiat_deposit_currency ?? "",
   )
@@ -303,7 +344,7 @@ export function resolveOfficeTxPresentation(tx: TxRow): OfficeTxPresentation {
   }
 
   if (direction === "in") {
-    if (resolveOfficeYcMode(tx) === "fund_balance") {
+    if (isOfficeYcFundBalancePayIn(tx)) {
       const fundBalance = resolveOfficeFundBalanceInPresentation(tx, meta)
       if (fundBalance) return fundBalance
     }

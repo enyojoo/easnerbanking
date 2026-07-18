@@ -1,5 +1,6 @@
 import type { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { TxRow } from "./office-overview-compute"
+import { enrichYcFundBalanceOfficeRows } from "@/lib/admin/enrich-yc-fund-balance-office-rows"
 import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 import {
   filterSupersededPendingGlobalPayoutRows,
@@ -92,9 +93,10 @@ async function attachProfilesAndFinalizeVisible(
   const visible = filterSupersededPendingGlobalPayoutRows(
     await filterUserVisibleOfficeLedgerRows(admin, withUsers as OfficeLedgerTransaction[]),
   )
+  const fundBalanceEnriched = await enrichYcFundBalanceOfficeRows(admin, visible as TxRow[])
   const enrichedRows = (await enrichBankDepositLedgerRows(
     admin,
-    visible as Record<string, unknown>[],
+    fundBalanceEnriched as Record<string, unknown>[],
   )) as TxRow[]
 
   return [...enrichedRows]

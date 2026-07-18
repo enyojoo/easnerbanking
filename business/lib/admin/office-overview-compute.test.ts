@@ -183,6 +183,55 @@ describe("office-overview-compute", () => {
     expect(activity.amount).not.toBe(activity.impactFormatted)
   })
 
+  it("uses deposit_review for fund balance when yc_mode is missing", () => {
+    const [activity] = processRecentActivity([
+      {
+        id: "yc-fb-review-only",
+        direction: "in",
+        status: "settled",
+        provider: "yellowcard",
+        currency: "USD",
+        amount: 80,
+        metadata: {
+          source: "api_yellowcard_fund_balance",
+          usd_credit: 80,
+          deposit_review: {
+            local_pay_in: 120000,
+            local_currency: "NGN",
+            usd_credit: 80,
+            exchange_rate: 1500,
+            pay_in_rail: "bank_transfer",
+            credit_to: "USD Balance",
+            residence_country: "NG",
+            transfer_method: "Bank Transfer",
+            processing_fee: 0,
+          },
+        },
+        created_at: new Date().toISOString(),
+      },
+    ])
+    expect(activity.amount).toContain("₦")
+    expect(activity.impactFormatted).toBe("$80.00")
+  })
+
+  it("uses fiat_deposit_amount for fund balance display when present", () => {
+    const amount = formatOfficeTxAmount({
+      id: "yc-fb-fiat",
+      direction: "in",
+      provider: "yellowcard",
+      currency: "USD",
+      amount: 90,
+      metadata: {
+        yc_mode: "fund_balance",
+        usd_credit: 90,
+        fiat_deposit_amount: 140000,
+        fiat_deposit_currency: "NGN",
+      },
+    })
+    expect(amount).toContain("₦")
+    expect(amount).not.toContain("$")
+  })
+
   it("aggregates pay-in and payout into one row per currency", () => {
     const { topCurrencies, volumeBalance } = computeProviderLedgerDashboardExtras([
       {

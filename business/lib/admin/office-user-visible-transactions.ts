@@ -18,6 +18,7 @@ import {
   type OfficeYcMode,
 } from "@/lib/admin/office-overview-compute"
 import type { OfficeLedgerTransaction } from "@/lib/admin/office-load-transactions"
+import { enrichYcFundBalanceOfficeRows } from "@/lib/admin/enrich-yc-fund-balance-office-rows"
 
 export type OfficeUserVisibleTransaction = OfficeLedgerTransaction & {
   label: string
@@ -162,7 +163,8 @@ export async function prepareOfficeUserVisibleTransactions(
   const visible = filterSupersededPendingGlobalPayoutRows(
     await filterUserVisibleOfficeLedgerRows(admin, rows),
   )
-  return visible.map((row) => enrichOfficeLedgerForUserDisplay(row))
+  const enriched = await enrichYcFundBalanceOfficeRows(admin, visible)
+  return enriched.map((row) => enrichOfficeLedgerForUserDisplay(row))
 }
 
 export async function prepareOfficeUserVisibleTransactionsWithSummary(
