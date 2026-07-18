@@ -157,6 +157,26 @@ export function LocalDepositWizard({
     }
   }, [customerRate, amountMode, enteredAmount])
 
+  const quoteMatchesAmount = useMemo(() => {
+    if (!quote?.ok || !(quote.localPayIn > 0)) return false
+    if (amountMode === "usd") {
+      const credit = quote.usdCredit ?? quote.creditOrReceiveAmount ?? 0
+      return Math.abs(credit - enteredAmount) < 0.01
+    }
+    return Math.abs(quote.localPayIn - enteredAmount) < 0.01
+  }, [quote, amountMode, enteredAmount])
+
+  const displayPreview = useMemo(() => {
+    if (quoteMatchesAmount && quote) {
+      return {
+        usdCredit: quote.usdCredit ?? quote.creditOrReceiveAmount ?? preview.usdCredit,
+        localPayIn: quote.localPayIn,
+        feeInclusive: true,
+      }
+    }
+    return { ...preview, feeInclusive: false }
+  }, [quote, quoteMatchesAmount, preview])
+
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
 
   const payInLimits = useMemo(
@@ -342,7 +362,7 @@ export function LocalDepositWizard({
         if (!opts?.silent) setQuoteError(msg)
         return null
       }
-      if (!opts?.silent) setQuote(data)
+      setQuote(data)
       return data
     } catch {
       if (!opts?.silent) setQuoteError("Could not get payment details")
@@ -364,20 +384,19 @@ export function LocalDepositWizard({
     defaultPhone,
   ])
 
-  const bankQuotePrefetchKey =
-    step === "amount" && !isMomo && enteredAmount > 0 && customerRate
+  const quotePrefetchKey =
+    step === "amount" && enteredAmount > 0 && customerRate
       ? `${residenceCountry}|${localPayInCurrency}|${amountMode}|${enteredAmount}|${rail}`
       : ""
 
-  const [debouncedBankQuotePrefetchKey, bankQuotePrefetchControls] =
-    useDebouncedValue(bankQuotePrefetchKey)
+  const [debouncedQuotePrefetchKey, quotePrefetchControls] =
+    useDebouncedValue(quotePrefetchKey)
 
   useEffect(() => {
-    if (!debouncedBankQuotePrefetchKey || isMomo) return
+    if (!debouncedQuotePrefetchKey) return
     void createQuote({ silent: true })
-    // Quote only when debounced amount key settles — not on every createQuote identity change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedBankQuotePrefetchKey, isMomo])
+  }, [debouncedQuotePrefetchKey])
 
   useEffect(() => {
     if (step !== "review" || !isMomo) return
@@ -511,7 +530,7 @@ export function LocalDepositWizard({
         ? validateYcFundBalancePayInAmount({
             amountEntryMode: amountMode,
             enteredAmount,
-            previewLocalPayIn: preview.localPayIn,
+            previewLocalPayIn: displayPreview.localPayIn,
             currency: localPayInCurrency,
             limits: payInLimits,
           })
@@ -554,12 +573,12 @@ export function LocalDepositWizard({
               type="button"
               className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
               onClick={() => {
-                if (amountMode === "usd" && preview.localPayIn > 0) {
+                if (amountMode === "usd" && displayPreview.localPayIn > 0) {
                   setAmountMode("local")
-                  setAmountStr(String(preview.localPayIn))
-                } else if (amountMode === "local" && preview.usdCredit > 0) {
+                  setAmountStr(String(displayPreview.localPayIn))
+                } else if (amountMode === "local" && displayPreview.usdCredit > 0) {
                   setAmountMode("usd")
-                  setAmountStr(String(preview.usdCredit))
+                  setAmountStr(String(displayPreview.usdCredit))
                 } else {
                   setAmountMode(amountMode === "usd" ? "local" : "usd")
                 }
@@ -567,8 +586,10 @@ export function LocalDepositWizard({
             >
               <ArrowUpDown className="h-3.5 w-3.5 text-primary" />
               {amountMode === "usd"
-                ? `Pay ≈ ${formatMoneyDisplay(preview.localPayIn, localPayInCurrency)}`
-                : `Receive ≈ ${formatMoneyDisplay(preview.usdCredit, "USD")}`}
+                ? displayPreview.feeInclusive
+                  ? `${REVIEW_ROW_LABELS.totalToPay}: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
+                  : `Pay ≈ ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
+                : `Receive ≈ ${formatMoneyDisplay(displayPreview.usdCredit, "USD")}`}
             </button>
           ) : null}
           {!amountLimitCheck.ok ? (
@@ -597,7 +618,7 @@ export function LocalDepositWizard({
           disabled={!canContinue}
           onClick={async () => {
             setQuoteError(null)
-            bankQuotePrefetchControls.flush()
+            quotePrefetchControls.flush()
             if (isMomo) {
               const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
               if (!cached?.length) setMomoNetworksLoading(true)
@@ -631,7 +652,9 @@ export function LocalDepositWizard({
   }
 
   if (step === "review") {
-    const reviewLocalPayIn = isMomo ? preview.localPayIn : (quote?.localPayIn ?? 0)
+    const reviewLocalPayIn = isMomo
+      ? displayPreview.localPayIn
+      : (quote?.localPayIn ?? displayPreview.localPayIn)
     const reviewUsdCredit = isMomo ? preview.usdCredit : (quote?.usdCredit ?? 0)
     const reviewCustomerRate = isMomo ? customerRate : (quote?.customerRate ?? customerRate)
     const lockedReviewBreakdown =

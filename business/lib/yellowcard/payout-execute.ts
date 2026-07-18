@@ -1,11 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { computeYcBalancePayoutCappedFeeWalletSweep } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { executeYcCryptoDeposit } from "@/lib/yellowcard/execute-yc-crypto-deposit"
 import { reverseGlobalPayoutWalletDebitForEasnerPayoutId } from "@/lib/noah/global-payout-ledger"
 import {
   buildEasnerRevenueSweepMetadataPatch,
-  computeSweepAmountFromMetadata,
   FEE_SWEEP_MIN,
   readPriorSweepFromMetadata,
   sweepEasnerRevenueFromDepositOmnibus,
@@ -95,7 +95,14 @@ async function sweepYcBalancePayoutRevenueToFeeWallet(
     return prior
   }
 
-  const sweepAmt = computeSweepAmountFromMetadata(meta, { rowAmount: Number(row.amount ?? 0) })
+  const totalDebited = Number(meta.total_debited ?? row.amount ?? 0)
+  const cryptoAuthorized = Number(meta.crypto_authorized_amount ?? meta.noah_send_amount ?? 0)
+  const sweepAmt = computeYcBalancePayoutCappedFeeWalletSweep({
+    totalDebited,
+    cryptoAuthorizedAmount: cryptoAuthorized,
+    marginAmount: Number(meta.margin_amount ?? 0),
+    processingFee: Number(meta.processing_fee ?? 0),
+  })
   if (sweepAmt < FEE_SWEEP_MIN) {
     return { sweepAmt, feeWalletSweepTxHash: null, captured: true }
   }

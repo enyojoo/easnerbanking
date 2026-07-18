@@ -9,6 +9,7 @@ export type YcFundBalanceQuoteErrorCode =
   | "yc_receive_rejected"
   | "yc_amount_below_min"
   | "yc_amount_above_max"
+  | "yc_omnibus_below_required"
 
 /** User-facing copy for fund-balance quote failures (mobile + business). */
 export function ycFundBalanceQuoteErrorMessage(
@@ -33,6 +34,8 @@ export function ycFundBalanceQuoteErrorMessage(
     case "yc_amount_below_min":
     case "yc_amount_above_max":
       return fallback || "Amount is outside the allowed range for this deposit."
+    case "yc_omnibus_below_required":
+      return "Rates changed — go back and confirm again to refresh payment details."
     case "yc_receive_rejected":
       if (fallback?.toLowerCase().includes("disabled")) {
         return "This payment method is temporarily unavailable. Try again later or contact support."

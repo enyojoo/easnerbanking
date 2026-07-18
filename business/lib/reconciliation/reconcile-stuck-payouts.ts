@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   computeEasnerRevenueFeeWalletSweepAmount,
+  computeYcBalancePayoutCappedFeeWalletSweep,
   EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
 } from "@easner/shared"
 import { applyNoahWebhookSideEffects } from "@/lib/noah/webhook-side-effects"
@@ -228,6 +229,19 @@ async function retryYcTransferFeeSweep(
       marginAmount,
       processingFee,
       ledgerSurplus: cryptoAmount > 0 && creditAmt > 0 ? Math.max(0, cryptoAmount - creditAmt) : undefined,
+    })
+  } else if (mode === "balance_payout") {
+    const totalDebited = Number(transfer.quoted_pay_in ?? meta.total_debited ?? 0)
+    const cryptoAmount = Number(
+      (transfer.settlement_info as { send?: { cryptoAmount?: number } } | null)?.send?.cryptoAmount ??
+        meta.crypto_authorized_amount ??
+        0,
+    )
+    sweepAmt = computeYcBalancePayoutCappedFeeWalletSweep({
+      totalDebited,
+      cryptoAuthorizedAmount: cryptoAmount,
+      marginAmount,
+      processingFee,
     })
   } else {
     return false

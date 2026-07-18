@@ -20,6 +20,7 @@ import {
   scaleSendAmountPrefixLineHeight,
   validateYcFundBalancePayInAmount,
   useDebouncedValue,
+  REVIEW_ROW_LABELS,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -54,6 +55,8 @@ import {
   clearFundBalanceQuote,
   ensureFundBalanceQuoteStashed,
   ensurePayInNetworksCached,
+  isStashedFundBalanceQuoteFresh,
+  peekFundBalanceQuote,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches } from '../../lib/warmYcLocalDepositCaches'
@@ -122,6 +125,32 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     enteredAmount,
   })
 
+  const quoteStashMeta = useMemo(
+    () => ({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: payInRail,
+      amountEntryMode,
+      enteredAmount,
+    }),
+    [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, enteredAmount],
+  )
+
+  const prefetchedQuote = isStashedFundBalanceQuoteFresh(quoteStashMeta)
+    ? peekFundBalanceQuote()
+    : null
+
+  const displayPreview = useMemo(() => {
+    if (prefetchedQuote?.localPayIn && prefetchedQuote.usdCredit) {
+      return {
+        localPayIn: prefetchedQuote.localPayIn,
+        usdCredit: prefetchedQuote.usdCredit,
+        feeInclusive: true,
+      }
+    }
+    return { ...ycFlow.preview, feeInclusive: false }
+  }, [prefetchedQuote, ycFlow.preview])
+
   const { rails: receiveRails } = useYcReceiveRails({
     country: residenceCountry,
     currency: localPayInCurrency,
@@ -144,7 +173,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     return validateYcFundBalancePayInAmount({
       amountEntryMode,
       enteredAmount,
-      previewLocalPayIn: ycFlow.preview.localPayIn,
+      previewLocalPayIn: displayPreview.localPayIn,
       currency: localPayInCurrency,
       limits: payInLimits,
     })
@@ -211,16 +240,15 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     clearFundBalanceQuote()
   }, [localPayInCurrency, residenceCountry, payInRail])
 
-  const fundBalanceQuotePrefetchKey =
-    payInRail === 'bank_transfer' && canContinue
-      ? [residenceCountry, localPayInCurrency, amountEntryMode, enteredAmount].join('|')
-      : ''
+  const fundBalanceQuotePrefetchKey = canContinue
+    ? [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, enteredAmount].join('|')
+    : ''
 
   const [debouncedFundBalanceQuotePrefetchKey, fundBalanceQuotePrefetchControls] =
     useDebouncedValue(fundBalanceQuotePrefetchKey)
 
   useEffect(() => {
-    if (!debouncedFundBalanceQuotePrefetchKey || payInRail !== 'bank_transfer') return
+    if (!debouncedFundBalanceQuotePrefetchKey) return
     void ensureFundBalanceQuoteStashed({
       country: residenceCountry,
       currency: localPayInCurrency,
@@ -229,7 +257,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       enteredAmount,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedFundBalanceQuotePrefetchKey, payInRail])
+  }, [debouncedFundBalanceQuotePrefetchKey])
 
   const momoNetworksPrefetchKey =
     payInRail === 'mobile_money' && residenceCountry && localPayInCurrency
@@ -250,12 +278,12 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
   const toggleAmountDirection = () => {
     haptics.tap()
-    if (amountEntryMode === 'usd' && ycFlow.preview.localPayIn > 0) {
+    if (amountEntryMode === 'usd' && displayPreview.localPayIn > 0) {
       setAmountEntryMode('local')
-      setAmountStr(formatKeypadAmount(toSwitchInputAmount(ycFlow.preview.localPayIn)))
-    } else if (amountEntryMode === 'local' && ycFlow.preview.usdCredit > 0) {
+      setAmountStr(formatKeypadAmount(toSwitchInputAmount(displayPreview.localPayIn)))
+    } else if (amountEntryMode === 'local' && displayPreview.usdCredit > 0) {
       setAmountEntryMode('usd')
-      setAmountStr(formatKeypadAmount(toSwitchInputAmount(ycFlow.preview.usdCredit)))
+      setAmountStr(formatKeypadAmount(toSwitchInputAmount(displayPreview.usdCredit)))
     } else {
       setAmountEntryMode(amountEntryMode === 'usd' ? 'local' : 'usd')
     }
@@ -322,8 +350,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
           payInRail,
           amountEntryMode,
           enteredAmount,
-          usdCredit: ycFlow.preview.usdCredit,
-          localPayIn: ycFlow.preview.localPayIn,
+          usdCredit: displayPreview.usdCredit,
+          localPayIn: displayPreview.localPayIn,
           customerRate: ycFlow.customerRate ?? 0,
         } as never)
       } catch (e) {
@@ -397,8 +425,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
               showExchangePreviewSkeleton={showExchangePreviewSkeleton}
               exchangePreviewReady={exchangePreviewReady}
               amountLimitMessage={!amountLimitCheck.ok ? amountLimitCheck.message : null}
-              previewLocalPayIn={ycFlow.preview.localPayIn}
-              previewUsdCredit={ycFlow.preview.usdCredit}
+              previewLocalPayIn={displayPreview.localPayIn}
+              previewUsdCredit={displayPreview.usdCredit}
               customerRate={ycFlow.customerRate}
               bankAvailable={bankAvailable}
               momoAvailable={momoAvailable}
@@ -471,8 +499,10 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
                       <ArrowUpDown size={13} color={colors.primary.main} strokeWidth={2.5} />
                       <Text style={styles.exchangeInfoText}>
                         {amountEntryMode === 'usd'
-                          ? `Paying: ${formatMoneyDisplay(ycFlow.preview.localPayIn, localPayInCurrency)}`
-                          : `Receiving: ${formatMoneyDisplay(ycFlow.preview.usdCredit, 'USD')}`}
+                          ? displayPreview.feeInclusive
+                            ? `${REVIEW_ROW_LABELS.totalToPay}: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
+                            : `Paying: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
+                          : `Receiving: ${formatMoneyDisplay(displayPreview.usdCredit, 'USD')}`}
                       </Text>
                     </Pressable>
                     {ycFlow.customerRate ? (

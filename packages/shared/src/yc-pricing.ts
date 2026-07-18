@@ -24,6 +24,9 @@ function roundLocal(n: number): number {
   return Math.round(n * 100) / 100
 }
 
+/** Default USDC tolerance when comparing YC settlement vs required economics. */
+export const YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC = 0.02
+
 /** Quote TTL — YC receive locks ~10 minutes. */
 export const YC_QUOTE_TTL_MS = 10 * 60 * 1000
 
@@ -196,6 +199,118 @@ export function computeYcBalancePayoutPricing(
   }
 }
 
+/** Conservative YC send leg fee estimate before POST /send returns actual fees. */
+export function estimateYcBalancePayoutSendLegFeesUsd(input: {
+  provisionalCryptoUsd: number
+  customerRate: number
+  ycBuyRate?: number
+}): number {
+  const crypto = roundUsdc(input.provisionalCryptoUsd)
+  if (crypto <= 0) return 0
+  if (input.ycBuyRate != null && input.ycBuyRate > 0 && input.customerRate > 0) {
+    const spread = Math.max(0, input.customerRate / input.ycBuyRate - 1)
+    return roundUsdc(Math.max(crypto * spread * 1.25, crypto * 0.02))
+  }
+  return roundUsdc(crypto * 0.02)
+}
+
+/** Preview pricing with padded YC floor before POST /send locks actual cryptoAmount. */
+export function computeYcBalancePayoutPricingBeforeSend(input: {
+  receiveAmount: number
+  customerRate: number
+  provisionalCryptoUsd: number
+  ycMidUsd?: number
+  ycBuyRate?: number
+  processingFeeBps?: number
+}): YcBalancePayoutPricing {
+  const estimatedFees = estimateYcBalancePayoutSendLegFeesUsd({
+    provisionalCryptoUsd: input.provisionalCryptoUsd,
+    customerRate: input.customerRate,
+    ycBuyRate: input.ycBuyRate,
+  })
+  const paddedFloor = roundUsdc(input.provisionalCryptoUsd + estimatedFees)
+  return computeYcBalancePayoutPricing({
+    receiveAmount: input.receiveAmount,
+    customerRate: input.customerRate,
+    ycFloorUsd: paddedFloor,
+    ycMidUsd: input.ycMidUsd,
+    networkFeeAmountUsd: estimatedFees,
+    serviceFeeAmountUsd: 0,
+    processingFeeBps: input.processingFeeBps,
+  })
+}
+
+export type YcBalancePayoutEconomicsCheck = {
+  ok: boolean
+  ledgerSurplus: number
+  requiredRevenue: number
+  totalDebited: number
+  cryptoAmount: number
+}
+
+/** Balance payout: wallet debit must cover on-chain send + Easner revenue (margin + 1% fee). */
+export function computeYcBalancePayoutLedgerSurplus(input: {
+  totalDebited: number
+  cryptoAuthorizedAmount: number
+}): number {
+  return roundUsdc(
+    Math.max(0, roundUsdc(input.totalDebited) - roundUsdc(input.cryptoAuthorizedAmount)),
+  )
+}
+
+export function checkYcBalancePayoutEconomicsSufficient(input: {
+  totalDebited: number
+  cryptoAmount: number
+  marginAmount: number
+  processingFee: number
+  tolerance?: number
+}): YcBalancePayoutEconomicsCheck {
+  const tolerance = input.tolerance ?? YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC
+  const totalDebited = roundUsdc(input.totalDebited)
+  const cryptoAmount = roundUsdc(input.cryptoAmount)
+  const ledgerSurplus = computeYcBalancePayoutLedgerSurplus({
+    totalDebited,
+    cryptoAuthorizedAmount: cryptoAmount,
+  })
+  const requiredRevenue = roundUsdc(input.marginAmount + input.processingFee)
+  return {
+    ok:
+      totalDebited >= cryptoAmount - tolerance &&
+      ledgerSurplus >= requiredRevenue - tolerance,
+    ledgerSurplus,
+    requiredRevenue,
+    totalDebited,
+    cryptoAmount,
+  }
+}
+
+export function assertYcBalancePayoutEconomicsSufficient(input: {
+  totalDebited: number
+  cryptoAmount: number
+  marginAmount: number
+  processingFee: number
+  tolerance?: number
+}): void {
+  const result = checkYcBalancePayoutEconomicsSufficient(input)
+  if (!result.ok) {
+    throw new Error(
+      `yc_payout_economics_invalid: surplus ${result.ledgerSurplus} < required ${result.requiredRevenue}`,
+    )
+  }
+}
+
+/** Fee wallet sweep capped to wallet-debit surplus after YC on-chain send. */
+export function computeYcBalancePayoutCappedFeeWalletSweep(input: {
+  totalDebited: number
+  cryptoAuthorizedAmount: number
+  marginAmount?: number
+  processingFee?: number
+}): number {
+  const quoted = roundUsdc(Number(input.marginAmount ?? 0) + Number(input.processingFee ?? 0))
+  const surplus = computeYcBalancePayoutLedgerSurplus(input)
+  return Math.min(quoted, surplus)
+}
+
 /** Conservative YC receive leg fee estimate before POST /receive returns actual fees. */
 export function estimateYcReceiveLegFeesUsd(input: {
   omnibusUsd: number
@@ -335,6 +450,127 @@ export function computeYcFundBalancePricing(
     processingFee,
     marginAmount,
   }
+}
+
+export type YcOmnibusSufficiencyCheck = {
+  ok: boolean
+  requiredOmnibus: number
+  cryptoAmount: number
+}
+
+/** Fund balance: leg1 crypto must cover user credit + Easner 1% processing fee. */
+export function checkYcFundBalanceOmnibusSufficient(input: {
+  cryptoAmount: number
+  usdCredit: number
+  processingFee: number
+  tolerance?: number
+}): YcOmnibusSufficiencyCheck {
+  const tolerance = input.tolerance ?? YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC
+  const cryptoAmount = roundUsdc(input.cryptoAmount)
+  const requiredOmnibus = roundUsdc(input.usdCredit + input.processingFee)
+  return {
+    ok: cryptoAmount >= requiredOmnibus - tolerance,
+    requiredOmnibus,
+    cryptoAmount,
+  }
+}
+
+export function assertYcFundBalanceOmnibusSufficient(input: {
+  cryptoAmount: number
+  usdCredit: number
+  processingFee: number
+  tolerance?: number
+}): void {
+  const result = checkYcFundBalanceOmnibusSufficient(input)
+  if (!result.ok) {
+    throw new Error(
+      `yc_omnibus_below_required: cryptoAmount ${result.cryptoAmount} < required ${result.requiredOmnibus}`,
+    )
+  }
+}
+
+/** Cross-border leg1 crypto must cover leg2 send + Easner 1% + FX margin. */
+export function checkYcCrossBorderOmnibusSufficient(input: {
+  receiveCryptoUsd: number
+  sendCryptoUsd: number
+  processingFee: number
+  marginAmount: number
+  tolerance?: number
+}): YcOmnibusSufficiencyCheck {
+  const tolerance = input.tolerance ?? YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC
+  const cryptoAmount = roundUsdc(input.receiveCryptoUsd)
+  const requiredOmnibus = computeYcCrossBorderRequiredOmnibus({
+    sendCryptoUsd: input.sendCryptoUsd,
+    processingFee: input.processingFee,
+    marginAmount: input.marginAmount,
+  })
+  return {
+    ok: cryptoAmount >= requiredOmnibus - tolerance,
+    requiredOmnibus,
+    cryptoAmount,
+  }
+}
+
+export function assertYcCrossBorderOmnibusSufficient(input: {
+  receiveCryptoUsd: number
+  sendCryptoUsd: number
+  processingFee: number
+  marginAmount: number
+  tolerance?: number
+}): void {
+  const result = checkYcCrossBorderOmnibusSufficient(input)
+  if (!result.ok) {
+    throw new Error(
+      `yc_omnibus_below_required: receiveCrypto ${result.cryptoAmount} < required ${result.requiredOmnibus}`,
+    )
+  }
+}
+
+export function computeYcCrossBorderRequiredOmnibus(input: {
+  sendCryptoUsd: number
+  processingFee: number
+  marginAmount: number
+}): number {
+  return roundUsdc(input.sendCryptoUsd + input.processingFee + input.marginAmount)
+}
+
+/**
+ * Fund balance pay-in before POST /receive: pad receive leg fees from estimate.
+ */
+export function computeYcFundBalancePricingBeforeReceive(input: {
+  usdCredit?: number
+  localPayIn?: number
+  customerSellRate: number
+  ycSellRate: number
+  processingFeeBps?: number
+}): YcFundBalancePricing {
+  const usdCreditTarget = input.usdCredit != null && Number(input.usdCredit) > 0
+  if (usdCreditTarget) {
+    const estimatedReceiveFees = estimateYcFundBalanceReceiveLegFeesUsd({
+      usdCredit: Number(input.usdCredit),
+      customerSellRate: input.customerSellRate,
+      ycSellRate: input.ycSellRate,
+      processingFeeBps: input.processingFeeBps,
+    })
+    return computeYcFundBalancePricing({
+      usdCredit: input.usdCredit,
+      customerSellRate: input.customerSellRate,
+      ycSellRate: input.ycSellRate,
+      processingFeeBps: input.processingFeeBps,
+      receiveLeg: {
+        cryptoAmountUsd: 0,
+        networkFeeAmountUsd: estimatedReceiveFees,
+        serviceFeeAmountUsd: 0,
+      },
+    })
+  }
+  return computeYcFundBalancePricing({
+    localPayIn: input.localPayIn,
+    customerSellRate: input.customerSellRate,
+    ycSellRate: input.ycSellRate,
+    processingFeeBps: input.processingFeeBps,
+    receiveLeg: { cryptoAmountUsd: 0 },
+  })
 }
 
 export type ComputeYcCrossBorderPricingInput = {

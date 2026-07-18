@@ -253,6 +253,20 @@ export async function handleYcCrossBorderWebhook(
     (ctx.matchedLeg === "leg1" || transfer.leg1_sequence_id === input.sequenceId)
   ) {
     if (canTransitionYcCrossBorderStatus(String(transfer.status), "leg1_settled")) {
+      const transferMeta = asMeta(transfer.metadata)
+      const settlement = (input.payload.settlementInfo ??
+        input.payload.settlement_info) as Record<string, unknown> | null
+      const omnibusAmount = Number(
+        settlement?.cryptoAmount ?? transfer.omnibus_in_actual ?? 0,
+      )
+      const { isCrossBorderLeg1OmnibusSufficient } = await import("./cross-border-orchestrator")
+      const omnibusSufficient =
+        omnibusAmount > 0 &&
+        isCrossBorderLeg1OmnibusSufficient({
+          omnibusAmount,
+          metadata: transferMeta,
+        })
+
       await upsertCrossBorderTx(
         "processing",
         {
@@ -261,6 +275,7 @@ export async function handleYcCrossBorderWebhook(
         {
           leg1_settled_at: occurredAt,
           leg1_status: "complete",
+          ...(omnibusSufficient ? {} : { ops_alert: "yc_omnibus_underfunded" }),
         },
       )
       await admin
@@ -268,16 +283,23 @@ export async function handleYcCrossBorderWebhook(
         .update({
           leg1_status: "complete",
           status: "leg1_settled",
+          ...(omnibusAmount > 0 ? { omnibus_in_actual: omnibusAmount } : {}),
           metadata: {
-            ...transfer.metadata,
+            ...transferMeta,
             leg1_settled_at: occurredAt,
+            ...(omnibusAmount > 0 ? { omnibus_in_actual: omnibusAmount } : {}),
+            ...(omnibusSufficient
+              ? {}
+              : { ops_alert: "yc_omnibus_underfunded" }),
           },
           updated_at: occurredAt,
         })
         .eq("id", transfer.id)
 
-      const { maybeExecuteCrossBorderLeg2 } = await import("./cross-border-orchestrator")
-      await maybeExecuteCrossBorderLeg2(admin, transfer.id)
+      if (omnibusSufficient) {
+        const { maybeExecuteCrossBorderLeg2 } = await import("./cross-border-orchestrator")
+        await maybeExecuteCrossBorderLeg2(admin, transfer.id)
+      }
     }
     return
   }

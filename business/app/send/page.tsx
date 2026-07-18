@@ -70,6 +70,7 @@ import {
   ensureCrossBorderQuoteStashed,
   isCompleteCrossBorderQuote,
   isStashedCrossBorderQuoteFresh,
+  peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
   type CrossBorderQuoteStashMeta,
 } from "@/lib/yc-cross-border-quote-cache"
@@ -457,6 +458,20 @@ export default function SendPage() {
     void ensureCrossBorderQuoteStashed(crossBorderBankQuoteMeta)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedCrossBorderBankPrefetchKey])
+
+  const tlcSendingDisplayAmount = useMemo(() => {
+    if (!showThroughLocalCurrency || amountEntryMode !== "receive") return sendAmount
+    if (crossBorderBankQuoteMeta && isStashedCrossBorderQuoteFresh(crossBorderBankQuoteMeta)) {
+      const quote = peekCrossBorderQuote()
+      if (quote?.localPayIn && quote.localPayIn > 0) return quote.localPayIn
+    }
+    return sendAmount
+  }, [showThroughLocalCurrency, amountEntryMode, sendAmount, crossBorderBankQuoteMeta])
+
+  const tlcReceivingDisplayAmount = receiveAmount
+
+  const tlcExchangeDisplayAmount =
+    amountEntryMode === "receive" ? tlcSendingDisplayAmount : tlcReceivingDisplayAmount
 
   const tlcPayInLimits = useMemo(() => {
     if (!payInRails || paymentMethod !== "otherCurrency") {
@@ -1300,16 +1315,21 @@ export default function SendPage() {
                         <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
                         <span className="min-w-0 truncate">
                           {amountEntryMode === "receive" ? "Sending" : "Receiving"}:{" "}
+                          {showThroughLocalCurrency && otherCurrency
+                            ? formatMoneyDisplay(
+                                tlcExchangeDisplayAmount,
+                                amountEntryMode === "receive" ? otherCurrency : receiveCurrency,
+                              )
+                            : <>
                           {getSendAmountFieldSymbol(
                             amountEntryMode === "receive" ? sendCurrency : receiveCurrency,
                           )}
-                          {(amountEntryMode === "receive" ? sendAmount : receiveAmount).toLocaleString("en-US", {
+                          {tlcExchangeDisplayAmount.toLocaleString("en-US", {
                             minimumFractionDigits:
-                              Math.abs((amountEntryMode === "receive" ? sendAmount : receiveAmount) % 1) >= 0.01
-                                ? 2
-                                : 0,
+                              Math.abs(tlcExchangeDisplayAmount % 1) >= 0.01 ? 2 : 0,
                             maximumFractionDigits: 2,
                           })}
+                          </>}
                         </span>
                       </button>
                       <span className="shrink-0">• Rate: {rateDisplay}</span>

@@ -4,15 +4,16 @@ import {
   YC_QUOTE_TTL_MS,
   buildYcFundBalanceDepositReviewSnapshot,
   buildYcFundBalanceDisplayFees,
+  checkYcFundBalanceOmnibusSufficient,
   computeYcFundBalancePricing,
-  estimateYcFundBalanceReceiveLegFeesUsd,
+  computeYcFundBalancePricingBeforeReceive,
   parseYcReceiveRejectedMinError,
   resolveYcFundBalanceDepositTitle,
   resolveYcPayInLimits,
   ycPayInInstructionNotice,
 } from "@easner/shared"
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
-import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
+import { submitYcReceive, type YcReceiveSubmitResult } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 import { buildYcFundBalanceReceiveMetadata } from "@/lib/yellowcard/yc-ledger"
@@ -156,24 +157,12 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
 
   const customerSellRate = Number(leg.easner_sell)
   const ycSellRate = Number(leg.yc_sell)
-  const usdCreditTarget = ctx.usdCredit != null && Number(ctx.usdCredit) > 0
 
-  const provisional = computeYcFundBalancePricing({
+  const provisional = computeYcFundBalancePricingBeforeReceive({
     usdCredit: ctx.usdCredit,
     localPayIn: ctx.localPayIn,
     customerSellRate,
     ycSellRate,
-    receiveLeg: usdCreditTarget
-      ? {
-          cryptoAmountUsd: 0,
-          networkFeeAmountUsd: estimateYcFundBalanceReceiveLegFeesUsd({
-            usdCredit: Number(ctx.usdCredit),
-            customerSellRate,
-            ycSellRate,
-          }),
-          serviceFeeAmountUsd: 0,
-        }
-      : { cryptoAmountUsd: 0 },
   })
 
   const amountCheck = await validateFundBalancePayInAmountLimits({
@@ -223,6 +212,123 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
     customerRate: customerSellRate,
     quoteKey,
   }
+}
+
+function computeFundBalancePricingFromReceive(input: {
+  ctx: FundBalanceQuoteInput
+  prepared: Awaited<ReturnType<typeof prepareFundBalanceQuote>>
+  receiveRes: YcReceiveSubmitResult
+}) {
+  const receiveLeg = {
+    cryptoAmountUsd: Number(input.receiveRes.settlementInfo?.cryptoAmount ?? 0),
+    networkFeeAmountUsd: Number(input.receiveRes.networkFeeAmountUSD ?? 0),
+    serviceFeeAmountUsd: Number(input.receiveRes.serviceFeeAmountUSD ?? 0),
+  }
+  const usdCreditTarget = input.ctx.usdCredit != null && Number(input.ctx.usdCredit) > 0
+  return usdCreditTarget
+    ? computeYcFundBalancePricing({
+        usdCredit: input.prepared.provisional.usdCredit,
+        customerSellRate: input.prepared.customerRate,
+        ycSellRate: Number(input.prepared.leg.yc_sell),
+        receiveLeg,
+      })
+    : computeYcFundBalancePricing({
+        localPayIn: Number(
+          input.receiveRes.localAmount ?? input.prepared.provisional.localPayIn,
+        ),
+        customerSellRate: input.prepared.customerRate,
+        ycSellRate: Number(input.prepared.leg.yc_sell),
+        receiveLeg,
+      })
+}
+
+async function submitFundBalanceYcReceive(input: {
+  ctx: FundBalanceQuoteInput
+  prepared: Awaited<ReturnType<typeof prepareFundBalanceQuote>>
+}): Promise<{ receiveRes: YcReceiveSubmitResult; pricing: ReturnType<typeof computeYcFundBalancePricing>; sequenceId: string }> {
+  let localAmount = input.prepared.provisional.localPayIn
+  let sequenceId = `yc_fb_${randomUUID()}`
+  let receiveRes: YcReceiveSubmitResult | null = null
+  let pricing: ReturnType<typeof computeYcFundBalancePricing> | null = null
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) {
+      sequenceId = `yc_fb_${randomUUID()}`
+    }
+    try {
+      receiveRes = await submitYcReceive({
+        sequenceId,
+        customerUID: input.ctx.kycUserId,
+        channelId: input.prepared.channelId,
+        currency: input.ctx.currency,
+        country: input.ctx.country,
+        localAmount,
+        recipient: input.prepared.sender,
+        payInRail: input.ctx.rail,
+        sourcePhone: input.ctx.sourcePhone,
+        sourceNetworkId: input.ctx.sourceNetworkId,
+        reason: "fund_balance",
+      })
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "YC receive submit failed"
+      if (message === "deposit_omnibus_solana_address_usd_required") {
+        throw new FundBalanceQuoteServiceError("yc_settlement_wallet_not_configured", message, 503)
+      }
+      const parsedMin = parseYcReceiveRejectedMinError(message)
+      if (parsedMin) {
+        throw new FundBalanceQuoteServiceError("yc_amount_below_min", message, 400, {
+          minLocalPayIn: parsedMin.minLocalPayIn,
+          currency: parsedMin.currency,
+        })
+      }
+      throw new FundBalanceQuoteServiceError("yc_receive_rejected", message, 400, {
+        userId: input.ctx.kycUserId,
+        currency: input.ctx.currency,
+        country: input.ctx.country,
+        rail: input.ctx.rail,
+      })
+    }
+
+    pricing = computeFundBalancePricingFromReceive({
+      ctx: input.ctx,
+      prepared: input.prepared,
+      receiveRes,
+    })
+
+    const cryptoAmount = Number(receiveRes.settlementInfo?.cryptoAmount ?? 0)
+    const omnibusCheck = checkYcFundBalanceOmnibusSufficient({
+      cryptoAmount,
+      usdCredit: pricing.usdCredit,
+      processingFee: pricing.processingFee,
+    })
+    const ycLockedPayIn = Number(receiveRes.localAmount ?? localAmount)
+    const payInAligned = Math.abs(pricing.localPayIn - ycLockedPayIn) < 0.01
+
+    if (omnibusCheck.ok && payInAligned) {
+      return { receiveRes, pricing, sequenceId }
+    }
+
+    if (attempt === 0) {
+      localAmount = Math.max(pricing.localPayIn, ycLockedPayIn)
+      continue
+    }
+
+    throw new FundBalanceQuoteServiceError(
+      "yc_omnibus_below_required",
+      `YC omnibus ${cryptoAmount} below required ${omnibusCheck.requiredOmnibus}`,
+      400,
+      {
+        userId: input.ctx.kycUserId,
+        currency: input.ctx.currency,
+        country: input.ctx.country,
+        rail: input.ctx.rail,
+        cryptoAmount,
+        requiredOmnibus: omnibusCheck.requiredOmnibus,
+      },
+    )
+  }
+
+  throw new FundBalanceQuoteServiceError("yc_receive_rejected", "YC receive submit failed", 400)
 }
 
 function formatFundBalanceTransferResponse(input: {
@@ -333,61 +439,12 @@ export async function confirmFundBalanceOrder(ctx: FundBalanceQuoteInput) {
     })
   }
 
-  const sequenceId = `yc_fb_${randomUUID()}`
-  let receiveRes
-  try {
-    receiveRes = await submitYcReceive({
-      sequenceId,
-      customerUID: ctx.kycUserId,
-      channelId: prepared.channelId,
-      currency: ctx.currency,
-      country: ctx.country,
-      localAmount: prepared.provisional.localPayIn,
-      recipient: prepared.sender,
-      payInRail: ctx.rail,
-      sourcePhone: ctx.sourcePhone,
-      sourceNetworkId: ctx.sourceNetworkId,
-      reason: "fund_balance",
-    })
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "YC receive submit failed"
-    if (message === "deposit_omnibus_solana_address_usd_required") {
-      throw new FundBalanceQuoteServiceError("yc_settlement_wallet_not_configured", message, 503)
-    }
-    const parsedMin = parseYcReceiveRejectedMinError(message)
-    if (parsedMin) {
-      throw new FundBalanceQuoteServiceError("yc_amount_below_min", message, 400, {
-        minLocalPayIn: parsedMin.minLocalPayIn,
-        currency: parsedMin.currency,
-      })
-    }
-    throw new FundBalanceQuoteServiceError("yc_receive_rejected", message, 400, {
-      userId: ctx.kycUserId,
-      currency: ctx.currency,
-      country: ctx.country,
-      rail: ctx.rail,
-    })
-  }
-
-  const receiveLeg = {
-    cryptoAmountUsd: Number(receiveRes.settlementInfo?.cryptoAmount ?? 0),
-    networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
-    serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
-  }
-  const usdCreditTarget = ctx.usdCredit != null && Number(ctx.usdCredit) > 0
-  const pricing = usdCreditTarget
-    ? computeYcFundBalancePricing({
-        usdCredit: prepared.provisional.usdCredit,
-        customerSellRate: prepared.customerRate,
-        ycSellRate: Number(prepared.leg.yc_sell),
-        receiveLeg,
-      })
-    : computeYcFundBalancePricing({
-        localPayIn: Number(receiveRes.localAmount ?? prepared.provisional.localPayIn),
-        customerSellRate: prepared.customerRate,
-        ycSellRate: Number(prepared.leg.yc_sell),
-        receiveLeg,
-      })
+  const { receiveRes, pricing, sequenceId: finalSequenceId } = await submitFundBalanceYcReceive({
+    ctx,
+    prepared,
+  })
+  const lockedLocalPayIn = Number(receiveRes.localAmount ?? pricing.localPayIn)
+  const omnibusInExpected = Number(receiveRes.settlementInfo?.cryptoAmount ?? pricing.omnibusInUsd)
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const easnerTransactionId = generateTransactionId()
@@ -401,7 +458,7 @@ export async function confirmFundBalanceOrder(ctx: FundBalanceQuoteInput) {
     payInCurrency: ctx.currency,
   })
   const depositReview = buildYcFundBalanceDepositReviewSnapshot({
-    localPayIn: pricing.localPayIn,
+    localPayIn: lockedLocalPayIn,
     localCurrency: ctx.currency,
     usdCredit: pricing.usdCredit,
     processingFee: pricing.processingFee,
@@ -417,8 +474,8 @@ export async function confirmFundBalanceOrder(ctx: FundBalanceQuoteInput) {
     localCurrency: ctx.currency,
   })
   const metadata = buildYcFundBalanceReceiveMetadata({
-    sequenceId,
-    localPayIn: pricing.localPayIn,
+    sequenceId: finalSequenceId,
+    localPayIn: lockedLocalPayIn,
     localCurrency: ctx.currency,
     usdCredit: pricing.usdCredit,
     processingFee: pricing.processingFee,
@@ -436,7 +493,7 @@ export async function confirmFundBalanceOrder(ctx: FundBalanceQuoteInput) {
       user_id: ctx.kycUserId,
       business_id: ctx.businessId,
       provider: "yellowcard",
-      provider_transaction_id: sequenceId,
+      provider_transaction_id: finalSequenceId,
       status: "pending",
       amount: pricing.usdCredit,
       currency: "USD",
@@ -452,6 +509,9 @@ export async function confirmFundBalanceOrder(ctx: FundBalanceQuoteInput) {
         display_processing_fee: displayFeesPreview.displayProcessingFee,
         display_processing_fee_local: displayFeesPreview.displayProcessingFeeLocal,
         yc_leg_fees_usd: pricing.ycLegFeesUsd,
+        margin_amount: pricing.marginAmount,
+        omnibus_in_expected: omnibusInExpected,
+        margin_capture_mode: "fee_wallet_omnibus",
         ...(ctx.sourcePhone ? { source_phone: ctx.sourcePhone } : {}),
         ...(ctx.sourceNetworkId ? { source_network_id: ctx.sourceNetworkId } : {}),
       },
@@ -469,10 +529,10 @@ export async function confirmFundBalanceOrder(ctx: FundBalanceQuoteInput) {
       status: "awaiting_pay_in",
       pay_in_currency: ctx.currency,
       receive_currency: "USD",
-      quoted_pay_in: pricing.localPayIn,
+      quoted_pay_in: lockedLocalPayIn,
       quoted_receive: pricing.usdCredit,
       customer_rate: prepared.customerRate,
-      leg1_sequence_id: sequenceId,
+      leg1_sequence_id: finalSequenceId,
       leg1_yc_id: receiveRes.id ?? null,
       leg1_channel_id: prepared.channelId,
       bank_info: receiveRes.bankInfo ?? null,
@@ -485,6 +545,9 @@ export async function confirmFundBalanceOrder(ctx: FundBalanceQuoteInput) {
         display_processing_fee: displayFeesPreview.displayProcessingFee,
         display_processing_fee_local: displayFeesPreview.displayProcessingFeeLocal,
         usd_credit: pricing.usdCredit,
+        margin_amount: pricing.marginAmount,
+        omnibus_in_expected: omnibusInExpected,
+        margin_capture_mode: "fee_wallet_omnibus",
         ...(ctx.sourcePhone
           ? { source_phone: ctx.sourcePhone, source_network_id: ctx.sourceNetworkId }
           : {}),
@@ -504,6 +567,6 @@ export async function confirmFundBalanceOrder(ctx: FundBalanceQuoteInput) {
     sourcePhone: ctx.sourcePhone,
     sourceNetworkId: ctx.sourceNetworkId,
     sourceNetworkName: ctx.sourceNetworkName,
-    sequenceId,
+    sequenceId: finalSequenceId,
   })
 }

@@ -465,10 +465,11 @@ export async function findYcTransferForOmnibusInbound(
   for (const row of rows ?? []) {
     const t = mapTransfer(row as Record<string, unknown>)
     const expected =
+      Number(t.metadata?.omnibus_in_expected ?? 0) ||
       Number(t.omnibus_in_actual ?? 0) ||
-      Number(t.metadata?.usd_credit ?? 0) ||
-      Number(t.quoted_receive ?? 0) ||
-      Number((t.settlement_info as Record<string, unknown> | null)?.cryptoAmount ?? 0)
+      Number((t.settlement_info as Record<string, unknown> | null)?.cryptoAmount ?? 0) ||
+      Number(t.metadata?.usd_credit ?? 0) + Number(t.metadata?.processing_fee ?? 0) ||
+      Number(t.quoted_receive ?? 0) + Number(t.metadata?.processing_fee ?? 0)
     if (!(expected > 0)) continue
     if (Math.abs(expected - amount) <= Math.max(0.02, expected * 0.002)) {
       return t

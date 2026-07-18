@@ -114,6 +114,7 @@ import {
   isCompleteCrossBorderQuote,
   isUsableCrossBorderQuotePreview,
   isStashedCrossBorderQuoteFresh,
+  peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
   type CrossBorderQuoteStashMeta,
 } from '../../lib/sendFlowCrossBorderQuote'
@@ -768,6 +769,20 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     void ensureCrossBorderQuoteStashed(crossBorderBankQuoteMeta)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedCrossBorderBankPrefetchKey])
+
+  const tlcSendingDisplayAmount = useMemo(() => {
+    if (!showThroughLocalCurrency || amountEntryMode !== 'receive') return sendingAmount
+    if (crossBorderBankQuoteMeta && isStashedCrossBorderQuoteFresh(crossBorderBankQuoteMeta)) {
+      const quote = peekCrossBorderQuote()
+      if (quote?.localPayIn && quote.localPayIn > 0) return quote.localPayIn
+    }
+    return sendingAmount
+  }, [
+    showThroughLocalCurrency,
+    amountEntryMode,
+    sendingAmount,
+    crossBorderBankQuoteMeta,
+  ])
 
   const payoutMinReceive = useMemo(
     () =>
@@ -1804,7 +1819,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           <ArrowUpDown size={13} color={colors.primary.main} strokeWidth={2.5} />
                           <Text style={styles.exchangeInfoText}>
                             {amountEntryMode === 'receive'
-                              ? `Sending: ${formatMoneyDisplay(sendingAmount, sendCurrency)}`
+                              ? `Sending: ${formatMoneyDisplay(
+                                  showThroughLocalCurrency && selectedOtherCurrency
+                                    ? tlcSendingDisplayAmount
+                                    : sendingAmount,
+                                  showThroughLocalCurrency && selectedOtherCurrency
+                                    ? selectedOtherCurrency
+                                    : sendCurrency,
+                                )}`
                               : `Receiving: ${formatMoneyDisplay(receiveAmount, receiveCurrency)}`}
                           </Text>
                         </Pressable>

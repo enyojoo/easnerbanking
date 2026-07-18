@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { computeEasnerRevenueFeeWalletSweepAmount } from "@easner/shared"
+import {
+  checkYcFundBalanceOmnibusSufficient,
+  computeEasnerRevenueFeeWalletSweepAmount,
+  EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
+} from "@easner/shared"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import {
@@ -51,6 +55,14 @@ export async function creditFundBalanceFromYcReceive(
   )
   const processingFee = Number(transferMeta.processing_fee ?? 0)
   const quotedCredit = Number(transferMeta.usd_credit ?? transfer.quoted_receive ?? 0)
+  const expectedOmnibus = Number(
+    transferMeta.omnibus_in_expected ?? quotedCredit + processingFee,
+  )
+  const omnibusCheck = checkYcFundBalanceOmnibusSufficient({
+    cryptoAmount,
+    usdCredit: quotedCredit,
+    processingFee,
+  })
   const creditAmt =
     quotedCredit > 0 ? quotedCredit : Math.max(0, cryptoAmount - processingFee)
   if (!Number.isFinite(creditAmt) || creditAmt <= 0) {
@@ -60,6 +72,37 @@ export async function creditFundBalanceFromYcReceive(
   const creditKey = `yc_fund_balance:${input.transferId}`
   const now = new Date().toISOString()
   let transactionId = input.transactionId
+
+  if (!omnibusCheck.ok) {
+    await admin
+      .from("yc_transfers")
+      .update({
+        status: "processing",
+        leg1_status: "complete",
+        omnibus_in_actual: cryptoAmount,
+        metadata: {
+          ...transferMeta,
+          ops_alert: "yc_omnibus_underfunded",
+          omnibus_in_expected: expectedOmnibus,
+          omnibus_in_actual: cryptoAmount,
+          ...(input.omnibusTxHash ? { leg1_omnibus_tx_hash: input.omnibusTxHash } : {}),
+        },
+        updated_at: now,
+      })
+      .eq("id", input.transferId)
+
+    if (transactionId) {
+      await patchYcFundBalanceReceiveStatus(admin, {
+        transferId: input.transferId,
+        transactionId,
+        sequenceId: String(transfer.leg1_sequence_id ?? ""),
+        status: "processing",
+        payload: input.payload,
+        occurredAt: now,
+      })
+    }
+    return { credited: false, creditAmt: 0 }
+  }
 
   if (transactionId) {
     const { data: txRow } = await admin
@@ -80,15 +123,20 @@ export async function creditFundBalanceFromYcReceive(
     delta: creditAmt,
   })
 
-  const marginAmount = Number(transferMeta.margin_amount ?? Math.max(0, cryptoAmount - creditAmt - processingFee))
-  const feeSweep = computeEasnerRevenueFeeWalletSweepAmount({
+  const marginAmount = Number(transferMeta.margin_amount ?? 0)
+  const quotedSweep = computeEasnerRevenueFeeWalletSweepAmount({
     marginAmount,
     processingFee,
     ledgerSurplus: cryptoAmount - creditAmt,
   })
+  const availableSweep = Math.max(0, cryptoAmount - creditAmt)
+  const feeSweep = Math.min(quotedSweep, availableSweep)
 
   let feeWalletSweepTxHash: string | null = null
-  if (!readPriorSweepFromMetadata(transferMeta).captured && feeSweep > 0) {
+  if (
+    !readPriorSweepFromMetadata(transferMeta).captured &&
+    feeSweep >= EASNER_REVENUE_FEE_WALLET_SWEEP_MIN
+  ) {
     const sweep = await sweepEasnerRevenueFromDepositOmnibus({
       ledgerCurrency: "USD",
       amount: feeSweep,
@@ -103,10 +151,11 @@ export async function creditFundBalanceFromYcReceive(
       status: "completed",
       leg1_status: "complete",
       omnibus_in_actual: cryptoAmount,
-      fee_wallet_sweep: feeSweep > 0 ? feeSweep : null,
+      fee_wallet_sweep: feeSweep >= EASNER_REVENUE_FEE_WALLET_SWEEP_MIN ? feeSweep : null,
       metadata: {
         ...transferMeta,
         margin_amount: marginAmount,
+        omnibus_in_expected: expectedOmnibus,
         processing_fee: processingFee,
         margin_capture_mode: "fee_wallet_omnibus",
         ...(input.omnibusTxHash ? { leg1_omnibus_tx_hash: input.omnibusTxHash } : {}),

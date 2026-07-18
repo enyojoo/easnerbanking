@@ -1,9 +1,20 @@
 import { describe, expect, it } from "vitest"
 import {
+  assertYcCrossBorderOmnibusSufficient,
+  assertYcFundBalanceOmnibusSufficient,
   buildYcFundBalanceDisplayFees,
+  checkYcCrossBorderOmnibusSufficient,
+  checkYcFundBalanceOmnibusSufficient,
+  computeYcBalancePayoutCappedFeeWalletSweep,
+  computeYcBalancePayoutPricing,
+  computeYcBalancePayoutPricingBeforeSend,
+  checkYcBalancePayoutEconomicsSufficient,
+  assertYcBalancePayoutEconomicsSufficient,
   computeYcCrossBorderPricing,
   computeYcCrossBorderPricingBeforeReceive,
+  computeYcCrossBorderRequiredOmnibus,
   computeYcFundBalancePricing,
+  computeYcFundBalancePricingBeforeReceive,
   computeYcFundBalanceSendExactlyLocal,
   easnerFeeLocalFromUsdCredit,
   estimateYcFundBalanceReceiveLegFeesUsd,
@@ -78,6 +89,145 @@ describe("computeYcFundBalancePricing", () => {
       ycSellRate: 127,
     })
     expect(estimate).toBeGreaterThanOrEqual(1.96)
+  })
+})
+
+describe("computeYcFundBalancePricingBeforeReceive", () => {
+  it("pads localPayIn above zero-fee preview for locked usdCredit", () => {
+    const preview = computeYcFundBalancePricing({
+      usdCredit: 100,
+      customerSellRate: 130,
+      ycSellRate: 128,
+      receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    })
+    const padded = computeYcFundBalancePricingBeforeReceive({
+      usdCredit: 100,
+      customerSellRate: 130,
+      ycSellRate: 128,
+    })
+    expect(padded.localPayIn).toBeGreaterThan(preview.localPayIn)
+    expect(padded.ycLegFeesUsd).toBeGreaterThan(0)
+  })
+})
+
+describe("yc omnibus sufficiency checks", () => {
+  it("fund balance: requires crypto >= credit + processing fee", () => {
+    expect(
+      checkYcFundBalanceOmnibusSufficient({
+        cryptoAmount: 101,
+        usdCredit: 100,
+        processingFee: 1,
+      }).ok,
+    ).toBe(true)
+    expect(
+      checkYcFundBalanceOmnibusSufficient({
+        cryptoAmount: 100.5,
+        usdCredit: 100,
+        processingFee: 1,
+      }).ok,
+    ).toBe(false)
+    expect(() =>
+      assertYcFundBalanceOmnibusSufficient({
+        cryptoAmount: 100,
+        usdCredit: 100,
+        processingFee: 1,
+      }),
+    ).toThrow(/yc_omnibus_below_required/)
+  })
+
+  it("cross-border: requires receive crypto >= send + fee + margin", () => {
+    const required = computeYcCrossBorderRequiredOmnibus({
+      sendCryptoUsd: 77.5,
+      processingFee: 0.78,
+      marginAmount: 0.5,
+    })
+    expect(required).toBeCloseTo(78.78, 2)
+    expect(
+      checkYcCrossBorderOmnibusSufficient({
+        receiveCryptoUsd: 79,
+        sendCryptoUsd: 77.5,
+        processingFee: 0.78,
+        marginAmount: 0.5,
+      }).ok,
+    ).toBe(true)
+    expect(() =>
+      assertYcCrossBorderOmnibusSufficient({
+        receiveCryptoUsd: 78,
+        sendCryptoUsd: 77.5,
+        processingFee: 0.78,
+        marginAmount: 0.5,
+      }),
+    ).toThrow(/yc_omnibus_below_required/)
+  })
+})
+
+describe("computeYcBalancePayoutPricing", () => {
+  const payout2 = {
+    receiveAmount: 5000,
+    customerRate: 1335.6388919029,
+    ycFloorUsd: 4.520121,
+    ycMidUsd: 5000 / 1355.96793609,
+  }
+
+  it("totalDebited = ycFloor + margin + 1% processing fee", () => {
+    const p = computeYcBalancePayoutPricing(payout2)
+    expect(p.customerPrincipal).toBeCloseTo(3.743527, 4)
+    expect(p.processingFee).toBeCloseTo(p.customerPrincipal * 0.01, 6)
+    expect(p.totalDebited).toBeCloseTo(p.ycFloorUsd + p.marginAmount + p.processingFee, 6)
+    expect(
+      checkYcBalancePayoutEconomicsSufficient({
+        totalDebited: p.totalDebited,
+        cryptoAmount: p.ycFloorUsd,
+        marginAmount: p.marginAmount,
+        processingFee: p.processingFee,
+      }).ok,
+    ).toBe(true)
+  })
+
+  it("BeforeSend pads totalDebited above zero-fee preview", () => {
+    const preview = computeYcBalancePayoutPricing({
+      ...payout2,
+      networkFeeAmountUsd: 0,
+      serviceFeeAmountUsd: 0,
+    })
+    const padded = computeYcBalancePayoutPricingBeforeSend({
+      receiveAmount: payout2.receiveAmount,
+      customerRate: payout2.customerRate,
+      provisionalCryptoUsd: payout2.ycFloorUsd,
+      ycMidUsd: payout2.ycMidUsd,
+      ycBuyRate: 1355.96793609,
+    })
+    expect(padded.totalDebited).toBeGreaterThan(preview.totalDebited)
+  })
+
+  it("caps fee wallet sweep to debit surplus", () => {
+    const sweep = computeYcBalancePayoutCappedFeeWalletSweep({
+      totalDebited: 4.61368,
+      cryptoAuthorizedAmount: 4.520121,
+      marginAmount: 0.056124,
+      processingFee: 0.037435,
+    })
+    expect(sweep).toBeCloseTo(0.093559, 6)
+    expect(sweep).toBeLessThanOrEqual(4.61368 - 4.520121 + 0.000001)
+  })
+
+  it("rejects economics when surplus is below margin + fee", () => {
+    expect(
+      checkYcBalancePayoutEconomicsSufficient({
+        totalDebited: 4.52,
+        cryptoAmount: 4.51,
+        marginAmount: 0.05,
+        processingFee: 0.04,
+      }).ok,
+    ).toBe(false)
+    expect(() =>
+      assertYcBalancePayoutEconomicsSufficient({
+        totalDebited: 4.52,
+        cryptoAmount: 4.51,
+        marginAmount: 0.05,
+        processingFee: 0.04,
+      }),
+    ).toThrow(/yc_payout_economics_invalid/)
   })
 })
 

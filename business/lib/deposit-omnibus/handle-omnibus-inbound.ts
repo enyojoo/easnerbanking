@@ -8,6 +8,7 @@ import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-
 import { triggerDepositSplit } from "@/lib/deposit-omnibus/execute-deposit-split"
 import { findYcTransferForOmnibusInbound } from "@/lib/yellowcard/yc-ledger"
 import { creditFundBalanceFromYcReceive } from "@/lib/yellowcard/fund-balance-credit"
+import { isCrossBorderLeg1OmnibusSufficient } from "@/lib/yellowcard/cross-border-orchestrator"
 
 /**
  * Omnibus Turnkey balance webhook — Noah deposit split or YC fund_balance / cross-border routing.
@@ -39,17 +40,34 @@ export async function handleDepositOmnibusInbound(
     }
     if (ycTransfer.mode === "cross_border_send") {
       const occurredAt = new Date().toISOString()
-      // Pass-through only — mark omnibus received; do not credit user balance.
+      const transferMeta =
+        ycTransfer.metadata && typeof ycTransfer.metadata === "object"
+          ? (ycTransfer.metadata as Record<string, unknown>)
+          : {}
+      const omnibusSufficient = isCrossBorderLeg1OmnibusSufficient({
+        omnibusAmount: deposit.amount,
+        metadata: transferMeta,
+      })
       await admin
         .from("yc_transfers")
         .update({
           omnibus_in_actual: deposit.amount,
           leg1_status: "complete",
-          status: String(ycTransfer.status) === "completed" ? ycTransfer.status : "leg1_settled",
+          status: omnibusSufficient
+            ? String(ycTransfer.status) === "completed"
+              ? ycTransfer.status
+              : "leg1_settled"
+            : "leg1_settled",
           metadata: {
-            ...ycTransfer.metadata,
+            ...transferMeta,
             leg1_omnibus_tx_hash: txHash,
             leg1_settled_at: occurredAt,
+            ...(omnibusSufficient
+              ? {}
+              : {
+                  ops_alert: "yc_omnibus_underfunded",
+                  omnibus_in_actual: deposit.amount,
+                }),
           },
           updated_at: occurredAt,
         })
@@ -73,18 +91,21 @@ export async function handleDepositOmnibusInbound(
               leg1_settled_at: occurredAt,
               leg1_status: "complete",
               processing_at: prior.processing_at ?? occurredAt,
+              ...(omnibusSufficient ? {} : { ops_alert: "yc_omnibus_underfunded" }),
             },
             updated_at: occurredAt,
           })
           .eq("id", ycTransfer.transaction_id)
       }
-      try {
-        const { maybeExecuteCrossBorderLeg2 } = await import(
-          "@/lib/yellowcard/cross-border-orchestrator"
-        )
-        await maybeExecuteCrossBorderLeg2(admin, ycTransfer.id)
-      } catch (e) {
-        console.error("[handleDepositOmnibusInbound] yc cross-border leg2 trigger failed", e)
+      if (omnibusSufficient) {
+        try {
+          const { maybeExecuteCrossBorderLeg2 } = await import(
+            "@/lib/yellowcard/cross-border-orchestrator"
+          )
+          await maybeExecuteCrossBorderLeg2(admin, ycTransfer.id)
+        } catch (e) {
+          console.error("[handleDepositOmnibusInbound] yc cross-border leg2 trigger failed", e)
+        }
       }
       return true
     }

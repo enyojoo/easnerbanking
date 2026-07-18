@@ -13,11 +13,14 @@ End-to-end and staging checks for Yellowcard **Through Local Currency** (cross-b
 ### Bank TLC
 
 1. Send → recipient in foreign currency → **Through local currency** → bank rail.
-2. Amount screen: Sending/Rate preview only; quote prefetches silently while amount is valid. Entering receive currency below the KES min auto-bumps to the rate-adjusted floor (no min hint copy).
+2. Amount screen: while typing receive amount, debounced preview shows fee-inclusive **Total to pay** (not rate-only `receive / rate`). Entering receive currency below the KES min auto-bumps to the rate-adjusted floor (no min hint copy).
 3. **Continue** may show brief spinner when quote is not warm; navigates to review with stashed quote.
 4. Review (locked): **Transaction ID** (ETID), exchange rate, **Transfer amount**, processing fee, **Total to pay**, **Recipient gets**, **Transfer method: Local Transfer**, quote countdown.
 5. Complete: minimal summary (ETID + **Recipient gets** + **Local Transfer**), **Send exactly {localPayIn}**, bank VA fields, **I've made the payment**.
 6. Transaction detail: hero **Send to {recipient}**, ledger **Amount paid**, status **Processing**, lifecycle single **Processing** step.
+7. After confirm, verify `yc_transfers.metadata`: `omnibus_in_expected >= sendCrypto + processing_fee + margin`, `leg2_crypto_expected`, `margin_capture_mode: fee_wallet_omnibus`.
+8. After leg 1 settles: `omnibus_in_actual >= omnibus_in_expected` (within tolerance) before leg 2 triggers; if under-funded, `ops_alert: yc_omnibus_underfunded` and leg 2 does not start.
+9. After leg 2 SEND.COMPLETE: `fee_wallet_sweep <= omnibus_in_actual - leg2_crypto` (sweep capped to residual).
 
 ### MoMo TLC
 
@@ -64,3 +67,24 @@ Use output to verify cross-rate, pay-in limits, and corridor gates before enabli
 - `easner_transaction_id`, `recipient_snapshot`, `payout_review.transfer_method = "Local Transfer"`.
 - `payout_type: global_fiat`, `yc_mode: cross_border_send`, `processing_at` at quote.
 - Fund-balance deposits unchanged (`Bank Transfer` / `Mobile Money`).
+
+## Fund balance pay-in economics (sandbox)
+
+| Case | Expected |
+|------|----------|
+| Bank $2,000 credit confirm | `metadata.omnibus_in_expected >= 2020` (credit + 1% fee); `quoted_pay_in` matches YC-locked local amount |
+| MoMo $1,000 credit confirm | `omnibus_in_expected >= 1010` |
+| Amount step (USD mode) | Shows fee-inclusive **Total to pay** (~265k KES for $2k), not rate-only ~257k |
+| Settlement sufficient | User credited full `quoted_receive`; fee wallet sweep = min(quoted fee+margin, omnibus − credit) |
+| Settlement under-funded | No wallet credit; `ops_alert: yc_omnibus_underfunded`; transfer stays processing |
+| Confirm rejects bad YC quote | `400` + `code: yc_omnibus_below_required` when YC `cryptoAmount` cannot fund credit + fee |
+
+## YC balance payout economics (USD wallet → local)
+
+| Case | Expected |
+|------|----------|
+| Quote preview | `totalDebited` uses padded YC floor (`computeYcBalancePayoutPricingBeforeSend`) — conservative vs zero-fee estimate |
+| Execute lock (POST /send) | `assertYcBalancePayoutEconomicsSufficient`: `totalDebited − cryptoAmount >= margin + processingFee` |
+| Ledger metadata | `total_debited`, `crypto_authorized_amount`, `margin_amount`, `processing_fee`, `margin_capture_mode: fee_wallet_omnibus` from **locked** POST /send pricing |
+| SEND.COMPLETE sweep | `fee_wallet_sweep <= totalDebited − cryptoAuthorized` (capped to debit surplus) |
+| Bad lock economics | Execute fails with `yc_payout_economics_invalid` before wallet debit |

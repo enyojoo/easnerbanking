@@ -2,7 +2,9 @@ import { randomUUID } from "crypto"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { findYcBalancePayoutRate, listYcRates } from "@/lib/fx/yc-rates"
 import {
+  assertYcBalancePayoutEconomicsSufficient,
   computeYcBalancePayoutPricing,
+  computeYcBalancePayoutPricingBeforeSend,
   normalizeGlobalPayoutQuoteReceiveAmount,
   normalizePayoutReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
@@ -180,16 +182,15 @@ export async function buildYcPayoutQuote(input: {
     throw new Error("Could not derive USDC amount for Yellowcard payout quote.")
   }
 
-  const pricing = computeYcBalancePayoutPricing({
+  const pricing = computeYcBalancePayoutPricingBeforeSend({
     receiveAmount: quoteReceiveAmount,
     customerRate,
-    ycFloorUsd: provisionalCryptoUsd,
+    provisionalCryptoUsd,
     ycMidUsd:
       payoutRate?.yc_buy != null && payoutRate.yc_buy > 0
         ? roundUsdc(quoteReceiveAmount / payoutRate.yc_buy)
         : undefined,
-    networkFeeAmountUsd: 0,
-    serviceFeeAmountUsd: 0,
+    ycBuyRate: payoutRate?.yc_buy != null && payoutRate.yc_buy > 0 ? payoutRate.yc_buy : undefined,
   })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
@@ -203,8 +204,8 @@ export async function buildYcPayoutQuote(input: {
   const settlement: PayoutSettlementLeg = {
     totalFee: pricing.channelCost,
     feeCurrency: "USD",
-    cryptoAuthorizedAmount: String(provisionalCryptoUsd),
-    cryptoFloor: String(provisionalCryptoUsd),
+    cryptoAuthorizedAmount: String(pricing.ycFloorUsd),
+    cryptoFloor: String(pricing.ycFloorUsd),
     cryptoSendAmount: String(provisionalCryptoUsd),
     cryptoCurrency: "USDC",
     sessionId: quoteId,
@@ -263,7 +264,7 @@ export async function buildYcPayoutQuote(input: {
     yc: {
       sequenceId,
       channelId,
-      cryptoAmount: provisionalCryptoUsd,
+      cryptoAmount: pricing.ycFloorUsd,
     },
   }
 }
@@ -378,6 +379,13 @@ export async function lockYcBalancePayoutSend(input: {
         : undefined,
     networkFeeAmountUsd,
     serviceFeeAmountUsd,
+  })
+
+  assertYcBalancePayoutEconomicsSufficient({
+    totalDebited: pricing.totalDebited,
+    cryptoAmount,
+    marginAmount: pricing.marginAmount,
+    processingFee: pricing.processingFee,
   })
 
   return {

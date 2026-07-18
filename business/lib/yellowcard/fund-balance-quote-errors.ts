@@ -11,6 +11,7 @@ export type YcFundBalanceQuoteErrorCode =
   | "yc_receive_rejected"
   | "yc_amount_below_min"
   | "yc_amount_above_max"
+  | "yc_omnibus_below_required"
   | "momo_source_required"
   | "invalid_rail"
   | "transfer_not_found"

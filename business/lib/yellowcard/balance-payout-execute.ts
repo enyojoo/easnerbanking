@@ -219,7 +219,7 @@ export async function executeYcBalancePayout(
     easnerPayoutId,
     easnerTransactionId,
     sequenceId,
-    ycSendId: input.yc.sendId ?? null,
+    ycSendId: locked.sendId ?? null,
     channelId: channelId || null,
     totalDebited,
     cryptoAuthorizedAmount: cryptoAmount,
@@ -227,7 +227,7 @@ export async function executeYcBalancePayout(
     processingFee: locked.pricing.processingFee,
     receiveAmount: fiatAmount,
     receiveCurrency: fiatCurrency,
-    customerRate: input.pricing.customerRate,
+    customerRate: locked.pricing.customerRate,
     recipientId,
     recipientSnapshot,
     walletAddress,
@@ -253,7 +253,7 @@ export async function executeYcBalancePayout(
     direction: "out",
     payload: {
       phase: "awaiting_yc_crypto_deposit",
-      yc_send_id: input.yc.sendId ?? null,
+      yc_send_id: locked.sendId ?? null,
       sequence_id: sequenceId,
     },
     metadata,
@@ -290,7 +290,7 @@ export async function executeYcBalancePayout(
     receive_currency: fiatCurrency,
     quoted_pay_in: totalDebited,
     quoted_receive: fiatAmount,
-    customer_rate: input.pricing.customerRate ?? null,
+    customer_rate: locked.pricing.customerRate ?? null,
     leg2_sequence_id: sequenceId,
     leg2_yc_id: locked.sendId ?? input.yc.sendId ?? null,
     leg2_channel_id: channelId || null,
@@ -299,9 +299,12 @@ export async function executeYcBalancePayout(
     },
     metadata: {
       easner_payout_id: easnerPayoutId,
-      processing_fee: input.pricing.processingFee,
+      total_debited: totalDebited,
+      crypto_authorized_amount: cryptoAmount,
+      processing_fee: locked.pricing.processingFee,
       margin_amount: locked.pricing.marginAmount,
       channel_cost: locked.pricing.channelCost,
+      margin_capture_mode: "fee_wallet_omnibus",
     },
   })
 
@@ -391,6 +394,12 @@ export async function executeYcBalancePayout(
       metadata: {
         easner_payout_id: easnerPayoutId,
         leg2_deposit_tx_hash: deposit.txHash,
+        total_debited: totalDebited,
+        crypto_authorized_amount: cryptoAmount,
+        processing_fee: locked.pricing.processingFee,
+        margin_amount: locked.pricing.marginAmount,
+        channel_cost: locked.pricing.channelCost,
+        margin_capture_mode: "fee_wallet_omnibus",
       },
       updated_at: new Date().toISOString(),
     })
