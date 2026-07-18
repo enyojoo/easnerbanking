@@ -1,3 +1,5 @@
+"use client"
+
 import { useCallback, useEffect, useRef, useState } from "react"
 
 /** Pause after typing before background server quote prefetch (Wise/Revolut-style). */
