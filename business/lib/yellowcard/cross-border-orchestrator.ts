@@ -24,6 +24,7 @@ import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import { resolveYcSendChannelId } from "@/lib/payout-providers/yellowcard-provider"
 import { mapRecipientToYcSend } from "@/lib/yellowcard/map-recipient-to-yc-send"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
+import { logYcTiming } from "@/lib/yellowcard/timing"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
@@ -230,7 +231,7 @@ async function prepareCrossBorderQuote(input: CrossBorderTransferInput) {
     sourceNetworkId: input.sourceNetworkId ?? null,
   })
 
-  return { cross, pricing, payInCurrency, receiveCurrency, quoteKey }
+  return { cross, pricing, payInCurrency, receiveCurrency, quoteKey, rates, fromLeg, toLeg }
 }
 
 /** Indicative cross-border pricing — no YC API calls, no ledger rows. */
@@ -371,7 +372,6 @@ export async function createCrossBorderTransfer(input: CrossBorderTransferInput)
   const receiveCountry = resolveRecipientPayoutCountry(input.recipient)
   if (!receiveCountry) throw new Error("Recipient country required")
 
-  const rates = await listYcRates(admin, { status: "active" })
   const receiveChannelId = await resolveYcReceiveChannelId({
     countryCode: input.payInCountry.toUpperCase(),
     currencyCode: payInCurrency,
@@ -418,8 +418,8 @@ export async function createCrossBorderTransfer(input: CrossBorderTransferInput)
   }
 
   // Provisional send lock for fee/crypto sizing
-  const fromLeg = findYcPayInLeg(rates, payInCurrency) ?? findYcRate(rates, payInCurrency, "USDC")
-  const toLeg = findYcPayInLeg(rates, receiveCurrency) ?? findYcRate(rates, receiveCurrency, "USDC")
+  const fromLeg = prepared.fromLeg
+  const toLeg = prepared.toLeg
   const ycBuyTo = Number(toLeg?.yc_buy ?? 0)
   if (!ycBuyTo) throw new Error("YC destination rate unavailable for cross-border send leg")
 
@@ -465,6 +465,14 @@ export async function createCrossBorderTransfer(input: CrossBorderTransferInput)
     if (attempt > 0) {
       leg1Seq = `yc_cb_l1_${randomUUID()}`
     }
+    logYcTiming("cross_border_receive_attempt", {
+      attempt: attempt + 1,
+      maxAttempts: YC_CROSS_BORDER_RECEIVE_MAX_ATTEMPTS,
+      localAmount,
+      payInCurrency,
+      payInCountry: input.payInCountry.toUpperCase(),
+      payInRail: input.payInRail,
+    })
     receiveRes = await submitYcReceive({
       sequenceId: leg1Seq,
       customerUID: input.customerUID,
@@ -775,7 +783,19 @@ export async function createCrossBorderTransfer(input: CrossBorderTransferInput)
 
 /** Lock YC legs + create ledger rows after user confirms review. */
 export async function confirmCrossBorderTransfer(input: CrossBorderTransferInput) {
-  return createCrossBorderTransfer(input)
+  const startedAt = Date.now()
+  try {
+    return await createCrossBorderTransfer(input)
+  } finally {
+    logYcTiming("cross_border_confirm", {
+      durationMs: Date.now() - startedAt,
+      payInCurrency: input.payInCurrency,
+      payInCountry: input.payInCountry,
+      payInRail: input.payInRail,
+      userId: input.userId,
+      receiveAmount: input.receiveAmount,
+    })
+  }
 }
 
 /** @deprecated MoMo cross-border draft — quote API replaces this. Routes return 410. */

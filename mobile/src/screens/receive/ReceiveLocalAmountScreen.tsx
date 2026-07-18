@@ -22,6 +22,7 @@ import {
   REVIEW_ROW_LABELS,
   SEND_LOCAL_PAY_IN_BANK_CHIP,
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
+  useDebouncedValue,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -237,6 +238,51 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     if (!momoNetworksPrefetchKey) return
     void ensurePayInNetworksCached(residenceCountry, localPayInCurrency)
   }, [momoNetworksPrefetchKey, residenceCountry, localPayInCurrency])
+
+  const needsBackgroundFundBalanceConfirm =
+    payInRail === 'bank_transfer' &&
+    Boolean(residenceCountry && localPayInCurrency) &&
+    canContinue
+
+  const fundBalanceConfirmPrefetchKey = useMemo(() => {
+    if (!needsBackgroundFundBalanceConfirm) return ''
+    return [
+      residenceCountry,
+      localPayInCurrency,
+      payInRail,
+      amountEntryMode,
+      enteredAmount,
+    ].join('|')
+  }, [
+    needsBackgroundFundBalanceConfirm,
+    residenceCountry,
+    localPayInCurrency,
+    payInRail,
+    amountEntryMode,
+    enteredAmount,
+  ])
+
+  const [debouncedFundBalanceConfirmPrefetchKey] = useDebouncedValue(
+    fundBalanceConfirmPrefetchKey,
+  )
+
+  useEffect(() => {
+    if (!debouncedFundBalanceConfirmPrefetchKey) return
+    void ensureFundBalanceOrderConfirmed({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: payInRail,
+      amountEntryMode,
+      enteredAmount,
+    })
+  }, [
+    debouncedFundBalanceConfirmPrefetchKey,
+    residenceCountry,
+    localPayInCurrency,
+    payInRail,
+    amountEntryMode,
+    enteredAmount,
+  ])
 
   const toSwitchInputAmount = (amount: number): string => {
     const roundedAmount = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100

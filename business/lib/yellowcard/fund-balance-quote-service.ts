@@ -30,6 +30,7 @@ import { mapKycErrorToCode } from "@/lib/yellowcard/fund-balance-quote-errors"
 import { buildFundBalanceQuoteSummary } from "@/lib/yellowcard/build-yc-quote-response"
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 import { buildYcQuoteKey, findReusableYcTransfer } from "@/lib/yellowcard/quote-key"
+import { logYcTiming } from "@/lib/yellowcard/timing"
 
 export type FundBalanceRail = "bank_transfer" | "mobile_money"
 
@@ -289,6 +290,15 @@ async function submitFundBalanceYcReceive(input: {
       sequenceId = `yc_fb_${randomUUID()}`
     }
 
+    logYcTiming("fund_balance_receive_attempt", {
+      attempt: attempt + 1,
+      maxAttempts: YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS,
+      localAmount,
+      currency: input.ctx.currency,
+      country: input.ctx.country,
+      rail: input.ctx.rail,
+    })
+
     let receiveRes: YcReceiveSubmitResult
     try {
       receiveRes = await submitYcReceive({
@@ -439,6 +449,21 @@ export async function previewFundBalanceQuote(ctx: FundBalanceQuoteInput) {
 
 /** Lock YC receive + create ledger rows after user confirms review. Idempotent by quoteKey. */
 export async function confirmFundBalanceOrder(ctx: FundBalanceQuoteInput) {
+  const startedAt = Date.now()
+  try {
+    return await confirmFundBalanceOrderInner(ctx)
+  } finally {
+    logYcTiming("fund_balance_confirm", {
+      durationMs: Date.now() - startedAt,
+      currency: ctx.currency,
+      country: ctx.country,
+      rail: ctx.rail,
+      userId: ctx.kycUserId,
+    })
+  }
+}
+
+async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
   const prepared = await prepareFundBalanceQuote(ctx)
 
   const existing = await findReusableYcTransfer(ctx.admin, {

@@ -3,9 +3,11 @@ import {
   getYellowcardApiKey,
   getYellowcardApiOrigin,
   getYellowcardApiSecret,
+  getYellowcardEnvironment,
   toYellowcardRequestPath,
   toYellowcardSignedPath,
 } from "./config"
+import { logYcTiming } from "./timing"
 
 export class YellowcardHttpError extends Error {
   constructor(
@@ -77,6 +79,7 @@ export async function yellowcardFetch<T>(opts: YellowcardFetchOptions): Promise<
   }
 
   const url = `${getYellowcardApiOrigin()}${requestPath}`
+  const startedAt = Date.now()
   const res = await fetch(url, {
     method: opts.method,
     headers,
@@ -84,6 +87,13 @@ export async function yellowcardFetch<T>(opts: YellowcardFetchOptions): Promise<
   })
 
   const text = await res.text()
+  logYcTiming("yc_api", {
+    method: opts.method,
+    path: opts.path,
+    status: res.status,
+    durationMs: Date.now() - startedAt,
+    environment: getYellowcardEnvironment(),
+  })
   let parsed: unknown = text
   if (text) {
     try {

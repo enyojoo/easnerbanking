@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { REVIEW_ROW_LABELS, normalizeYcMomoPhone } from '@easner/shared'
+import { REVIEW_ROW_LABELS, normalizeYcMomoPhone, useDebouncedValue } from '@easner/shared'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
@@ -92,6 +92,52 @@ export function YcFundBalanceMomoSetup({
 
   const momoReady = Boolean(phone.trim() && networkId)
   const selectedNetwork = networks.find((n) => n.id === networkId)
+
+  const momoConfirmPrefetchKey = useMemo(() => {
+    if (!momoReady) return ''
+    return [
+      residenceCountry,
+      localPayInCurrency,
+      amountEntryMode,
+      enteredAmount,
+      phone.trim(),
+      networkId,
+    ].join('|')
+  }, [
+    momoReady,
+    residenceCountry,
+    localPayInCurrency,
+    amountEntryMode,
+    enteredAmount,
+    phone,
+    networkId,
+  ])
+
+  const [debouncedMomoConfirmPrefetchKey] = useDebouncedValue(momoConfirmPrefetchKey)
+
+  useEffect(() => {
+    if (!debouncedMomoConfirmPrefetchKey || !momoReady) return
+    void ensureFundBalanceOrderConfirmed({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: 'mobile_money',
+      amountEntryMode,
+      enteredAmount,
+      sourcePhone: phone.trim(),
+      networkId,
+      sourceNetworkName: selectedNetwork?.name,
+    })
+  }, [
+    debouncedMomoConfirmPrefetchKey,
+    momoReady,
+    residenceCountry,
+    localPayInCurrency,
+    amountEntryMode,
+    enteredAmount,
+    phone,
+    networkId,
+    selectedNetwork?.name,
+  ])
 
   const onContinue = async () => {
     if (!momoReady || isContinueLoading) return
