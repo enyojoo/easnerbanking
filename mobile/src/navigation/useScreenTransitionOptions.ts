@@ -45,6 +45,34 @@ export function useScreenTransitionOptions(routeName: ScreenRouteName) {
   )
 }
 
+/** Single hook for MainStack — returns an options factory per route name. */
+export function useMainStackTransitionOptionsFactory() {
+  const { showSidebarShell, mode } = useResponsiveLayout()
+
+  return useCallback(
+    (routeName: ScreenRouteName) =>
+      ({
+        navigation,
+        route,
+      }: {
+        navigation: NavigationLike
+        route: RouteLike
+      }): StackNavigationOptions => {
+        const { name: previousRouteName } = getPreviousRouteFromState(
+          navigation.getState(),
+        )
+        return resolveScreenTransitionOptions({
+          routeName,
+          previousRouteName,
+          routeParams: route.params,
+          layoutMode: mode,
+          showSidebarShell,
+        })
+      },
+    [showSidebarShell, mode],
+  )
+}
+
 /** Static resolver for stacks outside ResponsiveLayoutProvider (auth/onboarding). */
 export function staticScreenTransitionOptions(routeName: ScreenRouteName) {
   return ({
