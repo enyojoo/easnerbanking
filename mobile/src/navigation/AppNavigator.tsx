@@ -29,7 +29,7 @@ import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 import { haptics } from '../lib/haptics'
 import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
-import { WebIdleLockOverlay } from '../components/WebIdleLockOverlay'
+import { MobileAppLockShell } from '../components/MobileAppLockShell'
 import { enterMainAppOnWeb } from './webMainEntry'
 import { webStackScreenListeners } from './webStackScreenListeners'
 // Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
@@ -717,14 +717,6 @@ function PinGateSetupStack() {
   )
 }
 
-function PinGateEntryStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }} screenListeners={webStackScreenListeners}>
-      <Stack.Screen name="PinEntryGate" component={PinEntryScreen} />
-    </Stack.Navigator>
-  )
-}
-
 /** Same canvas as PIN screens — avoids blank frames during auth / PIN / main handoffs. */
 function AuthFlowLoadingShell({
   palette,
@@ -757,12 +749,13 @@ export default function AppNavigator() {
   const palette = useThemeColors()
   const [pinGate, setPinGate] = useState<'loading' | 'setup' | 'pin' | 'main'>('loading')
   const [lockTick, setLockTick] = useState(0)
-  const [webIdleOverlayVisible, setWebIdleOverlayVisible] = useState(false)
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null)
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(
+    Platform.OS === 'web' ? true : null,
+  )
   // PIN TEMPORARILY DISABLED - keeping state variables for easy re-enable
   // const [pinSetup, setPinSetup] = useState<boolean | null>(null)
   // const [sessionValid, setSessionValid] = useState<boolean | null>(null)
-  const [checkingAuth, setCheckingAuth] = useState(true)
+  const [checkingAuth, setCheckingAuth] = useState(Platform.OS !== 'web')
   // const [isNewUser, setIsNewUser] = useState<boolean | null>(null)
   // const [showPinPrompt, setShowPinPrompt] = useState(false)
   // const [justLoggedIn, setJustLoggedIn] = useState(false)
@@ -828,7 +821,6 @@ export default function AppNavigator() {
       if (event === 'unlocked') {
         if (Platform.OS === 'web' && user?.id) {
           markWebPinSessionUnlocked(user.id)
-          setWebIdleOverlayVisible(false)
         }
         setPinGate('main')
         prefetchIntercomModule()
@@ -838,11 +830,7 @@ export default function AppNavigator() {
         if (avatarUri) {
           void warmAvatarCacheAsync(avatarUri)
         }
-        if (Platform.OS === 'web') {
-          setWebIdleOverlayVisible(true)
-        } else {
-          setPinGate('pin')
-        }
+        setPinGate('pin')
       }
       setLockTick((t) => t + 1)
     })
@@ -871,7 +859,6 @@ export default function AppNavigator() {
   useEffect(() => {
     if (!user) {
       setPinGate('loading')
-      setWebIdleOverlayVisible(false)
     }
   }, [user])
 
@@ -894,12 +881,7 @@ export default function AppNavigator() {
         return
       }
       const locked = idle === 'locked' || (await isAppLocked(user.id))
-      if (Platform.OS === 'web') {
-        setPinGate('main')
-        setWebIdleOverlayVisible(locked)
-      } else {
-        setPinGate(locked ? 'pin' : 'main')
-      }
+      setPinGate(locked ? 'pin' : 'main')
     })()
     return () => {
       cancelled = true
@@ -1128,39 +1110,26 @@ export default function AppNavigator() {
     return <PinGateSetupStack />
   }
 
-  if (user && pinGate === 'pin') {
-    return <PinGateEntryStack />
-  }
-
-  if (user && pinGate === 'main') {
+  if (user && (pinGate === 'main' || pinGate === 'pin')) {
     return (
-      <View style={styles.mainShellRoot}>
+      <MobileAppLockShell locked={pinGate === 'pin'}>
         <ResponsiveAppShell>
           <MainStack />
         </ResponsiveAppShell>
-        <WebIdleLockOverlay visible={webIdleOverlayVisible} />
-      </View>
+      </MobileAppLockShell>
     )
   }
 
   if (user) {
     return (
-      <View style={styles.mainShellRoot}>
+      <MobileAppLockShell locked={false}>
         <ResponsiveAppShell>
           <MainStack />
         </ResponsiveAppShell>
-        <WebIdleLockOverlay visible={webIdleOverlayVisible} />
-      </View>
+      </MobileAppLockShell>
     )
   }
 
   return <AuthStack key="auth-stack-no-user" />
 }
-
-const styles = StyleSheet.create({
-  mainShellRoot: {
-    flex: 1,
-    position: 'relative',
-  },
-})
 

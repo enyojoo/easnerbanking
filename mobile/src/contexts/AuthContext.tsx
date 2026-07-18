@@ -316,7 +316,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (mfaGateSyncRef.current) {
       return mfaGateSyncRef.current
     }
-    setMfaGateResolved(false)
+    const skipMfaGateFlicker =
+      Platform.OS === 'web' && mfaHydratedUserIdRef.current != null && !mfaPendingRef.current
+    if (!skipMfaGateFlicker) {
+      setMfaGateResolved(false)
+    }
     const run = (async (): Promise<'none' | 'pending' | 'missing_factor'> => {
       try {
         const { needsOtp, error: aalErr } = await resolvePostSignInMfaRequirement(supabase)
