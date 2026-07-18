@@ -41,6 +41,12 @@ export const YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC = 3
 /** Fund balance confirm: one retry only when the first POST /receive is under-funded. */
 export const YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS = 2
 
+/** Cross-border leg-1 confirm/settle tolerance for YC conversion rounding. */
+export const YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC = 1
+
+/** Cross-border leg-1 confirm retries when POST /receive omnibus is short. */
+export const YC_CROSS_BORDER_RECEIVE_MAX_ATTEMPTS = 3
+
 /** Quote TTL — YC receive locks ~10 minutes. */
 export const YC_QUOTE_TTL_MS = 10 * 60 * 1000
 
@@ -414,13 +420,13 @@ export function bumpYcCrossBorderLocalPayInForOmnibusShortfall(input: {
   padRatio?: number
 }): number {
   const shortfall = Math.max(0, roundUsdc(input.requiredOmnibus - input.cryptoAmount))
-  if (shortfall <= YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC) {
+  if (shortfall <= YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC) {
     return roundLocalUp(input.localPayIn)
   }
-  const pad = input.padRatio ?? 1.02
-  const fromShortfall = shortfall * input.ycSellFrom * pad
-  const minBumpLocal = input.ycSellFrom * Math.max(shortfall, 1)
-  return roundLocalUp(input.localPayIn + Math.max(fromShortfall, minBumpLocal))
+  const pad = input.padRatio ?? 1.05
+  // Shortfall plus 1 USDC headroom — YC leg-1 crypto often lags local pay-in bumps slightly.
+  const bumpUsd = roundUsdc(shortfall * pad + 1)
+  return roundLocalUp(input.localPayIn + input.ycSellFrom * bumpUsd)
 }
 
 /** POST /receive local pay-in: leg2 + fees + margin + conversion buffer (always round up). */
@@ -625,7 +631,7 @@ export function checkYcCrossBorderOmnibusSufficient(input: {
   marginAmount: number
   tolerance?: number
 }): YcOmnibusSufficiencyCheck {
-  const tolerance = input.tolerance ?? YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC
+  const tolerance = input.tolerance ?? YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC
   const cryptoAmount = roundUsdc(input.receiveCryptoUsd)
   const requiredOmnibus = computeYcCrossBorderRequiredOmnibus({
     sendCryptoUsd: input.sendCryptoUsd,

@@ -23,6 +23,7 @@ import {
   bumpYcFundBalanceLocalPayInForOmnibusShortfall,
   bumpYcCrossBorderLocalPayInForOmnibusShortfall,
   resolveYcFundBalanceSubmitLocalPayIn,
+  YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
   YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
 } from "./yc-pricing"
@@ -313,12 +314,24 @@ describe("yc omnibus sufficiency checks", () => {
     ).toBe(true)
     expect(() =>
       assertYcCrossBorderOmnibusSufficient({
-        receiveCryptoUsd: 78,
+        receiveCryptoUsd: 77.5,
         sendCryptoUsd: 77.5,
         processingFee: 0.78,
         marginAmount: 0.5,
       }),
     ).toThrow(/yc_omnibus_below_required/)
+  })
+
+  it("cross-border tolerance accepts YC conversion slop on one receive call", () => {
+    expect(
+      checkYcCrossBorderOmnibusSufficient({
+        receiveCryptoUsd: 476.029054,
+        sendCryptoUsd: 470,
+        processingFee: 4.7,
+        marginAmount: 1.617816,
+        tolerance: YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
+      }).ok,
+    ).toBe(true)
   })
 })
 

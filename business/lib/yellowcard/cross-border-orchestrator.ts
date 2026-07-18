@@ -12,7 +12,8 @@ import {
   EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
   getGlobalPayoutProcessingTime,
   validateYcRecipientForCorridor,
-  YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS,
+  YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
+  YC_CROSS_BORDER_RECEIVE_MAX_ATTEMPTS,
 } from "@easner/shared"
 import { buildCrossBorderQuoteSummary } from "@/lib/yellowcard/build-yc-quote-response"
 import { findYcCrossRate, findYcPayInLeg, findYcRate, listYcRates } from "@/lib/fx/yc-rates"
@@ -71,6 +72,7 @@ function finalizeCrossBorderLeg1Quote(input: {
     sendCryptoUsd: input.pricingFinal.sendCryptoUsd,
     processingFee: input.pricingFinal.processingFee,
     marginAmount: input.pricingFinal.marginAmount,
+    tolerance: YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
   })
   if (!omnibusCheck.ok) {
     throw new Error(
@@ -106,6 +108,7 @@ export function isCrossBorderLeg1OmnibusSufficient(input: {
     sendCryptoUsd: sendCrypto,
     processingFee: Number(input.metadata.processing_fee ?? 0),
     marginAmount: Number(input.metadata.margin_amount ?? 0),
+    tolerance: YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
   }).ok
 }
 
@@ -458,7 +461,7 @@ export async function createCrossBorderTransfer(input: CrossBorderTransferInput)
   let pricingFinal!: CrossBorderPricingFinal
   let lockedQuote!: ReturnType<typeof finalizeCrossBorderLeg1Quote>
 
-  for (let attempt = 0; attempt < YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < YC_CROSS_BORDER_RECEIVE_MAX_ATTEMPTS; attempt++) {
     if (attempt > 0) {
       leg1Seq = `yc_cb_l1_${randomUUID()}`
     }
@@ -501,6 +504,7 @@ export async function createCrossBorderTransfer(input: CrossBorderTransferInput)
       sendCryptoUsd: pricingFinal.sendCryptoUsd,
       processingFee: pricingFinal.processingFee,
       marginAmount: pricingFinal.marginAmount,
+      tolerance: YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
     })
 
     if (omnibusCheck.ok) {
@@ -508,7 +512,7 @@ export async function createCrossBorderTransfer(input: CrossBorderTransferInput)
       break
     }
 
-    if (attempt < YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS - 1) {
+    if (attempt < YC_CROSS_BORDER_RECEIVE_MAX_ATTEMPTS - 1) {
       const ycSellFrom = Number(fromLeg?.yc_sell ?? receiveRes.rate ?? 0)
       localAmount = bumpYcCrossBorderLocalPayInForOmnibusShortfall({
         localPayIn: Math.max(
@@ -1031,7 +1035,7 @@ export async function authorizeCrossBorderDraft(input: {
   let pricingFinal!: CrossBorderPricingFinal
   let lockedQuote!: ReturnType<typeof finalizeCrossBorderLeg1Quote>
 
-  for (let attempt = 0; attempt < YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < YC_CROSS_BORDER_RECEIVE_MAX_ATTEMPTS; attempt++) {
     receiveRes = await submitYcReceive({
       sequenceId: leg1Seq,
       customerUID: input.customerUID,
@@ -1067,6 +1071,7 @@ export async function authorizeCrossBorderDraft(input: {
       sendCryptoUsd: pricingFinal.sendCryptoUsd,
       processingFee: pricingFinal.processingFee,
       marginAmount: pricingFinal.marginAmount,
+      tolerance: YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
     })
 
     if (omnibusCheck.ok) {
@@ -1074,7 +1079,7 @@ export async function authorizeCrossBorderDraft(input: {
       break
     }
 
-    if (attempt < YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS - 1) {
+    if (attempt < YC_CROSS_BORDER_RECEIVE_MAX_ATTEMPTS - 1) {
       const ycSellFrom = Number(fromLeg?.yc_sell ?? receiveRes.rate ?? 0)
       localAmount = bumpYcCrossBorderLocalPayInForOmnibusShortfall({
         localPayIn: Math.max(
