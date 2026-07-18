@@ -29,9 +29,6 @@ import { haptics } from '../../lib/haptics'
 import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transactionDetailNavigation'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { YcLocalPayInCompleteSummary } from '../../components/yc/YcLocalPayInCompleteSummary'
-import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
-import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
-import { YcPayInShellWebForm } from '../../components/yc/YcPayInShellWebForm'
 
 type RouteParams = {
   flowMode?: 'fund_balance' | 'cross_border_send'
@@ -74,8 +71,6 @@ function SendExactlyAmount({
 }
 
 export default function YcPayInScreen({ navigation, route }: NavigationProps) {
-  const { isWeb, mode } = useResponsiveLayout()
-  const useWebShellLayout = isWeb && (mode === 'tablet' || mode === 'desktop')
   const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const footerPadding = useFixedFooterPadding(spacing[5])
   const copyToClipboard = useCopyToClipboard()
@@ -200,8 +195,8 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
 
   return (
     <ScreenWrapper>
-      <View style={[styles.container, !useWebShellLayout && styles.containerPadded, { paddingBottom: useWebShellLayout ? spacing[4] : footerPadding }]}>
-        <View style={[styles.header, useWebShellLayout && styles.headerWeb]}>
+      <View style={[styles.container, { paddingBottom: footerPadding }]}>
+        <View style={styles.header}>
           <Pressable
             android_ripple={ripple.neutral}
             onPress={() => navigation.goBack()}
@@ -214,46 +209,6 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
           </View>
         </View>
 
-        {useWebShellLayout ? (
-          <CenteredWebFlowPage>
-            <YcPayInShellWebForm
-              summary={
-                <YcLocalPayInCompleteSummary
-                  mode={flowMode}
-                  rail={payInRail}
-                  transactionId={displayTransactionId}
-                  payInCurrency={sendCurrency}
-                  receiveCurrency={receiveCurrency}
-                  localPayIn={localPayIn}
-                  receiveAmount={receiveAmount}
-                  customerRate={customerRate}
-                  provisionalPayIn={provisionalPayIn}
-                  processingFeeLocal={feeLocal}
-                  processingFeeUsd={processingFee}
-                  exchangeFeeUsd={ycChannelFeeUsd}
-                  recipientName={recipientName}
-                  copiedKey={copiedKey}
-                  onCopyTransactionId={(text) => void handleCopy(text, 'transactionId')}
-                />
-              }
-              sendExactlyLine={
-                !isMobileMoney ? (
-                  <SendExactlyAmount amount={formattedSendAmount} centered />
-                ) : (
-                  <Text style={styles.webMomoAmountHint}>
-                    Authorize the payment from your mobile money app using the details below.
-                  </Text>
-                )
-              }
-              noticeText={completeNotice}
-              isMobileMoney={isMobileMoney}
-              paymentDetails={paymentDetails}
-              ctaLabel={ctaLabel}
-              onContinue={handleContinue}
-            />
-          </CenteredWebFlowPage>
-        ) : (
-        <>
         <ScrollView
           contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
           showsVerticalScrollIndicator={false}
@@ -318,8 +273,6 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
             <Text style={styles.ctaText}>{ctaLabel}</Text>
           </LinearGradient>
         </Pressable>
-        </>
-        )}
       </View>
     </ScreenWrapper>
   )
@@ -328,8 +281,6 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  containerPadded: {
     paddingHorizontal: spacing[5],
   },
   centered: {
@@ -342,9 +293,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: spacing[4],
     paddingBottom: spacing[4],
-  },
-  headerWeb: {
-    paddingHorizontal: spacing[5],
   },
   backButton: {
     ...surfaceChromeCircleStyle(colors, 44),
@@ -383,12 +331,6 @@ const styles = StyleSheet.create({
   sendExactlyAmount: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
-  },
-  webMomoAmountHint: {
-    ...textStyles.bodyMedium,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 22,
   },
   noticeText: {
     ...textStyles.body,
