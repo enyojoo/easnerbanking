@@ -17,6 +17,8 @@ import {
   formatMoneyDisplay,
   mapResidenceToLocalPayInCurrency,
   resolveYcPayInCustomerRate,
+  resolveYcPayInYcSellRate,
+  computeYcFundBalanceAmountPreview,
   ycFundBalanceQuoteErrorMessage,
   ycPayInInstructionNotice,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
@@ -141,30 +143,34 @@ export function LocalDepositWizard({
     [rates, localPayInCurrency],
   )
 
+  const ycSellRate = useMemo(
+    () => resolveYcPayInYcSellRate(rates, localPayInCurrency) ?? customerRate,
+    [rates, localPayInCurrency, customerRate],
+  )
+
   const preview = useMemo(() => {
-    if (!customerRate || enteredAmount <= 0) {
+    if (!customerRate || !ycSellRate || enteredAmount <= 0) {
       return { usdCredit: 0, localPayIn: 0 }
     }
-    if (amountMode === "local") {
-      return {
-        localPayIn: enteredAmount,
-        usdCredit: Math.round((enteredAmount / customerRate) * 100) / 100,
-      }
-    }
-    return {
-      usdCredit: enteredAmount,
-      localPayIn: Math.round(enteredAmount * customerRate * 100) / 100,
-    }
-  }, [customerRate, amountMode, enteredAmount])
+    return (
+      computeYcFundBalanceAmountPreview({
+        amountEntryMode: amountMode,
+        enteredAmount,
+        customerSellRate: customerRate,
+        ycSellRate,
+        rail,
+      }) ?? { usdCredit: 0, localPayIn: 0 }
+    )
+  }, [customerRate, ycSellRate, amountMode, enteredAmount, rail])
 
   const quoteMatchesAmount = useMemo(() => {
     if (!quote?.ok || !(quote.localPayIn > 0)) return false
+    const credit = quote.usdCredit ?? quote.creditOrReceiveAmount ?? 0
     if (amountMode === "usd") {
-      const credit = quote.usdCredit ?? quote.creditOrReceiveAmount ?? 0
       return Math.abs(credit - enteredAmount) < 0.01
     }
-    return Math.abs(quote.localPayIn - enteredAmount) < 0.01
-  }, [quote, amountMode, enteredAmount])
+    return Math.abs(credit - preview.usdCredit) < 0.01
+  }, [quote, amountMode, enteredAmount, preview.usdCredit])
 
   const displayPreview = useMemo(() => {
     if (quoteMatchesAmount && quote) {
@@ -174,7 +180,10 @@ export function LocalDepositWizard({
         feeInclusive: true,
       }
     }
-    return { ...preview, feeInclusive: false }
+    if (preview.localPayIn > 0) {
+      return { ...preview, feeInclusive: true as const }
+    }
+    return { ...preview, feeInclusive: false as const }
   }, [quote, quoteMatchesAmount, preview])
 
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
@@ -383,6 +392,29 @@ export function LocalDepositWizard({
     momoNetworks,
     defaultPhone,
   ])
+
+  const momoReady = useMemo(
+    () => Boolean((momoPhone.trim() || defaultPhone.trim()) && momoNetworkId),
+    [momoPhone, defaultPhone, momoNetworkId],
+  )
+
+  const momoReviewQuoteKey =
+    step === "review" && isMomo && momoReady
+      ? [
+          residenceCountry,
+          localPayInCurrency,
+          amountMode,
+          enteredAmount,
+          momoPhone.trim() || defaultPhone.trim(),
+          momoNetworkId,
+        ].join("|")
+      : ""
+
+  useEffect(() => {
+    if (!momoReviewQuoteKey) return
+    void createQuote()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [momoReviewQuoteKey])
 
   const quotePrefetchKey =
     step === "amount" && enteredAmount > 0 && customerRate
@@ -652,21 +684,20 @@ export function LocalDepositWizard({
   }
 
   if (step === "review") {
-    const reviewLocalPayIn = isMomo
-      ? displayPreview.localPayIn
-      : (quote?.localPayIn ?? displayPreview.localPayIn)
-    const reviewUsdCredit = isMomo ? preview.usdCredit : (quote?.usdCredit ?? 0)
-    const reviewCustomerRate = isMomo ? customerRate : (quote?.customerRate ?? customerRate)
+    const quoteLocked = Boolean(quote?.ok && quote.localPayIn > 0)
+    const reviewLocalPayIn = quote?.localPayIn ?? displayPreview.localPayIn
+    const reviewUsdCredit = quote?.usdCredit ?? preview.usdCredit
+    const reviewCustomerRate = quote?.customerRate ?? customerRate
     const lockedReviewBreakdown =
-      !isMomo && quote && reviewLocalPayIn > 0
+      quoteLocked && reviewLocalPayIn > 0
         ? resolveYcFundBalanceLocalPayInBreakdownForDisplay({
             localPayIn: reviewLocalPayIn,
             localCurrency: localPayInCurrency,
             usdCredit: reviewUsdCredit,
             exchangeRate: reviewCustomerRate,
-            displayProcessingFeeLocal: quote.displayProcessingFeeLocal,
-            processingFee: quote.processingFee,
-            exchangeFee: quote.ycChannelFeeUsd,
+            displayProcessingFeeLocal: quote?.displayProcessingFeeLocal,
+            processingFee: quote?.processingFee,
+            exchangeFee: quote?.ycChannelFeeUsd,
           })
         : null
     const reviewPrincipalLocal =
@@ -675,18 +706,11 @@ export function LocalDepositWizard({
         usdCredit: reviewUsdCredit,
         exchangeRate: reviewCustomerRate,
       })
-    const reviewFeeLocal =
-      lockedReviewBreakdown?.feeLocal ??
-      (isMomo && reviewCustomerRate > 0 && reviewLocalPayIn > 0
-        ? Math.max(
-            0,
-            Math.round((reviewLocalPayIn - reviewUsdCredit * reviewCustomerRate) * 100) / 100,
-          )
-        : 0)
-    const momoReady = Boolean((momoPhone.trim() || defaultPhone.trim()) && momoNetworkId)
-    const reviewReady = isMomo
-      ? Boolean(reviewCustomerRate && reviewLocalPayIn > 0 && momoReady)
-      : Boolean(quote?.ok && reviewLocalPayIn > 0 && !quoteLoading)
+    const reviewFeeLocal = lockedReviewBreakdown?.feeLocal ?? 0
+    const showQuoteSpinner = quoteLoading && (isMomo ? momoReady : true)
+    const showLockedReview = quoteLocked && !quoteLoading
+    const canConfirmReview =
+      quoteLocked && !quoteLoading && !quoteCountdown.expired && (!isMomo || momoReady)
     return (
       <div className="space-y-4">
         <button
@@ -698,14 +722,53 @@ export function LocalDepositWizard({
           Back
         </button>
 
-        {!isMomo && quoteLoading ? (
+        {isMomo ? (
+          <div className="rounded-xl border border-border p-4 space-y-3 text-sm">
+            <div>
+              <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.momoNumberPrompt}</Label>
+              <YcMomoPhoneInput
+                id="momo-phone"
+                countryCode={residenceCountry}
+                value={momoPhone}
+                onChange={setMomoPhone}
+                className="mt-1"
+                placeholder="712345678"
+              />
+            </div>
+            <div>
+              <Label>{REVIEW_ROW_LABELS.momoNetworkPrompt}</Label>
+              {momoNetworksLoading ? (
+                <div className="flex justify-center py-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 mt-2">
+                  {momoNetworks.map((network) => (
+                    <button
+                      key={network.id}
+                      type="button"
+                      className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                        momoNetworkId === network.id ? "border-primary bg-primary/5" : "border-border"
+                      }`}
+                      onClick={() => setMomoNetworkId(network.id)}
+                    >
+                      {network.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {showQuoteSpinner ? (
           <div className="flex justify-center py-4">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
-        ) : reviewReady ? (
+        ) : showLockedReview ? (
           <YcLocalPayInReview
             mode="fund_balance"
-            phase={isMomo ? "preview" : "locked"}
+            phase="locked"
             rail={rail}
             payInCurrency={localPayInCurrency}
             receiveCurrency="USD"
@@ -726,7 +789,7 @@ export function LocalDepositWizard({
               />
             }
             quoteHint={
-              !isMomo && quote?.expiresAt ? (
+              quote?.expiresAt ? (
                 <p className="text-xs text-muted-foreground pt-1">
                   {quoteCountdown.expired
                     ? "Quote expired — go back and continue again."
@@ -734,57 +797,17 @@ export function LocalDepositWizard({
                 </p>
               ) : null
             }
-            footer={
-              isMomo ? (
-                <div className="pt-4 space-y-3">
-                  <div>
-                    <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.momoNumberPrompt}</Label>
-                    <YcMomoPhoneInput
-                      id="momo-phone"
-                      countryCode={residenceCountry}
-                      value={momoPhone}
-                      onChange={setMomoPhone}
-                      className="mt-1"
-                      placeholder="712345678"
-                    />
-                  </div>
-                  <div>
-                    <Label>{REVIEW_ROW_LABELS.momoNetworkPrompt}</Label>
-                    {momoNetworksLoading ? (
-                      <div className="flex justify-center py-3">
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2 mt-2">
-                        {momoNetworks.map((network) => (
-                          <button
-                            key={network.id}
-                            type="button"
-                            className={`rounded-lg border px-3 py-2 text-left text-sm ${
-                              momoNetworkId === network.id ? "border-primary bg-primary/5" : "border-border"
-                            }`}
-                            onClick={() => setMomoNetworkId(network.id)}
-                          >
-                            {network.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : null
-            }
           />
+        ) : isMomo && !momoReady ? (
+          <p className="text-sm text-muted-foreground">
+            Enter your mobile money number and network to see fees.
+          </p>
         ) : null}
         {quoteError ? <p className="text-sm text-destructive">{quoteError}</p> : null}
 
         <Button
           className="w-full"
-          disabled={
-            !reviewReady ||
-            quoteLoading ||
-            quoteCountdown.expired
-          }
+          disabled={!canConfirmReview}
           onClick={async () => {
             const result = await confirmOrder()
             if (result?.transferId) setStep("payin")

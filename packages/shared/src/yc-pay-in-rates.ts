@@ -4,6 +4,8 @@ export type YcRateClientRow = {
   from_currency: string
   to_currency: string
   rate: number
+  yc_sell?: number | null
+  yc_buy?: number | null
   easner_sell?: number | null
   easner_buy?: number | null
 }
@@ -23,6 +25,19 @@ export function resolveYcPayInCustomerRate(
   if (!from) return null
   const row = rates.find((r) => r.from_currency === from && r.to_currency === "USDC")
   const sell = row?.easner_sell
+  if (sell != null && Number.isFinite(sell) && sell > 0) return sell
+  return null
+}
+
+/** Provider yc_sell on local→USDC leg (for YC fee estimates before POST /receive). */
+export function resolveYcPayInYcSellRate(
+  rates: readonly YcRateClientRow[],
+  localFiat: string,
+): number | null {
+  const from = localFiat.trim().toUpperCase()
+  if (!from) return null
+  const row = rates.find((r) => r.from_currency === from && r.to_currency === "USDC")
+  const sell = row?.yc_sell
   if (sell != null && Number.isFinite(sell) && sell > 0) return sell
   return null
 }

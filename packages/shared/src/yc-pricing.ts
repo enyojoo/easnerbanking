@@ -628,6 +628,49 @@ export function computeYcCrossBorderRequiredOmnibus(input: {
 /**
  * Fund balance pay-in before POST /receive: pad receive leg fees from estimate.
  */
+export type YcFundBalanceAmountPreview = {
+  usdCredit: number
+  localPayIn: number
+  feeInclusive: true
+}
+
+/** Client/server amount-screen preview: padded pay-in aligned with confirm submit. */
+export function computeYcFundBalanceAmountPreview(input: {
+  amountEntryMode: "usd" | "local"
+  enteredAmount: number
+  customerSellRate: number
+  ycSellRate: number
+  processingFeeBps?: number
+  rail?: "bank_transfer" | "mobile_money"
+}): YcFundBalanceAmountPreview | null {
+  if (!Number.isFinite(input.customerSellRate) || input.customerSellRate <= 0) return null
+  if (!Number.isFinite(input.ycSellRate) || input.ycSellRate <= 0) return null
+  if (!(input.enteredAmount > 0)) return null
+
+  const padded =
+    input.amountEntryMode === "usd"
+      ? computeYcFundBalancePricingBeforeReceive({
+          usdCredit: input.enteredAmount,
+          customerSellRate: input.customerSellRate,
+          ycSellRate: input.ycSellRate,
+          processingFeeBps: input.processingFeeBps,
+          rail: input.rail,
+        })
+      : computeYcFundBalancePricingBeforeReceive({
+          localPayIn: input.enteredAmount,
+          customerSellRate: input.customerSellRate,
+          ycSellRate: input.ycSellRate,
+          processingFeeBps: input.processingFeeBps,
+          rail: input.rail,
+        })
+
+  return {
+    usdCredit: padded.usdCredit,
+    localPayIn: padded.localPayIn,
+    feeInclusive: true,
+  }
+}
+
 export function computeYcFundBalancePricingBeforeReceive(input: {
   usdCredit?: number
   localPayIn?: number

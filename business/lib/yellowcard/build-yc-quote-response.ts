@@ -28,17 +28,12 @@ export function buildFundBalanceQuoteSummary(input: {
     easnerSellRate: input.customerRate,
     payInCurrency: input.currency,
   })
-  const provisional = computeYcFundBalancePricing({
-    usdCredit: input.pricing.usdCredit,
-    customerSellRate: input.pricing.customerSellRate,
-    ycSellRate: input.pricing.ycSellRate,
-    receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
-  })
+  const paddedLocalPayIn = input.pricing.localPayIn
   return {
     ok: true,
     customerRate: input.customerRate,
-    provisionalPayIn: provisional.localPayIn,
-    localPayIn: input.pricing.localPayIn,
+    provisionalPayIn: paddedLocalPayIn,
+    localPayIn: paddedLocalPayIn,
     creditOrReceiveAmount: input.pricing.usdCredit,
     processingFee: input.pricing.processingFee,
     ycLegFeesUsd: input.pricing.ycLegFeesUsd,

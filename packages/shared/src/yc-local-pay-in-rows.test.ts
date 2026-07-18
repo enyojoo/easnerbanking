@@ -83,6 +83,26 @@ describe("buildYcLocalPayInReviewRows", () => {
     })
     expect(rows.find((r) => r.id === "transfer-method")?.value).toBe("Bank Transfer")
   })
+
+  it("locks fund-balance MoMo review with deposit amount and Total to pay", () => {
+    const rows = buildYcLocalPayInReviewRows({
+      mode: "fund_balance",
+      phase: "locked",
+      rail: "mobile_money",
+      payInCurrency: "KES",
+      receiveCurrency: "USD",
+      customerRate: 132.5,
+      localPayIn: 160_000,
+      receiveAmount: 1200,
+      usdCredit: 1200,
+      principalLocal: 159_000,
+      processingFeeLocal: 1000,
+    })
+    expect(rows.find((r) => r.id === "deposit-amount")?.label).toBe("Deposit amount")
+    expect(rows.find((r) => r.id === "pay-amount")?.label).toBe("Total to pay")
+    expect(rows.find((r) => r.id === "amount-to-credit")?.label).toBe("Amount to credit")
+    expect(rows.find((r) => r.id === "pay-amount")?.valueBold).toBe(true)
+  })
 })
 
 describe("buildYcLocalPayInCompleteRows", () => {

@@ -148,7 +148,10 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
         feeInclusive: true,
       }
     }
-    return { ...ycFlow.preview, feeInclusive: false }
+    if (ycFlow.preview.localPayIn > 0) {
+      return { ...ycFlow.preview, feeInclusive: true as const }
+    }
+    return { ...ycFlow.preview, feeInclusive: false as const }
   }, [prefetchedQuote, ycFlow.preview])
 
   const { rails: receiveRails } = useYcReceiveRails({
@@ -184,7 +187,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     localPayInCurrency,
     payInLimits,
     ycFlow.customerRate,
-    ycFlow.preview.localPayIn,
+    displayPreview.localPayIn,
   ])
 
   const minEnforcementSeedKey =
@@ -376,8 +379,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
         payInRail,
         amountEntryMode,
         enteredAmount,
-        usdCredit: ycFlow.preview.usdCredit,
-        localPayIn: ycFlow.preview.localPayIn,
+        usdCredit: displayPreview.usdCredit,
+        localPayIn: displayPreview.localPayIn,
         customerRate: ycFlow.customerRate ?? 0,
       } as never)
     } catch (e) {

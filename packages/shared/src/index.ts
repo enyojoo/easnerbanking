@@ -620,6 +620,7 @@ export {
   computeYcCrossBorderPricing,
   computeYcCrossBorderPricingBeforeReceive,
   computeYcCrossBorderRequiredOmnibus,
+  computeYcFundBalanceAmountPreview,
   computeYcFundBalancePricing,
   computeYcFundBalancePricingBeforeReceive,
   checkYcCrossBorderOmnibusSufficient,
@@ -647,6 +648,7 @@ export type {
   YcBalancePayoutPricing,
   YcCrossBorderPricing,
   YcDisplayQuoteFees,
+  YcFundBalanceAmountPreview,
   YcFundBalancePricing,
   YcLegFeeInputs,
   YcOmnibusSufficiencyCheck,
@@ -668,6 +670,7 @@ export {
 export {
   YC_PAY_IN_RATES_DESTINATION,
   resolveYcPayInCustomerRate,
+  resolveYcPayInYcSellRate,
 } from "./yc-pay-in-rates"
 export type { YcRateClientRow } from "./yc-pay-in-rates"
 export {

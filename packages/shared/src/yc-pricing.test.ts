@@ -15,6 +15,7 @@ import {
   computeYcCrossBorderRequiredOmnibus,
   computeYcFundBalancePricing,
   computeYcFundBalancePricingBeforeReceive,
+  computeYcFundBalanceAmountPreview,
   computeYcFundBalanceSendExactlyLocal,
   easnerFeeLocalFromUsdCredit,
   estimateYcFundBalanceReceiveLegFeesUsd,
@@ -94,6 +95,49 @@ describe("computeYcFundBalancePricing", () => {
       ycSellRate: 127,
     })
     expect(estimate).toBeGreaterThanOrEqual(1.96)
+  })
+})
+
+describe("computeYcFundBalanceAmountPreview", () => {
+  it("pads local pay-in above credit-only preview for USD entry", () => {
+    const unpadded = computeYcFundBalancePricing({
+      usdCredit: 2550,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+      receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    })
+    const preview = computeYcFundBalanceAmountPreview({
+      amountEntryMode: "usd",
+      enteredAmount: 2550,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+      rail: "bank_transfer",
+    })
+    expect(preview).not.toBeNull()
+    expect(preview!.localPayIn).toBeGreaterThan(unpadded.localPayIn)
+    expect(preview!.localPayIn).toBeGreaterThanOrEqual(
+      resolveYcFundBalanceSubmitLocalPayIn({
+        pricing: computeYcFundBalancePricingBeforeReceive({
+          usdCredit: 2550,
+          customerSellRate: 132.5,
+          ycSellRate: 130,
+          rail: "bank_transfer",
+        }),
+        customerSellRate: 132.5,
+      }),
+    )
+  })
+
+  it("pads local entry above entered local amount", () => {
+    const preview = computeYcFundBalanceAmountPreview({
+      amountEntryMode: "local",
+      enteredAmount: 341254,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+      rail: "bank_transfer",
+    })
+    expect(preview).not.toBeNull()
+    expect(preview!.localPayIn).toBeGreaterThan(341254)
   })
 })
 

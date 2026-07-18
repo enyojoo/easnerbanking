@@ -43,6 +43,8 @@ export function buildYcLocalPayInReviewRows(input: {
   const isLocked = input.phase === "locked"
   const isMomo = input.rail === "mobile_money"
   const isCrossBorderBankLocked = isCrossBorder && isLocked && !isMomo
+  /** Fund-balance MoMo uses preview labels until a server quote locks fees (same as bank). */
+  const isFundBalanceLockedBreakdown = isFundBalance && (!isMomo || isLocked)
   const transferMethod = isFundBalance
     ? resolveYcFundBalanceTransferMethod(input.rail)
     : TLC_LOCAL_TRANSFER_METHOD
@@ -74,7 +76,7 @@ export function buildYcLocalPayInReviewRows(input: {
       exchangeFee: input.exchangeFeeUsd ?? 0,
     })
 
-  if ((isFundBalance && !isMomo || isCrossBorderBankLocked) && (input.principalLocal ?? 0) > 0) {
+  if ((isFundBalanceLockedBreakdown || isCrossBorderBankLocked) && (input.principalLocal ?? 0) > 0) {
     const principalLabel = isCrossBorder
       ? REVIEW_ROW_LABELS.transferAmount
       : REVIEW_ROW_LABELS.depositAmount
@@ -102,7 +104,7 @@ export function buildYcLocalPayInReviewRows(input: {
   }
 
   const payLabel = isFundBalance
-    ? isMomo
+    ? isMomo && !isLocked
       ? REVIEW_ROW_LABELS.estimatedToPay
       : REVIEW_ROW_LABELS.totalToPay
     : isCrossBorderBankLocked
@@ -117,10 +119,10 @@ export function buildYcLocalPayInReviewRows(input: {
     id: "pay-amount",
     label: payLabel,
     value: formatReviewRowMoneyDisplay(payLabel, input.localPayIn, input.payInCurrency),
-    valueBold: (isLocked && !isMomo) || isCrossBorderBankLocked,
+    valueBold: (isLocked && isFundBalance) || isCrossBorderBankLocked,
   })
 
-  if (isFundBalance && !isMomo && (input.usdCredit ?? 0) > 0) {
+  if (isFundBalanceLockedBreakdown && (input.usdCredit ?? 0) > 0) {
     rows.push({
       id: "amount-to-credit",
       label: REVIEW_ROW_LABELS.amountToCredit,

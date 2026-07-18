@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ycFundBalanceQuoteErrorMessage,
   resolveYcPayInCustomerRate,
+  resolveYcPayInYcSellRate,
+  computeYcFundBalanceAmountPreview,
   type YcRateClientRow,
 } from '@easner/shared'
 import { ApiError } from '../query/api-client'
@@ -106,19 +108,30 @@ export function useYcFundBalanceFlow(input: {
     [rates, input.currency],
   )
 
+  const ycSellRate = useMemo(
+    () =>
+      input.currency
+        ? resolveYcPayInYcSellRate(rates, input.currency) ?? customerRate
+        : null,
+    [rates, input.currency, customerRate],
+  )
+
   const preview = useMemo(() => {
-    if (!customerRate || input.enteredAmount <= 0) {
+    if (!customerRate || !ycSellRate || input.enteredAmount <= 0) {
       return { usdCredit: 0, localPayIn: 0, forwardRate: customerRate ?? 1 }
     }
-    if (input.amountEntryMode === 'local') {
-      const localPayIn = input.enteredAmount
-      const usdCredit = Math.round((localPayIn / customerRate) * 100) / 100
-      return { usdCredit, localPayIn, forwardRate: customerRate }
+    const padded = computeYcFundBalanceAmountPreview({
+      amountEntryMode: input.amountEntryMode,
+      enteredAmount: input.enteredAmount,
+      customerSellRate: customerRate,
+      ycSellRate,
+      rail: input.rail,
+    })
+    if (!padded) {
+      return { usdCredit: 0, localPayIn: 0, forwardRate: customerRate }
     }
-    const usdCredit = input.enteredAmount
-    const localPayIn = Math.round(usdCredit * customerRate * 100) / 100
-    return { usdCredit, localPayIn, forwardRate: customerRate }
-  }, [customerRate, input.amountEntryMode, input.enteredAmount])
+    return { ...padded, forwardRate: customerRate }
+  }, [customerRate, ycSellRate, input.amountEntryMode, input.enteredAmount, input.rail])
 
   const createQuote = useCallback(
     async (opts: {
