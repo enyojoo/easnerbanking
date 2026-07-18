@@ -29,6 +29,7 @@ import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 import { haptics } from '../lib/haptics'
 import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
+import { WebIdleLockOverlay } from '../components/WebIdleLockOverlay'
 import { enterMainAppOnWeb } from './webMainEntry'
 import { webStackScreenListeners } from './webStackScreenListeners'
 // Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
@@ -37,6 +38,7 @@ import {
   sendFlowStandardPreset,
   sendFlowInstantTransitionSpec,
 } from './transitionPresets'
+import { createWebLazyScreen } from './createWebLazyScreen'
 
 // Onboarding Screen
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen'
@@ -60,7 +62,7 @@ import MoreScreen from '../screens/main/MoreScreen'
 import OpenCurrencyAccountScreen from '../screens/main/OpenCurrencyAccountScreen'
 import ProfileEditScreen from '../screens/main/ProfileEditScreen'
 import SupportScreen from '../screens/main/SupportScreen'
-import CardScreen from '../screens/main/CardScreen'
+import CardScreenNative from '../screens/main/CardScreen'
 import TransactionCardScreen from '../screens/main/TransactionCardScreen'
 import ChangePasswordScreen from '../screens/main/ChangePasswordScreen'
 import ChangePinScreen from '../screens/main/ChangePinScreen'
@@ -75,25 +77,92 @@ function loadTransactionDetailsScreen() {
 }
 
 // Send Money Flow Screens
-import SendAmountScreen from '../screens/send/SendAmountScreen'
-import SelectRecentRecipientScreen from '../screens/send/SelectRecentRecipientScreen'
-import ScanWalletAddressScreen from '../screens/recipients/ScanWalletAddressScreen'
-import SelectRecipientScreen from '../screens/send/SelectRecipientScreen'
-import SendConfirmScreen from '../screens/send/SendConfirmScreen'
-import SendPinScreen from '../screens/send/SendPinScreen'
-import YcPayInScreen from '../screens/send/YcPayInScreen'
-import YcPayInAuthorizeScreen from '../screens/send/YcPayInAuthorizeScreen'
+import SendAmountScreenNative from '../screens/send/SendAmountScreen'
+import SelectRecentRecipientScreenNative from '../screens/send/SelectRecentRecipientScreen'
+import ScanWalletAddressScreenNative from '../screens/recipients/ScanWalletAddressScreen'
+import SelectRecipientScreenNative from '../screens/send/SelectRecipientScreen'
+import SendConfirmScreenNative from '../screens/send/SendConfirmScreen'
+import SendPinScreenNative from '../screens/send/SendPinScreen'
+import YcPayInScreenNative from '../screens/send/YcPayInScreen'
+import YcPayInAuthorizeScreenNative from '../screens/send/YcPayInAuthorizeScreen'
 
 // Receive Money Flow Screens
-import ReceiveMoneyScreen from '../screens/receive/ReceiveMoneyScreen'
-import ReceiveBankDetailsScreen from '../screens/receive/ReceiveBankDetailsScreen'
-import ReceiveLocalRailScreen from '../screens/receive/ReceiveLocalRailScreen'
-import ReceiveLocalAmountScreen from '../screens/receive/ReceiveLocalAmountScreen'
-import ReceiveLocalReviewScreen from '../screens/receive/ReceiveLocalReviewScreen'
-import ReceiveTransactionDetailsScreen from '../screens/receive/ReceiveTransactionDetailsScreen'
+import ReceiveMoneyScreenNative from '../screens/receive/ReceiveMoneyScreen'
+import ReceiveBankDetailsScreenNative from '../screens/receive/ReceiveBankDetailsScreen'
+import ReceiveLocalRailScreenNative from '../screens/receive/ReceiveLocalRailScreen'
+import ReceiveLocalAmountScreenNative from '../screens/receive/ReceiveLocalAmountScreen'
+import ReceiveLocalReviewScreenNative from '../screens/receive/ReceiveLocalReviewScreen'
+import ReceiveTransactionDetailsScreenNative from '../screens/receive/ReceiveTransactionDetailsScreen'
 
 // Verification Screens
-import AccountVerificationScreen from '../screens/verification/AccountVerificationScreen'
+import AccountVerificationScreenNative from '../screens/verification/AccountVerificationScreen'
+
+const SendAmountScreen = createWebLazyScreen(
+  () => import('../screens/send/SendAmountScreen'),
+  SendAmountScreenNative,
+)
+const SelectRecentRecipientScreen = createWebLazyScreen(
+  () => import('../screens/send/SelectRecentRecipientScreen'),
+  SelectRecentRecipientScreenNative,
+)
+const ScanWalletAddressScreen = createWebLazyScreen(
+  () => import('../screens/recipients/ScanWalletAddressScreen'),
+  ScanWalletAddressScreenNative,
+)
+const SelectRecipientScreen = createWebLazyScreen(
+  () => import('../screens/send/SelectRecipientScreen'),
+  SelectRecipientScreenNative,
+)
+const SendConfirmScreen = createWebLazyScreen(
+  () => import('../screens/send/SendConfirmScreen'),
+  SendConfirmScreenNative,
+)
+const SendPinScreen = createWebLazyScreen(
+  () => import('../screens/send/SendPinScreen'),
+  SendPinScreenNative,
+)
+const YcPayInScreen = createWebLazyScreen(
+  () => import('../screens/send/YcPayInScreen'),
+  YcPayInScreenNative,
+)
+const YcPayInAuthorizeScreen = createWebLazyScreen(
+  () => import('../screens/send/YcPayInAuthorizeScreen'),
+  YcPayInAuthorizeScreenNative,
+)
+
+const CardScreen = createWebLazyScreen(
+  () => import('../screens/main/CardScreen'),
+  CardScreenNative,
+)
+const ReceiveMoneyScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveMoneyScreen'),
+  ReceiveMoneyScreenNative,
+)
+const ReceiveBankDetailsScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveBankDetailsScreen'),
+  ReceiveBankDetailsScreenNative,
+)
+const ReceiveLocalRailScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveLocalRailScreen'),
+  ReceiveLocalRailScreenNative,
+)
+const ReceiveLocalAmountScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveLocalAmountScreen'),
+  ReceiveLocalAmountScreenNative,
+)
+const ReceiveLocalReviewScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveLocalReviewScreen'),
+  ReceiveLocalReviewScreenNative,
+)
+const ReceiveTransactionDetailsScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveTransactionDetailsScreen'),
+  ReceiveTransactionDetailsScreenNative,
+)
+
+const AccountVerificationScreen = createWebLazyScreen(
+  () => import('../screens/verification/AccountVerificationScreen'),
+  AccountVerificationScreenNative,
+)
 
 const Stack = createStackNavigator()
 const Tab = createBottomTabNavigator()
@@ -688,6 +757,7 @@ export default function AppNavigator() {
   const palette = useThemeColors()
   const [pinGate, setPinGate] = useState<'loading' | 'setup' | 'pin' | 'main'>('loading')
   const [lockTick, setLockTick] = useState(0)
+  const [webIdleOverlayVisible, setWebIdleOverlayVisible] = useState(false)
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null)
   // PIN TEMPORARILY DISABLED - keeping state variables for easy re-enable
   // const [pinSetup, setPinSetup] = useState<boolean | null>(null)
@@ -758,6 +828,7 @@ export default function AppNavigator() {
       if (event === 'unlocked') {
         if (Platform.OS === 'web' && user?.id) {
           markWebPinSessionUnlocked(user.id)
+          setWebIdleOverlayVisible(false)
         }
         setPinGate('main')
         prefetchIntercomModule()
@@ -767,7 +838,11 @@ export default function AppNavigator() {
         if (avatarUri) {
           void warmAvatarCacheAsync(avatarUri)
         }
-        setPinGate('pin')
+        if (Platform.OS === 'web') {
+          setWebIdleOverlayVisible(true)
+        } else {
+          setPinGate('pin')
+        }
       }
       setLockTick((t) => t + 1)
     })
@@ -796,6 +871,7 @@ export default function AppNavigator() {
   useEffect(() => {
     if (!user) {
       setPinGate('loading')
+      setWebIdleOverlayVisible(false)
     }
   }, [user])
 
@@ -818,7 +894,12 @@ export default function AppNavigator() {
         return
       }
       const locked = idle === 'locked' || (await isAppLocked(user.id))
-      setPinGate(locked ? 'pin' : 'main')
+      if (Platform.OS === 'web') {
+        setPinGate('main')
+        setWebIdleOverlayVisible(locked)
+      } else {
+        setPinGate(locked ? 'pin' : 'main')
+      }
     })()
     return () => {
       cancelled = true
@@ -1053,20 +1134,33 @@ export default function AppNavigator() {
 
   if (user && pinGate === 'main') {
     return (
-      <ResponsiveAppShell>
-        <MainStack />
-      </ResponsiveAppShell>
+      <View style={styles.mainShellRoot}>
+        <ResponsiveAppShell>
+          <MainStack />
+        </ResponsiveAppShell>
+        <WebIdleLockOverlay visible={webIdleOverlayVisible} />
+      </View>
     )
   }
 
   if (user) {
     return (
-      <ResponsiveAppShell>
-        <MainStack />
-      </ResponsiveAppShell>
+      <View style={styles.mainShellRoot}>
+        <ResponsiveAppShell>
+          <MainStack />
+        </ResponsiveAppShell>
+        <WebIdleLockOverlay visible={webIdleOverlayVisible} />
+      </View>
     )
   }
 
   return <AuthStack key="auth-stack-no-user" />
 }
+
+const styles = StyleSheet.create({
+  mainShellRoot: {
+    flex: 1,
+    position: 'relative',
+  },
+})
 

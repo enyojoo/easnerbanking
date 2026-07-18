@@ -134,6 +134,10 @@ import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib
 import { formatSendAgainKeypadAmount } from '../../lib/resolveSendAgainRecipient'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
 import { getCurrencySymbol } from '../../utils/formatters'
+import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
+import { SendAmountShellWebForm } from '../../components/send/SendAmountShellWebForm'
+import { ResponsivePage } from '../../components/layout/ResponsivePage'
+import { SendFlowSplit } from '../../components/layout/SendFlowSplit'
 
 function initialSendAmountFromRouteParams(params: Record<string, unknown> | undefined): string {
   const formatted = String(params?.initialSendAmount ?? '').trim()
@@ -149,8 +153,12 @@ function initialAmountEntryModeFromRouteParams(
   return params?.initialAmountEntryMode === 'send' ? 'send' : 'receive'
 }
 
+const WEB_SHELL_MAX_WIDTH = 672
+
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
+  const { isWeb, mode } = useResponsiveLayout()
+  const useWebShellLayout = isWeb && (mode === 'tablet' || mode === 'desktop')
   const keypadSizing = computeKeypadCellSize(getContentWidth(windowWidth, spacing[5]), {
     gap: spacing[2],
     minSize: 90,
@@ -474,6 +482,20 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     if (raw === '0') raw = value
     else raw += value
     setSendAmount(formatAmount(raw))
+  }
+
+  const handleWebAmountChange = (text: string) => {
+    if (!recipient) return
+    const sanitized = text.replace(/[^0-9.]/g, '')
+    const parts = sanitized.split('.')
+    if (parts.length > 2) return
+    if (parts[1]?.length > 2) return
+    setSendAmount(formatAmount(sanitized || '0'))
+  }
+
+  const handleVerifyPress = () => {
+    haptics.tap()
+    navigation.navigate('AccountVerification' as never)
   }
 
   const toSwitchInputAmount = (amount: number): string => {
@@ -1540,14 +1562,130 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     </>
   )
 
+  const sendHeader = (
+    <Animated.View
+      style={[
+        styles.header,
+        {
+          opacity: headerAnim,
+          transform: [{
+            translateY: headerAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [-motion.screenEnterTranslateY, 0],
+            })
+          }]
+        }
+      ]}
+    >
+      <Pressable
+        android_ripple={ripple.neutral}
+        onPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack()
+          } else {
+            navigateToSendRecipientHub(navigation, {
+              preferredBalanceCurrency: selectedBalanceCurrency,
+            })
+          }
+        }}
+        style={styles.backButton}
+      >
+        <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
+      </Pressable>
+      <View style={styles.headerContent}>
+        <Text style={styles.title}>Send Money</Text>
+      </View>
+    </Animated.View>
+  )
+
+  const webShellForm = (
+    <SendAmountShellWebForm
+      amountEntryMode={amountEntryMode}
+      sendAmount={sendAmount}
+      sendCurrency={sendCurrency}
+      receiveCurrency={receiveCurrency}
+      sendingAmount={sendingAmount}
+      receiveAmount={receiveAmount}
+      exchangeRate={exchangeRate}
+      showCrossCurrencyExchangeUi={showCrossCurrencyExchangeUi}
+      exchangePreviewReady={exchangePreviewReady}
+      showExchangePreviewSkeleton={showExchangePreviewSkeleton}
+      needsNoahRateForSend={needsNoahRateForSend}
+      needsCryptoRateForSend={false}
+      noahRatesLoading={noahRatesLoading}
+      cryptoRatesLoading={false}
+      manualQuoteLoading={ycRateLoading}
+      hasNoahRateForPair={hasNoahRateForPair}
+      hasValidCryptoRateForPair
+      selectedPaymentMethod={selectedPaymentMethod}
+      selectedBalanceCurrency={selectedBalanceCurrency}
+      selectedOtherCurrency={selectedOtherCurrency}
+      selectedOtherPaymentMethod={selectedOtherPaymentMethod}
+      currencyPaymentMethods={{}}
+      sourceDisplayLabel={sourceDisplayLabel}
+      hasInsufficientBalance={hasInsufficientBalance}
+      shortfallAmount={shortfallAmount}
+      isWalletRecipient={isWalletRecipient}
+      amountFieldMode={amountFieldMode}
+      noteFieldUi={noteFieldUi}
+      note={note}
+      paymentPurpose={paymentPurpose}
+      amountFieldError={amountFieldError}
+      tier1Ok={tier1Ok}
+      sendButtonDisabled={sendButtonDisabled}
+      isContinueLoading={isContinueLoading}
+      onAmountChange={handleWebAmountChange}
+      onToggleAmountDirection={toggleAmountDirection}
+      onOpenPaymentMethodPicker={() => setShowCurrencyPicker(true)}
+      onOpenPurposePicker={() => setShowPurposePicker(true)}
+      onNoteChange={setNote}
+      onVerifyPress={handleVerifyPress}
+      onContinue={handleSendContinue}
+    />
+  )
+
+  const mainContentWrapperProps =
+    Platform.OS === 'web'
+      ? ({ style: styles.keyboardContainer } as const)
+      : ({
+          style: styles.keyboardContainer,
+          behavior: Platform.OS === 'ios' ? ('padding' as const) : ('height' as const),
+          keyboardVerticalOffset: Platform.OS === 'ios' ? spacing[2] : 0,
+        } as const)
+
+  const MainScrollWrapper = Platform.OS === 'web' ? View : KeyboardAvoidingView
+
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        <KeyboardAvoidingView
-          style={styles.keyboardContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? spacing[2] : 0}
-        >
+        {useWebShellLayout ? (
+          <View style={styles.mainColumn}>
+            {sendHeader}
+            <Animated.View
+              style={[
+                styles.webShellContent,
+                {
+                  opacity: contentAnim,
+                  transform: [{
+                    translateY: contentAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [motion.screenEnterTranslateY, 0],
+                    })
+                  }]
+                }
+              ]}
+            >
+              <ResponsivePage contentContainerStyle={styles.webShellPage}>
+                <SendFlowSplit
+                  form={webShellForm}
+                  preview={<View style={styles.webShellPreview}>{recipientSection}</View>}
+                />
+              </ResponsivePage>
+            </Animated.View>
+          </View>
+        ) : (
+          <>
+          <MainScrollWrapper {...mainContentWrapperProps}>
           <View style={styles.mainColumn}>
             {/* Header */}
             <Animated.View 
@@ -1820,7 +1958,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
             </Animated.View>
           </View>
-        </KeyboardAvoidingView>
+        </MainScrollWrapper>
 
         <View
           onLayout={(e) => {
@@ -1876,6 +2014,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             </LinearGradient>
           </Pressable>
         </View>
+          </>
+        )}
 
         {/* Sending Method Modal */}
         <WebAwareModal
@@ -2091,6 +2231,19 @@ const styles = StyleSheet.create({
     paddingTop: spacing[2],
     flex: 1,
     justifyContent: 'flex-start',
+  },
+  webShellContent: {
+    flex: 1,
+    minHeight: 0,
+  },
+  webShellPage: {
+    maxWidth: WEB_SHELL_MAX_WIDTH,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  webShellPreview: {
+    width: '100%',
+    gap: spacing[3],
   },
   sendFormTop: {
     flexShrink: 0,

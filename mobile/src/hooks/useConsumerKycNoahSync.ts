@@ -1,8 +1,9 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { AppState, AppStateStatus } from 'react-native'
+import { AppState, AppStateStatus, Platform } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk } from '@easner/shared'
 import { useAuth } from '../contexts/AuthContext'
+import { useDocumentVisibility } from './useDocumentVisibility'
 import { noahService } from '../lib/noahService'
 import { isTier1Complete } from '../lib/compliance'
 import { needsNoahVirtualAccountProvision } from '../lib/noahAccountSync'
@@ -88,12 +89,19 @@ export function useConsumerKycNoahSync(): void {
   }, [shouldSync, runSync])
 
   /** Same as business: pull Noah when returning to the app (approvals often land while away). */
+  const tabVisible = useDocumentVisibility()
+
   useEffect(() => {
     if (!shouldSync) return
+    if (Platform.OS === 'web') {
+      if (!tabVisible) return
+      void runSync()
+      return
+    }
 
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
       if (next === 'active') void runSync()
     })
     return () => sub.remove()
-  }, [shouldSync, runSync])
+  }, [shouldSync, runSync, tabVisible])
 }

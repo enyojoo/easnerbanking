@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { AppState } from 'react-native'
+import { AppState, Platform } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import * as Clipboard from 'expo-clipboard'
 
@@ -96,7 +96,7 @@ export function useOtpClipboardAutofill({
   )
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || Platform.OS === 'web') return
 
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {

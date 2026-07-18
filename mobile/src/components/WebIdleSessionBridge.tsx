@@ -56,6 +56,7 @@ export function WebIdleSessionBridge() {
       }
     }
     document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pageshow', onVisible)
 
     return () => {
       window.clearInterval(intervalId)
@@ -66,6 +67,7 @@ export function WebIdleSessionBridge() {
       window.removeEventListener('pointerdown', touchActivity, opts)
       window.removeEventListener('focusin', touchActivity, opts)
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pageshow', onVisible)
     }
   }, [user?.id, signOut])
 

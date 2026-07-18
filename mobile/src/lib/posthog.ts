@@ -8,7 +8,7 @@ export const posthogOptions: PostHogOptions | undefined =
   posthogKey && posthogHost
     ? {
         host: posthogHost,
-        captureAppLifecycleEvents: true,
+        captureAppLifecycleEvents: Platform.OS !== 'web',
         // Session replay is native-only (iOS/Android). Expo web keeps event tracking only.
         enableSessionReplay: Platform.OS !== 'web',
         sessionReplayConfig: {

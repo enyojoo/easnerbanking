@@ -261,7 +261,20 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      const defer = () => warmBundledFlagCache()
+      if (typeof requestIdleCallback !== 'undefined') {
+        requestIdleCallback(defer)
+      } else {
+        setTimeout(defer, 0)
+      }
+      return
+    }
     warmBundledFlagCache()
+  }, [])
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return
     prefetchIntercomModule()
   }, [])
 
@@ -356,8 +369,8 @@ export default function App() {
     }
   }, [])
 
-  // Wait for fonts to load before showing anything
-  if (!fontsLoaded) {
+  // Native: block first paint until fonts load (splash covers the gap). Web: render immediately.
+  if (!fontsLoaded && Platform.OS !== 'web') {
     return null
   }
 
