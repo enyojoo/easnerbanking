@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button"
 import { CountryFlag } from "@/components/flags"
 import { payoutCorridorsApi, type PayoutCorridorAdminRow } from "@/lib/payout-corridors-api"
 import { officeKeys } from "@/lib/query/keys"
-import { useOfficePayoutCorridors } from "@/hooks/queries"
+import { useOfficePayoutCorridors, useQueryInitialLoading } from "@/hooks/queries"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Loader2 } from "lucide-react"
 
 type ProviderId = "noah" | "yellowcard"
@@ -329,8 +330,8 @@ export function PayoutCorridorsAdminPanel() {
     [rows, railTab],
   )
   const fiatRows = useMemo(() => groupFiatDestinations(filteredRows), [filteredRows])
-  const showTableSkeleton = corridorsQuery.isPending && fiatRows.length === 0
-  const refreshing = corridorsQuery.isFetching && fiatRows.length > 0
+  const showTableSkeleton = useQueryInitialLoading(corridorsQuery.isPending, corridorsQuery.data, fiatRows)
+  const refreshing = corridorsQuery.isFetching && !showTableSkeleton
 
   const toggleEnabled = async (row: FiatDestinationRow, enabled: boolean) => {
     setSavingKey(row.key)
@@ -451,9 +452,10 @@ export function PayoutCorridorsAdminPanel() {
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           {showTableSkeleton ? (
-            <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
+            <div className="space-y-2 p-6">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
             </div>
           ) : fiatRows.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">

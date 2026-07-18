@@ -264,6 +264,14 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     prefetchRecentTransactionDetailsInBackground(qc, scope, recentTransactions, 10)
   }, [qc, recentTransactions, scope])
 
+  const warmReceiveLocalDeposit = useCallback(() => {
+    const corridor = resolveWarmYcLocalDepositCorridor(userProfile, {
+      kycApproved: isTier1Complete(userProfile),
+    })
+    if (!corridor) return
+    void warmYcLocalDepositCaches(corridor)
+  }, [userProfile])
+
   // Refresh balances on focus only if stale (don't fetch every time)
   useFocusEffect(
     React.useCallback(() => {
@@ -314,14 +322,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       warmReceiveLocalDeposit,
     ])
   )
-
-  const warmReceiveLocalDeposit = useCallback(() => {
-    const corridor = resolveWarmYcLocalDepositCorridor(userProfile, {
-      kycApproved: isTier1Complete(userProfile),
-    })
-    if (!corridor) return
-    void warmYcLocalDepositCaches(corridor)
-  }, [userProfile])
 
   // Gate ledger refetch on focus: skip when realtime is healthy (rows arrive via prepend).
   useTransactionListFocusRefresh({

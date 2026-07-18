@@ -38,8 +38,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ycRatesApi, type YcRateAdminRow } from "@/lib/yc-rates-api"
 import { officeKeys } from "@/lib/query/keys"
-import { useOfficeCurrencies, useOfficeYcRates } from "@/hooks/queries"
+import { useOfficeCurrencies, useOfficeYcRates, useQueryInitialLoading } from "@/hooks/queries"
 import { CurrencyFlag } from "@/components/flags"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Edit, Loader2, MoreHorizontal } from "lucide-react"
 
 const BRIDGE_CODES = new Set(["USD", "USDC"])
@@ -159,7 +160,10 @@ export function OfficeYcRatesPanel() {
   const ratesQuery = useOfficeYcRates()
   const currencies = (currenciesQuery.data ?? []) as CurrencyRow[]
   const rates = ratesQuery.data ?? []
-  const loading = ratesQuery.isPending && rates.length === 0
+  const ratesInitialLoading = useQueryInitialLoading(ratesQuery.isPending, ratesQuery.data)
+  const currenciesInitialLoading = useQueryInitialLoading(currenciesQuery.isPending, currenciesQuery.data)
+  const showTableSkeleton = ratesInitialLoading || currenciesInitialLoading
+  const loading = showTableSkeleton
   const queryError = currenciesQuery.error ?? ratesQuery.error
   const [syncing, setSyncing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -280,8 +284,6 @@ export function OfficeYcRatesPanel() {
       YC_RATE_SOURCES.find((s) => s.id === editingSource)
     : null
 
-  const showTableSkeleton = loading && rates.length === 0
-
   return (
     <PlatformControlTabShell
       title="Yellowcard rates"
@@ -307,9 +309,10 @@ export function OfficeYcRatesPanel() {
       <Card>
         <CardContent className="p-0">
           {showTableSkeleton ? (
-            <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
+            <div className="space-y-2 p-6">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
             </div>
           ) : (
             <Table>

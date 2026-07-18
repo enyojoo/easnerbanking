@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button"
 import { cryptoDestinationsApi, type CryptoDestinationAdminRow } from "@/lib/crypto-destinations-api"
 import { getTokenIconUrl } from "@/lib/crypto-icons"
 import { officeKeys } from "@/lib/query/keys"
-import { useOfficeCryptoDestinations } from "@/hooks/queries"
+import { useOfficeCryptoDestinations, useQueryInitialLoading } from "@/hooks/queries"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Loader2 } from "lucide-react"
 
 function CryptoAssetIcon({ code, size = 22 }: { code: string; size?: number }) {
@@ -68,8 +69,8 @@ export function CryptoDestinationsAdminPanel() {
   const [error, setError] = useState<string | null>(null)
   const [savingCode, setSavingCode] = useState<string | null>(null)
   const assetRows = useMemo(() => groupByAsset(rows), [rows])
-  const showTableSkeleton = destinationsQuery.isPending && assetRows.length === 0
-  const refreshing = destinationsQuery.isFetching && assetRows.length > 0
+  const showTableSkeleton = useQueryInitialLoading(destinationsQuery.isPending, destinationsQuery.data, assetRows)
+  const refreshing = destinationsQuery.isFetching && !showTableSkeleton
 
   const toggleEnabled = async (row: CryptoDestinationAdminRow, enabled: boolean) => {
     const code = row.asset_code.toUpperCase()
@@ -118,9 +119,10 @@ export function CryptoDestinationsAdminPanel() {
       <Card>
         <CardContent className="p-0">
           {showTableSkeleton ? (
-            <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
+            <div className="space-y-2 p-6">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
             </div>
           ) : assetRows.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">

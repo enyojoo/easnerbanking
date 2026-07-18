@@ -86,6 +86,29 @@ describe("office-overview-compute", () => {
     expect(amount).not.toContain("NGN")
   })
 
+  it("shows YC fund balance pay-in with local primary and USD impact in activity", () => {
+    const [activity] = processRecentActivity([
+      {
+        id: "yc-fb-1",
+        direction: "in",
+        status: "settled",
+        provider: "yellowcard",
+        currency: "USD",
+        amount: 65,
+        metadata: {
+          yc_mode: "fund_balance",
+          local_pay_in: 100000,
+          local_currency: "NGN",
+          usd_credit: 65,
+        },
+        created_at: new Date().toISOString(),
+      },
+    ])
+    expect(activity.amount).toContain("₦")
+    expect(activity.amount).not.toContain("USD")
+    expect(activity.impactFormatted).toBe("$65.00")
+  })
+
   it("aggregates pay-in and payout into one row per currency", () => {
     const { topCurrencies, volumeBalance } = computeProviderLedgerDashboardExtras([
       {

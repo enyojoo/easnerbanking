@@ -38,8 +38,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { noahRatesApi, type NoahRateAdminRow } from "@/lib/noah-rates-api"
 import { officeKeys } from "@/lib/query/keys"
-import { useOfficeCurrencies, useOfficeNoahRates } from "@/hooks/queries"
+import { useOfficeCurrencies, useOfficeNoahRates, useQueryInitialLoading } from "@/hooks/queries"
 import { CurrencyFlag } from "@/components/flags"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Edit, Loader2, MoreHorizontal } from "lucide-react"
 
 const WALLET_SOURCES = ["USD", "EUR"] as const
@@ -100,7 +101,10 @@ export function OfficeNoahRatesPanel() {
   const ratesQuery = useOfficeNoahRates()
   const currencies = (currenciesQuery.data ?? []) as CurrencyRow[]
   const rates = ratesQuery.data ?? []
-  const loading = ratesQuery.isPending && rates.length === 0
+  const ratesInitialLoading = useQueryInitialLoading(ratesQuery.isPending, ratesQuery.data)
+  const currenciesInitialLoading = useQueryInitialLoading(currenciesQuery.isPending, currenciesQuery.data)
+  const showTableSkeleton = ratesInitialLoading || currenciesInitialLoading
+  const loading = showTableSkeleton
   const queryError = currenciesQuery.error ?? ratesQuery.error
   const [syncing, setSyncing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -232,8 +236,6 @@ export function OfficeNoahRatesPanel() {
     ? walletSources.find((w) => w.code === editingSource) ?? defaultWalletMeta(editingSource)
     : null
 
-  const showTableSkeleton = loading && rates.length === 0
-
   return (
     <PlatformControlTabShell
       title="Noah rates"
@@ -259,9 +261,10 @@ export function OfficeNoahRatesPanel() {
       <Card>
         <CardContent className="p-0">
           {showTableSkeleton ? (
-            <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
+            <div className="space-y-2 p-6">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
             </div>
           ) : (
             <Table>

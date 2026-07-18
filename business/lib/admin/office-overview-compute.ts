@@ -217,6 +217,26 @@ export function resolveOfficeTxPresentation(tx: TxRow): OfficeTxPresentation {
   }
 
   if (direction === "in") {
+    const ycMode = resolveOfficeYcMode(tx)
+    if (ycMode === "fund_balance") {
+      const localPayIn = Number(meta.local_pay_in)
+      const localCurrency = String(
+        meta.local_currency ?? meta.fiat_deposit_currency ?? tx.currency ?? "",
+      )
+        .trim()
+        .toUpperCase()
+      const usdCredit = Number(meta.usd_credit ?? meta.settled_amount ?? tx.amount ?? 0)
+      if (Number.isFinite(localPayIn) && localPayIn > 0 && localCurrency) {
+        const balanceCurrency = asBalanceCurrency("USD") ?? asBalanceCurrency(tx.currency)
+        return {
+          displayAmount: localPayIn,
+          displayCurrency: localCurrency,
+          balanceAmount: Number.isFinite(usdCredit) && usdCredit > 0 ? usdCredit : 0,
+          balanceCurrency,
+        }
+      }
+    }
+
     const displayCurrency = String(
       meta.fiat_deposit_currency ?? meta.settled_currency ?? tx.currency ?? "USD",
     ).toUpperCase()

@@ -527,19 +527,15 @@ export default function AdminTransactionsPage() {
                     <TableRow>
                       <TableHead>Easner ID</TableHead>
                       <TableHead>Date</TableHead>
-                      <TableHead>Product</TableHead>
                       <TableHead>Who</TableHead>
                       <TableHead>Direction</TableHead>
                       <TableHead>Amount</TableHead>
-                      <TableHead>Impact</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="w-[4.5rem]">View</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredTransactions.map((transaction) => {
-                      const impact = transactionImpactFormatted(transaction)
-                      return (
+                    {filteredTransactions.map((transaction) => (
                         <TableRow key={transaction.id}>
                           <TableCell>
                             <div
@@ -552,13 +548,6 @@ export default function AdminTransactionsPage() {
                           </TableCell>
                           <TableCell>{formatDate(transaction.occurred_at || transaction.created_at)}</TableCell>
                           <TableCell>
-                            {transaction.productLabel ? (
-                              <Badge variant="outline">{transaction.productLabel}</Badge>
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                          <TableCell>
                             <WhoDisplay transaction={transaction} />
                           </TableCell>
                           <TableCell>
@@ -566,13 +555,6 @@ export default function AdminTransactionsPage() {
                           </TableCell>
                           <TableCell>
                             <div className="font-medium tabular-nums">{transactionAmountFormatted(transaction)}</div>
-                          </TableCell>
-                          <TableCell>
-                            {impact ? (
-                              <div className="text-sm tabular-nums text-gray-600">{impact}</div>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
                           </TableCell>
                           <TableCell>
                             <TransactionStatusBadge ledgerStatus={transaction.status} />
@@ -604,8 +586,7 @@ export default function AdminTransactionsPage() {
                             </Dialog>
                           </TableCell>
                         </TableRow>
-                      )
-                    })}
+                    ))}
                   </TableBody>
                 </Table>
 
