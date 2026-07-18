@@ -40,7 +40,7 @@ const STATUS_FILTER_LABELS: Record<string, string> = {
   failed: "Failed",
 }
 
-function formatVolumeBalanceSide(
+function statusToneBadgeVariant(
   tone: LedgerTransactionStatusTone,
 ): "emerald" | "amber" | "oxblood" | "slate" | "outline" {
   switch (tone) {
