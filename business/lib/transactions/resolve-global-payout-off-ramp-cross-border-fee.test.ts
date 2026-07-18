@@ -37,6 +37,9 @@ describe("resolveGlobalPayoutOffRampDetail cross-border processing fee", () => {
         receive_currency: "NGN",
         local_pay_in: 62689.73,
         display_processing_fee_local: 1877.52,
+        pay_in_review: {
+          principal_local_pay_in: 61_127.23,
+        },
         payout_review: {
           you_send_amount: 62689.73,
           total_debited: 62689.73,
@@ -54,5 +57,6 @@ describe("resolveGlobalPayoutOffRampDetail cross-border processing fee", () => {
     })
 
     expect(resolved?.payoutReview?.display_processing_fee_local).toBe(1877.52)
+    expect(resolved?.payoutReview?.principal_local_pay_in).toBe(61_127.23)
   })
 })

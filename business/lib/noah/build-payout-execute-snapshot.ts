@@ -73,5 +73,9 @@ export function normalizePayoutReviewSnapshot(
     Number(o.display_processing_fee_local) > 0
       ? { display_processing_fee_local: Number(o.display_processing_fee_local) }
       : {}),
+    ...(Number.isFinite(Number(o.principal_local_pay_in)) &&
+    Number(o.principal_local_pay_in) > 0
+      ? { principal_local_pay_in: Number(o.principal_local_pay_in) }
+      : {}),
   }
 }

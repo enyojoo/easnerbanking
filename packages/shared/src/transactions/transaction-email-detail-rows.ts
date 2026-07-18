@@ -23,6 +23,7 @@ import {
 import { normalizeTransferMethodLabel } from "./payout-transfer-method"
 import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
 import type { YcFundBalanceDepositReviewSnapshot } from "./global-deposit-types"
+import { computeYcCrossBorderPrincipalLocalPayIn } from "./yc-deposit-display"
 import type { InboundReceiveDetailSnapshot } from "./inbound-receive-detail"
 import { buildInboundReceiveEmailDetailRows } from "./inbound-receive-detail"
 import { resolveYcFundBalanceLocalPayInBreakdown } from "./yc-deposit-display"
@@ -90,29 +91,71 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
     ? hasWalletSendFxDisplay(review.send_currency, review.receive_currency, receiveNetwork)
     : hasPayoutCrossCurrencyFx(review.send_currency, review.receive_currency)
 
-  // Emails describe settled detail — TLC uses Amount paid, not Sent / Total debited.
-  const primaryLabel =
-    reviewFlow === "local_pay_in" ? REVIEW_ROW_LABELS.amountPaid : REVIEW_ROW_LABELS.sent
-  pushIf(rows, primaryLabel, formatMoneyDisplay(review.you_send_amount, sendCurrency))
-  if (isPayoutReviewFeeVisible(feeAmount)) {
+  if (reviewFlow === "local_pay_in") {
+    const principalLocal =
+      review.principal_local_pay_in != null && review.principal_local_pay_in > 0
+        ? review.principal_local_pay_in
+        : computeYcCrossBorderPrincipalLocalPayIn({
+            receiveAmount: review.receive_amount,
+            customerRate: review.exchange_rate,
+          })
     pushIf(
       rows,
-      REVIEW_ROW_LABELS.processingFee,
+      REVIEW_ROW_LABELS.transferAmount,
       formatReviewRowMoneyDisplay(
-        REVIEW_ROW_LABELS.processingFee,
-        feeAmount,
-        feeCurrency,
+        REVIEW_ROW_LABELS.transferAmount,
+        principalLocal,
+        sendCurrency,
       ),
     )
-  }
-  if (hasFx) {
+    if (isPayoutReviewFeeVisible(feeAmount)) {
+      pushIf(
+        rows,
+        REVIEW_ROW_LABELS.processingFee,
+        formatReviewRowMoneyDisplay(
+          REVIEW_ROW_LABELS.processingFee,
+          feeAmount,
+          feeCurrency,
+        ),
+      )
+    }
+    if (hasFx) {
+      pushIf(
+        rows,
+        REVIEW_ROW_LABELS.exchangeRate,
+        formatSendRateLabel(review.send_currency, review.receive_currency, review.exchange_rate),
+      )
+    }
     pushIf(
       rows,
-      REVIEW_ROW_LABELS.exchangeRate,
-      formatSendRateLabel(review.send_currency, review.receive_currency, review.exchange_rate),
+      REVIEW_ROW_LABELS.amountPaid,
+      formatReviewRowMoneyDisplay(
+        REVIEW_ROW_LABELS.amountPaid,
+        review.total_debited,
+        sendCurrency,
+      ),
     )
-  }
-  if (reviewFlow !== "local_pay_in") {
+  } else {
+    // Emails describe settled balance payout detail — Sent, fee, rate, total debited.
+    pushIf(rows, REVIEW_ROW_LABELS.sent, formatMoneyDisplay(review.you_send_amount, sendCurrency))
+    if (isPayoutReviewFeeVisible(feeAmount)) {
+      pushIf(
+        rows,
+        REVIEW_ROW_LABELS.processingFee,
+        formatReviewRowMoneyDisplay(
+          REVIEW_ROW_LABELS.processingFee,
+          feeAmount,
+          feeCurrency,
+        ),
+      )
+    }
+    if (hasFx) {
+      pushIf(
+        rows,
+        REVIEW_ROW_LABELS.exchangeRate,
+        formatSendRateLabel(review.send_currency, review.receive_currency, review.exchange_rate),
+      )
+    }
     pushIf(
       rows,
       REVIEW_ROW_LABELS.totalDebited,
@@ -125,12 +168,12 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
         formatAccountBalanceLabel(sendCurrency),
       )
     }
+    pushIf(
+      rows,
+      REVIEW_ROW_LABELS.recipientGets,
+      formatMoneyDisplay(review.receive_amount, review.receive_currency),
+    )
   }
-  pushIf(
-    rows,
-    REVIEW_ROW_LABELS.recipientGets,
-    formatMoneyDisplay(review.receive_amount, review.receive_currency),
-  )
 
   const recipient = input.recipient
   if (recipient?.fullName) {

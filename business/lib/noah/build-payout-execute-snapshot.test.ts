@@ -19,4 +19,23 @@ describe("normalizePayoutReviewSnapshot", () => {
 
     expect(review?.display_processing_fee_local).toBe(2830.91)
   })
+
+  it("preserves principal_local_pay_in for cross-border pay-in", () => {
+    const review = normalizePayoutReviewSnapshot({
+      you_send_amount: 94_606.3,
+      total_debited: 94_606.3,
+      receive_amount: 988_500,
+      receive_currency: "NGN",
+      send_currency: "KES",
+      transfer_method: "Local Transfer",
+      exchange_rate: 10.715354715212,
+      processing_fee: 7.207657,
+      exchange_fee: 14.8,
+      processing_time: "Within minutes",
+      display_processing_fee_local: 2830.91,
+      principal_local_pay_in: 92_250.8,
+    })
+
+    expect(review?.principal_local_pay_in).toBe(92_250.8)
+  })
 })

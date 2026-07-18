@@ -6,28 +6,41 @@ import { resolveYcCrossBorderLocalPayInBreakdown } from "./transactions/yc-depos
 import { TLC_LOCAL_TRANSFER_METHOD } from "./review-row-labels"
 
 describe("buildCrossBorderSendDetailRows", () => {
-  it("uses Amount paid and Local Transfer for TLC detail", () => {
+  it("shows transfer amount, fee, rate, amount paid — not recipient gets", () => {
     const rows = buildCrossBorderSendDetailRows({
       payoutReview: {
-        you_send_amount: 50_000,
-        total_debited: 50_000,
-        exchange_fee: 1,
-        processing_fee: 0.5,
-        exchange_rate: 1600,
-        send_currency: "NGN",
-        receive_amount: 100,
-        receive_currency: "USD",
+        you_send_amount: 94_606.3,
+        total_debited: 94_606.3,
+        exchange_fee: 14.8,
+        processing_fee: 7.207657,
+        exchange_rate: 10.715354715212,
+        send_currency: "KES",
+        receive_amount: 988_500,
+        receive_currency: "NGN",
         transfer_method: TLC_LOCAL_TRANSFER_METHOD,
         processing_time: "Within minutes",
-        display_processing_fee_local: 800,
+        display_processing_fee_local: 2830.91,
+        principal_local_pay_in: 92_250.8,
       },
       recipientSnapshot: { full_name: "Jane Doe", bank_name: "GTBank", account_number: "0123" },
       whenLabel: "Jul 16, 2026",
-      displayProcessingFee: 800,
+      displayProcessingFee: 2830.91,
     })
     const labels = rows.map((r) => r.label)
-    expect(labels).toContain("Amount paid")
-    expect(labels).not.toContain("Total debited")
+    expect(labels).toEqual([
+      "Transfer amount",
+      "Processing fee",
+      "Exchange rate",
+      "Amount paid",
+      "Recipient",
+      "Transfer method",
+      "When",
+    ])
+    expect(labels).not.toContain("Recipient gets")
+    expect(rows.find((r) => r.id === "transfer-amount")?.value).toContain("92,251")
+    expect(rows.find((r) => r.id === "processing-fee")?.value).toContain("2,831")
+    expect(rows.find((r) => r.id === "amount-paid")?.value).toContain("94,606")
+    expect(rows.find((r) => r.id === "amount-paid")?.valueBold).toBe(true)
     expect(rows.find((r) => r.id === "transfer-method")?.value).toBe(TLC_LOCAL_TRANSFER_METHOD)
   })
 })

@@ -90,20 +90,32 @@ function mergePayoutReviewDisplayProcessingFeeLocal(
   review: GlobalPayoutReviewSnapshot,
   meta: Record<string, unknown>,
 ): GlobalPayoutReviewSnapshot {
+  let merged = review
   const onReview = roundFiat(review.display_processing_fee_local)
-  if (onReview != null && onReview > 0) return review
-  const fromMeta = roundFiat(Number(meta.display_processing_fee_local))
-  if (fromMeta != null && fromMeta > 0) {
-    return { ...review, display_processing_fee_local: fromMeta }
-  }
-  const raw = meta.payout_review
-  if (raw && typeof raw === "object") {
-    const fromRaw = roundFiat(Number((raw as Record<string, unknown>).display_processing_fee_local))
-    if (fromRaw != null && fromRaw > 0) {
-      return { ...review, display_processing_fee_local: fromRaw }
+  if (!(onReview != null && onReview > 0)) {
+    const fromMeta = roundFiat(Number(meta.display_processing_fee_local))
+    if (fromMeta != null && fromMeta > 0) {
+      merged = { ...merged, display_processing_fee_local: fromMeta }
+    } else {
+      const raw = meta.payout_review
+      if (raw && typeof raw === "object") {
+        const fromRaw = roundFiat(Number((raw as Record<string, unknown>).display_processing_fee_local))
+        if (fromRaw != null && fromRaw > 0) {
+          merged = { ...merged, display_processing_fee_local: fromRaw }
+        }
+      }
     }
   }
-  return review
+  if (!(merged.principal_local_pay_in != null && merged.principal_local_pay_in > 0)) {
+    const principalLocal =
+      roundFiat(Number((meta.pay_in_review as Record<string, unknown> | undefined)?.principal_local_pay_in)) ??
+      roundFiat(Number(meta.provisional_pay_in)) ??
+      roundFiat(Number(meta.principal_local_pay_in))
+    if (principalLocal != null && principalLocal > 0) {
+      merged = { ...merged, principal_local_pay_in: principalLocal }
+    }
+  }
+  return merged
 }
 
 function needsPayoutReviewReconstruction(review: GlobalPayoutReviewSnapshot): boolean {
@@ -160,6 +172,10 @@ function derivePayoutReview(
         1
       const transferMethod = TLC_LOCAL_TRANSFER_METHOD
       const displayFeeLocal = roundFiat(Number(meta.display_processing_fee_local))
+      const principalLocal =
+        roundFiat(Number(meta.pay_in_review?.principal_local_pay_in)) ??
+        roundFiat(Number(meta.provisional_pay_in)) ??
+        roundFiat(fromMeta?.principal_local_pay_in)
       return {
         you_send_amount: localPayIn,
         total_debited: localPayIn,
@@ -173,6 +189,9 @@ function derivePayoutReview(
         processing_time: getGlobalPayoutProcessingTime(transferMethod),
         ...(displayFeeLocal != null && displayFeeLocal > 0
           ? { display_processing_fee_local: displayFeeLocal }
+          : {}),
+        ...(principalLocal != null && principalLocal > 0
+          ? { principal_local_pay_in: principalLocal }
           : {}),
       }
     }

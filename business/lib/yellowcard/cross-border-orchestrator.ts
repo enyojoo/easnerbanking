@@ -648,6 +648,11 @@ export async function createCrossBorderTransfer(input: CrossBorderTransferInput)
     transfer_method: TLC_LOCAL_TRANSFER_METHOD,
     processing_time: processingTime,
     display_processing_fee_local: quoteSummary.displayProcessingFeeLocal ?? 0,
+    principal_local_pay_in: computeYcCrossBorderPrincipalLocalPayIn({
+      receiveAmount: input.receiveAmount,
+      customerRate: cross.rate,
+      provisionalPayIn: pricingFinal.provisionalPayIn,
+    }),
   }
   const payInReview = {
     local_pay_in: lockedQuote.lockedLocalPayIn,

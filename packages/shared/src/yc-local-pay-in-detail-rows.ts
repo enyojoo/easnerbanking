@@ -6,9 +6,9 @@ import { isPayoutReviewFeeVisible } from "./payout-review-display"
 import { hasPayoutCrossCurrencyFx } from "./payout-review-display"
 import {
   REVIEW_ROW_LABELS,
-  reviewPrimaryAmountLabel,
   TLC_LOCAL_TRANSFER_METHOD,
 } from "./review-row-labels"
+import { computeYcCrossBorderPrincipalLocalPayIn } from "./transactions/yc-deposit-display"
 import type { GlobalPayoutRecipientSnapshot, GlobalPayoutReviewSnapshot } from "./transactions/global-payout-types"
 
 export type YcLocalPayInDetailRow = {
@@ -16,6 +16,21 @@ export type YcLocalPayInDetailRow = {
   label: string
   value: string
   valueBold?: boolean
+}
+
+function resolveCrossBorderPrincipalLocalPayIn(
+  payoutReview: GlobalPayoutReviewSnapshot,
+): number {
+  if (
+    payoutReview.principal_local_pay_in != null &&
+    payoutReview.principal_local_pay_in > 0
+  ) {
+    return payoutReview.principal_local_pay_in
+  }
+  return computeYcCrossBorderPrincipalLocalPayIn({
+    receiveAmount: payoutReview.receive_amount,
+    customerRate: payoutReview.exchange_rate,
+  })
 }
 
 export function buildCrossBorderSendDetailRows(input: {
@@ -31,11 +46,17 @@ export function buildCrossBorderSendDetailRows(input: {
     payoutReview.receive_currency,
   )
   const rows: YcLocalPayInDetailRow[] = []
+  const principalLocal = resolveCrossBorderPrincipalLocalPayIn(payoutReview)
+  const amountPaid = payoutReview.total_debited
 
   rows.push({
-    id: "amount-paid",
-    label: reviewPrimaryAmountLabel("local_pay_in", "detail"),
-    value: formatMoneyDisplay(payoutReview.you_send_amount, sendCurrency),
+    id: "transfer-amount",
+    label: REVIEW_ROW_LABELS.transferAmount,
+    value: formatReviewRowMoneyDisplay(
+      REVIEW_ROW_LABELS.transferAmount,
+      principalLocal,
+      sendCurrency,
+    ),
   })
 
   if (isPayoutReviewFeeVisible(displayProcessingFee)) {
@@ -68,9 +89,13 @@ export function buildCrossBorderSendDetailRows(input: {
   }
 
   rows.push({
-    id: "recipient-gets",
-    label: REVIEW_ROW_LABELS.recipientGets,
-    value: formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency),
+    id: "amount-paid",
+    label: REVIEW_ROW_LABELS.amountPaid,
+    value: formatReviewRowMoneyDisplay(
+      REVIEW_ROW_LABELS.amountPaid,
+      amountPaid,
+      sendCurrency,
+    ),
     valueBold: true,
   })
 

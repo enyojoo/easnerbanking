@@ -26,6 +26,8 @@ export type GlobalPayoutReviewSnapshot = {
   execution_model?: "direct_turnkey" | "lifi_bridge"
   /** Pay-in flows: combined fee in local currency for display (Easner 1% + YC legs). */
   display_processing_fee_local?: number
+  /** Cross-border pay-in: local principal before processing fees. */
+  principal_local_pay_in?: number
 }
 
 export type GlobalPayoutRecipientSnapshot = {
