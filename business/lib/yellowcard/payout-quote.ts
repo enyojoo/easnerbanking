@@ -171,7 +171,7 @@ export async function buildYcPayoutQuote(input: {
     requireNgIds: true,
   })
 
-  const sequenceId = `yc_quote_${randomUUID()}`
+  const sequenceId = `yc_preview_${randomUUID()}`
   const provisionalCryptoUsd =
     amountEntryMode === "send" && sendBudget != null && sendBudget > 0
       ? roundUsdc(sendBudget)
@@ -180,6 +180,168 @@ export async function buildYcPayoutQuote(input: {
     throw new Error("Could not derive USDC amount for Yellowcard payout quote.")
   }
 
+  const pricing = computeYcBalancePayoutPricing({
+    receiveAmount: quoteReceiveAmount,
+    customerRate,
+    ycFloorUsd: provisionalCryptoUsd,
+    ycMidUsd:
+      payoutRate?.yc_buy != null && payoutRate.yc_buy > 0
+        ? roundUsdc(quoteReceiveAmount / payoutRate.yc_buy)
+        : undefined,
+    networkFeeAmountUsd: 0,
+    serviceFeeAmountUsd: 0,
+  })
+
+  const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
+  const quoteId = sequenceId
+  const displayProcessingFee = computePayoutQuoteDisplayProcessingFee({
+    processingFee: pricing.processingFee,
+    displayChannelCost: pricing.displayChannelCost,
+    channelCost: pricing.channelCost,
+  })
+
+  const settlement: PayoutSettlementLeg = {
+    totalFee: pricing.channelCost,
+    feeCurrency: "USD",
+    cryptoAuthorizedAmount: String(provisionalCryptoUsd),
+    cryptoFloor: String(provisionalCryptoUsd),
+    cryptoSendAmount: String(provisionalCryptoUsd),
+    cryptoCurrency: "USDC",
+    sessionId: quoteId,
+    customerRate,
+    ...(payoutRate?.yc_buy != null && payoutRate.yc_buy > 0
+      ? { providerMid: payoutRate.yc_buy }
+      : {}),
+    effectiveRate: customerRate,
+    marginCaptureMode: "fee_wallet_omnibus",
+    channelCost: pricing.channelCost,
+    marginAmount: pricing.marginAmount,
+    customerPrincipal: pricing.customerPrincipal,
+  }
+
+  return {
+    receiveAmount: quoteReceiveAmount,
+    receiveCurrency,
+    customerPrincipal: pricing.customerPrincipal,
+    sendAmount: pricing.customerPrincipal,
+    sendCurrency: sourceBalanceCurrency,
+    totalDebited: pricing.totalDebited,
+    channelCost: pricing.channelCost,
+    marginAmount: pricing.marginAmount,
+    processingFee: pricing.processingFee,
+    displayChannelCost: pricing.displayChannelCost,
+    displayProcessingFee,
+    ycLegFeesUsd: pricing.ycLegFeesUsd ?? 0,
+    channelId,
+    settlement,
+    noah: buildLegacyNoahSettlementFromLeg(settlement),
+    easner: {
+      quoteId,
+      expiresAt,
+      providerRate: customerRate,
+      effectiveRate: customerRate,
+      destinationAmount: quoteReceiveAmount,
+      fxMarkupBps: 50,
+      payinFeeAmount: 0,
+      payoutFeeAmount: pricing.channelCost,
+      totalFeeAmount: pricing.marginAmount + pricing.channelCost,
+      sourceAmount: pricing.customerPrincipal,
+      sourceCurrency: sourceBalanceCurrency,
+      destinationCurrency: receiveCurrency,
+      pricingTotals: {
+        total_easner_fee: pricing.marginAmount,
+        total_user_fee: pricing.marginAmount + pricing.channelCost,
+        total_recipient_amount: quoteReceiveAmount,
+      },
+    },
+    pricingQuoteId: quoteId,
+    expiresAt,
+    executionModel: "turnkey_workflow",
+    provider: "yellowcard",
+    quotePhase: "preview",
+    requiresConfirm: true,
+    yc: {
+      sequenceId,
+      channelId,
+      cryptoAmount: provisionalCryptoUsd,
+    },
+  }
+}
+
+/** Lock POST /send when user authorizes payout (not at quote). */
+export async function lockYcBalancePayoutSend(input: {
+  userId: string
+  customerUID: string
+  recipient: RecipientSellPrepareRow
+  receiveFiatAmount: number
+  sourceBalanceCurrency: string
+  amountEntryMode?: "send" | "receive"
+  sendBudget?: number
+  userTurnkeyAddress: string
+  senderProfile: Parameters<typeof buildYcKycPersonMetadata>[0]["profile"]
+  paymentPurpose?: string
+  channelId?: string
+}): Promise<{
+  sequenceId: string
+  sendId?: string | null
+  channelId: string
+  cryptoAmount: number
+  walletAddress: string
+  pricing: ReturnType<typeof computeYcBalancePayoutPricing>
+  ycLegFeesUsd: number
+}> {
+  const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
+  const countryCode = resolveRecipientPayoutCountry(input.recipient)
+  if (!countryCode) throw new Error("Recipient country is required for Yellowcard payout.")
+
+  const rail =
+    input.recipient.mobile_provider ||
+    String(input.recipient.bank_name || "").toLowerCase().includes("mobile money")
+      ? ("mobile_money" as const)
+      : ("bank_transfer" as const)
+
+  const channelId =
+    String(input.channelId || "").trim() ||
+    (await resolveYcSendChannelId({
+      countryCode,
+      currencyCode: receiveCurrency,
+      rail,
+    })) ||
+    ""
+  if (!channelId) throw new Error("No Yellowcard send channel for this corridor.")
+
+  const admin = createSupabaseAdmin()
+  const rates = await listYcRates(admin, { destinations: [receiveCurrency], status: "active" })
+  const payoutRate = findYcBalancePayoutRate(rates, receiveCurrency)
+  const customerRate = payoutRate?.rate ?? 0
+  if (!customerRate || customerRate <= 0) {
+    throw new Error(`Exchange rate for USD → ${receiveCurrency} is unavailable. Try again shortly.`)
+  }
+
+  const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
+  const sendBudget =
+    input.sendBudget != null && Number.isFinite(input.sendBudget) && input.sendBudget > 0
+      ? input.sendBudget
+      : undefined
+  const quoteReceiveAmount = normalizeGlobalPayoutQuoteReceiveAmount({
+    amountEntryMode,
+    receiveFiatAmount: normalizePayoutReceiveAmount(Number(input.receiveFiatAmount)),
+    sendBudget,
+    customerRate,
+    receiveCurrency,
+    normalizeReceive: normalizePayoutReceiveAmountForCurrency,
+  })
+  const provisionalCryptoUsd =
+    amountEntryMode === "send" && sendBudget != null && sendBudget > 0
+      ? roundUsdc(sendBudget)
+      : roundUsdc(quoteReceiveAmount / customerRate)
+
+  const recipientMapped = await mapRecipientToYcSend(input.recipient, { channelId })
+  const sender = buildYcKycPersonMetadata({
+    profile: input.senderProfile,
+    requireNgIds: true,
+  })
+  const sequenceId = `yc_quote_${randomUUID()}`
   const sendRes: YcSendSubmitResult = await submitYcSend({
     sequenceId,
     customerUID: input.customerUID,
@@ -196,101 +358,35 @@ export async function buildYcPayoutQuote(input: {
     reason: input.paymentPurpose,
   })
 
-  const lockedReceiveAmount = quoteReceiveAmount
-
   const cryptoAmount = Number(sendRes.settlementInfo?.cryptoAmount ?? sendRes.convertedAmount ?? 0)
   if (!Number.isFinite(cryptoAmount) || cryptoAmount <= 0) {
     throw new Error("Yellowcard send response missing cryptoAmount.")
   }
+  const walletAddress = String(sendRes.settlementInfo?.walletAddress ?? "").trim()
+  if (!walletAddress) throw new Error("Yellowcard send response missing walletAddress.")
 
   const networkFeeAmountUsd = Number(sendRes.networkFeeAmountUSD ?? 0)
   const serviceFeeAmountUsd = Number(sendRes.serviceFeeAmountUSD ?? 0)
   const ycLegFeesUsd = roundUsdc(networkFeeAmountUsd + serviceFeeAmountUsd)
-
   const pricing = computeYcBalancePayoutPricing({
-    receiveAmount: lockedReceiveAmount,
+    receiveAmount: quoteReceiveAmount,
     customerRate,
     ycFloorUsd: cryptoAmount,
     ycMidUsd:
       payoutRate?.yc_buy != null && payoutRate.yc_buy > 0
-        ? roundUsdc(lockedReceiveAmount / payoutRate.yc_buy)
+        ? roundUsdc(quoteReceiveAmount / payoutRate.yc_buy)
         : undefined,
     networkFeeAmountUsd,
     serviceFeeAmountUsd,
   })
 
-  const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
-  const quoteId = String(sendRes.id ?? sequenceId)
-  const displayProcessingFee = computePayoutQuoteDisplayProcessingFee({
-    processingFee: pricing.processingFee,
-    displayChannelCost: pricing.displayChannelCost,
-    channelCost: pricing.channelCost,
-  })
-
-  const settlement: PayoutSettlementLeg = {
-    totalFee: pricing.channelCost,
-    feeCurrency: "USD",
-    cryptoAuthorizedAmount: String(cryptoAmount),
-    cryptoFloor: String(cryptoAmount),
-    cryptoSendAmount: String(cryptoAmount),
-    cryptoCurrency: "USDC",
-    sessionId: quoteId,
-    customerRate,
-    ...(payoutRate?.yc_buy != null && payoutRate.yc_buy > 0
-      ? { providerMid: payoutRate.yc_buy }
-      : {}),
-    effectiveRate: customerRate,
-    marginCaptureMode: "fee_wallet_omnibus",
-    channelCost: pricing.channelCost,
-    marginAmount: pricing.marginAmount,
-    customerPrincipal: pricing.customerPrincipal,
-  }
-
   return {
-    receiveAmount: lockedReceiveAmount,
-    receiveCurrency,
-    customerPrincipal: pricing.customerPrincipal,
-    sendAmount: pricing.customerPrincipal,
-    sendCurrency: sourceBalanceCurrency,
-    totalDebited: pricing.totalDebited,
-    channelCost: pricing.channelCost,
-    marginAmount: pricing.marginAmount,
-    processingFee: pricing.processingFee,
-    displayChannelCost: pricing.displayChannelCost,
-    displayProcessingFee,
-    ycLegFeesUsd,
+    sequenceId,
+    sendId: sendRes.id,
     channelId,
-    settlement,
-    noah: buildLegacyNoahSettlementFromLeg(settlement),
-    easner: {
-      quoteId,
-      expiresAt,
-      providerRate: customerRate,
-      effectiveRate: customerRate,
-      destinationAmount: lockedReceiveAmount,
-      fxMarkupBps: 50,
-      payinFeeAmount: 0,
-      payoutFeeAmount: pricing.channelCost,
-      totalFeeAmount: pricing.marginAmount + pricing.channelCost,
-      sourceAmount: pricing.customerPrincipal,
-      sourceCurrency: sourceBalanceCurrency,
-      destinationCurrency: receiveCurrency,
-      pricingTotals: {
-        total_easner_fee: pricing.marginAmount,
-        total_user_fee: pricing.marginAmount + pricing.channelCost,
-        total_recipient_amount: lockedReceiveAmount,
-      },
-    },
-    pricingQuoteId: quoteId,
-    expiresAt,
-    executionModel: "turnkey_workflow",
-    provider: "yellowcard",
-    yc: {
-      sequenceId,
-      sendId: sendRes.id,
-      channelId,
-      cryptoAmount,
-      walletAddress: sendRes.settlementInfo?.walletAddress,
-    },
+    cryptoAmount,
+    walletAddress,
+    pricing,
+    ycLegFeesUsd,
   }
 }

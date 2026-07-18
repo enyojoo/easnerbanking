@@ -27,6 +27,7 @@ import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSu
 import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
 import {
   ensureFundBalanceQuoteStashed,
+  ensureFundBalanceOrderConfirmed,
   ensurePayInNetworksCached,
   isCompleteFundBalanceQuote,
   isStashedFundBalanceQuoteFresh,
@@ -162,7 +163,7 @@ export function YcFundBalanceReview({
     void (async () => {
       const result = await ensureFundBalanceQuoteStashed(quoteMeta)
       if (cancelled) return
-      if (isCompleteFundBalanceQuote(result)) {
+      if (result?.ok && result.localPayIn > 0) {
         setQuote(result)
         return
       }
@@ -212,7 +213,7 @@ export function YcFundBalanceReview({
 
   const reviewRows = buildYcLocalPayInReviewRows({
     mode: 'fund_balance',
-    phase: isMobileMoney ? 'preview' : 'locked',
+    phase: 'preview',
     rail: payInRail,
     payInCurrency: localPayInCurrency,
     receiveCurrency: 'USD',
@@ -228,8 +229,7 @@ export function YcFundBalanceReview({
   })
 
   const momoReady = Boolean(phone.trim() && networkId)
-  const bankQuoteReady = Boolean(quote?.transferId)
-  const quoteReady = isMobileMoney ? previewCustomerRate > 0 && estimatedPayIn > 0 && momoReady : bankQuoteReady
+  const quoteReady = previewCustomerRate > 0 && estimatedPayIn > 0 && (isMobileMoney ? momoReady : true)
 
   const navigateToPayIn = (q: YcFundBalanceQuote) => {
     const selectedNetwork = networks.find((n) => n.id === networkId)
@@ -272,18 +272,12 @@ export function YcFundBalanceReview({
     setQuoteError(null)
 
     try {
-      if (isMobileMoney) {
-        const result = await ensureFundBalanceQuoteStashed(quoteMeta)
-        if (!isCompleteFundBalanceQuote(result)) {
-          setQuoteError(peekLastFundBalanceQuoteError() || 'Could not load quote')
-          return
-        }
-        navigateToPayIn(result)
+      const result = await ensureFundBalanceOrderConfirmed(quoteMeta)
+      if (!isCompleteFundBalanceQuote(result)) {
+        setQuoteError(peekLastFundBalanceQuoteError() || 'Could not confirm order')
         return
       }
-
-      if (!quote) return
-      navigateToPayIn(quote)
+      navigateToPayIn(result)
     } catch (e) {
       setQuoteError(e instanceof Error ? e.message : 'Could not continue')
     } finally {

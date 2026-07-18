@@ -100,7 +100,7 @@ function buildCrossBorderQuoteBody(meta: CrossBorderQuoteStashMeta): Record<stri
   return body
 }
 
-export async function fetchCrossBorderQuote(
+export async function fetchCrossBorderQuotePreview(
   meta: CrossBorderQuoteStashMeta,
 ): Promise<YcCrossBorderQuoteResult> {
   const data = await apiFetch<YcCrossBorderQuoteResult, Record<string, unknown>>(
@@ -109,6 +109,23 @@ export async function fetchCrossBorderQuote(
   )
   if (!data.ok) throw new Error('Cross-border quote failed')
   return data
+}
+
+export async function confirmCrossBorderOrder(
+  meta: CrossBorderQuoteStashMeta,
+): Promise<YcCrossBorderQuoteResult> {
+  const data = await apiFetch<YcCrossBorderQuoteResult, Record<string, unknown>>(
+    '/api/yellowcard/cross-border/confirm',
+    { method: 'POST', body: buildCrossBorderQuoteBody(meta) },
+  )
+  if (!data.ok || !data.transferId) throw new Error('Cross-border confirm failed')
+  return data
+}
+
+export async function fetchCrossBorderQuote(
+  meta: CrossBorderQuoteStashMeta,
+): Promise<YcCrossBorderQuoteResult> {
+  return fetchCrossBorderQuotePreview(meta)
 }
 
 /** Deduped quote fetch — bank prefetch, MoMo quote-on-continue, review gate. */
@@ -122,13 +139,15 @@ export async function ensureCrossBorderQuoteStashed(
 
   inflightQuoteKey = key
   lastQuoteError = null
-  inflightQuote = fetchCrossBorderQuote(meta)
+  inflightQuote = fetchCrossBorderQuotePreview(meta)
     .then((quote) => {
-      if (!isCompleteCrossBorderQuote(quote)) {
+      if (!quote?.ok || !(quote.localPayIn > 0) || !(quote.customerRate > 0)) {
         lastQuoteError = 'Incomplete cross-border quote response.'
         return null
       }
-      stashCrossBorderQuote(quote, meta)
+      stashed = quote
+      stashedMeta = meta
+      lastQuoteError = null
       return quote
     })
     .catch((err) => {
@@ -146,4 +165,31 @@ export async function ensureCrossBorderQuoteStashed(
     })
 
   return inflightQuote
+}
+
+export async function ensureCrossBorderOrderConfirmed(
+  meta: CrossBorderQuoteStashMeta,
+): Promise<YcCrossBorderQuoteResult | null> {
+  if (isStashedCrossBorderQuoteFresh(meta) && isCompleteCrossBorderQuote(stashed)) {
+    return stashed
+  }
+
+  lastQuoteError = null
+  try {
+    const quote = await confirmCrossBorderOrder(meta)
+    if (!isCompleteCrossBorderQuote(quote)) {
+      lastQuoteError = 'Incomplete cross-border confirm response.'
+      return null
+    }
+    stashCrossBorderQuote(quote, meta)
+    return quote
+  } catch (err) {
+    lastQuoteError =
+      err instanceof ApiError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : 'confirm_failed'
+    return null
+  }
 }

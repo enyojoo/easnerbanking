@@ -29,6 +29,7 @@ import { buildYcCrossBorderOutMetadata, canTransitionYcCrossBorderStatus } from 
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 import { buildYcCrossBorderReportingSnapshot } from "@/lib/transactions/reporting-snapshot"
 import { generateTransactionId } from "@/lib/transaction-id"
+import { buildYcQuoteKey, findReusableYcTransfer } from "@/lib/yellowcard/quote-key"
 
 function buildRecipientTransactionMetadata(
   recipientId: string | null,
@@ -62,10 +63,7 @@ async function resolveYcReceiveChannelId(input: {
   return match ? String(match.id ?? match.channelId ?? "").trim() || null : null
 }
 
-/**
- * Create locked cross-border quote + leg 1 receive session (bank pay-in).
- */
-export async function createCrossBorderTransfer(input: {
+type CrossBorderTransferInput = {
   admin: SupabaseClient
   userId: string
   businessId?: string | null
@@ -79,27 +77,9 @@ export async function createCrossBorderTransfer(input: {
   sourcePhone?: string
   sourceNetworkId?: string
   sourceNetworkName?: string
-}): Promise<{
-  transferId: string
-  transactionId: string
-  easnerTransactionId: string
-  localPayIn: number
-  customerRate: number
-  processingFee: number
-  ycLegFeesUsd: number
-  displayProcessingFee: number
-  displayProcessingFeeLocal: number
-  displayProcessingFeeCurrency: string
-  provisionalPayIn: number
-  receiveAmount: number
-  receiveCurrency: string
-  bankInfo: Record<string, unknown> | null
-  expiresAt: string
-  payInRail: "bank_transfer" | "mobile_money"
-  sourcePhone?: string
-  sourceNetworkId?: string
-  sourceNetworkName?: string
-}> {
+}
+
+async function prepareCrossBorderQuote(input: CrossBorderTransferInput) {
   if (input.payInRail === "mobile_money") {
     const phone = String(input.sourcePhone ?? "").trim()
     const netId = String(input.sourceNetworkId ?? "").trim()
@@ -131,6 +111,191 @@ export async function createCrossBorderTransfer(input: {
     throw new Error(`No Yellowcard cross rate for ${payInCurrency}→${receiveCurrency}`)
   }
 
+  const fromLeg = findYcPayInLeg(rates, payInCurrency) ?? findYcRate(rates, payInCurrency, "USDC")
+  const toLeg = findYcPayInLeg(rates, receiveCurrency) ?? findYcRate(rates, receiveCurrency, "USDC")
+  const ycBuyTo = Number(toLeg?.yc_buy ?? 0)
+  if (!ycBuyTo) throw new Error("YC destination rate unavailable for cross-border send leg")
+
+  const pricing = computeYcCrossBorderPricing({
+    receiveAmount: input.receiveAmount,
+    customerRate: cross.rate,
+    ycSellFrom: Number(fromLeg?.yc_sell ?? 0),
+    ycBuyTo,
+    receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    sendLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+  })
+
+  const amountCheck = await validateFundBalancePayInAmountLimits({
+    admin,
+    countryCode: input.payInCountry,
+    currencyCode: payInCurrency,
+    rail: input.payInRail,
+    localPayIn: pricing.localPayIn,
+  })
+  if (!amountCheck.ok) {
+    throw new Error(
+      amountCheck.message.toLowerCase().includes("minimum")
+        ? "yc_amount_below_min"
+        : amountCheck.message,
+    )
+  }
+
+  const recipientId =
+    String((input.recipient as RecipientSellPrepareRow & { id?: string }).id ?? "").trim() || null
+  const quoteKey = buildYcQuoteKey({
+    mode: "cross_border_send",
+    userId: input.userId,
+    recipientId,
+    payInCurrency,
+    payInCountry: input.payInCountry.toUpperCase(),
+    payInRail: input.payInRail,
+    receiveAmount: input.receiveAmount,
+    sourcePhone: input.sourcePhone ?? null,
+    sourceNetworkId: input.sourceNetworkId ?? null,
+  })
+
+  return { cross, pricing, payInCurrency, receiveCurrency, quoteKey }
+}
+
+/** Indicative cross-border pricing — no YC API calls, no ledger rows. */
+export async function previewCrossBorderQuote(input: CrossBorderTransferInput) {
+  const prepared = await prepareCrossBorderQuote(input)
+  const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
+  const quoteSummary = buildCrossBorderQuoteSummary({
+    pricing: prepared.pricing,
+    payInCurrency: prepared.payInCurrency,
+    receiveCurrency: prepared.receiveCurrency,
+    customerRate: prepared.cross.rate,
+    rail: input.payInRail,
+    expiresAt,
+    transactionId: "",
+    transferId: "",
+    bankInfo: null,
+    sourcePhone: input.sourcePhone,
+    sourceNetworkId: input.sourceNetworkId,
+    sourceNetworkName: input.sourceNetworkName,
+    easnerSellFrom: prepared.pricing.customerRate,
+  })
+
+  return {
+    ok: true as const,
+    quotePhase: "preview" as const,
+    quoteKey: prepared.quoteKey,
+    requiresConfirm: true,
+    localPayIn: prepared.pricing.localPayIn,
+    customerRate: prepared.cross.rate,
+    processingFee: prepared.pricing.processingFee,
+    ycLegFeesUsd: prepared.pricing.ycLegFeesUsd,
+    displayProcessingFee: quoteSummary.displayProcessingFee,
+    displayProcessingFeeLocal: quoteSummary.displayProcessingFeeLocal ?? 0,
+    displayProcessingFeeCurrency: prepared.payInCurrency,
+    provisionalPayIn: prepared.pricing.provisionalPayIn,
+    receiveAmount: input.receiveAmount,
+    receiveCurrency: prepared.receiveCurrency,
+    expiresAt,
+    payInRail: input.payInRail,
+    sourcePhone: input.sourcePhone,
+    sourceNetworkId: input.sourceNetworkId,
+    sourceNetworkName: input.sourceNetworkName,
+  }
+}
+
+async function formatCrossBorderFromExistingTransfer(
+  admin: SupabaseClient,
+  transfer: Record<string, unknown>,
+  input: CrossBorderTransferInput,
+) {
+  const payInCurrency = String(transfer.pay_in_currency ?? input.payInCurrency).toUpperCase()
+  const receiveCurrency = String(transfer.receive_currency ?? input.recipient.currency ?? "").toUpperCase()
+  const meta = (transfer.metadata || {}) as Record<string, unknown>
+  let easnerTransactionId = ""
+  let transactionId = ""
+  if (transfer.transaction_id) {
+    const { data: txRow } = await admin
+      .from("transactions")
+      .select("id,easner_transaction_id")
+      .eq("id", String(transfer.transaction_id))
+      .maybeSingle()
+    transactionId = String(txRow?.id ?? transfer.transaction_id)
+    easnerTransactionId = String(txRow?.easner_transaction_id ?? "")
+  }
+
+  const pricing = computeYcCrossBorderPricing({
+    receiveAmount: Number(transfer.quoted_receive ?? input.receiveAmount),
+    customerRate: Number(transfer.customer_rate ?? 0),
+    ycSellFrom: Number(meta.yc_sell_from ?? 0),
+    ycBuyTo: Number(meta.yc_buy_to ?? 0),
+    receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    sendLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+  })
+
+  return {
+    quotePhase: "locked" as const,
+    transferId: String(transfer.id),
+    transactionId,
+    easnerTransactionId,
+    localPayIn: Number(transfer.quoted_pay_in ?? pricing.localPayIn),
+    customerRate: Number(transfer.customer_rate ?? 0),
+    processingFee: Number(meta.processing_fee ?? pricing.processingFee),
+    ycLegFeesUsd: Number(meta.yc_leg_fees_usd ?? pricing.ycLegFeesUsd),
+    displayProcessingFee: Number(meta.display_processing_fee ?? 0),
+    displayProcessingFeeLocal: Number(meta.display_processing_fee_local ?? 0),
+    displayProcessingFeeCurrency: payInCurrency,
+    provisionalPayIn: Number(meta.provisional_pay_in ?? pricing.provisionalPayIn),
+    receiveAmount: Number(transfer.quoted_receive ?? input.receiveAmount),
+    receiveCurrency,
+    bankInfo: (transfer.bank_info as Record<string, unknown> | null) ?? null,
+    expiresAt: String(transfer.expires_at ?? new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()),
+    payInRail: input.payInRail,
+    sourcePhone: input.sourcePhone,
+    sourceNetworkId: input.sourceNetworkId,
+    sourceNetworkName: input.sourceNetworkName,
+  }
+}
+
+/**
+ * Create locked cross-border quote + leg 1 receive session (bank pay-in).
+ */
+export async function createCrossBorderTransfer(input: CrossBorderTransferInput): Promise<{
+  transferId: string
+  transactionId: string
+  easnerTransactionId: string
+  localPayIn: number
+  customerRate: number
+  processingFee: number
+  ycLegFeesUsd: number
+  displayProcessingFee: number
+  displayProcessingFeeLocal: number
+  displayProcessingFeeCurrency: string
+  provisionalPayIn: number
+  receiveAmount: number
+  receiveCurrency: string
+  bankInfo: Record<string, unknown> | null
+  expiresAt: string
+  payInRail: "bank_transfer" | "mobile_money"
+  sourcePhone?: string
+  sourceNetworkId?: string
+  sourceNetworkName?: string
+  quotePhase: "locked"
+}> {
+  const prepared = await prepareCrossBorderQuote(input)
+  const existing = await findReusableYcTransfer(input.admin, {
+    userId: input.userId,
+    mode: "cross_border_send",
+    quoteKey: prepared.quoteKey,
+  })
+  if (existing?.id) {
+    return formatCrossBorderFromExistingTransfer(input.admin, existing, input)
+  }
+
+  const admin = input.admin
+  const payInCurrency = prepared.payInCurrency
+  const receiveCurrency = prepared.receiveCurrency
+  const cross = prepared.cross
+  const receiveCountry = resolveRecipientPayoutCountry(input.recipient)
+  if (!receiveCountry) throw new Error("Recipient country required")
+
+  const rates = await listYcRates(admin, { status: "active" })
   const receiveChannelId = await resolveYcReceiveChannelId({
     countryCode: input.payInCountry.toUpperCase(),
     currencyCode: payInCurrency,
@@ -214,21 +379,6 @@ export async function createCrossBorderTransfer(input: {
     sendLeg,
   })
 
-  const amountCheck = await validateFundBalancePayInAmountLimits({
-    admin,
-    countryCode: input.payInCountry,
-    currencyCode: payInCurrency,
-    rail: input.payInRail,
-    localPayIn: pricing.localPayIn,
-  })
-  if (!amountCheck.ok) {
-    throw new Error(
-      amountCheck.message.toLowerCase().includes("minimum")
-        ? "yc_amount_below_min"
-        : amountCheck.message,
-    )
-  }
-
   const leg1Seq = `yc_cb_l1_${randomUUID()}`
   const receiveRes = await submitYcReceive({
     sequenceId: leg1Seq,
@@ -282,6 +432,7 @@ export async function createCrossBorderTransfer(input: {
       user_id: input.userId,
       business_id: input.businessId ?? null,
       provider: "yellowcard",
+      provider_transaction_id: leg1Seq,
       status: "pending",
       amount: pricingFinal.localPayIn,
       currency: payInCurrency,
@@ -332,8 +483,11 @@ export async function createCrossBorderTransfer(input: {
         send: sendRes.settlementInfo,
       },
       metadata: {
+        quote_key: prepared.quoteKey,
         processing_fee: pricingFinal.processingFee,
         margin_amount: pricingFinal.marginAmount,
+        yc_sell_from: Number(fromLeg?.yc_sell ?? 0),
+        yc_buy_to: ycBuyTo,
         ...reportingSnapshot,
         recipient: recipientMapped,
         sender,
@@ -472,6 +626,7 @@ export async function createCrossBorderTransfer(input: {
     .eq("id", tx.id)
 
   return {
+    quotePhase: "locked" as const,
     transferId: String(transfer.id),
     transactionId: String(tx.id),
     easnerTransactionId,
@@ -492,6 +647,11 @@ export async function createCrossBorderTransfer(input: {
     sourceNetworkId: input.sourceNetworkId,
     sourceNetworkName: input.sourceNetworkName,
   }
+}
+
+/** Lock YC legs + create ledger rows after user confirms review. */
+export async function confirmCrossBorderTransfer(input: CrossBorderTransferInput) {
+  return createCrossBorderTransfer(input)
 }
 
 /** @deprecated MoMo cross-border draft — quote API replaces this. Routes return 410. */
@@ -573,6 +733,7 @@ export async function createCrossBorderDraft(input: {
       user_id: input.userId,
       business_id: input.businessId ?? null,
       provider: "yellowcard",
+      provider_transaction_id: leg1Seq,
       status: "pending",
       amount: pricing.localPayIn,
       currency: payInCurrency,
@@ -1000,7 +1161,7 @@ export async function completeCrossBorderOnSendSuccess(
         businessId: txRow.business_id ? String(txRow.business_id) : null,
         provider: String(txRow.provider ?? "yellowcard"),
         providerTransactionId: String(
-          txRow.provider_transaction_id ?? prior.yc_sequence_id ?? transfer.leg2_sequence_id ?? transfer.id,
+          txRow.provider_transaction_id ?? prior.yc_sequence_id ?? transfer.leg1_sequence_id ?? transfer.id,
         ),
         status: "settled",
         amount: Number(txRow.amount ?? 0),

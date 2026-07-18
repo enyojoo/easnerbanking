@@ -32,6 +32,7 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   ensureCrossBorderQuoteStashed,
+  ensureCrossBorderOrderConfirmed,
   isCompleteCrossBorderQuote,
   isStashedCrossBorderQuoteFresh,
   peekCrossBorderQuote,
@@ -150,7 +151,7 @@ export function YcLocalPayInReview({
     void (async () => {
       const result = await ensureCrossBorderQuoteStashed(meta)
       if (cancelled) return
-      if (isCompleteCrossBorderQuote(result)) {
+      if (result?.ok && result.localPayIn > 0) {
         setQuote(result)
         return
       }
@@ -167,9 +168,7 @@ export function YcLocalPayInReview({
   const estimatedPayIn = ycFlow.preview.sendAmount
   const customerRate = quote?.customerRate ?? ycFlow.customerRate ?? 1
   const momoReady = Boolean(phone.trim() && networkId)
-  const quoteReady = isMobileMoney
-    ? Boolean(ycFlow.customerRate && estimatedPayIn > 0 && momoReady)
-    : Boolean(quote?.transferId)
+  const quoteReady = Boolean(ycFlow.customerRate && estimatedPayIn > 0 && (isMobileMoney ? momoReady : true))
   const lockedLocalPayIn = quote?.localPayIn ?? estimatedPayIn
   const displayTransactionId = quote?.easnerTransactionId ?? quote?.transactionId ?? ''
   const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
@@ -187,7 +186,7 @@ export function YcLocalPayInReview({
 
   const reviewRows = buildYcLocalPayInReviewRows({
     mode: 'cross_border_send',
-    phase: isMobileMoney ? 'preview' : 'locked',
+    phase: 'preview',
     rail: payInRail,
     payInCurrency,
     receiveCurrency,
@@ -236,28 +235,30 @@ export function YcLocalPayInReview({
     setSubmitting(true)
     setQuoteError(null)
     try {
-      if (isMobileMoney) {
-        const selectedNetwork = networks.find((n) => n.id === networkId)
-        const meta: CrossBorderQuoteStashMeta = {
-          recipientId: recipient.id,
-          payInCurrency,
-          payInCountry,
-          payInRail,
-          receiveAmount,
-          sourcePhone: phone.trim(),
-          networkId,
-          sourceNetworkName: selectedNetwork?.name,
-        }
-        const result = await ensureCrossBorderQuoteStashed(meta)
-        if (!isCompleteCrossBorderQuote(result)) {
-          setQuoteError(peekLastCrossBorderQuoteError() || 'Could not load quote')
-          return
-        }
-        navigateToPayIn(result)
+      const meta: CrossBorderQuoteStashMeta = isMobileMoney
+        ? {
+            recipientId: recipient.id,
+            payInCurrency,
+            payInCountry,
+            payInRail,
+            receiveAmount,
+            sourcePhone: phone.trim(),
+            networkId,
+            sourceNetworkName: networks.find((n) => n.id === networkId)?.name,
+          }
+        : {
+            recipientId: recipient.id,
+            payInCurrency,
+            payInCountry,
+            payInRail,
+            receiveAmount,
+          }
+      const result = await ensureCrossBorderOrderConfirmed(meta)
+      if (!isCompleteCrossBorderQuote(result)) {
+        setQuoteError(peekLastCrossBorderQuoteError() || 'Could not confirm order')
         return
       }
-      if (!quote) return
-      navigateToPayIn(quote)
+      navigateToPayIn(result)
     } catch (e) {
       setQuoteError(e instanceof Error ? e.message : 'Could not continue')
     } finally {

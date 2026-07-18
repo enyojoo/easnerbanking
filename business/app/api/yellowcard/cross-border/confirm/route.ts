@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { previewCrossBorderQuote } from "@/lib/yellowcard/cross-border-orchestrator"
+import { confirmCrossBorderTransfer } from "@/lib/yellowcard/cross-border-orchestrator"
 import { expireStaleYcPayInTransfers } from "@/lib/yellowcard/quote-key"
 import {
   ycPayInInstructionNotice,
@@ -25,10 +25,11 @@ function crossBorderQuoteError(
   status: number,
   extra?: Record<string, unknown>,
 ) {
-  console.warn("[yc-cross-border-quote]", { code, error, ...extra })
+  console.warn("[yc-cross-border-confirm]", { code, error, ...extra })
   return NextResponse.json({ error, code, ...extra }, { status })
 }
 
+/** Lock YC legs + create ledger rows after user confirms review. */
 export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await previewCrossBorderQuote({
+    const result = await confirmCrossBorderTransfer({
       admin,
       userId: kycUserId,
       businessId,
@@ -161,11 +162,12 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({
+      ok: true,
       ...result,
       payInNotice: ycPayInInstructionNotice(payInRail),
     })
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Cross-border quote failed"
+    const message = e instanceof Error ? e.message : "Cross-border confirm failed"
     if (message === "deposit_omnibus_solana_address_usd_required") {
       return ycFundBalanceQuoteError(
         "yc_settlement_wallet_not_configured",
@@ -201,6 +203,6 @@ export async function POST(request: Request) {
     ) {
       return ycFundBalanceQuoteError(mapKycErrorToCode(message), message, 400, { userId: kycUserId })
     }
-    return crossBorderQuoteError("yc_cross_border_quote_failed", message, 400)
+    return crossBorderQuoteError("yc_cross_border_confirm_failed", message, 400)
   }
 }

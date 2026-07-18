@@ -212,7 +212,7 @@ export async function POST(request: Request) {
       const channelCost = Number(body?.channelCost ?? 0)
       const customerPrincipal = Number(body?.customerPrincipal ?? totalDebited)
 
-      if (!walletAddress || !sequenceId || !(cryptoAmount > 0) || !(totalDebited > 0)) {
+      if (!(cryptoAmount > 0) || !(totalDebited > 0)) {
         return NextResponse.json(
           {
             error:
@@ -236,10 +236,10 @@ export async function POST(request: Request) {
         sendNote: sendNote || undefined,
         idempotencyKey: idempotencyKey || undefined,
         yc: {
-          sequenceId,
-          sendId: body?.ycSendId ?? formSessionId,
+          sequenceId: sequenceId || undefined,
+          sendId: body?.ycSendId ?? formSessionId ?? null,
           cryptoAmount,
-          walletAddress,
+          walletAddress: walletAddress || undefined,
           channelId: channelId || String(body?.channelId || ""),
         },
         pricing: {

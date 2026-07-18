@@ -151,7 +151,7 @@ export async function creditFundBalanceFromYcReceive(
       businessId: transfer.business_id ? String(transfer.business_id) : null,
       provider: "yellowcard",
       providerTransactionId: String(
-        transfer.leg1_yc_id ?? txRow?.provider_transaction_id ?? sequenceId,
+        transfer.leg1_sequence_id ?? txRow?.provider_transaction_id ?? sequenceId,
       ),
       status: "settled",
       amount: creditAmt,
@@ -179,7 +179,7 @@ export async function creditFundBalanceFromYcReceive(
       userId: String(transfer.user_id),
       businessId: transfer.business_id ? String(transfer.business_id) : null,
       provider: "yellowcard",
-      providerTransactionId: String(transfer.leg1_yc_id ?? sequenceId),
+      providerTransactionId: String(transfer.leg1_sequence_id ?? sequenceId),
       status: "settled",
       amount: creditAmt,
       currency: "USD",
@@ -228,7 +228,7 @@ export async function patchYcFundBalanceReceiveStatus(
   const now = input.occurredAt ?? new Date().toISOString()
   const { data: transfer } = await admin
     .from("yc_transfers")
-    .select("metadata, status, quoted_pay_in, pay_in_currency, quoted_receive, user_id, business_id, leg1_yc_id")
+    .select("metadata, status, quoted_pay_in, pay_in_currency, quoted_receive, user_id, business_id, leg1_sequence_id")
     .eq("id", input.transferId)
     .maybeSingle()
   if (!transfer) return
@@ -287,7 +287,7 @@ export async function patchYcFundBalanceReceiveStatus(
     businessId: transfer.business_id ? String(transfer.business_id) : null,
     provider: "yellowcard",
     providerTransactionId: String(
-      transfer.leg1_yc_id ?? txRow?.provider_transaction_id ?? input.sequenceId,
+      transfer.leg1_sequence_id ?? txRow?.provider_transaction_id ?? input.sequenceId,
     ),
     status: nextStatus,
     amount: Number(txRow?.amount ?? transfer.quoted_receive ?? 0),

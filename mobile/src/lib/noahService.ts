@@ -221,7 +221,7 @@ export const noahService = {
   }): Promise<PayoutQuote> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
-    const response = await fetch(`${apiUrl()}/api/noah/payouts/quote`, {
+    const response = await fetch(`${apiUrl()}/api/payouts/quote`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

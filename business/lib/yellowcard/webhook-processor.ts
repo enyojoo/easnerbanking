@@ -233,7 +233,7 @@ export async function handleYcCrossBorderWebhook(
       businessId: txRow.business_id ? String(txRow.business_id) : null,
       provider: String(txRow.provider ?? "yellowcard"),
       providerTransactionId: String(
-        txRow.provider_transaction_id ?? prior.yc_sequence_id ?? transfer.leg2_sequence_id ?? transfer.id,
+        txRow.provider_transaction_id ?? prior.yc_sequence_id ?? transfer.leg1_sequence_id ?? transfer.id,
       ),
       status,
       amount: Number(txRow.amount ?? 0),
@@ -338,8 +338,27 @@ export async function handleYcCrossBorderWebhook(
       }
       return
     }
-    if (input.classified.isTerminalSuccess) {
+    if (input.classified.isTerminalSuccess && !input.shouldTriggerCrossBorderLeg2) {
       await upsertCrossBorderTx("processing", { processing_at: occurredAt })
+      return
+    }
+
+    if (
+      !input.classified.isTerminalFailure &&
+      !input.classified.isTerminalSuccess &&
+      !input.shouldTriggerCrossBorderLeg2
+    ) {
+      const nextTransferStatus =
+        String(transfer.status) === "awaiting_pay_in" ? "processing" : String(transfer.status)
+      await admin
+        .from("yc_transfers")
+        .update({
+          status: nextTransferStatus,
+          leg1_status: "processing",
+          updated_at: occurredAt,
+        })
+        .eq("id", transfer.id)
+      await upsertCrossBorderTx("processing", { processing_at: occurredAt }, { leg1_status: "processing" })
     }
   }
 }

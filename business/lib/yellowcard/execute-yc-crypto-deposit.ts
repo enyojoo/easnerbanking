@@ -1,4 +1,5 @@
 import { sendStablecoinFromDepositOmnibus } from "@/lib/turnkey/send-from-omnibus"
+import { isYcCryptoDepositDryRun } from "@/lib/yellowcard/config"
 
 /**
  * After YC POST /send, deposit USDC from omnibus to YC settlementInfo.walletAddress (G1).
@@ -23,6 +24,16 @@ export async function executeYcCryptoDeposit(input: {
       providerTransactionId: null,
       errorMessage: "invalid_yc_crypto_deposit_input",
       dryRun: false,
+    }
+  }
+
+  if (isYcCryptoDepositDryRun()) {
+    return {
+      status: "skipped",
+      txHash: null,
+      providerTransactionId: `yc_crypto_dry_run_${Date.now()}`,
+      errorMessage: null,
+      dryRun: true,
     }
   }
 

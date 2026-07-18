@@ -4,6 +4,9 @@ import type { YcPayInRail } from '../hooks/useYcCrossBorderFlow'
 
 export type YcFundBalanceQuote = {
   ok: true
+  quotePhase?: "preview" | "locked"
+  quoteKey?: string
+  requiresConfirm?: boolean
   sequenceId?: string
   localPayIn: number
   usdCredit: number
@@ -130,13 +133,27 @@ function buildFundBalanceAmountBody(meta: FundBalanceQuoteStashMeta): Record<str
   return body
 }
 
-export async function fetchFundBalanceQuote(meta: FundBalanceQuoteStashMeta): Promise<YcFundBalanceQuote> {
+export async function fetchFundBalanceQuotePreview(meta: FundBalanceQuoteStashMeta): Promise<YcFundBalanceQuote> {
   const data = await apiFetch<YcFundBalanceQuote, Record<string, unknown>>(
     '/api/yellowcard/fund-balance/quote',
     { method: 'POST', body: buildFundBalanceAmountBody(meta) },
   )
   if (!data.ok) throw new Error('Fund balance quote failed')
   return data
+}
+
+export async function confirmFundBalanceOrder(meta: FundBalanceQuoteStashMeta): Promise<YcFundBalanceQuote> {
+  const data = await apiFetch<YcFundBalanceQuote, Record<string, unknown>>(
+    '/api/yellowcard/fund-balance/confirm',
+    { method: 'POST', body: buildFundBalanceAmountBody(meta) },
+  )
+  if (!data.ok || !data.transferId) throw new Error('Fund balance confirm failed')
+  return data
+}
+
+/** @deprecated Use fetchFundBalanceQuotePreview */
+export async function fetchFundBalanceQuote(meta: FundBalanceQuoteStashMeta): Promise<YcFundBalanceQuote> {
+  return fetchFundBalanceQuotePreview(meta)
 }
 
 /** Deduped quote fetch — background prefetch and Continue/review gate. */
@@ -150,13 +167,15 @@ export async function ensureFundBalanceQuoteStashed(
 
   inflightQuoteKey = key
   lastQuoteError = null
-  inflightQuote = fetchFundBalanceQuote(meta)
+  inflightQuote = fetchFundBalanceQuotePreview(meta)
     .then((quote) => {
-      if (!isCompleteFundBalanceQuote(quote)) {
+      if (!quote?.ok || !(quote.localPayIn > 0) || !(quote.usdCredit > 0)) {
         lastQuoteError = 'Incomplete fund balance quote response.'
         return null
       }
-      stashFundBalanceQuote(quote, meta)
+      stashed = quote
+      stashedMeta = meta
+      lastQuoteError = null
       return quote
     })
     .catch((err) => {
@@ -174,6 +193,33 @@ export async function ensureFundBalanceQuoteStashed(
     })
 
   return inflightQuote
+}
+
+export async function ensureFundBalanceOrderConfirmed(
+  meta: FundBalanceQuoteStashMeta,
+): Promise<YcFundBalanceQuote | null> {
+  if (isStashedFundBalanceQuoteFresh(meta) && isCompleteFundBalanceQuote(stashed)) {
+    return stashed
+  }
+
+  lastQuoteError = null
+  try {
+    const quote = await confirmFundBalanceOrder(meta)
+    if (!isCompleteFundBalanceQuote(quote)) {
+      lastQuoteError = 'Incomplete fund balance confirm response.'
+      return null
+    }
+    stashFundBalanceQuote(quote, meta)
+    return quote
+  } catch (err) {
+    lastQuoteError =
+      err instanceof ApiError
+        ? ycFundBalanceQuoteErrorMessage(err.code ?? undefined, err.message)
+        : err instanceof Error
+          ? err.message
+          : 'confirm_failed'
+    return null
+  }
 }
 
 export type PayInNetworkRow = { id: string; name: string }

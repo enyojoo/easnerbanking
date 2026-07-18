@@ -925,7 +925,7 @@ export default function SendPage() {
       try {
         const headers: Record<string, string> = { "Content-Type": "application/json" }
         if (businessId) headers["X-Easner-Noah-Scope"] = "business"
-        const res = await fetchWithSession("/api/noah/payouts/quote", {
+        const res = await fetchWithSession("/api/payouts/quote", {
           method: "POST",
           headers,
           body: JSON.stringify({
@@ -1169,7 +1169,7 @@ export default function SendPage() {
           }
           try {
             const quote = await ensureCrossBorderQuoteStashed(bankQuoteMeta)
-            if (!isCompleteCrossBorderQuote(quote)) {
+            if (!quote?.ok || !(quote.localPayIn > 0)) {
               setAmountFieldError(
                 peekLastCrossBorderQuoteError() || "Could not load cross-border quote. Try again.",
               )

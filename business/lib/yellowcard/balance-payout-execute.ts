@@ -23,6 +23,7 @@ import {
   ycPendingPayoutProviderTransactionId,
 } from "@/lib/yellowcard/yc-ledger"
 import { executeYcBalancePayoutCryptoLeg } from "@/lib/yellowcard/payout-execute"
+import { lockYcBalancePayoutSend } from "@/lib/yellowcard/payout-quote"
 
 async function readAvailableBalance(
   admin: SupabaseClient,
@@ -49,12 +50,12 @@ export type ExecuteYcBalancePayoutInput = {
   idempotencyKey?: string
   reviewSnapshot?: GlobalPayoutReviewSnapshot | null
   sendNote?: string
-  /** Locked YC send from quote. */
+  /** Locked YC send from quote preview — POST /send runs at execute. */
   yc: {
-    sequenceId: string
+    sequenceId?: string
     sendId?: string | null
-    cryptoAmount: number
-    walletAddress: string
+    cryptoAmount?: number
+    walletAddress?: string
     channelId: string
   }
   pricing: {
@@ -122,15 +123,6 @@ export async function executeYcBalancePayout(
     sendNote,
   } = input
 
-  const walletAddress = String(input.yc.walletAddress || "").trim()
-  const cryptoAmount = Number(input.yc.cryptoAmount)
-  const sequenceId = String(input.yc.sequenceId || "").trim()
-  if (!walletAddress) return { ok: false, error: "Yellowcard send wallet address missing from quote." }
-  if (!Number.isFinite(cryptoAmount) || cryptoAmount <= 0) {
-    return { ok: false, error: "Yellowcard crypto amount missing from quote." }
-  }
-  if (!sequenceId) return { ok: false, error: "Yellowcard sequence id missing from quote." }
-
   const idempotencyKey = String(input.idempotencyKey || "").trim()
   if (idempotencyKey) {
     const existing = await findExistingYcPayoutByIdempotency(admin, {
@@ -141,7 +133,7 @@ export async function executeYcBalancePayout(
     if (existing) return existing
   }
 
-  const totalDebited = Number(input.pricing.totalDebited)
+  let totalDebited = Number(input.pricing.totalDebited)
   if (!Number.isFinite(totalDebited) || totalDebited <= 0) {
     return { ok: false, error: "Invalid total debited for Yellowcard payout." }
   }
@@ -152,6 +144,68 @@ export async function executeYcBalancePayout(
     currency: "USD",
   })
   if (balErr) return { ok: false, error: "insufficient_balance" }
+
+  const { data: userRow } = await admin
+    .from("users")
+    .select(
+      "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+    )
+    .eq("id", userId)
+    .maybeSingle()
+  const { getWalletOwnerId } = await import("@/lib/wallet/resolve-wallet-owner")
+  const walletOwnerId = await getWalletOwnerId(
+    admin,
+    businessId ? "business" : "individual",
+    businessId ?? userId,
+  )
+  const { data: walletRow } = walletOwnerId
+    ? await admin
+        .from("wallet_accounts")
+        .select("address")
+        .eq("wallet_owner_id", walletOwnerId)
+        .eq("ledger_currency", "USD")
+        .eq("asset", "USDC")
+        .eq("status", "active")
+        .maybeSingle()
+    : { data: null }
+  const turnkeyAddr = String(walletRow?.address ?? "").trim()
+  if (!turnkeyAddr) {
+    return { ok: false, error: "User Solana wallet is required for Yellowcard payout refund routing." }
+  }
+
+  let locked
+  try {
+    locked = await lockYcBalancePayoutSend({
+      userId,
+      customerUID: userId,
+      recipient: recipientRow,
+      receiveFiatAmount: fiatAmount,
+      sourceBalanceCurrency: "USD",
+      userTurnkeyAddress: turnkeyAddr,
+      channelId: String(input.yc.channelId || input.channelId || "").trim(),
+      senderProfile: {
+        residenceCountry: userRow?.residence_country,
+        kycIdType: userRow?.kyc_id_type,
+        kycIdNumber: userRow?.kyc_id_number,
+        ngLocalIdType: userRow?.ng_local_id_type,
+        ngLocalIdNumber: userRow?.ng_local_id_number,
+        fullName: userRow?.full_name,
+        phone: userRow?.phone,
+        email: userRow?.email,
+        dateOfBirth: userRow?.date_of_birth,
+        addressStreet: userRow?.kyc_address_street,
+        addressCity: userRow?.kyc_address_city,
+        addressCountry: userRow?.kyc_address_country,
+      },
+    })
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "yc_send_lock_failed" }
+  }
+
+  const walletAddress = locked.walletAddress
+  const cryptoAmount = locked.cryptoAmount
+  const sequenceId = locked.sequenceId
+  totalDebited = locked.pricing.totalDebited
   if (available < totalDebited) return { ok: false, error: "insufficient_balance" }
 
   const easnerPayoutId = randomUUID()
@@ -159,7 +213,7 @@ export async function executeYcBalancePayout(
   const now = new Date().toISOString()
   const payoutReview = normalizePayoutReviewSnapshot(reviewSnapshotRaw)
   const recipientSnapshot = buildRecipientSnapshotFromRow(recipientRow)
-  const channelId = String(input.yc.channelId || input.channelId || "").trim()
+  const channelId = String(locked.channelId || input.yc.channelId || input.channelId || "").trim()
 
   const metadata = buildYcBalancePayoutOutMetadata({
     easnerPayoutId,
@@ -169,8 +223,8 @@ export async function executeYcBalancePayout(
     channelId: channelId || null,
     totalDebited,
     cryptoAuthorizedAmount: cryptoAmount,
-    marginAmount: input.pricing.marginAmount,
-    processingFee: input.pricing.processingFee,
+    marginAmount: locked.pricing.marginAmount,
+    processingFee: locked.pricing.processingFee,
     receiveAmount: fiatAmount,
     receiveCurrency: fiatCurrency,
     customerRate: input.pricing.customerRate,
@@ -238,7 +292,7 @@ export async function executeYcBalancePayout(
     quoted_receive: fiatAmount,
     customer_rate: input.pricing.customerRate ?? null,
     leg2_sequence_id: sequenceId,
-    leg2_yc_id: input.yc.sendId ?? null,
+    leg2_yc_id: locked.sendId ?? input.yc.sendId ?? null,
     leg2_channel_id: channelId || null,
     settlement_info: {
       send: { walletAddress, cryptoAmount },
@@ -246,8 +300,8 @@ export async function executeYcBalancePayout(
     metadata: {
       easner_payout_id: easnerPayoutId,
       processing_fee: input.pricing.processingFee,
-      margin_amount: input.pricing.marginAmount,
-      channel_cost: input.pricing.channelCost,
+      margin_amount: locked.pricing.marginAmount,
+      channel_cost: locked.pricing.channelCost,
     },
   })
 
@@ -277,7 +331,7 @@ export async function executeYcBalancePayout(
     .maybeSingle()
   const priorMeta = (txAfter?.metadata || {}) as Record<string, unknown>
   const providerTransactionId = String(
-    input.yc.sendId ?? priorMeta.yc_send_id ?? priorMeta.form_session_id ?? sequenceId,
+    locked.sendId ?? priorMeta.yc_send_id ?? priorMeta.form_session_id ?? sequenceId,
   )
 
   if (!deposit.ok) {

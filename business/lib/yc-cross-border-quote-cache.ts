@@ -5,8 +5,11 @@ export type YcPayInRail = "bank_transfer" | "mobile_money"
 
 export type CrossBorderQuoteResult = {
   ok: true
-  transferId: string
-  transactionId: string
+  quotePhase?: "preview" | "locked"
+  quoteKey?: string
+  requiresConfirm?: boolean
+  transferId?: string
+  transactionId?: string
   easnerTransactionId?: string
   localPayIn: number
   customerRate: number
@@ -18,7 +21,7 @@ export type CrossBorderQuoteResult = {
   provisionalPayIn?: number
   receiveAmount?: number
   receiveCurrency?: string
-  bankInfo: Record<string, unknown> | null
+  bankInfo?: Record<string, unknown> | null
   expiresAt: string
   payInNotice?: string
   payInRail?: YcPayInRail
@@ -54,6 +57,12 @@ export function quoteMetaKey(meta: CrossBorderQuoteStashMeta): string {
     meta.sourcePhone ?? "",
     meta.networkId ?? "",
   ].join("|")
+}
+
+export function isCrossBorderQuotePreview(
+  quote: CrossBorderQuoteResult | null | undefined,
+): boolean {
+  return Boolean(quote?.ok && quote.quotePhase === "preview" && !quote.transferId)
 }
 
 export function isCompleteCrossBorderQuote(
@@ -125,7 +134,7 @@ function buildCrossBorderQuoteBody(meta: CrossBorderQuoteStashMeta): Record<stri
   return body
 }
 
-export async function fetchCrossBorderQuote(
+export async function fetchCrossBorderQuotePreview(
   meta: CrossBorderQuoteStashMeta,
 ): Promise<CrossBorderQuoteResult> {
   const res = await fetchWithSession("/api/yellowcard/cross-border/quote", {
@@ -136,10 +145,34 @@ export async function fetchCrossBorderQuote(
   const data = (await res.json().catch(() => ({}))) as CrossBorderQuoteResult & {
     error?: string
   }
-  if (!res.ok || !data.ok || !data.transferId) {
+  if (!res.ok || !data.ok) {
     throw new Error(data.error || "Cross-border quote failed")
   }
   return data
+}
+
+export async function confirmCrossBorderOrder(
+  meta: CrossBorderQuoteStashMeta,
+): Promise<CrossBorderQuoteResult> {
+  const res = await fetchWithSession("/api/yellowcard/cross-border/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildCrossBorderQuoteBody(meta)),
+  })
+  const data = (await res.json().catch(() => ({}))) as CrossBorderQuoteResult & {
+    error?: string
+  }
+  if (!res.ok || !data.ok || !data.transferId) {
+    throw new Error(data.error || "Cross-border confirm failed")
+  }
+  return data
+}
+
+/** @deprecated Use fetchCrossBorderQuotePreview */
+export async function fetchCrossBorderQuote(
+  meta: CrossBorderQuoteStashMeta,
+): Promise<CrossBorderQuoteResult> {
+  return fetchCrossBorderQuotePreview(meta)
 }
 
 export async function ensureCrossBorderQuoteStashed(
@@ -152,13 +185,15 @@ export async function ensureCrossBorderQuoteStashed(
 
   inflightQuoteKey = key
   lastQuoteError = null
-  inflightQuote = fetchCrossBorderQuote(meta)
+  inflightQuote = fetchCrossBorderQuotePreview(meta)
     .then((quote) => {
-      if (!isCompleteCrossBorderQuote(quote)) {
+      if (!quote?.ok || !(quote.localPayIn > 0) || !(quote.customerRate > 0)) {
         lastQuoteError = "Incomplete cross-border quote response."
         return null
       }
-      stashCrossBorderQuote(quote, meta)
+      stashed = quote
+      stashedMeta = meta
+      lastQuoteError = null
       return quote
     })
     .catch((err) => {
@@ -173,13 +208,35 @@ export async function ensureCrossBorderQuoteStashed(
   return inflightQuote
 }
 
+export async function ensureCrossBorderOrderConfirmed(
+  meta: CrossBorderQuoteStashMeta,
+): Promise<CrossBorderQuoteResult | null> {
+  if (isStashedCrossBorderQuoteFresh(meta) && isCompleteCrossBorderQuote(stashed)) {
+    return stashed
+  }
+
+  lastQuoteError = null
+  try {
+    const quote = await confirmCrossBorderOrder(meta)
+    if (!isCompleteCrossBorderQuote(quote)) {
+      lastQuoteError = "Incomplete cross-border confirm response."
+      return null
+    }
+    stashCrossBorderQuote(quote, meta)
+    return quote
+  } catch (err) {
+    lastQuoteError = err instanceof Error ? err.message : "confirm_failed"
+    return null
+  }
+}
+
 export function crossBorderQuoteToFlowState(
   quote: CrossBorderQuoteResult,
   meta: CrossBorderQuoteStashMeta,
 ) {
   return {
-    transferId: quote.transferId,
-    transactionId: quote.transactionId,
+    transferId: quote.transferId ?? "",
+    transactionId: quote.transactionId ?? "",
     easnerTransactionId: quote.easnerTransactionId,
     localPayIn: quote.localPayIn,
     customerRate: quote.customerRate,

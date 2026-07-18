@@ -52,6 +52,7 @@ import {
 import {
   crossBorderQuoteToFlowState,
   ensureCrossBorderQuoteStashed,
+  ensureCrossBorderOrderConfirmed,
   isCompleteCrossBorderQuote,
   isStashedCrossBorderQuoteFresh,
   peekCrossBorderQuote,
@@ -280,7 +281,7 @@ export default function SendConfirmPage() {
       try {
         const headers: Record<string, string> = { "Content-Type": "application/json" }
         if (businessId) headers["X-Easner-Noah-Scope"] = "business"
-        const res = await fetchWithSession("/api/noah/payouts/quote", {
+        const res = await fetchWithSession("/api/payouts/quote", {
           method: "POST",
           headers,
           body: JSON.stringify({
@@ -373,10 +374,11 @@ export default function SendConfirmPage() {
     void (async () => {
       const quote = await ensureCrossBorderQuoteStashed(meta)
       if (cancelled) return
-      if (!isCompleteCrossBorderQuote(quote)) {
+      if (!isCompleteCrossBorderQuote(quote) && !quote?.localPayIn) {
         setYcQuoteError(peekLastCrossBorderQuoteError() || "Cross-border quote failed")
         return
       }
+      if (!quote) return
       const yc = crossBorderQuoteToFlowState(quote, meta)
       const next: SendFlowState = {
         ...state,
@@ -496,9 +498,9 @@ export default function SendConfirmPage() {
             networkId: momoNetworkId,
             sourceNetworkName: net?.name,
           }
-          const quote = await ensureCrossBorderQuoteStashed(meta)
+          const quote = await ensureCrossBorderOrderConfirmed(meta)
           if (!isCompleteCrossBorderQuote(quote)) {
-            throw new Error(peekLastCrossBorderQuoteError() || "Could not load quote")
+            throw new Error(peekLastCrossBorderQuoteError() || "Could not confirm order")
           }
           const yc = crossBorderQuoteToFlowState(quote, meta)
           const next: SendFlowState = {
@@ -521,7 +523,41 @@ export default function SendConfirmPage() {
       }
 
       if (!state.ycCrossBorder?.transferId) {
-        setAuthorizeError(ycQuoteError || "Cross-border quote is not ready. Go back and try again.")
+        setIsAuthorizing(true)
+        try {
+          const payInCountry = residenceCountryFromPayInCurrency(payInCurrency)
+          if (!payInCountry) {
+            setAuthorizeError("Pay-in country could not be resolved.")
+            return
+          }
+          const meta: CrossBorderQuoteStashMeta = {
+            recipientId: state.recipient.id,
+            payInCurrency,
+            payInCountry,
+            payInRail: "bank_transfer",
+            receiveAmount: state.amount,
+          }
+          const quote = await ensureCrossBorderOrderConfirmed(meta)
+          if (!isCompleteCrossBorderQuote(quote)) {
+            throw new Error(peekLastCrossBorderQuoteError() || "Could not confirm order")
+          }
+          const yc = crossBorderQuoteToFlowState(quote, meta)
+          const next: SendFlowState = {
+            ...state,
+            sendAmount: yc.localPayIn,
+            sendCurrency: payInCurrency,
+            totalAmount: yc.localPayIn,
+            transactionId: yc.easnerTransactionId || yc.transactionId,
+            ycCrossBorder: yc,
+          }
+          setState(next)
+          sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
+          router.push("/send/authorize/yc-pay-in")
+        } catch (e) {
+          setAuthorizeError(e instanceof Error ? e.message : "Could not continue")
+        } finally {
+          setIsAuthorizing(false)
+        }
         return
       }
       sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(state))

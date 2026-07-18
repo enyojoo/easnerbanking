@@ -14,6 +14,31 @@ export function getYellowcardEnvironment(): "sandbox" | "production" {
   return env === "production" ? "production" : "sandbox"
 }
 
+function envTruthy(name: string): boolean {
+  const v = String(process.env[name] || "").trim().toLowerCase()
+  return v === "true" || v === "1"
+}
+
+function envFalsy(name: string): boolean {
+  const v = String(process.env[name] || "").trim().toLowerCase()
+  return v === "false" || v === "0"
+}
+
+/**
+ * Skip omnibus → YC wallet sends in sandbox (omnibus is a live wallet).
+ * Set YC_CRYPTO_DEPOSIT_DRY_RUN=false to force live sends while YC is sandbox.
+ * DEPOSIT_SPLIT_DRY_RUN=true also skips sends (shared with deposit split).
+ */
+export function isYcCryptoDepositDryRun(): boolean {
+  if (envTruthy("DEPOSIT_SPLIT_DRY_RUN") || envTruthy("YC_CRYPTO_DEPOSIT_DRY_RUN")) {
+    return true
+  }
+  if (envFalsy("YC_CRYPTO_DEPOSIT_DRY_RUN")) {
+    return false
+  }
+  return getYellowcardEnvironment() === "sandbox"
+}
+
 /** API origin without trailing `/business`. */
 export function getYellowcardApiOrigin(): string {
   const configured = process.env.YELLOWCARD_API_BASE_URL?.trim()

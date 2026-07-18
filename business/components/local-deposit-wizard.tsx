@@ -238,6 +238,68 @@ export function LocalDepositWizard({
     }
   }, [railsLoading, rails, initialStep, initialRail])
 
+  const confirmOrder = useCallback(async () => {
+    setQuoteLoading(true)
+    setQuoteError(null)
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" }
+      if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+      const body: Record<string, unknown> =
+        amountMode === "usd"
+          ? {
+              currency: localPayInCurrency,
+              country: residenceCountry,
+              usdCredit: enteredAmount,
+              rail,
+            }
+          : {
+              currency: localPayInCurrency,
+              country: residenceCountry,
+              localPayIn: enteredAmount,
+              rail,
+            }
+      if (isMomo) {
+        body.sourcePhone = momoPhone.trim() || defaultPhone.trim()
+        body.networkId = momoNetworkId
+        const net = momoNetworks.find((n) => n.id === momoNetworkId)
+        if (net?.name) body.sourceNetworkName = net.name
+      }
+      const res = await fetchWithSession("/api/yellowcard/fund-balance/confirm", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      })
+      const data = (await res.json().catch(() => ({}))) as FundBalanceQuote & {
+        error?: string
+        code?: string
+      }
+      if (!res.ok || !data.ok || !data.transferId) {
+        const msg = ycFundBalanceQuoteErrorMessage(data.code, data.error)
+        setQuoteError(msg)
+        return null
+      }
+      setQuote(data)
+      return data
+    } catch {
+      setQuoteError("Could not lock payment details")
+      return null
+    } finally {
+      setQuoteLoading(false)
+    }
+  }, [
+    amountMode,
+    businessId,
+    enteredAmount,
+    localPayInCurrency,
+    rail,
+    residenceCountry,
+    isMomo,
+    momoPhone,
+    momoNetworkId,
+    momoNetworks,
+    defaultPhone,
+  ])
+
   const createQuote = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) {
       setQuoteLoading(true)
@@ -731,15 +793,11 @@ export function LocalDepositWizard({
           disabled={
             !reviewReady ||
             quoteLoading ||
-            (!isMomo && (quoteCountdown.expired || !quote?.transferId))
+            quoteCountdown.expired
           }
           onClick={async () => {
-            if (isMomo) {
-              const result = await createQuote()
-              if (result?.transferId) setStep("payin")
-              return
-            }
-            setStep("payin")
+            const result = await confirmOrder()
+            if (result?.transferId) setStep("payin")
           }}
         >
           Continue
