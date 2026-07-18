@@ -33,7 +33,7 @@ import { ripple } from '../../lib/androidRipple'
 import { CurrencyFlag } from '../flags/CurrencyFlag'
 import { getCurrencySymbol } from '../../utils/formatters'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
-import { formatMoneyDisplay, formatSendRateLabel } from '@easner/shared'
+import { formatMoneyDisplay, formatSendRateLabel, SEND_AMOUNT_CONTINUE_CTA } from '@easner/shared'
 import type { Recipient } from '../../types'
 import type { HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
 import { SendSelectedRecipientSummary } from './SendSelectedRecipientSummary'
@@ -153,14 +153,7 @@ export function SendAmountShellWebForm({
   const amountSymbol = getSendAmountFieldSymbol(amountInputCurrency)
   const showExchangeHeader = showCrossCurrencyExchangeUi
 
-  const continueLabel =
-    selectedPaymentMethod === 'balance'
-      ? 'Continue'
-      : selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency && selectedOtherPaymentMethod
-        ? 'Authorize'
-        : selectedPaymentMethod
-          ? 'Authorize'
-          : 'Select Method'
+  const continueLabel = selectedPaymentMethod ? SEND_AMOUNT_CONTINUE_CTA : 'Select Method'
 
   const renderExchangeHeader = () => {
     if (!showExchangeHeader) {

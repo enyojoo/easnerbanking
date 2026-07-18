@@ -679,12 +679,20 @@ export {
 export type { YcRateClientRow } from "./yc-pay-in-rates"
 export {
   YC_PAY_IN_SEND_EXACTLY_LABEL,
+  YC_PAY_IN_CONTINUE_CTA,
+  YC_PAY_IN_BANK_COMPLETE_CTA,
   YC_PAY_IN_MOMO_AUTHORIZE_CTA,
+  ycPayInCompleteCta,
   ycPayInInstructionNotice,
   ycPayInCompleteNotice,
   ycPayInMomoAuthorizeNotice,
   ycPayInSendingExactlyCopy,
 } from "./yc-pay-in-copy"
+export {
+  SEND_AMOUNT_CONTINUE_CTA,
+  SEND_REVIEW_CONFIRM_CTA,
+  SEND_REVIEW_CONTINUE_CTA,
+} from "./send-flow-copy"
 export {
   REVIEW_ROW_LABELS,
   TLC_LOCAL_TRANSFER_METHOD,

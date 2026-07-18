@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import {
   formatMoneyDisplay,
   REVIEW_ROW_LABELS,
-  YC_PAY_IN_MOMO_AUTHORIZE_CTA,
+  ycPayInCompleteCta,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
   ycPayInCompleteNotice,
   type YcPayInRail,
@@ -155,7 +155,7 @@ export function YcCompleteDepositPanel({
           href={transactionWebDetailPath(transactionId, { returnTo })}
           replace
         >
-          {isMomo ? YC_PAY_IN_MOMO_AUTHORIZE_CTA : "I've made the payment"}
+          {ycPayInCompleteCta(payInRail)}
         </Link>
       </Button>
     </div>

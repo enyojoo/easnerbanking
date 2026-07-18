@@ -15,6 +15,7 @@ import {
   resolveReceiveCountryName,
   sendLocalPayInBankTitle,
   sendLocalPayInMomoTitle,
+  SEND_AMOUNT_CONTINUE_CTA,
   SEND_LOCAL_PAY_IN_BANK_CHIP,
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
   convertNoahSendFlowAmounts,
@@ -809,8 +810,6 @@ export default function SendPage() {
 
   const canContinue = isBalanceSource ? canContinueBalance : canContinueOtherCurrency
 
-  const isAuthorizeFlow = !isBalanceSource
-
   const hasInsufficientBalance =
     isBalanceSource &&
     sourceAccount &&
@@ -1426,12 +1425,10 @@ export default function SendPage() {
         {isContinueLoading ? (
           <span className="inline-flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            {isAuthorizeFlow ? "Authorize" : "Continue"}
+            {SEND_AMOUNT_CONTINUE_CTA}
           </span>
-        ) : isAuthorizeFlow ? (
-          "Authorize"
         ) : (
-          "Continue"
+          SEND_AMOUNT_CONTINUE_CTA
         )}
       </Button>
 

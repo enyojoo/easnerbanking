@@ -83,6 +83,7 @@ import {
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
   validateYcCrossBorderSendAmount,
   useDebouncedValue,
+  SEND_AMOUNT_CONTINUE_CTA,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
@@ -1974,15 +1975,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 <ActivityIndicator color={colors.text.inverse} size="small" />
               ) : (
                 <Text style={styles.sendButtonText}>
-                  {selectedPaymentMethod === 'balance'
-                    ? 'Continue'
-                    : selectedPaymentMethod === 'otherCurrency' &&
-                        selectedOtherCurrency &&
-                        selectedOtherPaymentMethod
-                      ? 'Authorize'
-                      : selectedPaymentMethod
-                        ? 'Authorize'
-                        : 'Select Method'}
+                  {selectedPaymentMethod
+                    ? SEND_AMOUNT_CONTINUE_CTA
+                    : 'Select Method'}
                 </Text>
               )}
             </LinearGradient>

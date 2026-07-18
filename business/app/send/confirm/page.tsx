@@ -16,6 +16,8 @@ import {
   resolvePayoutCountryCode,
   resolveRecipientPayoutRail,
   resolveSendConfirmArrivalHint,
+  SEND_REVIEW_CONFIRM_CTA,
+  SEND_REVIEW_CONTINUE_CTA,
   resolveYcCrossBorderLocalPayInBreakdownForDisplay,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
@@ -1063,9 +1065,9 @@ export default function SendConfirmPage() {
               Sending…
             </>
           ) : isYcCrossBorder ? (
-            "Continue"
+            SEND_REVIEW_CONTINUE_CTA
           ) : (
-            "Authorize transfer"
+            SEND_REVIEW_CONFIRM_CTA
           )}
         </Button>
       </div>

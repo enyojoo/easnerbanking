@@ -20,6 +20,7 @@ import {
   resolvePayoutCountryCode,
   resolveRecipientPayoutRail,
   REVIEW_ROW_LABELS,
+  SEND_REVIEW_CONFIRM_CTA,
   formatAccountBalanceLabel,
   formatReviewRowMoneyDisplay,
 } from '@easner/shared'
@@ -936,7 +937,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 <Text style={styles.ctaText}>Sending…</Text>
               </View>
             ) : (
-              <Text style={styles.ctaText}>Confirm & Send</Text>
+              <Text style={styles.ctaText}>{SEND_REVIEW_CONFIRM_CTA}</Text>
             )}
           </LinearGradient>
         </Pressable>

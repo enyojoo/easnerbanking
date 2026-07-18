@@ -14,7 +14,7 @@ import {
   resolveYcCrossBorderLocalPayInBreakdownForDisplay,
   resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   ycPayInCompleteNotice,
-  YC_PAY_IN_MOMO_AUTHORIZE_CTA,
+  ycPayInCompleteCta,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
   REVIEW_ROW_LABELS,
 } from '@easner/shared'
@@ -129,7 +129,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
           : null
       : null
   const feeLocal = payInBreakdown?.feeLocal ?? processingFeeLocal ?? 0
-  const ctaLabel = isMobileMoney ? YC_PAY_IN_MOMO_AUTHORIZE_CTA : "I've made the payment"
+  const ctaLabel = ycPayInCompleteCta(payInRail)
 
   const handleCopy = async (text: string, key: string) => {
     haptics.tap()

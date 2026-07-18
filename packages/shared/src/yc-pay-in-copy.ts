@@ -3,8 +3,19 @@ export type YcPayInRail = 'bank_transfer' | 'mobile_money'
 /** Prefix for the pay-in amount reminder — render at body size; amount is styled separately. */
 export const YC_PAY_IN_SEND_EXACTLY_LABEL = 'Send exactly'
 
-/** CTA on the MoMo authorize screen. */
+/** CTA on amount, MoMo setup, and review steps before pay-in complete. */
+export const YC_PAY_IN_CONTINUE_CTA = 'Continue'
+
+/** CTA on bank pay-in complete (after VA / send-exactly instructions). */
+export const YC_PAY_IN_BANK_COMPLETE_CTA = "I've made the payment"
+
+/** CTA on the MoMo pay-in complete screen (STK / phone prompt). */
 export const YC_PAY_IN_MOMO_AUTHORIZE_CTA = 'Authorize payment'
+
+/** CTA on YC pay-in complete screens by rail. */
+export function ycPayInCompleteCta(rail: YcPayInRail): string {
+  return rail === 'mobile_money' ? YC_PAY_IN_MOMO_AUTHORIZE_CTA : YC_PAY_IN_BANK_COMPLETE_CTA
+}
 
 /** Instruction shown above bank pay-in payment details. */
 export function ycPayInInstructionNotice(rail: YcPayInRail): string {
