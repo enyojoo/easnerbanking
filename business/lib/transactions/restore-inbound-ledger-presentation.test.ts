@@ -38,4 +38,34 @@ describe("restoreInboundLedgerPresentation", () => {
     expect(restored.display_amount).toBe(2000)
     expect((restored.metadata as Record<string, unknown>).noah).toBeUndefined()
   })
+
+  it("uses usd_credit when ledger amount is zero after Noah mis-map", () => {
+    const row = {
+      provider: "yellowcard",
+      direction: "in",
+      status: "settled",
+      amount: 0,
+      currency: "USD",
+      metadata: {
+        yc_mode: "fund_balance",
+        usd_credit: 2500,
+        settled_amount: 2500,
+      },
+    }
+    const broken = {
+      type: "send",
+      direction: "debit",
+      amount: 0,
+      status: "unknown",
+      currency: "USD",
+      metadata: { noah: { id: "x", event: "RECEIVE.PROCESSING", sequenceId: "yc_fb_x" } },
+    }
+
+    const restored = restoreInboundLedgerPresentation(row, broken)
+
+    expect(restored.amount).toBe(2500)
+    expect(restored.display_amount).toBe(2500)
+    expect(restored.direction).toBe("credit")
+    expect(restored.status).toBe("completed")
+  })
 })

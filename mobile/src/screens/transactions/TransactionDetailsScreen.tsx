@@ -378,14 +378,33 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const heroAmountLabel = useMemo(() => {
     if (!transaction) return ''
-    const amount = Number(transaction.display_amount ?? transaction.amount)
-    const currency = String(transaction.display_currency ?? transaction.currency ?? 'USD')
-    const received = transaction.transaction_type === 'receive'
+    const amount = Number(
+      transaction.display_amount ??
+        transaction.posted_amount ??
+        transaction.final_amount ??
+        transaction.settled_amount ??
+        transaction.receipt_final_amount ??
+        transaction.amount,
+    )
+    const currency = String(
+      transaction.display_currency ??
+        transaction.posted_currency ??
+        transaction.settled_currency ??
+        transaction.currency ??
+        'USD',
+    )
+    const received =
+      transaction.transaction_type === 'receive' ||
+      transaction.direction === 'credit' ||
+      inboundReceive != null
     return formatSignedCurrency(amount, currency, received)
-  }, [transaction])
+  }, [transaction, inboundReceive])
 
   const heroAmountTextStyle = useMemo(() => {
-    const received = transaction?.transaction_type === 'receive'
+    const received =
+      transaction?.transaction_type === 'receive' ||
+      transaction?.direction === 'credit' ||
+      inboundReceive != null
     return buildDynamicAmountTextStyle(
       [styles.heroAmount, received ? styles.heroAmountIn : styles.heroAmountOut],
       heroAmountLabel || '0',

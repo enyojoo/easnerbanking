@@ -25,7 +25,8 @@ export function restoreInboundLedgerPresentation(
     isBankOnrampDepositFlow(meta)
   if (!isYcInbound) return transaction
 
-  const amount = typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
+  const amount =
+    typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
   const currency = String(row.currency ?? "USD")
   const status = mapLedgerStatusForPresentation(String(row.status ?? ""))
   const txMeta = { ...((transaction.metadata as Record<string, unknown> | undefined) ?? {}) }
@@ -40,17 +41,27 @@ export function restoreInboundLedgerPresentation(
   const usdCredit =
     typeof meta?.usd_credit === "number"
       ? meta.usd_credit
-      : Number(meta?.usd_credit) || amount
+      : Number(meta?.usd_credit) ||
+        Number(meta?.settled_amount) ||
+        Number(meta?.posted_amount) ||
+        amount
+
+  const resolvedAmount =
+    amount > 0
+      ? amount
+      : usdCredit > 0
+        ? usdCredit
+        : Number(meta?.settled_amount) || Number(meta?.posted_amount) || amount
 
   return {
     ...transaction,
     type: "receive",
     transaction_type: "receive",
     direction: "credit",
-    amount,
+    amount: resolvedAmount,
     currency,
     status,
-    display_amount: usdCredit,
+    display_amount: usdCredit > 0 ? usdCredit : resolvedAmount,
     display_currency: currency,
     metadata: txMeta,
   }
