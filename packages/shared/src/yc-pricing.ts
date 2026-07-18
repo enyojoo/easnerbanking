@@ -342,6 +342,49 @@ export function estimateYcFundBalanceReceiveLegFeesUsd(input: {
   })
 }
 
+/**
+ * YC often embeds receive leg fees in `cryptoAmount` without populating fee fields.
+ * Infer missing fees from locked local pay-in vs omnibus settlement when needed.
+ */
+export function inferYcReceiveLegFeesUsd(input: {
+  lockedLocalPayIn: number
+  customerSellRate: number
+  cryptoAmountUsd: number
+  networkFeeAmountUsd?: number
+  serviceFeeAmountUsd?: number
+}): number {
+  const reported = roundUsdc(
+    (input.networkFeeAmountUsd ?? 0) + (input.serviceFeeAmountUsd ?? 0),
+  )
+  if (reported > 0) return reported
+  const grossUsd = roundUsdc(input.lockedLocalPayIn / input.customerSellRate)
+  const cryptoAmountUsd = roundUsdc(input.cryptoAmountUsd)
+  if (
+    grossUsd > 0 &&
+    cryptoAmountUsd > 0 &&
+    grossUsd > cryptoAmountUsd + YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC
+  ) {
+    return roundUsdc(grossUsd - cryptoAmountUsd)
+  }
+  return 0
+}
+
+/** Retry POST /receive with extra local pay-in when omnibus settlement is short. */
+export function bumpYcFundBalanceLocalPayInForOmnibusShortfall(input: {
+  localPayIn: number
+  customerSellRate: number
+  requiredOmnibus: number
+  cryptoAmount: number
+  padRatio?: number
+}): number {
+  const shortfall = Math.max(0, roundUsdc(input.requiredOmnibus - input.cryptoAmount))
+  if (shortfall <= YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC) {
+    return roundLocal(input.localPayIn)
+  }
+  const pad = input.padRatio ?? 1.01
+  return roundLocal(input.localPayIn + shortfall * input.customerSellRate * pad)
+}
+
 /** Send exactly = locked USD credit at Easner rate + all processing fees (local). */
 export function computeYcFundBalanceSendExactlyLocal(input: {
   usdCredit: number
@@ -564,12 +607,19 @@ export function computeYcFundBalancePricingBeforeReceive(input: {
       },
     })
   }
-  return computeYcFundBalancePricing({
-    localPayIn: input.localPayIn,
+  const localPayIn = Number(input.localPayIn)
+  if (!(localPayIn > 0)) {
+    throw new Error("usdCredit or localPayIn required")
+  }
+  // Local entry covers credit + Easner fee; pad YC receive fees via the usdCredit solve path.
+  const neededOmnibus = roundUsdc(localPayIn / input.customerSellRate)
+  const bps = input.processingFeeBps ?? 100
+  const usdCredit = roundUsdc(neededOmnibus / (1 + bps / 10_000))
+  return computeYcFundBalancePricingBeforeReceive({
+    usdCredit,
     customerSellRate: input.customerSellRate,
     ycSellRate: input.ycSellRate,
     processingFeeBps: input.processingFeeBps,
-    receiveLeg: { cryptoAmountUsd: 0 },
   })
 }
 

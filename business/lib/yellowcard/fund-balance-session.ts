@@ -6,7 +6,7 @@ import {
   buildYcFundBalanceDisplayFees,
   computeDisplayProcessingFee,
   computeYcFundBalancePricing,
-  estimateYcFundBalanceReceiveLegFeesUsd,
+  computeYcFundBalancePricingBeforeReceive,
   resolveYcFundBalanceDepositTitle,
   resolveYcPayInLimits,
   validateYcPayInLocalAmount,
@@ -149,23 +149,11 @@ async function prepareFundBalanceSession(ctx: FundBalanceSessionContext) {
     )
   }
 
-  const provisional = computeYcFundBalancePricing({
+  const provisional = computeYcFundBalancePricingBeforeReceive({
     usdCredit: ctx.usdCredit,
     localPayIn: ctx.localPayIn,
     customerSellRate: Number(leg.easner_sell),
     ycSellRate: Number(leg.yc_sell),
-    receiveLeg:
-      ctx.usdCredit != null && ctx.usdCredit > 0
-        ? {
-            cryptoAmountUsd: 0,
-            networkFeeAmountUsd: estimateYcFundBalanceReceiveLegFeesUsd({
-              usdCredit: ctx.usdCredit,
-              customerSellRate: Number(leg.easner_sell),
-              ycSellRate: Number(leg.yc_sell),
-            }),
-            serviceFeeAmountUsd: 0,
-          }
-        : { cryptoAmountUsd: 0 },
   })
 
   const amountCheck = validateYcPayInLocalAmount({

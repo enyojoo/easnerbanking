@@ -2,11 +2,14 @@ import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   YC_QUOTE_TTL_MS,
+  YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC,
   buildYcFundBalanceDepositReviewSnapshot,
   buildYcFundBalanceDisplayFees,
+  bumpYcFundBalanceLocalPayInForOmnibusShortfall,
   checkYcFundBalanceOmnibusSufficient,
   computeYcFundBalancePricing,
   computeYcFundBalancePricingBeforeReceive,
+  inferYcReceiveLegFeesUsd,
   parseYcReceiveRejectedMinError,
   resolveYcFundBalanceDepositTitle,
   resolveYcPayInLimits,
@@ -214,16 +217,39 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
   }
 }
 
+function buildFundBalanceReceiveLeg(input: {
+  receiveRes: YcReceiveSubmitResult
+  customerSellRate: number
+  fallbackLocalPayIn: number
+}) {
+  const cryptoAmountUsd = Number(input.receiveRes.settlementInfo?.cryptoAmount ?? 0)
+  const lockedLocalPayIn = Number(input.receiveRes.localAmount ?? input.fallbackLocalPayIn)
+  const networkFeeAmountUsd = Number(input.receiveRes.networkFeeAmountUSD ?? 0)
+  const serviceFeeAmountUsd = Number(input.receiveRes.serviceFeeAmountUSD ?? 0)
+  const inferredFees = inferYcReceiveLegFeesUsd({
+    lockedLocalPayIn,
+    customerSellRate: input.customerSellRate,
+    cryptoAmountUsd,
+    networkFeeAmountUsd,
+    serviceFeeAmountUsd,
+  })
+  return {
+    cryptoAmountUsd,
+    networkFeeAmountUsd: networkFeeAmountUsd > 0 ? networkFeeAmountUsd : inferredFees,
+    serviceFeeAmountUsd,
+  }
+}
+
 function computeFundBalancePricingFromReceive(input: {
   ctx: FundBalanceQuoteInput
   prepared: Awaited<ReturnType<typeof prepareFundBalanceQuote>>
   receiveRes: YcReceiveSubmitResult
 }) {
-  const receiveLeg = {
-    cryptoAmountUsd: Number(input.receiveRes.settlementInfo?.cryptoAmount ?? 0),
-    networkFeeAmountUsd: Number(input.receiveRes.networkFeeAmountUSD ?? 0),
-    serviceFeeAmountUsd: Number(input.receiveRes.serviceFeeAmountUSD ?? 0),
-  }
+  const receiveLeg = buildFundBalanceReceiveLeg({
+    receiveRes: input.receiveRes,
+    customerSellRate: input.prepared.customerRate,
+    fallbackLocalPayIn: input.prepared.provisional.localPayIn,
+  })
   const usdCreditTarget = input.ctx.usdCredit != null && Number(input.ctx.usdCredit) > 0
   return usdCreditTarget
     ? computeYcFundBalancePricing({
@@ -309,6 +335,19 @@ async function submitFundBalanceYcReceive(input: {
     }
 
     if (attempt === 0) {
+      const shortfall = Math.max(
+        0,
+        omnibusCheck.requiredOmnibus - omnibusCheck.cryptoAmount,
+      )
+      if (shortfall > YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC) {
+        localAmount = bumpYcFundBalanceLocalPayInForOmnibusShortfall({
+          localPayIn: Math.max(localAmount, ycLockedPayIn),
+          customerSellRate: input.prepared.customerRate,
+          requiredOmnibus: omnibusCheck.requiredOmnibus,
+          cryptoAmount: omnibusCheck.cryptoAmount,
+        })
+        continue
+      }
       localAmount = Math.max(pricing.localPayIn, ycLockedPayIn)
       continue
     }

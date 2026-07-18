@@ -18,6 +18,8 @@ import {
   computeYcFundBalanceSendExactlyLocal,
   easnerFeeLocalFromUsdCredit,
   estimateYcFundBalanceReceiveLegFeesUsd,
+  inferYcReceiveLegFeesUsd,
+  bumpYcFundBalanceLocalPayInForOmnibusShortfall,
 } from "./yc-pricing"
 
 describe("computeYcFundBalancePricing", () => {
@@ -107,6 +109,48 @@ describe("computeYcFundBalancePricingBeforeReceive", () => {
     })
     expect(padded.localPayIn).toBeGreaterThan(preview.localPayIn)
     expect(padded.ycLegFeesUsd).toBeGreaterThan(0)
+  })
+
+  it("pads localPayIn entry that only covers credit + Easner fee", () => {
+    const unpadded = computeYcFundBalancePricing({
+      usdCredit: 1000,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+      receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    })
+    const padded = computeYcFundBalancePricingBeforeReceive({
+      localPayIn: unpadded.localPayIn,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+    })
+    expect(padded.localPayIn).toBeGreaterThan(unpadded.localPayIn)
+    expect(padded.usdCredit).toBe(1000)
+  })
+})
+
+describe("inferYcReceiveLegFeesUsd", () => {
+  it("infers embedded fees when YC fee fields are zero", () => {
+    expect(
+      inferYcReceiveLegFeesUsd({
+        lockedLocalPayIn: 133825,
+        customerSellRate: 132.5,
+        cryptoAmountUsd: 986.9886349,
+        networkFeeAmountUsd: 0,
+        serviceFeeAmountUsd: 0,
+      }),
+    ).toBeCloseTo(23.011365, 4)
+  })
+})
+
+describe("bumpYcFundBalanceLocalPayInForOmnibusShortfall", () => {
+  it("adds local pay-in for omnibus shortfall", () => {
+    const bumped = bumpYcFundBalanceLocalPayInForOmnibusShortfall({
+      localPayIn: 133825,
+      customerSellRate: 132.5,
+      requiredOmnibus: 1010,
+      cryptoAmount: 986.9886349,
+    })
+    expect(bumped).toBeGreaterThan(133825)
   })
 })
 

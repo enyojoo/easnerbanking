@@ -629,6 +629,8 @@ export {
   YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC,
   estimateYcFundBalanceReceiveLegFeesUsd,
   estimateYcReceiveLegFeesUsd,
+  inferYcReceiveLegFeesUsd,
+  bumpYcFundBalanceLocalPayInForOmnibusShortfall,
   computeYcFundBalanceSendExactlyLocal,
   easnerFeeLocalFromUsdCredit,
   ycLegFeesLocal,

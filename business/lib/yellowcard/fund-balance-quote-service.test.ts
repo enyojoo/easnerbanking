@@ -96,6 +96,40 @@ describe("confirmFundBalanceOrder", () => {
     vi.mocked(findReusableYcTransfer).mockResolvedValue(null)
   })
 
+  it("retries with bumped local pay-in when YC embeds receive fees in cryptoAmount", async () => {
+    vi.mocked(submitYcReceive)
+      .mockResolvedValueOnce({
+        id: "yc-short",
+        localAmount: 133825,
+        settlementInfo: { cryptoAmount: 986.9886349 },
+        networkFeeAmountUSD: 0,
+        serviceFeeAmountUSD: 0,
+      })
+      .mockResolvedValueOnce({
+        id: "yc-ok",
+        localAmount: 137041.95,
+        settlementInfo: { cryptoAmount: 1010 },
+        networkFeeAmountUSD: 0,
+        serviceFeeAmountUSD: 0,
+      })
+
+    const admin = makeAdmin()
+    admin.chain.single
+      .mockResolvedValueOnce({ data: { id: "tx-1" } })
+      .mockResolvedValueOnce({ data: { id: "tr-1" } })
+
+    const result = await confirmFundBalanceOrder({
+      ...baseCtx,
+      admin,
+      usdCredit: 1000,
+    })
+
+    expect(result.quotePhase).toBe("locked")
+    expect(submitYcReceive).toHaveBeenCalledTimes(2)
+    const secondCall = vi.mocked(submitYcReceive).mock.calls[1]?.[0]
+    expect(secondCall?.localAmount).toBeGreaterThan(133825)
+  })
+
   it("rejects confirm when YC cryptoAmount cannot fund credit + processing fee", async () => {
     vi.mocked(submitYcReceive).mockResolvedValue({
       id: "yc-1",
