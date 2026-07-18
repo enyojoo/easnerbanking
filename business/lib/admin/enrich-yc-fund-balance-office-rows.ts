@@ -7,16 +7,48 @@ import {
 import { isOfficeYcFundBalancePayIn, type TxRow } from "@/lib/admin/office-overview-compute"
 
 type YcTransferRow = {
+  id: string
   transaction_id: string | null
   quoted_pay_in: number | null
   pay_in_currency: string | null
   quoted_receive: number | null
   customer_rate: number | null
+  leg1_sequence_id: string | null
   metadata: Record<string, unknown> | null
 }
 
 function asMeta(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
+}
+
+function readMetaString(meta: Record<string, unknown>, key: string): string {
+  const value = meta[key]
+  return value != null ? String(value).trim() : ""
+}
+
+function collectFundBalanceTransferLookupKeys(row: TxRow): {
+  sequenceIds: string[]
+  transferIds: string[]
+} {
+  const meta = row.metadata ?? {}
+  const sequenceIds = new Set<string>()
+  const transferIds = new Set<string>()
+
+  for (const key of ["yc_sequence_id", "leg1_sequence_id", "sequence_id"] as const) {
+    const value = readMetaString(meta, key)
+    if (value) sequenceIds.add(value)
+  }
+
+  const providerTxId = String(row.provider_transaction_id ?? meta.provider_transaction_id ?? "").trim()
+  if (providerTxId) sequenceIds.add(providerTxId)
+
+  const transferId = readMetaString(meta, "yc_transfer_id")
+  if (transferId) transferIds.add(transferId)
+
+  return {
+    sequenceIds: [...sequenceIds],
+    transferIds: [...transferIds],
+  }
 }
 
 function hasResolvedFundBalanceLocalPayIn(meta: Record<string, unknown>): boolean {
@@ -63,6 +95,7 @@ function mergeFundBalanceTransferContext(
     ...(localCurrency ? { local_currency: localCurrency } : {}),
     ...(Number.isFinite(customerRate) && customerRate > 0 ? { customer_rate: customerRate } : {}),
     ...(Number.isFinite(usdCredit) && usdCredit > 0 ? { usd_credit: usdCredit } : {}),
+    ...(readMetaString(meta, "yc_mode") ? {} : { yc_mode: "fund_balance" }),
   }
 
   if (!normalizeYcFundBalanceDepositReview(patched.deposit_review)) {
@@ -91,41 +124,93 @@ function mergeFundBalanceTransferContext(
   return patched
 }
 
+function resolveTransferForRow(
+  row: TxRow,
+  byTransactionId: Map<string, YcTransferRow>,
+  bySequenceId: Map<string, YcTransferRow>,
+  byTransferId: Map<string, YcTransferRow>,
+): YcTransferRow | undefined {
+  const meta = row.metadata ?? {}
+  return (
+    byTransactionId.get(row.id) ??
+    byTransferId.get(readMetaString(meta, "yc_transfer_id")) ??
+    collectFundBalanceTransferLookupKeys(row).sequenceIds
+      .map((sequenceId) => bySequenceId.get(sequenceId))
+      .find(Boolean)
+  )
+}
+
+async function loadFundBalanceTransfersForRows(
+  admin: SupabaseClient,
+  rows: TxRow[],
+): Promise<YcTransferRow[]> {
+  const transactionIds = new Set<string>()
+  const sequenceIds = new Set<string>()
+  const transferIds = new Set<string>()
+
+  for (const row of rows) {
+    if (!isOfficeYcFundBalancePayIn(row)) continue
+    if (hasResolvedFundBalanceLocalPayIn(row.metadata ?? {})) continue
+    transactionIds.add(row.id)
+    const keys = collectFundBalanceTransferLookupKeys(row)
+    for (const sequenceId of keys.sequenceIds) sequenceIds.add(sequenceId)
+    for (const transferId of keys.transferIds) transferIds.add(transferId)
+  }
+
+  const orFilters: string[] = []
+  if (transactionIds.size > 0) {
+    orFilters.push(`transaction_id.in.(${[...transactionIds].join(",")})`)
+  }
+  if (sequenceIds.size > 0) {
+    orFilters.push(`leg1_sequence_id.in.(${[...sequenceIds].join(",")})`)
+  }
+  if (transferIds.size > 0) {
+    orFilters.push(`id.in.(${[...transferIds].join(",")})`)
+  }
+  if (orFilters.length === 0) return []
+
+  const { data, error } = await admin
+    .from("yc_transfers")
+    .select(
+      "id, transaction_id, quoted_pay_in, pay_in_currency, quoted_receive, customer_rate, leg1_sequence_id, metadata",
+    )
+    .eq("mode", "fund_balance")
+    .or(orFilters.join(","))
+
+  if (error) {
+    console.error("enrichYcFundBalanceOfficeRows:", error)
+    return []
+  }
+
+  return (data ?? []) as YcTransferRow[]
+}
+
 /** Patch YC fund-balance rows with local pay-in from linked yc_transfers when metadata is USD-only. */
 export async function enrichYcFundBalanceOfficeRows<T extends TxRow>(
   admin: SupabaseClient,
   rows: T[],
 ): Promise<T[]> {
-  const candidates = rows.filter(
-    (row) => isOfficeYcFundBalancePayIn(row) && !hasResolvedFundBalanceLocalPayIn(row.metadata ?? {}),
-  )
-  if (candidates.length === 0) return rows
+  const transfers = await loadFundBalanceTransfersForRows(admin, rows)
+  if (transfers.length === 0) return rows
 
-  const txIds = candidates.map((row) => row.id)
-  const { data: transfers, error } = await admin
-    .from("yc_transfers")
-    .select("transaction_id, quoted_pay_in, pay_in_currency, quoted_receive, customer_rate, metadata")
-    .in("transaction_id", txIds)
-    .eq("mode", "fund_balance")
+  const byTransactionId = new Map<string, YcTransferRow>()
+  const bySequenceId = new Map<string, YcTransferRow>()
+  const byTransferId = new Map<string, YcTransferRow>()
 
-  if (error) {
-    console.error("enrichYcFundBalanceOfficeRows:", error)
-    return rows
+  for (const transfer of transfers) {
+    const txId = transfer.transaction_id != null ? String(transfer.transaction_id) : ""
+    if (txId) byTransactionId.set(txId, transfer)
+    const sequenceId =
+      transfer.leg1_sequence_id != null ? String(transfer.leg1_sequence_id).trim() : ""
+    if (sequenceId) bySequenceId.set(sequenceId, transfer)
+    if (transfer.id) byTransferId.set(String(transfer.id), transfer)
   }
-
-  const transferByTxId = new Map<string, YcTransferRow>()
-  for (const raw of transfers ?? []) {
-    const txId = raw.transaction_id != null ? String(raw.transaction_id) : ""
-    if (txId) transferByTxId.set(txId, raw as YcTransferRow)
-  }
-
-  if (transferByTxId.size === 0) return rows
 
   return rows.map((row) => {
     if (!isOfficeYcFundBalancePayIn(row)) return row
     const meta = row.metadata ?? {}
     if (hasResolvedFundBalanceLocalPayIn(meta)) return row
-    const transfer = transferByTxId.get(row.id)
+    const transfer = resolveTransferForRow(row, byTransactionId, bySequenceId, byTransferId)
     if (!transfer) return row
     return {
       ...row,

@@ -28,6 +28,7 @@ export type TxRow = {
   amount?: number | null
   direction?: string | null
   provider?: string | null
+  provider_transaction_id?: string | null
   user_id?: string | null
   business_id?: string | null
   metadata?: Record<string, unknown> | null

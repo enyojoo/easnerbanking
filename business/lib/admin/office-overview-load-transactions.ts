@@ -11,7 +11,7 @@ import type { OfficeLedgerTransaction } from "./office-load-transactions"
 type AdminClient = ReturnType<typeof createSupabaseAdmin>
 
 const OVERVIEW_TX_SELECT =
-  "id, created_at, updated_at, occurred_at, status, currency, amount, direction, user_id, business_id, provider, metadata, payload, base_currency, base_amount, easner_transaction_id"
+  "id, created_at, updated_at, occurred_at, status, currency, amount, direction, user_id, business_id, provider, provider_transaction_id, metadata, payload, base_currency, base_amount, easner_transaction_id"
 
 type UserProfileRow = {
   id: string

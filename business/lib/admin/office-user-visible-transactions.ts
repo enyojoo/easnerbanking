@@ -102,6 +102,7 @@ function toTxRow(row: OfficeLedgerTransaction): TxRow {
     amount: row.amount,
     direction: row.direction,
     provider: row.provider,
+    provider_transaction_id: row.provider_transaction_id,
     metadata: row.metadata,
     payload: row.payload,
     base_currency: row.base_currency,
