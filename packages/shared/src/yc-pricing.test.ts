@@ -21,6 +21,7 @@ import {
   estimateYcFundBalanceReceiveLegFeesUsd,
   inferYcReceiveLegFeesUsd,
   bumpYcFundBalanceLocalPayInForOmnibusShortfall,
+  bumpYcCrossBorderLocalPayInForOmnibusShortfall,
   resolveYcFundBalanceSubmitLocalPayIn,
   YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
@@ -244,6 +245,18 @@ describe("bumpYcFundBalanceLocalPayInForOmnibusShortfall", () => {
     expect(padded.localPayIn - feeOnly.localPayIn).toBeGreaterThanOrEqual(
       YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC * 132.5 - 0.01,
     )
+  })
+})
+
+describe("bumpYcCrossBorderLocalPayInForOmnibusShortfall", () => {
+  it("adds local pay-in when leg-1 receive crypto is short", () => {
+    const bumped = bumpYcCrossBorderLocalPayInForOmnibusShortfall({
+      localPayIn: 47000,
+      ycSellFrom: 131.58,
+      requiredOmnibus: 366.39832,
+      cryptoAmount: 356.259099,
+    })
+    expect(bumped).toBeGreaterThan(47000)
   })
 })
 

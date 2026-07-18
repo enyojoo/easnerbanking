@@ -405,6 +405,43 @@ export function bumpYcFundBalanceLocalPayInForOmnibusShortfall(input: {
   return roundLocalUp(input.localPayIn + Math.max(fromShortfall, minBumpLocal))
 }
 
+/** Retry cross-border leg-1 POST /receive when receive crypto is below leg-2 + fee + margin. */
+export function bumpYcCrossBorderLocalPayInForOmnibusShortfall(input: {
+  localPayIn: number
+  ycSellFrom: number
+  requiredOmnibus: number
+  cryptoAmount: number
+  padRatio?: number
+}): number {
+  const shortfall = Math.max(0, roundUsdc(input.requiredOmnibus - input.cryptoAmount))
+  if (shortfall <= YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC) {
+    return roundLocalUp(input.localPayIn)
+  }
+  const pad = input.padRatio ?? 1.02
+  const fromShortfall = shortfall * input.ycSellFrom * pad
+  const minBumpLocal = input.ycSellFrom * Math.max(shortfall, 1)
+  return roundLocalUp(input.localPayIn + Math.max(fromShortfall, minBumpLocal))
+}
+
+/** POST /receive local pay-in: leg2 + fees + margin + conversion buffer (always round up). */
+export function resolveYcCrossBorderSubmitLocalPayIn(input: {
+  pricing: YcCrossBorderPricing
+  ycSellFrom: number
+}): number {
+  const requiredOmnibus = computeYcCrossBorderRequiredOmnibus({
+    sendCryptoUsd: input.pricing.sendCryptoUsd,
+    processingFee: input.pricing.processingFee,
+    marginAmount: input.pricing.marginAmount,
+  })
+  const bufferUsd = Math.max(
+    YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
+    roundUsdc(requiredOmnibus * 0.005),
+  )
+  const grossUsd = roundUsdc(requiredOmnibus + input.pricing.ycLegFeesUsd + bufferUsd)
+  const economicsLocal = roundLocalUp(grossUsd * input.ycSellFrom)
+  return roundLocalUp(Math.max(input.pricing.localPayIn, economicsLocal))
+}
+
 function applyYcFundBalanceBeforeReceiveBuffer(
   pricing: YcFundBalancePricing,
   customerSellRate: number,
@@ -843,7 +880,7 @@ export function computeYcCrossBorderPricingBeforeReceive(input: {
     customerSellRate: input.easnerSellFrom,
     ycSellRate: input.ycSellFrom,
   })
-  return computeYcCrossBorderPricing({
+  const priced = computeYcCrossBorderPricing({
     receiveAmount: input.receiveAmount,
     customerRate: input.customerRate,
     ycSellFrom: input.ycSellFrom,
@@ -856,4 +893,11 @@ export function computeYcCrossBorderPricingBeforeReceive(input: {
     },
     sendLeg: input.sendLeg,
   })
+  return {
+    ...priced,
+    localPayIn: resolveYcCrossBorderSubmitLocalPayIn({
+      pricing: priced,
+      ycSellFrom: input.ycSellFrom,
+    }),
+  }
 }
