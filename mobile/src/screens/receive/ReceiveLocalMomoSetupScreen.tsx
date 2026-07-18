@@ -4,24 +4,19 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { spacing } from '../../theme'
-import { YcFundBalanceReview } from '../../components/receive/YcFundBalanceReview'
-import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
+import { YcFundBalanceMomoSetup } from '../../components/receive/YcFundBalanceMomoSetup'
 
 type RouteParams = {
   localPayInCurrency: string
   residenceCountry: string
-  payInRail: YcPayInRail
   amountEntryMode: 'usd' | 'local'
   enteredAmount: number
   usdCredit: number
   localPayIn: number
   customerRate: number
-  sourcePhone?: string
-  networkId?: string
-  sourceNetworkName?: string
 }
 
-export default function ReceiveLocalReviewScreen({ navigation, route }: NavigationProps) {
+export default function ReceiveLocalMomoSetupScreen({ navigation, route }: NavigationProps) {
   const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const footerPadding = useFixedFooterPadding(spacing[5])
   const params = (route.params || {}) as Partial<RouteParams>
@@ -29,19 +24,15 @@ export default function ReceiveLocalReviewScreen({ navigation, route }: Navigati
   return (
     <ScreenWrapper>
       <View style={styles.container}>
-        <YcFundBalanceReview
+        <YcFundBalanceMomoSetup
           navigation={navigation}
           localPayInCurrency={params.localPayInCurrency ?? ''}
           residenceCountry={params.residenceCountry ?? ''}
-          payInRail={params.payInRail ?? 'bank_transfer'}
           amountEntryMode={params.amountEntryMode ?? 'usd'}
           enteredAmount={params.enteredAmount ?? 0}
           usdCredit={params.usdCredit ?? 0}
           localPayIn={params.localPayIn ?? 0}
           customerRate={params.customerRate ?? 0}
-          sourcePhone={params.sourcePhone}
-          networkId={params.networkId}
-          sourceNetworkName={params.sourceNetworkName}
           footerPadding={footerPadding}
           listBottomPadding={scrollBottomPadding}
         />

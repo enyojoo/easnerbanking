@@ -16,7 +16,6 @@ import {
   resolvePayoutCountryCode,
   resolveRecipientPayoutRail,
   resolveSendConfirmArrivalHint,
-  normalizeYcMomoPhone,
   resolveYcCrossBorderLocalPayInBreakdownForDisplay,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
@@ -44,11 +43,7 @@ import {
 } from "@/lib/wallet-send/map-wallet-quote-to-flow"
 import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
-import { residenceCountryFromPayInCurrency, useYcCrossBorderFlow } from "@/hooks/use-yc-cross-border-flow"
-import {
-  prefetchYcPayInNetworks,
-  readCachedYcPayInNetworks,
-} from "@/lib/yc-local-deposit-cache"
+import { residenceCountryFromPayInCurrency } from "@/hooks/use-yc-cross-border-flow"
 import {
   crossBorderQuoteToFlowState,
   ensureCrossBorderQuoteStashed,
@@ -60,10 +55,6 @@ import {
   peekLastCrossBorderQuoteError,
   type CrossBorderQuoteStashMeta,
 } from "@/lib/yc-cross-border-quote-cache"
-import { YcMomoPhoneInput } from "@/components/yc-momo-phone-input"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { REVIEW_ROW_LABELS } from "@easner/shared"
 import { ArrowLeft, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY_LOCAL = SEND_FLOW_STATE_KEY
@@ -110,39 +101,30 @@ export default function SendConfirmPage() {
   const [payoutQuoteError, setPayoutQuoteError] = useState<string | null>(null)
   const [walletQuoteError, setWalletQuoteError] = useState<string | null>(null)
   const [ycQuoteError, setYcQuoteError] = useState<string | null>(null)
-  const [momoPhone, setMomoPhone] = useState("")
-  const [momoNetworkId, setMomoNetworkId] = useState("")
-  const [momoNetworks, setMomoNetworks] = useState<{ id: string; name: string }[]>([])
-  const [momoNetworksLoading, setMomoNetworksLoading] = useState(false)
+  const [ycQuoteLoading, setYcQuoteLoading] = useState(false)
   const displayIdFallbackRef = useRef<string | null>(null)
 
   const isYcCrossBorder = isYcCrossBorderFlow(state)
   const isYcMomo =
     isYcCrossBorder && state?.otherPaymentMethod === "mobile_money"
 
-  const ycPreviewFlow = useYcCrossBorderFlow({
-    recipientId: isYcMomo ? (state?.recipient.id ?? null) : null,
-    enabled: isYcMomo && Boolean(state),
-    receiveCurrency: state?.receiveCurrency ?? "",
-    amountEntryMode: "receive",
-    enteredAmount: state?.amount ?? 0,
-    payInCurrencyOverride: state?.otherCurrency ?? null,
-    payInCountryOverride: state?.otherCurrency
-      ? residenceCountryFromPayInCurrency(state.otherCurrency) ?? null
-      : null,
-  })
-
   const displayTransactionId = useMemo(() => {
     if (isYcCrossBorder) {
       const etid = state?.ycCrossBorder?.easnerTransactionId?.trim()
       if (etid) return etid.toUpperCase()
-      if (isYcMomo) return ""
+      const tid = state?.ycCrossBorder?.transactionId?.trim()
+      if (tid) return tid.toUpperCase()
     }
     const s = state?.transactionId?.trim()
     if (s) return s.toUpperCase()
     if (!displayIdFallbackRef.current) displayIdFallbackRef.current = generateTransactionId()
     return displayIdFallbackRef.current
-  }, [isYcCrossBorder, isYcMomo, state?.transactionId, state?.ycCrossBorder?.easnerTransactionId])
+  }, [
+    isYcCrossBorder,
+    state?.transactionId,
+    state?.ycCrossBorder?.easnerTransactionId,
+    state?.ycCrossBorder?.transactionId,
+  ])
 
   const payoutRail =
     state
@@ -230,47 +212,99 @@ export default function SendConfirmPage() {
 
   useEffect(() => {
     if (!state || !isYcMomo) return
-    const payInCurrency = state.otherCurrency?.trim().toUpperCase()
-    const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
-    if (!payInCountry || !payInCurrency) return
-    let cancelled = false
-    const cached = readCachedYcPayInNetworks(payInCountry, payInCurrency)
-    if (cached?.length) {
-      setMomoNetworks(cached)
-      if (cached.length === 1) setMomoNetworkId(cached[0].id)
-    } else {
-      setMomoNetworksLoading(true)
+    if (state.ycMomoSetup?.sourcePhone && state.ycMomoSetup.networkId) return
+    router.replace("/send/momo-setup")
+  }, [state, isYcMomo, router])
+
+  useEffect(() => {
+    if (!state || !isYcCrossBorderFlow(state) || !(state.amount > 0)) return
+    if (state.otherPaymentMethod !== "mobile_money") return
+    const setup = state.ycMomoSetup
+    if (!setup?.sourcePhone || !setup.networkId) return
+
+    const payInCurrency = state.otherCurrency!.toUpperCase()
+    const payInCountry = residenceCountryFromPayInCurrency(payInCurrency)
+    if (!payInCountry) {
+      setYcQuoteError("Pay-in country could not be resolved.")
+      return
     }
+
+    const meta: CrossBorderQuoteStashMeta = {
+      recipientId: state.recipient.id,
+      payInCurrency,
+      payInCountry,
+      payInRail: "mobile_money",
+      receiveAmount: state.amount,
+      sourcePhone: setup.sourcePhone,
+      networkId: setup.networkId,
+      sourceNetworkName: setup.sourceNetworkName,
+    }
+
+    if (isStashedCrossBorderQuoteFresh(meta)) {
+      const stashed = peekCrossBorderQuote()
+      if (
+        stashed &&
+        state.ycCrossBorder?.localPayIn === stashed.localPayIn &&
+        state.ycCrossBorder?.customerRate === stashed.customerRate
+      ) {
+        return
+      }
+      if (stashed) {
+        const yc = crossBorderQuoteToFlowState(stashed, meta)
+        const next: SendFlowState = {
+          ...state,
+          sendAmount: yc.localPayIn,
+          sendCurrency: payInCurrency,
+          totalAmount: yc.localPayIn,
+          transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
+          ycCrossBorder: yc,
+        }
+        setState(next)
+        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
+      }
+      return
+    }
+
+    let cancelled = false
+    setYcQuoteError(null)
+    setYcQuoteLoading(true)
     void (async () => {
       try {
-        const rows = await prefetchYcPayInNetworks(payInCountry, payInCurrency)
-        if (!cancelled) {
-          setMomoNetworks(rows)
-          if (rows.length === 1) setMomoNetworkId(rows[0].id)
+        const quote = await ensureCrossBorderQuoteStashed(meta)
+        if (cancelled) return
+        if (!isUsableCrossBorderQuotePreview(quote)) {
+          setYcQuoteError(peekLastCrossBorderQuoteError() || "Cross-border quote failed")
+          return
         }
+        const yc = crossBorderQuoteToFlowState(quote, meta)
+        const next: SendFlowState = {
+          ...state,
+          sendAmount: yc.localPayIn,
+          sendCurrency: payInCurrency,
+          totalAmount: yc.localPayIn,
+          transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
+          ycCrossBorder: yc,
+        }
+        setState(next)
+        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
       } finally {
-        if (!cancelled) setMomoNetworksLoading(false)
+        if (!cancelled) setYcQuoteLoading(false)
       }
     })()
-    void (async () => {
-      try {
-        const res = await fetchWithSession("/api/settings/personal")
-        const data = (await res.json().catch(() => ({}))) as { personal?: { phone?: string | null } }
-        if (!cancelled && res.ok) {
-          const phone = String(data.personal?.phone ?? "").trim()
-          setMomoPhone((prev) =>
-            prev ||
-            (phone && payInCountry ? normalizeYcMomoPhone(phone, payInCountry) : phone),
-          )
-        }
-      } catch {
-        // optional prefill
-      }
-    })()
+
     return () => {
       cancelled = true
     }
-  }, [state, isYcMomo])
+  }, [
+    state?.recipient.id,
+    state?.amount,
+    state?.otherCurrency,
+    state?.otherPaymentMethod,
+    state?.ycMomoSetup?.sourcePhone,
+    state?.ycMomoSetup?.networkId,
+    state?.ycCrossBorder?.localPayIn,
+    state?.ycCrossBorder?.customerRate,
+  ])
 
   useEffect(() => {
     if (!state || isYcCrossBorderFlow(state) || isEasenetRecipient(state.recipient) || isWalletRecipient(state.recipient) || !(state.amount > 0))
@@ -489,36 +523,41 @@ export default function SendConfirmPage() {
             setAuthorizeError("Pay-in country could not be resolved.")
             return
           }
-          if (!momoPhone.trim() || !momoNetworkId) {
+          const setup = state.ycMomoSetup
+          if (!setup?.sourcePhone?.trim() || !setup.networkId) {
             setAuthorizeError("Mobile number and network are required.")
             return
           }
-          const net = momoNetworks.find((n) => n.id === momoNetworkId)
-          const meta: CrossBorderQuoteStashMeta = {
-            recipientId: state.recipient.id,
-            payInCurrency,
-            payInCountry,
-            payInRail: "mobile_money",
-            receiveAmount: state.amount,
-            sourcePhone: momoPhone.trim(),
-            networkId: momoNetworkId,
-            sourceNetworkName: net?.name,
+          if (!state.ycCrossBorder?.transferId) {
+            const meta: CrossBorderQuoteStashMeta = {
+              recipientId: state.recipient.id,
+              payInCurrency,
+              payInCountry,
+              payInRail: "mobile_money",
+              receiveAmount: state.amount,
+              sourcePhone: setup.sourcePhone.trim(),
+              networkId: setup.networkId,
+              sourceNetworkName: setup.sourceNetworkName,
+            }
+            const quote = await ensureCrossBorderOrderConfirmed(meta)
+            if (!isCompleteCrossBorderQuote(quote)) {
+              throw new Error(peekLastCrossBorderQuoteError() || "Could not confirm order")
+            }
+            const yc = crossBorderQuoteToFlowState(quote, meta)
+            const next: SendFlowState = {
+              ...state,
+              sendAmount: yc.localPayIn,
+              sendCurrency: payInCurrency,
+              totalAmount: yc.localPayIn,
+              transactionId: yc.easnerTransactionId || yc.transactionId,
+              ycCrossBorder: yc,
+            }
+            setState(next)
+            sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
+            router.push("/send/authorize/yc-pay-in")
+            return
           }
-          const quote = await ensureCrossBorderOrderConfirmed(meta)
-          if (!isCompleteCrossBorderQuote(quote)) {
-            throw new Error(peekLastCrossBorderQuoteError() || "Could not confirm order")
-          }
-          const yc = crossBorderQuoteToFlowState(quote, meta)
-          const next: SendFlowState = {
-            ...state,
-            sendAmount: yc.localPayIn,
-            sendCurrency: payInCurrency,
-            totalAmount: yc.localPayIn,
-            transactionId: yc.easnerTransactionId || yc.transactionId,
-            ycCrossBorder: yc,
-          }
-          setState(next)
-          sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
+          sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(state))
           router.push("/send/authorize/yc-pay-in")
         } catch (e) {
           setAuthorizeError(e instanceof Error ? e.message : "Could not continue")
@@ -873,13 +912,18 @@ export default function SendConfirmPage() {
   const pq = state.payoutQuote
   const wq = state.walletQuote
   const yc = state.ycCrossBorder
-  const ycPayInCountry = state.otherCurrency
-    ? residenceCountryFromPayInCurrency(state.otherCurrency.trim().toUpperCase())
-    : null
+  const momoQuoteLocked = Boolean(
+    isYcMomo &&
+      yc &&
+      yc.localPayIn > 0 &&
+      yc.customerRate > 0 &&
+      yc.expiresAt &&
+      !ycQuoteLoading,
+  )
   const quoteReady = isYcCrossBorder
     ? isYcMomo
-      ? Boolean(ycPreviewFlow.customerRate && ycPreviewFlow.preview.sendAmount > 0)
-      : Boolean(yc?.transferId)
+      ? momoQuoteLocked
+      : Boolean(yc?.localPayIn && yc?.customerRate)
     : easenetSend ||
       (walletSend
         ? isWalletQuoteFresh(wq, state.amount, state.recipient.id)
@@ -895,16 +939,12 @@ export default function SendConfirmPage() {
       ? state.sendCurrency
       : (pq?.easnerFeeCurrency ?? state.sendCurrency)
   const youSendAmount = isYcCrossBorder
-    ? isYcMomo
-      ? (yc?.localPayIn ?? ycPreviewFlow.preview.sendAmount)
-      : (yc?.localPayIn ?? state.sendAmount)
+    ? (yc?.localPayIn ?? state.sendAmount)
     : walletSend
       ? (wq?.sendAmount ?? state.sendAmount)
       : (pq?.customerPrincipal ?? pq?.sendAmount ?? state.sendAmount)
   const exchangeRate = isYcCrossBorder
-    ? isYcMomo
-      ? (yc?.customerRate ?? ycPreviewFlow.customerRate ?? 1)
-      : (yc?.customerRate ?? 1)
+    ? (yc?.customerRate ?? 1)
     : hasFx && (walletSend ? wq?.customerRate : pq?.midRate) &&
         (walletSend ? wq!.customerRate : pq!.midRate!) > 0
       ? walletSend
@@ -916,9 +956,7 @@ export default function SendConfirmPage() {
     : (pq?.displayChannelCost ?? 0)
   const networkFee = walletSend ? (wq?.networkFee ?? 0) : 0
   const totalDebited = isYcCrossBorder
-    ? isYcMomo
-      ? (yc?.localPayIn ?? ycPreviewFlow.preview.sendAmount)
-      : (yc?.localPayIn ?? state.sendAmount)
+    ? (yc?.localPayIn ?? state.sendAmount)
     : walletSend
       ? (wq?.totalDebited ?? state.sendAmount)
       : (pq?.totalDebited ?? state.sendAmount)
@@ -928,12 +966,11 @@ export default function SendConfirmPage() {
   const authorizeDisabled = isYcCrossBorder
     ? isYcMomo
       ? isAuthorizing ||
-        ycPreviewFlow.ratesLoading ||
+        ycQuoteLoading ||
         Boolean(ycQuoteError) ||
         !quoteReady ||
-        !momoPhone.trim() ||
-        !momoNetworkId
-      : isAuthorizing || Boolean(ycQuoteError) || !yc?.transferId || quoteCountdown.expired
+        quoteCountdown.expired
+      : isAuthorizing || Boolean(ycQuoteError) || !quoteReady || quoteCountdown.expired
     : isAuthorizing ||
       Boolean((walletSend ? walletQuoteError : payoutQuoteError) && !easenetSend) ||
       (!easenetSend && (!quoteReady || quoteCountdown.expired))
@@ -956,87 +993,43 @@ export default function SendConfirmPage() {
       </div>
 
       {isYcCrossBorder ? (
-        <YcLocalPayInReview
-          mode="cross_border_send"
-          phase={isYcMomo ? "preview" : yc?.transferId ? "locked" : "preview"}
-          rail={state.otherPaymentMethod === "mobile_money" ? "mobile_money" : "bank_transfer"}
-          payInCurrency={state.sendCurrency}
-          receiveCurrency={state.receiveCurrency}
-          customerRate={exchangeRate}
-          localPayIn={totalDebited}
-          receiveAmount={state.amount}
-          processingFeeLocal={tlcReviewFeeLocal}
-          processingFeeUsd={yc?.processingFee}
-          principalLocal={tlcReviewPrincipalLocal}
-          transactionId={displayTransactionId || undefined}
-          processingTime={arrivalHint ?? undefined}
-          recipientNode={
-            <SendSelectedRecipientSummary
-              beneficiary={state.recipient}
-              alignEnd
-              className="min-w-0 max-w-[70%] shrink-0"
-            />
-          }
-          quoteHint={
-            !isYcMomo && yc?.expiresAt ? (
-              <p className="text-xs text-muted-foreground pt-1">
-                {quoteCountdown.expired
-                  ? "Quote expired — go back and continue again."
-                  : `Quote valid for ${quoteCountdown.label}`}
-              </p>
-            ) : null
-          }
-          footer={
-            isYcMomo ? (
-              <div className="pt-4 space-y-3">
-                <div>
-                  <Label htmlFor="send-momo-phone">{REVIEW_ROW_LABELS.mobileNumber}</Label>
-                  {ycPayInCountry ? (
-                    <YcMomoPhoneInput
-                      id="send-momo-phone"
-                      countryCode={ycPayInCountry}
-                      value={momoPhone}
-                      onChange={setMomoPhone}
-                      className="mt-1"
-                      placeholder="712345678"
-                    />
-                  ) : (
-                    <Input
-                      id="send-momo-phone"
-                      value={momoPhone}
-                      onChange={(e) => setMomoPhone(e.target.value)}
-                      placeholder="+254712345678"
-                      className="mt-1"
-                    />
-                  )}
-                </div>
-                <div>
-                  <Label>{REVIEW_ROW_LABELS.paymentNetwork}</Label>
-                  {momoNetworksLoading ? (
-                    <div className="flex justify-center py-3">
-                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2 mt-2">
-                      {momoNetworks.map((network) => (
-                        <button
-                          key={network.id}
-                          type="button"
-                          className={`rounded-lg border px-3 py-2 text-left text-sm ${
-                            momoNetworkId === network.id ? "border-primary bg-primary/5" : "border-border"
-                          }`}
-                          onClick={() => setMomoNetworkId(network.id)}
-                        >
-                          {network.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : null
-          }
-        />
+        isYcMomo && (ycQuoteLoading || !momoQuoteLocked) && !ycQuoteError ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <YcLocalPayInReview
+            mode="cross_border_send"
+            phase={quoteReady ? "locked" : "preview"}
+            rail={state.otherPaymentMethod === "mobile_money" ? "mobile_money" : "bank_transfer"}
+            payInCurrency={state.sendCurrency}
+            receiveCurrency={state.receiveCurrency}
+            customerRate={exchangeRate}
+            localPayIn={totalDebited}
+            receiveAmount={state.amount}
+            processingFeeLocal={tlcReviewFeeLocal}
+            processingFeeUsd={yc?.processingFee}
+            principalLocal={tlcReviewPrincipalLocal}
+            transactionId={displayTransactionId || undefined}
+            processingTime={arrivalHint ?? undefined}
+            recipientNode={
+              <SendSelectedRecipientSummary
+                beneficiary={state.recipient}
+                alignEnd
+                className="min-w-0 max-w-[70%] shrink-0"
+              />
+            }
+            quoteHint={
+              yc?.expiresAt ? (
+                <p className="text-xs text-muted-foreground pt-1">
+                  {quoteCountdown.expired
+                    ? "Quote expired — go back and continue again."
+                    : `Quote valid for ${quoteCountdown.label}`}
+                </p>
+              ) : null
+            }
+          />
+        )
       ) : (
         <PayoutReviewDetailsRows
           transactionId={displayTransactionId}
@@ -1083,7 +1076,7 @@ export default function SendConfirmPage() {
           {isYcCrossBorder ? ycQuoteError : walletSend ? walletQuoteError : payoutQuoteError}
         </p>
       ) : null}
-      {!easenetSend && !isYcMomo && (yc?.expiresAt || wq?.expiresAt || pq?.expiresAt) ? (
+      {!easenetSend && !isYcCrossBorder && (wq?.expiresAt || pq?.expiresAt) ? (
         <div className="text-xs text-muted-foreground">
           {quoteCountdown.expired
             ? "Quote expired — go back and continue again for a fresh quote."

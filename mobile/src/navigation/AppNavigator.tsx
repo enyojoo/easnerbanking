@@ -82,6 +82,7 @@ import SelectRecentRecipientScreenNative from '../screens/send/SelectRecentRecip
 import ScanWalletAddressScreenNative from '../screens/recipients/ScanWalletAddressScreen'
 import SelectRecipientScreenNative from '../screens/send/SelectRecipientScreen'
 import SendConfirmScreenNative from '../screens/send/SendConfirmScreen'
+import SendCrossBorderMomoSetupScreenNative from '../screens/send/SendCrossBorderMomoSetupScreen'
 import SendPinScreenNative from '../screens/send/SendPinScreen'
 import YcPayInScreenNative from '../screens/send/YcPayInScreen'
 import YcPayInAuthorizeScreenNative from '../screens/send/YcPayInAuthorizeScreen'
@@ -92,6 +93,7 @@ import ReceiveBankDetailsScreenNative from '../screens/receive/ReceiveBankDetail
 import ReceiveLocalRailScreenNative from '../screens/receive/ReceiveLocalRailScreen'
 import ReceiveLocalAmountScreenNative from '../screens/receive/ReceiveLocalAmountScreen'
 import ReceiveLocalReviewScreenNative from '../screens/receive/ReceiveLocalReviewScreen'
+import ReceiveLocalMomoSetupScreenNative from '../screens/receive/ReceiveLocalMomoSetupScreen'
 import ReceiveTransactionDetailsScreenNative from '../screens/receive/ReceiveTransactionDetailsScreen'
 
 // Verification Screens
@@ -116,6 +118,10 @@ const SelectRecipientScreen = createWebLazyScreen(
 const SendConfirmScreen = createWebLazyScreen(
   () => import('../screens/send/SendConfirmScreen'),
   SendConfirmScreenNative,
+)
+const SendCrossBorderMomoSetupScreen = createWebLazyScreen(
+  () => import('../screens/send/SendCrossBorderMomoSetupScreen'),
+  SendCrossBorderMomoSetupScreenNative,
 )
 const SendPinScreen = createWebLazyScreen(
   () => import('../screens/send/SendPinScreen'),
@@ -153,6 +159,10 @@ const ReceiveLocalAmountScreen = createWebLazyScreen(
 const ReceiveLocalReviewScreen = createWebLazyScreen(
   () => import('../screens/receive/ReceiveLocalReviewScreen'),
   ReceiveLocalReviewScreenNative,
+)
+const ReceiveLocalMomoSetupScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveLocalMomoSetupScreen'),
+  ReceiveLocalMomoSetupScreenNative,
 )
 const ReceiveTransactionDetailsScreen = createWebLazyScreen(
   () => import('../screens/receive/ReceiveTransactionDetailsScreen'),
@@ -506,6 +516,14 @@ function MainStack() {
           }
         }}
       />
+      <Stack.Screen
+        name="SendCrossBorderMomoSetup"
+        component={SendCrossBorderMomoSetupScreen}
+        options={{
+          headerShown: false,
+          ...sendFlowStandardPreset(),
+        }}
+      />
       <Stack.Screen 
         name="SendConfirm" 
         component={SendConfirmScreen}
@@ -565,6 +583,14 @@ function MainStack() {
       <Stack.Screen
         name="ReceiveLocalAmount"
         component={ReceiveLocalAmountScreen}
+        options={{
+          headerShown: false,
+          ...sendFlowStandardPreset(),
+        }}
+      />
+      <Stack.Screen
+        name="ReceiveLocalMomoSetup"
+        component={ReceiveLocalMomoSetupScreen}
         options={{
           headerShown: false,
           ...sendFlowStandardPreset(),

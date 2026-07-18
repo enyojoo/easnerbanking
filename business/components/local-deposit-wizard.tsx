@@ -44,7 +44,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useYcPayInMinEnforcement } from "@/hooks/use-yc-pay-in-min-enforcement"
 
 type LocalRail = "bank_transfer" | "mobile_money"
-type WizardStep = "rail" | "amount" | "review" | "payin"
+type WizardStep = "rail" | "amount" | "momo_setup" | "review" | "payin"
 type AmountMode = "usd" | "local"
 
 import {
@@ -251,9 +251,31 @@ export function LocalDepositWizard({
 
   useEffect(() => {
     if (!isMomo || !residenceCountry || !localPayInCurrency) return
-    if (readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)?.length) return
-    void prefetchYcPayInNetworks(residenceCountry, localPayInCurrency)
-  }, [isMomo, residenceCountry, localPayInCurrency])
+    if (step !== "amount" && step !== "momo_setup") return
+    let cancelled = false
+    const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
+    if (cached?.length) {
+      setMomoNetworks(cached)
+      if (cached.length === 1 && !momoNetworkId) setMomoNetworkId(cached[0].id)
+      setMomoNetworksLoading(false)
+    } else {
+      setMomoNetworksLoading(true)
+    }
+    void (async () => {
+      try {
+        const res = await prefetchYcPayInNetworks(residenceCountry, localPayInCurrency)
+        if (!cancelled) {
+          setMomoNetworks(res)
+          if (res.length === 1 && !momoNetworkId) setMomoNetworkId(res[0].id)
+        }
+      } finally {
+        if (!cancelled) setMomoNetworksLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isMomo, residenceCountry, localPayInCurrency, step, momoNetworkId])
 
   useEffect(() => {
     if (initialStep === "amount" && initialRail) return
@@ -431,26 +453,8 @@ export function LocalDepositWizard({
   }, [debouncedQuotePrefetchKey])
 
   useEffect(() => {
-    if (step !== "review" || !isMomo) return
+    if (step !== "momo_setup" || !isMomo) return
     let cancelled = false
-    const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
-    if (cached?.length) {
-      setMomoNetworks(cached)
-      if (cached.length === 1) setMomoNetworkId(cached[0].id)
-    } else {
-      setMomoNetworksLoading(true)
-    }
-    void (async () => {
-      try {
-        const res = await prefetchYcPayInNetworks(residenceCountry, localPayInCurrency)
-        if (!cancelled) {
-          setMomoNetworks(res)
-          if (res.length === 1) setMomoNetworkId(res[0].id)
-        }
-      } finally {
-        if (!cancelled) setMomoNetworksLoading(false)
-      }
-    })()
     void (async () => {
       try {
         const res = await fetchWithSession("/api/settings/personal")
@@ -469,7 +473,7 @@ export function LocalDepositWizard({
     return () => {
       cancelled = true
     }
-  }, [step, isMomo, residenceCountry, localPayInCurrency])
+  }, [step, isMomo, residenceCountry])
 
   if (ngMissingType) {
     return (
@@ -503,7 +507,8 @@ export function LocalDepositWizard({
       return
     }
     if (step === "amount") setStep(bankAvailable && momoAvailable ? "rail" : "rail")
-    else if (step === "review") setStep("amount")
+    else if (step === "momo_setup") setStep("amount")
+    else if (step === "review") setStep(isMomo ? "momo_setup" : "amount")
     else if (step === "payin") setStep("review")
     else setStep("rail")
   }
@@ -652,20 +657,8 @@ export function LocalDepositWizard({
             setQuoteError(null)
             quotePrefetchControls.flush()
             if (isMomo) {
-              const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
-              if (!cached?.length) setMomoNetworksLoading(true)
-              try {
-                const res = await prefetchYcPayInNetworks(residenceCountry, localPayInCurrency)
-                setMomoNetworks(res)
-                if (res.length === 1) setMomoNetworkId(res[0].id)
-              } catch {
-                setQuoteError("Could not load mobile money networks")
-                return
-              } finally {
-                setMomoNetworksLoading(false)
-              }
               setQuote(null)
-              setStep("review")
+              setStep("momo_setup")
               return
             }
             if (quote?.ok && quote.localPayIn > 0 && !quoteCountdown.expired) {
@@ -675,6 +668,72 @@ export function LocalDepositWizard({
             setQuote(null)
             const result = await createQuote()
             if (result) setStep("review")
+          }}
+        >
+          Continue
+        </Button>
+      </div>
+    )
+  }
+
+  if (step === "momo_setup") {
+    return (
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={goBack}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
+
+        <p className="text-sm font-medium">Mobile money</p>
+
+        <div className="rounded-xl border border-border p-4 space-y-3 text-sm">
+          <div>
+            <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.momoNumberPrompt}</Label>
+            <YcMomoPhoneInput
+              id="momo-phone"
+              countryCode={residenceCountry}
+              value={momoPhone}
+              onChange={setMomoPhone}
+              className="mt-1"
+              placeholder="712345678"
+            />
+          </div>
+          <div>
+            <Label>{REVIEW_ROW_LABELS.momoNetworkPrompt}</Label>
+            {momoNetworksLoading ? (
+              <div className="flex justify-center py-3">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 mt-2">
+                {momoNetworks.map((network) => (
+                  <button
+                    key={network.id}
+                    type="button"
+                    className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                      momoNetworkId === network.id ? "border-primary bg-primary/5" : "border-border"
+                    }`}
+                    onClick={() => setMomoNetworkId(network.id)}
+                  >
+                    {network.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <Button
+          className="w-full"
+          disabled={!momoReady}
+          onClick={() => {
+            setQuote(null)
+            setQuoteError(null)
+            setStep("review")
           }}
         >
           Continue
@@ -707,7 +766,7 @@ export function LocalDepositWizard({
         exchangeRate: reviewCustomerRate,
       })
     const reviewFeeLocal = lockedReviewBreakdown?.feeLocal ?? 0
-    const showQuoteSpinner = quoteLoading && (isMomo ? momoReady : true)
+    const showQuoteSpinner = quoteLoading && !isMomo
     const showLockedReview = quoteLocked && !quoteLoading
     const canConfirmReview =
       quoteLocked && !quoteLoading && !quoteCountdown.expired && (!isMomo || momoReady)
@@ -721,45 +780,6 @@ export function LocalDepositWizard({
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
-
-        {isMomo ? (
-          <div className="rounded-xl border border-border p-4 space-y-3 text-sm">
-            <div>
-              <Label htmlFor="momo-phone">{REVIEW_ROW_LABELS.momoNumberPrompt}</Label>
-              <YcMomoPhoneInput
-                id="momo-phone"
-                countryCode={residenceCountry}
-                value={momoPhone}
-                onChange={setMomoPhone}
-                className="mt-1"
-                placeholder="712345678"
-              />
-            </div>
-            <div>
-              <Label>{REVIEW_ROW_LABELS.momoNetworkPrompt}</Label>
-              {momoNetworksLoading ? (
-                <div className="flex justify-center py-3">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2 mt-2">
-                  {momoNetworks.map((network) => (
-                    <button
-                      key={network.id}
-                      type="button"
-                      className={`rounded-lg border px-3 py-2 text-left text-sm ${
-                        momoNetworkId === network.id ? "border-primary bg-primary/5" : "border-border"
-                      }`}
-                      onClick={() => setMomoNetworkId(network.id)}
-                    >
-                      {network.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : null}
 
         {showQuoteSpinner ? (
           <div className="flex justify-center py-4">
@@ -798,10 +818,10 @@ export function LocalDepositWizard({
               ) : null
             }
           />
-        ) : isMomo && !momoReady ? (
-          <p className="text-sm text-muted-foreground">
-            Enter your mobile money number and network to see fees.
-          </p>
+        ) : isMomo && quoteLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
         ) : null}
         {quoteError ? <p className="text-sm text-destructive">{quoteError}</p> : null}
 

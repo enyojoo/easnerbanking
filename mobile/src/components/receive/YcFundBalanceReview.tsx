@@ -14,7 +14,6 @@ import {
   computeYcFundBalancePrincipalLocalPayIn,
   resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   REVIEW_ROW_LABELS,
-  normalizeYcMomoPhone,
 } from '@easner/shared'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -24,19 +23,15 @@ import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
 import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
 import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
-import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
 import {
   ensureFundBalanceQuoteStashed,
   ensureFundBalanceOrderConfirmed,
-  ensurePayInNetworksCached,
   isCompleteFundBalanceQuote,
   isStashedFundBalanceQuoteFresh,
   peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
-  readCachedPayInNetworks,
   type YcFundBalanceQuote,
 } from '../../lib/sendFlowFundBalanceQuote'
-import { useAuth } from '../../contexts/AuthContext'
 
 type Props = {
   navigation: { goBack: () => void; navigate: (name: string, params?: object) => void }
@@ -48,11 +43,12 @@ type Props = {
   usdCredit: number
   localPayIn: number
   customerRate: number
+  sourcePhone?: string
+  networkId?: string
+  sourceNetworkName?: string
   footerPadding: number
   listBottomPadding: number
 }
-
-type PayInNetwork = { id: string; name: string }
 
 export function YcFundBalanceReview({
   navigation,
@@ -64,28 +60,13 @@ export function YcFundBalanceReview({
   usdCredit,
   localPayIn,
   customerRate: previewCustomerRate,
+  sourcePhone,
+  networkId,
+  sourceNetworkName,
   footerPadding,
   listBottomPadding,
 }: Props) {
-  const { userProfile } = useAuth()
   const isMobileMoney = payInRail === 'mobile_money'
-  const defaultPhone = userProfile?.phone ?? userProfile?.profile?.phone ?? ''
-
-  const cachedNetworks = isMobileMoney
-    ? readCachedPayInNetworks(residenceCountry, localPayInCurrency)
-    : null
-
-  const [phone, setPhone] = useState(() =>
-    defaultPhone ? normalizeYcMomoPhone(defaultPhone, residenceCountry) : '',
-  )
-  const [networks, setNetworks] = useState<PayInNetwork[]>(() => cachedNetworks ?? [])
-  const [networkId, setNetworkId] = useState(() =>
-    cachedNetworks?.length === 1 ? cachedNetworks[0].id : '',
-  )
-  const [networksLoading, setNetworksLoading] = useState(
-    isMobileMoney && !cachedNetworks?.length,
-  )
-  const [networksError, setNetworksError] = useState<string | null>(null)
 
   const quoteMeta = useMemo(
     () => ({
@@ -94,11 +75,9 @@ export function YcFundBalanceReview({
       rail: payInRail,
       amountEntryMode,
       enteredAmount,
-      sourcePhone: isMobileMoney ? phone.trim() : undefined,
+      sourcePhone: isMobileMoney ? sourcePhone?.trim() : undefined,
       networkId: isMobileMoney ? networkId : undefined,
-      sourceNetworkName: isMobileMoney
-        ? networks.find((n) => n.id === networkId)?.name
-        : undefined,
+      sourceNetworkName: isMobileMoney ? sourceNetworkName : undefined,
     }),
     [
       residenceCountry,
@@ -107,58 +86,22 @@ export function YcFundBalanceReview({
       amountEntryMode,
       enteredAmount,
       isMobileMoney,
-      phone,
+      sourcePhone,
       networkId,
-      networks,
+      sourceNetworkName,
     ],
   )
 
   const [quote, setQuote] = useState<YcFundBalanceQuoteResult | null>(() =>
-    !isMobileMoney && isStashedFundBalanceQuoteFresh(quoteMeta) ? peekFundBalanceQuote() : null,
+    isStashedFundBalanceQuoteFresh(quoteMeta) ? peekFundBalanceQuote() : null,
   )
   const [quoteLoading, setQuoteLoading] = useState(
-    () => !isMobileMoney && !isStashedFundBalanceQuoteFresh(quoteMeta),
+    () => !isStashedFundBalanceQuoteFresh(quoteMeta),
   )
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const momoReady = Boolean(phone.trim() && networkId)
-
   useEffect(() => {
-    if (!isMobileMoney) return
-    let cancelled = false
-    const hadCache = Boolean(cachedNetworks?.length)
-    if (!hadCache) {
-      setNetworksLoading(true)
-    }
-    setNetworksError(null)
-    void (async () => {
-      try {
-        const rows = await ensurePayInNetworksCached(residenceCountry, localPayInCurrency)
-        if (cancelled) return
-        setNetworks(rows)
-        if (rows.length === 1) setNetworkId(rows[0].id)
-      } catch (e) {
-        if (!cancelled) {
-          setNetworksError(e instanceof Error ? e.message : 'Could not load networks')
-        }
-      } finally {
-        if (!cancelled) setNetworksLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [isMobileMoney, residenceCountry, localPayInCurrency, cachedNetworks?.length])
-
-  useEffect(() => {
-    if (isMobileMoney && !momoReady) {
-      setQuote(null)
-      setQuoteLoading(false)
-      setQuoteError(null)
-      return
-    }
-
     if (isStashedFundBalanceQuoteFresh(quoteMeta)) {
       const stashed = peekFundBalanceQuote()
       if (stashed) {
@@ -187,7 +130,7 @@ export function YcFundBalanceReview({
     return () => {
       cancelled = true
     }
-  }, [quoteMeta, isMobileMoney, momoReady])
+  }, [quoteMeta])
 
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
   const quoteLocked = Boolean(quote?.ok && quote.localPayIn > 0)
@@ -235,10 +178,7 @@ export function YcFundBalanceReview({
       })
     : []
 
-  const showQuoteSpinner = quoteLoading && (isMobileMoney ? momoReady : true)
-
   const navigateToPayIn = (q: YcFundBalanceQuote) => {
-    const selectedNetwork = networks.find((n) => n.id === networkId)
     const baseParams = {
       flowMode: 'fund_balance' as const,
       transactionId: q.easnerTransactionId ?? q.transactionId,
@@ -248,9 +188,9 @@ export function YcFundBalanceReview({
       bankInfo: q.bankInfo ?? null,
       payInNotice: q.payInNotice,
       payInRail,
-      sourcePhone: q.sourcePhone ?? phone.trim(),
+      sourcePhone: q.sourcePhone ?? sourcePhone?.trim(),
       sourceNetworkId: q.sourceNetworkId ?? networkId,
-      sourceNetworkName: q.sourceNetworkName ?? selectedNetwork?.name,
+      sourceNetworkName: q.sourceNetworkName ?? sourceNetworkName,
     }
     if (isMobileMoney) {
       navigation.navigate('YcPayIn', {
@@ -305,53 +245,7 @@ export function YcFundBalanceReview({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {isMobileMoney ? (
-            <View style={styles.momoSection}>
-              <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.momoNumberPrompt}</Text>
-              <YcMomoPhoneInput
-                countryCode={residenceCountry}
-                value={phone}
-                onChange={setPhone}
-                placeholder="712345678"
-              />
-              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>
-                {REVIEW_ROW_LABELS.momoNetworkPrompt}
-              </Text>
-              {networksLoading ? (
-                <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[3] }} />
-              ) : networksError ? (
-                <Text style={styles.error}>{networksError}</Text>
-              ) : (
-                <View style={styles.networkList}>
-                  {networks.map((network) => {
-                    const selected = network.id === networkId
-                    return (
-                      <Pressable
-                        key={network.id}
-                        android_ripple={ripple.neutral}
-                        style={[styles.networkOption, selected && styles.networkOptionSelected]}
-                        onPress={() => {
-                          haptics.tap()
-                          setNetworkId(network.id)
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.networkOptionText,
-                            selected && styles.networkOptionTextSelected,
-                          ]}
-                        >
-                          {network.name}
-                        </Text>
-                      </Pressable>
-                    )
-                  })}
-                </View>
-              )}
-            </View>
-          ) : null}
-
-          {showQuoteSpinner ? (
+          {quoteLoading ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : quoteLocked ? (
             <>
@@ -384,8 +278,6 @@ export function YcFundBalanceReview({
                 )
               })}
             </>
-          ) : isMobileMoney && !momoReady ? (
-            <Text style={styles.hint}>Enter your mobile money number and network to see fees.</Text>
           ) : null}
 
           {quoteError ? <Text style={styles.error}>{quoteError}</Text> : null}
@@ -428,32 +320,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing[4],
   },
-  momoSection: { paddingBottom: spacing[4] },
-  fieldLabel: { ...textStyles.caption, color: colors.text.secondary, marginBottom: spacing[2] },
-  fieldLabelSpaced: { marginTop: spacing[4] },
-  input: {
-    ...textStyles.body,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
-    color: colors.text.primary,
-  },
-  networkList: { gap: spacing[2] },
-  networkOption: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-  },
-  networkOptionSelected: {
-    borderColor: colors.primary.main,
-    backgroundColor: colors.primary.main + '12',
-  },
-  networkOptionText: { ...textStyles.body, color: colors.text.primary },
-  networkOptionTextSelected: { fontFamily: textStyles.sectionTitle.fontFamily },
   error: { ...textStyles.caption, color: colors.semantic.destructive, marginTop: spacing[2] },
   hint: { ...textStyles.caption, color: colors.text.secondary, marginTop: spacing[2] },
   cta: { borderRadius: borderRadius.lg, overflow: 'hidden', marginTop: spacing[3] },

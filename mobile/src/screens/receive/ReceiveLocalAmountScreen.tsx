@@ -57,7 +57,6 @@ import {
   ensurePayInNetworksCached,
   isStashedFundBalanceQuoteFresh,
   peekFundBalanceQuote,
-  readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches } from '../../lib/warmYcLocalDepositCaches'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
@@ -269,7 +268,6 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
   useEffect(() => {
     if (!momoNetworksPrefetchKey) return
-    if (readCachedPayInNetworks(residenceCountry, localPayInCurrency)?.length) return
     void ensurePayInNetworksCached(residenceCountry, localPayInCurrency)
   }, [momoNetworksPrefetchKey, residenceCountry, localPayInCurrency])
 
@@ -340,33 +338,15 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     haptics.medium()
 
     if (payInRail === 'mobile_money') {
-      const networksCached = readCachedPayInNetworks(residenceCountry, localPayInCurrency)
-      if (!networksCached?.length) {
-        setIsContinuePending(true)
-        continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-      }
-      try {
-        await ensurePayInNetworksCached(residenceCountry, localPayInCurrency)
-        navigation.navigate('ReceiveLocalReview' as never, {
-          localPayInCurrency,
-          residenceCountry,
-          payInRail,
-          amountEntryMode,
-          enteredAmount,
-          usdCredit: displayPreview.usdCredit,
-          localPayIn: displayPreview.localPayIn,
-          customerRate: ycFlow.customerRate ?? 0,
-        } as never)
-      } catch (e) {
-        showError(e instanceof Error ? e.message : 'Could not load mobile money networks. Try again.')
-      } finally {
-        if (continueSpinnerTimerRef.current) {
-          clearTimeout(continueSpinnerTimerRef.current)
-          continueSpinnerTimerRef.current = null
-        }
-        setIsContinuePending(false)
-        setIsContinueLoading(false)
-      }
+      navigation.navigate('ReceiveLocalMomoSetup' as never, {
+        localPayInCurrency,
+        residenceCountry,
+        amountEntryMode,
+        enteredAmount,
+        usdCredit: displayPreview.usdCredit,
+        localPayIn: displayPreview.localPayIn,
+        customerRate: ycFlow.customerRate ?? 0,
+      } as never)
       return
     }
 

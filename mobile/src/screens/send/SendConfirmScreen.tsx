@@ -150,6 +150,9 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     paymentMethod?: 'balance' | 'otherCurrency'
     ycPayInCurrency?: string
     ycPayInRail?: YcPayInRail
+    sourcePhone?: string
+    networkId?: string
+    sourceNetworkName?: string
   }
 
   const isYcCrossBorder =
@@ -710,18 +713,26 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   }
 
   if (isYcCrossBorder) {
+    const isYcMomo = params.ycPayInRail === 'mobile_money'
+    if (isYcMomo && (!params.sourcePhone?.trim() || !params.networkId)) {
+      navigation.goBack()
+      return null
+    }
     return (
       <ScreenWrapper>
         <YcLocalPayInReview
           navigation={navigation}
           recipient={recipient}
           receiveAmount={params.receiveAmountValue ?? 0}
-          receiveCurrency={params.receiveCurrency ?? recipient.currency ?? ''}
+          receiveCurrency={params.receiveCurrency ?? recipient?.currency ?? ''}
           payInCurrency={params.ycPayInCurrency!}
           payInCountry={
             residenceCountryFromPayInCurrency(params.ycPayInCurrency!) ?? ''
           }
           payInRail={params.ycPayInRail!}
+          sourcePhone={params.sourcePhone}
+          networkId={params.networkId}
+          sourceNetworkName={params.sourceNetworkName}
           footerPadding={footerPadding}
           listBottomPadding={listBottomPadding}
         />

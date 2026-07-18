@@ -1159,29 +1159,14 @@ export default function SendPage() {
     try {
       if (showThroughLocalCurrency && paymentMethod === "otherCurrency") {
         if (otherPaymentMethod === "mobile_money" && otherCurrency) {
-          const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
-          if (!payInCountry) {
-            setAmountFieldError("Could not resolve pay-in country for mobile money.")
-            return
+          flowState = {
+            ...state,
+            ycMomoSetup: undefined,
+            ycCrossBorder: undefined,
           }
-          const networksCached = readCachedYcPayInNetworks(payInCountry, otherCurrency)
-          if (!networksCached?.length) {
-            setIsContinuePending(true)
-            continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-          }
-          try {
-            await prefetchYcPayInNetworks(payInCountry, otherCurrency)
-          } catch {
-            setAmountFieldError("Could not load mobile money networks. Try again.")
-            return
-          } finally {
-            if (continueSpinnerTimerRef.current) {
-              clearTimeout(continueSpinnerTimerRef.current)
-              continueSpinnerTimerRef.current = null
-            }
-            setIsContinuePending(false)
-            setIsContinueLoading(false)
-          }
+          persistSendFlowState(flowState)
+          router.push("/send/momo-setup")
+          return
         }
         if (otherPaymentMethod === "bank_transfer" && otherCurrency && recipient) {
           const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)

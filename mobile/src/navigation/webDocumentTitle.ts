@@ -13,6 +13,7 @@ const ROUTE_TITLES: Record<string, string> = {
   SelectRecentRecipient: 'Send Money',
   SelectRecipient: 'Send Money',
   SendConfirm: 'Confirm Send',
+  SendCrossBorderMomoSetup: 'Mobile Money',
   SendPin: 'Confirm Send',
   Recipients: 'Recipients',
   Profile: 'Profile',

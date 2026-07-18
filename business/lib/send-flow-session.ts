@@ -68,6 +68,12 @@ export interface SendFlowState {
     ycWalletAddress?: string
     ycCryptoAmount?: number
   }
+  /** MoMo pay-in details collected before cross-border review (phone + network). */
+  ycMomoSetup?: {
+    sourcePhone: string
+    networkId: string
+    sourceNetworkName?: string
+  }
   /** Yellowcard Through Local Currency pay-in session (cross-border). */
   ycCrossBorder?: {
     transferId: string

@@ -1442,26 +1442,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             showError('Could not resolve pay-in country for mobile money.')
             return
           }
-          const networksCached = readCachedPayInNetworks(payInCountry, selectedOtherCurrency)
-          if (!networksCached?.length) {
-            setIsContinuePending(true)
-            continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-          }
-          try {
-            await ensurePayInNetworksCached(payInCountry, selectedOtherCurrency)
-          } catch (e) {
-            showError(
-              e instanceof Error ? e.message : 'Could not load mobile money networks. Try again.',
-            )
-            return
-          } finally {
-            if (continueSpinnerTimerRef.current) {
-              clearTimeout(continueSpinnerTimerRef.current)
-              continueSpinnerTimerRef.current = null
-            }
-            setIsContinuePending(false)
-            setIsContinueLoading(false)
-          }
+          navigation.navigate('SendCrossBorderMomoSetup' as never, {
+            recipient,
+            ycPayInCurrency: selectedOtherCurrency,
+            receiveAmountValue,
+            receiveCurrency: recipient.currency,
+            amountEntryMode,
+            amountScreenSendAmount: navAmounts.sendAmount,
+            ...(note.trim() ? { note: note.trim() } : {}),
+            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+          } as never)
+          return
         }
         if (rail === 'bank_transfer') {
           const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
