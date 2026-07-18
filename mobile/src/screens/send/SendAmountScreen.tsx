@@ -45,6 +45,7 @@ import { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from '../../h
 import { useQueryClient } from '@tanstack/react-query'
 import { useYcCrossBorderFlow, type YcPayInRail, residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
 import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
+import { warmYcPayInCorridor } from '../../lib/warmYcLocalDepositCaches'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { useAuth } from '../../contexts/AuthContext'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
@@ -319,11 +320,16 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
   const payInCountryName = payInCountry ? resolveReceiveCountryName(payInCountry) : ''
 
-  const { rails: payInRails, loading: payInRailsLoading } = useYcReceiveRails({
+  const { rails: payInRails, blocking: payInRailsBlocking } = useYcReceiveRails({
     country: payInCountry,
     currency: payInCurrency,
     enabled: showThroughLocalCurrency && Boolean(payInCountry && payInCurrency),
   })
+
+  useEffect(() => {
+    if (!showThroughLocalCurrency || !payInCountry || !payInCurrency) return
+    void warmYcPayInCorridor(payInCountry, payInCurrency)
+  }, [showThroughLocalCurrency, payInCountry, payInCurrency])
 
   const localPayInOptions = useMemo(() => {
     if (!payInCurrency || !payInCountry || !payInRails) return []
@@ -2087,15 +2093,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   })}
                 </View>
 
-                {showThroughLocalCurrency ? (
+                {showThroughLocalCurrency && !payInRailsBlocking ? (
                 <View style={styles.paymentSection}>
                   <Text style={styles.paymentSectionTitle}>Through Local Currency</Text>
-                  {payInRailsLoading && localPayInOptions.length === 0 ? (
-                    <ActivityIndicator
-                      color={colors.primary.main}
-                      style={{ marginVertical: spacing[4] }}
-                    />
-                  ) : null}
                   {localPayInOptions.map((option) => {
                     const isSelected =
                       selectedPaymentMethod === 'otherCurrency' &&
@@ -2133,7 +2133,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       </Pressable>
                     )
                   })}
-                  {!payInRailsLoading && localPayInOptions.length === 0 ? (
+                  {localPayInOptions.length === 0 ? (
                     <Text style={styles.localPayInUnavailable}>
                       Local pay-in is not available for your country right now.
                     </Text>

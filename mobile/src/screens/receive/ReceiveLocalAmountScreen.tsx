@@ -20,6 +20,8 @@ import {
   scaleSendAmountPrefixLineHeight,
   validateYcFundBalancePayInAmount,
   REVIEW_ROW_LABELS,
+  SEND_LOCAL_PAY_IN_BANK_CHIP,
+  SEND_LOCAL_PAY_IN_MOMO_CHIP,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -41,6 +43,7 @@ import { useYcPayInMinEnforcement } from '../../hooks/useYcPayInMinEnforcement'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { haptics } from '../../lib/haptics'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
+import { CountryFlag } from '../../components/flags/CountryFlag'
 import { formatKeypadAmount } from '../../components/receive/AmountKeypad'
 import { useBalance } from '../../contexts/BalanceContext'
 import { getCurrencySymbol } from '../../utils/formatters'
@@ -57,7 +60,7 @@ import {
   isCompleteFundBalanceQuote,
   peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
-import { warmYcLocalDepositCaches } from '../../lib/warmYcLocalDepositCaches'
+import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady } from '../../lib/warmYcLocalDepositCaches'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import { ReceiveLocalAmountShellWebForm } from '../../components/receive/ReceiveLocalAmountShellWebForm'
@@ -100,7 +103,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
   useEffect(() => {
     if (!residenceCountry || !localPayInCurrency) return
-    void warmYcLocalDepositCaches({
+    void ensureYcLocalDepositCachesReady({
       residenceCountry,
       localPayInCurrency,
       kycApproved: true,
@@ -193,7 +196,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   })
 
   const usdBalance = parseFloat(balances.USD || '0')
-  const railLabel = payInRail === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
+  const railLabel =
+    payInRail === 'mobile_money' ? SEND_LOCAL_PAY_IN_MOMO_CHIP : SEND_LOCAL_PAY_IN_BANK_CHIP
   const canContinue =
     amountPositive &&
     !ycFlow.ratesLoading &&
@@ -381,6 +385,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
               amountStr={amountStr}
               displayCurrency={displayCurrency}
               localPayInCurrency={localPayInCurrency}
+              residenceCountry={residenceCountry}
               railLabel={railLabel}
               amountPositive={amountPositive}
               showExchangePreviewSkeleton={showExchangePreviewSkeleton}
@@ -492,10 +497,10 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
                   disabled={!bankAvailable || !momoAvailable}
                 >
                   <View style={styles.flagContainer}>
-                    <CurrencyFlag currency={localPayInCurrency} size={24} style={styles.flagImage} />
+                    <CountryFlag code={residenceCountry} size={24} style={styles.flagImage} />
                   </View>
                   <Text style={styles.balanceSelectorText} numberOfLines={1}>
-                    {localPayInCurrency} • {railLabel}
+                    {railLabel}
                   </Text>
                   {bankAvailable && momoAvailable ? (
                     <ChevronDown size={16} color={colors.text.primary} strokeWidth={2} />

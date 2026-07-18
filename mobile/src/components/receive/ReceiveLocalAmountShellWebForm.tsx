@@ -22,6 +22,7 @@ import {
 } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { CurrencyFlag } from '../flags/CurrencyFlag'
+import { CountryFlag } from '../flags/CountryFlag'
 import { getCurrencySymbol } from '../../utils/formatters'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
 import { formatMoneyDisplay, formatSendRateLabel } from '@easner/shared'
@@ -32,6 +33,7 @@ export type ReceiveLocalAmountShellWebFormProps = {
   amountStr: string
   displayCurrency: string
   localPayInCurrency: string
+  residenceCountry: string
   railLabel: string
   amountPositive: boolean
   showExchangePreviewSkeleton: boolean
@@ -56,6 +58,7 @@ export function ReceiveLocalAmountShellWebForm({
   amountStr,
   displayCurrency,
   localPayInCurrency,
+  residenceCountry,
   railLabel,
   amountPositive,
   showExchangePreviewSkeleton,
@@ -165,9 +168,9 @@ export function ReceiveLocalAmountShellWebForm({
           style={styles.sourceSelector}
         >
           <View style={styles.sourceSelectorLeft}>
-            <CurrencyFlag currency={localPayInCurrency} size={22} style={styles.sourceFlag} />
+            <CountryFlag code={residenceCountry} size={22} style={styles.sourceFlag} />
             <Text style={styles.sourceLabel} numberOfLines={2}>
-              {localPayInCurrency} • {railLabel}
+              {railLabel}
             </Text>
           </View>
           {canChangeRail ? (

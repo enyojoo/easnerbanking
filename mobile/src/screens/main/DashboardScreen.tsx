@@ -63,6 +63,7 @@ import { useTransactionsList, prefetchRecentTransactionDetailsInBackground, pref
 import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-deposit-queries'
 import {
   resolveWarmYcLocalDepositCorridor,
+  ensureYcLocalDepositCachesReady,
   warmYcLocalDepositCaches,
 } from '../../lib/warmYcLocalDepositCaches'
 import {
@@ -301,6 +302,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
         // Silently fail
       })
       void prefetchReceiveDepositQueries(qc, scope)
+      warmReceiveLocalDeposit()
     }, [
       user?.id,
       userProfile,
@@ -309,6 +311,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       loadAvailableCurrencies,
       qc,
       scope,
+      warmReceiveLocalDeposit,
     ])
   )
 
@@ -798,9 +801,15 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               onPressIn={warmReceiveLocalDeposit}
               onPress={() => {
                 haptics.tap()
-                navigation.navigate('ReceiveMoney' as never, {
-                  currency: selectedCurrency,
-                } as never)
+                const corridor = resolveWarmYcLocalDepositCorridor(userProfile, {
+                  kycApproved: isTier1Complete(userProfile),
+                })
+                void (async () => {
+                  await ensureYcLocalDepositCachesReady(corridor)
+                  navigation.navigate('ReceiveMoney' as never, {
+                    currency: selectedCurrency,
+                  } as never)
+                })()
               }}
               accessibilityRole="button"
               accessibilityLabel="Receive"

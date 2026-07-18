@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import {
   receiveInternationalBankTitle,
   receiveInternationalDepositSubtitle,
@@ -23,7 +23,6 @@ type Props = {
   bankAvailable: boolean
   momoAvailable: boolean
   localDepositBlocked: boolean
-  loading: boolean
   onBankPress: () => void
   onLocalBankPress: () => void
   onLocalMomoPress: () => void
@@ -49,7 +48,6 @@ export function ReceiveCashMethodList({
   bankAvailable,
   momoAvailable,
   localDepositBlocked,
-  loading,
   onBankPress,
   onLocalBankPress,
   onLocalMomoPress,
@@ -60,17 +58,15 @@ export function ReceiveCashMethodList({
     : ''
   const intlBankFlagCode = currency === 'USD' ? 'US' : 'EU'
 
-  if (loading && showLocalRows && !bankAvailable && !momoAvailable) {
-    return <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[6] }} />
-  }
-
   const hasAnyRow =
     showBankRow || (showLocalRows && (bankAvailable || momoAvailable))
 
   if (!hasAnyRow) {
     return (
       <Text style={styles.unavailable}>
-        Cash deposit methods are not available right now.
+        {showLocalRows
+          ? 'Local pay-in is not available for your country right now.'
+          : 'Cash deposit methods are not available right now.'}
       </Text>
     )
   }
@@ -104,12 +100,6 @@ export function ReceiveCashMethodList({
           onPress={onLocalMomoPress}
           disabled={localDepositBlocked}
         />
-      ) : null}
-
-      {showLocalRows && !loading && !bankAvailable && !momoAvailable ? (
-        <Text style={styles.unavailable}>
-          Local pay-in is not available for your country right now.
-        </Text>
       ) : null}
     </View>
   )

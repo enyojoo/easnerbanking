@@ -46,10 +46,10 @@ import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { ReceiveCashMethodList } from '../../components/receive/ReceiveCashMethodList'
 import {
+  resolveWarmYcLocalDepositCorridor,
+  ensureYcLocalDepositCachesReady,
   prefetchNgLocalVerification,
   readCachedNgLocalMissingType,
-  resolveWarmYcLocalDepositCorridor,
-  warmYcLocalDepositCaches,
 } from '../../lib/warmYcLocalDepositCaches'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
@@ -165,27 +165,33 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const residenceCountry = String(userProfile?.residence_country ?? '').trim().toUpperCase()
 
+  const needsYcReceiveRails =
+    verificationComplete && currency === 'USD' && Boolean(localPayInCurrency && residenceCountry)
+
   useFocusEffect(
     React.useCallback(() => {
       const corridor = resolveWarmYcLocalDepositCorridor(userProfile, {
         kycApproved: verificationComplete,
       })
       if (!corridor) return
-      void warmYcLocalDepositCaches(corridor)
+      void ensureYcLocalDepositCachesReady(corridor)
     }, [userProfile, verificationComplete]),
   )
 
-  const { rails: receiveRails, loading: receiveRailsLoading } = useYcReceiveRails({
+  const { rails: receiveRails, blocking: receiveRailsBlocking } = useYcReceiveRails({
     country: residenceCountry || null,
     currency: localPayInCurrency,
-    enabled: Boolean(localPayInCurrency) && verificationComplete && currency === 'USD',
+    enabled: needsYcReceiveRails,
   })
+
+  const cashMethodsReady = !needsYcReceiveRails || !receiveRailsBlocking
 
   const showLocalTab =
     Boolean(localPayInCurrency) &&
     verificationComplete &&
     currency === 'USD' &&
-    !(receiveRails != null && !receiveRailsLoading && !receiveRails.anyAvailable)
+    cashMethodsReady &&
+    Boolean(receiveRails?.anyAvailable)
   const showCashTab = showBankTab || showLocalTab
   const showTabBar = showCashTab && showStablecoinTab
 
@@ -212,7 +218,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   }
 
   useEffect(() => {
-    if (!showLocalTab || localPayInCurrency !== 'NGN') {
+    if (localPayInCurrency !== 'NGN' || !verificationComplete || currency !== 'USD' || !residenceCountry) {
       setNgMissingType(null)
       return
     }
@@ -228,7 +234,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     return () => {
       cancelled = true
     }
-  }, [showLocalTab, localPayInCurrency, residenceCountry])
+  }, [localPayInCurrency, verificationComplete, currency, residenceCountry])
 
   const accountReady = hasAccountData
 
@@ -485,6 +491,56 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     )
   }
 
+  const renderDepositVerificationNotice = (surface: 'cash' | 'stablecoin') => {
+    const stablecoinLabel = currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'
+    const title =
+      kycStatus === 'in_review'
+        ? 'Verification in Review'
+        : kycStatus === 'approved' && surface === 'stablecoin'
+          ? `${stablecoinLabel} Address Setup in Progress`
+          : surface === 'cash'
+            ? 'Complete Verification to get an account'
+            : `Complete Verification for ${stablecoinLabel} address`
+
+    const body =
+      kycStatus === 'in_review'
+        ? 'Your verification is currently being reviewed.'
+        : !kycStatus
+          ? surface === 'cash'
+            ? 'Please complete your identity verification to receive bank and local cash deposit information.'
+            : 'Please complete your identity verification to receive bank and stablecoin deposit information.'
+          : kycStatus === 'rejected'
+            ? surface === 'cash'
+              ? 'Your verification was not approved. Please complete identity verification again to receive your account details.'
+              : 'Your verification was not approved. Please complete identity verification again to receive your wallet address.'
+            : kycStatus === 'approved' && surface === 'stablecoin'
+              ? `Your ${stablecoinLabel} address is being set up. This may take a few moments. Please check back shortly.`
+              : 'Please complete your identity verification to receive bank and stablecoin deposit information.'
+
+    return (
+      <View style={styles.kycNoticeContainer}>
+        <View style={styles.kycNoticeIconContainer}>
+          <ShieldCheck size={32} color={colors.primary.main} strokeWidth={2} />
+        </View>
+        <Text style={styles.kycNoticeTitle}>{title}</Text>
+        <Text style={styles.kycNoticeText}>{body}</Text>
+        {kycStatus !== 'approved' && kycStatus !== 'in_review' ? (
+          <Pressable
+            android_ripple={ripple.neutral}
+            style={styles.kycNoticeButton}
+            onPress={() => {
+              haptics.medium()
+              navigation.navigate('AccountVerification' as any)
+            }}
+          >
+            <Text style={styles.kycNoticeButtonText}>Complete Verification</Text>
+            <ArrowRight size={18} color={colors.text.inverse} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+      </View>
+    )
+  }
+
   const renderDetailActions = () => (
     <View style={styles.detailActionsRow}>
       <Pressable
@@ -574,6 +630,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         >
           <View style={styles.content}>
             {effectiveTab === 'cash' && showCashTab ? (
+              !verificationComplete ? (
+                renderDepositVerificationNotice('cash')
+              ) : !cashMethodsReady ? null : (
               <View style={{ gap: spacing[4] }}>
                 {localPayInCurrency === 'NGN' && ngMissingType ? (
                   <NgLocalVerificationNotice
@@ -594,12 +653,12 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   bankAvailable={bankAvailable}
                   momoAvailable={momoAvailable}
                   localDepositBlocked={localDepositBlocked}
-                  loading={receiveRailsLoading}
                   onBankPress={navigateToBankDetails}
                   onLocalBankPress={() => navigateToLocalDeposit('bank_transfer')}
                   onLocalMomoPress={() => navigateToLocalDeposit('mobile_money')}
                 />
               </View>
+              )
             ) : effectiveTab === 'stablecoin' && showStablecoinTab ? (
               <>
                 {/* Stablecoin rails only while KYC approved; otherwise verification notice. */}
@@ -662,42 +721,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                     {renderDetailActions()}
                   </>
                 ) : !verificationComplete || depositFetched ? (
-                  /* KYC notice when not approved, or setup notice when approved but address missing */
-                  <View style={styles.kycNoticeContainer}>
-                    <View style={styles.kycNoticeIconContainer}>
-                      <ShieldCheck size={32} color={colors.primary.main} strokeWidth={2} />
-                    </View>
-                    <Text style={styles.kycNoticeTitle}>
-                      {kycStatus === 'approved' 
-                        ? `${currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} Address Setup in Progress` 
-                        : kycStatus === 'in_review'
-                        ? 'Verification in Review'
-                        : `Complete Verification for ${currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} address`}
-                    </Text>
-                    <Text style={styles.kycNoticeText}>
-                      {kycStatus === 'in_review'
-                        ? 'Your verification is currently being reviewed.'
-                        : !kycStatus
-                        ? `Please complete your identity verification to receive bank and stablecoin deposit information.`
-                        : kycStatus === 'rejected'
-                        ? 'Your verification was not approved. Please complete identity verification again to receive your wallet address.'
-                        : kycStatus === 'approved'
-                        ? `Your ${currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'} address is being set up. This may take a few moments. Please check back shortly.`
-                        : 'Please complete your identity verification to receive bank and stablecoin deposit information.'}
-                    </Text>
-                    {kycStatus !== 'approved' && kycStatus !== 'in_review' && (
-                    <Pressable
-                     android_ripple={ripple.neutral}
-                      style={styles.kycNoticeButton}
-                      onPress={async () => {
-                        haptics.medium()
-                        navigation.navigate('AccountVerification' as any)
-                      }} >
-                      <Text style={styles.kycNoticeButtonText}>Complete Verification</Text>
-                      <ArrowRight size={18} color={colors.text.inverse} strokeWidth={2} />
-                    </Pressable>
-                    )}
-                  </View>
+                  renderDepositVerificationNotice('stablecoin')
                 ) : null}
               </>
             ) : null}

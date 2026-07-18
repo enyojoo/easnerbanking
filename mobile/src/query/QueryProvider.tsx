@@ -15,7 +15,7 @@ import { warmSendRateCachesFromRecipients } from '../lib/warmSendRateCaches'
 import { recipientService } from '../lib/recipientService'
 import {
   resolveWarmYcLocalDepositCorridor,
-  warmYcLocalDepositCaches,
+  ensureYcLocalDepositCachesReady,
 } from '../lib/warmYcLocalDepositCaches'
 
 /**
@@ -90,7 +90,7 @@ function WarmYcLocalDepositCachesOnScope({ children }: { children: React.ReactNo
     if (authLoading) return
     const corridor = resolveWarmYcLocalDepositCorridor(userProfile)
     if (!corridor) return
-    void warmYcLocalDepositCaches(corridor)
+    void ensureYcLocalDepositCachesReady(corridor)
   }, [userProfile?.residence_country, userProfile?.noah_kyc_status, authLoading])
   return <>{children}</>
 }

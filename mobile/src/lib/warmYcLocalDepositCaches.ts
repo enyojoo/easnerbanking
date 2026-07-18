@@ -230,3 +230,26 @@ export async function warmYcLocalDepositCaches(input: WarmYcLocalDepositInput): 
   }
   await Promise.allSettled(tasks)
 }
+
+/** Awaitable warmup — call before Receive / Send local-currency UI so rows appear together. */
+export async function ensureYcLocalDepositCachesReady(
+  input: WarmYcLocalDepositInput | null | undefined,
+): Promise<void> {
+  if (!input) return
+  await warmYcLocalDepositCaches(input)
+}
+
+/** Warm pay-in corridor when country + currency are known (send cross-border picker). */
+export async function warmYcPayInCorridor(
+  country: string | null | undefined,
+  currency: string | null | undefined,
+): Promise<void> {
+  const cc = String(country ?? '').trim().toUpperCase()
+  const cur = String(currency ?? '').trim().toUpperCase()
+  if (!cc || !cur) return
+  await warmYcLocalDepositCaches({
+    residenceCountry: cc,
+    localPayInCurrency: cur,
+    kycApproved: true,
+  })
+}
