@@ -96,14 +96,22 @@ describe("confirmFundBalanceOrder", () => {
     vi.mocked(findReusableYcTransfer).mockResolvedValue(null)
   })
 
-  it("locks on a single YC receive when pay-in is padded before POST /receive", async () => {
-    vi.mocked(submitYcReceive).mockImplementation(async (input) => ({
-      id: "yc-ok",
-      localAmount: input.localAmount,
-      settlementInfo: { cryptoAmount: 1010 },
-      networkFeeAmountUSD: 0,
-      serviceFeeAmountUSD: 0,
-    }))
+  it("locks bank deposit after retry when YC first quote omits embedded receive fees", async () => {
+    vi.mocked(submitYcReceive)
+      .mockResolvedValueOnce({
+        id: "yc-bank-short",
+        localAmount: 341253.75,
+        settlementInfo: { cryptoAmount: 2529.14898161 },
+        networkFeeAmountUSD: 0,
+        serviceFeeAmountUSD: 0,
+      })
+      .mockResolvedValueOnce({
+        id: "yc-bank-ok",
+        localAmount: 351500,
+        settlementInfo: { cryptoAmount: 2576 },
+        networkFeeAmountUSD: 0,
+        serviceFeeAmountUSD: 0,
+      })
 
     const admin = makeAdmin()
     admin.chain.single
@@ -113,13 +121,13 @@ describe("confirmFundBalanceOrder", () => {
     const result = await confirmFundBalanceOrder({
       ...baseCtx,
       admin,
-      usdCredit: 1000,
+      usdCredit: 2550,
     })
 
     expect(result.quotePhase).toBe("locked")
-    expect(submitYcReceive).toHaveBeenCalledTimes(1)
+    expect(submitYcReceive).toHaveBeenCalledTimes(2)
     const firstCall = vi.mocked(submitYcReceive).mock.calls[0]?.[0]
-    expect(firstCall?.localAmount).toBeGreaterThan(133825)
+    expect(firstCall?.localAmount).toBeGreaterThan(341253.75)
   })
 
   it("accepts confirm on one YC call when omnibus is within fund-balance tolerance", async () => {
@@ -162,7 +170,32 @@ describe("confirmFundBalanceOrder", () => {
     ).rejects.toMatchObject({
       code: "yc_omnibus_below_required",
     })
+    expect(submitYcReceive).toHaveBeenCalledTimes(2)
+  })
+
+  it("locks on a single YC receive when padded pay-in settles enough crypto", async () => {
+    vi.mocked(submitYcReceive).mockImplementation(async (input) => ({
+      id: "yc-ok",
+      localAmount: input.localAmount,
+      settlementInfo: { cryptoAmount: 1010 },
+      networkFeeAmountUSD: 0,
+      serviceFeeAmountUSD: 0,
+    }))
+
+    const admin = makeAdmin()
+    admin.chain.single
+      .mockResolvedValueOnce({ data: { id: "tx-1" } })
+      .mockResolvedValueOnce({ data: { id: "tr-1" } })
+
+    const result = await confirmFundBalanceOrder({
+      ...baseCtx,
+      admin,
+      usdCredit: 1000,
+    })
+
+    expect(result.quotePhase).toBe("locked")
     expect(submitYcReceive).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(submitYcReceive).mock.calls[0]?.[0]?.localAmount).toBeGreaterThan(133825)
   })
 
   it("persists omnibus_in_expected and margin_amount when YC receive is sufficient", async () => {

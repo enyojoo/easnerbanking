@@ -20,6 +20,7 @@ import {
   estimateYcFundBalanceReceiveLegFeesUsd,
   inferYcReceiveLegFeesUsd,
   bumpYcFundBalanceLocalPayInForOmnibusShortfall,
+  resolveYcFundBalanceSubmitLocalPayIn,
   YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
 } from "./yc-pricing"
@@ -141,6 +142,30 @@ describe("inferYcReceiveLegFeesUsd", () => {
         serviceFeeAmountUsd: 0,
       }),
     ).toBeCloseTo(23.011365, 4)
+  })
+})
+
+describe("resolveYcFundBalanceSubmitLocalPayIn", () => {
+  it("pads bank-scale deposits above credit + Easner fee only", () => {
+    const unpadded = computeYcFundBalancePricing({
+      usdCredit: 2550,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+      receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    })
+    const padded = computeYcFundBalancePricingBeforeReceive({
+      usdCredit: 2550,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+      rail: "bank_transfer",
+    })
+    const submitLocal = resolveYcFundBalanceSubmitLocalPayIn({
+      pricing: padded,
+      customerSellRate: 132.5,
+    })
+    expect(submitLocal).toBeGreaterThan(unpadded.localPayIn)
+    expect(unpadded.localPayIn).toBeCloseTo(341253.75, 2)
+    expect(submitLocal).toBeGreaterThanOrEqual(padded.localPayIn)
   })
 })
 

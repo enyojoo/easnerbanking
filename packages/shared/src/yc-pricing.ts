@@ -38,6 +38,9 @@ export const YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC = 1
 /** Extra USDC padding on fund-balance pay-in solve before POST /receive (YC conversion slop). */
 export const YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC = 3
 
+/** Fund balance confirm: one retry only when the first POST /receive is under-funded. */
+export const YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS = 2
+
 /** Quote TTL — YC receive locks ~10 minutes. */
 export const YC_QUOTE_TTL_MS = 10 * 60 * 1000
 
@@ -342,15 +345,19 @@ export function estimateYcFundBalanceReceiveLegFeesUsd(input: {
   customerSellRate: number
   ycSellRate: number
   processingFeeBps?: number
+  rail?: "bank_transfer" | "mobile_money"
 }): number {
   const usdCredit = roundUsdc(input.usdCredit)
   if (usdCredit <= 0) return 0
   const processingFee = computePayoutProcessingFeeBps(usdCredit, { bps: input.processingFeeBps })
-  return estimateYcReceiveLegFeesUsd({
-    omnibusUsd: roundUsdc(usdCredit + processingFee),
+  const omnibusUsd = roundUsdc(usdCredit + processingFee)
+  const base = estimateYcReceiveLegFeesUsd({
+    omnibusUsd,
     customerSellRate: input.customerSellRate,
     ycSellRate: input.ycSellRate,
   })
+  const minPct = input.rail === "bank_transfer" ? 0.025 : 0.02
+  return roundUsdc(Math.max(base, omnibusUsd * minPct))
 }
 
 /**
@@ -402,17 +409,28 @@ function applyYcFundBalanceBeforeReceiveBuffer(
   pricing: YcFundBalancePricing,
   customerSellRate: number,
 ): YcFundBalancePricing {
-  const neededOmnibus = roundUsdc(pricing.usdCredit + pricing.processingFee)
+  return {
+    ...pricing,
+    localPayIn: resolveYcFundBalanceSubmitLocalPayIn({
+      pricing,
+      customerSellRate,
+    }),
+  }
+}
+
+/** POST /receive local pay-in: credit + Easner fee + YC fees + conversion buffer (always round up). */
+export function resolveYcFundBalanceSubmitLocalPayIn(input: {
+  pricing: YcFundBalancePricing
+  customerSellRate: number
+}): number {
+  const neededOmnibus = roundUsdc(input.pricing.usdCredit + input.pricing.processingFee)
   const bufferUsd = Math.max(
     YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
     roundUsdc(neededOmnibus * 0.005),
   )
-  const bufferLocal = roundLocalUp(bufferUsd * customerSellRate)
-  if (!(bufferLocal > 0)) return { ...pricing, localPayIn: roundLocalUp(pricing.localPayIn) }
-  return {
-    ...pricing,
-    localPayIn: roundLocalUp(pricing.localPayIn + bufferLocal),
-  }
+  const grossUsd = roundUsdc(neededOmnibus + input.pricing.ycLegFeesUsd + bufferUsd)
+  const economicsLocal = roundLocalUp(grossUsd * input.customerSellRate)
+  return roundLocalUp(Math.max(input.pricing.localPayIn, economicsLocal))
 }
 
 /** Send exactly = locked USD credit at Easner rate + all processing fees (local). */
@@ -616,6 +634,7 @@ export function computeYcFundBalancePricingBeforeReceive(input: {
   customerSellRate: number
   ycSellRate: number
   processingFeeBps?: number
+  rail?: "bank_transfer" | "mobile_money"
 }): YcFundBalancePricing {
   const usdCreditTarget = input.usdCredit != null && Number(input.usdCredit) > 0
   if (usdCreditTarget) {
@@ -624,6 +643,7 @@ export function computeYcFundBalancePricingBeforeReceive(input: {
       customerSellRate: input.customerSellRate,
       ycSellRate: input.ycSellRate,
       processingFeeBps: input.processingFeeBps,
+      rail: input.rail,
     })
     return applyYcFundBalanceBeforeReceiveBuffer(
       computeYcFundBalancePricing({
@@ -653,6 +673,7 @@ export function computeYcFundBalancePricingBeforeReceive(input: {
     customerSellRate: input.customerSellRate,
     ycSellRate: input.ycSellRate,
     processingFeeBps: input.processingFeeBps,
+    rail: input.rail,
   })
 }
 

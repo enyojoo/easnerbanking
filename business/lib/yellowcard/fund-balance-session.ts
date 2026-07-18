@@ -154,6 +154,7 @@ async function prepareFundBalanceSession(ctx: FundBalanceSessionContext) {
     localPayIn: ctx.localPayIn,
     customerSellRate: Number(leg.easner_sell),
     ycSellRate: Number(leg.yc_sell),
+    rail: ctx.rail,
   })
 
   const amountCheck = validateYcPayInLocalAmount({
