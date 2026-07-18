@@ -455,7 +455,8 @@ export default function SendPage() {
   useEffect(() => {
     if (!debouncedCrossBorderBankPrefetchKey || !crossBorderBankQuoteMeta) return
     void ensureCrossBorderQuoteStashed(crossBorderBankQuoteMeta)
-  }, [debouncedCrossBorderBankPrefetchKey, crossBorderBankQuoteMeta])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedCrossBorderBankPrefetchKey])
 
   const tlcPayInLimits = useMemo(() => {
     if (!payInRails || paymentMethod !== "otherCurrency") {
@@ -1048,12 +1049,14 @@ export default function SendPage() {
   useEffect(() => {
     if (!needsWalletQuoteBeforeConfirm || !debouncedWalletQuoteCacheKey || !recipient?.id) return
     void fetchWalletQuote()
-  }, [needsWalletQuoteBeforeConfirm, debouncedWalletQuoteCacheKey, recipient?.id, fetchWalletQuote])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsWalletQuoteBeforeConfirm, debouncedWalletQuoteCacheKey, recipient?.id])
 
   useEffect(() => {
     if (!needsPayoutQuoteBeforeConfirm || !debouncedPayoutQuotePrefetchKey || !recipient?.id) return
     void fetchPayoutQuote()
-  }, [needsPayoutQuoteBeforeConfirm, debouncedPayoutQuotePrefetchKey, recipient?.id, fetchPayoutQuote])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsPayoutQuoteBeforeConfirm, debouncedPayoutQuotePrefetchKey, recipient?.id])
 
   const handleContinue = async () => {
     if (!canContinue || !recipient || isContinuePending || isContinueLoading) return

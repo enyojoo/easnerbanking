@@ -47,6 +47,22 @@ export function pickTxAmountAndCurrency(tx: Record<string, unknown>): { amount: 
   }
 }
 
+/** True when `payload` is a Noah REST Transaction — not a YC webhook or other provider blob. */
+export function isNoahLedgerTransactionPayload(
+  payload: Record<string, unknown> | null | undefined,
+  row?: Record<string, unknown>,
+): boolean {
+  if (!payload || typeof payload !== "object") return false
+  if (String(row?.provider ?? "").toLowerCase() === "yellowcard") return false
+  if (payload.event != null || payload.sequenceId != null || payload.sequence_id != null) {
+    return false
+  }
+  if (payload.settlementInfo != null || payload.settlement_info != null) return false
+  if (payload.ID != null) return true
+  if (payload.Direction != null || payload.Status != null || payload.Created != null) return true
+  return false
+}
+
 export function mapNoahTransactionToMobileItem(tx: Record<string, unknown>): Record<string, unknown> {
   const id = String(tx.ID ?? "")
   const direction = String(tx.Direction ?? "")

@@ -228,14 +228,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       amountEntryMode,
       enteredAmount,
     })
-  }, [
-    debouncedFundBalanceQuotePrefetchKey,
-    payInRail,
-    residenceCountry,
-    localPayInCurrency,
-    amountEntryMode,
-    enteredAmount,
-  ])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedFundBalanceQuotePrefetchKey, payInRail])
 
   const momoNetworksPrefetchKey =
     payInRail === 'mobile_money' && residenceCountry && localPayInCurrency

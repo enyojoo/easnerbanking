@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import {
   enrichMobileDetailFromLedgerMetadata,
+  isNoahLedgerTransactionPayload,
   mapNoahTransactionToMobileDetail,
 } from "@/lib/noah/map-transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
@@ -47,6 +48,7 @@ import {
 import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 import { LEDGER_DETAIL_SELECT } from "@/lib/ledger/ledger-select"
+import { restoreInboundLedgerPresentation } from "@/lib/transactions/restore-inbound-ledger-presentation"
 
 function ledgerWhenAtFromRow(row: Record<string, unknown>): string {
   return (
@@ -380,7 +382,7 @@ export async function GET(request: Request, routeCtx: Props) {
   const payload = rec.payload as Record<string, unknown> | null | undefined
   const meta = rec.metadata as Record<string, unknown> | null | undefined
   let transaction = mapLedgerRowToMobileDetail(rec)
-  if (payload && typeof payload === "object" && (payload.ID != null || payload.id != null)) {
+  if (payload && typeof payload === "object" && isNoahLedgerTransactionPayload(payload, rec)) {
     const fromNoah = mapNoahTransactionToMobileDetail(payload)
     transaction = enrichMobileDetailFromLedgerMetadata(
       {
@@ -399,6 +401,8 @@ export async function GET(request: Request, routeCtx: Props) {
   transaction = await attachGlobalPayoutDetailFieldsAsync(admin, rec, transaction)
   transaction = attachWalletSendDetailFields(rec, transaction)
   transaction = attachStablecoinDepositDetailFields(rec, transaction)
+
+  transaction = restoreInboundLedgerPresentation(rec, transaction)
 
   if (scope === "business") {
     const [enrichedRec] = await enrichBankDepositLedgerRows(admin, [rec])

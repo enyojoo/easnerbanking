@@ -375,7 +375,9 @@ export function LocalDepositWizard({
   useEffect(() => {
     if (!debouncedBankQuotePrefetchKey || isMomo) return
     void createQuote({ silent: true })
-  }, [debouncedBankQuotePrefetchKey, isMomo, createQuote])
+    // Quote only when debounced amount key settles — not on every createQuote identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedBankQuotePrefetchKey, isMomo])
 
   useEffect(() => {
     if (step !== "review" || !isMomo) return

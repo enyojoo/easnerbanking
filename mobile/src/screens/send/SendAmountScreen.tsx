@@ -766,7 +766,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   useEffect(() => {
     if (!debouncedCrossBorderBankPrefetchKey || !crossBorderBankQuoteMeta) return
     void ensureCrossBorderQuoteStashed(crossBorderBankQuoteMeta)
-  }, [debouncedCrossBorderBankPrefetchKey, crossBorderBankQuoteMeta])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedCrossBorderBankPrefetchKey])
 
   const payoutMinReceive = useMemo(
     () =>
@@ -1049,7 +1050,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         }),
       meta,
     )
-  }, [debouncedPayoutQuotePrefetchKey, recipient, receiveAmount, receiveCurrency, selectedBalanceCurrency, amountEntryMode, sendingAmount, note, paymentPurpose])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedPayoutQuotePrefetchKey, recipient?.id])
 
   const needsBackgroundWalletSendQuote =
     selectedPaymentMethod === 'balance' &&
@@ -1083,7 +1085,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     return () => {
       cancelled = true
     }
-  }, [debouncedWalletQuotePrefetchKey, recipient, receiveAmount, selectedBalanceCurrency, walletQuoteStashMeta])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedWalletQuotePrefetchKey, recipient?.id])
 
   useEffect(() => {
     clearSendPayoutQuote()
