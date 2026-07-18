@@ -14,4 +14,10 @@ describe('webLinking path parity', () => {
     expect(parsed?.params?.transactionId).toBe('tx_abc')
     expect(webLinking.config?.screens?.TransactionDetails).toBe('user/transactions/:transactionId')
   })
+
+  it('maps send confirm and verification paths', () => {
+    expect(webLinking.config?.screens?.SendConfirm).toBe('user/send/confirm')
+    expect(webLinking.config?.screens?.AccountVerification).toBe('user/verification')
+    expect(webLinking.config?.screens?.ChangePassword).toBe('user/profile/password')
+  })
 })

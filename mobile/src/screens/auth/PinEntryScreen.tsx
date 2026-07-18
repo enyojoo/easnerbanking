@@ -27,8 +27,10 @@ import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { haptics } from '../../lib/haptics'
 import EaseEnter from '../../components/EaseEnter'
 import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
+import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
+  const { shouldAnimateEnter } = useScreenDecorativeEnter()
   const palette = useThemeColors()
   const { user, userProfile, signOut } = useAuth()
   const [pin, setPin] = useState<string[]>(['', '', '', ''])
@@ -183,7 +185,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
       >
         <View style={styles.content}>
           <AuthFlowContainer>
-          <EaseEnter>
+          <EaseEnter enabled={shouldAnimateEnter}>
           <View style={styles.helpRow}>
             <Pressable
               android_ripple={ripple.neutral}

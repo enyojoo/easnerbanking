@@ -131,6 +131,7 @@ import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { isWalletSendRecipient, resolveRecipientWalletNetwork } from '../../lib/recipientWalletMeta'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
 import { navigateToSendRecipientHub } from '../../lib/sendFlowNavigation'
+import { navigateStackBack } from '../../navigation/stackBackNavigation'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
 import { haptics } from '../../lib/haptics'
 import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib/dynamicAmountFontSize'
@@ -1538,7 +1539,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         android_ripple={ripple.neutral}
         onPress={() => {
           if (navigation.canGoBack()) {
-            navigation.goBack()
+            navigateStackBack(navigation)
           } else {
             navigateToSendRecipientHub(navigation, {
               preferredBalanceCurrency: selectedBalanceCurrency,
@@ -1675,7 +1676,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 onPress={() => {
                   // Match iOS swipe-back: one pop to recipient hub when it is the previous route; otherwise leave send flow safely.
                   if (navigation.canGoBack()) {
-                    navigation.goBack()
+                    navigateStackBack(navigation)
                   } else {
                     navigateToSendRecipientHub(navigation, {
                       preferredBalanceCurrency: selectedBalanceCurrency,

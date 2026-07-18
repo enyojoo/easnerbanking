@@ -27,6 +27,7 @@ import {
 import { CreditDestinationRow } from '../../components/transactions/CreditDestinationRow'
 import { TransactionDetailSummaryRow } from '../../components/transactions/TransactionDetailSummaryRow'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
 import { NavigationProps } from '../../types'
 import type { Recipient, User } from '../../types'
@@ -725,12 +726,14 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   if (!recipient) {
     return (
       <ScreenWrapper>
+        <CenteredWebFlowPage>
         <View style={[styles.container, { paddingBottom: footerPadding }]}>
           <Text style={textStyles.body}>Nothing to confirm.</Text>
           <Pressable onPress={() => navigation.goBack()} style={{ marginTop: spacing[4] }}>
             <Text style={{ color: colors.primary.main }}>Go back</Text>
           </Pressable>
         </View>
+        </CenteredWebFlowPage>
       </ScreenWrapper>
     )
   }
@@ -765,6 +768,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   return (
     <ScreenWrapper>
+      <CenteredWebFlowPage>
       <View style={[styles.container, { paddingBottom: footerPadding }]}>
         <Animated.View
           style={[
@@ -942,6 +946,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           </LinearGradient>
         </Pressable>
       </View>
+      </CenteredWebFlowPage>
     </ScreenWrapper>
   )
 }

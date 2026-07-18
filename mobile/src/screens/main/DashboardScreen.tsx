@@ -116,7 +116,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
   const insets = useSafeAreaInsets()
   const { showSidebarShell } = useResponsiveLayout()
-  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4], { tabScreen: true })
   const footerPadding = useFixedFooterPadding(spacing[4])
   const styles = useMemo(
     () => createDashboardStyles(palette, scrollBottomPadding),

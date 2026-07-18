@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, type NgLocalIdType } from '@easner/shared'
@@ -51,6 +51,8 @@ import {
   resolveWarmYcLocalDepositCorridor,
   warmYcLocalDepositCaches,
 } from '../../lib/warmYcLocalDepositCaches'
+import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
+import { navigateStackBack } from '../../navigation/stackBackNavigation'
 
 type TabType = 'cash' | 'stablecoin'
 
@@ -70,6 +72,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const currency = ((route.params as any)?.currency || 'USD') as 'USD' | 'EUR'
   const supportsStablecoins = currency === 'USD' || currency === 'EUR'
+
+  const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
+  useStackHardwareBack(handleBack)
 
   const vaRecord = vaQuery.data?.[currency]
   const virtualAccount = useMemo(() => {

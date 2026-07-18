@@ -266,7 +266,7 @@ function CardActivitySection({
 export default function CardScreen({ navigation: _navigation }: NavigationProps) {
   const { mode, showSidebarShell, width: layoutWidth, sidebarWidth } = useResponsiveLayout()
   const { width: windowWidth } = useWindowDimensions()
-  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4], { tabScreen: true })
   const wideLayout = showSidebarShell && mode === 'desktop'
   const shellLayout = showSidebarShell && !wideLayout
   const centerCardLayout = !showSidebarShell && (mode === 'tablet' || mode === 'desktop')

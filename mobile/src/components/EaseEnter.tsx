@@ -9,6 +9,8 @@ type EaseEnterProps = {
   style?: StyleProp<ViewStyle>
   /** Initial translateY offset; defaults to screen enter token (12px). */
   translateY?: number
+  /** When false, renders children without enter animation (stack already animated). */
+  enabled?: boolean
 }
 
 /**
@@ -19,6 +21,7 @@ export default function EaseEnter({
   children,
   style,
   translateY = motion.screenEnterTranslateY,
+  enabled = true,
 }: EaseEnterProps) {
   const [reduceMotion, setReduceMotion] = useState(false)
 
@@ -29,9 +32,11 @@ export default function EaseEnter({
     })()
   }, [])
 
-  const transition = reduceMotion
-    ? ({ type: 'none' } as const)
-    : ({ type: 'spring', damping: 28, stiffness: 320 } as const)
+  if (!enabled || reduceMotion) {
+    return <>{children}</>
+  }
+
+  const transition = { type: 'spring', damping: 28, stiffness: 320 } as const
 
   return (
     <EaseView

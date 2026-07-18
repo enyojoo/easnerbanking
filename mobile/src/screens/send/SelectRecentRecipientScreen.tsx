@@ -113,6 +113,7 @@ import { useSendDestinations } from '../../hooks/useSendDestinations'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { useFocusEffect } from '@react-navigation/native'
 import { haptics } from '../../lib/haptics'
+import { exitSendFlowFromHub } from '../../navigation/stackBackNavigation'
 
 const getInitials = (name: string): string => {
   const parts = name.trim().split(' ')
@@ -862,7 +863,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           <Pressable
            android_ripple={ripple.neutral}
             onPress={() => {
-              navigation.navigate('MainTabs' as never)
+              haptics.tap()
+              exitSendFlowFromHub(navigation)
             }}
             style={styles.backButton}
           >

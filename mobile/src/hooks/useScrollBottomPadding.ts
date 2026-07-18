@@ -6,11 +6,18 @@ import { layout, spacing } from '../theme'
 /** Primary CTA + footer chrome height for scroll clearance above fixed footers. */
 export const FIXED_FOOTER_SCROLL_CLEARANCE = 72
 
-/**
- * Bottom padding for scroll `contentContainerStyle`.
- * Shell web: compact (DesktopShell already pads). Native / phone web: tab bar + safe area.
+/** Bottom padding for scroll `contentContainerStyle`.
+ * Shell web: compact (DesktopShell already pads). Native / phone web: safe area + optional tab clearance.
  */
-export function useScrollBottomPadding(extra: number = spacing[4]): number {
+export type ScrollBottomPaddingOptions = {
+  /** Tab root (Dashboard, More, …) — layout already reserves the tab bar; use minimal tail padding. */
+  tabScreen?: boolean
+}
+
+export function useScrollBottomPadding(
+  extra: number = spacing[4],
+  options?: ScrollBottomPaddingOptions,
+): number {
   const insets = useSafeAreaInsets()
   const { showSidebarShell } = useResponsiveLayout()
 
@@ -22,7 +29,11 @@ export function useScrollBottomPadding(extra: number = spacing[4]): number {
     return extra
   }
 
-  return insets.bottom + layout.tabBarHeight + extra
+  if (options?.tabScreen) {
+    return spacing[2]
+  }
+
+  return insets.bottom + extra
 }
 
 /** Bottom inset for a fixed footer bar container. */

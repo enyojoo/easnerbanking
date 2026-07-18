@@ -3,21 +3,23 @@ import { Animated, Platform } from 'react-native'
 import { USE_NATIVE_DRIVER } from '../lib/animation'
 import { motion } from '../theme/motion'
 import { shouldPlayDecorativeMotionEnter } from '../theme/reduceMotion'
+import { useScreenDecorativeEnter } from './useScreenDecorativeEnter'
 
 /**
  * When `ready` is true, runs one short parallel enter on all values (no stagger).
- * Honors reduce motion.
+ * Honors reduce motion and skips when stack transition already animated the screen.
  */
 export function useCalmParallelEnterWhen(ready: boolean, ...values: Animated.Value[]) {
   const valuesRef = useRef(values)
   valuesRef.current = values
+  const { shouldAnimateEnter } = useScreenDecorativeEnter()
 
   useEffect(() => {
     if (!ready) return
     let cancelled = false
     const vals = valuesRef.current
 
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' || !shouldAnimateEnter) {
       vals.forEach((v) => v.setValue(1))
       return
     }
@@ -43,5 +45,5 @@ export function useCalmParallelEnterWhen(ready: boolean, ...values: Animated.Val
     return () => {
       cancelled = true
     }
-  }, [ready])
+  }, [ready, shouldAnimateEnter])
 }

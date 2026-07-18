@@ -361,7 +361,7 @@ function TransactionsSkeleton() {
 
 function TransactionsContent({ navigation }: NavigationProps) {
   const { width: windowWidth } = useWindowDimensions()
-  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
+  const scrollBottomPadding = useScrollBottomPadding(spacing[4], { tabScreen: true })
   const { regularWidth, config: splitConfig } = useSplitPaneConfig()
   const { refreshBalances } = useBalance()
   const { user, userProfile } = useAuth()

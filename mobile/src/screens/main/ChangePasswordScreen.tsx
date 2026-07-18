@@ -12,6 +12,7 @@ import {
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { NavigationProps } from '../../types'
@@ -117,6 +118,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
 
   return (
     <ScreenWrapper>
+      <CenteredWebFlowPage>
       <View style={styles.container}>
         <ScrollView
           style={styles.scrollContainer}
@@ -257,6 +259,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
           </Animated.View>
         </ScrollView>
       </View>
+      </CenteredWebFlowPage>
     </ScreenWrapper>
   )
 }

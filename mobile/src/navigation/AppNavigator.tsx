@@ -32,12 +32,9 @@ import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
 import { MobileAppLockShell } from '../components/MobileAppLockShell'
 import { enterMainAppOnWeb } from './webMainEntry'
 import { webStackScreenListeners } from './webStackScreenListeners'
-// Stack timing and Android vs iOS card transitions: see `transitionPresets.ts`.
-import {
-  mainStackPreset,
-  sendFlowStandardPreset,
-  sendFlowInstantTransitionSpec,
-} from './transitionPresets'
+import { authGatePreset } from './transitionPresets'
+import { staticScreenTransitionOptions } from './useScreenTransitionOptions'
+import { Stack, StackScreenWithTransition } from './StackScreenWithTransition'
 import { createWebLazyScreen } from './createWebLazyScreen'
 
 // Onboarding Screen
@@ -174,86 +171,82 @@ const AccountVerificationScreen = createWebLazyScreen(
   AccountVerificationScreenNative,
 )
 
-const Stack = createStackNavigator()
+const StackLegacy = createStackNavigator()
 const Tab = createBottomTabNavigator()
 
 function OnboardingStack() {
   return (
-    <Stack.Navigator 
+    <StackLegacy.Navigator 
       screenOptions={{ 
         headerShown: false,
+        ...authGatePreset(false),
         gestureEnabled: false,
       }}
       screenListeners={webStackScreenListeners}
     >
-      <Stack.Screen 
+      <StackLegacy.Screen 
         name="Onboarding" 
         component={OnboardingScreen}
+        options={staticScreenTransitionOptions('Onboarding')}
       />
-    </Stack.Navigator>
+    </StackLegacy.Navigator>
   )
 }
 
 function MfaStack() {
   return (
-    <Stack.Navigator
+    <StackLegacy.Navigator
       screenOptions={{
         headerShown: false,
-        ...mainStackPreset(),
+        ...authGatePreset(false),
       }}
       screenListeners={webStackScreenListeners}
     >
-      <Stack.Screen name="MfaVerify" component={MfaVerifyScreen} />
-    </Stack.Navigator>
+      <StackLegacy.Screen
+        name="MfaVerify"
+        component={MfaVerifyScreen}
+        options={staticScreenTransitionOptions('MfaVerify')}
+      />
+    </StackLegacy.Navigator>
   )
 }
 
 function AuthStack() {
   return (
-    <Stack.Navigator 
+    <StackLegacy.Navigator 
       screenOptions={{ 
         headerShown: false,
-        ...mainStackPreset()
+        ...authGatePreset(false),
       }}
       screenListeners={webStackScreenListeners}
     >
-      <Stack.Screen 
+      <StackLegacy.Screen 
         name="Auth" 
         component={AuthScreen}
-        options={{
-          gestureEnabled: true, // Allow swipe back when coming from onboarding
-        }}
+        options={staticScreenTransitionOptions('Auth')}
       />
-      <Stack.Screen 
+      <StackLegacy.Screen 
         name="ForgotPassword" 
         component={ForgotPasswordScreen}
-        options={{
-          ...mainStackPreset(),
-        }}
+        options={staticScreenTransitionOptions('ForgotPassword')}
       />
-      <Stack.Screen 
+      <StackLegacy.Screen 
         name="ResetPassword" 
         component={ResetPasswordScreen}
-        options={{
-          ...mainStackPreset(),
-        }}
+        options={staticScreenTransitionOptions('ResetPassword')}
       />
-      <Stack.Screen 
+      <StackLegacy.Screen 
         name="PinSetup" 
         component={PinSetupScreen}
-        options={{
-          ...mainStackPreset(),
-        }}
+        options={staticScreenTransitionOptions('PinSetup')}
         initialParams={{ mandatory: false }}
       />
-      <Stack.Screen 
+      <StackLegacy.Screen 
         name="PinEntry" 
         component={PinEntryScreen}
-        options={{
-          ...mainStackPreset(),
-        }}
+        options={staticScreenTransitionOptions('PinEntry')}
       />
-    </Stack.Navigator>
+    </StackLegacy.Navigator>
   )
 }
 
@@ -426,304 +419,41 @@ function MainStack() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        ...mainStackPreset()
       }}
       screenListeners={webStackScreenListeners}
     >
-      <Stack.Screen 
-        name="MainTabs" 
-        component={MainTabs} 
-        options={{ 
-          headerShown: false,
-          gestureEnabled: false // Disable gesture for main tabs
-        }}
-      />
-      <Stack.Screen 
-        name="PinSetup" 
-        component={PinSetupScreen}
-        options={{
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="SelectRecentRecipient" 
-        component={SelectRecentRecipientScreen}
-        options={({ navigation }) => {
-          // Check if previous screen is SendAmountScreen (no transition when going back from SendAmountScreen)
-          const state = navigation.getState()
-          const currentIndex = state?.index ?? 0
-          const previousRoute = currentIndex > 0 ? state?.routes?.[currentIndex - 1] : null
-          const isFromSendAmount = previousRoute?.name === 'SendAmount'
-          
-          return {
-            headerShown: false,
-            ...(Platform.OS === 'ios' ? { fullScreenGestureEnabled: true as const } : {}),
-            // No animation when going back from SendAmountScreen
-            ...(isFromSendAmount ? sendFlowInstantTransitionSpec : sendFlowStandardPreset()),
-          }
-        }}
-      />
-      <Stack.Screen
-        name="ScanWalletAddress"
-        component={ScanWalletAddressScreen}
-        options={{
-          headerShown: false,
-          animation: Platform.OS === 'web' ? 'none' : 'slide_from_bottom',
-          contentStyle: { backgroundColor: '#000' },
-        }}
-      />
-      <Stack.Screen 
-        name="SendAmount" 
-        component={SendAmountScreen}
-        options={({ navigation, route }) => {
-          // Check route params for flags (forward navigation)
-          const params = route.params as any
-          const fromSelectRecipientParam = params?.fromSelectRecipient === true
-          const fromSelectRecentRecipientParam = params?.fromSelectRecentRecipient === true
-          
-          // Check if previous screen is the send recipient hub (backward navigation)
-          const state = navigation.getState()
-          const currentIndex = state?.index ?? 0
-          const previousRoute = currentIndex > 0 ? state?.routes?.[currentIndex - 1] : null
-          const isFromSelectRecent = previousRoute?.name === 'SelectRecentRecipient'
-          const isFromRecipientScreen =
-            isFromSelectRecent || fromSelectRecipientParam || fromSelectRecentRecipientParam
-          
-          return {
-            headerShown: false,
-            ...(Platform.OS === 'ios' ? { fullScreenGestureEnabled: true as const } : {}),
-            // No animation when navigating from/to the send recipient hub (same header)
-            ...(isFromRecipientScreen ? sendFlowInstantTransitionSpec : sendFlowStandardPreset()),
-          }
-        }}
-      />
-      <Stack.Screen 
-        name="SelectRecipient" 
-        component={SelectRecipientScreen}
-        options={({ navigation }) => {
-          // Check if previous screen is SendAmountScreen or SelectRecentRecipientScreen (no transition)
-          const state = navigation.getState()
-          const currentIndex = state?.index ?? 0
-          const previousRoute = currentIndex > 0 ? state?.routes?.[currentIndex - 1] : null
-          const isFromSendAmount = previousRoute?.name === 'SendAmount'
-          const isFromSelectRecent = previousRoute?.name === 'SelectRecentRecipient'
-          const shouldHaveNoTransition = isFromSendAmount || isFromSelectRecent
-          
-          return {
-            headerShown: false,
-            // No animation when navigating to/from SendAmountScreen or SelectRecentRecipientScreen
-            ...(shouldHaveNoTransition ? sendFlowInstantTransitionSpec : sendFlowStandardPreset()),
-          }
-        }}
-      />
-      <Stack.Screen
-        name="SendCrossBorderMomoSetup"
-        component={SendCrossBorderMomoSetupScreen}
-        options={{
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="SendConfirm" 
-        component={SendConfirmScreen}
-        options={{ 
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="SendPin"
-        component={SendPinScreen}
-        options={{
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="YcPayIn"
-        component={YcPayInScreen}
-        options={{
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="YcPayInAuthorize"
-        component={YcPayInAuthorizeScreen}
-        options={{
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="ReceiveMoney" 
-        component={ReceiveMoneyScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="ReceiveBankDetails"
-        component={ReceiveBankDetailsScreen}
-        options={{
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="ReceiveLocalRail"
-        component={ReceiveLocalRailScreen}
-        options={{
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="ReceiveLocalAmount"
-        component={ReceiveLocalAmountScreen}
-        options={{
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="ReceiveLocalMomoSetup"
-        component={ReceiveLocalMomoSetupScreen}
-        options={{
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="ReceiveLocalReview"
-        component={ReceiveLocalReviewScreen}
-        options={{
-          headerShown: false,
-          ...sendFlowStandardPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="OpenCurrencyAccount"
-        component={OpenCurrencyAccountScreen}
-        options={{
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="TransactionDetails" 
-        getComponent={loadTransactionDetailsScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="Recipients" 
-        component={RecipientsScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="Card" 
-        component={CardScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="TransactionCard" 
-        component={TransactionCardScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="Support" 
-        component={SupportScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="Legal"
-        component={LegalScreen}
-        options={{
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="ReceiveTransactionDetails" 
-        component={ReceiveTransactionDetailsScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="AccountVerification" 
-        component={AccountVerificationScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="Profile"
-        component={ProfileEditScreen}
-        options={{
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="ChangePassword" 
-        component={ChangePasswordScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="ChangePin"
-        component={ChangePinScreen}
-        options={{
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen
-        name="MfaSetup"
-        component={MfaSetupScreen}
-        options={{
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="Notifications" 
-        component={NotificationsScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
-      <Stack.Screen 
-        name="InAppNotifications" 
-        component={InAppNotificationsScreen}
-        options={{ 
-          headerShown: false,
-          ...mainStackPreset(),
-        }}
-      />
+      <StackScreenWithTransition name="MainTabs" component={MainTabs} />
+      <StackScreenWithTransition name="PinSetup" component={PinSetupScreen} />
+      <StackScreenWithTransition name="SelectRecentRecipient" component={SelectRecentRecipientScreen} />
+      <StackScreenWithTransition name="ScanWalletAddress" component={ScanWalletAddressScreen} />
+      <StackScreenWithTransition name="SendAmount" component={SendAmountScreen} />
+      <StackScreenWithTransition name="SelectRecipient" component={SelectRecipientScreen} />
+      <StackScreenWithTransition name="SendCrossBorderMomoSetup" component={SendCrossBorderMomoSetupScreen} />
+      <StackScreenWithTransition name="SendConfirm" component={SendConfirmScreen} />
+      <StackScreenWithTransition name="SendPin" component={SendPinScreen} />
+      <StackScreenWithTransition name="YcPayIn" component={YcPayInScreen} />
+      <StackScreenWithTransition name="YcPayInAuthorize" component={YcPayInAuthorizeScreen} />
+      <StackScreenWithTransition name="ReceiveMoney" component={ReceiveMoneyScreen} />
+      <StackScreenWithTransition name="ReceiveBankDetails" component={ReceiveBankDetailsScreen} />
+      <StackScreenWithTransition name="ReceiveLocalRail" component={ReceiveLocalRailScreen} />
+      <StackScreenWithTransition name="ReceiveLocalAmount" component={ReceiveLocalAmountScreen} />
+      <StackScreenWithTransition name="ReceiveLocalMomoSetup" component={ReceiveLocalMomoSetupScreen} />
+      <StackScreenWithTransition name="ReceiveLocalReview" component={ReceiveLocalReviewScreen} />
+      <StackScreenWithTransition name="OpenCurrencyAccount" component={OpenCurrencyAccountScreen} />
+      <StackScreenWithTransition name="TransactionDetails" getComponent={loadTransactionDetailsScreen} />
+      <StackScreenWithTransition name="Recipients" component={RecipientsScreen} />
+      <StackScreenWithTransition name="Card" component={CardScreen} />
+      <StackScreenWithTransition name="TransactionCard" component={TransactionCardScreen} />
+      <StackScreenWithTransition name="Support" component={SupportScreen} />
+      <StackScreenWithTransition name="Legal" component={LegalScreen} />
+      <StackScreenWithTransition name="ReceiveTransactionDetails" component={ReceiveTransactionDetailsScreen} />
+      <StackScreenWithTransition name="AccountVerification" component={AccountVerificationScreen} />
+      <StackScreenWithTransition name="Profile" component={ProfileEditScreen} />
+      <StackScreenWithTransition name="ChangePassword" component={ChangePasswordScreen} />
+      <StackScreenWithTransition name="ChangePin" component={ChangePinScreen} />
+      <StackScreenWithTransition name="MfaSetup" component={MfaSetupScreen} />
+      <StackScreenWithTransition name="Notifications" component={NotificationsScreen} />
+      <StackScreenWithTransition name="InAppNotifications" component={InAppNotificationsScreen} />
     </Stack.Navigator>
     </View>
   )
@@ -733,21 +463,32 @@ const ONBOARDING_COMPLETED_KEY = '@easner_onboarding_completed'
 
 function PinGateSetupStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }} screenListeners={webStackScreenListeners}>
-      <Stack.Screen
+    <StackLegacy.Navigator
+      screenOptions={{ headerShown: false, ...authGatePreset(false) }}
+      screenListeners={webStackScreenListeners}
+    >
+      <StackLegacy.Screen
         name="PinSetupGate"
         component={PinSetupScreen}
+        options={staticScreenTransitionOptions('PinSetupGate')}
         initialParams={{ mandatory: true }}
       />
-    </Stack.Navigator>
+    </StackLegacy.Navigator>
   )
 }
 
 function PinGateEntryStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }} screenListeners={webStackScreenListeners}>
-      <Stack.Screen name="PinEntryGate" component={PinEntryScreen} />
-    </Stack.Navigator>
+    <StackLegacy.Navigator
+      screenOptions={{ headerShown: false, ...authGatePreset(false) }}
+      screenListeners={webStackScreenListeners}
+    >
+      <StackLegacy.Screen
+        name="PinEntryGate"
+        component={PinEntryScreen}
+        options={staticScreenTransitionOptions('PinEntryGate')}
+      />
+    </StackLegacy.Navigator>
   )
 }
 

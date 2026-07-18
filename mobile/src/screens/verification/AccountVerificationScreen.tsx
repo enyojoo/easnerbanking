@@ -27,6 +27,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
+import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import {
   IframeWebViewModalHeader,
   iframeModalTitleTextStyle,
@@ -719,6 +720,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
   return (
     <ScreenWrapper>
+      <CenteredWebFlowPage>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1074,6 +1076,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
+      </CenteredWebFlowPage>
       <ExternalLinkModal
         visible={externalLink.isVisible}
         url={externalLink.url}

@@ -6,6 +6,7 @@ import { textStyles, spacing, fontFamily, useThemeColors } from '../theme'
 import type { Colors } from '../theme/colors'
 import { ripple } from '../lib/androidRipple'
 import { haptics } from '../lib/haptics'
+import { navigateStackBack } from '../navigation/stackBackNavigation'
 
 interface InternalHeaderProps {
   title: string
@@ -35,7 +36,7 @@ export default function InternalHeader({
     if (onBack) {
       onBack()
     } else {
-      navigation.goBack()
+      navigateStackBack(navigation)
     }
   }
 

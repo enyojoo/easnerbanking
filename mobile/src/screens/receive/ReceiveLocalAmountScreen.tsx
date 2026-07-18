@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -61,6 +61,8 @@ import { warmYcLocalDepositCaches } from '../../lib/warmYcLocalDepositCaches'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import { ReceiveLocalAmountShellWebForm } from '../../components/receive/ReceiveLocalAmountShellWebForm'
+import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
+import { navigateStackBack } from '../../navigation/stackBackNavigation'
 
 type RouteParams = {
   localPayInCurrency: string
@@ -92,6 +94,9 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   const bankAvailable = params.bankAvailable ?? false
   const momoAvailable = params.momoAvailable ?? false
   const ngMissingType = params.ngMissingType ?? null
+
+  const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
+  useStackHardwareBack(handleBack)
 
   useEffect(() => {
     if (!residenceCountry || !localPayInCurrency) return
@@ -276,11 +281,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   const changeRail = () => {
     if (!bankAvailable || !momoAvailable) return
     haptics.tap()
-    navigation.navigate('ReceiveLocalRail' as never, {
-      localPayInCurrency,
-      residenceCountry,
-      ngMissingType,
-    } as never)
+    const nextRail = payInRail === 'bank_transfer' ? 'mobile_money' : 'bank_transfer'
+    navigation.setParams({ payInRail: nextRail } as never)
   }
 
   const handleWebAmountChange = (text: string) => {
@@ -349,7 +351,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       <ScreenWrapper>
         <View style={[styles.blocked, { paddingTop: insets.top }]}>
           <View style={styles.header}>
-            <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Pressable android_ripple={ripple.neutral} onPress={handleBack} style={styles.backButton}>
               <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <Text style={styles.title}>Add money</Text>
@@ -365,7 +367,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       {useWebShellLayout ? (
         <View style={styles.mainColumn}>
           <View style={[styles.header, { paddingTop: spacing[4] }]}>
-            <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Pressable android_ripple={ripple.neutral} onPress={handleBack} style={styles.backButton}>
               <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerContent}>
@@ -401,7 +403,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       ) : (
       <KeyboardAvoidingView style={styles.mainColumn} behavior="padding">
         <View style={[styles.header, { paddingTop: spacing[4] + insets.top }]}>
-          <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Pressable android_ripple={ripple.neutral} onPress={handleBack} style={styles.backButton}>
             <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
           <View style={styles.headerContent}>

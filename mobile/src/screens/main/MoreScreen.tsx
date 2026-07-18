@@ -88,7 +88,7 @@ function tierBadgeForProfile(
 }
 
 function MoreContent({ navigation }: NavigationProps) {
-  const scrollBottomPadding = useScrollBottomPadding(spacing[4])
+  const scrollBottomPadding = useScrollBottomPadding(spacing[2], { tabScreen: true })
   const { user, userProfile, refreshUserProfile, signOut, loading: authLoading } = useAuth()
   const { showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
@@ -538,7 +538,7 @@ function MoreContent({ navigation }: NavigationProps) {
                 {renderMenuItem(
                   'Notifications',
                   'Alerts, pushes, and communication settings',
-                  () => navigation.navigate('Notifications' as never),
+                  () => navigateFromMoreTab('Notifications'),
                   Bell,
                   undefined,
                   false,
@@ -941,7 +941,8 @@ const styles = StyleSheet.create({
   },
   versionContainer: {
     alignItems: 'center',
-    paddingTop: spacing[2],
+    paddingTop: spacing[1],
+    paddingBottom: spacing[1],
   },
   versionText: {
     ...textStyles.bodySmall,

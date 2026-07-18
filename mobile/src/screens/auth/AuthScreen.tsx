@@ -33,6 +33,7 @@ import { useToast } from '../../components/ToastProvider'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import EaseEnter from '../../components/EaseEnter'
 import { haptics } from '../../lib/haptics'
+import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
 
 /**
  * Layout mirrors business auth pages:
@@ -48,6 +49,7 @@ type SignupStep = 'form' | 'otp'
 const FROM_ONBOARDING_KEY = '@easner_from_onboarding'
 
 export default function AuthScreen({ navigation }: NavigationProps) {
+  const { shouldAnimateEnter } = useScreenDecorativeEnter()
   /** Stack of auth modes so Back pops login ↔ signup before leaving for onboarding. */
   const [modeStack, setModeStack] = useState<AuthMode[]>(['login'])
   const [fromOnboarding, setFromOnboarding] = useState(false)
@@ -365,7 +367,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <EaseEnter>
+        <EaseEnter enabled={shouldAnimateEnter}>
           <AuthFlowContainer>
           <View style={styles.topBar}>
             {showBackButton ? (

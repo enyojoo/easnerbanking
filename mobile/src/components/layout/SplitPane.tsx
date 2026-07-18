@@ -1,5 +1,6 @@
 import React, { type ReactNode, useMemo } from 'react'
 import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native'
+import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { spacing } from '../../theme'
 import { isRegularWidth } from '../../theme/layoutMetrics'
 import { scaledFontSize } from '../../theme/typography'
@@ -26,8 +27,9 @@ type SplitPaneProps = {
 
 export function useSplitPaneConfig(): { regularWidth: boolean; config: SplitPaneConfig } {
   const { width: windowWidth } = useWindowDimensions()
-  // Expo web: same UX as mobile — tap row opens TransactionDetails (no split preview pane).
-  const regularWidth = Platform.OS === 'web' ? false : isRegularWidth(windowWidth)
+  const { showSidebarShell } = useResponsiveLayout()
+  const regularWidth =
+    Platform.OS === 'web' ? showSidebarShell : isRegularWidth(windowWidth)
 
   const config = useMemo<SplitPaneConfig>(() => {
     if (windowWidth >= 1024) {
