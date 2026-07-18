@@ -109,6 +109,80 @@ describe("office-overview-compute", () => {
     expect(activity.impactFormatted).toBe("$65.00")
   })
 
+  it("reads YC fund balance local pay-in from deposit_review snapshot", () => {
+    const [activity] = processRecentActivity([
+      {
+        id: "yc-fb-review",
+        direction: "in",
+        status: "settled",
+        provider: "yellowcard",
+        currency: "USD",
+        amount: 65,
+        metadata: {
+          yc_mode: "fund_balance",
+          usd_credit: 65,
+          deposit_review: {
+            local_pay_in: 100000,
+            local_currency: "NGN",
+            usd_credit: 65,
+            exchange_rate: 1538.46,
+            pay_in_rail: "bank_transfer",
+            credit_to: "USD Balance",
+            residence_country: "NG",
+            transfer_method: "Bank Transfer",
+            processing_fee: 0,
+          },
+        },
+        created_at: new Date().toISOString(),
+      },
+    ])
+    expect(activity.amount).toContain("₦")
+    expect(activity.impactFormatted).toBe("$65.00")
+  })
+
+  it("uses ledger local currency for YC fund balance when metadata only has usd_credit", () => {
+    const [activity] = processRecentActivity([
+      {
+        id: "yc-fb-ledger-local",
+        direction: "in",
+        status: "settled",
+        provider: "yellowcard",
+        currency: "NGN",
+        amount: 250000,
+        metadata: {
+          yc_mode: "fund_balance",
+          usd_credit: 150,
+        },
+        created_at: new Date().toISOString(),
+      },
+    ])
+    expect(activity.amount).toContain("₦")
+    expect(activity.impactFormatted).toBe("$150.00")
+  })
+
+  it("infers YC fund balance local pay-in from usd_credit and customer_rate", () => {
+    const [activity] = processRecentActivity([
+      {
+        id: "yc-fb-infer",
+        direction: "in",
+        status: "settled",
+        provider: "yellowcard",
+        currency: "USD",
+        amount: 65,
+        metadata: {
+          yc_mode: "fund_balance",
+          usd_credit: 65,
+          local_currency: "NGN",
+          customer_rate: 1538.46,
+        },
+        created_at: new Date().toISOString(),
+      },
+    ])
+    expect(activity.amount).toContain("₦")
+    expect(activity.impactFormatted).toBe("$65.00")
+    expect(activity.amount).not.toBe(activity.impactFormatted)
+  })
+
   it("aggregates pay-in and payout into one row per currency", () => {
     const { topCurrencies, volumeBalance } = computeProviderLedgerDashboardExtras([
       {

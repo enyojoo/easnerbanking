@@ -1,6 +1,7 @@
 import {
   formatMoneyDisplay,
   isVerificationDepositMetadata,
+  reconstructYcFundBalanceDepositReview,
   resolveAccountImpactAmount,
   toEasnerTransactionPrimaryLabel,
   type ReportingFxRate,
@@ -156,6 +157,24 @@ export function resolveOfficeReportingEurAmount(tx: TxRow): number | null {
 }
 
 export function formatOfficeTxImpactAmount(tx: TxRow): string {
+  const meta = tx.metadata || {}
+  if (resolveOfficeYcMode(tx) === "fund_balance" && normalizeDirection(tx.direction) === "in") {
+    const impact = resolveOfficeAccountImpact(tx)
+    if (impact && Number.isFinite(impact.amount) && impact.amount > 0) {
+      const currency = asBalanceCurrency(impact.currency)
+      if (currency) return formatMoneyDisplay(impact.amount, currency)
+    }
+    const review = reconstructYcFundBalanceDepositReview(meta)
+    if (review?.usd_credit) {
+      return formatMoneyDisplay(review.usd_credit, "USD")
+    }
+    const usdCredit = Number(meta.usd_credit ?? meta.settled_amount ?? meta.posted_amount ?? 0)
+    if (Number.isFinite(usdCredit) && usdCredit > 0) {
+      return formatMoneyDisplay(usdCredit, "USD")
+    }
+    return ""
+  }
+
   const impact = resolveOfficeAccountImpact(tx)
   if (impact && Number.isFinite(impact.amount) && impact.amount > 0) {
     const currency = asBalanceCurrency(impact.currency)
@@ -182,6 +201,73 @@ export function resolveOfficeReportingAmount(
 function readPayoutReview(meta: Record<string, unknown>) {
   const raw = meta.payout_review
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null
+}
+
+/** YC fund-balance pay-in: local pay-in primary, USD credit secondary (matches cross-border list UX). */
+function resolveOfficeFundBalanceInPresentation(
+  tx: TxRow,
+  meta: Record<string, unknown>,
+): OfficeTxPresentation | null {
+  const review = reconstructYcFundBalanceDepositReview(meta)
+  if (review) {
+    return {
+      displayAmount: review.local_pay_in,
+      displayCurrency: review.local_currency,
+      balanceAmount: review.usd_credit,
+      balanceCurrency: asBalanceCurrency("USD"),
+    }
+  }
+
+  const localPayIn = Number(meta.local_pay_in)
+  const localCurrency = String(
+    meta.local_currency ?? meta.pay_in_currency ?? meta.fiat_deposit_currency ?? "",
+  )
+    .trim()
+    .toUpperCase()
+  const usdCredit = Number(
+    meta.usd_credit ?? meta.settled_amount ?? meta.posted_amount ?? 0,
+  )
+
+  if (Number.isFinite(localPayIn) && localPayIn > 0 && localCurrency) {
+    return {
+      displayAmount: localPayIn,
+      displayCurrency: localCurrency,
+      balanceAmount: Number.isFinite(usdCredit) && usdCredit > 0 ? usdCredit : 0,
+      balanceCurrency: asBalanceCurrency("USD"),
+    }
+  }
+
+  const ledgerCurrency = String(tx.currency ?? "").trim().toUpperCase()
+  const ledgerAmount = Number(tx.amount ?? 0)
+  if (!asBalanceCurrency(ledgerCurrency) && Number.isFinite(ledgerAmount) && ledgerAmount > 0) {
+    return {
+      displayAmount: ledgerAmount,
+      displayCurrency: ledgerCurrency,
+      balanceAmount: Number.isFinite(usdCredit) && usdCredit > 0 ? usdCredit : 0,
+      balanceCurrency: asBalanceCurrency("USD"),
+    }
+  }
+
+  const rate = Number(meta.customer_rate ?? meta.exchange_rate)
+  if (
+    Number.isFinite(usdCredit) &&
+    usdCredit > 0 &&
+    Number.isFinite(rate) &&
+    rate > 0 &&
+    localCurrency
+  ) {
+    const inferredLocal = Math.round(usdCredit * rate * 100) / 100
+    if (inferredLocal > 0) {
+      return {
+        displayAmount: inferredLocal,
+        displayCurrency: localCurrency,
+        balanceAmount: usdCredit,
+        balanceCurrency: asBalanceCurrency("USD"),
+      }
+    }
+  }
+
+  return null
 }
 
 /**
@@ -217,24 +303,9 @@ export function resolveOfficeTxPresentation(tx: TxRow): OfficeTxPresentation {
   }
 
   if (direction === "in") {
-    const ycMode = resolveOfficeYcMode(tx)
-    if (ycMode === "fund_balance") {
-      const localPayIn = Number(meta.local_pay_in)
-      const localCurrency = String(
-        meta.local_currency ?? meta.fiat_deposit_currency ?? tx.currency ?? "",
-      )
-        .trim()
-        .toUpperCase()
-      const usdCredit = Number(meta.usd_credit ?? meta.settled_amount ?? tx.amount ?? 0)
-      if (Number.isFinite(localPayIn) && localPayIn > 0 && localCurrency) {
-        const balanceCurrency = asBalanceCurrency("USD") ?? asBalanceCurrency(tx.currency)
-        return {
-          displayAmount: localPayIn,
-          displayCurrency: localCurrency,
-          balanceAmount: Number.isFinite(usdCredit) && usdCredit > 0 ? usdCredit : 0,
-          balanceCurrency,
-        }
-      }
+    if (resolveOfficeYcMode(tx) === "fund_balance") {
+      const fundBalance = resolveOfficeFundBalanceInPresentation(tx, meta)
+      if (fundBalance) return fundBalance
     }
 
     const displayCurrency = String(
