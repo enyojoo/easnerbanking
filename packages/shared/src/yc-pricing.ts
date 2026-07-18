@@ -24,8 +24,19 @@ function roundLocal(n: number): number {
   return Math.round(n * 100) / 100
 }
 
+function roundLocalUp(n: number): number {
+  if (!Number.isFinite(n)) return 0
+  return Math.ceil(n * 100) / 100
+}
+
 /** Default USDC tolerance when comparing YC settlement vs required economics. */
 export const YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC = 0.02
+
+/** Extra USDC padding on fund-balance pay-in solve before POST /receive (YC conversion slop). */
+export const YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC = 2
+
+/** Max POST /receive attempts while sizing fund-balance pay-in to omnibus economics. */
+export const YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS = 5
 
 /** Quote TTL — YC receive locks ~10 minutes. */
 export const YC_QUOTE_TTL_MS = 10 * 60 * 1000
@@ -379,10 +390,26 @@ export function bumpYcFundBalanceLocalPayInForOmnibusShortfall(input: {
 }): number {
   const shortfall = Math.max(0, roundUsdc(input.requiredOmnibus - input.cryptoAmount))
   if (shortfall <= YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC) {
-    return roundLocal(input.localPayIn)
+    return roundLocalUp(input.localPayIn)
   }
-  const pad = input.padRatio ?? 1.01
-  return roundLocal(input.localPayIn + shortfall * input.customerSellRate * pad)
+  const pad = input.padRatio ?? 1.02
+  const fromShortfall = shortfall * input.customerSellRate * pad
+  const minBumpLocal = input.customerSellRate * Math.max(shortfall, 1)
+  return roundLocalUp(input.localPayIn + Math.max(fromShortfall, minBumpLocal))
+}
+
+function applyYcFundBalanceBeforeReceiveBuffer(
+  pricing: YcFundBalancePricing,
+  customerSellRate: number,
+): YcFundBalancePricing {
+  const bufferLocal = roundLocalUp(
+    YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC * customerSellRate,
+  )
+  if (!(bufferLocal > 0)) return pricing
+  return {
+    ...pricing,
+    localPayIn: roundLocalUp(pricing.localPayIn + bufferLocal),
+  }
 }
 
 /** Send exactly = locked USD credit at Easner rate + all processing fees (local). */
@@ -595,17 +622,20 @@ export function computeYcFundBalancePricingBeforeReceive(input: {
       ycSellRate: input.ycSellRate,
       processingFeeBps: input.processingFeeBps,
     })
-    return computeYcFundBalancePricing({
-      usdCredit: input.usdCredit,
-      customerSellRate: input.customerSellRate,
-      ycSellRate: input.ycSellRate,
-      processingFeeBps: input.processingFeeBps,
-      receiveLeg: {
-        cryptoAmountUsd: 0,
-        networkFeeAmountUsd: estimatedReceiveFees,
-        serviceFeeAmountUsd: 0,
-      },
-    })
+    return applyYcFundBalanceBeforeReceiveBuffer(
+      computeYcFundBalancePricing({
+        usdCredit: input.usdCredit,
+        customerSellRate: input.customerSellRate,
+        ycSellRate: input.ycSellRate,
+        processingFeeBps: input.processingFeeBps,
+        receiveLeg: {
+          cryptoAmountUsd: 0,
+          networkFeeAmountUsd: estimatedReceiveFees,
+          serviceFeeAmountUsd: 0,
+        },
+      }),
+      input.customerSellRate,
+    )
   }
   const localPayIn = Number(input.localPayIn)
   if (!(localPayIn > 0)) {

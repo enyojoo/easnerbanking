@@ -2,7 +2,7 @@ import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   YC_QUOTE_TTL_MS,
-  YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC,
+  YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS,
   buildYcFundBalanceDepositReviewSnapshot,
   buildYcFundBalanceDisplayFees,
   bumpYcFundBalanceLocalPayInForOmnibusShortfall,
@@ -277,7 +277,7 @@ async function submitFundBalanceYcReceive(input: {
   let receiveRes: YcReceiveSubmitResult | null = null
   let pricing: ReturnType<typeof computeYcFundBalancePricing> | null = null
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS; attempt++) {
     if (attempt > 0) {
       sequenceId = `yc_fb_${randomUUID()}`
     }
@@ -328,27 +328,19 @@ async function submitFundBalanceYcReceive(input: {
       processingFee: pricing.processingFee,
     })
     const ycLockedPayIn = Number(receiveRes.localAmount ?? localAmount)
-    const payInAligned = Math.abs(pricing.localPayIn - ycLockedPayIn) < 0.01
 
-    if (omnibusCheck.ok && payInAligned) {
+    if (omnibusCheck.ok) {
       return { receiveRes, pricing, sequenceId }
     }
 
-    if (attempt === 0) {
-      const shortfall = Math.max(
-        0,
-        omnibusCheck.requiredOmnibus - omnibusCheck.cryptoAmount,
-      )
-      if (shortfall > YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC) {
-        localAmount = bumpYcFundBalanceLocalPayInForOmnibusShortfall({
-          localPayIn: Math.max(localAmount, ycLockedPayIn),
-          customerSellRate: input.prepared.customerRate,
-          requiredOmnibus: omnibusCheck.requiredOmnibus,
-          cryptoAmount: omnibusCheck.cryptoAmount,
-        })
-        continue
-      }
-      localAmount = Math.max(pricing.localPayIn, ycLockedPayIn)
+    if (attempt < YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS - 1) {
+      localAmount = bumpYcFundBalanceLocalPayInForOmnibusShortfall({
+        localPayIn: Math.max(localAmount, ycLockedPayIn, pricing.localPayIn),
+        customerSellRate: input.prepared.customerRate,
+        requiredOmnibus: omnibusCheck.requiredOmnibus,
+        cryptoAmount: omnibusCheck.cryptoAmount,
+        padRatio: 1.02 + attempt * 0.015,
+      })
       continue
     }
 

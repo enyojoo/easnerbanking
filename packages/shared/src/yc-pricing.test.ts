@@ -20,6 +20,7 @@ import {
   estimateYcFundBalanceReceiveLegFeesUsd,
   inferYcReceiveLegFeesUsd,
   bumpYcFundBalanceLocalPayInForOmnibusShortfall,
+  YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
 } from "./yc-pricing"
 
 describe("computeYcFundBalancePricing", () => {
@@ -151,6 +152,28 @@ describe("bumpYcFundBalanceLocalPayInForOmnibusShortfall", () => {
       cryptoAmount: 986.9886349,
     })
     expect(bumped).toBeGreaterThan(133825)
+  })
+
+  it("beforeReceive adds solve buffer above fee-padded pay-in", () => {
+    const padded = computeYcFundBalancePricingBeforeReceive({
+      usdCredit: 1200,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+    })
+    const feeOnly = computeYcFundBalancePricing({
+      usdCredit: 1200,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+      receiveLeg: {
+        cryptoAmountUsd: 0,
+        networkFeeAmountUsd: padded.ycLegFeesUsd,
+        serviceFeeAmountUsd: 0,
+      },
+    })
+    expect(padded.localPayIn).toBeGreaterThan(feeOnly.localPayIn)
+    expect(padded.localPayIn - feeOnly.localPayIn).toBeGreaterThanOrEqual(
+      YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC * 132.5 - 0.01,
+    )
   })
 })
 

@@ -130,6 +130,38 @@ describe("confirmFundBalanceOrder", () => {
     expect(secondCall?.localAmount).toBeGreaterThan(133825)
   })
 
+  it("accepts confirm after retry when first YC quote is within conversion slop", async () => {
+    vi.mocked(submitYcReceive)
+      .mockResolvedValueOnce({
+        id: "yc-slop",
+        localAmount: 164462,
+        settlementInfo: { cryptoAmount: 1211.1089995799998 },
+        networkFeeAmountUSD: 0,
+        serviceFeeAmountUSD: 0,
+      })
+      .mockResolvedValueOnce({
+        id: "yc-ok",
+        localAmount: 165727,
+        settlementInfo: { cryptoAmount: 1212 },
+        networkFeeAmountUSD: 0,
+        serviceFeeAmountUSD: 0,
+      })
+
+    const admin = makeAdmin()
+    admin.chain.single
+      .mockResolvedValueOnce({ data: { id: "tx-1" } })
+      .mockResolvedValueOnce({ data: { id: "tr-1" } })
+
+    const result = await confirmFundBalanceOrder({
+      ...baseCtx,
+      admin,
+      usdCredit: 1200,
+    })
+
+    expect(result.quotePhase).toBe("locked")
+    expect(submitYcReceive).toHaveBeenCalledTimes(2)
+  })
+
   it("rejects confirm when YC cryptoAmount cannot fund credit + processing fee", async () => {
     vi.mocked(submitYcReceive).mockResolvedValue({
       id: "yc-1",
@@ -146,7 +178,7 @@ describe("confirmFundBalanceOrder", () => {
     ).rejects.toMatchObject({
       code: "yc_omnibus_below_required",
     })
-    expect(submitYcReceive).toHaveBeenCalledTimes(2)
+    expect(submitYcReceive).toHaveBeenCalledTimes(5)
   })
 
   it("persists omnibus_in_expected and margin_amount when YC receive is sufficient", async () => {
