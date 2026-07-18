@@ -18,7 +18,6 @@ import {
 import { ripple } from '../../lib/androidRipple'
 
 type YcPayInShellWebFormProps = {
-  screenTitle: string
   summary: ReactNode
   sendExactlyLine: ReactNode
   noticeText?: string | null
@@ -29,7 +28,6 @@ type YcPayInShellWebFormProps = {
 }
 
 export function YcPayInShellWebForm({
-  screenTitle,
   summary,
   sendExactlyLine,
   noticeText,
@@ -40,8 +38,6 @@ export function YcPayInShellWebForm({
 }: YcPayInShellWebFormProps) {
   return (
     <View style={styles.root}>
-      <Text style={styles.pageTitle}>{screenTitle}</Text>
-
       <View style={styles.section}>
         <Text style={styles.fieldLabel}>Payment summary</Text>
         <View style={styles.summaryCard}>{summary}</View>
@@ -96,12 +92,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing[5],
-  },
-  pageTitle: {
-    ...textStyles.headlineMedium,
-    color: colors.text.primary,
-    textAlign: 'center',
-    marginBottom: spacing[1],
   },
   section: {
     gap: spacing[2],

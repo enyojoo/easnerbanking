@@ -21,7 +21,7 @@ import {
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { NavigationProps } from '../../types'
-import { colors, spacing, textStyles, borderRadius, surfaceFrameStyle } from '../../theme'
+import { colors, spacing, textStyles, borderRadius, surfaceFrameStyle, surfaceChromeCircleStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ycBankInfoFields } from '../../lib/yc-bank-info-fields'
@@ -200,8 +200,8 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
 
   return (
     <ScreenWrapper>
-      <View style={[styles.container, useWebShellLayout && styles.containerWeb, { paddingBottom: useWebShellLayout ? spacing[4] : footerPadding }]}>
-        <View style={styles.header}>
+      <View style={[styles.container, !useWebShellLayout && styles.containerPadded, { paddingBottom: useWebShellLayout ? spacing[4] : footerPadding }]}>
+        <View style={[styles.header, useWebShellLayout && styles.headerWeb]}>
           <Pressable
             android_ripple={ripple.neutral}
             onPress={() => navigation.goBack()}
@@ -209,13 +209,14 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
           >
             <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
-          {!useWebShellLayout ? <Text style={styles.title}>{screenTitle}</Text> : null}
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>{screenTitle}</Text>
+          </View>
         </View>
 
         {useWebShellLayout ? (
           <CenteredWebFlowPage>
             <YcPayInShellWebForm
-              screenTitle={screenTitle}
               summary={
                 <YcLocalPayInCompleteSummary
                   mode={flowMode}
@@ -327,10 +328,9 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: spacing[5],
   },
-  containerWeb: {
-    paddingHorizontal: spacing[4],
+  containerPadded: {
+    paddingHorizontal: spacing[5],
   },
   centered: {
     flex: 1,
@@ -340,14 +340,23 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
-    marginBottom: spacing[4],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[4],
+  },
+  headerWeb: {
+    paddingHorizontal: spacing[5],
   },
   backButton: {
-    padding: spacing[1],
+    ...surfaceChromeCircleStyle(colors, 44),
+    marginRight: spacing[3],
+  },
+  headerContent: {
+    flex: 1,
+    justifyContent: 'center',
   },
   title: {
-    ...textStyles.screenTitle,
+    ...textStyles.headlineMedium,
+    color: colors.text.primary,
   },
   summaryCard: {
     backgroundColor: colors.semantic.card,

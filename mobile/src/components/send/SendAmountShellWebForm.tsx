@@ -52,7 +52,6 @@ function LandmarkIcon({ size = 20, color = colors.text.primary }: { size?: numbe
 }
 
 export type SendAmountShellWebFormProps = {
-  pageTitle?: string
   recipient: Recipient | null
   easenetPreview?: HydratedEasenetProfile | null
   showPayoutCorridorWarning?: boolean
@@ -104,7 +103,6 @@ export type SendAmountShellWebFormProps = {
 }
 
 export function SendAmountShellWebForm({
-  pageTitle,
   recipient,
   easenetPreview,
   showPayoutCorridorWarning = false,
@@ -214,8 +212,6 @@ export function SendAmountShellWebForm({
 
   return (
     <View style={styles.root}>
-      {pageTitle ? <Text style={styles.pageTitle}>{pageTitle}</Text> : null}
-
       <View style={styles.section}>
         <Text style={styles.fieldLabel}>Recipient</Text>
         {recipient ? (
@@ -421,12 +417,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing[5],
-  },
-  pageTitle: {
-    ...textStyles.headlineMedium,
-    color: colors.text.primary,
-    textAlign: 'center',
-    marginBottom: spacing[1],
   },
   section: {
     gap: spacing[2],

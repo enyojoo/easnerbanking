@@ -1589,11 +1589,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       >
         <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
       </Pressable>
-      {!useWebShellLayout ? (
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Send Money</Text>
-        </View>
-      ) : null}
+      <View style={styles.headerContent}>
+        <Text style={styles.title}>Send Money</Text>
+      </View>
     </Animated.View>
   )
 
@@ -1609,7 +1607,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const webShellForm = (
     <SendAmountShellWebForm
-      pageTitle="Send Money"
       recipient={recipient}
       easenetPreview={easenetDisplay}
       showPayoutCorridorWarning={

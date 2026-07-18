@@ -60,6 +60,9 @@ import {
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches } from '../../lib/warmYcLocalDepositCaches'
+import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
+import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
+import { ReceiveLocalAmountShellWebForm } from '../../components/receive/ReceiveLocalAmountShellWebForm'
 
 type RouteParams = {
   localPayInCurrency: string
@@ -72,6 +75,8 @@ type RouteParams = {
 
 export default function ReceiveLocalAmountScreen({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
+  const { isWeb, mode } = useResponsiveLayout()
+  const useWebShellLayout = isWeb && (mode === 'tablet' || mode === 'desktop')
   const { width: windowWidth } = useWindowDimensions()
   const footerPadding = useFixedFooterPadding(spacing[4])
   const keypadSizing = computeKeypadCellSize(getContentWidth(windowWidth, spacing[5]), {
@@ -266,16 +271,6 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     }
   }
 
-  const changeRail = () => {
-    if (!bankAvailable || !momoAvailable) return
-    haptics.tap()
-    navigation.navigate('ReceiveLocalRail' as never, {
-      localPayInCurrency,
-      residenceCountry,
-      ngMissingType,
-    } as never)
-  }
-
   const handleKeypadPress = (value: string) => {
     haptics.tap()
     let raw = amountStr.replace(/,/g, '')
@@ -299,6 +294,24 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     if (raw === '0') raw = value
     else raw += value
     setAmountStr(formatKeypadAmount(raw))
+  }
+
+  const changeRail = () => {
+    if (!bankAvailable || !momoAvailable) return
+    haptics.tap()
+    navigation.navigate('ReceiveLocalRail' as never, {
+      localPayInCurrency,
+      residenceCountry,
+      ngMissingType,
+    } as never)
+  }
+
+  const handleWebAmountChange = (text: string) => {
+    const sanitized = text.replace(/[^0-9.]/g, '')
+    const parts = sanitized.split('.')
+    if (parts.length > 2) return
+    if (parts[1]?.length > 2) return
+    setAmountStr(formatKeypadAmount(sanitized || '0'))
   }
 
   const onContinue = async () => {
@@ -388,6 +401,43 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
   return (
     <ScreenWrapper>
+      {useWebShellLayout ? (
+        <View style={styles.mainColumn}>
+          <View style={[styles.header, { paddingTop: spacing[4] }]}>
+            <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
+              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
+            </Pressable>
+            <View style={styles.headerContent}>
+              <Text style={styles.title}>Add money</Text>
+            </View>
+          </View>
+          <CenteredWebFlowPage>
+            <ReceiveLocalAmountShellWebForm
+              usdBalance={usdBalance}
+              amountEntryMode={amountEntryMode}
+              amountStr={amountStr}
+              displayCurrency={displayCurrency}
+              localPayInCurrency={localPayInCurrency}
+              railLabel={railLabel}
+              amountPositive={amountPositive}
+              showExchangePreviewSkeleton={showExchangePreviewSkeleton}
+              exchangePreviewReady={exchangePreviewReady}
+              amountLimitMessage={!amountLimitCheck.ok ? amountLimitCheck.message : null}
+              previewLocalPayIn={ycFlow.preview.localPayIn}
+              previewUsdCredit={ycFlow.preview.usdCredit}
+              customerRate={ycFlow.customerRate}
+              bankAvailable={bankAvailable}
+              momoAvailable={momoAvailable}
+              canContinue={canContinue}
+              isContinueLoading={isContinueLoading}
+              onAmountChange={handleWebAmountChange}
+              onToggleAmountDirection={toggleAmountDirection}
+              onChangeRail={changeRail}
+              onContinue={() => void onContinue()}
+            />
+          </CenteredWebFlowPage>
+        </View>
+      ) : (
       <KeyboardAvoidingView style={styles.mainColumn} behavior="padding">
         <View style={[styles.header, { paddingTop: spacing[4] + insets.top }]}>
           <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -563,6 +613,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      )}
     </ScreenWrapper>
   )
 }
