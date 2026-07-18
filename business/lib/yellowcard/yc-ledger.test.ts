@@ -10,6 +10,7 @@ import {
   buildYcBalancePayoutOutMetadata,
   buildYcFundBalanceReceiveMetadata,
   buildYcOmnibusCryptoDepositMetadata,
+  buildYcParentPayoutCryptoDepositTracking,
   buildYcRefundExpectedPatch,
   isYcBalancePayoutRow,
   isYcFundBalanceRow,
@@ -98,6 +99,17 @@ describe("yc-ledger metadata builders", () => {
     expect(meta.suppress_in_feed).toBe(true)
     expect(meta.yc_crypto_deposit_leg).toBe(true)
     expect(isYcInternalCryptoLeg(meta)).toBe(true)
+  })
+
+  it("parent payout crypto tracking stays visible in feed", () => {
+    const meta = buildYcParentPayoutCryptoDepositTracking({
+      prior: { yc_mode: "balance_payout", easner_payout_id: "payout-1" },
+      txHash: "sig456",
+      status: "settled",
+    })
+    expect(meta.suppress_in_feed).toBeUndefined()
+    expect(meta.yc_crypto_deposit_leg).toBeUndefined()
+    expect(isYcInternalCryptoLeg(meta)).toBe(false)
   })
 
   it("sets yc + noah refund expected flags on failure", () => {

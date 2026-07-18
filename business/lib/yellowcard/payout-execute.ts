@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { executeYcCryptoDeposit } from "@/lib/yellowcard/execute-yc-crypto-deposit"
 import { reverseGlobalPayoutWalletDebitForEasnerPayoutId } from "@/lib/noah/global-payout-ledger"
 import {
@@ -9,6 +10,10 @@ import {
   readPriorSweepFromMetadata,
   sweepEasnerRevenueFromDepositOmnibus,
 } from "@/lib/processing-fee/fee-wallet-sweep"
+import {
+  buildYcParentPayoutCryptoDepositTracking,
+  mergeYcPayoutLifecycle,
+} from "@/lib/yellowcard/yc-ledger"
 
 function asMeta(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
@@ -31,28 +36,41 @@ export async function executeYcBalancePayoutCryptoLeg(input: {
   const admin = createSupabaseAdmin()
   const { data: existing } = await admin
     .from("transactions")
-    .select("metadata")
+    .select("id,user_id,business_id,metadata,amount,provider,provider_transaction_id")
     .eq("id", input.transactionId)
     .maybeSingle()
   const prior =
     existing?.metadata && typeof existing.metadata === "object"
       ? (existing.metadata as Record<string, unknown>)
       : {}
-  await admin
-    .from("transactions")
-    .update({
-      metadata: {
-        ...prior,
-        yc_crypto_deposit_status: deposit.status,
-        yc_crypto_deposit_tx_hash: deposit.txHash,
-        yc_crypto_deposit_provider_id: deposit.providerTransactionId,
-        yc_crypto_deposit_error: deposit.errorMessage,
-        suppress_in_feed: true,
-        yc_crypto_deposit_leg: true,
-      },
-      updated_at: new Date().toISOString(),
+  const trackingMeta = buildYcParentPayoutCryptoDepositTracking({
+    prior,
+    txHash: deposit.txHash,
+    providerTransactionId: deposit.providerTransactionId,
+    status: deposit.status,
+    error: deposit.errorMessage,
+  })
+  if (existing?.id) {
+    await upsertLedgerTransaction(admin, {
+      userId: String(existing.user_id),
+      businessId: existing.business_id ? String(existing.business_id) : null,
+      provider: String(existing.provider ?? "yellowcard"),
+      providerTransactionId: String(
+        existing.provider_transaction_id ??
+          prior.yc_send_id ??
+          prior.form_session_id ??
+          prior.yc_sequence_id ??
+          existing.id,
+      ),
+      status: String(existing.status ?? "pending"),
+      amount: Number(existing.amount ?? 0),
+      currency: "USD",
+      direction: "out",
+      metadata: trackingMeta,
+      baseCurrency: "USD",
+      asset: "USDC",
     })
-    .eq("id", input.transactionId)
+  }
 
   if (deposit.status === "failed") {
     return { ok: false, txHash: null, error: deposit.errorMessage ?? "yc_crypto_deposit_failed" }
@@ -105,7 +123,7 @@ export async function handleYcBalancePayoutSendComplete(input: {
 
   const { data: row } = await admin
     .from("transactions")
-    .select("id, metadata, amount")
+    .select("id, user_id, business_id, metadata, amount, provider, provider_transaction_id")
     .eq("id", input.transactionId)
     .maybeSingle()
   if (!row?.id) return
@@ -116,25 +134,41 @@ export async function handleYcBalancePayoutSendComplete(input: {
     { transactionId: row.id },
   )
 
-  const txPatch = {
-    ...prior,
-    ...buildEasnerRevenueSweepMetadataPatch({
-      sweepAmt,
-      feeWalletSweepTxHash,
-      captured,
-    }),
-    margin_capture_mode: "fee_wallet_omnibus",
-  }
+  const txPatch = mergeYcPayoutLifecycle(
+    {
+      ...prior,
+      ...buildEasnerRevenueSweepMetadataPatch({
+        sweepAmt,
+        feeWalletSweepTxHash,
+        captured,
+      }),
+      margin_capture_mode: "fee_wallet_omnibus",
+      processing_fee_pending: false,
+    },
+    { completed_at: now, processing_at: now },
+  )
 
-  await admin
-    .from("transactions")
-    .update({
-      status: "settled",
-      settled_at: now,
-      metadata: txPatch,
-      updated_at: now,
-    })
-    .eq("id", row.id)
+  await upsertLedgerTransaction(admin, {
+    userId: String(row.user_id),
+    businessId: row.business_id ? String(row.business_id) : null,
+    provider: String(row.provider ?? "yellowcard"),
+    providerTransactionId: String(
+      row.provider_transaction_id ??
+        prior.yc_send_id ??
+        prior.form_session_id ??
+        prior.yc_sequence_id ??
+        row.id,
+    ),
+    status: "settled",
+    amount: Number(row.amount ?? 0),
+    currency: "USD",
+    direction: "out",
+    metadata: txPatch,
+    occurredAt: now,
+    settledAt: now,
+    baseCurrency: "USD",
+    asset: "USDC",
+  })
 
   const { data: transfer } = await admin
     .from("yc_transfers")

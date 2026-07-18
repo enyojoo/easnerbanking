@@ -10,6 +10,7 @@ import {
 } from "./webhook-event-id"
 import {
   buildYcRefundExpectedPatch,
+  canTransitionYcCrossBorderStatus,
   findYcContextBySequenceId,
   mergeYcPayoutLifecycle,
 } from "./yc-ledger"
@@ -110,7 +111,7 @@ export async function handleYcBalancePayoutSendWebhook(
 
   const { data: row } = await admin
     .from("transactions")
-    .select("id,user_id,business_id,metadata,status,amount")
+    .select("id,user_id,business_id,metadata,status,amount,provider,provider_transaction_id")
     .eq("id", transactionId)
     .maybeSingle()
   if (!row?.id) return
@@ -118,19 +119,11 @@ export async function handleYcBalancePayoutSendWebhook(
   const prior = asMeta(row.metadata)
   const occurredAt = pickOccurredAt(input.payload)
   const easnerPayoutId = String(prior.easner_payout_id ?? row.id)
+  const providerTransactionId = String(
+    row.provider_transaction_id ?? prior.yc_send_id ?? prior.form_session_id ?? input.sequenceId,
+  )
 
   if (input.classified.isTerminalSuccess) {
-    let meta = mergeYcPayoutLifecycle(prior, { completed_at: occurredAt, processing_at: occurredAt })
-    await admin
-      .from("transactions")
-      .update({
-        status: "settled",
-        settled_at: occurredAt,
-        metadata: meta,
-        updated_at: occurredAt,
-      })
-      .eq("id", row.id)
-
     if (transfer) {
       await admin
         .from("yc_transfers")
@@ -152,10 +145,22 @@ export async function handleYcBalancePayoutSendWebhook(
       refundAmount: Number.isFinite(refundAmt) && refundAmt > 0 ? refundAmt : null,
     })
     meta = mergeYcPayoutLifecycle(meta, { failed_at: occurredAt, processing_at: occurredAt })
-    await admin
-      .from("transactions")
-      .update({ status: "failed", metadata: meta, updated_at: occurredAt })
-      .eq("id", row.id)
+
+    await upsertLedgerTransaction(admin, {
+      userId: String(row.user_id),
+      businessId: row.business_id ? String(row.business_id) : null,
+      provider: String(row.provider ?? "yellowcard"),
+      providerTransactionId,
+      status: "failed",
+      amount: Number(row.amount ?? 0),
+      currency: "USD",
+      direction: "out",
+      payload: input.payload,
+      metadata: meta,
+      occurredAt,
+      baseCurrency: "USD",
+      asset: "USDC",
+    })
 
     if (transfer) {
       await admin
@@ -173,8 +178,8 @@ export async function handleYcBalancePayoutSendWebhook(
   await upsertLedgerTransaction(admin, {
     userId: String(row.user_id),
     businessId: row.business_id ? String(row.business_id) : null,
-    provider: "yellowcard",
-    providerTransactionId: String(prior.yc_send_id ?? prior.form_session_id ?? input.sequenceId),
+    provider: String(row.provider ?? "yellowcard"),
+    providerTransactionId,
     status: "processing",
     amount: Number(row.amount ?? 0),
     currency: "USD",
@@ -183,6 +188,7 @@ export async function handleYcBalancePayoutSendWebhook(
     metadata: meta,
     occurredAt,
     baseCurrency: "USD",
+    asset: "USDC",
   })
 }
 
@@ -202,43 +208,77 @@ export async function handleYcCrossBorderWebhook(
   const occurredAt = pickOccurredAt(input.payload)
   const transactionId = transfer.transaction_id ?? ctx.transaction?.id ?? null
 
+  async function upsertCrossBorderTx(
+    status: "processing" | "failed" | "settled",
+    lifecyclePatch: Parameters<typeof mergeYcPayoutLifecycle>[1],
+    extraMeta?: Record<string, unknown>,
+    opts?: { settledAt?: string },
+  ): Promise<void> {
+    if (!transactionId) return
+    const { data: txRow } = await admin
+      .from("transactions")
+      .select(
+        "id,user_id,business_id,metadata,amount,provider,provider_transaction_id,direction,currency",
+      )
+      .eq("id", transactionId)
+      .maybeSingle()
+    if (!txRow?.id) return
+    const prior = asMeta(txRow.metadata)
+    const metadata = {
+      ...mergeYcPayoutLifecycle(prior, lifecyclePatch),
+      ...(extraMeta ?? {}),
+    }
+    await upsertLedgerTransaction(admin, {
+      userId: String(txRow.user_id),
+      businessId: txRow.business_id ? String(txRow.business_id) : null,
+      provider: String(txRow.provider ?? "yellowcard"),
+      providerTransactionId: String(
+        txRow.provider_transaction_id ?? prior.yc_sequence_id ?? transfer.leg2_sequence_id ?? transfer.id,
+      ),
+      status,
+      amount: Number(txRow.amount ?? 0),
+      currency: String(txRow.currency ?? "USD"),
+      direction: (txRow.direction === "in" ? "in" : "out") as "in" | "out",
+      payload: input.payload,
+      metadata,
+      occurredAt,
+      settledAt: opts?.settledAt,
+      baseCurrency: "USD",
+    })
+  }
+
   // Leg 1 receive settlement → trigger leg 2
   if (
     input.shouldTriggerCrossBorderLeg2 &&
     (ctx.matchedLeg === "leg1" || transfer.leg1_sequence_id === input.sequenceId)
   ) {
-    if (transactionId) {
-      const { data: txRow } = await admin
-        .from("transactions")
-        .select("metadata")
-        .eq("id", transactionId)
-        .maybeSingle()
-      const prior = asMeta(txRow?.metadata)
-      const meta = mergeYcPayoutLifecycle(prior, {
-        processing_at: occurredAt,
-        leg1_settled_at: occurredAt,
-        leg1_status: "complete",
-      })
-      await admin
-        .from("transactions")
-        .update({ status: "processing", metadata: meta, updated_at: occurredAt })
-        .eq("id", transactionId)
-    }
-    await admin
-      .from("yc_transfers")
-      .update({
-        leg1_status: "complete",
-        status: "leg1_settled",
-        metadata: {
-          ...transfer.metadata,
-          leg1_settled_at: occurredAt,
+    if (canTransitionYcCrossBorderStatus(String(transfer.status), "leg1_settled")) {
+      await upsertCrossBorderTx(
+        "processing",
+        {
+          processing_at: occurredAt,
         },
-        updated_at: occurredAt,
-      })
-      .eq("id", transfer.id)
+        {
+          leg1_settled_at: occurredAt,
+          leg1_status: "complete",
+        },
+      )
+      await admin
+        .from("yc_transfers")
+        .update({
+          leg1_status: "complete",
+          status: "leg1_settled",
+          metadata: {
+            ...transfer.metadata,
+            leg1_settled_at: occurredAt,
+          },
+          updated_at: occurredAt,
+        })
+        .eq("id", transfer.id)
 
-    const { maybeExecuteCrossBorderLeg2 } = await import("./cross-border-orchestrator")
-    await maybeExecuteCrossBorderLeg2(admin, transfer.id)
+      const { maybeExecuteCrossBorderLeg2 } = await import("./cross-border-orchestrator")
+      await maybeExecuteCrossBorderLeg2(admin, transfer.id)
+    }
     return
   }
 
@@ -255,34 +295,25 @@ export async function handleYcCrossBorderWebhook(
         ops_alert: "cross_border_leg2_failed_refund_to_fee_wallet",
         yc_refund_expected: true,
       }
-      await admin
-        .from("yc_transfers")
-        .update({
-          status: "failed",
-          leg2_status: "failed",
-          metadata: meta,
-          updated_at: occurredAt,
-        })
-        .eq("id", transfer.id)
-      if (transactionId) {
-        const { data: txRow } = await admin
-          .from("transactions")
-          .select("metadata")
-          .eq("id", transactionId)
-          .maybeSingle()
-        const prior = asMeta(txRow?.metadata)
+      if (canTransitionYcCrossBorderStatus(String(transfer.status), "failed")) {
         await admin
-          .from("transactions")
+          .from("yc_transfers")
           .update({
             status: "failed",
-            metadata: mergeYcPayoutLifecycle(buildYcRefundExpectedPatch(prior), {
-              failed_at: occurredAt,
-              failure_leg: "leg2",
-              leg2_status: "failed",
-            }),
+            leg2_status: "failed",
+            metadata: meta,
             updated_at: occurredAt,
           })
-          .eq("id", transactionId)
+          .eq("id", transfer.id)
+        await upsertCrossBorderTx(
+          "failed",
+          { failed_at: occurredAt },
+          {
+            ...buildYcRefundExpectedPatch({}),
+            failure_leg: "leg2",
+            leg2_status: "failed",
+          },
+        )
       }
       console.error("[yc-cross-border] SEND.FAILED — refund to fee wallet; NGN recovery runbook", {
         transferId: transfer.id,
@@ -294,43 +325,21 @@ export async function handleYcCrossBorderWebhook(
   // Leg 1 intermediate / terminal without crypto settlement yet
   if (ctx.matchedLeg === "leg1" || transfer.leg1_sequence_id === input.sequenceId) {
     if (input.classified.isTerminalFailure) {
-      await admin
-        .from("yc_transfers")
-        .update({ status: "failed", leg1_status: "failed", updated_at: occurredAt })
-        .eq("id", transfer.id)
-      if (transactionId) {
-        const { data: txRow } = await admin
-          .from("transactions")
-          .select("metadata")
-          .eq("id", transactionId)
-          .maybeSingle()
-        const prior = asMeta(txRow?.metadata)
+      if (canTransitionYcCrossBorderStatus(String(transfer.status), "failed")) {
         await admin
-          .from("transactions")
-          .update({
-            status: "failed",
-            metadata: mergeYcPayoutLifecycle(prior, {
-              failed_at: occurredAt,
-              failure_leg: "leg1",
-              leg1_status: "failed",
-            }),
-            updated_at: occurredAt,
-          })
-          .eq("id", transactionId)
+          .from("yc_transfers")
+          .update({ status: "failed", leg1_status: "failed", updated_at: occurredAt })
+          .eq("id", transfer.id)
+        await upsertCrossBorderTx(
+          "failed",
+          { failed_at: occurredAt },
+          { failure_leg: "leg1", leg1_status: "failed" },
+        )
       }
       return
     }
-    if (input.classified.isTerminalSuccess && transactionId) {
-      await admin
-        .from("transactions")
-        .update({
-          status: "processing",
-          metadata: mergeYcPayoutLifecycle(asMeta(ctx.transaction?.metadata), {
-            processing_at: occurredAt,
-          }),
-          updated_at: occurredAt,
-        })
-        .eq("id", transactionId)
+    if (input.classified.isTerminalSuccess) {
+      await upsertCrossBorderTx("processing", { processing_at: occurredAt })
     }
   }
 }

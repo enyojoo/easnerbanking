@@ -147,6 +147,32 @@ export async function findYcContextBySequenceId(
   return { transfer, transaction, sequenceId: seq, matchedLeg }
 }
 
+/** Merge YC receive webhook fields onto fund_balance metadata (Noah FiatDeposit parity). */
+export function enrichYcFundBalanceReceiveFromPayload(
+  prior: Record<string, unknown>,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const bankInfo = (payload.bankInfo ?? payload.bank_info) as Record<string, unknown> | null | undefined
+  const settlementInfo = (payload.settlementInfo ?? payload.settlement_info) as
+    | Record<string, unknown>
+    | null
+    | undefined
+  const ycId = String(payload.id ?? payload.receiveId ?? payload.collectionId ?? "").trim()
+  const channelId = String(payload.channelId ?? payload.channel_id ?? "").trim()
+  const status = String(payload.status ?? "").trim()
+
+  return {
+    ...prior,
+    ...(ycId ? { yc_receive_id: ycId, leg1_yc_id: ycId } : {}),
+    ...(channelId ? { channel_id: channelId } : {}),
+    ...(status ? { yc_receive_status: status } : {}),
+    ...(bankInfo && typeof bankInfo === "object" ? { yc_bank_info: bankInfo } : {}),
+    ...(settlementInfo && typeof settlementInfo === "object"
+      ? { yc_settlement_info: settlementInfo }
+      : {}),
+  }
+}
+
 export function buildYcFundBalanceReceiveMetadata(input: {
   prior?: Record<string, unknown> | null
   sequenceId: string
@@ -163,7 +189,7 @@ export function buildYcFundBalanceReceiveMetadata(input: {
   depositDisplayTitle?: string | null
   displayHeroTitle?: string | null
 }): Record<string, unknown> {
-  return {
+  const base = {
     ...(input.prior ?? {}),
     source: "api_yellowcard_fund_balance",
     flow: "bank_onramp",
@@ -184,6 +210,26 @@ export function buildYcFundBalanceReceiveMetadata(input: {
     ...(input.displayHeroTitle ? { display_hero_title: input.displayHeroTitle } : {}),
     ...(input.payload ? { yc_webhook_payload_keys: Object.keys(input.payload).slice(0, 40) } : {}),
   }
+  return input.payload ? enrichYcFundBalanceReceiveFromPayload(base, input.payload) : base
+}
+
+const YC_CROSS_BORDER_ALLOWED: Record<string, readonly string[]> = {
+  awaiting_pay_in: ["processing", "failed"],
+  processing: ["leg1_settled", "failed"],
+  leg1_settled: ["leg2_in_progress", "failed"],
+  leg2_in_progress: ["completed", "failed"],
+  pending: ["processing", "leg1_settled", "leg2_in_progress", "completed", "failed"],
+}
+
+/** Guard cross-border yc_transfers.status transitions (no-op downgrade allowed). */
+export function canTransitionYcCrossBorderStatus(current: string, next: string): boolean {
+  const cur = String(current || "").trim()
+  const nxt = String(next || "").trim()
+  if (!cur || !nxt || cur === nxt) return true
+  if (cur === "completed" || cur === "failed") return false
+  const allowed = YC_CROSS_BORDER_ALLOWED[cur]
+  if (!allowed) return true
+  return allowed.includes(nxt)
 }
 
 export function buildYcBalancePayoutOutMetadata(input: {
@@ -264,6 +310,30 @@ export function buildYcCrossBorderOutMetadata(input: {
     ...(input.customerRate != null ? { customer_rate: input.customerRate } : {}),
     transaction_started_at: new Date().toISOString(),
   }
+}
+
+/** Track omnibus→YC crypto deposit on the visible payout row (no feed suppression). */
+export function buildYcParentPayoutCryptoDepositTracking(input: {
+  prior?: Record<string, unknown> | null
+  txHash?: string | null
+  providerTransactionId?: string | null
+  status?: string | null
+  error?: string | null
+}): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...(input.prior ?? {}) }
+  delete next.suppress_in_feed
+  delete next.yc_crypto_deposit_leg
+  delete next.yc_settlement_leg
+  if (input.txHash) {
+    next.yc_crypto_deposit_tx_hash = input.txHash
+    next.turnkey_tx_hash = input.txHash
+  }
+  if (input.providerTransactionId) {
+    next.yc_crypto_deposit_provider_id = input.providerTransactionId
+  }
+  if (input.status) next.yc_crypto_deposit_status = input.status
+  if (input.error) next.yc_crypto_deposit_error = input.error
+  return next
 }
 
 /** Internal omnibus → YC wallet crypto deposit leg (hidden from feed). */

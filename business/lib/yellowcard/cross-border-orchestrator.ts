@@ -25,7 +25,7 @@ import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
 import { computeEasnerRevenueFeeWalletSweepAmount } from "@easner/shared"
 import { readPriorSweepFromMetadata, sweepEasnerRevenueFromDepositOmnibus } from "@/lib/processing-fee/fee-wallet-sweep"
 import { buildRecipientSnapshotFromRow } from "@/lib/noah/build-payout-execute-snapshot"
-import { buildYcCrossBorderOutMetadata } from "@/lib/yellowcard/yc-ledger"
+import { buildYcCrossBorderOutMetadata, canTransitionYcCrossBorderStatus } from "@/lib/yellowcard/yc-ledger"
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 import { buildYcCrossBorderReportingSnapshot } from "@/lib/transactions/reporting-snapshot"
 import { generateTransactionId } from "@/lib/transaction-id"
@@ -870,6 +870,7 @@ export async function maybeExecuteCrossBorderLeg2(
   if (!transfer || transfer.mode !== "cross_border_send") return
   if (String(transfer.leg2_status) === "complete" || String(transfer.status) === "completed") return
   if (String(transfer.leg2_status) === "depositing") return
+  if (!canTransitionYcCrossBorderStatus(String(transfer.status), "leg2_in_progress")) return
 
   const settlement = transfer.settlement_info as {
     send?: { walletAddress?: string; cryptoAmount?: number }
@@ -985,19 +986,31 @@ export async function completeCrossBorderOnSendSuccess(
   if (transfer.transaction_id) {
     const { data: txRow } = await admin
       .from("transactions")
-      .select("metadata")
+      .select(
+        "id,user_id,business_id,metadata,amount,provider,provider_transaction_id,direction,currency",
+      )
       .eq("id", transfer.transaction_id)
       .maybeSingle()
     const prior = (txRow?.metadata || {}) as Record<string, unknown>
     const { mergeYcPayoutLifecycle } = await import("@/lib/yellowcard/yc-ledger")
-    await admin
-      .from("transactions")
-      .update({
+    const { upsertLedgerTransaction } = await import("@/lib/ledger/transactions")
+    if (txRow?.id) {
+      await upsertLedgerTransaction(admin, {
+        userId: String(txRow.user_id),
+        businessId: txRow.business_id ? String(txRow.business_id) : null,
+        provider: String(txRow.provider ?? "yellowcard"),
+        providerTransactionId: String(
+          txRow.provider_transaction_id ?? prior.yc_sequence_id ?? transfer.leg2_sequence_id ?? transfer.id,
+        ),
         status: "settled",
-        settled_at: now,
+        amount: Number(txRow.amount ?? 0),
+        currency: String(txRow.currency ?? "USD"),
+        direction: txRow.direction === "in" ? "in" : "out",
         metadata: mergeYcPayoutLifecycle(prior, { completed_at: now, processing_at: now }),
-        updated_at: now,
+        occurredAt: now,
+        settledAt: now,
+        baseCurrency: "USD",
       })
-      .eq("id", transfer.transaction_id)
+    }
   }
 }

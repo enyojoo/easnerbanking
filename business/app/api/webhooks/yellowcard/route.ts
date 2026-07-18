@@ -4,6 +4,7 @@ import {
   readYellowcardWebhookSignatureHeader,
 } from "@/lib/yellowcard/webhook-verify"
 import { recordYellowcardWebhookDelivery } from "@/lib/yellowcard/process-webhook"
+import { recordYellowcardWebhookAuthRejection } from "@/lib/yellowcard/record-webhook-auth-rejection"
 import { getYellowcardApiSecret } from "@/lib/yellowcard/config"
 
 export const runtime = "nodejs"
@@ -32,7 +33,13 @@ export async function POST(request: Request) {
     console.warn("[yellowcard-webhook] verification failed", {
       code,
       bodyBytes: diagnostic.bodyBytes,
+      signaturePresent: Boolean(sig),
     })
+    await recordYellowcardWebhookAuthRejection({
+      code,
+      bodyBytes: diagnostic.bodyBytes,
+      signatureBytes: sig ? Buffer.byteLength(sig, "utf8") : null,
+    }).catch(() => undefined)
     return NextResponse.json(
       {
         error:

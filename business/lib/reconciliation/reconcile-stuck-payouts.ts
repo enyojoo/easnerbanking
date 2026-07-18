@@ -5,8 +5,15 @@ import {
 } from "@easner/shared"
 import { applyNoahWebhookSideEffects } from "@/lib/noah/webhook-side-effects"
 import { applyYellowcardWebhookSideEffects } from "@/lib/yellowcard/webhook-processor"
-import { maybeExecuteCrossBorderLeg2, completeCrossBorderOnSendSuccess } from "@/lib/yellowcard/cross-border-orchestrator"
+import { maybeExecuteCrossBorderLeg2 } from "@/lib/yellowcard/cross-border-orchestrator"
 import { handleYcBalancePayoutSendComplete } from "@/lib/yellowcard/payout-execute"
+import {
+  buildYellowcardPollWebhookEnvelope,
+  fetchYcReceiveBySequenceId,
+  fetchYcSendBySequenceId,
+  isYcPollTerminalEnvelope,
+  isYcPollTerminalStatus,
+} from "@/lib/reconciliation/yc-transaction-poll"
 import {
   buildEasnerRevenueSweepMetadataPatch,
   computeSweepAmountFromMetadata,
@@ -44,7 +51,16 @@ export type ReconcileStuckPayoutsOpts = {
 export type ReconcileStuckPayoutsResult = {
   inbox: { failedReplayed: number; failedErrors: number; staleReplayed: number; staleErrors: number }
   noah: { scanned: number; patched: number }
-  yc: { scanned: number; replayed: number; leg2Triggered: number; feeRetried: number }
+  yc: {
+    scanned: number
+    replayed: number
+    polled: number
+    leg2Triggered: number
+    feeRetried: number
+    stuckAwaitingPayIn: number
+    stuckLeg2InProgress: number
+    ycRefundExpected: number
+  }
   fees: { scanned: number; captured: number }
   walletSends: { scanned: number; patched: number }
 }
@@ -68,6 +84,79 @@ function pickSequenceIdsFromTransfer(row: Record<string, unknown>): string[] {
     .map((v) => String(v ?? "").trim())
     .filter(Boolean)
   return [...new Set(ids)]
+}
+
+function pickYcPollSequenceIds(transfer: Record<string, unknown>): Array<{ leg: "send" | "receive"; sequenceId: string }> {
+  const mode = String(transfer.mode ?? "")
+  const out: Array<{ leg: "send" | "receive"; sequenceId: string }> = []
+  const leg1 = String(transfer.leg1_sequence_id ?? "").trim()
+  const leg2 = String(transfer.leg2_sequence_id ?? "").trim()
+  if (mode === "fund_balance" && leg1) out.push({ leg: "receive", sequenceId: leg1 })
+  if (mode === "balance_payout" && leg2) out.push({ leg: "send", sequenceId: leg2 })
+  if (mode === "cross_border_send") {
+    const status = String(transfer.status ?? "")
+    const leg2Status = String(transfer.leg2_status ?? "")
+    if (leg1 && !["leg1_settled", "leg2_in_progress", "completed"].includes(status)) {
+      out.push({ leg: "receive", sequenceId: leg1 })
+    }
+    if (leg2 && (status === "leg2_in_progress" || leg2Status === "pending_yc")) {
+      out.push({ leg: "send", sequenceId: leg2 })
+    }
+  }
+  return out
+}
+
+async function pollYellowcardTransferStatus(
+  admin: SupabaseClient,
+  transfer: Record<string, unknown>,
+): Promise<{ polled: number }> {
+  let polled = 0
+  for (const { leg, sequenceId } of pickYcPollSequenceIds(transfer)) {
+    const txData =
+      leg === "send"
+        ? await fetchYcSendBySequenceId(sequenceId)
+        : await fetchYcReceiveBySequenceId(sequenceId)
+    if (!txData) continue
+    const ycStatus = String(txData.status ?? txData.Status ?? "").trim()
+    if (!ycStatus || !isYcPollTerminalStatus(ycStatus)) continue
+    const envelope = buildYellowcardPollWebhookEnvelope(leg, txData)
+    if (!isYcPollTerminalEnvelope(envelope)) continue
+    await applyYellowcardWebhookSideEffects(admin, envelope)
+    polled += 1
+  }
+  return { polled }
+}
+
+async function countYcStuckHealth(
+  admin: SupabaseClient,
+  since: string,
+): Promise<{
+  stuckAwaitingPayIn: number
+  stuckLeg2InProgress: number
+  ycRefundExpected: number
+}> {
+  const { data: rows, error } = await admin
+    .from("yc_transfers")
+    .select("status, leg2_status, metadata")
+    .gte("created_at", since)
+    .limit(500)
+  if (error) throw error
+
+  let stuckAwaitingPayIn = 0
+  let stuckLeg2InProgress = 0
+  let ycRefundExpected = 0
+  for (const row of rows ?? []) {
+    const status = String(row.status ?? "")
+    if (status === "awaiting_pay_in") stuckAwaitingPayIn += 1
+    if (status === "leg2_in_progress" && String(row.leg2_status ?? "") === "pending_yc") {
+      stuckLeg2InProgress += 1
+    }
+    const meta = asMeta(row.metadata)
+    if (meta.yc_refund_expected === true && meta.yc_refund_tx_hash == null) {
+      ycRefundExpected += 1
+    }
+  }
+  return { stuckAwaitingPayIn, stuckLeg2InProgress, ycRefundExpected }
 }
 
 function payloadSequenceId(payload: Record<string, unknown>): string | null {
@@ -252,7 +341,17 @@ export async function reconcileStuckYcTransfers(
   admin: SupabaseClient,
   since: string,
   dryRun: boolean,
-): Promise<{ scanned: number; replayed: number; leg2Triggered: number; feeRetried: number }> {
+): Promise<{
+  scanned: number
+  replayed: number
+  polled: number
+  leg2Triggered: number
+  feeRetried: number
+  stuckAwaitingPayIn: number
+  stuckLeg2InProgress: number
+  ycRefundExpected: number
+}> {
+  const health = await countYcStuckHealth(admin, since)
   const { data: rows, error } = await admin
     .from("yc_transfers")
     .select("*")
@@ -266,6 +365,7 @@ export async function reconcileStuckYcTransfers(
   )
 
   let replayed = 0
+  let polled = 0
   let leg2Triggered = 0
   let feeRetried = 0
 
@@ -275,6 +375,9 @@ export async function reconcileStuckYcTransfers(
 
     const replay = await replayYellowcardInboxForSequenceIds(admin, sequenceIds, since)
     replayed += replay.replayed
+
+    const poll = await pollYellowcardTransferStatus(admin, transfer as Record<string, unknown>)
+    polled += poll.polled
 
     const mode = String(transfer.mode ?? "")
     if (mode === "cross_border_send") {
@@ -288,9 +391,6 @@ export async function reconcileStuckYcTransfers(
       ) {
         await maybeExecuteCrossBorderLeg2(admin, String(transfer.id))
         leg2Triggered += 1
-      }
-      if (String(transfer.status) === "leg2_in_progress" && leg2 === "pending_yc") {
-        await completeCrossBorderOnSendSuccess(admin, String(transfer.id)).catch(() => undefined)
       }
     }
 
@@ -334,7 +434,14 @@ export async function reconcileStuckYcTransfers(
     }
   }
 
-  return { scanned: stuckRows.length, replayed, leg2Triggered, feeRetried }
+  return {
+    scanned: stuckRows.length,
+    replayed,
+    polled,
+    leg2Triggered,
+    feeRetried,
+    ...health,
+  }
 }
 
 export async function reconcilePendingFeeCaptures(
@@ -542,7 +649,7 @@ export async function reconcileStuckPayouts(
   const result: ReconcileStuckPayoutsResult = {
     inbox: { failedReplayed: 0, failedErrors: 0, staleReplayed: 0, staleErrors: 0 },
     noah: { scanned: 0, patched: 0 },
-    yc: { scanned: 0, replayed: 0, leg2Triggered: 0, feeRetried: 0 },
+    yc: { scanned: 0, replayed: 0, polled: 0, leg2Triggered: 0, feeRetried: 0, stuckAwaitingPayIn: 0, stuckLeg2InProgress: 0, ycRefundExpected: 0 },
     fees: { scanned: 0, captured: 0 },
     walletSends: { scanned: 0, patched: 0 },
   }

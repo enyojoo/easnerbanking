@@ -137,7 +137,7 @@ export async function creditFundBalanceFromYcReceive(
   if (transactionId) {
     const { data: txRow } = await admin
       .from("transactions")
-      .select("metadata, occurred_at, created_at")
+      .select("metadata, occurred_at, created_at, user_id, business_id, provider, provider_transaction_id, amount")
       .eq("id", transactionId)
       .maybeSingle()
     const prior = asMeta(txRow?.metadata)
@@ -146,28 +146,34 @@ export async function creditFundBalanceFromYcReceive(
       createdAt: txRow?.created_at != null ? String(txRow.created_at) : null,
       fallback: now,
     })
-    await admin
-      .from("transactions")
-      .update({
-        status: "settled",
-        amount: creditAmt,
-        settled_at: now,
-        occurred_at: occurredAt,
-        metadata: {
-          ...prior,
-          ...lifecycleMeta,
-          ...buildWalletReportingSnapshot({
-            amount: creditAmt,
-            currency: "USD",
-            fxRates: [],
-          }),
-          wallet_balance_credit_key: creditKey,
-          balance_delta_applied: true,
-          ...(input.omnibusTxHash ? { yc_omnibus_tx_hash: input.omnibusTxHash } : {}),
-        },
-        updated_at: now,
-      })
-      .eq("id", transactionId)
+    await upsertLedgerTransaction(admin, {
+      userId: String(transfer.user_id),
+      businessId: transfer.business_id ? String(transfer.business_id) : null,
+      provider: "yellowcard",
+      providerTransactionId: String(
+        transfer.leg1_yc_id ?? txRow?.provider_transaction_id ?? sequenceId,
+      ),
+      status: "settled",
+      amount: creditAmt,
+      currency: "USD",
+      direction: "in",
+      payload: input.payload,
+      metadata: {
+        ...prior,
+        ...lifecycleMeta,
+        ...buildWalletReportingSnapshot({
+          amount: creditAmt,
+          currency: "USD",
+          fxRates: [],
+        }),
+        wallet_balance_credit_key: creditKey,
+        balance_delta_applied: true,
+        ...(input.omnibusTxHash ? { yc_omnibus_tx_hash: input.omnibusTxHash } : {}),
+      },
+      occurredAt,
+      settledAt: now,
+      baseCurrency: "USD",
+    })
   } else {
     const upsert = await upsertLedgerTransaction(admin, {
       userId: String(transfer.user_id),
@@ -222,7 +228,7 @@ export async function patchYcFundBalanceReceiveStatus(
   const now = input.occurredAt ?? new Date().toISOString()
   const { data: transfer } = await admin
     .from("yc_transfers")
-    .select("metadata, status, quoted_pay_in, pay_in_currency, quoted_receive")
+    .select("metadata, status, quoted_pay_in, pay_in_currency, quoted_receive, user_id, business_id, leg1_yc_id")
     .eq("id", input.transferId)
     .maybeSingle()
   if (!transfer) return
@@ -248,7 +254,7 @@ export async function patchYcFundBalanceReceiveStatus(
 
   const { data: txRow } = await admin
     .from("transactions")
-    .select("metadata, occurred_at, created_at")
+    .select("metadata, occurred_at, created_at, provider, provider_transaction_id, amount")
     .eq("id", input.transactionId)
     .maybeSingle()
   const prior = asMeta(txRow?.metadata)
@@ -273,13 +279,23 @@ export async function patchYcFundBalanceReceiveStatus(
     meta = mergeYcFundBalanceLifecycle(meta, { failed_at: now })
   }
 
-  await admin
-    .from("transactions")
-    .update({
-      status: input.status === "failed" ? "failed" : input.status === "processing" ? "processing" : "pending",
-      metadata: meta,
-      occurred_at: occurredAt,
-      updated_at: now,
-    })
-    .eq("id", input.transactionId)
+  const nextStatus =
+    input.status === "failed" ? "failed" : input.status === "processing" ? "processing" : "pending"
+
+  await upsertLedgerTransaction(admin, {
+    userId: String(transfer.user_id),
+    businessId: transfer.business_id ? String(transfer.business_id) : null,
+    provider: "yellowcard",
+    providerTransactionId: String(
+      transfer.leg1_yc_id ?? txRow?.provider_transaction_id ?? input.sequenceId,
+    ),
+    status: nextStatus,
+    amount: Number(txRow?.amount ?? transfer.quoted_receive ?? 0),
+    currency: "USD",
+    direction: "in",
+    payload: input.payload,
+    metadata: meta,
+    occurredAt,
+    baseCurrency: "USD",
+  })
 }

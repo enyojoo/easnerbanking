@@ -18,7 +18,8 @@ import {
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import {
   buildYcBalancePayoutOutMetadata,
-  buildYcOmnibusCryptoDepositMetadata,
+  buildYcParentPayoutCryptoDepositTracking,
+  buildYcRefundExpectedPatch,
   ycPendingPayoutProviderTransactionId,
 } from "@/lib/yellowcard/yc-ledger"
 import { executeYcBalancePayoutCryptoLeg } from "@/lib/yellowcard/payout-execute"
@@ -275,44 +276,58 @@ export async function executeYcBalancePayout(
     .eq("id", transactionId)
     .maybeSingle()
   const priorMeta = (txAfter?.metadata || {}) as Record<string, unknown>
-  const cryptoMeta = buildYcOmnibusCryptoDepositMetadata({
-    prior: priorMeta,
-    easnerPayoutId,
-    ycMode: "balance_payout",
-    txHash: deposit.txHash,
-    providerTransactionId: null,
-  })
+  const providerTransactionId = String(
+    input.yc.sendId ?? priorMeta.yc_send_id ?? priorMeta.form_session_id ?? sequenceId,
+  )
 
   if (!deposit.ok) {
-    await admin
-      .from("transactions")
-      .update({
+    const failedMeta = buildYcRefundExpectedPatch(
+      buildYcParentPayoutCryptoDepositTracking({
+        prior: priorMeta,
+        txHash: deposit.txHash,
         status: "failed",
-        metadata: {
-          ...cryptoMeta,
-          yc_crypto_deposit_error: deposit.error,
-          yc_refund_expected: true,
-          noah_refund_expected: true,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", transactionId)
+        error: deposit.error,
+      }),
+      { refundAmount: cryptoAmount },
+    )
+    await upsertLedgerTransaction(admin, {
+      userId,
+      businessId,
+      provider: "yellowcard",
+      providerTransactionId,
+      status: "failed",
+      amount: totalDebited,
+      currency: "USD",
+      direction: "out",
+      metadata: failedMeta,
+      occurredAt: now,
+      baseCurrency: "USD",
+      asset: "USDC",
+    })
     await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId }).catch(() => {})
     return { ok: false, error: deposit.error || "yc_crypto_deposit_failed" }
   }
 
-  await admin
-    .from("transactions")
-    .update({
-      status: "processing",
-      metadata: {
-        ...cryptoMeta,
-        yc_crypto_deposit_status: "settled",
-      },
-      ...(deposit.txHash ? { tx_hash: deposit.txHash } : {}),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", transactionId)
+  const processingMeta = buildYcParentPayoutCryptoDepositTracking({
+    prior: priorMeta,
+    txHash: deposit.txHash,
+    status: "settled",
+  })
+  await upsertLedgerTransaction(admin, {
+    userId,
+    businessId,
+    provider: "yellowcard",
+    providerTransactionId,
+    status: "processing",
+    amount: totalDebited,
+    currency: "USD",
+    direction: "out",
+    metadata: processingMeta,
+    occurredAt: now,
+    txHash: deposit.txHash,
+    baseCurrency: "USD",
+    asset: "USDC",
+  })
 
   await admin
     .from("yc_transfers")
