@@ -31,6 +31,7 @@ function entryAmountsMatch(a: number, b: number): boolean {
 export function isStashedWalletQuoteFresh(input: SendWalletQuoteStashMeta): boolean {
   if (!stashed?.expiresAt || !stashed.formSessionId || !stashedMeta) return false
   if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
+  if (stashed.quotePhase === 'preview') return false
   if (stashedMeta.recipientId.trim() !== input.recipientId.trim()) return false
   if (stashedMeta.amountEntryMode !== input.amountEntryMode) return false
   if (stashedMeta.receiveCurrency.trim().toUpperCase() !== input.receiveCurrency.trim().toUpperCase()) {
@@ -41,7 +42,13 @@ export function isStashedWalletQuoteFresh(input: SendWalletQuoteStashMeta): bool
 
 let inflightQuote: Promise<WalletSendQuote | null> | null = null
 let inflightQuoteKey = ''
+let inflightConfirm: Promise<WalletSendQuote | null> | null = null
+let inflightConfirmKey = ''
 let lastWalletQuoteError: string | null = null
+
+function quoteMetaKey(meta: SendWalletQuoteStashMeta): string {
+  return [meta.recipientId, meta.amountEntryMode, meta.entryAmount, meta.receiveCurrency].join('|')
+}
 
 export function peekLastWalletQuoteError(): string | null {
   return lastWalletQuoteError
@@ -51,18 +58,15 @@ export async function ensureSendWalletQuoteStashed(
   fetchQuote: () => Promise<WalletSendQuote>,
   meta: SendWalletQuoteStashMeta,
 ): Promise<WalletSendQuote | null> {
-  if (isStashedWalletQuoteFresh(meta)) return peekSendWalletQuote()
-
-  const key = [meta.recipientId, meta.amountEntryMode, meta.entryAmount, meta.receiveCurrency].join('|')
+  const key = quoteMetaKey(meta)
   if (inflightQuote && inflightQuoteKey === key) return inflightQuote
 
   inflightQuoteKey = key
   lastWalletQuoteError = null
   inflightQuote = fetchQuote()
     .then((quote) => {
-      stashSendWalletQuote(quote, meta)
       lastWalletQuoteError = null
-      return quote
+      return { ...quote, quotePhase: 'preview' as const }
     })
     .catch((err) => {
       lastWalletQuoteError = err instanceof Error ? err.message : 'quote_failed'
@@ -74,6 +78,38 @@ export async function ensureSendWalletQuoteStashed(
     })
 
   return inflightQuote
+}
+
+export async function ensureSendWalletOrderConfirmed(
+  fetchQuote: () => Promise<WalletSendQuote>,
+  fetchConfirm: (formSessionId: string) => Promise<WalletSendQuote>,
+  meta: SendWalletQuoteStashMeta,
+): Promise<WalletSendQuote | null> {
+  if (isStashedWalletQuoteFresh(meta)) return peekSendWalletQuote()
+
+  const key = quoteMetaKey(meta)
+  if (inflightConfirm && inflightConfirmKey === key) return inflightConfirm
+
+  inflightConfirmKey = key
+  lastWalletQuoteError = null
+  inflightConfirm = (async () => {
+    const preview = await ensureSendWalletQuoteStashed(fetchQuote, meta)
+    if (!preview?.formSessionId) return null
+    try {
+      const locked = await fetchConfirm(preview.formSessionId)
+      const quote = { ...locked, quotePhase: 'locked' as const }
+      stashSendWalletQuote(quote, meta)
+      return quote
+    } catch (err) {
+      lastWalletQuoteError = err instanceof Error ? err.message : 'confirm_failed'
+      return null
+    }
+  })().finally(() => {
+    inflightConfirm = null
+    inflightConfirmKey = ''
+  })
+
+  return inflightConfirm
 }
 
 export type WalletPrepareSession = {

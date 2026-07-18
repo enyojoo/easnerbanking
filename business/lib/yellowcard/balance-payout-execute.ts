@@ -23,6 +23,12 @@ import {
   ycPendingPayoutProviderTransactionId,
 } from "@/lib/yellowcard/yc-ledger"
 import { executeYcBalancePayoutCryptoLeg } from "@/lib/yellowcard/payout-execute"
+import {
+  getPayoutLockSession,
+  markPayoutLockSessionExecuted,
+} from "@/lib/payout/payout-lock-session"
+import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
+import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 import { lockYcBalancePayoutSend } from "@/lib/yellowcard/payout-quote"
 
 async function readAvailableBalance(
@@ -50,7 +56,8 @@ export type ExecuteYcBalancePayoutInput = {
   idempotencyKey?: string
   reviewSnapshot?: GlobalPayoutReviewSnapshot | null
   sendNote?: string
-  /** Locked YC send from quote preview — POST /send runs at execute. */
+  lockId?: string
+  /** Locked YC send from confirm — POST /send runs at confirm when lock-on-review enabled. */
   yc: {
     sequenceId?: string
     sendId?: string | null
@@ -173,40 +180,91 @@ export async function executeYcBalancePayout(
     return { ok: false, error: "User Solana wallet is required for Yellowcard payout refund routing." }
   }
 
-  let locked
-  try {
-    locked = await lockYcBalancePayoutSend({
-      userId,
-      customerUID: userId,
-      recipient: recipientRow,
-      receiveFiatAmount: fiatAmount,
-      sourceBalanceCurrency: "USD",
-      userTurnkeyAddress: turnkeyAddr,
-      channelId: String(input.yc.channelId || input.channelId || "").trim(),
-      senderProfile: {
-        residenceCountry: userRow?.residence_country,
-        kycIdType: userRow?.kyc_id_type,
-        kycIdNumber: userRow?.kyc_id_number,
-        ngLocalIdType: userRow?.ng_local_id_type,
-        ngLocalIdNumber: userRow?.ng_local_id_number,
-        fullName: userRow?.full_name,
-        phone: userRow?.phone,
-        email: userRow?.email,
-        dateOfBirth: userRow?.date_of_birth,
-        addressStreet: userRow?.kyc_address_street,
-        addressCity: userRow?.kyc_address_city,
-        addressCountry: userRow?.kyc_address_country,
+  let locked:
+    | Awaited<ReturnType<typeof lockYcBalancePayoutSend>>
+    | {
+        sequenceId: string
+        sendId?: string | null
+        channelId: string
+        cryptoAmount: number
+        walletAddress: string
+        pricing: ExecuteYcBalancePayoutInput["pricing"] & { customerRate?: number }
+        ycLegFeesUsd: number
+      }
+
+  const useLockOnReview = isPayoutLockOnReviewEnabled("yellowcard")
+  const lockId = String(input.lockId || "").trim()
+
+  if (useLockOnReview && lockId) {
+    const lockRow = await getPayoutLockSession(admin, { lockId, userId })
+    if (!lockRow || lockRow.provider !== "yellowcard") {
+      return { ok: false, error: "Payout lock expired or invalid. Go back and review again." }
+    }
+    if (lockRow.recipient_id !== recipientId) {
+      return { ok: false, error: "Payout lock does not match this recipient." }
+    }
+    const snapshotHash = hashRecipientSnapshot(recipientRow)
+    if (lockRow.recipient_snapshot_hash !== snapshotHash) {
+      return { ok: false, error: "Recipient changed since review. Go back and confirm again." }
+    }
+    const payload = lockRow.provider_payload_json
+    const pricing = lockRow.pricing_json
+    locked = {
+      sequenceId: String(payload.sequenceId || input.yc.sequenceId || ""),
+      sendId: (payload.sendId as string | null | undefined) ?? input.yc.sendId ?? null,
+      channelId: String(payload.channelId || input.yc.channelId || input.channelId || ""),
+      cryptoAmount: Number(payload.cryptoAmount ?? input.yc.cryptoAmount ?? 0),
+      walletAddress: String(payload.walletAddress || input.yc.walletAddress || ""),
+      pricing: {
+        totalDebited: pricing.totalDebited,
+        customerPrincipal: pricing.customerPrincipal,
+        marginAmount: pricing.marginAmount,
+        processingFee: pricing.processingFee,
+        channelCost: pricing.channelCost,
+        customerRate: pricing.settlement?.customerRate,
       },
-    })
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "yc_send_lock_failed" }
+      ycLegFeesUsd: pricing.ycLegFeesUsd ?? 0,
+    }
+    if (!(locked.cryptoAmount > 0) || !locked.walletAddress) {
+      return { ok: false, error: "Locked Yellowcard payout is incomplete." }
+    }
+    totalDebited = locked.pricing.totalDebited
+  } else {
+    try {
+      locked = await lockYcBalancePayoutSend({
+        userId,
+        customerUID: userId,
+        recipient: recipientRow,
+        receiveFiatAmount: fiatAmount,
+        sourceBalanceCurrency: "USD",
+        userTurnkeyAddress: turnkeyAddr,
+        channelId: String(input.yc.channelId || input.channelId || "").trim(),
+        senderProfile: {
+          residenceCountry: userRow?.residence_country,
+          kycIdType: userRow?.kyc_id_type,
+          kycIdNumber: userRow?.kyc_id_number,
+          ngLocalIdType: userRow?.ng_local_id_type,
+          ngLocalIdNumber: userRow?.ng_local_id_number,
+          fullName: userRow?.full_name,
+          phone: userRow?.phone,
+          email: userRow?.email,
+          dateOfBirth: userRow?.date_of_birth,
+          addressStreet: userRow?.kyc_address_street,
+          addressCity: userRow?.kyc_address_city,
+          addressCountry: userRow?.kyc_address_country,
+        },
+      })
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "yc_send_lock_failed" }
+    }
+    totalDebited = locked.pricing.totalDebited
   }
+
+  if (available < totalDebited) return { ok: false, error: "insufficient_balance" }
 
   const walletAddress = locked.walletAddress
   const cryptoAmount = locked.cryptoAmount
   const sequenceId = locked.sequenceId
-  totalDebited = locked.pricing.totalDebited
-  if (available < totalDebited) return { ok: false, error: "insufficient_balance" }
 
   const easnerPayoutId = randomUUID()
   const easnerTransactionId = generateTransactionId()
@@ -404,6 +462,10 @@ export async function executeYcBalancePayout(
       updated_at: new Date().toISOString(),
     })
     .eq("transaction_id", transactionId)
+
+  if (lockId) {
+    await markPayoutLockSessionExecuted(admin, lockId).catch(() => {})
+  }
 
   return {
     ok: true,

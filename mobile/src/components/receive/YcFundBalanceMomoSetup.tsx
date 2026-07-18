@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
 import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
 import {
+  ensureFundBalanceOrderConfirmed,
   ensurePayInNetworksCached,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
@@ -87,6 +88,33 @@ export function YcFundBalanceMomoSetup({
 
   const momoReady = Boolean(phone.trim() && networkId)
   const selectedNetwork = networks.find((n) => n.id === networkId)
+
+  const quoteMeta = useMemo(
+    () => ({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: 'mobile_money' as const,
+      amountEntryMode,
+      enteredAmount,
+      sourcePhone: phone.trim(),
+      networkId,
+      sourceNetworkName: selectedNetwork?.name,
+    }),
+    [
+      residenceCountry,
+      localPayInCurrency,
+      amountEntryMode,
+      enteredAmount,
+      phone,
+      networkId,
+      selectedNetwork?.name,
+    ],
+  )
+
+  useEffect(() => {
+    if (!momoReady) return
+    void ensureFundBalanceOrderConfirmed(quoteMeta)
+  }, [momoReady, quoteMeta])
 
   const onContinue = () => {
     if (!momoReady) return

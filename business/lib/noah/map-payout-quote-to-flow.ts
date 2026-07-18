@@ -50,6 +50,8 @@ export function mapPayoutQuoteToFlowState(
       ...(q.yc?.sendId ? { ycSendId: q.yc.sendId } : {}),
       ...(q.yc?.walletAddress ? { ycWalletAddress: q.yc.walletAddress } : {}),
       ...(q.yc?.cryptoAmount != null ? { ycCryptoAmount: q.yc.cryptoAmount } : {}),
+      ...(q.lockId ? { lockId: q.lockId } : {}),
+      ...(q.quotePhase ? { quotePhase: q.quotePhase } : {}),
     },
   }
 }
@@ -62,5 +64,10 @@ export function isPayoutQuoteFresh(
   if (!pq?.formSessionId || !pq.expiresAt) return false
   if (!pq.recipientId?.trim() || pq.recipientId.trim() !== recipientId.trim()) return false
   if (!payoutReceiveAmountsMatch(pq.receiveAmount, receiveAmount)) return false
-  return new Date(pq.expiresAt).getTime() > Date.now()
+  if (new Date(pq.expiresAt).getTime() <= Date.now()) return false
+  if (pq.quotePhase === "preview") return false
+  if (pq.quotePhase === "locked") {
+    return Boolean(pq.lockId || pq.ycSendId)
+  }
+  return true
 }

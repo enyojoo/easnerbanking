@@ -91,6 +91,7 @@ import { useYcSendExchangeRates } from '../../hooks/queries/use-yc-send-exchange
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
   ensureSendPayoutQuoteStashed,
+  ensureSendPayoutOrderConfirmed,
   isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
   peekLastPayoutQuoteError,
@@ -99,6 +100,7 @@ import {
 } from '../../lib/sendFlowPayoutQuote'
 import {
   ensureSendWalletQuoteStashed,
+  ensureSendWalletOrderConfirmed,
   isStashedWalletQuoteFresh,
   peekLastWalletQuoteError,
   peekSendWalletQuote,
@@ -110,11 +112,8 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   clearCrossBorderQuote,
-  ensureCrossBorderQuoteStashed,
+  ensureCrossBorderOrderConfirmed,
   isCompleteCrossBorderQuote,
-  isUsableCrossBorderQuotePreview,
-  isStashedCrossBorderQuoteFresh,
-  peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
   type CrossBorderQuoteStashMeta,
 } from '../../lib/sendFlowCrossBorderQuote'
@@ -719,70 +718,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const sendingAmount = flowAmounts.sendAmount
   const exchangeRate = flowAmounts.forwardRate
 
-  const crossBorderBankQuoteMeta = useMemo((): CrossBorderQuoteStashMeta | null => {
-    if (
-      selectedPaymentMethod !== 'otherCurrency' ||
-      !showThroughLocalCurrency ||
-      !selectedOtherCurrency ||
-      tlcPayInRail !== 'bank_transfer' ||
-      !recipient?.id ||
-      !(receiveAmount > 0)
-    ) {
-      return null
-    }
-    const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
-    if (!payInCountry) return null
-    return {
-      recipientId: recipient.id,
-      payInCurrency: selectedOtherCurrency,
-      payInCountry,
-      payInRail: 'bank_transfer',
-      receiveAmount,
-    }
-  }, [
-    selectedPaymentMethod,
-    showThroughLocalCurrency,
-    selectedOtherCurrency,
-    tlcPayInRail,
-    recipient?.id,
-    receiveAmount,
-  ])
-
-  const crossBorderBankPrefetchKey = crossBorderBankQuoteMeta
-    ? [
-        crossBorderBankQuoteMeta.recipientId,
-        crossBorderBankQuoteMeta.payInCurrency,
-        crossBorderBankQuoteMeta.payInCountry,
-        crossBorderBankQuoteMeta.receiveAmount,
-      ].join('|')
-    : ''
-
-  const [debouncedCrossBorderBankPrefetchKey, crossBorderQuotePrefetchControls] =
-    useDebouncedValue(crossBorderBankPrefetchKey)
-
   useEffect(() => {
     clearCrossBorderQuote()
   }, [recipient?.id, selectedOtherCurrency, tlcPayInRail])
 
-  useEffect(() => {
-    if (!debouncedCrossBorderBankPrefetchKey || !crossBorderBankQuoteMeta) return
-    void ensureCrossBorderQuoteStashed(crossBorderBankQuoteMeta)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedCrossBorderBankPrefetchKey])
-
   const tlcSendingDisplayAmount = useMemo(() => {
     if (!showThroughLocalCurrency || amountEntryMode !== 'receive') return sendingAmount
-    if (crossBorderBankQuoteMeta && isStashedCrossBorderQuoteFresh(crossBorderBankQuoteMeta)) {
-      const quote = peekCrossBorderQuote()
-      if (quote?.localPayIn && quote.localPayIn > 0) return quote.localPayIn
-    }
     return sendingAmount
-  }, [
-    showThroughLocalCurrency,
-    amountEntryMode,
-    sendingAmount,
-    crossBorderBankQuoteMeta,
-  ])
+  }, [showThroughLocalCurrency, amountEntryMode, sendingAmount])
 
   const payoutMinReceive = useMemo(
     () =>
@@ -1211,7 +1154,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       haptics.medium()
       payoutQuotePrefetchControls.flush()
       walletQuotePrefetchControls.flush()
-      crossBorderQuotePrefetchControls.flush()
 
       const walletReceiveAmount = normalizePayoutReceiveAmountForCurrency(
         receiveCurrency,
@@ -1315,7 +1257,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         selectedPaymentMethod === 'balance' &&
         isWalletRecipient &&
         receiveAmountValue > 0
-          ? await ensureSendWalletQuoteStashed(
+          ? await ensureSendWalletOrderConfirmed(
               () =>
                 noahService.createWalletSendQuote({
                   recipientId: recipient.id,
@@ -1323,6 +1265,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   amountEntryMode: 'receive',
                   receiveAmount: receiveAmountValue,
                 }),
+              (formSessionId) => noahService.confirmWalletSendOrder({ formSessionId }),
               quoteStashMeta,
             )
           : isStashedWalletQuoteFresh(quoteStashMeta)
@@ -1334,9 +1277,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         !isEasetagRecipient &&
         !isWalletRecipient &&
         receiveAmountValue > 0
-          ? await ensureSendPayoutQuoteStashed(
+          ? await ensureSendPayoutOrderConfirmed(
               () =>
-                noahService.createPayoutQuote({
+                noahService.confirmPayoutOrder({
                   recipientId: recipient.id,
                   receiveAmount: receiveAmountValue,
                   sourceBalanceCurrency: selectedBalanceCurrency,
@@ -1467,15 +1410,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             payInRail: 'bank_transfer',
             receiveAmount: receiveAmountValue,
           }
-          const quoteAlreadyWarm = isStashedCrossBorderQuoteFresh(bankQuoteMeta)
-          if (!quoteAlreadyWarm) {
-            setIsContinuePending(true)
-            continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-          }
+          setIsContinuePending(true)
+          continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
           try {
-            const quote = await ensureCrossBorderQuoteStashed(bankQuoteMeta)
-            if (!isUsableCrossBorderQuotePreview(quote)) {
-              showError(peekLastCrossBorderQuoteError() || 'Could not load cross-border quote. Try again.')
+            const quote = await ensureCrossBorderOrderConfirmed(bankQuoteMeta)
+            if (!isCompleteCrossBorderQuote(quote)) {
+              showError(peekLastCrossBorderQuoteError() || 'Could not lock cross-border order. Try again.')
               return
             }
           } finally {

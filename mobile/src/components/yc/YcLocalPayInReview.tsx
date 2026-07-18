@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -24,7 +24,6 @@ import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSu
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
 import {
-  ensureCrossBorderQuoteStashed,
   ensureCrossBorderOrderConfirmed,
   isCompleteCrossBorderQuote,
   isStashedCrossBorderQuoteFresh,
@@ -66,15 +65,10 @@ export function YcLocalPayInReview({
   const isMobileMoney = payInRail === 'mobile_money'
   const momoConfigured = Boolean(sourcePhone?.trim() && networkId)
 
-  const [quote, setQuote] = useState<YcCrossBorderQuoteResult | null>(null)
-  const [quoteError, setQuoteError] = useState<string | null>(null)
-  const [quoteLoading, setQuoteLoading] = useState(isMobileMoney)
-  const [submitting, setSubmitting] = useState(false)
-
-  useEffect(() => {
-    if (!payInCurrency || !payInCountry) return
-
-    const meta: CrossBorderQuoteStashMeta = isMobileMoney
+  const quoteMeta = useMemo((): CrossBorderQuoteStashMeta | null => {
+    if (!payInCurrency || !payInCountry) return null
+    if (isMobileMoney && !momoConfigured) return null
+    return isMobileMoney
       ? {
           recipientId: recipient.id,
           payInCurrency,
@@ -92,38 +86,6 @@ export function YcLocalPayInReview({
           payInRail,
           receiveAmount,
         }
-
-    if (isMobileMoney && !momoConfigured) return
-
-    if (isStashedCrossBorderQuoteFresh(meta)) {
-      const stashed = peekCrossBorderQuote()
-      if (stashed) {
-        setQuote(stashed)
-        setQuoteError(null)
-        setQuoteLoading(false)
-      }
-      return
-    }
-
-    let cancelled = false
-    setQuoteError(null)
-    if (isMobileMoney) setQuoteLoading(true)
-    void (async () => {
-      const result = await ensureCrossBorderQuoteStashed(meta)
-      if (cancelled) return
-      if (result?.ok && result.localPayIn > 0) {
-        setQuote(result)
-        setQuoteLoading(false)
-        return
-      }
-      setQuote(null)
-      setQuoteError(peekLastCrossBorderQuoteError() || 'Could not load quote')
-      setQuoteLoading(false)
-    })()
-
-    return () => {
-      cancelled = true
-    }
   }, [
     recipient.id,
     receiveAmount,
@@ -137,8 +99,57 @@ export function YcLocalPayInReview({
     sourceNetworkName,
   ])
 
+  const [quote, setQuote] = useState<YcCrossBorderQuoteResult | null>(() => {
+    if (!quoteMeta) return null
+    if (isStashedCrossBorderQuoteFresh(quoteMeta) && isCompleteCrossBorderQuote(peekCrossBorderQuote())) {
+      return peekCrossBorderQuote()
+    }
+    return null
+  })
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [quoteLoading, setQuoteLoading] = useState(() => {
+    if (!quoteMeta) return false
+    return !(
+      isStashedCrossBorderQuoteFresh(quoteMeta) &&
+      isCompleteCrossBorderQuote(peekCrossBorderQuote())
+    )
+  })
+
+  useEffect(() => {
+    if (!quoteMeta) return
+
+    if (isStashedCrossBorderQuoteFresh(quoteMeta) && isCompleteCrossBorderQuote(peekCrossBorderQuote())) {
+      const stashed = peekCrossBorderQuote()
+      if (stashed) {
+        setQuote(stashed)
+        setQuoteError(null)
+      }
+      setQuoteLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setQuoteLoading(true)
+    setQuoteError(null)
+    void (async () => {
+      const result = await ensureCrossBorderOrderConfirmed(quoteMeta)
+      if (cancelled) return
+      setQuoteLoading(false)
+      if (isCompleteCrossBorderQuote(result)) {
+        setQuote(result)
+        return
+      }
+      setQuote(null)
+      setQuoteError(peekLastCrossBorderQuoteError() || 'Could not lock transfer details')
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [quoteMeta])
+
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
-  const quoteLocked = Boolean(quote?.ok && quote.localPayIn > 0 && quote.customerRate > 0)
+  const quoteLocked = isCompleteCrossBorderQuote(quote)
   const customerRate = quote?.customerRate ?? 1
   const lockedLocalPayIn = quote?.localPayIn ?? 0
   const displayTransactionId = quote?.easnerTransactionId ?? quote?.transactionId ?? ''
@@ -199,48 +210,16 @@ export function YcLocalPayInReview({
     })
   }
 
-  const onContinue = async () => {
-    if (submitting) return
+  const onContinue = () => {
+    if (!isCompleteCrossBorderQuote(quote)) return
     haptics.medium()
-    setSubmitting(true)
-    setQuoteError(null)
-    try {
-      const meta: CrossBorderQuoteStashMeta = isMobileMoney
-        ? {
-            recipientId: recipient.id,
-            payInCurrency,
-            payInCountry,
-            payInRail,
-            receiveAmount,
-            sourcePhone: sourcePhone?.trim(),
-            networkId,
-            sourceNetworkName,
-          }
-        : {
-            recipientId: recipient.id,
-            payInCurrency,
-            payInCountry,
-            payInRail,
-            receiveAmount,
-          }
-      const result = await ensureCrossBorderOrderConfirmed(meta)
-      if (!isCompleteCrossBorderQuote(result)) {
-        setQuoteError(peekLastCrossBorderQuoteError() || 'Could not confirm order')
-        return
-      }
-      navigateToPayIn(result)
-    } catch (e) {
-      setQuoteError(e instanceof Error ? e.message : 'Could not continue')
-    } finally {
-      setSubmitting(false)
-    }
+    navigateToPayIn(quote)
   }
 
   const ctaDisabled =
     !quoteLocked ||
     Boolean(quoteError) ||
     quoteCountdown.expired ||
-    submitting ||
     quoteLoading
 
   return (
@@ -254,7 +233,7 @@ export function YcLocalPayInReview({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {quoteLoading && !quoteError ? (
+          {quoteLoading && !quoteLocked ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : quoteLocked ? (
             <>
@@ -312,7 +291,7 @@ export function YcLocalPayInReview({
       <Pressable
         android_ripple={ripple.neutral}
         style={[styles.cta, ctaDisabled && styles.ctaDisabled]}
-        onPress={() => void onContinue()}
+        onPress={onContinue}
         disabled={ctaDisabled}
       >
         <LinearGradient
@@ -321,7 +300,7 @@ export function YcLocalPayInReview({
           end={{ x: 1, y: 0 }}
           style={styles.ctaGradient}
         >
-          <Text style={styles.ctaText}>{submitting ? 'Loading…' : 'Continue'}</Text>
+          <Text style={styles.ctaText}>Continue</Text>
         </LinearGradient>
       </Pressable>
     </View>

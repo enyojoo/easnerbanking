@@ -18,6 +18,8 @@ let stashedMeta: CrossBorderQuoteStashMeta | null = null
 let lastQuoteError: string | null = null
 let inflightQuote: Promise<YcCrossBorderQuoteResult | null> | null = null
 let inflightQuoteKey = ''
+let inflightConfirm: Promise<YcCrossBorderQuoteResult | null> | null = null
+let inflightConfirmKey = ''
 
 export function quoteMetaKey(meta: CrossBorderQuoteStashMeta): string {
   return [
@@ -184,22 +186,33 @@ export async function ensureCrossBorderOrderConfirmed(
     return stashed
   }
 
+  const key = quoteMetaKey(meta)
+  if (inflightConfirm && inflightConfirmKey === key) return inflightConfirm
+
+  inflightConfirmKey = key
   lastQuoteError = null
-  try {
-    const quote = await confirmCrossBorderOrder(meta)
-    if (!isCompleteCrossBorderQuote(quote)) {
-      lastQuoteError = 'Incomplete cross-border confirm response.'
-      return null
-    }
-    stashCrossBorderQuote(quote, meta)
-    return quote
-  } catch (err) {
-    lastQuoteError =
-      err instanceof ApiError
-        ? err.message
-        : err instanceof Error
+  inflightConfirm = confirmCrossBorderOrder(meta)
+    .then((quote) => {
+      if (!isCompleteCrossBorderQuote(quote)) {
+        lastQuoteError = 'Incomplete cross-border confirm response.'
+        return null
+      }
+      stashCrossBorderQuote(quote, meta)
+      return quote
+    })
+    .catch((err) => {
+      lastQuoteError =
+        err instanceof ApiError
           ? err.message
-          : 'confirm_failed'
-    return null
-  }
+          : err instanceof Error
+            ? err.message
+            : 'confirm_failed'
+      return null
+    })
+    .finally(() => {
+      inflightConfirm = null
+      inflightConfirmKey = ''
+    })
+
+  return inflightConfirm
 }

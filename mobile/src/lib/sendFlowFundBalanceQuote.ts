@@ -48,6 +48,8 @@ let stashedMeta: FundBalanceQuoteStashMeta | null = null
 let lastQuoteError: string | null = null
 let inflightQuote: Promise<YcFundBalanceQuote | null> | null = null
 let inflightQuoteKey = ''
+let inflightConfirm: Promise<YcFundBalanceQuote | null> | null = null
+let inflightConfirmKey = ''
 
 function roundMoney(n: number): number {
   return Math.round(n * 100) / 100
@@ -209,24 +211,35 @@ export async function ensureFundBalanceOrderConfirmed(
     return stashed
   }
 
+  const key = quoteMetaKey(meta)
+  if (inflightConfirm && inflightConfirmKey === key) return inflightConfirm
+
+  inflightConfirmKey = key
   lastQuoteError = null
-  try {
-    const quote = await confirmFundBalanceOrder(meta)
-    if (!isCompleteFundBalanceQuote(quote)) {
-      lastQuoteError = 'Incomplete fund balance confirm response.'
+  inflightConfirm = confirmFundBalanceOrder(meta)
+    .then((quote) => {
+      if (!isCompleteFundBalanceQuote(quote)) {
+        lastQuoteError = 'Incomplete fund balance confirm response.'
+        return null
+      }
+      stashFundBalanceQuote(quote, meta)
+      return quote
+    })
+    .catch((err) => {
+      lastQuoteError =
+        err instanceof ApiError
+          ? ycFundBalanceQuoteErrorMessage(err.code ?? undefined, err.message)
+          : err instanceof Error
+            ? err.message
+            : 'confirm_failed'
       return null
-    }
-    stashFundBalanceQuote(quote, meta)
-    return quote
-  } catch (err) {
-    lastQuoteError =
-      err instanceof ApiError
-        ? ycFundBalanceQuoteErrorMessage(err.code ?? undefined, err.message)
-        : err instanceof Error
-          ? err.message
-          : 'confirm_failed'
-    return null
-  }
+    })
+    .finally(() => {
+      inflightConfirm = null
+      inflightConfirmKey = ''
+    })
+
+  return inflightConfirm
 }
 
 export type PayInNetworkRow = { id: string; name: string }

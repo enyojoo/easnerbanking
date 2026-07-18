@@ -49,56 +49,7 @@ export function buildYcLocalPayInCompleteRows(input: {
     valueMono: true,
   })
 
-  if (isFundBalance && isMomo && input.customerRate > 0) {
-    rows.push({
-      id: "exchange-rate",
-      label: REVIEW_ROW_LABELS.exchangeRate,
-      value: formatSendRateLabel("USD", input.payInCurrency, input.customerRate),
-    })
-    if ((input.principalLocal ?? 0) > 0) {
-      rows.push({
-        id: "deposit-amount",
-        label: REVIEW_ROW_LABELS.depositAmount,
-        value: formatReviewRowMoneyDisplay(
-          REVIEW_ROW_LABELS.depositAmount,
-          input.principalLocal!,
-          input.payInCurrency,
-        ),
-      })
-    }
-    const showFee =
-      (input.processingFeeLocal ?? 0) > 0 ||
-      shouldShowPayoutReviewFeeRow({
-        processingFee: input.processingFeeUsd ?? 0,
-        exchangeFee: input.exchangeFeeUsd ?? 0,
-      })
-    if (showFee && (input.processingFeeLocal ?? 0) > 0) {
-      rows.push({
-        id: "processing-fee",
-        label: REVIEW_ROW_LABELS.processingFee,
-        value: formatReviewRowMoneyDisplay(
-          REVIEW_ROW_LABELS.processingFee,
-          input.processingFeeLocal!,
-          input.payInCurrency,
-        ),
-      })
-    }
-    rows.push({
-      id: "total-to-pay",
-      label: REVIEW_ROW_LABELS.totalToPay,
-      value: formatReviewRowMoneyDisplay(
-        REVIEW_ROW_LABELS.totalToPay,
-        input.localPayIn,
-        input.payInCurrency,
-      ),
-      valueBold: true,
-    })
-    rows.push({
-      id: "amount-to-credit",
-      label: REVIEW_ROW_LABELS.amountToCredit,
-      value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
-    })
-  } else if (isCrossBorder && isMomo && input.customerRate > 0) {
+  if (isCrossBorder && isMomo && input.customerRate > 0) {
     rows.push({
       id: "exchange-rate",
       label: REVIEW_ROW_LABELS.exchangeRate,
@@ -146,7 +97,7 @@ export function buildYcLocalPayInCompleteRows(input: {
       label: REVIEW_ROW_LABELS.recipientGets,
       value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
     })
-  } else if (isFundBalance && !isMomo) {
+  } else if (isFundBalance) {
     rows.push({
       id: "amount-to-credit",
       label: REVIEW_ROW_LABELS.amountToCredit,

@@ -43,8 +43,8 @@ export function buildYcLocalPayInReviewRows(input: {
   const isLocked = input.phase === "locked"
   const isMomo = input.rail === "mobile_money"
   const isCrossBorderBankLocked = isCrossBorder && isLocked && !isMomo
-  /** Fund-balance MoMo uses preview labels until a server quote locks fees (same as bank). */
-  const isFundBalanceLockedBreakdown = isFundBalance && (!isMomo || isLocked)
+  /** Fund-balance review uses locked /confirm order data for bank and MoMo. */
+  const isFundBalanceLockedBreakdown = isFundBalance && isLocked
   const transferMethod = isFundBalance
     ? resolveYcFundBalanceTransferMethod(input.rail)
     : TLC_LOCAL_TRANSFER_METHOD

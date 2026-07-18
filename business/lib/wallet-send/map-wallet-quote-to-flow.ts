@@ -33,6 +33,7 @@ export function mapWalletQuoteToFlowState(
       expiresAt: q.expiresAt,
       executionModel: q.executionModel,
       lifiFloor: q.wallet.lifiFloor,
+      ...(q.quotePhase ? { quotePhase: q.quotePhase } : {}),
     },
   }
 }
@@ -45,5 +46,8 @@ export function isWalletQuoteFresh(
   if (!wq?.formSessionId || !wq.expiresAt) return false
   if (!wq.recipientId?.trim() || wq.recipientId.trim() !== recipientId.trim()) return false
   if (!payoutReceiveAmountsMatch(wq.receiveAmount, receiveAmount)) return false
-  return new Date(wq.expiresAt).getTime() > Date.now()
+  if (new Date(wq.expiresAt).getTime() <= Date.now()) return false
+  if (wq.quotePhase === "locked") return true
+  if (wq.quotePhase === "preview") return false
+  return true
 }

@@ -27,6 +27,7 @@ import {
   resolveYcPayoutLimits,
   validateYcBalancePayoutAmount,
 } from "@easner/shared"
+import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
 
 function roundUsdc(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -261,6 +262,14 @@ export async function buildYcPayoutQuote(input: {
     provider: "yellowcard",
     quotePhase: "preview",
     requiresConfirm: true,
+    quoteKey: buildPayoutQuoteKey({
+      recipientId: String(input.recipientId || row.id || ""),
+      sourceBalanceCurrency,
+      amountEntryMode,
+      receiveAmount: quoteReceiveAmount,
+      sendBudget,
+      paymentPurpose: input.paymentPurpose,
+    }),
     yc: {
       sequenceId,
       channelId,

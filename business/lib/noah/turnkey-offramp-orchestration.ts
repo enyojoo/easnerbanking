@@ -35,6 +35,12 @@ import { createTurnkeySend } from "@/lib/turnkey/send"
 import { getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
 import type { GlobalPayoutMarginCaptureMode } from "@easner/shared"
+import {
+  getPayoutLockSession,
+  markPayoutLockSessionExecuted,
+} from "@/lib/payout/payout-lock-session"
+import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
+import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 
 const NOAH_OFFRAMP_NETWORK = "Solana"
 
@@ -68,6 +74,7 @@ export type ExecuteTurnkeyOfframpPayoutInput = {
   reviewSnapshot?: GlobalPayoutReviewSnapshot
   sendNote?: string
   quotedSession?: QuotedPayoutSession
+  lockId?: string
 }
 
 export type ExecuteTurnkeyOfframpPayoutResult =
@@ -225,38 +232,107 @@ export async function executeTurnkeyOfframpPayout(
   let formSessionId = ""
   let cryptoAuthorizedAmount = ""
   let resolvedChannelId = quotedChannelId || channelId
+  let destinationAddress = ""
+  let noahWorkflowId: string | undefined
+  let sourceAddress = ""
+  let lockId = String(input.lockId || "").trim()
 
-  // Always prepare at execute so the Noah form session matches this recipient row.
-  // Client-quoted sessions are used for pricing/debit only — reusing a stale session
-  // can route payouts to the wrong bank account when quotes were cached incorrectly.
-  let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>
-  try {
-    prep = await prepareSellFromRecipientRow({
-      row: recipientRow,
-      fiatAmount,
-      cryptoCurrency,
-      noahCustomerId: ctx.noahCustomerId,
-      overrides,
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return { ok: false, error: msg || "prepare_failed" }
+  const lockRow =
+    lockId && isPayoutLockOnReviewEnabled("noah")
+      ? await getPayoutLockSession(admin, { lockId, userId })
+      : null
+
+  if (lockRow) {
+    if (lockRow.recipient_id !== String(recipientId || "").trim()) {
+      return { ok: false, error: "Payout lock does not match this recipient." }
+    }
+    if (hashRecipientSnapshot(recipientRow) !== lockRow.recipient_snapshot_hash) {
+      return { ok: false, error: "Recipient changed since review. Go back and confirm again." }
+    }
+    const payload = lockRow.provider_payload_json
+    formSessionId = String(payload.formSessionId || "").trim()
+    cryptoAuthorizedAmount = String(payload.cryptoAuthorizedAmount || "").trim()
+    destinationAddress = String(payload.destinationAddress || "").trim()
+    noahWorkflowId =
+      typeof payload.noahWorkflowId === "string" ? payload.noahWorkflowId : undefined
+    sourceAddress = String(payload.sourceAddress || "").trim()
+    resolvedChannelId = String(payload.channelId || resolvedChannelId || "").trim()
+    if (!formSessionId || !cryptoAuthorizedAmount || !destinationAddress) {
+      return { ok: false, error: "Payout lock expired or invalid. Go back and review again." }
+    }
+  } else {
+    lockId = ""
+    // Always prepare at execute when no valid lock (legacy path).
+    let prep: Awaited<ReturnType<typeof prepareSellFromRecipientRow>>
+    try {
+      prep = await prepareSellFromRecipientRow({
+        row: recipientRow,
+        fiatAmount,
+        cryptoCurrency,
+        noahCustomerId: ctx.noahCustomerId,
+        overrides,
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return { ok: false, error: msg || "prepare_failed" }
+    }
+
+    formSessionId = String(prep.prep.formSessionId || "").trim()
+    cryptoAuthorizedAmount = String(prep.prep.cryptoAuthorizedAmount || "").trim()
+    resolvedChannelId = prep.channelId || resolvedChannelId
+
+    if (quotedFormSessionId && quotedFormSessionId !== formSessionId) {
+      console.warn("[noah_global_payout]", {
+        stage: "execute_form_session_mismatch",
+        recipientId: recipientId ?? null,
+        quotedFormSessionIdPrefix: quotedFormSessionId.slice(0, 12),
+        executeFormSessionIdPrefix: formSessionId.slice(0, 12),
+      })
+    }
+
+    if (!formSessionId || !cryptoAuthorizedAmount) {
+      return { ok: false, error: "Could not prepare payout session. Go back and get a fresh quote." }
+    }
+
+    sourceAddress = (
+      await resolveTurnkeyAddressForNoahPair(admin, ctx, cryptoCurrency, NOAH_OFFRAMP_NETWORK)
+    )?.trim()
+    if (!sourceAddress) {
+      return { ok: false, error: "No Turnkey wallet found for this payout. Complete wallet setup first." }
+    }
+
+    const cryptoTrigger = pickTriggerCryptoAmount(cryptoAuthorizedAmount, cryptoAuthorizedAmount)
+    let workflowRaw: Record<string, unknown>
+    try {
+      workflowRaw = await startOnchainDepositToPaymentWorkflow({
+        customerId: ctx.noahCustomerId,
+        cryptoCurrency,
+        fiatAmount: fiatAmount.toFixed(2),
+        formSessionId,
+        externalId: easnerPayoutId,
+        network: NOAH_OFFRAMP_NETWORK,
+        sourceAddress,
+        cryptoTriggerAmount: cryptoTrigger,
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return { ok: false, error: msg || "workflow_failed" }
+    }
+
+    destinationAddress = pickDestinationAddress(workflowRaw)?.trim() || ""
+    if (!destinationAddress) {
+      console.warn("[noah_global_payout]", {
+        stage: "workflow_missing_destination",
+        responseKeys: Object.keys(workflowRaw),
+        hasConditions: Array.isArray(workflowRaw.Conditions),
+      })
+      return { ok: false, error: "Noah did not return a deposit address for this payout." }
+    }
+
+    noahWorkflowId = pickNoahWorkflowIdFromResponse(workflowRaw)
   }
 
-  formSessionId = String(prep.prep.formSessionId || "").trim()
-  cryptoAuthorizedAmount = String(prep.prep.cryptoAuthorizedAmount || "").trim()
-  resolvedChannelId = prep.channelId || resolvedChannelId
-
-  if (quotedFormSessionId && quotedFormSessionId !== formSessionId) {
-    console.warn("[noah_global_payout]", {
-      stage: "execute_form_session_mismatch",
-      recipientId: recipientId ?? null,
-      quotedFormSessionIdPrefix: quotedFormSessionId.slice(0, 12),
-      executeFormSessionIdPrefix: formSessionId.slice(0, 12),
-    })
-  }
-
-  if (!formSessionId || !cryptoAuthorizedAmount) {
+  if (!formSessionId || !cryptoAuthorizedAmount || !destinationAddress) {
     return { ok: false, error: "Could not prepare payout session. Go back and get a fresh quote." }
   }
 
@@ -268,16 +344,24 @@ export async function executeTurnkeyOfframpPayout(
   const marginCaptureMode = getGlobalPayoutMarginCaptureMode()
   await assertMarginCaptureModeReady(admin, marginCaptureMode, walletCurrency)
 
+  const lockedPricing = lockRow?.pricing_json
   const totalDebited =
+    (lockedPricing?.totalDebited != null && lockedPricing.totalDebited > 0
+      ? lockedPricing.totalDebited
+      : null) ??
     parsePositiveAmount(quoted?.totalDebited) ??
     parsePositiveAmount(quoted?.noahSendAmount) ??
     noahFloor
   const marginAmount =
-    parsePositiveAmount(quoted?.marginAmount) ?? Math.max(0, totalDebited - noahFloor)
-  const processingFee = Math.max(
-    0,
-    Math.round((totalDebited - noahFloor - marginAmount) * 1_000_000) / 1_000_000,
-  )
+    (lockedPricing?.marginAmount != null ? lockedPricing.marginAmount : null) ??
+    parsePositiveAmount(quoted?.marginAmount) ??
+    Math.max(0, totalDebited - noahFloor)
+  const processingFee =
+    (lockedPricing?.processingFee != null ? lockedPricing.processingFee : null) ??
+    Math.max(
+      0,
+      Math.round((totalDebited - noahFloor - marginAmount) * 1_000_000) / 1_000_000,
+    )
   const noahSendAmount = noahFloor
   const revenueSweepPending =
     marginAmount + processingFee >= EASNER_REVENUE_FEE_WALLET_SWEEP_MIN
@@ -290,9 +374,11 @@ export async function executeTurnkeyOfframpPayout(
   if (balErr) return { ok: false, error: "insufficient_balance" }
   if (available < totalDebited) return { ok: false, error: "insufficient_balance" }
 
-  const sourceAddress = (
-    await resolveTurnkeyAddressForNoahPair(admin, ctx, cryptoCurrency, NOAH_OFFRAMP_NETWORK)
-  )?.trim()
+  if (!sourceAddress) {
+    sourceAddress = (
+      await resolveTurnkeyAddressForNoahPair(admin, ctx, cryptoCurrency, NOAH_OFFRAMP_NETWORK)
+    )?.trim() || ""
+  }
   if (!sourceAddress) {
     return { ok: false, error: "No Turnkey wallet found for this payout. Complete wallet setup first." }
   }
@@ -304,36 +390,6 @@ export async function executeTurnkeyOfframpPayout(
     return { ok: false, error: "Your stablecoin deposit account is not ready yet. Try again shortly." }
   }
 
-  const cryptoTrigger = pickTriggerCryptoAmount(cryptoAuthorizedAmount, cryptoAuthorizedAmount)
-
-  let workflowRaw: Record<string, unknown>
-  try {
-    workflowRaw = await startOnchainDepositToPaymentWorkflow({
-      customerId: ctx.noahCustomerId,
-      cryptoCurrency,
-      fiatAmount: fiatAmount.toFixed(2),
-      formSessionId,
-      externalId: easnerPayoutId,
-      network: NOAH_OFFRAMP_NETWORK,
-      sourceAddress,
-      cryptoTriggerAmount: cryptoTrigger,
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return { ok: false, error: msg || "workflow_failed" }
-  }
-
-  const destinationAddress = pickDestinationAddress(workflowRaw)?.trim() || ""
-  if (!destinationAddress) {
-    console.warn("[noah_global_payout]", {
-      stage: "workflow_missing_destination",
-      responseKeys: Object.keys(workflowRaw),
-      hasConditions: Array.isArray(workflowRaw.Conditions),
-    })
-    return { ok: false, error: "Noah did not return a deposit address for this payout." }
-  }
-
-  const noahWorkflowId = pickNoahWorkflowIdFromResponse(workflowRaw)
   resolvedChannelId = resolvedChannelId || channelId
   const asset = assetForCrypto(cryptoCurrency)
   const now = new Date().toISOString()
@@ -488,7 +544,12 @@ export async function executeTurnkeyOfframpPayout(
     totalDebited,
     noahSendAmount,
     turnkeySendId,
+    usedLock: Boolean(lockId),
   })
+
+  if (lockId) {
+    await markPayoutLockSessionExecuted(admin, lockId).catch(() => {})
+  }
 
   return {
     ok: true,

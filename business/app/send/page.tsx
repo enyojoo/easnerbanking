@@ -67,13 +67,26 @@ import {
 import {
   clearCrossBorderQuote,
   crossBorderQuoteToFlowState,
-  ensureCrossBorderQuoteStashed,
+  ensureCrossBorderOrderConfirmed,
   isCompleteCrossBorderQuote,
-  isStashedCrossBorderQuoteFresh,
-  peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
   type CrossBorderQuoteStashMeta,
 } from "@/lib/yc-cross-border-quote-cache"
+import {
+  ensurePayoutOrderConfirmed,
+  isCompletePayoutQuoteLocked,
+  isStashedPayoutQuoteFresh,
+  payoutQuoteToFlowState,
+  peekLastPayoutQuoteError,
+  type PayoutQuoteStashMeta,
+} from "@/lib/payout-quote-cache"
+import {
+  ensureWalletSendOrderConfirmed,
+  isStashedWalletQuoteFresh,
+  peekLastWalletQuoteError,
+  walletQuoteToFlowState,
+  type WalletQuoteStashMeta,
+} from "@/lib/wallet-send-quote-cache"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useSendDestinations } from "@/lib/use-send-destinations"
@@ -92,11 +105,7 @@ import {
   resolvePayoutCountryCode,
   YC_DIRECT_SETTLEMENT_MIN_SEND_USDC_EXCLUSIVE,
 } from "@easner/shared"
-import { mapPayoutQuoteToFlowState } from "@/lib/noah/map-payout-quote-to-flow"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
-import {
-  mapWalletQuoteToFlowState,
-} from "@/lib/wallet-send/map-wallet-quote-to-flow"
 import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { usePayoutMinEnforcement } from "@/hooks/use-payout-min-enforcement"
 import { useYcPayoutMinEnforcement } from "@/hooks/use-yc-payout-min-enforcement"
@@ -408,65 +417,14 @@ export default function SendPage() {
   const tlcPayInRail =
     otherPaymentMethod === "mobile_money" ? ("mobile_money" as const) : ("bank_transfer" as const)
 
-  const crossBorderBankQuoteMeta = useMemo((): CrossBorderQuoteStashMeta | null => {
-    if (
-      paymentMethod !== "otherCurrency" ||
-      !showThroughLocalCurrency ||
-      !otherCurrency ||
-      tlcPayInRail !== "bank_transfer" ||
-      !recipient?.id ||
-      !(receiveAmount > 0)
-    ) {
-      return null
-    }
-    const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
-    if (!payInCountry) return null
-    return {
-      recipientId: recipient.id,
-      payInCurrency: otherCurrency,
-      payInCountry,
-      payInRail: "bank_transfer",
-      receiveAmount,
-    }
-  }, [
-    paymentMethod,
-    showThroughLocalCurrency,
-    otherCurrency,
-    tlcPayInRail,
-    recipient?.id,
-    receiveAmount,
-  ])
-
-  const crossBorderBankPrefetchKey = crossBorderBankQuoteMeta
-    ? [
-        crossBorderBankQuoteMeta.recipientId,
-        crossBorderBankQuoteMeta.payInCurrency,
-        crossBorderBankQuoteMeta.payInCountry,
-        crossBorderBankQuoteMeta.receiveAmount,
-      ].join("|")
-    : ""
-
-  const [debouncedCrossBorderBankPrefetchKey, crossBorderQuotePrefetchControls] =
-    useDebouncedValue(crossBorderBankPrefetchKey)
-
   useEffect(() => {
     clearCrossBorderQuote()
   }, [recipient?.id, otherCurrency, tlcPayInRail])
 
-  useEffect(() => {
-    if (!debouncedCrossBorderBankPrefetchKey || !crossBorderBankQuoteMeta) return
-    void ensureCrossBorderQuoteStashed(crossBorderBankQuoteMeta)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedCrossBorderBankPrefetchKey])
-
   const tlcSendingDisplayAmount = useMemo(() => {
     if (!showThroughLocalCurrency || amountEntryMode !== "receive") return sendAmount
-    if (crossBorderBankQuoteMeta && isStashedCrossBorderQuoteFresh(crossBorderBankQuoteMeta)) {
-      const quote = peekCrossBorderQuote()
-      if (quote?.localPayIn && quote.localPayIn > 0) return quote.localPayIn
-    }
     return sendAmount
-  }, [showThroughLocalCurrency, amountEntryMode, sendAmount, crossBorderBankQuoteMeta])
+  }, [showThroughLocalCurrency, amountEntryMode, sendAmount])
 
   const tlcReceivingDisplayAmount = receiveAmount
 
@@ -1117,7 +1075,6 @@ export default function SendPage() {
     setAmountFieldError(null)
     payoutQuotePrefetchControls.flush()
     walletQuotePrefetchControls.flush()
-    crossBorderQuotePrefetchControls.flush()
     const isTlcSend = showThroughLocalCurrency && paymentMethod === "otherCurrency"
     const transactionId = isTlcSend ? "" : generateTransactionId()
 
@@ -1125,6 +1082,29 @@ export default function SendPage() {
     const totalAmount = showThroughLocalCurrency ? sendAmount : sendAmount
 
     const walletAmountEntryMode = isWalletRecipient ? ("receive" as const) : amountEntryMode
+
+    const payoutQuoteMeta: PayoutQuoteStashMeta | null =
+      needsPayoutQuoteBeforeConfirm && recipient?.id
+        ? {
+            recipientId: recipient.id,
+            amountEntryMode,
+            entryAmount: amountEntryMode === "send" ? sendAmount : receiveAmount,
+            receiveCurrency,
+            sourceBalanceCurrency: sendCurrency,
+            ...(note.trim() ? { note: note.trim() } : {}),
+            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+          }
+        : null
+    const walletQuoteMeta: WalletQuoteStashMeta | null =
+      needsWalletQuoteBeforeConfirm && recipient?.id
+        ? {
+            recipientId: recipient.id,
+            amountEntryMode: walletAmountEntryMode,
+            entryAmount: receiveAmount,
+            receiveCurrency,
+            sourceBalanceCurrency: sendCurrency,
+          }
+        : null
 
     const state: SendFlowState = {
       recipient: coerceBeneficiaryEasenetDisplay(recipient),
@@ -1147,9 +1127,11 @@ export default function SendPage() {
     const needsQuoteAwait = needsPayoutQuoteBeforeConfirm || needsWalletQuoteBeforeConfirm
     const quoteAlreadyWarm =
       (needsWalletQuoteBeforeConfirm &&
-        walletQuoteCacheRef.current?.key === walletQuoteCacheKey) ||
+        walletQuoteMeta &&
+        isStashedWalletQuoteFresh(walletQuoteMeta)) ||
       (needsPayoutQuoteBeforeConfirm &&
-        payoutQuoteCacheRef.current?.key === payoutQuoteCacheKey)
+        payoutQuoteMeta &&
+        isStashedPayoutQuoteFresh(payoutQuoteMeta))
     if (
       (needsQuoteAwait && !quoteAlreadyWarm)
     ) {
@@ -1181,16 +1163,13 @@ export default function SendPage() {
             payInRail: "bank_transfer",
             receiveAmount,
           }
-          const quoteAlreadyWarm = isStashedCrossBorderQuoteFresh(bankQuoteMeta)
-          if (!quoteAlreadyWarm) {
-            setIsContinuePending(true)
-            continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-          }
+          setIsContinuePending(true)
+          continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
           try {
-            const quote = await ensureCrossBorderQuoteStashed(bankQuoteMeta)
-            if (!quote?.ok || !(quote.localPayIn > 0)) {
+            const quote = await ensureCrossBorderOrderConfirmed(bankQuoteMeta)
+            if (!isCompleteCrossBorderQuote(quote)) {
               setAmountFieldError(
-                peekLastCrossBorderQuoteError() || "Could not load cross-border quote. Try again.",
+                peekLastCrossBorderQuoteError() || "Could not lock cross-border order. Try again.",
               )
               return
             }
@@ -1217,20 +1196,24 @@ export default function SendPage() {
         return
       }
 
-      if (needsPayoutQuoteBeforeConfirm) {
-        const quote = await fetchPayoutQuote()
-        if (!quote?.noah?.formSessionId) {
-          setAmountFieldError("Could not load payout quote. Try again.")
+      if (needsPayoutQuoteBeforeConfirm && payoutQuoteMeta) {
+        const quote = await ensurePayoutOrderConfirmed(payoutQuoteMeta, businessId)
+        if (!isCompletePayoutQuoteLocked(quote)) {
+          setAmountFieldError(
+            peekLastPayoutQuoteError() || "Could not lock payout order. Try again.",
+          )
           return
         }
-        flowState = mapPayoutQuoteToFlowState(state, quote)
-      } else if (needsWalletQuoteBeforeConfirm) {
-        const quote = await fetchWalletQuote()
+        flowState = payoutQuoteToFlowState(state, quote)
+      } else if (needsWalletQuoteBeforeConfirm && walletQuoteMeta) {
+        const quote = await ensureWalletSendOrderConfirmed(walletQuoteMeta, businessId)
         if (!quote?.formSessionId) {
-          setAmountFieldError("Could not load wallet send quote. Try again.")
+          setAmountFieldError(
+            peekLastWalletQuoteError() || "Could not lock wallet send order. Try again.",
+          )
           return
         }
-        flowState = mapWalletQuoteToFlowState(state, quote)
+        flowState = walletQuoteToFlowState(state, quote)
       }
 
       persistSendFlowState(flowState)

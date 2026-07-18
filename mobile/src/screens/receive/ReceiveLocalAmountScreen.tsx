@@ -19,7 +19,6 @@ import {
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
   validateYcFundBalancePayInAmount,
-  useDebouncedValue,
   REVIEW_ROW_LABELS,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -53,10 +52,10 @@ import SkeletonLoader from '../../components/SkeletonLoader'
 import { useToast } from '../../components/ToastProvider'
 import {
   clearFundBalanceQuote,
-  ensureFundBalanceQuoteStashed,
+  ensureFundBalanceOrderConfirmed,
   ensurePayInNetworksCached,
-  isStashedFundBalanceQuoteFresh,
-  peekFundBalanceQuote,
+  isCompleteFundBalanceQuote,
+  peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches } from '../../lib/warmYcLocalDepositCaches'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
@@ -124,34 +123,12 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     enteredAmount,
   })
 
-  const quoteStashMeta = useMemo(
-    () => ({
-      country: residenceCountry,
-      currency: localPayInCurrency,
-      rail: payInRail,
-      amountEntryMode,
-      enteredAmount,
-    }),
-    [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, enteredAmount],
-  )
-
-  const prefetchedQuote = isStashedFundBalanceQuoteFresh(quoteStashMeta)
-    ? peekFundBalanceQuote()
-    : null
-
   const displayPreview = useMemo(() => {
-    if (prefetchedQuote?.localPayIn && prefetchedQuote.usdCredit) {
-      return {
-        localPayIn: prefetchedQuote.localPayIn,
-        usdCredit: prefetchedQuote.usdCredit,
-        feeInclusive: true,
-      }
-    }
     if (ycFlow.preview.localPayIn > 0) {
       return { ...ycFlow.preview, feeInclusive: true as const }
     }
     return { ...ycFlow.preview, feeInclusive: false as const }
-  }, [prefetchedQuote, ycFlow.preview])
+  }, [ycFlow.preview])
 
   const { rails: receiveRails } = useYcReceiveRails({
     country: residenceCountry,
@@ -242,25 +219,6 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     clearFundBalanceQuote()
   }, [localPayInCurrency, residenceCountry, payInRail])
 
-  const fundBalanceQuotePrefetchKey = canContinue
-    ? [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, enteredAmount].join('|')
-    : ''
-
-  const [debouncedFundBalanceQuotePrefetchKey, fundBalanceQuotePrefetchControls] =
-    useDebouncedValue(fundBalanceQuotePrefetchKey)
-
-  useEffect(() => {
-    if (!debouncedFundBalanceQuotePrefetchKey) return
-    void ensureFundBalanceQuoteStashed({
-      country: residenceCountry,
-      currency: localPayInCurrency,
-      rail: payInRail,
-      amountEntryMode,
-      enteredAmount,
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedFundBalanceQuotePrefetchKey])
-
   const momoNetworksPrefetchKey =
     payInRail === 'mobile_money' && residenceCountry && localPayInCurrency
       ? `${residenceCountry}:${localPayInCurrency}`
@@ -350,21 +308,39 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       return
     }
 
-    fundBalanceQuotePrefetchControls.flush()
-
+    setIsContinuePending(true)
+    continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
     try {
+      const quote = await ensureFundBalanceOrderConfirmed({
+        country: residenceCountry,
+        currency: localPayInCurrency,
+        rail: payInRail,
+        amountEntryMode,
+        enteredAmount,
+      })
+      if (!isCompleteFundBalanceQuote(quote)) {
+        showError(peekLastFundBalanceQuoteError() || 'Could not lock deposit details. Try again.')
+        return
+      }
       navigation.navigate('ReceiveLocalReview' as never, {
         localPayInCurrency,
         residenceCountry,
         payInRail,
         amountEntryMode,
         enteredAmount,
-        usdCredit: displayPreview.usdCredit,
-        localPayIn: displayPreview.localPayIn,
-        customerRate: ycFlow.customerRate ?? 0,
+        usdCredit: quote.usdCredit,
+        localPayIn: quote.localPayIn,
+        customerRate: quote.customerRate,
       } as never)
     } catch (e) {
       showError(e instanceof Error ? e.message : 'Could not continue. Try again.')
+    } finally {
+      if (continueSpinnerTimerRef.current) {
+        clearTimeout(continueSpinnerTimerRef.current)
+        continueSpinnerTimerRef.current = null
+      }
+      setIsContinuePending(false)
+      setIsContinueLoading(false)
     }
   }
 

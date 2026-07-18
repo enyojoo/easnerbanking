@@ -149,6 +149,10 @@ export interface PayoutQuote {
   easner: PricingQuote
   pricingQuoteId: string
   expiresAt: string
+  quotePhase?: 'preview' | 'locked'
+  requiresConfirm?: boolean
+  quoteKey?: string
+  lockId?: string
 }
 
 export interface WalletSendQuote {
@@ -172,6 +176,7 @@ export interface WalletSendQuote {
   formSessionId: string
   pricingQuoteId: string
   executionModel: 'direct_turnkey' | 'lifi_bridge'
+  quotePhase?: 'preview' | 'locked'
   wallet: {
     cryptoAuthorizedAmount: string
     lifiFloor: string
@@ -249,6 +254,68 @@ export const noahService = {
       throw new Error((data as { error?: string }).error || 'Failed to create payout quote')
     }
     return (data as { quote: PayoutQuote }).quote
+  },
+
+  async confirmPayoutOrder(input: {
+    recipientId: string
+    receiveAmount: number
+    sourceBalanceCurrency: string
+    amountEntryMode?: 'send' | 'receive'
+    sendAmount?: number
+    note?: string
+    paymentPurpose?: string
+    email?: string
+    branchCode?: string
+  }): Promise<PayoutQuote> {
+    const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
+    const response = await fetch(`${apiUrl()}/api/payouts/confirm`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
+      },
+      body: JSON.stringify({
+        recipientId: input.recipientId,
+        receiveAmount: input.receiveAmount,
+        sourceBalanceCurrency: input.sourceBalanceCurrency,
+        amountEntryMode: input.amountEntryMode ?? 'receive',
+        ...(input.amountEntryMode === 'send' &&
+        input.sendAmount != null &&
+        input.sendAmount > 0
+          ? { sendAmount: input.sendAmount }
+          : {}),
+        ...(input.note ? { note: input.note } : {}),
+        ...(input.paymentPurpose ? { paymentPurpose: input.paymentPurpose } : {}),
+        ...(input.email ? { email: input.email } : {}),
+        ...(input.branchCode ? { branchCode: input.branchCode } : {}),
+      }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !(data as { ok?: boolean }).ok) {
+      throw new Error((data as { error?: string }).error || 'Failed to lock payout order')
+    }
+    return (data as { quote: PayoutQuote }).quote
+  },
+
+  async confirmWalletSendOrder(input: { formSessionId: string }): Promise<WalletSendQuote> {
+    const session = await requireAuthSession()
+    const scopeHeaders = await getNoahScopeHeaders()
+    const response = await fetch(`${apiUrl()}/api/wallets/send/confirm`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...scopeHeaders,
+      },
+      body: JSON.stringify({ formSessionId: input.formSessionId }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !(data as { ok?: boolean }).ok) {
+      throw new Error((data as { error?: string }).error || 'Failed to lock wallet send order')
+    }
+    return (data as { quote: WalletSendQuote }).quote
   },
 
   async createWalletSendQuote(input: {
@@ -1191,6 +1258,12 @@ export const noahService = {
     marginCaptureMode?: 'surplus_send' | 'split_debit'
     customerRate?: number
     noahMid?: number
+    payoutProvider?: 'noah' | 'yellowcard'
+    ycSequenceId?: string
+    ycSendId?: string
+    ycWalletAddress?: string
+    ycCryptoAmount?: number
+    lockId?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
     const scopeHeaders = await getNoahScopeHeaders()
@@ -1225,6 +1298,12 @@ export const noahService = {
         ...(transferData.marginCaptureMode ? { marginCaptureMode: transferData.marginCaptureMode } : {}),
         ...(transferData.customerRate != null ? { customerRate: transferData.customerRate } : {}),
         ...(transferData.noahMid != null ? { noahMid: transferData.noahMid } : {}),
+        ...(transferData.payoutProvider ? { payoutProvider: transferData.payoutProvider } : {}),
+        ...(transferData.ycSequenceId ? { ycSequenceId: transferData.ycSequenceId } : {}),
+        ...(transferData.ycSendId ? { ycSendId: transferData.ycSendId } : {}),
+        ...(transferData.ycWalletAddress ? { ycWalletAddress: transferData.ycWalletAddress } : {}),
+        ...(transferData.ycCryptoAmount != null ? { ycCryptoAmount: transferData.ycCryptoAmount } : {}),
+        ...(transferData.lockId ? { lockId: transferData.lockId } : {}),
       }),
     })
 

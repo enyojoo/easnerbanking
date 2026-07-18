@@ -1,5 +1,7 @@
 # Cross-Border TLC Test Runbook
 
+> **See also:** [lock-on-review-ux-guide.md](./lock-on-review-ux-guide.md) — unified lock-on-review UX across fund balance, TLC, balance payout, and wallet send.
+
 End-to-end and staging checks for Yellowcard **Through Local Currency** (cross-border send): leg 1 local pay-in → YC USDC → omnibus → leg 2 YC send to recipient.
 
 ## Prerequisites

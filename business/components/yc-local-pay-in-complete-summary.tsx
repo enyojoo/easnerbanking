@@ -3,12 +3,9 @@
 import {
   buildYcLocalPayInCompleteRows,
   resolveYcCrossBorderLocalPayInBreakdownForDisplay,
-  resolveYcFundBalanceLocalPayInBreakdownForDisplay,
-  REVIEW_ROW_LABELS,
   type YcPayInRail,
 } from "@easner/shared"
 import { Check, Copy } from "lucide-react"
-import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
 import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
 
 export type YcLocalPayInCompleteSummaryProps = {
@@ -46,7 +43,6 @@ export function YcLocalPayInCompleteSummary({
   copiedField,
   onCopy,
 }: YcLocalPayInCompleteSummaryProps) {
-  const isFundBalance = flowMode === "fund_balance"
   const isCrossBorder = flowMode === "cross_border_send"
   const isMomo = payInRail === "mobile_money"
   const crossBorderBreakdown =
@@ -60,20 +56,7 @@ export function YcLocalPayInCompleteSummary({
           displayProcessingFeeLocal: processingFeeLocal,
         })
       : null
-  const fundBalanceBreakdown =
-    isFundBalance && isMomo && customerRate > 0 && localPayIn > 0
-      ? resolveYcFundBalanceLocalPayInBreakdownForDisplay({
-          localPayIn,
-          localCurrency,
-          usdCredit: creditOrReceiveAmount,
-          exchangeRate: customerRate,
-          displayProcessingFeeLocal: processingFeeLocal,
-          processingFee: processingFeeUsd,
-          exchangeFee: exchangeFeeUsd,
-        })
-      : null
-  const principalLocal =
-    fundBalanceBreakdown?.principalLocal ?? crossBorderBreakdown?.principalLocal
+  const principalLocal = crossBorderBreakdown?.principalLocal
 
   const rows = buildYcLocalPayInCompleteRows({
     mode: flowMode,
@@ -85,7 +68,7 @@ export function YcLocalPayInCompleteSummary({
     receiveAmount: creditOrReceiveAmount,
     customerRate,
     processingFeeLocal:
-      fundBalanceBreakdown?.feeLocal ?? crossBorderBreakdown?.feeLocal ?? processingFeeLocal,
+      crossBorderBreakdown?.feeLocal ?? processingFeeLocal,
     processingFeeUsd,
     exchangeFeeUsd,
     principalLocal,
@@ -131,13 +114,6 @@ export function YcLocalPayInCompleteSummary({
           </div>
         )
       })}
-      {isFundBalance && isMomo ? (
-        <CreditDestinationRow
-          label={REVIEW_ROW_LABELS.creditTo}
-          currency="USD"
-          balanceLabel="USD Balance"
-        />
-      ) : null}
     </>
   )
 }

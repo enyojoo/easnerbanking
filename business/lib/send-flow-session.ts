@@ -67,6 +67,9 @@ export interface SendFlowState {
     ycSendId?: string
     ycWalletAddress?: string
     ycCryptoAmount?: number
+    /** Locked payout session id when quotePhase is locked. */
+    lockId?: string
+    quotePhase?: "preview" | "locked"
   }
   /** MoMo pay-in details collected before cross-border review (phone + network). */
   ycMomoSetup?: {
@@ -115,6 +118,7 @@ export interface SendFlowState {
     expiresAt: string
     executionModel: "direct_turnkey" | "lifi_bridge"
     lifiFloor?: string
+    quotePhase?: "preview" | "locked"
   }
 }
 

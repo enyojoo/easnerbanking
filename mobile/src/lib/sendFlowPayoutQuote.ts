@@ -68,7 +68,7 @@ let stashed: PayoutQuote | null = null
 let stashedMeta: SendPayoutQuoteStashMeta | null = null
 let lastPayoutQuoteError: string | null = null
 
-export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
+export function isUsablePayoutQuotePreview(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
   const leg = quote ? resolveSettlementLeg(quote) : null
   const easnerRate = quote?.easner?.providerRate
   return Boolean(
@@ -80,6 +80,17 @@ export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): qu
       Number.isFinite(easnerRate) &&
       easnerRate > 0,
   )
+}
+
+/** Locked order from `/confirm` — required before authorize. */
+export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
+  if (!isUsablePayoutQuotePreview(quote)) return false
+  if (new Date(quote.expiresAt).getTime() <= Date.now()) return false
+  if (quote.quotePhase === 'locked') {
+    return Boolean(quote.lockId || quote.yc?.sendId || quote.settlement?.sessionId)
+  }
+  if (quote.quotePhase === 'preview') return false
+  return Boolean(quote.settlement?.sessionId || quote.noah?.formSessionId)
 }
 
 export function stashSendPayoutQuote(quote: PayoutQuote, meta: SendPayoutQuoteStashMeta): void {
@@ -119,6 +130,17 @@ export function isStashedPayoutQuoteFresh(input: SendPayoutQuoteStashMeta): bool
 
 let inflightQuote: Promise<PayoutQuote | null> | null = null
 let inflightQuoteKey = ''
+let inflightConfirm: Promise<PayoutQuote | null> | null = null
+let inflightConfirmKey = ''
+
+function quoteMetaKey(meta: SendPayoutQuoteStashMeta): string {
+  return [
+    meta.recipientId,
+    meta.amountEntryMode,
+    meta.entryAmount,
+    meta.receiveCurrency,
+  ].join('|')
+}
 
 /** Deduped quote fetch — used for background prefetch and Continue gate. */
 export async function ensureSendPayoutQuoteStashed(
@@ -127,23 +149,17 @@ export async function ensureSendPayoutQuoteStashed(
 ): Promise<PayoutQuote | null> {
   if (isStashedPayoutQuoteFresh(meta)) return peekSendPayoutQuote()
 
-  const key = [
-    meta.recipientId,
-    meta.amountEntryMode,
-    meta.entryAmount,
-    meta.receiveCurrency,
-  ].join('|')
+  const key = quoteMetaKey(meta)
   if (inflightQuote && inflightQuoteKey === key) return inflightQuote
 
   inflightQuoteKey = key
   lastPayoutQuoteError = null
   inflightQuote = fetchQuote()
     .then((quote) => {
-      if (!isCompletePayoutQuote(quote)) {
+      if (!isUsablePayoutQuotePreview(quote)) {
         lastPayoutQuoteError = 'Incomplete payout quote response.'
         return null
       }
-      stashSendPayoutQuote(quote, meta)
       return quote
     })
     .catch((err) => {
@@ -156,6 +172,39 @@ export async function ensureSendPayoutQuoteStashed(
     })
 
   return inflightQuote
+}
+
+/** Lock payout order at review — idempotent by quote key on server. */
+export async function ensureSendPayoutOrderConfirmed(
+  fetchConfirm: () => Promise<PayoutQuote>,
+  meta: SendPayoutQuoteStashMeta,
+): Promise<PayoutQuote | null> {
+  if (isStashedPayoutQuoteFresh(meta)) return peekSendPayoutQuote()
+
+  const key = quoteMetaKey(meta)
+  if (inflightConfirm && inflightConfirmKey === key) return inflightConfirm
+
+  inflightConfirmKey = key
+  lastPayoutQuoteError = null
+  inflightConfirm = fetchConfirm()
+    .then((quote) => {
+      if (!isCompletePayoutQuote(quote)) {
+        lastPayoutQuoteError = 'Incomplete locked payout quote.'
+        return null
+      }
+      stashSendPayoutQuote(quote, meta)
+      return quote
+    })
+    .catch((err) => {
+      lastPayoutQuoteError = err instanceof Error ? err.message : 'confirm_failed'
+      return null
+    })
+    .finally(() => {
+      inflightConfirm = null
+      inflightConfirmKey = ''
+    })
+
+  return inflightConfirm
 }
 
 export function payoutPrepareSessionFromQuote(
@@ -181,6 +230,8 @@ export function payoutPrepareSessionFromQuote(
     ...(quote.yc?.sequenceId ? { ycSequenceId: quote.yc.sequenceId } : {}),
     ...(quote.yc?.walletAddress ? { ycWalletAddress: quote.yc.walletAddress } : {}),
     ...(quote.yc?.cryptoAmount != null ? { ycCryptoAmount: quote.yc.cryptoAmount } : {}),
+    ...(quote.yc?.sendId ? { ycSendId: quote.yc.sendId } : {}),
+    ...(quote.lockId ? { lockId: quote.lockId } : {}),
   }
 }
 

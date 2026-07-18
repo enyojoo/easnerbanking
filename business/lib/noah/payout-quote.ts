@@ -20,6 +20,7 @@ import {
 import { NoProviderForCorridorError, corridorHasYellowcardPayout, selectProviderForCorridor } from "@/lib/payout-providers"
 import { mapNoahPrepareError, shouldTryAlternatePayoutProvider } from "@/lib/noah/noah-prepare-errors"
 import { NoahHttpError } from "@/lib/noah/http"
+import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { getGlobalPayoutMarginCaptureMode } from "@/lib/noah/margin-capture-mode"
 import { noahImpliedProviderRate } from "@/lib/noah/fx-prices"
@@ -107,6 +108,10 @@ export type PayoutQuoteResult = {
   ycLegFeesUsd?: number
   /** Easner 1% + channel/YC component shown as one Processing fee row (USD). */
   displayProcessingFee?: number
+  quotePhase?: "preview" | "locked"
+  requiresConfirm?: boolean
+  quoteKey?: string
+  lockId?: string
 }
 
 const QUOTE_TTL_MS = 15 * 60 * 1000
@@ -610,5 +615,16 @@ export async function buildPayoutQuote(input: {
     expiresAt: easner.expiresAt,
     executionModel: "turnkey_workflow",
     provider: "noah",
+    quotePhase: "preview",
+    requiresConfirm: true,
+    quoteKey: buildPayoutQuoteKey({
+      recipientId: String(input.recipientId || ""),
+      sourceBalanceCurrency: input.sourceBalanceCurrency,
+      amountEntryMode: input.amountEntryMode === "send" ? "send" : "receive",
+      receiveAmount: quoteReceiveAmount,
+      sendBudget,
+      note: input.prepareOverrides?.note,
+      paymentPurpose: input.prepareOverrides?.paymentPurpose,
+    }),
   }
 }

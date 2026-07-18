@@ -11,4 +11,10 @@ export type PayoutPrepareSession = {
   marginCaptureMode?: 'surplus_send' | 'split_debit'
   customerRate?: number
   noahMid?: number
+  payoutProvider?: 'noah' | 'yellowcard'
+  ycSequenceId?: string
+  ycSendId?: string
+  ycWalletAddress?: string
+  ycCryptoAmount?: number
+  lockId?: string
 }

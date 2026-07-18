@@ -77,10 +77,29 @@ export async function createWalletSendSession(
   }
 }
 
+export async function lockWalletSendSession(
+  admin: SupabaseClient,
+  formSessionId: string,
+  userId: string,
+): Promise<WalletSendSessionRow | null> {
+  const row = await getWalletSendSession(admin, formSessionId, userId, { allowQuoted: true })
+  if (!row) return null
+  if (row.status === "locked") return row
+  const { error } = await admin
+    .from("wallet_send_sessions")
+    .update({ status: "locked" })
+    .eq("form_session_id", formSessionId)
+    .eq("user_id", userId)
+    .eq("status", "quoted")
+  if (error) return null
+  return { ...row, status: "locked" }
+}
+
 export async function getWalletSendSession(
   admin: SupabaseClient,
   formSessionId: string,
   userId: string,
+  opts?: { allowQuoted?: boolean },
 ): Promise<WalletSendSessionRow | null> {
   const { data, error } = await admin
     .from("wallet_send_sessions")
@@ -100,7 +119,9 @@ export async function getWalletSendSession(
   if (!data) return null
 
   const row = rowFromDb(data as Record<string, unknown>)
-  if (row.status !== "quoted") return null
+  const allowed =
+    row.status === "locked" || (opts?.allowQuoted && row.status === "quoted")
+  if (!allowed) return null
   if (new Date(row.expires_at).getTime() <= Date.now()) return null
   return row
 }

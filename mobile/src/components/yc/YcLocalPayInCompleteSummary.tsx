@@ -2,11 +2,8 @@ import React from 'react'
 import {
   buildYcLocalPayInCompleteRows,
   resolveYcCrossBorderLocalPayInBreakdownForDisplay,
-  resolveYcFundBalanceLocalPayInBreakdownForDisplay,
-  REVIEW_ROW_LABELS,
   type YcPayInRail,
 } from '@easner/shared'
-import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
 import {
   TransactionDetailSummaryRow,
   TransactionDetailCopyableValue,
@@ -48,7 +45,6 @@ export function YcLocalPayInCompleteSummary({
   copiedKey,
   onCopyTransactionId,
 }: YcLocalPayInCompleteSummaryProps) {
-  const isFundBalance = mode === 'fund_balance'
   const isCrossBorder = mode === 'cross_border_send'
   const isMomo = rail === 'mobile_money'
   const crossBorderBreakdown =
@@ -62,20 +58,7 @@ export function YcLocalPayInCompleteSummary({
           displayProcessingFeeLocal: processingFeeLocal,
         })
       : null
-  const fundBalanceBreakdown =
-    isFundBalance && isMomo && customerRate > 0 && localPayIn > 0
-      ? resolveYcFundBalanceLocalPayInBreakdownForDisplay({
-          localPayIn,
-          localCurrency: payInCurrency,
-          usdCredit: receiveAmount,
-          exchangeRate: customerRate,
-          displayProcessingFeeLocal: processingFeeLocal,
-          processingFee: processingFeeUsd,
-          exchangeFee: exchangeFeeUsd,
-        })
-      : null
-  const principalLocal =
-    fundBalanceBreakdown?.principalLocal ?? crossBorderBreakdown?.principalLocal
+  const principalLocal = crossBorderBreakdown?.principalLocal
 
   const rows = buildYcLocalPayInCompleteRows({
     mode,
@@ -87,19 +70,17 @@ export function YcLocalPayInCompleteSummary({
     receiveAmount,
     customerRate,
     processingFeeLocal:
-      fundBalanceBreakdown?.feeLocal ?? crossBorderBreakdown?.feeLocal ?? processingFeeLocal,
+      crossBorderBreakdown?.feeLocal ?? processingFeeLocal,
     processingFeeUsd,
     exchangeFeeUsd,
     principalLocal,
     recipientName,
   })
 
-  const showCreditDestination = isFundBalance && isMomo
-
   return (
     <>
       {rows.map((row, index) => {
-        const isLast = index === rows.length - 1 && !showCreditDestination
+        const isLast = index === rows.length - 1
         if (row.id === 'transaction-id' && onCopyTransactionId) {
           return (
             <TransactionDetailSummaryRow key={row.id} label={row.label} last={isLast}>
@@ -123,15 +104,6 @@ export function YcLocalPayInCompleteSummary({
           />
         )
       })}
-      {showCreditDestination ? (
-        <>
-          <CreditDestinationRow
-            label={REVIEW_ROW_LABELS.creditTo}
-            currency="USD"
-            balanceLabel="USD Balance"
-          />
-        </>
-      ) : null}
     </>
   )
 }

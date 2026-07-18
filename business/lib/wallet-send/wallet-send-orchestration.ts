@@ -8,6 +8,7 @@ import { generateTransactionId } from "@/lib/transaction-id"
 import { isWalletSendEnabled } from "@/lib/lifi/client"
 import { getTurnkeyDisplayBalancesUsdEur } from "@/lib/wallet/turnkey-chain-balances"
 import { resolveWalletSendExecutionModel } from "./routing"
+import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 import { getWalletSendSession, markWalletSendSessionExecuted } from "./wallet-send-session"
 import { executeLifiWalletSend } from "./lifi-execute"
 import type { WalletRecipientRow } from "./validate-recipient"
@@ -124,7 +125,9 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     return { ok: false, error: "wallet_send_disabled" }
   }
 
-  const session = await getWalletSendSession(input.admin, input.formSessionId, input.userId)
+  const session = await getWalletSendSession(input.admin, input.formSessionId, input.userId, {
+    allowQuoted: !isPayoutLockOnReviewEnabled("wallet"),
+  })
   if (!session) {
     return { ok: false, error: "quote_expired" }
   }

@@ -56,6 +56,8 @@ function sampleQuote(overrides?: Partial<PayoutQuote>): PayoutQuote {
     },
     pricingQuoteId: '',
     expiresAt,
+    quotePhase: 'locked',
+    lockId: 'lock-1',
   }
   return { ...base, ...overrides }
 }
@@ -94,6 +96,14 @@ describe('sendFlowPayoutQuote stash', () => {
 
   it('rejects incomplete quotes', () => {
     expect(isCompletePayoutQuote(null)).toBe(false)
+    expect(
+      isCompletePayoutQuote(
+        sampleQuote({
+          quotePhase: 'preview',
+          lockId: undefined,
+        }),
+      ),
+    ).toBe(false)
     expect(
       isCompletePayoutQuote(
         sampleQuote({

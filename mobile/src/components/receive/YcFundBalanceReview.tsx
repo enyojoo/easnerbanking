@@ -24,7 +24,6 @@ import { haptics } from '../../lib/haptics'
 import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
 import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
 import {
-  ensureFundBalanceQuoteStashed,
   ensureFundBalanceOrderConfirmed,
   isCompleteFundBalanceQuote,
   isStashedFundBalanceQuoteFresh,
@@ -92,17 +91,23 @@ export function YcFundBalanceReview({
     ],
   )
 
-  const [quote, setQuote] = useState<YcFundBalanceQuoteResult | null>(() =>
-    isStashedFundBalanceQuoteFresh(quoteMeta) ? peekFundBalanceQuote() : null,
-  )
+  const [quote, setQuote] = useState<YcFundBalanceQuoteResult | null>(() => {
+    if (isStashedFundBalanceQuoteFresh(quoteMeta) && isCompleteFundBalanceQuote(peekFundBalanceQuote())) {
+      return peekFundBalanceQuote()
+    }
+    return null
+  })
   const [quoteLoading, setQuoteLoading] = useState(
-    () => !isStashedFundBalanceQuoteFresh(quoteMeta),
+    () =>
+      !(
+        isStashedFundBalanceQuoteFresh(quoteMeta) &&
+        isCompleteFundBalanceQuote(peekFundBalanceQuote())
+      ),
   )
   const [quoteError, setQuoteError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (isStashedFundBalanceQuoteFresh(quoteMeta)) {
+    if (isStashedFundBalanceQuoteFresh(quoteMeta) && isCompleteFundBalanceQuote(peekFundBalanceQuote())) {
       const stashed = peekFundBalanceQuote()
       if (stashed) {
         setQuote(stashed)
@@ -116,15 +121,15 @@ export function YcFundBalanceReview({
     setQuoteLoading(true)
     setQuoteError(null)
     void (async () => {
-      const result = await ensureFundBalanceQuoteStashed(quoteMeta)
+      const result = await ensureFundBalanceOrderConfirmed(quoteMeta)
       if (cancelled) return
       setQuoteLoading(false)
-      if (result?.ok && result.localPayIn > 0) {
+      if (isCompleteFundBalanceQuote(result)) {
         setQuote(result)
         return
       }
       setQuote(null)
-      setQuoteError(peekLastFundBalanceQuoteError() || 'Could not load quote')
+      setQuoteError(peekLastFundBalanceQuoteError() || 'Could not lock deposit details')
     })()
 
     return () => {
@@ -133,7 +138,7 @@ export function YcFundBalanceReview({
   }, [quoteMeta])
 
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
-  const quoteLocked = Boolean(quote?.ok && quote.localPayIn > 0)
+  const quoteLocked = isCompleteFundBalanceQuote(quote)
   const customerRate = quote?.customerRate ?? previewCustomerRate
   const displayTransactionId = quote?.easnerTransactionId ?? quote?.transactionId ?? ''
   const resolvedLocalPayIn = quote?.localPayIn ?? localPayIn
@@ -211,28 +216,14 @@ export function YcFundBalanceReview({
     })
   }
 
-  const onContinue = async () => {
-    if (submitting) return
+  const onContinue = () => {
+    if (submitting || !isCompleteFundBalanceQuote(quote)) return
     haptics.medium()
-    setSubmitting(true)
-    setQuoteError(null)
-
-    try {
-      const result = await ensureFundBalanceOrderConfirmed(quoteMeta)
-      if (!isCompleteFundBalanceQuote(result)) {
-        setQuoteError(peekLastFundBalanceQuoteError() || 'Could not confirm order')
-        return
-      }
-      navigateToPayIn(result)
-    } catch (e) {
-      setQuoteError(e instanceof Error ? e.message : 'Could not continue')
-    } finally {
-      setSubmitting(false)
-    }
+    navigateToPayIn(quote)
   }
 
   const ctaDisabled =
-    !quoteLocked || quoteLoading || quoteCountdown.expired || submitting || Boolean(quoteError)
+    !quoteLocked || quoteLoading || quoteCountdown.expired || Boolean(quoteError)
 
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>
@@ -245,7 +236,7 @@ export function YcFundBalanceReview({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {quoteLoading ? (
+          {quoteLoading && !quoteLocked ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : quoteLocked ? (
             <>
@@ -303,7 +294,7 @@ export function YcFundBalanceReview({
           end={{ x: 1, y: 0 }}
           style={styles.ctaGradient}
         >
-          <Text style={styles.ctaText}>{submitting ? 'Loading…' : 'Continue'}</Text>
+          <Text style={styles.ctaText}>Continue</Text>
         </LinearGradient>
       </Pressable>
     </View>

@@ -48,6 +48,7 @@ export type WalletSendQuoteResult = {
   formSessionId: string
   pricingQuoteId: string
   executionModel: "direct_turnkey" | "lifi_bridge"
+  quotePhase?: "preview" | "locked"
   wallet: {
     cryptoAuthorizedAmount: string
     lifiFloor: string

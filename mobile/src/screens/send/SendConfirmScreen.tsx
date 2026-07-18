@@ -62,15 +62,19 @@ import { getSendDestinationsMemory } from '../../lib/sendDestinations'
 import { isWalletSendRecipient } from '../../lib/recipientWalletMeta'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
 import {
+  ensureSendPayoutOrderConfirmed,
   isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
+  peekLastPayoutQuoteError,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
   payoutDisplayAmountsFromQuote,
   payoutPrepareSessionFromQuote,
 } from '../../lib/sendFlowPayoutQuote'
 import {
+  ensureSendWalletOrderConfirmed,
   isStashedWalletQuoteFresh,
+  peekLastWalletQuoteError,
   peekSendWalletQuote,
   clearSendWalletQuote,
   walletDisplayAmountsFromQuote,
@@ -90,7 +94,8 @@ function payoutSessionMatchesRecipient(
   return Boolean(
     session?.formSessionId &&
       recipientId &&
-      session.recipientId.trim() === recipientId.trim(),
+      session.recipientId.trim() === recipientId.trim() &&
+      Boolean(session.lockId || session.ycSendId),
   )
 }
 
@@ -425,16 +430,29 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       setPricing((prev) => ({ ...prev, quoteLoading: true, quoteError: null }))
       void (async () => {
         try {
-          const wq = await noahService.createWalletSendQuote({
-            recipientId: recipient.id,
-            sourceBalanceCurrency: selectedBalanceCurrency,
-            amountEntryMode,
-            ...(amountEntryMode === 'receive' ? { receiveAmount: receiveAmountValue } : {}),
-            ...(amountEntryMode === 'send' && amountScreenSendAmount > 0
-              ? { sendAmount: amountScreenSendAmount }
-              : {}),
-          })
+          const wq = await ensureSendWalletOrderConfirmed(
+            () =>
+              noahService.createWalletSendQuote({
+                recipientId: recipient.id,
+                sourceBalanceCurrency: selectedBalanceCurrency,
+                amountEntryMode,
+                ...(amountEntryMode === 'receive' ? { receiveAmount: receiveAmountValue } : {}),
+                ...(amountEntryMode === 'send' && amountScreenSendAmount > 0
+                  ? { sendAmount: amountScreenSendAmount }
+                  : {}),
+              }),
+            (formSessionId) => noahService.confirmWalletSendOrder({ formSessionId }),
+            quoteStashMeta,
+          )
           if (cancelled) return
+          if (!wq?.formSessionId) {
+            setPricing((prev) => ({
+              ...prev,
+              quoteLoading: false,
+              quoteError: peekLastWalletQuoteError() || 'Could not lock wallet send order',
+            }))
+            return
+          }
           setQuotedReceiveAmount(wq.receiveAmount)
           const display = walletDisplayAmountsFromQuote(wq)
           setPricing((prev) => ({
@@ -452,7 +470,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           }))
         } catch (e) {
           if (cancelled) return
-          const msg = e instanceof Error ? e.message : 'Could not load wallet send quote'
+          const msg = e instanceof Error ? e.message : 'Could not lock wallet send order'
           setPricing((prev) => ({ ...prev, quoteLoading: false, quoteError: msg }))
         }
       })()
@@ -486,26 +504,30 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       return
     }
     let cancelled = false
-    setPricing((prev) => ({ ...prev, quoteError: null }))
+    setPricing((prev) => ({ ...prev, quoteLoading: true, quoteError: null }))
     void (async () => {
       try {
-        const pq = await noahService.createPayoutQuote({
-          recipientId: recipient.id,
-          receiveAmount: receiveAmountValue,
-          sourceBalanceCurrency: selectedBalanceCurrency,
-          amountEntryMode,
-          ...(amountEntryMode === 'send' && amountScreenSendAmount > 0
-            ? { sendAmount: amountScreenSendAmount }
-            : {}),
-          ...(sendNote ? { note: sendNote } : {}),
-          ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
-        })
+        const pq = await ensureSendPayoutOrderConfirmed(
+          () =>
+            noahService.confirmPayoutOrder({
+              recipientId: recipient.id,
+              receiveAmount: receiveAmountValue,
+              sourceBalanceCurrency: selectedBalanceCurrency,
+              amountEntryMode,
+              ...(amountEntryMode === 'send' && amountScreenSendAmount > 0
+                ? { sendAmount: amountScreenSendAmount }
+                : {}),
+              ...(sendNote ? { note: sendNote } : {}),
+              ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
+            }),
+          quoteStashMeta,
+        )
         if (cancelled) return
         if (!isCompletePayoutQuote(pq)) {
           setPricing((prev) => ({
             ...prev,
             quoteLoading: false,
-            quoteError: 'Incomplete payout quote response.',
+            quoteError: peekLastPayoutQuoteError() || 'Could not lock payout order',
           }))
           return
         }
@@ -529,7 +551,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         }))
       } catch (e) {
         if (cancelled) return
-        const msg = e instanceof Error ? e.message : 'Could not load payout quote'
+        const msg = e instanceof Error ? e.message : 'Could not lock payout order'
         setPricing((prev) => ({ ...prev, quoteLoading: false, quoteError: msg }))
       }
     })()

@@ -125,6 +125,25 @@ describe("buildYcLocalPayInCompleteRows", () => {
     expect(rows.find((r) => r.id === "transfer-method")?.value).toBe(TLC_LOCAL_TRANSFER_METHOD)
   })
 
+  it("uses minimal fund-balance MoMo complete card like bank", () => {
+    const rows = buildYcLocalPayInCompleteRows({
+      mode: "fund_balance",
+      rail: "mobile_money",
+      transactionId: "etid789",
+      payInCurrency: "KES",
+      receiveCurrency: "USD",
+      localPayIn: 15_500,
+      receiveAmount: 1200,
+      customerRate: 129.5,
+      processingFeeLocal: 200,
+    })
+    expect(rows.map((r) => r.id)).toEqual([
+      "transaction-id",
+      "amount-to-credit",
+      "transfer-method",
+    ])
+  })
+
   it("mirrors fund-balance MoMo breakdown for TLC MoMo complete with footed fee", () => {
     const breakdown = resolveYcCrossBorderLocalPayInBreakdown({
       localPayIn: 307.94,

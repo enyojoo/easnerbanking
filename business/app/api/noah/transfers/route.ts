@@ -71,6 +71,7 @@ export async function POST(request: Request) {
         processingFee?: string | number
         channelCost?: string | number
         customerPrincipal?: string | number
+        lockId?: string
       }
     | null
 
@@ -235,6 +236,7 @@ export async function POST(request: Request) {
         reviewSnapshot: reviewSnapshot ?? undefined,
         sendNote: sendNote || undefined,
         idempotencyKey: idempotencyKey || undefined,
+        lockId: String(body?.lockId || "").trim() || undefined,
         yc: {
           sequenceId: sequenceId || undefined,
           sendId: body?.ycSendId ?? formSessionId ?? null,
@@ -316,6 +318,7 @@ export async function POST(request: Request) {
             },
           }
         : {}),
+      lockId: String(body?.lockId || "").trim() || undefined,
     })
 
     if (!result.ok) {

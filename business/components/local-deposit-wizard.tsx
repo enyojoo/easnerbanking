@@ -289,9 +289,11 @@ export function LocalDepositWizard({
     }
   }, [railsLoading, rails, initialStep, initialRail])
 
-  const confirmOrder = useCallback(async () => {
-    setQuoteLoading(true)
-    setQuoteError(null)
+  const confirmOrder = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setQuoteLoading(true)
+      setQuoteError(null)
+    }
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" }
       if (businessId) headers["X-Easner-Noah-Scope"] = "business"
@@ -326,77 +328,13 @@ export function LocalDepositWizard({
       }
       if (!res.ok || !data.ok || !data.transferId) {
         const msg = ycFundBalanceQuoteErrorMessage(data.code, data.error)
-        setQuoteError(msg)
-        return null
-      }
-      setQuote(data)
-      return data
-    } catch {
-      setQuoteError("Could not lock payment details")
-      return null
-    } finally {
-      setQuoteLoading(false)
-    }
-  }, [
-    amountMode,
-    businessId,
-    enteredAmount,
-    localPayInCurrency,
-    rail,
-    residenceCountry,
-    isMomo,
-    momoPhone,
-    momoNetworkId,
-    momoNetworks,
-    defaultPhone,
-  ])
-
-  const createQuote = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) {
-      setQuoteLoading(true)
-      setQuoteError(null)
-    }
-    try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (businessId) headers["X-Easner-Noah-Scope"] = "business"
-      const body: Record<string, unknown> =
-        amountMode === "usd"
-          ? {
-              currency: localPayInCurrency,
-              country: residenceCountry,
-              usdCredit: enteredAmount,
-              rail,
-            }
-          : {
-              currency: localPayInCurrency,
-              country: residenceCountry,
-              localPayIn: enteredAmount,
-              rail,
-            }
-      if (isMomo) {
-        body.sourcePhone = momoPhone.trim() || defaultPhone.trim()
-        body.networkId = momoNetworkId
-        const net = momoNetworks.find((n) => n.id === momoNetworkId)
-        if (net?.name) body.sourceNetworkName = net.name
-      }
-      const res = await fetchWithSession("/api/yellowcard/fund-balance/quote", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-      })
-      const data = (await res.json().catch(() => ({}))) as FundBalanceQuote & {
-        error?: string
-        code?: string
-      }
-      if (!res.ok || !data.ok) {
-        const msg = ycFundBalanceQuoteErrorMessage(data.code, data.error)
         if (!opts?.silent) setQuoteError(msg)
         return null
       }
       setQuote(data)
       return data
     } catch {
-      if (!opts?.silent) setQuoteError("Could not get payment details")
+      if (!opts?.silent) setQuoteError("Could not lock payment details")
       return null
     } finally {
       if (!opts?.silent) setQuoteLoading(false)
@@ -420,8 +358,8 @@ export function LocalDepositWizard({
     [momoPhone, defaultPhone, momoNetworkId],
   )
 
-  const momoReviewQuoteKey =
-    step === "review" && isMomo && momoReady
+  const momoSetupConfirmPrefetchKey =
+    step === "momo_setup" && isMomo && momoReady
       ? [
           residenceCountry,
           localPayInCurrency,
@@ -432,25 +370,33 @@ export function LocalDepositWizard({
         ].join("|")
       : ""
 
-  useEffect(() => {
-    if (!momoReviewQuoteKey) return
-    void createQuote()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [momoReviewQuoteKey])
-
-  const quotePrefetchKey =
-    step === "amount" && enteredAmount > 0 && customerRate
-      ? `${residenceCountry}|${localPayInCurrency}|${amountMode}|${enteredAmount}|${rail}`
+  const reviewConfirmKey =
+    step === "review" && enteredAmount > 0 && (!isMomo || momoReady)
+      ? [
+          residenceCountry,
+          localPayInCurrency,
+          amountMode,
+          enteredAmount,
+          rail,
+          isMomo ? momoPhone.trim() || defaultPhone.trim() : "",
+          isMomo ? momoNetworkId : "",
+        ].join("|")
       : ""
 
-  const [debouncedQuotePrefetchKey, quotePrefetchControls] =
-    useDebouncedValue(quotePrefetchKey)
+  const [debouncedMomoSetupConfirmKey] = useDebouncedValue(momoSetupConfirmPrefetchKey)
 
   useEffect(() => {
-    if (!debouncedQuotePrefetchKey) return
-    void createQuote({ silent: true })
+    if (!debouncedMomoSetupConfirmKey) return
+    void confirmOrder({ silent: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuotePrefetchKey])
+  }, [debouncedMomoSetupConfirmKey])
+
+  useEffect(() => {
+    if (!reviewConfirmKey) return
+    if (quote?.ok && quote.transferId) return
+    void confirmOrder()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewConfirmKey])
 
   useEffect(() => {
     if (step !== "momo_setup" || !isMomo) return
@@ -655,19 +601,12 @@ export function LocalDepositWizard({
           disabled={!canContinue}
           onClick={async () => {
             setQuoteError(null)
-            quotePrefetchControls.flush()
             if (isMomo) {
-              setQuote(null)
               setStep("momo_setup")
               return
             }
-            if (quote?.ok && quote.localPayIn > 0 && !quoteCountdown.expired) {
-              setStep("review")
-              return
-            }
-            setQuote(null)
-            const result = await createQuote()
-            if (result) setStep("review")
+            const result = await confirmOrder()
+            if (result?.transferId) setStep("review")
           }}
         >
           Continue
@@ -731,7 +670,6 @@ export function LocalDepositWizard({
           className="w-full"
           disabled={!momoReady}
           onClick={() => {
-            setQuote(null)
             setQuoteError(null)
             setStep("review")
           }}
@@ -743,7 +681,7 @@ export function LocalDepositWizard({
   }
 
   if (step === "review") {
-    const quoteLocked = Boolean(quote?.ok && quote.localPayIn > 0)
+    const quoteLocked = Boolean(quote?.ok && quote.transferId && quote.localPayIn > 0)
     const reviewLocalPayIn = quote?.localPayIn ?? displayPreview.localPayIn
     const reviewUsdCredit = quote?.usdCredit ?? preview.usdCredit
     const reviewCustomerRate = quote?.customerRate ?? customerRate
@@ -766,8 +704,8 @@ export function LocalDepositWizard({
         exchangeRate: reviewCustomerRate,
       })
     const reviewFeeLocal = lockedReviewBreakdown?.feeLocal ?? 0
-    const showQuoteSpinner = quoteLoading && !isMomo
-    const showLockedReview = quoteLocked && !quoteLoading
+    const showQuoteSpinner = quoteLoading && !isMomo && !quoteLocked
+    const showLockedReview = quoteLocked
     const canConfirmReview =
       quoteLocked && !quoteLoading && !quoteCountdown.expired && (!isMomo || momoReady)
     return (
@@ -818,19 +756,14 @@ export function LocalDepositWizard({
               ) : null
             }
           />
-        ) : isMomo && quoteLoading ? (
-          <div className="flex justify-center py-4">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
         ) : null}
         {quoteError ? <p className="text-sm text-destructive">{quoteError}</p> : null}
 
         <Button
           className="w-full"
           disabled={!canConfirmReview}
-          onClick={async () => {
-            const result = await confirmOrder()
-            if (result?.transferId) setStep("payin")
+          onClick={() => {
+            if (quote?.transferId) setStep("payin")
           }}
         >
           Continue
@@ -862,10 +795,10 @@ export function LocalDepositWizard({
         Back
       </button>
 
-      {quote?.transactionId ? (
+      {quote?.easnerTransactionId || quote?.transactionId ? (
         <YcCompleteDepositPanel
           flowMode="fund_balance"
-          transactionId={quote.transactionId}
+          transactionId={quote.easnerTransactionId ?? quote.transactionId ?? ""}
           localPayIn={quote.localPayIn ?? preview.localPayIn}
           localCurrency={localPayInCurrency}
           creditOrReceiveAmount={quote.usdCredit ?? preview.usdCredit}
