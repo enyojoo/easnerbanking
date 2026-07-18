@@ -2,7 +2,6 @@
 
 import {
   buildYcLocalPayInCompleteRows,
-  resolveYcCrossBorderLocalPayInBreakdownForDisplay,
   type YcPayInRail,
 } from "@easner/shared"
 import { Check, Copy } from "lucide-react"
@@ -43,21 +42,6 @@ export function YcLocalPayInCompleteSummary({
   copiedField,
   onCopy,
 }: YcLocalPayInCompleteSummaryProps) {
-  const isCrossBorder = flowMode === "cross_border_send"
-  const isMomo = payInRail === "mobile_money"
-  const crossBorderBreakdown =
-    isCrossBorder && isMomo && customerRate > 0 && localPayIn > 0
-      ? resolveYcCrossBorderLocalPayInBreakdownForDisplay({
-          localPayIn,
-          payInCurrency: localCurrency,
-          receiveAmount: creditOrReceiveAmount,
-          customerRate,
-          provisionalPayIn,
-          displayProcessingFeeLocal: processingFeeLocal,
-        })
-      : null
-  const principalLocal = crossBorderBreakdown?.principalLocal
-
   const rows = buildYcLocalPayInCompleteRows({
     mode: flowMode,
     rail: payInRail,
@@ -67,11 +51,9 @@ export function YcLocalPayInCompleteSummary({
     localPayIn,
     receiveAmount: creditOrReceiveAmount,
     customerRate,
-    processingFeeLocal:
-      crossBorderBreakdown?.feeLocal ?? processingFeeLocal,
+    processingFeeLocal,
     processingFeeUsd,
     exchangeFeeUsd,
-    principalLocal,
     recipientName,
   })
 

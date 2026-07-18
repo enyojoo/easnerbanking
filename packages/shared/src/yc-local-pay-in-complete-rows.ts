@@ -1,7 +1,4 @@
 import { formatMoneyDisplay } from "./format-money-display"
-import { formatReviewRowMoneyDisplay } from "./format-review-row-money"
-import { formatSendRateLabel } from "./format-exchange-rate"
-import { shouldShowPayoutReviewFeeRow } from "./payout-review-display"
 import {
   REVIEW_ROW_LABELS,
   TLC_LOCAL_TRANSFER_METHOD,
@@ -37,7 +34,6 @@ export function buildYcLocalPayInCompleteRows(input: {
   const rows: YcLocalPayInCompleteRow[] = []
   const isFundBalance = input.mode === "fund_balance"
   const isCrossBorder = input.mode === "cross_border_send"
-  const isMomo = input.rail === "mobile_money"
   const transferMethod = isFundBalance
     ? resolveYcFundBalanceTransferMethod(input.rail)
     : TLC_LOCAL_TRANSFER_METHOD
@@ -49,61 +45,13 @@ export function buildYcLocalPayInCompleteRows(input: {
     valueMono: true,
   })
 
-  if (isCrossBorder && isMomo && input.customerRate > 0) {
-    rows.push({
-      id: "exchange-rate",
-      label: REVIEW_ROW_LABELS.exchangeRate,
-      value: formatSendRateLabel(
-        input.payInCurrency,
-        input.receiveCurrency,
-        input.customerRate,
-      ),
-    })
-    if ((input.principalLocal ?? 0) > 0) {
-      rows.push({
-        id: "deposit-amount",
-        label: REVIEW_ROW_LABELS.transferAmount,
-        value: formatReviewRowMoneyDisplay(
-          REVIEW_ROW_LABELS.transferAmount,
-          input.principalLocal!,
-          input.payInCurrency,
-        ),
-      })
-    }
-    const showFee = (input.processingFeeLocal ?? 0) > 0
-    if (showFee) {
-      rows.push({
-        id: "processing-fee",
-        label: REVIEW_ROW_LABELS.processingFee,
-        value: formatReviewRowMoneyDisplay(
-          REVIEW_ROW_LABELS.processingFee,
-          input.processingFeeLocal!,
-          input.payInCurrency,
-        ),
-      })
-    }
-    rows.push({
-      id: "total-to-pay",
-      label: REVIEW_ROW_LABELS.totalToPay,
-      value: formatReviewRowMoneyDisplay(
-        REVIEW_ROW_LABELS.totalToPay,
-        input.localPayIn,
-        input.payInCurrency,
-      ),
-      valueBold: true,
-    })
-    rows.push({
-      id: "recipient-gets",
-      label: REVIEW_ROW_LABELS.recipientGets,
-      value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
-    })
-  } else if (isFundBalance) {
+  if (isFundBalance) {
     rows.push({
       id: "amount-to-credit",
       label: REVIEW_ROW_LABELS.amountToCredit,
       value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
     })
-  } else if (isCrossBorder && !isMomo) {
+  } else if (isCrossBorder) {
     rows.push({
       id: "recipient-gets",
       label: REVIEW_ROW_LABELS.recipientGets,

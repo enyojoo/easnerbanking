@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import { buildCrossBorderSendDetailRows } from "./yc-local-pay-in-detail-rows"
 import { buildYcLocalPayInCompleteRows } from "./yc-local-pay-in-complete-rows"
 import { buildYcLocalPayInReviewRows } from "./yc-local-pay-in-review-rows"
-import { resolveYcCrossBorderLocalPayInBreakdown } from "./transactions/yc-deposit-display"
 import { TLC_LOCAL_TRANSFER_METHOD } from "./review-row-labels"
 
 describe("buildCrossBorderSendDetailRows", () => {
@@ -157,36 +156,25 @@ describe("buildYcLocalPayInCompleteRows", () => {
     ])
   })
 
-  it("mirrors fund-balance MoMo breakdown for TLC MoMo complete with footed fee", () => {
-    const breakdown = resolveYcCrossBorderLocalPayInBreakdown({
-      localPayIn: 307.94,
-      payInCurrency: "KES",
-      receiveAmount: 3221,
-      customerRate: 10.735227698797,
-      provisionalPayIn: 300.04,
-      displayProcessingFeeLocal: 9.45,
-    })
+  it("uses minimal TLC MoMo complete card like fund-balance MoMo", () => {
     const rows = buildYcLocalPayInCompleteRows({
       mode: "cross_border_send",
       rail: "mobile_money",
       transactionId: "etid456",
       payInCurrency: "KES",
       receiveCurrency: "NGN",
-      localPayIn: breakdown.totalLocal,
-      receiveAmount: 3221,
-      customerRate: 10.735227698797,
-      principalLocal: breakdown.principalLocal,
-      processingFeeLocal: breakdown.feeLocal,
+      localPayIn: 92_357,
+      receiveAmount: 965_000,
+      customerRate: 10.715354715212,
+      principalLocal: 90_058,
+      processingFeeLocal: 2763.85,
     })
-    const ids = rows.map((r) => r.id)
-    expect(ids).toContain("exchange-rate")
-    expect(ids).toContain("deposit-amount")
-    expect(rows.find((r) => r.id === "deposit-amount")?.label).toBe("Transfer amount")
-    expect(ids).toContain("processing-fee")
-    expect(ids).toContain("total-to-pay")
-    expect(ids).toContain("recipient-gets")
-    expect(breakdown.principalLocal + breakdown.feeLocal).toBe(breakdown.totalLocal)
-    expect(rows.find((r) => r.id === "total-to-pay")?.valueBold).toBe(true)
+    expect(rows.map((r) => r.id)).toEqual([
+      "transaction-id",
+      "recipient-gets",
+      "transfer-method",
+    ])
+    expect(rows.find((r) => r.id === "recipient-gets")?.value).toContain("965")
     expect(rows.find((r) => r.id === "transfer-method")?.value).toBe(TLC_LOCAL_TRANSFER_METHOD)
   })
 })
