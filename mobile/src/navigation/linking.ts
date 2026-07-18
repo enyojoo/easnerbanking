@@ -1,6 +1,7 @@
 import type { LinkingOptions } from '@react-navigation/native'
 import { getPathFromState as getPathFromStateDefault } from '@react-navigation/native'
 import * as Linking from 'expo-linking'
+import { shouldPreserveUserPathOverAuth } from './webLinkingGuard'
 
 const prefix = Linking.createURL('/')
 
@@ -27,7 +28,13 @@ function stripNonSerializableQueryParams(path: string): string {
 export const webLinking: LinkingOptions<Record<string, unknown>> = {
   prefixes: [prefix, 'https://app.easner.com', 'https://easner-web.vercel.app'],
   getPathFromState(state, options) {
-    return stripNonSerializableQueryParams(getPathFromStateDefault(state, options))
+    const path = stripNonSerializableQueryParams(getPathFromStateDefault(state, options))
+    if (shouldPreserveUserPathOverAuth(path) && typeof window !== 'undefined') {
+      const current = window.location.pathname.replace(/^\//, '')
+      const search = window.location.search
+      return search ? `${current}${search}` : current
+    }
+    return path
   },
   config: {
     screens: {

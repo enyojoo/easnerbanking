@@ -32,6 +32,7 @@ import {
 } from './src/query/refresh-money-feeds'
 import AppNavigator from './src/navigation/AppNavigator'
 import { webLinking } from './src/navigation/linking'
+import { setPreserveUserPathOverAuth } from './src/navigation/webLinkingGuard'
 import { formatWebDocumentTitle, setWebDocumentTitle } from './src/navigation/webDocumentTitle'
 import { WebIdleSessionBridge } from './src/components/WebIdleSessionBridge'
 import { markWebBfcacheRestore } from './src/lib/pinAuth'
@@ -62,7 +63,7 @@ SplashScreen.preventAutoHideAsync()
 function AppContent() {
   const navigationRef = useRef<NavigationContainerRef<any>>(null)
   const routeNameRef = useRef<string>('')
-  const { loading: authLoading } = useAuth()
+  const { loading: authLoading, user: authUser } = useAuth()
   const palette = useThemeColors()
   const getActiveRouteName = (route: any): string => {
     if (!route) return 'Unknown'
@@ -72,7 +73,7 @@ function AppContent() {
     return route.name || 'Unknown'
   }
 
-  const [splashFinished, setSplashFinished] = useState(false)
+  const [splashFinished, setSplashFinished] = useState(Platform.OS === 'web')
   const [navReady, setNavReady] = useState(false)
   /** Leaf route name — used so status bar stays light on dark chrome (e.g. onboarding) after splash hides. */
   const [activeRouteName, setActiveRouteName] = useState('')
@@ -92,28 +93,41 @@ function AppContent() {
     const html = document.documentElement
     const body = document.body
     const root = document.getElementById('root')
+    const canvas = palette.background.primary
     html.style.height = '100%'
+    html.style.backgroundColor = canvas
     body.style.height = '100%'
     body.style.margin = '0'
+    body.style.backgroundColor = canvas
     if (root) {
       root.style.height = '100%'
       root.style.display = 'flex'
       root.style.flexDirection = 'column'
       root.style.minHeight = '100%'
+      root.style.backgroundColor = canvas
     }
+    void SplashScreen.hideAsync().catch((e) => {
+      console.warn('SplashScreen.hideAsync', e)
+    })
     const onPageShow = (event: PageTransitionEvent) => {
       if (event.persisted) markWebBfcacheRestore()
     }
     window.addEventListener('pageshow', onPageShow)
     return () => window.removeEventListener('pageshow', onPageShow)
-  }, [])
+  }, [palette.background.primary])
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return
+    setPreserveUserPathOverAuth(authLoading && !authUser)
+  }, [authLoading, authUser])
 
   // Single native splash (`app.json` + `expo-splash-screen`): keep it visible until:
   // - Supabase session restore has resolved (`authLoading` false)
   // - React Navigation has mounted (`navReady` true)
   //
-  // This avoids the "blank gap" / auth flash between Splash → Login → PIN on cold starts.
+  // Web skips the opacity gate below; loading shells and PIN render immediately on the themed canvas.
   useEffect(() => {
+    if (Platform.OS === 'web') return
     if (splashFinished) return
     if (authLoading) return
     if (!navReady) return
@@ -222,7 +236,14 @@ function AppContent() {
   )
 
   return (
-    <Animated.View style={[styles.appRoot, { opacity: splashFinished ? appFadeAnim : 0 }]}>
+    <Animated.View
+      style={[
+        styles.appRoot,
+        {
+          opacity: Platform.OS === 'web' ? 1 : splashFinished ? appFadeAnim : 0,
+        },
+      ]}
+    >
       {isIosOnMac() ? (
         <View style={[styles.macFrameOuter, { backgroundColor: palette.background.primary }]}>
           <View
@@ -261,15 +282,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      const defer = () => warmBundledFlagCache()
-      if (typeof requestIdleCallback !== 'undefined') {
-        requestIdleCallback(defer)
-      } else {
-        setTimeout(defer, 0)
-      }
-      return
-    }
+    if (Platform.OS === 'web') return
     warmBundledFlagCache()
   }, [])
 

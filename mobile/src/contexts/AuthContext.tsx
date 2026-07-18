@@ -806,6 +806,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
             })
           })
           void syncIntercomSession(session)
+          if (mounted) {
+            setLoading(false)
+          }
         } else {
           // No user session - clear state immediately
           // This happens when user logs out via signOut() or session expires
@@ -821,10 +824,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       } catch (error) {
         console.error('Error handling auth state change:', error)
-        // Don't clear state on error, just log it
-      } finally {
         if (mounted) {
-          /** Do not wait for `userProfile` — PIN/MFA gates only need session + MFA state. */
           setLoading(false)
         }
       }
