@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { isBankOnrampDepositFlow, isVerificationDepositMetadata } from "@easner/shared"
+import { isBankOnrampDepositFlow, isVerificationDepositMetadata, isYcFundBalanceDepositMetadata } from "@easner/shared"
 import { dispatchTransactionNotification } from "@/lib/notifications/dispatch"
 import { normalizeDirection } from "@/lib/ledger/transactions"
 
@@ -9,6 +9,7 @@ import { normalizeDirection } from "@/lib/ledger/transactions"
  */
 export function shouldDeferBankDepositSettledPush(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== "object") return false
+  if (isYcFundBalanceDepositMetadata(metadata as Record<string, unknown>)) return false
   if (!isBankOnrampDepositFlow(metadata as Record<string, unknown>)) return false
   return !isVerificationDepositMetadata(metadata as Record<string, unknown>)
 }

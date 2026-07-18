@@ -30,7 +30,7 @@ import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-ga
 import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
 import { readPriorSweepFromMetadata, sweepEasnerRevenueFromDepositOmnibus } from "@/lib/processing-fee/fee-wallet-sweep"
 import { buildRecipientSnapshotFromRow } from "@/lib/noah/build-payout-execute-snapshot"
-import { buildYcCrossBorderOutMetadata, canTransitionYcCrossBorderStatus } from "@/lib/yellowcard/yc-ledger"
+import { buildYcCrossBorderOutMetadata, buildYcRefundExpectedPatch, canTransitionYcCrossBorderStatus, mergeYcPayoutLifecycle } from "@/lib/yellowcard/yc-ledger"
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 import { buildYcCrossBorderReportingSnapshot } from "@/lib/transactions/reporting-snapshot"
 import { generateTransactionId } from "@/lib/transaction-id"
@@ -1220,6 +1220,7 @@ export async function maybeExecuteCrossBorderLeg2(
   })
 
   if (deposit.status === "failed") {
+    const failedAt = new Date().toISOString()
     await admin
       .from("yc_transfers")
       .update({
@@ -1230,14 +1231,43 @@ export async function maybeExecuteCrossBorderLeg2(
           leg2_deposit_error: deposit.errorMessage,
           ops_alert: "cross_border_leg2_failed_refund_to_fee_wallet",
         },
-        updated_at: new Date().toISOString(),
+        updated_at: failedAt,
       })
       .eq("id", transferId)
     if (transfer.transaction_id) {
-      await admin
+      const { data: txRow } = await admin
         .from("transactions")
-        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .select(
+          "id,user_id,business_id,metadata,amount,provider,provider_transaction_id,direction,currency",
+        )
         .eq("id", transfer.transaction_id)
+        .maybeSingle()
+      if (txRow?.id) {
+        const prior = (txRow.metadata || {}) as Record<string, unknown>
+        const { upsertLedgerTransaction } = await import("@/lib/ledger/transactions")
+        await upsertLedgerTransaction(admin, {
+          userId: String(txRow.user_id),
+          businessId: txRow.business_id ? String(txRow.business_id) : null,
+          provider: String(txRow.provider ?? "yellowcard"),
+          providerTransactionId: String(
+            txRow.provider_transaction_id ?? prior.yc_sequence_id ?? transfer.leg1_sequence_id ?? transfer.id,
+          ),
+          status: "failed",
+          amount: Number(txRow.amount ?? 0),
+          currency: String(txRow.currency ?? "USD"),
+          direction: txRow.direction === "in" ? "in" : "out",
+          metadata: {
+            ...mergeYcPayoutLifecycle(prior, { failed_at: failedAt }),
+            leg2_deposit_error: deposit.errorMessage,
+            ops_alert: "cross_border_leg2_failed_refund_to_fee_wallet",
+            failure_leg: "leg2",
+            leg2_status: "failed",
+            ...buildYcRefundExpectedPatch(prior, {}),
+          },
+          occurredAt: failedAt,
+          baseCurrency: "USD",
+        })
+      }
     }
     console.error("[yc-cross-border] leg2 deposit failed — USDC refund to fee wallet; NGN recovery runbook", {
       transferId,

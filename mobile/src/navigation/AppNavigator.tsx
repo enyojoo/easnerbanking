@@ -743,6 +743,14 @@ function PinGateSetupStack() {
   )
 }
 
+function PinGateEntryStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenListeners={webStackScreenListeners}>
+      <Stack.Screen name="PinEntryGate" component={PinEntryScreen} />
+    </Stack.Navigator>
+  )
+}
+
 /** Same canvas as PIN screens — avoids blank frames during auth / PIN / main handoffs. */
 function AuthFlowLoadingShell({
   palette,
@@ -1136,7 +1144,7 @@ export default function AppNavigator() {
     return <PinGateSetupStack />
   }
 
-  if (user && (pinGate === 'main' || pinGate === 'pin')) {
+  if (Platform.OS === 'web' && (pinGate === 'main' || pinGate === 'pin')) {
     return (
       <MobileAppLockShell locked={pinGate === 'pin'}>
         <ResponsiveAppShell>
@@ -1146,13 +1154,23 @@ export default function AppNavigator() {
     )
   }
 
+  if (user && pinGate === 'pin') {
+    return <PinGateEntryStack />
+  }
+
+  if (user && pinGate === 'main') {
+    return (
+      <ResponsiveAppShell>
+        <MainStack />
+      </ResponsiveAppShell>
+    )
+  }
+
   if (user) {
     return (
-      <MobileAppLockShell locked={false}>
-        <ResponsiveAppShell>
-          <MainStack />
-        </ResponsiveAppShell>
-      </MobileAppLockShell>
+      <ResponsiveAppShell>
+        <MainStack />
+      </ResponsiveAppShell>
     )
   }
 

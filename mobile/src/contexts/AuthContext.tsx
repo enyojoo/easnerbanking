@@ -807,7 +807,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           })
           void syncIntercomSession(session)
           if (mounted) {
-            setLoading(false)
+            if (Platform.OS === 'web') {
+              setLoading(false)
+            }
           }
         } else {
           // No user session - clear state immediately
@@ -825,6 +827,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } catch (error) {
         console.error('Error handling auth state change:', error)
         if (mounted) {
+          setLoading(false)
+        }
+      } finally {
+        if (mounted && Platform.OS !== 'web') {
+          /** Native: end bootstrap once auth event handling completes (unchanged pre-web fix). */
           setLoading(false)
         }
       }

@@ -20,6 +20,7 @@ import {
   buildYcBalancePayoutOutMetadata,
   buildYcParentPayoutCryptoDepositTracking,
   buildYcRefundExpectedPatch,
+  mergeYcPayoutLifecycle,
   ycPendingPayoutProviderTransactionId,
 } from "@/lib/yellowcard/yc-ledger"
 import { executeYcBalancePayoutCryptoLeg } from "@/lib/yellowcard/payout-execute"
@@ -369,13 +370,27 @@ export async function executeYcBalancePayout(
   try {
     await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId })
   } catch (e) {
-    await admin
-      .from("transactions")
-      .update({ status: "failed", updated_at: new Date().toISOString() })
-      .eq("id", transactionId)
+    const debitError = e instanceof Error ? e.message : "wallet_debit_failed"
+    await upsertLedgerTransaction(admin, {
+      userId,
+      businessId,
+      provider: "yellowcard",
+      providerTransactionId: pendingPtid,
+      status: "failed",
+      amount: totalDebited,
+      currency: "USD",
+      direction: "out",
+      metadata: mergeYcPayoutLifecycle(
+        { ...metadata, failure_reason: debitError },
+        { failed_at: now },
+      ),
+      occurredAt: now,
+      baseCurrency: "USD",
+      asset: "USDC",
+    })
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "wallet_debit_failed",
+      error: debitError,
     }
   }
 

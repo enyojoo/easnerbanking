@@ -9,10 +9,14 @@ type MobileAppLockShellProps = {
 }
 
 /**
- * Full-screen PIN gate (business-style) while keeping the main navigator mounted
- * so browser tab switches and idle unlock do not reset navigation state.
+ * Web-only: full-screen PIN while keeping the main navigator mounted so tab return
+ * and idle unlock do not reset navigation state. Native uses PinGateEntryStack instead.
  */
 export function MobileAppLockShell({ locked, children }: MobileAppLockShellProps) {
+  if (Platform.OS !== 'web') {
+    return <>{children}</>
+  }
+
   return (
     <View style={styles.root}>
       <View
