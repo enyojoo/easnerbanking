@@ -36,7 +36,7 @@ Target mental model: Wise / Revolut / Mercury — one visible wait before review
 | Wallet send | Send (balance) | LI.FI bridge | Amount **Continue** | same (+ LI.FI artifact) | same (stored route) | `wallet_send_sessions` |
 | Easetag P2P | Send (balance) | Internal | *No lock* | — | Wallet-to-wallet transfer | — |
 
-**MoMo pattern:** Phone + network must exist before lock is meaningful → lock deferred to review (web TLC / web fund-balance MoMo) or after MoMo setup screen (mobile TLC).
+**MoMo pattern:** Phone + network must exist before lock is meaningful → lock deferred to review (web TLC / web fund-balance MoMo) or after MoMo setup screen (mobile TLC). **Never call `/confirm` while typing on the MoMo setup screen** — each confirm creates a YC transfer keyed by phone number.
 
 ---
 

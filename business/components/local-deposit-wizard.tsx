@@ -27,7 +27,6 @@ import {
   computeYcFundBalancePrincipalLocalPayIn,
   resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   normalizeYcMomoPhone,
-  useDebouncedValue,
   type NgLocalIdType,
   type YcRateClientRow,
 } from "@easner/shared"
@@ -358,18 +357,6 @@ export function LocalDepositWizard({
     [momoPhone, defaultPhone, momoNetworkId],
   )
 
-  const momoSetupConfirmPrefetchKey =
-    step === "momo_setup" && isMomo && momoReady
-      ? [
-          residenceCountry,
-          localPayInCurrency,
-          amountMode,
-          enteredAmount,
-          momoPhone.trim() || defaultPhone.trim(),
-          momoNetworkId,
-        ].join("|")
-      : ""
-
   const reviewConfirmKey =
     step === "review" && enteredAmount > 0 && (!isMomo || momoReady)
       ? [
@@ -382,14 +369,6 @@ export function LocalDepositWizard({
           isMomo ? momoNetworkId : "",
         ].join("|")
       : ""
-
-  const [debouncedMomoSetupConfirmKey] = useDebouncedValue(momoSetupConfirmPrefetchKey)
-
-  useEffect(() => {
-    if (!debouncedMomoSetupConfirmKey) return
-    void confirmOrder({ silent: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedMomoSetupConfirmKey])
 
   useEffect(() => {
     if (!reviewConfirmKey) return

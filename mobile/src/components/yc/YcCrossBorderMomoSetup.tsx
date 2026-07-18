@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -19,10 +19,6 @@ import {
   ensurePayInNetworksCached,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
-import {
-  ensureCrossBorderOrderConfirmed,
-  type CrossBorderQuoteStashMeta,
-} from '../../lib/sendFlowCrossBorderQuote'
 import { useAuth } from '../../contexts/AuthContext'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 
@@ -98,34 +94,6 @@ export function YcCrossBorderMomoSetup({
   const momoReady = Boolean(phone.trim() && networkId)
   const selectedNetwork = networks.find((n) => n.id === networkId)
   const rail: YcPayInRail = 'mobile_money'
-
-  const quoteMeta = useMemo((): CrossBorderQuoteStashMeta | null => {
-    if (!momoReady || !payInCountry || !payInCurrency) return null
-    return {
-      recipientId: recipient.id,
-      payInCurrency,
-      payInCountry,
-      payInRail: rail,
-      receiveAmount,
-      sourcePhone: phone.trim(),
-      networkId,
-      sourceNetworkName: selectedNetwork?.name,
-    }
-  }, [
-    momoReady,
-    recipient.id,
-    payInCurrency,
-    payInCountry,
-    receiveAmount,
-    phone,
-    networkId,
-    selectedNetwork?.name,
-  ])
-
-  useEffect(() => {
-    if (!quoteMeta) return
-    void ensureCrossBorderOrderConfirmed(quoteMeta)
-  }, [quoteMeta])
 
   const onContinue = () => {
     if (!momoReady) return

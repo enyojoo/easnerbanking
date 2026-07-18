@@ -19,11 +19,7 @@ import {
   readCachedYcPayInNetworks,
 } from "@/lib/yc-local-deposit-cache"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { normalizeYcMomoPhone, REVIEW_ROW_LABELS, useDebouncedValue } from "@easner/shared"
-import {
-  ensureCrossBorderOrderConfirmed,
-  type CrossBorderQuoteStashMeta,
-} from "@/lib/yc-cross-border-quote-cache"
+import { normalizeYcMomoPhone, REVIEW_ROW_LABELS } from "@easner/shared"
 
 function isYcCrossBorderMomo(state: SendFlowState | null): boolean {
   return (
@@ -46,36 +42,6 @@ export default function SendMomoSetupPage() {
   const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
   const momoReady = Boolean(momoPhone.trim() && momoNetworkId)
   const selectedNetwork = momoNetworks.find((n) => n.id === momoNetworkId)
-
-  const momoConfirmPrefetchKey =
-    state && momoReady && payInCountry && payInCurrency
-      ? [
-          state.recipient.id,
-          payInCurrency,
-          payInCountry,
-          state.amount,
-          momoPhone.trim(),
-          momoNetworkId,
-        ].join("|")
-      : ""
-
-  const [debouncedMomoConfirmPrefetchKey] = useDebouncedValue(momoConfirmPrefetchKey)
-
-  useEffect(() => {
-    if (!debouncedMomoConfirmPrefetchKey || !state || !payInCountry || !payInCurrency) return
-    const meta: CrossBorderQuoteStashMeta = {
-      recipientId: state.recipient.id,
-      payInCurrency,
-      payInCountry,
-      payInRail: "mobile_money",
-      receiveAmount: state.amount,
-      sourcePhone: momoPhone.trim(),
-      networkId: momoNetworkId,
-      sourceNetworkName: selectedNetwork?.name,
-    }
-    void ensureCrossBorderOrderConfirmed(meta)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedMomoConfirmPrefetchKey])
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
