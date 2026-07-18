@@ -86,6 +86,26 @@ function deriveRecipientName(
   return null
 }
 
+function mergePayoutReviewDisplayProcessingFeeLocal(
+  review: GlobalPayoutReviewSnapshot,
+  meta: Record<string, unknown>,
+): GlobalPayoutReviewSnapshot {
+  const onReview = roundFiat(review.display_processing_fee_local)
+  if (onReview != null && onReview > 0) return review
+  const fromMeta = roundFiat(Number(meta.display_processing_fee_local))
+  if (fromMeta != null && fromMeta > 0) {
+    return { ...review, display_processing_fee_local: fromMeta }
+  }
+  const raw = meta.payout_review
+  if (raw && typeof raw === "object") {
+    const fromRaw = roundFiat(Number((raw as Record<string, unknown>).display_processing_fee_local))
+    if (fromRaw != null && fromRaw > 0) {
+      return { ...review, display_processing_fee_local: fromRaw }
+    }
+  }
+  return review
+}
+
 function needsPayoutReviewReconstruction(review: GlobalPayoutReviewSnapshot): boolean {
   const hasFx =
     review.send_currency.toUpperCase() !== review.receive_currency.toUpperCase()
@@ -103,7 +123,9 @@ function derivePayoutReview(
   ledgerCurrency: string,
 ): GlobalPayoutReviewSnapshot | null {
   const fromMeta = normalizePayoutReviewSnapshot(meta.payout_review)
-  if (fromMeta && !needsPayoutReviewReconstruction(fromMeta)) return fromMeta
+  if (fromMeta && !needsPayoutReviewReconstruction(fromMeta)) {
+    return mergePayoutReviewDisplayProcessingFeeLocal(fromMeta, meta)
+  }
 
   const receiveAmount = roundFiat(
     typeof meta.receive_amount === "number" ? meta.receive_amount : Number(meta.receive_amount),
@@ -301,6 +323,14 @@ function derivePayoutReview(
     ...(fromMeta?.noah_floor != null ? { noah_floor: fromMeta.noah_floor } : {}),
     ...(fromMeta?.noah_send_amount != null ? { noah_send_amount: fromMeta.noah_send_amount } : {}),
     ...(fromMeta?.channel_cost != null ? { channel_cost: fromMeta.channel_cost } : {}),
+    ...(() => {
+      const displayFeeLocal =
+        roundFiat(fromMeta?.display_processing_fee_local) ??
+        roundFiat(Number(meta.display_processing_fee_local))
+      return displayFeeLocal != null && displayFeeLocal > 0
+        ? { display_processing_fee_local: displayFeeLocal }
+        : {}
+    })(),
   }
 }
 

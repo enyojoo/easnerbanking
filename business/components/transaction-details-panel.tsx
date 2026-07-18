@@ -303,10 +303,12 @@ export function TransactionDetailsPanel({
       ? transaction.payoutReview.display_processing_fee_local != null &&
         transaction.payoutReview.display_processing_fee_local > 0
         ? transaction.payoutReview.display_processing_fee_local
-        : computeDisplayProcessingFee({
-            processingFee: transaction.payoutReview.processing_fee,
-            exchangeFee: transaction.payoutReview.exchange_fee,
-          })
+        : Number(transaction.metadata?.display_processing_fee_local) > 0
+          ? Number(transaction.metadata.display_processing_fee_local)
+          : computeDisplayProcessingFee({
+              processingFee: transaction.payoutReview.processing_fee,
+              exchangeFee: transaction.payoutReview.exchange_fee,
+            })
       : 0
 
   return (

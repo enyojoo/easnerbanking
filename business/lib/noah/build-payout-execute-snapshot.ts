@@ -69,5 +69,9 @@ export function normalizePayoutReviewSnapshot(
     ...(o.execution_model === "direct_turnkey" || o.execution_model === "lifi_bridge"
       ? { execution_model: o.execution_model }
       : {}),
+    ...(Number.isFinite(Number(o.display_processing_fee_local)) &&
+    Number(o.display_processing_fee_local) > 0
+      ? { display_processing_fee_local: Number(o.display_processing_fee_local) }
+      : {}),
   }
 }

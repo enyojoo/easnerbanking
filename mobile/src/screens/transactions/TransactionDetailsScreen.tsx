@@ -831,10 +831,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       exchangeFee: transaction.payout_review.exchange_fee,
     })
   const payoutLocalFee =
-    payoutReviewFlow === 'local_pay_in' &&
-    transaction.payout_review?.display_processing_fee_local != null &&
-    transaction.payout_review.display_processing_fee_local > 0
-      ? transaction.payout_review.display_processing_fee_local
+    payoutReviewFlow === 'local_pay_in'
+      ? transaction.payout_review?.display_processing_fee_local != null &&
+        transaction.payout_review.display_processing_fee_local > 0
+        ? transaction.payout_review.display_processing_fee_local
+        : Number(transaction.metadata?.display_processing_fee_local) > 0
+          ? Number(transaction.metadata.display_processing_fee_local)
+          : null
       : null
   const payoutDisplayProcessingFee = transaction.payout_review
     ? payoutLocalFee ??
