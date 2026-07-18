@@ -63,6 +63,7 @@ export type OfficeOverviewActivity = {
   user?: string
   userKind?: "business" | "individual"
   amount?: string
+  impactFormatted?: string
 }
 
 export type OfficeOverviewRecentTransaction = {
@@ -74,6 +75,9 @@ export type OfficeOverviewRecentTransaction = {
   status: string
   statusLabel: string
   label: string
+  productLabel?: string
+  ycMode?: string | null
+  payInRail?: string | null
   who: string
   /** @deprecated Use `who` */
   user: string
@@ -84,7 +88,16 @@ export type OfficeOverviewRecentTransaction = {
   balanceAmount: number
   balanceCurrency: string | null
   balanceFormatted: string | null
+  impactFormatted?: string | null
+  reportingUsdAmount?: number | null
+  reportingEurAmount?: number | null
   occurred_at: string | null
+}
+
+export type OfficeYcVolumeBreakdown = {
+  fund_balance: { count: number; usdVolume: number }
+  cross_border_send: { count: number; usdVolume: number }
+  balance_payout: { count: number; usdVolume: number }
 }
 
 export type OfficeOverviewResponse = {
@@ -93,6 +106,7 @@ export type OfficeOverviewResponse = {
   kpis: OfficeOverviewKpis
   topCurrencies: OfficeOverviewTopCurrency[]
   processingBuckets: OfficeOverviewProcessingBucket[]
+  ycVolumeBreakdown?: OfficeYcVolumeBreakdown
   recentActivity: OfficeOverviewActivity[]
   recentTransactions: OfficeOverviewRecentTransaction[]
   links: {

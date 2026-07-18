@@ -4,10 +4,7 @@ import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layo
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { officeFetch } from "@/lib/api-client"
-import { useQuery } from "@tanstack/react-query"
-import { officeKeys } from "@/lib/query/keys"
-import { useOfficeAdminEnabled } from "@/hooks/queries"
+import { useOfficeTerminalSessions, useQueryInitialLoading } from "@/hooks/queries"
 
 type Row = {
   id: string
@@ -33,21 +30,16 @@ function fmtFiat(amount: number | string | null, currency: string | null) {
 }
 
 export default function TerminalPage() {
-  const { enabled } = useOfficeAdminEnabled()
-  const { data: rows = [], error, isPending } = useQuery({
-    queryKey: officeKeys.terminalSessions(),
-    enabled,
-    queryFn: async () => {
-      const r = await officeFetch("/api/admin/business/terminal-sessions")
-      const d = (await r.json()) as { sessions?: Row[]; error?: string }
-      if (d.error) throw new Error(d.error)
-      return d.sessions ?? []
-    },
-    staleTime: 60_000,
-  })
+  const terminalQuery = useOfficeTerminalSessions()
+  const rows = (terminalQuery.data ?? []) as Row[]
 
-  const message = error instanceof Error ? error.message : error ? String(error) : null
-  const loading = isPending && rows.length === 0
+  const message =
+    terminalQuery.error instanceof Error
+      ? terminalQuery.error.message
+      : terminalQuery.error
+        ? String(terminalQuery.error)
+        : null
+  const loading = useQueryInitialLoading(terminalQuery.isPending, terminalQuery.data, rows)
 
   return (
     <OfficeDashboardLayout>

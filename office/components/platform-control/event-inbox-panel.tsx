@@ -1,11 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { officeFetch } from "@/lib/api-client"
-import { officeKeys } from "@/lib/query/keys"
-import { useOfficeAdminEnabled } from "@/hooks/queries"
-import type { OfficeEventInboxResponse } from "@/lib/types/office-overview"
+import { useOfficeEventInbox, useQueryInitialLoading } from "@/hooks/queries"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -35,28 +31,12 @@ function formatTs(iso: string | null | undefined) {
 }
 
 export function EventInboxPanel() {
-  const { enabled } = useOfficeAdminEnabled()
   const [providerFilter, setProviderFilter] = useState<(typeof PROVIDERS)[number]>("all")
   const [statusFilter, setStatusFilter] = useState<(typeof STATUSES)[number]>("all")
 
-  const query = useQuery({
-    queryKey: officeKeys.eventInbox(providerFilter, statusFilter),
-    enabled,
-    staleTime: 30_000,
-    queryFn: async (): Promise<OfficeEventInboxResponse> => {
-      const params = new URLSearchParams({ limit: "200" })
-      if (providerFilter !== "all") params.set("provider", providerFilter)
-      if (statusFilter !== "all") params.set("status", statusFilter)
-      const r = await officeFetch(`/api/admin/office/event-inbox?${params.toString()}`)
-      const body = (await r.json()) as OfficeEventInboxResponse & { error?: string }
-      if (!r.ok || body.error) {
-        throw new Error(typeof body.error === "string" ? body.error : r.statusText || "Failed to load webhook inbox")
-      }
-      return body
-    },
-  })
+  const query = useOfficeEventInbox(providerFilter, statusFilter)
 
-  const loading = query.isPending && !query.data
+  const loading = useQueryInitialLoading(query.isPending, query.data)
   const counts = query.data?.counts
   const events = query.data?.events ?? []
 
@@ -80,9 +60,9 @@ export function EventInboxPanel() {
           </span>
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+        <div className="flex flex-wrap gap-2">
           <Select value={providerFilter} onValueChange={(v) => setProviderFilter(v as (typeof PROVIDERS)[number])}>
-            <SelectTrigger className="w-[180px] bg-white">
+            <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Provider" />
             </SelectTrigger>
             <SelectContent>
@@ -94,7 +74,7 @@ export function EventInboxPanel() {
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as (typeof STATUSES)[number])}>
-            <SelectTrigger className="w-[180px] bg-white">
+            <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -109,47 +89,41 @@ export function EventInboxPanel() {
       </div>
 
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Recent events</CardTitle>
+        <CardHeader>
+          <CardTitle>Recent events</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent>
           {loading ? (
-            <Skeleton className="h-48 w-full" />
-          ) : query.error ? (
-            <p className="text-sm text-destructive">
-              {query.error instanceof Error ? query.error.message : String(query.error)}
-            </p>
+            <Skeleton className="h-40 w-full" />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Received</TableHead>
                   <TableHead>Provider</TableHead>
-                  <TableHead>Event type</TableHead>
-                  <TableHead>Event ID</TableHead>
+                  <TableHead>Event</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Received</TableHead>
                   <TableHead>Error</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {events.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-sm whitespace-nowrap">{formatTs(row.received_at)}</TableCell>
-                    <TableCell className="font-medium uppercase text-sm">{row.provider}</TableCell>
-                    <TableCell className="text-sm max-w-[200px] truncate">{row.event_type || "—"}</TableCell>
-                    <TableCell className="font-mono text-xs max-w-[220px] truncate">{row.event_id}</TableCell>
+                {events.map((event) => (
+                  <TableRow key={event.id}>
+                    <TableCell>{event.provider}</TableCell>
+                    <TableCell className="font-mono text-xs">{event.event_type ?? event.event_id}</TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
+                      <Badge variant={statusVariant(event.status)}>{event.status}</Badge>
                     </TableCell>
-                    <TableCell className="text-xs text-destructive max-w-[240px] truncate" title={row.error || undefined}>
-                      {row.error || "—"}
+                    <TableCell>{formatTs(event.received_at)}</TableCell>
+                    <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
+                      {event.error ?? "—"}
                     </TableCell>
                   </TableRow>
                 ))}
                 {events.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
-                      No webhook events match these filters.
+                    <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                      No events match these filters.
                     </TableCell>
                   </TableRow>
                 )}

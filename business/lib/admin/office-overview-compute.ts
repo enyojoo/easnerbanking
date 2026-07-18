@@ -1,5 +1,19 @@
-import { formatMoneyDisplay, isVerificationDepositMetadata, toEasnerTransactionPrimaryLabel } from "@easner/shared"
+import {
+  formatMoneyDisplay,
+  isVerificationDepositMetadata,
+  resolveAccountImpactAmount,
+  toEasnerTransactionPrimaryLabel,
+  type ReportingFxRate,
+} from "@easner/shared"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
+
+export type OfficeYcMode = "fund_balance" | "cross_border_send" | "balance_payout" | null
+
+export type YcVolumeBreakdown = {
+  fund_balance: { count: number; usdVolume: number }
+  cross_border_send: { count: number; usdVolume: number }
+  balance_payout: { count: number; usdVolume: number }
+}
 
 export type TxRow = {
   id: string
@@ -90,6 +104,79 @@ function asBalanceCurrency(raw: string | null | undefined): BalanceCurrencyCode 
   if (code === "USDC") return "USD"
   if (code === "EURC") return "EUR"
   return BALANCE_CURRENCIES.has(code as BalanceCurrencyCode) ? (code as BalanceCurrencyCode) : null
+}
+
+function txRowAsRecord(tx: TxRow): Record<string, unknown> {
+  return tx as Record<string, unknown>
+}
+
+/** Wallet impact for volume KPIs — mirrors business dashboard `resolveAccountImpactAmount`. */
+export function resolveOfficeAccountImpact(tx: TxRow) {
+  return resolveAccountImpactAmount(txRowAsRecord(tx))
+}
+
+export function resolveOfficeYcMode(tx: TxRow): OfficeYcMode {
+  const mode = String(tx.metadata?.yc_mode ?? "").trim()
+  if (mode === "fund_balance" || mode === "cross_border_send" || mode === "balance_payout") {
+    return mode
+  }
+  return null
+}
+
+export function resolveOfficePayInRail(tx: TxRow): "bank_transfer" | "mobile_money" | null {
+  const rail = String(tx.metadata?.pay_in_rail ?? "").trim()
+  if (rail === "bank_transfer" || rail === "mobile_money") return rail
+  return null
+}
+
+export function resolveOfficeProductLabel(tx: TxRow): string {
+  const ycMode = resolveOfficeYcMode(tx)
+  const provider = String(tx.provider ?? "").trim().toLowerCase()
+  if (ycMode === "fund_balance") return "Fund balance"
+  if (ycMode === "cross_border_send") return "Cross-border"
+  if (ycMode === "balance_payout" && provider === "yellowcard") return "YC payout"
+  if (provider === "yellowcard") return "Yellowcard"
+  if (provider === "noah") {
+    return normalizeDirection(tx.direction) === "in" ? "Bank deposit" : "Noah payout"
+  }
+  if (provider === "easner_internal") return "Easetag"
+  return officeTxFlowLabel(tx)
+}
+
+export function resolveOfficeReportingUsdAmount(tx: TxRow): number | null {
+  const impact = resolveOfficeAccountImpact(tx)
+  if (!impact || impact.currency !== "USD") return null
+  return Number.isFinite(impact.amount) && impact.amount > 0 ? impact.amount : null
+}
+
+export function resolveOfficeReportingEurAmount(tx: TxRow): number | null {
+  const impact = resolveOfficeAccountImpact(tx)
+  if (!impact || impact.currency !== "EUR") return null
+  return Number.isFinite(impact.amount) && impact.amount > 0 ? impact.amount : null
+}
+
+export function formatOfficeTxImpactAmount(tx: TxRow): string {
+  const impact = resolveOfficeAccountImpact(tx)
+  if (impact && Number.isFinite(impact.amount) && impact.amount > 0) {
+    const currency = asBalanceCurrency(impact.currency)
+    if (currency) return formatMoneyDisplay(impact.amount, currency)
+  }
+  return formatOfficeTxBalanceAmount(tx)
+}
+
+export function resolveOfficeReportingAmount(
+  tx: TxRow,
+  targetBase: BalanceCurrencyCode,
+  _fxRates: ReportingFxRate[] = [],
+) {
+  const impact = resolveOfficeAccountImpact(tx)
+  if (!impact || !Number.isFinite(impact.amount) || impact.amount <= 0) return null
+  const currency = asBalanceCurrency(impact.currency)
+  if (!currency) return null
+  if (currency === targetBase) {
+    return { amount: impact.amount, currency: targetBase, source: impact.source }
+  }
+  return null
 }
 
 function readPayoutReview(meta: Record<string, unknown>) {
@@ -252,6 +339,8 @@ function isVerificationDepositTx(tx: TxRow): boolean {
 /** @deprecated Use volumeBalance KPI — kept for tests migrating off USD-only helper. */
 export function volumeUsdContribution(tx: TxRow): number {
   if (isVerificationDepositTx(tx)) return 0
+  const usd = resolveOfficeReportingUsdAmount(tx)
+  if (usd != null) return usd
   const { balanceAmount, balanceCurrency } = resolveOfficeTxPresentation(tx)
   return balanceCurrency === "USD" && Number.isFinite(balanceAmount) ? balanceAmount : 0
 }
@@ -320,23 +409,53 @@ export function createEmptyVolumeBalance(): VolumeBalanceKpi {
   return { USD: emptyVolumeSide(), EUR: emptyVolumeSide() }
 }
 
+export function createEmptyYcVolumeBreakdown(): YcVolumeBreakdown {
+  return {
+    fund_balance: { count: 0, usdVolume: 0 },
+    cross_border_send: { count: 0, usdVolume: 0 },
+    balance_payout: { count: 0, usdVolume: 0 },
+  }
+}
+
 export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
   const volumeBalance = createEmptyVolumeBalance()
+  const ycVolumeBreakdown = createEmptyYcVolumeBreakdown()
   const byCode = new Map<string, { code: string; count: number; totalAmount: number; dataOnly: boolean }>()
 
   for (const t of transactions) {
-    const pres = resolveOfficeTxPresentation(t)
     const direction = normalizeDirection(t.direction)
     const verificationDeposit = isVerificationDepositTx(t)
 
-    if (!verificationDeposit && pres.balanceCurrency && pres.balanceAmount > 0) {
-      const side = volumeBalance[pres.balanceCurrency]
-      if (direction === "in") {
-        side.moneyIn += pres.balanceAmount
-      } else {
-        side.moneyOut += pres.balanceAmount
+    if (!verificationDeposit) {
+      let impact = resolveOfficeAccountImpact(t)
+      if (!impact) {
+        const pres = resolveOfficeTxPresentation(t)
+        if (pres.balanceCurrency && pres.balanceAmount > 0) {
+          impact = {
+            amount: pres.balanceAmount,
+            currency: pres.balanceCurrency,
+            source: "metadata",
+          }
+        }
       }
-      side.total = side.moneyIn + side.moneyOut
+      if (impact && Number.isFinite(impact.amount) && impact.amount > 0) {
+        const currency = asBalanceCurrency(impact.currency)
+        if (currency) {
+          const side = volumeBalance[currency]
+          if (direction === "in") {
+            side.moneyIn += impact.amount
+          } else {
+            side.moneyOut += impact.amount
+          }
+          side.total = side.moneyIn + side.moneyOut
+        }
+        const ycMode = resolveOfficeYcMode(t)
+        if (ycMode && currency === "USD") {
+          const bucket = ycVolumeBreakdown[ycMode]
+          bucket.count += 1
+          bucket.usdVolume += impact.amount
+        }
+      }
     }
 
     for (const bucket of extractCurrencyBuckets(t)) {
@@ -399,7 +518,7 @@ export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
 
   const legacyUsdVolume = volumeBalance.USD.total
 
-  return { volumeBalance, totalVolumeUsd: legacyUsdVolume, topCurrencies, processingBuckets }
+  return { volumeBalance, ycVolumeBreakdown, totalVolumeUsd: legacyUsdVolume, topCurrencies, processingBuckets }
 }
 
 export function processRecentActivity(transactions: TxRow[], limit = 10) {
@@ -424,12 +543,13 @@ export function processRecentActivity(transactions: TxRow[], limit = 10) {
       id: tx.id,
       type: `transaction_${status}`,
       message,
-      productLabel: primary,
+      productLabel: resolveOfficeProductLabel(tx),
       statusLabel: activityStatusSuffix(status),
       user: account.label,
       userKind: account.kind,
       who: account.label,
       amount,
+      impactFormatted: formatOfficeTxImpactAmount(tx) || undefined,
       displayAmount: pres.displayAmount,
       displayCurrency: pres.displayCurrency,
       balanceAmount: pres.balanceAmount,
@@ -456,6 +576,7 @@ export function buildRecentTransactionsPreview(transactions: TxRow[], limit = 10
         pres.balanceCurrency && pres.balanceAmount > 0
           ? formatMoneyDisplay(pres.balanceAmount, pres.balanceCurrency)
           : null
+      const impactFormatted = formatOfficeTxImpactAmount(tx)
 
       return {
         id: tx.id,
@@ -466,6 +587,9 @@ export function buildRecentTransactionsPreview(transactions: TxRow[], limit = 10
         status: normalizeStatus(tx.status),
         statusLabel: activityStatusSuffix(tx.status),
         label: activityPrimaryLabel(tx),
+        productLabel: resolveOfficeProductLabel(tx),
+        ycMode: resolveOfficeYcMode(tx),
+        payInRail: resolveOfficePayInRail(tx),
         user: account.label || "—",
         userKind: account.kind,
         who: account.label || "—",
@@ -475,6 +599,9 @@ export function buildRecentTransactionsPreview(transactions: TxRow[], limit = 10
         balanceAmount: pres.balanceAmount,
         balanceCurrency: pres.balanceCurrency,
         balanceFormatted,
+        impactFormatted: impactFormatted || null,
+        reportingUsdAmount: resolveOfficeReportingUsdAmount(tx),
+        reportingEurAmount: resolveOfficeReportingEurAmount(tx),
         occurred_at: tx.occurred_at || tx.created_at || null,
       }
     })

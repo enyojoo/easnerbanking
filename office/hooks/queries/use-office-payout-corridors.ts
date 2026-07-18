@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { payoutCorridorsApi, type PayoutCorridorAdminRow } from "@/lib/payout-corridors-api"
 import { officeKeys } from "@/lib/query/keys"
-import { OFFICE_REFERENCE_STALE_MS } from "./constants"
+import { officeReferenceQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
 export function useOfficePayoutCorridors() {
@@ -12,7 +12,7 @@ export function useOfficePayoutCorridors() {
   return useQuery({
     queryKey: officeKeys.payoutCorridors(),
     enabled,
-    staleTime: OFFICE_REFERENCE_STALE_MS,
+    ...officeReferenceQueryDefaults,
     queryFn: (): Promise<PayoutCorridorAdminRow[]> => payoutCorridorsApi.list({ annotateProviders: true }),
   })
 }

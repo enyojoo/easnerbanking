@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useState, useEffect, useMemo } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,44 +35,24 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { officeFetch } from "@/lib/api-client"
-import { useAuth } from "@/lib/auth-context"
 import { officeKeys } from "@/lib/query/keys"
-import type { CommunicationPreferences } from "@easner/shared"
+import {
+  useOfficeAdminEnabled,
+  useOfficeUserMfa,
+  useOfficeUserTransactions,
+  useOfficeUsersDirectory,
+  useQueryInitialLoading,
+  type OfficeUserRow,
+} from "@/hooks/queries"
+import { OfficeTransactionDetailPanel } from "@/components/transactions/office-transaction-detail-panel"
+import type { OfficeTransaction } from "@/lib/types/office-transaction"
+import {
+  ledgerTransactionStatusDisplay,
+  type LedgerTransactionStatusTone,
+} from "@easner/shared"
 
 /** Mirrors `public.users` (+ `email_confirmed_at` merged from auth). */
-interface UserData {
-  id: string
-  email: string | null
-  full_name: string | null
-  phone: string | null
-  date_of_birth: string | null
-  avatar_url: string | null
-  role: string
-  easner_business_id: string | null
-  created_at: string
-  updated_at: string
-  noah_customer_id?: string | null
-  noah_kyc_status?: string | null
-  noah_kyc_rejection_reasons?: unknown
-  kyc_id_type?: string | null
-  kyc_verified_at?: string | null
-  noah_usd_virtual_account_id?: string | null
-  noah_eur_virtual_account_id?: string | null
-  noah_gbp_virtual_account_id?: string | null
-  noah_kyb_customer_id?: string | null
-  noah_kyb_status?: string | null
-  /** From `public.businesses.name` via admin office users API when `easner_business_id` is set. */
-  linkedBusinessName?: string | null
-  enabled_extra_account_currencies?: string[]
-  email_confirmed_at?: string | null
-  /** Parsed from API (not raw jsonb). */
-  communicationPreferences?: CommunicationPreferences
-  hasExpoPushToken?: boolean
-  totalTransactions: number
-  totalVolume: number
-  verificationStatus?: string
-  noahKycStatus?: string
-}
+type UserData = OfficeUserRow
 
 function userDisplayName(user: Pick<UserData, "id" | "email" | "full_name">) {
   const n = (user.full_name || "").trim()
@@ -114,96 +94,85 @@ function NoahVerificationBadge({ rawStatus }: { rawStatus: string }) {
   return <Badge variant={config.variant}>{config.text}</Badge>
 }
 
-interface TransactionData {
-  id: string
-  created_at: string
-  provider?: string | null
-  provider_tx_id?: string | null
-  direction?: "in" | "out" | null
-  amount?: number | null
-  currency?: string | null
-  status: string
+interface TransactionData extends OfficeTransaction {}
+
+function formatProviderLabel(provider: string | null | undefined): string {
+  const raw = String(provider || "").trim()
+  if (!raw) return "—"
+  if (raw.toLowerCase() === "easner_internal") return "Easetag"
+  if (raw.toLowerCase() === "yellowcard") return "Yellowcard"
+  if (raw.toLowerCase() === "noah") return "Noah"
+  return raw
+}
+
+function transactionStatusBadgeVariant(
+  tone: LedgerTransactionStatusTone,
+): "emerald" | "amber" | "oxblood" | "slate" | "outline" {
+  switch (tone) {
+    case "completed":
+      return "emerald"
+    case "pending":
+      return "amber"
+    case "processing":
+      return "outline"
+    case "failed":
+      return "oxblood"
+    case "cancelled":
+      return "slate"
+    default:
+      return "outline"
+  }
 }
 
 export default function AdminUsersPage() {
   const queryClient = useQueryClient()
-  const { user, isAdmin, loading: authLoading } = useAuth()
+  const { authLoading } = useOfficeAdminEnabled()
   const [searchTerm, setSearchTerm] = useState("")
   const [roleFilter, setRoleFilter] = useState<"all" | "individual" | "business">("all")
   const [verificationFilter, setVerificationFilter] = useState("all")
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
-  const [userTransactions, setUserTransactions] = useState<TransactionData[]>([])
-  const usersEnabled = !authLoading && Boolean(isAdmin && user)
-  const directoryQuery = useQuery({
-    queryKey: officeKeys.users(),
-    enabled: usersEnabled,
-    staleTime: 60_000,
-    gcTime: 5 * 60_000,
-    queryFn: async () => {
-      const r = await officeFetch("/api/admin/office/users")
-      const d = (await r.json()) as { users?: unknown[]; error?: string }
-      if (!r.ok || d.error) {
-        throw new Error(typeof d.error === "string" ? d.error : "Failed to load users")
-      }
-      const rows = d.users ?? []
-      return (rows as Record<string, unknown>[]).map((row) => {
-        const id = String(row.id)
-        const noahKycStatus = String(row.noah_kyc_status || "not_started")
-        return {
-          ...row,
-          id,
-          email: (row.email as string | null) ?? null,
-          full_name: (row.full_name as string | null) ?? null,
-          phone: (row.phone as string | null) ?? null,
-          date_of_birth: (row.date_of_birth as string | null) ?? null,
-          avatar_url: (row.avatar_url as string | null) ?? null,
-          role: String(row.role || "individual"),
-          easner_business_id: (row.easner_business_id as string | null) ?? null,
-          created_at: String(row.created_at),
-          updated_at: String(row.updated_at),
-          noah_customer_id: row.noah_customer_id as string | null | undefined,
-          noah_kyc_status: row.noah_kyc_status as string | null | undefined,
-          noah_kyc_rejection_reasons: row.noah_kyc_rejection_reasons,
-          kyc_id_type: row.kyc_id_type as string | null | undefined,
-          kyc_verified_at: row.kyc_verified_at as string | null | undefined,
-          noah_usd_virtual_account_id: row.noah_usd_virtual_account_id as string | null | undefined,
-          noah_eur_virtual_account_id: row.noah_eur_virtual_account_id as string | null | undefined,
-          noah_gbp_virtual_account_id: row.noah_gbp_virtual_account_id as string | null | undefined,
-          noah_kyb_customer_id: row.noah_kyb_customer_id as string | null | undefined,
-          noah_kyb_status: row.noah_kyb_status as string | null | undefined,
-          linkedBusinessName: (row.linkedBusinessName as string | null | undefined) ?? null,
-          enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
-          email_confirmed_at: row.email_confirmed_at as string | null | undefined,
-          communicationPreferences: row.communicationPreferences as CommunicationPreferences | undefined,
-          hasExpoPushToken: Boolean(row.hasExpoPushToken),
-          totalTransactions: 0,
-          totalVolume: 0,
-          verificationStatus: noahKycStatus === "approved" ? "verified" : "pending",
-          noahKycStatus,
-        } as UserData
-      })
-    },
-  })
+  const [selectedUserTransaction, setSelectedUserTransaction] = useState<TransactionData | null>(null)
+
+  const directoryQuery = useOfficeUsersDirectory()
   const directoryUsers = directoryQuery.data ?? []
-  const dirLoading = usersEnabled ? directoryQuery.isPending && directoryUsers.length === 0 : false
+  const dirLoading = useQueryInitialLoading(directoryQuery.isPending, directoryQuery.data, directoryUsers)
   const dirError =
     directoryQuery.error instanceof Error
       ? directoryQuery.error.message
       : directoryQuery.error
         ? String(directoryQuery.error)
         : null
+
+  const userTransactionsQuery = useOfficeUserTransactions(selectedUser?.id)
+  const userTransactions = userTransactionsQuery.data ?? []
+  const userTransactionsLoading = useQueryInitialLoading(
+    userTransactionsQuery.isPending,
+    userTransactionsQuery.data,
+    userTransactions,
+  )
+
+  const mfaQuery = useOfficeUserMfa(selectedUser?.id)
+  const mfaStatus = {
+    loading: mfaQuery.isPending && mfaQuery.data === undefined,
+    hasTotp: mfaQuery.data?.hasTotp ?? null,
+  }
   const [mfaResetConfirmOpen, setMfaResetConfirmOpen] = useState(false)
   const [mfaResetLoading, setMfaResetLoading] = useState(false)
   const [mfaResetFeedback, setMfaResetFeedback] = useState<{ ok: boolean; message: string } | null>(null)
-  const [mfaStatus, setMfaStatus] = useState<{ loading: boolean; hasTotp: boolean | null }>({
-    loading: false,
-    hasTotp: null,
-  })
 
   const formatAmount = (amount: number | null | undefined, currencyCode: string | null | undefined): string => {
     const amt = Number(amount || 0) || 0
     const cur = String(currencyCode || "").toUpperCase()
     return `${amt.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`
+  }
+
+  const transactionDisplayAmount = (tx: TransactionData): string => {
+    if (tx.amountFormatted) return tx.amountFormatted
+    return formatAmount(tx.displayAmount ?? tx.amount, tx.displayCurrency ?? tx.currency)
+  }
+
+  const transactionImpactAmount = (tx: TransactionData): string => {
+    return tx.impactFormatted || tx.balanceFormatted || ""
   }
 
   const formatTimestamp = (dateString: string) => {
@@ -228,42 +197,6 @@ export default function AdminUsersPage() {
     return `${month} ${day}, ${year}`
   }
 
-  const fetchUserTransactions = useCallback(async (userId: string) => {
-    try {
-      const r = await officeFetch(`/api/admin/office/transactions?userId=${encodeURIComponent(userId)}&limit=100`)
-      const body = (await r.json()) as {
-        transactions?: Array<{
-          id: string
-          created_at: string
-          occurred_at?: string | null
-          provider?: string | null
-          provider_transaction_id?: string | null
-          easner_transaction_id?: string | null
-          direction?: string | null
-          amount?: number | null
-          currency?: string | null
-          status?: string | null
-        }>
-        error?: string
-      }
-      if (!r.ok || body.error) throw new Error(body.error || r.statusText)
-      const transformedData = (body.transactions ?? []).map((tx) => ({
-        id: tx.id,
-        created_at: tx.occurred_at || tx.created_at,
-        provider: tx.provider ?? null,
-        provider_tx_id: tx.easner_transaction_id || tx.provider_transaction_id || null,
-        direction: tx.direction ?? null,
-        amount: tx.amount ?? null,
-        currency: tx.currency ?? null,
-        status: tx.status,
-      }))
-      setUserTransactions(transformedData)
-    } catch (err) {
-      console.error("Error fetching user transactions:", err)
-      setUserTransactions([])
-    }
-  }, [])
-
   const usersWithStats = useMemo(() => directoryUsers, [directoryUsers])
 
   useEffect(() => {
@@ -273,37 +206,11 @@ export default function AdminUsersPage() {
     const found = usersWithStats.find((u: UserData) => u.id === id)
     if (found) {
       setSelectedUser(found)
-      void fetchUserTransactions(found.id)
       requestAnimationFrame(() => {
         document.querySelector(`[data-user-row="${id}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" })
       })
     }
-  }, [usersWithStats, fetchUserTransactions])
-
-  useEffect(() => {
-    if (!selectedUser?.id) {
-      setMfaStatus({ loading: false, hasTotp: null })
-      return
-    }
-    let cancelled = false
-    setMfaStatus({ loading: true, hasTotp: null })
-    void officeFetch(`/api/admin/office/users/${selectedUser.id}/mfa`)
-      .then(async (r) => {
-        const d = (await r.json().catch(() => ({}))) as { hasTotp?: boolean }
-        if (cancelled) return
-        if (!r.ok) {
-          setMfaStatus({ loading: false, hasTotp: null })
-          return
-        }
-        setMfaStatus({ loading: false, hasTotp: Boolean(d.hasTotp) })
-      })
-      .catch(() => {
-        if (!cancelled) setMfaStatus({ loading: false, hasTotp: null })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [selectedUser?.id])
+  }, [usersWithStats])
 
   const filteredUsers = usersWithStats.filter((user: UserData) => {
     const q = searchTerm.toLowerCase()
@@ -409,7 +316,6 @@ export default function AdminUsersPage() {
   const handleUserSelect = (user: UserData) => {
     setSelectedUser(user)
     setMfaResetFeedback(null)
-    fetchUserTransactions(user.id)
   }
 
   const handleConfirmResetMfa = async () => {
@@ -439,8 +345,8 @@ export default function AdminUsersPage() {
           : `Removed ${Number(d.removed ?? 0)} authenticator factor(s). User can sign in with password and set up MFA again.`
       setMfaResetFeedback({ ok: true, message: msg })
       setMfaResetConfirmOpen(false)
-      if (Number(d.removed ?? 0) > 0) {
-        setMfaStatus({ loading: false, hasTotp: false })
+      if (Number(d.removed ?? 0) > 0 && selectedUser?.id) {
+        void queryClient.invalidateQueries({ queryKey: officeKeys.userMfa(selectedUser.id) })
       }
       void queryClient.invalidateQueries({ queryKey: officeKeys.users() })
     } catch (e: unknown) {
@@ -782,55 +688,115 @@ export default function AdminUsersPage() {
                                     <div>
                                       <label className="text-sm font-medium text-gray-600">Recent Transactions</label>
                                       <div className="mt-2 max-h-64 overflow-y-auto rounded-md border">
+                                        {userTransactionsLoading ? (
+                                          <div className="space-y-2 p-3">
+                                            <Skeleton className="h-8 w-full" />
+                                            <Skeleton className="h-8 w-full" />
+                                            <Skeleton className="h-8 w-full" />
+                                          </div>
+                                        ) : (
                                         <Table>
                                           <TableHeader>
                                             <TableRow>
-                                              <TableHead>ID</TableHead>
+                                              <TableHead>Label</TableHead>
                                               <TableHead>Date</TableHead>
-                                              <TableHead>Provider</TableHead>
-                                              <TableHead>Direction</TableHead>
+                                              <TableHead>Product</TableHead>
                                               <TableHead>Amount</TableHead>
+                                              <TableHead>Impact</TableHead>
                                               <TableHead>Status</TableHead>
+                                              <TableHead className="w-[4.5rem]">View</TableHead>
                                             </TableRow>
                                           </TableHeader>
                                           <TableBody>
-                                            {userTransactions.map((transaction) => (
-                                              <TableRow key={transaction.id}>
-                                                <TableCell className="font-mono text-sm">
-                                                  {transaction.provider_tx_id || transaction.id}
-                                                </TableCell>
-                                                <TableCell>{formatTimestamp(transaction.created_at)}</TableCell>
-                                                <TableCell>{String(transaction.provider || "").toUpperCase() || "—"}</TableCell>
-                                                <TableCell>{(transaction.direction || "out").toUpperCase()}</TableCell>
-                                                <TableCell>
-                                                  <div className="font-medium">
-                                                    {formatAmount(transaction.amount, transaction.currency)}
-                                                  </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                  <Badge
-                                                    variant={
-                                                      transaction.status === "completed"
-                                                        ? "emerald"
-                                                        : transaction.status === "processing"
-                                                          ? "amber"
-                                                          : "slate"
-                                                    }
-                                                  >
-                                                    {transaction.status}
-                                                  </Badge>
-                                                </TableCell>
-                                              </TableRow>
-                                            ))}
+                                            {userTransactions.map((transaction) => {
+                                              const { label: statusLabel, tone } = ledgerTransactionStatusDisplay(
+                                                transaction.status,
+                                              )
+                                              return (
+                                                <TableRow key={transaction.id}>
+                                                  <TableCell>
+                                                    <div className="font-medium text-sm">
+                                                      {transaction.label ||
+                                                        transaction.easner_transaction_id ||
+                                                        transaction.id}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                      {formatProviderLabel(transaction.provider)}
+                                                    </div>
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    {formatTimestamp(transaction.occurred_at || transaction.created_at)}
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    {transaction.productLabel ? (
+                                                      <Badge variant="outline">{transaction.productLabel}</Badge>
+                                                    ) : (
+                                                      "—"
+                                                    )}
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    <div className="font-medium tabular-nums">
+                                                      {transactionDisplayAmount(transaction)}
+                                                    </div>
+                                                    {transaction.flowLabel ? (
+                                                      <div className="text-xs text-muted-foreground">
+                                                        {transaction.flowLabel}
+                                                      </div>
+                                                    ) : null}
+                                                  </TableCell>
+                                                  <TableCell className="tabular-nums text-sm text-muted-foreground">
+                                                    {transactionImpactAmount(transaction) || "—"}
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    <Badge variant={transactionStatusBadgeVariant(tone)}>
+                                                      {statusLabel}
+                                                    </Badge>
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    <Dialog>
+                                                      <DialogTrigger asChild>
+                                                        <Button
+                                                          variant="outline"
+                                                          size="sm"
+                                                          onClick={() => setSelectedUserTransaction(transaction)}
+                                                        >
+                                                          <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                      </DialogTrigger>
+                                                      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+                                                        <DialogHeader>
+                                                          <DialogTitle>Transaction Details</DialogTitle>
+                                                        </DialogHeader>
+                                                        {selectedUserTransaction ? (
+                                                          <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+                                                            <OfficeTransactionDetailPanel
+                                                              transaction={selectedUserTransaction}
+                                                              onStatusUpdated={() => {
+                                                                if (selectedUser?.id) {
+                                                                  void queryClient.invalidateQueries({
+                                                                    queryKey: officeKeys.userTransactions(selectedUser.id),
+                                                                  })
+                                                                }
+                                                              }}
+                                                            />
+                                                          </div>
+                                                        ) : null}
+                                                      </DialogContent>
+                                                    </Dialog>
+                                                  </TableCell>
+                                                </TableRow>
+                                              )
+                                            })}
                                             {userTransactions.length === 0 && (
                                               <TableRow>
-                                                <TableCell colSpan={6} className="text-center py-4 text-gray-500">
+                                                <TableCell colSpan={7} className="text-center py-4 text-gray-500">
                                                   No transactions found
                                                 </TableCell>
                                               </TableRow>
                                             )}
                                           </TableBody>
                                         </Table>
+                                        )}
                                       </div>
                                     </div>
                                   </div>

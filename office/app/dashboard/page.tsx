@@ -1,7 +1,5 @@
 "use client"
 
-import { useCallback } from "react"
-import { useQuery } from "@tanstack/react-query"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -21,12 +19,9 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatMoneyDisplay } from "@easner/shared"
-import { officeFetch } from "@/lib/api-client"
-import type { OfficeOverviewResponse, OfficeVolumeBalance } from "@/lib/types/office-overview"
-import { officeKeys } from "@/lib/query/keys"
-import { useOfficeAdminEnabled } from "@/hooks/queries"
+import type { OfficeVolumeBalance } from "@/lib/types/office-overview"
+import { useOfficeOverview, useQueryInitialLoading } from "@/hooks/queries"
 
-const OFFICE_OVERVIEW_TTL_MS = 5 * 60 * 1000
 const OVERVIEW_PRESET = "7d" as const
 
 function stripActivityStatusSuffix(message: string): string {
@@ -34,30 +29,13 @@ function stripActivityStatusSuffix(message: string): string {
 }
 
 export default function AdminDashboardPage() {
-  const { enabled } = useOfficeAdminEnabled()
-
-  const fetchOverview = useCallback(async (): Promise<OfficeOverviewResponse> => {
-    const r = await officeFetch(`/api/admin/office/overview?preset=${encodeURIComponent(OVERVIEW_PRESET)}`)
-    const d = (await r.json()) as OfficeOverviewResponse & { error?: string }
-    if (!r.ok || d.error) {
-      throw new Error(typeof d.error === "string" ? d.error : r.statusText || "Overview request failed")
-    }
-    return d
-  }, [])
-
   const {
     data: overview,
     isPending,
     error: overviewError,
-  } = useQuery({
-    queryKey: officeKeys.overview(OVERVIEW_PRESET),
-    enabled,
-    queryFn: fetchOverview,
-    staleTime: OFFICE_OVERVIEW_TTL_MS,
-    gcTime: OFFICE_OVERVIEW_TTL_MS * 2,
-  })
+  } = useOfficeOverview(OVERVIEW_PRESET)
 
-  const loading = isPending && !overview
+  const loading = useQueryInitialLoading(isPending, overview)
   const loadError =
     overviewError instanceof Error ? overviewError.message : overviewError ? String(overviewError) : null
 
@@ -224,14 +202,22 @@ export default function AdminDashboardPage() {
                       <div className="flex-shrink-0 mt-0.5">{getActivityIcon(activity.type)}</div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-gray-900 min-w-0">
-                            {stripActivityStatusSuffix(activity.message)}
-                          </p>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900">
+                              {stripActivityStatusSuffix(activity.message)}
+                            </p>
+                            {activity.productLabel ? (
+                              <p className="text-xs text-muted-foreground mt-0.5">{activity.productLabel}</p>
+                            ) : null}
+                          </div>
                           <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
                             {activity.amount ? (
                               <span className="text-xs font-medium text-gray-900 tabular-nums">
                                 {activity.amount}
                               </span>
+                            ) : null}
+                            {activity.impactFormatted ? (
+                              <span className="text-xs text-gray-500 tabular-nums">{activity.impactFormatted}</span>
                             ) : null}
                             <span className="text-xs text-gray-500">{activity.time}</span>
                           </div>
@@ -255,6 +241,9 @@ export default function AdminDashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle>Top currencies</CardTitle>
+              <p className="text-xs text-muted-foreground font-normal">
+                Local corridor totals are informational; USD/EUR volume is in KPIs above.
+              </p>
             </CardHeader>
             <CardContent className="max-h-80 overflow-y-auto">
               {loading && !overview ? (
@@ -275,7 +264,7 @@ export default function AdminDashboardPage() {
                           {row.code}
                           {row.dataOnly ? (
                             <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                              {row.code === "USD" || row.code === "EUR" ? "verification" : "local payout"}
+                              local corridor (informational)
                             </span>
                           ) : null}
                         </TableCell>
@@ -298,6 +287,122 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Recent transactions + processing queue */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent transactions</CardTitle>
+            </CardHeader>
+            <CardContent className="max-h-80 overflow-y-auto">
+              {loading && !overview ? (
+                <Skeleton className="h-40 w-full" />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Label</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Impact</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(overview?.recentTransactions ?? []).map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell>
+                          <div className="font-medium text-sm">{tx.label}</div>
+                          {tx.productLabel ? (
+                            <div className="text-xs text-muted-foreground">{tx.productLabel}</div>
+                          ) : null}
+                          <div className="text-xs text-muted-foreground">{tx.who}</div>
+                        </TableCell>
+                        <TableCell className="tabular-nums whitespace-nowrap">{tx.amountFormatted}</TableCell>
+                        <TableCell className="tabular-nums whitespace-nowrap text-sm text-muted-foreground">
+                          {tx.impactFormatted || tx.balanceFormatted || "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">{tx.statusLabel || tx.status}</TableCell>
+                      </TableRow>
+                    ))}
+                    {(!overview?.recentTransactions || overview.recentTransactions.length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-sm text-muted-foreground">
+                          No recent transactions in this window.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Processing queue</CardTitle>
+              <p className="text-xs text-muted-foreground font-normal">
+                Settlement duration for completed transactions in the volume window.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {loading && !overview ? (
+                <Skeleton className="h-40 w-full" />
+              ) : (
+                <div className="space-y-3">
+                  {(overview?.processingBuckets ?? []).map((bucket) => (
+                    <div key={bucket.label} className="flex items-center justify-between rounded-lg border px-4 py-3">
+                      <span className="text-sm text-muted-foreground">{bucket.label}</span>
+                      <span className="text-lg font-semibold tabular-nums">{bucket.count}</span>
+                    </div>
+                  ))}
+                  {(!overview?.processingBuckets || overview.processingBuckets.length === 0) && (
+                    <p className="text-sm text-muted-foreground py-6 text-center">No processing data available.</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {overview?.ycVolumeBreakdown ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Yellowcard volume breakdown</CardTitle>
+              <p className="text-xs text-muted-foreground font-normal">All-time USD reporting volume by YC product mode.</p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="rounded-lg border bg-muted/30 px-4 py-3">
+                  <p className="text-sm text-muted-foreground">Fund balance</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">
+                    {formatMoneyDisplay(overview.ycVolumeBreakdown.fund_balance.usdVolume, "USD")}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {overview.ycVolumeBreakdown.fund_balance.count.toLocaleString()} transactions
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 px-4 py-3">
+                  <p className="text-sm text-muted-foreground">Cross-border</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">
+                    {formatMoneyDisplay(overview.ycVolumeBreakdown.cross_border_send.usdVolume, "USD")}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {overview.ycVolumeBreakdown.cross_border_send.count.toLocaleString()} transactions
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 px-4 py-3">
+                  <p className="text-sm text-muted-foreground">Balance payout</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">
+                    {formatMoneyDisplay(overview.ycVolumeBreakdown.balance_payout.usdVolume, "USD")}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {overview.ycVolumeBreakdown.balance_payout.count.toLocaleString()} transactions
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
     </OfficeDashboardLayout>
   )

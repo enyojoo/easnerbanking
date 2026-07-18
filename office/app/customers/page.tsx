@@ -4,10 +4,7 @@ import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layo
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { officeFetch } from "@/lib/api-client"
-import { useQuery } from "@tanstack/react-query"
-import { officeKeys } from "@/lib/query/keys"
-import { useOfficeAdminEnabled } from "@/hooks/queries"
+import { useOfficeCustomers, useQueryInitialLoading } from "@/hooks/queries"
 
 type Row = {
   id: string
@@ -19,21 +16,16 @@ type Row = {
 }
 
 export default function CustomersPage() {
-  const { enabled } = useOfficeAdminEnabled()
-  const { data: rows = [], error, isPending } = useQuery({
-    queryKey: officeKeys.businessCustomers(),
-    enabled,
-    queryFn: async () => {
-      const r = await officeFetch("/api/admin/business/customers")
-      const d = (await r.json()) as { customers?: Row[]; error?: string }
-      if (d.error) throw new Error(d.error)
-      return d.customers ?? []
-    },
-    staleTime: 60_000,
-  })
+  const customersQuery = useOfficeCustomers()
+  const rows = (customersQuery.data ?? []) as Row[]
 
-  const message = error instanceof Error ? error.message : error ? String(error) : null
-  const loading = isPending && rows.length === 0
+  const message =
+    customersQuery.error instanceof Error
+      ? customersQuery.error.message
+      : customersQuery.error
+        ? String(customersQuery.error)
+        : null
+  const loading = useQueryInitialLoading(customersQuery.isPending, customersQuery.data, rows)
 
   return (
     <OfficeDashboardLayout>

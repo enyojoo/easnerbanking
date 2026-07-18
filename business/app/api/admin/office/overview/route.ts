@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     (t) => String(t.status || "").toLowerCase() === "pending" || String(t.status || "").toLowerCase() === "processing",
   ).length
 
-  const { volumeBalance, totalVolumeUsd, topCurrencies, processingBuckets } =
+  const { volumeBalance, totalVolumeUsd, topCurrencies, processingBuckets, ycVolumeBreakdown } =
     computeProviderLedgerDashboardExtras(volumeTransactions)
   const recentActivity = processRecentActivity(activityTransactions, 10)
   const recentTransactions = buildRecentTransactionsPreview(activityTransactions, 10)
@@ -94,6 +94,7 @@ export async function GET(request: Request) {
     },
     topCurrencies,
     processingBuckets,
+    ycVolumeBreakdown,
     recentActivity,
     recentTransactions,
     links: {

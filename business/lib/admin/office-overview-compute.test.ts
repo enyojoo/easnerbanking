@@ -4,27 +4,31 @@ vi.mock("@/lib/transactions/resolve-global-payout-off-ramp", () => ({
   resolveGlobalPayoutOffRampDetail: () => null,
 }))
 
-vi.mock("@easner/shared", () => ({
-  isVerificationDepositMetadata: (metadata?: Record<string, unknown> | null) =>
-    String(metadata?.deposit_kind ?? "").toLowerCase() === "verification",
-  toEasnerTransactionPrimaryLabel: (input: {
-    direction: string
-    metadata?: Record<string, unknown> | null
-  }) => {
-    const meta = input.metadata || {}
-    if (String(meta.source) === "easetag_p2p" && input.direction === "in") {
-      const tag = typeof meta.sender_easetag === "string" ? meta.sender_easetag : ""
-      return tag ? `Received from @${tag}` : "Easetag Received"
-    }
-    if (typeof meta.sender_name === "string" && meta.sender_name.trim()) return meta.sender_name.trim()
-    return input.direction === "in" ? "Bank Deposit" : "Bank Transfer"
-  },
-  formatMoneyDisplay: (amount: number, currency: string) => {
-    const sym =
-      currency === "USD" ? "$" : currency === "EUR" ? "€" : currency === "NGN" ? "₦" : currency
-    return `${sym}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  },
-}))
+vi.mock("@easner/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@easner/shared")>()
+  return {
+    ...actual,
+    isVerificationDepositMetadata: (metadata?: Record<string, unknown> | null) =>
+      String(metadata?.deposit_kind ?? "").toLowerCase() === "verification",
+    toEasnerTransactionPrimaryLabel: (input: {
+      direction: string
+      metadata?: Record<string, unknown> | null
+    }) => {
+      const meta = input.metadata || {}
+      if (String(meta.source) === "easetag_p2p" && input.direction === "in") {
+        const tag = typeof meta.sender_easetag === "string" ? meta.sender_easetag : ""
+        return tag ? `Received from @${tag}` : "Easetag Received"
+      }
+      if (typeof meta.sender_name === "string" && meta.sender_name.trim()) return meta.sender_name.trim()
+      return input.direction === "in" ? "Bank Deposit" : "Bank Transfer"
+    },
+    formatMoneyDisplay: (amount: number, currency: string) => {
+      const sym =
+        currency === "USD" ? "$" : currency === "EUR" ? "€" : currency === "NGN" ? "₦" : currency
+      return `${sym}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    },
+  }
+})
 
 import {
   activityPrimaryLabel,
@@ -289,5 +293,64 @@ describe("office-overview-compute", () => {
       },
     })
     expect(account).toEqual({ label: "Alex Individual", kind: "individual" })
+  })
+
+  it("counts YC cross-border volume from reporting_usd_amount, not local ledger amount", () => {
+    const { volumeBalance, ycVolumeBreakdown } = computeProviderLedgerDashboardExtras([
+      {
+        id: "yc-cb-1",
+        direction: "out",
+        provider: "yellowcard",
+        currency: "NGN",
+        amount: 500000,
+        metadata: {
+          yc_mode: "cross_border_send",
+          reporting_usd_amount: 320.5,
+          receive_currency: "KES",
+          receive_amount: 42000,
+        },
+      },
+    ])
+    expect(volumeBalance.USD.moneyOut).toBe(320.5)
+    expect(volumeBalance.USD.total).toBe(320.5)
+    expect(ycVolumeBreakdown.cross_border_send.count).toBe(1)
+    expect(ycVolumeBreakdown.cross_border_send.usdVolume).toBe(320.5)
+  })
+
+  it("counts YC fund_balance pay-in from usd_credit metadata", () => {
+    const { volumeBalance, ycVolumeBreakdown } = computeProviderLedgerDashboardExtras([
+      {
+        id: "yc-fb-1",
+        direction: "in",
+        provider: "yellowcard",
+        currency: "NGN",
+        amount: 250000,
+        metadata: {
+          yc_mode: "fund_balance",
+          usd_credit: 150,
+          local_pay_in: 250000,
+        },
+      },
+    ])
+    expect(volumeBalance.USD.moneyIn).toBe(150)
+    expect(ycVolumeBreakdown.fund_balance.usdVolume).toBe(150)
+  })
+
+  it("does not infer cross-border volume when reporting snapshot is missing", () => {
+    const { volumeBalance } = computeProviderLedgerDashboardExtras([
+      {
+        id: "yc-cb-missing",
+        direction: "out",
+        provider: "yellowcard",
+        currency: "NGN",
+        amount: 500000,
+        metadata: {
+          yc_mode: "cross_border_send",
+          receive_currency: "KES",
+          receive_amount: 42000,
+        },
+      },
+    ])
+    expect(volumeBalance.USD.total).toBe(0)
   })
 })

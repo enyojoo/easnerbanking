@@ -2,11 +2,23 @@
 
 export type OfficeCurrencyScope = "fiat" | "rates"
 
+export type OfficeTransactionFilters = {
+  provider?: string
+  ycMode?: string
+  rail?: string
+  status?: string
+}
+
 export const officeKeys = {
   root: ["office"] as const,
   overview: (preset: string) => [...officeKeys.root, "overview", preset] as const,
+  overviewRoot: () => [...officeKeys.root, "overview"] as const,
   users: () => [...officeKeys.root, "users"] as const,
-  transactions: () => [...officeKeys.root, "transactions"] as const,
+  userTransactions: (userId: string) => [...officeKeys.root, "user-transactions", userId] as const,
+  userMfa: (userId: string) => [...officeKeys.root, "user-mfa", userId] as const,
+  transactionsRoot: () => [...officeKeys.root, "transactions"] as const,
+  transactions: (filters?: OfficeTransactionFilters) =>
+    [...officeKeys.root, "transactions", filters ?? {}] as const,
   eventInbox: (provider: string, status: string) =>
     [...officeKeys.root, "event-inbox", provider, status] as const,
   businessCustomers: () => [...officeKeys.root, "business-customers"] as const,

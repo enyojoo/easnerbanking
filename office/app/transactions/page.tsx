@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useMemo, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
+import { OfficeTransactionDetailPanel } from "@/components/transactions/office-transaction-detail-panel"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,68 +26,12 @@ import {
 } from "lucide-react"
 import {
   formatMoneyDisplay,
-  ledgerStatusMatchesUserFilter,
   ledgerTransactionStatusDisplay,
-  pollingIntervalFor,
   type LedgerTransactionStatusTone,
 } from "@easner/shared"
-import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
-import { useOfficeAdminEnabled } from "@/hooks/queries"
-import { useOfficeRealtimeHealth } from "@/lib/query/attach-office-realtime-bridge"
-
-interface ProviderLedgerTx {
-  id: string
-  provider?: string | null
-  provider_transaction_id?: string | null
-  easner_transaction_id?: string | null
-  business_id?: string | null
-  status: string
-  created_at: string
-  occurred_at?: string | null
-  updated_at?: string
-  direction?: "in" | "out" | null
-  amount?: number | null
-  currency?: string | null
-  displayAmount?: number
-  displayCurrency?: string
-  balanceAmount?: number
-  balanceCurrency?: string | null
-  balanceFormatted?: string
-  flowLabel?: "Pay-in" | "Payout"
-  label?: string
-  amountFormatted?: string
-  who?: string
-  tx_hash?: string | null
-  user?: {
-    first_name: string
-    last_name: string
-    email: string
-  }
-  business?: {
-    id: string
-    name: string | null
-  } | null
-}
-
-type VolumeBalanceSide = {
-  moneyIn: number
-  moneyOut: number
-  total: number
-}
-
-type TransactionsSummary = {
-  volumeBalance: {
-    USD: VolumeBalanceSide
-    EUR: VolumeBalanceSide
-  }
-  transactionCount: number
-  window?: {
-    preset: string
-    since: string | null
-    until: string | null
-  }
-}
+import { useOfficeTransactionsList, useQueryInitialLoading } from "@/hooks/queries"
+import type { OfficeTransaction, OfficeTransactionsSummary } from "@/lib/types/office-transaction"
 
 const STATUS_FILTER_LABELS: Record<string, string> = {
   completed: "Completed",
@@ -95,7 +40,7 @@ const STATUS_FILTER_LABELS: Record<string, string> = {
   failed: "Failed",
 }
 
-function statusToneBadgeVariant(
+function formatVolumeBalanceSide(
   tone: LedgerTransactionStatusTone,
 ): "emerald" | "amber" | "oxblood" | "slate" | "outline" {
   switch (tone) {
@@ -147,21 +92,23 @@ function formatDirectionLabel(direction: string | null | undefined): string {
 function formatProviderLabel(provider: string | null | undefined): string {
   const raw = String(provider || "").trim()
   if (!raw) return "—"
-  if (raw.toLowerCase() === "easner_internal") return "EASETAG"
+  if (raw.toLowerCase() === "easner_internal") return "Easetag"
+  if (raw.toLowerCase() === "yellowcard") return "Yellowcard"
+  if (raw.toLowerCase() === "noah") return "Noah"
   return raw
 }
 
-function transactionLabel(tx: ProviderLedgerTx): string {
+function transactionLabel(tx: OfficeTransaction): string {
   const label = String(tx.label || "").trim()
   if (label) return label
   return tx.easner_transaction_id || tx.provider_transaction_id || tx.id
 }
 
-function transactionIdDisplay(tx: ProviderLedgerTx): string {
+function transactionIdDisplay(tx: OfficeTransaction): string {
   return tx.easner_transaction_id || tx.provider_transaction_id || tx.id
 }
 
-function WhoDisplay({ transaction }: { transaction: ProviderLedgerTx }) {
+function WhoDisplay({ transaction }: { transaction: OfficeTransaction }) {
   return (
     <div>
       <div className="font-medium">{transaction.who || "—"}</div>
@@ -172,108 +119,56 @@ function WhoDisplay({ transaction }: { transaction: ProviderLedgerTx }) {
   )
 }
 
-function transactionAmountFormatted(tx: ProviderLedgerTx): string {
+function transactionAmountFormatted(tx: OfficeTransaction): string {
   const formatted = String(tx.amountFormatted || "").trim()
   if (formatted) return formatted
   return formatMoneyDisplay(Number(tx.displayAmount ?? tx.amount ?? 0) || 0, tx.displayCurrency || tx.currency || "USD")
 }
 
-function transactionBalanceFormatted(tx: ProviderLedgerTx): string {
-  const formatted = String(tx.balanceFormatted || "").trim()
-  if (formatted) return formatted
-  const balanceCurrency = tx.balanceCurrency
-  const balanceAmount = Number(tx.balanceAmount ?? 0)
-  if (!balanceCurrency || !Number.isFinite(balanceAmount) || balanceAmount <= 0) return ""
-  return formatMoneyDisplay(balanceAmount, balanceCurrency)
+function transactionImpactFormatted(tx: OfficeTransaction): string {
+  const impact = String(tx.impactFormatted || "").trim()
+  if (impact) return impact
+  const balance = String(tx.balanceFormatted || "").trim()
+  if (balance) return balance
+  return ""
 }
 
-function shouldShowBalanceLeg(tx: ProviderLedgerTx): boolean {
-  const balance = transactionBalanceFormatted(tx)
-  if (!balance) return false
-  const displayCurrency = String(tx.displayCurrency || tx.currency || "").toUpperCase()
-  const balanceCurrency = String(tx.balanceCurrency || "").toUpperCase()
-  if (!balanceCurrency) return false
-  if (displayCurrency === balanceCurrency && Math.abs(Number(tx.displayAmount ?? tx.amount ?? 0) - Number(tx.balanceAmount ?? 0)) < 0.01) {
-    return false
-  }
-  return true
-}
-
-function formatVolumeBalanceSide(side: VolumeBalanceSide | undefined, currency: "USD" | "EUR"): string {
+function formatVolumeBalanceSide(
+  side: OfficeTransactionsSummary["volumeBalance"]["USD"] | undefined,
+  currency: "USD" | "EUR",
+): string {
   if (!side) return formatMoneyDisplay(0, currency)
   return formatMoneyDisplay(side.total, currency)
 }
 
 export default function AdminTransactionsPage() {
-  const { enabled: transactionsEnabled } = useOfficeAdminEnabled()
-  const realtimeHealth = useOfficeRealtimeHealth()
-  const transactionsQuery = useQuery({
-    queryKey: officeKeys.transactions(),
-    enabled: transactionsEnabled,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-    refetchInterval: pollingIntervalFor("operational", realtimeHealth),
-    queryFn: async (): Promise<{ transactions: ProviderLedgerTx[]; summary: TransactionsSummary }> => {
-      const r = await officeFetch("/api/admin/office/transactions?limit=50")
-      const body = (await r.json()) as {
-        transactions?: ProviderLedgerTx[]
-        summary?: TransactionsSummary
-        error?: string
-      }
-      if (!r.ok || body.error) {
-        throw new Error(typeof body.error === "string" ? body.error : r.statusText || "Failed to load transactions")
-      }
-      const transactions = (body.transactions ?? []).map((t) => ({
-        ...t,
-        id: String(t.id || ""),
-        provider: t.provider ?? null,
-        provider_transaction_id: t.provider_transaction_id ?? null,
-        easner_transaction_id: t.easner_transaction_id ?? null,
-        status: String(t.status || "pending"),
-        created_at: String(t.created_at || ""),
-        occurred_at: t.occurred_at ?? null,
-        updated_at: t.updated_at ?? undefined,
-        direction: (t.direction as "in" | "out" | null) ?? null,
-        amount: t.amount ?? null,
-        currency: t.currency ?? null,
-        displayAmount: t.displayAmount ?? undefined,
-        displayCurrency: t.displayCurrency ?? undefined,
-        balanceAmount: t.balanceAmount ?? undefined,
-        balanceCurrency: t.balanceCurrency ?? undefined,
-        balanceFormatted: t.balanceFormatted ?? undefined,
-        flowLabel: t.flowLabel ?? undefined,
-        label: t.label ?? undefined,
-        amountFormatted: t.amountFormatted ?? undefined,
-        who: t.who ?? undefined,
-        tx_hash: t.tx_hash ?? null,
-        user: t.user
-          ? {
-              first_name: t.user.first_name || "",
-              last_name: t.user.last_name || "",
-              email: t.user.email || "",
-            }
-          : undefined,
-      }))
-      const summary = body.summary ?? {
-        volumeBalance: {
-          USD: { moneyIn: 0, moneyOut: 0, total: 0 },
-          EUR: { moneyIn: 0, moneyOut: 0, total: 0 },
-        },
-        transactionCount: transactions.length,
-      }
-      return { transactions, summary }
-    },
-  })
-
-  const transactions = transactionsQuery.data?.transactions ?? []
-  const summary = transactionsQuery.data?.summary
-  const transactionsLoading = transactionsQuery.isPending && transactions.length === 0
+  const queryClient = useQueryClient()
 
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
   const [directionFilter, setDirectionFilter] = useState<"all" | "in" | "out">("all")
   const [currencyFilter, setCurrencyFilter] = useState("all")
-  const [selectedTransaction, setSelectedTransaction] = useState<ProviderLedgerTx | null>(null)
+  const [providerFilter, setProviderFilter] = useState("all")
+  const [ycModeFilter, setYcModeFilter] = useState("all")
+  const [railFilter, setRailFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [selectedTransaction, setSelectedTransaction] = useState<OfficeTransaction | null>(null)
+
+  const serverFilters = useMemo(
+    () => ({
+      provider: providerFilter === "all" ? undefined : providerFilter,
+      ycMode: ycModeFilter === "all" ? undefined : ycModeFilter,
+      rail: railFilter === "all" ? undefined : railFilter,
+      status: statusFilter === "all" ? undefined : statusFilter,
+    }),
+    [providerFilter, ycModeFilter, railFilter, statusFilter],
+  )
+
+  const transactionsQuery = useOfficeTransactionsList(serverFilters)
+
+  const transactions = transactionsQuery.data?.pages.flatMap((page) => page.transactions) ?? []
+  const summary = transactionsQuery.data?.pages[0]?.summary
+  const hasNextPage = transactionsQuery.hasNextPage
+  const transactionsLoading = useQueryInitialLoading(transactionsQuery.isPending, transactionsQuery.data, transactions)
 
   const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch =
@@ -285,15 +180,15 @@ export default function AdminTransactionsPage() {
       String(transaction.easner_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.user?.email || "").toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchesStatus = ledgerStatusMatchesUserFilter(transaction.status, statusFilter)
     const matchesDirection =
       directionFilter === "all" || (transaction.direction || "out") === directionFilter
     const matchesCurrency =
       currencyFilter === "all" ||
       String(transaction.displayCurrency || transaction.currency || "").toUpperCase() === currencyFilter
 
-    return matchesSearch && matchesStatus && matchesDirection && matchesCurrency
+    return matchesSearch && matchesDirection && matchesCurrency
   })
+
   const currencyOptions = Array.from(
     new Set(
       transactions
@@ -301,6 +196,15 @@ export default function AdminTransactionsPage() {
         .filter((code) => code.length > 0),
     ),
   ).sort()
+
+  const hasActiveFilters =
+    searchTerm ||
+    statusFilter !== "all" ||
+    currencyFilter !== "all" ||
+    directionFilter !== "all" ||
+    providerFilter !== "all" ||
+    ycModeFilter !== "all" ||
+    railFilter !== "all"
 
   const formatTimestamp = (dateString: string) => {
     const date = new Date(dateString)
@@ -311,7 +215,6 @@ export default function AdminTransactionsPage() {
     const minutes = date.getMinutes().toString().padStart(2, "0")
     const ampm = hours >= 12 ? "PM" : "AM"
     const displayHours = hours % 12 || 12
-    // Format: "Nov 07, 2025 • 7:29 PM"
     return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
   }
 
@@ -320,24 +223,38 @@ export default function AdminTransactionsPage() {
     const month = date.toLocaleString("en-US", { month: "short" })
     const day = date.getDate().toString().padStart(2, "0")
     const year = date.getFullYear()
-    // Format: "Nov 07, 2025"
     return `${month} ${day}, ${year}`
   }
 
   const handleExport = () => {
     const csvContent = [
-      ["ID", "Label", "Easner ID", "Provider", "Provider Tx ID", "Direction", "Payout amount", "Balance amount", "Status", "Ledger Status", "Date", "Who"].join(","),
+      [
+        "ID",
+        "Label",
+        "Product",
+        "Easner ID",
+        "Provider",
+        "Provider Tx ID",
+        "Direction",
+        "Display amount",
+        "Impact amount",
+        "Status",
+        "Ledger Status",
+        "Date",
+        "Who",
+      ].join(","),
       ...filteredTransactions.map((t) => {
         const { label: statusLabel } = ledgerTransactionStatusDisplay(t.status)
         return [
           t.id,
           transactionLabel(t),
+          t.productLabel || "",
           t.easner_transaction_id || "",
           formatProviderLabel(t.provider),
           t.provider_transaction_id || "",
           formatDirectionLabel(t.direction),
           transactionAmountFormatted(t),
-          transactionBalanceFormatted(t),
+          transactionImpactFormatted(t),
           statusLabel,
           t.status,
           formatTimestamp(t.occurred_at || t.created_at),
@@ -352,6 +269,16 @@ export default function AdminTransactionsPage() {
     a.href = url
     a.download = "transactions.csv"
     a.click()
+  }
+
+  const clearFilters = () => {
+    setSearchTerm("")
+    setStatusFilter("all")
+    setCurrencyFilter("all")
+    setDirectionFilter("all")
+    setProviderFilter("all")
+    setYcModeFilter("all")
+    setRailFilter("all")
   }
 
   return (
@@ -406,11 +333,8 @@ export default function AdminTransactionsPage() {
           </Card>
         </div>
 
-        {/* Search and Filters */}
         <div className="space-y-4">
-          {/* Search and Filters Row */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Type Filter Tabs */}
             <Tabs value={directionFilter} onValueChange={(v) => setDirectionFilter(v as "all" | "in" | "out")}>
               <TabsList className="bg-gray-100">
                 <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
@@ -425,7 +349,6 @@ export default function AdminTransactionsPage() {
               </TabsList>
             </Tabs>
 
-            {/* Search Bar */}
             <div className="relative flex-1 min-w-[300px]">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
               <Input
@@ -434,19 +357,18 @@ export default function AdminTransactionsPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-12 h-12 text-base"
               />
-              {searchTerm && (
+              {searchTerm ? (
                 <button
                   onClick={() => setSearchTerm("")}
                   className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
                   <X className="h-5 w-5" />
                 </button>
-              )}
+              ) : null}
             </div>
 
-            {/* Status Filter */}
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px] bg-white">
+              <SelectTrigger className="w-[160px] bg-white">
                 <div className="flex items-center gap-2">
                   <Filter className="h-4 w-4 text-gray-500" />
                   <SelectValue placeholder="Status" />
@@ -461,7 +383,41 @@ export default function AdminTransactionsPage() {
               </SelectContent>
             </Select>
 
-            {/* Currency Filter */}
+            <Select value={providerFilter} onValueChange={setProviderFilter}>
+              <SelectTrigger className="w-[160px] bg-white">
+                <SelectValue placeholder="Provider" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Providers</SelectItem>
+                <SelectItem value="yellowcard">Yellowcard</SelectItem>
+                <SelectItem value="noah">Noah</SelectItem>
+                <SelectItem value="easner_internal">Easetag</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={ycModeFilter} onValueChange={setYcModeFilter}>
+              <SelectTrigger className="w-[180px] bg-white">
+                <SelectValue placeholder="YC mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All YC modes</SelectItem>
+                <SelectItem value="fund_balance">Fund balance</SelectItem>
+                <SelectItem value="cross_border_send">Cross-border</SelectItem>
+                <SelectItem value="balance_payout">Balance payout</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={railFilter} onValueChange={setRailFilter}>
+              <SelectTrigger className="w-[160px] bg-white">
+                <SelectValue placeholder="Rail" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All rails</SelectItem>
+                <SelectItem value="bank_transfer">Bank transfer</SelectItem>
+                <SelectItem value="mobile_money">Mobile money</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
               <SelectTrigger className="w-[160px] bg-white">
                 <SelectValue placeholder="Currency" />
@@ -476,30 +432,18 @@ export default function AdminTransactionsPage() {
               </SelectContent>
             </Select>
 
-            {/* Clear Filters Button */}
-            {(searchTerm || statusFilter !== "all" || currencyFilter !== "all" || directionFilter !== "all") && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearchTerm("")
-                  setStatusFilter("all")
-                  setCurrencyFilter("all")
-                  setDirectionFilter("all")
-                }}
-                className="text-gray-600 hover:text-gray-900"
-              >
+            {hasActiveFilters ? (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-gray-600 hover:text-gray-900">
                 <X className="h-4 w-4 mr-1" />
                 Clear filters
               </Button>
-            )}
+            ) : null}
           </div>
 
-          {/* Active Filters Badges */}
-          {(searchTerm || statusFilter !== "all" || currencyFilter !== "all" || directionFilter !== "all") && (
+          {hasActiveFilters ? (
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200">
               <span className="text-sm text-gray-500">Active filters:</span>
-              {directionFilter !== "all" && (
+              {directionFilter !== "all" ? (
                 <Badge variant="outline">
                   Direction: {directionFilter === "out" ? "Outgoing" : "Incoming"}
                   <button
@@ -509,19 +453,40 @@ export default function AdminTransactionsPage() {
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
-              )}
-              {statusFilter !== "all" && (
+              ) : null}
+              {statusFilter !== "all" ? (
                 <Badge variant="slate">
                   Status: {STATUS_FILTER_LABELS[statusFilter] ?? statusFilter}
-                  <button
-                    onClick={() => setStatusFilter("all")}
-                    className="ml-2 rounded-full p-0.5 hover:bg-muted"
-                  >
+                  <button onClick={() => setStatusFilter("all")} className="ml-2 rounded-full p-0.5 hover:bg-muted">
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
-              )}
-              {currencyFilter !== "all" && (
+              ) : null}
+              {providerFilter !== "all" ? (
+                <Badge variant="outline">
+                  Provider: {formatProviderLabel(providerFilter)}
+                  <button onClick={() => setProviderFilter("all")} className="ml-2 rounded-full p-0.5 hover:bg-muted">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ) : null}
+              {ycModeFilter !== "all" ? (
+                <Badge variant="outline">
+                  YC mode: {ycModeFilter.replace(/_/g, " ")}
+                  <button onClick={() => setYcModeFilter("all")} className="ml-2 rounded-full p-0.5 hover:bg-muted">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ) : null}
+              {railFilter !== "all" ? (
+                <Badge variant="outline">
+                  Rail: {railFilter.replace(/_/g, " ")}
+                  <button onClick={() => setRailFilter("all")} className="ml-2 rounded-full p-0.5 hover:bg-muted">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ) : null}
+              {currencyFilter !== "all" ? (
                 <Badge variant="emerald">
                   Currency: {currencyFilter}
                   <button
@@ -531,26 +496,22 @@ export default function AdminTransactionsPage() {
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
-              )}
-              {searchTerm && (
+              ) : null}
+              {searchTerm ? (
                 <Badge variant="secondary" className="bg-gray-50 text-gray-700 border-gray-200">
                   Search: &quot;{searchTerm}&quot;
-                  <button
-                    onClick={() => setSearchTerm("")}
-                    className="ml-2 hover:bg-gray-100 rounded-full p-0.5"
-                  >
+                  <button onClick={() => setSearchTerm("")} className="ml-2 hover:bg-gray-100 rounded-full p-0.5">
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
-              )}
+              ) : null}
               <span className="text-sm text-gray-500 ml-2">
                 {filteredTransactions.length} {filteredTransactions.length === 1 ? "transaction" : "transactions"}
               </span>
             </div>
-          )}
+          ) : null}
         </div>
 
-        {/* Transactions Table */}
         <Card>
           <CardContent>
             {transactionsLoading ? (
@@ -560,145 +521,110 @@ export default function AdminTransactionsPage() {
                 ))}
               </div>
             ) : (
-            <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Easner ID</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Who</TableHead>
-                  <TableHead>Direction</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[4.5rem]">View</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTransactions.map((transaction: ProviderLedgerTx) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell>
-                      <div className="font-mono text-sm truncate max-w-[280px]" title={transactionIdDisplay(transaction)}>
-                        {transactionIdDisplay(transaction)}
-                      </div>
-                    </TableCell>
-                    <TableCell>{formatDate(transaction.occurred_at || transaction.created_at)}</TableCell>
-                    <TableCell>
-                      <WhoDisplay transaction={transaction} />
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-medium">{formatDirectionLabel(transaction.direction)}</span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-0.5">
-                        <div className="font-medium tabular-nums">{transactionAmountFormatted(transaction)}</div>
-                        {shouldShowBalanceLeg(transaction) ? (
-                          <div className="text-xs text-gray-500 tabular-nums">
-                            {transactionBalanceFormatted(transaction)} balance
-                          </div>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <TransactionStatusBadge ledgerStatus={transaction.status} />
-                    </TableCell>
-                    <TableCell>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" onClick={() => setSelectedTransaction(transaction)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-                          <DialogHeader>
-                            <DialogTitle>Transaction Details</DialogTitle>
-                          </DialogHeader>
-                          {selectedTransaction && (
-                            <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                {String(selectedTransaction.label || "").trim() ? (
-                                  <div className="col-span-2">
-                                    <label className="text-sm font-medium text-gray-600">Transaction</label>
-                                    <p className="font-medium">{selectedTransaction.label}</p>
-                                  </div>
-                                ) : null}
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">ID</label>
-                                  <p className="font-mono text-xs break-all">{selectedTransaction.id}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">Status</label>
-                                  <div className="mt-1">
-                                    <TransactionStatusBadge ledgerStatus={selectedTransaction.status} />
-                                  </div>
-                                  <p className="mt-1 text-xs text-gray-500 font-mono">
-                                    Ledger: {selectedTransaction.status}
-                                  </p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">Who</label>
-                                  <WhoDisplay transaction={selectedTransaction} />
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">Date</label>
-                                  <p>{formatTimestamp(selectedTransaction.created_at)}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">Provider</label>
-                                  <p className="font-medium">{formatProviderLabel(selectedTransaction.provider)}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">Easner Tx ID</label>
-                                  <p className="font-mono text-xs break-all">{selectedTransaction.easner_transaction_id || "—"}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">Provider Tx ID</label>
-                                  <p className="font-mono text-xs break-all">{selectedTransaction.provider_transaction_id || "—"}</p>
-                                </div>
-                                {selectedTransaction.tx_hash ? (
-                                  <div className="col-span-2">
-                                    <label className="text-sm font-medium text-gray-600">Tx hash</label>
-                                    <p className="font-mono text-xs break-all">{selectedTransaction.tx_hash}</p>
-                                  </div>
-                                ) : null}
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">Direction</label>
-                                  <p className="font-medium">{formatDirectionLabel(selectedTransaction.direction)}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">
-                                    {selectedTransaction.flowLabel === "Pay-in" ? "Pay-in amount" : "Payout amount"}
-                                  </label>
-                                  <p className="font-medium tabular-nums">
-                                    {transactionAmountFormatted(selectedTransaction)}
-                                  </p>
-                                </div>
-                                {shouldShowBalanceLeg(selectedTransaction) ? (
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Balance debited</label>
-                                    <p className="font-medium tabular-nums">
-                                      {transactionBalanceFormatted(selectedTransaction)}
-                                    </p>
-                                  </div>
-                                ) : null}
-                                <div>
-                                  <label className="text-sm font-medium text-gray-600">Flow</label>
-                                  <p className="font-medium">{selectedTransaction.flowLabel || "—"}</p>
-                                </div>
-                              </div>
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Easner ID</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Who</TableHead>
+                      <TableHead>Direction</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Impact</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-[4.5rem]">View</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTransactions.map((transaction) => {
+                      const impact = transactionImpactFormatted(transaction)
+                      return (
+                        <TableRow key={transaction.id}>
+                          <TableCell>
+                            <div
+                              className="font-mono text-sm truncate max-w-[220px]"
+                              title={transactionIdDisplay(transaction)}
+                            >
+                              {transactionIdDisplay(transaction)}
                             </div>
-                          )}
-                        </DialogContent>
-                      </Dialog>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                            <div className="text-xs text-gray-500">{formatProviderLabel(transaction.provider)}</div>
+                          </TableCell>
+                          <TableCell>{formatDate(transaction.occurred_at || transaction.created_at)}</TableCell>
+                          <TableCell>
+                            {transaction.productLabel ? (
+                              <Badge variant="outline">{transaction.productLabel}</Badge>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <WhoDisplay transaction={transaction} />
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-medium">{formatDirectionLabel(transaction.direction)}</span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium tabular-nums">{transactionAmountFormatted(transaction)}</div>
+                          </TableCell>
+                          <TableCell>
+                            {impact ? (
+                              <div className="text-sm tabular-nums text-gray-600">{impact}</div>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <TransactionStatusBadge ledgerStatus={transaction.status} />
+                          </TableCell>
+                          <TableCell>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" onClick={() => setSelectedTransaction(transaction)}>
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+                                <DialogHeader>
+                                  <DialogTitle>Transaction Details</DialogTitle>
+                                </DialogHeader>
+                                {selectedTransaction ? (
+                                  <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+                                    <OfficeTransactionDetailPanel
+                                      transaction={selectedTransaction}
+                                      onStatusUpdated={() => {
+                                        void queryClient.invalidateQueries({
+                                          queryKey: [...officeKeys.root, "transactions"],
+                                        })
+                                      }}
+                                    />
+                                  </div>
+                                ) : null}
+                              </DialogContent>
+                            </Dialog>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
 
-            {filteredTransactions.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">No transactions found matching your criteria.</div>
-            ) : null}
-            </>
+                {filteredTransactions.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">No transactions found matching your criteria.</div>
+                ) : null}
+
+                {hasNextPage ? (
+                  <div className="flex justify-center pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => void transactionsQuery.fetchNextPage()}
+                      disabled={transactionsQuery.isFetchingNextPage}
+                    >
+                      {transactionsQuery.isFetchingNextPage ? "Loading..." : "Load more"}
+                    </Button>
+                  </div>
+                ) : null}
+              </>
             )}
           </CardContent>
         </Card>

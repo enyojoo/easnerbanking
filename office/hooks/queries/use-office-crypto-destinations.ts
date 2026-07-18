@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { cryptoDestinationsApi, type CryptoDestinationAdminRow } from "@/lib/crypto-destinations-api"
 import { officeKeys } from "@/lib/query/keys"
-import { OFFICE_REFERENCE_STALE_MS } from "./constants"
+import { officeReferenceQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
 export function useOfficeCryptoDestinations() {
@@ -12,7 +12,7 @@ export function useOfficeCryptoDestinations() {
   return useQuery({
     queryKey: officeKeys.cryptoDestinations(),
     enabled,
-    staleTime: OFFICE_REFERENCE_STALE_MS,
+    ...officeReferenceQueryDefaults,
     queryFn: (): Promise<CryptoDestinationAdminRow[]> => cryptoDestinationsApi.list(),
   })
 }

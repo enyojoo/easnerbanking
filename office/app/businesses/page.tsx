@@ -1,7 +1,6 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react"
-import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
@@ -13,9 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Eye, Building2, Search } from "lucide-react"
-import { officeFetch } from "@/lib/api-client"
-import { officeKeys } from "@/lib/query/keys"
-import { useOfficeAdminEnabled } from "@/hooks/queries"
+import { useOfficeBusinesses, useQueryInitialLoading } from "@/hooks/queries"
 import { businessTypeDisplayText } from "@/lib/business-type-label"
 
 /** Mirrors `public.businesses` (+ owner fields from admin API). */
@@ -113,30 +110,20 @@ function KybBadge({ rawStatus }: { rawStatus: string }) {
 function BusinessesPageInner() {
   const searchParams = useSearchParams()
   const highlightBusinessId = searchParams.get("highlight")
-  const { enabled } = useOfficeAdminEnabled()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessRow | null>(null)
 
-  const {
-    data: rows = [],
-    isPending,
-    error: queryError,
-  } = useQuery({
-    queryKey: officeKeys.businesses(),
-    enabled,
-    queryFn: async () => {
-      const r = await officeFetch("/api/admin/business/businesses")
-      const d = (await r.json()) as { businesses?: BusinessRow[]; error?: string }
-      if (d.error) throw new Error(d.error)
-      return d.businesses ?? []
-    },
-    staleTime: 60_000,
-  })
+  const businessesQuery = useOfficeBusinesses()
+  const rows = (businessesQuery.data ?? []) as BusinessRow[]
 
   const error =
-    queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null
-  const loading = isPending && rows.length === 0
+    businessesQuery.error instanceof Error
+      ? businessesQuery.error.message
+      : businessesQuery.error
+        ? String(businessesQuery.error)
+        : null
+  const loading = useQueryInitialLoading(businessesQuery.isPending, businessesQuery.data, rows)
 
   const displayRows = useMemo(() => {
     const q = searchTerm.toLowerCase().trim()

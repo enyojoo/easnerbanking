@@ -1,0 +1,31 @@
+import {
+  OFFICE_ANALYTICS_STALE_MS,
+  OFFICE_LIST_STALE_MS,
+  OFFICE_OPERATIONAL_GC_MS,
+  OFFICE_REFERENCE_GC_MS,
+  OFFICE_REFERENCE_STALE_MS,
+} from "./constants"
+
+export const officeOperationalQueryDefaults = {
+  staleTime: OFFICE_LIST_STALE_MS,
+  gcTime: OFFICE_OPERATIONAL_GC_MS,
+  refetchOnWindowFocus: false,
+  refetchIntervalInBackground: false,
+  meta: { webPersist: "reduced" as const, freshness: "operational" as const },
+}
+
+export const officeAnalyticsQueryDefaults = {
+  staleTime: OFFICE_ANALYTICS_STALE_MS,
+  gcTime: OFFICE_OPERATIONAL_GC_MS,
+  refetchOnWindowFocus: false,
+  refetchIntervalInBackground: false,
+  meta: { webPersist: "reduced" as const, freshness: "analytics" as const },
+}
+
+export const officeReferenceQueryDefaults = {
+  staleTime: OFFICE_REFERENCE_STALE_MS,
+  gcTime: OFFICE_REFERENCE_GC_MS,
+  refetchOnWindowFocus: false,
+  refetchIntervalInBackground: false,
+  meta: { webPersist: "reduced" as const, freshness: "reference" as const },
+}

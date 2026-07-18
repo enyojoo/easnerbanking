@@ -53,9 +53,9 @@ describe("attachOfficeRealtime", () => {
     const mock = buildMockSupabase()
     detach = attachOfficeRealtime({ qc, supabase: mock.supabase, batchMs: 0 })
     triggerUpdate = mock.triggerUpdate
-    qc.setQueryData(officeKeys.transactions(), {
-      transactions: [{ id: "tx-1", status: "pending" }],
-      summary: {},
+    qc.setQueryData(officeKeys.transactions({}), {
+      pages: [{ transactions: [{ id: "tx-1", status: "pending" }], summary: {}, nextCursor: null }],
+      pageParams: [null],
     })
   })
 
@@ -64,15 +64,15 @@ describe("attachOfficeRealtime", () => {
     qc.clear()
   })
 
-  it("patches transaction status in cache on UPDATE without active refetch", async () => {
+  it("patches transaction status in cache on non-settlement UPDATE without active refetch", async () => {
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
-    triggerUpdate({ id: "tx-1", status: "settled", updated_at: "2025-06-01T00:00:00.000Z" })
+    triggerUpdate({ id: "tx-1", status: "processing", updated_at: "2025-06-01T00:00:00.000Z" })
     await new Promise((resolve) => setTimeout(resolve, 10))
 
-    const cached = qc.getQueryData<{ transactions: Array<{ id: string; status: string }> }>(
-      officeKeys.transactions(),
-    )
-    expect(cached?.transactions[0]?.status).toBe("settled")
+    const cached = qc.getQueryData<{
+      pages: Array<{ transactions: Array<{ id: string; status: string }> }>
+    }>(officeKeys.transactions({}))
+    expect(cached?.pages[0]?.transactions[0]?.status).toBe("processing")
     expect(
       invalidateSpy.mock.calls.some(
         ([args]) =>
@@ -81,5 +81,25 @@ describe("attachOfficeRealtime", () => {
           (args as { refetchType?: string }).refetchType === "active",
       ),
     ).toBe(false)
+  })
+
+  it("invalidates transaction queries on settlement UPDATE so enriched amounts refresh", async () => {
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    triggerUpdate({
+      id: "tx-1",
+      status: "settled",
+      metadata: { reporting_usd_amount: 100 },
+      updated_at: "2025-06-01T00:00:00.000Z",
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(
+      invalidateSpy.mock.calls.some(
+        ([args]) =>
+          Array.isArray((args as { queryKey?: unknown[] }).queryKey) &&
+          (args as { queryKey: unknown[] }).queryKey[1] === "transactions" &&
+          (args as { refetchType?: string }).refetchType === "active",
+      ),
+    ).toBe(true)
   })
 })

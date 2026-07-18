@@ -102,12 +102,110 @@ function attachAccountProfiles(
   })
 }
 
+export type OfficeLedgerLoadFilters = {
+  userId?: string
+  provider?: string
+  ycMode?: string
+  rail?: string
+  status?: string
+  cursor?: string
+  limit?: number
+}
+
+export type OfficeLedgerLoadResult = {
+  data: OfficeLedgerTransaction[]
+  nextCursor: string | null
+  error: { message: string } | null
+}
+
+function normalizeProviderFilter(raw: string | undefined): string | null {
+  const value = String(raw ?? "").trim().toLowerCase()
+  if (!value || value === "all") return null
+  return value
+}
+
+function normalizeYcModeFilter(raw: string | undefined): string | null {
+  const value = String(raw ?? "").trim()
+  if (!value || value === "all") return null
+  if (value === "fund_balance" || value === "cross_border_send" || value === "balance_payout") {
+    return value
+  }
+  return null
+}
+
+function normalizeRailFilter(raw: string | undefined): string | null {
+  const value = String(raw ?? "").trim()
+  if (!value || value === "all") return null
+  if (value === "bank_transfer" || value === "mobile_money") return value
+  return null
+}
+
+function normalizeStatusFilter(raw: string | undefined): string | null {
+  const value = String(raw ?? "").trim().toLowerCase()
+  if (!value || value === "all") return null
+  return value
+}
+
+function matchesOfficeLedgerFilters(
+  row: Omit<OfficeLedgerTransaction, "user" | "business">,
+  filters: Omit<OfficeLedgerLoadFilters, "cursor" | "limit" | "userId">,
+): boolean {
+  const provider = normalizeProviderFilter(filters.provider)
+  if (provider && String(row.provider ?? "").trim().toLowerCase() !== provider) return false
+
+  const ycMode = normalizeYcModeFilter(filters.ycMode)
+  if (ycMode && String(row.metadata?.yc_mode ?? "") !== ycMode) return false
+
+  const rail = normalizeRailFilter(filters.rail)
+  if (rail && String(row.metadata?.pay_in_rail ?? "") !== rail) return false
+
+  const status = normalizeStatusFilter(filters.status)
+  if (status && String(row.status ?? "").trim().toLowerCase() !== status) return false
+
+  return true
+}
+
+function encodeOfficeLedgerCursor(row: { occurred_at: string | null; created_at: string; id: string }): string {
+  return Buffer.from(
+    JSON.stringify({
+      occurred_at: row.occurred_at,
+      created_at: row.created_at,
+      id: row.id,
+    }),
+  ).toString("base64url")
+}
+
+function decodeOfficeLedgerCursor(raw: string | undefined): {
+  occurred_at: string | null
+  created_at: string
+  id: string
+} | null {
+  const value = String(raw ?? "").trim()
+  if (!value) return null
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as {
+      occurred_at?: string | null
+      created_at?: string
+      id?: string
+    }
+    if (!parsed?.id || !parsed.created_at) return null
+    return {
+      occurred_at: parsed.occurred_at ?? null,
+      created_at: parsed.created_at,
+      id: parsed.id,
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function loadOfficeLedgerTransactions(
   admin: AdminClient,
-  opts: { userId?: string; limit?: number } = {},
-): Promise<{ data: OfficeLedgerTransaction[]; error: { message: string } | null }> {
+  opts: OfficeLedgerLoadFilters = {},
+): Promise<OfficeLedgerLoadResult> {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 150)
-  const fetchLimit = Math.min(limit * 3, 450)
+  const fetchLimit = Math.min(limit * 4, 600)
+  const cursor = decodeOfficeLedgerCursor(opts.cursor)
   let q = admin
     .from("transactions")
     .select(OFFICE_LEDGER_LIST_SELECT)
@@ -123,11 +221,30 @@ export async function loadOfficeLedgerTransactions(
   const txRes = await q.limit(fetchLimit)
 
   if (txRes.error) {
-    return { data: [], error: txRes.error }
+    return { data: [], nextCursor: null, error: txRes.error }
   }
 
-  const rows = [...((txRes.data || []) as Omit<OfficeLedgerTransaction, "user" | "business">[])].sort(
-    (a, b) => {
+  let rows = ((txRes.data || []) as Omit<OfficeLedgerTransaction, "user" | "business">[]).filter((row) =>
+    matchesOfficeLedgerFilters(row, opts),
+  )
+
+  if (cursor) {
+    const cursorOccurred = cursor.occurred_at || cursor.created_at
+    const cursorCreated = cursor.created_at
+    rows = rows.filter((row) => {
+      const rowOccurred = row.occurred_at || row.created_at
+      if (rowOccurred !== cursorOccurred) {
+        return rowOccurred < cursorOccurred
+      }
+      if (row.created_at !== cursorCreated) {
+        return row.created_at < cursorCreated
+      }
+      return String(row.id) < cursor.id
+    })
+  }
+
+  rows = [...rows]
+    .sort((a, b) => {
       const da = new Date(a.occurred_at || a.created_at || 0).getTime()
       const db = new Date(b.occurred_at || b.created_at || 0).getTime()
       if (db !== da) return db - da
@@ -135,8 +252,13 @@ export async function loadOfficeLedgerTransactions(
       const cb = new Date(b.created_at || 0).getTime()
       if (cb !== ca) return cb - ca
       return String(b.id).localeCompare(String(a.id))
-    },
-  ).slice(0, limit)
+    })
+
+  const pageRows = rows.slice(0, limit)
+  const nextCursor =
+    rows.length > limit && pageRows.length > 0
+      ? encodeOfficeLedgerCursor(pageRows[pageRows.length - 1])
+      : null
   const userIds = [...new Set(rows.map((t) => t.user_id).filter((id): id is string => Boolean(id)))]
   const businessIds = [...new Set(rows.map((t) => t.business_id).filter((id): id is string => Boolean(id)))]
 
@@ -158,5 +280,5 @@ export async function loadOfficeLedgerTransactions(
     businesses = (data || []) as BusinessRow[]
   }
 
-  return { data: attachAccountProfiles(rows, profiles, businesses), error: null }
+  return { data: attachAccountProfiles(pageRows, profiles, businesses), nextCursor, error: null }
 }

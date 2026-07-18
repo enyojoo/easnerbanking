@@ -5,10 +5,17 @@ import {
   computeProviderLedgerDashboardExtras,
   formatOfficeTxAmount,
   formatOfficeTxBalanceAmount,
+  formatOfficeTxImpactAmount,
   officeTxFlowLabel,
+  resolveOfficePayInRail,
+  resolveOfficeProductLabel,
+  resolveOfficeReportingEurAmount,
+  resolveOfficeReportingUsdAmount,
   resolveOfficeTxPresentation,
+  resolveOfficeYcMode,
   type TxRow,
   type VolumeBalanceKpi,
+  type OfficeYcMode,
 } from "@/lib/admin/office-overview-compute"
 import type { OfficeLedgerTransaction } from "@/lib/admin/office-load-transactions"
 
@@ -20,6 +27,12 @@ export type OfficeUserVisibleTransaction = OfficeLedgerTransaction & {
   balanceAmount: number
   balanceCurrency: string | null
   balanceFormatted: string
+  impactFormatted: string
+  reportingUsdAmount: number | null
+  reportingEurAmount: number | null
+  productLabel: string
+  ycMode: OfficeYcMode
+  payInRail: "bank_transfer" | "mobile_money" | null
   flowLabel: "Pay-in" | "Payout"
   who: string
 }
@@ -120,6 +133,12 @@ export function enrichOfficeLedgerForUserDisplay(row: OfficeLedgerTransaction): 
     balanceAmount: pres.balanceAmount,
     balanceCurrency: pres.balanceCurrency,
     balanceFormatted: formatOfficeTxBalanceAmount(txRow),
+    impactFormatted: formatOfficeTxImpactAmount(txRow),
+    reportingUsdAmount: resolveOfficeReportingUsdAmount(txRow),
+    reportingEurAmount: resolveOfficeReportingEurAmount(txRow),
+    productLabel: resolveOfficeProductLabel(txRow),
+    ycMode: resolveOfficeYcMode(txRow),
+    payInRail: resolveOfficePayInRail(txRow),
     flowLabel: officeTxFlowLabel(txRow),
     who: account.label || "—",
   }

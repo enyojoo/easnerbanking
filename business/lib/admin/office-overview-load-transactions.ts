@@ -117,6 +117,7 @@ export async function loadAllTimeUserVisibleTransactions(
   const txRes = await admin
     .from("transactions")
     .select(OVERVIEW_TX_SELECT)
+    .eq("hidden_from_feed", false)
     .order("occurred_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(fetchLimit)
@@ -143,6 +144,7 @@ export async function loadTransactionsForOverview(
   const txRes = await admin
     .from("transactions")
     .select(OVERVIEW_TX_SELECT)
+    .eq("hidden_from_feed", false)
     .gte("created_at", sinceIso)
     .lte("created_at", untilIso)
     .order("occurred_at", { ascending: false, nullsFirst: false })

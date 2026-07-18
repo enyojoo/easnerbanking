@@ -7,7 +7,7 @@ import { loadAllTimeUserVisibleTransactions, loadTransactionsForOverview } from 
 import { prepareOfficeUserVisibleTransactions } from "@/lib/admin/office-user-visible-transactions"
 
 /**
- * Office ledger: list provider transactions (service role). Optional `userId` filter.
+ * Office ledger: list provider transactions (service role). Optional filters.
  */
 export async function GET(request: Request) {
   const auth = await requireOfficeAdmin(request)
@@ -15,9 +15,13 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const userId = url.searchParams.get("userId")?.trim() || undefined
+  const provider = url.searchParams.get("provider")?.trim() || undefined
+  const ycMode = url.searchParams.get("ycMode")?.trim() || undefined
+  const rail = url.searchParams.get("rail")?.trim() || undefined
+  const status = url.searchParams.get("status")?.trim() || undefined
+  const cursor = url.searchParams.get("cursor")?.trim() || undefined
   const limitRaw = Number(url.searchParams.get("limit") || "50")
   const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 50
-  const fetchLimit = Math.min(Math.max(limit * 2, limit), 150)
 
   const admin = createSupabaseAdmin()
 
@@ -39,7 +43,15 @@ export async function GET(request: Request) {
     summaryWindow = { preset: "all", since: null, until: null }
   }
 
-  const listLoad = await loadOfficeLedgerTransactions(admin, { userId, limit: fetchLimit })
+  const listLoad = await loadOfficeLedgerTransactions(admin, {
+    userId,
+    provider,
+    ycMode,
+    rail,
+    status,
+    cursor,
+    limit,
+  })
 
   if (listLoad.error) {
     return NextResponse.json({ error: listLoad.error.message }, { status: 500 })
@@ -49,12 +61,14 @@ export async function GET(request: Request) {
   }
 
   const transactions = await prepareOfficeUserVisibleTransactions(admin, listLoad.data)
-  const { volumeBalance } = computeProviderLedgerDashboardExtras(volumeLoad.data)
+  const { volumeBalance, ycVolumeBreakdown } = computeProviderLedgerDashboardExtras(volumeLoad.data)
 
   return NextResponse.json({
-    transactions: transactions.slice(0, limit),
+    transactions,
+    nextCursor: listLoad.nextCursor,
     summary: {
       volumeBalance,
+      ycVolumeBreakdown,
       transactionCount: volumeLoad.data.length,
       window: summaryWindow,
     },

@@ -4,10 +4,7 @@ import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layo
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { officeFetch } from "@/lib/api-client"
-import { useQuery } from "@tanstack/react-query"
-import { officeKeys } from "@/lib/query/keys"
-import { useOfficeAdminEnabled } from "@/hooks/queries"
+import { useOfficeInvoices, useQueryInitialLoading } from "@/hooks/queries"
 
 type Row = {
   id: string
@@ -20,21 +17,16 @@ type Row = {
 }
 
 export default function InvoicesPage() {
-  const { enabled } = useOfficeAdminEnabled()
-  const { data: rows = [], error, isPending } = useQuery({
-    queryKey: officeKeys.businessInvoices(),
-    enabled,
-    queryFn: async () => {
-      const r = await officeFetch("/api/admin/business/invoices")
-      const d = (await r.json()) as { invoices?: Row[]; error?: string }
-      if (d.error) throw new Error(d.error)
-      return d.invoices ?? []
-    },
-    staleTime: 60_000,
-  })
+  const invoicesQuery = useOfficeInvoices()
+  const rows = (invoicesQuery.data ?? []) as Row[]
 
-  const message = error instanceof Error ? error.message : error ? String(error) : null
-  const loading = isPending && rows.length === 0
+  const message =
+    invoicesQuery.error instanceof Error
+      ? invoicesQuery.error.message
+      : invoicesQuery.error
+        ? String(invoicesQuery.error)
+        : null
+  const loading = useQueryInitialLoading(invoicesQuery.isPending, invoicesQuery.data, rows)
 
   return (
     <OfficeDashboardLayout>

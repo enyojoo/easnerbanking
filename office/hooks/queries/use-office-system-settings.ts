@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase"
 import { officeKeys } from "@/lib/query/keys"
-import { OFFICE_REFERENCE_STALE_MS } from "./constants"
+import { officeReferenceQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
 export type OfficeSystemSetting = {
@@ -35,7 +35,7 @@ export function useOfficeSystemSettings() {
   return useQuery({
     queryKey: officeKeys.systemSettings(),
     enabled,
-    staleTime: OFFICE_REFERENCE_STALE_MS,
+    ...officeReferenceQueryDefaults,
     queryFn: fetchOfficeSystemSettings,
   })
 }
