@@ -135,12 +135,23 @@ export function resolveScreenTransitionOptions(
   }
 
   if (routeName === 'MainTabs') {
+    // MainTabs is always the stack root — instant avoids card interpolator work on cold mount (PIN unlock).
     return {
       ...base,
       gestureEnabled: false,
-      ...(Platform.OS === 'web'
-        ? webInstantPreset()
-        : horizontalPushPreset({ gestureEnabled: false })),
+      ...(Platform.OS === 'web' ? webInstantPreset() : flowHubInstantSpec),
+    }
+  }
+
+  // Auth/onboarding/PIN gate stacks mount a single root screen on cold entry — instant avoids interpolator work.
+  if (
+    !previousRouteName &&
+    entry.intent === 'authGate' &&
+    Platform.OS !== 'web'
+  ) {
+    return {
+      ...base,
+      ...flowHubInstantSpec,
     }
   }
 

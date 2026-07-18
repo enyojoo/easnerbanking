@@ -6,7 +6,10 @@ import {
   getPreviousRouteFromState,
   shouldSkipDecorativeEnterForRoute,
 } from '../navigation/resolveScreenTransitionOptions'
-import type { ScreenRouteName } from '../navigation/screenTransitionRegistry'
+import {
+  getScreenTransitionEntry,
+  type ScreenRouteName,
+} from '../navigation/screenTransitionRegistry'
 
 /**
  * Returns whether decorative screen enter animations (EaseEnter, useCalmParallelEnter)
@@ -20,12 +23,23 @@ export function useScreenDecorativeEnter(): { shouldAnimateEnter: boolean } {
   const shouldAnimateEnter = useMemo(() => {
     if (Platform.OS === 'web') return false
 
-    const { name: previousRouteName } = getPreviousRouteFromState(
-      navigation.getState() as Parameters<typeof getPreviousRouteFromState>[0],
-    )
+    const routeName = route.name as ScreenRouteName
+    const entry = getScreenTransitionEntry(routeName)
+    // Onboarding → auth → MFA → PIN gates swap whole navigators; skip decorative enter on those routes.
+    if (entry?.intent === 'authGate') return false
+
+    const stackNavigation = navigation.getParent() ?? navigation
+    let previousRouteName: string | undefined
+    try {
+      ;({ name: previousRouteName } = getPreviousRouteFromState(
+        stackNavigation.getState() as Parameters<typeof getPreviousRouteFromState>[0],
+      ))
+    } catch {
+      return false
+    }
 
     const skip = shouldSkipDecorativeEnterForRoute({
-      routeName: route.name as ScreenRouteName,
+      routeName,
       previousRouteName,
       routeParams: route.params as Record<string, unknown> | undefined,
       layoutMode: mode,

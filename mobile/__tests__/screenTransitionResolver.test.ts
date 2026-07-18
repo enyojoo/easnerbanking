@@ -190,4 +190,21 @@ describe('resolveScreenTransitionOptions', () => {
     })
     expect(options.gestureEnabled).toBe(false)
   })
+
+  it('uses instant preset for auth gate stack roots on native', () => {
+    setPlatform('android')
+    const options = resolveScreenTransitionOptions({
+      routeName: 'PinEntryGate',
+    })
+    expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(false)
+  })
+
+  it('uses horizontal motion when pushing auth screens within AuthStack', () => {
+    setPlatform('android')
+    const options = resolveScreenTransitionOptions({
+      routeName: 'ForgotPassword',
+      previousRouteName: 'Auth',
+    })
+    expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(true)
+  })
 })

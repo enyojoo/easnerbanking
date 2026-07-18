@@ -32,7 +32,6 @@ import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
 import { MobileAppLockShell } from '../components/MobileAppLockShell'
 import { enterMainAppOnWeb } from './webMainEntry'
 import { webStackScreenListeners } from './webStackScreenListeners'
-import { authGatePreset } from './transitionPresets'
 import {
   staticScreenTransitionOptions,
   useMainStackTransitionOptionsFactory,
@@ -176,14 +175,15 @@ const AccountVerificationScreen = createWebLazyScreen(
 const Stack = createStackNavigator()
 const Tab = createBottomTabNavigator()
 
+/** Per-screen resolver owns motion; keep stack defaults minimal to avoid option churn. */
+const FLOW_STACK_SCREEN_OPTIONS = {
+  headerShown: false,
+} as const
+
 function OnboardingStack() {
   return (
     <Stack.Navigator 
-      screenOptions={{ 
-        headerShown: false,
-        ...authGatePreset(false),
-        gestureEnabled: false,
-      }}
+      screenOptions={FLOW_STACK_SCREEN_OPTIONS}
       screenListeners={webStackScreenListeners}
     >
       <Stack.Screen 
@@ -198,10 +198,7 @@ function OnboardingStack() {
 function MfaStack() {
   return (
     <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-        ...authGatePreset(false),
-      }}
+      screenOptions={FLOW_STACK_SCREEN_OPTIONS}
       screenListeners={webStackScreenListeners}
     >
       <Stack.Screen
@@ -216,10 +213,7 @@ function MfaStack() {
 function AuthStack() {
   return (
     <Stack.Navigator 
-      screenOptions={{ 
-        headerShown: false,
-        ...authGatePreset(false),
-      }}
+      screenOptions={FLOW_STACK_SCREEN_OPTIONS}
       screenListeners={webStackScreenListeners}
     >
       <Stack.Screen 
@@ -468,7 +462,7 @@ const ONBOARDING_COMPLETED_KEY = '@easner_onboarding_completed'
 function PinGateSetupStack() {
   return (
     <Stack.Navigator
-      screenOptions={{ headerShown: false, ...authGatePreset(false) }}
+      screenOptions={FLOW_STACK_SCREEN_OPTIONS}
       screenListeners={webStackScreenListeners}
     >
       <Stack.Screen
@@ -484,7 +478,7 @@ function PinGateSetupStack() {
 function PinGateEntryStack() {
   return (
     <Stack.Navigator
-      screenOptions={{ headerShown: false, ...authGatePreset(false) }}
+      screenOptions={FLOW_STACK_SCREEN_OPTIONS}
       screenListeners={webStackScreenListeners}
     >
       <Stack.Screen
@@ -845,7 +839,7 @@ export default function AppNavigator() {
   // This ensures new users see onboarding even if they're not logged in
   const skipOnboarding = Platform.OS === 'web'
   if (!skipOnboarding && !onboardingCompleted) {
-    return <OnboardingStack />
+    return <OnboardingStack key="onboarding-stack" />
   }
 
   // After onboarding is completed, check user authentication
@@ -886,7 +880,7 @@ export default function AppNavigator() {
   }
 
   if (user && pinGate === 'setup') {
-    return <PinGateSetupStack />
+    return <PinGateSetupStack key="pin-gate-setup" />
   }
 
   if (Platform.OS === 'web' && (pinGate === 'main' || pinGate === 'pin')) {
@@ -900,12 +894,12 @@ export default function AppNavigator() {
   }
 
   if (user && pinGate === 'pin') {
-    return <PinGateEntryStack />
+    return <PinGateEntryStack key="pin-gate-entry" />
   }
 
   if (user && pinGate === 'main') {
     return (
-      <ResponsiveAppShell>
+      <ResponsiveAppShell key="main-app-shell">
         <MainStack />
       </ResponsiveAppShell>
     )

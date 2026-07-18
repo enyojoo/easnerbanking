@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { StackNavigationOptions } from '@react-navigation/stack'
 import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import {
@@ -17,6 +17,11 @@ type NavigationLike = {
 type RouteLike = {
   params?: Record<string, unknown>
 }
+
+type ScreenTransitionOptionsFactory = (args: {
+  navigation: NavigationLike
+  route: RouteLike
+}) => StackNavigationOptions
 
 /** Hook factory for Stack.Screen options — wires responsive web layout into resolver. */
 export function useScreenTransitionOptions(routeName: ScreenRouteName) {
@@ -45,19 +50,20 @@ export function useScreenTransitionOptions(routeName: ScreenRouteName) {
   )
 }
 
-/** Single hook for MainStack — returns an options factory per route name. */
-export function useMainStackTransitionOptionsFactory() {
+/** Single hook for MainStack — stable per-route options callbacks (avoids stack thrash on Android). */
+export function useMainStackTransitionOptionsFactory(): (
+  routeName: ScreenRouteName,
+) => ScreenTransitionOptionsFactory {
   const { showSidebarShell, mode } = useResponsiveLayout()
 
-  return useCallback(
-    (routeName: ScreenRouteName) =>
-      ({
-        navigation,
-        route,
-      }: {
-        navigation: NavigationLike
-        route: RouteLike
-      }): StackNavigationOptions => {
+  return useMemo(() => {
+    const cache = new Map<ScreenRouteName, ScreenTransitionOptionsFactory>()
+
+    return (routeName: ScreenRouteName): ScreenTransitionOptionsFactory => {
+      const cached = cache.get(routeName)
+      if (cached) return cached
+
+      const factory: ScreenTransitionOptionsFactory = ({ navigation, route }) => {
         const { name: previousRouteName } = getPreviousRouteFromState(
           navigation.getState(),
         )
@@ -68,20 +74,27 @@ export function useMainStackTransitionOptionsFactory() {
           layoutMode: mode,
           showSidebarShell,
         })
-      },
-    [showSidebarShell, mode],
-  )
+      }
+
+      cache.set(routeName, factory)
+      return factory
+    }
+  }, [showSidebarShell, mode])
 }
 
-/** Static resolver for stacks outside ResponsiveLayoutProvider (auth/onboarding). */
-export function staticScreenTransitionOptions(routeName: ScreenRouteName) {
-  return ({
-    navigation,
-    route,
-  }: {
-    navigation: NavigationLike
-    route: RouteLike
-  }): StackNavigationOptions => {
+const staticTransitionOptionsCache = new Map<
+  ScreenRouteName,
+  ScreenTransitionOptionsFactory
+>()
+
+/** Static resolver for auth/onboarding stacks — cached callbacks avoid Android stack thrash. */
+export function staticScreenTransitionOptions(
+  routeName: ScreenRouteName,
+): ScreenTransitionOptionsFactory {
+  const cached = staticTransitionOptionsCache.get(routeName)
+  if (cached) return cached
+
+  const factory: ScreenTransitionOptionsFactory = ({ navigation, route }) => {
     const { name: previousRouteName } = getPreviousRouteFromState(
       navigation.getState(),
     )
@@ -91,4 +104,7 @@ export function staticScreenTransitionOptions(routeName: ScreenRouteName) {
       routeParams: route.params,
     })
   }
+
+  staticTransitionOptionsCache.set(routeName, factory)
+  return factory
 }

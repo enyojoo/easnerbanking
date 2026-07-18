@@ -21,8 +21,6 @@ import { ripple } from '../../lib/androidRipple'
 import { AUTH_INITIAL_MODE_KEY } from '../../constants/auth'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
-import EaseEnter from '../../components/EaseEnter'
-
 // Onboarding images
 const ONBOARDING_DATA = [
   {
