@@ -25,6 +25,7 @@ import {
   computeYcFundBalancePrincipalLocalPayIn,
   resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   normalizeYcMomoPhone,
+  useDebouncedValue,
   type NgLocalIdType,
   type YcRateClientRow,
 } from "@easner/shared"
@@ -116,7 +117,6 @@ export function LocalDepositWizard({
   const [amountStr, setAmountStr] = useState("")
   const [rates, setRates] = useState<YcRateRow[]>(() => readCachedYcPayInRates() ?? [])
   const [quote, setQuote] = useState<FundBalanceQuote | null>(null)
-  const [prefetchedQuote, setPrefetchedQuote] = useState<FundBalanceQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [defaultPhone, setDefaultPhone] = useState("")
@@ -364,6 +364,19 @@ export function LocalDepositWizard({
     defaultPhone,
   ])
 
+  const bankQuotePrefetchKey =
+    step === "amount" && !isMomo && enteredAmount > 0 && customerRate
+      ? `${residenceCountry}|${localPayInCurrency}|${amountMode}|${enteredAmount}|${rail}`
+      : ""
+
+  const [debouncedBankQuotePrefetchKey, bankQuotePrefetchControls] =
+    useDebouncedValue(bankQuotePrefetchKey)
+
+  useEffect(() => {
+    if (!debouncedBankQuotePrefetchKey || isMomo) return
+    void createQuote({ silent: true })
+  }, [debouncedBankQuotePrefetchKey, isMomo, createQuote])
+
   useEffect(() => {
     if (step !== "review" || !isMomo) return
     let cancelled = false
@@ -404,54 +417,6 @@ export function LocalDepositWizard({
       cancelled = true
     }
   }, [step, isMomo, residenceCountry, localPayInCurrency])
-
-  const quotePrefetchKey =
-    !isMomo &&
-    step === "amount" &&
-    enteredAmount > 0 &&
-    customerRate
-      ? [
-          residenceCountry,
-          localPayInCurrency,
-          rail,
-          amountMode,
-          enteredAmount,
-        ].join("|")
-      : ""
-
-  useEffect(() => {
-    if (!quotePrefetchKey) {
-      setPrefetchedQuote(null)
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      const result = await createQuote({ silent: true })
-      if (!cancelled && result) setPrefetchedQuote(result)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [quotePrefetchKey, createQuote])
-
-  useEffect(() => {
-    if (step !== "review" || isMomo) return
-    if (quote?.transferId) return
-    if (prefetchedQuote?.transferId) {
-      setQuote(prefetchedQuote)
-      setQuoteError(null)
-      setQuoteLoading(false)
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      const result = await createQuote()
-      if (!cancelled && !result) setQuote(null)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [step, quote?.transferId, prefetchedQuote, createQuote, isMomo])
 
   if (ngMissingType) {
     return (
@@ -630,6 +595,7 @@ export function LocalDepositWizard({
           disabled={!canContinue}
           onClick={async () => {
             setQuoteError(null)
+            bankQuotePrefetchControls.flush()
             if (isMomo) {
               const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
               if (!cached?.length) setMomoNetworksLoading(true)
@@ -647,8 +613,7 @@ export function LocalDepositWizard({
               setStep("review")
               return
             }
-            if (prefetchedQuote?.transferId) {
-              setQuote(prefetchedQuote)
+            if (quote?.ok && quote.localPayIn > 0 && !quoteCountdown.expired) {
               setStep("review")
               return
             }
@@ -696,7 +661,7 @@ export function LocalDepositWizard({
     const momoReady = Boolean((momoPhone.trim() || defaultPhone.trim()) && momoNetworkId)
     const reviewReady = isMomo
       ? Boolean(reviewCustomerRate && reviewLocalPayIn > 0 && momoReady)
-      : Boolean(quote?.transferId)
+      : Boolean(quote?.ok && reviewLocalPayIn > 0 && !quoteLoading)
     return (
       <div className="space-y-4">
         <button

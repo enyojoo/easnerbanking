@@ -55,6 +55,7 @@ import {
   ensureCrossBorderOrderConfirmed,
   isCompleteCrossBorderQuote,
   isStashedCrossBorderQuoteFresh,
+  isUsableCrossBorderQuotePreview,
   peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
   type CrossBorderQuoteStashMeta,
@@ -352,7 +353,13 @@ export default function SendConfirmPage() {
 
     if (isStashedCrossBorderQuoteFresh(meta)) {
       const stashed = peekCrossBorderQuote()
-      if (stashed && state.ycCrossBorder?.transferId === stashed.transferId) return
+      if (
+        stashed &&
+        state.ycCrossBorder?.localPayIn === stashed.localPayIn &&
+        state.ycCrossBorder?.customerRate === stashed.customerRate
+      ) {
+        return
+      }
       if (stashed) {
         const yc = crossBorderQuoteToFlowState(stashed, meta)
         const next: SendFlowState = {
@@ -374,11 +381,10 @@ export default function SendConfirmPage() {
     void (async () => {
       const quote = await ensureCrossBorderQuoteStashed(meta)
       if (cancelled) return
-      if (!isCompleteCrossBorderQuote(quote) && !quote?.localPayIn) {
+      if (!isUsableCrossBorderQuotePreview(quote)) {
         setYcQuoteError(peekLastCrossBorderQuoteError() || "Cross-border quote failed")
         return
       }
-      if (!quote) return
       const yc = crossBorderQuoteToFlowState(quote, meta)
       const next: SendFlowState = {
         ...state,

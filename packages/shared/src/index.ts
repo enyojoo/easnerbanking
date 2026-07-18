@@ -720,6 +720,11 @@ export type { YcPayInLimits, YcPayInAmountValidation } from "./yc-pay-in-limits"
 export { useYcPayInMinEnforcement } from "./hooks/use-yc-pay-in-min-enforcement"
 export { useYcCrossBorderSendMinEnforcement } from "./hooks/use-yc-cross-border-send-min-enforcement"
 export {
+  QUOTE_PREFETCH_DEBOUNCE_MS,
+  useDebouncedValue,
+  type DebouncedValueControls,
+} from "./hooks/use-debounced-value"
+export {
   YC_DIRECT_SETTLEMENT_MIN_SEND_USDC_EXCLUSIVE,
   YC_PAYOUT_MIN_ENFORCE_DEBOUNCE_MS,
   computeEnteredAmountForYcPayoutMin,

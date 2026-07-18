@@ -69,17 +69,24 @@ function quoteMetaKey(meta: FundBalanceQuoteStashMeta): string {
   ].join('|')
 }
 
-export function isCompleteFundBalanceQuote(
+/** Preview quote from `/quote` — enough for review and Continue. */
+export function isUsableFundBalanceQuotePreview(
   quote: YcFundBalanceQuote | null | undefined,
 ): quote is YcFundBalanceQuote {
   return Boolean(
     quote?.ok &&
-      quote.transferId &&
       quote.expiresAt &&
       quote.localPayIn > 0 &&
       quote.usdCredit > 0 &&
       quote.customerRate > 0,
   )
+}
+
+/** Locked order from `/confirm` — required before pay-in instructions finalize. */
+export function isCompleteFundBalanceQuote(
+  quote: YcFundBalanceQuote | null | undefined,
+): quote is YcFundBalanceQuote {
+  return Boolean(isUsableFundBalanceQuotePreview(quote) && quote.transferId)
 }
 
 export function stashFundBalanceQuote(quote: YcFundBalanceQuote, meta: FundBalanceQuoteStashMeta): void {
@@ -104,7 +111,7 @@ export function clearFundBalanceQuote(): void {
 }
 
 export function isStashedFundBalanceQuoteFresh(meta: FundBalanceQuoteStashMeta): boolean {
-  if (!isCompleteFundBalanceQuote(stashed) || !stashedMeta) return false
+  if (!isUsableFundBalanceQuotePreview(stashed) || !stashedMeta) return false
   if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
   return quoteMetaKey(stashedMeta) === quoteMetaKey(meta)
 }

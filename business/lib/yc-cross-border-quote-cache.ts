@@ -65,16 +65,23 @@ export function isCrossBorderQuotePreview(
   return Boolean(quote?.ok && quote.quotePhase === "preview" && !quote.transferId)
 }
 
-export function isCompleteCrossBorderQuote(
+/** Preview quote from `/quote` — enough for review and Continue. */
+export function isUsableCrossBorderQuotePreview(
   quote: CrossBorderQuoteResult | null | undefined,
 ): quote is CrossBorderQuoteResult {
   return Boolean(
     quote?.ok &&
-      quote.transferId &&
       quote.expiresAt &&
       quote.localPayIn > 0 &&
       quote.customerRate > 0,
   )
+}
+
+/** Locked order from `/confirm` — required before pay-in instructions finalize. */
+export function isCompleteCrossBorderQuote(
+  quote: CrossBorderQuoteResult | null | undefined,
+): quote is CrossBorderQuoteResult {
+  return Boolean(isUsableCrossBorderQuotePreview(quote) && quote.transferId)
 }
 
 export function stashCrossBorderQuote(
@@ -102,7 +109,7 @@ export function clearCrossBorderQuote(): void {
 }
 
 export function isStashedCrossBorderQuoteFresh(meta: CrossBorderQuoteStashMeta): boolean {
-  if (!isCompleteCrossBorderQuote(stashed) || !stashedMeta) return false
+  if (!isUsableCrossBorderQuotePreview(stashed) || !stashedMeta) return false
   if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
   return quoteMetaKey(stashedMeta) === quoteMetaKey(meta)
 }

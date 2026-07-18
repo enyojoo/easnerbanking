@@ -82,6 +82,7 @@ import {
   SEND_LOCAL_PAY_IN_BANK_CHIP,
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
   validateYcCrossBorderSendAmount,
+  useDebouncedValue,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
@@ -111,6 +112,7 @@ import {
   clearCrossBorderQuote,
   ensureCrossBorderQuoteStashed,
   isCompleteCrossBorderQuote,
+  isUsableCrossBorderQuotePreview,
   isStashedCrossBorderQuoteFresh,
   peekLastCrossBorderQuoteError,
   type CrossBorderQuoteStashMeta,
@@ -754,14 +756,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       ].join('|')
     : ''
 
+  const [debouncedCrossBorderBankPrefetchKey, crossBorderQuotePrefetchControls] =
+    useDebouncedValue(crossBorderBankPrefetchKey)
+
   useEffect(() => {
     clearCrossBorderQuote()
   }, [recipient?.id, selectedOtherCurrency, tlcPayInRail])
 
   useEffect(() => {
-    if (!crossBorderBankPrefetchKey || !crossBorderBankQuoteMeta) return
+    if (!debouncedCrossBorderBankPrefetchKey || !crossBorderBankQuoteMeta) return
     void ensureCrossBorderQuoteStashed(crossBorderBankQuoteMeta)
-  }, [crossBorderBankPrefetchKey, crossBorderBankQuoteMeta])
+  }, [debouncedCrossBorderBankPrefetchKey, crossBorderBankQuoteMeta])
 
   const payoutMinReceive = useMemo(
     () =>
@@ -1010,8 +1015,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       amountEntryMode,
       amountEntryMode === 'send' ? sendingAmount : receiveAmount,
       selectedBalanceCurrency,
-      note.trim(),
-      paymentPurpose.trim(),
     ].join('|')
   }, [
     needsBackgroundPayoutQuote,
@@ -1020,12 +1023,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     sendingAmount,
     receiveAmount,
     selectedBalanceCurrency,
-    note,
-    paymentPurpose,
   ])
 
+  const [debouncedPayoutQuotePrefetchKey, payoutQuotePrefetchControls] =
+    useDebouncedValue(payoutQuotePrefetchKey)
+
   useEffect(() => {
-    if (!payoutQuotePrefetchKey || !recipient?.id) return
+    if (!debouncedPayoutQuotePrefetchKey || !recipient?.id) return
     const meta = {
       recipientId: recipient.id,
       amountEntryMode,
@@ -1045,7 +1049,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         }),
       meta,
     )
-  }, [payoutQuotePrefetchKey, recipient, receiveAmount, receiveCurrency, selectedBalanceCurrency, amountEntryMode, sendingAmount, note, paymentPurpose])
+  }, [debouncedPayoutQuotePrefetchKey, recipient, receiveAmount, receiveCurrency, selectedBalanceCurrency, amountEntryMode, sendingAmount, note, paymentPurpose])
 
   const needsBackgroundWalletSendQuote =
     selectedPaymentMethod === 'balance' &&
@@ -1058,8 +1062,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     return [recipient.id, receiveAmount, selectedBalanceCurrency].join('|')
   }, [needsBackgroundWalletSendQuote, recipient?.id, receiveAmount, selectedBalanceCurrency])
 
+  const [debouncedWalletQuotePrefetchKey, walletQuotePrefetchControls] =
+    useDebouncedValue(walletQuotePrefetchKey)
+
   useEffect(() => {
-    if (!walletQuotePrefetchKey || !recipient?.id) return
+    if (!debouncedWalletQuotePrefetchKey || !recipient?.id) return
     let cancelled = false
     void ensureSendWalletQuoteStashed(
       () =>
@@ -1076,7 +1083,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     return () => {
       cancelled = true
     }
-  }, [walletQuotePrefetchKey, recipient, receiveAmount, selectedBalanceCurrency, walletQuoteStashMeta])
+  }, [debouncedWalletQuotePrefetchKey, recipient, receiveAmount, selectedBalanceCurrency, walletQuoteStashMeta])
 
   useEffect(() => {
     clearSendPayoutQuote()
@@ -1184,6 +1191,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       setAmountFieldError(null)
 
       haptics.medium()
+      payoutQuotePrefetchControls.flush()
+      walletQuotePrefetchControls.flush()
+      crossBorderQuotePrefetchControls.flush()
 
       const walletReceiveAmount = normalizePayoutReceiveAmountForCurrency(
         receiveCurrency,
@@ -1455,7 +1465,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           }
           try {
             const quote = await ensureCrossBorderQuoteStashed(bankQuoteMeta)
-            if (!isCompleteCrossBorderQuote(quote)) {
+            if (!isUsableCrossBorderQuotePreview(quote)) {
               showError(peekLastCrossBorderQuoteError() || 'Could not load cross-border quote. Try again.')
               return
             }

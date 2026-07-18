@@ -19,6 +19,7 @@ import {
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
   validateYcFundBalancePayInAmount,
+  useDebouncedValue,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -53,10 +54,6 @@ import {
   clearFundBalanceQuote,
   ensureFundBalanceQuoteStashed,
   ensurePayInNetworksCached,
-  isCompleteFundBalanceQuote,
-  isStashedFundBalanceQuoteFresh,
-  peekFundBalanceQuote,
-  peekLastFundBalanceQuoteError,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches } from '../../lib/warmYcLocalDepositCaches'
@@ -210,36 +207,35 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   const showExchangePreviewSkeleton = amountPositive && ycFlow.ratesLoading
   const exchangePreviewReady = amountPositive && !ycFlow.ratesLoading && Boolean(ycFlow.customerRate)
 
-  const quoteStashMeta = useMemo(
-    () => ({
+  useEffect(() => {
+    clearFundBalanceQuote()
+  }, [localPayInCurrency, residenceCountry, payInRail])
+
+  const fundBalanceQuotePrefetchKey =
+    payInRail === 'bank_transfer' && canContinue
+      ? [residenceCountry, localPayInCurrency, amountEntryMode, enteredAmount].join('|')
+      : ''
+
+  const [debouncedFundBalanceQuotePrefetchKey, fundBalanceQuotePrefetchControls] =
+    useDebouncedValue(fundBalanceQuotePrefetchKey)
+
+  useEffect(() => {
+    if (!debouncedFundBalanceQuotePrefetchKey || payInRail !== 'bank_transfer') return
+    void ensureFundBalanceQuoteStashed({
       country: residenceCountry,
       currency: localPayInCurrency,
       rail: payInRail,
       amountEntryMode,
       enteredAmount,
-    }),
-    [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, enteredAmount],
-  )
-
-  const quotePrefetchKey = useMemo(() => {
-    if (!canContinue) return ''
-    return [
-      quoteStashMeta.country,
-      quoteStashMeta.currency,
-      quoteStashMeta.rail,
-      quoteStashMeta.amountEntryMode,
-      quoteStashMeta.enteredAmount,
-    ].join('|')
-  }, [canContinue, quoteStashMeta])
-
-  useEffect(() => {
-    clearFundBalanceQuote()
-  }, [localPayInCurrency, residenceCountry, payInRail])
-
-  useEffect(() => {
-    if (!quotePrefetchKey || payInRail === 'mobile_money') return
-    void ensureFundBalanceQuoteStashed(quoteStashMeta)
-  }, [quotePrefetchKey, quoteStashMeta, payInRail])
+    })
+  }, [
+    debouncedFundBalanceQuotePrefetchKey,
+    payInRail,
+    residenceCountry,
+    localPayInCurrency,
+    amountEntryMode,
+    enteredAmount,
+  ])
 
   const momoNetworksPrefetchKey =
     payInRail === 'mobile_money' && residenceCountry && localPayInCurrency
@@ -349,20 +345,9 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       return
     }
 
-    const quoteAlreadyWarm = isStashedFundBalanceQuoteFresh(quoteStashMeta)
-    if (!quoteAlreadyWarm) {
-      setIsContinuePending(true)
-      continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-    }
+    fundBalanceQuotePrefetchControls.flush()
 
     try {
-      const quote = quoteAlreadyWarm
-        ? peekFundBalanceQuote()
-        : await ensureFundBalanceQuoteStashed(quoteStashMeta)
-      if (!isCompleteFundBalanceQuote(quote)) {
-        showError(peekLastFundBalanceQuoteError() || 'Could not load deposit quote. Try again.')
-        return
-      }
       navigation.navigate('ReceiveLocalReview' as never, {
         localPayInCurrency,
         residenceCountry,
@@ -373,13 +358,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
         localPayIn: ycFlow.preview.localPayIn,
         customerRate: ycFlow.customerRate ?? 0,
       } as never)
-    } finally {
-      if (continueSpinnerTimerRef.current) {
-        clearTimeout(continueSpinnerTimerRef.current)
-        continueSpinnerTimerRef.current = null
-      }
-      setIsContinuePending(false)
-      setIsContinueLoading(false)
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'Could not continue. Try again.')
     }
   }
 

@@ -21,6 +21,7 @@ import {
   hasNoahSendRateRow,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
+  useDebouncedValue,
   type NoahWalletRateRow,
 } from "@easner/shared"
 import { getCurrencySymbol, getSendAmountFieldSymbol } from "@/lib/utils"
@@ -444,14 +445,17 @@ export default function SendPage() {
       ].join("|")
     : ""
 
+  const [debouncedCrossBorderBankPrefetchKey, crossBorderQuotePrefetchControls] =
+    useDebouncedValue(crossBorderBankPrefetchKey)
+
   useEffect(() => {
     clearCrossBorderQuote()
   }, [recipient?.id, otherCurrency, tlcPayInRail])
 
   useEffect(() => {
-    if (!crossBorderBankPrefetchKey || !crossBorderBankQuoteMeta) return
+    if (!debouncedCrossBorderBankPrefetchKey || !crossBorderBankQuoteMeta) return
     void ensureCrossBorderQuoteStashed(crossBorderBankQuoteMeta)
-  }, [crossBorderBankPrefetchKey, crossBorderBankQuoteMeta])
+  }, [debouncedCrossBorderBankPrefetchKey, crossBorderBankQuoteMeta])
 
   const tlcPayInLimits = useMemo(() => {
     if (!payInRails || paymentMethod !== "otherCurrency") {
@@ -898,17 +902,26 @@ export default function SendPage() {
     return [recipient.id, receiveAmount, sendCurrency].join("|")
   }, [recipient?.id, receiveAmount, sendCurrency])
 
-  const payoutQuoteCacheKey = useMemo(() => {
+  const payoutQuotePrefetchKey = useMemo(() => {
     if (!recipient?.id || !(receiveAmount > 0)) return ""
     return [
       recipient.id,
       amountEntryMode,
       amountEntryMode === "send" ? sendAmount : receiveAmount,
       sendCurrency,
-      note.trim(),
-      paymentPurpose.trim(),
     ].join("|")
-  }, [recipient?.id, amountEntryMode, sendAmount, receiveAmount, sendCurrency, note, paymentPurpose])
+  }, [recipient?.id, amountEntryMode, sendAmount, receiveAmount, sendCurrency])
+
+  const payoutQuoteCacheKey = useMemo(() => {
+    if (!payoutQuotePrefetchKey) return ""
+    return [payoutQuotePrefetchKey, note.trim(), paymentPurpose.trim()].join("|")
+  }, [payoutQuotePrefetchKey, note, paymentPurpose])
+
+  const [debouncedWalletQuoteCacheKey, walletQuotePrefetchControls] =
+    useDebouncedValue(walletQuoteCacheKey)
+  const [debouncedPayoutQuotePrefetchKey, payoutQuotePrefetchControls] = useDebouncedValue(
+    payoutQuotePrefetchKey,
+  )
 
   const fetchPayoutQuote = useCallback(async (): Promise<PayoutQuoteResult | null> => {
     if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return null
@@ -1033,14 +1046,14 @@ export default function SendPage() {
   ])
 
   useEffect(() => {
-    if (!needsWalletQuoteBeforeConfirm || !walletQuoteCacheKey || !recipient?.id) return
+    if (!needsWalletQuoteBeforeConfirm || !debouncedWalletQuoteCacheKey || !recipient?.id) return
     void fetchWalletQuote()
-  }, [needsWalletQuoteBeforeConfirm, walletQuoteCacheKey, recipient?.id, fetchWalletQuote])
+  }, [needsWalletQuoteBeforeConfirm, debouncedWalletQuoteCacheKey, recipient?.id, fetchWalletQuote])
 
   useEffect(() => {
-    if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return
+    if (!needsPayoutQuoteBeforeConfirm || !debouncedPayoutQuotePrefetchKey || !recipient?.id) return
     void fetchPayoutQuote()
-  }, [needsPayoutQuoteBeforeConfirm, payoutQuoteCacheKey, recipient?.id, fetchPayoutQuote])
+  }, [needsPayoutQuoteBeforeConfirm, debouncedPayoutQuotePrefetchKey, recipient?.id, fetchPayoutQuote])
 
   const handleContinue = async () => {
     if (!canContinue || !recipient || isContinuePending || isContinueLoading) return
@@ -1084,6 +1097,9 @@ export default function SendPage() {
       }
     }
     setAmountFieldError(null)
+    payoutQuotePrefetchControls.flush()
+    walletQuotePrefetchControls.flush()
+    crossBorderQuotePrefetchControls.flush()
     const isTlcSend = showThroughLocalCurrency && paymentMethod === "otherCurrency"
     const transactionId = isTlcSend ? "" : generateTransactionId()
 
