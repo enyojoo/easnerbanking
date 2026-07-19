@@ -241,9 +241,6 @@ export default function AdminDashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle>Top currencies</CardTitle>
-              <p className="text-xs text-muted-foreground font-normal">
-                Local corridor totals are informational; USD/EUR volume is in KPIs above.
-              </p>
             </CardHeader>
             <CardContent className="max-h-80 overflow-y-auto">
               {loading && !overview ? (
@@ -260,14 +257,7 @@ export default function AdminDashboardPage() {
                   <TableBody>
                     {(overview?.topCurrencies ?? []).map((row) => (
                       <TableRow key={row.code}>
-                        <TableCell className="font-medium">
-                          {row.code}
-                          {row.dataOnly ? (
-                            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                              local corridor (informational)
-                            </span>
-                          ) : null}
-                        </TableCell>
+                        <TableCell className="font-medium">{row.code}</TableCell>
                         <TableCell>{row.count}</TableCell>
                         <TableCell className="whitespace-nowrap">
                           {formatMoneyDisplay(row.totalAmount, row.code)}
