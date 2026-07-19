@@ -572,14 +572,7 @@ export default function AdminTransactionsPage() {
                                 </DialogHeader>
                                 {selectedTransaction ? (
                                   <div className="overflow-y-auto flex-1 pr-2 -mr-2">
-                                    <OfficeTransactionDetailPanel
-                                      transaction={selectedTransaction}
-                                      onStatusUpdated={() => {
-                                        void queryClient.invalidateQueries({
-                                          queryKey: [...officeKeys.root, "transactions"],
-                                        })
-                                      }}
-                                    />
+                                    <OfficeTransactionDetailPanel transaction={selectedTransaction} />
                                   </div>
                                 ) : null}
                               </DialogContent>

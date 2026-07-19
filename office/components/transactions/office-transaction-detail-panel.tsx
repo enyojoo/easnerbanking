@@ -1,7 +1,5 @@
 "use client"
 
-import { useState } from "react"
-import Link from "next/link"
 import {
   buildCrossBorderSendDetailRows,
   buildInboundReceiveDetailRows,
@@ -15,14 +13,10 @@ import {
   type GlobalPayoutReviewSnapshot,
 } from "@easner/shared"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { officeFetch } from "@/lib/api-client"
 import type { OfficeTransaction } from "@/lib/types/office-transaction"
 
 type Props = {
   transaction: OfficeTransaction
-  onStatusUpdated?: () => void
 }
 
 function DetailRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
@@ -49,19 +43,7 @@ function formatProviderLabel(provider: string | null | undefined): string {
   return raw
 }
 
-function eventInboxHref(transaction: OfficeTransaction): string {
-  const meta = transaction.metadata || {}
-  const sequenceId = String(meta.leg1_sequence_id ?? meta.sequence_id ?? transaction.provider_transaction_id ?? "").trim()
-  const params = new URLSearchParams({ provider: "yellowcard" })
-  if (sequenceId) params.set("q", sequenceId)
-  return `/platform-control?tab=webhooks&${params.toString()}`
-}
-
-export function OfficeTransactionDetailPanel({ transaction, onStatusUpdated }: Props) {
-  const [statusDraft, setStatusDraft] = useState(transaction.status)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-
+export function OfficeTransactionDetailPanel({ transaction }: Props) {
   const meta = transaction.metadata || {}
   const payoutReviewFlow = resolvePayoutReviewFlow(meta)
   const payoutReview = readRecord(meta.payout_review) as GlobalPayoutReviewSnapshot | null
@@ -140,36 +122,6 @@ export function OfficeTransactionDetailPanel({ transaction, onStatusUpdated }: P
     }
   }
 
-  const opsFields: Array<{ label: string; value: string }> = [
-    { label: "YC mode", value: String(meta.yc_mode ?? "—") },
-    { label: "Pay-in rail", value: String(meta.pay_in_rail ?? "—") },
-    { label: "Sequence ID", value: String(meta.leg1_sequence_id ?? meta.sequence_id ?? "—") },
-    { label: "Reporting USD", value: String(meta.reporting_usd_amount ?? "—") },
-    { label: "Failure leg", value: String(meta.failure_leg ?? "—") },
-    { label: "Quote expires", value: String(meta.expires_at ?? meta.quote_expires_at ?? "—") },
-  ]
-
-  const onSaveStatus = async () => {
-    setSaving(true)
-    setSaveError(null)
-    try {
-      const res = await officeFetch("/api/admin/office/transactions", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactionId: transaction.id, status: statusDraft }),
-      })
-      const body = (await res.json()) as { error?: string }
-      if (!res.ok || body.error) {
-        throw new Error(body.error || "Status update failed")
-      }
-      onStatusUpdated?.()
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Status update failed")
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -202,15 +154,6 @@ export function OfficeTransactionDetailPanel({ transaction, onStatusUpdated }: P
         </div>
       ) : null}
 
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-gray-900">Ops metadata</h3>
-        <div className="rounded-lg border border-gray-200 px-3">
-          {opsFields.map((field) => (
-            <DetailRow key={field.label} label={field.label} value={field.value} />
-          ))}
-        </div>
-      </div>
-
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
           <p className="text-gray-500">Easner ID</p>
@@ -220,34 +163,6 @@ export function OfficeTransactionDetailPanel({ transaction, onStatusUpdated }: P
           <p className="text-gray-500">Provider Tx ID</p>
           <p className="font-mono text-xs break-all">{transaction.provider_transaction_id || "—"}</p>
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" asChild>
-          <Link href={eventInboxHref(transaction)}>Open webhook inbox</Link>
-        </Button>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 p-3 space-y-3">
-        <p className="text-sm font-semibold text-gray-900">Manual status override</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={statusDraft} onValueChange={setStatusDraft}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">pending</SelectItem>
-              <SelectItem value="processing">processing</SelectItem>
-              <SelectItem value="completed">completed</SelectItem>
-              <SelectItem value="failed">failed</SelectItem>
-              <SelectItem value="cancelled">cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button size="sm" onClick={() => void onSaveStatus()} disabled={saving}>
-            {saving ? "Saving..." : "Update status"}
-          </Button>
-        </div>
-        {saveError ? <p className="text-sm text-red-600">{saveError}</p> : null}
       </div>
     </div>
   )

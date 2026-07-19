@@ -769,16 +769,7 @@ export default function AdminUsersPage() {
                                                         </DialogHeader>
                                                         {selectedUserTransaction ? (
                                                           <div className="overflow-y-auto flex-1 pr-2 -mr-2">
-                                                            <OfficeTransactionDetailPanel
-                                                              transaction={selectedUserTransaction}
-                                                              onStatusUpdated={() => {
-                                                                if (selectedUser?.id) {
-                                                                  void queryClient.invalidateQueries({
-                                                                    queryKey: officeKeys.userTransactions(selectedUser.id),
-                                                                  })
-                                                                }
-                                                              }}
-                                                            />
+                                                            <OfficeTransactionDetailPanel transaction={selectedUserTransaction} />
                                                           </div>
                                                         ) : null}
                                                       </DialogContent>
