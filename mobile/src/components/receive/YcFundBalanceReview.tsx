@@ -25,7 +25,7 @@ import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
 import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
 import {
   ensureFundBalanceOrderConfirmed,
-  fetchFundBalanceQuotePreview,
+  ensureFundBalanceQuoteStashed,
   isCompleteFundBalanceQuote,
   isStashedFundBalanceQuoteFresh,
   isUsableFundBalanceQuotePreview,
@@ -93,22 +93,23 @@ export function YcFundBalanceReview({
     ],
   )
 
-  const [previewQuote, setPreviewQuote] = useState<YcFundBalanceQuoteResult | null>(null)
+  const [previewQuote, setPreviewQuote] = useState<YcFundBalanceQuoteResult | null>(() => {
+    if (!isStashedFundBalanceQuoteFresh(quoteMeta)) return null
+    const stashed = peekFundBalanceQuote()
+    if (!stashed || isCompleteFundBalanceQuote(stashed)) return null
+    return isUsableFundBalanceQuotePreview(stashed) ? stashed : null
+  })
   const [lockedQuote, setLockedQuote] = useState<YcFundBalanceQuoteResult | null>(() => {
     if (isStashedFundBalanceQuoteFresh(quoteMeta) && isCompleteFundBalanceQuote(peekFundBalanceQuote())) {
       return peekFundBalanceQuote()
     }
     return null
   })
-  const [quoteLoading, setQuoteLoading] = useState(
-    () =>
-      !(
-        isStashedFundBalanceQuoteFresh(quoteMeta) &&
-        isCompleteFundBalanceQuote(peekFundBalanceQuote())
-      ),
-  )
-  const [confirmLoading, setConfirmLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [confirmLoading, setConfirmLoading] = useState(false)
+
+  const hasClientPreview =
+    previewCustomerRate > 0 && localPayIn > 0 && usdCredit > 0
 
   useEffect(() => {
     if (isStashedFundBalanceQuoteFresh(quoteMeta) && isCompleteFundBalanceQuote(peekFundBalanceQuote())) {
@@ -118,29 +119,26 @@ export function YcFundBalanceReview({
         setPreviewQuote(stashed)
         setQuoteError(null)
       }
-      setQuoteLoading(false)
       return
     }
 
     let cancelled = false
-    setQuoteLoading(true)
-    setQuoteError(null)
-    void (async () => {
-      const preview = await fetchFundBalanceQuotePreview(quoteMeta).catch(() => null)
+    void ensureFundBalanceQuoteStashed(quoteMeta).then((preview) => {
       if (cancelled) return
-      setQuoteLoading(false)
       if (preview && isUsableFundBalanceQuotePreview(preview)) {
         setPreviewQuote(preview)
         setQuoteError(null)
         return
       }
-      setQuoteError(peekLastFundBalanceQuoteError() || 'Could not load deposit details')
-    })()
+      if (!hasClientPreview) {
+        setQuoteError(peekLastFundBalanceQuoteError() || 'Could not load deposit details')
+      }
+    })
 
     return () => {
       cancelled = true
     }
-  }, [quoteMeta])
+  }, [quoteMeta, hasClientPreview])
 
   const displayQuote = lockedQuote ?? previewQuote
   const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
@@ -233,6 +231,7 @@ export function YcFundBalanceReview({
       sourcePhone: q.sourcePhone ?? sourcePhone?.trim(),
       sourceNetworkId: q.sourceNetworkId ?? networkId,
       sourceNetworkName: q.sourceNetworkName ?? sourceNetworkName,
+      depositExpiresAt: q.expiresAt,
     }
     if (isMobileMoney) {
       navigation.navigate('YcPayIn', {
@@ -283,7 +282,7 @@ export function YcFundBalanceReview({
     confirmLoading ||
     quoteCountdown.expired ||
     Boolean(quoteError) ||
-    (quoteLoading && !previewQuote && !quoteLocked)
+    (!quoteLocked && !previewQuote && !hasClientPreview)
 
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>
@@ -296,9 +295,6 @@ export function YcFundBalanceReview({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {(quoteLoading || confirmLoading) && !quoteLocked ? (
-            <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
-          ) : null}
           {reviewRows.length > 0 ? (
             <>
               {reviewRows.map((row, index) => {
@@ -357,7 +353,11 @@ export function YcFundBalanceReview({
           end={{ x: 1, y: 0 }}
           style={styles.ctaGradient}
         >
-          <Text style={styles.ctaText}>{confirmLoading ? 'Locking details…' : 'Continue'}</Text>
+          {confirmLoading ? (
+            <ActivityIndicator color={colors.text.inverse} size="small" />
+          ) : (
+            <Text style={styles.ctaText}>Continue</Text>
+          )}
         </LinearGradient>
       </Pressable>
     </View>

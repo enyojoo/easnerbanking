@@ -111,6 +111,7 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   clearCrossBorderQuote,
+  prefetchCrossBorderQuotePipeline,
 } from '../../lib/sendFlowCrossBorderQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
@@ -1376,6 +1377,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             showError('Could not resolve pay-in country for bank transfer.')
             return
           }
+          prefetchCrossBorderQuotePipeline({
+            recipientId: recipient.id,
+            payInCurrency: selectedOtherCurrency,
+            payInCountry,
+            payInRail: rail,
+            receiveAmount: receiveAmountValue,
+          })
         }
         navigation.navigate('SendConfirm' as never, {
           recipient,

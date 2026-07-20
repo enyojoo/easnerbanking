@@ -110,6 +110,7 @@ export default function YcPayInPage() {
         payInNotice={yc.payInNotice}
         copiedField={copiedKey}
         onCopy={handleCopy}
+        depositExpiresAt={yc.expiresAt}
       />
     </div>
   )

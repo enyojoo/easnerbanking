@@ -15,6 +15,7 @@ import {
 import { ycBankInfoFields } from "@/lib/yc-bank-info-fields"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { YcLocalPayInCompleteSummary } from "@/components/yc-local-pay-in-complete-summary"
+import { YcPayInAwaitingPaymentCountdown } from "@/components/yc/yc-pay-in-awaiting-payment-countdown"
 
 export type YcCompleteDepositPanelProps = {
   flowMode: "fund_balance" | "cross_border_send"
@@ -37,6 +38,10 @@ export type YcCompleteDepositPanelProps = {
   onCopy?: (text: string, field: string) => void
   /** Where transaction detail back should land after YC pay-in complete. */
   returnTo?: "dashboard" | "transactions"
+  /** When true, hide the attest CTA (detail "here" link replay). */
+  readOnly?: boolean
+  /** Channel deposit window expiry (ISO) — awaiting payment countdown. */
+  depositExpiresAt?: string | null
 }
 
 export function YcCompleteDepositPanel({
@@ -59,6 +64,8 @@ export function YcCompleteDepositPanel({
   copiedField,
   onCopy,
   returnTo = "dashboard",
+  readOnly = false,
+  depositExpiresAt,
 }: YcCompleteDepositPanelProps) {
   const router = useRouter()
   const [attestLoading, setAttestLoading] = useState(false)
@@ -96,7 +103,7 @@ export function YcCompleteDepositPanel({
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-semibold">{title}</h2>
+      {!readOnly ? <h2 className="text-2xl font-semibold">{title}</h2> : null}
 
       <div className="rounded-xl border border-border p-4 space-y-1 text-sm">
         <YcLocalPayInCompleteSummary
@@ -115,6 +122,10 @@ export function YcCompleteDepositPanel({
           onCopy={onCopy}
         />
       </div>
+
+      {depositExpiresAt ? (
+        <YcPayInAwaitingPaymentCountdown depositExpiresAt={depositExpiresAt} />
+      ) : null}
 
       {(completeNotice || !isMomo) ? (
       <div className="space-y-4">
@@ -181,9 +192,11 @@ export function YcCompleteDepositPanel({
 
       {attestError ? <p className="text-sm text-destructive text-center">{attestError}</p> : null}
 
-      <Button className="w-full" type="button" disabled={attestLoading} onClick={() => void handleAttest()}>
-        {attestLoading ? "Confirming…" : ycPayInCompleteCta(payInRail)}
-      </Button>
+      {!readOnly ? (
+        <Button className="w-full" type="button" disabled={attestLoading} onClick={() => void handleAttest()}>
+          {attestLoading ? "Confirming…" : ycPayInCompleteCta(payInRail)}
+        </Button>
+      ) : null}
     </div>
   )
 }

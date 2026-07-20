@@ -41,16 +41,54 @@ describe("yc pay-in display", () => {
     ).toBe("Awaiting payment")
   })
 
-  it("builds awaiting-transfer lifecycle before attestation", () => {
+  it("builds awaiting-payment lifecycle before attestation", () => {
     const steps = buildYcPayInLifecycle({
       status: "pending",
       metadata: {
         yc_mode: "cross_border_send",
         quote_locked_at: "2026-01-01T00:00:00.000Z",
+        local_pay_in: 1000,
+        local_currency: "NGN",
+        quote_expires_at: "2099-01-01T00:00:00.000Z",
       },
       crossBorder: true,
+      nowMs: Date.parse("2026-01-01T12:00:00.000Z"),
     })
     expect(steps[0]?.id).toBe("awaiting_transfer")
+    expect(steps[0]?.title).toBe("Awaiting payment")
     expect(steps[0]?.state).toBe("current")
+    expect(steps[0]?.showPaymentDetailsLink).toBe(true)
+  })
+
+  it("shows expired lifecycle copy after the payment window closes", () => {
+    const steps = buildYcPayInLifecycle({
+      status: "pending",
+      metadata: {
+        yc_mode: "fund_balance",
+        quote_locked_at: "2026-01-01T00:00:00.000Z",
+        quote_expires_at: "2026-01-01T00:05:00.000Z",
+        local_pay_in: 1000,
+        local_currency: "NGN",
+      },
+      nowMs: Date.parse("2026-01-01T00:10:00.000Z"),
+    })
+    expect(steps[0]?.description).toBe(
+      "The time to complete this transfer has passed — contact support with your transaction ID.",
+    )
+    expect(steps[0]?.showPaymentDetailsLink).toBe(false)
+  })
+
+  it("still shows payment link when expiry is unknown (legacy rows)", () => {
+    const steps = buildYcPayInLifecycle({
+      status: "pending",
+      metadata: {
+        yc_mode: "fund_balance",
+        quote_locked_at: "2026-01-01T00:00:00.000Z",
+        local_pay_in: 1000,
+        local_currency: "NGN",
+      },
+      nowMs: Date.parse("2026-01-01T00:01:00.000Z"),
+    })
+    expect(steps[0]?.showPaymentDetailsLink).toBe(true)
   })
 })

@@ -55,6 +55,7 @@ import SkeletonLoader from '../../components/SkeletonLoader'
 import { useToast } from '../../components/ToastProvider'
 import {
   clearFundBalanceQuote,
+  ensureFundBalanceQuoteStashed,
   ensurePayInNetworksCached,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady } from '../../lib/warmYcLocalDepositCaches'
@@ -313,6 +314,13 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     }
 
     haptics.medium()
+    void ensureFundBalanceQuoteStashed({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: payInRail,
+      amountEntryMode,
+      enteredAmount,
+    }).catch(() => {})
     void ensurePayInNetworksCached(residenceCountry, localPayInCurrency).catch(() => {})
     navigation.navigate('ReceiveLocalReview' as never, {
       localPayInCurrency,

@@ -812,6 +812,7 @@ export function LocalDepositWizard({
           payInNotice={payInNotice}
           copiedField={copiedField}
           onCopy={onCopy}
+          depositExpiresAt={quote?.expiresAt}
         />
       ) : (
         <p className="text-sm text-muted-foreground">Loading quote…</p>

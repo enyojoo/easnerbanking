@@ -1,3 +1,5 @@
+import type { YcPayInPaymentDetails } from "@easner/shared"
+
 export interface Account {
   id: string
   currency: "USD" | "EUR" | "GBP" | "NGN"
@@ -77,8 +79,14 @@ export interface Transaction {
   ledgerCreatedAt?: string
   /** YC pay-in: user-facing when (attestation / webhook), not quote lock. */
   displayWhenAt?: string
-  /** YC pay-in awaiting user attestation — hide misleading list date. */
+  /** YC pay-in awaiting user attestation. */
   payInAwaitingAttestation?: boolean
+  /** YC pay-in quote lock time. */
+  quoteLockedAt?: string
+  /** YC pay-in payment instructions for detail "here" link. */
+  ycPayInPaymentDetails?: YcPayInPaymentDetails | null
+  /** YC pay-in deposit window expiry (ISO). */
+  quoteExpiresAt?: string | null
   /** Detail row label — e.g. Easetag P2P shows "Easetag". */
   paymentScheme?: string
   /** User note from send flow (Easetag / payout metadata). */
@@ -90,6 +98,7 @@ export interface Transaction {
     description: string
     state: string
     occurredAt: string | null
+    showPaymentDetailsLink?: boolean
   }>
   depositAmount?: number
   postedAmount?: number

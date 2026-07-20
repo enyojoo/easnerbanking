@@ -27,9 +27,8 @@ import {
 } from "./product-label"
 import { resolveLedgerWhenAt } from "./transaction-timing-display"
 import {
-  isYcPayInAwaitingAttestation,
   resolveYcPayInFeedStatus,
-  resolveYcPayInUserWhenAt,
+  resolveYcPayInListWhenAt,
 } from "./yc-pay-in-display"
 import {
   isYcFundBalanceDepositMetadata,
@@ -334,8 +333,7 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
       occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
       createdAt: row.created_at != null ? String(row.created_at) : null,
     }) ?? new Date().toISOString()
-  const displayWhenAt = resolveYcPayInUserWhenAt(meta)
-  const payInAwaitingAttestation = isYcPayInAwaitingAttestation(meta, ledgerStatus)
+  const displayWhenAt = resolveYcPayInListWhenAt(meta, ledgerStatus)
 
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
   const easnerId = displayEasnerTransactionIdForList({
@@ -428,7 +426,6 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
     created_at: created,
     noah_created_at: created,
     ...(displayWhenAt ? { display_when_at: displayWhenAt } : {}),
-    ...(payInAwaitingAttestation ? { pay_in_awaiting_attestation: true } : {}),
     name: displayName,
     ...(listSenderName ? { sender_display_name: listSenderName } : {}),
     direction: dirRaw === "in" ? "credit" : "debit",

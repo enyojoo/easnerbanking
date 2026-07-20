@@ -85,3 +85,48 @@ export async function fetchYcReceiveBySequenceId(
 ): Promise<Record<string, unknown> | null> {
   return fetchYcBySequenceId("receive", sequenceId)
 }
+
+export function pickYcPollSequenceIds(
+  transfer: Record<string, unknown>,
+): Array<{ leg: YcPollLeg; sequenceId: string }> {
+  const mode = String(transfer.mode ?? "")
+  const out: Array<{ leg: YcPollLeg; sequenceId: string }> = []
+  const leg1 = String(transfer.leg1_sequence_id ?? "").trim()
+  const leg2 = String(transfer.leg2_sequence_id ?? "").trim()
+  if (mode === "fund_balance" && leg1) out.push({ leg: "receive", sequenceId: leg1 })
+  if (mode === "balance_payout" && leg2) out.push({ leg: "send", sequenceId: leg2 })
+  if (mode === "cross_border_send") {
+    const status = String(transfer.status ?? "")
+    const leg2Status = String(transfer.leg2_status ?? "")
+    if (leg1 && !["leg1_settled", "leg2_in_progress", "completed"].includes(status)) {
+      out.push({ leg: "receive", sequenceId: leg1 })
+    }
+    if (leg2 && (status === "leg2_in_progress" || leg2Status === "pending_yc")) {
+      out.push({ leg: "send", sequenceId: leg2 })
+    }
+  }
+  return out
+}
+
+/** Poll YC REST for terminal status and replay through webhook side effects. */
+export async function pollYellowcardTransferStatus(
+  admin: import("@supabase/supabase-js").SupabaseClient,
+  transfer: Record<string, unknown>,
+): Promise<{ polled: number }> {
+  const { applyYellowcardWebhookSideEffects } = await import("@/lib/yellowcard/webhook-processor")
+  let polled = 0
+  for (const { leg, sequenceId } of pickYcPollSequenceIds(transfer)) {
+    const txData =
+      leg === "send"
+        ? await fetchYcSendBySequenceId(sequenceId)
+        : await fetchYcReceiveBySequenceId(sequenceId)
+    if (!txData) continue
+    const ycStatus = String(txData.status ?? txData.Status ?? "").trim()
+    if (!ycStatus || !isYcPollTerminalStatus(ycStatus)) continue
+    const envelope = buildYellowcardPollWebhookEnvelope(leg, txData)
+    if (!isYcPollTerminalEnvelope(envelope)) continue
+    await applyYellowcardWebhookSideEffects(admin, envelope)
+    polled += 1
+  }
+  return { polled }
+}

@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 import type { Transaction } from "@/lib/finance-types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -18,6 +19,8 @@ import { DepositReviewDetailsRows } from "@/components/transactions/deposit-revi
 import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
 import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
+import { useScope } from "@/hooks/use-scope"
+import { getTransactionDetailPrefetchOptions } from "@/hooks/queries/use-transactions"
 import {
   REVIEW_ROW_LABELS,
   computeDisplayProcessingFee,
@@ -26,11 +29,12 @@ import {
   resolvePayoutReviewFlow,
   shouldShowReviewTotalDebited,
   formatReviewRowMoneyDisplay,
+  useYcPayInExpiredDetailRefetch,
 } from "@easner/shared"
 
 function resolveTransactionDetailWhenAt(transaction: Transaction): string | null {
   if (transaction.displayWhenAt) return transaction.displayWhenAt
-  if (transaction.payInAwaitingAttestation) return null
+  if (transaction.quoteLockedAt) return transaction.quoteLockedAt
   return (
     resolveLedgerWhenAt({
       occurredAt: transaction.date,
@@ -178,7 +182,7 @@ function TransactionSummaryDetails({
                   hour: "2-digit",
                   minute: "2-digit",
                 })
-              : "Awaiting your transfer"
+              : "—"
           }
         />
 
@@ -250,9 +254,25 @@ export function TransactionDetailsPanel({
 }: TransactionDetailsPanelProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const qc = useQueryClient()
+  const { scope } = useScope()
   const txHere = currentLocationPath(pathname, searchParams)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [downloadingReceipt, setDownloadingReceipt] = useState(false)
+
+  const refetchExpiredPayIn = useCallback(() => {
+    if (!scope || !transaction?.id) return
+    void qc.invalidateQueries(getTransactionDetailPrefetchOptions(scope, transaction.id))
+  }, [qc, scope, transaction?.id])
+
+  useYcPayInExpiredDetailRefetch({
+    enabled: Boolean(transaction),
+    ledgerStatus: transaction?.status ?? "",
+    quoteExpiresAt: transaction?.quoteExpiresAt,
+    awaitingPayIn:
+      transaction?.status === "awaiting_payment" || Boolean(transaction?.payInAwaitingAttestation),
+    onRefetch: refetchExpiredPayIn,
+  })
 
   if (!transaction) return null
 
@@ -399,6 +419,8 @@ export function TransactionDetailsPanel({
             <TransactionLifecycleTracker
               lifecycle={transaction.lifecycle}
               title={lifecycleTitle}
+              ycPayInPaymentDetails={transaction.ycPayInPaymentDetails}
+              quoteExpiresAt={transaction.quoteExpiresAt}
             />
           </CardContent>
         </Card>

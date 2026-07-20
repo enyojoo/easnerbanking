@@ -15,6 +15,7 @@ import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
 import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
 import {
+  ensureFundBalanceQuoteStashed,
   ensurePayInNetworksCached,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
@@ -94,6 +95,16 @@ export function YcFundBalanceMomoSetup({
     if (!momoReady || isContinueLoading) return
     setContinueError(null)
     haptics.medium()
+    void ensureFundBalanceQuoteStashed({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: 'mobile_money',
+      amountEntryMode,
+      enteredAmount,
+      sourcePhone: phone.trim(),
+      networkId,
+      sourceNetworkName: selectedNetwork?.name,
+    }).catch(() => {})
     navigation.navigate('ReceiveLocalReview' as never, {
       localPayInCurrency,
       residenceCountry,

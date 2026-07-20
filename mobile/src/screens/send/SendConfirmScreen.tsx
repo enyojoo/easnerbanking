@@ -267,6 +267,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     const needsQuoteLock =
       !isWalletRecipient &&
       !(stashed && isStashedPayoutQuoteFresh(meta) && isCompletePayoutQuote(stashed))
+    const hasClientPayoutPreview =
+      (params.calculatedSendingAmount ?? 0) > 0 && (params.calculatedTotalAmount ?? 0) > 0
     return {
       calculatedSendingAmount: params.calculatedSendingAmount ?? 0,
       calculatedFeeAmount: params.calculatedFeeAmount ?? 0,
@@ -279,7 +281,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       payoutSession: undefined as PayoutPrepareSession | undefined,
       walletSession: undefined as WalletPrepareSession | undefined,
       quoteDisplay: null as ReturnType<typeof payoutDisplayAmountsFromQuote> | null,
-      quoteLoading: needsQuoteLock,
+      quoteLoading: needsQuoteLock && !hasClientPayoutPreview,
       quoteError: null as string | null,
     }
   })
@@ -766,6 +768,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           sourcePhone={params.sourcePhone}
           networkId={params.networkId}
           sourceNetworkName={params.sourceNetworkName}
+          clientCustomerRate={
+            (params.amountScreenSendAmount ?? 0) > 0 && (params.receiveAmountValue ?? 0) > 0
+              ? (params.receiveAmountValue ?? 0) / (params.amountScreenSendAmount ?? 1)
+              : 0
+          }
+          clientProvisionalLocalPayIn={params.amountScreenSendAmount ?? 0}
           footerPadding={footerPadding}
           listBottomPadding={listBottomPadding}
         />
@@ -827,12 +835,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.card}>
-              {quoteLoading && !quoteReady ? (
-                <ActivityIndicator
-                  color={colors.primary.main}
-                  style={{ marginVertical: spacing[3], alignSelf: 'center' }}
-                />
-              ) : null}
               {displayTransactionId ? (
                 <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.transactionId}
@@ -934,7 +936,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
         <Pressable
           android_ripple={ripple.neutral}
-          style={[styles.cta, (sendingAfterPin || (!easetagUi && !quoteReady)) && styles.ctaDisabled]}
+          style={[
+            styles.cta,
+            (sendingAfterPin || (!easetagUi && !quoteReady)) && styles.ctaDisabled,
+          ]}
           onPress={() => void onConfirmPress()}
           disabled={sendingAfterPin || (!easetagUi && !quoteReady)}
         >
@@ -953,6 +958,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 <ActivityIndicator color="#fff" size="small" />
                 <Text style={styles.ctaText}>Sending…</Text>
               </View>
+            ) : !easetagUi && quoteLoading && !quoteReady ? (
+              <ActivityIndicator color="#fff" size="small" />
             ) : (
               <Text style={styles.ctaText}>{SEND_REVIEW_CONFIRM_CTA}</Text>
             )}

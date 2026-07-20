@@ -8,13 +8,7 @@ import { applyNoahWebhookSideEffects } from "@/lib/noah/webhook-side-effects"
 import { applyYellowcardWebhookSideEffects } from "@/lib/yellowcard/webhook-processor"
 import { maybeExecuteCrossBorderLeg2 } from "@/lib/yellowcard/cross-border-orchestrator"
 import { handleYcBalancePayoutSendComplete } from "@/lib/yellowcard/payout-execute"
-import {
-  buildYellowcardPollWebhookEnvelope,
-  fetchYcReceiveBySequenceId,
-  fetchYcSendBySequenceId,
-  isYcPollTerminalEnvelope,
-  isYcPollTerminalStatus,
-} from "@/lib/reconciliation/yc-transaction-poll"
+import { pollYellowcardTransferStatus } from "@/lib/reconciliation/yc-transaction-poll"
 import {
   buildEasnerRevenueSweepMetadataPatch,
   computeSweepAmountFromMetadata,
@@ -85,47 +79,6 @@ function pickSequenceIdsFromTransfer(row: Record<string, unknown>): string[] {
     .map((v) => String(v ?? "").trim())
     .filter(Boolean)
   return [...new Set(ids)]
-}
-
-function pickYcPollSequenceIds(transfer: Record<string, unknown>): Array<{ leg: "send" | "receive"; sequenceId: string }> {
-  const mode = String(transfer.mode ?? "")
-  const out: Array<{ leg: "send" | "receive"; sequenceId: string }> = []
-  const leg1 = String(transfer.leg1_sequence_id ?? "").trim()
-  const leg2 = String(transfer.leg2_sequence_id ?? "").trim()
-  if (mode === "fund_balance" && leg1) out.push({ leg: "receive", sequenceId: leg1 })
-  if (mode === "balance_payout" && leg2) out.push({ leg: "send", sequenceId: leg2 })
-  if (mode === "cross_border_send") {
-    const status = String(transfer.status ?? "")
-    const leg2Status = String(transfer.leg2_status ?? "")
-    if (leg1 && !["leg1_settled", "leg2_in_progress", "completed"].includes(status)) {
-      out.push({ leg: "receive", sequenceId: leg1 })
-    }
-    if (leg2 && (status === "leg2_in_progress" || leg2Status === "pending_yc")) {
-      out.push({ leg: "send", sequenceId: leg2 })
-    }
-  }
-  return out
-}
-
-async function pollYellowcardTransferStatus(
-  admin: SupabaseClient,
-  transfer: Record<string, unknown>,
-): Promise<{ polled: number }> {
-  let polled = 0
-  for (const { leg, sequenceId } of pickYcPollSequenceIds(transfer)) {
-    const txData =
-      leg === "send"
-        ? await fetchYcSendBySequenceId(sequenceId)
-        : await fetchYcReceiveBySequenceId(sequenceId)
-    if (!txData) continue
-    const ycStatus = String(txData.status ?? txData.Status ?? "").trim()
-    if (!ycStatus || !isYcPollTerminalStatus(ycStatus)) continue
-    const envelope = buildYellowcardPollWebhookEnvelope(leg, txData)
-    if (!isYcPollTerminalEnvelope(envelope)) continue
-    await applyYellowcardWebhookSideEffects(admin, envelope)
-    polled += 1
-  }
-  return { polled }
 }
 
 async function countYcStuckHealth(

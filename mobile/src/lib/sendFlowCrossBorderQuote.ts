@@ -344,3 +344,10 @@ export async function ensureCrossBorderOrderConfirmed(
 
   return inflightConfirm
 }
+
+/** Fire-and-forget preview + leg2 lock while user is on amount / MoMo setup. */
+export function prefetchCrossBorderQuotePipeline(meta: CrossBorderQuoteStashMeta): void {
+  void ensureCrossBorderQuoteStashed(meta)
+    .then(() => ensureCrossBorderLeg2Locked(meta))
+    .catch(() => {})
+}

@@ -946,13 +946,11 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                         {getTransactionName(transaction)}
                       </Text>
                       <Text style={styles.transactionDate} numberOfLines={1}>
-                        {(transaction as { pay_in_awaiting_attestation?: boolean }).pay_in_awaiting_attestation
-                          ? 'Awaiting your transfer'
-                          : formatTransactionDate(
-                              (transaction as { display_when_at?: string }).display_when_at ||
-                                transaction.noah_created_at ||
-                                transaction.created_at,
-                            )}
+                        {formatTransactionDate(
+                          (transaction as { display_when_at?: string }).display_when_at ||
+                            transaction.noah_created_at ||
+                            transaction.created_at,
+                        )}
                       </Text>
                     </View>
                     <View style={styles.transactionAmountContainer}>

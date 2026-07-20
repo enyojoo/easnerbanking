@@ -24,6 +24,11 @@ import {
   resolveAccountImpactAmount,
   resolveYcPayInFeedStatus,
   resolveYcPayInUserWhenAt,
+  resolveYcPayInListWhenAt,
+  readYcQuoteLockedAt,
+  readYcPayInExpiresAt,
+  isYcPayInFlowMetadata,
+  resolveYcPayInPaymentDetails,
   isYcPayInAwaitingAttestation,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
@@ -106,8 +111,21 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const ycFeedStatus = resolveYcPayInFeedStatus(meta, ledgerStatusRaw)
   const status = (ycFeedStatus ?? mapLedgerStatusForUserFeed(ledgerStatusRaw)) as TransactionWithSource["status"]
   const payInAwaitingAttestation = isYcPayInAwaitingAttestation(meta, ledgerStatusRaw)
-  const ycDisplayWhen = resolveYcPayInUserWhenAt(meta)
+  const ycDisplayWhen = resolveYcPayInListWhenAt(meta, ledgerStatusRaw)
+  const ycQuoteLockedAt = readYcQuoteLockedAt(meta)
+  const ycQuoteExpiresAt = readYcPayInExpiresAt(meta)
 
+  const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
+  const easnerId = displayEasnerTransactionIdForList({
+    easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
+    metadata: meta,
+    providerTransactionId: providerTxId,
+    fallbackId: row.id != null ? String(row.id) : null,
+  })
+  const ycPayInPaymentDetails =
+    meta && isYcPayInFlowMetadata(meta)
+      ? resolveYcPayInPaymentDetails(meta, { easnerTransactionId: easnerId })
+      : null
   const isVerification = isVerificationDepositMetadata(meta)
   const isYcFundBalance = isYcFundBalanceDepositMetadata(meta)
   const ycDepositTitle = isYcFundBalance ? resolveYcFundBalanceDepositDisplayTitle(meta ?? {}) : undefined
@@ -225,12 +243,6 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       ? String(row.base_currency)
       : undefined
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : undefined
-  const easnerId = displayEasnerTransactionIdForList({
-    easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
-    metadata: meta,
-    providerTransactionId: providerTxId,
-    fallbackId: row.id != null ? String(row.id) : null,
-  })
   const paymentRail =
     String(
       meta?.payment_rail ??
@@ -333,6 +345,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     status,
     ...(payInAwaitingAttestation ? { payInAwaitingAttestation: true } : {}),
     ...(ycDisplayWhen ? { displayWhenAt: ycDisplayWhen } : {}),
+    ...(ycQuoteLockedAt ? { quoteLockedAt: ycQuoteLockedAt } : {}),
+    ...(ycQuoteExpiresAt ? { quoteExpiresAt: ycQuoteExpiresAt } : {}),
+    ...(ycPayInPaymentDetails ? { ycPayInPaymentDetails } : {}),
     direction,
     source: "account" as const,
     reference: easnerId,

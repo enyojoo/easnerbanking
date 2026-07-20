@@ -30,6 +30,7 @@ import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transact
 import { attestYcPayInPayment } from '../../lib/ycPayInAttest'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { YcLocalPayInCompleteSummary } from '../../components/yc/YcLocalPayInCompleteSummary'
+import { YcPayInAwaitingPaymentCountdown } from '../../components/yc/YcPayInAwaitingPaymentCountdown'
 
 type RouteParams = {
   flowMode?: 'fund_balance' | 'cross_border_send'
@@ -46,6 +47,7 @@ type RouteParams = {
   bankInfo: Record<string, unknown> | null
   payInNotice?: string
   payInRail?: YcPayInRail
+  depositExpiresAt?: string
   residenceCountry?: string
   processingFeeLocal?: number
   displayProcessingFee?: number
@@ -93,6 +95,7 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
     provisionalPayIn,
     bankInfo,
     payInRail = 'bank_transfer',
+    depositExpiresAt,
     processingFeeLocal,
     displayProcessingFee,
     processingFee,
@@ -251,6 +254,12 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
             />
           </View>
 
+          {depositExpiresAt ? (
+            <View style={styles.countdownWrap}>
+              <YcPayInAwaitingPaymentCountdown depositExpiresAt={depositExpiresAt} />
+            </View>
+          ) : null}
+
           {(completeNotice || !isMobileMoney) ? (
           <View style={styles.payInCopySection}>
             {completeNotice ? (
@@ -336,6 +345,10 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     gap: spacing[1],
     marginBottom: spacing[4],
+  },
+  countdownWrap: {
+    marginBottom: spacing[4],
+    paddingHorizontal: spacing[1],
   },
   payInCopySection: {
     gap: spacing[4],

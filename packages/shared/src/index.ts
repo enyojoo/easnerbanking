@@ -569,11 +569,30 @@ export {
   readYcQuoteLockedAt,
   resolveYcPayInFeedStatus,
   resolveYcPayInUserWhenAt,
+  resolveYcPayInListWhenAt,
+  readYcPayInExpiresAt,
+  isYcPayInPaymentWindowOpen,
+  resolveYcPayInPaymentDetails,
+  YC_PAY_IN_AWAITING_STATUS_LABEL,
+  YC_PAY_IN_AWAITING_STEP_TITLE,
+  YC_PAY_IN_AWAITING_DESCRIPTION_PREFIX,
+  YC_PAY_IN_AWAITING_DESCRIPTION_LINK,
+  YC_PAY_IN_AWAITING_DESCRIPTION_SUFFIX,
+  YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED,
+  YC_PAY_IN_CROSS_BORDER_AWAITING_DESCRIPTION_PREFIX,
+  formatYcPayInDepositTimeRemaining,
+  YC_PAY_IN_COMPLETE_PAYMENT_WITHIN_PREFIX,
+  YC_PAY_IN_AWAITING_PAYMENT_TIME_PASSED,
+  YC_PAY_IN_PAYMENT_WINDOW_COUNTDOWN_PREFIX,
+  formatYcPayInAwaitingPaymentCountdown,
+  ycPayInAwaitingPaymentCountdownLabel,
+  formatYcPayInPaymentWindowCountdown,
 } from "./transactions/yc-pay-in-display"
 export type {
   BuildYcPayInLifecycleInput,
   YcPayInLifecycleStep,
   YcPayInLifecycleStepId,
+  YcPayInPaymentDetails,
 } from "./transactions/yc-pay-in-display"
 export {
   convertWalletToReportingBase,
@@ -664,6 +683,14 @@ export {
   easnerFeeLocalFromUsdCredit,
   ycLegFeesLocal,
 } from "./yc-pricing"
+export {
+  resolveYcChannelDepositWindowMs,
+  resolveYcPayInDepositExpiresAt,
+} from "./yc-channel-deposit-window"
+export type {
+  ResolveYcPayInDepositExpiresAtInput,
+  YcPayInRailForWindow,
+} from "./yc-channel-deposit-window"
 export type {
   BuildYcDisplayQuoteInput,
   ComputeYcBalancePayoutPricingInput,
@@ -773,6 +800,7 @@ export {
 } from "./yc-pay-in-limits"
 export type { YcPayInLimits, YcPayInAmountValidation } from "./yc-pay-in-limits"
 export { useYcPayInMinEnforcement } from "./hooks/use-yc-pay-in-min-enforcement"
+export { useYcPayInExpiredDetailRefetch } from "./hooks/use-yc-pay-in-expired-detail-refetch"
 export { useYcCrossBorderSendMinEnforcement } from "./hooks/use-yc-cross-border-send-min-enforcement"
 export {
   QUOTE_PREFETCH_DEBOUNCE_MS,

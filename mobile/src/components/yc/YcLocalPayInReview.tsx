@@ -26,7 +26,7 @@ import { haptics } from '../../lib/haptics'
 import {
   confirmCrossBorderLeg1,
   ensureCrossBorderLeg2Locked,
-  fetchCrossBorderQuotePreview,
+  ensureCrossBorderQuoteStashed,
   isCompleteCrossBorderQuote,
   isCrossBorderLeg2Locked,
   isStashedCrossBorderQuoteFresh,
@@ -49,6 +49,9 @@ type Props = {
   sourcePhone?: string
   networkId?: string
   sourceNetworkName?: string
+  /** Amount-screen estimate — shown immediately while preview/leg2 refresh in background. */
+  clientCustomerRate?: number
+  clientProvisionalLocalPayIn?: number
   footerPadding: number
   listBottomPadding: number
 }
@@ -64,6 +67,8 @@ export function YcLocalPayInReview({
   sourcePhone,
   networkId,
   sourceNetworkName,
+  clientCustomerRate = 0,
+  clientProvisionalLocalPayIn = 0,
   footerPadding,
   listBottomPadding,
 }: Props) {
@@ -104,7 +109,12 @@ export function YcLocalPayInReview({
     sourceNetworkName,
   ])
 
-  const [previewQuote, setPreviewQuote] = useState<YcCrossBorderQuoteResult | null>(null)
+  const [previewQuote, setPreviewQuote] = useState<YcCrossBorderQuoteResult | null>(() => {
+    if (!quoteMeta || !isStashedCrossBorderQuoteFresh(quoteMeta)) return null
+    const stashed = peekCrossBorderQuote()
+    if (!stashed || isCompleteCrossBorderQuote(stashed)) return null
+    return isUsableCrossBorderQuotePreview(stashed) ? stashed : null
+  })
   const [leg2Quote, setLeg2Quote] = useState<YcCrossBorderQuoteResult | null>(() => {
     if (!quoteMeta) return null
     if (isStashedCrossBorderQuoteFresh(quoteMeta)) {
@@ -123,20 +133,12 @@ export function YcLocalPayInReview({
     return null
   })
   const [quoteError, setQuoteError] = useState<string | null>(null)
-  const [quoteLoading, setQuoteLoading] = useState(() => {
-    if (!quoteMeta) return false
-    if (isStashedCrossBorderQuoteFresh(quoteMeta) && isCompleteCrossBorderQuote(peekCrossBorderQuote())) {
-      return false
-    }
-    if (
-      isStashedCrossBorderQuoteFresh(quoteMeta) &&
-      isCrossBorderLeg2Locked(peekCrossBorderQuote(), peekCrossBorderLeg2DraftId())
-    ) {
-      return false
-    }
-    return true
-  })
   const [confirmLoading, setConfirmLoading] = useState(false)
+
+  const hasClientPreview =
+    clientCustomerRate > 0 &&
+    receiveAmount > 0 &&
+    clientProvisionalLocalPayIn > 0
 
   useEffect(() => {
     if (!quoteMeta) return
@@ -149,7 +151,6 @@ export function YcLocalPayInReview({
         setPreviewQuote(stashed)
         setQuoteError(null)
       }
-      setQuoteLoading(false)
       return
     }
 
@@ -163,24 +164,18 @@ export function YcLocalPayInReview({
         setPreviewQuote(stashed)
         setQuoteError(null)
       }
-      setQuoteLoading(false)
       return
     }
 
     let cancelled = false
-    setQuoteLoading(true)
-    setQuoteError(null)
     void (async () => {
-      const previewPromise = fetchCrossBorderQuotePreview(quoteMeta).catch(() => null)
-      const leg2Promise = ensureCrossBorderLeg2Locked(quoteMeta)
-      const preview = await previewPromise
+      const preview = await ensureCrossBorderQuoteStashed(quoteMeta)
       if (cancelled) return
       if (preview && isUsableCrossBorderQuotePreview(preview)) {
         setPreviewQuote(preview)
       }
-      const leg2 = await leg2Promise
+      const leg2 = await ensureCrossBorderLeg2Locked(quoteMeta)
       if (cancelled) return
-      setQuoteLoading(false)
       if (leg2 && (isCrossBorderLeg2Locked(leg2, leg2.leg2DraftId) || isCompleteCrossBorderQuote(leg2))) {
         setLeg2Quote(leg2)
         if (isCompleteCrossBorderQuote(leg2)) {
@@ -189,20 +184,24 @@ export function YcLocalPayInReview({
         setQuoteError(null)
         return
       }
-      setQuoteError(peekLastCrossBorderQuoteError() || 'Could not lock transfer details')
+      if (!hasClientPreview) {
+        setQuoteError(peekLastCrossBorderQuoteError() || 'Could not lock transfer details')
+      }
     })()
 
     return () => {
       cancelled = true
     }
-  }, [quoteMeta])
+  }, [quoteMeta, hasClientPreview])
 
   const displayQuote = lockedQuote ?? leg2Quote ?? previewQuote
   const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
   const quoteLocked = isCompleteCrossBorderQuote(lockedQuote)
   const leg2Ready = isCrossBorderLeg2Locked(leg2Quote, peekCrossBorderLeg2DraftId() ?? leg2Quote?.leg2DraftId)
-  const customerRate = displayQuote?.customerRate ?? 0
-  const displayLocalPayIn = displayQuote?.localPayIn ?? 0
+  const customerRate = displayQuote?.customerRate ?? clientCustomerRate
+  const displayLocalPayIn =
+    displayQuote?.localPayIn ??
+    (hasClientPreview ? clientProvisionalLocalPayIn : 0)
   const displayTransactionId = lockedQuote?.easnerTransactionId ?? lockedQuote?.transactionId ?? ''
   const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
 
@@ -211,7 +210,7 @@ export function YcLocalPayInReview({
     payInCurrency,
     receiveAmount,
     customerRate,
-    provisionalPayIn: displayQuote?.provisionalPayIn,
+    provisionalPayIn: displayQuote?.provisionalPayIn ?? clientProvisionalLocalPayIn,
     displayProcessingFeeLocal: displayQuote?.displayProcessingFeeLocal,
   })
   const reviewPrincipalLocal = reviewBreakdown.principalLocal
@@ -258,6 +257,7 @@ export function YcLocalPayInReview({
       sourcePhone: q.sourcePhone ?? sourcePhone?.trim(),
       sourceNetworkId: q.sourceNetworkId ?? networkId,
       sourceNetworkName: q.sourceNetworkName ?? sourceNetworkName,
+      depositExpiresAt: q.expiresAt,
     })
   }
 
@@ -296,7 +296,8 @@ export function YcLocalPayInReview({
     !leg2Ready ||
     Boolean(quoteError) ||
     quoteCountdown.expired ||
-    (quoteLoading && !leg2Ready)
+    (!hasClientPreview && !displayQuote)
+
 
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>
@@ -309,9 +310,6 @@ export function YcLocalPayInReview({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {quoteLoading && !leg2Ready ? (
-            <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
-          ) : null}
           {reviewRows.length > 0 ? (
             <>
               {reviewRows.map((row, index) => {

@@ -2,6 +2,7 @@ import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   resolveYcQuoteExpiresAt,
+  resolveYcPayInDepositExpiresAt,
   TLC_LOCAL_TRANSFER_METHOD,
   alignYcCrossBorderLockedLocalPayIn,
   bumpYcCrossBorderLocalPayInForOmnibusShortfall,
@@ -16,6 +17,7 @@ import {
   validateYcRecipientForCorridor,
   YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
   YC_CROSS_BORDER_RECEIVE_MAX_ATTEMPTS,
+  ycPayInInstructionNotice,
 } from "@easner/shared"
 import { buildCrossBorderQuoteSummary } from "@/lib/yellowcard/build-yc-quote-response"
 import { findYcCrossRate, findYcPayInLeg, findYcRate, listYcRates } from "@/lib/fx/yc-rates"
@@ -762,10 +764,15 @@ export async function confirmCrossBorderLeg1(
     sendCryptoUsd: pricingFinal.sendCryptoUsd,
   })
 
-  const expiresAt = resolveYcQuoteExpiresAt(
-    (receiveRes as { expiresAt?: string }).expiresAt ?? (receiveRes as { expires_at?: string }).expires_at,
-  )
   const startedAt = new Date().toISOString()
+  const expiresAt = resolveYcPayInDepositExpiresAt({
+    lockedAt: startedAt,
+    preferredExpiresAt:
+      (receiveRes as { expiresAt?: string }).expiresAt ??
+      (receiveRes as { expires_at?: string }).expires_at,
+    country: input.payInCountry,
+    payInRail: input.payInRail,
+  })
   const easnerTransactionId = generateTransactionId()
   const recipientSnapshot = buildRecipientSnapshotFromRow(input.recipient)
   const recipientId =
@@ -942,6 +949,9 @@ export async function confirmCrossBorderLeg1(
         ...reportingSnapshot,
         quote_locked_at: startedAt,
         transaction_started_at: startedAt,
+        quote_expires_at: expiresAt,
+        yc_bank_info: (receiveRes.bankInfo as Record<string, unknown>) ?? null,
+        yc_pay_in_notice: ycPayInInstructionNotice(input.payInRail),
         leg1_status: receiveRes.status ?? "pending",
         leg2_status: payload.sendRes.status ?? "quoted",
         ...(input.sourcePhone || payload.sourcePhone
@@ -1394,8 +1404,17 @@ export async function authorizeCrossBorderDraft(input: {
     sendCryptoUsd: pricingFinal.sendCryptoUsd,
   })
 
-  const expiresAt = resolveYcQuoteExpiresAt()
   const now = new Date().toISOString()
+  const expiresAt = resolveYcPayInDepositExpiresAt({
+    lockedAt: now,
+    preferredExpiresAt:
+      (receiveRes as { expiresAt?: string }).expiresAt ??
+      (receiveRes as { expires_at?: string }).expires_at,
+    country: payInCountry,
+    payInRail: String(meta.pay_in_rail ?? "bank_transfer") === "mobile_money"
+      ? "mobile_money"
+      : "bank_transfer",
+  })
 
   await admin
     .from("yc_transfers")

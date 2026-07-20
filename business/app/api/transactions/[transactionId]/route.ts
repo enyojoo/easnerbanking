@@ -44,11 +44,14 @@ import {
   resolveLedgerWhenAt,
   resolveAccountImpactAmount,
   resolveYcCrossBorderListDisplay,
+  resolveYcPayInFeedStatus,
 } from "@easner/shared"
 import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 import { LEDGER_DETAIL_SELECT } from "@/lib/ledger/ledger-select"
 import { restoreInboundLedgerPresentation } from "@/lib/transactions/restore-inbound-ledger-presentation"
+import { enrichYcPayInMetadataFromTransfer } from "@/lib/yellowcard/enrich-yc-pay-in-metadata"
+import { reconcileExpiredYcPayInOnDetail } from "@/lib/yellowcard/reconcile-expired-yc-pay-in"
 
 function ledgerWhenAtFromRow(row: Record<string, unknown>): string {
   return (
@@ -59,19 +62,24 @@ function ledgerWhenAtFromRow(row: Record<string, unknown>): string {
   )
 }
 
+function mapLedgerStatusForMobile(meta: Record<string, unknown> | null | undefined, ledgerStatus: string): string {
+  const ycFeed = resolveYcPayInFeedStatus(meta, ledgerStatus)
+  const st = String(ycFeed ?? ledgerStatus ?? "").trim().toLowerCase()
+  if (st === "settled") return "completed"
+  if (st === "awaiting_payment") return "awaiting_payment"
+  if (st === "pending" || st === "processing") return st
+  if (st === "failed" || st === "cancelled") return "failed"
+  if (st === "unknown") return "pending"
+  return st || "unknown"
+}
+
 function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, unknown> {
   const dirRaw = String(row.direction ?? "").toLowerCase()
   const transaction_type = dirRaw === "in" ? "receive" : "send"
-  const st = String(row.status ?? "").toLowerCase()
-  const status =
-    st === "settled" ? "completed"
-    : st === "pending" || st === "processing" ? st
-    : st === "failed" || st === "cancelled" ? "failed"
-    : st === "unknown" ? "pending"
-    : st || "unknown"
+  const meta = row.metadata as Record<string, unknown> | null | undefined
+  const status = mapLedgerStatusForMobile(meta, String(row.status ?? ""))
   const created = ledgerWhenAtFromRow(row)
   const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
-  const meta = row.metadata as Record<string, unknown> | null | undefined
   const easnerId = displayEasnerTransactionId({
     easnerTransactionId: row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
     metadata: meta,
@@ -380,8 +388,34 @@ export async function GET(request: Request, routeCtx: Props) {
   }
 
   const payload = rec.payload as Record<string, unknown> | null | undefined
-  const meta = rec.metadata as Record<string, unknown> | null | undefined
-  let transaction = mapLedgerRowToMobileDetail(rec)
+  const priorMeta = (rec.metadata ?? {}) as Record<string, unknown>
+  const { metadata: ycEnrichedMeta } = await enrichYcPayInMetadataFromTransfer(
+    admin,
+    priorMeta,
+    rec.id != null ? String(rec.id) : null,
+  )
+  let ledgerRec =
+    ycEnrichedMeta !== priorMeta ? { ...rec, metadata: ycEnrichedMeta } : rec
+
+  if (ledgerRec.id) {
+    const metaForReconcile = (ledgerRec.metadata ?? {}) as Record<string, unknown>
+    const reconcile = await reconcileExpiredYcPayInOnDetail(admin, {
+      transactionLedgerId: String(ledgerRec.id),
+      metadata: metaForReconcile,
+      ledgerStatus: String(ledgerRec.status ?? ""),
+    })
+    if (reconcile.attempted) {
+      const { data: refreshed } = await admin
+        .from("transactions")
+        .select(LEDGER_DETAIL_SELECT)
+        .eq("id", String(ledgerRec.id))
+        .maybeSingle()
+      if (refreshed) ledgerRec = refreshed
+    }
+  }
+
+  const meta = ledgerRec.metadata as Record<string, unknown> | null | undefined
+  let transaction = mapLedgerRowToMobileDetail(ledgerRec)
   if (payload && typeof payload === "object" && isNoahLedgerTransactionPayload(payload, rec)) {
     const fromNoah = mapNoahTransactionToMobileDetail(payload)
     transaction = enrichMobileDetailFromLedgerMetadata(
@@ -397,19 +431,19 @@ export async function GET(request: Request, routeCtx: Props) {
     transaction = enrichMobileDetailFromLedgerMetadata(transaction, meta)
   }
 
-  transaction = await attachBankDepositDetailFieldsAsync(admin, rec, transaction)
-  transaction = await attachGlobalPayoutDetailFieldsAsync(admin, rec, transaction)
-  transaction = attachWalletSendDetailFields(rec, transaction)
-  transaction = attachStablecoinDepositDetailFields(rec, transaction)
+  transaction = await attachBankDepositDetailFieldsAsync(admin, ledgerRec, transaction)
+  transaction = await attachGlobalPayoutDetailFieldsAsync(admin, ledgerRec, transaction)
+  transaction = attachWalletSendDetailFields(ledgerRec, transaction)
+  transaction = attachStablecoinDepositDetailFields(ledgerRec, transaction)
 
-  transaction = restoreInboundLedgerPresentation(rec, transaction)
+  transaction = restoreInboundLedgerPresentation(ledgerRec, transaction)
 
   if (scope === "business") {
-    const [enrichedRec] = await enrichBankDepositLedgerRows(admin, [rec])
-    const rowForBusiness = enrichedRec ?? rec
+    const [enrichedRec] = await enrichBankDepositLedgerRows(admin, [ledgerRec])
+    const rowForBusiness = enrichedRec ?? ledgerRec
     const enrichedMeta = rowForBusiness.metadata as Record<string, unknown> | undefined
     let businessTransaction = mapRowToBusinessTransaction(rowForBusiness)
-    if (isBankOnrampPayInRow(rec)) {
+    if (isBankOnrampPayInRow(ledgerRec)) {
       const senderLabel =
         (typeof transaction.name === "string" && transaction.name.trim()) ||
         (typeof transaction.sender_display_name === "string" &&
@@ -474,7 +508,7 @@ export async function GET(request: Request, routeCtx: Props) {
           (transaction.transaction_timing as typeof businessTransaction.transactionTiming) ??
           businessTransaction.transactionTiming,
       }
-    } else if (isGlobalPayoutOffRampRow(rec) || isWalletSendOutRow(rec)) {
+    } else if (isGlobalPayoutOffRampRow(ledgerRec) || isWalletSendOutRow(ledgerRec)) {
       businessTransaction = {
         ...businessTransaction,
         amount:
@@ -529,6 +563,17 @@ export async function GET(request: Request, routeCtx: Props) {
           businessTransaction.transactionTiming,
       }
     }
+
+    businessTransaction = {
+      ...businessTransaction,
+      quoteExpiresAt:
+        (transaction as { quoteExpiresAt?: string }).quoteExpiresAt ??
+        businessTransaction.quoteExpiresAt,
+      ycPayInPaymentDetails:
+        (transaction as { yc_pay_in_payment_details?: typeof businessTransaction.ycPayInPaymentDetails })
+          .yc_pay_in_payment_details ?? businessTransaction.ycPayInPaymentDetails,
+    }
+
     return NextResponse.json({ transaction, businessTransaction })
   }
 

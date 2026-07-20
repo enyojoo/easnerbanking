@@ -21,6 +21,7 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import { useAuth } from '../../contexts/AuthContext'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
+import { prefetchCrossBorderQuotePipeline } from '../../lib/sendFlowCrossBorderQuote'
 
 type PayInNetwork = { id: string; name: string }
 
@@ -101,6 +102,16 @@ export function YcCrossBorderMomoSetup({
     if (!momoReady || isContinueLoading) return
     setContinueError(null)
     haptics.medium()
+    prefetchCrossBorderQuotePipeline({
+      recipientId: recipient.id,
+      payInCurrency,
+      payInCountry,
+      payInRail: rail,
+      receiveAmount,
+      sourcePhone: phone.trim(),
+      networkId,
+      sourceNetworkName: selectedNetwork?.name,
+    })
     navigation.navigate('SendConfirm' as never, {
       recipient,
       paymentMethod: 'otherCurrency',

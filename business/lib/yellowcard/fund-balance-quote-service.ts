@@ -2,6 +2,7 @@ import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   resolveYcQuoteExpiresAt,
+  resolveYcPayInDepositExpiresAt,
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
   YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS,
   buildYcFundBalanceDepositReviewSnapshot,
@@ -502,9 +503,16 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
   const lockedLocalPayIn = Number(receiveRes.localAmount ?? pricing.localPayIn)
   const omnibusInExpected = Number(receiveRes.settlementInfo?.cryptoAmount ?? pricing.omnibusInUsd)
 
-  const expiresAt = resolveYcQuoteExpiresAt()
-  const easnerTransactionId = generateTransactionId()
   const startedAt = new Date().toISOString()
+  const expiresAt = resolveYcPayInDepositExpiresAt({
+    lockedAt: startedAt,
+    preferredExpiresAt:
+      (receiveRes as { expiresAt?: string }).expiresAt ??
+      (receiveRes as { expires_at?: string }).expires_at,
+    country: ctx.country,
+    payInRail: ctx.rail,
+  })
+  const easnerTransactionId = generateTransactionId()
   const residenceCountry = String(ctx.userRow?.residence_country ?? ctx.country).trim().toUpperCase()
   const displayFeesLocked = buildYcFundBalanceDisplayFees({
     usdCredit: pricing.usdCredit,
@@ -561,6 +569,10 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
         easner_transaction_id: easnerTransactionId,
         quote_locked_at: startedAt,
         transaction_started_at: startedAt,
+        quote_expires_at: expiresAt,
+        yc_bank_info: receiveRes.bankInfo ?? null,
+        yc_pay_in_notice: ycPayInInstructionNotice(ctx.rail),
+        local_pay_in: lockedLocalPayIn,
         pay_in_rail: ctx.rail,
         display_processing_fee: displayFeesLocked.displayProcessingFee,
         display_processing_fee_local: displayFeesLocked.displayProcessingFeeLocal,
@@ -612,6 +624,24 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
     })
     .select("*")
     .single()
+
+  if (tx?.id && transferRow?.id) {
+    const { data: txRow } = await ctx.admin
+      .from("transactions")
+      .select("metadata")
+      .eq("id", tx.id)
+      .maybeSingle()
+    const prior = (txRow?.metadata ?? {}) as Record<string, unknown>
+    await ctx.admin
+      .from("transactions")
+      .update({
+        metadata: {
+          ...prior,
+          yc_transfer_id: String(transferRow.id),
+        },
+      })
+      .eq("id", tx.id)
+  }
 
   return formatFundBalanceTransferResponse({
     transfer: (transferRow ?? {}) as Record<string, unknown>,

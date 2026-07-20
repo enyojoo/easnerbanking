@@ -2,7 +2,14 @@ import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { ArrowUp, RefreshCw, CircleCheck, CircleX } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { colors, textStyles, spacing } from '../theme'
+import {
+  YC_PAY_IN_AWAITING_DESCRIPTION_LINK,
+  YC_PAY_IN_AWAITING_DESCRIPTION_SUFFIX,
+  formatYcPayInDepositTimeRemaining,
+  type YcPayInPaymentDetails,
+} from '@easner/shared'
+import { colors, textStyles, spacing } from '../../theme'
+import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 
 export type LifecycleStep = {
   id: string
@@ -10,6 +17,7 @@ export type LifecycleStep = {
   description: string
   state: 'complete' | 'current' | 'upcoming'
   occurredAt: string | null
+  showPaymentDetailsLink?: boolean
 }
 
 function StageGlyph({
@@ -58,9 +66,20 @@ function formatTimestamp(dateString: string): string {
 type Props = {
   steps: LifecycleStep[]
   title?: string
+  ycPayInPaymentDetails?: YcPayInPaymentDetails | null
+  quoteExpiresAt?: string | null
+  onPaymentDetailsLinkPress?: () => void
 }
 
-export function TransactionLifecycleTracker({ steps, title = 'Deposit status' }: Props) {
+export function TransactionLifecycleTracker({
+  steps,
+  title = 'Deposit status',
+  ycPayInPaymentDetails,
+  quoteExpiresAt,
+  onPaymentDetailsLinkPress,
+}: Props) {
+  const quoteCountdown = useQuoteCountdown(quoteExpiresAt)
+
   if (!steps.length) return null
 
   return (
@@ -71,6 +90,13 @@ export function TransactionLifecycleTracker({ steps, title = 'Deposit status' }:
         const isCurrent = stage.state === 'current'
         const showActive = isComplete || isCurrent
         const isLast = index === steps.length - 1
+        const showDepositTimer =
+          stage.id === 'awaiting_transfer' &&
+          isCurrent &&
+          Boolean(quoteExpiresAt) &&
+          !quoteCountdown.expired
+        const showLink =
+          stage.showPaymentDetailsLink && ycPayInPaymentDetails && onPaymentDetailsLinkPress
         return (
           <View
             key={stage.id}
@@ -110,6 +136,12 @@ export function TransactionLifecycleTracker({ steps, title = 'Deposit status' }:
                 ]}
               >
                 {stage.title}
+                {showDepositTimer ? (
+                  <Text style={styles.depositTimer}>
+                    {' · '}
+                    {formatYcPayInDepositTimeRemaining(quoteCountdown.remainingMs)}
+                  </Text>
+                ) : null}
               </Text>
               {stage.occurredAt ? (
                 <Text style={styles.timestamp}>{formatTimestamp(stage.occurredAt)}</Text>
@@ -120,7 +152,21 @@ export function TransactionLifecycleTracker({ steps, title = 'Deposit status' }:
                   showActive ? styles.descriptionCompleted : styles.descriptionPending,
                 ]}
               >
-                {stage.description}
+                {showLink ? (
+                  <>
+                    {stage.description}
+                    <Text
+                      style={styles.link}
+                      onPress={onPaymentDetailsLinkPress}
+                      accessibilityRole="link"
+                    >
+                      {YC_PAY_IN_AWAITING_DESCRIPTION_LINK}
+                    </Text>
+                    {YC_PAY_IN_AWAITING_DESCRIPTION_SUFFIX}
+                  </>
+                ) : (
+                  stage.description
+                )}
               </Text>
             </View>
           </View>
@@ -135,6 +181,11 @@ const styles = StyleSheet.create({
     ...textStyles.titleMedium,
     color: colors.text.primary,
     marginBottom: spacing[3],
+  },
+  depositTimer: {
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    color: colors.warning.main,
   },
   stageContainer: {
     flexDirection: 'row',
@@ -204,5 +255,9 @@ const styles = StyleSheet.create({
   },
   descriptionPending: {
     color: colors.text.tertiary,
+  },
+  link: {
+    textDecorationLine: 'underline',
+    color: colors.text.primary,
   },
 })

@@ -47,7 +47,7 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ripple } from '../../lib/androidRipple'
-import { formatSignedCurrency } from '../../utils/formatters'
+import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/formatters'
 import {
   useTransactionDetail,
   useRecipientsList,
@@ -79,6 +79,7 @@ import {
   type GlobalPayoutReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
   type YcFundBalanceDepositReviewSnapshot,
+  useYcPayInExpiredDetailRefetch,
 } from '@easner/shared'
 import { InboundReceiveDetailRows } from '../../components/transactions/InboundReceiveDetailRows'
 import { CrossBorderSendDetailRows } from '../../components/transactions/CrossBorderSendDetailRows'
@@ -91,6 +92,7 @@ import {
   navigateBackFromTransactionDetail,
   usesCustomTransactionDetailBack,
 } from '../../navigation/transactionDetailNavigation'
+import { YcPayInPaymentDetailsSheet } from '../../components/yc/YcPayInPaymentDetailsSheet'
 import { buildDynamicAmountTextStyle } from '../../lib/dynamicAmountFontSize'
 
 interface LedgerTransaction {
@@ -149,6 +151,8 @@ interface LedgerTransaction {
   ledger_created_at?: string
   provider?: string
   chain?: string
+  yc_pay_in_payment_details?: import('@easner/shared').YcPayInPaymentDetails
+  quote_expires_at?: string
 }
 
 type StatusInfo = {
@@ -161,6 +165,7 @@ type StatusInfo = {
 function statusInfoToneFromInfo(info: StatusInfo) {
   const label = info.label.toLowerCase()
   if (label.includes('completed')) return 'completed' as const
+  if (label.includes('awaiting payment')) return 'pending' as const
   if (label.includes('processing') || label.includes('pending')) return 'pending' as const
   if (label.includes('failed') || label.includes('refunded') || label.includes('returned'))
     return 'failed' as const
@@ -354,6 +359,18 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     }
   }, [detailQuery, transaction])
 
+  const refetchExpiredYcPayIn = useCallback(() => {
+    void detailQuery.refetch()
+  }, [detailQuery])
+
+  useYcPayInExpiredDetailRefetch({
+    enabled: Boolean(transaction),
+    ledgerStatus: transaction?.status ?? '',
+    quoteExpiresAt: transaction?.quote_expires_at,
+    awaitingPayIn: transaction?.status === 'awaiting_payment',
+    onRefetch: refetchExpiredYcPayIn,
+  })
+
   const onRefresh = async () => {
     setRefreshing(true)
     try {
@@ -413,6 +430,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }, [heroAmountLabel, transaction?.transaction_type])
 
   const [receiptSheetOpen, setReceiptSheetOpen] = useState(false)
+  const [ycPayInSheetOpen, setYcPayInSheetOpen] = useState(false)
 
   const formatTimestamp = (dateString: string) => {
     if (!dateString) return ''
@@ -529,6 +547,28 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     label: string
     gradient: readonly [string, string]
   } => {
+    const mapped = getTransactionStatusDisplay(status)
+    if (mapped) {
+      const statusLower = status.toLowerCase()
+      const Icon =
+        statusLower.includes('failed') || statusLower.includes('returned') || statusLower.includes('refunded')
+          ? CircleX
+          : statusLower.includes('completed') || statusLower.includes('processed')
+            ? CircleCheck
+            : Clock
+      return {
+        color: mapped.color,
+        Icon,
+        label: mapped.label,
+        gradient:
+          mapped.tone === 'failed'
+            ? colors.error.gradient || colors.primary.gradient
+            : mapped.tone === 'completed'
+              ? colors.success.gradient
+              : colors.primary.gradient,
+      }
+    }
+
     const statusLower = status.toLowerCase()
     if (statusLower.includes('processed') || statusLower.includes('completed')) {
       return {
@@ -1201,6 +1241,9 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 <TransactionLifecycleTracker
                   steps={transaction.lifecycle}
                   title={isGlobalPayoutSend ? 'Transfer status' : 'Deposit status'}
+                  ycPayInPaymentDetails={transaction.yc_pay_in_payment_details}
+                  quoteExpiresAt={transaction.quote_expires_at}
+                  onPaymentDetailsLinkPress={() => setYcPayInSheetOpen(true)}
                 />
               </SectionCard>
             ) : null}
@@ -1245,6 +1288,14 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               rows: receiptRows,
               transactionId: transaction.transaction_id,
             }}
+          />
+        ) : null}
+
+        {transaction.yc_pay_in_payment_details ? (
+          <YcPayInPaymentDetailsSheet
+            visible={ycPayInSheetOpen}
+            onClose={() => setYcPayInSheetOpen(false)}
+            details={transaction.yc_pay_in_payment_details}
           />
         ) : null}
 
