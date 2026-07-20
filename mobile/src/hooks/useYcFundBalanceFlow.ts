@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AppState, type AppStateStatus } from 'react-native'
 import {
   ycFundBalanceQuoteErrorMessage,
   resolveYcPayInCustomerRate,
@@ -21,6 +22,19 @@ export type { YcReceiveRailsResponse }
 
 export type YcFundBalanceQuoteResult = YcFundBalanceQuote
 
+function useRevalidateOnAppActive(revalidate: () => void) {
+  const revalidateRef = useRef(revalidate)
+  revalidateRef.current = revalidate
+
+  useEffect(() => {
+    const onChange = (state: AppStateStatus) => {
+      if (state === 'active') revalidateRef.current()
+    }
+    const sub = AppState.addEventListener('change', onChange)
+    return () => sub.remove()
+  }, [])
+}
+
 export function useYcReceiveRails(input: {
   country: string | null
   currency: string | null
@@ -28,6 +42,8 @@ export function useYcReceiveRails(input: {
 }) {
   const country = input.country?.trim().toUpperCase() ?? ''
   const currency = input.currency?.trim().toUpperCase() ?? ''
+  const corridorKey = country && currency ? `${country}:${currency}` : ''
+
   const [rails, setRails] = useState<YcReceiveRailsResponse | null>(() =>
     country && currency ? readCachedReceiveRails(country, currency) : null,
   )
@@ -35,13 +51,8 @@ export function useYcReceiveRails(input: {
     Boolean(input.enabled && country && currency && !readCachedReceiveRails(country, currency)),
   )
 
-  useEffect(() => {
-    if (!input.enabled || !country || !currency) {
-      setRails(null)
-      setLoading(false)
-      return
-    }
-    let cancelled = false
+  const revalidate = useCallback(async () => {
+    if (!input.enabled || !country || !currency) return
     const cached = readCachedReceiveRails(country, currency)
     if (cached) {
       setRails(cached)
@@ -49,19 +60,44 @@ export function useYcReceiveRails(input: {
     } else {
       setLoading(true)
     }
+    const data = await prefetchYcReceiveRails(country, currency)
+    setRails(data ?? cached ?? null)
+    setLoading(false)
+  }, [input.enabled, country, currency])
+
+  useEffect(() => {
+    if (!corridorKey) {
+      setRails(null)
+      setLoading(false)
+      return
+    }
+    if (!input.enabled) {
+      setLoading(false)
+      return
+    }
+    let cancelled = false
     void (async () => {
+      const cached = readCachedReceiveRails(country, currency)
+      if (cached) {
+        setRails(cached)
+        setLoading(false)
+      } else {
+        setLoading(true)
+      }
       const data = await prefetchYcReceiveRails(country, currency)
       if (!cancelled) {
-        setRails(data ?? cached)
+        setRails(data ?? cached ?? null)
         setLoading(false)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [input.enabled, country, currency])
+  }, [input.enabled, corridorKey, country, currency])
 
-  return { rails, loading, blocking: loading && !rails }
+  useRevalidateOnAppActive(revalidate)
+
+  return { rails, loading, blocking: loading && !rails, revalidate }
 }
 
 export function useYcFundBalanceFlow(input: {
@@ -72,28 +108,42 @@ export function useYcFundBalanceFlow(input: {
   amountEntryMode: 'usd' | 'local'
   enteredAmount: number
 }) {
+  const currency = input.currency?.trim().toUpperCase() ?? ''
   const [rates, setRates] = useState<YcRateClientRow[]>(() => readCachedYcPayInRates() ?? [])
   const [ratesLoading, setRatesLoading] = useState(
-    () => Boolean(input.enabled && input.currency && !readCachedYcPayInRates()),
+    () => Boolean(input.enabled && currency && !readCachedYcPayInRates()),
   )
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!input.enabled || !input.currency) {
-      setRates([])
-      setRatesLoading(false)
-      return
-    }
-    let cancelled = false
+  const revalidateRates = useCallback(async () => {
+    if (!input.enabled || !currency) return
     const cached = readCachedYcPayInRates()
-    if (cached) {
+    if (cached?.length) {
       setRates(cached)
       setRatesLoading(false)
     } else {
       setRatesLoading(true)
     }
+    const next = await prefetchYcPayInRates()
+    setRates(next ?? cached ?? [])
+    setRatesLoading(false)
+  }, [input.enabled, currency])
+
+  useEffect(() => {
+    if (!input.enabled || !currency) {
+      setRatesLoading(false)
+      return
+    }
+    let cancelled = false
     void (async () => {
+      const cached = readCachedYcPayInRates()
+      if (cached?.length) {
+        setRates(cached)
+        setRatesLoading(false)
+      } else {
+        setRatesLoading(true)
+      }
       const next = await prefetchYcPayInRates()
       if (!cancelled) setRates(next ?? cached ?? [])
       if (!cancelled) setRatesLoading(false)
@@ -101,7 +151,9 @@ export function useYcFundBalanceFlow(input: {
     return () => {
       cancelled = true
     }
-  }, [input.enabled, input.currency])
+  }, [input.enabled, currency])
+
+  useRevalidateOnAppActive(revalidateRates)
 
   const customerRate = useMemo(
     () => (input.currency ? resolveYcPayInCustomerRate(rates, input.currency) : null),
@@ -185,7 +237,7 @@ export function useYcFundBalanceFlow(input: {
 
   return {
     rates,
-    ratesLoading,
+    ratesLoading: ratesLoading && rates.length === 0,
     customerRate,
     preview,
     quoteLoading,

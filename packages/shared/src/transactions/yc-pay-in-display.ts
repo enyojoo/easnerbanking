@@ -178,6 +178,20 @@ export function readYcPayInAttestedAt(meta: Record<string, unknown> | null | und
   return pickIso(meta?.payment_attested_at)
 }
 
+/** Ignore pre-attest webhook timestamps polluted by YC order-state churn. */
+export function readYcPayInEffectiveProcessingAt(
+  meta: Record<string, unknown> | null | undefined,
+): string | null {
+  const attestedAt = readYcPayInAttestedAt(meta)
+  const raw = pickIso(meta?.processing_at)
+  if (!raw) return null
+  if (!attestedAt) return null
+  const attMs = new Date(attestedAt).getTime()
+  const procMs = new Date(raw).getTime()
+  if (Number.isFinite(attMs) && Number.isFinite(procMs) && procMs < attMs) return null
+  return raw
+}
+
 export function readYcQuoteLockedAt(meta: Record<string, unknown> | null | undefined): string | null {
   return pickIso(meta?.quote_locked_at, meta?.transaction_started_at)
 }
@@ -400,7 +414,7 @@ export function buildYcPayInLifecycle(input: BuildYcPayInLifecycleInput): YcPayI
   const ledgerStatus = normalizeLedgerStatus(input.status)
   const attestedAt = readYcPayInAttestedAt(meta)
   const quoteLockedAt = readYcQuoteLockedAt(meta)
-  const processingAt = pickIso(meta.processing_at)
+  const processingAt = readYcPayInEffectiveProcessingAt(meta)
   const completedAt = pickIso(meta.completed_at) ?? input.settledAt ?? null
   const failedAt = pickIso(meta.failed_at) ?? null
   const crossBorder = input.crossBorder === true

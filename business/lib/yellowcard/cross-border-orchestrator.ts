@@ -85,6 +85,7 @@ function buildCrossBorderReceiveLegFromResponse(input: {
 function finalizeCrossBorderLeg1Quote(input: {
   receiveRes: YcReceiveSubmitResult
   pricingFinal: CrossBorderPricingFinal
+  submittedLocalAmount: number
 }): {
   lockedLocalPayIn: number
   omnibusInExpected: number
@@ -108,7 +109,8 @@ function finalizeCrossBorderLeg1Quote(input: {
   }
   const lockedLocalPayIn = alignYcCrossBorderLockedLocalPayIn({
     pricingLocalPayIn: input.pricingFinal.localPayIn,
-    ycLockedLocalPayIn: Number(input.receiveRes.localAmount ?? input.pricingFinal.localPayIn),
+    submittedLocalAmount: input.submittedLocalAmount,
+    receiveRes: input.receiveRes,
   })
   const pricingFinal = { ...input.pricingFinal, localPayIn: lockedLocalPayIn }
   return {
@@ -736,7 +738,11 @@ export async function confirmCrossBorderLeg1(
     })
 
     if (omnibusCheck.ok) {
-      lockedQuote = finalizeCrossBorderLeg1Quote({ receiveRes, pricingFinal })
+      lockedQuote = finalizeCrossBorderLeg1Quote({
+        receiveRes,
+        pricingFinal,
+        submittedLocalAmount: localAmount,
+      })
       pricingFinal = lockedQuote.pricingFinal
       break
     }
@@ -1376,7 +1382,11 @@ export async function authorizeCrossBorderDraft(input: {
     })
 
     if (omnibusCheck.ok) {
-      lockedQuote = finalizeCrossBorderLeg1Quote({ receiveRes, pricingFinal })
+      lockedQuote = finalizeCrossBorderLeg1Quote({
+        receiveRes,
+        pricingFinal,
+        submittedLocalAmount: localAmount,
+      })
       pricingFinal = lockedQuote.pricingFinal
       break
     }

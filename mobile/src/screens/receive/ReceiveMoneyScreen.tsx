@@ -168,21 +168,23 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const needsYcReceiveRails =
     verificationComplete && currency === 'USD' && Boolean(localPayInCurrency && residenceCountry)
 
+  const { rails: receiveRails, blocking: receiveRailsBlocking, revalidate: receiveRailsRevalidate } = useYcReceiveRails({
+    country: residenceCountry || null,
+    currency: localPayInCurrency,
+    enabled: needsYcReceiveRails,
+  })
+
   useFocusEffect(
     React.useCallback(() => {
       const corridor = resolveWarmYcLocalDepositCorridor(userProfile, {
         kycApproved: verificationComplete,
       })
       if (!corridor) return
-      void ensureYcLocalDepositCachesReady(corridor)
-    }, [userProfile, verificationComplete]),
+      void ensureYcLocalDepositCachesReady(corridor).then(() => {
+        void receiveRailsRevalidate()
+      })
+    }, [userProfile, verificationComplete, receiveRailsRevalidate]),
   )
-
-  const { rails: receiveRails, blocking: receiveRailsBlocking } = useYcReceiveRails({
-    country: residenceCountry || null,
-    currency: localPayInCurrency,
-    enabled: needsYcReceiveRails,
-  })
 
   const cashMethodsReady = !needsYcReceiveRails || !receiveRailsBlocking
 
@@ -632,7 +634,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             {effectiveTab === 'cash' && showCashTab ? (
               !verificationComplete ? (
                 renderDepositVerificationNotice('cash')
-              ) : !cashMethodsReady ? null : (
+              ) : (
               <View style={{ gap: spacing[4] }}>
                 {localPayInCurrency === 'NGN' && ngMissingType ? (
                   <NgLocalVerificationNotice

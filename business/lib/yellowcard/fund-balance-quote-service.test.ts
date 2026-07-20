@@ -60,7 +60,7 @@ function makeAdmin() {
   const chain = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
     single: vi.fn(),
     insert: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
@@ -195,7 +195,39 @@ describe("confirmFundBalanceOrder", () => {
 
     expect(result.quotePhase).toBe("locked")
     expect(submitYcReceive).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(submitYcReceive).mock.calls[0]?.[0]?.localAmount).toBeGreaterThan(133825)
+    const submitted = vi.mocked(submitYcReceive).mock.calls[0]?.[0]?.localAmount ?? 0
+    expect(submitted).toBeGreaterThan(133825)
+    expect(result.localPayIn).toBe(submitted)
+  })
+
+  it("uses submitted local pay-in when YC POST /receive omits locked amount fields", async () => {
+    vi.mocked(submitYcReceive).mockImplementation(async (input) => ({
+      id: "yc-ng-bank",
+      settlementInfo: { cryptoAmount: 31.05538504 },
+      networkFeeAmountUSD: 0,
+      serviceFeeAmountUSD: 0.31,
+    }))
+
+    const admin = makeAdmin()
+    admin.chain.single
+      .mockResolvedValueOnce({ data: { id: "tx-1" } })
+      .mockResolvedValueOnce({ data: { id: "tr-1" } })
+
+    const result = await confirmFundBalanceOrder({
+      ...baseCtx,
+      admin,
+      currency: "NGN",
+      country: "NG",
+      usdCredit: 30,
+    })
+
+    const submitted = vi.mocked(submitYcReceive).mock.calls[0]?.[0]?.localAmount ?? 0
+    expect(result.localPayIn).toBe(submitted)
+    expect(result.localPayIn).toBeGreaterThan(4000)
+
+    const txInsert = admin.chain.insert.mock.calls.find((call) => call[0]?.provider === "yellowcard")?.[0]
+    expect(txInsert?.metadata?.local_pay_in).toBe(submitted)
+    expect(txInsert?.metadata?.deposit_review?.local_pay_in).toBe(submitted)
   })
 
   it("persists live YC leg fees when POST /receive reports service fee only", async () => {

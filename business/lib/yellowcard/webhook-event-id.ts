@@ -69,3 +69,38 @@ export function classifyYellowcardWebhookEvent(eventType: string): {
   }
   return { kind: "other", isTerminalSuccess, isTerminalFailure, isCryptoSettlementComplete }
 }
+
+/** YC order-state webhooks that fire before the user pays (VA created, awaiting deposit). */
+export function isYcReceivePrePaymentEvent(eventType: string): boolean {
+  const e = eventType.trim().toUpperCase()
+  if (!e.startsWith("RECEIVE.") && !e.includes("RECEIVE")) return false
+  return (
+    e.endsWith(".PENDING") ||
+    e.endsWith(".PENDING_APPROVAL") ||
+    e === "RECEIVE.PENDING" ||
+    e === "RECEIVE.PENDING_APPROVAL"
+  )
+}
+
+/**
+ * Whether a receive webhook should set user-facing `processing_at` / ledger processing.
+ * Requires user attestation; pre-payment events and pre-attest timestamps are ignored.
+ */
+export function shouldYcReceiveWebhookAdvanceProcessing(input: {
+  eventType: string
+  paymentAttestedAt?: string | null
+  webhookOccurredAt?: string | null
+  force?: boolean
+}): boolean {
+  if (input.force) return true
+  if (isYcReceivePrePaymentEvent(input.eventType)) return false
+  const attested = String(input.paymentAttestedAt ?? "").trim()
+  if (!attested) return false
+  const occurred = String(input.webhookOccurredAt ?? "").trim()
+  if (occurred) {
+    const attMs = new Date(attested).getTime()
+    const occMs = new Date(occurred).getTime()
+    if (Number.isFinite(attMs) && Number.isFinite(occMs) && occMs < attMs) return false
+  }
+  return true
+}

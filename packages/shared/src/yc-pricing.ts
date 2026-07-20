@@ -1015,19 +1015,61 @@ export function computeYcCrossBorderPricingBeforeReceive(input: {
   }
 }
 
+/** Read locked local pay-in from POST /receive response (field names vary by YC API version). */
+export function readYcReceiveLockedLocalAmount(
+  receiveRes: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!receiveRes) return null
+  for (const key of ["localAmount", "local_amount", "convertedAmount", "converted_amount"]) {
+    const n = Number(receiveRes[key] ?? 0)
+    if (Number.isFinite(n) && n > 0) return roundLocal(n)
+  }
+  return null
+}
+
+/**
+ * Authoritative user pay-in after POST /receive.
+ * Never downgrade to economics-only repricing when submit padding or YC echo is higher.
+ */
+export function resolveYcLockedLocalPayInFromReceive(input: {
+  submittedLocalAmount: number
+  receiveRes?: Record<string, unknown> | null
+  receiveLocalAmount?: number | null
+  economicsLocalPayIn?: number
+}): number {
+  const submitted = roundLocalUp(input.submittedLocalAmount)
+  const fromResponse =
+    input.receiveLocalAmount != null && Number(input.receiveLocalAmount) > 0
+      ? roundLocal(Number(input.receiveLocalAmount))
+      : readYcReceiveLockedLocalAmount(input.receiveRes)
+  if (fromResponse != null && fromResponse > 0) {
+    return roundLocalUp(Math.max(fromResponse, submitted))
+  }
+  if (submitted > 0) return submitted
+  const economics = roundLocal(input.economicsLocalPayIn ?? 0)
+  if (economics > 0) return economics
+  throw new Error("yc_locked_local_pay_in_invalid")
+}
+
 /**
  * Cross-border confirm: YC locked local pay-in is authoritative.
  * Submit padding may lock above repriced model — only reject underpayment.
  */
 export function alignYcCrossBorderLockedLocalPayIn(input: {
   pricingLocalPayIn: number
-  ycLockedLocalPayIn: number
+  /** @deprecated prefer submittedLocalAmount + receiveRes */
+  ycLockedLocalPayIn?: number
+  submittedLocalAmount?: number
+  receiveRes?: Record<string, unknown> | null
 }): number {
-  const locked = roundLocal(input.ycLockedLocalPayIn)
+  const locked = resolveYcLockedLocalPayInFromReceive({
+    submittedLocalAmount:
+      input.submittedLocalAmount ?? input.ycLockedLocalPayIn ?? input.pricingLocalPayIn,
+    receiveLocalAmount: input.ycLockedLocalPayIn,
+    receiveRes: input.receiveRes,
+    economicsLocalPayIn: input.pricingLocalPayIn,
+  })
   const quoted = roundLocal(input.pricingLocalPayIn)
-  if (!(locked > 0)) {
-    throw new Error("yc_locked_local_pay_in_invalid")
-  }
   if (locked + 0.01 < quoted) {
     throw new Error(`yc_pay_in_mismatch: YC locked ${locked} < quoted ${quoted}`)
   }

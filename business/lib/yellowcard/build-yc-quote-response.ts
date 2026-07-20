@@ -20,6 +20,8 @@ export function buildFundBalanceQuoteSummary(input: {
   sourcePhone?: string
   sourceNetworkId?: string
   sourceNetworkName?: string
+  /** Pre-lock indicative pay-in shown on amount screen; locked pay-in may be higher. */
+  provisionalPayIn?: number
 }): YcQuoteSummary & { ok: true; sequenceId?: string; payInNotice?: string } {
   const displayFees = buildYcFundBalanceDisplayFees({
     usdCredit: input.pricing.usdCredit,
@@ -28,12 +30,13 @@ export function buildFundBalanceQuoteSummary(input: {
     easnerSellRate: input.customerRate,
     payInCurrency: input.currency,
   })
-  const paddedLocalPayIn = input.pricing.localPayIn
+  const lockedLocalPayIn = input.pricing.localPayIn
+  const provisionalPayIn = input.provisionalPayIn ?? lockedLocalPayIn
   return {
     ok: true,
     customerRate: input.customerRate,
-    provisionalPayIn: paddedLocalPayIn,
-    localPayIn: paddedLocalPayIn,
+    provisionalPayIn,
+    localPayIn: lockedLocalPayIn,
     creditOrReceiveAmount: input.pricing.usdCredit,
     processingFee: input.pricing.processingFee,
     ycLegFeesUsd: input.pricing.ycLegFeesUsd,

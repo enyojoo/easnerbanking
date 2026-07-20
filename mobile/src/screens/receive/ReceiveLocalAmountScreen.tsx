@@ -7,6 +7,7 @@ import {
   Platform,
   useWindowDimensions,
   ActivityIndicator,
+  AppState,
 } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { ArrowLeft, ArrowUpDown, ChevronDown, Delete } from 'lucide-react-native'
@@ -261,6 +262,19 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   useEffect(() => {
     clearFundBalanceQuote()
   }, [localPayInCurrency, residenceCountry, payInRail])
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return
+      setIsContinuePending(false)
+      setIsContinueLoading(false)
+      if (continueSpinnerTimerRef.current) {
+        clearTimeout(continueSpinnerTimerRef.current)
+        continueSpinnerTimerRef.current = null
+      }
+    })
+    return () => sub.remove()
+  }, [])
 
   const momoNetworksPrefetchKey =
     payInRail === 'mobile_money' && residenceCountry && localPayInCurrency

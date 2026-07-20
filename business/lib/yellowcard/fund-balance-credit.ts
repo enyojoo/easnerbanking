@@ -15,6 +15,7 @@ import {
   buildYcFundBalanceReceiveMetadata,
   mergeYcFundBalanceLifecycle,
 } from "@/lib/yellowcard/yc-ledger"
+import { shouldYcReceiveWebhookAdvanceProcessing } from "@/lib/yellowcard/webhook-event-id"
 import { resolveLedgerOccurredAt } from "@/lib/ledger/ledger-occurred-at"
 import { buildWalletReportingSnapshot } from "@/lib/transactions/reporting-snapshot"
 
@@ -101,6 +102,7 @@ export async function creditFundBalanceFromYcReceive(
         status: "processing",
         payload: input.payload,
         occurredAt: now,
+        forceAdvanceProcessing: true,
       })
     }
     return { credited: false, creditAmt: 0 }
@@ -274,9 +276,18 @@ export async function patchYcFundBalanceReceiveStatus(
     status: "pending" | "processing" | "failed"
     payload: Record<string, unknown>
     occurredAt?: string
+    eventType?: string
+    forceAdvanceProcessing?: boolean
   },
 ): Promise<void> {
   const now = input.occurredAt ?? new Date().toISOString()
+  const eventType = String(
+    input.eventType ??
+      input.payload.event ??
+      input.payload.Event ??
+      input.payload.status ??
+      "",
+  ).trim()
   const { data: transfer } = await admin
     .from("yc_transfers")
     .select("metadata, status, quoted_pay_in, pay_in_currency, quoted_receive, user_id, business_id, leg1_sequence_id")
@@ -285,23 +296,24 @@ export async function patchYcFundBalanceReceiveStatus(
   if (!transfer) return
   if (String(transfer.status) === "completed") return
 
-  const transferStatus =
-    input.status === "failed"
-      ? "failed"
-      : input.status === "processing"
-        ? "processing"
-        : "awaiting_pay_in"
-
-  await admin
-    .from("yc_transfers")
-    .update({
-      status: transferStatus,
-      leg1_status: input.status,
-      updated_at: now,
-    })
-    .eq("id", input.transferId)
-
-  if (!input.transactionId) return
+  if (!input.transactionId) {
+    const priorTransferStatus = String(transfer.status)
+    const transferStatus =
+      input.status === "failed"
+        ? "failed"
+        : priorTransferStatus === "awaiting_pay_in" || priorTransferStatus === "pending"
+          ? priorTransferStatus
+          : "processing"
+    await admin
+      .from("yc_transfers")
+      .update({
+        status: transferStatus,
+        leg1_status: input.status === "failed" ? "failed" : input.status,
+        updated_at: now,
+      })
+      .eq("id", input.transferId)
+    return
+  }
 
   const { data: txRow } = await admin
     .from("transactions")
@@ -309,6 +321,33 @@ export async function patchYcFundBalanceReceiveStatus(
     .eq("id", input.transactionId)
     .maybeSingle()
   const prior = asMeta(txRow?.metadata)
+  const attestedAt = String(prior.payment_attested_at ?? "").trim()
+  const advanceProcessing =
+    input.status !== "failed" &&
+    shouldYcReceiveWebhookAdvanceProcessing({
+      eventType,
+      paymentAttestedAt: attestedAt || null,
+      webhookOccurredAt: now,
+      force: input.forceAdvanceProcessing,
+    })
+
+  const priorTransferStatus = String(transfer.status)
+  const transferStatus =
+    input.status === "failed"
+      ? "failed"
+      : advanceProcessing
+        ? "processing"
+        : priorTransferStatus
+
+  await admin
+    .from("yc_transfers")
+    .update({
+      status: transferStatus,
+      leg1_status: input.status === "failed" ? "failed" : input.status,
+      updated_at: now,
+    })
+    .eq("id", input.transferId)
+
   const occurredAt = resolveLedgerOccurredAt({
     occurredAt: txRow?.occurred_at != null ? String(txRow.occurred_at) : null,
     createdAt: txRow?.created_at != null ? String(txRow.created_at) : null,
@@ -323,7 +362,12 @@ export async function patchYcFundBalanceReceiveStatus(
     localCurrency: transfer.pay_in_currency ? String(transfer.pay_in_currency) : null,
     usdCredit: transfer.quoted_receive != null ? Number(transfer.quoted_receive) : null,
   })
-  if (input.status === "processing" || input.status === "pending") {
+  meta = {
+    ...meta,
+    yc_last_webhook_at: now,
+    ...(eventType ? { yc_last_event_type: eventType } : {}),
+  }
+  if (advanceProcessing) {
     meta = mergeYcFundBalanceLifecycle(meta, { processing_at: now })
   }
   if (input.status === "failed") {
@@ -331,7 +375,7 @@ export async function patchYcFundBalanceReceiveStatus(
   }
 
   const nextStatus =
-    input.status === "failed" ? "failed" : input.status === "processing" ? "processing" : "pending"
+    input.status === "failed" ? "failed" : advanceProcessing ? "processing" : "pending"
 
   await upsertLedgerTransaction(admin, {
     userId: String(transfer.user_id),

@@ -5,6 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import {
   classifyYellowcardWebhookEvent,
+  isYcReceivePrePaymentEvent,
+  shouldYcReceiveWebhookAdvanceProcessing,
   yellowcardWebhookEventId,
   yellowcardWebhookEventType,
 } from "./webhook-event-id"
@@ -58,6 +60,7 @@ export async function handleYcFundBalanceReceiveWebhook(
 
   const transactionId = transfer.transaction_id ?? ctx.transaction?.id ?? null
   const occurredAt = pickOccurredAt(input.payload)
+  const eventType = yellowcardWebhookEventType(input.payload)
 
   if (input.classified.isTerminalFailure) {
     await patchYcFundBalanceReceiveStatus(admin, {
@@ -67,6 +70,7 @@ export async function handleYcFundBalanceReceiveWebhook(
       status: "failed",
       payload: input.payload,
       occurredAt,
+      eventType,
     })
     return
   }
@@ -84,9 +88,10 @@ export async function handleYcFundBalanceReceiveWebhook(
     transferId: transfer.id,
     transactionId,
     sequenceId: input.sequenceId,
-    status: "processing",
+    status: isYcReceivePrePaymentEvent(eventType) ? "pending" : "processing",
     payload: input.payload,
     occurredAt,
+    eventType,
   })
 }
 
@@ -207,6 +212,27 @@ export async function handleYcCrossBorderWebhook(
 
   const occurredAt = pickOccurredAt(input.payload)
   const transactionId = transfer.transaction_id ?? ctx.transaction?.id ?? null
+  const eventType = yellowcardWebhookEventType(input.payload)
+
+  async function loadTxAttestedAt(): Promise<string | null> {
+    if (!transactionId) return null
+    const { data: txRow } = await admin
+      .from("transactions")
+      .select("metadata")
+      .eq("id", transactionId)
+      .maybeSingle()
+    return String(asMeta(txRow?.metadata).payment_attested_at ?? "").trim() || null
+  }
+
+  async function shouldAdvanceLeg1Processing(force?: boolean): Promise<boolean> {
+    const attestedAt = await loadTxAttestedAt()
+    return shouldYcReceiveWebhookAdvanceProcessing({
+      eventType,
+      paymentAttestedAt: attestedAt,
+      webhookOccurredAt: occurredAt,
+      force,
+    })
+  }
 
   async function upsertCrossBorderTx(
     status: "processing" | "failed" | "settled",
@@ -361,7 +387,12 @@ export async function handleYcCrossBorderWebhook(
       return
     }
     if (input.classified.isTerminalSuccess && !input.shouldTriggerCrossBorderLeg2) {
-      await upsertCrossBorderTx("processing", { processing_at: occurredAt })
+      const advance = await shouldAdvanceLeg1Processing()
+      await upsertCrossBorderTx(
+        advance ? "processing" : "pending",
+        advance ? { processing_at: occurredAt } : {},
+        { yc_last_webhook_at: occurredAt, yc_last_event_type: eventType },
+      )
       return
     }
 
@@ -370,17 +401,29 @@ export async function handleYcCrossBorderWebhook(
       !input.classified.isTerminalSuccess &&
       !input.shouldTriggerCrossBorderLeg2
     ) {
+      const advance = await shouldAdvanceLeg1Processing()
+      const priorTransferStatus = String(transfer.status)
       const nextTransferStatus =
-        String(transfer.status) === "awaiting_pay_in" ? "processing" : String(transfer.status)
+        advance && priorTransferStatus === "awaiting_pay_in"
+          ? "processing"
+          : priorTransferStatus
       await admin
         .from("yc_transfers")
         .update({
           status: nextTransferStatus,
-          leg1_status: "processing",
+          leg1_status: isYcReceivePrePaymentEvent(eventType) ? "pending" : "processing",
           updated_at: occurredAt,
         })
         .eq("id", transfer.id)
-      await upsertCrossBorderTx("processing", { processing_at: occurredAt }, { leg1_status: "processing" })
+      await upsertCrossBorderTx(
+        advance ? "processing" : "pending",
+        advance ? { processing_at: occurredAt } : {},
+        {
+          leg1_status: isYcReceivePrePaymentEvent(eventType) ? "pending" : "processing",
+          yc_last_webhook_at: occurredAt,
+          yc_last_event_type: eventType,
+        },
+      )
     }
   }
 }

@@ -52,12 +52,14 @@ export function readCachedReceiveRails(
 ): YcReceiveRailsResponse | null {
   const key = receiveRailsCacheKey(country, currency)
   const hit = receiveRailsCache.get(key)
-  if (!hit) return null
-  if (Date.now() - hit.at > RECEIVE_RAILS_CACHE_TTL_MS) {
-    receiveRailsCache.delete(key)
-    return null
-  }
-  return hit.data
+  return hit?.data ?? null
+}
+
+export function isReceiveRailsCacheFresh(country: string, currency: string): boolean {
+  const key = receiveRailsCacheKey(country, currency)
+  const hit = receiveRailsCache.get(key)
+  if (!hit) return false
+  return Date.now() - hit.at <= RECEIVE_RAILS_CACHE_TTL_MS
 }
 
 function writeReceiveRailsCache(
@@ -69,12 +71,12 @@ function writeReceiveRailsCache(
 }
 
 export function readCachedYcPayInRates(): YcRateClientRow[] | null {
-  if (!payInRatesCache) return null
-  if (Date.now() - payInRatesCache.at > PAY_IN_RATES_CACHE_TTL_MS) {
-    payInRatesCache = null
-    return null
-  }
-  return payInRatesCache.rates
+  return payInRatesCache?.rates ?? null
+}
+
+export function isYcPayInRatesCacheFresh(): boolean {
+  if (!payInRatesCache) return false
+  return Date.now() - payInRatesCache.at <= PAY_IN_RATES_CACHE_TTL_MS
 }
 
 function writeYcPayInRatesCache(rates: YcRateClientRow[]): void {
@@ -102,7 +104,7 @@ export async function prefetchYcReceiveRails(
   if (!cc || !cur) return null
 
   const cached = readCachedReceiveRails(cc, cur)
-  if (cached) return cached
+  if (cached && isReceiveRailsCacheFresh(cc, cur)) return cached
 
   const key = receiveRailsCacheKey(cc, cur)
   const inflight = receiveRailsInflight.get(key)
@@ -116,7 +118,7 @@ export async function prefetchYcReceiveRails(
       writeReceiveRailsCache(cc, cur, data)
       return data
     } catch {
-      return null
+      return readCachedReceiveRails(cc, cur)
     } finally {
       receiveRailsInflight.delete(key)
     }
@@ -128,7 +130,7 @@ export async function prefetchYcReceiveRails(
 
 export async function prefetchYcPayInRates(): Promise<YcRateClientRow[] | null> {
   const cached = readCachedYcPayInRates()
-  if (cached) return cached
+  if (cached && isYcPayInRatesCacheFresh()) return cached
 
   if (payInRatesInflight) return payInRatesInflight
 
@@ -141,7 +143,7 @@ export async function prefetchYcPayInRates(): Promise<YcRateClientRow[] | null> 
       writeYcPayInRatesCache(rates)
       return rates
     } catch {
-      return null
+      return readCachedYcPayInRates()
     } finally {
       payInRatesInflight = null
     }

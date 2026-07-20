@@ -684,6 +684,8 @@ export {
   bumpYcCrossBorderLocalPayInForOmnibusShortfall,
   resolveYcFundBalanceSubmitLocalPayIn,
   resolveYcCrossBorderSubmitLocalPayIn,
+  readYcReceiveLockedLocalAmount,
+  resolveYcLockedLocalPayInFromReceive,
   alignYcCrossBorderLockedLocalPayIn,
   computeYcFundBalanceSendExactlyLocal,
   easnerFeeLocalFromUsdCredit,

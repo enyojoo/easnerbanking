@@ -8,6 +8,7 @@ import {
   formatYcPayInDepositTimeRemaining,
   isYcPayInAwaitingAttestation,
   ledgerTransactionStatusDisplayForRow,
+  readYcPayInEffectiveProcessingAt,
   resolveYcPayInFeedStatus,
   resolveYcPayInUserWhenAt,
 } from "./yc-pay-in-display"
@@ -104,6 +105,29 @@ describe("yc pay-in display", () => {
     expect(steps[0]?.occurredAt).toBe("2026-01-01T00:03:00.000Z")
     expect(steps[1]?.title).toBe("Processing")
     expect(steps[1]?.occurredAt).toBe("2026-01-01T00:10:00.000Z")
+  })
+
+  it("ignores pre-attest processing_at from YC order-state webhooks", () => {
+    expect(
+      readYcPayInEffectiveProcessingAt({
+        payment_attested_at: "2026-01-01T00:03:00.000Z",
+        processing_at: "2026-01-01T00:01:00.000Z",
+      }),
+    ).toBeNull()
+
+    const steps = buildYcPayInLifecycle({
+      status: "processing",
+      metadata: {
+        yc_mode: "fund_balance",
+        quote_locked_at: "2026-01-01T00:00:00.000Z",
+        payment_attested_at: "2026-01-01T00:03:00.000Z",
+        processing_at: "2026-01-01T00:01:00.000Z",
+        local_pay_in: 1000,
+        local_currency: "NGN",
+      },
+    })
+    expect(steps[1]?.title).toBe("Confirming payment")
+    expect(steps[1]?.state).toBe("current")
   })
 
   it("shows Awaiting payment label before attestation", () => {

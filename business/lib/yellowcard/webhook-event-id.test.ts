@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
   classifyYellowcardWebhookEvent,
+  isYcReceivePrePaymentEvent,
+  shouldYcReceiveWebhookAdvanceProcessing,
   yellowcardWebhookEventId,
 } from "@/lib/yellowcard/webhook-event-id"
 
@@ -43,5 +45,51 @@ describe("classifyYellowcardWebhookEvent", () => {
   it("tolerates legacy collection/payment", () => {
     expect(classifyYellowcardWebhookEvent("COLLECTION.COMPLETE").kind).toBe("legacy_collection")
     expect(classifyYellowcardWebhookEvent("PAYMENT.FAILED").kind).toBe("legacy_payment")
+  })
+})
+
+describe("isYcReceivePrePaymentEvent", () => {
+  it("flags YC order-state events before user payment", () => {
+    expect(isYcReceivePrePaymentEvent("RECEIVE.PENDING")).toBe(true)
+    expect(isYcReceivePrePaymentEvent("RECEIVE.PENDING_APPROVAL")).toBe(true)
+    expect(isYcReceivePrePaymentEvent("RECEIVE.PROCESSING")).toBe(false)
+    expect(isYcReceivePrePaymentEvent("RECEIVE.COMPLETE")).toBe(false)
+  })
+})
+
+describe("shouldYcReceiveWebhookAdvanceProcessing", () => {
+  it("requires attestation and ignores pre-payment events", () => {
+    expect(
+      shouldYcReceiveWebhookAdvanceProcessing({
+        eventType: "RECEIVE.PENDING",
+        paymentAttestedAt: "2026-07-21T02:33:00.000Z",
+      }),
+    ).toBe(false)
+    expect(
+      shouldYcReceiveWebhookAdvanceProcessing({
+        eventType: "RECEIVE.PROCESSING",
+        paymentAttestedAt: null,
+      }),
+    ).toBe(false)
+  })
+
+  it("advances after attestation on meaningful receive events", () => {
+    expect(
+      shouldYcReceiveWebhookAdvanceProcessing({
+        eventType: "RECEIVE.PROCESSING",
+        paymentAttestedAt: "2026-07-21T02:33:00.000Z",
+        webhookOccurredAt: "2026-07-21T02:33:05.000Z",
+      }),
+    ).toBe(true)
+  })
+
+  it("ignores webhooks timestamped before attestation", () => {
+    expect(
+      shouldYcReceiveWebhookAdvanceProcessing({
+        eventType: "RECEIVE.PROCESSING",
+        paymentAttestedAt: "2026-07-21T02:33:00.000Z",
+        webhookOccurredAt: "2026-07-21T02:32:54.000Z",
+      }),
+    ).toBe(false)
   })
 })

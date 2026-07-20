@@ -25,6 +25,7 @@ import {
   bumpYcCrossBorderLocalPayInForOmnibusShortfall,
   alignYcCrossBorderLockedLocalPayIn,
   resolveYcFundBalanceSubmitLocalPayIn,
+  resolveYcLockedLocalPayInFromReceive,
   YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
   YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
@@ -315,6 +316,7 @@ describe("alignYcCrossBorderLockedLocalPayIn", () => {
       alignYcCrossBorderLockedLocalPayIn({
         pricingLocalPayIn: 109057,
         ycLockedLocalPayIn: 110673,
+        submittedLocalAmount: 110673,
       }),
     ).toBe(110673)
   })
@@ -324,6 +326,7 @@ describe("alignYcCrossBorderLockedLocalPayIn", () => {
       alignYcCrossBorderLockedLocalPayIn({
         pricingLocalPayIn: 109057.2,
         ycLockedLocalPayIn: 109057.25,
+        submittedLocalAmount: 109057.25,
       }),
     ).toBe(109057.25)
   })
@@ -333,8 +336,31 @@ describe("alignYcCrossBorderLockedLocalPayIn", () => {
       alignYcCrossBorderLockedLocalPayIn({
         pricingLocalPayIn: 110673,
         ycLockedLocalPayIn: 109057,
+        submittedLocalAmount: 109057,
       }),
     ).toThrow(/yc_pay_in_mismatch/)
+  })
+})
+
+describe("resolveYcLockedLocalPayInFromReceive", () => {
+  it("prefers submitted amount when YC response omits localAmount", () => {
+    expect(
+      resolveYcLockedLocalPayInFromReceive({
+        submittedLocalAmount: 44178.78,
+        receiveRes: { settlementInfo: { cryptoAmount: 31.05 } },
+        economicsLocalPayIn: 43330.84,
+      }),
+    ).toBe(44178.78)
+  })
+
+  it("reads convertedAmount from YC receive response", () => {
+    expect(
+      resolveYcLockedLocalPayInFromReceive({
+        submittedLocalAmount: 44178.78,
+        receiveRes: { convertedAmount: 44178.78 },
+        economicsLocalPayIn: 43330.84,
+      }),
+    ).toBe(44178.78)
   })
 })
 

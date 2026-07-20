@@ -15,6 +15,7 @@ import {
   parseYcReceiveRejectedMinError,
   resolveYcFundBalanceDepositTitle,
   resolveYcFundBalanceSubmitLocalPayIn,
+  resolveYcLockedLocalPayInFromReceive,
   resolveYcPayInLimits,
   ycPayInInstructionNotice,
 } from "@easner/shared"
@@ -228,11 +229,17 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
 function buildFundBalanceReceiveLeg(input: {
   receiveRes: YcReceiveSubmitResult
   customerSellRate: number
+  submittedLocalAmount: number
   fallbackLocalPayIn: number
 }) {
+  const lockedLocalPayIn = resolveYcLockedLocalPayInFromReceive({
+    submittedLocalAmount: input.submittedLocalAmount,
+    receiveRes: input.receiveRes,
+    economicsLocalPayIn: input.fallbackLocalPayIn,
+  })
   return buildYcReceiveLegFromResponse({
     cryptoAmountUsd: Number(input.receiveRes.settlementInfo?.cryptoAmount ?? 0),
-    lockedLocalPayIn: Number(input.receiveRes.localAmount ?? input.fallbackLocalPayIn),
+    lockedLocalPayIn,
     customerSellRate: input.customerSellRate,
     networkFeeAmountUsd: Number(input.receiveRes.networkFeeAmountUSD ?? 0),
     serviceFeeAmountUsd: Number(input.receiveRes.serviceFeeAmountUSD ?? 0),
@@ -243,10 +250,12 @@ function computeFundBalancePricingFromReceive(input: {
   ctx: FundBalanceQuoteInput
   prepared: Awaited<ReturnType<typeof prepareFundBalanceQuote>>
   receiveRes: YcReceiveSubmitResult
+  submittedLocalAmount: number
 }) {
   const receiveLeg = buildFundBalanceReceiveLeg({
     receiveRes: input.receiveRes,
     customerSellRate: input.prepared.customerRate,
+    submittedLocalAmount: input.submittedLocalAmount,
     fallbackLocalPayIn: input.prepared.provisional.localPayIn,
   })
   const usdCreditTarget = input.ctx.usdCredit != null && Number(input.ctx.usdCredit) > 0
@@ -258,9 +267,11 @@ function computeFundBalancePricingFromReceive(input: {
         receiveLeg,
       })
     : computeYcFundBalancePricing({
-        localPayIn: Number(
-          input.receiveRes.localAmount ?? input.prepared.provisional.localPayIn,
-        ),
+        localPayIn: resolveYcLockedLocalPayInFromReceive({
+          submittedLocalAmount: input.submittedLocalAmount,
+          receiveRes: input.receiveRes,
+          economicsLocalPayIn: input.prepared.provisional.localPayIn,
+        }),
         customerSellRate: input.prepared.customerRate,
         ycSellRate: Number(input.prepared.leg.yc_buy),
         receiveLeg,
@@ -270,7 +281,12 @@ function computeFundBalancePricingFromReceive(input: {
 async function submitFundBalanceYcReceive(input: {
   ctx: FundBalanceQuoteInput
   prepared: Awaited<ReturnType<typeof prepareFundBalanceQuote>>
-}): Promise<{ receiveRes: YcReceiveSubmitResult; pricing: ReturnType<typeof computeYcFundBalancePricing>; sequenceId: string }> {
+}): Promise<{
+  receiveRes: YcReceiveSubmitResult
+  pricing: ReturnType<typeof computeYcFundBalancePricing>
+  sequenceId: string
+  submittedLocalAmount: number
+}> {
   let localAmount = resolveYcFundBalanceSubmitLocalPayIn({
     pricing: input.prepared.provisional,
     customerSellRate: input.prepared.customerRate,
@@ -330,6 +346,7 @@ async function submitFundBalanceYcReceive(input: {
       ctx: input.ctx,
       prepared: input.prepared,
       receiveRes,
+      submittedLocalAmount: localAmount,
     })
 
     const cryptoAmount = Number(receiveRes.settlementInfo?.cryptoAmount ?? 0)
@@ -341,11 +358,15 @@ async function submitFundBalanceYcReceive(input: {
     })
 
     if (omnibusCheck.ok) {
-      return { receiveRes, pricing, sequenceId }
+      return { receiveRes, pricing, sequenceId, submittedLocalAmount: localAmount }
     }
 
     if (attempt < YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS - 1) {
-      const ycLockedPayIn = Number(receiveRes.localAmount ?? localAmount)
+      const ycLockedPayIn = resolveYcLockedLocalPayInFromReceive({
+        submittedLocalAmount: localAmount,
+        receiveRes,
+        economicsLocalPayIn: pricing.localPayIn,
+      })
       localAmount = bumpYcFundBalanceLocalPayInForOmnibusShortfall({
         localPayIn: Math.max(localAmount, ycLockedPayIn, pricing.localPayIn),
         customerSellRate: input.prepared.customerRate,
@@ -385,6 +406,7 @@ function formatFundBalanceTransferResponse(input: {
   sourceNetworkId?: string
   sourceNetworkName?: string
   sequenceId?: string
+  provisionalPayIn?: number
 }) {
   const expiresAt = resolveYcPayInDepositExpiresAt({
     lockedAt: String(input.transfer.created_at ?? input.transfer.updated_at ?? ""),
@@ -405,6 +427,7 @@ function formatFundBalanceTransferResponse(input: {
     sourcePhone: input.sourcePhone,
     sourceNetworkId: input.sourceNetworkId,
     sourceNetworkName: input.sourceNetworkName,
+    provisionalPayIn: input.provisionalPayIn,
   })
 
   return {
@@ -503,12 +526,24 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
     })
   }
 
-  const { receiveRes, pricing, sequenceId: finalSequenceId } = await submitFundBalanceYcReceive({
+  const {
+    receiveRes,
+    pricing,
+    sequenceId: finalSequenceId,
+    submittedLocalAmount,
+  } = await submitFundBalanceYcReceive({
     ctx,
     prepared,
   })
-  const lockedLocalPayIn = Number(receiveRes.localAmount ?? pricing.localPayIn)
-  const omnibusInExpected = Number(receiveRes.settlementInfo?.cryptoAmount ?? pricing.omnibusInUsd)
+  const lockedLocalPayIn = resolveYcLockedLocalPayInFromReceive({
+    submittedLocalAmount,
+    receiveRes,
+    economicsLocalPayIn: pricing.localPayIn,
+  })
+  const lockedPricing = { ...pricing, localPayIn: lockedLocalPayIn }
+  const omnibusInExpected = Number(
+    receiveRes.settlementInfo?.cryptoAmount ?? lockedPricing.omnibusInUsd,
+  )
 
   const startedAt = new Date().toISOString()
   const expiresAt = resolveYcPayInDepositExpiresAt({
@@ -522,18 +557,18 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
   const easnerTransactionId = generateTransactionId()
   const residenceCountry = String(ctx.userRow?.residence_country ?? ctx.country).trim().toUpperCase()
   const displayFeesLocked = buildYcFundBalanceDisplayFees({
-    usdCredit: pricing.usdCredit,
-    processingFee: pricing.processingFee,
-    ycLegFeesUsd: pricing.ycLegFeesUsd,
+    usdCredit: lockedPricing.usdCredit,
+    processingFee: lockedPricing.processingFee,
+    ycLegFeesUsd: lockedPricing.ycLegFeesUsd,
     easnerSellRate: prepared.customerRate,
     payInCurrency: ctx.currency,
   })
   const depositReview = buildYcFundBalanceDepositReviewSnapshot({
     localPayIn: lockedLocalPayIn,
     localCurrency: ctx.currency,
-    usdCredit: pricing.usdCredit,
-    processingFee: pricing.processingFee,
-    exchangeFee: pricing.ycLegFeesUsd,
+    usdCredit: lockedPricing.usdCredit,
+    processingFee: lockedPricing.processingFee,
+    exchangeFee: lockedPricing.ycLegFeesUsd,
     exchangeRate: prepared.customerRate,
     residenceCountry,
     payInRail: ctx.rail,
@@ -548,8 +583,8 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
     sequenceId: finalSequenceId,
     localPayIn: lockedLocalPayIn,
     localCurrency: ctx.currency,
-    usdCredit: pricing.usdCredit,
-    processingFee: pricing.processingFee,
+    usdCredit: lockedPricing.usdCredit,
+    processingFee: lockedPricing.processingFee,
     residenceCountry,
     payInRail: ctx.rail,
     customerRate: prepared.customerRate,
@@ -566,7 +601,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
       provider: "yellowcard",
       provider_transaction_id: finalSequenceId,
       status: "pending",
-      amount: pricing.usdCredit,
+      amount: lockedPricing.usdCredit,
       currency: "USD",
       direction: "in",
       easner_transaction_id: easnerTransactionId,
@@ -583,8 +618,8 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
         pay_in_rail: ctx.rail,
         display_processing_fee: displayFeesLocked.displayProcessingFee,
         display_processing_fee_local: displayFeesLocked.displayProcessingFeeLocal,
-        yc_leg_fees_usd: pricing.ycLegFeesUsd,
-        margin_amount: pricing.marginAmount,
+        yc_leg_fees_usd: lockedPricing.ycLegFeesUsd,
+        margin_amount: lockedPricing.marginAmount,
         omnibus_in_expected: omnibusInExpected,
         margin_capture_mode: "fee_wallet_omnibus",
         ...(ctx.sourcePhone ? { source_phone: ctx.sourcePhone } : {}),
@@ -605,7 +640,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
       pay_in_currency: ctx.currency,
       receive_currency: "USD",
       quoted_pay_in: lockedLocalPayIn,
-      quoted_receive: pricing.usdCredit,
+      quoted_receive: lockedPricing.usdCredit,
       customer_rate: prepared.customerRate,
       leg1_sequence_id: finalSequenceId,
       leg1_yc_id: receiveRes.id ?? null,
@@ -614,13 +649,13 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
       settlement_info: receiveRes.settlementInfo ?? null,
       metadata: {
         quote_key: prepared.quoteKey,
-        processing_fee: pricing.processingFee,
-        yc_channel_fee_usd: pricing.ycLegFeesUsd,
-        yc_leg_fees_usd: pricing.ycLegFeesUsd,
+        processing_fee: lockedPricing.processingFee,
+        yc_channel_fee_usd: lockedPricing.ycLegFeesUsd,
+        yc_leg_fees_usd: lockedPricing.ycLegFeesUsd,
         display_processing_fee: displayFeesLocked.displayProcessingFee,
         display_processing_fee_local: displayFeesLocked.displayProcessingFeeLocal,
-        usd_credit: pricing.usdCredit,
-        margin_amount: pricing.marginAmount,
+        usd_credit: lockedPricing.usdCredit,
+        margin_amount: lockedPricing.marginAmount,
         omnibus_in_expected: omnibusInExpected,
         margin_capture_mode: "fee_wallet_omnibus",
         ...(ctx.sourcePhone
@@ -653,7 +688,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
   return formatFundBalanceTransferResponse({
     transfer: (transferRow ?? {}) as Record<string, unknown>,
     transactionEasnerId: easnerTransactionId,
-    pricing,
+    pricing: lockedPricing,
     currency: ctx.currency,
     country: ctx.country,
     customerRate: prepared.customerRate,
@@ -662,5 +697,6 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
     sourceNetworkId: ctx.sourceNetworkId,
     sourceNetworkName: ctx.sourceNetworkName,
     sequenceId: finalSequenceId,
+    provisionalPayIn: prepared.provisional.localPayIn,
   })
 }

@@ -9,6 +9,7 @@ import {
   computeYcFundBalancePricingBeforeReceive,
   buildYcReceiveLegFromResponse,
   resolveYcFundBalanceDepositTitle,
+  resolveYcLockedLocalPayInFromReceive,
   resolveYcPayInLimits,
   validateYcPayInLocalAmount,
 } from "@easner/shared"
@@ -435,15 +436,21 @@ export async function authorizeFundBalanceDraft(input: {
     throw new FundBalanceSessionError("yc_receive_rejected", message, 400)
   }
 
+  const submittedLocalAmount = Number(transfer.quoted_pay_in)
+  const lockedLocalPayIn = resolveYcLockedLocalPayInFromReceive({
+    submittedLocalAmount,
+    receiveRes,
+    economicsLocalPayIn: submittedLocalAmount,
+  })
   const lockedUsdCredit = Number(transfer.quoted_receive ?? 0)
   const receiveLeg = buildYcReceiveLegFromResponse({
     cryptoAmountUsd: Number(receiveRes.settlementInfo?.cryptoAmount ?? 0),
-    lockedLocalPayIn: Number(receiveRes.localAmount ?? transfer.quoted_pay_in),
+    lockedLocalPayIn,
     customerSellRate: Number(leg.easner_sell),
     networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
     serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
   })
-  const pricing = lockedUsdCredit > 0
+  const pricingRaw = lockedUsdCredit > 0
     ? computeYcFundBalancePricing({
         usdCredit: lockedUsdCredit,
         customerSellRate: Number(leg.easner_sell),
@@ -451,11 +458,12 @@ export async function authorizeFundBalanceDraft(input: {
         receiveLeg,
       })
     : computeYcFundBalancePricing({
-        localPayIn: Number(receiveRes.localAmount ?? transfer.quoted_pay_in),
+        localPayIn: lockedLocalPayIn,
         customerSellRate: Number(leg.easner_sell),
         ycSellRate: Number(leg.yc_buy),
         receiveLeg,
       })
+  const pricing = { ...pricingRaw, localPayIn: lockedLocalPayIn }
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const residenceCountry = country
