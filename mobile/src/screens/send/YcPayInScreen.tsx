@@ -27,6 +27,7 @@ import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ycBankInfoFields } from '../../lib/yc-bank-info-fields'
 import { haptics } from '../../lib/haptics'
 import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transactionDetailNavigation'
+import { attestYcPayInPayment } from '../../lib/ycPayInAttest'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { YcLocalPayInCompleteSummary } from '../../components/yc/YcLocalPayInCompleteSummary'
 
@@ -75,6 +76,8 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   const footerPadding = useFixedFooterPadding(spacing[5])
   const copyToClipboard = useCopyToClipboard()
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [attestLoading, setAttestLoading] = useState(false)
+  const [attestError, setAttestError] = useState<string | null>(null)
 
   const params = (route.params || {}) as Partial<RouteParams>
   const {
@@ -139,8 +142,23 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
   }
 
   const handleContinue = () => {
+    if (attestLoading) return
     haptics.medium()
-    navigateToTransactionDetailAfterPayIn(navigation, transactionId)
+    setAttestError(null)
+    setAttestLoading(true)
+    void (async () => {
+      try {
+        await attestYcPayInPayment({
+          transactionId: displayTransactionId,
+          transferId,
+        })
+        navigateToTransactionDetailAfterPayIn(navigation, transactionId)
+      } catch (e) {
+        setAttestError(e instanceof Error ? e.message : 'Could not confirm payment')
+      } finally {
+        setAttestLoading(false)
+      }
+    })()
   }
 
   const paymentDetails = isMobileMoney ? (
@@ -257,12 +275,14 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
             </View>
             {paymentDetails}
           </View>
+          {attestError ? <Text style={styles.errorText}>{attestError}</Text> : null}
         </ScrollView>
 
         <Pressable
           android_ripple={ripple.neutral}
-          style={styles.cta}
+          style={[styles.cta, attestLoading && styles.ctaDisabled]}
           onPress={handleContinue}
+          disabled={attestLoading}
         >
           <LinearGradient
             colors={colors.primary.gradient}
@@ -270,7 +290,11 @@ export default function YcPayInScreen({ navigation, route }: NavigationProps) {
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
           >
-            <Text style={styles.ctaText}>{ctaLabel}</Text>
+            {attestLoading ? (
+              <ActivityIndicator color={colors.text.inverse} />
+            ) : (
+              <Text style={styles.ctaText}>{ctaLabel}</Text>
+            )}
           </LinearGradient>
         </Pressable>
       </View>
@@ -392,5 +416,14 @@ const styles = StyleSheet.create({
   ctaText: {
     ...textStyles.button,
     color: colors.text.inverse,
+  },
+  ctaDisabled: {
+    opacity: 0.85,
+  },
+  errorText: {
+    ...textStyles.caption,
+    color: colors.semantic.destructive,
+    textAlign: 'center',
+    marginTop: spacing[2],
   },
 })

@@ -2,19 +2,33 @@ import { describe, expect, it } from "vitest"
 import { buildGlobalPayoutLifecycle } from "./global-payout-lifecycle"
 
 describe("buildGlobalPayoutLifecycle cross-border", () => {
-  it("shows Processing as current for pending cross-border send", () => {
+  it("shows awaiting transfer before user attestation", () => {
     const steps = buildGlobalPayoutLifecycle({
       status: "pending",
       metadata: {
         yc_mode: "cross_border_send",
-        processing_at: "2026-07-16T10:00:00.000Z",
+        quote_locked_at: "2026-07-16T10:00:00.000Z",
         leg1_status: "pending",
       },
     })
-    expect(steps).toHaveLength(2)
-    expect(steps[0].id).toBe("processing")
+    expect(steps).toHaveLength(3)
+    expect(steps[0].id).toBe("awaiting_transfer")
     expect(steps[0].state).toBe("current")
+    expect(steps[1].id).toBe("processing")
     expect(steps[1].state).toBe("upcoming")
+  })
+
+  it("shows confirming payment after attestation", () => {
+    const steps = buildGlobalPayoutLifecycle({
+      status: "pending",
+      metadata: {
+        yc_mode: "cross_border_send",
+        quote_locked_at: "2026-07-16T10:00:00.000Z",
+        payment_attested_at: "2026-07-16T10:05:00.000Z",
+      },
+    })
+    expect(steps[1].title).toBe("Confirming payment")
+    expect(steps[1].state).toBe("current")
   })
 
   it("branches failed copy on failure_leg", () => {

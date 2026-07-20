@@ -798,6 +798,7 @@ export function LocalDepositWizard({
         <YcCompleteDepositPanel
           flowMode="fund_balance"
           transactionId={quote.easnerTransactionId ?? quote.transactionId ?? ""}
+          transferId={quote.transferId ?? ""}
           localPayIn={quote.localPayIn ?? preview.localPayIn}
           localCurrency={localPayInCurrency}
           creditOrReceiveAmount={quote.usdCredit ?? preview.usdCredit}

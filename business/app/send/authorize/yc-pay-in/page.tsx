@@ -94,6 +94,7 @@ export default function YcPayInPage() {
       <YcCompleteDepositPanel
         flowMode="cross_border_send"
         transactionId={displayTransactionId}
+        transferId={yc.transferId}
         localPayIn={payIn}
         localCurrency={payInCurrency}
         creditOrReceiveAmount={state.amount}

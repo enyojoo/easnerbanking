@@ -10,6 +10,7 @@ import {
   computeYcCrossBorderPricing,
   computeYcCrossBorderPricingBeforeReceive,
   computeYcCrossBorderPrincipalLocalPayIn,
+  buildYcReceiveLegFromResponse,
   EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
   getGlobalPayoutProcessingTime,
   validateYcRecipientForCorridor,
@@ -64,6 +65,20 @@ function buildRecipientTransactionMetadata(
 }
 
 type CrossBorderPricingFinal = ReturnType<typeof computeYcCrossBorderPricing>
+
+function buildCrossBorderReceiveLegFromResponse(input: {
+  receiveRes: YcReceiveSubmitResult
+  ycSellFrom: number
+  fallbackLocalPayIn: number
+}) {
+  return buildYcReceiveLegFromResponse({
+    cryptoAmountUsd: Number(input.receiveRes.settlementInfo?.cryptoAmount ?? 0),
+    lockedLocalPayIn: Number(input.receiveRes.localAmount ?? input.fallbackLocalPayIn),
+    customerSellRate: input.ycSellFrom,
+    networkFeeAmountUsd: Number(input.receiveRes.networkFeeAmountUSD ?? 0),
+    serviceFeeAmountUsd: Number(input.receiveRes.serviceFeeAmountUSD ?? 0),
+  })
+}
 
 function finalizeCrossBorderLeg1Quote(input: {
   receiveRes: YcReceiveSubmitResult
@@ -694,11 +709,11 @@ export async function confirmCrossBorderLeg1(
       customerRate: crossRate,
       ycSellFrom: Number(payload.ycSellFrom ?? receiveRes.rate ?? 0),
       ycBuyTo: Number(ycBuyTo ?? payload.sendRes.rate ?? 0),
-      receiveLeg: {
-        cryptoAmountUsd: Number(receiveRes.settlementInfo?.cryptoAmount ?? 0),
-        networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
-        serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
-      },
+      receiveLeg: buildCrossBorderReceiveLegFromResponse({
+        receiveRes,
+        ycSellFrom: Number(payload.ycSellFrom ?? receiveRes.rate ?? 0),
+        fallbackLocalPayIn: localAmount,
+      }),
       sendLeg,
     })
 
@@ -896,7 +911,7 @@ export async function confirmCrossBorderLeg1(
             receive_amount: input.receiveAmount,
             receive_currency: receiveCurrency,
             customer_rate: crossRate,
-            processing_at: startedAt,
+            quote_locked_at: startedAt,
             transaction_started_at: startedAt,
           },
           sequenceId: leg1Seq,
@@ -925,7 +940,7 @@ export async function confirmCrossBorderLeg1(
         payout_review: payoutReview,
         pay_in_review: payInReview,
         ...reportingSnapshot,
-        processing_at: startedAt,
+        quote_locked_at: startedAt,
         transaction_started_at: startedAt,
         leg1_status: receiveRes.status ?? "pending",
         leg2_status: payload.sendRes.status ?? "quoted",
@@ -1135,7 +1150,7 @@ export async function createCrossBorderDraft(input: {
         receive_amount: input.receiveAmount,
         receive_currency: receiveCurrency,
         customer_rate: cross.rate,
-        processing_at: startedAt,
+        quote_locked_at: startedAt,
         transaction_started_at: startedAt,
         pay_in_rail: "mobile_money",
         ...buildRecipientTransactionMetadata(recipientId, recipientSnapshot),
@@ -1326,11 +1341,11 @@ export async function authorizeCrossBorderDraft(input: {
       customerRate: cross.rate,
       ycSellFrom: Number(fromLeg?.yc_buy ?? receiveRes.rate ?? 0),
       ycBuyTo: Number(toLeg?.yc_sell ?? sendRes.rate ?? 0),
-      receiveLeg: {
-        cryptoAmountUsd: Number(receiveRes.settlementInfo?.cryptoAmount ?? 0),
-        networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
-        serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
-      },
+      receiveLeg: buildCrossBorderReceiveLegFromResponse({
+        receiveRes,
+        ycSellFrom: Number(fromLeg?.yc_buy ?? receiveRes.rate ?? 0),
+        fallbackLocalPayIn: localAmount,
+      }),
       sendLeg,
     })
 

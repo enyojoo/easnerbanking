@@ -198,6 +198,34 @@ describe("confirmFundBalanceOrder", () => {
     expect(vi.mocked(submitYcReceive).mock.calls[0]?.[0]?.localAmount).toBeGreaterThan(133825)
   })
 
+  it("persists live YC leg fees when POST /receive reports service fee only", async () => {
+    vi.mocked(submitYcReceive).mockResolvedValue({
+      id: "yc-live-fees",
+      localAmount: 2590.01,
+      settlementInfo: { cryptoAmount: 1.8250192 },
+      networkFeeAmountUSD: 0,
+      serviceFeeAmountUSD: 0.02,
+    })
+
+    const admin = makeAdmin()
+    admin.chain.single
+      .mockResolvedValueOnce({ data: { id: "tx-1" } })
+      .mockResolvedValueOnce({ data: { id: "tr-1" } })
+
+    await confirmFundBalanceOrder({
+      ...baseCtx,
+      admin,
+      currency: "NGN",
+      country: "NG",
+      usdCredit: 1.77,
+    })
+
+    const txInsert = admin.chain.insert.mock.calls.find((call) => call[0]?.provider === "yellowcard")?.[0]
+    expect(txInsert?.metadata?.yc_leg_fees_usd).toBe(0.02)
+    expect(txInsert?.metadata?.display_processing_fee).toBeCloseTo(0.0377, 4)
+    expect(txInsert?.metadata?.omnibus_in_expected).toBe(1.8250192)
+  })
+
   it("persists omnibus_in_expected and margin_amount when YC receive is sufficient", async () => {
     vi.mocked(submitYcReceive).mockImplementation(async () => {
       const pricing = computeYcFundBalancePricing({

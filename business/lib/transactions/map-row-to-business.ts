@@ -22,6 +22,9 @@ import {
   resolvePayoutReviewFlow,
   resolveLedgerWhenAt,
   resolveAccountImpactAmount,
+  resolveYcPayInFeedStatus,
+  resolveYcPayInUserWhenAt,
+  isYcPayInAwaitingAttestation,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
@@ -99,7 +102,11 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const provider = String(row.provider ?? "noah").toLowerCase()
   const dirRaw = String(row.direction ?? "").toLowerCase()
   const direction = dirRaw === "in" ? "credit" : "debit"
-  const status = mapLedgerStatusForUserFeed(String(row.status ?? "")) as TransactionWithSource["status"]
+  const ledgerStatusRaw = String(row.status ?? "")
+  const ycFeedStatus = resolveYcPayInFeedStatus(meta, ledgerStatusRaw)
+  const status = (ycFeedStatus ?? mapLedgerStatusForUserFeed(ledgerStatusRaw)) as TransactionWithSource["status"]
+  const payInAwaitingAttestation = isYcPayInAwaitingAttestation(meta, ledgerStatusRaw)
+  const ycDisplayWhen = resolveYcPayInUserWhenAt(meta)
 
   const isVerification = isVerificationDepositMetadata(meta)
   const isYcFundBalance = isYcFundBalanceDepositMetadata(meta)
@@ -190,10 +197,12 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     })
 
   const ledgerCreatedAt =
+    ycDisplayWhen ??
     resolveLedgerWhenAt({
       occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
       createdAt: row.created_at != null ? String(row.created_at) : null,
-    }) ?? undefined
+    }) ??
+    undefined
 
   const created = ledgerCreatedAt ?? new Date().toISOString()
 
@@ -322,6 +331,8 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     description,
     date: created,
     status,
+    ...(payInAwaitingAttestation ? { payInAwaitingAttestation: true } : {}),
+    ...(ycDisplayWhen ? { displayWhenAt: ycDisplayWhen } : {}),
     direction,
     source: "account" as const,
     reference: easnerId,

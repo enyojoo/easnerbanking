@@ -30,10 +30,15 @@ vi.mock("@/lib/transaction-id", () => ({
   generateTransactionId: vi.fn(() => "ETID123"),
 }))
 
+vi.mock("@/lib/yellowcard/receive-submit", () => ({
+  submitYcReceive: vi.fn(),
+}))
+
 import { listYcRates, findYcPayInLeg } from "@/lib/fx/yc-rates"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
+import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import {
   authorizeFundBalanceDraft,
   createFundBalanceDraft,
@@ -151,5 +156,65 @@ describe("authorizeFundBalanceDraft", () => {
         networkId: "net-1",
       }),
     ).rejects.toMatchObject({ code: "quote_expired" })
+  })
+
+  it("persists live YC leg fees from POST /receive on authorize", async () => {
+    vi.mocked(listYcRates).mockResolvedValue([])
+    vi.mocked(findYcPayInLeg).mockReturnValue({
+      easner_sell: 1417.08,
+      yc_buy: 1410,
+    } as never)
+    vi.mocked(submitYcReceive).mockResolvedValue({
+      id: "yc-live-fees",
+      localAmount: 2590.01,
+      settlementInfo: { cryptoAmount: 1.8250192 },
+      networkFeeAmountUSD: 0,
+      serviceFeeAmountUSD: 0.02,
+    })
+
+    const admin = makeAdmin({
+      id: "tr-1",
+      mode: "fund_balance",
+      status: "pending_authorize",
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      pay_in_currency: "NGN",
+      quoted_pay_in: 2590.01,
+      quoted_receive: 1.77,
+      leg1_sequence_id: "seq-1",
+      leg1_channel_id: "ch-1",
+      transaction_id: "tx-1",
+      metadata: { sender: { name: "Test" } },
+    })
+    admin.chain.maybeSingle
+      .mockResolvedValueOnce({
+        data: {
+          id: "tr-1",
+          mode: "fund_balance",
+          status: "pending_authorize",
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+          pay_in_currency: "NGN",
+          quoted_pay_in: 2590.01,
+          quoted_receive: 1.77,
+          leg1_sequence_id: "seq-1",
+          leg1_channel_id: "ch-1",
+          transaction_id: "tx-1",
+          metadata: { sender: { name: "Test" } },
+        },
+      })
+      .mockResolvedValueOnce({ data: { residence_country: "NG" } })
+      .mockResolvedValueOnce({ data: { easner_transaction_id: "ETID123", metadata: {} } })
+
+    await authorizeFundBalanceDraft({
+      admin,
+      kycUserId: "user-1",
+      transferId: "tr-1",
+      sourcePhone: "+2348012345678",
+      networkId: "net-1",
+    })
+
+    const transferUpdate = admin.chain.update.mock.calls.find(
+      (call) => call[0]?.metadata?.yc_channel_fee_usd != null,
+    )?.[0]
+    expect(transferUpdate?.metadata?.yc_channel_fee_usd).toBe(0.02)
   })
 })

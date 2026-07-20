@@ -28,6 +28,19 @@ import {
   formatReviewRowMoneyDisplay,
 } from "@easner/shared"
 
+function resolveTransactionDetailWhenAt(transaction: Transaction): string | null {
+  if (transaction.displayWhenAt) return transaction.displayWhenAt
+  if (transaction.payInAwaitingAttestation) return null
+  return (
+    resolveLedgerWhenAt({
+      occurredAt: transaction.date,
+      createdAt: transaction.ledgerCreatedAt,
+    }) ??
+    transaction.ledgerCreatedAt ??
+    transaction.date
+  )
+}
+
 export interface TransactionDetailsPanelProps {
   transaction: Transaction | null
   /** When true, omit "Track status" (e.g. already on full-page `/transactions/[etid]`). */
@@ -130,11 +143,7 @@ function TransactionSummaryDetails({
     Boolean(transaction.counterpartyName) &&
     (isDeposit || !showLifecycleTracker)
 
-  const whenAt =
-    resolveLedgerWhenAt({
-      occurredAt: transaction.date,
-      createdAt: transaction.ledgerCreatedAt,
-    }) ?? transaction.ledgerCreatedAt ?? transaction.date
+  const whenAt = resolveTransactionDetailWhenAt(transaction)
 
   return (
     <Card className="border-border shadow-sm">
@@ -160,13 +169,17 @@ function TransactionSummaryDetails({
 
         <TransactionDetailSummaryRow
           label={REVIEW_ROW_LABELS.when}
-          value={new Date(whenAt).toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
+          value={
+            whenAt
+              ? new Date(whenAt).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "Awaiting your transfer"
+          }
         />
 
         {transaction.paymentScheme ? (
@@ -292,11 +305,7 @@ export function TransactionDetailsPanel({
   }
 
   const etidForLink = transactionWebDetailPath(transaction.id)
-  const whenAt =
-    resolveLedgerWhenAt({
-      occurredAt: transaction.date,
-      createdAt: transaction.ledgerCreatedAt,
-    }) ?? transaction.ledgerCreatedAt ?? transaction.date
+  const whenAt = resolveTransactionDetailWhenAt(transaction)
 
   const tlcDetailFee =
     payoutReviewFlow === "local_pay_in" && transaction.payoutReview

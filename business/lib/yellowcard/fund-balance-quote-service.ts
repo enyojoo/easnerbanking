@@ -10,7 +10,7 @@ import {
   checkYcFundBalanceOmnibusSufficient,
   computeYcFundBalancePricing,
   computeYcFundBalancePricingBeforeReceive,
-  inferYcReceiveLegFeesUsd,
+  buildYcReceiveLegFromResponse,
   parseYcReceiveRejectedMinError,
   resolveYcFundBalanceDepositTitle,
   resolveYcFundBalanceSubmitLocalPayIn,
@@ -229,22 +229,13 @@ function buildFundBalanceReceiveLeg(input: {
   customerSellRate: number
   fallbackLocalPayIn: number
 }) {
-  const cryptoAmountUsd = Number(input.receiveRes.settlementInfo?.cryptoAmount ?? 0)
-  const lockedLocalPayIn = Number(input.receiveRes.localAmount ?? input.fallbackLocalPayIn)
-  const networkFeeAmountUsd = Number(input.receiveRes.networkFeeAmountUSD ?? 0)
-  const serviceFeeAmountUsd = Number(input.receiveRes.serviceFeeAmountUSD ?? 0)
-  const inferredFees = inferYcReceiveLegFeesUsd({
-    lockedLocalPayIn,
+  return buildYcReceiveLegFromResponse({
+    cryptoAmountUsd: Number(input.receiveRes.settlementInfo?.cryptoAmount ?? 0),
+    lockedLocalPayIn: Number(input.receiveRes.localAmount ?? input.fallbackLocalPayIn),
     customerSellRate: input.customerSellRate,
-    cryptoAmountUsd,
-    networkFeeAmountUsd,
-    serviceFeeAmountUsd,
+    networkFeeAmountUsd: Number(input.receiveRes.networkFeeAmountUSD ?? 0),
+    serviceFeeAmountUsd: Number(input.receiveRes.serviceFeeAmountUSD ?? 0),
   })
-  return {
-    cryptoAmountUsd,
-    networkFeeAmountUsd: networkFeeAmountUsd > 0 ? networkFeeAmountUsd : inferredFees,
-    serviceFeeAmountUsd,
-  }
 }
 
 function computeFundBalancePricingFromReceive(input: {
@@ -515,7 +506,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
   const easnerTransactionId = generateTransactionId()
   const startedAt = new Date().toISOString()
   const residenceCountry = String(ctx.userRow?.residence_country ?? ctx.country).trim().toUpperCase()
-  const displayFeesPreview = buildYcFundBalanceDisplayFees({
+  const displayFeesLocked = buildYcFundBalanceDisplayFees({
     usdCredit: pricing.usdCredit,
     processingFee: pricing.processingFee,
     ycLegFeesUsd: pricing.ycLegFeesUsd,
@@ -531,7 +522,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
     exchangeRate: prepared.customerRate,
     residenceCountry,
     payInRail: ctx.rail,
-    displayProcessingFeeLocal: displayFeesPreview.displayProcessingFeeLocal,
+    displayProcessingFeeLocal: displayFeesLocked.displayProcessingFeeLocal,
   })
   const depositDisplayTitle = resolveYcFundBalanceDepositTitle({
     residenceCountry,
@@ -568,11 +559,11 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
       metadata: {
         ...metadata,
         easner_transaction_id: easnerTransactionId,
-        processing_at: startedAt,
+        quote_locked_at: startedAt,
         transaction_started_at: startedAt,
         pay_in_rail: ctx.rail,
-        display_processing_fee: displayFeesPreview.displayProcessingFee,
-        display_processing_fee_local: displayFeesPreview.displayProcessingFeeLocal,
+        display_processing_fee: displayFeesLocked.displayProcessingFee,
+        display_processing_fee_local: displayFeesLocked.displayProcessingFeeLocal,
         yc_leg_fees_usd: pricing.ycLegFeesUsd,
         margin_amount: pricing.marginAmount,
         omnibus_in_expected: omnibusInExpected,
@@ -607,8 +598,8 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
         processing_fee: pricing.processingFee,
         yc_channel_fee_usd: pricing.ycLegFeesUsd,
         yc_leg_fees_usd: pricing.ycLegFeesUsd,
-        display_processing_fee: displayFeesPreview.displayProcessingFee,
-        display_processing_fee_local: displayFeesPreview.displayProcessingFeeLocal,
+        display_processing_fee: displayFeesLocked.displayProcessingFee,
+        display_processing_fee_local: displayFeesLocked.displayProcessingFeeLocal,
         usd_credit: pricing.usdCredit,
         margin_amount: pricing.marginAmount,
         omnibus_in_expected: omnibusInExpected,

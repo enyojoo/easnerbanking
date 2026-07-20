@@ -50,7 +50,7 @@ export interface Transaction {
   accountImpactCurrency?: string
   description: string
   date: string
-  status: "completed" | "pending" | "processing" | "failed"
+  status: "completed" | "pending" | "processing" | "failed" | "awaiting_payment"
   direction: "credit" | "debit"
   cardId?: string
   /** When the ledger row includes masked card tail (e.g. future card product). */
@@ -75,6 +75,10 @@ export interface Transaction {
   settledAt?: string
   /** Ledger row creation time — detail "When" (distinct from list `date`). */
   ledgerCreatedAt?: string
+  /** YC pay-in: user-facing when (attestation / webhook), not quote lock. */
+  displayWhenAt?: string
+  /** YC pay-in awaiting user attestation — hide misleading list date. */
+  payInAwaitingAttestation?: boolean
   /** Detail row label — e.g. Easetag P2P shows "Easetag". */
   paymentScheme?: string
   /** User note from send flow (Easetag / payout metadata). */

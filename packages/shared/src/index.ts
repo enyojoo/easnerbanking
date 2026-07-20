@@ -560,6 +560,22 @@ export type {
   TransactionTimingRow,
 } from "./transactions/transaction-timing-display"
 export {
+  YC_PAY_IN_AWAITING_STATUS,
+  buildYcPayInLifecycle,
+  isYcPayInAwaitingAttestation,
+  isYcPayInFlowMetadata,
+  ledgerTransactionStatusDisplayForRow,
+  readYcPayInAttestedAt,
+  readYcQuoteLockedAt,
+  resolveYcPayInFeedStatus,
+  resolveYcPayInUserWhenAt,
+} from "./transactions/yc-pay-in-display"
+export type {
+  BuildYcPayInLifecycleInput,
+  YcPayInLifecycleStep,
+  YcPayInLifecycleStepId,
+} from "./transactions/yc-pay-in-display"
+export {
   convertWalletToReportingBase,
   findReportingFxRate,
   normalizeWalletReportingCurrency,
@@ -638,6 +654,7 @@ export {
   estimateYcFundBalanceReceiveLegFeesUsd,
   estimateYcReceiveLegFeesUsd,
   inferYcReceiveLegFeesUsd,
+  buildYcReceiveLegFromResponse,
   bumpYcFundBalanceLocalPayInForOmnibusShortfall,
   bumpYcCrossBorderLocalPayInForOmnibusShortfall,
   resolveYcFundBalanceSubmitLocalPayIn,

@@ -324,7 +324,13 @@ const TransactionItem = React.memo(function TransactionItem({
             {getTransactionName(item, transactionType)}
           </Text>
           <Text style={styles.transactionDate} numberOfLines={1}>
-            {formatDate(item.noah_created_at || item.created_at)}
+            {(item as { pay_in_awaiting_attestation?: boolean }).pay_in_awaiting_attestation
+              ? 'Awaiting your transfer'
+              : formatDate(
+                  (item as { display_when_at?: string }).display_when_at ||
+                    item.noah_created_at ||
+                    item.created_at,
+                )}
           </Text>
         </View>
         <View style={styles.transactionAmountContainer}>

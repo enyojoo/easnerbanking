@@ -20,6 +20,7 @@ import {
   easnerFeeLocalFromUsdCredit,
   estimateYcFundBalanceReceiveLegFeesUsd,
   inferYcReceiveLegFeesUsd,
+  buildYcReceiveLegFromResponse,
   bumpYcFundBalanceLocalPayInForOmnibusShortfall,
   bumpYcCrossBorderLocalPayInForOmnibusShortfall,
   alignYcCrossBorderLockedLocalPayIn,
@@ -228,6 +229,59 @@ describe("inferYcReceiveLegFeesUsd", () => {
         serviceFeeAmountUsd: 0,
       }),
     ).toBeCloseTo(23.011365, 4)
+  })
+})
+
+describe("buildYcReceiveLegFromResponse", () => {
+  it("uses reported service fee without double-counting when network is zero", () => {
+    const leg = buildYcReceiveLegFromResponse({
+      cryptoAmountUsd: 1.8250192,
+      lockedLocalPayIn: 2590.01,
+      customerSellRate: 1417.08,
+      networkFeeAmountUsd: 0,
+      serviceFeeAmountUsd: 0.02,
+    })
+    expect(leg.networkFeeAmountUsd).toBe(0)
+    expect(leg.serviceFeeAmountUsd).toBe(0.02)
+    expect(
+      (leg.networkFeeAmountUsd ?? 0) + (leg.serviceFeeAmountUsd ?? 0),
+    ).toBeCloseTo(0.02, 4)
+  })
+
+  it("infers embedded fees only when both reported fee fields are zero", () => {
+    const leg = buildYcReceiveLegFromResponse({
+      cryptoAmountUsd: 986.9886349,
+      lockedLocalPayIn: 133825,
+      customerSellRate: 132.5,
+      networkFeeAmountUsd: 0,
+      serviceFeeAmountUsd: 0,
+    })
+    expect(leg.networkFeeAmountUsd).toBeCloseTo(23.011365, 4)
+    expect(leg.serviceFeeAmountUsd).toBe(0)
+  })
+
+  it("passes through both reported network and service fees", () => {
+    const leg = buildYcReceiveLegFromResponse({
+      cryptoAmountUsd: 100,
+      lockedLocalPayIn: 14000,
+      customerSellRate: 140,
+      networkFeeAmountUsd: 0.01,
+      serviceFeeAmountUsd: 0.02,
+    })
+    expect(leg.networkFeeAmountUsd).toBe(0.01)
+    expect(leg.serviceFeeAmountUsd).toBe(0.02)
+  })
+
+  it("infers embedded receive fees using pay-in provider rate (cross-border leg1)", () => {
+    const leg = buildYcReceiveLegFromResponse({
+      cryptoAmountUsd: 2576,
+      lockedLocalPayIn: 351500,
+      customerSellRate: 130,
+      networkFeeAmountUsd: 0,
+      serviceFeeAmountUsd: 0,
+    })
+    expect(leg.networkFeeAmountUsd).toBeCloseTo(127.8462, 2)
+    expect(leg.serviceFeeAmountUsd).toBe(0)
   })
 })
 

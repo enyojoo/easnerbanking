@@ -7,6 +7,7 @@ import {
   computeDisplayProcessingFee,
   computeYcFundBalancePricing,
   computeYcFundBalancePricingBeforeReceive,
+  buildYcReceiveLegFromResponse,
   resolveYcFundBalanceDepositTitle,
   resolveYcPayInLimits,
   validateYcPayInLocalAmount,
@@ -287,7 +288,7 @@ export async function createFundBalanceDraft(ctx: FundBalanceSessionContext) {
       metadata: {
         ...metadata,
         easner_transaction_id: easnerTransactionId,
-        processing_at: startedAt,
+        quote_locked_at: startedAt,
         transaction_started_at: startedAt,
         pay_in_rail: rail,
       },
@@ -435,11 +436,13 @@ export async function authorizeFundBalanceDraft(input: {
   }
 
   const lockedUsdCredit = Number(transfer.quoted_receive ?? 0)
-  const receiveLeg = {
+  const receiveLeg = buildYcReceiveLegFromResponse({
     cryptoAmountUsd: Number(receiveRes.settlementInfo?.cryptoAmount ?? 0),
+    lockedLocalPayIn: Number(receiveRes.localAmount ?? transfer.quoted_pay_in),
+    customerSellRate: Number(leg.easner_sell),
     networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
     serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
-  }
+  })
   const pricing = lockedUsdCredit > 0
     ? computeYcFundBalancePricing({
         usdCredit: lockedUsdCredit,

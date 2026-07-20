@@ -414,6 +414,41 @@ export function inferYcReceiveLegFeesUsd(input: {
   return 0
 }
 
+/**
+ * Build receive leg from POST /receive: use reported network + service fees when present;
+ * infer embedded fees only when both reported fee fields are zero.
+ */
+export function buildYcReceiveLegFromResponse(input: {
+  cryptoAmountUsd: number
+  lockedLocalPayIn: number
+  customerSellRate: number
+  networkFeeAmountUsd?: number
+  serviceFeeAmountUsd?: number
+}): YcLegFeeInputs {
+  const cryptoAmountUsd = roundUsdc(input.cryptoAmountUsd)
+  const networkFeeAmountUsd = roundUsdc(input.networkFeeAmountUsd ?? 0)
+  const serviceFeeAmountUsd = roundUsdc(input.serviceFeeAmountUsd ?? 0)
+  const reportedTotal = roundUsdc(networkFeeAmountUsd + serviceFeeAmountUsd)
+
+  if (reportedTotal > 0) {
+    return { cryptoAmountUsd, networkFeeAmountUsd, serviceFeeAmountUsd }
+  }
+
+  const inferredFees = inferYcReceiveLegFeesUsd({
+    lockedLocalPayIn: input.lockedLocalPayIn,
+    customerSellRate: input.customerSellRate,
+    cryptoAmountUsd,
+    networkFeeAmountUsd: 0,
+    serviceFeeAmountUsd: 0,
+  })
+
+  return {
+    cryptoAmountUsd,
+    networkFeeAmountUsd: inferredFees,
+    serviceFeeAmountUsd: 0,
+  }
+}
+
 /** Retry POST /receive with extra local pay-in when omnibus settlement is short. */
 export function bumpYcFundBalanceLocalPayInForOmnibusShortfall(input: {
   localPayIn: number

@@ -11,6 +11,8 @@ import {
   BANK_VERIFICATION_COMPLETED_DESCRIPTION,
   isVerificationDepositMetadata,
 } from "./verification-deposit"
+import { isYcFundBalanceDepositMetadata } from "./yc-deposit-display"
+import { buildYcPayInLifecycle } from "./yc-pay-in-display"
 export type BankDepositLifecycleStepId = "processing" | "completed" | "failed"
 export type BankDepositLifecycleStepState = "complete" | "current" | "upcoming"
 
@@ -114,6 +116,17 @@ export function buildBankDepositLifecycle(
   const processingDescription = blockedNegativeMargin
     ? BANK_DEPOSIT_BLOCKED_NEGATIVE_MARGIN_DESCRIPTION
     : buildBankDepositProcessingDescription(schemeLabel)
+
+  if (isYcFundBalanceDepositMetadata(meta)) {
+    return buildYcPayInLifecycle({
+      status: input.status,
+      metadata: meta,
+      settledAt: input.settledAt ?? null,
+      crossBorder: false,
+      completedDescription: completedDescription(meta),
+      processingDescription,
+    }) as BankDepositLifecycleStep[]
+  }
 
   if (ledgerStatus === "failed") {
     return [

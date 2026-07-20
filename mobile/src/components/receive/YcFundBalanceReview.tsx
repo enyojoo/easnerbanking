@@ -25,8 +25,10 @@ import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
 import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
 import {
   ensureFundBalanceOrderConfirmed,
+  fetchFundBalanceQuotePreview,
   isCompleteFundBalanceQuote,
   isStashedFundBalanceQuoteFresh,
+  isUsableFundBalanceQuotePreview,
   peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
   type YcFundBalanceQuote,
@@ -91,7 +93,8 @@ export function YcFundBalanceReview({
     ],
   )
 
-  const [quote, setQuote] = useState<YcFundBalanceQuoteResult | null>(() => {
+  const [previewQuote, setPreviewQuote] = useState<YcFundBalanceQuoteResult | null>(null)
+  const [lockedQuote, setLockedQuote] = useState<YcFundBalanceQuoteResult | null>(() => {
     if (isStashedFundBalanceQuoteFresh(quoteMeta) && isCompleteFundBalanceQuote(peekFundBalanceQuote())) {
       return peekFundBalanceQuote()
     }
@@ -104,13 +107,15 @@ export function YcFundBalanceReview({
         isCompleteFundBalanceQuote(peekFundBalanceQuote())
       ),
   )
+  const [confirmLoading, setConfirmLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isStashedFundBalanceQuoteFresh(quoteMeta) && isCompleteFundBalanceQuote(peekFundBalanceQuote())) {
       const stashed = peekFundBalanceQuote()
       if (stashed) {
-        setQuote(stashed)
+        setLockedQuote(stashed)
+        setPreviewQuote(stashed)
         setQuoteError(null)
       }
       setQuoteLoading(false)
@@ -121,15 +126,15 @@ export function YcFundBalanceReview({
     setQuoteLoading(true)
     setQuoteError(null)
     void (async () => {
-      const result = await ensureFundBalanceOrderConfirmed(quoteMeta)
+      const preview = await fetchFundBalanceQuotePreview(quoteMeta).catch(() => null)
       if (cancelled) return
       setQuoteLoading(false)
-      if (isCompleteFundBalanceQuote(result)) {
-        setQuote(result)
+      if (preview && isUsableFundBalanceQuotePreview(preview)) {
+        setPreviewQuote(preview)
+        setQuoteError(null)
         return
       }
-      setQuote(null)
-      setQuoteError(peekLastFundBalanceQuoteError() || 'Could not lock deposit details')
+      setQuoteError(peekLastFundBalanceQuoteError() || 'Could not load deposit details')
     })()
 
     return () => {
@@ -137,12 +142,13 @@ export function YcFundBalanceReview({
     }
   }, [quoteMeta])
 
-  const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
-  const quoteLocked = isCompleteFundBalanceQuote(quote)
-  const customerRate = quote?.customerRate ?? previewCustomerRate
-  const displayTransactionId = quote?.easnerTransactionId ?? quote?.transactionId ?? ''
-  const resolvedLocalPayIn = quote?.localPayIn ?? localPayIn
-  const resolvedUsdCredit = quote?.usdCredit ?? usdCredit
+  const displayQuote = lockedQuote ?? previewQuote
+  const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
+  const quoteLocked = isCompleteFundBalanceQuote(lockedQuote)
+  const customerRate = displayQuote?.customerRate ?? previewCustomerRate
+  const displayTransactionId = lockedQuote?.easnerTransactionId ?? lockedQuote?.transactionId ?? ''
+  const resolvedLocalPayIn = displayQuote?.localPayIn ?? localPayIn
+  const resolvedUsdCredit = displayQuote?.usdCredit ?? usdCredit
 
   const lockedReviewBreakdown =
     quoteLocked && resolvedLocalPayIn > 0
@@ -151,9 +157,9 @@ export function YcFundBalanceReview({
           localCurrency: localPayInCurrency,
           usdCredit: resolvedUsdCredit,
           exchangeRate: customerRate,
-          displayProcessingFeeLocal: quote?.displayProcessingFeeLocal,
-          processingFee: quote?.processingFee,
-          exchangeFee: quote?.ycChannelFeeUsd ?? quote?.ycLegFeesUsd,
+          displayProcessingFeeLocal: lockedQuote?.displayProcessingFeeLocal,
+          processingFee: lockedQuote?.processingFee,
+          exchangeFee: lockedQuote?.ycChannelFeeUsd ?? lockedQuote?.ycLegFeesUsd,
         })
       : null
   const reviewPrincipalLocal =
@@ -192,8 +198,8 @@ export function YcFundBalanceReview({
         localPayIn: resolvedLocalPayIn,
         receiveAmount: resolvedUsdCredit,
         processingFeeLocal: reviewFeeLocal,
-        processingFeeUsd: quote?.processingFee,
-        exchangeFeeUsd: quote?.ycChannelFeeUsd ?? quote?.ycLegFeesUsd,
+        processingFeeUsd: lockedQuote?.processingFee,
+        exchangeFeeUsd: lockedQuote?.ycChannelFeeUsd ?? lockedQuote?.ycLegFeesUsd,
         principalLocal: reviewPrincipalLocal,
         usdCredit: resolvedUsdCredit,
         transactionId: displayTransactionId,
@@ -247,14 +253,37 @@ export function YcFundBalanceReview({
     })
   }
 
-  const onContinue = () => {
-    if (!isCompleteFundBalanceQuote(quote)) return
-    haptics.medium()
-    navigateToPayIn(quote)
+  const onContinue = async () => {
+    if (quoteLocked && lockedQuote) {
+      haptics.medium()
+      navigateToPayIn(lockedQuote)
+      return
+    }
+    if (!previewQuote) return
+
+    setConfirmLoading(true)
+    setQuoteError(null)
+    try {
+      const result = await ensureFundBalanceOrderConfirmed(quoteMeta)
+      if (!isCompleteFundBalanceQuote(result)) {
+        setQuoteError(peekLastFundBalanceQuoteError() || 'Could not lock deposit details')
+        return
+      }
+      setLockedQuote(result)
+      haptics.medium()
+      navigateToPayIn(result)
+    } catch (e) {
+      setQuoteError(e instanceof Error ? e.message : 'Could not lock deposit details')
+    } finally {
+      setConfirmLoading(false)
+    }
   }
 
   const ctaDisabled =
-    !quoteLocked || quoteCountdown.expired || Boolean(quoteError) || (quoteLoading && !quoteLocked)
+    confirmLoading ||
+    quoteCountdown.expired ||
+    Boolean(quoteError) ||
+    (quoteLoading && !previewQuote && !quoteLocked)
 
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>
@@ -267,7 +296,7 @@ export function YcFundBalanceReview({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {quoteLoading && !quoteLocked ? (
+          {(quoteLoading || confirmLoading) && !quoteLocked ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
           ) : null}
           {reviewRows.length > 0 ? (
@@ -306,7 +335,7 @@ export function YcFundBalanceReview({
           ) : null}
 
           {quoteError ? <Text style={styles.error}>{quoteError}</Text> : null}
-          {quote?.expiresAt ? (
+          {displayQuote?.expiresAt ? (
             <Text style={styles.hint}>
               {quoteCountdown.expired
                 ? 'Quote expired — go back and continue again.'
@@ -328,7 +357,7 @@ export function YcFundBalanceReview({
           end={{ x: 1, y: 0 }}
           style={styles.ctaGradient}
         >
-          <Text style={styles.ctaText}>Continue</Text>
+          <Text style={styles.ctaText}>{confirmLoading ? 'Locking details…' : 'Continue'}</Text>
         </LinearGradient>
       </Pressable>
     </View>

@@ -1,5 +1,6 @@
 import { formatMoneyDisplay } from "../format-money-display"
 import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
+import { buildYcPayInLifecycle, isYcPayInFlowMetadata } from "./yc-pay-in-display"
 
 export type GlobalPayoutLifecycleStepId = "processing" | "completed" | "failed"
 export type GlobalPayoutLifecycleStepState = "complete" | "current" | "upcoming"
@@ -96,6 +97,18 @@ export function buildGlobalPayoutLifecycle(
   const failedDescription = crossBorder
     ? crossBorderFailedDescription(meta)
     : "This transfer could not be completed. Please contact support with your transaction reference."
+
+  if (crossBorder && isYcPayInFlowMetadata(meta)) {
+    return buildYcPayInLifecycle({
+      status: input.status,
+      metadata: meta,
+      settledAt: input.settledAt ?? null,
+      crossBorder: true,
+      completedDescription,
+      processingDescription,
+      failedDescription,
+    }) as GlobalPayoutLifecycleStep[]
+  }
 
   if (ledgerStatus === "failed") {
     return [

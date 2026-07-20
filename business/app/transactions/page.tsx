@@ -313,7 +313,9 @@ export default function TransactionsPage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">{txn.description}</p>
                         <p className="mt-1 truncate text-xs text-muted-foreground">
-                          {formatTransactionRowDateTime(txn.date)}
+                          {txn.payInAwaitingAttestation
+                            ? "Awaiting your transfer"
+                            : formatTransactionRowDateTime(txn.displayWhenAt ?? txn.date)}
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">

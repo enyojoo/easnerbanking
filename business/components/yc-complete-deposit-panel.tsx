@@ -1,6 +1,7 @@
 "use client"
 
-import Link from "next/link"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Check, Copy, Landmark, Smartphone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +19,7 @@ import { YcLocalPayInCompleteSummary } from "@/components/yc-local-pay-in-comple
 export type YcCompleteDepositPanelProps = {
   flowMode: "fund_balance" | "cross_border_send"
   transactionId: string
+  transferId: string
   localPayIn: number
   localCurrency: string
   creditOrReceiveAmount: number
@@ -40,6 +42,7 @@ export type YcCompleteDepositPanelProps = {
 export function YcCompleteDepositPanel({
   flowMode,
   transactionId,
+  transferId,
   localPayIn,
   localCurrency,
   creditOrReceiveAmount,
@@ -57,6 +60,10 @@ export function YcCompleteDepositPanel({
   onCopy,
   returnTo = "dashboard",
 }: YcCompleteDepositPanelProps) {
+  const router = useRouter()
+  const [attestLoading, setAttestLoading] = useState(false)
+  const [attestError, setAttestError] = useState<string | null>(null)
+
   const isFundBalance = flowMode === "fund_balance"
   const isMomo = payInRail === "mobile_money"
   const title = isFundBalance ? "Complete deposit" : "Complete payment"
@@ -64,6 +71,28 @@ export function YcCompleteDepositPanel({
   const completeNotice = ycPayInCompleteNotice(payInRail)
   const bankFields = ycBankInfoFields(bankInfo)
   const PaymentIcon = isMomo ? Smartphone : Landmark
+
+  const handleAttest = async () => {
+    if (attestLoading || !transactionId.trim() || !transferId.trim()) return
+    setAttestError(null)
+    setAttestLoading(true)
+    try {
+      const res = await fetch("/api/yellowcard/pay-in/attest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactionId, transferId }),
+      })
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; message?: string } | null
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.message || "Could not confirm payment")
+      }
+      router.replace(transactionWebDetailPath(transactionId, { returnTo }))
+    } catch (e) {
+      setAttestError(e instanceof Error ? e.message : "Could not confirm payment")
+    } finally {
+      setAttestLoading(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -150,13 +179,10 @@ export function YcCompleteDepositPanel({
         )}
       </div>
 
-      <Button className="w-full" asChild>
-        <Link
-          href={transactionWebDetailPath(transactionId, { returnTo })}
-          replace
-        >
-          {ycPayInCompleteCta(payInRail)}
-        </Link>
+      {attestError ? <p className="text-sm text-destructive text-center">{attestError}</p> : null}
+
+      <Button className="w-full" type="button" disabled={attestLoading} onClick={() => void handleAttest()}>
+        {attestLoading ? "Confirming…" : ycPayInCompleteCta(payInRail)}
       </Button>
     </div>
   )
