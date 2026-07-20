@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { REVIEW_ROW_LABELS, normalizeYcMomoPhone, useDebouncedValue } from '@easner/shared'
+import { REVIEW_ROW_LABELS, normalizeYcMomoPhone } from '@easner/shared'
 import type { Recipient } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -102,47 +102,6 @@ export function YcCrossBorderMomoSetup({
   const momoReady = Boolean(phone.trim() && networkId)
   const selectedNetwork = networks.find((n) => n.id === networkId)
   const rail: YcPayInRail = 'mobile_money'
-
-  const momoConfirmPrefetchKey = useMemo(() => {
-    if (!momoReady) return ''
-    return [
-      recipient.id,
-      payInCurrency,
-      payInCountry,
-      receiveAmount,
-      rail,
-      phone.trim(),
-      networkId,
-    ].join('|')
-  }, [momoReady, recipient.id, payInCurrency, payInCountry, receiveAmount, rail, phone, networkId])
-
-  const [debouncedMomoConfirmPrefetchKey] = useDebouncedValue(momoConfirmPrefetchKey)
-
-  useEffect(() => {
-    if (!debouncedMomoConfirmPrefetchKey || !momoReady) return
-    const meta: CrossBorderQuoteStashMeta = {
-      recipientId: recipient.id,
-      payInCurrency,
-      payInCountry,
-      payInRail: rail,
-      receiveAmount,
-      sourcePhone: phone.trim(),
-      networkId,
-      sourceNetworkName: selectedNetwork?.name,
-    }
-    void ensureCrossBorderOrderConfirmed(meta)
-  }, [
-    debouncedMomoConfirmPrefetchKey,
-    momoReady,
-    recipient.id,
-    payInCurrency,
-    payInCountry,
-    receiveAmount,
-    rail,
-    phone,
-    networkId,
-    selectedNetwork?.name,
-  ])
 
   const onContinue = async () => {
     if (!momoReady || isContinueLoading) return

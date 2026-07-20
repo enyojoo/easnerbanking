@@ -1019,52 +1019,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedPayoutQuotePrefetchKey, recipient?.id])
 
-  const needsBackgroundTlcConfirm =
-    selectedPaymentMethod === 'otherCurrency' &&
-    showThroughLocalCurrency &&
-    tlcPayInRail === 'bank_transfer' &&
-    Boolean(recipient?.id && selectedOtherCurrency && payInCountry) &&
-    receiveAmount > 0 &&
-    tlcAmountLimitOk &&
-    Boolean(ycFlow.customerRate) &&
-    !payInRailsBlocking &&
-    !verificationBlocksSend
-
-  const tlcConfirmPrefetchKey = useMemo(() => {
-    if (!needsBackgroundTlcConfirm || !recipient?.id || !selectedOtherCurrency || !payInCountry) {
-      return ''
-    }
-    return [recipient.id, selectedOtherCurrency, payInCountry, receiveAmount, tlcPayInRail].join('|')
-  }, [
-    needsBackgroundTlcConfirm,
-    recipient?.id,
-    selectedOtherCurrency,
-    payInCountry,
-    receiveAmount,
-    tlcPayInRail,
-  ])
-
-  const [debouncedTlcConfirmPrefetchKey] = useDebouncedValue(tlcConfirmPrefetchKey)
-
-  useEffect(() => {
-    if (!debouncedTlcConfirmPrefetchKey || !recipient?.id || !selectedOtherCurrency || !payInCountry) {
-      return
-    }
-    void ensureCrossBorderOrderConfirmed({
-      recipientId: recipient.id,
-      payInCurrency: selectedOtherCurrency,
-      payInCountry,
-      payInRail: 'bank_transfer',
-      receiveAmount,
-    })
-  }, [
-    debouncedTlcConfirmPrefetchKey,
-    recipient?.id,
-    selectedOtherCurrency,
-    payInCountry,
-    receiveAmount,
-  ])
-
   const needsBackgroundWalletSendQuote =
     selectedPaymentMethod === 'balance' &&
     isWalletRecipient &&
