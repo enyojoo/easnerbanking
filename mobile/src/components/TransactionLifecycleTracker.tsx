@@ -8,8 +8,8 @@ import {
   formatYcPayInDepositTimeRemaining,
   type YcPayInPaymentDetails,
 } from '@easner/shared'
-import { colors, textStyles, spacing } from '../../theme'
-import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
+import { colors, textStyles, spacing } from '../theme'
+import { useQuoteCountdown } from '../hooks/useQuoteCountdown'
 
 export type LifecycleStep = {
   id: string
