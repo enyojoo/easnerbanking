@@ -124,7 +124,6 @@ export function buildBankDepositLifecycle(
       settledAt: input.settledAt ?? null,
       crossBorder: false,
       completedDescription: completedDescription(meta),
-      processingDescription,
     }) as BankDepositLifecycleStep[]
   }
 

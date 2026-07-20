@@ -25,18 +25,22 @@ export const YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED =
 export const YC_PAY_IN_REVIEW_PAYMENT_WINDOW_EXPIRED =
   "The time to complete this payment has passed. Go back and start again."
 
-/** Bare deposit countdown (e.g. 4:32, 2h 15m) — no prefix. */
+/** Bare deposit countdown — live timer (mm:ss under 1h, H:MM:SS from 1h, days + timer above). */
 export function formatYcPayInDepositTimeRemaining(remainingMs: number): string {
   const totalSec = Math.max(0, Math.floor(remainingMs / 1000))
   if (totalSec >= 86400) {
     const days = Math.floor(totalSec / 86400)
-    const hrs = Math.floor((totalSec % 86400) / 3600)
-    return `${days}d ${hrs}h`
+    const remainder = totalSec % 86400
+    const hrs = Math.floor(remainder / 3600)
+    const mm = Math.floor((remainder % 3600) / 60)
+    const ss = remainder % 60
+    return `${days}d ${hrs}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`
   }
   if (totalSec >= 3600) {
     const hrs = Math.floor(totalSec / 3600)
     const mm = Math.floor((totalSec % 3600) / 60)
-    return `${hrs}h ${mm}m`
+    const ss = totalSec % 60
+    return `${hrs}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`
   }
   const mm = Math.floor(totalSec / 60)
   const ss = totalSec % 60
@@ -46,7 +50,7 @@ export function formatYcPayInDepositTimeRemaining(remainingMs: number): string {
 /** Prefix for live pay-in countdown (YC channel deposit window). */
 export const YC_PAY_IN_MAKE_PAYMENT_WITHIN_PREFIX = "Make payment within "
 
-/** Live countdown label from remaining ms — e.g. "Make payment within 2h 15m". */
+/** Live countdown label from remaining ms — e.g. "Make payment within 3:59:42". */
 export function formatYcPayInPaymentCountdownLabel(
   remainingMs: number,
   expired = false,
@@ -207,10 +211,10 @@ export function isYcPayInAwaitingAttestation(
   return st === "pending" || st === "processing" || st === "unknown"
 }
 
-/** User-facing "When" on detail — never quote lock time after attestation. */
+/** User-facing "When" on detail — attestation time after CTA; quote lock while awaiting. */
 export function resolveYcPayInUserWhenAt(meta: Record<string, unknown> | null | undefined): string | null {
   if (!meta) return null
-  return pickIso(meta.payment_attested_at, meta.processing_at, meta.completed_at)
+  return readYcPayInAttestedAt(meta) ?? readYcQuoteLockedAt(meta)
 }
 
 /** List / feed timestamp — attestation time when present, otherwise quote lock. */
@@ -412,6 +416,17 @@ export function buildYcPayInLifecycle(input: BuildYcPayInLifecycleInput): YcPayI
           showPaymentDetailsLink: false,
         }
 
+  const awaitingOccurredAt = attestedAt ?? quoteLockedAt
+
+  const awaitingStep = (state: YcPayInLifecycleStep["state"]): YcPayInLifecycleStep => ({
+    id: "awaiting_transfer",
+    title: YC_PAY_IN_AWAITING_STEP_TITLE,
+    description: awaitingCopy.description,
+    state,
+    occurredAt: awaitingOccurredAt,
+    showPaymentDetailsLink: awaitingCopy.showPaymentDetailsLink,
+  })
+
   const confirmingDescription = crossBorder
     ? "We're waiting for your bank to confirm the transfer."
     : "We're waiting for your bank to confirm the deposit."
@@ -429,15 +444,6 @@ export function buildYcPayInLifecycle(input: BuildYcPayInLifecycleInput): YcPayI
   const failedDescription =
     input.failedDescription ??
     "This payment could not be completed. Please contact support with your transaction reference."
-
-  const awaitingStep = (state: YcPayInLifecycleStep["state"]): YcPayInLifecycleStep => ({
-    id: "awaiting_transfer",
-    title: YC_PAY_IN_AWAITING_STEP_TITLE,
-    description: awaitingCopy.description,
-    state,
-    occurredAt: quoteLockedAt,
-    showPaymentDetailsLink: awaitingCopy.showPaymentDetailsLink,
-  })
 
   if (ledgerStatus === "failed") {
     return [
@@ -500,7 +506,7 @@ export function buildYcPayInLifecycle(input: BuildYcPayInLifecycleInput): YcPayI
         title: "Confirming payment",
         description: confirmingDescription,
         state: "current",
-        occurredAt: attestedAt,
+        occurredAt: null,
       },
       {
         id: "completed",

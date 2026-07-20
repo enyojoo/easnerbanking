@@ -130,7 +130,7 @@ export function resolveBankDepositPayInDetail(
       String(meta.pay_in_rail ?? "").trim().toLowerCase() === "mobile_money"
         ? "mobile_money"
         : "bank_transfer"
-    const processingAt = pickIso(meta.processing_at, row.occurred_at)
+    const processingAt = pickIso(meta.processing_at)
     const completedAt = pickIso(meta.completed_at, row.settled_at)
     const failedAt = pickIso(meta.failed_at)
     const depositReview = reconstructYcFundBalanceDepositReview(
