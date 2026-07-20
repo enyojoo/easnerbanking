@@ -39,6 +39,19 @@ import { isAppleWebSignInCanceled, signInWithAppleWeb } from '../lib/appleSignIn
 // Completes the auth session on web popup flows. Native deep links are handled below.
 WebBrowser.maybeCompleteAuthSession()
 
+/** iOS: close SFSafariViewController after deep-link callback. Android: no-op (Expo closes Custom Tab). */
+function dismissOAuthBrowserIfNeeded(): void {
+  if (Platform.OS === 'android') return
+  try {
+    const result = WebBrowser.dismissBrowser() as Promise<unknown> | undefined
+    if (result && typeof result.catch === 'function') {
+      void result.catch(() => undefined)
+    }
+  } catch {
+    // ignore
+  }
+}
+
 async function finalizePostAuthSession(options?: {
   noSessionMessage?: string
 }): Promise<{ error: Error | null }> {
@@ -616,23 +629,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [],
   )
 
-  const consumeOAuthCallbackIfPresent = useCallback(async (url: string) => {
-    if (oauthConsumeInFlightRef.current) return
+  const consumeOAuthCallbackIfPresent = useCallback(async (url: string): Promise<boolean> => {
+    if (oauthConsumeInFlightRef.current) return false
     const { code, accessToken, refreshToken, error, errorDescription } = parseAuthCallbackUrl(url)
     if (error) {
       console.warn('AuthContext: OAuth error:', error, errorDescription ?? '')
-      return
+      return false
     }
-    if (!code && !accessToken) return
-    void WebBrowser.dismissBrowser().catch(() => undefined)
+    if (!code && !accessToken) return false
+    dismissOAuthBrowserIfNeeded()
     oauthConsumeInFlightRef.current = true
     try {
       if (code) {
         const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
         if (exErr) {
           console.warn('AuthContext: exchangeCodeForSession failed:', exErr.message)
+          return false
         }
-        return
+        return true
       }
       if (accessToken) {
         const { error: sErr } = await supabase.auth.setSession({
@@ -641,8 +655,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         })
         if (sErr) {
           console.warn('AuthContext: setSession (OAuth fragment) failed:', sErr.message)
+          return false
         }
+        return true
       }
+      return false
     } finally {
       oauthConsumeInFlightRef.current = false
     }
@@ -1008,12 +1025,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         ...(Platform.OS === 'android' ? { createTask: false } : {}),
       })
 
-      if (authSessionResult.type === 'cancel' || authSessionResult.type === 'dismiss') {
+      if (authSessionResult.type === 'cancel') {
         return { error: null }
       }
 
       if (authSessionResult.type === 'success' && authSessionResult.url) {
         await consumeOAuthCallbackIfPresent(authSessionResult.url)
+      } else if (authSessionResult.type === 'dismiss') {
+        if (Platform.OS === 'ios') {
+          // User closed the auth sheet before completing sign-in.
+          return { error: null }
+        }
+        // Android sometimes reports `dismiss` even after redirect; allow Linking/session to settle.
+        await new Promise((r) => setTimeout(r, 400))
       }
 
       return finalizePostAuthSession({
