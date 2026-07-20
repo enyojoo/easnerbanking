@@ -34,4 +34,15 @@ describe("yc channel deposit window", () => {
       }),
     ).toBe("2026-01-01T04:00:00.000Z")
   })
+
+  it("extends quote-scale YC expiry to the corridor deposit window", () => {
+    expect(
+      resolveYcPayInDepositExpiresAt({
+        lockedAt: "2026-01-01T00:00:00.000Z",
+        preferredExpiresAt: "2026-01-01T00:10:00.000Z",
+        country: "NG",
+        payInRail: "bank_transfer",
+      }),
+    ).toBe("2026-01-01T04:00:00.000Z")
+  })
 })

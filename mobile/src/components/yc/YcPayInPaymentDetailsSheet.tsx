@@ -5,6 +5,8 @@ import {
   formatMoneyDisplay,
   ycPayInCompleteNotice,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
+  YC_PAY_IN_BANK_ACCOUNT_TITLE,
+  YC_PAY_IN_BANK_ACCOUNT_SUBTITLE,
   REVIEW_ROW_LABELS,
   type YcPayInPaymentDetails,
 } from '@easner/shared'
@@ -86,7 +88,14 @@ export function YcPayInPaymentDetailsSheet({ visible, onClose, details }: Props)
         <View style={styles.card}>
           <View style={styles.paymentHeader}>
             <PaymentIcon size={20} color={colors.primary.main} strokeWidth={2} />
-            <Text style={styles.paymentTitle}>{isMomo ? 'Mobile Money' : 'Bank Account'}</Text>
+            <View style={styles.paymentHeaderText}>
+              <Text style={styles.paymentTitle}>
+                {isMomo ? 'Mobile Money' : YC_PAY_IN_BANK_ACCOUNT_TITLE}
+              </Text>
+              {!isMomo ? (
+                <Text style={styles.paymentSubtitle}>{YC_PAY_IN_BANK_ACCOUNT_SUBTITLE}</Text>
+              ) : null}
+            </View>
           </View>
           {isMomo ? (
             <>
@@ -174,13 +183,21 @@ const styles = StyleSheet.create({
   },
   paymentHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing[2],
     marginBottom: spacing[3],
+  },
+  paymentHeaderText: {
+    flex: 1,
+    gap: spacing[1],
   },
   paymentTitle: {
     ...textStyles.titleSmall,
     color: colors.text.primary,
+  },
+  paymentSubtitle: {
+    ...textStyles.caption,
+    color: colors.text.secondary,
   },
   row: {
     flexDirection: 'row',

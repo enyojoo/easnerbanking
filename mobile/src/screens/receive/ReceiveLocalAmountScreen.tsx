@@ -57,7 +57,9 @@ import { useToast } from '../../components/ToastProvider'
 import {
   clearFundBalanceQuote,
   ensureFundBalanceQuoteStashed,
+  ensureFundBalanceOrderConfirmed,
   ensurePayInNetworksCached,
+  peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady } from '../../lib/warmYcLocalDepositCaches'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
@@ -346,16 +348,35 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       return
     }
 
-    navigation.navigate('ReceiveLocalReview' as never, {
-      localPayInCurrency,
-      residenceCountry,
-      payInRail,
-      amountEntryMode,
-      enteredAmount,
-      usdCredit: displayPreview.usdCredit,
-      localPayIn: displayPreview.localPayIn,
-      customerRate: ycFlow.customerRate ?? 0,
-    } as never)
+    setIsContinuePending(true)
+    const spinnerTimer = setTimeout(() => setIsContinueLoading(true), 175)
+    try {
+      const quote = await ensureFundBalanceOrderConfirmed({
+        country: residenceCountry,
+        currency: localPayInCurrency,
+        rail: payInRail,
+        amountEntryMode,
+        enteredAmount,
+      })
+      if (!quote?.transferId) {
+        showError(peekLastFundBalanceQuoteError() ?? 'Could not lock deposit details')
+        return
+      }
+      navigation.navigate('ReceiveLocalReview' as never, {
+        localPayInCurrency,
+        residenceCountry,
+        payInRail,
+        amountEntryMode,
+        enteredAmount,
+        usdCredit: quote.usdCredit ?? displayPreview.usdCredit,
+        localPayIn: quote.localPayIn ?? displayPreview.localPayIn,
+        customerRate: quote.customerRate ?? ycFlow.customerRate ?? 0,
+      } as never)
+    } finally {
+      clearTimeout(spinnerTimer)
+      setIsContinuePending(false)
+      setIsContinueLoading(false)
+    }
   }
 
   if (ngMissingType) {

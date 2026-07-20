@@ -21,7 +21,11 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import { useAuth } from '../../contexts/AuthContext'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
-import { prefetchCrossBorderQuotePipeline } from '../../lib/sendFlowCrossBorderQuote'
+import {
+  ensureCrossBorderOrderConfirmed,
+  isCompleteCrossBorderQuote,
+  peekLastCrossBorderQuoteError,
+} from '../../lib/sendFlowCrossBorderQuote'
 
 type PayInNetwork = { id: string; name: string }
 
@@ -98,35 +102,47 @@ export function YcCrossBorderMomoSetup({
   const selectedNetwork = networks.find((n) => n.id === networkId)
   const rail: YcPayInRail = 'mobile_money'
 
-  const onContinue = () => {
+  const onContinue = async () => {
     if (!momoReady || isContinueLoading) return
     setContinueError(null)
     haptics.medium()
-    prefetchCrossBorderQuotePipeline({
-      recipientId: recipient.id,
-      payInCurrency,
-      payInCountry,
-      payInRail: rail,
-      receiveAmount,
-      sourcePhone: phone.trim(),
-      networkId,
-      sourceNetworkName: selectedNetwork?.name,
-    })
-    navigation.navigate('SendConfirm' as never, {
-      recipient,
-      paymentMethod: 'otherCurrency',
-      ycPayInCurrency: payInCurrency,
-      ycPayInRail: rail,
-      receiveAmountValue: receiveAmount,
-      receiveCurrency,
-      amountEntryMode,
-      amountScreenSendAmount,
-      sourcePhone: phone.trim(),
-      networkId,
-      sourceNetworkName: selectedNetwork?.name,
-      ...(note?.trim() ? { note: note.trim() } : {}),
-      ...(paymentPurpose?.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-    } as never)
+    setIsContinueLoading(true)
+    try {
+      const quoteMeta = {
+        recipientId: recipient.id,
+        payInCurrency,
+        payInCountry,
+        payInRail: rail,
+        receiveAmount,
+        sourcePhone: phone.trim(),
+        networkId,
+        sourceNetworkName: selectedNetwork?.name,
+      }
+      const quote = await ensureCrossBorderOrderConfirmed(quoteMeta)
+      if (!quote || !isCompleteCrossBorderQuote(quote)) {
+        setContinueError(peekLastCrossBorderQuoteError() ?? 'Could not lock transfer details')
+        return
+      }
+      navigation.navigate('SendConfirm' as never, {
+        recipient,
+        paymentMethod: 'otherCurrency',
+        ycPayInCurrency: payInCurrency,
+        ycPayInRail: rail,
+        receiveAmountValue: receiveAmount,
+        receiveCurrency,
+        amountEntryMode,
+        amountScreenSendAmount,
+        calculatedSendingAmount: quote.localPayIn,
+        calculatedTotalAmount: quote.localPayIn,
+        sourcePhone: phone.trim(),
+        networkId,
+        sourceNetworkName: selectedNetwork?.name,
+        ...(note?.trim() ? { note: note.trim() } : {}),
+        ...(paymentPurpose?.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+      } as never)
+    } finally {
+      setIsContinueLoading(false)
+    }
   }
 
   return (

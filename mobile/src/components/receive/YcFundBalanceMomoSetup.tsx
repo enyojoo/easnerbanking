@@ -15,8 +15,9 @@ import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
 import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
 import {
-  ensureFundBalanceQuoteStashed,
+  ensureFundBalanceOrderConfirmed,
   ensurePayInNetworksCached,
+  peekLastFundBalanceQuoteError,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { useAuth } from '../../contexts/AuthContext'
@@ -91,33 +92,43 @@ export function YcFundBalanceMomoSetup({
   const momoReady = Boolean(phone.trim() && networkId)
   const selectedNetwork = networks.find((n) => n.id === networkId)
 
-  const onContinue = () => {
+  const onContinue = async () => {
     if (!momoReady || isContinueLoading) return
     setContinueError(null)
     haptics.medium()
-    void ensureFundBalanceQuoteStashed({
-      country: residenceCountry,
-      currency: localPayInCurrency,
-      rail: 'mobile_money',
-      amountEntryMode,
-      enteredAmount,
-      sourcePhone: phone.trim(),
-      networkId,
-      sourceNetworkName: selectedNetwork?.name,
-    }).catch(() => {})
-    navigation.navigate('ReceiveLocalReview' as never, {
-      localPayInCurrency,
-      residenceCountry,
-      payInRail: 'mobile_money',
-      amountEntryMode,
-      enteredAmount,
-      usdCredit,
-      localPayIn,
-      customerRate,
-      sourcePhone: phone.trim(),
-      networkId,
-      sourceNetworkName: selectedNetwork?.name,
-    } as never)
+    setIsContinueLoading(true)
+    try {
+      const quoteMeta = {
+        country: residenceCountry,
+        currency: localPayInCurrency,
+        rail: 'mobile_money' as const,
+        amountEntryMode,
+        enteredAmount,
+        sourcePhone: phone.trim(),
+        networkId,
+        sourceNetworkName: selectedNetwork?.name,
+      }
+      const quote = await ensureFundBalanceOrderConfirmed(quoteMeta)
+      if (!quote?.transferId) {
+        setContinueError(peekLastFundBalanceQuoteError() ?? 'Could not lock deposit details')
+        return
+      }
+      navigation.navigate('ReceiveLocalReview' as never, {
+        localPayInCurrency,
+        residenceCountry,
+        payInRail: 'mobile_money',
+        amountEntryMode,
+        enteredAmount,
+        usdCredit: quote.usdCredit ?? usdCredit,
+        localPayIn: quote.localPayIn ?? localPayIn,
+        customerRate: quote.customerRate ?? customerRate,
+        sourcePhone: phone.trim(),
+        networkId,
+        sourceNetworkName: selectedNetwork?.name,
+      } as never)
+    } finally {
+      setIsContinueLoading(false)
+    }
   }
 
   return (

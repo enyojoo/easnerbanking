@@ -52,19 +52,24 @@ export function resolveYcChannelDepositWindowMs(
 
 /** ISO expiry for the user deposit window (distinct from preview quote TTL). */
 export function resolveYcPayInDepositExpiresAt(input: ResolveYcPayInDepositExpiresAtInput): string {
-  const preferred = String(input.preferredExpiresAt ?? "").trim()
-  if (preferred) {
-    const ms = new Date(preferred).getTime()
-    if (Number.isFinite(ms)) {
-      return new Date(ms).toISOString()
-    }
-  }
-
   const lockedMs = input.lockedAt ? new Date(input.lockedAt).getTime() : Date.now()
   const baseMs = Number.isFinite(lockedMs) ? lockedMs : Date.now()
   const windowMs = resolveYcChannelDepositWindowMs(input.country, input.payInRail)
-  if (windowMs != null) {
-    return new Date(baseMs + windowMs).toISOString()
+  const corridorExpiresMs = windowMs != null ? baseMs + windowMs : null
+
+  const preferred = String(input.preferredExpiresAt ?? "").trim()
+  const preferredMs = preferred ? new Date(preferred).getTime() : NaN
+
+  if (corridorExpiresMs != null) {
+    if (Number.isFinite(preferredMs)) {
+      // YC may echo preview quote TTL; deposit window is at least the corridor minimum.
+      return new Date(Math.max(preferredMs, corridorExpiresMs)).toISOString()
+    }
+    return new Date(corridorExpiresMs).toISOString()
+  }
+
+  if (Number.isFinite(preferredMs)) {
+    return new Date(preferredMs).toISOString()
   }
 
   return resolveYcQuoteExpiresAt()

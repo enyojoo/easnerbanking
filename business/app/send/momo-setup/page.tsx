@@ -18,6 +18,12 @@ import {
   prefetchYcPayInNetworks,
   readCachedYcPayInNetworks,
 } from "@/lib/yc-local-deposit-cache"
+import {
+  crossBorderQuoteToFlowState,
+  ensureCrossBorderOrderConfirmed,
+  isCompleteCrossBorderQuote,
+  peekLastCrossBorderQuoteError,
+} from "@/lib/yc-cross-border-quote-cache"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { normalizeYcMomoPhone, REVIEW_ROW_LABELS } from "@easner/shared"
 function isYcCrossBorderMomo(state: SendFlowState | null): boolean {
@@ -123,19 +129,47 @@ export default function SendMomoSetupPage() {
     }
   }, [state, payInCountry])
 
-  const onContinue = () => {
+  const onContinue = async () => {
     if (!state || !momoReady || !payInCountry || !payInCurrency || isContinueLoading) return
     setContinueError(null)
-    const next: SendFlowState = {
-      ...state,
-      ycMomoSetup: {
+    setIsContinueLoading(true)
+    try {
+      const crossBorderMeta = {
+        recipientId: state.recipient.id,
+        payInCurrency,
+        payInCountry,
+        payInRail: "mobile_money" as const,
+        receiveAmount: state.amount,
         sourcePhone: momoPhone.trim(),
         networkId: momoNetworkId,
         sourceNetworkName: selectedNetwork?.name,
-      },
+      }
+      const lockedQuote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
+      if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
+        setContinueError(peekLastCrossBorderQuoteError() || "Could not lock transfer details")
+        return
+      }
+      const next: SendFlowState = {
+        ...state,
+        ycMomoSetup: {
+          sourcePhone: momoPhone.trim(),
+          networkId: momoNetworkId,
+          sourceNetworkName: selectedNetwork?.name,
+        },
+        sendAmount: lockedQuote.localPayIn,
+        sendCurrency: payInCurrency,
+        totalAmount: lockedQuote.localPayIn,
+        transactionId:
+          lockedQuote.easnerTransactionId ||
+          lockedQuote.transactionId ||
+          state.transactionId,
+        ycCrossBorder: crossBorderQuoteToFlowState(lockedQuote, crossBorderMeta),
+      }
+      persistSendFlowState(next)
+      router.push("/send/confirm")
+    } finally {
+      setIsContinueLoading(false)
     }
-    persistSendFlowState(next)
-    router.push("/send/confirm")
   }
 
   if (!state) {
@@ -213,10 +247,7 @@ export default function SendMomoSetupPage() {
           onClick={() => void onContinue()}
         >
           {isContinueLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Locking…
-            </>
+            <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             "Continue"
           )}

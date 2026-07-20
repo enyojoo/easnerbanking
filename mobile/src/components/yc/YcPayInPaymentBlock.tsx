@@ -4,6 +4,8 @@ import { Landmark, Smartphone } from 'lucide-react-native'
 import {
   REVIEW_ROW_LABELS,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
+  YC_PAY_IN_BANK_ACCOUNT_TITLE,
+  YC_PAY_IN_BANK_ACCOUNT_SUBTITLE,
   formatMoneyDisplay,
   ycPayInCompleteNotice,
   type YcPayInRail,
@@ -90,9 +92,14 @@ export function YcPayInPaymentBlock({
           ) : (
             <Landmark size={20} color={colors.primary.main} strokeWidth={2} />
           )}
-          <Text style={styles.paymentCardTitle}>
-            {isMobileMoney ? 'Mobile Money' : 'Bank Account'}
-          </Text>
+          <View style={styles.paymentCardHeaderText}>
+            <Text style={styles.paymentCardTitle}>
+              {isMobileMoney ? 'Mobile Money' : YC_PAY_IN_BANK_ACCOUNT_TITLE}
+            </Text>
+            {!isMobileMoney ? (
+              <Text style={styles.paymentCardSubtitle}>{YC_PAY_IN_BANK_ACCOUNT_SUBTITLE}</Text>
+            ) : null}
+          </View>
         </View>
 
         {!isMobileMoney && detailRows.length === 0 ? (
@@ -158,13 +165,21 @@ const styles = StyleSheet.create({
   },
   paymentCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing[2],
     marginBottom: spacing[3],
+  },
+  paymentCardHeaderText: {
+    flex: 1,
+    gap: spacing[1],
   },
   paymentCardTitle: {
     ...textStyles.bodyMedium,
     fontFamily: textStyles.button.fontFamily,
+  },
+  paymentCardSubtitle: {
+    ...textStyles.caption,
+    color: colors.text.secondary,
   },
   emptyFields: {
     ...textStyles.caption,

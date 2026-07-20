@@ -70,6 +70,10 @@ import {
 } from "@/lib/yc-local-deposit-cache"
 import {
   clearCrossBorderQuote,
+  crossBorderQuoteToFlowState,
+  ensureCrossBorderOrderConfirmed,
+  isCompleteCrossBorderQuote,
+  peekLastCrossBorderQuoteError,
 } from "@/lib/yc-cross-border-quote-cache"
 import {
   ensureWalletSendOrderConfirmed,
@@ -1147,6 +1151,38 @@ export default function SendPage() {
             setAmountFieldError("Could not resolve pay-in country for bank transfer.")
             return
           }
+          if (!isContinuePending && !isContinueLoading) {
+            setIsContinuePending(true)
+            continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+          }
+          const crossBorderMeta = {
+            recipientId: recipient.id,
+            payInCurrency: otherCurrency,
+            payInCountry,
+            payInRail: "bank_transfer" as const,
+            receiveAmount,
+          }
+          const lockedQuote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
+          if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
+            setAmountFieldError(
+              peekLastCrossBorderQuoteError() || "Could not lock transfer details",
+            )
+            return
+          }
+          flowState = {
+            ...state,
+            sendAmount: lockedQuote.localPayIn,
+            sendCurrency: otherCurrency,
+            totalAmount: lockedQuote.localPayIn,
+            transactionId:
+              lockedQuote.easnerTransactionId ||
+              lockedQuote.transactionId ||
+              transactionId,
+            ycCrossBorder: crossBorderQuoteToFlowState(lockedQuote, crossBorderMeta),
+          }
+          persistSendFlowState(flowState)
+          router.push("/send/confirm")
+          return
         }
         persistSendFlowState(flowState)
         router.push("/send/confirm")

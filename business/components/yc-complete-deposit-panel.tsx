@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import {
   formatMoneyDisplay,
   REVIEW_ROW_LABELS,
+  YC_PAY_IN_BANK_ACCOUNT_TITLE,
+  YC_PAY_IN_BANK_ACCOUNT_SUBTITLE,
   ycPayInCompleteCta,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
   ycPayInCompleteNotice,
@@ -142,9 +144,14 @@ export function YcCompleteDepositPanel({
       ) : null}
 
       <div className="rounded-xl border border-border p-4 space-y-1">
-        <div className="flex items-center gap-2 mb-3">
-          <PaymentIcon className="h-5 w-5 text-primary" />
-          <p className="font-medium">{isMomo ? "Mobile Money" : "Bank Account"}</p>
+        <div className="flex items-start gap-2 mb-3">
+          <PaymentIcon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">{isMomo ? "Mobile Money" : YC_PAY_IN_BANK_ACCOUNT_TITLE}</p>
+            {!isMomo ? (
+              <p className="text-sm text-muted-foreground">{YC_PAY_IN_BANK_ACCOUNT_SUBTITLE}</p>
+            ) : null}
+          </div>
         </div>
         {isMomo ? (
           <>

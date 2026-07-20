@@ -35,8 +35,16 @@ export function useYcPayInLock<T>(input: UseYcPayInLockInput<T>): UseYcPayInLock
     defaultErrorMessage = "Could not lock payment details",
   } = input
 
-  const [status, setStatus] = useState<YcPayInLockStatus>("idle")
-  const [quote, setQuote] = useState<T | null>(null)
+  const readCached = useCallback(() => {
+    if (!enabled || !lockKey) return null
+    const cached = getCachedLocked()
+    return cached && isLocked(cached) ? cached : null
+  }, [enabled, lockKey, getCachedLocked, isLocked])
+
+  const [status, setStatus] = useState<YcPayInLockStatus>(() =>
+    readCached() ? "locked" : "idle",
+  )
+  const [quote, setQuote] = useState<T | null>(() => readCached())
   const [error, setError] = useState<string | null>(null)
   const attemptRef = useRef(0)
 
@@ -52,8 +60,8 @@ export function useYcPayInLock<T>(input: UseYcPayInLockInput<T>): UseYcPayInLock
   const runLock = useCallback(async () => {
     if (!enabled || !lockKey) return
 
-    const cached = getCachedRef.current()
-    if (cached && isLockedRef.current(cached)) {
+    const cached = readCached()
+    if (cached) {
       setQuote(cached)
       setStatus("locked")
       setError(null)
@@ -82,7 +90,7 @@ export function useYcPayInLock<T>(input: UseYcPayInLockInput<T>): UseYcPayInLock
       setStatus("error")
       setError(e instanceof Error ? e.message : defaultErrorMessage)
     }
-  }, [enabled, lockKey, defaultErrorMessage])
+  }, [enabled, lockKey, defaultErrorMessage, readCached])
 
   useEffect(() => {
     if (!enabled || !lockKey) {
@@ -92,8 +100,8 @@ export function useYcPayInLock<T>(input: UseYcPayInLockInput<T>): UseYcPayInLock
       return
     }
 
-    const cached = getCachedRef.current()
-    if (cached && isLockedRef.current(cached)) {
+    const cached = readCached()
+    if (cached) {
       setQuote(cached)
       setStatus("locked")
       setError(null)
@@ -101,7 +109,7 @@ export function useYcPayInLock<T>(input: UseYcPayInLockInput<T>): UseYcPayInLock
     }
 
     void runLock()
-  }, [enabled, lockKey, runLock])
+  }, [enabled, lockKey, runLock, readCached])
 
   const retry = useCallback(() => {
     void runLock()

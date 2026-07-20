@@ -112,6 +112,9 @@ import {
 import {
   clearCrossBorderQuote,
   ensureCrossBorderQuoteStashed,
+  ensureCrossBorderOrderConfirmed,
+  isCompleteCrossBorderQuote,
+  peekLastCrossBorderQuoteError,
   prefetchCrossBorderQuotePipeline,
 } from '../../lib/sendFlowCrossBorderQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
@@ -1419,13 +1422,35 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             showError('Could not resolve pay-in country for bank transfer.')
             return
           }
-          prefetchCrossBorderQuotePipeline({
+          setIsContinuePending(true)
+          continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+          const crossBorderMeta = {
             recipientId: recipient.id,
             payInCurrency: selectedOtherCurrency,
             payInCountry,
             payInRail: rail,
             receiveAmount: receiveAmountValue,
-          })
+          }
+          const lockedQuote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
+          if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
+            showError(peekLastCrossBorderQuoteError() ?? 'Could not lock transfer details')
+            return
+          }
+          navigation.navigate('SendConfirm' as never, {
+            recipient,
+            paymentMethod: 'otherCurrency',
+            ycPayInCurrency: selectedOtherCurrency,
+            ycPayInRail: rail,
+            receiveAmountValue,
+            receiveCurrency: recipient.currency,
+            amountEntryMode,
+            amountScreenSendAmount: navAmounts.sendAmount,
+            calculatedSendingAmount: lockedQuote.localPayIn,
+            calculatedTotalAmount: lockedQuote.localPayIn,
+            ...(note.trim() ? { note: note.trim() } : {}),
+            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+          } as never)
+          return
         }
         navigation.navigate('SendConfirm' as never, {
           recipient,

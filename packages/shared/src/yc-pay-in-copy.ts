@@ -9,6 +9,13 @@ export const YC_PAY_IN_CONTINUE_CTA = 'Continue'
 /** Title on YC pay-in review screens (fund balance + cross-border bank/MoMo). */
 export const YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE = 'Review & Complete'
 
+/** Bank pay-in payment block heading. */
+export const YC_PAY_IN_BANK_ACCOUNT_TITLE = 'Bank Account'
+
+/** Bank pay-in payment block subtitle (one-time virtual account). */
+export const YC_PAY_IN_BANK_ACCOUNT_SUBTITLE =
+  "This account is only for this transaction - don't save it."
+
 /** CTA on bank pay-in complete (after VA / send-exactly instructions). */
 export const YC_PAY_IN_BANK_COMPLETE_CTA = "I've made the payment"
 

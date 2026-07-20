@@ -142,7 +142,6 @@ export function YcPayInReviewSection(props: Props) {
 
     const ctaDisabled =
       !isLocked ||
-      isLoading ||
       attestLoading ||
       Boolean(lockError) ||
       !lockedQuote?.transferId
@@ -205,7 +204,7 @@ export function YcPayInReviewSection(props: Props) {
             void attestPayment(transactionId, lockedQuote.transferId)
           }}
         >
-          {attestLoading || (isLoading && !isLocked) ? (
+          {attestLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Confirming…
@@ -233,7 +232,6 @@ export function YcPayInReviewSection(props: Props) {
 
   const ctaDisabled =
     !isLocked ||
-    isLoading ||
     attestLoading ||
     Boolean(lockError) ||
     !lockedQuote?.transferId
@@ -290,7 +288,7 @@ export function YcPayInReviewSection(props: Props) {
           void attestPayment(transactionId, lockedQuote.transferId)
         }}
       >
-        {attestLoading || (isLoading && !isLocked) ? (
+        {attestLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Confirming…

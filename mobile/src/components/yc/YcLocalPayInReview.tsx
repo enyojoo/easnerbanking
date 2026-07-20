@@ -197,7 +197,6 @@ export function YcLocalPayInReview({
 
   const ctaDisabled =
     !isLocked ||
-    isLoading ||
     attestLoading ||
     quoteCountdown.expired ||
     Boolean(lockError) ||
@@ -310,7 +309,7 @@ export function YcLocalPayInReview({
           end={{ x: 1, y: 0 }}
           style={styles.ctaGradient}
         >
-          {attestLoading || isLoading ? (
+          {attestLoading ? (
             <ActivityIndicator color={colors.text.inverse} />
           ) : (
             <Text style={styles.ctaText}>{ycPayInCompleteCta(payInRail)}</Text>
