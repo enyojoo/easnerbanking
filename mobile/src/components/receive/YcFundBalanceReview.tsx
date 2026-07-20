@@ -265,7 +265,10 @@ export function YcFundBalanceReview({
           <>
             {lockedQuote.expiresAt ? (
               <View style={styles.countdownWrap}>
-                <YcPayInAwaitingPaymentCountdown depositExpiresAt={lockedQuote.expiresAt} />
+                <YcPayInAwaitingPaymentCountdown
+                  depositExpiresAt={lockedQuote.expiresAt}
+                  context="review"
+                />
               </View>
             ) : null}
             <YcPayInPaymentBlock

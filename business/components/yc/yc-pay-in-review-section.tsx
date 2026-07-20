@@ -177,7 +177,10 @@ export function YcPayInReviewSection(props: Props) {
         {isLocked && lockedQuote ? (
           <>
             {lockedQuote.expiresAt ? (
-              <YcPayInAwaitingPaymentCountdown depositExpiresAt={lockedQuote.expiresAt} />
+              <YcPayInAwaitingPaymentCountdown
+                depositExpiresAt={lockedQuote.expiresAt}
+                context="review"
+              />
             ) : null}
             <YcPayInPaymentInstructions
               payInRail={props.payInRail}
@@ -261,7 +264,10 @@ export function YcPayInReviewSection(props: Props) {
       {isLocked && lockedQuote ? (
         <>
           {lockedQuote.expiresAt ? (
-            <YcPayInAwaitingPaymentCountdown depositExpiresAt={lockedQuote.expiresAt} />
+            <YcPayInAwaitingPaymentCountdown
+              depositExpiresAt={lockedQuote.expiresAt}
+              context="review"
+            />
           ) : null}
           <YcPayInPaymentInstructions
             payInRail={props.payInRail}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   YC_PAY_IN_AWAITING_STATUS,
   YC_PAY_IN_AWAITING_DESCRIPTION_PREFIX,
+  YC_PAY_IN_REVIEW_PAYMENT_WINDOW_EXPIRED,
   buildYcPayInLifecycle,
   formatYcPayInPaymentDeadlineLabel,
   isYcPayInAwaitingAttestation,
@@ -68,6 +69,12 @@ describe("yc pay-in display", () => {
     const expiresAt = "2026-07-21T14:30:00.000Z"
     expect(formatYcPayInPaymentDeadlineLabel(expiresAt, { nowMs })).toBe(
       "Make payment within 4h 30m",
+    )
+  })
+
+  it("shows review restart copy when payment window closes on Review & Complete", () => {
+    expect(YC_PAY_IN_REVIEW_PAYMENT_WINDOW_EXPIRED).toBe(
+      "The time to complete this payment has passed. Go back and start again.",
     )
   })
 

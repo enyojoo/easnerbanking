@@ -21,6 +21,10 @@ export const YC_PAY_IN_AWAITING_DESCRIPTION_SUFFIX = "."
 export const YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED =
   "The time to complete this transfer has passed — contact support with your transaction ID."
 
+/** Shown on Review & Complete when the deposit window closes — user should restart the flow. */
+export const YC_PAY_IN_REVIEW_PAYMENT_WINDOW_EXPIRED =
+  "The time to complete this payment has passed. Go back and start again."
+
 /** Bare deposit countdown (e.g. 4:32, 2h 15m) — no prefix. */
 export function formatYcPayInDepositTimeRemaining(remainingMs: number): string {
   const totalSec = Math.max(0, Math.floor(remainingMs / 1000))
