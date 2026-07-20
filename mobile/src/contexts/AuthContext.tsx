@@ -1000,11 +1000,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { error: null }
       }
 
-      await WebBrowser.openBrowserAsync(authUrl, {
+      const authSessionResult = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo, {
         controlsColor: '#0F1110',
         enableBarCollapsing: true,
         showTitle: true,
+        // singleTask MainActivity: keep Custom Tab in-app so the OAuth redirect URL is returned.
+        ...(Platform.OS === 'android' ? { createTask: false } : {}),
       })
+
+      if (authSessionResult.type === 'cancel' || authSessionResult.type === 'dismiss') {
+        return { error: null }
+      }
+
+      if (authSessionResult.type === 'success' && authSessionResult.url) {
+        await consumeOAuthCallbackIfPresent(authSessionResult.url)
+      }
 
       return finalizePostAuthSession({
         noSessionMessage: 'Google sign-in did not create a session in the app.',
