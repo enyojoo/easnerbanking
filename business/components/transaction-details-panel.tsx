@@ -19,7 +19,7 @@ import { DepositReviewDetailsRows } from "@/components/transactions/deposit-revi
 import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
 import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
-import { useScope } from "@/hooks/use-scope"
+import { useScope } from "@/lib/query/scope"
 import { getTransactionDetailPrefetchOptions } from "@/hooks/queries/use-transactions"
 import {
   REVIEW_ROW_LABELS,

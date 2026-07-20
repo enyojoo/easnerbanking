@@ -242,7 +242,6 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     : row.base_currency != null
       ? String(row.base_currency)
       : undefined
-  const providerTxId = row.provider_transaction_id != null ? String(row.provider_transaction_id) : undefined
   const paymentRail =
     String(
       meta?.payment_rail ??
@@ -354,7 +353,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     paymentScheme: isEasetagP2p
       ? "Easetag"
       : stablecoinDepositDetail?.schemeLabel ?? undefined,
-    transferId: providerTxId,
+    transferId: providerTxId || undefined,
     baseCurrency: listBaseCurrency,
     baseAmount: listBaseAmount,
     ...(globalPayoutDetail

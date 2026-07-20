@@ -1,3 +1,5 @@
+"use client"
+
 import { useEffect, useRef } from "react"
 import { useQuoteCountdown } from "./use-quote-countdown"
 import {
