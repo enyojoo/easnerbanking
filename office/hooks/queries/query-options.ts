@@ -29,3 +29,13 @@ export const officeReferenceQueryDefaults = {
   refetchIntervalInBackground: false,
   meta: { webPersist: "reduced" as const, freshness: "reference" as const },
 }
+
+/** Admin rate catalogs — cron-synced; always fetch fresh, never persist to disk. */
+export const officeRatesQueryDefaults = {
+  staleTime: 0,
+  gcTime: OFFICE_REFERENCE_GC_MS,
+  refetchOnWindowFocus: false,
+  refetchOnMount: true,
+  refetchIntervalInBackground: false,
+  meta: { webPersist: "none" as const, freshness: "reference" as const },
+}

@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { noahRatesApi, type NoahRateAdminRow } from "@/lib/noah-rates-api"
 import { officeKeys } from "@/lib/query/keys"
-import { officeReferenceQueryDefaults } from "./query-options"
+import { officeRatesQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
 export function useOfficeNoahRates() {
@@ -12,7 +12,7 @@ export function useOfficeNoahRates() {
   return useQuery({
     queryKey: officeKeys.noahRates(),
     enabled,
-    ...officeReferenceQueryDefaults,
+    ...officeRatesQueryDefaults,
     queryFn: (): Promise<NoahRateAdminRow[]> => noahRatesApi.list(),
   })
 }

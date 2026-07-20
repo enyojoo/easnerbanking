@@ -114,10 +114,7 @@ export function OfficeNoahRatesPanel() {
   const [draft, setDraft] = useState<EditableNoahRate[]>([])
 
   const refreshNoahRatesData = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: officeKeys.currencies("rates") }),
-      queryClient.invalidateQueries({ queryKey: officeKeys.noahRates() }),
-    ])
+    await queryClient.refetchQueries({ queryKey: officeKeys.noahRates() })
   }, [queryClient])
 
   const currencyByCode = useMemo(() => {

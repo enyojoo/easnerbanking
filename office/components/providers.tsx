@@ -49,8 +49,48 @@ export function OfficeQueryProvider({ children }: { children: React.ReactNode })
 }
 
 function PersistedOfficeLifecycleBridge() {
-  const { user } = useAuth()
+  const { user, isAdmin, loading: authLoading } = useAuth()
   const queryClient = useQueryClient()
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || authLoading || !user?.id || !isAdmin) return
+
+    let cancelled = false
+    const refreshActiveReducedQueries = async () => {
+      try {
+        if (cancelled) return
+        await queryClient.invalidateQueries({
+          predicate: (query) => query.meta?.webPersist === "reduced",
+          refetchType: "active",
+        })
+      } catch {
+        // ignore background warm failures
+      }
+    }
+
+    const w = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+      cancelIdleCallback?: (id: number) => void
+    }
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(() => {
+        void refreshActiveReducedQueries()
+      }, { timeout: 250 })
+      return () => {
+        cancelled = true
+        w.cancelIdleCallback?.(id)
+      }
+    }
+
+    const timeout = window.setTimeout(() => {
+      void refreshActiveReducedQueries()
+    }, 150)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [authLoading, isAdmin, queryClient, user?.id])
 
   React.useEffect(() => {
     if (typeof window === "undefined") return

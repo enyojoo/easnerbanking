@@ -154,7 +154,7 @@ export function OfficeCryptoRatesPanel() {
   const [draft, setDraft] = useState<EditableCryptoRate[]>([])
 
   const refreshCryptoRatesData = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: officeKeys.cryptoRates() })
+    await queryClient.refetchQueries({ queryKey: officeKeys.cryptoRates() })
   }, [queryClient])
 
   const currencyByCode = useMemo(() => {

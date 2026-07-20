@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { cryptoRatesApi, type CryptoRateAdminRow } from "@/lib/crypto-rates-api"
 import { officeKeys } from "@/lib/query/keys"
-import { officeReferenceQueryDefaults } from "./query-options"
+import { officeRatesQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
 export function useOfficeCryptoRates() {
@@ -12,7 +12,7 @@ export function useOfficeCryptoRates() {
   return useQuery({
     queryKey: officeKeys.cryptoRates(),
     enabled,
-    ...officeReferenceQueryDefaults,
+    ...officeRatesQueryDefaults,
     queryFn: (): Promise<CryptoRateAdminRow[]> => cryptoRatesApi.list(),
   })
 }

@@ -173,10 +173,7 @@ export function OfficeYcRatesPanel() {
   const [draft, setDraft] = useState<EditableYcRate[]>([])
 
   const refreshYcRatesData = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: officeKeys.currencies("rates") }),
-      queryClient.invalidateQueries({ queryKey: officeKeys.ycRates() }),
-    ])
+    await queryClient.refetchQueries({ queryKey: officeKeys.ycRates() })
   }, [queryClient])
 
   const currencyByCode = useMemo(() => {
