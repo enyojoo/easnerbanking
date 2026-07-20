@@ -36,7 +36,7 @@ export const YC_OMNIBUS_SUFFICIENCY_TOLERANCE_USDC = 0.02
 export const YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC = 1
 
 /** Extra USDC padding on fund-balance pay-in solve before POST /receive (YC conversion slop). */
-export const YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC = 3
+export const YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC = 0
 
 /** Fund balance confirm: one retry only when the first POST /receive is under-funded. */
 export const YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS = 2
@@ -47,8 +47,29 @@ export const YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC = 1
 /** Cross-border leg-1 confirm retries when POST /receive omnibus is short. */
 export const YC_CROSS_BORDER_RECEIVE_MAX_ATTEMPTS = 3
 
-/** Quote TTL — YC receive locks ~10 minutes. */
-export const YC_QUOTE_TTL_MS = 10 * 60 * 1000
+/** Quote TTL — production 5min (YC PENDING_APPROVAL), sandbox 10min. */
+export function resolveYcQuoteTtlMs(): number {
+  const env = String(
+    typeof process !== "undefined" ? process.env?.YELLOWCARD_ENVIRONMENT ?? "sandbox" : "sandbox",
+  )
+    .trim()
+    .toLowerCase()
+  return env === "production" ? 5 * 60 * 1000 : 10 * 60 * 1000
+}
+
+/** Prefer YC-provided expiry when valid; otherwise compute from environment TTL. */
+export function resolveYcQuoteExpiresAt(preferred?: string | null): string {
+  if (preferred) {
+    const ms = new Date(preferred).getTime()
+    if (Number.isFinite(ms) && ms > Date.now()) {
+      return new Date(ms).toISOString()
+    }
+  }
+  return new Date(Date.now() + resolveYcQuoteTtlMs()).toISOString()
+}
+
+/** @deprecated Use resolveYcQuoteTtlMs() for environment-aware TTL. */
+export const YC_QUOTE_TTL_MS = resolveYcQuoteTtlMs()
 
 /** Easner 1% leg in pay-in currency from USD credit (display-only). */
 export function easnerFeeLocalFromUsdCredit(usdCredit: number, easnerSellRate: number): number {
@@ -439,10 +460,7 @@ export function resolveYcCrossBorderSubmitLocalPayIn(input: {
     processingFee: input.pricing.processingFee,
     marginAmount: input.pricing.marginAmount,
   })
-  const bufferUsd = Math.max(
-    YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
-    roundUsdc(requiredOmnibus * 0.005),
-  )
+  const bufferUsd = roundUsdc(requiredOmnibus * 0.005)
   const grossUsd = roundUsdc(requiredOmnibus + input.pricing.ycLegFeesUsd + bufferUsd)
   const economicsLocal = roundLocalUp(grossUsd * input.ycSellFrom)
   return roundLocalUp(Math.max(input.pricing.localPayIn, economicsLocal))
@@ -467,10 +485,7 @@ export function resolveYcFundBalanceSubmitLocalPayIn(input: {
   customerSellRate: number
 }): number {
   const neededOmnibus = roundUsdc(input.pricing.usdCredit + input.pricing.processingFee)
-  const bufferUsd = Math.max(
-    YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
-    roundUsdc(neededOmnibus * 0.005),
-  )
+  const bufferUsd = roundUsdc(neededOmnibus * 0.005)
   const grossUsd = roundUsdc(neededOmnibus + input.pricing.ycLegFeesUsd + bufferUsd)
   const economicsLocal = roundLocalUp(grossUsd * input.customerSellRate)
   return roundLocalUp(Math.max(input.pricing.localPayIn, economicsLocal))
@@ -669,15 +684,62 @@ export function computeYcCrossBorderRequiredOmnibus(input: {
 }
 
 /**
- * Fund balance pay-in before POST /receive: pad receive leg fees from estimate.
+ * Fund balance amount-screen preview (Noah payout parity).
+ * Shows principal at customer rate; fees appear on review/confirm.
  */
 export type YcFundBalanceAmountPreview = {
   usdCredit: number
+  /** Principal local at easner_sell (amount-screen display). */
   localPayIn: number
-  feeInclusive: true
+  /** Estimated all-in local pay-in for corridor min checks (fees, no flat USDC buffer). */
+  estimatedTotalLocalPayIn: number
+  feeInclusive: false
 }
 
-/** Client/server amount-screen preview: padded pay-in aligned with confirm submit. */
+function computeYcFundBalanceEstimatedTotalLocalPayIn(input: {
+  usdCredit?: number
+  localPayIn?: number
+  customerSellRate: number
+  ycSellRate: number
+  processingFeeBps?: number
+  rail?: "bank_transfer" | "mobile_money"
+}): YcFundBalancePricing {
+  const usdCreditTarget = input.usdCredit != null && Number(input.usdCredit) > 0
+  if (usdCreditTarget) {
+    const estimatedReceiveFees = estimateYcFundBalanceReceiveLegFeesUsd({
+      usdCredit: Number(input.usdCredit),
+      customerSellRate: input.customerSellRate,
+      ycSellRate: input.ycSellRate,
+      processingFeeBps: input.processingFeeBps,
+      rail: input.rail,
+    })
+    return computeYcFundBalancePricing({
+      usdCredit: input.usdCredit,
+      customerSellRate: input.customerSellRate,
+      ycSellRate: input.ycSellRate,
+      processingFeeBps: input.processingFeeBps,
+      receiveLeg: {
+        cryptoAmountUsd: 0,
+        networkFeeAmountUsd: estimatedReceiveFees,
+        serviceFeeAmountUsd: 0,
+      },
+    })
+  }
+  const localPayIn = Number(input.localPayIn)
+  if (!(localPayIn > 0)) throw new Error("usdCredit or localPayIn required")
+  const neededOmnibus = roundUsdc(localPayIn / input.customerSellRate)
+  const bps = input.processingFeeBps ?? 100
+  const usdCredit = roundUsdc(neededOmnibus / (1 + bps / 10_000))
+  return computeYcFundBalanceEstimatedTotalLocalPayIn({
+    usdCredit,
+    customerSellRate: input.customerSellRate,
+    ycSellRate: input.ycSellRate,
+    processingFeeBps: input.processingFeeBps,
+    rail: input.rail,
+  })
+}
+
+/** Client/server amount-screen preview — principal at DB customer rate. */
 export function computeYcFundBalanceAmountPreview(input: {
   amountEntryMode: "usd" | "local"
   enteredAmount: number
@@ -690,27 +752,37 @@ export function computeYcFundBalanceAmountPreview(input: {
   if (!Number.isFinite(input.ycSellRate) || input.ycSellRate <= 0) return null
   if (!(input.enteredAmount > 0)) return null
 
-  const padded =
-    input.amountEntryMode === "usd"
-      ? computeYcFundBalancePricingBeforeReceive({
-          usdCredit: input.enteredAmount,
-          customerSellRate: input.customerSellRate,
-          ycSellRate: input.ycSellRate,
-          processingFeeBps: input.processingFeeBps,
-          rail: input.rail,
-        })
-      : computeYcFundBalancePricingBeforeReceive({
-          localPayIn: input.enteredAmount,
-          customerSellRate: input.customerSellRate,
-          ycSellRate: input.ycSellRate,
-          processingFeeBps: input.processingFeeBps,
-          rail: input.rail,
-        })
+  try {
+    const estimated =
+      input.amountEntryMode === "usd"
+        ? computeYcFundBalanceEstimatedTotalLocalPayIn({
+            usdCredit: input.enteredAmount,
+            customerSellRate: input.customerSellRate,
+            ycSellRate: input.ycSellRate,
+            processingFeeBps: input.processingFeeBps,
+            rail: input.rail,
+          })
+        : computeYcFundBalanceEstimatedTotalLocalPayIn({
+            localPayIn: input.enteredAmount,
+            customerSellRate: input.customerSellRate,
+            ycSellRate: input.ycSellRate,
+            processingFeeBps: input.processingFeeBps,
+            rail: input.rail,
+          })
 
-  return {
-    usdCredit: padded.usdCredit,
-    localPayIn: padded.localPayIn,
-    feeInclusive: true,
+    const principalLocal =
+      input.amountEntryMode === "usd"
+        ? roundLocal(input.enteredAmount * input.customerSellRate)
+        : roundLocal(input.enteredAmount)
+
+    return {
+      usdCredit: estimated.usdCredit,
+      localPayIn: principalLocal,
+      estimatedTotalLocalPayIn: estimated.localPayIn,
+      feeInclusive: false,
+    }
+  } catch {
+    return null
   }
 }
 
@@ -906,4 +978,23 @@ export function computeYcCrossBorderPricingBeforeReceive(input: {
       ycSellFrom: input.ycSellFrom,
     }),
   }
+}
+
+/**
+ * Cross-border confirm: YC locked local pay-in is authoritative.
+ * Submit padding may lock above repriced model — only reject underpayment.
+ */
+export function alignYcCrossBorderLockedLocalPayIn(input: {
+  pricingLocalPayIn: number
+  ycLockedLocalPayIn: number
+}): number {
+  const locked = roundLocal(input.ycLockedLocalPayIn)
+  const quoted = roundLocal(input.pricingLocalPayIn)
+  if (!(locked > 0)) {
+    throw new Error("yc_locked_local_pay_in_invalid")
+  }
+  if (locked + 0.01 < quoted) {
+    throw new Error(`yc_pay_in_mismatch: YC locked ${locked} < quoted ${quoted}`)
+  }
+  return locked
 }

@@ -61,7 +61,7 @@ describe("createFundBalanceDraft", () => {
     vi.mocked(listYcRates).mockResolvedValue([])
     vi.mocked(findYcPayInLeg).mockReturnValue({
       easner_sell: 1500,
-      yc_sell: 1400,
+      yc_buy: 1400,
     } as never)
     vi.mocked(isYcLocalPayInEnabledForCorridor).mockResolvedValue(true)
     vi.mocked(listYellowcardChannels).mockResolvedValue([])

@@ -17,9 +17,6 @@ import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
 import {
   ensurePayInNetworksCached,
   readCachedPayInNetworks,
-  ensureFundBalanceOrderConfirmed,
-  isCompleteFundBalanceQuote,
-  peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -93,43 +90,23 @@ export function YcFundBalanceMomoSetup({
   const momoReady = Boolean(phone.trim() && networkId)
   const selectedNetwork = networks.find((n) => n.id === networkId)
 
-  const onContinue = async () => {
+  const onContinue = () => {
     if (!momoReady || isContinueLoading) return
     setContinueError(null)
-    setIsContinueLoading(true)
-    try {
-      const quoteMeta = {
-        country: residenceCountry,
-        currency: localPayInCurrency,
-        rail: 'mobile_money' as const,
-        amountEntryMode,
-        enteredAmount,
-        sourcePhone: phone.trim(),
-        networkId,
-        sourceNetworkName: selectedNetwork?.name,
-      }
-      const quote = await ensureFundBalanceOrderConfirmed(quoteMeta)
-      if (!isCompleteFundBalanceQuote(quote)) {
-        setContinueError(peekLastFundBalanceQuoteError() || 'Could not lock deposit details. Try again.')
-        return
-      }
-      haptics.medium()
-      navigation.navigate('ReceiveLocalReview' as never, {
-        localPayInCurrency,
-        residenceCountry,
-        payInRail: 'mobile_money',
-        amountEntryMode,
-        enteredAmount,
-        usdCredit,
-        localPayIn,
-        customerRate,
-        sourcePhone: phone.trim(),
-        networkId,
-        sourceNetworkName: selectedNetwork?.name,
-      } as never)
-    } finally {
-      setIsContinueLoading(false)
-    }
+    haptics.medium()
+    navigation.navigate('ReceiveLocalReview' as never, {
+      localPayInCurrency,
+      residenceCountry,
+      payInRail: 'mobile_money',
+      amountEntryMode,
+      enteredAmount,
+      usdCredit,
+      localPayIn,
+      customerRate,
+      sourcePhone: phone.trim(),
+      networkId,
+      sourceNetworkName: selectedNetwork?.name,
+    } as never)
   }
 
   return (

@@ -22,6 +22,7 @@ import {
   inferYcReceiveLegFeesUsd,
   bumpYcFundBalanceLocalPayInForOmnibusShortfall,
   bumpYcCrossBorderLocalPayInForOmnibusShortfall,
+  alignYcCrossBorderLockedLocalPayIn,
   resolveYcFundBalanceSubmitLocalPayIn,
   YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
   YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
@@ -101,7 +102,21 @@ describe("computeYcFundBalancePricing", () => {
 })
 
 describe("computeYcFundBalanceAmountPreview", () => {
-  it("pads local pay-in above credit-only preview for USD entry", () => {
+  it("returns principal at customer rate for USD entry (fees on review)", () => {
+    const preview = computeYcFundBalanceAmountPreview({
+      amountEntryMode: "usd",
+      enteredAmount: 1.79,
+      customerSellRate: 1396.98,
+      ycSellRate: 1390,
+      rail: "bank_transfer",
+    })
+    expect(preview).not.toBeNull()
+    expect(preview!.localPayIn).toBeCloseTo(1.79 * 1396.98, 0)
+    expect(preview!.estimatedTotalLocalPayIn).toBeGreaterThan(preview!.localPayIn)
+    expect(preview!.feeInclusive).toBe(false)
+  })
+
+  it("pads estimated total above principal for USD entry", () => {
     const unpadded = computeYcFundBalancePricing({
       usdCredit: 2550,
       customerSellRate: 132.5,
@@ -116,21 +131,11 @@ describe("computeYcFundBalanceAmountPreview", () => {
       rail: "bank_transfer",
     })
     expect(preview).not.toBeNull()
-    expect(preview!.localPayIn).toBeGreaterThan(unpadded.localPayIn)
-    expect(preview!.localPayIn).toBeGreaterThanOrEqual(
-      resolveYcFundBalanceSubmitLocalPayIn({
-        pricing: computeYcFundBalancePricingBeforeReceive({
-          usdCredit: 2550,
-          customerSellRate: 132.5,
-          ycSellRate: 130,
-          rail: "bank_transfer",
-        }),
-        customerSellRate: 132.5,
-      }),
-    )
+    expect(preview!.localPayIn).toBeCloseTo(2550 * 132.5, 0)
+    expect(preview!.estimatedTotalLocalPayIn).toBeGreaterThan(unpadded.localPayIn)
   })
 
-  it("pads local entry above entered local amount", () => {
+  it("pads estimated total above entered local principal", () => {
     const preview = computeYcFundBalanceAmountPreview({
       amountEntryMode: "local",
       enteredAmount: 341254,
@@ -139,7 +144,20 @@ describe("computeYcFundBalanceAmountPreview", () => {
       rail: "bank_transfer",
     })
     expect(preview).not.toBeNull()
-    expect(preview!.localPayIn).toBeGreaterThan(341254)
+    expect(preview!.localPayIn).toBe(341254)
+    expect(preview!.estimatedTotalLocalPayIn).toBeGreaterThan(341254)
+  })
+})
+
+describe("bumpYcFundBalanceLocalPayInForOmnibusShortfall", () => {
+  it("adds local pay-in for omnibus shortfall", () => {
+    const bumped = bumpYcFundBalanceLocalPayInForOmnibusShortfall({
+      localPayIn: 133825,
+      customerSellRate: 132.5,
+      requiredOmnibus: 1010,
+      cryptoAmount: 986.9886349,
+    })
+    expect(bumped).toBeGreaterThan(133825)
   })
 })
 
@@ -174,6 +192,28 @@ describe("computeYcFundBalancePricingBeforeReceive", () => {
     })
     expect(padded.localPayIn).toBeGreaterThan(unpadded.localPayIn)
     expect(padded.usdCredit).toBe(1000)
+  })
+
+  it("adds pct-only solve buffer above fee-padded pay-in", () => {
+    const padded = computeYcFundBalancePricingBeforeReceive({
+      usdCredit: 1200,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+    })
+    const feeOnly = computeYcFundBalancePricing({
+      usdCredit: 1200,
+      customerSellRate: 132.5,
+      ycSellRate: 130,
+      receiveLeg: {
+        cryptoAmountUsd: 0,
+        networkFeeAmountUsd: padded.ycLegFeesUsd,
+        serviceFeeAmountUsd: 0,
+      },
+    })
+    const neededOmnibus = 1200 + padded.processingFee
+    const expectedBufferLocal = Math.ceil(neededOmnibus * 0.005 * 132.5 * 100) / 100
+    expect(padded.localPayIn).toBeGreaterThan(feeOnly.localPayIn)
+    expect(padded.localPayIn - feeOnly.localPayIn).toBeCloseTo(expectedBufferLocal, 0)
   })
 })
 
@@ -215,37 +255,32 @@ describe("resolveYcFundBalanceSubmitLocalPayIn", () => {
   })
 })
 
-describe("bumpYcFundBalanceLocalPayInForOmnibusShortfall", () => {
-  it("adds local pay-in for omnibus shortfall", () => {
-    const bumped = bumpYcFundBalanceLocalPayInForOmnibusShortfall({
-      localPayIn: 133825,
-      customerSellRate: 132.5,
-      requiredOmnibus: 1010,
-      cryptoAmount: 986.9886349,
-    })
-    expect(bumped).toBeGreaterThan(133825)
+describe("alignYcCrossBorderLockedLocalPayIn", () => {
+  it("accepts YC locked above repriced model (submit padding)", () => {
+    expect(
+      alignYcCrossBorderLockedLocalPayIn({
+        pricingLocalPayIn: 109057,
+        ycLockedLocalPayIn: 110673,
+      }),
+    ).toBe(110673)
   })
 
-  it("beforeReceive adds solve buffer above fee-padded pay-in", () => {
-    const padded = computeYcFundBalancePricingBeforeReceive({
-      usdCredit: 1200,
-      customerSellRate: 132.5,
-      ycSellRate: 130,
-    })
-    const feeOnly = computeYcFundBalancePricing({
-      usdCredit: 1200,
-      customerSellRate: 132.5,
-      ycSellRate: 130,
-      receiveLeg: {
-        cryptoAmountUsd: 0,
-        networkFeeAmountUsd: padded.ycLegFeesUsd,
-        serviceFeeAmountUsd: 0,
-      },
-    })
-    expect(padded.localPayIn).toBeGreaterThan(feeOnly.localPayIn)
-    expect(padded.localPayIn - feeOnly.localPayIn).toBeGreaterThanOrEqual(
-      YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC * 132.5 - 0.01,
-    )
+  it("accepts exact match", () => {
+    expect(
+      alignYcCrossBorderLockedLocalPayIn({
+        pricingLocalPayIn: 109057.2,
+        ycLockedLocalPayIn: 109057.25,
+      }),
+    ).toBe(109057.25)
+  })
+
+  it("rejects underpayment vs quoted model", () => {
+    expect(() =>
+      alignYcCrossBorderLockedLocalPayIn({
+        pricingLocalPayIn: 110673,
+        ycLockedLocalPayIn: 109057,
+      }),
+    ).toThrow(/yc_pay_in_mismatch/)
   })
 })
 

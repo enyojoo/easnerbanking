@@ -28,32 +28,32 @@ const sample: YcRateRow[] = [
   row({
     from_currency: "USD",
     to_currency: "NGN",
-    rate: 1492.5,
+    rate: 1512.4,
     yc_buy: 1500,
-    easner_buy: 1492.5,
+    easner_sell: 1507.53819,
     yc_sell: 1520,
-    easner_sell: 1527.63819,
+    easner_buy: 1512.4,
   }),
   row({
     from_currency: "NGN",
     to_currency: "USDC",
-    rate: 1527.63819,
+    rate: 1507.53819,
     yc_buy: 1500,
-    easner_buy: 1492.5,
+    easner_sell: 1507.53819,
     yc_sell: 1520,
-    easner_sell: 1527.63819,
+    easner_buy: 1512.4,
   }),
   row({
     from_currency: "NGN",
     to_currency: "KES",
-    rate: 0.085,
-    yc_cross_mid: 0.0854,
+    rate: 0.08756,
+    yc_cross_mid: 132 / 1500,
   }),
 ]
 
 describe("findYcBalancePayoutRate", () => {
   it("returns USD → receiveFiat only", () => {
-    expect(findYcBalancePayoutRate(sample, "NGN")?.rate).toBe(1492.5)
+    expect(findYcBalancePayoutRate(sample, "NGN")?.rate).toBe(1512.4)
   })
 
   it("does not fall back to local → USDC", () => {
@@ -64,7 +64,7 @@ describe("findYcBalancePayoutRate", () => {
 
 describe("findYcPayInLeg", () => {
   it("returns local → USDC when easner_sell present", () => {
-    expect(findYcPayInLeg(sample, "NGN")?.easner_sell).toBe(1527.63819)
+    expect(findYcPayInLeg(sample, "NGN")?.easner_sell).toBe(1507.53819)
   })
 
   it("returns null when easner_sell missing", () => {
@@ -82,7 +82,7 @@ describe("findYcPayInLeg", () => {
 
 describe("findYcCrossRate", () => {
   it("finds fiat cross row", () => {
-    expect(findYcCrossRate(sample, "NGN", "KES")?.rate).toBe(0.085)
+    expect(findYcCrossRate(sample, "NGN", "KES")?.rate).toBe(0.08756)
   })
 
   it("returns null for missing cross", () => {

@@ -55,8 +55,8 @@ describe("syncYcRatesToSupabase", () => {
     }>
     const keys = rows.map((r) => `${r.from_currency}_${r.to_currency}`).sort()
     expect(keys).toEqual(["NGN_USDC", "USD_NGN"])
-    expect(rows.find((r) => r.from_currency === "USD")?.rate).toBeLessThan(1500)
-    expect(rows.find((r) => r.to_currency === "USDC")?.rate).toBeGreaterThan(1520)
+    expect(rows.find((r) => r.from_currency === "USD")?.rate).toBeCloseTo(1520 * 0.995, 5)
+    expect(rows.find((r) => r.to_currency === "USDC")?.rate).toBeCloseTo(1500 / 0.995, 5)
     expect(result.updated).toBe(2)
     expect(result.pruned).toBeGreaterThanOrEqual(2)
   })

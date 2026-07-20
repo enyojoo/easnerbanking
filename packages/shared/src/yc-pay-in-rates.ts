@@ -29,7 +29,10 @@ export function resolveYcPayInCustomerRate(
   return null
 }
 
-/** Provider yc_sell on local→USDC leg (for YC fee estimates before POST /receive). */
+/**
+ * YC provider pay-in rate on local→USDC (POST /receive locks yc_buy).
+ * Kept as resolveYcPayInYcSellRate for call-site compatibility.
+ */
 export function resolveYcPayInYcSellRate(
   rates: readonly YcRateClientRow[],
   localFiat: string,
@@ -37,7 +40,7 @@ export function resolveYcPayInYcSellRate(
   const from = localFiat.trim().toUpperCase()
   if (!from) return null
   const row = rates.find((r) => r.from_currency === from && r.to_currency === "USDC")
-  const sell = row?.yc_sell
-  if (sell != null && Number.isFinite(sell) && sell > 0) return sell
+  const buy = row?.yc_buy
+  if (buy != null && Number.isFinite(buy) && buy > 0) return buy
   return null
 }

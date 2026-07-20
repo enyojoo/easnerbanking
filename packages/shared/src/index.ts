@@ -607,6 +607,8 @@ export type {
 } from "./ng-local-verification"
 export {
   YC_QUOTE_TTL_MS,
+  resolveYcQuoteTtlMs,
+  resolveYcQuoteExpiresAt,
   buildYcCrossBorderDisplayFees,
   buildYcDisplayQuote,
   buildYcFundBalanceDisplayFees,
@@ -640,6 +642,7 @@ export {
   bumpYcCrossBorderLocalPayInForOmnibusShortfall,
   resolveYcFundBalanceSubmitLocalPayIn,
   resolveYcCrossBorderSubmitLocalPayIn,
+  alignYcCrossBorderLockedLocalPayIn,
   computeYcFundBalanceSendExactlyLocal,
   easnerFeeLocalFromUsdCredit,
   ycLegFeesLocal,

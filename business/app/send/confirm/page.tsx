@@ -44,9 +44,13 @@ import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import { residenceCountryFromPayInCurrency } from "@/hooks/use-yc-cross-border-flow"
 import {
   crossBorderQuoteToFlowState,
-  ensureCrossBorderOrderConfirmed,
+  confirmCrossBorderLeg1,
+  ensureCrossBorderLeg2Locked,
+  fetchCrossBorderQuotePreview,
   isCompleteCrossBorderQuote,
+  isCrossBorderLeg2Locked,
   isStashedCrossBorderQuoteFresh,
+  peekCrossBorderLeg2DraftId,
   peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
   type CrossBorderQuoteStashMeta,
@@ -291,10 +295,39 @@ export default function SendConfirmPage() {
     setYcQuoteLoading(true)
     void (async () => {
       try {
-        const quote = await ensureCrossBorderOrderConfirmed(meta)
+        void fetchCrossBorderQuotePreview(meta)
+          .then((preview) => {
+            if (cancelled || !preview?.ok) return
+            const ycPreview = crossBorderQuoteToFlowState(preview, meta)
+            const previewState: SendFlowState = {
+              ...state,
+              sendAmount: ycPreview.localPayIn,
+              sendCurrency: payInCurrency,
+              totalAmount: ycPreview.localPayIn,
+              ycCrossBorder: ycPreview,
+            }
+            setState(previewState)
+            sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(previewState))
+          })
+          .catch(() => {})
+        const quote = await ensureCrossBorderLeg2Locked(meta)
         if (cancelled) return
-        if (!isCompleteCrossBorderQuote(quote)) {
-          setYcQuoteError(peekLastCrossBorderQuoteError() || "Cross-border confirm failed")
+        if (!quote || !isCrossBorderLeg2Locked(quote, quote.leg2DraftId ?? peekCrossBorderLeg2DraftId())) {
+          setYcQuoteError(peekLastCrossBorderQuoteError() || "Cross-border leg2 lock failed")
+          return
+        }
+        if (isCompleteCrossBorderQuote(quote)) {
+          const yc = crossBorderQuoteToFlowState(quote, meta)
+          const next: SendFlowState = {
+            ...state,
+            sendAmount: yc.localPayIn,
+            sendCurrency: payInCurrency,
+            totalAmount: yc.localPayIn,
+            transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
+            ycCrossBorder: yc,
+          }
+          setState(next)
+          sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
           return
         }
         const yc = crossBorderQuoteToFlowState(quote, meta)
@@ -303,7 +336,6 @@ export default function SendConfirmPage() {
           sendAmount: yc.localPayIn,
           sendCurrency: payInCurrency,
           totalAmount: yc.localPayIn,
-          transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
           ycCrossBorder: yc,
         }
         setState(next)
@@ -493,10 +525,39 @@ export default function SendConfirmPage() {
     setYcQuoteLoading(true)
     void (async () => {
       try {
-        const quote = await ensureCrossBorderOrderConfirmed(meta)
+        void fetchCrossBorderQuotePreview(meta)
+          .then((preview) => {
+            if (cancelled || !preview?.ok) return
+            const ycPreview = crossBorderQuoteToFlowState(preview, meta)
+            const previewState: SendFlowState = {
+              ...state,
+              sendAmount: ycPreview.localPayIn,
+              sendCurrency: payInCurrency,
+              totalAmount: ycPreview.localPayIn,
+              ycCrossBorder: ycPreview,
+            }
+            setState(previewState)
+            sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(previewState))
+          })
+          .catch(() => {})
+        const quote = await ensureCrossBorderLeg2Locked(meta)
         if (cancelled) return
-        if (!isCompleteCrossBorderQuote(quote)) {
-          setYcQuoteError(peekLastCrossBorderQuoteError() || "Cross-border confirm failed")
+        if (!quote || !isCrossBorderLeg2Locked(quote, quote.leg2DraftId ?? peekCrossBorderLeg2DraftId())) {
+          setYcQuoteError(peekLastCrossBorderQuoteError() || "Cross-border leg2 lock failed")
+          return
+        }
+        if (isCompleteCrossBorderQuote(quote)) {
+          const yc = crossBorderQuoteToFlowState(quote, meta)
+          const next: SendFlowState = {
+            ...state,
+            sendAmount: yc.localPayIn,
+            sendCurrency: payInCurrency,
+            totalAmount: yc.localPayIn,
+            transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
+            ycCrossBorder: yc,
+          }
+          setState(next)
+          sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
           return
         }
         const yc = crossBorderQuoteToFlowState(quote, meta)
@@ -505,7 +566,6 @@ export default function SendConfirmPage() {
           sendAmount: yc.localPayIn,
           sendCurrency: payInCurrency,
           totalAmount: yc.localPayIn,
-          transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
           ycCrossBorder: yc,
         }
         setState(next)
@@ -556,9 +616,57 @@ export default function SendConfirmPage() {
         }
       }
       if (!state.ycCrossBorder?.transferId) {
-        setAuthorizeError(
-          peekLastCrossBorderQuoteError() || "Order not locked yet. Wait for review to load, then try again.",
-        )
+        const payInCurrency = state.otherCurrency!.toUpperCase()
+        const payInCountry = residenceCountryFromPayInCurrency(payInCurrency)
+        if (!payInCountry) {
+          setAuthorizeError("Pay-in country could not be resolved.")
+          return
+        }
+        const meta: CrossBorderQuoteStashMeta = {
+          recipientId: state.recipient.id,
+          payInCurrency,
+          payInCountry,
+          payInRail,
+          receiveAmount: state.amount,
+          ...(payInRail === "mobile_money" && state.ycMomoSetup
+            ? {
+                sourcePhone: state.ycMomoSetup.sourcePhone,
+                networkId: state.ycMomoSetup.networkId,
+                sourceNetworkName: state.ycMomoSetup.sourceNetworkName,
+              }
+            : {}),
+        }
+        const leg2DraftId = peekCrossBorderLeg2DraftId()
+        if (!leg2DraftId) {
+          setAuthorizeError(
+            peekLastCrossBorderQuoteError() || "Order not locked yet. Wait for review to load, then try again.",
+          )
+          return
+        }
+        setIsAuthorizing(true)
+        try {
+          const quote = await confirmCrossBorderLeg1(meta, leg2DraftId)
+          if (!isCompleteCrossBorderQuote(quote)) {
+            setAuthorizeError(peekLastCrossBorderQuoteError() || "Cross-border confirm failed")
+            return
+          }
+          const yc = crossBorderQuoteToFlowState(quote, meta)
+          const next: SendFlowState = {
+            ...state,
+            sendAmount: yc.localPayIn,
+            sendCurrency: payInCurrency,
+            totalAmount: yc.localPayIn,
+            transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
+            ycCrossBorder: yc,
+          }
+          setState(next)
+          sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
+          router.push("/send/authorize/yc-pay-in")
+        } catch (e) {
+          setAuthorizeError(e instanceof Error ? e.message : "Cross-border confirm failed")
+        } finally {
+          setIsAuthorizing(false)
+        }
         return
       }
       sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(state))
@@ -869,11 +977,18 @@ export default function SendConfirmPage() {
   const pq = state.payoutQuote
   const wq = state.walletQuote
   const yc = state.ycCrossBorder
-  const ycQuoteLocked = Boolean(
+  const ycQuoteFullyLocked = Boolean(
     yc?.transferId && yc.localPayIn > 0 && yc.customerRate > 0,
   )
+  const ycLeg2Ready = Boolean(
+    yc?.localPayIn &&
+      yc.localPayIn > 0 &&
+      yc.customerRate > 0 &&
+      (ycQuoteFullyLocked || Boolean(peekCrossBorderLeg2DraftId())),
+  )
+  const ycQuoteLocked = ycLeg2Ready
   const quoteReady = isYcCrossBorder
-    ? ycQuoteLocked
+    ? ycLeg2Ready
     : easenetSend ||
       (walletSend
         ? isWalletQuoteFresh(wq, state.amount, state.recipient.id) && !walletQuoteLoading

@@ -70,20 +70,7 @@ import {
 } from "@/lib/yc-local-deposit-cache"
 import {
   clearCrossBorderQuote,
-  crossBorderQuoteToFlowState,
-  ensureCrossBorderOrderConfirmed,
-  isCompleteCrossBorderQuote,
-  peekLastCrossBorderQuoteError,
-  type CrossBorderQuoteStashMeta,
 } from "@/lib/yc-cross-border-quote-cache"
-import {
-  ensurePayoutOrderConfirmed,
-  isCompletePayoutQuoteLocked,
-  isStashedPayoutQuoteFresh,
-  payoutQuoteToFlowState,
-  peekLastPayoutQuoteError,
-  type PayoutQuoteStashMeta,
-} from "@/lib/payout-quote-cache"
 import {
   ensureWalletSendOrderConfirmed,
   isStashedWalletQuoteFresh,
@@ -111,6 +98,7 @@ import {
 } from "@easner/shared"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
+import { warmYcMetadataCacheOnContinue } from "@/lib/yellowcard/warm-yc-metadata-cache"
 import { usePayoutMinEnforcement } from "@/hooks/use-payout-min-enforcement"
 import { useYcPayoutMinEnforcement } from "@/hooks/use-yc-payout-min-enforcement"
 import { useYcCrossBorderSendMinEnforcement } from "@/hooks/use-yc-cross-border-send-min-enforcement"
@@ -1083,6 +1071,14 @@ export default function SendPage() {
       }
     }
     setAmountFieldError(null)
+    warmYcMetadataCacheOnContinue(
+      showThroughLocalCurrency && otherCurrency
+        ? {
+            country: residenceCountryFromPayInCurrency(otherCurrency) ?? undefined,
+            currency: otherCurrency,
+          }
+        : undefined,
+    )
     payoutQuotePrefetchControls.flush()
     walletQuotePrefetchControls.flush()
     const isTlcSend = showThroughLocalCurrency && paymentMethod === "otherCurrency"
@@ -1093,18 +1089,6 @@ export default function SendPage() {
 
     const walletAmountEntryMode = isWalletRecipient ? ("receive" as const) : amountEntryMode
 
-    const payoutQuoteMeta: PayoutQuoteStashMeta | null =
-      needsPayoutQuoteBeforeConfirm && recipient?.id
-        ? {
-            recipientId: recipient.id,
-            amountEntryMode,
-            entryAmount: amountEntryMode === "send" ? sendAmount : receiveAmount,
-            receiveCurrency,
-            sourceBalanceCurrency: sendCurrency,
-            ...(note.trim() ? { note: note.trim() } : {}),
-            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-          }
-        : null
     const walletQuoteMeta: WalletQuoteStashMeta | null =
       needsWalletQuoteBeforeConfirm && recipient?.id
         ? {
@@ -1134,14 +1118,11 @@ export default function SendPage() {
       transactionId,
     }
     let flowState = state
-    const needsQuoteAwait = needsPayoutQuoteBeforeConfirm || needsWalletQuoteBeforeConfirm
+    const needsQuoteAwait = needsWalletQuoteBeforeConfirm
     const quoteAlreadyWarm =
-      (needsWalletQuoteBeforeConfirm &&
-        walletQuoteMeta &&
-        isStashedWalletQuoteFresh(walletQuoteMeta)) ||
-      (needsPayoutQuoteBeforeConfirm &&
-        payoutQuoteMeta &&
-        isStashedPayoutQuoteFresh(payoutQuoteMeta))
+      needsWalletQuoteBeforeConfirm &&
+      walletQuoteMeta &&
+      isStashedWalletQuoteFresh(walletQuoteMeta)
     if (
       (needsQuoteAwait && !quoteAlreadyWarm)
     ) {
@@ -1166,56 +1147,13 @@ export default function SendPage() {
             setAmountFieldError("Could not resolve pay-in country for bank transfer.")
             return
           }
-          const bankQuoteMeta: CrossBorderQuoteStashMeta = {
-            recipientId: recipient.id,
-            payInCurrency: otherCurrency,
-            payInCountry,
-            payInRail: "bank_transfer",
-            receiveAmount,
-          }
-          setIsContinuePending(true)
-          continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-          try {
-            const quote = await ensureCrossBorderOrderConfirmed(bankQuoteMeta)
-            if (!isCompleteCrossBorderQuote(quote)) {
-              setAmountFieldError(
-                peekLastCrossBorderQuoteError() || "Could not lock cross-border order. Try again.",
-              )
-              return
-            }
-            const yc = crossBorderQuoteToFlowState(quote, bankQuoteMeta)
-            flowState = {
-              ...state,
-              sendAmount: yc.localPayIn,
-              sendCurrency: otherCurrency.toUpperCase(),
-              totalAmount: yc.localPayIn,
-              transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
-              ycCrossBorder: yc,
-            }
-          } finally {
-            if (continueSpinnerTimerRef.current) {
-              clearTimeout(continueSpinnerTimerRef.current)
-              continueSpinnerTimerRef.current = null
-            }
-            setIsContinuePending(false)
-            setIsContinueLoading(false)
-          }
         }
         persistSendFlowState(flowState)
         router.push("/send/confirm")
         return
       }
 
-      if (needsPayoutQuoteBeforeConfirm && payoutQuoteMeta) {
-        const quote = await ensurePayoutOrderConfirmed(payoutQuoteMeta, businessId)
-        if (!isCompletePayoutQuoteLocked(quote)) {
-          setAmountFieldError(
-            peekLastPayoutQuoteError() || "Could not lock payout order. Try again.",
-          )
-          return
-        }
-        flowState = payoutQuoteToFlowState(state, quote)
-      } else if (needsWalletQuoteBeforeConfirm && walletQuoteMeta) {
+      if (needsWalletQuoteBeforeConfirm && walletQuoteMeta) {
         const quote = await ensureWalletSendOrderConfirmed(walletQuoteMeta, businessId)
         if (!quote?.formSessionId) {
           setAmountFieldError(

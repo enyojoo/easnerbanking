@@ -118,7 +118,12 @@ export function useYcFundBalanceFlow(input: {
 
   const preview = useMemo(() => {
     if (!customerRate || !ycSellRate || input.enteredAmount <= 0) {
-      return { usdCredit: 0, localPayIn: 0, forwardRate: customerRate ?? 1 }
+      return {
+        usdCredit: 0,
+        localPayIn: 0,
+        estimatedTotalLocalPayIn: 0,
+        forwardRate: customerRate ?? 1,
+      }
     }
     const padded = computeYcFundBalanceAmountPreview({
       amountEntryMode: input.amountEntryMode,
@@ -128,7 +133,12 @@ export function useYcFundBalanceFlow(input: {
       rail: input.rail,
     })
     if (!padded) {
-      return { usdCredit: 0, localPayIn: 0, forwardRate: customerRate }
+      return {
+        usdCredit: 0,
+        localPayIn: 0,
+        estimatedTotalLocalPayIn: 0,
+        forwardRate: customerRate,
+      }
     }
     return { ...padded, forwardRate: customerRate }
   }, [customerRate, ycSellRate, input.amountEntryMode, input.enteredAmount, input.rail])

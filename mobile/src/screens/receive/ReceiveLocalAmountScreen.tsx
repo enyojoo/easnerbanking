@@ -55,10 +55,7 @@ import SkeletonLoader from '../../components/SkeletonLoader'
 import { useToast } from '../../components/ToastProvider'
 import {
   clearFundBalanceQuote,
-  ensureFundBalanceOrderConfirmed,
   ensurePayInNetworksCached,
-  isCompleteFundBalanceQuote,
-  peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady } from '../../lib/warmYcLocalDepositCaches'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
@@ -131,12 +128,12 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     enteredAmount,
   })
 
-  const displayPreview = useMemo(() => {
-    if (ycFlow.preview.localPayIn > 0) {
-      return { ...ycFlow.preview, feeInclusive: true as const }
-    }
-    return { ...ycFlow.preview, feeInclusive: false as const }
-  }, [ycFlow.preview])
+  const displayPreview = useMemo(() => ycFlow.preview, [ycFlow.preview])
+
+  const previewLocalPayInForLimits =
+    displayPreview.estimatedTotalLocalPayIn > 0
+      ? displayPreview.estimatedTotalLocalPayIn
+      : displayPreview.localPayIn
 
   const { rails: receiveRails } = useYcReceiveRails({
     country: residenceCountry,
@@ -160,7 +157,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     return validateYcFundBalancePayInAmount({
       amountEntryMode,
       enteredAmount,
-      previewLocalPayIn: displayPreview.localPayIn,
+      previewLocalPayIn: previewLocalPayInForLimits,
       currency: localPayInCurrency,
       limits: payInLimits,
     })
@@ -172,6 +169,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     payInLimits,
     ycFlow.customerRate,
     displayPreview.localPayIn,
+    previewLocalPayInForLimits,
   ])
 
   const minEnforcementSeedKey =
@@ -314,40 +312,18 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       return
     }
 
-    setIsContinuePending(true)
-    continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-    try {
-      const quote = await ensureFundBalanceOrderConfirmed({
-        country: residenceCountry,
-        currency: localPayInCurrency,
-        rail: payInRail,
-        amountEntryMode,
-        enteredAmount,
-      })
-      if (!isCompleteFundBalanceQuote(quote)) {
-        showError(peekLastFundBalanceQuoteError() || 'Could not lock deposit details. Try again.')
-        return
-      }
-      navigation.navigate('ReceiveLocalReview' as never, {
-        localPayInCurrency,
-        residenceCountry,
-        payInRail,
-        amountEntryMode,
-        enteredAmount,
-        usdCredit: quote.usdCredit,
-        localPayIn: quote.localPayIn,
-        customerRate: quote.customerRate,
-      } as never)
-    } catch (e) {
-      showError(e instanceof Error ? e.message : 'Could not continue. Try again.')
-    } finally {
-      if (continueSpinnerTimerRef.current) {
-        clearTimeout(continueSpinnerTimerRef.current)
-        continueSpinnerTimerRef.current = null
-      }
-      setIsContinuePending(false)
-      setIsContinueLoading(false)
-    }
+    haptics.medium()
+    void ensurePayInNetworksCached(residenceCountry, localPayInCurrency).catch(() => {})
+    navigation.navigate('ReceiveLocalReview' as never, {
+      localPayInCurrency,
+      residenceCountry,
+      payInRail,
+      amountEntryMode,
+      enteredAmount,
+      usdCredit: displayPreview.usdCredit,
+      localPayIn: displayPreview.localPayIn,
+      customerRate: ycFlow.customerRate ?? 0,
+    } as never)
   }
 
   if (ngMissingType) {
@@ -393,7 +369,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
               amountLimitMessage={!amountLimitCheck.ok ? amountLimitCheck.message : null}
               previewLocalPayIn={displayPreview.localPayIn}
               previewUsdCredit={displayPreview.usdCredit}
-              customerRate={ycFlow.customerRate}
+              displayRate={ycFlow.customerRate}
+              feeInclusive={false}
               bankAvailable={bankAvailable}
               momoAvailable={momoAvailable}
               canContinue={canContinue}
@@ -465,9 +442,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
                       <ArrowUpDown size={13} color={colors.primary.main} strokeWidth={2.5} />
                       <Text style={styles.exchangeInfoText}>
                         {amountEntryMode === 'usd'
-                          ? displayPreview.feeInclusive
-                            ? `${REVIEW_ROW_LABELS.totalToPay}: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
-                            : `Paying: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
+                          ? `Paying: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
                           : `Receiving: ${formatMoneyDisplay(displayPreview.usdCredit, 'USD')}`}
                       </Text>
                     </Pressable>

@@ -168,8 +168,9 @@ export async function syncYcRatesToSupabase(options: {
       skippedPairs.push({ from_currency: ccy, to_currency: "USDC", reason: "not_in_corridor_allowlist" })
       continue
     }
-    const easnerBuy = applyYcCustomerBuy(input.yc_buy, margin)
-    const easnerSell = applyYcCustomerSell(input.yc_sell, margin)
+    // YC buy = pay-in (local→crypto); YC sell = payout (crypto→local).
+    const easnerBuy = applyYcCustomerBuy(input.yc_sell, margin)
+    const easnerSell = applyYcCustomerSell(input.yc_buy, margin)
     byCcy.set(ccy, {
       buy: input.yc_buy,
       sell: input.yc_sell,
@@ -221,7 +222,7 @@ export async function syncYcRatesToSupabase(options: {
       skippedPairs.push({ from_currency: from, to_currency: to, reason: "missing currency legs" })
       continue
     }
-    const { ycCrossMid, rate } = applyYcCustomerCrossRate(b.buy, a.sell, margin)
+    const { ycCrossMid, rate } = applyYcCustomerCrossRate(b.sell, a.buy, margin)
     pushLegRow(updates, existingByKey, nowIso, marginBps, {
       from_currency: from,
       to_currency: to,

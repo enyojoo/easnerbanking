@@ -5,9 +5,9 @@ export type YcPayInRail = "bank_transfer" | "mobile_money"
 
 export type CrossBorderQuoteResult = {
   ok: true
-  quotePhase?: "preview" | "locked"
+  quotePhase?: "preview" | "leg2_locked" | "locked"
   quoteKey?: string
-  requiresConfirm?: boolean
+  leg2DraftId?: string
   transferId?: string
   transactionId?: string
   easnerTransactionId?: string
@@ -43,9 +43,12 @@ export type CrossBorderQuoteStashMeta = {
 
 let stashed: CrossBorderQuoteResult | null = null
 let stashedMeta: CrossBorderQuoteStashMeta | null = null
+let stashedLeg2DraftId: string | null = null
 let lastQuoteError: string | null = null
 let inflightQuote: Promise<CrossBorderQuoteResult | null> | null = null
 let inflightQuoteKey = ""
+let inflightLeg2Lock: Promise<CrossBorderQuoteResult | null> | null = null
+let inflightLeg2LockKey = ""
 let inflightConfirm: Promise<CrossBorderQuoteResult | null> | null = null
 let inflightConfirmKey = ""
 
@@ -79,6 +82,17 @@ export function isUsableCrossBorderQuotePreview(
   )
 }
 
+/** Leg2 locked — review Continue can trigger leg1 confirm. */
+export function isCrossBorderLeg2Locked(
+  quote: CrossBorderQuoteResult | null | undefined,
+  leg2DraftId?: string | null,
+): boolean {
+  return Boolean(
+    isUsableCrossBorderQuotePreview(quote) &&
+      (quote.quotePhase === "leg2_locked" || Boolean(leg2DraftId?.trim())),
+  )
+}
+
 /** Locked order from `/confirm` — required before pay-in instructions finalize. */
 export function isCompleteCrossBorderQuote(
   quote: CrossBorderQuoteResult | null | undefined,
@@ -89,15 +103,33 @@ export function isCompleteCrossBorderQuote(
 export function stashCrossBorderQuote(
   quote: CrossBorderQuoteResult,
   meta: CrossBorderQuoteStashMeta,
+  leg2DraftId?: string | null,
 ): void {
   if (!isCompleteCrossBorderQuote(quote)) return
   stashed = quote
   stashedMeta = meta
+  stashedLeg2DraftId = leg2DraftId?.trim() || null
+  lastQuoteError = null
+}
+
+export function stashCrossBorderLeg2Lock(
+  quote: CrossBorderQuoteResult,
+  meta: CrossBorderQuoteStashMeta,
+  leg2DraftId: string,
+): void {
+  if (!isCrossBorderLeg2Locked(quote, leg2DraftId)) return
+  stashed = quote
+  stashedMeta = meta
+  stashedLeg2DraftId = leg2DraftId.trim()
   lastQuoteError = null
 }
 
 export function peekCrossBorderQuote(): CrossBorderQuoteResult | null {
   return stashed
+}
+
+export function peekCrossBorderLeg2DraftId(): string | null {
+  return stashedLeg2DraftId
 }
 
 export function peekLastCrossBorderQuoteError(): string | null {
@@ -107,6 +139,7 @@ export function peekLastCrossBorderQuoteError(): string | null {
 export function clearCrossBorderQuote(): void {
   stashed = null
   stashedMeta = null
+  stashedLeg2DraftId = null
   lastQuoteError = null
 }
 
@@ -116,7 +149,10 @@ export function isStashedCrossBorderQuoteFresh(meta: CrossBorderQuoteStashMeta):
   return quoteMetaKey(stashedMeta) === quoteMetaKey(meta)
 }
 
-function buildCrossBorderQuoteBody(meta: CrossBorderQuoteStashMeta): Record<string, unknown> {
+function buildCrossBorderQuoteBody(
+  meta: CrossBorderQuoteStashMeta,
+  extra?: { leg2DraftId?: string },
+): Record<string, unknown> {
   if (!meta.recipientId?.trim()) throw new Error("Recipient is required")
   if (!meta.payInCurrency?.trim() || !meta.payInCountry?.trim()) {
     throw new Error("Pay-in country could not be resolved")
@@ -140,6 +176,10 @@ function buildCrossBorderQuoteBody(meta: CrossBorderQuoteStashMeta): Record<stri
     if (meta.sourceNetworkName) body.sourceNetworkName = meta.sourceNetworkName
   }
 
+  if (extra?.leg2DraftId?.trim()) {
+    body.leg2DraftId = extra.leg2DraftId.trim()
+  }
+
   return body
 }
 
@@ -160,13 +200,51 @@ export async function fetchCrossBorderQuotePreview(
   return data
 }
 
-export async function confirmCrossBorderOrder(
+export async function lockCrossBorderLeg2(
   meta: CrossBorderQuoteStashMeta,
+): Promise<CrossBorderQuoteResult> {
+  const res = await fetchWithSession("/api/yellowcard/cross-border/lock-leg2", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildCrossBorderQuoteBody(meta)),
+  })
+  const data = (await res.json().catch(() => ({}))) as CrossBorderQuoteResult & {
+    error?: string
+  }
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Cross-border leg2 lock failed")
+  }
+  return data
+}
+
+export async function confirmCrossBorderLeg1(
+  meta: CrossBorderQuoteStashMeta,
+  leg2DraftId: string,
 ): Promise<CrossBorderQuoteResult> {
   const res = await fetchWithSession("/api/yellowcard/cross-border/confirm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildCrossBorderQuoteBody(meta)),
+    body: JSON.stringify(buildCrossBorderQuoteBody(meta, { leg2DraftId })),
+  })
+  const data = (await res.json().catch(() => ({}))) as CrossBorderQuoteResult & {
+    error?: string
+  }
+  if (!res.ok || !data.ok || !data.transferId) {
+    throw new Error(data.error || "Cross-border confirm failed")
+  }
+  return data
+}
+
+export async function confirmCrossBorderOrder(
+  meta: CrossBorderQuoteStashMeta,
+  leg2DraftId?: string,
+): Promise<CrossBorderQuoteResult> {
+  const res = await fetchWithSession("/api/yellowcard/cross-border/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      buildCrossBorderQuoteBody(meta, leg2DraftId ? { leg2DraftId } : undefined),
+    ),
   })
   const data = (await res.json().catch(() => ({}))) as CrossBorderQuoteResult & {
     error?: string
@@ -217,6 +295,47 @@ export async function ensureCrossBorderQuoteStashed(
   return inflightQuote
 }
 
+export async function ensureCrossBorderLeg2Locked(
+  meta: CrossBorderQuoteStashMeta,
+): Promise<CrossBorderQuoteResult | null> {
+  if (
+    isStashedCrossBorderQuoteFresh(meta) &&
+    isCrossBorderLeg2Locked(peekCrossBorderQuote(), peekCrossBorderLeg2DraftId())
+  ) {
+    return peekCrossBorderQuote()
+  }
+
+  const key = quoteMetaKey(meta)
+  if (inflightLeg2Lock && inflightLeg2LockKey === key) return inflightLeg2Lock
+
+  inflightLeg2LockKey = key
+  lastQuoteError = null
+  inflightLeg2Lock = lockCrossBorderLeg2(meta)
+    .then((quote) => {
+      if (quote.quotePhase === "locked" && isCompleteCrossBorderQuote(quote)) {
+        stashCrossBorderQuote(quote, meta, quote.leg2DraftId)
+        return quote
+      }
+      const leg2DraftId = quote.leg2DraftId?.trim()
+      if (!leg2DraftId || !isCrossBorderLeg2Locked(quote, leg2DraftId)) {
+        lastQuoteError = "Incomplete cross-border leg2 lock response."
+        return null
+      }
+      stashCrossBorderLeg2Lock(quote, meta, leg2DraftId)
+      return quote
+    })
+    .catch((err) => {
+      lastQuoteError = err instanceof Error ? err.message : "leg2_lock_failed"
+      return null
+    })
+    .finally(() => {
+      inflightLeg2Lock = null
+      inflightLeg2LockKey = ""
+    })
+
+  return inflightLeg2Lock
+}
+
 export async function ensureCrossBorderOrderConfirmed(
   meta: CrossBorderQuoteStashMeta,
 ): Promise<CrossBorderQuoteResult | null> {
@@ -229,15 +348,25 @@ export async function ensureCrossBorderOrderConfirmed(
 
   inflightConfirmKey = key
   lastQuoteError = null
-  inflightConfirm = confirmCrossBorderOrder(meta)
-    .then((quote) => {
-      if (!isCompleteCrossBorderQuote(quote)) {
-        lastQuoteError = "Incomplete cross-border confirm response."
-        return null
-      }
-      stashCrossBorderQuote(quote, meta)
-      return quote
-    })
+  inflightConfirm = (async () => {
+    if (!peekCrossBorderLeg2DraftId()) {
+      const leg2 = await ensureCrossBorderLeg2Locked(meta)
+      if (!leg2) return null
+      if (isCompleteCrossBorderQuote(leg2)) return leg2
+    }
+    const draftId = peekCrossBorderLeg2DraftId()
+    if (!draftId) {
+      lastQuoteError = "Cross-border leg2 session missing."
+      return null
+    }
+    const quote = await confirmCrossBorderLeg1(meta, draftId)
+    if (!isCompleteCrossBorderQuote(quote)) {
+      lastQuoteError = "Incomplete cross-border confirm response."
+      return null
+    }
+    stashCrossBorderQuote(quote, meta, draftId)
+    return quote
+  })()
     .catch((err) => {
       lastQuoteError = err instanceof Error ? err.message : "confirm_failed"
       return null

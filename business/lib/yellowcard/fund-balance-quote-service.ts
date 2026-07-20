@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
-  YC_QUOTE_TTL_MS,
+  resolveYcQuoteExpiresAt,
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
   YC_FUND_BALANCE_RECEIVE_MAX_ATTEMPTS,
   buildYcFundBalanceDepositReviewSnapshot,
@@ -89,7 +89,7 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
   ])
 
   const leg = findYcPayInLeg(rates, currency)
-  if (!leg?.easner_sell || !leg.yc_sell) {
+  if (!leg?.easner_sell || !leg.yc_buy) {
     throw new FundBalanceQuoteServiceError(
       "yc_rate_unavailable",
       "YC rate unavailable for currency",
@@ -165,7 +165,7 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
   }
 
   const customerSellRate = Number(leg.easner_sell)
-  const ycSellRate = Number(leg.yc_sell)
+  const ycSellRate = Number(leg.yc_buy)
 
   const provisional = computeYcFundBalancePricingBeforeReceive({
     usdCredit: ctx.usdCredit,
@@ -262,7 +262,7 @@ function computeFundBalancePricingFromReceive(input: {
     ? computeYcFundBalancePricing({
         usdCredit: input.prepared.provisional.usdCredit,
         customerSellRate: input.prepared.customerRate,
-        ycSellRate: Number(input.prepared.leg.yc_sell),
+        ycSellRate: Number(input.prepared.leg.yc_buy),
         receiveLeg,
       })
     : computeYcFundBalancePricing({
@@ -270,7 +270,7 @@ function computeFundBalancePricingFromReceive(input: {
           input.receiveRes.localAmount ?? input.prepared.provisional.localPayIn,
         ),
         customerSellRate: input.prepared.customerRate,
-        ycSellRate: Number(input.prepared.leg.yc_sell),
+        ycSellRate: Number(input.prepared.leg.yc_buy),
         receiveLeg,
       })
 }
@@ -393,7 +393,7 @@ function formatFundBalanceTransferResponse(input: {
   sourceNetworkName?: string
   sequenceId?: string
 }) {
-  const expiresAt = String(input.transfer.expires_at ?? new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString())
+  const expiresAt = String(input.transfer.expires_at ?? resolveYcQuoteExpiresAt())
   const bankInfo = (input.transfer.bank_info as Record<string, unknown> | null) ?? null
   const summary = buildFundBalanceQuoteSummary({
     pricing: input.pricing,
@@ -422,7 +422,7 @@ function formatFundBalanceTransferResponse(input: {
 /** Indicative pricing only — no YC API calls, no DB rows. */
 export async function previewFundBalanceQuote(ctx: FundBalanceQuoteInput) {
   const prepared = await prepareFundBalanceQuote(ctx)
-  const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
+  const expiresAt = resolveYcQuoteExpiresAt()
 
   const summary = buildFundBalanceQuoteSummary({
     pricing: prepared.provisional,
@@ -491,7 +491,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
         usdCredit: Number(existing.quoted_receive ?? meta.usd_credit ?? 0),
         localPayIn: Number(existing.quoted_pay_in ?? 0),
         customerSellRate: prepared.customerRate,
-        ycSellRate: Number(prepared.leg.yc_sell),
+        ycSellRate: Number(prepared.leg.yc_buy),
         receiveLeg: { cryptoAmountUsd: 0 },
       }),
       currency: ctx.currency,
@@ -511,7 +511,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
   const lockedLocalPayIn = Number(receiveRes.localAmount ?? pricing.localPayIn)
   const omnibusInExpected = Number(receiveRes.settlementInfo?.cryptoAmount ?? pricing.omnibusInUsd)
 
-  const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
+  const expiresAt = resolveYcQuoteExpiresAt()
   const easnerTransactionId = generateTransactionId()
   const startedAt = new Date().toISOString()
   const residenceCountry = String(ctx.userRow?.residence_country ?? ctx.country).trim().toUpperCase()

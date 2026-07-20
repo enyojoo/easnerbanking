@@ -2,13 +2,9 @@ import { NextResponse } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { confirmCrossBorderTransfer } from "@/lib/yellowcard/cross-border-orchestrator"
+import { lockCrossBorderLeg2 } from "@/lib/yellowcard/cross-border-orchestrator"
 import { expireStaleYcPayInTransfers } from "@/lib/yellowcard/quote-key"
-import {
-  ycPayInInstructionNotice,
-  normalizeYcMomoPhone,
-  parseYcReceiveRejectedMinError,
-} from "@easner/shared"
+import { normalizeYcMomoPhone } from "@easner/shared"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
 import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
@@ -19,17 +15,17 @@ import {
 
 export const runtime = "nodejs"
 
-function crossBorderQuoteError(
+function crossBorderLockError(
   code: string,
   error: string,
   status: number,
   extra?: Record<string, unknown>,
 ) {
-  console.warn("[yc-cross-border-confirm]", { code, error, ...extra })
+  console.warn("[yc-cross-border-lock-leg2]", { code, error, ...extra })
   return NextResponse.json({ error, code, ...extra }, { status })
 }
 
-/** Lock YC legs + create ledger rows after user confirms review. */
+/** Lock cross-border leg2 (destination send) for review-screen background fetch. */
 export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
@@ -57,7 +53,6 @@ export async function POST(request: Request) {
     sourcePhone?: string
     networkId?: string
     sourceNetworkName?: string
-    leg2DraftId?: string
   } | null
 
   const recipientId = body?.recipientId?.trim()
@@ -65,7 +60,7 @@ export async function POST(request: Request) {
   const payInCurrency = String(body?.payInCurrency ?? "").trim().toUpperCase()
   const payInCountry = String(body?.payInCountry ?? "").trim().toUpperCase()
   if (!recipientId || !(receiveAmount > 0) || !payInCurrency || !payInCountry) {
-    return crossBorderQuoteError(
+    return crossBorderLockError(
       "recipient_required",
       "recipientId, receiveAmount, payInCurrency, payInCountry required",
       400,
@@ -90,7 +85,7 @@ export async function POST(request: Request) {
     .eq("user_id", kycUserId)
     .maybeSingle()
   if (!recipient) {
-    return crossBorderQuoteError("recipient_not_found", "Recipient not found", 404)
+    return crossBorderLockError("recipient_not_found", "Recipient not found", 404)
   }
 
   const { data: userRow } = await admin
@@ -131,75 +126,40 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await confirmCrossBorderTransfer(
-      {
-        admin,
-        userId: kycUserId,
-        businessId,
-        customerUID: kycUserId,
-        payInCurrency,
-        payInCountry,
-        payInRail,
-        receiveAmount,
-        recipient: recipient as RecipientSellPrepareRow,
-        sourcePhone: payInRail === "mobile_money"
-          ? normalizeYcMomoPhone(String(body?.sourcePhone ?? "").trim(), payInCountry)
-          : body?.sourcePhone,
-        sourceNetworkId: body?.networkId,
-        sourceNetworkName: body?.sourceNetworkName,
-        senderProfile: {
-          residenceCountry: userRow?.residence_country ?? payInCountry,
-          kycIdType: userRow?.kyc_id_type,
-          kycIdNumber: userRow?.kyc_id_number,
-          ngLocalIdType: userRow?.ng_local_id_type,
-          ngLocalIdNumber: userRow?.ng_local_id_number,
-          fullName: userRow?.full_name,
-          phone: userRow?.phone,
-          email: userRow?.email,
-          dateOfBirth: userRow?.date_of_birth,
-          addressStreet: userRow?.kyc_address_street,
-          addressCity: userRow?.kyc_address_city,
-          addressCountry: userRow?.kyc_address_country,
-        },
+    const result = await lockCrossBorderLeg2({
+      admin,
+      userId: kycUserId,
+      businessId,
+      customerUID: kycUserId,
+      payInCurrency,
+      payInCountry,
+      payInRail,
+      receiveAmount,
+      recipient: recipient as RecipientSellPrepareRow,
+      sourcePhone: payInRail === "mobile_money"
+        ? normalizeYcMomoPhone(String(body?.sourcePhone ?? "").trim(), payInCountry)
+        : body?.sourcePhone,
+      sourceNetworkId: body?.networkId,
+      sourceNetworkName: body?.sourceNetworkName,
+      senderProfile: {
+        residenceCountry: userRow?.residence_country ?? payInCountry,
+        kycIdType: userRow?.kyc_id_type,
+        kycIdNumber: userRow?.kyc_id_number,
+        ngLocalIdType: userRow?.ng_local_id_type,
+        ngLocalIdNumber: userRow?.ng_local_id_number,
+        fullName: userRow?.full_name,
+        phone: userRow?.phone,
+        email: userRow?.email,
+        dateOfBirth: userRow?.date_of_birth,
+        addressStreet: userRow?.kyc_address_street,
+        addressCity: userRow?.kyc_address_city,
+        addressCountry: userRow?.kyc_address_country,
       },
-      body?.leg2DraftId?.trim() ? { leg2DraftId: body.leg2DraftId.trim() } : undefined,
-    )
-
-    return NextResponse.json({
-      ok: true,
-      ...result,
-      payInNotice: ycPayInInstructionNotice(payInRail),
     })
+
+    return NextResponse.json({ ok: true, ...result })
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Cross-border confirm failed"
-    if (message === "deposit_omnibus_solana_address_usd_required") {
-      return ycFundBalanceQuoteError(
-        "yc_settlement_wallet_not_configured",
-        message,
-        503,
-        {
-          hint: "Set DEPOSIT_OMNIBUS_SOLANA_ADDRESS_USD on the business API (USDC Solana omnibus for YC pay-in settlement).",
-        },
-      )
-    }
-    if (message === "yc_amount_below_min" || message.includes("below minimum")) {
-      return ycFundBalanceQuoteError("yc_amount_below_min", message, 400, { userId: kycUserId })
-    }
-    if (message === "Local pay-in is not enabled for this corridor") {
-      return ycFundBalanceQuoteError(
-        "yc_corridor_disabled",
-        message,
-        400,
-        { userId: kycUserId, currency: payInCurrency, country: payInCountry, rail: payInRail },
-      )
-    }
-    const parsedMin = parseYcReceiveRejectedMinError(message)
-    if (parsedMin) {
-      return ycFundBalanceQuoteError("yc_amount_below_min", message, 400, {
-        userId: kycUserId,
-        minLocalPayIn: parsedMin.minLocalPayIn,
-      })
-    }
+    const message = e instanceof Error ? e.message : "Cross-border leg2 lock failed"
     if (
       message === "ng_local_verification_incomplete" ||
       message.includes("kyc") ||
@@ -207,6 +167,6 @@ export async function POST(request: Request) {
     ) {
       return ycFundBalanceQuoteError(mapKycErrorToCode(message), message, 400, { userId: kycUserId })
     }
-    return crossBorderQuoteError("yc_cross_border_confirm_failed", message, 400)
+    return crossBorderLockError("yc_cross_border_lock_leg2_failed", message, 400)
   }
 }

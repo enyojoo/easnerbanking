@@ -264,6 +264,9 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         quoteError: null as string | null,
       }
     }
+    const needsQuoteLock =
+      !isWalletRecipient &&
+      !(stashed && isStashedPayoutQuoteFresh(meta) && isCompletePayoutQuote(stashed))
     return {
       calculatedSendingAmount: params.calculatedSendingAmount ?? 0,
       calculatedFeeAmount: params.calculatedFeeAmount ?? 0,
@@ -276,7 +279,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       payoutSession: undefined as PayoutPrepareSession | undefined,
       walletSession: undefined as WalletPrepareSession | undefined,
       quoteDisplay: null as ReturnType<typeof payoutDisplayAmountsFromQuote> | null,
-      quoteLoading: false,
+      quoteLoading: needsQuoteLock,
       quoteError: null as string | null,
     }
   })
@@ -355,6 +358,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     (isWalletRecipient
       ? hasWalletSendFxDisplay(selectedBalanceCurrency, receiveCurrency, walletNetwork)
       : selectedBalanceCurrency.toUpperCase() !== receiveCurrency.toUpperCase())
+  const youSendAmount = quoteDisplay?.youSendAmount ?? calculatedSendingAmount
   const customerRate = useMemo(() => {
     if (quoteDisplay?.customerRate && quoteDisplay.customerRate > 0) {
       return quoteDisplay.customerRate
@@ -365,9 +369,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       stashed?.noah?.rate ??
       pricingQuoteResult?.providerRate ??
       0
-    return Number.isFinite(rate) && rate > 0 ? rate : 0
-  }, [quoteDisplay?.customerRate, pricingQuoteResult?.providerRate])
-  const youSendAmount = quoteDisplay?.youSendAmount ?? calculatedSendingAmount
+    if (Number.isFinite(rate) && rate > 0) return rate
+    if (youSendAmount > 0 && quotedReceiveAmount > 0) {
+      return quotedReceiveAmount / youSendAmount
+    }
+    return 0
+  }, [quoteDisplay?.customerRate, pricingQuoteResult?.providerRate, youSendAmount, quotedReceiveAmount])
   const processingFee = quoteDisplay?.marginAmount ?? easnerFee ?? calculatedFeeAmount
   const exchangeFee = quoteDisplay?.exchangeFee ?? 0
   const networkFee = isWalletRecipient ? (quoteDisplay as { networkFee?: number } | null)?.networkFee ?? 0 : 0
@@ -820,6 +827,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.card}>
+              {quoteLoading && !quoteReady ? (
+                <ActivityIndicator
+                  color={colors.primary.main}
+                  style={{ marginVertical: spacing[3], alignSelf: 'center' }}
+                />
+              ) : null}
               {displayTransactionId ? (
                 <TransactionDetailSummaryRow
                   label={REVIEW_ROW_LABELS.transactionId}

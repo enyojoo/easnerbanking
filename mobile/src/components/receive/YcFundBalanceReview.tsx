@@ -164,6 +164,23 @@ export function YcFundBalanceReview({
     })
   const reviewFeeLocal = lockedReviewBreakdown?.feeLocal ?? 0
 
+  const previewReviewBreakdown =
+    !quoteLocked && previewCustomerRate > 0 && localPayIn > 0
+      ? resolveYcFundBalanceLocalPayInBreakdownForDisplay({
+          localPayIn,
+          localCurrency: localPayInCurrency,
+          usdCredit,
+          exchangeRate: previewCustomerRate,
+        })
+      : null
+  const previewPrincipalLocal =
+    previewReviewBreakdown?.principalLocal ??
+    computeYcFundBalancePrincipalLocalPayIn({
+      usdCredit,
+      exchangeRate: previewCustomerRate,
+    })
+  const previewFeeLocal = previewReviewBreakdown?.feeLocal ?? 0
+
   const reviewRows = quoteLocked
     ? buildYcLocalPayInReviewRows({
         mode: 'fund_balance',
@@ -181,7 +198,21 @@ export function YcFundBalanceReview({
         usdCredit: resolvedUsdCredit,
         transactionId: displayTransactionId,
       })
-    : []
+    : previewCustomerRate > 0 && localPayIn > 0
+      ? buildYcLocalPayInReviewRows({
+          mode: 'fund_balance',
+          phase: 'preview',
+          rail: payInRail,
+          payInCurrency: localPayInCurrency,
+          receiveCurrency: 'USD',
+          customerRate: previewCustomerRate,
+          localPayIn,
+          receiveAmount: usdCredit,
+          processingFeeLocal: previewFeeLocal,
+          principalLocal: previewPrincipalLocal,
+          usdCredit,
+        })
+      : []
 
   const navigateToPayIn = (q: YcFundBalanceQuote) => {
     const baseParams = {
@@ -238,7 +269,8 @@ export function YcFundBalanceReview({
         <View style={styles.card}>
           {quoteLoading && !quoteLocked ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
-          ) : quoteLocked ? (
+          ) : null}
+          {reviewRows.length > 0 ? (
             <>
               {reviewRows.map((row, index) => {
                 if (row.id === 'amount-to-credit') {
@@ -249,11 +281,13 @@ export function YcFundBalanceReview({
                         value={row.value}
                         valueBold={row.valueBold}
                       />
-                      <CreditDestinationRow
-                        label={REVIEW_ROW_LABELS.creditTo}
-                        currency="USD"
-                        balanceLabel="USD Balance"
-                      />
+                      {quoteLocked ? (
+                        <CreditDestinationRow
+                          label={REVIEW_ROW_LABELS.creditTo}
+                          currency="USD"
+                          balanceLabel="USD Balance"
+                        />
+                      ) : null}
                     </React.Fragment>
                   )
                 }

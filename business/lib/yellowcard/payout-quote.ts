@@ -188,10 +188,10 @@ export async function buildYcPayoutQuote(input: {
     customerRate,
     provisionalCryptoUsd,
     ycMidUsd:
-      payoutRate?.yc_buy != null && payoutRate.yc_buy > 0
-        ? roundUsdc(quoteReceiveAmount / payoutRate.yc_buy)
+      payoutRate?.yc_sell != null && payoutRate.yc_sell > 0
+        ? roundUsdc(quoteReceiveAmount / payoutRate.yc_sell)
         : undefined,
-    ycBuyRate: payoutRate?.yc_buy != null && payoutRate.yc_buy > 0 ? payoutRate.yc_buy : undefined,
+    ycBuyRate: payoutRate?.yc_sell != null && payoutRate.yc_sell > 0 ? payoutRate.yc_sell : undefined,
   })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
@@ -211,8 +211,8 @@ export async function buildYcPayoutQuote(input: {
     cryptoCurrency: "USDC",
     sessionId: quoteId,
     customerRate,
-    ...(payoutRate?.yc_buy != null && payoutRate.yc_buy > 0
-      ? { providerMid: payoutRate.yc_buy }
+    ...(payoutRate?.yc_sell != null && payoutRate.yc_sell > 0
+      ? { providerMid: payoutRate.yc_sell }
       : {}),
     effectiveRate: customerRate,
     marginCaptureMode: "fee_wallet_omnibus",
@@ -383,8 +383,8 @@ export async function lockYcBalancePayoutSend(input: {
     customerRate,
     ycFloorUsd: cryptoAmount,
     ycMidUsd:
-      payoutRate?.yc_buy != null && payoutRate.yc_buy > 0
-        ? roundUsdc(quoteReceiveAmount / payoutRate.yc_buy)
+      payoutRate?.yc_sell != null && payoutRate.yc_sell > 0
+        ? roundUsdc(quoteReceiveAmount / payoutRate.yc_sell)
         : undefined,
     networkFeeAmountUsd,
     serviceFeeAmountUsd,

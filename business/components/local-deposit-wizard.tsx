@@ -159,7 +159,7 @@ export function LocalDepositWizard({
         customerSellRate: customerRate,
         ycSellRate,
         rail,
-      }) ?? { usdCredit: 0, localPayIn: 0 }
+      }) ?? { usdCredit: 0, localPayIn: 0, estimatedTotalLocalPayIn: 0, feeInclusive: false as const }
     )
   }, [customerRate, ycSellRate, amountMode, enteredAmount, rail])
 
@@ -177,13 +177,11 @@ export function LocalDepositWizard({
       return {
         usdCredit: quote.usdCredit ?? quote.creditOrReceiveAmount ?? preview.usdCredit,
         localPayIn: quote.localPayIn,
-        feeInclusive: true,
+        estimatedTotalLocalPayIn: quote.localPayIn,
+        feeInclusive: true as const,
       }
     }
-    if (preview.localPayIn > 0) {
-      return { ...preview, feeInclusive: true as const }
-    }
-    return { ...preview, feeInclusive: false as const }
+    return preview
   }, [quote, quoteMatchesAmount, preview])
 
   const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
@@ -491,7 +489,10 @@ export function LocalDepositWizard({
         ? validateYcFundBalancePayInAmount({
             amountEntryMode: amountMode,
             enteredAmount,
-            previewLocalPayIn: displayPreview.localPayIn,
+            previewLocalPayIn:
+              displayPreview.estimatedTotalLocalPayIn > 0
+                ? displayPreview.estimatedTotalLocalPayIn
+                : displayPreview.localPayIn,
             currency: localPayInCurrency,
             limits: payInLimits,
           })

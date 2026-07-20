@@ -25,7 +25,7 @@ import { CurrencyFlag } from '../flags/CurrencyFlag'
 import { CountryFlag } from '../flags/CountryFlag'
 import { getCurrencySymbol } from '../../utils/formatters'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
-import { formatMoneyDisplay, formatSendRateLabel } from '@easner/shared'
+import { formatMoneyDisplay, formatSendRateLabel, REVIEW_ROW_LABELS } from '@easner/shared'
 
 export type ReceiveLocalAmountShellWebFormProps = {
   usdBalance: number
@@ -41,7 +41,8 @@ export type ReceiveLocalAmountShellWebFormProps = {
   amountLimitMessage?: string | null
   previewLocalPayIn: number
   previewUsdCredit: number
-  customerRate: number | null
+  displayRate: number | null
+  feeInclusive: boolean
   bankAvailable: boolean
   momoAvailable: boolean
   canContinue: boolean
@@ -66,7 +67,8 @@ export function ReceiveLocalAmountShellWebForm({
   amountLimitMessage,
   previewLocalPayIn,
   previewUsdCredit,
-  customerRate,
+  displayRate,
+  feeInclusive,
   bankAvailable,
   momoAvailable,
   canContinue,
@@ -94,7 +96,7 @@ export function ReceiveLocalAmountShellWebForm({
         </Text>
       )
     }
-    if (exchangePreviewReady && customerRate) {
+    if (exchangePreviewReady && displayRate) {
       return (
         <Pressable
           android_ripple={ripple.neutral}
@@ -104,10 +106,12 @@ export function ReceiveLocalAmountShellWebForm({
           <ArrowUpDown size={14} color={colors.primary.main} strokeWidth={2.5} />
           <Text style={styles.exchangeInfoText} numberOfLines={1}>
             {amountEntryMode === 'usd'
-              ? `Paying: ${formatMoneyDisplay(previewLocalPayIn, localPayInCurrency)}`
+              ? feeInclusive
+                ? `${REVIEW_ROW_LABELS.totalToPay}: ${formatMoneyDisplay(previewLocalPayIn, localPayInCurrency)}`
+                : `Paying: ${formatMoneyDisplay(previewLocalPayIn, localPayInCurrency)}`
               : `Receiving: ${formatMoneyDisplay(previewUsdCredit, 'USD')}`}
             {' • '}
-            {`Rate: ${formatSendRateLabel('USD', localPayInCurrency, customerRate)}`}
+            {`Rate: ${formatSendRateLabel('USD', localPayInCurrency, displayRate)}`}
           </Text>
         </Pressable>
       )

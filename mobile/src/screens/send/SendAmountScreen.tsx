@@ -93,10 +93,7 @@ import { useYcSendExchangeRates } from '../../hooks/queries/use-yc-send-exchange
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
   ensureSendPayoutQuoteStashed,
-  ensureSendPayoutOrderConfirmed,
-  isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
-  peekLastPayoutQuoteError,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
 } from '../../lib/sendFlowPayoutQuote'
@@ -114,10 +111,6 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   clearCrossBorderQuote,
-  ensureCrossBorderOrderConfirmed,
-  isCompleteCrossBorderQuote,
-  peekLastCrossBorderQuoteError,
-  type CrossBorderQuoteStashMeta,
 } from '../../lib/sendFlowCrossBorderQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
@@ -1247,14 +1240,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
       const needsQuoteAwait =
         selectedPaymentMethod === 'balance' &&
-        ((isWalletRecipient && walletReceiveAmount > 0) ||
-          (!isEasetagRecipient && !isWalletRecipient && receiveAmountValue > 0))
+        isWalletRecipient &&
+        walletReceiveAmount > 0
 
       const quoteAlreadyWarm =
-        needsQuoteAwait &&
-        (isWalletRecipient
-          ? isStashedWalletQuoteFresh(quoteStashMeta)
-          : isStashedPayoutQuoteFresh(quoteStashMeta))
+        needsQuoteAwait && isStashedWalletQuoteFresh(quoteStashMeta)
 
       if (needsQuoteAwait && !quoteAlreadyWarm) {
         setIsContinuePending(true)
@@ -1284,25 +1274,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         selectedPaymentMethod === 'balance' &&
         !isEasetagRecipient &&
         !isWalletRecipient &&
-        receiveAmountValue > 0
-          ? await ensureSendPayoutOrderConfirmed(
-              () =>
-                noahService.confirmPayoutOrder({
-                  recipientId: recipient.id,
-                  receiveAmount: receiveAmountValue,
-                  sourceBalanceCurrency: selectedBalanceCurrency,
-                  amountEntryMode,
-                  ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-                    ? { sendAmount: navAmounts.sendAmount }
-                    : {}),
-                  ...(note.trim() ? { note: note.trim() } : {}),
-                  ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-                }),
-              quoteStashMeta,
-            )
-          : isStashedPayoutQuoteFresh(quoteStashMeta)
-            ? peekSendPayoutQuote()
-            : null
+        receiveAmountValue > 0 &&
+        isStashedPayoutQuoteFresh(quoteStashMeta)
+          ? peekSendPayoutQuote()
+          : null
 
       if (
         selectedPaymentMethod === 'balance' &&
@@ -1314,18 +1289,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         return
       }
 
-      if (
-        selectedPaymentMethod === 'balance' &&
-        !isEasetagRecipient &&
-        !isWalletRecipient &&
-        receiveAmountValue > 0 &&
-        !isCompletePayoutQuote(stashedQuote)
-      ) {
-        showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
-        return
-      }
       const stashedRate =
-        stashedQuote?.settlement?.customerRate ?? stashedQuote?.noah?.rate ?? 0
+        stashedQuote?.settlement?.customerRate ?? stashedQuote?.noah?.rate ?? exchangeRate
       let calculatedSendingAmount =
         stashedRate > 0 ? receiveAmountValue / stashedRate : navAmounts.sendAmount
       const calculatedFeeAmount = 0
@@ -1410,29 +1375,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           if (!payInCountry) {
             showError('Could not resolve pay-in country for bank transfer.')
             return
-          }
-          const bankQuoteMeta: CrossBorderQuoteStashMeta = {
-            recipientId: recipient.id,
-            payInCurrency: selectedOtherCurrency,
-            payInCountry,
-            payInRail: 'bank_transfer',
-            receiveAmount: receiveAmountValue,
-          }
-          setIsContinuePending(true)
-          continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-          try {
-            const quote = await ensureCrossBorderOrderConfirmed(bankQuoteMeta)
-            if (!isCompleteCrossBorderQuote(quote)) {
-              showError(peekLastCrossBorderQuoteError() || 'Could not lock cross-border order. Try again.')
-              return
-            }
-          } finally {
-            if (continueSpinnerTimerRef.current) {
-              clearTimeout(continueSpinnerTimerRef.current)
-              continueSpinnerTimerRef.current = null
-            }
-            setIsContinuePending(false)
-            setIsContinueLoading(false)
           }
         }
         navigation.navigate('SendConfirm' as never, {

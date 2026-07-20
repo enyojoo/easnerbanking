@@ -55,8 +55,8 @@ export async function upsertYcRatesAdmin(admin: SupabaseClient, rows: YcRateUpse
 
     let easnerBuy: number | null = null
     let easnerSell: number | null = null
-    if (ycBuy != null) easnerBuy = applyYcCustomerBuy(ycBuy, margin)
-    if (ycSell != null) easnerSell = applyYcCustomerSell(ycSell, margin)
+    if (ycBuy != null) easnerSell = applyYcCustomerSell(ycBuy, margin)
+    if (ycSell != null) easnerBuy = applyYcCustomerBuy(ycSell, margin)
 
     // Derive customer rate by pair type when not provided
     let rate = Number(row.rate) || 0

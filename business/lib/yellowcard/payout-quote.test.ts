@@ -45,7 +45,7 @@ describe("lockYcBalancePayoutSend", () => {
     vi.mocked(listYcRates).mockResolvedValue([])
     vi.mocked(findYcBalancePayoutRate).mockReturnValue({
       rate: 1335.6388919029,
-      yc_buy: 1355.96793609,
+      yc_sell: 1355.96793609,
     } as never)
     vi.mocked(mapRecipientToYcSend).mockResolvedValue({
       destination: { networkId: "net-1" },

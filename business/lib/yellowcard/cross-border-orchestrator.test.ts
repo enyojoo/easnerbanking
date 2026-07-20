@@ -63,7 +63,26 @@ import {
   createCrossBorderDraft,
   createCrossBorderTransfer,
   isCrossBorderLeg1OmnibusSufficient,
+  lockCrossBorderLeg2,
 } from "./cross-border-orchestrator"
+
+describe("lockCrossBorderLeg2", () => {
+  it("requires MoMo source phone and network", async () => {
+    await expect(
+      lockCrossBorderLeg2({
+        admin: {} as never,
+        userId: "user-1",
+        customerUID: "user-1",
+        payInCurrency: "NGN",
+        payInCountry: "NG",
+        payInRail: "mobile_money",
+        receiveAmount: 100,
+        recipient: { id: "r-1", currency: "USD", country_code: "US" } as never,
+        senderProfile: { residenceCountry: "NG" },
+      }),
+    ).rejects.toThrow("Mobile number and network are required")
+  })
+})
 
 describe("createCrossBorderTransfer", () => {
   it("requires MoMo source phone and network", async () => {

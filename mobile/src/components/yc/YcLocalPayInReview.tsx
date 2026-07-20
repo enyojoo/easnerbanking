@@ -24,9 +24,14 @@ import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSu
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
 import {
-  ensureCrossBorderOrderConfirmed,
+  confirmCrossBorderLeg1,
+  ensureCrossBorderLeg2Locked,
+  fetchCrossBorderQuotePreview,
   isCompleteCrossBorderQuote,
+  isCrossBorderLeg2Locked,
   isStashedCrossBorderQuoteFresh,
+  isUsableCrossBorderQuotePreview,
+  peekCrossBorderLeg2DraftId,
   peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
   type CrossBorderQuoteStashMeta,
@@ -99,7 +104,18 @@ export function YcLocalPayInReview({
     sourceNetworkName,
   ])
 
-  const [quote, setQuote] = useState<YcCrossBorderQuoteResult | null>(() => {
+  const [previewQuote, setPreviewQuote] = useState<YcCrossBorderQuoteResult | null>(null)
+  const [leg2Quote, setLeg2Quote] = useState<YcCrossBorderQuoteResult | null>(() => {
+    if (!quoteMeta) return null
+    if (isStashedCrossBorderQuoteFresh(quoteMeta)) {
+      const stashed = peekCrossBorderQuote()
+      if (stashed && isCrossBorderLeg2Locked(stashed, peekCrossBorderLeg2DraftId())) {
+        return stashed
+      }
+    }
+    return null
+  })
+  const [lockedQuote, setLockedQuote] = useState<YcCrossBorderQuoteResult | null>(() => {
     if (!quoteMeta) return null
     if (isStashedCrossBorderQuoteFresh(quoteMeta) && isCompleteCrossBorderQuote(peekCrossBorderQuote())) {
       return peekCrossBorderQuote()
@@ -109,11 +125,18 @@ export function YcLocalPayInReview({
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(() => {
     if (!quoteMeta) return false
-    return !(
+    if (isStashedCrossBorderQuoteFresh(quoteMeta) && isCompleteCrossBorderQuote(peekCrossBorderQuote())) {
+      return false
+    }
+    if (
       isStashedCrossBorderQuoteFresh(quoteMeta) &&
-      isCompleteCrossBorderQuote(peekCrossBorderQuote())
-    )
+      isCrossBorderLeg2Locked(peekCrossBorderQuote(), peekCrossBorderLeg2DraftId())
+    ) {
+      return false
+    }
+    return true
   })
+  const [confirmLoading, setConfirmLoading] = useState(false)
 
   useEffect(() => {
     if (!quoteMeta) return
@@ -121,7 +144,23 @@ export function YcLocalPayInReview({
     if (isStashedCrossBorderQuoteFresh(quoteMeta) && isCompleteCrossBorderQuote(peekCrossBorderQuote())) {
       const stashed = peekCrossBorderQuote()
       if (stashed) {
-        setQuote(stashed)
+        setLockedQuote(stashed)
+        setLeg2Quote(stashed)
+        setPreviewQuote(stashed)
+        setQuoteError(null)
+      }
+      setQuoteLoading(false)
+      return
+    }
+
+    if (
+      isStashedCrossBorderQuoteFresh(quoteMeta) &&
+      isCrossBorderLeg2Locked(peekCrossBorderQuote(), peekCrossBorderLeg2DraftId())
+    ) {
+      const stashed = peekCrossBorderQuote()
+      if (stashed) {
+        setLeg2Quote(stashed)
+        setPreviewQuote(stashed)
         setQuoteError(null)
       }
       setQuoteLoading(false)
@@ -132,14 +171,24 @@ export function YcLocalPayInReview({
     setQuoteLoading(true)
     setQuoteError(null)
     void (async () => {
-      const result = await ensureCrossBorderOrderConfirmed(quoteMeta)
+      const previewPromise = fetchCrossBorderQuotePreview(quoteMeta).catch(() => null)
+      const leg2Promise = ensureCrossBorderLeg2Locked(quoteMeta)
+      const preview = await previewPromise
+      if (cancelled) return
+      if (preview && isUsableCrossBorderQuotePreview(preview)) {
+        setPreviewQuote(preview)
+      }
+      const leg2 = await leg2Promise
       if (cancelled) return
       setQuoteLoading(false)
-      if (isCompleteCrossBorderQuote(result)) {
-        setQuote(result)
+      if (leg2 && (isCrossBorderLeg2Locked(leg2, leg2.leg2DraftId) || isCompleteCrossBorderQuote(leg2))) {
+        setLeg2Quote(leg2)
+        if (isCompleteCrossBorderQuote(leg2)) {
+          setLockedQuote(leg2)
+        }
+        setQuoteError(null)
         return
       }
-      setQuote(null)
       setQuoteError(peekLastCrossBorderQuoteError() || 'Could not lock transfer details')
     })()
 
@@ -148,20 +197,22 @@ export function YcLocalPayInReview({
     }
   }, [quoteMeta])
 
-  const quoteCountdown = useQuoteCountdown(quote?.expiresAt)
-  const quoteLocked = isCompleteCrossBorderQuote(quote)
-  const customerRate = quote?.customerRate ?? 1
-  const lockedLocalPayIn = quote?.localPayIn ?? 0
-  const displayTransactionId = quote?.easnerTransactionId ?? quote?.transactionId ?? ''
+  const displayQuote = lockedQuote ?? leg2Quote ?? previewQuote
+  const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
+  const quoteLocked = isCompleteCrossBorderQuote(lockedQuote)
+  const leg2Ready = isCrossBorderLeg2Locked(leg2Quote, peekCrossBorderLeg2DraftId() ?? leg2Quote?.leg2DraftId)
+  const customerRate = displayQuote?.customerRate ?? 0
+  const displayLocalPayIn = displayQuote?.localPayIn ?? 0
+  const displayTransactionId = lockedQuote?.easnerTransactionId ?? lockedQuote?.transactionId ?? ''
   const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
 
   const reviewBreakdown = resolveYcCrossBorderLocalPayInBreakdownForDisplay({
-    localPayIn: lockedLocalPayIn,
+    localPayIn: displayLocalPayIn,
     payInCurrency,
     receiveAmount,
     customerRate,
-    provisionalPayIn: quote?.provisionalPayIn,
-    displayProcessingFeeLocal: quote?.displayProcessingFeeLocal,
+    provisionalPayIn: displayQuote?.provisionalPayIn,
+    displayProcessingFeeLocal: displayQuote?.displayProcessingFeeLocal,
   })
   const reviewPrincipalLocal = reviewBreakdown.principalLocal
   const reviewFeeLocal = reviewBreakdown.feeLocal
@@ -173,11 +224,11 @@ export function YcLocalPayInReview({
     payInCurrency,
     receiveCurrency,
     customerRate,
-    localPayIn: lockedLocalPayIn,
+    localPayIn: displayLocalPayIn,
     receiveAmount,
     processingFeeLocal: reviewFeeLocal,
-    processingFeeUsd: quote?.processingFee,
-    exchangeFeeUsd: quote?.ycLegFeesUsd,
+    processingFeeUsd: displayQuote?.processingFee,
+    exchangeFeeUsd: displayQuote?.ycLegFeesUsd,
     principalLocal: reviewPrincipalLocal,
     transactionId: displayTransactionId,
     processingTime,
@@ -210,17 +261,42 @@ export function YcLocalPayInReview({
     })
   }
 
-  const onContinue = () => {
-    if (!isCompleteCrossBorderQuote(quote)) return
-    haptics.medium()
-    navigateToPayIn(quote)
+  const onContinue = async () => {
+    if (!quoteMeta || quoteLocked) {
+      if (lockedQuote) {
+        haptics.medium()
+        navigateToPayIn(lockedQuote)
+      }
+      return
+    }
+    if (!leg2Ready) return
+    const leg2DraftId = peekCrossBorderLeg2DraftId() ?? leg2Quote?.leg2DraftId
+    if (!leg2DraftId) return
+
+    setConfirmLoading(true)
+    setQuoteError(null)
+    try {
+      const result = await confirmCrossBorderLeg1(quoteMeta, leg2DraftId)
+      if (!isCompleteCrossBorderQuote(result)) {
+        setQuoteError(peekLastCrossBorderQuoteError() || 'Could not lock transfer details')
+        return
+      }
+      setLockedQuote(result)
+      haptics.medium()
+      navigateToPayIn(result)
+    } catch (e) {
+      setQuoteError(e instanceof Error ? e.message : 'Could not lock transfer details')
+    } finally {
+      setConfirmLoading(false)
+    }
   }
 
   const ctaDisabled =
-    !quoteLocked ||
+    confirmLoading ||
+    !leg2Ready ||
     Boolean(quoteError) ||
     quoteCountdown.expired ||
-    (quoteLoading && !quoteLocked)
+    (quoteLoading && !leg2Ready)
 
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>
@@ -233,9 +309,10 @@ export function YcLocalPayInReview({
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          {quoteLoading && !quoteLocked ? (
+          {quoteLoading && !leg2Ready ? (
             <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing[4] }} />
-          ) : quoteLocked ? (
+          ) : null}
+          {reviewRows.length > 0 ? (
             <>
               {reviewRows.map((row, index) => {
                 if (row.id === 'transfer-method') {
@@ -244,7 +321,7 @@ export function YcLocalPayInReview({
                       key={row.id}
                       label={row.label}
                       value={row.value}
-                      last={index === reviewRows.length - 1 && !quote?.expiresAt}
+                      last={index === reviewRows.length - 1 && !displayQuote?.expiresAt}
                     />
                   )
                 }
@@ -278,7 +355,7 @@ export function YcLocalPayInReview({
           ) : null}
 
           {quoteError ? <Text style={styles.error}>{quoteError}</Text> : null}
-          {quote?.expiresAt ? (
+          {displayQuote?.expiresAt ? (
             <Text style={styles.hint}>
               {quoteCountdown.expired
                 ? 'Quote expired — go back and continue again.'
@@ -291,7 +368,7 @@ export function YcLocalPayInReview({
       <Pressable
         android_ripple={ripple.neutral}
         style={[styles.cta, ctaDisabled && styles.ctaDisabled]}
-        onPress={onContinue}
+        onPress={() => void onContinue()}
         disabled={ctaDisabled}
       >
         <LinearGradient
@@ -300,7 +377,11 @@ export function YcLocalPayInReview({
           end={{ x: 1, y: 0 }}
           style={styles.ctaGradient}
         >
-          <Text style={styles.ctaText}>Continue</Text>
+          {confirmLoading ? (
+            <ActivityIndicator color={colors.text.inverse} />
+          ) : (
+            <Text style={styles.ctaText}>Continue</Text>
+          )}
         </LinearGradient>
       </Pressable>
     </View>

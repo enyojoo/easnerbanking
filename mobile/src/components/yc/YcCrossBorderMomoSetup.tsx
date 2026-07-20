@@ -19,12 +19,6 @@ import {
   ensurePayInNetworksCached,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
-import {
-  ensureCrossBorderOrderConfirmed,
-  isCompleteCrossBorderQuote,
-  peekLastCrossBorderQuoteError,
-  type CrossBorderQuoteStashMeta,
-} from '../../lib/sendFlowCrossBorderQuote'
 import { useAuth } from '../../contexts/AuthContext'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 
@@ -103,45 +97,25 @@ export function YcCrossBorderMomoSetup({
   const selectedNetwork = networks.find((n) => n.id === networkId)
   const rail: YcPayInRail = 'mobile_money'
 
-  const onContinue = async () => {
+  const onContinue = () => {
     if (!momoReady || isContinueLoading) return
     setContinueError(null)
-    setIsContinueLoading(true)
-    try {
-      const meta: CrossBorderQuoteStashMeta = {
-        recipientId: recipient.id,
-        payInCurrency,
-        payInCountry,
-        payInRail: rail,
-        receiveAmount,
-        sourcePhone: phone.trim(),
-        networkId,
-        sourceNetworkName: selectedNetwork?.name,
-      }
-      const quote = await ensureCrossBorderOrderConfirmed(meta)
-      if (!isCompleteCrossBorderQuote(quote)) {
-        setContinueError(peekLastCrossBorderQuoteError() || 'Could not lock transfer details. Try again.')
-        return
-      }
-      haptics.medium()
-      navigation.navigate('SendConfirm' as never, {
-        recipient,
-        paymentMethod: 'otherCurrency',
-        ycPayInCurrency: payInCurrency,
-        ycPayInRail: rail,
-        receiveAmountValue: receiveAmount,
-        receiveCurrency,
-        amountEntryMode,
-        amountScreenSendAmount,
-        sourcePhone: phone.trim(),
-        networkId,
-        sourceNetworkName: selectedNetwork?.name,
-        ...(note?.trim() ? { note: note.trim() } : {}),
-        ...(paymentPurpose?.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-      } as never)
-    } finally {
-      setIsContinueLoading(false)
-    }
+    haptics.medium()
+    navigation.navigate('SendConfirm' as never, {
+      recipient,
+      paymentMethod: 'otherCurrency',
+      ycPayInCurrency: payInCurrency,
+      ycPayInRail: rail,
+      receiveAmountValue: receiveAmount,
+      receiveCurrency,
+      amountEntryMode,
+      amountScreenSendAmount,
+      sourcePhone: phone.trim(),
+      networkId,
+      sourceNetworkName: selectedNetwork?.name,
+      ...(note?.trim() ? { note: note.trim() } : {}),
+      ...(paymentPurpose?.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+    } as never)
   }
 
   return (

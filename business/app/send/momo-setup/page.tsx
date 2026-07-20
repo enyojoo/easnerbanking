@@ -20,14 +20,6 @@ import {
 } from "@/lib/yc-local-deposit-cache"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { normalizeYcMomoPhone, REVIEW_ROW_LABELS } from "@easner/shared"
-import {
-  crossBorderQuoteToFlowState,
-  ensureCrossBorderOrderConfirmed,
-  isCompleteCrossBorderQuote,
-  peekLastCrossBorderQuoteError,
-  type CrossBorderQuoteStashMeta,
-} from "@/lib/yc-cross-border-quote-cache"
-
 function isYcCrossBorderMomo(state: SendFlowState | null): boolean {
   return (
     state?.paymentMethod === "otherCurrency" &&
@@ -131,45 +123,19 @@ export default function SendMomoSetupPage() {
     }
   }, [state, payInCountry])
 
-  const onContinue = async () => {
+  const onContinue = () => {
     if (!state || !momoReady || !payInCountry || !payInCurrency || isContinueLoading) return
     setContinueError(null)
-    setIsContinueLoading(true)
-    try {
-      const meta: CrossBorderQuoteStashMeta = {
-        recipientId: state.recipient.id,
-        payInCurrency,
-        payInCountry,
-        payInRail: "mobile_money",
-        receiveAmount: state.amount,
+    const next: SendFlowState = {
+      ...state,
+      ycMomoSetup: {
         sourcePhone: momoPhone.trim(),
         networkId: momoNetworkId,
         sourceNetworkName: selectedNetwork?.name,
-      }
-      const quote = await ensureCrossBorderOrderConfirmed(meta)
-      if (!isCompleteCrossBorderQuote(quote)) {
-        setContinueError(peekLastCrossBorderQuoteError() || "Could not lock transfer details. Try again.")
-        return
-      }
-      const yc = crossBorderQuoteToFlowState(quote, meta)
-      const next: SendFlowState = {
-        ...state,
-        ycMomoSetup: {
-          sourcePhone: momoPhone.trim(),
-          networkId: momoNetworkId,
-          sourceNetworkName: selectedNetwork?.name,
-        },
-        sendAmount: yc.localPayIn,
-        sendCurrency: payInCurrency,
-        totalAmount: yc.localPayIn,
-        transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
-        ycCrossBorder: yc,
-      }
-      persistSendFlowState(next)
-      router.push("/send/confirm")
-    } finally {
-      setIsContinueLoading(false)
+      },
     }
+    persistSendFlowState(next)
+    router.push("/send/confirm")
   }
 
   if (!state) {

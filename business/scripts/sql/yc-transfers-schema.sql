@@ -37,4 +37,4 @@ create index if not exists yc_transfers_transaction_id_idx on public.yc_transfer
 create index if not exists yc_transfers_status_idx on public.yc_transfers (status);
 
 comment on table public.yc_transfers is
-  'YC product orchestration: fund_balance, balance_payout, cross_border_send.';
+  'YC product orchestration: fund_balance, balance_payout, cross_border_send. cross_border_send may use status leg2_quoted for split leg2 draft sessions.';

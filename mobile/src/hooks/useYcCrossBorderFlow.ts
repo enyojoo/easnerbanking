@@ -17,8 +17,11 @@ export type YcEligibilityResponse = {
 
 export type YcCrossBorderQuoteResult = {
   ok: true
-  transferId: string
-  transactionId: string
+  quotePhase?: 'preview' | 'leg2_locked' | 'locked'
+  quoteKey?: string
+  leg2DraftId?: string
+  transferId?: string
+  transactionId?: string
   easnerTransactionId?: string
   localPayIn: number
   customerRate: number
@@ -30,7 +33,7 @@ export type YcCrossBorderQuoteResult = {
   provisionalPayIn?: number
   receiveAmount?: number
   receiveCurrency?: string
-  bankInfo: Record<string, unknown> | null
+  bankInfo?: Record<string, unknown> | null
   expiresAt: string
   payInNotice?: string
   payInRail?: YcPayInRail

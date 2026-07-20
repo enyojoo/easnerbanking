@@ -131,3 +131,4 @@ next-env.d.ts
 # Local / internal docs (not part of app deploy)
 /docs/
 business/docs/
+.env*

@@ -68,7 +68,7 @@ async function prepareFundBalanceSession(ctx: FundBalanceSessionContext) {
 
   const rates = await listYcRates(admin, { status: "active" })
   const leg = findYcPayInLeg(rates, currency)
-  if (!leg?.easner_sell || !leg.yc_sell) {
+  if (!leg?.easner_sell || !leg.yc_buy) {
     throw new FundBalanceSessionError(
       "yc_rate_unavailable",
       "YC rate unavailable for currency",
@@ -153,7 +153,7 @@ async function prepareFundBalanceSession(ctx: FundBalanceSessionContext) {
     usdCredit: ctx.usdCredit,
     localPayIn: ctx.localPayIn,
     customerSellRate: Number(leg.easner_sell),
-    ycSellRate: Number(leg.yc_sell),
+    ycSellRate: Number(leg.yc_buy),
     rail: ctx.rail,
   })
 
@@ -396,7 +396,7 @@ export async function authorizeFundBalanceDraft(input: {
 
   const rates = await listYcRates(admin, { status: "active" })
   const leg = findYcPayInLeg(rates, currency)
-  if (!leg?.easner_sell || !leg.yc_sell) {
+  if (!leg?.easner_sell || !leg.yc_buy) {
     throw new FundBalanceSessionError("yc_rate_unavailable", "YC rate unavailable", 400)
   }
 
@@ -444,13 +444,13 @@ export async function authorizeFundBalanceDraft(input: {
     ? computeYcFundBalancePricing({
         usdCredit: lockedUsdCredit,
         customerSellRate: Number(leg.easner_sell),
-        ycSellRate: Number(leg.yc_sell),
+        ycSellRate: Number(leg.yc_buy),
         receiveLeg,
       })
     : computeYcFundBalancePricing({
         localPayIn: Number(receiveRes.localAmount ?? transfer.quoted_pay_in),
         customerSellRate: Number(leg.easner_sell),
-        ycSellRate: Number(leg.yc_sell),
+        ycSellRate: Number(leg.yc_buy),
         receiveLeg,
       })
 
