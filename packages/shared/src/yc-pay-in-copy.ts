@@ -6,6 +6,9 @@ export const YC_PAY_IN_SEND_EXACTLY_LABEL = 'Send exactly'
 /** CTA on amount, MoMo setup, and review steps before pay-in complete. */
 export const YC_PAY_IN_CONTINUE_CTA = 'Continue'
 
+/** Title on YC pay-in review screens (fund balance + cross-border bank/MoMo). */
+export const YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE = 'Review & Complete'
+
 /** CTA on bank pay-in complete (after VA / send-exactly instructions). */
 export const YC_PAY_IN_BANK_COMPLETE_CTA = "I've made the payment"
 

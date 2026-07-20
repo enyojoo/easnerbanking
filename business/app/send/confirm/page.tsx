@@ -17,6 +17,7 @@ import {
   resolveRecipientPayoutRail,
   resolveSendConfirmArrivalHint,
   SEND_REVIEW_CONFIRM_CTA,
+  YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -850,7 +851,9 @@ export default function SendConfirmPage() {
         <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-2xl font-semibold text-foreground">Review transfer</h1>
+        <h1 className="text-2xl font-semibold text-foreground">
+          {isYcCrossBorder ? YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE : "Review transfer"}
+        </h1>
       </div>
 
       {isYcCrossBorder && crossBorderMeta ? (

@@ -9,6 +9,7 @@ import {
   type YcPayInRail,
 } from "@easner/shared"
 import { ycBankInfoFields } from "@/lib/yc-bank-info-fields"
+import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
 
 type Props = {
   payInRail: YcPayInRail
@@ -41,6 +42,15 @@ export function YcPayInPaymentInstructions({
   const PaymentIcon = isMomo ? Smartphone : Landmark
   const displayTransactionId = transactionId?.toUpperCase() ?? ""
 
+  const momoRows = [
+    sourceNetworkName
+      ? { id: "network", label: REVIEW_ROW_LABELS.paymentNetwork, value: sourceNetworkName }
+      : null,
+    sourcePhone ? { id: "phone", label: REVIEW_ROW_LABELS.mobileNumber, value: sourcePhone } : null,
+  ].filter(Boolean) as Array<{ id: string; label: string; value: string }>
+
+  const detailRows = isMomo ? momoRows : bankFields.map((f) => ({ id: f.id, label: f.label, value: f.value }))
+
   return (
     <div className="space-y-4">
       {(completeNotice || !isMomo) ? (
@@ -57,52 +67,45 @@ export function YcPayInPaymentInstructions({
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-border p-4 space-y-1">
+      <div className="rounded-xl bg-card p-4 space-y-1">
         <div className="flex items-center gap-2 mb-3">
           <PaymentIcon className="h-5 w-5 text-primary" />
           <p className="font-medium">{isMomo ? "Mobile Money" : "Bank Account"}</p>
         </div>
-        {isMomo ? (
-          <>
-            {sourceNetworkName ? (
-              <div className="flex justify-between gap-4 py-3 border-b">
-                <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.paymentNetwork}</span>
-                <span className="font-mono text-sm">{sourceNetworkName}</span>
-              </div>
-            ) : null}
-            {sourcePhone ? (
-              <div className="flex justify-between gap-4 py-3">
-                <span className="text-sm text-muted-foreground">{REVIEW_ROW_LABELS.mobileNumber}</span>
-                <span className="font-mono text-sm">{sourcePhone}</span>
-              </div>
-            ) : null}
-          </>
-        ) : bankFields.length === 0 ? (
+        {!isMomo && detailRows.length === 0 ? (
           <p className="text-sm text-muted-foreground py-2">
             Payment details unavailable. Contact support with reference {displayTransactionId}.
           </p>
         ) : (
-          bankFields.map((f) => (
-            <div key={f.id} className="flex justify-between items-center gap-4 py-3 border-b last:border-0">
-              <span className="text-sm text-muted-foreground">{f.label}</span>
-              {onCopy ? (
+          detailRows.map((row) =>
+            !isMomo && onCopy ? (
+              <div
+                key={row.id}
+                className="flex justify-between items-center gap-4 border-b border-border py-2 text-sm last:border-0"
+              >
+                <span className="shrink-0 text-muted-foreground">{row.label}</span>
                 <button
                   type="button"
-                  onClick={() => void onCopy(f.value, `yc-review-${f.id}`)}
+                  onClick={() => void onCopy(row.value, `yc-review-${row.id}`)}
                   className="flex items-center gap-2 font-mono text-sm hover:text-primary transition-colors text-right"
                 >
-                  <span className="break-all">{f.value}</span>
-                  {copiedField === `yc-review-${f.id}` ? (
+                  <span className="break-all">{row.value}</span>
+                  {copiedField === `yc-review-${row.id}` ? (
                     <Check className="h-4 w-4 text-primary shrink-0" />
                   ) : (
                     <Copy className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
                 </button>
-              ) : (
-                <span className="font-mono text-sm">{f.value}</span>
-              )}
-            </div>
-          ))
+              </div>
+            ) : (
+              <TransactionDetailSummaryRow
+                key={row.id}
+                label={row.label}
+                value={row.value}
+                valueClassName="font-mono"
+              />
+            ),
+          )
         )}
       </div>
     </div>

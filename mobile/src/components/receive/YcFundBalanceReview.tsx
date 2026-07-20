@@ -16,7 +16,9 @@ import {
   REVIEW_ROW_LABELS,
   useYcFundBalancePayInLock,
   useYcPayInAttest,
+  YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
   ycPayInCompleteCta,
+  type YcLocalPayInReviewPhase,
 } from '@easner/shared'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -24,7 +26,10 @@ import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
 import { CreditDestinationRow } from '../transactions/CreditDestinationRow'
-import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
+import {
+  TransactionDetailSummaryRow,
+  TransactionDetailCopyableValue,
+} from '../transactions/TransactionDetailSummaryRow'
 import { YcPayInPaymentBlock } from '../yc/YcPayInPaymentBlock'
 import { YcPayInAwaitingPaymentCountdown } from '../yc/YcPayInAwaitingPaymentCountdown'
 import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transactionDetailNavigation'
@@ -128,51 +133,51 @@ export function YcFundBalanceReview({
     getErrorMessage: peekLastFundBalanceQuoteError,
   })
 
-  const displayQuote = lockedQuote
+  const previewQuote = isStashedFundBalanceQuoteFresh(quoteMeta) ? peekFundBalanceQuote() : null
+  const displayQuote = lockedQuote ?? previewQuote
+  const reviewPhase: YcLocalPayInReviewPhase = isLocked ? 'locked' : 'preview'
   const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
   const customerRate = displayQuote?.customerRate ?? previewCustomerRate
-  const displayTransactionId = displayQuote?.easnerTransactionId ?? displayQuote?.transactionId ?? ''
+  const displayTransactionId = lockedQuote?.easnerTransactionId ?? lockedQuote?.transactionId ?? ''
   const resolvedLocalPayIn = displayQuote?.localPayIn ?? localPayIn
   const resolvedUsdCredit = displayQuote?.usdCredit ?? usdCredit
 
-  const lockedReviewBreakdown =
-    isLocked && resolvedLocalPayIn > 0
+  const reviewBreakdown =
+    resolvedLocalPayIn > 0
       ? resolveYcFundBalanceLocalPayInBreakdownForDisplay({
           localPayIn: resolvedLocalPayIn,
           localCurrency: localPayInCurrency,
           usdCredit: resolvedUsdCredit,
           exchangeRate: customerRate,
-          displayProcessingFeeLocal: lockedQuote?.displayProcessingFeeLocal,
-          processingFee: lockedQuote?.processingFee,
-          exchangeFee: lockedQuote?.ycChannelFeeUsd ?? lockedQuote?.ycLegFeesUsd,
+          displayProcessingFeeLocal: displayQuote?.displayProcessingFeeLocal,
+          processingFee: displayQuote?.processingFee,
+          exchangeFee: displayQuote?.ycChannelFeeUsd ?? displayQuote?.ycLegFeesUsd,
         })
       : null
   const reviewPrincipalLocal =
-    lockedReviewBreakdown?.principalLocal ??
+    reviewBreakdown?.principalLocal ??
     computeYcFundBalancePrincipalLocalPayIn({
       usdCredit: resolvedUsdCredit,
       exchangeRate: customerRate,
     })
-  const reviewFeeLocal = lockedReviewBreakdown?.feeLocal ?? 0
+  const reviewFeeLocal = reviewBreakdown?.feeLocal ?? 0
 
-  const reviewRows = isLocked
-    ? buildYcLocalPayInReviewRows({
-        mode: 'fund_balance',
-        phase: 'locked',
-        rail: payInRail,
-        payInCurrency: localPayInCurrency,
-        receiveCurrency: 'USD',
-        customerRate,
-        localPayIn: resolvedLocalPayIn,
-        receiveAmount: resolvedUsdCredit,
-        processingFeeLocal: reviewFeeLocal,
-        processingFeeUsd: lockedQuote?.processingFee,
-        exchangeFeeUsd: lockedQuote?.ycChannelFeeUsd ?? lockedQuote?.ycLegFeesUsd,
-        principalLocal: reviewPrincipalLocal,
-        usdCredit: resolvedUsdCredit,
-        transactionId: displayTransactionId,
-      })
-    : []
+  const reviewRows = buildYcLocalPayInReviewRows({
+    mode: 'fund_balance',
+    phase: reviewPhase,
+    rail: payInRail,
+    payInCurrency: localPayInCurrency,
+    receiveCurrency: 'USD',
+    customerRate,
+    localPayIn: resolvedLocalPayIn,
+    receiveAmount: resolvedUsdCredit,
+    processingFeeLocal: reviewFeeLocal,
+    processingFeeUsd: displayQuote?.processingFee,
+    exchangeFeeUsd: displayQuote?.ycChannelFeeUsd ?? displayQuote?.ycLegFeesUsd,
+    principalLocal: reviewPrincipalLocal,
+    usdCredit: resolvedUsdCredit,
+    transactionId: displayTransactionId || undefined,
+  })
 
   const { attestLoading, attestError, attestPayment } = useYcPayInAttest({
     attest: attestYcPayInPayment,
@@ -208,18 +213,11 @@ export function YcFundBalanceReview({
         <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
         </Pressable>
-        <Text style={styles.title}>Review deposit</Text>
+        <Text style={styles.title}>{YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
-        {isLoading && !isLocked ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator color={colors.primary.main} />
-            <Text style={styles.loadingText}>Confirming rate…</Text>
-          </View>
-        ) : null}
-
-        {isLocked && reviewRows.length > 0 ? (
+        {reviewRows.length > 0 ? (
           <View style={styles.card}>
             {reviewRows.map((row, index) => {
               if (row.id === 'amount-to-credit') {
@@ -238,6 +236,18 @@ export function YcFundBalanceReview({
                   </React.Fragment>
                 )
               }
+              if (row.id === 'transaction-id') {
+                return (
+                  <TransactionDetailSummaryRow key={row.id} label={row.label}>
+                    <TransactionDetailCopyableValue
+                      value={row.value}
+                      mono
+                      copied={copiedKey === 'transaction-id'}
+                      onPress={() => void handleCopy(displayTransactionId, 'transaction-id')}
+                    />
+                  </TransactionDetailSummaryRow>
+                )
+              }
               return (
                 <TransactionDetailSummaryRow
                   key={row.id}
@@ -252,20 +262,20 @@ export function YcFundBalanceReview({
           </View>
         ) : null}
 
-        {isLocked && displayQuote ? (
+        {isLocked && lockedQuote ? (
           <>
-            {displayQuote.expiresAt ? (
+            {lockedQuote.expiresAt ? (
               <View style={styles.countdownWrap}>
-                <YcPayInAwaitingPaymentCountdown depositExpiresAt={displayQuote.expiresAt} />
+                <YcPayInAwaitingPaymentCountdown depositExpiresAt={lockedQuote.expiresAt} />
               </View>
             ) : null}
             <YcPayInPaymentBlock
               payInRail={payInRail}
               localPayIn={resolvedLocalPayIn}
               localCurrency={localPayInCurrency}
-              bankInfo={displayQuote.bankInfo}
-              sourcePhone={displayQuote.sourcePhone ?? sourcePhone}
-              sourceNetworkName={displayQuote.sourceNetworkName ?? sourceNetworkName}
+              bankInfo={lockedQuote.bankInfo}
+              sourcePhone={lockedQuote.sourcePhone ?? sourcePhone}
+              sourceNetworkName={lockedQuote.sourceNetworkName ?? sourceNetworkName}
               transactionId={displayTransactionId}
               copiedKey={copiedKey}
               onCopy={handleCopy}
@@ -275,13 +285,6 @@ export function YcFundBalanceReview({
 
         {lockError ? <Text style={styles.error}>{lockError}</Text> : null}
         {attestError ? <Text style={styles.error}>{attestError}</Text> : null}
-        {displayQuote?.expiresAt && !isLocked ? (
-          <Text style={styles.hint}>
-            {quoteCountdown.expired
-              ? 'Quote expired — go back and continue again.'
-              : `Quote valid for ${quoteCountdown.label}`}
-          </Text>
-        ) : null}
       </ScrollView>
 
       <Pressable
@@ -318,20 +321,10 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     marginBottom: spacing[3],
   },
-  loadingWrap: {
-    alignItems: 'center',
-    paddingVertical: spacing[6],
-    gap: spacing[2],
-  },
-  loadingText: {
-    ...textStyles.caption,
-    color: colors.text.secondary,
-  },
   countdownWrap: {
     marginBottom: spacing[2],
   },
   error: { ...textStyles.caption, color: colors.semantic.destructive, marginTop: spacing[2] },
-  hint: { ...textStyles.caption, color: colors.text.secondary, marginTop: spacing[2] },
   cta: { borderRadius: borderRadius.lg, overflow: 'hidden', marginTop: spacing[3] },
   ctaDisabled: { opacity: 0.7 },
   ctaGradient: { paddingVertical: spacing[4], alignItems: 'center' },

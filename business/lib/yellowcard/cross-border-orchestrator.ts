@@ -348,7 +348,12 @@ async function formatCrossBorderFromExistingTransfer(
     receiveAmount: Number(transfer.quoted_receive ?? input.receiveAmount),
     receiveCurrency,
     bankInfo: (transfer.bank_info as Record<string, unknown> | null) ?? null,
-    expiresAt: String(transfer.expires_at ?? resolveYcQuoteExpiresAt()),
+    expiresAt: resolveYcPayInDepositExpiresAt({
+      lockedAt: String(transfer.created_at ?? ""),
+      preferredExpiresAt: String(transfer.expires_at ?? ""),
+      country: input.payInCountry,
+      payInRail: input.payInRail,
+    }),
     payInRail: input.payInRail,
     sourcePhone: input.sourcePhone,
     sourceNetworkId: input.sourceNetworkId,

@@ -17,13 +17,18 @@ import {
   resolveYcCrossBorderLocalPayInBreakdownForDisplay,
   useYcCrossBorderPayInLock,
   useYcPayInAttest,
+  YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
   ycPayInCompleteCta,
+  type YcLocalPayInReviewPhase,
 } from '@easner/shared'
 import type { Recipient } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { SendSelectedRecipientSummary } from '../send/SendSelectedRecipientSummary'
-import { TransactionDetailSummaryRow } from '../transactions/TransactionDetailSummaryRow'
+import {
+  TransactionDetailSummaryRow,
+  TransactionDetailCopyableValue,
+} from '../transactions/TransactionDetailSummaryRow'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { haptics } from '../../lib/haptics'
 import { YcPayInPaymentBlock } from './YcPayInPaymentBlock'
@@ -138,7 +143,10 @@ export function YcLocalPayInReview({
     getErrorMessage: peekLastCrossBorderQuoteError,
   })
 
-  const displayQuote = lockedQuote
+  const previewQuote =
+    quoteMeta && isStashedCrossBorderQuoteFresh(quoteMeta) ? peekCrossBorderQuote() : null
+  const displayQuote = lockedQuote ?? previewQuote
+  const reviewPhase: YcLocalPayInReviewPhase = isLocked ? 'locked' : 'preview'
   const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
   const customerRate = displayQuote?.customerRate ?? clientCustomerRate
   const displayLocalPayIn =
@@ -156,24 +164,22 @@ export function YcLocalPayInReview({
     displayProcessingFeeLocal: displayQuote?.displayProcessingFeeLocal,
   })
 
-  const reviewRows = isLocked
-    ? buildYcLocalPayInReviewRows({
-        mode: 'cross_border_send',
-        phase: 'locked',
-        rail: payInRail,
-        payInCurrency,
-        receiveCurrency,
-        customerRate,
-        localPayIn: displayLocalPayIn,
-        receiveAmount,
-        processingFeeLocal: reviewBreakdown.feeLocal,
-        processingFeeUsd: displayQuote?.processingFee,
-        exchangeFeeUsd: displayQuote?.ycLegFeesUsd,
-        principalLocal: reviewBreakdown.principalLocal,
-        transactionId: displayTransactionId,
-        processingTime,
-      })
-    : []
+  const reviewRows = buildYcLocalPayInReviewRows({
+    mode: 'cross_border_send',
+    phase: reviewPhase,
+    rail: payInRail,
+    payInCurrency,
+    receiveCurrency,
+    customerRate,
+    localPayIn: displayLocalPayIn,
+    receiveAmount,
+    processingFeeLocal: reviewBreakdown.feeLocal,
+    processingFeeUsd: displayQuote?.processingFee,
+    exchangeFeeUsd: displayQuote?.ycLegFeesUsd,
+    principalLocal: reviewBreakdown.principalLocal,
+    transactionId: displayTransactionId || undefined,
+    processingTime: isLocked ? processingTime : undefined,
+  })
 
   const { attestLoading, attestError, attestPayment } = useYcPayInAttest({
     attest: attestYcPayInPayment,
@@ -209,18 +215,11 @@ export function YcLocalPayInReview({
         <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
         </Pressable>
-        <Text style={styles.title}>Review transfer</Text>
+        <Text style={styles.title}>{YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
-        {isLoading && !isLocked ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator color={colors.primary.main} />
-            <Text style={styles.loadingText}>Confirming rate…</Text>
-          </View>
-        ) : null}
-
-        {isLocked && reviewRows.length > 0 ? (
+        {reviewRows.length > 0 ? (
           <View style={styles.card}>
             {reviewRows.map((row, index) => {
               if (row.id === 'transfer-method') {
@@ -249,6 +248,18 @@ export function YcLocalPayInReview({
                   </React.Fragment>
                 )
               }
+              if (row.id === 'transaction-id') {
+                return (
+                  <TransactionDetailSummaryRow key={row.id} label={row.label}>
+                    <TransactionDetailCopyableValue
+                      value={row.value}
+                      mono
+                      copied={copiedKey === 'transaction-id'}
+                      onPress={() => void handleCopy(displayTransactionId, 'transaction-id')}
+                    />
+                  </TransactionDetailSummaryRow>
+                )
+              }
               return (
                 <TransactionDetailSummaryRow
                   key={row.id}
@@ -262,20 +273,20 @@ export function YcLocalPayInReview({
           </View>
         ) : null}
 
-        {isLocked && displayQuote ? (
+        {isLocked && lockedQuote ? (
           <>
-            {displayQuote.expiresAt ? (
+            {lockedQuote.expiresAt ? (
               <View style={styles.countdownWrap}>
-                <YcPayInAwaitingPaymentCountdown depositExpiresAt={displayQuote.expiresAt} />
+                <YcPayInAwaitingPaymentCountdown depositExpiresAt={lockedQuote.expiresAt} />
               </View>
             ) : null}
             <YcPayInPaymentBlock
               payInRail={payInRail}
               localPayIn={displayLocalPayIn}
               localCurrency={payInCurrency}
-              bankInfo={displayQuote.bankInfo}
-              sourcePhone={displayQuote.sourcePhone ?? sourcePhone}
-              sourceNetworkName={displayQuote.sourceNetworkName ?? sourceNetworkName}
+              bankInfo={lockedQuote.bankInfo}
+              sourcePhone={lockedQuote.sourcePhone ?? sourcePhone}
+              sourceNetworkName={lockedQuote.sourceNetworkName ?? sourceNetworkName}
               transactionId={displayTransactionId}
               copiedKey={copiedKey}
               onCopy={handleCopy}
@@ -328,15 +339,6 @@ const styles = StyleSheet.create({
     maxWidth: '72%',
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
-  },
-  loadingWrap: {
-    alignItems: 'center',
-    paddingVertical: spacing[6],
-    gap: spacing[2],
-  },
-  loadingText: {
-    ...textStyles.caption,
-    color: colors.text.secondary,
   },
   countdownWrap: {
     marginBottom: spacing[2],

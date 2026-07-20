@@ -2,7 +2,7 @@ import React from 'react'
 import { Text, StyleSheet } from 'react-native'
 import {
   YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED,
-  formatYcPayInDepositTimeRemaining,
+  formatYcPayInPaymentCountdownFromExpiry,
 } from '@easner/shared'
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { colors, textStyles } from '../../theme'
@@ -16,14 +16,14 @@ export function YcPayInAwaitingPaymentCountdown({ depositExpiresAt }: Props) {
   if (!depositExpiresAt) return null
 
   if (countdown.expired) {
-    return (
-      <Text style={styles.expired}>{YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED}</Text>
-    )
+    return <Text style={styles.expired}>{YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED}</Text>
   }
 
   return (
     <Text style={styles.active}>
-      {formatYcPayInDepositTimeRemaining(countdown.remainingMs)}
+      {formatYcPayInPaymentCountdownFromExpiry(depositExpiresAt, {
+        nowMs: countdown.nowMs,
+      })}
     </Text>
   )
 }

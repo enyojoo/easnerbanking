@@ -22,6 +22,7 @@ import {
   computeYcFundBalanceAmountPreview,
   ycFundBalanceQuoteErrorMessage,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
+  YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
   validateYcFundBalancePayInAmount,
   REVIEW_ROW_LABELS,
   normalizeYcMomoPhone,
@@ -710,6 +711,8 @@ export function LocalDepositWizard({
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
+
+        <h2 className="text-2xl font-semibold text-foreground">{YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE}</h2>
 
         <YcPayInReviewSection
           flowMode="fund_balance"

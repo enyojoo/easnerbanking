@@ -13,6 +13,7 @@ import {
   useYcPayInLock,
   useYcPayInAttest,
   ycPayInCompleteCta,
+  type YcLocalPayInReviewPhase,
   type YcPayInRail,
 } from "@easner/shared"
 import { YcLocalPayInReview } from "@/components/yc-local-pay-in-review"
@@ -101,7 +102,7 @@ export function YcPayInReviewSection(props: Props) {
         }
       }
 
-  const { quote, isLocked, isLoading, error: lockError } = useYcPayInLock<YcPayInLockedQuote>({
+  const { quote: lockedQuote, isLocked, isLoading, error: lockError } = useYcPayInLock<YcPayInLockedQuote>({
     enabled: Boolean(props.lockKey),
     lockKey: props.lockKey,
     getCachedLocked: props.getCachedLocked,
@@ -119,43 +120,38 @@ export function YcPayInReviewSection(props: Props) {
     onSuccess: props.attest.onSuccess,
   })
 
-  if (isLoading && !isLocked) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 gap-2">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Confirming rate…</p>
-      </div>
-    )
-  }
-
-  if (!isLocked || !quote?.transferId) {
-    return lockError ? <p className="text-sm text-destructive">{lockError}</p> : null
-  }
-
-  const transactionId = quote.easnerTransactionId ?? quote.transactionId ?? ""
-  const customerRate = quote.customerRate
-  const localPayIn = quote.localPayIn
+  const reviewPhase: YcLocalPayInReviewPhase = isLocked ? "locked" : "preview"
+  const transactionId = lockedQuote?.easnerTransactionId ?? lockedQuote?.transactionId ?? ""
 
   if (props.flowMode === "fund_balance") {
-    const usdCredit = quote.usdCredit ?? props.previewUsdCredit
+    const customerRate = lockedQuote?.customerRate ?? props.previewCustomerRate
+    const localPayIn = lockedQuote?.localPayIn ?? props.previewLocalPayIn
+    const usdCredit = lockedQuote?.usdCredit ?? props.previewUsdCredit
     const breakdown = resolveYcFundBalanceLocalPayInBreakdownForDisplay({
       localPayIn,
       localCurrency: props.payInCurrency,
       usdCredit,
       exchangeRate: customerRate,
-      displayProcessingFeeLocal: quote.displayProcessingFeeLocal,
-      processingFee: quote.processingFee,
-      exchangeFee: quote.ycChannelFeeUsd ?? quote.ycLegFeesUsd,
+      displayProcessingFeeLocal: lockedQuote?.displayProcessingFeeLocal,
+      processingFee: lockedQuote?.processingFee,
+      exchangeFee: lockedQuote?.ycChannelFeeUsd ?? lockedQuote?.ycLegFeesUsd,
     })
     const principalLocal =
       breakdown.principalLocal ??
       computeYcFundBalancePrincipalLocalPayIn({ usdCredit, exchangeRate: customerRate })
 
+    const ctaDisabled =
+      !isLocked ||
+      isLoading ||
+      attestLoading ||
+      Boolean(lockError) ||
+      !lockedQuote?.transferId
+
     return (
       <div className="space-y-4">
         <YcLocalPayInReview
           mode="fund_balance"
-          phase="locked"
+          phase={reviewPhase}
           rail={props.payInRail}
           payInCurrency={props.payInCurrency}
           receiveCurrency="USD"
@@ -163,11 +159,13 @@ export function YcPayInReviewSection(props: Props) {
           localPayIn={localPayIn}
           receiveAmount={usdCredit}
           processingFeeLocal={breakdown.feeLocal}
-          processingFeeUsd={quote.processingFee}
-          exchangeFeeUsd={quote.ycChannelFeeUsd ?? quote.ycLegFeesUsd}
+          processingFeeUsd={lockedQuote?.processingFee}
+          exchangeFeeUsd={lockedQuote?.ycChannelFeeUsd ?? lockedQuote?.ycLegFeesUsd}
           principalLocal={principalLocal}
           usdCredit={usdCredit}
           transactionId={transactionId || undefined}
+          copiedField={copiedField}
+          onCopy={handleCopy}
           creditDestinationNode={
             <CreditDestinationRow
               label={REVIEW_ROW_LABELS.creditTo}
@@ -176,47 +174,75 @@ export function YcPayInReviewSection(props: Props) {
             />
           }
         />
-        {quote.expiresAt ? <YcPayInAwaitingPaymentCountdown depositExpiresAt={quote.expiresAt} /> : null}
-        <YcPayInPaymentInstructions
-          payInRail={props.payInRail}
-          localPayIn={localPayIn}
-          localCurrency={props.payInCurrency}
-          bankInfo={quote.bankInfo}
-          sourcePhone={quote.sourcePhone}
-          sourceNetworkName={quote.sourceNetworkName}
-          transactionId={transactionId}
-          copiedField={copiedField}
-          onCopy={handleCopy}
-        />
+
+        {isLocked && lockedQuote ? (
+          <>
+            {lockedQuote.expiresAt ? (
+              <YcPayInAwaitingPaymentCountdown depositExpiresAt={lockedQuote.expiresAt} />
+            ) : null}
+            <YcPayInPaymentInstructions
+              payInRail={props.payInRail}
+              localPayIn={localPayIn}
+              localCurrency={props.payInCurrency}
+              bankInfo={lockedQuote.bankInfo}
+              sourcePhone={lockedQuote.sourcePhone}
+              sourceNetworkName={lockedQuote.sourceNetworkName}
+              transactionId={transactionId}
+              copiedField={copiedField}
+              onCopy={handleCopy}
+            />
+          </>
+        ) : null}
+
+        {lockError ? <p className="text-sm text-destructive text-center">{lockError}</p> : null}
         {attestError ? <p className="text-sm text-destructive text-center">{attestError}</p> : null}
         <Button
           className="w-full"
           type="button"
-          disabled={attestLoading}
-          onClick={() => void attestPayment(transactionId, quote.transferId!)}
+          disabled={ctaDisabled}
+          onClick={() => {
+            if (!lockedQuote?.transferId || !transactionId) return
+            void attestPayment(transactionId, lockedQuote.transferId)
+          }}
         >
-          {attestLoading ? "Confirming…" : ycPayInCompleteCta(props.payInRail)}
+          {attestLoading || (isLoading && !isLocked) ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Confirming…
+            </>
+          ) : (
+            ycPayInCompleteCta(props.payInRail)
+          )}
         </Button>
       </div>
     )
   }
 
   const receiveAmount = props.receiveAmount
+  const customerRate = lockedQuote?.customerRate ?? props.clientCustomerRate ?? 0
+  const localPayIn = lockedQuote?.localPayIn ?? props.clientProvisionalLocalPayIn ?? 0
   const breakdown = resolveYcCrossBorderLocalPayInBreakdownForDisplay({
     localPayIn,
     payInCurrency: props.payInCurrency,
     receiveAmount,
     customerRate,
-    provisionalPayIn: quote.provisionalPayIn ?? props.clientProvisionalLocalPayIn,
-    displayProcessingFeeLocal: quote.displayProcessingFeeLocal,
+    provisionalPayIn: lockedQuote?.provisionalPayIn ?? props.clientProvisionalLocalPayIn,
+    displayProcessingFeeLocal: lockedQuote?.displayProcessingFeeLocal,
   })
   const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
+
+  const ctaDisabled =
+    !isLocked ||
+    isLoading ||
+    attestLoading ||
+    Boolean(lockError) ||
+    !lockedQuote?.transferId
 
   return (
     <div className="space-y-4">
       <YcLocalPayInReview
         mode="cross_border_send"
-        phase="locked"
+        phase={reviewPhase}
         rail={props.payInRail}
         payInCurrency={props.payInCurrency}
         receiveCurrency={props.receiveCurrency}
@@ -224,33 +250,54 @@ export function YcPayInReviewSection(props: Props) {
         localPayIn={localPayIn}
         receiveAmount={receiveAmount}
         processingFeeLocal={breakdown.feeLocal}
-        processingFeeUsd={quote.processingFee}
-        exchangeFeeUsd={quote.ycLegFeesUsd}
+        processingFeeUsd={lockedQuote?.processingFee}
+        exchangeFeeUsd={lockedQuote?.ycLegFeesUsd}
         principalLocal={breakdown.principalLocal}
         transactionId={transactionId || undefined}
-        processingTime={processingTime}
+        processingTime={isLocked ? processingTime : undefined}
         recipientNode={props.recipientNode}
-      />
-      {quote.expiresAt ? <YcPayInAwaitingPaymentCountdown depositExpiresAt={quote.expiresAt} /> : null}
-      <YcPayInPaymentInstructions
-        payInRail={props.payInRail}
-        localPayIn={localPayIn}
-        localCurrency={props.payInCurrency}
-        bankInfo={quote.bankInfo}
-        sourcePhone={quote.sourcePhone}
-        sourceNetworkName={quote.sourceNetworkName}
-        transactionId={transactionId}
         copiedField={copiedField}
         onCopy={handleCopy}
       />
+
+      {isLocked && lockedQuote ? (
+        <>
+          {lockedQuote.expiresAt ? (
+            <YcPayInAwaitingPaymentCountdown depositExpiresAt={lockedQuote.expiresAt} />
+          ) : null}
+          <YcPayInPaymentInstructions
+            payInRail={props.payInRail}
+            localPayIn={localPayIn}
+            localCurrency={props.payInCurrency}
+            bankInfo={lockedQuote.bankInfo}
+            sourcePhone={lockedQuote.sourcePhone}
+            sourceNetworkName={lockedQuote.sourceNetworkName}
+            transactionId={transactionId}
+            copiedField={copiedField}
+            onCopy={handleCopy}
+          />
+        </>
+      ) : null}
+
+      {lockError ? <p className="text-sm text-destructive text-center">{lockError}</p> : null}
       {attestError ? <p className="text-sm text-destructive text-center">{attestError}</p> : null}
       <Button
         className="w-full"
         type="button"
-        disabled={attestLoading}
-        onClick={() => void attestPayment(transactionId, quote.transferId!)}
+        disabled={ctaDisabled}
+        onClick={() => {
+          if (!lockedQuote?.transferId || !transactionId) return
+          void attestPayment(transactionId, lockedQuote.transferId)
+        }}
       >
-        {attestLoading ? "Confirming…" : ycPayInCompleteCta(props.payInRail)}
+        {attestLoading || (isLoading && !isLocked) ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Confirming…
+          </>
+        ) : (
+          ycPayInCompleteCta(props.payInRail)
+        )}
       </Button>
     </div>
   )

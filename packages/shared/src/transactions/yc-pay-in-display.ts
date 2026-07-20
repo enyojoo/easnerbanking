@@ -39,6 +39,64 @@ export function formatYcPayInDepositTimeRemaining(remainingMs: number): string {
   return `${mm}:${String(ss).padStart(2, "0")}`
 }
 
+/** Prefix for live pay-in countdown (YC channel deposit window). */
+export const YC_PAY_IN_MAKE_PAYMENT_WITHIN_PREFIX = "Make payment within "
+
+/** Live countdown label from remaining ms — e.g. "Make payment within 2h 15m". */
+export function formatYcPayInPaymentCountdownLabel(
+  remainingMs: number,
+  expired = false,
+): string {
+  if (expired || remainingMs <= 0) {
+    return YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED
+  }
+  return `${YC_PAY_IN_MAKE_PAYMENT_WITHIN_PREFIX}${formatYcPayInDepositTimeRemaining(remainingMs)}`
+}
+
+/** Live countdown from YC deposit expiry ISO timestamp. */
+export function formatYcPayInPaymentCountdownFromExpiry(
+  expiresAt: string,
+  options?: { nowMs?: number },
+): string {
+  const endMs = new Date(expiresAt).getTime()
+  if (!Number.isFinite(endMs)) return YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED
+  const nowMs = options?.nowMs ?? Date.now()
+  return formatYcPayInPaymentCountdownLabel(endMs - nowMs, endMs <= nowMs)
+}
+
+/** Absolute deadline time — time-only when still today, otherwise short date + time. */
+export function formatYcPayInPaymentDeadlineAt(
+  expiresAt: string,
+  options?: { nowMs?: number; locale?: string },
+): string {
+  const ms = new Date(expiresAt).getTime()
+  if (!Number.isFinite(ms)) return ""
+
+  const date = new Date(ms)
+  const now = new Date(options?.nowMs ?? Date.now())
+  const sameDay = date.toDateString() === now.toDateString()
+  const locale = options?.locale
+
+  if (sameDay) {
+    return date.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" })
+  }
+
+  return date.toLocaleString(locale, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
+
+/** @deprecated Use formatYcPayInPaymentCountdownFromExpiry */
+export function formatYcPayInPaymentDeadlineLabel(
+  expiresAt: string,
+  options?: { nowMs?: number; locale?: string },
+): string {
+  return formatYcPayInPaymentCountdownFromExpiry(expiresAt, options)
+}
+
 /** @deprecated Use formatYcPayInDepositTimeRemaining */
 export const YC_PAY_IN_COMPLETE_PAYMENT_WITHIN_PREFIX = "Complete payment within "
 
@@ -48,9 +106,9 @@ export const YC_PAY_IN_AWAITING_PAYMENT_TIME_PASSED = YC_PAY_IN_AWAITING_DESCRIP
 /** @deprecated Use YC_PAY_IN_COMPLETE_PAYMENT_WITHIN_PREFIX */
 export const YC_PAY_IN_PAYMENT_WINDOW_COUNTDOWN_PREFIX = YC_PAY_IN_COMPLETE_PAYMENT_WITHIN_PREFIX
 
-/** @deprecated Use formatYcPayInDepositTimeRemaining */
+/** @deprecated Use formatYcPayInPaymentCountdownLabel */
 export function formatYcPayInAwaitingPaymentCountdown(remainingMs: number): string {
-  return `${YC_PAY_IN_COMPLETE_PAYMENT_WITHIN_PREFIX}${formatYcPayInDepositTimeRemaining(remainingMs)}`
+  return formatYcPayInPaymentCountdownLabel(remainingMs)
 }
 
 /** @deprecated Use formatYcPayInDepositTimeRemaining + YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED */
@@ -317,7 +375,7 @@ function buildAwaitingDescription(input: {
       : YC_PAY_IN_AWAITING_DESCRIPTION_PREFIX
 
     return {
-      description: prefix.trim(),
+      description: prefix,
       showPaymentDetailsLink: true,
     }
   }

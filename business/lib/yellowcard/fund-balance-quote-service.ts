@@ -378,6 +378,7 @@ function formatFundBalanceTransferResponse(input: {
   transactionEasnerId: string | null
   pricing: ReturnType<typeof computeYcFundBalancePricing>
   currency: string
+  country: string
   customerRate: number
   rail: FundBalanceRail
   sourcePhone?: string
@@ -385,7 +386,12 @@ function formatFundBalanceTransferResponse(input: {
   sourceNetworkName?: string
   sequenceId?: string
 }) {
-  const expiresAt = String(input.transfer.expires_at ?? resolveYcQuoteExpiresAt())
+  const expiresAt = resolveYcPayInDepositExpiresAt({
+    lockedAt: String(input.transfer.created_at ?? input.transfer.updated_at ?? ""),
+    preferredExpiresAt: String(input.transfer.expires_at ?? ""),
+    country: input.country,
+    payInRail: input.rail,
+  })
   const bankInfo = (input.transfer.bank_info as Record<string, unknown> | null) ?? null
   const summary = buildFundBalanceQuoteSummary({
     pricing: input.pricing,
@@ -487,6 +493,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
         receiveLeg: { cryptoAmountUsd: 0 },
       }),
       currency: ctx.currency,
+      country: ctx.country,
       customerRate: Number(existing.customer_rate ?? prepared.customerRate),
       rail: ctx.rail,
       sourcePhone: ctx.sourcePhone,
@@ -648,6 +655,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
     transactionEasnerId: easnerTransactionId,
     pricing,
     currency: ctx.currency,
+    country: ctx.country,
     customerRate: prepared.customerRate,
     rail: ctx.rail,
     sourcePhone: ctx.sourcePhone,

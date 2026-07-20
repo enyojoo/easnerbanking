@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 import {
   YC_PAY_IN_AWAITING_STATUS,
+  YC_PAY_IN_AWAITING_DESCRIPTION_PREFIX,
   buildYcPayInLifecycle,
+  formatYcPayInPaymentDeadlineLabel,
   isYcPayInAwaitingAttestation,
   ledgerTransactionStatusDisplayForRow,
   resolveYcPayInFeedStatus,
@@ -58,6 +60,15 @@ describe("yc pay-in display", () => {
     expect(steps[0]?.title).toBe("Awaiting payment")
     expect(steps[0]?.state).toBe("current")
     expect(steps[0]?.showPaymentDetailsLink).toBe(true)
+    expect(steps[0]?.description.endsWith(" ")).toBe(true)
+  })
+
+  it("formats pay-in countdown from YC deposit expiry", () => {
+    const nowMs = Date.parse("2026-07-21T10:00:00.000Z")
+    const expiresAt = "2026-07-21T14:30:00.000Z"
+    expect(formatYcPayInPaymentDeadlineLabel(expiresAt, { nowMs })).toBe(
+      "Make payment within 4h 30m",
+    )
   })
 
   it("shows expired lifecycle copy after the payment window closes", () => {

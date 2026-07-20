@@ -4,7 +4,7 @@ import { useState } from "react"
 import {
   YC_PAY_IN_AWAITING_DESCRIPTION_LINK,
   YC_PAY_IN_AWAITING_DESCRIPTION_SUFFIX,
-  formatYcPayInDepositTimeRemaining,
+  formatYcPayInPaymentCountdownFromExpiry,
   type YcPayInPaymentDetails,
 } from "@easner/shared"
 import { Check, Loader2, CircleX } from "lucide-react"
@@ -75,12 +75,6 @@ export function TransactionLifecycleTracker({
                 <div className="min-w-0 flex-1 pb-6">
                   <p className={`text-sm font-medium ${active ? "text-foreground" : "text-muted-foreground"}`}>
                     {step.title}
-                    {showDepositTimer ? (
-                      <span className="font-semibold tabular-nums text-amber-600 dark:text-amber-500">
-                        {" · "}
-                        {formatYcPayInDepositTimeRemaining(quoteCountdown.remainingMs)}
-                      </span>
-                    ) : null}
                   </p>
                   {step.occurredAt ? (
                     <p className="mt-0.5 text-xs text-muted-foreground">
@@ -104,6 +98,13 @@ export function TransactionLifecycleTracker({
                       step.description
                     )}
                   </p>
+                  {showDepositTimer && quoteExpiresAt ? (
+                    <p className="mt-1.5 text-sm font-semibold tabular-nums text-amber-600 dark:text-amber-500">
+                      {formatYcPayInPaymentCountdownFromExpiry(quoteExpiresAt, {
+                        nowMs: quoteCountdown.nowMs,
+                      })}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             )

@@ -25,6 +25,7 @@ export function useQuoteCountdown(expiresAt: string | null | undefined) {
   return {
     expired,
     remainingMs,
+    nowMs: now,
     label: formatQuoteCountdownLabel(remainingMs),
   }
 }

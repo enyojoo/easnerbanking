@@ -2,9 +2,10 @@
 
 import {
   YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED,
-  formatYcPayInDepositTimeRemaining,
+  formatYcPayInPaymentCountdownFromExpiry,
 } from "@easner/shared"
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
+import { cn } from "@/lib/utils"
 
 type Props = {
   depositExpiresAt?: string | null
@@ -25,12 +26,14 @@ export function YcPayInAwaitingPaymentCountdown({ depositExpiresAt, className }:
 
   return (
     <p
-      className={
-        className ??
-        "text-sm font-semibold tabular-nums text-amber-600 dark:text-amber-500 text-center"
-      }
+      className={cn(
+        "text-sm font-semibold tabular-nums text-amber-600 dark:text-amber-500 text-center",
+        className,
+      )}
     >
-      {formatYcPayInDepositTimeRemaining(countdown.remainingMs)}
+      {formatYcPayInPaymentCountdownFromExpiry(depositExpiresAt, {
+        nowMs: countdown.nowMs,
+      })}
     </p>
   )
 }

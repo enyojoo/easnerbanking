@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import {
   YC_PAY_IN_AWAITING_DESCRIPTION_LINK,
   YC_PAY_IN_AWAITING_DESCRIPTION_SUFFIX,
-  formatYcPayInDepositTimeRemaining,
+  formatYcPayInPaymentCountdownFromExpiry,
   type YcPayInPaymentDetails,
 } from '@easner/shared'
 import { colors, textStyles, spacing } from '../theme'
@@ -136,12 +136,6 @@ export function TransactionLifecycleTracker({
                 ]}
               >
                 {stage.title}
-                {showDepositTimer ? (
-                  <Text style={styles.depositTimer}>
-                    {' · '}
-                    {formatYcPayInDepositTimeRemaining(quoteCountdown.remainingMs)}
-                  </Text>
-                ) : null}
               </Text>
               {stage.occurredAt ? (
                 <Text style={styles.timestamp}>{formatTimestamp(stage.occurredAt)}</Text>
@@ -168,6 +162,13 @@ export function TransactionLifecycleTracker({
                   stage.description
                 )}
               </Text>
+              {showDepositTimer && quoteExpiresAt ? (
+                <Text style={styles.countdown}>
+                  {formatYcPayInPaymentCountdownFromExpiry(quoteExpiresAt, {
+                    nowMs: quoteCountdown.nowMs,
+                  })}
+                </Text>
+              ) : null}
             </View>
           </View>
         )
@@ -182,10 +183,12 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing[3],
   },
-  depositTimer: {
-    fontWeight: '700',
+  countdown: {
+    ...textStyles.bodySmall,
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
     color: colors.warning.main,
+    marginTop: spacing[2],
   },
   stageContainer: {
     flexDirection: 'row',
