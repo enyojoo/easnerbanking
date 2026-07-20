@@ -82,8 +82,6 @@ import SelectRecipientScreenNative from '../screens/send/SelectRecipientScreen'
 import SendConfirmScreenNative from '../screens/send/SendConfirmScreen'
 import SendCrossBorderMomoSetupScreenNative from '../screens/send/SendCrossBorderMomoSetupScreen'
 import SendPinScreenNative from '../screens/send/SendPinScreen'
-import YcPayInScreenNative from '../screens/send/YcPayInScreen'
-import YcPayInAuthorizeScreenNative from '../screens/send/YcPayInAuthorizeScreen'
 
 // Receive Money Flow Screens
 import ReceiveMoneyScreenNative from '../screens/receive/ReceiveMoneyScreen'
@@ -124,14 +122,6 @@ const SendCrossBorderMomoSetupScreen = createWebLazyScreen(
 const SendPinScreen = createWebLazyScreen(
   () => import('../screens/send/SendPinScreen'),
   SendPinScreenNative,
-)
-const YcPayInScreen = createWebLazyScreen(
-  () => import('../screens/send/YcPayInScreen'),
-  YcPayInScreenNative,
-)
-const YcPayInAuthorizeScreen = createWebLazyScreen(
-  () => import('../screens/send/YcPayInAuthorizeScreen'),
-  YcPayInAuthorizeScreenNative,
 )
 
 const CardScreen = createWebLazyScreen(
@@ -429,8 +419,6 @@ function MainStack() {
       <Stack.Screen name="SendCrossBorderMomoSetup" component={SendCrossBorderMomoSetupScreen} options={transitionOptions('SendCrossBorderMomoSetup')} />
       <Stack.Screen name="SendConfirm" component={SendConfirmScreen} options={transitionOptions('SendConfirm')} />
       <Stack.Screen name="SendPin" component={SendPinScreen} options={transitionOptions('SendPin')} />
-      <Stack.Screen name="YcPayIn" component={YcPayInScreen} options={transitionOptions('YcPayIn')} />
-      <Stack.Screen name="YcPayInAuthorize" component={YcPayInAuthorizeScreen} options={transitionOptions('YcPayInAuthorize')} />
       <Stack.Screen name="ReceiveMoney" component={ReceiveMoneyScreen} options={transitionOptions('ReceiveMoney')} />
       <Stack.Screen name="ReceiveBankDetails" component={ReceiveBankDetailsScreen} options={transitionOptions('ReceiveBankDetails')} />
       <Stack.Screen name="ReceiveLocalRail" component={ReceiveLocalRailScreen} options={transitionOptions('ReceiveLocalRail')} />

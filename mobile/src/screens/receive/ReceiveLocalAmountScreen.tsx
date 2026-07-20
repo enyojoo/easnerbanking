@@ -50,6 +50,7 @@ import { getCurrencySymbol } from '../../utils/formatters'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
 import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib/dynamicAmountFontSize'
 import type { NgLocalIdType } from '@easner/shared'
+import { useDebouncedValue } from '@easner/shared'
 import { NgLocalVerificationNotice } from '../../components/compliance/NgLocalVerificationNotice'
 import SkeletonLoader from '../../components/SkeletonLoader'
 import { useToast } from '../../components/ToastProvider'
@@ -194,6 +195,38 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     },
   })
 
+  const fundBalanceQuotePrefetchKey = useMemo(() => {
+    if (!amountPositive || !residenceCountry || !localPayInCurrency) return ''
+    return [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, enteredAmount].join('|')
+  }, [
+    amountPositive,
+    residenceCountry,
+    localPayInCurrency,
+    payInRail,
+    amountEntryMode,
+    enteredAmount,
+  ])
+
+  const [debouncedFundBalanceQuotePrefetchKey] = useDebouncedValue(fundBalanceQuotePrefetchKey)
+
+  useEffect(() => {
+    if (!debouncedFundBalanceQuotePrefetchKey || enteredAmount <= 0) return
+    void ensureFundBalanceQuoteStashed({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: payInRail,
+      amountEntryMode,
+      enteredAmount,
+    })
+  }, [
+    debouncedFundBalanceQuotePrefetchKey,
+    residenceCountry,
+    localPayInCurrency,
+    payInRail,
+    amountEntryMode,
+    enteredAmount,
+  ])
+
   const usdBalance = parseFloat(balances.USD || '0')
   const railLabel =
     payInRail === 'mobile_money' ? SEND_LOCAL_PAY_IN_MOMO_CHIP : SEND_LOCAL_PAY_IN_BANK_CHIP
@@ -313,15 +346,6 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       return
     }
 
-    haptics.medium()
-    void ensureFundBalanceQuoteStashed({
-      country: residenceCountry,
-      currency: localPayInCurrency,
-      rail: payInRail,
-      amountEntryMode,
-      enteredAmount,
-    }).catch(() => {})
-    void ensurePayInNetworksCached(residenceCountry, localPayInCurrency).catch(() => {})
     navigation.navigate('ReceiveLocalReview' as never, {
       localPayInCurrency,
       residenceCountry,

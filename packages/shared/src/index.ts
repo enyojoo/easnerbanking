@@ -801,6 +801,14 @@ export {
 export type { YcPayInLimits, YcPayInAmountValidation } from "./yc-pay-in-limits"
 export { useYcPayInMinEnforcement } from "./hooks/use-yc-pay-in-min-enforcement"
 export { useYcPayInExpiredDetailRefetch } from "./hooks/use-yc-pay-in-expired-detail-refetch"
+export {
+  useYcPayInLock,
+  type YcPayInLockStatus,
+  type UseYcPayInLockResult,
+} from "./hooks/use-yc-pay-in-lock"
+export { useYcFundBalancePayInLock } from "./hooks/use-yc-fund-balance-pay-in-lock"
+export { useYcCrossBorderPayInLock } from "./hooks/use-yc-cross-border-pay-in-lock"
+export { useYcPayInAttest, type YcPayInAttestResult } from "./hooks/use-yc-pay-in-attest"
 export { useYcCrossBorderSendMinEnforcement } from "./hooks/use-yc-cross-border-send-min-enforcement"
 export {
   QUOTE_PREFETCH_DEBOUNCE_MS,

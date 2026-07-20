@@ -49,8 +49,6 @@ export type ScreenRouteName =
   | 'SendCrossBorderMomoSetup'
   | 'SendConfirm'
   | 'SendPin'
-  | 'YcPayIn'
-  | 'YcPayInAuthorize'
   | 'ReceiveMoney'
   | 'ReceiveBankDetails'
   | 'ReceiveLocalRail'
@@ -104,8 +102,6 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   SendCrossBorderMomoSetup: { intent: 'flowStep' },
   SendConfirm: { intent: 'flowStep', flowStepTerminal: true },
   SendPin: { intent: 'flowStep', flowStepTerminal: true },
-  YcPayIn: { intent: 'flowStep' },
-  YcPayInAuthorize: { intent: 'flowStep', flowStepTerminal: true },
 
   // Receive flow
   ReceiveMoney: { intent: 'stackEntry' },

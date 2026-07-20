@@ -3,7 +3,6 @@ import { CommonActions } from '@react-navigation/native'
 export type TransactionDetailFromScreen =
   | 'Dashboard'
   | 'Transactions'
-  | 'YcPayIn'
   | 'SendFlow'
   | 'ReceiveFlow'
   | string
@@ -13,10 +12,11 @@ type NavigationLike = {
   dispatch: (action: ReturnType<typeof CommonActions.reset>) => void
 }
 
-/** Leave YC pay-in complete — land on transaction detail with a clean stack. */
+/** Leave pay-in review — land on transaction detail with a clean stack. */
 export function navigateToTransactionDetailAfterPayIn(
   navigation: NavigationLike,
   transactionId: string,
+  fromScreen: 'SendFlow' | 'ReceiveFlow' = 'ReceiveFlow',
 ): void {
   navigation.dispatch(
     CommonActions.reset({
@@ -25,7 +25,7 @@ export function navigateToTransactionDetailAfterPayIn(
         { name: 'MainTabs' },
         {
           name: 'TransactionDetails',
-          params: { transactionId, fromScreen: 'YcPayIn' satisfies TransactionDetailFromScreen },
+          params: { transactionId, fromScreen },
         },
       ],
     }),
@@ -35,14 +35,13 @@ export function navigateToTransactionDetailAfterPayIn(
 export function usesCustomTransactionDetailBack(fromScreen?: TransactionDetailFromScreen): boolean {
   return (
     fromScreen === 'Transactions' ||
-    fromScreen === 'YcPayIn' ||
     fromScreen === 'SendFlow' ||
     fromScreen === 'ReceiveFlow' ||
     fromScreen === 'Dashboard'
   )
 }
 
-/** Back from transaction detail — never return to YC pay-in complete screens. */
+/** Back from transaction detail — never return to pay-in flow screens. */
 export function navigateBackFromTransactionDetail(
   navigation: NavigationLike,
   fromScreen?: TransactionDetailFromScreen,
@@ -57,7 +56,6 @@ export function navigateBackFromTransactionDetail(
     return
   }
   if (
-    fromScreen === 'YcPayIn' ||
     fromScreen === 'SendFlow' ||
     fromScreen === 'ReceiveFlow' ||
     fromScreen === 'Dashboard'

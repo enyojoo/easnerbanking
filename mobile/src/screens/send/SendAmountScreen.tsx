@@ -111,6 +111,7 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   clearCrossBorderQuote,
+  ensureCrossBorderQuoteStashed,
   prefetchCrossBorderQuotePipeline,
 } from '../../lib/sendFlowCrossBorderQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
@@ -1047,6 +1048,47 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedWalletQuotePrefetchKey, recipient?.id])
+
+  const needsBackgroundCrossBorderQuote =
+    selectedPaymentMethod === 'otherCurrency' &&
+    showThroughLocalCurrency &&
+    Boolean(recipient?.id && selectedOtherCurrency && receiveAmount > 0) &&
+    selectedOtherPaymentMethod === 'bank_transfer'
+
+  const crossBorderQuotePrefetchKey = useMemo(() => {
+    if (!needsBackgroundCrossBorderQuote || !recipient?.id || !selectedOtherCurrency) return ''
+    const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
+    if (!payInCountry) return ''
+    return [
+      recipient.id,
+      selectedOtherCurrency,
+      payInCountry,
+      tlcPayInRail,
+      receiveAmount,
+    ].join('|')
+  }, [
+    needsBackgroundCrossBorderQuote,
+    recipient?.id,
+    selectedOtherCurrency,
+    tlcPayInRail,
+    receiveAmount,
+  ])
+
+  const [debouncedCrossBorderQuotePrefetchKey] = useDebouncedValue(crossBorderQuotePrefetchKey)
+
+  useEffect(() => {
+    if (!debouncedCrossBorderQuotePrefetchKey || !recipient?.id || !selectedOtherCurrency) return
+    const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
+    if (!payInCountry) return
+    void ensureCrossBorderQuoteStashed({
+      recipientId: recipient.id,
+      payInCurrency: selectedOtherCurrency,
+      payInCountry,
+      payInRail: tlcPayInRail,
+      receiveAmount,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedCrossBorderQuotePrefetchKey, recipient?.id])
 
   useEffect(() => {
     clearSendPayoutQuote()

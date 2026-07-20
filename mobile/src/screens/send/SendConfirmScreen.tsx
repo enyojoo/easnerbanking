@@ -769,11 +769,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           networkId={params.networkId}
           sourceNetworkName={params.sourceNetworkName}
           clientCustomerRate={
-            (params.amountScreenSendAmount ?? 0) > 0 && (params.receiveAmountValue ?? 0) > 0
-              ? (params.receiveAmountValue ?? 0) / (params.amountScreenSendAmount ?? 1)
+            amountScreenSendAmount > 0 && receiveAmountValue > 0
+              ? receiveAmountValue / amountScreenSendAmount
               : 0
           }
-          clientProvisionalLocalPayIn={params.amountScreenSendAmount ?? 0}
+          clientProvisionalLocalPayIn={amountScreenSendAmount}
           footerPadding={footerPadding}
           listBottomPadding={listBottomPadding}
         />
