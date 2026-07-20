@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { createHash, createHmac } from "node:crypto"
-import { buildYellowcardAuthHeaders } from "@/lib/yellowcard/http"
+import { buildYellowcardAuthHeaders, yellowcardFetch } from "@/lib/yellowcard/http"
 import { toYellowcardRequestPath, toYellowcardSignedPath } from "@/lib/yellowcard/config"
 
 describe("buildYellowcardAuthHeaders", () => {
@@ -76,5 +76,41 @@ describe("toYellowcardSignedPath", () => {
 describe("toYellowcardRequestPath", () => {
   it("keeps query string on request path", () => {
     expect(toYellowcardRequestPath("/networks?country=MX")).toBe("/business/networks?country=MX")
+  })
+})
+
+describe("yellowcardFetch relay", () => {
+  const originalEnv = { ...process.env }
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+    vi.restoreAllMocks()
+  })
+
+  it("routes through relay when YELLOWCARD_RELAY_URL is set", async () => {
+    process.env.YELLOWCARD_API_KEY = "test-api-key"
+    process.env.YELLOWCARD_API_SECRET = "test-api-secret"
+    process.env.YELLOWCARD_ENVIRONMENT = "production"
+    process.env.YELLOWCARD_RELAY_URL = "https://relay.example.com"
+    process.env.YELLOWCARD_RELAY_SECRET = "relay-secret"
+
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: 200, body: JSON.stringify({ channels: [{ id: "ch_1" }] }) }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+
+    const result = await yellowcardFetch<{ channels: { id: string }[] }>({
+      method: "GET",
+      path: "/channels",
+    })
+
+    expect(result.channels[0]?.id).toBe("ch_1")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [relayUrl, relayInit] = fetchMock.mock.calls[0] ?? []
+    expect(String(relayUrl)).toBe("https://relay.example.com/forward")
+    expect(relayInit?.method).toBe("POST")
+    expect((relayInit?.headers as Record<string, string>).Authorization).toBe("Bearer relay-secret")
   })
 })

@@ -14,6 +14,15 @@ export function getYellowcardEnvironment(): "sandbox" | "production" {
   return env === "production" ? "production" : "sandbox"
 }
 
+/** Optional static-IP relay for production YC IP whitelisting (see business/yc-relay). */
+export function getYellowcardRelayUrl(): string {
+  return (process.env.YELLOWCARD_RELAY_URL || "").trim().replace(/\/$/, "")
+}
+
+export function getYellowcardRelaySecret(): string {
+  return (process.env.YELLOWCARD_RELAY_SECRET || process.env.YC_RELAY_SECRET || "").trim()
+}
+
 function envTruthy(name: string): boolean {
   const v = String(process.env[name] || "").trim().toLowerCase()
   return v === "true" || v === "1"

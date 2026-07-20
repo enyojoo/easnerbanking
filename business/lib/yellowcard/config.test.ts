@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { getYellowcardEnvironment, isYcCryptoDepositDryRun } from "./config"
+import {
+  getYellowcardEnvironment,
+  getYellowcardRelaySecret,
+  getYellowcardRelayUrl,
+  isYcCryptoDepositDryRun,
+} from "./config"
 
 describe("isYcCryptoDepositDryRun", () => {
   const originalEnv = { ...process.env }
@@ -31,5 +36,12 @@ describe("isYcCryptoDepositDryRun", () => {
   it("reads environment helper", () => {
     process.env.YELLOWCARD_ENVIRONMENT = "production"
     expect(getYellowcardEnvironment()).toBe("production")
+  })
+
+  it("reads relay config helpers", () => {
+    process.env.YELLOWCARD_RELAY_URL = "https://relay.example.com/"
+    process.env.YC_RELAY_SECRET = "relay-secret"
+    expect(getYellowcardRelayUrl()).toBe("https://relay.example.com")
+    expect(getYellowcardRelaySecret()).toBe("relay-secret")
   })
 })

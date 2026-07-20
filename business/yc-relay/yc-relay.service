@@ -1,0 +1,15 @@
+[Unit]
+Description=Easner Yellow Card API relay
+After=network.target
+
+[Service]
+Type=simple
+User=ycrelay
+WorkingDirectory=/opt/yc-relay
+EnvironmentFile=/opt/yc-relay/relay.env
+ExecStart=/usr/bin/node /opt/yc-relay/server.mjs
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

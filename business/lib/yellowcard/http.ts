@@ -4,6 +4,8 @@ import {
   getYellowcardApiOrigin,
   getYellowcardApiSecret,
   getYellowcardEnvironment,
+  getYellowcardRelaySecret,
+  getYellowcardRelayUrl,
   toYellowcardRequestPath,
   toYellowcardSignedPath,
 } from "./config"
@@ -64,6 +66,83 @@ export function buildYellowcardAuthHeaders(input: {
   }
 }
 
+type YellowcardHttpResponse = {
+  status: number
+  text: string
+  viaRelay: boolean
+}
+
+async function requestYellowcardHttp(input: {
+  method: YellowcardFetchOptions["method"]
+  path: string
+  requestPath: string
+  headers: Record<string, string>
+  body?: string
+}): Promise<YellowcardHttpResponse> {
+  const relayUrl = getYellowcardRelayUrl()
+  if (relayUrl) {
+    const relaySecret = getYellowcardRelaySecret()
+    if (!relaySecret) {
+      throw new Error("YELLOWCARD_RELAY_SECRET is required when YELLOWCARD_RELAY_URL is set")
+    }
+
+    const res = await fetch(`${relayUrl}/forward`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${relaySecret}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        method: input.method,
+        path: input.requestPath,
+        origin: getYellowcardApiOrigin(),
+        headers: input.headers,
+        body: input.body ?? null,
+      }),
+    })
+
+    const relayText = await res.text()
+    if (!res.ok) {
+      throw new YellowcardHttpError(
+        relayText || `Yellowcard relay HTTP ${res.status}`,
+        res.status,
+        relayText,
+      )
+    }
+
+    let relayPayload: { status?: number; body?: string; error?: string }
+    try {
+      relayPayload = JSON.parse(relayText) as { status?: number; body?: string; error?: string }
+    } catch {
+      throw new YellowcardHttpError("Yellowcard relay returned invalid JSON", 502, relayText)
+    }
+
+    if (relayPayload.error) {
+      throw new YellowcardHttpError(relayPayload.error, 502, relayPayload)
+    }
+
+    return {
+      status: Number(relayPayload.status ?? 502),
+      text: String(relayPayload.body ?? ""),
+      viaRelay: true,
+    }
+  }
+
+  const url = `${getYellowcardApiOrigin()}${input.requestPath}`
+  const res = await fetch(url, {
+    method: input.method,
+    headers: input.headers,
+    ...(input.body ? { body: input.body } : {}),
+  })
+
+  return {
+    status: res.status,
+    text: await res.text(),
+    viaRelay: false,
+  }
+}
+
 export async function yellowcardFetch<T>(opts: YellowcardFetchOptions): Promise<T> {
   const requestPath = toYellowcardRequestPath(opts.path)
   const signPath = toYellowcardSignedPath(opts.path)
@@ -78,21 +157,22 @@ export async function yellowcardFetch<T>(opts: YellowcardFetchOptions): Promise<
     ...(body ? { "Content-Type": "application/json" } : {}),
   }
 
-  const url = `${getYellowcardApiOrigin()}${requestPath}`
   const startedAt = Date.now()
-  const res = await fetch(url, {
+  const { status, text, viaRelay } = await requestYellowcardHttp({
     method: opts.method,
+    path: opts.path,
+    requestPath,
     headers,
-    ...(body ? { body } : {}),
+    body,
   })
 
-  const text = await res.text()
   logYcTiming("yc_api", {
     method: opts.method,
     path: opts.path,
-    status: res.status,
+    status,
     durationMs: Date.now() - startedAt,
     environment: getYellowcardEnvironment(),
+    viaRelay,
   })
   let parsed: unknown = text
   if (text) {
@@ -103,15 +183,15 @@ export async function yellowcardFetch<T>(opts: YellowcardFetchOptions): Promise<
     }
   }
 
-  if (!res.ok) {
+  if (status < 200 || status >= 300) {
     const message =
       typeof parsed === "object" &&
       parsed &&
       "message" in parsed &&
       typeof (parsed as { message?: unknown }).message === "string"
         ? (parsed as { message: string }).message
-        : `Yellowcard HTTP ${res.status}`
-    throw new YellowcardHttpError(message, res.status, parsed)
+        : `Yellowcard HTTP ${status}`
+    throw new YellowcardHttpError(message, status, parsed)
   }
 
   return parsed as T
