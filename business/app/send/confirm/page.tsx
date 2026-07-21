@@ -44,13 +44,11 @@ import { residenceCountryFromPayInCurrency } from "@/hooks/use-yc-cross-border-f
 import {
   crossBorderQuoteToFlowState,
   ensureCrossBorderOrderConfirmed,
-  ensureCrossBorderQuoteStashed,
   isCompleteCrossBorderQuote,
   isStashedCrossBorderQuoteFresh,
   peekCrossBorderLeg2DraftId,
   peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
-  prefetchCrossBorderQuotePipeline,
   type CrossBorderQuoteStashMeta,
 } from "@/lib/yc-cross-border-quote-cache"
 import {
@@ -99,6 +97,21 @@ function corridorTransferMethod(recipient: Beneficiary, currency: string): strin
   })
 }
 
+function readSendFlowStateFromSession(): SendFlowState | null {
+  if (typeof window === "undefined") return null
+  const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY_LOCAL)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as SendFlowState
+    return {
+      ...parsed,
+      recipient: coerceBeneficiaryEasenetDisplay(parsed.recipient),
+    }
+  } catch {
+    return null
+  }
+}
+
 export default function SendConfirmPage() {
   const router = useRouter()
   const qc = useQueryClient()
@@ -106,7 +119,7 @@ export default function SendConfirmPage() {
   const { user } = useAuth()
   const { tier1Complete, isLoading: profileLoading, businessId } = useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
-  const [state, setState] = useState<SendFlowState | null>(null)
+  const [state, setState] = useState<SendFlowState | null>(() => readSendFlowStateFromSession())
   const [showPinDialog, setShowPinDialog] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [isAuthorizing, setIsAuthorizing] = useState(false)
@@ -284,20 +297,20 @@ export default function SendConfirmPage() {
     }
   }, [state])
 
+  /**
+   * Cross-border review renders only after a locked quote (transferId + bankInfo).
+   * Never hydrate review from ensureCrossBorderQuoteStashed preview-only — that
+   * caused partial cards until leg1 confirm finished (1774c762 regression).
+   */
   useEffect(() => {
-    if (!crossBorderMeta) return
+    if (!state || !crossBorderMeta) return
     if (
-      isStashedCrossBorderQuoteFresh(crossBorderMeta) &&
-      isCompleteCrossBorderQuote(peekCrossBorderQuote())
+      state.ycCrossBorder?.transferId &&
+      state.ycCrossBorder.localPayIn > 0 &&
+      state.ycCrossBorder.customerRate > 0
     ) {
       return
     }
-    void prefetchCrossBorderQuotePipeline(crossBorderMeta)
-  }, [crossBorderMeta])
-
-  useEffect(() => {
-    if (!state || !crossBorderMeta) return
-    if (state.ycCrossBorder?.transferId) return
 
     if (
       isStashedCrossBorderQuoteFresh(crossBorderMeta) &&
@@ -311,6 +324,7 @@ export default function SendConfirmPage() {
           sendAmount: yc.localPayIn,
           sendCurrency: crossBorderMeta.payInCurrency,
           totalAmount: yc.localPayIn,
+          transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
           ycCrossBorder: yc,
         }
         setState(next)
@@ -321,37 +335,42 @@ export default function SendConfirmPage() {
 
     let cancelled = false
     setYcQuoteError(null)
-    void ensureCrossBorderQuoteStashed(crossBorderMeta)
-      .then((preview) => {
-        if (cancelled || !preview?.localPayIn) {
-          if (!cancelled && !preview?.localPayIn) {
-            setYcQuoteError("Could not load transfer quote")
-          }
+    setYcQuoteLoading(true)
+    void (async () => {
+      try {
+        const quote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
+        if (cancelled) return
+        if (!quote || !isCompleteCrossBorderQuote(quote)) {
+          setYcQuoteError(
+            peekLastCrossBorderQuoteError() || "Could not lock transfer details",
+          )
           return
         }
-        const ycPreview = crossBorderQuoteToFlowState(preview, crossBorderMeta)
-        const previewState: SendFlowState = {
+        const yc = crossBorderQuoteToFlowState(quote, crossBorderMeta)
+        const next: SendFlowState = {
           ...state,
-          sendAmount: ycPreview.localPayIn,
+          sendAmount: yc.localPayIn,
           sendCurrency: crossBorderMeta.payInCurrency,
-          totalAmount: ycPreview.localPayIn,
-          ycCrossBorder: ycPreview,
+          totalAmount: yc.localPayIn,
+          transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
+          ycCrossBorder: yc,
         }
-        setState(previewState)
-        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(previewState))
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setYcQuoteError("Could not load transfer quote")
-        }
-      })
+        setState(next)
+        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
+      } finally {
+        if (!cancelled) setYcQuoteLoading(false)
+      }
+    })()
 
     return () => {
       cancelled = true
+      setYcQuoteLoading(false)
     }
   }, [
     crossBorderMeta,
     state?.ycCrossBorder?.transferId,
+    state?.ycCrossBorder?.localPayIn,
+    state?.ycCrossBorder?.customerRate,
   ])
 
   useEffect(() => {
@@ -869,6 +888,11 @@ export default function SendConfirmPage() {
       ? peekCrossBorderQuote()
       : null
 
+  const ycCrossBorderReviewReady = Boolean(
+    (yc?.transferId && yc.localPayIn > 0 && yc.customerRate > 0) ||
+      (stashedCrossBorder && isCompleteCrossBorderQuote(stashedCrossBorder)),
+  )
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
@@ -880,11 +904,29 @@ export default function SendConfirmPage() {
         </h1>
       </div>
 
-      {isYcCrossBorder && crossBorderMeta ? (
+      {isYcCrossBorder && crossBorderMeta && ycCrossBorderReviewReady ? (
         <YcPayInReviewSection
           flowMode="cross_border_send"
           lockKey={crossBorderLockKey}
           getCachedLocked={() => {
+            if (yc?.transferId && yc.localPayIn > 0 && yc.customerRate > 0) {
+              return {
+                ok: true as const,
+                transferId: yc.transferId,
+                transactionId: yc.transactionId,
+                easnerTransactionId: yc.easnerTransactionId,
+                localPayIn: yc.localPayIn,
+                customerRate: yc.customerRate,
+                processingFee: yc.processingFee,
+                ycLegFeesUsd: yc.ycLegFeesUsd,
+                displayProcessingFeeLocal: yc.displayProcessingFeeLocal,
+                provisionalPayIn: yc.provisionalPayIn,
+                bankInfo: yc.bankInfo,
+                expiresAt: yc.expiresAt,
+                sourcePhone: yc.sourcePhone,
+                sourceNetworkName: yc.sourceNetworkName,
+              }
+            }
             if (
               crossBorderMeta &&
               isStashedCrossBorderQuoteFresh(crossBorderMeta)
@@ -1004,8 +1046,14 @@ export default function SendConfirmPage() {
             onSuccess: (transactionId) => finishSend(transactionId),
           }}
         />
-      ) : isYcCrossBorder && ycQuoteError ? (
-        <p className="text-sm text-destructive">{ycQuoteError}</p>
+      ) : isYcCrossBorder ? (
+        ycQuoteLoading && !ycQuoteError ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : ycQuoteError ? (
+          <p className="text-sm text-destructive">{ycQuoteError}</p>
+        ) : null
       ) : (
         <PayoutReviewDetailsRows
           transactionId={displayTransactionId}

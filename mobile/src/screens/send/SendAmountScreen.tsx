@@ -1453,8 +1453,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             showError('Could not resolve pay-in country for bank transfer.')
             return
           }
+          // Keep spinner visible for full YC confirm; do not skip lock on Continue.
           setIsContinuePending(true)
-          continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+          setIsContinueLoading(true)
+          if (continueSpinnerTimerRef.current) {
+            clearTimeout(continueSpinnerTimerRef.current)
+            continueSpinnerTimerRef.current = null
+          }
           const crossBorderMeta = {
             recipientId: recipient.id,
             payInCurrency: selectedOtherCurrency,

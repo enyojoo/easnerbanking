@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useCallback, useRef } from "react"
+import { useState, useMemo, useEffect, useCallback, useRef, type MutableRefObject } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -142,6 +142,24 @@ function formatAmountForDisplay(raw: string): string {
 
 function parseAmountFromDisplay(display: string): number {
   return Number.parseFloat(display.replace(/,/g, "")) || 0
+}
+
+/**
+ * Cross-border bank Continue MUST await ensureCrossBorderOrderConfirmed and show
+ * loading immediately. Do not navigate to review with preview-only quotes (regression
+ * from 1774c762): review expects transferId + bankInfo on first paint.
+ */
+function beginTlcContinueLoading(
+  setIsContinuePending: (value: boolean) => void,
+  setIsContinueLoading: (value: boolean) => void,
+  timerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>,
+) {
+  setIsContinuePending(true)
+  setIsContinueLoading(true)
+  if (timerRef.current) {
+    clearTimeout(timerRef.current)
+    timerRef.current = null
+  }
 }
 
 export default function SendPage() {
@@ -1233,10 +1251,11 @@ export default function SendPage() {
             setAmountFieldError("Could not resolve pay-in country for bank transfer.")
             return
           }
-          if (!isContinuePending && !isContinueLoading) {
-            setIsContinuePending(true)
-            continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-          }
+          beginTlcContinueLoading(
+            setIsContinuePending,
+            setIsContinueLoading,
+            continueSpinnerTimerRef,
+          )
           const crossBorderMeta = {
             recipientId: recipient.id,
             payInCurrency: otherCurrency,
