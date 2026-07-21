@@ -54,7 +54,7 @@ vi.mock("@easner/shared", () => ({
       (mode === "fund_balance" || mode === "cross_border_send") &&
       (ledgerStatus === "pending" || ledgerStatus === "processing")
     return {
-      label: inFlight ? "Processing payment" : ledgerStatus === "settled" ? "Completed" : "Processing",
+      label: inFlight ? "Processing" : ledgerStatus === "settled" ? "Completed" : "Processing",
       tone: "processing" as const,
     }
   },
@@ -267,6 +267,6 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.description).toBe("Transfer to Ama Mensah")
     expect(item.displayHeroTitle).toBe("Transfer to Ama Mensah")
     expect(item.status).toBe("processing_payment")
-    expect(item.statusLabel).toBe("Processing payment")
+    expect(item.statusLabel).toBe("Processing")
   })
 })

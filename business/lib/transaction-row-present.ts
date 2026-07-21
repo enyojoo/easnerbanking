@@ -26,10 +26,7 @@ export function transactionStatusRowPresentation(
   }
   const s = status.toLowerCase()
   if (s === "confirming_payment" || s === "awaiting_payment" || s === "processing_payment") {
-    return {
-      label: s === "processing_payment" ? "Processing payment" : "Processing",
-      className: "text-muted-foreground",
-    }
+    return { label: "Processing", className: "text-muted-foreground" }
   }
   if (s.includes("processed") || s.includes("completed")) {
     return { label: "Completed", className: "text-emerald-600 dark:text-emerald-400" }

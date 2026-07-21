@@ -48,7 +48,7 @@ export function ledgerTransactionStatusDisplay(ledgerStatus: string): LedgerTran
     return { label: "Pending", tone: "pending" }
   }
   if (s === "processing_payment") {
-    return { label: "Processing payment", tone: "processing" }
+    return { label: "Processing", tone: "processing" }
   }
   if (
     s === "processing" ||

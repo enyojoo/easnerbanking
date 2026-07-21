@@ -119,7 +119,7 @@ export function getTransactionStatusDisplay(
   if (!status) return null
   const statusLower = status.toLowerCase()
   if (statusLower === 'processing_payment') {
-    return { label: 'Processing payment', color: easnerBrand.slate, tone: 'processing' }
+    return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
   }
   if (statusLower.includes('processed') || statusLower.includes('completed')) {
     return { label: 'Completed', color: easnerBrand.emerald, tone: 'completed' }
