@@ -56,6 +56,20 @@ export function mapPayoutQuoteToFlowState(
   }
 }
 
+export function isPayoutQuotePreviewFresh(
+  pq: SendFlowState["payoutQuote"] | undefined,
+  receiveAmount: number,
+  recipientId: string,
+): boolean {
+  if (!pq?.formSessionId || !pq.expiresAt) return false
+  if (!pq.recipientId?.trim() || pq.recipientId.trim() !== recipientId.trim()) return false
+  if (!payoutReceiveAmountsMatch(pq.receiveAmount, receiveAmount)) return false
+  if (new Date(pq.expiresAt).getTime() <= Date.now()) return false
+  if (pq.quotePhase === "locked") return false
+  if (pq.lockId || pq.ycSendId) return false
+  return pq.quotePhase === "preview" || pq.quotePhase == null
+}
+
 export function isPayoutQuoteFresh(
   pq: SendFlowState["payoutQuote"] | undefined,
   receiveAmount: number,

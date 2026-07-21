@@ -82,6 +82,15 @@ import {
   walletQuoteToFlowState,
   type WalletQuoteStashMeta,
 } from "@/lib/wallet-send-quote-cache"
+import {
+  ensurePayoutOrderConfirmed,
+  isCompletePayoutQuoteLocked,
+  isStashedPayoutQuoteFresh,
+  payoutQuoteToFlowState,
+  peekLastPayoutQuoteError,
+  stashPayoutQuotePreview,
+  type PayoutQuoteStashMeta,
+} from "@/lib/payout-quote-cache"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useSendDestinations } from "@/lib/use-send-destinations"
@@ -934,6 +943,16 @@ export default function SendPage() {
         if (!res.ok || !data.ok || !data.quote) return null
         payoutQuoteCacheRef.current = { key: payoutQuoteCacheKey, quote: data.quote }
         setPayoutQuotePreview(data.quote)
+        const previewMeta: PayoutQuoteStashMeta = {
+          recipientId: recipient.id,
+          amountEntryMode,
+          entryAmount: amountEntryMode === "send" && sendAmount > 0 ? sendAmount : receiveAmount,
+          receiveCurrency,
+          sourceBalanceCurrency: sendCurrency,
+          ...(note.trim() ? { note: note.trim() } : {}),
+          ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+        }
+        stashPayoutQuotePreview(data.quote, previewMeta)
         return data.quote
       } catch {
         setPayoutQuotePreview(null)
@@ -1093,6 +1112,18 @@ export default function SendPage() {
 
     const walletAmountEntryMode = isWalletRecipient ? ("receive" as const) : amountEntryMode
 
+    const payoutQuoteMeta: PayoutQuoteStashMeta | null =
+      needsPayoutQuoteBeforeConfirm && recipient?.id
+        ? {
+            recipientId: recipient.id,
+            amountEntryMode,
+            entryAmount: amountEntryMode === "send" ? sendAmount : receiveAmount,
+            receiveCurrency,
+            sourceBalanceCurrency: sendCurrency,
+            ...(note.trim() ? { note: note.trim() } : {}),
+            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+          }
+        : null
     const walletQuoteMeta: WalletQuoteStashMeta | null =
       needsWalletQuoteBeforeConfirm && recipient?.id
         ? {
@@ -1122,11 +1153,14 @@ export default function SendPage() {
       transactionId,
     }
     let flowState = state
-    const needsQuoteAwait = needsWalletQuoteBeforeConfirm
+    const needsQuoteAwait = needsPayoutQuoteBeforeConfirm || needsWalletQuoteBeforeConfirm
     const quoteAlreadyWarm =
-      needsWalletQuoteBeforeConfirm &&
-      walletQuoteMeta &&
-      isStashedWalletQuoteFresh(walletQuoteMeta)
+      (needsWalletQuoteBeforeConfirm &&
+        walletQuoteMeta &&
+        isStashedWalletQuoteFresh(walletQuoteMeta)) ||
+      (needsPayoutQuoteBeforeConfirm &&
+        payoutQuoteMeta &&
+        isStashedPayoutQuoteFresh(payoutQuoteMeta))
     if (
       (needsQuoteAwait && !quoteAlreadyWarm)
     ) {
@@ -1189,7 +1223,16 @@ export default function SendPage() {
         return
       }
 
-      if (needsWalletQuoteBeforeConfirm && walletQuoteMeta) {
+      if (needsPayoutQuoteBeforeConfirm && payoutQuoteMeta) {
+        const quote = await ensurePayoutOrderConfirmed(payoutQuoteMeta, businessId)
+        if (!isCompletePayoutQuoteLocked(quote)) {
+          setAmountFieldError(
+            peekLastPayoutQuoteError() || "Could not lock payout order. Try again.",
+          )
+          return
+        }
+        flowState = payoutQuoteToFlowState(state, quote)
+      } else if (needsWalletQuoteBeforeConfirm && walletQuoteMeta) {
         const quote = await ensureWalletSendOrderConfirmed(walletQuoteMeta, businessId)
         if (!quote?.formSessionId) {
           setAmountFieldError(

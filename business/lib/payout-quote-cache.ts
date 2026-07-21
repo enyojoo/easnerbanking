@@ -16,6 +16,8 @@ export type PayoutQuoteStashMeta = {
 
 let stashed: PayoutQuoteResult | null = null
 let stashedMeta: PayoutQuoteStashMeta | null = null
+let previewStashed: PayoutQuoteResult | null = null
+let previewStashedMeta: PayoutQuoteStashMeta | null = null
 let lastQuoteError: string | null = null
 let inflightQuote: Promise<PayoutQuoteResult | null> | null = null
 let inflightQuoteKey = ""
@@ -59,6 +61,25 @@ export function stashPayoutQuote(quote: PayoutQuoteResult, meta: PayoutQuoteStas
   lastQuoteError = null
 }
 
+export function stashPayoutQuotePreview(
+  quote: PayoutQuoteResult,
+  meta: PayoutQuoteStashMeta,
+): void {
+  if (!isUsablePayoutQuotePreview(quote)) return
+  previewStashed = quote
+  previewStashedMeta = meta
+}
+
+export function peekPayoutQuotePreview(): PayoutQuoteResult | null {
+  return previewStashed
+}
+
+export function isStashedPayoutQuotePreviewFresh(meta: PayoutQuoteStashMeta): boolean {
+  if (!isUsablePayoutQuotePreview(previewStashed) || !previewStashedMeta) return false
+  if (new Date(previewStashed.expiresAt).getTime() <= Date.now()) return false
+  return quoteMetaKey(previewStashedMeta) === quoteMetaKey(meta)
+}
+
 export function peekPayoutQuote(): PayoutQuoteResult | null {
   return stashed
 }
@@ -70,6 +91,8 @@ export function peekLastPayoutQuoteError(): string | null {
 export function clearPayoutQuote(): void {
   stashed = null
   stashedMeta = null
+  previewStashed = null
+  previewStashedMeta = null
   lastQuoteError = null
 }
 
@@ -119,6 +142,9 @@ export async function ensurePayoutQuoteStashed(
       if (!res.ok || !data.ok || !data.quote) {
         lastQuoteError = data.error || "Could not load payout quote"
         return null
+      }
+      if (isUsablePayoutQuotePreview(data.quote)) {
+        stashPayoutQuotePreview(data.quote, meta)
       }
       return data.quote
     } catch (e) {

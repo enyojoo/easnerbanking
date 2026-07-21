@@ -4,7 +4,9 @@ import {
   clearSendPayoutQuote,
   isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
+  isStashedPayoutQuotePreviewFresh,
   stashSendPayoutQuote,
+  stashSendPayoutQuotePreview,
 } from './sendFlowPayoutQuote'
 
 function sampleQuote(overrides?: Partial<PayoutQuote>): PayoutQuote {
@@ -118,5 +120,31 @@ describe('sendFlowPayoutQuote stash', () => {
         }),
       ),
     ).toBe(false)
+  })
+
+  it('stores preview quotes separately from locked stash', () => {
+    const meta = {
+      recipientId: 'recipient-a',
+      amountEntryMode: 'receive' as const,
+      entryAmount: 1000,
+      receiveCurrency: 'NGN',
+    }
+    stashSendPayoutQuotePreview(
+      sampleQuote({
+        quotePhase: 'preview',
+        lockId: undefined,
+        settlement: {
+          ...sampleQuote().settlement,
+          sessionId: 'preview-session',
+        },
+      }),
+      meta,
+    )
+
+    expect(isStashedPayoutQuotePreviewFresh(meta)).toBe(true)
+    expect(isStashedPayoutQuoteFresh(meta)).toBe(false)
+
+    stashSendPayoutQuote(sampleQuote(), meta)
+    expect(isStashedPayoutQuoteFresh(meta)).toBe(true)
   })
 })

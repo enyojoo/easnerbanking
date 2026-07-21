@@ -57,6 +57,7 @@ import {
   isStashedPayoutQuoteFresh,
   payoutQuoteToFlowState,
   peekLastPayoutQuoteError,
+  peekPayoutQuote,
   type PayoutQuoteStashMeta,
 } from "@/lib/payout-quote-cache"
 import {
@@ -203,10 +204,33 @@ export default function SendConfirmPage() {
           router.replace("/send")
           return
         }
-        setState({
+        let hydrated = {
           ...parsed,
           recipient: coerceBeneficiaryEasenetDisplay(parsed.recipient),
-        })
+        }
+        if (
+          !isEasenetRecipient(hydrated.recipient) &&
+          !isWalletRecipient(hydrated.recipient) &&
+          hydrated.amount > 0
+        ) {
+          const payoutMeta: PayoutQuoteStashMeta = {
+            recipientId: hydrated.recipient.id,
+            amountEntryMode: hydrated.amountEntryMode ?? "receive",
+            entryAmount:
+              hydrated.amountEntryMode === "send" && hydrated.sendAmount > 0
+                ? hydrated.sendAmount
+                : hydrated.amount,
+            receiveCurrency: hydrated.receiveCurrency,
+            sourceBalanceCurrency: hydrated.sendCurrency,
+            ...(hydrated.note ? { note: hydrated.note } : {}),
+            ...(hydrated.paymentPurpose ? { paymentPurpose: hydrated.paymentPurpose } : {}),
+          }
+          if (isStashedPayoutQuoteFresh(payoutMeta)) {
+            const locked = peekPayoutQuote()
+            if (locked) hydrated = payoutQuoteToFlowState(hydrated, locked)
+          }
+        }
+        setState(hydrated)
       } catch {
         router.replace("/send")
       }
@@ -361,8 +385,15 @@ export default function SendConfirmPage() {
     }
 
     if (isStashedPayoutQuoteFresh(meta)) {
-      const stashed = state.payoutQuote
-      if (stashed && isPayoutQuoteFresh(stashed, state.amount, state.recipient.id)) return
+      const stashed = peekPayoutQuote()
+      if (stashed) {
+        const next = payoutQuoteToFlowState(state, stashed)
+        if (isPayoutQuoteFresh(next.payoutQuote, state.amount, state.recipient.id)) {
+          setState(next)
+          sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
+          return
+        }
+      }
     }
 
     let cancelled = false

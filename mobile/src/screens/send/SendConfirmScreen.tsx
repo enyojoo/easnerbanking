@@ -64,10 +64,8 @@ import { getSendDestinationsMemory } from '../../lib/sendDestinations'
 import { isWalletSendRecipient } from '../../lib/recipientWalletMeta'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
 import {
-  ensureSendPayoutOrderConfirmed,
   isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
-  peekLastPayoutQuoteError,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
   payoutDisplayAmountsFromQuote,
@@ -513,61 +511,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         }))
       }
       return
-    }
-    let cancelled = false
-    setPricing((prev) => ({ ...prev, quoteLoading: true, quoteError: null }))
-    void (async () => {
-      try {
-        const pq = await ensureSendPayoutOrderConfirmed(
-          () =>
-            noahService.confirmPayoutOrder({
-              recipientId: recipient.id,
-              receiveAmount: receiveAmountValue,
-              sourceBalanceCurrency: selectedBalanceCurrency,
-              amountEntryMode,
-              ...(amountEntryMode === 'send' && amountScreenSendAmount > 0
-                ? { sendAmount: amountScreenSendAmount }
-                : {}),
-              ...(sendNote ? { note: sendNote } : {}),
-              ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
-            }),
-          quoteStashMeta,
-        )
-        if (cancelled) return
-        if (!isCompletePayoutQuote(pq)) {
-          setPricing((prev) => ({
-            ...prev,
-            quoteLoading: false,
-            quoteError: peekLastPayoutQuoteError() || 'Could not lock payout order',
-          }))
-          return
-        }
-        setQuotedReceiveAmount(pq.receiveAmount)
-        const display = payoutDisplayAmountsFromQuote(pq)
-        const payoutSessionFromQuote = payoutPrepareSessionFromQuote(pq, recipient.id)
-        setPricing((prev) => ({
-          ...prev,
-          calculatedSendingAmount: display.youSendAmount,
-          noahFee: pq.noah.totalFee ?? 0,
-          easnerFee: display.marginAmount,
-          calculatedFeeAmount: display.marginAmount,
-          calculatedTotalAmount: display.totalDebited,
-          pricingQuoteId: pq.pricingQuoteId,
-          pricingQuoteExpiry: pq.expiresAt,
-          pricingQuoteResult: pq.easner,
-          payoutSession: payoutSessionFromQuote,
-          quoteDisplay: display,
-          quoteLoading: false,
-          quoteError: null,
-        }))
-      } catch (e) {
-        if (cancelled) return
-        const msg = e instanceof Error ? e.message : 'Could not lock payout order'
-        setPricing((prev) => ({ ...prev, quoteLoading: false, quoteError: msg }))
-      }
-    })()
-    return () => {
-      cancelled = true
     }
   }, [easetagUi, isYcCrossBorder, isWalletRecipient, recipient?.id, recipient?.currency, selectedBalanceCurrency, receiveAmountValue, quoteStashMeta, amountScreenSendAmount, sendNote, sendPaymentPurpose, walletSession?.formSessionId, payoutSession?.formSessionId, amountEntryMode])
 

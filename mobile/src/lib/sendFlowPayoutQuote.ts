@@ -66,6 +66,8 @@ export type SendPayoutQuoteStashMeta = {
 
 let stashed: PayoutQuote | null = null
 let stashedMeta: SendPayoutQuoteStashMeta | null = null
+let previewStashed: PayoutQuote | null = null
+let previewStashedMeta: SendPayoutQuoteStashMeta | null = null
 let lastPayoutQuoteError: string | null = null
 
 export function isUsablePayoutQuotePreview(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
@@ -100,6 +102,33 @@ export function stashSendPayoutQuote(quote: PayoutQuote, meta: SendPayoutQuoteSt
   lastPayoutQuoteError = null
 }
 
+export function stashSendPayoutQuotePreview(quote: PayoutQuote, meta: SendPayoutQuoteStashMeta): void {
+  if (!isUsablePayoutQuotePreview(quote)) return
+  previewStashed = quote
+  previewStashedMeta = meta
+}
+
+export function peekSendPayoutQuotePreview(): PayoutQuote | null {
+  return previewStashed
+}
+
+export function isStashedPayoutQuotePreviewFresh(input: SendPayoutQuoteStashMeta): boolean {
+  if (!isUsablePayoutQuotePreview(previewStashed) || !previewStashedMeta) return false
+  if (new Date(previewStashed.expiresAt).getTime() <= Date.now()) return false
+  if (previewStashedMeta.recipientId.trim() !== input.recipientId.trim()) return false
+  if (previewStashedMeta.amountEntryMode !== input.amountEntryMode) return false
+  if (
+    previewStashedMeta.receiveCurrency.trim().toUpperCase() !==
+    input.receiveCurrency.trim().toUpperCase()
+  ) {
+    return false
+  }
+  if (input.amountEntryMode === 'send') {
+    return sendEntryAmountsMatch(previewStashedMeta.entryAmount, input.entryAmount)
+  }
+  return entryAmountsMatch(previewStashed.receiveAmount, input.entryAmount, input.receiveCurrency)
+}
+
 export function peekSendPayoutQuote(): PayoutQuote | null {
   return stashed
 }
@@ -111,6 +140,8 @@ export function peekLastPayoutQuoteError(): string | null {
 export function clearSendPayoutQuote(): void {
   stashed = null
   stashedMeta = null
+  previewStashed = null
+  previewStashedMeta = null
   lastPayoutQuoteError = null
 }
 
@@ -160,6 +191,7 @@ export async function ensureSendPayoutQuoteStashed(
         lastPayoutQuoteError = 'Incomplete payout quote response.'
         return null
       }
+      stashSendPayoutQuotePreview(quote, meta)
       return quote
     })
     .catch((err) => {

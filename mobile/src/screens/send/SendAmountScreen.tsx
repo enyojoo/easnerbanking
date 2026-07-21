@@ -93,7 +93,10 @@ import { useYcSendExchangeRates } from '../../hooks/queries/use-yc-send-exchange
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
   ensureSendPayoutQuoteStashed,
+  ensureSendPayoutOrderConfirmed,
+  isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
+  peekLastPayoutQuoteError,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
 } from '../../lib/sendFlowPayoutQuote'
@@ -1286,11 +1289,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
       const needsQuoteAwait =
         selectedPaymentMethod === 'balance' &&
-        isWalletRecipient &&
-        walletReceiveAmount > 0
+        ((isWalletRecipient && walletReceiveAmount > 0) ||
+          (!isEasetagRecipient && !isWalletRecipient && receiveAmountValue > 0))
 
       const quoteAlreadyWarm =
-        needsQuoteAwait && isStashedWalletQuoteFresh(quoteStashMeta)
+        needsQuoteAwait &&
+        (isWalletRecipient
+          ? isStashedWalletQuoteFresh(quoteStashMeta)
+          : isStashedPayoutQuoteFresh(quoteStashMeta))
 
       if (needsQuoteAwait && !quoteAlreadyWarm) {
         setIsContinuePending(true)
@@ -1320,10 +1326,36 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         selectedPaymentMethod === 'balance' &&
         !isEasetagRecipient &&
         !isWalletRecipient &&
+        receiveAmountValue > 0
+          ? await ensureSendPayoutOrderConfirmed(
+              () =>
+                noahService.confirmPayoutOrder({
+                  recipientId: recipient.id,
+                  receiveAmount: receiveAmountValue,
+                  sourceBalanceCurrency: selectedBalanceCurrency,
+                  amountEntryMode,
+                  ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+                    ? { sendAmount: navAmounts.sendAmount }
+                    : {}),
+                  ...(note.trim() ? { note: note.trim() } : {}),
+                  ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+                }),
+              quoteStashMeta,
+            )
+          : isStashedPayoutQuoteFresh(quoteStashMeta)
+            ? peekSendPayoutQuote()
+            : null
+
+      if (
+        selectedPaymentMethod === 'balance' &&
+        !isEasetagRecipient &&
+        !isWalletRecipient &&
         receiveAmountValue > 0 &&
-        isStashedPayoutQuoteFresh(quoteStashMeta)
-          ? peekSendPayoutQuote()
-          : null
+        !isCompletePayoutQuote(stashedQuote)
+      ) {
+        showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
+        return
+      }
 
       if (
         selectedPaymentMethod === 'balance' &&
