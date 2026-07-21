@@ -38,6 +38,30 @@ describe("buildYcSendSubmitBody", () => {
     expect(body.reason).toBe("other")
   })
 
+  it("uses user turnkey as senderAddress for balance_payout", () => {
+    const body = buildYcSendSubmitBody({
+      ...base,
+      userTurnkeyAddress: "user-turnkey-wallet",
+      settlementCryptoAmount: 6.5,
+    })
+    expect(body.settlementInfo).toMatchObject({
+      senderAddress: "user-turnkey-wallet",
+      refundAddress: "refund-address",
+    })
+  })
+
+  it("uses deposit omnibus as senderAddress for cross_border_send", () => {
+    const body = buildYcSendSubmitBody({
+      ...base,
+      refundMode: "cross_border_send",
+      userTurnkeyAddress: "user-turnkey-wallet",
+      settlementCryptoAmount: 6.5,
+    })
+    expect(body.settlementInfo).toMatchObject({
+      senderAddress: "omnibus-address",
+    })
+  })
+
   it("allows localAmount when direct settlement is disabled", () => {
     const body = buildYcSendSubmitBody({
       ...base,

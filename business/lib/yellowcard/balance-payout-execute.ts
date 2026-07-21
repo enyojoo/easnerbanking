@@ -1,6 +1,6 @@
 /**
- * Execute Yellowcard balance_payout: debit wallet → locked POST /send already done at quote →
- * omnibus USDC → YC wallet. Mirrors executeTurnkeyOfframpPayout shape.
+ * Execute Yellowcard balance_payout: debit wallet → locked POST /send already done at confirm →
+ * user Turnkey USDC → YC wallet. Mirrors executeTurnkeyOfframpPayout shape.
  */
 import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -10,6 +10,7 @@ import {
   applyGlobalPayoutWalletDebitForEasnerPayoutId,
   reverseGlobalPayoutWalletDebitForEasnerPayoutId,
 } from "@/lib/noah/global-payout-ledger"
+import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import {
   buildRecipientSnapshotFromRow,
   normalizePayoutReviewSnapshot,
@@ -23,7 +24,7 @@ import {
   mergeYcPayoutLifecycle,
   ycPendingPayoutProviderTransactionId,
 } from "@/lib/yellowcard/yc-ledger"
-import { executeYcBalancePayoutCryptoLeg } from "@/lib/yellowcard/payout-execute"
+import { executeYcBalancePayoutTurnkeyLeg } from "@/lib/yellowcard/payout-execute"
 import {
   getPayoutLockSession,
   markPayoutLockSessionExecuted,
@@ -83,6 +84,7 @@ export type ExecuteYcBalancePayoutResult =
       easnerTransactionId: string
       status: "pending" | "failed"
       ycCryptoDepositTxHash?: string | null
+      turnkeySendId?: string | null
     }
   | { ok: false; error: string }
 
@@ -263,6 +265,11 @@ export async function executeYcBalancePayout(
 
   if (available < totalDebited) return { ok: false, error: "insufficient_balance" }
 
+  const ctx = await resolveNoahAccountContextFromLedgerScope(admin, { userId, businessId })
+  if (!ctx) {
+    return { ok: false, error: "Could not resolve wallet context for Yellowcard payout." }
+  }
+
   const walletAddress = locked.walletAddress
   const cryptoAmount = locked.cryptoAmount
   const sequenceId = locked.sequenceId
@@ -311,7 +318,7 @@ export async function executeYcBalancePayout(
     currency: "USD",
     direction: "out",
     payload: {
-      phase: "awaiting_yc_crypto_deposit",
+      phase: "awaiting_chain_deposit",
       yc_send_id: locked.sendId ?? null,
       sequence_id: sequenceId,
     },
@@ -363,7 +370,7 @@ export async function executeYcBalancePayout(
       processing_fee: locked.pricing.processingFee,
       margin_amount: locked.pricing.marginAmount,
       channel_cost: locked.pricing.channelCost,
-      margin_capture_mode: "fee_wallet_omnibus",
+      margin_capture_mode: "fee_wallet_deferred",
     },
   })
 
@@ -394,10 +401,15 @@ export async function executeYcBalancePayout(
     }
   }
 
-  const deposit = await executeYcBalancePayoutCryptoLeg({
+  const chainSend = await executeYcBalancePayoutTurnkeyLeg({
+    admin,
+    ctx,
     transactionId,
+    easnerPayoutId,
     ycWalletAddress: walletAddress,
     cryptoAmountUsd: cryptoAmount,
+    totalDebited,
+    formSessionId: String(locked.sendId ?? sequenceId),
   })
 
   const { data: txAfter } = await admin
@@ -410,13 +422,13 @@ export async function executeYcBalancePayout(
     locked.sendId ?? priorMeta.yc_send_id ?? priorMeta.form_session_id ?? sequenceId,
   )
 
-  if (!deposit.ok) {
+  if (!chainSend.ok) {
     const failedMeta = buildYcRefundExpectedPatch(
       buildYcParentPayoutCryptoDepositTracking({
         prior: priorMeta,
-        txHash: deposit.txHash,
+        txHash: chainSend.txHash,
         status: "failed",
-        error: deposit.error,
+        error: chainSend.error,
       }),
       { refundAmount: cryptoAmount },
     )
@@ -435,13 +447,16 @@ export async function executeYcBalancePayout(
       asset: "USDC",
     })
     await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId }).catch(() => {})
-    return { ok: false, error: deposit.error || "yc_crypto_deposit_failed" }
+    return { ok: false, error: chainSend.error || "yc_turnkey_send_failed" }
   }
 
   const processingMeta = buildYcParentPayoutCryptoDepositTracking({
-    prior: priorMeta,
-    txHash: deposit.txHash,
-    status: "settled",
+    prior: {
+      ...priorMeta,
+      turnkey_send_id: chainSend.turnkeySendId ?? priorMeta.turnkey_send_id,
+    },
+    txHash: chainSend.txHash,
+    status: "pending",
   })
   await upsertLedgerTransaction(admin, {
     userId,
@@ -454,7 +469,7 @@ export async function executeYcBalancePayout(
     direction: "out",
     metadata: processingMeta,
     occurredAt: now,
-    txHash: deposit.txHash,
+    txHash: chainSend.txHash ?? undefined,
     baseCurrency: "USD",
     asset: "USDC",
   })
@@ -466,13 +481,13 @@ export async function executeYcBalancePayout(
       leg2_status: "pending_yc",
       metadata: {
         easner_payout_id: easnerPayoutId,
-        leg2_deposit_tx_hash: deposit.txHash,
+        leg2_deposit_tx_hash: chainSend.txHash,
         total_debited: totalDebited,
         crypto_authorized_amount: cryptoAmount,
         processing_fee: locked.pricing.processingFee,
         margin_amount: locked.pricing.marginAmount,
         channel_cost: locked.pricing.channelCost,
-        margin_capture_mode: "fee_wallet_omnibus",
+        margin_capture_mode: "fee_wallet_deferred",
       },
       updated_at: new Date().toISOString(),
     })
@@ -487,7 +502,8 @@ export async function executeYcBalancePayout(
     easnerPayoutId,
     easnerTransactionId,
     status: "pending",
-    ycCryptoDepositTxHash: deposit.txHash,
+    ycCryptoDepositTxHash: chainSend.txHash,
+    turnkeySendId: chainSend.turnkeySendId ?? null,
   }
 }
 

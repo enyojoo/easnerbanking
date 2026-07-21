@@ -53,7 +53,7 @@ function buildLockedYcPayoutQuote(input: {
     sessionId: locked.sequenceId,
     customerRate: locked.pricing.customerRate,
     effectiveRate: locked.pricing.customerRate,
-    marginCaptureMode: "fee_wallet_omnibus",
+    marginCaptureMode: "fee_wallet_deferred",
     channelCost: locked.pricing.channelCost,
     marginAmount: locked.pricing.marginAmount,
     customerPrincipal: locked.pricing.customerPrincipal,

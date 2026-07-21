@@ -53,7 +53,11 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
     userTurnkeyAddress: input.userTurnkeyAddress,
     ledgerCurrency: "USD",
   })
-  const senderAddress = depositOmnibusSolanaAddressUsd() || undefined
+  const userTurnkeyAddress = String(input.userTurnkeyAddress ?? "").trim()
+  const senderAddress =
+    input.refundMode === "balance_payout"
+      ? userTurnkeyAddress || undefined
+      : depositOmnibusSolanaAddressUsd() || undefined
   const directSettlement = input.directSettlement ?? true
 
   const settlementInfo: Record<string, unknown> = {

@@ -257,7 +257,7 @@ export function buildYcBalancePayoutOutMetadata(input: {
     source: "api_yellowcard_balance_payout",
     payout_type: "global_fiat",
     flow: "global_fiat_offramp",
-    execution_model: "yc_omnibus_send",
+    execution_model: "turnkey_workflow",
     payout_provider: "yellowcard",
     yc_mode: "balance_payout" satisfies YcMode,
     yc_sequence_id: input.sequenceId,
@@ -271,7 +271,7 @@ export function buildYcBalancePayoutOutMetadata(input: {
     margin_amount: input.marginAmount ?? 0,
     processing_fee: processingFee,
     ...(processingFee > 0.000_001 ? { processing_fee_pending: true } : {}),
-    margin_capture_mode: "fee_wallet_omnibus",
+    margin_capture_mode: "fee_wallet_deferred",
     ...(input.channelId ? { channel_id: input.channelId } : {}),
     ...(input.receiveAmount != null ? { receive_amount: input.receiveAmount } : {}),
     ...(input.receiveCurrency ? { receive_currency: input.receiveCurrency, fiat_currency: input.receiveCurrency } : {}),
@@ -312,7 +312,7 @@ export function buildYcCrossBorderOutMetadata(input: {
   }
 }
 
-/** Track omnibus→YC crypto deposit on the visible payout row (no feed suppression). */
+/** Track user Turnkey→YC crypto send on the visible payout row (no feed suppression). */
 export function buildYcParentPayoutCryptoDepositTracking(input: {
   prior?: Record<string, unknown> | null
   txHash?: string | null

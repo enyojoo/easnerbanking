@@ -2,14 +2,16 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { computeYcBalancePayoutCappedFeeWalletSweep } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { executeYcCryptoDeposit } from "@/lib/yellowcard/execute-yc-crypto-deposit"
 import { reverseGlobalPayoutWalletDebitForEasnerPayoutId } from "@/lib/noah/global-payout-ledger"
+import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import {
   buildEasnerRevenueSweepMetadataPatch,
   FEE_SWEEP_MIN,
   readPriorSweepFromMetadata,
-  sweepEasnerRevenueFromDepositOmnibus,
+  sweepEasnerRevenueFromUserTurnkeyWallet,
 } from "@/lib/processing-fee/fee-wallet-sweep"
+import { createTurnkeySend } from "@/lib/turnkey/send"
 import {
   buildYcParentPayoutCryptoDepositTracking,
   mergeYcPayoutLifecycle,
@@ -20,18 +22,44 @@ function asMeta(raw: unknown): Record<string, unknown> {
 }
 
 /**
- * After ledger debit + YC POST /send: deposit USDC from omnibus to YC wallet.
+ * After ledger debit + YC POST /send: user Turnkey USDC → YC settlement wallet.
+ * Mirrors Noah global payout execute (createTurnkeySend + globalPayout metadata).
  */
-export async function executeYcBalancePayoutCryptoLeg(input: {
+export async function executeYcBalancePayoutTurnkeyLeg(input: {
+  admin: SupabaseClient
+  ctx: NoahAccountContext
   transactionId: string
+  easnerPayoutId: string
   ycWalletAddress: string
   cryptoAmountUsd: number
-}): Promise<{ ok: boolean; txHash: string | null; error?: string }> {
-  const deposit = await executeYcCryptoDeposit({
-    ycWalletAddress: input.ycWalletAddress,
-    cryptoAmountUsd: input.cryptoAmountUsd,
-    pollForSettlement: true,
-  })
+  totalDebited: number
+  formSessionId: string
+}): Promise<{ ok: boolean; txHash: string | null; turnkeySendId?: string | null; error?: string }> {
+  const destinationAddress = String(input.ycWalletAddress || "").trim()
+  const amount = Number(input.cryptoAmountUsd)
+  if (!destinationAddress || !Number.isFinite(amount) || amount <= 0) {
+    return { ok: false, txHash: null, error: "invalid_yc_turnkey_send_input" }
+  }
+
+  let send: Awaited<ReturnType<typeof createTurnkeySend>>
+  try {
+    send = await createTurnkeySend(input.admin, {
+      ctx: input.ctx,
+      asset: "USDC",
+      chain: "solana",
+      destinationAddress,
+      amount,
+      settlementPollTimeoutMs: 0,
+      globalPayout: {
+        easnerPayoutId: input.easnerPayoutId,
+        formSessionId: input.formSessionId,
+        walletDebitAmount: input.totalDebited,
+      },
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "turnkey_send_failed"
+    return { ok: false, txHash: null, error: msg }
+  }
 
   const admin = createSupabaseAdmin()
   const { data: existing } = await admin
@@ -44,11 +72,15 @@ export async function executeYcBalancePayoutCryptoLeg(input: {
       ? (existing.metadata as Record<string, unknown>)
       : {}
   const trackingMeta = buildYcParentPayoutCryptoDepositTracking({
-    prior,
-    txHash: deposit.txHash,
-    providerTransactionId: deposit.providerTransactionId,
-    status: deposit.status,
-    error: deposit.errorMessage,
+    prior: {
+      ...prior,
+      turnkey_send_id: send.providerTransactionId,
+      turnkey_send_status: send.status,
+    },
+    txHash: send.txHash,
+    providerTransactionId: send.providerTransactionId,
+    status: send.status,
+    error: send.status === "failed" ? send.chainFailureDetail ?? "turnkey_send_failed" : null,
   })
   if (existing?.id) {
     await upsertLedgerTransaction(admin, {
@@ -72,16 +104,26 @@ export async function executeYcBalancePayoutCryptoLeg(input: {
     })
   }
 
-  if (deposit.status === "failed") {
-    return { ok: false, txHash: null, error: deposit.errorMessage ?? "yc_crypto_deposit_failed" }
+  if (send.status === "failed") {
+    return {
+      ok: false,
+      txHash: send.txHash,
+      turnkeySendId: send.providerTransactionId,
+      error: send.chainFailureDetail?.trim() || "turnkey_send_failed",
+    }
   }
-  return { ok: true, txHash: deposit.txHash }
+
+  return {
+    ok: true,
+    txHash: send.txHash,
+    turnkeySendId: send.providerTransactionId,
+  }
 }
 
 async function sweepYcBalancePayoutRevenueToFeeWallet(
   admin: SupabaseClient,
-  input: { transactionId: string },
-): Promise<{ sweepAmt: number; feeWalletSweepTxHash: string | null; captured: boolean }> {
+  input: { transactionId: string; userId: string; businessId: string | null },
+): Promise<{ sweepAmt: number; feeWalletSweepTxHash: string | null; captured: boolean; turnkeySendId?: string | null }> {
   const { data: row } = await admin
     .from("transactions")
     .select("id, metadata, amount")
@@ -107,9 +149,25 @@ async function sweepYcBalancePayoutRevenueToFeeWallet(
     return { sweepAmt, feeWalletSweepTxHash: null, captured: true }
   }
 
-  const sweep = await sweepEasnerRevenueFromDepositOmnibus({
+  const ctx = await resolveNoahAccountContextFromLedgerScope(admin, {
+    userId: input.userId,
+    businessId: input.businessId,
+  })
+  if (!ctx) {
+    return { sweepAmt, feeWalletSweepTxHash: null, captured: false }
+  }
+
+  const easnerPayoutId = String(meta.easner_payout_id ?? "").trim()
+  const sweep = await sweepEasnerRevenueFromUserTurnkeyWallet(admin, {
+    ctx,
     ledgerCurrency: "USD",
     amount: sweepAmt,
+    globalPayout: easnerPayoutId
+      ? {
+          easnerPayoutId,
+          formSessionId: String(meta.form_session_id ?? meta.yc_sequence_id ?? ""),
+        }
+      : undefined,
     logTag: "yc-balance-payout",
   })
 
@@ -117,6 +175,7 @@ async function sweepYcBalancePayoutRevenueToFeeWallet(
     sweepAmt,
     feeWalletSweepTxHash: sweep.feeWalletSweepTxHash,
     captured: sweep.captured,
+    turnkeySendId: sweep.turnkeySendId,
   }
 }
 
@@ -136,10 +195,12 @@ export async function handleYcBalancePayoutSendComplete(input: {
   if (!row?.id) return
 
   const prior = asMeta(row.metadata)
-  const { sweepAmt, feeWalletSweepTxHash, captured } = await sweepYcBalancePayoutRevenueToFeeWallet(
-    admin,
-    { transactionId: row.id },
-  )
+  const { sweepAmt, feeWalletSweepTxHash, captured, turnkeySendId } =
+    await sweepYcBalancePayoutRevenueToFeeWallet(admin, {
+      transactionId: row.id,
+      userId: input.userId,
+      businessId: input.businessId,
+    })
 
   const txPatch = mergeYcPayoutLifecycle(
     {
@@ -148,8 +209,9 @@ export async function handleYcBalancePayoutSendComplete(input: {
         sweepAmt,
         feeWalletSweepTxHash,
         captured,
+        turnkeySendId,
       }),
-      margin_capture_mode: "fee_wallet_omnibus",
+      margin_capture_mode: "fee_wallet_deferred",
       processing_fee_pending: false,
     },
     { completed_at: now, processing_at: now },
@@ -192,6 +254,7 @@ export async function handleYcBalancePayoutSendComplete(input: {
         fee_wallet_sweep: sweepAmt > 0 ? sweepAmt : null,
         metadata: {
           ...transferMeta,
+          margin_capture_mode: "fee_wallet_deferred",
           ...(feeWalletSweepTxHash ? { fee_wallet_sweep_tx_hash: feeWalletSweepTxHash } : {}),
         },
         updated_at: now,

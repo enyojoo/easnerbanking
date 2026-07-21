@@ -15,10 +15,12 @@ import {
   isEasnerRevenueAlreadySwept,
   readPriorSweepFromMetadata,
   sweepEasnerRevenueFromDepositOmnibus,
+  sweepEasnerRevenueFromUserTurnkeyWallet,
 } from "@/lib/processing-fee/fee-wallet-sweep"
 import {
   captureGlobalPayoutProcessingFeeIfPending,
   captureWalletSendFeeLegIfPending,
+  resolveNoahAccountContextFromLedgerScope,
 } from "@/lib/processing-fee/capture-pending-processing-fee"
 import {
   buildNoahTransactionWebhookEnvelope,
@@ -196,6 +198,49 @@ async function retryYcTransferFeeSweep(
       marginAmount,
       processingFee,
     })
+    if (!Number.isFinite(sweepAmt) || sweepAmt < EASNER_REVENUE_FEE_WALLET_SWEEP_MIN) return false
+
+    const userId = String(transfer.user_id ?? "")
+    const businessId = transfer.business_id != null ? String(transfer.business_id) : null
+    if (!userId) return false
+
+    const ctx = await resolveNoahAccountContextFromLedgerScope(admin, { userId, businessId })
+    if (!ctx) return false
+
+    const sweep = await sweepEasnerRevenueFromUserTurnkeyWallet(admin, {
+      ctx,
+      ledgerCurrency: "USD",
+      amount: sweepAmt,
+      globalPayout: meta.easner_payout_id
+        ? {
+            easnerPayoutId: String(meta.easner_payout_id),
+            formSessionId: String(meta.form_session_id ?? transfer.leg2_sequence_id ?? ""),
+          }
+        : undefined,
+      logTag: "yc-balance_payout-reconcile",
+    })
+
+    if (!sweep.feeWalletSweepTxHash && !sweep.captured) return false
+
+    await admin
+      .from("yc_transfers")
+      .update({
+        fee_wallet_sweep: sweepAmt,
+        metadata: {
+          ...meta,
+          margin_capture_mode: "fee_wallet_deferred",
+          ...buildEasnerRevenueSweepMetadataPatch({
+            sweepAmt,
+            feeWalletSweepTxHash: sweep.feeWalletSweepTxHash,
+            captured: sweep.captured,
+            turnkeySendId: sweep.turnkeySendId,
+          }),
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", String(transfer.id))
+
+    return true
   } else {
     return false
   }

@@ -215,7 +215,7 @@ export async function buildYcPayoutQuote(input: {
       ? { providerMid: payoutRate.yc_sell }
       : {}),
     effectiveRate: customerRate,
-    marginCaptureMode: "fee_wallet_omnibus",
+    marginCaptureMode: "fee_wallet_deferred",
     channelCost: pricing.channelCost,
     marginAmount: pricing.marginAmount,
     customerPrincipal: pricing.customerPrincipal,
