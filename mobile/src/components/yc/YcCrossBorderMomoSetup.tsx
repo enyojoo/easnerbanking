@@ -23,7 +23,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import {
   prefetchCrossBorderQuotePipeline,
-  warmCrossBorderQuotePipeline,
+  ensureCrossBorderOrderConfirmed,
+  isCompleteCrossBorderQuote,
+  peekLastCrossBorderQuoteError,
 } from '../../lib/sendFlowCrossBorderQuote'
 
 type PayInNetwork = { id: string; name: string }
@@ -150,9 +152,11 @@ export function YcCrossBorderMomoSetup({
     haptics.medium()
     setIsContinueLoading(true)
     try {
-      const previewQuote = await warmCrossBorderQuotePipeline(quoteMeta)
-      if (!previewQuote?.localPayIn) {
-        setContinueError('Could not load transfer quote')
+      const lockedQuote = await ensureCrossBorderOrderConfirmed(quoteMeta)
+      if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
+        setContinueError(
+          peekLastCrossBorderQuoteError() || 'Could not lock transfer details',
+        )
         return
       }
       navigation.navigate('SendConfirm' as never, {
@@ -164,14 +168,16 @@ export function YcCrossBorderMomoSetup({
         receiveCurrency,
         amountEntryMode,
         amountScreenSendAmount,
-        calculatedSendingAmount: previewQuote.localPayIn,
-        calculatedTotalAmount: previewQuote.localPayIn,
-        ycPreviewCustomerRate: previewQuote.customerRate,
+        calculatedSendingAmount: lockedQuote.localPayIn,
+        calculatedTotalAmount: lockedQuote.localPayIn,
+        transactionId:
+          lockedQuote.easnerTransactionId || lockedQuote.transactionId || undefined,
+        ycPreviewCustomerRate: lockedQuote.customerRate,
         ycPreviewProvisionalLocalPayIn:
-          previewQuote.provisionalPayIn ?? previewQuote.localPayIn,
-        ycPreviewProcessingFee: previewQuote.processingFee,
-        ycPreviewDisplayProcessingFeeLocal: previewQuote.displayProcessingFeeLocal,
-        ycPreviewYcLegFeesUsd: previewQuote.ycLegFeesUsd,
+          lockedQuote.provisionalPayIn ?? lockedQuote.localPayIn,
+        ycPreviewProcessingFee: lockedQuote.processingFee,
+        ycPreviewDisplayProcessingFeeLocal: lockedQuote.displayProcessingFeeLocal,
+        ycPreviewYcLegFeesUsd: lockedQuote.ycLegFeesUsd,
         sourcePhone: phone.trim(),
         networkId,
         sourceNetworkName: selectedNetwork?.name,

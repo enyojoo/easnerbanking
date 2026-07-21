@@ -70,10 +70,11 @@ import {
 } from "@/lib/yc-local-deposit-cache"
 import {
   clearCrossBorderQuote,
-  fetchCrossBorderQuotePreview,
   crossBorderQuoteToFlowState,
+  ensureCrossBorderOrderConfirmed,
+  isCompleteCrossBorderQuote,
   prefetchCrossBorderQuotePipeline,
-  warmCrossBorderQuotePipeline,
+  peekLastCrossBorderQuoteError,
 } from "@/lib/yc-cross-border-quote-cache"
 import {
   ensureWalletSendOrderConfirmed,
@@ -1243,19 +1244,23 @@ export default function SendPage() {
             payInRail: "bank_transfer" as const,
             receiveAmount,
           }
-          const previewQuote =
-            (await warmCrossBorderQuotePipeline(crossBorderMeta)) ??
-            (await fetchCrossBorderQuotePreview(crossBorderMeta).catch(() => null))
-          if (!previewQuote?.localPayIn) {
-            setAmountFieldError("Could not load transfer quote")
+          const lockedQuote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
+          if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
+            setAmountFieldError(
+              peekLastCrossBorderQuoteError() || "Could not lock transfer details",
+            )
             return
           }
           flowState = {
             ...state,
-            sendAmount: previewQuote.localPayIn,
+            sendAmount: lockedQuote.localPayIn,
             sendCurrency: otherCurrency,
-            totalAmount: previewQuote.localPayIn,
-            ycCrossBorder: crossBorderQuoteToFlowState(previewQuote, crossBorderMeta),
+            totalAmount: lockedQuote.localPayIn,
+            transactionId:
+              lockedQuote.easnerTransactionId ||
+              lockedQuote.transactionId ||
+              state.transactionId,
+            ycCrossBorder: crossBorderQuoteToFlowState(lockedQuote, crossBorderMeta),
           }
           persistSendFlowState(flowState)
           router.push("/send/confirm")

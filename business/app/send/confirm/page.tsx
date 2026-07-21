@@ -286,18 +286,22 @@ export default function SendConfirmPage() {
 
   useEffect(() => {
     if (!crossBorderMeta) return
+    if (
+      isStashedCrossBorderQuoteFresh(crossBorderMeta) &&
+      isCompleteCrossBorderQuote(peekCrossBorderQuote())
+    ) {
+      return
+    }
     void prefetchCrossBorderQuotePipeline(crossBorderMeta)
   }, [crossBorderMeta])
 
   useEffect(() => {
     if (!state || !crossBorderMeta) return
-    if ((state.ycCrossBorder?.localPayIn ?? 0) > 0 && (state.ycCrossBorder?.customerRate ?? 0) > 0) {
-      return
-    }
+    if (state.ycCrossBorder?.transferId) return
 
     if (
       isStashedCrossBorderQuoteFresh(crossBorderMeta) &&
-      peekCrossBorderQuote()?.localPayIn
+      isCompleteCrossBorderQuote(peekCrossBorderQuote())
     ) {
       const stashed = peekCrossBorderQuote()
       if (stashed) {
@@ -347,8 +351,7 @@ export default function SendConfirmPage() {
     }
   }, [
     crossBorderMeta,
-    state?.ycCrossBorder?.localPayIn,
-    state?.ycCrossBorder?.customerRate,
+    state?.ycCrossBorder?.transferId,
   ])
 
   useEffect(() => {
@@ -861,6 +864,11 @@ export default function SendConfirmPage() {
       ].join("|")
     : ""
 
+  const stashedCrossBorder =
+    crossBorderMeta && isStashedCrossBorderQuoteFresh(crossBorderMeta)
+      ? peekCrossBorderQuote()
+      : null
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
@@ -952,11 +960,15 @@ export default function SendConfirmPage() {
           }}
           getErrorMessage={() => peekLastCrossBorderQuoteError() ?? ycQuoteError}
           crossBorderMeta={crossBorderMeta}
-          clientCustomerRate={yc?.customerRate}
-          clientProvisionalLocalPayIn={yc?.localPayIn ?? yc?.provisionalPayIn}
-          clientProcessingFee={yc?.processingFee}
-          clientDisplayProcessingFeeLocal={yc?.displayProcessingFeeLocal}
-          clientYcLegFeesUsd={yc?.ycLegFeesUsd}
+          clientCustomerRate={yc?.customerRate ?? stashedCrossBorder?.customerRate}
+          clientProvisionalLocalPayIn={
+            yc?.localPayIn ?? yc?.provisionalPayIn ?? stashedCrossBorder?.localPayIn
+          }
+          clientProcessingFee={yc?.processingFee ?? stashedCrossBorder?.processingFee}
+          clientDisplayProcessingFeeLocal={
+            yc?.displayProcessingFeeLocal ?? stashedCrossBorder?.displayProcessingFeeLocal
+          }
+          clientYcLegFeesUsd={yc?.ycLegFeesUsd ?? stashedCrossBorder?.ycLegFeesUsd}
           payInCurrency={state.sendCurrency}
           receiveCurrency={state.receiveCurrency}
           receiveAmount={state.amount}

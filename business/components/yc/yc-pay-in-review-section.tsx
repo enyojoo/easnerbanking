@@ -23,6 +23,7 @@ import { CreditDestinationRow } from "@/components/transactions/credit-destinati
 import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import {
   isStashedCrossBorderQuoteFresh,
+  isCompleteCrossBorderQuote,
   peekCrossBorderQuote,
   type CrossBorderQuoteStashMeta,
 } from "@/lib/yc-cross-border-quote-cache"
@@ -231,11 +232,18 @@ export function YcPayInReviewSection(props: Props) {
   }
 
   const receiveAmount = props.receiveAmount
-  const stashedPreview =
+  const stashedQuote =
     props.crossBorderMeta && isStashedCrossBorderQuoteFresh(props.crossBorderMeta)
       ? peekCrossBorderQuote()
       : null
-  const displayQuote = lockedQuote ?? stashedPreview
+  const stashedLocked =
+    stashedQuote && isCompleteCrossBorderQuote(stashedQuote) ? stashedQuote : null
+  const activeLockedQuote = lockedQuote ?? stashedLocked
+  const displayLocked = isLocked || Boolean(stashedLocked)
+  const crossBorderReviewPhase: YcLocalPayInReviewPhase = displayLocked ? "locked" : "preview"
+  const displayQuote = activeLockedQuote ?? stashedQuote
+  const crossBorderTransactionId =
+    activeLockedQuote?.easnerTransactionId ?? activeLockedQuote?.transactionId ?? ""
   const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
   const customerRate =
     displayQuote?.customerRate ?? props.clientCustomerRate ?? 0
@@ -256,17 +264,17 @@ export function YcPayInReviewSection(props: Props) {
   const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
 
   const ctaDisabled =
-    !isLocked ||
+    !displayLocked ||
     attestLoading ||
     quoteCountdown.expired ||
     Boolean(lockError) ||
-    !lockedQuote?.transferId
+    !activeLockedQuote?.transferId
 
   return (
     <div className="space-y-4">
       <YcLocalPayInReview
         mode="cross_border_send"
-        phase={reviewPhase}
+        phase={crossBorderReviewPhase}
         rail={props.payInRail}
         payInCurrency={props.payInCurrency}
         receiveCurrency={props.receiveCurrency}
@@ -278,23 +286,23 @@ export function YcPayInReviewSection(props: Props) {
           displayQuote?.processingFee ?? props.clientProcessingFee
         }
         exchangeFeeUsd={
-          lockedQuote?.ycLegFeesUsd ??
+          activeLockedQuote?.ycLegFeesUsd ??
           displayQuote?.ycLegFeesUsd ??
           props.clientYcLegFeesUsd
         }
         principalLocal={breakdown.principalLocal}
-        transactionId={transactionId || undefined}
-        processingTime={isLocked ? processingTime : undefined}
+        transactionId={crossBorderTransactionId || undefined}
+        processingTime={displayLocked ? processingTime : undefined}
         recipientNode={props.recipientNode}
         copiedField={copiedField}
         onCopy={handleCopy}
       />
 
-      {isLocked && lockedQuote ? (
+      {displayLocked && activeLockedQuote ? (
         <>
-          {lockedQuote.expiresAt ? (
+          {activeLockedQuote.expiresAt ? (
             <YcPayInAwaitingPaymentCountdown
-              depositExpiresAt={lockedQuote.expiresAt}
+              depositExpiresAt={activeLockedQuote.expiresAt}
               context="review"
             />
           ) : null}
@@ -302,10 +310,10 @@ export function YcPayInReviewSection(props: Props) {
             payInRail={props.payInRail}
             localPayIn={localPayIn}
             localCurrency={props.payInCurrency}
-            bankInfo={lockedQuote.bankInfo}
-            sourcePhone={lockedQuote.sourcePhone}
-            sourceNetworkName={lockedQuote.sourceNetworkName}
-            transactionId={transactionId}
+            bankInfo={activeLockedQuote.bankInfo}
+            sourcePhone={activeLockedQuote.sourcePhone}
+            sourceNetworkName={activeLockedQuote.sourceNetworkName}
+            transactionId={crossBorderTransactionId}
             copiedField={copiedField}
             onCopy={handleCopy}
           />
@@ -319,8 +327,8 @@ export function YcPayInReviewSection(props: Props) {
         type="button"
         disabled={ctaDisabled}
         onClick={() => {
-          if (!lockedQuote?.transferId || !transactionId) return
-          void attestPayment(transactionId, lockedQuote.transferId)
+          if (!activeLockedQuote?.transferId || !crossBorderTransactionId) return
+          void attestPayment(crossBorderTransactionId, activeLockedQuote.transferId)
         }}
       >
         {attestLoading ? (

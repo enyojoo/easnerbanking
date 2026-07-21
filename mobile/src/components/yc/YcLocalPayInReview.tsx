@@ -157,14 +157,21 @@ export function YcLocalPayInReview({
 
   const previewQuote =
     quoteMeta && isStashedCrossBorderQuoteFresh(quoteMeta) ? peekCrossBorderQuote() : null
-  const displayQuote = lockedQuote ?? previewQuote
-  const reviewPhase: YcLocalPayInReviewPhase = isLocked ? 'locked' : 'preview'
+  const stashedLocked =
+    previewQuote && isCompleteCrossBorderQuote(previewQuote) ? previewQuote : null
+  const activeLockedQuote = lockedQuote ?? stashedLocked
+  const displayQuote = activeLockedQuote ?? previewQuote
+  const displayLocked = isLocked || Boolean(stashedLocked)
+  const reviewPhase: YcLocalPayInReviewPhase = displayLocked ? 'locked' : 'preview'
   const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
   const customerRate = displayQuote?.customerRate ?? clientCustomerRate
   const displayLocalPayIn =
     displayQuote?.localPayIn ??
     (clientProvisionalLocalPayIn > 0 ? clientProvisionalLocalPayIn : 0)
-  const displayTransactionId = lockedQuote?.easnerTransactionId ?? lockedQuote?.transactionId ?? ''
+  const displayTransactionId =
+    activeLockedQuote?.easnerTransactionId ??
+    activeLockedQuote?.transactionId ??
+    ''
   const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
 
   const reviewBreakdown = resolveYcCrossBorderLocalPayInBreakdownForDisplay({
@@ -191,7 +198,7 @@ export function YcLocalPayInReview({
     exchangeFeeUsd: displayQuote?.ycLegFeesUsd ?? clientYcLegFeesUsd,
     principalLocal: reviewBreakdown.principalLocal,
     transactionId: displayTransactionId || undefined,
-    processingTime: isLocked ? processingTime : undefined,
+    processingTime: displayLocked ? processingTime : undefined,
   })
 
   const { attestLoading, attestError, attestPayment } = useYcPayInAttest({
@@ -209,16 +216,16 @@ export function YcLocalPayInReview({
   }
 
   const ctaDisabled =
-    !isLocked ||
+    !displayLocked ||
     attestLoading ||
     quoteCountdown.expired ||
     Boolean(lockError) ||
-    !displayQuote?.transferId
+    !activeLockedQuote?.transferId
 
   const onAttest = () => {
-    if (!displayQuote?.transferId || !displayTransactionId) return
+    if (!activeLockedQuote?.transferId || !displayTransactionId) return
     haptics.medium()
-    void attestPayment(displayTransactionId, displayQuote.transferId)
+    void attestPayment(displayTransactionId, activeLockedQuote.transferId)
   }
 
   return (
@@ -285,12 +292,12 @@ export function YcLocalPayInReview({
           </View>
         ) : null}
 
-        {isLocked && lockedQuote ? (
+        {displayLocked && activeLockedQuote ? (
           <>
-            {lockedQuote.expiresAt ? (
+            {activeLockedQuote.expiresAt ? (
               <View style={styles.countdownWrap}>
                 <YcPayInAwaitingPaymentCountdown
-                  depositExpiresAt={lockedQuote.expiresAt}
+                  depositExpiresAt={activeLockedQuote.expiresAt}
                   context="review"
                 />
               </View>
@@ -299,9 +306,9 @@ export function YcLocalPayInReview({
               payInRail={payInRail}
               localPayIn={displayLocalPayIn}
               localCurrency={payInCurrency}
-              bankInfo={lockedQuote.bankInfo}
-              sourcePhone={lockedQuote.sourcePhone ?? sourcePhone}
-              sourceNetworkName={lockedQuote.sourceNetworkName ?? sourceNetworkName}
+              bankInfo={activeLockedQuote.bankInfo}
+              sourcePhone={activeLockedQuote.sourcePhone ?? sourcePhone}
+              sourceNetworkName={activeLockedQuote.sourceNetworkName ?? sourceNetworkName}
               transactionId={displayTransactionId}
               copiedKey={copiedKey}
               onCopy={handleCopy}

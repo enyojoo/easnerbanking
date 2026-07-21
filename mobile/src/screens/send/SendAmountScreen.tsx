@@ -114,8 +114,10 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   clearCrossBorderQuote,
+  ensureCrossBorderOrderConfirmed,
+  isCompleteCrossBorderQuote,
   prefetchCrossBorderQuotePipeline,
-  warmCrossBorderQuotePipeline,
+  peekLastCrossBorderQuoteError,
 } from '../../lib/sendFlowCrossBorderQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
@@ -1460,9 +1462,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             payInRail: rail,
             receiveAmount: receiveAmountValue,
           }
-          const previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
-          if (!previewQuote?.localPayIn) {
-            showError('Could not load transfer quote')
+          const lockedQuote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
+          if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
+            showError(peekLastCrossBorderQuoteError() || 'Could not lock transfer details')
             return
           }
           navigation.navigate('SendConfirm' as never, {
@@ -1474,14 +1476,16 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             receiveCurrency: recipient.currency,
             amountEntryMode,
             amountScreenSendAmount: navAmounts.sendAmount,
-            calculatedSendingAmount: previewQuote.localPayIn,
-            calculatedTotalAmount: previewQuote.localPayIn,
-            ycPreviewCustomerRate: previewQuote.customerRate,
+            calculatedSendingAmount: lockedQuote.localPayIn,
+            calculatedTotalAmount: lockedQuote.localPayIn,
+            transactionId:
+              lockedQuote.easnerTransactionId || lockedQuote.transactionId || undefined,
+            ycPreviewCustomerRate: lockedQuote.customerRate,
             ycPreviewProvisionalLocalPayIn:
-              previewQuote.provisionalPayIn ?? previewQuote.localPayIn,
-            ycPreviewProcessingFee: previewQuote.processingFee,
-            ycPreviewDisplayProcessingFeeLocal: previewQuote.displayProcessingFeeLocal,
-            ycPreviewYcLegFeesUsd: previewQuote.ycLegFeesUsd,
+              lockedQuote.provisionalPayIn ?? lockedQuote.localPayIn,
+            ycPreviewProcessingFee: lockedQuote.processingFee,
+            ycPreviewDisplayProcessingFeeLocal: lockedQuote.displayProcessingFeeLocal,
+            ycPreviewYcLegFeesUsd: lockedQuote.ycLegFeesUsd,
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
           } as never)
