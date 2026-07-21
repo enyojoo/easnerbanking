@@ -3,6 +3,7 @@ import { emailService } from "@easner/server"
 import type { VerificationEmailData } from "@easner/server"
 import { getEmailAudienceProfile } from "@easner/server"
 import { resolveEmailAudience } from "@/lib/notifications/resolve-email-audience"
+import { fetchUserEmailContact } from "@/lib/notifications/user-contact"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 
 type VerificationStatus = "not_started" | "under_review" | "approved" | "rejected"
@@ -81,18 +82,14 @@ export async function notifyBusinessKybStatusChange(
   const ownerUserId = await resolveOrgOwnerUserId(admin, businessId, "")
   if (!ownerUserId) return
 
-  const { data: user } = await admin
-    .from("users")
-    .select("email,first_name")
-    .eq("id", ownerUserId)
-    .maybeSingle()
-  if (!user?.email) return
+  const contact = await fetchUserEmailContact(admin, ownerUserId)
+  if (!contact.email) return
 
   await notifyVerificationStatusChange({
     admin,
     userId: ownerUserId,
-    userEmail: user.email,
-    firstName: user.first_name ?? undefined,
+    userEmail: contact.email,
+    firstName: contact.firstName,
     kind: "kyb",
     previousStatus,
     nextStatus,
@@ -107,18 +104,14 @@ export async function notifyIndividualKycStatusChange(
   nextStatus: VerificationStatus,
   rejectionReasons?: string[] | null,
 ): Promise<void> {
-  const { data: user } = await admin
-    .from("users")
-    .select("email,first_name")
-    .eq("id", userId)
-    .maybeSingle()
-  if (!user?.email) return
+  const contact = await fetchUserEmailContact(admin, userId)
+  if (!contact.email) return
 
   await notifyVerificationStatusChange({
     admin,
     userId,
-    userEmail: user.email,
-    firstName: user.first_name ?? undefined,
+    userEmail: contact.email,
+    firstName: contact.firstName,
     kind: "kyc",
     previousStatus,
     nextStatus,

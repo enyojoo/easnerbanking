@@ -20,6 +20,7 @@ import type { TransactionEmailData } from "@easner/server"
 import { isLedgerTransactionEmailEnabled } from "@/lib/notifications/email-rollout"
 import { sendTransactionSettledPush } from "@/lib/notifications/expo-push"
 import { resolveEmailAudience } from "@/lib/notifications/resolve-email-audience"
+import { fetchUserEmailContact } from "@/lib/notifications/user-contact"
 
 export type DispatchTransactionNotificationInput = DeriveTransactionNotificationInput & {
   userId: string
@@ -28,17 +29,6 @@ export type DispatchTransactionNotificationInput = DeriveTransactionNotification
   outcome?: NotificationOutcome
   sendEmail?: boolean
   sendPush?: boolean
-}
-
-async function fetchUserContact(
-  admin: SupabaseClient,
-  userId: string,
-): Promise<{ email: string | null; firstName?: string }> {
-  const { data } = await admin.from("users").select("email, first_name").eq("id", userId).maybeSingle()
-  return {
-    email: data?.email?.trim() || null,
-    firstName: data?.first_name?.trim() || undefined,
-  }
 }
 
 async function fetchCommunicationPreferences(
@@ -267,7 +257,7 @@ export async function dispatchTransactionNotification(
   }
 
   if (sendEmailChannel && parsed.channels.email) {
-    const contact = await fetchUserContact(admin, input.userId)
+    const contact = await fetchUserEmailContact(admin, input.userId)
     const email = input.userEmail?.trim() || contact.email
     if (email) {
       const emailData = descriptorToEmailData(descriptor, input, audience, contact.firstName)
@@ -275,6 +265,10 @@ export async function dispatchTransactionNotification(
       await emailService
         .sendTransactionSettledEmail(email, emailData, prefs)
         .catch((e) => console.warn("transaction notification email (non-fatal):", e))
+    } else {
+      console.warn(
+        `[email] skipped ledger transaction email user=${input.userId} tx=${input.transactionId}: no users.email`,
+      )
     }
   } else if (
     input.sendEmail !== false &&

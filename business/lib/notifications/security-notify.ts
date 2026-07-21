@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { emailService } from "@easner/server"
 import type { SecurityAlertEmailData } from "@easner/server"
 import { resolveEmailAudience } from "@/lib/notifications/resolve-email-audience"
+import { fetchUserEmailContact } from "@/lib/notifications/user-contact"
 
 const TEMPLATE_BY_ALERT: Record<SecurityAlertEmailData["alertType"], string> = {
   password_changed: "passwordChanged",
@@ -31,17 +32,13 @@ export async function sendSecurityAlertEmail(
 ): Promise<void> {
   const audience = await resolveEmailAudience(admin, input.userId)
   const prefs = await fetchCommunicationPreferences(admin, input.userId)
-  const { data: user } = await admin
-    .from("users")
-    .select("first_name")
-    .eq("id", input.userId)
-    .maybeSingle()
+  const contact = await fetchUserEmailContact(admin, input.userId)
   const data: SecurityAlertEmailData = {
     email: input.userEmail,
     alertType: input.alertType,
     deviceLabel: input.deviceLabel,
     occurredAt: new Date().toISOString(),
-    firstName: user?.first_name?.trim() || undefined,
+    firstName: contact.firstName,
     audience,
   }
   await emailService
