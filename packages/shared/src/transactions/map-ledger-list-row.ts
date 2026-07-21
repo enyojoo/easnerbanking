@@ -27,6 +27,7 @@ import {
 } from "./product-label"
 import { resolveLedgerWhenAt } from "./transaction-timing-display"
 import {
+  ledgerTransactionStatusDisplayForRow,
   resolveYcPayInFeedStatus,
   resolveYcPayInListWhenAt,
 } from "./yc-pay-in-display"
@@ -328,6 +329,7 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
   const meta = row.metadata as Record<string, unknown> | null | undefined
   const ycFeedStatus = resolveYcPayInFeedStatus(meta, ledgerStatus)
   const st = ycFeedStatus ?? mapLedgerStatusForUserFeed(ledgerStatus)
+  const statusLabel = ledgerTransactionStatusDisplayForRow(ledgerStatus, meta).label
   const created =
     resolveLedgerWhenAt({
       occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
@@ -423,6 +425,7 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
           }
         : {}),
     status: st,
+    status_label: statusLabel,
     created_at: created,
     noah_created_at: created,
     ...(displayWhenAt ? { display_when_at: displayWhenAt } : {}),

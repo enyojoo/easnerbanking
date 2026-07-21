@@ -23,7 +23,12 @@ import { qk } from "./keys"
 import { patchRowInPages, prependIntoFirstPage } from "./infinite-cache"
 import { markRecentMoneyActivity } from "./polling-fallback"
 import { scopeId, type Scope } from "./scope"
-import { displayEasnerTransactionIdForList, shouldIncludeRowInUserFeed } from "../transactions/map-ledger-list-row"
+import {
+  displayEasnerTransactionIdForList,
+  mapLedgerStatusForUserFeed,
+  shouldIncludeRowInUserFeed,
+} from "../transactions/map-ledger-list-row"
+import { resolveYcPayInFeedStatus } from "../transactions/yc-pay-in-display"
 
 // Minimal Supabase client shape we rely on. Using a structural type avoids
 // pulling `@supabase/supabase-js` into the shared package's types graph.
@@ -198,7 +203,10 @@ function tryPartialTransactionPatch(
   const dbRowId = row.id != null ? String(row.id) : ""
   const patchFn = (prev: unknown) => ({
     ...(prev as Record<string, unknown>),
-    status: mapLedgerStatusForList(String(row.status ?? (prev as { status?: string }).status ?? "")),
+    status: mapLedgerStatusForList(
+      String(row.status ?? (prev as { status?: string }).status ?? ""),
+      row.metadata,
+    ),
     metadata: row.metadata ?? (prev as { metadata?: unknown }).metadata,
   })
 
@@ -312,13 +320,17 @@ function scheduleTransactionRowPatch(
   })
 }
 
-function mapLedgerStatusForList(st: string): string {
-  const lower = st.toLowerCase()
-  if (lower === "settled") return "completed"
-  if (lower === "pending" || lower === "processing") return lower
-  if (lower === "failed" || lower === "cancelled") return "failed"
-  if (lower === "unknown") return "pending"
-  return lower || "unknown"
+function mapLedgerStatusForList(
+  st: string,
+  metadata?: unknown,
+): string {
+  const meta =
+    metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>)
+      : null
+  const ycFeed = resolveYcPayInFeedStatus(meta, st)
+  if (ycFeed) return ycFeed
+  return mapLedgerStatusForUserFeed(st)
 }
 
 /**

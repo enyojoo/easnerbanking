@@ -109,19 +109,28 @@ export type TransactionStatusDisplay = {
  * for backwards-compat call sites), and a `tone` that the new `StatusPill` primitive
  * consumes directly.
  */
-export function getTransactionStatusDisplay(status: string): TransactionStatusDisplay | null {
+export function getTransactionStatusDisplay(
+  status: string,
+  statusLabel?: string | null,
+): TransactionStatusDisplay | null {
+  if (statusLabel) {
+    return { label: statusLabel, color: easnerBrand.slate, tone: 'processing' }
+  }
   if (!status) return null
   const statusLower = status.toLowerCase()
+  if (statusLower === 'processing_payment') {
+    return { label: 'Processing payment', color: easnerBrand.slate, tone: 'processing' }
+  }
   if (statusLower.includes('processed') || statusLower.includes('completed')) {
     return { label: 'Completed', color: easnerBrand.emerald, tone: 'completed' }
   }
   if (statusLower.includes('pending') || statusLower.includes('awaiting') || statusLower.includes('scheduled') || statusLower.includes('received') || statusLower.includes('submitted')) {
-    if (statusLower === 'processing_payment') {
-      return { label: 'Processing payment', color: easnerBrand.slate, tone: 'processing' }
-    }
     if (statusLower === 'confirming_payment' || statusLower === 'awaiting_payment') {
       return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
     }
+    return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
+  }
+  if (statusLower.includes('processing')) {
     return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
   }
   if (statusLower.includes('failed') || statusLower.includes('returned')) {

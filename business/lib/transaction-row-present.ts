@@ -17,7 +17,13 @@ export function formatTransactionRowDateTime(iso: string): string {
 }
 
 /** Second line under amount on the right. */
-export function transactionStatusRowPresentation(status: string): { label: string; className: string } {
+export function transactionStatusRowPresentation(
+  status: string,
+  statusLabel?: string | null,
+): { label: string; className: string } {
+  if (statusLabel) {
+    return { label: statusLabel, className: "text-muted-foreground" }
+  }
   const s = status.toLowerCase()
   if (s === "confirming_payment" || s === "awaiting_payment" || s === "processing_payment") {
     return {

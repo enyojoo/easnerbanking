@@ -919,7 +919,9 @@ export default function SendConfirmPage() {
               sourceNetworkName: quote.sourceNetworkName,
             }
           }}
-          getErrorMessage={() => ycQuoteError}
+          getErrorMessage={() => peekLastCrossBorderQuoteError() ?? ycQuoteError}
+          clientCustomerRate={yc?.customerRate}
+          clientProvisionalLocalPayIn={yc?.localPayIn ?? yc?.provisionalPayIn}
           payInCurrency={state.sendCurrency}
           receiveCurrency={state.receiveCurrency}
           receiveAmount={state.amount}

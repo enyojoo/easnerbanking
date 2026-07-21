@@ -265,7 +265,7 @@ export function DashboardPageClient() {
               <div className="py-8 text-center text-sm text-muted-foreground">No transactions yet</div>
             : <div className="divide-y">
                 {recentTransactions.map((txn) => {
-                  const statusRow = transactionStatusRowPresentation(txn.status)
+                  const statusRow = transactionStatusRowPresentation(txn.status, txn.statusLabel)
                   return (
                     <div
                       key={txn.id}

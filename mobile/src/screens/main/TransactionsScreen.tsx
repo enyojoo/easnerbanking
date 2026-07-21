@@ -262,7 +262,7 @@ const TransactionItem = React.memo(function TransactionItem({
 
   // Noah-backed rows use `transaction_type`; older `transactions` rows use `type`.
   const transactionType = item.transaction_type || item.type || 'send'
-  const statusDisplay = getTransactionStatusDisplay(item.status)
+  const statusDisplay = getTransactionStatusDisplay(item.status, item.status_label)
 
   const getTransactionIcon = () => {
     const iconColor = colors.primary.main

@@ -120,7 +120,13 @@ export default function TransactionsPage() {
     let result = rows.filter((t) => {
       const d = new Date(t.date).getTime()
       if (d < start.getTime() || d > end.getTime()) return false
-      if (statusFilter !== "all" && t.status !== statusFilter) return false
+      if (statusFilter !== "all") {
+        const bucket =
+          t.status === "processing_payment" && statusFilter === "processing"
+            ? "processing"
+            : t.status
+        if (bucket !== statusFilter) return false
+      }
       if (q) {
         const hay = `${t.description} ${t.reference || ""} ${t.autopayoutConfigId || ""}`.toLowerCase()
         if (!hay.includes(q)) return false
@@ -293,7 +299,7 @@ export default function TransactionsPage() {
           : <>
               <div className="divide-y">
                 {displayedTransactions.map((txn) => {
-                  const statusRow = transactionStatusRowPresentation(txn.status)
+                  const statusRow = transactionStatusRowPresentation(txn.status, txn.statusLabel)
                   return (
                     <TransactionDetailPrefetchLink
                       key={txn.id}

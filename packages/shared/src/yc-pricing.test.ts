@@ -331,12 +331,23 @@ describe("alignYcCrossBorderLockedLocalPayIn", () => {
     ).toBe(109057.25)
   })
 
-  it("rejects underpayment vs quoted model", () => {
+  it("accepts YC lock at submitted amount when repriced model drifted higher", () => {
+    expect(
+      alignYcCrossBorderLockedLocalPayIn({
+        pricingLocalPayIn: 5591.27,
+        submittedLocalAmount: 5562.63,
+        receiveRes: { localAmount: 5562.63 },
+      }),
+    ).toBe(5562.63)
+  })
+
+  it("rejects when YC locks below submitted amount", () => {
     expect(() =>
       alignYcCrossBorderLockedLocalPayIn({
         pricingLocalPayIn: 110673,
+        submittedLocalAmount: 110673,
         ycLockedLocalPayIn: 109057,
-        submittedLocalAmount: 109057,
+        receiveRes: { localAmount: 109057 },
       }),
     ).toThrow(/yc_pay_in_mismatch/)
   })

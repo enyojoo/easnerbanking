@@ -45,6 +45,7 @@ import {
   resolveAccountImpactAmount,
   resolveYcCrossBorderListDisplay,
   resolveYcPayInFeedStatus,
+  ledgerTransactionStatusDisplayForRow,
 } from "@easner/shared"
 import { enrichBankDepositLedgerRows } from "@/lib/transactions/enrich-bank-deposit-ledger-rows"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
@@ -150,6 +151,7 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
         }
       : {}),
     status,
+    status_label: ledgerTransactionStatusDisplayForRow(String(row.status ?? ""), meta).label,
     created_at: created,
     noah_created_at: created,
     name,

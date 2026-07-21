@@ -38,6 +38,26 @@ vi.mock("@easner/shared", () => ({
     currency: String(row.ledger_currency ?? row.currency ?? "USD"),
   }),
   mapLedgerStatusForUserFeed: (st: string) => (st === "settled" ? "completed" : st),
+  resolveYcPayInFeedStatus: (meta: Record<string, unknown> | null | undefined, ledgerStatus: string) => {
+    const mode = String(meta?.yc_mode ?? "")
+    if (
+      (mode === "fund_balance" || mode === "cross_border_send") &&
+      (ledgerStatus === "pending" || ledgerStatus === "processing")
+    ) {
+      return "processing_payment"
+    }
+    return null
+  },
+  ledgerTransactionStatusDisplayForRow: (ledgerStatus: string, meta?: Record<string, unknown> | null) => {
+    const mode = String(meta?.yc_mode ?? "")
+    const inFlight =
+      (mode === "fund_balance" || mode === "cross_border_send") &&
+      (ledgerStatus === "pending" || ledgerStatus === "processing")
+    return {
+      label: inFlight ? "Processing payment" : ledgerStatus === "settled" ? "Completed" : "Processing",
+      tone: "processing" as const,
+    }
+  },
   resolveGlobalPayoutListDisplay: (row: Record<string, unknown>) => {
     const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
     if (String(meta.payout_type ?? "").toLowerCase() !== "global_fiat") return null
@@ -89,6 +109,15 @@ vi.mock("@easner/shared", () => ({
   buildTransactionTimingRows: () => [],
   resolvePayoutReviewFlow: (meta?: Record<string, unknown> | null) =>
     meta && String(meta.yc_mode ?? "") === "cross_border_send" ? "local_pay_in" : "balance_payout",
+  isYcPayInAwaitingAttestation: () => false,
+  resolveYcPayInListWhenAt: () => null,
+  readYcQuoteLockedAt: () => null,
+  readYcPayInExpiresAt: () => null,
+  isYcPayInFlowMetadata: (meta?: Record<string, unknown> | null) => {
+    const mode = String(meta?.yc_mode ?? "")
+    return mode === "fund_balance" || mode === "cross_border_send"
+  },
+  resolveYcPayInPaymentDetails: () => null,
 }))
 
 vi.mock("@/lib/transactions/resolve-global-payout-off-ramp", () => ({
@@ -237,5 +266,7 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.displayCurrency).toBe("GHS")
     expect(item.description).toBe("Transfer to Ama Mensah")
     expect(item.displayHeroTitle).toBe("Transfer to Ama Mensah")
+    expect(item.status).toBe("processing_payment")
+    expect(item.statusLabel).toBe("Processing payment")
   })
 })

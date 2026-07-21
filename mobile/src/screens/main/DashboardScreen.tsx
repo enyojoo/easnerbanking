@@ -909,7 +909,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 const txType = transaction.transaction_type || transaction.type
                 const isReceived = txType === 'receive'
                 const iconType = getTransactionIconType(transaction)
-                const statusDisplay = getTransactionStatusDisplay(transaction.status)
+                const statusDisplay = getTransactionStatusDisplay(
+                  transaction.status,
+                  (transaction as { status_label?: string }).status_label,
+                )
                 return (
                   <Pressable
                     android_ripple={ripple.neutral}

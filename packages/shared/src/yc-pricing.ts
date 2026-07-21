@@ -1053,7 +1053,7 @@ export function resolveYcLockedLocalPayInFromReceive(input: {
 
 /**
  * Cross-border confirm: YC locked local pay-in is authoritative.
- * Submit padding may lock above repriced model — only reject underpayment.
+ * Submit padding may lock above repriced model — only reject when YC locks below submitted.
  */
 export function alignYcCrossBorderLockedLocalPayIn(input: {
   pricingLocalPayIn: number
@@ -1062,16 +1062,20 @@ export function alignYcCrossBorderLockedLocalPayIn(input: {
   submittedLocalAmount?: number
   receiveRes?: Record<string, unknown> | null
 }): number {
-  const locked = resolveYcLockedLocalPayInFromReceive({
-    submittedLocalAmount:
-      input.submittedLocalAmount ?? input.ycLockedLocalPayIn ?? input.pricingLocalPayIn,
+  const submitted = roundLocal(
+    input.submittedLocalAmount ?? input.ycLockedLocalPayIn ?? input.pricingLocalPayIn,
+  )
+  const rawYcLocked =
+    input.ycLockedLocalPayIn != null && Number(input.ycLockedLocalPayIn) > 0
+      ? roundLocal(Number(input.ycLockedLocalPayIn))
+      : readYcReceiveLockedLocalAmount(input.receiveRes)
+  if (rawYcLocked != null && submitted > 0 && rawYcLocked + 0.01 < submitted) {
+    throw new Error(`yc_pay_in_mismatch: YC locked ${rawYcLocked} < submitted ${submitted}`)
+  }
+  return resolveYcLockedLocalPayInFromReceive({
+    submittedLocalAmount: submitted,
     receiveLocalAmount: input.ycLockedLocalPayIn,
     receiveRes: input.receiveRes,
     economicsLocalPayIn: input.pricingLocalPayIn,
   })
-  const quoted = roundLocal(input.pricingLocalPayIn)
-  if (locked + 0.01 < quoted) {
-    throw new Error(`yc_pay_in_mismatch: YC locked ${locked} < quoted ${quoted}`)
-  }
-  return locked
 }

@@ -23,6 +23,7 @@ import {
   resolveLedgerWhenAt,
   resolveAccountImpactAmount,
   resolveYcPayInFeedStatus,
+  ledgerTransactionStatusDisplayForRow,
   resolveYcPayInUserWhenAt,
   resolveYcPayInListWhenAt,
   readYcQuoteLockedAt,
@@ -110,6 +111,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const ledgerStatusRaw = String(row.status ?? "")
   const ycFeedStatus = resolveYcPayInFeedStatus(meta, ledgerStatusRaw)
   const status = (ycFeedStatus ?? mapLedgerStatusForUserFeed(ledgerStatusRaw)) as TransactionWithSource["status"]
+  const statusLabel = ledgerTransactionStatusDisplayForRow(ledgerStatusRaw, meta).label
   const payInAwaitingAttestation = isYcPayInAwaitingAttestation(meta, ledgerStatusRaw)
   const ycDisplayWhen = resolveYcPayInListWhenAt(meta, ledgerStatusRaw)
   const ycQuoteLockedAt = readYcQuoteLockedAt(meta)
@@ -342,6 +344,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     description,
     date: created,
     status,
+    statusLabel,
     ...(payInAwaitingAttestation ? { payInAwaitingAttestation: true } : {}),
     ...(ycDisplayWhen ? { displayWhenAt: ycDisplayWhen } : {}),
     ...(ycQuoteLockedAt ? { quoteLockedAt: ycQuoteLockedAt } : {}),

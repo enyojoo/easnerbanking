@@ -53,6 +53,8 @@ export interface Transaction {
   description: string
   date: string
   status: "completed" | "pending" | "processing" | "failed" | "processing_payment" | "confirming_payment" | "awaiting_payment"
+  /** User-facing list row label (may differ from raw `status` slug, e.g. YC pay-in). */
+  statusLabel?: string
   direction: "credit" | "debit"
   cardId?: string
   /** When the ledger row includes masked card tail (e.g. future card product). */
