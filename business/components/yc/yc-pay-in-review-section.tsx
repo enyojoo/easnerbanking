@@ -131,34 +131,48 @@ export function YcPayInReviewSection(props: Props) {
     onSuccess: props.attest.onSuccess,
   })
 
-  const reviewPhase: YcLocalPayInReviewPhase = isLocked ? "locked" : "preview"
-  const transactionId = lockedQuote?.easnerTransactionId ?? lockedQuote?.transactionId ?? ""
-
   if (props.flowMode === "fund_balance") {
-    const customerRate = lockedQuote?.customerRate ?? props.previewCustomerRate
-    const localPayIn = lockedQuote?.localPayIn ?? props.previewLocalPayIn
-    const usdCredit = lockedQuote?.usdCredit ?? props.previewUsdCredit
+    const cachedLocked = props.getCachedLocked()
+    const stashedLocked =
+      cachedLocked && isCompleteLockedQuote(cachedLocked) ? cachedLocked : null
+    const activeLockedQuote = lockedQuote ?? stashedLocked
+    const displayLocked = isLocked || Boolean(stashedLocked)
+    const reviewPhase: YcLocalPayInReviewPhase = displayLocked ? "locked" : "preview"
+    const customerRate = activeLockedQuote?.customerRate ?? props.previewCustomerRate
+    const localPayIn = activeLockedQuote?.localPayIn ?? props.previewLocalPayIn
+    const usdCredit = activeLockedQuote?.usdCredit ?? props.previewUsdCredit
+    const transactionId =
+      activeLockedQuote?.easnerTransactionId ?? activeLockedQuote?.transactionId ?? ""
     const breakdown = resolveYcFundBalanceLocalPayInBreakdownForDisplay({
       localPayIn,
       localCurrency: props.payInCurrency,
       usdCredit,
       exchangeRate: customerRate,
-      displayProcessingFeeLocal: lockedQuote?.displayProcessingFeeLocal,
-      processingFee: lockedQuote?.processingFee,
-      exchangeFee: lockedQuote?.ycChannelFeeUsd ?? lockedQuote?.ycLegFeesUsd,
+      displayProcessingFeeLocal: activeLockedQuote?.displayProcessingFeeLocal,
+      processingFee: activeLockedQuote?.processingFee,
+      exchangeFee: activeLockedQuote?.ycChannelFeeUsd ?? activeLockedQuote?.ycLegFeesUsd,
     })
     const principalLocal =
       breakdown.principalLocal ??
       computeYcFundBalancePrincipalLocalPayIn({ usdCredit, exchangeRate: customerRate })
 
     const ctaDisabled =
-      !isLocked ||
+      !displayLocked ||
       attestLoading ||
       Boolean(lockError) ||
-      !lockedQuote?.transferId
+      !activeLockedQuote?.transferId
+
+    if (!displayLocked && isLoading) {
+      return (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )
+    }
 
     return (
       <div className="space-y-4">
+        {displayLocked ? (
         <YcLocalPayInReview
           mode="fund_balance"
           phase={reviewPhase}
@@ -169,8 +183,8 @@ export function YcPayInReviewSection(props: Props) {
           localPayIn={localPayIn}
           receiveAmount={usdCredit}
           processingFeeLocal={breakdown.feeLocal}
-          processingFeeUsd={lockedQuote?.processingFee}
-          exchangeFeeUsd={lockedQuote?.ycChannelFeeUsd ?? lockedQuote?.ycLegFeesUsd}
+          processingFeeUsd={activeLockedQuote?.processingFee}
+          exchangeFeeUsd={activeLockedQuote?.ycChannelFeeUsd ?? activeLockedQuote?.ycLegFeesUsd}
           principalLocal={principalLocal}
           usdCredit={usdCredit}
           transactionId={transactionId || undefined}
@@ -184,12 +198,13 @@ export function YcPayInReviewSection(props: Props) {
             />
           }
         />
+        ) : null}
 
-        {isLocked && lockedQuote ? (
+        {displayLocked && activeLockedQuote ? (
           <>
-            {lockedQuote.expiresAt ? (
+            {activeLockedQuote.expiresAt ? (
               <YcPayInAwaitingPaymentCountdown
-                depositExpiresAt={lockedQuote.expiresAt}
+                depositExpiresAt={activeLockedQuote.expiresAt}
                 context="review"
               />
             ) : null}
@@ -197,9 +212,9 @@ export function YcPayInReviewSection(props: Props) {
               payInRail={props.payInRail}
               localPayIn={localPayIn}
               localCurrency={props.payInCurrency}
-              bankInfo={lockedQuote.bankInfo}
-              sourcePhone={lockedQuote.sourcePhone}
-              sourceNetworkName={lockedQuote.sourceNetworkName}
+              bankInfo={activeLockedQuote.bankInfo}
+              sourcePhone={activeLockedQuote.sourcePhone}
+              sourceNetworkName={activeLockedQuote.sourceNetworkName}
               transactionId={transactionId}
               copiedField={copiedField}
               onCopy={handleCopy}
@@ -214,8 +229,8 @@ export function YcPayInReviewSection(props: Props) {
           type="button"
           disabled={ctaDisabled}
           onClick={() => {
-            if (!lockedQuote?.transferId || !transactionId) return
-            void attestPayment(transactionId, lockedQuote.transferId)
+            if (!activeLockedQuote?.transferId || !transactionId) return
+            void attestPayment(transactionId, activeLockedQuote.transferId)
           }}
         >
           {attestLoading ? (

@@ -23,6 +23,17 @@ export type UseYcPayInLockResult<T> = {
   retry: () => void
 }
 
+function readCachedLocked<T>(
+  enabled: boolean,
+  lockKey: string,
+  getCachedLocked: () => T | null,
+  isLocked: (value: T) => boolean,
+): T | null {
+  if (!enabled || !lockKey) return null
+  const cached = getCachedLocked()
+  return cached && isLocked(cached) ? cached : null
+}
+
 /** Lock YC pay-in order on mount (Noah payout review pattern). */
 export function useYcPayInLock<T>(input: UseYcPayInLockInput<T>): UseYcPayInLockResult<T> {
   const {
@@ -35,19 +46,6 @@ export function useYcPayInLock<T>(input: UseYcPayInLockInput<T>): UseYcPayInLock
     defaultErrorMessage = "Could not lock payment details",
   } = input
 
-  const readCached = useCallback(() => {
-    if (!enabled || !lockKey) return null
-    const cached = getCachedLocked()
-    return cached && isLocked(cached) ? cached : null
-  }, [enabled, lockKey, getCachedLocked, isLocked])
-
-  const [status, setStatus] = useState<YcPayInLockStatus>(() =>
-    readCached() ? "locked" : "idle",
-  )
-  const [quote, setQuote] = useState<T | null>(() => readCached())
-  const [error, setError] = useState<string | null>(null)
-  const attemptRef = useRef(0)
-
   const lockRef = useRef(lock)
   lockRef.current = lock
   const getCachedRef = useRef(getCachedLocked)
@@ -57,11 +55,38 @@ export function useYcPayInLock<T>(input: UseYcPayInLockInput<T>): UseYcPayInLock
   const getErrorRef = useRef(getErrorMessage)
   getErrorRef.current = getErrorMessage
 
+  const readCachedFromRefs = useCallback((): T | null => {
+    return readCachedLocked(enabled, lockKey, () => getCachedRef.current(), (value) =>
+      isLockedRef.current(value),
+    )
+  }, [enabled, lockKey])
+
+  const [status, setStatus] = useState<YcPayInLockStatus>(() =>
+    readCachedLocked(enabled, lockKey, getCachedLocked, isLocked) ? "locked" : "idle",
+  )
+  const [quote, setQuote] = useState<T | null>(() =>
+    readCachedLocked(enabled, lockKey, getCachedLocked, isLocked),
+  )
+  const [error, setError] = useState<string | null>(null)
+  const attemptRef = useRef(0)
+  const lockedKeyRef = useRef<string | null>(null)
+  const quoteRef = useRef<T | null>(quote)
+  quoteRef.current = quote
+
   const runLock = useCallback(async () => {
     if (!enabled || !lockKey) return
 
-    const cached = readCached()
+    if (
+      lockedKeyRef.current === lockKey &&
+      quoteRef.current &&
+      isLockedRef.current(quoteRef.current)
+    ) {
+      return
+    }
+
+    const cached = readCachedFromRefs()
     if (cached) {
+      lockedKeyRef.current = lockKey
       setQuote(cached)
       setStatus("locked")
       setError(null)
@@ -77,41 +102,62 @@ export function useYcPayInLock<T>(input: UseYcPayInLockInput<T>): UseYcPayInLock
       if (attempt !== attemptRef.current) return
 
       if (result && isLockedRef.current(result)) {
+        lockedKeyRef.current = lockKey
         setQuote(result)
         setStatus("locked")
         setError(null)
         return
       }
 
+      lockedKeyRef.current = null
       setStatus("error")
       setError(getErrorRef.current?.() ?? defaultErrorMessage)
     } catch (e) {
       if (attempt !== attemptRef.current) return
+      lockedKeyRef.current = null
       setStatus("error")
       setError(e instanceof Error ? e.message : defaultErrorMessage)
     }
-  }, [enabled, lockKey, defaultErrorMessage, readCached])
+  }, [enabled, lockKey, defaultErrorMessage, readCachedFromRefs])
 
   useEffect(() => {
     if (!enabled || !lockKey) {
+      lockedKeyRef.current = null
       setStatus("idle")
       setQuote(null)
       setError(null)
       return
     }
 
-    const cached = readCached()
+    const cached = readCachedFromRefs()
     if (cached) {
+      lockedKeyRef.current = lockKey
       setQuote(cached)
       setStatus("locked")
       setError(null)
       return
     }
 
+    if (
+      lockedKeyRef.current === lockKey &&
+      quoteRef.current &&
+      isLockedRef.current(quoteRef.current)
+    ) {
+      setStatus("locked")
+      return
+    }
+
+    if (lockedKeyRef.current !== lockKey) {
+      lockedKeyRef.current = null
+      setQuote(null)
+      setStatus("idle")
+    }
+
     void runLock()
-  }, [enabled, lockKey, runLock, readCached])
+  }, [enabled, lockKey, runLock, readCachedFromRefs])
 
   const retry = useCallback(() => {
+    lockedKeyRef.current = null
     void runLock()
   }, [runLock])
 

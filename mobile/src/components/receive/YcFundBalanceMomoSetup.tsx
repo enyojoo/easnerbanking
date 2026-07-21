@@ -5,6 +5,7 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -14,10 +15,14 @@ import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
 import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
 import {
+  ensureFundBalanceOrderConfirmed,
   ensurePayInNetworksCached,
+  isCompleteFundBalanceQuote,
+  peekLastFundBalanceQuoteError,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToast } from '../ToastProvider'
 
 type PayInNetwork = { id: string; name: string }
 
@@ -47,6 +52,7 @@ export function YcFundBalanceMomoSetup({
   listBottomPadding,
 }: Props) {
   const { userProfile } = useAuth()
+  const { showError } = useToast()
   const defaultPhone = userProfile?.phone ?? userProfile?.profile?.phone ?? ''
   const cachedNetworks = readCachedPayInNetworks(residenceCountry, localPayInCurrency)
 
@@ -60,6 +66,7 @@ export function YcFundBalanceMomoSetup({
   const [networksLoading, setNetworksLoading] = useState(!cachedNetworks?.length)
   const [networksError, setNetworksError] = useState<string | null>(null)
   const [continueError, setContinueError] = useState<string | null>(null)
+  const [isContinueLoading, setIsContinueLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -88,23 +95,44 @@ export function YcFundBalanceMomoSetup({
   const momoReady = Boolean(phone.trim() && networkId)
   const selectedNetwork = networks.find((n) => n.id === networkId)
 
-  const onContinue = () => {
-    if (!momoReady) return
+  const onContinue = async () => {
+    if (!momoReady || isContinueLoading) return
     setContinueError(null)
     haptics.medium()
-    navigation.navigate('ReceiveLocalReview' as never, {
-      localPayInCurrency,
-      residenceCountry,
-      payInRail: 'mobile_money',
-      amountEntryMode,
-      enteredAmount,
-      usdCredit,
-      localPayIn,
-      customerRate,
-      sourcePhone: phone.trim(),
-      networkId,
-      sourceNetworkName: selectedNetwork?.name,
-    } as never)
+    setIsContinueLoading(true)
+    try {
+      const lockedQuote = await ensureFundBalanceOrderConfirmed({
+        country: residenceCountry,
+        currency: localPayInCurrency,
+        rail: 'mobile_money',
+        amountEntryMode,
+        enteredAmount,
+        sourcePhone: phone.trim(),
+        networkId,
+        sourceNetworkName: selectedNetwork?.name,
+      })
+      if (!lockedQuote || !isCompleteFundBalanceQuote(lockedQuote)) {
+        const message = peekLastFundBalanceQuoteError() || 'Could not lock deposit details'
+        setContinueError(message)
+        showError(message)
+        return
+      }
+      navigation.navigate('ReceiveLocalReview' as never, {
+        localPayInCurrency,
+        residenceCountry,
+        payInRail: 'mobile_money',
+        amountEntryMode,
+        enteredAmount,
+        usdCredit: lockedQuote.usdCredit,
+        localPayIn: lockedQuote.localPayIn,
+        customerRate: lockedQuote.customerRate,
+        sourcePhone: phone.trim(),
+        networkId,
+        sourceNetworkName: selectedNetwork?.name,
+      } as never)
+    } finally {
+      setIsContinueLoading(false)
+    }
   }
 
   return (
@@ -166,17 +194,21 @@ export function YcFundBalanceMomoSetup({
 
       <Pressable
         android_ripple={ripple.neutral}
-        style={[styles.cta, !momoReady && styles.ctaDisabled]}
-        onPress={onContinue}
-        disabled={!momoReady}
+        style={[styles.cta, (!momoReady || isContinueLoading) && styles.ctaDisabled]}
+        onPress={() => void onContinue()}
+        disabled={!momoReady || isContinueLoading}
       >
         <LinearGradient
-          colors={!momoReady ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
+          colors={!momoReady || isContinueLoading ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.ctaGradient}
         >
-          <Text style={styles.ctaText}>Continue</Text>
+          {isContinueLoading ? (
+            <ActivityIndicator color={colors.text.inverse} size="small" />
+          ) : (
+            <Text style={styles.ctaText}>Continue</Text>
+          )}
         </LinearGradient>
       </Pressable>
     </View>

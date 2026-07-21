@@ -12,7 +12,7 @@ export type UseYcFundBalancePayInLockInput<T> = {
   defaultErrorMessage?: string
 }
 
-/** Fund-balance pay-in: auto-lock via `/fund-balance/confirm` on review mount. */
+/** Fund-balance pay-in: lock via `/fund-balance/confirm` before review (Continue spinner). Review may re-read stash only. */
 export function useYcFundBalancePayInLock<T>(
   input: UseYcFundBalancePayInLockInput<T>,
 ): UseYcPayInLockResult<T> {

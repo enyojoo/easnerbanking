@@ -130,6 +130,7 @@ export function LocalDepositWizard({
     const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
     return rail === "mobile_money" && !cached?.length
   })
+  const [isContinueLoading, setIsContinueLoading] = useState(false)
 
   const isMomo = rail === "mobile_money"
 
@@ -417,6 +418,23 @@ export function LocalDepositWizard({
         ].join("|")
       : ""
 
+  const getCachedLockedQuote = useCallback((): FundBalanceQuote | null => {
+    return quote?.ok && quote.transferId && quote.localPayIn > 0 ? quote : null
+  }, [quote])
+
+  const fundBalanceReviewReady = Boolean(quote?.transferId && quote.localPayIn > 0)
+
+  const lockBeforeReview = useCallback(async (): Promise<boolean> => {
+    setQuoteError(null)
+    setIsContinueLoading(true)
+    try {
+      const locked = await confirmOrder()
+      return Boolean(locked?.transferId && locked.localPayIn > 0)
+    } finally {
+      setIsContinueLoading(false)
+    }
+  }, [confirmOrder])
+
   useEffect(() => {
     if (step !== "momo_setup" || !isMomo) return
     let cancelled = false
@@ -619,17 +637,25 @@ export function LocalDepositWizard({
 
         <Button
           className="w-full"
-          disabled={!canContinue}
-          onClick={() => {
+          disabled={!canContinue || isContinueLoading}
+          onClick={async () => {
             setQuoteError(null)
             if (isMomo) {
               setStep("momo_setup")
               return
             }
-            setStep("review")
+            const locked = await lockBeforeReview()
+            if (locked) setStep("review")
           }}
         >
-          Continue
+          {isContinueLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Locking details…
+            </>
+          ) : (
+            "Continue"
+          )}
         </Button>
       </div>
     )
@@ -688,13 +714,20 @@ export function LocalDepositWizard({
 
         <Button
           className="w-full"
-          disabled={!momoReady}
-          onClick={() => {
-            setQuoteError(null)
-            setStep("review")
+          disabled={!momoReady || isContinueLoading}
+          onClick={async () => {
+            const locked = await lockBeforeReview()
+            if (locked) setStep("review")
           }}
         >
-          Continue
+          {isContinueLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Locking details…
+            </>
+          ) : (
+            "Continue"
+          )}
         </Button>
       </div>
     )
@@ -714,12 +747,13 @@ export function LocalDepositWizard({
 
         <h2 className="text-2xl font-semibold text-foreground">{YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE}</h2>
 
+        {quoteError ? <p className="text-sm text-destructive">{quoteError}</p> : null}
+
+        {fundBalanceReviewReady ? (
         <YcPayInReviewSection
           flowMode="fund_balance"
           lockKey={reviewLockKey}
-          getCachedLocked={() =>
-            quote?.ok && quote.transferId && quote.localPayIn > 0 ? quote : null
-          }
+          getCachedLocked={getCachedLockedQuote}
           confirmOrder={async () => {
             const result = await confirmOrder()
             if (!result?.transferId) return null
@@ -757,6 +791,11 @@ export function LocalDepositWizard({
             },
           }}
         />
+        ) : (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        )}
       </div>
     )
   }

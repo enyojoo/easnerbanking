@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -120,25 +120,31 @@ export function YcFundBalanceReview({
 
   const lockKey = fundBalanceLockKey(quoteMeta)
 
+  const getCachedLocked = useCallback((): YcFundBalanceQuote | null => {
+    if (!isStashedFundBalanceQuoteFresh(quoteMeta)) return null
+    const cached = peekFundBalanceQuote()
+    return cached && isCompleteFundBalanceQuote(cached) ? cached : null
+  }, [quoteMeta])
+
+  const stashedLocked = getCachedLocked()
+
   const { quote: lockedQuote, isLocked, isLoading, error: lockError } = useYcFundBalancePayInLock<YcFundBalanceQuote>({
     enabled: Boolean(lockKey),
     lockKey,
-    getCachedLocked: () => {
-      if (!isStashedFundBalanceQuoteFresh(quoteMeta)) return null
-      const cached = peekFundBalanceQuote()
-      return cached && isCompleteFundBalanceQuote(cached) ? cached : null
-    },
+    getCachedLocked,
     isLocked: isCompleteFundBalanceQuote,
     confirmOrder: () => ensureFundBalanceOrderConfirmed(quoteMeta),
     getErrorMessage: peekLastFundBalanceQuoteError,
   })
 
-  const previewQuote = isStashedFundBalanceQuoteFresh(quoteMeta) ? peekFundBalanceQuote() : null
-  const displayQuote = lockedQuote ?? previewQuote
-  const reviewPhase: YcLocalPayInReviewPhase = isLocked ? 'locked' : 'preview'
+  const activeLockedQuote = lockedQuote ?? stashedLocked
+  const displayLocked = isLocked || Boolean(stashedLocked)
+  const reviewPhase: YcLocalPayInReviewPhase = displayLocked ? 'locked' : 'preview'
+  const displayQuote = activeLockedQuote
   const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
   const customerRate = displayQuote?.customerRate ?? previewCustomerRate
-  const displayTransactionId = lockedQuote?.easnerTransactionId ?? lockedQuote?.transactionId ?? ''
+  const displayTransactionId =
+    activeLockedQuote?.easnerTransactionId ?? activeLockedQuote?.transactionId ?? ''
   const resolvedLocalPayIn = displayQuote?.localPayIn ?? localPayIn
   const resolvedUsdCredit = displayQuote?.usdCredit ?? usdCredit
 
@@ -194,16 +200,32 @@ export function YcFundBalanceReview({
   }
 
   const ctaDisabled =
-    !isLocked ||
+    !displayLocked ||
     attestLoading ||
     quoteCountdown.expired ||
     Boolean(lockError) ||
-    !displayQuote?.transferId
+    !activeLockedQuote?.transferId
 
   const onAttest = () => {
-    if (!displayQuote?.transferId || !displayTransactionId) return
+    if (!activeLockedQuote?.transferId || !displayTransactionId) return
     haptics.medium()
-    void attestPayment(displayTransactionId, displayQuote.transferId)
+    void attestPayment(displayTransactionId, activeLockedQuote.transferId)
+  }
+
+  if (!displayLocked && isLoading) {
+    return (
+      <View style={[styles.container, { paddingBottom: footerPadding }]}>
+        <View style={styles.header}>
+          <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
+          </Pressable>
+          <Text style={styles.title}>{YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE}</Text>
+        </View>
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary.main} size="large" />
+        </View>
+      </View>
+    )
   }
 
   return (
@@ -216,7 +238,7 @@ export function YcFundBalanceReview({
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
-        {reviewRows.length > 0 ? (
+        {displayLocked && reviewRows.length > 0 ? (
           <View style={styles.card}>
             {reviewRows.map((row, index) => {
               if (row.id === 'amount-to-credit') {
@@ -261,12 +283,12 @@ export function YcFundBalanceReview({
           </View>
         ) : null}
 
-        {isLocked && lockedQuote ? (
+        {displayLocked && activeLockedQuote ? (
           <>
-            {lockedQuote.expiresAt ? (
+            {activeLockedQuote.expiresAt ? (
               <View style={styles.countdownWrap}>
                 <YcPayInAwaitingPaymentCountdown
-                  depositExpiresAt={lockedQuote.expiresAt}
+                  depositExpiresAt={activeLockedQuote.expiresAt}
                   context="review"
                 />
               </View>
@@ -275,9 +297,9 @@ export function YcFundBalanceReview({
               payInRail={payInRail}
               localPayIn={resolvedLocalPayIn}
               localCurrency={localPayInCurrency}
-              bankInfo={lockedQuote.bankInfo}
-              sourcePhone={lockedQuote.sourcePhone ?? sourcePhone}
-              sourceNetworkName={lockedQuote.sourceNetworkName ?? sourceNetworkName}
+              bankInfo={activeLockedQuote.bankInfo}
+              sourcePhone={activeLockedQuote.sourcePhone ?? sourcePhone}
+              sourceNetworkName={activeLockedQuote.sourceNetworkName ?? sourceNetworkName}
               transactionId={displayTransactionId}
               copiedKey={copiedKey}
               onCopy={handleCopy}
@@ -325,6 +347,12 @@ const styles = StyleSheet.create({
   },
   countdownWrap: {
     marginBottom: spacing[2],
+  },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[8],
   },
   error: { ...textStyles.caption, color: colors.semantic.destructive, marginTop: spacing[2] },
   cta: { borderRadius: borderRadius.lg, overflow: 'hidden', marginTop: spacing[3] },

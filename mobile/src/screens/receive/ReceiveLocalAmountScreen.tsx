@@ -57,8 +57,11 @@ import SkeletonLoader from '../../components/SkeletonLoader'
 import { useToast } from '../../components/ToastProvider'
 import {
   clearFundBalanceQuote,
+  ensureFundBalanceOrderConfirmed,
   ensureFundBalanceQuoteStashed,
   ensurePayInNetworksCached,
+  isCompleteFundBalanceQuote,
+  peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady } from '../../lib/warmYcLocalDepositCaches'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
@@ -360,23 +363,34 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       return
     }
 
-    void ensureFundBalanceQuoteStashed({
-      country: residenceCountry,
-      currency: localPayInCurrency,
-      rail: payInRail,
-      amountEntryMode,
-      enteredAmount,
-    })
-    navigation.navigate('ReceiveLocalReview' as never, {
-      localPayInCurrency,
-      residenceCountry,
-      payInRail,
-      amountEntryMode,
-      enteredAmount,
-      usdCredit: displayPreview.usdCredit,
-      localPayIn: displayPreview.localPayIn,
-      customerRate: ycFlow.customerRate ?? 0,
-    } as never)
+    setIsContinuePending(true)
+    setIsContinueLoading(true)
+    try {
+      const lockedQuote = await ensureFundBalanceOrderConfirmed({
+        country: residenceCountry,
+        currency: localPayInCurrency,
+        rail: payInRail,
+        amountEntryMode,
+        enteredAmount,
+      })
+      if (!lockedQuote || !isCompleteFundBalanceQuote(lockedQuote)) {
+        showError(peekLastFundBalanceQuoteError() || 'Could not lock deposit details')
+        return
+      }
+      navigation.navigate('ReceiveLocalReview' as never, {
+        localPayInCurrency,
+        residenceCountry,
+        payInRail,
+        amountEntryMode,
+        enteredAmount,
+        usdCredit: lockedQuote.usdCredit,
+        localPayIn: lockedQuote.localPayIn,
+        customerRate: lockedQuote.customerRate,
+      } as never)
+    } finally {
+      setIsContinuePending(false)
+      setIsContinueLoading(false)
+    }
   }
 
   if (ngMissingType) {
