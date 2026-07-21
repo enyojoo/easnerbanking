@@ -144,6 +144,15 @@ export async function handleYcBalancePayoutSendWebhook(
   )
 
   if (input.classified.isTerminalSuccess) {
+    // Ignore orphan YC send webhooks — fee sweep and settle only after PIN + Turnkey deposit leg.
+    if (!String(prior.turnkey_send_id ?? "").trim()) {
+      console.warn("[yellowcard-webhook] balance_payout success ignored (no turnkey_send_id)", {
+        transactionId: row.id,
+        sequenceId: input.sequenceId,
+      })
+      return
+    }
+
     if (transfer) {
       await admin
         .from("yc_transfers")

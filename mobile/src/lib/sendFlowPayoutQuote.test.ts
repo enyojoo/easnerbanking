@@ -96,6 +96,24 @@ describe('sendFlowPayoutQuote stash', () => {
     ).toBe(false)
   })
 
+  it('accepts Yellowcard preview quotes for review (lock happens at PIN execute)', () => {
+    expect(
+      isCompletePayoutQuote(
+        sampleQuote({
+          provider: 'yellowcard',
+          quotePhase: 'preview',
+          requiresConfirm: true,
+          lockId: undefined,
+          yc: { sequenceId: 'yc_preview_abc', channelId: 'ch-1', cryptoAmount: 1.5 },
+          settlement: {
+            ...sampleQuote().settlement,
+            sessionId: 'yc_preview_abc',
+          },
+        }),
+      ),
+    ).toBe(true)
+  })
+
   it('rejects incomplete quotes', () => {
     expect(isCompletePayoutQuote(null)).toBe(false)
     expect(

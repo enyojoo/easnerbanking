@@ -84,15 +84,26 @@ export function isUsablePayoutQuotePreview(quote: PayoutQuote | null | undefined
   )
 }
 
-/** Locked order from `/confirm` — required before authorize. */
+/** Locked order from `/confirm` — required before authorize (Noah). YC uses preview until PIN execute. */
 export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
   if (!isUsablePayoutQuotePreview(quote)) return false
   if (new Date(quote.expiresAt).getTime() <= Date.now()) return false
+  if (
+    quote.provider === 'yellowcard' &&
+    quote.quotePhase === 'preview' &&
+    quote.requiresConfirm !== false
+  ) {
+    return Boolean(quote.settlement?.sessionId || quote.yc?.sequenceId)
+  }
   if (quote.quotePhase === 'locked') {
     return Boolean(quote.lockId || quote.yc?.sendId || quote.settlement?.sessionId)
   }
   if (quote.quotePhase === 'preview') return false
   return Boolean(quote.settlement?.sessionId || quote.noah?.formSessionId)
+}
+
+export function isYellowcardPayoutQuote(quote: PayoutQuote | null | undefined): boolean {
+  return String(quote?.provider ?? '').toLowerCase() === 'yellowcard'
 }
 
 export function stashSendPayoutQuote(quote: PayoutQuote, meta: SendPayoutQuoteStashMeta): void {

@@ -13,5 +13,7 @@ export function isPayoutLockOnReviewEnabled(provider: "noah" | "yellowcard" | "w
   const v = String(process.env[key] || "").trim().toLowerCase()
   if (v === "true" || v === "1") return true
   if (v === "false" || v === "0") return false
+  // YC POST /send creates a real pending payout — lock only after PIN at execute.
+  if (provider === "yellowcard") return false
   return true
 }

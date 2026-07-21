@@ -147,6 +147,14 @@ export async function confirmYcBalancePayoutOrder(
     channelId: input.channelId,
   })
 
+  const raced = await findReusablePayoutLockSession(input.admin, {
+    userId: input.userId,
+    quoteKey,
+  })
+  if (raced && raced.provider === "yellowcard" && String(raced.provider_payload_json?.sendId ?? "") !== String(locked.sendId ?? "")) {
+    return lockedQuoteFromSession(raced)
+  }
+
   const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const pricing = buildLockedYcPayoutQuote({

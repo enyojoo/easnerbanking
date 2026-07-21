@@ -95,10 +95,12 @@ import {
   ensureSendPayoutQuoteStashed,
   ensureSendPayoutOrderConfirmed,
   isCompletePayoutQuote,
+  isYellowcardPayoutQuote,
   isStashedPayoutQuoteFresh,
   peekLastPayoutQuoteError,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
+  stashSendPayoutQuote,
 } from '../../lib/sendFlowPayoutQuote'
 import {
   ensureSendWalletQuoteStashed,
@@ -1321,12 +1323,38 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             ? peekSendWalletQuote()
             : null
 
-      const stashedQuote =
+      let stashedQuote: Awaited<ReturnType<typeof ensureSendPayoutOrderConfirmed>> = null
+      if (
         selectedPaymentMethod === 'balance' &&
         !isEasetagRecipient &&
         !isWalletRecipient &&
         receiveAmountValue > 0
-          ? await ensureSendPayoutOrderConfirmed(
+      ) {
+        if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
+          stashedQuote = peekSendPayoutQuote()
+        } else {
+          const previewQuote = await ensureSendPayoutQuoteStashed(
+            () =>
+              noahService.createPayoutQuote({
+                recipientId: recipient.id,
+                receiveAmount: receiveAmountValue,
+                sourceBalanceCurrency: selectedBalanceCurrency,
+                amountEntryMode,
+                ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+                  ? { sendAmount: navAmounts.sendAmount }
+                  : {}),
+                ...(note.trim() ? { note: note.trim() } : {}),
+                ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+              }),
+            quoteStashMeta,
+          )
+          if (isYellowcardPayoutQuote(previewQuote)) {
+            if (previewQuote && isCompletePayoutQuote(previewQuote)) {
+              stashSendPayoutQuote(previewQuote, quoteStashMeta)
+            }
+            stashedQuote = previewQuote
+          } else {
+            stashedQuote = await ensureSendPayoutOrderConfirmed(
               () =>
                 noahService.confirmPayoutOrder({
                   recipientId: recipient.id,
@@ -1341,9 +1369,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 }),
               quoteStashMeta,
             )
-          : isStashedPayoutQuoteFresh(quoteStashMeta)
-            ? peekSendPayoutQuote()
-            : null
+          }
+        }
+      }
 
       if (
         selectedPaymentMethod === 'balance' &&

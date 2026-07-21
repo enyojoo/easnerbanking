@@ -136,6 +136,14 @@ async function sweepYcBalancePayoutRevenueToFeeWallet(
   if (prior.captured) {
     return prior
   }
+  if (String(meta.processing_fee_turnkey_send_id ?? "").trim()) {
+    return {
+      sweepAmt: Number(meta.fee_wallet_sweep ?? meta.easner_revenue_sweep_amount ?? 0),
+      feeWalletSweepTxHash: String(meta.fee_wallet_sweep_tx_hash ?? "") || null,
+      captured: true,
+      turnkeySendId: String(meta.processing_fee_turnkey_send_id),
+    }
+  }
 
   const totalDebited = Number(meta.total_debited ?? row.amount ?? 0)
   const cryptoAuthorized = Number(meta.crypto_authorized_amount ?? meta.noah_send_amount ?? 0)
