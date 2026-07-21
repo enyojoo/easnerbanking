@@ -162,23 +162,10 @@ export async function executeYcBalancePayout(
     )
     .eq("id", userId)
     .maybeSingle()
-  const { getWalletOwnerId } = await import("@/lib/wallet/resolve-wallet-owner")
-  const walletOwnerId = await getWalletOwnerId(
-    admin,
-    businessId ? "business" : "individual",
-    businessId ?? userId,
+  const { resolveActiveUsdcSolanaAddress } = await import(
+    "@/lib/wallet/resolve-active-usdc-solana-address"
   )
-  const { data: walletRow } = walletOwnerId
-    ? await admin
-        .from("wallet_accounts")
-        .select("address")
-        .eq("wallet_owner_id", walletOwnerId)
-        .eq("ledger_currency", "USD")
-        .eq("asset", "USDC")
-        .eq("status", "active")
-        .maybeSingle()
-    : { data: null }
-  const turnkeyAddr = String(walletRow?.address ?? "").trim()
+  const turnkeyAddr = (await resolveActiveUsdcSolanaAddress(admin, { userId, businessId })) ?? ""
   if (!turnkeyAddr) {
     return { ok: false, error: "User Solana wallet is required for Yellowcard payout refund routing." }
   }

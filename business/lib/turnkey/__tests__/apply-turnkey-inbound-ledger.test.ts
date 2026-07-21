@@ -47,6 +47,12 @@ vi.mock("@/lib/noah/global-payout-ledger", () => ({
 vi.mock("@/lib/deposit-omnibus/execute-deposit-split", () => ({
   tryCompleteDepositSplitFromUserVaultInbound: vi.fn().mockResolvedValue(false),
 }))
+vi.mock("@/lib/yellowcard/yc-ledger", () => ({
+  findYcFundBalanceChainSettlementForSuppression: vi.fn().mockResolvedValue(false),
+}))
+vi.mock("@/lib/yellowcard/execute-yc-fund-balance-split", () => ({
+  tryCompleteYcFundBalanceFromUserVaultInbound: vi.fn().mockResolvedValue(false),
+}))
 vi.mock("@/lib/deposit-omnibus/config", () => ({
   isDepositSplitEnabled: () => false,
 }))
@@ -56,6 +62,8 @@ vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
 
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
 import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
+import { findYcFundBalanceChainSettlementForSuppression } from "@/lib/yellowcard/yc-ledger"
+import { tryCompleteYcFundBalanceFromUserVaultInbound } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 
 const baseInput = {
   userId: "user-1",
@@ -179,17 +187,27 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(mocks.updateEasetag).toHaveBeenCalled()
   })
 
-  it("passes payee scope to Easetag suppression for inbound deposits", async () => {
-    mocks.findEasetag.mockResolvedValue({ transfer_group_id: "tg-1", status: "pending" })
+  it("suppresses YC fund balance vault delivery without upsert", async () => {
+    vi.mocked(findYcFundBalanceChainSettlementForSuppression).mockResolvedValueOnce(true)
     const admin = { from: vi.fn() }
-    await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
-    expect(mocks.findEasetag).toHaveBeenCalledWith(admin, {
-      turnkeySendStatusId: "pt-1",
-      txHash: "hash-noah",
-      payeeUserId: "user-1",
-      payeeBusinessId: null,
-      amount: 10,
-      currency: "USD",
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      txHash: "hash-yc-vault",
     })
+    expect(result.kind).toBe("suppressed_noah")
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+  })
+
+  it("completes YC fund balance split from vault inbound", async () => {
+    vi.mocked(tryCompleteYcFundBalanceFromUserVaultInbound).mockResolvedValueOnce(true)
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      txHash: "hash-yc-vault",
+    })
+    expect(result.kind).toBe("suppressed_noah")
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
   })
 })

@@ -44,13 +44,13 @@ describe("shouldDeferBankDepositSettledPush", () => {
     ).toBe(false)
   })
 
-  it("does not defer YC fund balance pay-in (credits synchronously)", () => {
+  it("defers YC fund balance pay-in until on-chain vault settlement", () => {
     expect(
       shouldDeferBankDepositSettledPush({
         flow: "bank_onramp",
         yc_mode: "fund_balance",
         deposit_kind: "funding",
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 })

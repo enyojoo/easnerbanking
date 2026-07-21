@@ -1,31 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
-  checkYcFundBalanceOmnibusSufficient,
-  computeEasnerRevenueFeeWalletSweepAmount,
-  EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
-  YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
-} from "@easner/shared"
-import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
-import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import {
-  readPriorSweepFromMetadata,
-  sweepEasnerRevenueFromDepositOmnibus,
-} from "@/lib/processing-fee/fee-wallet-sweep"
+  triggerYcFundBalanceOmnibusSplit,
+  computeYcFundBalanceEconomics,
+} from "@/lib/yellowcard/execute-yc-fund-balance-split"
 import {
   buildYcFundBalanceReceiveMetadata,
   mergeYcFundBalanceLifecycle,
 } from "@/lib/yellowcard/yc-ledger"
 import { shouldYcReceiveWebhookAdvanceProcessing } from "@/lib/yellowcard/webhook-event-id"
 import { resolveLedgerOccurredAt } from "@/lib/ledger/ledger-occurred-at"
-import { buildWalletReportingSnapshot } from "@/lib/transactions/reporting-snapshot"
+import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 function asMeta(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
 }
 
 /**
- * Credit USD balance when YC fund_balance receive settles to omnibus.
- * Idempotent via wallet_balance_credit_key on the transaction row.
+ * Orchestrate YC fund_balance receive settlement: enrich metadata, then split omnibus → user vault.
+ * Ledger credit happens only after on-chain delivery (see finalizeYcFundBalanceCredit).
  */
 export async function creditFundBalanceFromYcReceive(
   admin: SupabaseClient,
@@ -34,6 +26,7 @@ export async function creditFundBalanceFromYcReceive(
     transactionId: string | null
     payload: Record<string, unknown>
     omnibusTxHash?: string | null
+    omnibusAmount?: number | null
   },
 ): Promise<{ credited: boolean; creditAmt: number }> {
   const { data: transfer } = await admin
@@ -45,220 +38,69 @@ export async function creditFundBalanceFromYcReceive(
     return { credited: false, creditAmt: 0 }
   }
   if (String(transfer.status) === "completed") {
-    return { credited: false, creditAmt: 0 }
+    const meta = asMeta(transfer.metadata)
+    return { credited: false, creditAmt: Number(meta.usd_credit_applied ?? 0) }
   }
 
   const transferMeta = asMeta(transfer.metadata)
-  const settlement = (input.payload.settlementInfo ??
-    input.payload.settlement_info ??
-    transfer.settlement_info) as Record<string, unknown> | null
-  const cryptoAmount = Number(
-    settlement?.cryptoAmount ?? transfer.omnibus_in_actual ?? transferMeta.usd_credit ?? 0,
-  )
-  const processingFee = Number(transferMeta.processing_fee ?? 0)
-  const quotedCredit = Number(transferMeta.usd_credit ?? transfer.quoted_receive ?? 0)
-  const expectedOmnibus = Number(
-    transferMeta.omnibus_in_expected ?? quotedCredit + processingFee,
-  )
-  const omnibusCheck = checkYcFundBalanceOmnibusSufficient({
-    cryptoAmount,
-    usdCredit: quotedCredit,
-    processingFee,
-    tolerance: YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
+  const economics = computeYcFundBalanceEconomics({
+    transfer,
+    payload: input.payload,
+    omnibusAmount: input.omnibusAmount,
   })
-  const creditAmt =
-    quotedCredit > 0 ? quotedCredit : Math.max(0, cryptoAmount - processingFee)
-  if (!Number.isFinite(creditAmt) || creditAmt <= 0) {
-    throw new Error("fund_balance_credit_amount_invalid")
-  }
-
-  const creditKey = `yc_fund_balance:${input.transferId}`
   const now = new Date().toISOString()
-  let transactionId = input.transactionId
-
-  if (!omnibusCheck.ok) {
-    await admin
-      .from("yc_transfers")
-      .update({
-        status: "processing",
-        leg1_status: "complete",
-        omnibus_in_actual: cryptoAmount,
-        metadata: {
-          ...transferMeta,
-          ops_alert: "yc_omnibus_underfunded",
-          omnibus_in_expected: expectedOmnibus,
-          omnibus_in_actual: cryptoAmount,
-          ...(input.omnibusTxHash ? { leg1_omnibus_tx_hash: input.omnibusTxHash } : {}),
-        },
-        updated_at: now,
-      })
-      .eq("id", input.transferId)
-
-    if (transactionId) {
-      await patchYcFundBalanceReceiveStatus(admin, {
-        transferId: input.transferId,
-        transactionId,
-        sequenceId: String(transfer.leg1_sequence_id ?? ""),
-        status: "processing",
-        payload: input.payload,
-        occurredAt: now,
-        forceAdvanceProcessing: true,
-      })
-    }
-    return { credited: false, creditAmt: 0 }
-  }
-
-  if (transactionId) {
-    const { data: txRow } = await admin
-      .from("transactions")
-      .select("id, metadata, status")
-      .eq("id", transactionId)
-      .maybeSingle()
-    const prior = asMeta(txRow?.metadata)
-    if (prior.wallet_balance_credit_key === creditKey || prior.balance_delta_applied === true) {
-      return { credited: false, creditAmt }
-    }
-  }
-
-  await applyWalletBalanceDelta(admin, {
-    userId: transfer.business_id ? null : String(transfer.user_id),
-    businessId: transfer.business_id ? String(transfer.business_id) : null,
-    currency: "USD",
-    delta: creditAmt,
-  })
-
-  const quotedSweep = computeEasnerRevenueFeeWalletSweepAmount({
-    processingFee,
-    ledgerSurplus: cryptoAmount - creditAmt,
-  })
-  const availableSweep = Math.max(0, cryptoAmount - creditAmt)
-  const feeSweep = Math.min(quotedSweep, availableSweep)
-
-  let feeWalletSweepTxHash: string | null = null
-  if (
-    !readPriorSweepFromMetadata(transferMeta).captured &&
-    feeSweep >= EASNER_REVENUE_FEE_WALLET_SWEEP_MIN
-  ) {
-    const sweep = await sweepEasnerRevenueFromDepositOmnibus({
-      ledgerCurrency: "USD",
-      amount: feeSweep,
-      logTag: "yc-fund-balance",
-    })
-    feeWalletSweepTxHash = sweep.feeWalletSweepTxHash
-  }
+  const omnibusTxHash = String(
+    input.omnibusTxHash ?? transferMeta.leg1_omnibus_tx_hash ?? "",
+  ).trim()
 
   await admin
     .from("yc_transfers")
     .update({
-      status: "completed",
       leg1_status: "complete",
-      omnibus_in_actual: cryptoAmount,
-      fee_wallet_sweep: feeSweep >= EASNER_REVENUE_FEE_WALLET_SWEEP_MIN ? feeSweep : null,
+      omnibus_in_actual: economics.cryptoAmount,
+      settlement_info:
+        input.payload.settlementInfo ??
+        input.payload.settlement_info ??
+        transfer.settlement_info,
       metadata: {
         ...transferMeta,
-        omnibus_in_expected: expectedOmnibus,
-        processing_fee: processingFee,
-        margin_capture_mode: "fee_wallet_omnibus",
-        ...(input.omnibusTxHash ? { leg1_omnibus_tx_hash: input.omnibusTxHash } : {}),
-        ...(feeWalletSweepTxHash ? { fee_wallet_sweep_tx_hash: feeWalletSweepTxHash } : {}),
-        usd_credit_applied: creditAmt,
+        omnibus_in_expected: economics.expectedOmnibus,
+        omnibus_in_actual: economics.cryptoAmount,
+        ...(omnibusTxHash ? { leg1_omnibus_tx_hash: omnibusTxHash } : {}),
+        ...(economics.omnibusCheckOk ? {} : { ops_alert: "yc_omnibus_underfunded" }),
       },
       updated_at: now,
     })
     .eq("id", input.transferId)
 
-  const sequenceId = String(transfer.leg1_sequence_id ?? "")
-  const baseMeta = buildYcFundBalanceReceiveMetadata({
-    sequenceId,
-    transferId: input.transferId,
-    payload: input.payload,
-    localPayIn: transfer.quoted_pay_in != null ? Number(transfer.quoted_pay_in) : null,
-    localCurrency: transfer.pay_in_currency ? String(transfer.pay_in_currency) : null,
-    usdCredit: creditAmt,
-    processingFee,
-  })
-  const lifecycleMeta = mergeYcFundBalanceLifecycle(baseMeta, {
-    completed_at: now,
-    processing_at: now,
-  })
-  // Bank deposit lifecycle treats on_chain_settled_at as funds-available for non-verification.
-  lifecycleMeta.on_chain_settled_at = now
-
-  if (transactionId) {
-    const { data: txRow } = await admin
-      .from("transactions")
-      .select("metadata, occurred_at, created_at, user_id, business_id, provider, provider_transaction_id, amount")
-      .eq("id", transactionId)
-      .maybeSingle()
-    const prior = asMeta(txRow?.metadata)
-    const occurredAt = resolveLedgerOccurredAt({
-      occurredAt: txRow?.occurred_at != null ? String(txRow.occurred_at) : null,
-      createdAt: txRow?.created_at != null ? String(txRow.created_at) : null,
-      fallback: now,
-    })
-    await upsertLedgerTransaction(admin, {
-      userId: String(transfer.user_id),
-      businessId: transfer.business_id ? String(transfer.business_id) : null,
-      provider: "yellowcard",
-      providerTransactionId: String(
-        transfer.leg1_sequence_id ?? txRow?.provider_transaction_id ?? sequenceId,
-      ),
-      status: "settled",
-      amount: creditAmt,
-      currency: "USD",
-      direction: "in",
+  if (input.transactionId) {
+    await patchYcFundBalanceReceiveStatus(admin, {
+      transferId: input.transferId,
+      transactionId: input.transactionId,
+      sequenceId: String(transfer.leg1_sequence_id ?? ""),
+      status: "processing",
       payload: input.payload,
-      metadata: {
-        ...prior,
-        ...lifecycleMeta,
-        ...buildWalletReportingSnapshot({
-          amount: creditAmt,
-          currency: "USD",
-          fxRates: [],
-        }),
-        wallet_balance_credit_key: creditKey,
-        balance_delta_applied: true,
-        ...(input.omnibusTxHash ? { yc_omnibus_tx_hash: input.omnibusTxHash } : {}),
-      },
-      occurredAt,
-      settledAt: now,
-      baseCurrency: "USD",
-    })
-  } else {
-    const upsert = await upsertLedgerTransaction(admin, {
-      userId: String(transfer.user_id),
-      businessId: transfer.business_id ? String(transfer.business_id) : null,
-      provider: "yellowcard",
-      providerTransactionId: String(transfer.leg1_sequence_id ?? sequenceId),
-      status: "settled",
-      amount: creditAmt,
-      currency: "USD",
-      direction: "in",
-      payload: input.payload,
-      metadata: {
-        ...lifecycleMeta,
-        ...buildWalletReportingSnapshot({
-          amount: creditAmt,
-          currency: "USD",
-          fxRates: [],
-        }),
-        wallet_balance_credit_key: creditKey,
-        balance_delta_applied: true,
-      },
       occurredAt: now,
-      settledAt: now,
-      baseCurrency: "USD",
+      forceAdvanceProcessing: true,
     })
-    transactionId = upsert.transactionId
-    if (transactionId) {
-      await admin
-        .from("yc_transfers")
-        .update({ transaction_id: transactionId, updated_at: now })
-        .eq("id", input.transferId)
-    }
   }
 
-  return { credited: true, creditAmt }
+  if (!omnibusTxHash) {
+    return { credited: false, creditAmt: 0 }
+  }
+
+  const split = await triggerYcFundBalanceOmnibusSplit(admin, {
+    transferId: input.transferId,
+    transactionId: input.transactionId,
+    payload: input.payload,
+    omnibusTxHash,
+    omnibusAmount: input.omnibusAmount ?? economics.cryptoAmount,
+  })
+
+  return {
+    credited: split.finalized === true,
+    creditAmt: split.creditAmt ?? economics.creditAmt,
+  }
 }
 
 /**

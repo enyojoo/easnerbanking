@@ -7,7 +7,7 @@ import {
 import { findBankOnrampPayInTransaction } from "@/lib/noah/find-bank-onramp-pay-in-transaction"
 import { triggerDepositSplit } from "@/lib/deposit-omnibus/execute-deposit-split"
 import { findYcTransferForOmnibusInbound } from "@/lib/yellowcard/yc-ledger"
-import { creditFundBalanceFromYcReceive } from "@/lib/yellowcard/fund-balance-credit"
+import { triggerYcFundBalanceOmnibusSplit } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 import { isCrossBorderLeg1OmnibusSufficient } from "@/lib/yellowcard/cross-border-orchestrator"
 
 /**
@@ -30,11 +30,12 @@ export async function handleDepositOmnibusInbound(
   })
   if (ycTransfer) {
     if (ycTransfer.mode === "fund_balance") {
-      await creditFundBalanceFromYcReceive(admin, {
+      await triggerYcFundBalanceOmnibusSplit(admin, {
         transferId: ycTransfer.id,
         transactionId: ycTransfer.transaction_id,
         payload: { settlementInfo: { cryptoAmount: deposit.amount } },
         omnibusTxHash: txHash,
+        omnibusAmount: deposit.amount,
       })
       return true
     }

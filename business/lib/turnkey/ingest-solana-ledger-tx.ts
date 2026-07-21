@@ -4,6 +4,7 @@ import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbo
 import { accountPubkeyAtIndex, type ParsedTx, resolvedAccountKeys } from "@/lib/turnkey/solana-parsed-tx-accounts"
 import { findEasetagSettlementForChainSuppression } from "@/lib/ledger/easetag-settlement"
 import { findNoahBankOnrampChainSettlementForSuppression } from "@/lib/noah/noah-bank-onramp-chain-suppression"
+import { findYcFundBalanceChainSettlementForSuppression } from "@/lib/yellowcard/yc-ledger"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 
 type OwnerVaultCtx = { userId: string; businessId: string | null }
@@ -114,6 +115,15 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
   })
   if (noahMirror) {
     return { upserts: 0, kind: "noop", reason: "noah_bank_onramp" }
+  }
+
+  const ycFundBalanceMirror = await findYcFundBalanceChainSettlementForSuppression(admin, {
+    txHash: params.signature,
+    userId: params.ctx.userId,
+    businessId: params.ctx.businessId,
+  })
+  if (ycFundBalanceMirror) {
+    return { upserts: 0, kind: "noop", reason: "yc_fund_balance" }
   }
 
   if (params.skipIfLedgerRowExists) {

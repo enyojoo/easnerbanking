@@ -7,11 +7,13 @@ import {
   persistGlobalPayoutRefundTxHashOnOutRow,
 } from "@/lib/noah/global-payout-ledger"
 import { reconcileNoahBankOnrampCreditForSolanaTx, linkBankOnrampPayInToSolanaTxHash } from "@/lib/noah/credit-bank-onramp-wallet"
+import { findYcFundBalanceChainSettlementForSuppression } from "@/lib/yellowcard/yc-ledger"
 import {
   findNoahBankOnrampChainSettlementForSuppression,
   findPendingNoahBankOnrampForInboundAmount,
 } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { tryCompleteDepositSplitFromUserVaultInbound } from "@/lib/deposit-omnibus/execute-deposit-split"
+import { tryCompleteYcFundBalanceFromUserVaultInbound } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 import { isDepositSplitEnabled } from "@/lib/deposit-omnibus/config"
 import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
@@ -66,14 +68,26 @@ export async function applyTurnkeyInboundLedgerEvent(
   const direction = input.direction
 
   if (direction === "in") {
-    if (isDepositSplitEnabled() && txHash && status === "settled") {
-      const completed = await tryCompleteDepositSplitFromUserVaultInbound(admin, {
+    if (txHash && status === "settled") {
+      if (isDepositSplitEnabled()) {
+        const completed = await tryCompleteDepositSplitFromUserVaultInbound(admin, {
+          txHash,
+          userId,
+          businessId,
+          amount: input.amount,
+        }).catch(() => false)
+        if (completed) {
+          return { kind: "suppressed_noah" }
+        }
+      }
+
+      const ycCompleted = await tryCompleteYcFundBalanceFromUserVaultInbound(admin, {
         txHash,
         userId,
         businessId,
         amount: input.amount,
       }).catch(() => false)
-      if (completed) {
+      if (ycCompleted) {
         return { kind: "suppressed_noah" }
       }
     }
@@ -90,6 +104,15 @@ export async function applyTurnkeyInboundLedgerEvent(
           userId,
           businessId,
         }).catch(() => {})
+        return { kind: "suppressed_noah" }
+      }
+
+      const ycSuppressed = await findYcFundBalanceChainSettlementForSuppression(admin, {
+        txHash,
+        userId,
+        businessId,
+      })
+      if (ycSuppressed) {
         return { kind: "suppressed_noah" }
       }
     }

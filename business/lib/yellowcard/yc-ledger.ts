@@ -462,10 +462,11 @@ export async function findYcTransferForOmnibusInbound(
     .from("yc_transfers")
     .select("*")
     .in("mode", ["fund_balance", "cross_border_send"])
-    .in("status", ["awaiting_pay_in", "pending", "leg1_settled", "leg2_in_progress"])
+    .in("status", ["awaiting_pay_in", "pending", "processing", "leg1_settled", "leg2_in_progress"])
     .gte("created_at", sinceIso)
     .limit(30)
 
+  const candidates: YcTransferRow[] = []
   for (const row of rows ?? []) {
     const t = mapTransfer(row as Record<string, unknown>)
     const expected =
@@ -476,10 +477,76 @@ export async function findYcTransferForOmnibusInbound(
       Number(t.quoted_receive ?? 0) + Number(t.metadata?.processing_fee ?? 0)
     if (!(expected > 0)) continue
     if (Math.abs(expected - amount) <= Math.max(0.02, expected * 0.002)) {
-      return t
+      candidates.push(t)
     }
   }
-  return null
+
+  if (!candidates.length) return null
+
+  const preferred =
+    candidates.find((t) => t.mode === "fund_balance" && t.status === "processing") ??
+    candidates.find((t) => t.status === "processing") ??
+    candidates[0]
+
+  if (txHash && preferred?.id) {
+    const priorMeta = preferred.metadata ?? {}
+    if (priorMeta.leg1_omnibus_tx_hash !== txHash) {
+      await admin
+        .from("yc_transfers")
+        .update({
+          metadata: { ...priorMeta, leg1_omnibus_tx_hash: txHash },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", preferred.id)
+      preferred.metadata = { ...priorMeta, leg1_omnibus_tx_hash: txHash }
+    }
+  }
+
+  return preferred ?? null
+}
+
+/** Suppress duplicate Turnkey inbound rows for YC fund_balance vault delivery. */
+export async function findYcFundBalanceChainSettlementForSuppression(
+  admin: SupabaseClient,
+  input: { txHash: string | null; userId: string; businessId: string | null },
+): Promise<boolean> {
+  const txHash = String(input.txHash || "").trim()
+  if (!txHash) return false
+
+  let q = admin
+    .from("yc_transfers")
+    .select("id")
+    .eq("mode", "fund_balance")
+    .filter("metadata->>user_vault_tx_hash", "eq", txHash)
+  if (input.businessId) {
+    q = q.eq("business_id", input.businessId)
+  } else {
+    q = q.eq("user_id", input.userId).is("business_id", null)
+  }
+  const { data: byTransfer } = await q.maybeSingle()
+  if (byTransfer?.id) return true
+
+  let txQ = admin
+    .from("transactions")
+    .select("id")
+    .eq("provider", "yellowcard")
+    .eq("tx_hash", txHash)
+    .eq("direction", "in")
+  if (input.businessId) {
+    txQ = txQ.eq("business_id", input.businessId)
+  } else {
+    txQ = txQ.eq("user_id", input.userId).is("business_id", null)
+  }
+  const { data: txRow } = await txQ.maybeSingle()
+  if (!txRow?.id) return false
+
+  const { data: fullTx } = await admin
+    .from("transactions")
+    .select("metadata")
+    .eq("id", txRow.id)
+    .maybeSingle()
+  const meta = asMeta(fullTx?.metadata)
+  return meta.yc_mode === "fund_balance" || meta.flow === "bank_onramp"
 }
 
 /** Fee-wallet refund after cross_border leg2 SEND.FAILED. */
