@@ -64,7 +64,7 @@ describe("yc pay-in display", () => {
     })
     expect(steps).toHaveLength(2)
     expect(steps[0]?.id).toBe("confirming_payment")
-    expect(steps[0]?.title).toBe("Confirming payment")
+    expect(steps[0]?.title).toBe("Processing payment")
     expect(steps[0]?.state).toBe("current")
     expect(steps[0]?.occurredAt).toBe("2026-01-01T00:00:00.000Z")
     expect(steps[0]?.showPaymentDetailsLink).toBe(true)
@@ -110,7 +110,7 @@ describe("yc pay-in display", () => {
         local_currency: "NGN",
       },
     })
-    expect(steps[0]?.title).toBe("Confirming payment")
+    expect(steps[0]?.title).toBe("Processing payment")
     expect(steps[0]?.state).toBe("current")
   })
 

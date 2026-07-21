@@ -391,6 +391,7 @@ export function crossBorderQuoteToFlowState(
     customerRate: quote.customerRate,
     provisionalPayIn: quote.provisionalPayIn,
     processingFee: quote.processingFee,
+    ycLegFeesUsd: quote.ycLegFeesUsd,
     displayProcessingFeeLocal: quote.displayProcessingFeeLocal,
     bankInfo: quote.bankInfo ?? null,
     expiresAt: quote.expiresAt,

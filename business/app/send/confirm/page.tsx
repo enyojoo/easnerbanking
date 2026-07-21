@@ -920,8 +920,12 @@ export default function SendConfirmPage() {
             }
           }}
           getErrorMessage={() => peekLastCrossBorderQuoteError() ?? ycQuoteError}
+          crossBorderMeta={crossBorderMeta}
           clientCustomerRate={yc?.customerRate}
           clientProvisionalLocalPayIn={yc?.localPayIn ?? yc?.provisionalPayIn}
+          clientProcessingFee={yc?.processingFee}
+          clientDisplayProcessingFeeLocal={yc?.displayProcessingFeeLocal}
+          clientYcLegFeesUsd={yc?.ycLegFeesUsd}
           payInCurrency={state.sendCurrency}
           receiveCurrency={state.receiveCurrency}
           receiveAmount={state.amount}

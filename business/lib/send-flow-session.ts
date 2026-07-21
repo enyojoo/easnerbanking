@@ -86,6 +86,7 @@ export interface SendFlowState {
     customerRate: number
     provisionalPayIn?: number
     processingFee?: number
+    ycLegFeesUsd?: number
     bankInfo: Record<string, unknown> | null
     expiresAt: string
     payInNotice?: string

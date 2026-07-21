@@ -33,7 +33,7 @@ describe("buildGlobalPayoutLifecycle cross-border", () => {
         local_currency: "NGN",
       },
     })
-    expect(steps[0].title).toBe("Confirming payment")
+    expect(steps[0].title).toBe("Processing payment")
     expect(steps[0].state).toBe("current")
     expect(steps[0].description).toBe("We're waiting for your bank to confirm the transfer.")
   })

@@ -20,6 +20,11 @@ import { YcLocalPayInReview } from "@/components/yc-local-pay-in-review"
 import { YcPayInPaymentInstructions } from "@/components/yc/yc-pay-in-payment-instructions"
 import { YcPayInAwaitingPaymentCountdown } from "@/components/yc/yc-pay-in-awaiting-payment-countdown"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
+import {
+  isStashedCrossBorderQuoteFresh,
+  peekCrossBorderQuote,
+  type CrossBorderQuoteStashMeta,
+} from "@/lib/yc-cross-border-quote-cache"
 import type { ReactNode } from "react"
 
 export type YcPayInLockedQuote = {
@@ -59,6 +64,7 @@ type FundBalanceLockInput = {
 type CrossBorderLockInput = {
   flowMode: "cross_border_send"
   lockKey: string
+  crossBorderMeta?: CrossBorderQuoteStashMeta
   getCachedLocked: () => YcPayInLockedQuote | null
   confirmOrder: () => Promise<YcPayInLockedQuote | null>
   getErrorMessage?: () => string | null
@@ -69,6 +75,9 @@ type CrossBorderLockInput = {
   recipientNode?: ReactNode
   clientCustomerRate?: number
   clientProvisionalLocalPayIn?: number
+  clientProcessingFee?: number
+  clientDisplayProcessingFeeLocal?: number
+  clientYcLegFeesUsd?: number
 }
 
 type AttestInput = {
@@ -221,15 +230,26 @@ export function YcPayInReviewSection(props: Props) {
   }
 
   const receiveAmount = props.receiveAmount
-  const customerRate = lockedQuote?.customerRate ?? props.clientCustomerRate ?? 0
-  const localPayIn = lockedQuote?.localPayIn ?? props.clientProvisionalLocalPayIn ?? 0
+  const stashedPreview =
+    props.crossBorderMeta && isStashedCrossBorderQuoteFresh(props.crossBorderMeta)
+      ? peekCrossBorderQuote()
+      : null
+  const displayQuote = lockedQuote ?? stashedPreview
+  const customerRate =
+    displayQuote?.customerRate ?? props.clientCustomerRate ?? 0
+  const localPayIn =
+    displayQuote?.localPayIn ??
+    props.clientProvisionalLocalPayIn ??
+    0
   const breakdown = resolveYcCrossBorderLocalPayInBreakdownForDisplay({
     localPayIn,
     payInCurrency: props.payInCurrency,
     receiveAmount,
     customerRate,
-    provisionalPayIn: lockedQuote?.provisionalPayIn ?? props.clientProvisionalLocalPayIn,
-    displayProcessingFeeLocal: lockedQuote?.displayProcessingFeeLocal,
+    provisionalPayIn:
+      displayQuote?.provisionalPayIn ?? props.clientProvisionalLocalPayIn,
+    displayProcessingFeeLocal:
+      displayQuote?.displayProcessingFeeLocal ?? props.clientDisplayProcessingFeeLocal,
   })
   const processingTime = getGlobalPayoutProcessingTime(TLC_LOCAL_TRANSFER_METHOD)
 
@@ -241,6 +261,11 @@ export function YcPayInReviewSection(props: Props) {
 
   return (
     <div className="space-y-4">
+      {isLoading && !isLocked ? (
+        <div className="flex justify-center py-6">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : null}
       <YcLocalPayInReview
         mode="cross_border_send"
         phase={reviewPhase}
@@ -251,8 +276,14 @@ export function YcPayInReviewSection(props: Props) {
         localPayIn={localPayIn}
         receiveAmount={receiveAmount}
         processingFeeLocal={breakdown.feeLocal}
-        processingFeeUsd={lockedQuote?.processingFee}
-        exchangeFeeUsd={lockedQuote?.ycLegFeesUsd}
+        processingFeeUsd={
+          displayQuote?.processingFee ?? props.clientProcessingFee
+        }
+        exchangeFeeUsd={
+          lockedQuote?.ycLegFeesUsd ??
+          displayQuote?.ycLegFeesUsd ??
+          props.clientYcLegFeesUsd
+        }
         principalLocal={breakdown.principalLocal}
         transactionId={transactionId || undefined}
         processingTime={isLocked ? processingTime : undefined}

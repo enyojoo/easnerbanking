@@ -11,14 +11,14 @@ export const YC_PAY_IN_CONFIRMING_STATUS = "confirming_payment"
 /** List / feed status slug for in-flight YC pay-ins. */
 export const YC_PAY_IN_LIST_STATUS = "processing_payment"
 
-/** List / feed pill copy — detail lifecycle step stays Confirming payment. */
+/** List / feed pill copy. */
 export const YC_PAY_IN_LIST_STATUS_LABEL = "Processing"
 
-/** Lifecycle step title — used on detail deposit tracker only. */
-export const YC_PAY_IN_CONFIRMING_STATUS_LABEL = "Confirming payment"
+/** Detail deposit tracker step title (list uses Processing). */
+export const YC_PAY_IN_CONFIRMING_STATUS_LABEL = "Processing payment"
 
-/** Lifecycle step title — matches detail deposit tracker. */
-export const YC_PAY_IN_CONFIRMING_STEP_TITLE = "Confirming payment"
+/** Detail deposit tracker step title — matches hero/list status on detail only. */
+export const YC_PAY_IN_CONFIRMING_STEP_TITLE = "Processing payment"
 
 /** @deprecated Use YC_PAY_IN_CONFIRMING_STATUS */
 export const YC_PAY_IN_AWAITING_STATUS = YC_PAY_IN_CONFIRMING_STATUS
@@ -277,7 +277,7 @@ export function resolveYcPayInListWhenAt(
   return resolveYcPayInUserWhenAt(meta) ?? readYcQuoteLockedAt(meta)
 }
 
-/** Feed status override for in-flight YC pay-ins — list shows Processing; detail lifecycle uses Confirming payment. */
+/** Feed status override for in-flight YC pay-ins — list shows Processing; detail lifecycle uses Processing payment. */
 export function resolveYcPayInFeedStatus(
   meta: Record<string, unknown> | null | undefined,
   ledgerStatus: string,
