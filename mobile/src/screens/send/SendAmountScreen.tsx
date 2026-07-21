@@ -114,7 +114,8 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   clearCrossBorderQuote,
-  ensureCrossBorderQuoteStashed,
+  prefetchCrossBorderQuotePipeline,
+  warmCrossBorderQuotePipeline,
 } from '../../lib/sendFlowCrossBorderQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
@@ -1082,7 +1083,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     if (!debouncedCrossBorderQuotePrefetchKey || !recipient?.id || !selectedOtherCurrency) return
     const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
     if (!payInCountry) return
-    void ensureCrossBorderQuoteStashed({
+    void prefetchCrossBorderQuotePipeline({
       recipientId: recipient.id,
       payInCurrency: selectedOtherCurrency,
       payInCountry,
@@ -1459,7 +1460,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             payInRail: rail,
             receiveAmount: receiveAmountValue,
           }
-          const previewQuote = await ensureCrossBorderQuoteStashed(crossBorderMeta)
+          const previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
           if (!previewQuote?.localPayIn) {
             showError('Could not load transfer quote')
             return
@@ -1475,6 +1476,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             amountScreenSendAmount: navAmounts.sendAmount,
             calculatedSendingAmount: previewQuote.localPayIn,
             calculatedTotalAmount: previewQuote.localPayIn,
+            ycPreviewCustomerRate: previewQuote.customerRate,
+            ycPreviewProvisionalLocalPayIn:
+              previewQuote.provisionalPayIn ?? previewQuote.localPayIn,
+            ycPreviewProcessingFee: previewQuote.processingFee,
+            ycPreviewDisplayProcessingFeeLocal: previewQuote.displayProcessingFeeLocal,
+            ycPreviewYcLegFeesUsd: previewQuote.ycLegFeesUsd,
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
           } as never)

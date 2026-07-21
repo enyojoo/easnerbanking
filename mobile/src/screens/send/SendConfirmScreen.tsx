@@ -84,6 +84,10 @@ import {
 import { useQuoteCountdown } from '../../hooks/useQuoteCountdown'
 import { YcLocalPayInReview } from '../../components/yc/YcLocalPayInReview'
 import { residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
+import {
+  isStashedCrossBorderQuoteFresh,
+  peekCrossBorderQuote,
+} from '../../lib/sendFlowCrossBorderQuote'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { haptics } from '../../lib/haptics'
 
@@ -158,6 +162,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     sourcePhone?: string
     networkId?: string
     sourceNetworkName?: string
+    ycPreviewCustomerRate?: number
+    ycPreviewProvisionalLocalPayIn?: number
+    ycPreviewProcessingFee?: number
+    ycPreviewDisplayProcessingFeeLocal?: number
+    ycPreviewYcLegFeesUsd?: number
   }
 
   const isYcCrossBorder =
@@ -174,6 +183,46 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const paramTransactionId = typeof params.transactionId === 'string' ? params.transactionId.trim() : ''
   const sendNote = typeof params.note === 'string' ? params.note.trim() : ''
   const sendPaymentPurpose = typeof params.paymentPurpose === 'string' ? params.paymentPurpose.trim() : ''
+
+  const crossBorderQuoteMeta = useMemo(() => {
+    if (!isYcCrossBorder || !recipient || !params.ycPayInCurrency) return null
+    const payInCountry = residenceCountryFromPayInCurrency(params.ycPayInCurrency)
+    if (!payInCountry) return null
+    if (params.ycPayInRail === 'mobile_money') {
+      if (!params.sourcePhone?.trim() || !params.networkId) return null
+      return {
+        recipientId: recipient.id,
+        payInCurrency: params.ycPayInCurrency,
+        payInCountry,
+        payInRail: 'mobile_money' as const,
+        receiveAmount: receiveAmountValue,
+        sourcePhone: params.sourcePhone.trim(),
+        networkId: params.networkId,
+        sourceNetworkName: params.sourceNetworkName,
+      }
+    }
+    return {
+      recipientId: recipient.id,
+      payInCurrency: params.ycPayInCurrency,
+      payInCountry,
+      payInRail: 'bank_transfer' as const,
+      receiveAmount: receiveAmountValue,
+    }
+  }, [
+    isYcCrossBorder,
+    recipient,
+    params.ycPayInCurrency,
+    params.ycPayInRail,
+    params.sourcePhone,
+    params.networkId,
+    params.sourceNetworkName,
+    receiveAmountValue,
+  ])
+
+  const stashedCrossBorderPreview = useMemo(() => {
+    if (!crossBorderQuoteMeta || !isStashedCrossBorderQuoteFresh(crossBorderQuoteMeta)) return null
+    return peekCrossBorderQuote()
+  }, [crossBorderQuoteMeta])
 
   const amountScreenSendAmount = params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0
   const amountEntryMode = params.amountEntryMode ?? 'receive'
@@ -712,11 +761,27 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           networkId={params.networkId}
           sourceNetworkName={params.sourceNetworkName}
           clientCustomerRate={
-            amountScreenSendAmount > 0 && receiveAmountValue > 0
-              ? receiveAmountValue / amountScreenSendAmount
-              : 0
+            params.ycPreviewCustomerRate ??
+            stashedCrossBorderPreview?.customerRate ??
+            0
           }
-          clientProvisionalLocalPayIn={amountScreenSendAmount}
+          clientProvisionalLocalPayIn={
+            params.calculatedSendingAmount ??
+            params.ycPreviewProvisionalLocalPayIn ??
+            stashedCrossBorderPreview?.provisionalPayIn ??
+            stashedCrossBorderPreview?.localPayIn ??
+            0
+          }
+          clientProcessingFee={
+            params.ycPreviewProcessingFee ?? stashedCrossBorderPreview?.processingFee
+          }
+          clientDisplayProcessingFeeLocal={
+            params.ycPreviewDisplayProcessingFeeLocal ??
+            stashedCrossBorderPreview?.displayProcessingFeeLocal
+          }
+          clientYcLegFeesUsd={
+            params.ycPreviewYcLegFeesUsd ?? stashedCrossBorderPreview?.ycLegFeesUsd
+          }
           footerPadding={footerPadding}
           listBottomPadding={listBottomPadding}
         />

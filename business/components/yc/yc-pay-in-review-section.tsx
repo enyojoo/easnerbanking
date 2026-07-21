@@ -20,6 +20,7 @@ import { YcLocalPayInReview } from "@/components/yc-local-pay-in-review"
 import { YcPayInPaymentInstructions } from "@/components/yc/yc-pay-in-payment-instructions"
 import { YcPayInAwaitingPaymentCountdown } from "@/components/yc/yc-pay-in-awaiting-payment-countdown"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
+import { useQuoteCountdown } from "@/hooks/use-quote-countdown"
 import {
   isStashedCrossBorderQuoteFresh,
   peekCrossBorderQuote,
@@ -235,6 +236,7 @@ export function YcPayInReviewSection(props: Props) {
       ? peekCrossBorderQuote()
       : null
   const displayQuote = lockedQuote ?? stashedPreview
+  const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
   const customerRate =
     displayQuote?.customerRate ?? props.clientCustomerRate ?? 0
   const localPayIn =
@@ -256,6 +258,7 @@ export function YcPayInReviewSection(props: Props) {
   const ctaDisabled =
     !isLocked ||
     attestLoading ||
+    quoteCountdown.expired ||
     Boolean(lockError) ||
     !lockedQuote?.transferId
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -42,6 +42,7 @@ import {
   isStashedCrossBorderQuoteFresh,
   peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
+  prefetchCrossBorderQuotePipeline,
   type CrossBorderQuoteStashMeta,
 } from '../../lib/sendFlowCrossBorderQuote'
 import type { YcCrossBorderQuoteResult, YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
@@ -59,6 +60,9 @@ type Props = {
   sourceNetworkName?: string
   clientCustomerRate?: number
   clientProvisionalLocalPayIn?: number
+  clientProcessingFee?: number
+  clientDisplayProcessingFeeLocal?: number
+  clientYcLegFeesUsd?: number
   footerPadding: number
   listBottomPadding: number
 }
@@ -76,6 +80,9 @@ export function YcLocalPayInReview({
   sourceNetworkName,
   clientCustomerRate = 0,
   clientProvisionalLocalPayIn = 0,
+  clientProcessingFee,
+  clientDisplayProcessingFeeLocal,
+  clientYcLegFeesUsd,
   footerPadding,
   listBottomPadding,
 }: Props) {
@@ -117,6 +124,11 @@ export function YcLocalPayInReview({
     networkId,
     sourceNetworkName,
   ])
+
+  useEffect(() => {
+    if (!quoteMeta) return
+    prefetchCrossBorderQuotePipeline(quoteMeta)
+  }, [quoteMeta])
 
   const lockKey = quoteMeta
     ? [
@@ -161,7 +173,8 @@ export function YcLocalPayInReview({
     receiveAmount,
     customerRate,
     provisionalPayIn: displayQuote?.provisionalPayIn ?? clientProvisionalLocalPayIn,
-    displayProcessingFeeLocal: displayQuote?.displayProcessingFeeLocal,
+    displayProcessingFeeLocal:
+      displayQuote?.displayProcessingFeeLocal ?? clientDisplayProcessingFeeLocal,
   })
 
   const reviewRows = buildYcLocalPayInReviewRows({
@@ -174,8 +187,8 @@ export function YcLocalPayInReview({
     localPayIn: displayLocalPayIn,
     receiveAmount,
     processingFeeLocal: reviewBreakdown.feeLocal,
-    processingFeeUsd: displayQuote?.processingFee,
-    exchangeFeeUsd: displayQuote?.ycLegFeesUsd,
+    processingFeeUsd: displayQuote?.processingFee ?? clientProcessingFee,
+    exchangeFeeUsd: displayQuote?.ycLegFeesUsd ?? clientYcLegFeesUsd,
     principalLocal: reviewBreakdown.principalLocal,
     transactionId: displayTransactionId || undefined,
     processingTime: isLocked ? processingTime : undefined,

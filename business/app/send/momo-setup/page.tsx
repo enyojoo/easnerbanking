@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -20,11 +20,12 @@ import {
 } from "@/lib/yc-local-deposit-cache"
 import {
   crossBorderQuoteToFlowState,
-  ensureCrossBorderQuoteStashed,
   fetchCrossBorderQuotePreview,
+  prefetchCrossBorderQuotePipeline,
+  warmCrossBorderQuotePipeline,
 } from "@/lib/yc-cross-border-quote-cache"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { normalizeYcMomoPhone, REVIEW_ROW_LABELS } from "@easner/shared"
+import { normalizeYcMomoPhone, REVIEW_ROW_LABELS, useDebouncedValue } from "@easner/shared"
 function isYcCrossBorderMomo(state: SendFlowState | null): boolean {
   return (
     state?.paymentMethod === "otherCurrency" &&
@@ -48,6 +49,47 @@ export default function SendMomoSetupPage() {
   const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
   const momoReady = Boolean(momoPhone.trim() && momoNetworkId)
   const selectedNetwork = momoNetworks.find((n) => n.id === momoNetworkId)
+
+  const crossBorderMeta = useMemo(() => {
+    if (!state || !payInCountry || !payInCurrency || !momoReady) return null
+    return {
+      recipientId: state.recipient.id,
+      payInCurrency,
+      payInCountry,
+      payInRail: "mobile_money" as const,
+      receiveAmount: state.amount,
+      sourcePhone: momoPhone.trim(),
+      networkId: momoNetworkId,
+      sourceNetworkName: selectedNetwork?.name,
+    }
+  }, [
+    state,
+    payInCountry,
+    payInCurrency,
+    momoReady,
+    momoPhone,
+    momoNetworkId,
+    selectedNetwork?.name,
+  ])
+
+  const [debouncedCrossBorderPrefetchKey] = useDebouncedValue(
+    crossBorderMeta
+      ? [
+          crossBorderMeta.recipientId,
+          crossBorderMeta.payInCurrency,
+          crossBorderMeta.payInCountry,
+          crossBorderMeta.payInRail,
+          crossBorderMeta.receiveAmount,
+          crossBorderMeta.sourcePhone ?? "",
+          crossBorderMeta.networkId ?? "",
+        ].join("|")
+      : "",
+  )
+
+  useEffect(() => {
+    if (!debouncedCrossBorderPrefetchKey || !crossBorderMeta) return
+    prefetchCrossBorderQuotePipeline(crossBorderMeta)
+  }, [debouncedCrossBorderPrefetchKey, crossBorderMeta])
 
   useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
@@ -129,22 +171,12 @@ export default function SendMomoSetupPage() {
   }, [state, payInCountry])
 
   const onContinue = async () => {
-    if (!state || !momoReady || !payInCountry || !payInCurrency || isContinueLoading) return
+    if (!state || !crossBorderMeta || isContinueLoading) return
     setContinueError(null)
     setIsContinueLoading(true)
     try {
-      const crossBorderMeta = {
-        recipientId: state.recipient.id,
-        payInCurrency,
-        payInCountry,
-        payInRail: "mobile_money" as const,
-        receiveAmount: state.amount,
-        sourcePhone: momoPhone.trim(),
-        networkId: momoNetworkId,
-        sourceNetworkName: selectedNetwork?.name,
-      }
       const previewQuote =
-        (await ensureCrossBorderQuoteStashed(crossBorderMeta)) ??
+        (await warmCrossBorderQuotePipeline(crossBorderMeta)) ??
         (await fetchCrossBorderQuotePreview(crossBorderMeta).catch(() => null))
       if (!previewQuote?.localPayIn) {
         setContinueError("Could not load transfer quote")

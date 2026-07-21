@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { REVIEW_ROW_LABELS, normalizeYcMomoPhone } from '@easner/shared'
+import { REVIEW_ROW_LABELS, normalizeYcMomoPhone, useDebouncedValue } from '@easner/shared'
 import type { Recipient } from '../../types'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -22,7 +22,8 @@ import {
 import { useAuth } from '../../contexts/AuthContext'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import {
-  ensureCrossBorderQuoteStashed,
+  prefetchCrossBorderQuotePipeline,
+  warmCrossBorderQuotePipeline,
 } from '../../lib/sendFlowCrossBorderQuote'
 
 type PayInNetwork = { id: string; name: string }
@@ -100,23 +101,56 @@ export function YcCrossBorderMomoSetup({
   const selectedNetwork = networks.find((n) => n.id === networkId)
   const rail: YcPayInRail = 'mobile_money'
 
+  const quoteMeta = useMemo(() => {
+    if (!momoReady) return null
+    return {
+      recipientId: recipient.id,
+      payInCurrency,
+      payInCountry,
+      payInRail: rail,
+      receiveAmount,
+      sourcePhone: phone.trim(),
+      networkId,
+      sourceNetworkName: selectedNetwork?.name,
+    }
+  }, [
+    momoReady,
+    recipient.id,
+    payInCurrency,
+    payInCountry,
+    rail,
+    receiveAmount,
+    phone,
+    networkId,
+    selectedNetwork?.name,
+  ])
+
+  const [debouncedQuotePrefetchKey] = useDebouncedValue(
+    quoteMeta
+      ? [
+          quoteMeta.recipientId,
+          quoteMeta.payInCurrency,
+          quoteMeta.payInCountry,
+          quoteMeta.payInRail,
+          quoteMeta.receiveAmount,
+          quoteMeta.sourcePhone ?? '',
+          quoteMeta.networkId ?? '',
+        ].join('|')
+      : '',
+  )
+
+  useEffect(() => {
+    if (!debouncedQuotePrefetchKey || !quoteMeta) return
+    prefetchCrossBorderQuotePipeline(quoteMeta)
+  }, [debouncedQuotePrefetchKey, quoteMeta])
+
   const onContinue = async () => {
-    if (!momoReady || isContinueLoading) return
+    if (!quoteMeta || isContinueLoading) return
     setContinueError(null)
     haptics.medium()
     setIsContinueLoading(true)
     try {
-      const quoteMeta = {
-        recipientId: recipient.id,
-        payInCurrency,
-        payInCountry,
-        payInRail: rail,
-        receiveAmount,
-        sourcePhone: phone.trim(),
-        networkId,
-        sourceNetworkName: selectedNetwork?.name,
-      }
-      const previewQuote = await ensureCrossBorderQuoteStashed(quoteMeta)
+      const previewQuote = await warmCrossBorderQuotePipeline(quoteMeta)
       if (!previewQuote?.localPayIn) {
         setContinueError('Could not load transfer quote')
         return
@@ -132,6 +166,12 @@ export function YcCrossBorderMomoSetup({
         amountScreenSendAmount,
         calculatedSendingAmount: previewQuote.localPayIn,
         calculatedTotalAmount: previewQuote.localPayIn,
+        ycPreviewCustomerRate: previewQuote.customerRate,
+        ycPreviewProvisionalLocalPayIn:
+          previewQuote.provisionalPayIn ?? previewQuote.localPayIn,
+        ycPreviewProcessingFee: previewQuote.processingFee,
+        ycPreviewDisplayProcessingFeeLocal: previewQuote.displayProcessingFeeLocal,
+        ycPreviewYcLegFeesUsd: previewQuote.ycLegFeesUsd,
         sourcePhone: phone.trim(),
         networkId,
         sourceNetworkName: selectedNetwork?.name,

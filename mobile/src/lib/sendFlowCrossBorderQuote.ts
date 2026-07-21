@@ -351,3 +351,13 @@ export function prefetchCrossBorderQuotePipeline(meta: CrossBorderQuoteStashMeta
     .then(() => ensureCrossBorderLeg2Locked(meta))
     .catch(() => {})
 }
+
+/** Await preview stash and warm leg2 before navigating to review. */
+export async function warmCrossBorderQuotePipeline(
+  meta: CrossBorderQuoteStashMeta,
+): Promise<YcCrossBorderQuoteResult | null> {
+  const preview = await ensureCrossBorderQuoteStashed(meta)
+  if (!preview) return null
+  await ensureCrossBorderLeg2Locked(meta).catch(() => {})
+  return peekCrossBorderQuote()
+}

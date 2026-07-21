@@ -379,6 +379,23 @@ export async function ensureCrossBorderOrderConfirmed(
   return inflightConfirm
 }
 
+/** Fire-and-forget preview + leg2 lock while user is on amount / MoMo setup. */
+export function prefetchCrossBorderQuotePipeline(meta: CrossBorderQuoteStashMeta): void {
+  void ensureCrossBorderQuoteStashed(meta)
+    .then(() => ensureCrossBorderLeg2Locked(meta))
+    .catch(() => {})
+}
+
+/** Await preview stash and warm leg2 before navigating to review. */
+export async function warmCrossBorderQuotePipeline(
+  meta: CrossBorderQuoteStashMeta,
+): Promise<CrossBorderQuoteResult | null> {
+  const preview = await ensureCrossBorderQuoteStashed(meta)
+  if (!preview) return null
+  await ensureCrossBorderLeg2Locked(meta).catch(() => {})
+  return peekCrossBorderQuote()
+}
+
 export function crossBorderQuoteToFlowState(
   quote: CrossBorderQuoteResult,
   meta: CrossBorderQuoteStashMeta,

@@ -44,11 +44,13 @@ import { residenceCountryFromPayInCurrency } from "@/hooks/use-yc-cross-border-f
 import {
   crossBorderQuoteToFlowState,
   ensureCrossBorderOrderConfirmed,
-  fetchCrossBorderQuotePreview,
+  ensureCrossBorderQuoteStashed,
   isCompleteCrossBorderQuote,
   isStashedCrossBorderQuoteFresh,
+  peekCrossBorderLeg2DraftId,
   peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
+  prefetchCrossBorderQuotePipeline,
   type CrossBorderQuoteStashMeta,
 } from "@/lib/yc-cross-border-quote-cache"
 import {
@@ -283,8 +285,13 @@ export default function SendConfirmPage() {
   }, [state])
 
   useEffect(() => {
+    if (!crossBorderMeta) return
+    void prefetchCrossBorderQuotePipeline(crossBorderMeta)
+  }, [crossBorderMeta])
+
+  useEffect(() => {
     if (!state || !crossBorderMeta) return
-    if (state.ycCrossBorder?.localPayIn > 0 && state.ycCrossBorder?.customerRate > 0) {
+    if ((state.ycCrossBorder?.localPayIn ?? 0) > 0 && (state.ycCrossBorder?.customerRate ?? 0) > 0) {
       return
     }
 
@@ -310,10 +317,14 @@ export default function SendConfirmPage() {
 
     let cancelled = false
     setYcQuoteError(null)
-    setYcQuoteLoading(true)
-    void fetchCrossBorderQuotePreview(crossBorderMeta)
+    void ensureCrossBorderQuoteStashed(crossBorderMeta)
       .then((preview) => {
-        if (cancelled || !preview?.ok) return
+        if (cancelled || !preview?.localPayIn) {
+          if (!cancelled && !preview?.localPayIn) {
+            setYcQuoteError("Could not load transfer quote")
+          }
+          return
+        }
         const ycPreview = crossBorderQuoteToFlowState(preview, crossBorderMeta)
         const previewState: SendFlowState = {
           ...state,
@@ -330,13 +341,9 @@ export default function SendConfirmPage() {
           setYcQuoteError("Could not load transfer quote")
         }
       })
-      .finally(() => {
-        if (!cancelled) setYcQuoteLoading(false)
-      })
 
     return () => {
       cancelled = true
-      setYcQuoteLoading(false)
     }
   }, [
     crossBorderMeta,
@@ -870,6 +877,30 @@ export default function SendConfirmPage() {
           flowMode="cross_border_send"
           lockKey={crossBorderLockKey}
           getCachedLocked={() => {
+            if (
+              crossBorderMeta &&
+              isStashedCrossBorderQuoteFresh(crossBorderMeta)
+            ) {
+              const cached = peekCrossBorderQuote()
+              if (cached && isCompleteCrossBorderQuote(cached)) {
+                return {
+                  ok: true as const,
+                  transferId: cached.transferId ?? null,
+                  transactionId: cached.transactionId,
+                  easnerTransactionId: cached.easnerTransactionId,
+                  localPayIn: cached.localPayIn,
+                  customerRate: cached.customerRate,
+                  processingFee: cached.processingFee,
+                  ycLegFeesUsd: cached.ycLegFeesUsd,
+                  displayProcessingFeeLocal: cached.displayProcessingFeeLocal,
+                  provisionalPayIn: cached.provisionalPayIn,
+                  bankInfo: cached.bankInfo,
+                  expiresAt: cached.expiresAt,
+                  sourcePhone: cached.sourcePhone,
+                  sourceNetworkName: cached.sourceNetworkName,
+                }
+              }
+            }
             if (!yc?.transferId || !(yc.localPayIn > 0) || !(yc.customerRate > 0)) return null
             return {
               ok: true as const,
@@ -961,14 +992,8 @@ export default function SendConfirmPage() {
             onSuccess: (transactionId) => finishSend(transactionId),
           }}
         />
-      ) : isYcCrossBorder ? (
-        ycQuoteLoading && !ycQuoteError ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : ycQuoteError ? (
-          <p className="text-sm text-destructive">{ycQuoteError}</p>
-        ) : null
+      ) : isYcCrossBorder && ycQuoteError ? (
+        <p className="text-sm text-destructive">{ycQuoteError}</p>
       ) : (
         <PayoutReviewDetailsRows
           transactionId={displayTransactionId}

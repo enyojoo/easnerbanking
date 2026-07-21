@@ -70,9 +70,10 @@ import {
 } from "@/lib/yc-local-deposit-cache"
 import {
   clearCrossBorderQuote,
-  ensureCrossBorderQuoteStashed,
   fetchCrossBorderQuotePreview,
   crossBorderQuoteToFlowState,
+  prefetchCrossBorderQuotePipeline,
+  warmCrossBorderQuotePipeline,
 } from "@/lib/yc-cross-border-quote-cache"
 import {
   ensureWalletSendOrderConfirmed,
@@ -907,6 +908,39 @@ export default function SendPage() {
     payoutQuotePrefetchKey,
   )
 
+  const crossBorderBankQuotePrefetchKey = useMemo(() => {
+    if (
+      !showThroughLocalCurrency ||
+      paymentMethod !== "otherCurrency" ||
+      otherPaymentMethod !== "bank_transfer" ||
+      !recipient?.id ||
+      !otherCurrency ||
+      !(receiveAmount > 0)
+    ) {
+      return ""
+    }
+    const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
+    if (!payInCountry) return ""
+    return [
+      recipient.id,
+      otherCurrency,
+      payInCountry,
+      "bank_transfer",
+      receiveAmount,
+    ].join("|")
+  }, [
+    showThroughLocalCurrency,
+    paymentMethod,
+    otherPaymentMethod,
+    recipient?.id,
+    otherCurrency,
+    receiveAmount,
+  ])
+
+  const [debouncedCrossBorderBankQuotePrefetchKey] = useDebouncedValue(
+    crossBorderBankQuotePrefetchKey,
+  )
+
   const fetchPayoutQuote = useCallback(async (): Promise<PayoutQuoteResult | null> => {
     if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return null
     const cached = payoutQuoteCacheRef.current
@@ -1050,6 +1084,20 @@ export default function SendPage() {
     void fetchPayoutQuote()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsPayoutQuoteBeforeConfirm, debouncedPayoutQuotePrefetchKey, recipient?.id])
+
+  useEffect(() => {
+    if (!debouncedCrossBorderBankQuotePrefetchKey || !recipient?.id || !otherCurrency) return
+    const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
+    if (!payInCountry) return
+    prefetchCrossBorderQuotePipeline({
+      recipientId: recipient.id,
+      payInCurrency: otherCurrency,
+      payInCountry,
+      payInRail: "bank_transfer",
+      receiveAmount,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedCrossBorderBankQuotePrefetchKey, recipient?.id, otherCurrency])
 
   const handleContinue = async () => {
     if (!canContinue || !recipient || isContinuePending || isContinueLoading) return
@@ -1196,7 +1244,7 @@ export default function SendPage() {
             receiveAmount,
           }
           const previewQuote =
-            (await ensureCrossBorderQuoteStashed(crossBorderMeta)) ??
+            (await warmCrossBorderQuotePipeline(crossBorderMeta)) ??
             (await fetchCrossBorderQuotePreview(crossBorderMeta).catch(() => null))
           if (!previewQuote?.localPayIn) {
             setAmountFieldError("Could not load transfer quote")

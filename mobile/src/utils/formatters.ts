@@ -104,51 +104,77 @@ export type TransactionStatusDisplay = {
   tone: TransactionStatusTone
 }
 
+export function colorForTransactionStatusTone(tone: TransactionStatusTone): string {
+  switch (tone) {
+    case 'completed':
+      return easnerBrand.emerald
+    case 'pending':
+    case 'processing':
+      return easnerBrand.amber
+    case 'failed':
+      return easnerBrand.oxblood
+    case 'cancelled':
+      return easnerBrand.slate
+    case 'neutral':
+    default:
+      return easnerBrand.slate
+  }
+}
+
+function resolveTransactionStatusFromSlug(status: string): Omit<TransactionStatusDisplay, 'color'> | null {
+  if (!status) return null
+  const statusLower = status.toLowerCase()
+  if (statusLower === 'processing_payment') {
+    return { label: 'Processing', tone: 'processing' }
+  }
+  if (statusLower.includes('processed') || statusLower.includes('completed') || statusLower === 'settled') {
+    return { label: 'Completed', tone: 'completed' }
+  }
+  if (statusLower.includes('failed') || statusLower.includes('returned')) {
+    return { label: 'Failed', tone: 'failed' }
+  }
+  if (statusLower.includes('refunded')) {
+    return { label: 'Refunded', tone: 'failed' }
+  }
+  if (statusLower.includes('review')) {
+    return { label: 'In Review', tone: 'pending' }
+  }
+  if (statusLower.includes('cancelled')) {
+    return { label: 'Cancelled', tone: 'cancelled' }
+  }
+  if (
+    statusLower.includes('pending') ||
+    statusLower.includes('awaiting') ||
+    statusLower.includes('scheduled') ||
+    statusLower.includes('received') ||
+    statusLower.includes('submitted') ||
+    statusLower.includes('processing') ||
+    statusLower === 'confirming_payment'
+  ) {
+    return { label: 'Processing', tone: 'processing' }
+  }
+  return {
+    label: status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+    tone: 'neutral',
+  }
+}
+
 /**
- * Map Bridge API transaction status to user-friendly label, legacy raw color (kept
- * for backwards-compat call sites), and a `tone` that the new `StatusPill` primitive
- * consumes directly.
+ * Map ledger status slug (+ optional API label) to display label, color, and tone.
+ * Tone drives list + hero colors: green completed, orange processing, red failed.
+ * When `statusLabel` is provided it overrides the label only — tone still comes from `status`.
  */
 export function getTransactionStatusDisplay(
   status: string,
   statusLabel?: string | null,
 ): TransactionStatusDisplay | null {
-  if (statusLabel) {
-    return { label: statusLabel, color: easnerBrand.slate, tone: 'processing' }
-  }
-  if (!status) return null
-  const statusLower = status.toLowerCase()
-  if (statusLower === 'processing_payment') {
-    return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
-  }
-  if (statusLower.includes('processed') || statusLower.includes('completed')) {
-    return { label: 'Completed', color: easnerBrand.emerald, tone: 'completed' }
-  }
-  if (statusLower.includes('pending') || statusLower.includes('awaiting') || statusLower.includes('scheduled') || statusLower.includes('received') || statusLower.includes('submitted')) {
-    if (statusLower === 'confirming_payment' || statusLower === 'awaiting_payment') {
-      return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
-    }
-    return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
-  }
-  if (statusLower.includes('processing')) {
-    return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
-  }
-  if (statusLower.includes('failed') || statusLower.includes('returned')) {
-    return { label: 'Failed', color: easnerBrand.oxblood, tone: 'failed' }
-  }
-  if (statusLower.includes('refunded')) {
-    return { label: 'Refunded', color: easnerBrand.oxblood, tone: 'failed' }
-  }
-  if (statusLower.includes('review')) {
-    return { label: 'In Review', color: easnerBrand.amber, tone: 'pending' }
-  }
-  if (statusLower.includes('cancelled')) {
-    return { label: 'Cancelled', color: easnerBrand.slate, tone: 'cancelled' }
-  }
+  const resolved = resolveTransactionStatusFromSlug(status)
+  if (!resolved) return null
+  const label = statusLabel?.trim() || resolved.label
   return {
-    label: status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-    color: easnerBrand.slate,
-    tone: 'neutral',
+    label,
+    tone: resolved.tone,
+    color: colorForTransactionStatusTone(resolved.tone),
   }
 }
 

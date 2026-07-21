@@ -47,7 +47,12 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ripple } from '../../lib/androidRipple'
-import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/formatters'
+import {
+  colorForTransactionStatusTone,
+  formatSignedCurrency,
+  getTransactionStatusDisplay,
+  type TransactionStatusTone,
+} from '../../utils/formatters'
 import {
   useTransactionDetail,
   useRecipientsList,
@@ -109,6 +114,7 @@ interface LedgerTransaction {
   settled_amount?: number
   settled_currency?: string
   status: string
+  status_label?: string
   source_type?: string
   source_payment_rail?: string
   destination_payment_rail?: string
@@ -163,16 +169,34 @@ type StatusInfo = {
   gradient: readonly [string, string]
 }
 
-function statusInfoToneFromInfo(info: StatusInfo) {
-  const label = info.label.toLowerCase()
-  if (label.includes('completed')) return 'completed' as const
-  if (label.includes('awaiting payment')) return 'pending' as const
-  if (label.includes('processing') || label.includes('pending')) return 'pending' as const
-  if (label.includes('failed') || label.includes('refunded') || label.includes('returned'))
-    return 'failed' as const
-  if (label.includes('cancel')) return 'cancelled' as const
-  if (label.includes('review')) return 'pending' as const
-  return 'neutral' as const
+function statusGradientForTone(tone: TransactionStatusTone): readonly [string, string] {
+  switch (tone) {
+    case 'completed':
+      return colors.success.gradient
+    case 'failed':
+      return colors.error.gradient || colors.primary.gradient
+    case 'pending':
+    case 'processing':
+      return colors.warning.gradient
+    default:
+      return colors.primary.gradient
+  }
+}
+
+function statusIconForTone(tone: TransactionStatusTone): LucideIcon {
+  switch (tone) {
+    case 'completed':
+      return CircleCheck
+    case 'failed':
+      return CircleX
+    case 'pending':
+    case 'processing':
+      return Clock
+    case 'cancelled':
+      return CircleAlert
+    default:
+      return CircleHelp
+  }
 }
 
 function mergeTransactionSnapshots(
@@ -545,70 +569,15 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     return trimmed || undefined
   }
 
-  const getStatusInfo = (status: string): {
-    color: string
-    Icon: LucideIcon
-    label: string
-    gradient: readonly [string, string]
-  } => {
-    const mapped = getTransactionStatusDisplay(status)
+  const getStatusInfo = (status: string, statusLabel?: string | null): StatusInfo & { tone: TransactionStatusTone } => {
+    const mapped = getTransactionStatusDisplay(status, statusLabel)
     if (mapped) {
-      const statusLower = status.toLowerCase()
-      const Icon =
-        statusLower.includes('failed') || statusLower.includes('returned') || statusLower.includes('refunded')
-          ? CircleX
-          : statusLower.includes('completed') || statusLower.includes('processed')
-            ? CircleCheck
-            : Clock
       return {
-        color: mapped.color,
-        Icon,
+        color: colorForTransactionStatusTone(mapped.tone),
+        Icon: statusIconForTone(mapped.tone),
         label: mapped.label,
-        gradient:
-          mapped.tone === 'failed'
-            ? colors.error.gradient || colors.primary.gradient
-            : mapped.tone === 'completed'
-              ? colors.success.gradient
-              : colors.primary.gradient,
-      }
-    }
-
-    const statusLower = status.toLowerCase()
-    if (statusLower.includes('processed') || statusLower.includes('completed')) {
-      return {
-        color: colors.success.main,
-        Icon: CircleCheck,
-        label: 'Completed',
-        gradient: colors.success.gradient,
-      }
-    }
-    if (
-      statusLower.includes('pending') ||
-      statusLower.includes('awaiting') ||
-      statusLower.includes('scheduled') ||
-      statusLower.includes('received')
-    ) {
-      return {
-        color: colors.warning.main,
-        Icon: Clock,
-        label: 'Processing',
-        gradient: colors.primary.gradient,
-      }
-    }
-    if (statusLower.includes('failed') || statusLower.includes('returned') || statusLower.includes('refunded')) {
-      return {
-        color: colors.error.main,
-        Icon: CircleX,
-        label: statusLower.includes('refunded') ? 'Refunded' : 'Failed',
-        gradient: colors.error.gradient || colors.primary.gradient,
-      }
-    }
-    if (statusLower.includes('review')) {
-      return {
-        color: colors.warning.main,
-        Icon: CircleAlert,
-        label: 'In Review',
-        gradient: colors.primary.gradient,
+        gradient: statusGradientForTone(mapped.tone),
+        tone: mapped.tone,
       }
     }
     return {
@@ -616,6 +585,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       Icon: CircleHelp,
       label: status.replace(/_/g, ' '),
       gradient: colors.primary.gradient,
+      tone: 'neutral',
     }
   }
 
@@ -815,7 +785,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }
 
   const isReceived = transaction.transaction_type === 'receive'
-  const statusInfo = getStatusInfo(transaction.status)
+  const statusInfo = getStatusInfo(transaction.status, transaction.status_label)
   const isEasetagP2p = transaction.source_type === 'easetag_p2p'
   const isStablecoinReceive =
     transaction.transaction_type === 'receive' &&
@@ -1056,7 +1026,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               </View>
               <StatusPill
                 label={statusInfo.label}
-                tone={statusInfoToneFromInfo(statusInfo)}
+                tone={statusInfo.tone}
                 size="md"
                 showIcon={true}
                 style={styles.heroStatus}
