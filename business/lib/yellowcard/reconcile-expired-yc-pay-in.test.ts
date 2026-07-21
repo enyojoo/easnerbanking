@@ -34,11 +34,21 @@ describe("shouldReconcileExpiredYcPayInOnDetail", () => {
     ).toBe(false)
   })
 
-  it("returns false when ledger is no longer awaiting attestation", () => {
+  it("returns true when attested but deposit window closed and ledger still pending", () => {
     expect(
       shouldReconcileExpiredYcPayInOnDetail(
         { ...baseMeta, payment_attested_at: "2026-01-01T00:06:00.000Z" },
         "pending",
+        Date.parse("2026-01-01T00:10:00.000Z"),
+      ),
+    ).toBe(true)
+  })
+
+  it("returns false when ledger is already terminal", () => {
+    expect(
+      shouldReconcileExpiredYcPayInOnDetail(
+        { ...baseMeta, payment_attested_at: "2026-01-01T00:06:00.000Z" },
+        "failed",
         Date.parse("2026-01-01T00:10:00.000Z"),
       ),
     ).toBe(false)

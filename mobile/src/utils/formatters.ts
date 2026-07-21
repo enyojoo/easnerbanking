@@ -117,7 +117,7 @@ export function getTransactionStatusDisplay(status: string): TransactionStatusDi
   }
   if (statusLower.includes('pending') || statusLower.includes('awaiting') || statusLower.includes('scheduled') || statusLower.includes('received') || statusLower.includes('submitted')) {
     if (statusLower === 'confirming_payment' || statusLower === 'awaiting_payment') {
-      return { label: 'Confirming payment', color: easnerBrand.amber, tone: 'pending' }
+      return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
     }
     return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
   }

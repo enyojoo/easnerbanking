@@ -30,6 +30,16 @@ describe("yc-transaction-poll", () => {
     expect(isYcPollTerminalEnvelope(envelope)).toBe(true)
   })
 
+  it("maps receive expired status to RECEIVE.FAILED envelope", () => {
+    const envelope = buildYellowcardPollWebhookEnvelope("receive", {
+      sequenceId: "yc_fb_1",
+      status: "expired",
+    })
+    expect(envelope.event).toBe("RECEIVE.FAILED")
+    expect(isYcPollTerminalStatus("expired")).toBe(true)
+    expect(isYcPollTerminalEnvelope(envelope)).toBe(true)
+  })
+
   it("treats processing as non-terminal", () => {
     expect(isYcPollTerminalStatus("processing")).toBe(false)
     const envelope = buildYellowcardPollWebhookEnvelope("send", {

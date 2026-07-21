@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
-  isYcPayInAwaitingAttestation,
   isYcPayInFlowMetadata,
   isYcPayInPaymentWindowOpen,
   readYcPayInExpiresAt,
@@ -9,13 +8,18 @@ import { pollYellowcardTransferStatus } from "@/lib/reconciliation/yc-transactio
 
 export const YC_EXPIRED_PAY_IN_RECONCILE_POLLED_AT = "yc_expired_reconcile_polled_at"
 
+function isOpenYcPayInLedgerStatus(status: string): boolean {
+  const st = String(status ?? "").trim().toLowerCase()
+  return st === "pending" || st === "processing" || st === "unknown"
+}
+
 export function shouldReconcileExpiredYcPayInOnDetail(
   metadata: Record<string, unknown>,
   ledgerStatus: string,
   nowMs: number = Date.now(),
 ): boolean {
   if (!isYcPayInFlowMetadata(metadata)) return false
-  if (!isYcPayInAwaitingAttestation(metadata, ledgerStatus)) return false
+  if (!isOpenYcPayInLedgerStatus(ledgerStatus)) return false
   if (!readYcPayInExpiresAt(metadata)) return false
   if (isYcPayInPaymentWindowOpen(metadata, nowMs)) return false
   if (metadata[YC_EXPIRED_PAY_IN_RECONCILE_POLLED_AT]) return false
@@ -42,6 +46,35 @@ async function fetchYcTransferForPayIn(
     .maybeSingle()
 
   return (data as Record<string, unknown> | null) ?? null
+}
+
+/** Fail a pending/processing ledger row when the linked YC pay-in session expired. */
+export async function failLedgerForExpiredYcPayInTransfer(
+  admin: SupabaseClient,
+  transfer: Record<string, unknown>,
+): Promise<boolean> {
+  const transactionId = transfer.transaction_id != null ? String(transfer.transaction_id).trim() : ""
+  if (!transactionId) return false
+
+  const { data: tx } = await admin
+    .from("transactions")
+    .select("status")
+    .eq("id", transactionId)
+    .maybeSingle()
+  if (!isOpenYcPayInLedgerStatus(String(tx?.status ?? ""))) return false
+
+  const sequenceId = String(transfer.leg1_sequence_id ?? "").trim()
+  if (!sequenceId) return false
+
+  const now = new Date().toISOString()
+  const { applyYellowcardWebhookSideEffects } = await import("@/lib/yellowcard/webhook-processor")
+  await applyYellowcardWebhookSideEffects(admin, {
+    event: "RECEIVE.FAILED",
+    status: "expired",
+    sequenceId,
+    executedAt: now,
+  })
+  return true
 }
 
 async function markExpiredPayInReconcileAttempted(
@@ -71,8 +104,8 @@ async function markExpiredPayInReconcileAttempted(
 }
 
 /**
- * One-shot YC receive poll when the deposit window has closed but the ledger is still awaiting payment.
- * Replays terminal status through webhook side effects (e.g. RECEIVE.FAILED).
+ * One-shot reconcile when the deposit window has closed but the ledger is still open.
+ * Replays terminal YC status through webhook side effects (e.g. RECEIVE.FAILED).
  */
 export async function reconcileExpiredYcPayInOnDetail(
   admin: SupabaseClient,
@@ -95,14 +128,26 @@ export async function reconcileExpiredYcPayInOnDetail(
 
   let polled = 0
   if (transfer) {
-    try {
-      const result = await pollYellowcardTransferStatus(admin, transfer)
-      polled = result.polled
-    } catch (e) {
-      console.warn("[yc-pay-in] expired detail reconcile poll failed", {
-        transactionId: input.transactionLedgerId,
-        error: e instanceof Error ? e.message : String(e),
-      })
+    const transferStatus = String(transfer.status ?? "").trim().toLowerCase()
+    if (transferStatus === "expired") {
+      try {
+        await failLedgerForExpiredYcPayInTransfer(admin, transfer)
+      } catch (e) {
+        console.warn("[yc-pay-in] expired ledger fail failed", {
+          transactionId: input.transactionLedgerId,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
+    } else {
+      try {
+        const result = await pollYellowcardTransferStatus(admin, transfer)
+        polled = result.polled
+      } catch (e) {
+        console.warn("[yc-pay-in] expired detail reconcile poll failed", {
+          transactionId: input.transactionLedgerId,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
     }
   }
 

@@ -15,7 +15,7 @@ export function buildYellowcardPollWebhookEnvelope(
   let event = leg === "send" ? "SEND.PROCESSING" : "RECEIVE.PROCESSING"
   if (status === "complete" || status === "completed" || status === "success") {
     event = leg === "send" ? "SEND.COMPLETE" : "RECEIVE.SETTLEMENT_COMPLETE"
-  } else if (status === "failed" || status === "fail" || status === "cancelled") {
+  } else if (status === "failed" || status === "fail" || status === "cancelled" || status === "expired") {
     event = leg === "send" ? "SEND.FAILED" : "RECEIVE.FAILED"
   } else if (status === "pending" || status === "created") {
     event = leg === "send" ? "SEND.PENDING" : "RECEIVE.PENDING"
@@ -38,7 +38,8 @@ export function isYcPollTerminalStatus(status: string): boolean {
     s === "success" ||
     s === "failed" ||
     s === "fail" ||
-    s === "cancelled"
+    s === "cancelled" ||
+    s === "expired"
   )
 }
 

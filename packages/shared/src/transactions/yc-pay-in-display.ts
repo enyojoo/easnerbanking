@@ -271,12 +271,12 @@ export function resolveYcPayInListWhenAt(
   return resolveYcPayInUserWhenAt(meta) ?? readYcQuoteLockedAt(meta)
 }
 
-/** Feed status override for in-flight YC pay-ins. */
+/** Feed status override for in-flight YC pay-ins — list shows Processing; detail lifecycle uses Confirming payment. */
 export function resolveYcPayInFeedStatus(
   meta: Record<string, unknown> | null | undefined,
   ledgerStatus: string,
 ): string | null {
-  if (isYcPayInInFlight(meta, ledgerStatus)) return YC_PAY_IN_CONFIRMING_STATUS
+  if (isYcPayInInFlight(meta, ledgerStatus)) return "processing"
   return null
 }
 
@@ -284,9 +284,8 @@ export function ledgerTransactionStatusDisplayForRow(
   ledgerStatus: string,
   meta?: Record<string, unknown> | null,
 ): LedgerTransactionStatusDisplay {
-  if (resolveYcPayInFeedStatus(meta, ledgerStatus) === YC_PAY_IN_CONFIRMING_STATUS) {
-    return { label: YC_PAY_IN_CONFIRMING_STATUS_LABEL, tone: "pending" }
-  }
+  const feedStatus = resolveYcPayInFeedStatus(meta, ledgerStatus)
+  if (feedStatus) return ledgerTransactionStatusDisplay(feedStatus)
   return ledgerTransactionStatusDisplay(ledgerStatus)
 }
 

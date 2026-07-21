@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
 import {
-  YC_PAY_IN_CONFIRMING_STATUS,
   YC_PAY_IN_CONFIRMING_DESCRIPTION_PREFIX,
   YC_PAY_IN_CONFIRMING_BANK_WAITING_DESCRIPTION,
   YC_PAY_IN_REVIEW_PAYMENT_WINDOW_EXPIRED,
@@ -20,19 +19,17 @@ describe("yc pay-in display", () => {
     expect(
       isYcPayInAwaitingAttestation({ yc_mode: "cross_border_send" }, "pending"),
     ).toBe(true)
-    expect(resolveYcPayInFeedStatus({ yc_mode: "fund_balance" }, "pending")).toBe(
-      YC_PAY_IN_CONFIRMING_STATUS,
-    )
+    expect(resolveYcPayInFeedStatus({ yc_mode: "fund_balance" }, "pending")).toBe("processing")
     expect(isYcPayInInFlight({ yc_mode: "fund_balance" }, "pending")).toBe(true)
   })
 
-  it("stops awaiting after attestation but stays in confirming feed status", () => {
+  it("stops awaiting after attestation but stays in processing feed status", () => {
     const meta = {
       yc_mode: "cross_border_send",
       payment_attested_at: "2026-01-02T00:00:00.000Z",
     }
     expect(isYcPayInAwaitingAttestation(meta, "pending")).toBe(false)
-    expect(resolveYcPayInFeedStatus(meta, "processing")).toBe(YC_PAY_IN_CONFIRMING_STATUS)
+    expect(resolveYcPayInFeedStatus(meta, "processing")).toBe("processing")
   })
 
   it("prefers attestation over lock for user when", () => {
@@ -117,16 +114,16 @@ describe("yc pay-in display", () => {
     expect(steps[0]?.state).toBe("current")
   })
 
-  it("shows Confirming payment label for in-flight YC pay-ins", () => {
+  it("shows Processing label for in-flight YC pay-ins on the list", () => {
     expect(
       ledgerTransactionStatusDisplayForRow("pending", { yc_mode: "fund_balance" }).label,
-    ).toBe("Confirming payment")
+    ).toBe("Processing")
     expect(
       ledgerTransactionStatusDisplayForRow("processing", {
         yc_mode: "fund_balance",
         payment_attested_at: "2026-01-01T00:00:00.000Z",
       }).label,
-    ).toBe("Confirming payment")
+    ).toBe("Processing")
   })
 
   it("formats pay-in countdown from YC deposit expiry", () => {

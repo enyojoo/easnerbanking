@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { failLedgerForExpiredYcPayInTransfer } from "./reconcile-expired-yc-pay-in"
 
 export type YcTransferMode = "fund_balance" | "cross_border_send" | "balance_payout"
 
@@ -52,7 +53,7 @@ export async function expireStaleYcPayInTransfers(
   const now = new Date().toISOString()
   let query = admin
     .from("yc_transfers")
-    .select("id")
+    .select("id, transaction_id, mode, leg1_sequence_id, status")
     .in("status", ["awaiting_pay_in", "pending_authorize"])
     .lt("expires_at", now)
     .limit(opts?.limit ?? 50)
@@ -71,5 +72,21 @@ export async function expireStaleYcPayInTransfers(
     .in("id", ids)
 
   if (error) return 0
+
+  for (const row of rows) {
+    if (!row.transaction_id) continue
+    try {
+      await failLedgerForExpiredYcPayInTransfer(admin, {
+        ...row,
+        status: "expired",
+      } as Record<string, unknown>)
+    } catch (e) {
+      console.warn("[yc-pay-in] failed to sync ledger for expired transfer", {
+        transferId: row.id,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
   return ids.length
 }
