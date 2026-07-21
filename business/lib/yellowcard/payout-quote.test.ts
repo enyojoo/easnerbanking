@@ -23,6 +23,7 @@ vi.mock("@/lib/yellowcard/kyc-metadata", () => ({
 
 vi.mock("@/lib/yellowcard/send-submit", () => ({
   submitYcSend: vi.fn(),
+  hydrateYcSendSubmitResult: (sendRes: unknown) => Promise.resolve(sendRes),
 }))
 
 import { listYcRates, findYcBalancePayoutRate } from "@/lib/fx/yc-rates"

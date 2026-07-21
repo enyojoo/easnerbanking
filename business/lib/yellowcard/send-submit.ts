@@ -1,7 +1,7 @@
 import { yellowcardFetch } from "./http"
 import { resolveYcSendRefundAddress, type YcSendRefundMode } from "./refund-address"
 import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
-import { resolveYcPaymentReason } from "@easner/shared"
+import { readYcSendLegFeeLocal, resolveYcPaymentReason } from "@easner/shared"
 
 export type YcSendSubmitInput = {
   sequenceId: string
@@ -108,4 +108,24 @@ export async function submitYcSend(input: YcSendSubmitInput): Promise<YcSendSubm
     path: "/send",
     json: body,
   })
+}
+
+/**
+ * POST /send often omits serviceFeeAmountLocal; GET /send/{id} includes fee fields
+ * required for net-local destination validation.
+ */
+export async function hydrateYcSendSubmitResult(
+  sendRes: YcSendSubmitResult,
+): Promise<YcSendSubmitResult> {
+  const record = sendRes as Record<string, unknown>
+  if (readYcSendLegFeeLocal(record) > 0) return sendRes
+
+  const id = String(sendRes.id ?? "").trim()
+  if (!id) return sendRes
+
+  const full = await yellowcardFetch<YcSendSubmitResult>({
+    method: "GET",
+    path: `/send/${encodeURIComponent(id)}`,
+  })
+  return { ...sendRes, ...full, settlementInfo: full.settlementInfo ?? sendRes.settlementInfo }
 }

@@ -1,75 +1,44 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi, beforeEach } from "vitest"
 
-vi.mock("@/lib/deposit-omnibus/config", () => ({
-  depositOmnibusSolanaAddressUsd: () => "omnibus-address",
+vi.mock("./http", () => ({
+  yellowcardFetch: vi.fn(),
 }))
 
-vi.mock("./refund-address", () => ({
-  resolveYcSendRefundAddress: () => "refund-address",
-}))
+import { yellowcardFetch } from "./http"
+import { hydrateYcSendSubmitResult } from "./send-submit"
 
-import { buildYcSendSubmitBody } from "./send-submit"
-
-describe("buildYcSendSubmitBody", () => {
-  const base = {
-    sequenceId: "seq-1",
-    customerUID: "user-1",
-    channelId: "ch-1",
-    currency: "NGN",
-    country: "NG",
-    refundMode: "balance_payout" as const,
-    reason: "balance_payout_quote",
-  }
-
-  it("uses settlementInfo.cryptoAmount for direct settlement sends", () => {
-    const body = buildYcSendSubmitBody({
-      ...base,
-      settlementCryptoAmount: 6.5,
-      localAmount: 1000,
-    })
-    expect(body.directSettlement).toBe(true)
-    expect(body.localAmount).toBeUndefined()
-    expect(body.amount).toBeUndefined()
-    expect(body.settlementInfo).toMatchObject({
-      cryptoCurrency: "USDC",
-      cryptoNetwork: "SOL",
-      cryptoAmount: 6.5,
-    })
-    expect(body.reason).toBe("other")
+describe("hydrateYcSendSubmitResult", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
   })
 
-  it("uses user turnkey as senderAddress for balance_payout", () => {
-    const body = buildYcSendSubmitBody({
-      ...base,
-      userTurnkeyAddress: "user-turnkey-wallet",
-      settlementCryptoAmount: 6.5,
-    })
-    expect(body.settlementInfo).toMatchObject({
-      senderAddress: "user-turnkey-wallet",
-      refundAddress: "refund-address",
-    })
+  it("returns POST response when serviceFeeAmountLocal is present", async () => {
+    const post = {
+      id: "send-1",
+      convertedAmount: 2020.12,
+      serviceFeeAmountLocal: 20.12,
+    }
+    const result = await hydrateYcSendSubmitResult(post)
+    expect(result).toEqual(post)
+    expect(yellowcardFetch).not.toHaveBeenCalled()
   })
 
-  it("uses deposit omnibus as senderAddress for cross_border_send", () => {
-    const body = buildYcSendSubmitBody({
-      ...base,
-      refundMode: "cross_border_send",
-      userTurnkeyAddress: "user-turnkey-wallet",
-      settlementCryptoAmount: 6.5,
+  it("GETs /send/{id} when local fee fields are missing on POST", async () => {
+    vi.mocked(yellowcardFetch).mockResolvedValueOnce({
+      id: "send-1",
+      convertedAmount: 2011.88,
+      serviceFeeAmountLocal: 20.12,
+      settlementInfo: { cryptoAmount: 1.458672 },
     })
-    expect(body.settlementInfo).toMatchObject({
-      senderAddress: "omnibus-address",
+    const result = await hydrateYcSendSubmitResult({
+      id: "send-1",
+      convertedAmount: 2011.88,
+      settlementInfo: { cryptoAmount: 1.458672, walletAddress: "w" },
     })
-  })
-
-  it("allows localAmount when direct settlement is disabled", () => {
-    const body = buildYcSendSubmitBody({
-      ...base,
-      directSettlement: false,
-      localAmount: 1000,
+    expect(yellowcardFetch).toHaveBeenCalledWith({
+      method: "GET",
+      path: "/send/send-1",
     })
-    expect(body.directSettlement).toBe(false)
-    expect(body.localAmount).toBe(1000)
-    expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBeUndefined()
+    expect(result.serviceFeeAmountLocal).toBe(20.12)
   })
 })

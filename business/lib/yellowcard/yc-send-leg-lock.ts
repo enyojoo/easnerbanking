@@ -8,6 +8,7 @@ import {
   YC_SEND_LEG_DESTINATION_TOLERANCE,
 } from "@easner/shared"
 import type { YcSendSubmitResult } from "@/lib/yellowcard/send-submit"
+import { hydrateYcSendSubmitResult } from "@/lib/yellowcard/send-submit"
 
 export type YcSendLegLockResult = {
   sendRes: YcSendSubmitResult
@@ -47,11 +48,12 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       sequenceId = `${prefix}_${randomUUID()}`
     }
 
-    const sendRes = await input.buildSubmit({
+    const sendResRaw = await input.buildSubmit({
       settlementCryptoUsd,
       sequenceId,
       attempt,
     })
+    const sendRes = await hydrateYcSendSubmitResult(sendResRaw)
     lastSendRes = sendRes
     lastLockedLocal = readYcSendLockedLocalAmount(sendRes as Record<string, unknown>) ?? 0
     const sendLegFeeLocal = readYcSendLegFeeLocal(sendRes as Record<string, unknown>)

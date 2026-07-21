@@ -1,4 +1,13 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi, beforeEach } from "vitest"
+
+vi.mock("./send-submit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./send-submit")>()
+  return {
+    ...actual,
+    hydrateYcSendSubmitResult: (sendRes: unknown) => Promise.resolve(sendRes),
+  }
+})
+
 import { submitYcSendWithDestinationAmountLock } from "./yc-send-leg-lock"
 import type { YcSendSubmitResult } from "./send-submit"
 
