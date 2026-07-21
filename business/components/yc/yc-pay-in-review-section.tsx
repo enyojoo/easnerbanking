@@ -261,11 +261,6 @@ export function YcPayInReviewSection(props: Props) {
 
   return (
     <div className="space-y-4">
-      {isLoading && !isLocked ? (
-        <div className="flex justify-center py-6">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : null}
       <YcLocalPayInReview
         mode="cross_border_send"
         phase={reviewPhase}
