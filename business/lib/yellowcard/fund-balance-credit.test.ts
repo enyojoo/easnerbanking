@@ -57,7 +57,6 @@ describe("creditFundBalanceFromYcReceive", () => {
       metadata: {
         usd_credit: 2000,
         processing_fee: 20,
-        margin_amount: 0.5,
         omnibus_in_expected: 2020,
       },
     }
@@ -90,7 +89,6 @@ describe("creditFundBalanceFromYcReceive", () => {
       metadata: {
         usd_credit: 2000,
         processing_fee: 20,
-        margin_amount: 0,
         omnibus_in_expected: 2020,
       },
     }

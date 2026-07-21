@@ -619,7 +619,6 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
         display_processing_fee: displayFeesLocked.displayProcessingFee,
         display_processing_fee_local: displayFeesLocked.displayProcessingFeeLocal,
         yc_leg_fees_usd: lockedPricing.ycLegFeesUsd,
-        margin_amount: lockedPricing.marginAmount,
         omnibus_in_expected: omnibusInExpected,
         margin_capture_mode: "fee_wallet_omnibus",
         ...(ctx.sourcePhone ? { source_phone: ctx.sourcePhone } : {}),
@@ -655,7 +654,6 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
         display_processing_fee: displayFeesLocked.displayProcessingFee,
         display_processing_fee_local: displayFeesLocked.displayProcessingFeeLocal,
         usd_credit: lockedPricing.usdCredit,
-        margin_amount: lockedPricing.marginAmount,
         omnibus_in_expected: omnibusInExpected,
         margin_capture_mode: "fee_wallet_omnibus",
         ...(ctx.sourcePhone

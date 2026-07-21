@@ -258,7 +258,7 @@ describe("confirmFundBalanceOrder", () => {
     expect(txInsert?.metadata?.omnibus_in_expected).toBe(1.8250192)
   })
 
-  it("persists omnibus_in_expected and margin_amount when YC receive is sufficient", async () => {
+  it("persists omnibus_in_expected when YC receive is sufficient", async () => {
     vi.mocked(submitYcReceive).mockImplementation(async () => {
       const pricing = computeYcFundBalancePricing({
         usdCredit: 2000,
@@ -285,7 +285,7 @@ describe("confirmFundBalanceOrder", () => {
     expect(result.quotePhase).toBe("locked")
     const txInsert = admin.chain.insert.mock.calls.find((call) => call[0]?.provider === "yellowcard")?.[0]
     expect(txInsert?.metadata?.omnibus_in_expected).toBe(2050)
-    expect(txInsert?.metadata?.margin_amount).toBeGreaterThanOrEqual(0)
+    expect(txInsert?.metadata?.margin_amount).toBeUndefined()
     expect(txInsert?.metadata?.margin_capture_mode).toBe("fee_wallet_omnibus")
 
     const transferInsert = admin.chain.insert.mock.calls.find(

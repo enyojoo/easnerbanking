@@ -127,9 +127,7 @@ export async function creditFundBalanceFromYcReceive(
     delta: creditAmt,
   })
 
-  const marginAmount = Number(transferMeta.margin_amount ?? 0)
   const quotedSweep = computeEasnerRevenueFeeWalletSweepAmount({
-    marginAmount,
     processingFee,
     ledgerSurplus: cryptoAmount - creditAmt,
   })
@@ -158,7 +156,6 @@ export async function creditFundBalanceFromYcReceive(
       fee_wallet_sweep: feeSweep >= EASNER_REVENUE_FEE_WALLET_SWEEP_MIN ? feeSweep : null,
       metadata: {
         ...transferMeta,
-        margin_amount: marginAmount,
         omnibus_in_expected: expectedOmnibus,
         processing_fee: processingFee,
         margin_capture_mode: "fee_wallet_omnibus",
