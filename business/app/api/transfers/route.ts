@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
@@ -20,6 +20,7 @@ import {
   isYcBalancePayoutQuote,
 } from "@/lib/yellowcard/balance-payout-execute"
 
+/** Execute balance payout (Noah or Yellowcard) after review lock + PIN. */
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
   if (mis) return mis
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
     amount > 0
 
   if (!isValidPayout) {
-    console.warn("[noah_payout]", {
+    console.warn("[balance_payout]", {
       stage: "transfers_validation",
       userId: user.id,
       scope: noahCtx.scope,

@@ -399,7 +399,7 @@ export async function executeTurnkeyOfframpPayout(
   const noteFromOverrides = overrides?.note?.trim() || sendNote?.trim() || ""
 
   const pendingMetadata: Record<string, unknown> = {
-    source: "api_noah_transfers",
+    source: "api_transfers",
     transaction_started_at: now,
     payout_type: "global_fiat",
     execution_model: "turnkey_workflow",

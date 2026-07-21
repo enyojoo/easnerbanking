@@ -2,13 +2,13 @@ import { NextResponse } from "next/server"
 import { noahFetch } from "@/lib/noah/http"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../../_helpers"
+import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 
 type Props = { params: Promise<{ transferId: string }> }
 
-/** Treat transfer id as Noah transaction id (UUID). */
+/** Poll Noah payout status by provider transaction id (Noah balance payouts only). */
 export async function GET(request: Request, routeCtx: Props) {
   const mis = requireNoahEnv()
   if (mis) return mis
@@ -53,7 +53,7 @@ export async function GET(request: Request, routeCtx: Props) {
       currency,
       direction: "out",
       payload: tx,
-      metadata: { source: "api_noah_transfers_status" },
+      metadata: { source: "api_transfers_status" },
       occurredAt: String(tx.Created ?? tx.Updated ?? new Date().toISOString()),
       settledAt: status === "settled" ? String(tx.Updated ?? tx.Created ?? new Date().toISOString()) : null,
       txHash: String(tx.TxHash ?? tx.TransactionHash ?? "").trim() || null,

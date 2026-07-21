@@ -36,7 +36,8 @@ export function getCorsAllowedOrigins(): Set<string> {
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Easner-Noah-Scope",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, X-Easner-Noah-Scope, Idempotency-Key",
   "Access-Control-Max-Age": "86400",
 } as const
 

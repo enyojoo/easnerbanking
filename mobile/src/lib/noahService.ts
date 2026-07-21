@@ -1269,7 +1269,7 @@ export const noahService = {
     const scopeHeaders = await getNoahScopeHeaders()
     const etid = transferData.reservedDebitEtid?.trim().toUpperCase() ?? ''
 
-    const response = await fetch(`${apiUrl()}/api/noah/transfers`, {
+    const response = await fetch(`${apiUrl()}/api/transfers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1334,7 +1334,7 @@ export const noahService = {
   async getTransferStatus(transferId: string): Promise<NoahTransfer> {
     const session = await requireAuthSession()
 
-    const response = await fetch(`${apiUrl()}/api/noah/transfers/${transferId}`, {
+    const response = await fetch(`${apiUrl()}/api/transfers/${transferId}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,

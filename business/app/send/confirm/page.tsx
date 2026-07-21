@@ -726,7 +726,7 @@ export default function SendConfirmPage() {
         reviewSnapshot,
       }
 
-      const transferRes = await fetchWithSession("/api/noah/transfers", {
+      const transferRes = await fetchWithSession("/api/transfers", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

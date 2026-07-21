@@ -49,7 +49,7 @@ export function useCreateTransfer() {
   return useMutation({
     meta: { intent: 'create transfer', destructive: true },
     mutationFn: (input: PersonalTransferInput) =>
-      apiFetch<PersonalTransferResult>('/api/noah/transfers', {
+      apiFetch<PersonalTransferResult>('/api/transfers', {
         method: 'POST',
         body: {
           amount: input.amount,
