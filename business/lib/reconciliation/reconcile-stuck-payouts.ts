@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   computeEasnerRevenueFeeWalletSweepAmount,
-  computeYcBalancePayoutCappedFeeWalletSweep,
   EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
 } from "@easner/shared"
 import { applyNoahWebhookSideEffects } from "@/lib/noah/webhook-side-effects"
@@ -14,14 +13,14 @@ import {
   isEasnerRevenueAlreadySwept,
   readPriorSweepFromMetadata,
   sweepEasnerRevenueFromDepositOmnibus,
-  sweepEasnerRevenueFromUserTurnkeyWallet,
 } from "@/lib/processing-fee/fee-wallet-sweep"
 import {
   captureGlobalPayoutProcessingFeeIfPending,
   captureWalletSendFeeLegIfPending,
   captureYcBalancePayoutProcessingFeeIfPending,
-  resolveNoahAccountContextFromLedgerScope,
-} from "@/lib/processing-fee/capture-pending-processing-fee"
+  isNoahGlobalPayoutLedgerMeta,
+  isYcBalancePayoutLedgerMeta,
+} from "@/lib/processing-fee/payout-fee-ledger-routing"
 import {
   buildNoahTransactionWebhookEnvelope,
   fetchNoahTransactionById,
@@ -186,55 +185,35 @@ async function retryYcTransferFeeSweep(
       ledgerSurplus: cryptoAmount > 0 && creditAmt > 0 ? Math.max(0, cryptoAmount - creditAmt) : undefined,
     })
   } else if (mode === "balance_payout") {
-    const totalDebited = Number(transfer.quoted_pay_in ?? meta.total_debited ?? 0)
-    const cryptoAmount = Number(
-      (transfer.settlement_info as { send?: { cryptoAmount?: number } } | null)?.send?.cryptoAmount ??
-        meta.crypto_authorized_amount ??
-        0,
-    )
-    sweepAmt = computeYcBalancePayoutCappedFeeWalletSweep({
-      totalDebited,
-      cryptoAuthorizedAmount: cryptoAmount,
-      marginAmount,
-      processingFee,
-    })
-    if (!Number.isFinite(sweepAmt) || sweepAmt < EASNER_REVENUE_FEE_WALLET_SWEEP_MIN) return false
-
+    const transactionId = String(transfer.transaction_id ?? "").trim()
     const userId = String(transfer.user_id ?? "")
     const businessId = transfer.business_id != null ? String(transfer.business_id) : null
-    if (!userId) return false
+    if (!transactionId || !userId) return false
 
-    const ctx = await resolveNoahAccountContextFromLedgerScope(admin, { userId, businessId })
-    if (!ctx) return false
-
-    const sweep = await sweepEasnerRevenueFromUserTurnkeyWallet(admin, {
-      ctx,
-      ledgerCurrency: "USD",
-      amount: sweepAmt,
-      globalPayout: meta.easner_payout_id
-        ? {
-            easnerPayoutId: String(meta.easner_payout_id),
-            formSessionId: String(meta.form_session_id ?? transfer.leg2_sequence_id ?? ""),
-          }
-        : undefined,
-      logTag: "yc-balance_payout-reconcile",
+    const captured = await captureYcBalancePayoutProcessingFeeIfPending(admin, {
+      transactionId,
+      userId,
+      businessId,
     })
+    if (!captured.captured) return false
 
-    if (!sweep.feeWalletSweepTxHash && !sweep.captured) return false
+    const { data: txRow } = await admin
+      .from("transactions")
+      .select("metadata")
+      .eq("id", transactionId)
+      .maybeSingle()
+    const txMeta = asMeta(txRow?.metadata)
+    const sweepAmt = Number(txMeta.fee_wallet_sweep ?? txMeta.easner_revenue_sweep_amount ?? 0)
+    const feeWalletSweepTxHash = String(txMeta.fee_wallet_sweep_tx_hash ?? "").trim() || null
 
     await admin
       .from("yc_transfers")
       .update({
-        fee_wallet_sweep: sweepAmt,
+        fee_wallet_sweep: sweepAmt > 0 ? sweepAmt : null,
         metadata: {
           ...meta,
           margin_capture_mode: "fee_wallet_deferred",
-          ...buildEasnerRevenueSweepMetadataPatch({
-            sweepAmt,
-            feeWalletSweepTxHash: sweep.feeWalletSweepTxHash,
-            captured: sweep.captured,
-            turnkeySendId: sweep.turnkeySendId,
-          }),
+          ...(feeWalletSweepTxHash ? { fee_wallet_sweep_tx_hash: feeWalletSweepTxHash } : {}),
         },
         updated_at: new Date().toISOString(),
       })
@@ -496,7 +475,13 @@ export async function reconcilePendingFeeCaptures(
         userId,
         businessId,
       })
-    } else if (meta.payout_type === "global_fiat" && String(meta.execution_model ?? "") === "turnkey_workflow") {
+    } else if (isYcBalancePayoutLedgerMeta(meta)) {
+      result = await captureYcBalancePayoutProcessingFeeIfPending(admin, {
+        transactionId: String(row.id),
+        userId,
+        businessId,
+      })
+    } else if (isNoahGlobalPayoutLedgerMeta(meta)) {
       result = await captureGlobalPayoutProcessingFeeIfPending(admin, {
         transactionId: String(row.id),
         userId,

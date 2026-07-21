@@ -17,7 +17,16 @@ import {
   sweepEasnerRevenueFromUserTurnkeyWallet,
 } from "@/lib/processing-fee/fee-wallet-sweep"
 
+import {
+  isNoahGlobalPayoutLedgerMeta,
+  isYcBalancePayoutLedgerMeta,
+} from "@/lib/processing-fee/payout-fee-ledger-routing"
+
 const FEE_DUST = 0.000_001
+
+function asLedgerMeta(raw: unknown): Record<string, unknown> {
+  return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
+}
 
 export async function resolveNoahAccountContextFromLedgerScope(
   admin: SupabaseClient,
@@ -94,11 +103,8 @@ export async function captureGlobalPayoutProcessingFeeIfPending(
     return { captured: false }
   }
 
-  const meta = (row.metadata || {}) as Record<string, unknown>
-  if (String(meta.payout_provider ?? "").toLowerCase() === "yellowcard") {
-    return { captured: false }
-  }
-  if (String(meta.yc_mode ?? "") === "balance_payout") {
+  const meta = asLedgerMeta(row.metadata)
+  if (!isNoahGlobalPayoutLedgerMeta(meta)) {
     return { captured: false }
   }
   if (isEasnerRevenueAlreadySwept(meta)) {
@@ -233,8 +239,8 @@ export async function captureYcBalancePayoutProcessingFeeIfPending(
     return { captured: false }
   }
 
-  const meta = (row.metadata || {}) as Record<string, unknown>
-  if (String(meta.yc_mode ?? "") !== "balance_payout") return { captured: false }
+  const meta = asLedgerMeta(row.metadata)
+  if (!isYcBalancePayoutLedgerMeta(meta)) return { captured: false }
   if (!String(meta.turnkey_send_id ?? "").trim()) return { captured: false }
   if (isEasnerRevenueAlreadySwept(meta)) return { captured: false }
   if (String(meta.processing_fee_turnkey_send_id ?? "").trim()) return { captured: false }
