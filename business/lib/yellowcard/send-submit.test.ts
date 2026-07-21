@@ -35,10 +35,30 @@ describe("hydrateYcSendSubmitResult", () => {
       convertedAmount: 2011.88,
       settlementInfo: { cryptoAmount: 1.458672, walletAddress: "w" },
     })
-    expect(yellowcardFetch).toHaveBeenCalledWith({
-      method: "GET",
-      path: "/send/send-1",
+    expect(yellowcardFetch).toHaveBeenCalledTimes(1)
+    expect(result.serviceFeeAmountLocal).toBe(20.12)
+  })
+
+  it("polls GET when fee fields are not ready on first fetch", async () => {
+    vi.mocked(yellowcardFetch)
+      .mockResolvedValueOnce({
+        id: "send-1",
+        convertedAmount: 2011.88,
+        settlementInfo: { cryptoAmount: 1.458672 },
+      })
+      .mockResolvedValueOnce({
+        id: "send-1",
+        convertedAmount: 2011.88,
+        serviceFeeAmountLocal: 20.12,
+        settlementInfo: { cryptoAmount: 1.458672 },
+      })
+
+    const result = await hydrateYcSendSubmitResult({
+      id: "send-1",
+      convertedAmount: 2011.88,
+      settlementInfo: { cryptoAmount: 1.458672, walletAddress: "w" },
     })
+    expect(yellowcardFetch).toHaveBeenCalledTimes(2)
     expect(result.serviceFeeAmountLocal).toBe(20.12)
   })
 })

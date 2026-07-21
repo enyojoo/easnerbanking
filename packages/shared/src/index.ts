@@ -703,6 +703,7 @@ export {
   ycLegFeesLocal,
   readYcSendLockedLocalAmount,
   readYcSendLegFeeLocal,
+  resolveYcSendLegFeeLocalForLock,
   resolveYcSendLegFeesFromResponse,
   checkYcSendLegDestinationAmountSufficient,
   assertYcSendLegDestinationAmountSufficient,

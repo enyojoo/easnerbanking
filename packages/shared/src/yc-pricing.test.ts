@@ -32,6 +32,8 @@ import {
   bumpYcSendLegSettlementCryptoForLocalShortfall,
   checkYcSendLegDestinationAmountSufficient,
   resolveYcSendLegFeesFromResponse,
+  readYcSendLockedLocalAmount,
+  resolveYcSendLegFeeLocalForLock,
 } from "./yc-pricing"
 
 describe("computeYcFundBalancePricing", () => {
@@ -581,6 +583,25 @@ describe("buildYcFundBalanceDisplayFees", () => {
 })
 
 describe("yc send leg destination amount", () => {
+  it("prefers convertedAmount over localAmount for gross lock", () => {
+    expect(
+      readYcSendLockedLocalAmount({
+        localAmount: 2000,
+        convertedAmount: 2011.88,
+      }),
+    ).toBe(2011.88)
+  })
+
+  it("estimates send fee local when YC omits serviceFeeAmountLocal", () => {
+    expect(
+      resolveYcSendLegFeeLocalForLock({
+        sendRes: { convertedAmount: 2011.88 },
+        lockedLocalAmount: 2011.88,
+        quotedReceive: 2000,
+      }),
+    ).toBe(20.12)
+  })
+
   it("bumps settlement crypto for local shortfall", () => {
     const bumped = bumpYcSendLegSettlementCryptoForLocalShortfall({
       settlementCryptoUsd: 1.458672,

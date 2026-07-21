@@ -2,8 +2,8 @@ import { randomUUID } from "crypto"
 import {
   bumpYcSendLegSettlementCryptoForLocalShortfall,
   checkYcSendLegDestinationAmountSufficient,
-  readYcSendLegFeeLocal,
   readYcSendLockedLocalAmount,
+  resolveYcSendLegFeeLocalForLock,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,
 } from "@easner/shared"
@@ -56,7 +56,11 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     const sendRes = await hydrateYcSendSubmitResult(sendResRaw)
     lastSendRes = sendRes
     lastLockedLocal = readYcSendLockedLocalAmount(sendRes as Record<string, unknown>) ?? 0
-    const sendLegFeeLocal = readYcSendLegFeeLocal(sendRes as Record<string, unknown>)
+    const sendLegFeeLocal = resolveYcSendLegFeeLocalForLock({
+      sendRes: sendRes as Record<string, unknown>,
+      lockedLocalAmount: lastLockedLocal,
+      quotedReceive: input.receiveAmount,
+    })
 
     const check = checkYcSendLegDestinationAmountSufficient({
       quotedReceive: input.receiveAmount,

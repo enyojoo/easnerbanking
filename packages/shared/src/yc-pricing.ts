@@ -1086,16 +1086,40 @@ export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 3
 /** Allow 1 unit of destination fiat below quoted receive (rounding). */
 export const YC_SEND_LEG_DESTINATION_TOLERANCE = 1
 
-/** Read locked destination fiat from YC POST /send response. */
+/** Read locked destination fiat from YC POST /send response (gross before fee deduction). */
 export function readYcSendLockedLocalAmount(
   sendRes: Record<string, unknown> | null | undefined,
 ): number | null {
   if (!sendRes) return null
-  for (const key of ["localAmount", "local_amount", "convertedAmount", "converted_amount"]) {
+  // Prefer convertedAmount — localAmount is often the quoted receive, not YC gross lock.
+  for (const key of ["convertedAmount", "converted_amount", "localAmount", "local_amount"]) {
     const n = Number(sendRes[key] ?? 0)
     if (Number.isFinite(n) && n > 0) return roundLocal(n)
   }
   return null
+}
+
+/** Fee local for send lock when YC omits or delays serviceFeeAmountLocal on POST/GET. */
+export function resolveYcSendLegFeeLocalForLock(input: {
+  sendRes: Record<string, unknown> | null | undefined
+  lockedLocalAmount: number
+  quotedReceive: number
+  tolerance?: number
+}): number {
+  const reported = readYcSendLegFeeLocal(input.sendRes)
+  if (reported > 0) return reported
+
+  const locked = roundLocal(input.lockedLocalAmount)
+  const quoted = roundLocal(input.quotedReceive)
+  const tolerance = input.tolerance ?? YC_SEND_LEG_DESTINATION_TOLERANCE
+  if (!(locked > 0) || !(quoted > 0)) return 0
+
+  // Gross above quoted receive — YC will deduct ~1% service fee before crediting recipient.
+  if (locked > quoted + tolerance) {
+    const pctEstimate = roundLocal(locked * 0.01)
+    return roundLocal(Math.max(pctEstimate, locked - quoted))
+  }
+  return 0
 }
 
 /** YC send leg fees deducted from gross destination fiat before recipient credit. */

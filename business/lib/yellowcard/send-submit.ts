@@ -111,8 +111,7 @@ export async function submitYcSend(input: YcSendSubmitInput): Promise<YcSendSubm
 }
 
 /**
- * POST /send often omits serviceFeeAmountLocal; GET /send/{id} includes fee fields
- * required for net-local destination validation.
+ * POST /send often omits serviceFeeAmountLocal; GET /send/{id} may lag briefly.
  */
 export async function hydrateYcSendSubmitResult(
   sendRes: YcSendSubmitResult,
@@ -123,9 +122,27 @@ export async function hydrateYcSendSubmitResult(
   const id = String(sendRes.id ?? "").trim()
   if (!id) return sendRes
 
-  const full = await yellowcardFetch<YcSendSubmitResult>({
-    method: "GET",
-    path: `/send/${encodeURIComponent(id)}`,
-  })
-  return { ...sendRes, ...full, settlementInfo: full.settlementInfo ?? sendRes.settlementInfo }
+  const maxAttempts = 3
+  const delayMs = 400
+  let merged: YcSendSubmitResult = sendRes
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+    const full = await yellowcardFetch<YcSendSubmitResult>({
+      method: "GET",
+      path: `/send/${encodeURIComponent(id)}`,
+    })
+    merged = {
+      ...merged,
+      ...full,
+      settlementInfo: full.settlementInfo ?? merged.settlementInfo,
+    }
+    if (readYcSendLegFeeLocal(merged as Record<string, unknown>) > 0) {
+      return merged
+    }
+  }
+
+  return merged
 }
