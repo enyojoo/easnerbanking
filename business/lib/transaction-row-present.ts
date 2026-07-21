@@ -19,8 +19,11 @@ export function formatTransactionRowDateTime(iso: string): string {
 /** Second line under amount on the right. */
 export function transactionStatusRowPresentation(status: string): { label: string; className: string } {
   const s = status.toLowerCase()
-  if (s === "confirming_payment" || s === "awaiting_payment") {
-    return { label: "Processing", className: "text-muted-foreground" }
+  if (s === "confirming_payment" || s === "awaiting_payment" || s === "processing_payment") {
+    return {
+      label: s === "processing_payment" ? "Processing payment" : "Processing",
+      className: "text-muted-foreground",
+    }
   }
   if (s.includes("processed") || s.includes("completed")) {
     return { label: "Completed", className: "text-emerald-600 dark:text-emerald-400" }

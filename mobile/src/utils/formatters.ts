@@ -116,6 +116,9 @@ export function getTransactionStatusDisplay(status: string): TransactionStatusDi
     return { label: 'Completed', color: easnerBrand.emerald, tone: 'completed' }
   }
   if (statusLower.includes('pending') || statusLower.includes('awaiting') || statusLower.includes('scheduled') || statusLower.includes('received') || statusLower.includes('submitted')) {
+    if (statusLower === 'processing_payment') {
+      return { label: 'Processing payment', color: easnerBrand.slate, tone: 'processing' }
+    }
     if (statusLower === 'confirming_payment' || statusLower === 'awaiting_payment') {
       return { label: 'Processing', color: easnerBrand.slate, tone: 'processing' }
     }

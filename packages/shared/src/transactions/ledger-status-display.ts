@@ -22,6 +22,7 @@ export type LedgerTransactionStatusDisplay = {
 export function mapLedgerStatusToUserStatus(ledgerStatus: string): UserTransactionStatus | string {
   const st = String(ledgerStatus ?? "").trim().toLowerCase()
   if (st === "settled" || st === "completed" || st === "deposited") return "completed"
+  if (st === "processing_payment") return "processing"
   if (st === "pending" || st === "processing") return st
   if (st === "failed" || st === "cancelled" || st === "canceled") return "failed"
   if (st === "unknown") return "pending"
@@ -45,6 +46,9 @@ export function ledgerTransactionStatusDisplay(ledgerStatus: string): LedgerTran
   }
   if (s === "pending" || s === "unknown") {
     return { label: "Pending", tone: "pending" }
+  }
+  if (s === "processing_payment") {
+    return { label: "Processing payment", tone: "processing" }
   }
   if (
     s === "processing" ||

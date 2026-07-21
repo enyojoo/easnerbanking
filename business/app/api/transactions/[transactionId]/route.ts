@@ -67,6 +67,7 @@ function mapLedgerStatusForMobile(meta: Record<string, unknown> | null | undefin
   const st = String(ycFeed ?? ledgerStatus ?? "").trim().toLowerCase()
   if (st === "settled") return "completed"
   if (st === "confirming_payment" || st === "awaiting_payment") return "processing"
+  if (st === "processing_payment") return "processing_payment"
   if (st === "pending" || st === "processing") return st
   if (st === "failed" || st === "cancelled") return "failed"
   if (st === "unknown") return "pending"

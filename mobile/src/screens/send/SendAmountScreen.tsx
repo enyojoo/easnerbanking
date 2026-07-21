@@ -115,7 +115,6 @@ import {
 import {
   clearCrossBorderQuote,
   ensureCrossBorderQuoteStashed,
-  ensureCrossBorderQuoteStashed,
 } from '../../lib/sendFlowCrossBorderQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {

@@ -19,7 +19,7 @@ describe("yc pay-in display", () => {
     expect(
       isYcPayInAwaitingAttestation({ yc_mode: "cross_border_send" }, "pending"),
     ).toBe(true)
-    expect(resolveYcPayInFeedStatus({ yc_mode: "fund_balance" }, "pending")).toBe("processing")
+    expect(resolveYcPayInFeedStatus({ yc_mode: "fund_balance" }, "pending")).toBe("processing_payment")
     expect(isYcPayInInFlight({ yc_mode: "fund_balance" }, "pending")).toBe(true)
   })
 
@@ -29,7 +29,7 @@ describe("yc pay-in display", () => {
       payment_attested_at: "2026-01-02T00:00:00.000Z",
     }
     expect(isYcPayInAwaitingAttestation(meta, "pending")).toBe(false)
-    expect(resolveYcPayInFeedStatus(meta, "processing")).toBe("processing")
+    expect(resolveYcPayInFeedStatus(meta, "processing")).toBe("processing_payment")
   })
 
   it("prefers attestation over lock for user when", () => {
@@ -114,16 +114,16 @@ describe("yc pay-in display", () => {
     expect(steps[0]?.state).toBe("current")
   })
 
-  it("shows Processing label for in-flight YC pay-ins on the list", () => {
+  it("shows Processing payment label for in-flight YC pay-ins on the list", () => {
     expect(
       ledgerTransactionStatusDisplayForRow("pending", { yc_mode: "fund_balance" }).label,
-    ).toBe("Processing")
+    ).toBe("Processing payment")
     expect(
       ledgerTransactionStatusDisplayForRow("processing", {
         yc_mode: "fund_balance",
         payment_attested_at: "2026-01-01T00:00:00.000Z",
       }).label,
-    ).toBe("Processing")
+    ).toBe("Processing payment")
   })
 
   it("formats pay-in countdown from YC deposit expiry", () => {
