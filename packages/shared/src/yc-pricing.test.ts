@@ -30,6 +30,7 @@ import {
   YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
   bumpYcSendLegSettlementCryptoForLocalShortfall,
+  trimYcSendLegSettlementCryptoForLocalExcess,
   checkYcSendLegDestinationAmountSufficient,
   resolveYcSendLegFeesFromResponse,
   readYcSendLockedLocalAmount,
@@ -602,6 +603,16 @@ describe("yc send leg destination amount", () => {
     ).toBe(20.12)
   })
 
+  it("does not treat gross-over-quote delta as YC fee when fee is omitted", () => {
+    expect(
+      resolveYcSendLegFeeLocalForLock({
+        sendRes: { convertedAmount: 2027.13 },
+        lockedLocalAmount: 2027.13,
+        quotedReceive: 2000,
+      }),
+    ).toBe(20.27)
+  })
+
   it("bumps settlement crypto for local shortfall", () => {
     const bumped = bumpYcSendLegSettlementCryptoForLocalShortfall({
       settlementCryptoUsd: 1.458672,
@@ -642,6 +653,30 @@ describe("yc send leg destination amount", () => {
     })
     expect(check.ok).toBe(true)
     expect(check.netLocalAmount).toBe(2000)
+    expect(check.excess).toBe(0)
+  })
+
+  it("rejects when net local exceeds quoted receive (over-delivery)", () => {
+    const check = checkYcSendLegDestinationAmountSufficient({
+      quotedReceive: 2000,
+      lockedLocalAmount: 2027.13,
+      sendLegFeeLocal: 20.27,
+      tolerance: 1,
+    })
+    expect(check.ok).toBe(false)
+    expect(check.netLocalAmount).toBe(2006.86)
+    expect(check.excess).toBeGreaterThan(0)
+    expect(check.shortfall).toBe(0)
+  })
+
+  it("trims settlement crypto for local excess", () => {
+    const trimmed = trimYcSendLegSettlementCryptoForLocalExcess({
+      settlementCryptoUsd: 1.472227,
+      excessLocal: 6.86,
+      destinationRate: 1379,
+    })
+    expect(trimmed).toBeLessThan(1.472227)
+    expect(trimmed).toBeGreaterThan(0.7)
   })
 
   it("resolves send leg fees from serviceFeeAmountLocal when USD fields underreport", () => {

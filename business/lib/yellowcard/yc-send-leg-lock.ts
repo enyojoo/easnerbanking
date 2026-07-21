@@ -4,6 +4,7 @@ import {
   checkYcSendLegDestinationAmountSufficient,
   readYcSendLockedLocalAmount,
   resolveYcSendLegFeeLocalForLock,
+  trimYcSendLegSettlementCryptoForLocalExcess,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,
 } from "@easner/shared"
@@ -78,9 +79,22 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     }
 
     if (attempt >= maxAttempts - 1) {
+      const detail =
+        check.excess > 0
+          ? `exceeds quoted by ${check.excess}`
+          : `net ${check.netLocalAmount} (gross ${lastLockedLocal}, fee ${sendLegFeeLocal})`
       throw new Error(
-        `Yellowcard could not lock ${input.receiveAmount} ${input.receiveCurrency}: net ${check.netLocalAmount} (gross ${lastLockedLocal}, fee ${sendLegFeeLocal}) after ${maxAttempts} attempts.`,
+        `Yellowcard could not lock ${input.receiveAmount} ${input.receiveCurrency}: ${detail} after ${maxAttempts} attempts.`,
       )
+    }
+
+    if (check.excess > 0) {
+      settlementCryptoUsd = trimYcSendLegSettlementCryptoForLocalExcess({
+        settlementCryptoUsd,
+        excessLocal: check.excess,
+        destinationRate: input.destinationRate,
+      })
+      continue
     }
 
     settlementCryptoUsd = bumpYcSendLegSettlementCryptoForLocalShortfall({

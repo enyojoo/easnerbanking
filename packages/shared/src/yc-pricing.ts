@@ -1114,10 +1114,10 @@ export function resolveYcSendLegFeeLocalForLock(input: {
   const tolerance = input.tolerance ?? YC_SEND_LEG_DESTINATION_TOLERANCE
   if (!(locked > 0) || !(quoted > 0)) return 0
 
-  // Gross above quoted receive — YC will deduct ~1% service fee before crediting recipient.
+  // Gross above quoted receive — YC deducts ~1% service fee before crediting recipient.
+  // Do not use (locked - quoted) as fee: excess gross is over-settlement crypto, not YC fee.
   if (locked > quoted + tolerance) {
-    const pctEstimate = roundLocal(locked * 0.01)
-    return roundLocal(Math.max(pctEstimate, locked - quoted))
+    return roundLocal(locked * 0.01)
   }
   return 0
 }
@@ -1189,17 +1189,23 @@ export function checkYcSendLegDestinationAmountSufficient(input: {
   /** Deducted from gross locked local before recipient credit (serviceFeeAmountLocal). */
   sendLegFeeLocal?: number
   tolerance?: number
-}): { ok: boolean; shortfall: number; netLocalAmount: number } {
+}): { ok: boolean; shortfall: number; excess: number; netLocalAmount: number } {
   const tolerance = input.tolerance ?? YC_SEND_LEG_DESTINATION_TOLERANCE
   const quoted = roundLocal(input.quotedReceive)
   const locked = roundLocal(input.lockedLocalAmount)
   const feeLocal = roundLocal(input.sendLegFeeLocal ?? 0)
   const netLocal = roundLocal(Math.max(0, locked - feeLocal))
   if (!(quoted > 0) || !(locked > 0)) {
-    return { ok: false, shortfall: quoted > 0 ? quoted : 0, netLocalAmount: netLocal }
+    return {
+      ok: false,
+      shortfall: quoted > 0 ? quoted : 0,
+      excess: 0,
+      netLocalAmount: netLocal,
+    }
   }
   const shortfall = roundLocal(Math.max(0, quoted - netLocal - tolerance))
-  return { ok: shortfall <= 0, shortfall, netLocalAmount: netLocal }
+  const excess = roundLocal(Math.max(0, netLocal - quoted - tolerance))
+  return { ok: shortfall <= 0 && excess <= 0, shortfall, excess, netLocalAmount: netLocal }
 }
 
 export function assertYcSendLegDestinationAmountSufficient(input: {
@@ -1213,6 +1219,11 @@ export function assertYcSendLegDestinationAmountSufficient(input: {
   if (check.ok) return
   const currency = String(input.currency ?? "").trim().toUpperCase() || "fiat"
   const feeLocal = roundLocal(input.sendLegFeeLocal ?? 0)
+  if (check.excess > 0) {
+    throw new Error(
+      `yc_send_destination_excess: quoted ${input.quotedReceive} ${currency}, YC net ${check.netLocalAmount} ${currency} (gross ${input.lockedLocalAmount}, fee ${feeLocal}, over ${check.excess})`,
+    )
+  }
   throw new Error(
     `yc_send_destination_shortfall: quoted ${input.quotedReceive} ${currency}, YC net ${check.netLocalAmount} ${currency} (gross ${input.lockedLocalAmount}, fee ${feeLocal}, short ${check.shortfall})`,
   )
@@ -1231,4 +1242,20 @@ export function bumpYcSendLegSettlementCryptoForLocalShortfall(input: {
   const bumpFromShortfall = roundUsdc(shortfall / rate)
   const bumpFromPct = roundUsdc(crypto * 0.005)
   return roundUsdc(crypto + Math.max(bumpFromShortfall, bumpFromPct))
+}
+
+/** Decrease settlement crypto when YC net local exceeds quoted receive. */
+export function trimYcSendLegSettlementCryptoForLocalExcess(input: {
+  settlementCryptoUsd: number
+  excessLocal: number
+  destinationRate: number
+}): number {
+  const crypto = roundUsdc(input.settlementCryptoUsd)
+  const rate = input.destinationRate
+  const excess = roundLocal(input.excessLocal)
+  if (crypto <= 0 || rate <= 0 || excess <= 0) return crypto
+  const trimFromExcess = roundUsdc(excess / rate)
+  const trimFromPct = roundUsdc(crypto * 0.005)
+  const trimmed = roundUsdc(crypto - Math.max(trimFromExcess, trimFromPct))
+  return roundUsdc(Math.max(trimmed, crypto * 0.5))
 }

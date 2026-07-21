@@ -708,6 +708,7 @@ export {
   checkYcSendLegDestinationAmountSufficient,
   assertYcSendLegDestinationAmountSufficient,
   bumpYcSendLegSettlementCryptoForLocalShortfall,
+  trimYcSendLegSettlementCryptoForLocalExcess,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,
 } from "./yc-pricing"
