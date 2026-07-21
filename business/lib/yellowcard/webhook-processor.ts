@@ -24,6 +24,7 @@ import {
   handleYcBalancePayoutSendComplete,
   handleYcBalancePayoutSendFailed,
 } from "./payout-execute"
+import { findPendingGlobalPayoutByExternalId } from "@/lib/noah/global-payout-ledger"
 
 function asMeta(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
@@ -114,11 +115,25 @@ export async function handleYcBalancePayoutSendWebhook(
   const transactionId = tx?.id ?? transfer?.transaction_id
   if (!transactionId) return
 
-  const { data: row } = await admin
+  let { data: row } = await admin
     .from("transactions")
     .select("id,user_id,business_id,metadata,status,amount,provider,provider_transaction_id")
     .eq("id", transactionId)
     .maybeSingle()
+  if (!row?.id) {
+    const easnerPayoutIdFromTransfer = String(transfer?.metadata?.easner_payout_id ?? "").trim()
+    if (easnerPayoutIdFromTransfer) {
+      const pending = await findPendingGlobalPayoutByExternalId(admin, easnerPayoutIdFromTransfer)
+      if (pending?.id) {
+        const fallback = await admin
+          .from("transactions")
+          .select("id,user_id,business_id,metadata,status,amount,provider,provider_transaction_id")
+          .eq("id", pending.id)
+          .maybeSingle()
+        row = fallback.data ?? null
+      }
+    }
+  }
   if (!row?.id) return
 
   const prior = asMeta(row.metadata)

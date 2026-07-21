@@ -1079,3 +1079,65 @@ export function alignYcCrossBorderLockedLocalPayIn(input: {
     economicsLocalPayIn: input.pricingLocalPayIn,
   })
 }
+
+/** Max POST /send retries when YC locked destination fiat is below quoted receive. */
+export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 3
+
+/** Allow 1 unit of destination fiat below quoted receive (rounding). */
+export const YC_SEND_LEG_DESTINATION_TOLERANCE = 1
+
+/** Read locked destination fiat from YC POST /send response. */
+export function readYcSendLockedLocalAmount(
+  sendRes: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!sendRes) return null
+  for (const key of ["localAmount", "local_amount", "convertedAmount", "converted_amount"]) {
+    const n = Number(sendRes[key] ?? 0)
+    if (Number.isFinite(n) && n > 0) return roundLocal(n)
+  }
+  return null
+}
+
+export function checkYcSendLegDestinationAmountSufficient(input: {
+  quotedReceive: number
+  lockedLocalAmount: number
+  tolerance?: number
+}): { ok: boolean; shortfall: number } {
+  const tolerance = input.tolerance ?? YC_SEND_LEG_DESTINATION_TOLERANCE
+  const quoted = roundLocal(input.quotedReceive)
+  const locked = roundLocal(input.lockedLocalAmount)
+  if (!(quoted > 0) || !(locked > 0)) {
+    return { ok: false, shortfall: quoted > 0 ? quoted : 0 }
+  }
+  const shortfall = roundLocal(Math.max(0, quoted - locked - tolerance))
+  return { ok: shortfall <= 0, shortfall }
+}
+
+export function assertYcSendLegDestinationAmountSufficient(input: {
+  quotedReceive: number
+  lockedLocalAmount: number
+  tolerance?: number
+  currency?: string
+}): void {
+  const check = checkYcSendLegDestinationAmountSufficient(input)
+  if (check.ok) return
+  const currency = String(input.currency ?? "").trim().toUpperCase() || "fiat"
+  throw new Error(
+    `yc_send_destination_shortfall: quoted ${input.quotedReceive} ${currency}, YC locked ${input.lockedLocalAmount} ${currency} (short ${check.shortfall})`,
+  )
+}
+
+/** Increase settlement crypto so YC destination fiat can meet quoted receive. */
+export function bumpYcSendLegSettlementCryptoForLocalShortfall(input: {
+  settlementCryptoUsd: number
+  shortfallLocal: number
+  destinationRate: number
+}): number {
+  const crypto = roundUsdc(input.settlementCryptoUsd)
+  const rate = input.destinationRate
+  const shortfall = roundLocal(input.shortfallLocal)
+  if (crypto <= 0 || rate <= 0 || shortfall <= 0) return crypto
+  const bumpFromShortfall = roundUsdc(shortfall / rate)
+  const bumpFromPct = roundUsdc(crypto * 0.005)
+  return roundUsdc(crypto + Math.max(bumpFromShortfall, bumpFromPct))
+}

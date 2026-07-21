@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { computeYcBalancePayoutCappedFeeWalletSweep } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { reverseGlobalPayoutWalletDebitForEasnerPayoutId } from "@/lib/noah/global-payout-ledger"
+import { reverseGlobalPayoutWalletDebitForEasnerPayoutId, linkPendingGlobalPayoutProviderTransactionId, pendingGlobalPayoutProviderTransactionId } from "@/lib/noah/global-payout-ledger"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import {
@@ -202,6 +202,22 @@ export async function handleYcBalancePayoutSendComplete(input: {
       businessId: input.businessId,
     })
 
+  const easnerPayoutId = String(prior.easner_payout_id ?? "").trim()
+  const ycSendId = String(prior.yc_send_id ?? prior.form_session_id ?? "").trim()
+  const currentPtid = String(row.provider_transaction_id ?? "").trim()
+  let providerTransactionId = currentPtid || ycSendId || String(row.id)
+  if (
+    easnerPayoutId &&
+    ycSendId &&
+    currentPtid === pendingGlobalPayoutProviderTransactionId(easnerPayoutId)
+  ) {
+    await linkPendingGlobalPayoutProviderTransactionId(admin, {
+      pendingRowId: row.id,
+      providerTransactionId: ycSendId,
+    })
+    providerTransactionId = ycSendId
+  }
+
   const txPatch = mergeYcPayoutLifecycle(
     {
       ...prior,
@@ -221,13 +237,7 @@ export async function handleYcBalancePayoutSendComplete(input: {
     userId: String(row.user_id),
     businessId: row.business_id ? String(row.business_id) : null,
     provider: String(row.provider ?? "yellowcard"),
-    providerTransactionId: String(
-      row.provider_transaction_id ??
-        prior.yc_send_id ??
-        prior.form_session_id ??
-        prior.yc_sequence_id ??
-        row.id,
-    ),
+    providerTransactionId,
     status: "settled",
     amount: Number(row.amount ?? 0),
     currency: "USD",

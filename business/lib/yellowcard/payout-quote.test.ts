@@ -56,6 +56,7 @@ describe("lockYcBalancePayoutSend", () => {
   it("recomputes pricing from YC cryptoAmount and validates economics", async () => {
     vi.mocked(submitYcSend).mockResolvedValue({
       id: "send-1",
+      localAmount: 5000,
       settlementInfo: {
         cryptoAmount: 4.520121,
         walletAddress: "yc-wallet",

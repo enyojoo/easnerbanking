@@ -156,7 +156,8 @@ export function prefetchTransactionDetail(
   scope: Scope,
   txId: string,
 ): Promise<void> {
-  if (!txId.trim()) return Promise.resolve()
+  const id = txId.trim()
+  if (!id || id.startsWith("optimistic_")) return Promise.resolve()
   void seedTransactionDetailFromDisk(qc, scope, txId)
   return qc
     .prefetchQuery({

@@ -701,7 +701,15 @@ export {
   computeYcFundBalanceSendExactlyLocal,
   easnerFeeLocalFromUsdCredit,
   ycLegFeesLocal,
+  readYcSendLockedLocalAmount,
+  checkYcSendLegDestinationAmountSufficient,
+  assertYcSendLegDestinationAmountSufficient,
+  bumpYcSendLegSettlementCryptoForLocalShortfall,
+  YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
+  YC_SEND_LEG_DESTINATION_TOLERANCE,
 } from "./yc-pricing"
+export { filterSupersededPendingGlobalPayoutRows } from "./ledger/filter-superseded-pending-payouts"
+export type { SupersededPayoutLedgerRow } from "./ledger/filter-superseded-pending-payouts"
 export {
   resolveYcChannelDepositWindowMs,
   resolveYcPayInDepositExpiresAt,

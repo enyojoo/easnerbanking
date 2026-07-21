@@ -1198,10 +1198,20 @@ export async function linkPendingGlobalPayoutToNoahTransactionId(
   admin: SupabaseClient,
   input: { pendingRowId: string; noahTransactionId: string },
 ): Promise<void> {
+  await linkPendingGlobalPayoutProviderTransactionId(admin, {
+    pendingRowId: input.pendingRowId,
+    providerTransactionId: input.noahTransactionId,
+  })
+}
+
+export async function linkPendingGlobalPayoutProviderTransactionId(
+  admin: SupabaseClient,
+  input: { pendingRowId: string; providerTransactionId: string },
+): Promise<void> {
   await admin
     .from("transactions")
     .update({
-      provider_transaction_id: input.noahTransactionId,
+      provider_transaction_id: input.providerTransactionId,
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.pendingRowId)

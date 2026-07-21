@@ -193,6 +193,7 @@ export async function executeYcBalancePayout(
         walletAddress: string
         pricing: ExecuteYcBalancePayoutInput["pricing"] & { customerRate?: number }
         ycLegFeesUsd: number
+        lockedLocalAmount?: number
       }
 
   const useLockOnReview = isPayoutLockOnReviewEnabled("yellowcard")
@@ -226,8 +227,9 @@ export async function executeYcBalancePayout(
         channelCost: pricing.channelCost,
         customerRate: pricing.settlement?.customerRate,
       },
-      ycLegFeesUsd: pricing.ycLegFeesUsd ?? 0,
-    }
+        ycLegFeesUsd: pricing.ycLegFeesUsd ?? 0,
+        lockedLocalAmount: Number(payload.lockedLocalAmount ?? pricing.lockedLocalAmount ?? 0),
+      }
     if (!(locked.cryptoAmount > 0) || !locked.walletAddress) {
       return { ok: false, error: "Locked Yellowcard payout is incomplete." }
     }
@@ -298,6 +300,10 @@ export async function executeYcBalancePayout(
     recipientSnapshot,
     walletAddress,
     transactionStartedAt: now,
+    ycLockedLocalAmount:
+      "lockedLocalAmount" in locked && locked.lockedLocalAmount > 0
+        ? locked.lockedLocalAmount
+        : null,
   })
   if (idempotencyKey) metadata.idempotency_key = idempotencyKey
   if (sendNote?.trim()) {
@@ -418,9 +424,6 @@ export async function executeYcBalancePayout(
     .eq("id", transactionId)
     .maybeSingle()
   const priorMeta = (txAfter?.metadata || {}) as Record<string, unknown>
-  const providerTransactionId = String(
-    locked.sendId ?? priorMeta.yc_send_id ?? priorMeta.form_session_id ?? sequenceId,
-  )
 
   if (!chainSend.ok) {
     const failedMeta = buildYcRefundExpectedPatch(
@@ -436,7 +439,7 @@ export async function executeYcBalancePayout(
       userId,
       businessId,
       provider: "yellowcard",
-      providerTransactionId,
+      providerTransactionId: pendingPtid,
       status: "failed",
       amount: totalDebited,
       currency: "USD",
@@ -462,7 +465,7 @@ export async function executeYcBalancePayout(
     userId,
     businessId,
     provider: "yellowcard",
-    providerTransactionId,
+    providerTransactionId: pendingPtid,
     status: "processing",
     amount: totalDebited,
     currency: "USD",

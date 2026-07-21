@@ -7,6 +7,7 @@ export type CrossBorderLeg2DraftPayload = {
   receiveCountry: string
   customerRate: number
   receiveAmount: number
+  lockedReceiveAmount?: number
   payInRail: "bank_transfer" | "mobile_money"
   receiveChannelId: string
   sendChannelId: string

@@ -3,7 +3,7 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import type { TransactionWithSource } from "@/lib/transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
 import { LEDGER_LIST_SELECT } from "@/lib/ledger/ledger-select"
-import { mapLedgerRowToMobileListItem } from "@easner/shared"
+import { filterSupersededPendingGlobalPayoutRows, mapLedgerRowToMobileListItem } from "@easner/shared"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
 import {
   applyLedgerListCursorFilter,
@@ -69,7 +69,10 @@ export async function GET(request: Request) {
   }
 
   const rawRows = (rows ?? []) as Record<string, unknown>[]
-  const { visible, nextCursor } = buildNextLedgerListCursor(rawRows, limit)
+  const dedupedRows = filterSupersededPendingGlobalPayoutRows(
+    rawRows as Parameters<typeof filterSupersededPendingGlobalPayoutRows>[0],
+  ) as Record<string, unknown>[]
+  const { visible, nextCursor } = buildNextLedgerListCursor(dedupedRows, limit)
 
   let transactions: TransactionWithSource[] | Record<string, unknown>[]
   if (scope === "business") {

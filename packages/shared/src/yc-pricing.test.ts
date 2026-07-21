@@ -29,6 +29,8 @@ import {
   YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC,
   YC_FUND_BALANCE_OMNIBUS_SOLVE_BUFFER_USDC,
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
+  bumpYcSendLegSettlementCryptoForLocalShortfall,
+  checkYcSendLegDestinationAmountSufficient,
 } from "./yc-pricing"
 
 describe("computeYcFundBalancePricing", () => {
@@ -574,5 +576,26 @@ describe("buildYcFundBalanceDisplayFees", () => {
       easnerFeeLocalFromUsdCredit(100, 130) + Math.round(0.5 * 130 * 100) / 100,
     )
     expect(fees.displayProcessingFeeCurrency).toBe("KES")
+  })
+})
+
+describe("yc send leg destination amount", () => {
+  it("bumps settlement crypto for local shortfall", () => {
+    const bumped = bumpYcSendLegSettlementCryptoForLocalShortfall({
+      settlementCryptoUsd: 1.458672,
+      shortfallLocal: 8.24,
+      destinationRate: 1371.11,
+    })
+    expect(bumped).toBeGreaterThan(1.458672)
+  })
+
+  it("accepts locked local within tolerance", () => {
+    expect(
+      checkYcSendLegDestinationAmountSufficient({
+        quotedReceive: 2000,
+        lockedLocalAmount: 1999.5,
+        tolerance: 1,
+      }).ok,
+    ).toBe(true)
   })
 })

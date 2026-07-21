@@ -23,6 +23,7 @@ import { buildCrossBorderQuoteSummary } from "@/lib/yellowcard/build-yc-quote-re
 import { findYcCrossRate, findYcPayInLeg, findYcRate, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive, type YcReceiveSubmitResult } from "@/lib/yellowcard/receive-submit"
 import { submitYcSend } from "@/lib/yellowcard/send-submit"
+import { submitYcSendWithDestinationAmountLock } from "@/lib/yellowcard/yc-send-leg-lock"
 import { executeYcCryptoDeposit } from "@/lib/yellowcard/execute-yc-crypto-deposit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import { resolveYcSendChannelId } from "@/lib/payout-providers/yellowcard-provider"
@@ -529,21 +530,31 @@ export async function lockCrossBorderLeg2(
   const ycBuyTo = Number(ctx.toLeg?.yc_sell ?? 0)
   if (!ycBuyTo) throw new Error("YC destination rate unavailable for cross-border send leg")
 
-  const leg2Seq = `yc_cb_l2_${randomUUID()}`
   const provisionalSendCrypto = Math.round((input.receiveAmount / ycBuyTo) * 1_000_000) / 1_000_000
-  const sendRes = await submitYcSend({
-    sequenceId: leg2Seq,
-    customerUID: input.customerUID,
-    channelId: ctx.sendChannelId,
-    currency: ctx.receiveCurrency,
-    country: ctx.receiveCountry,
-    settlementCryptoAmount: provisionalSendCrypto,
-    refundMode: "cross_border_send",
-    sender: ctx.sender,
-    destination: ctx.recipientMapped.destination,
-    sendExtras: ctx.recipientMapped.root,
-    reason: "cross_border_leg2_quote",
+  const sendLock = await submitYcSendWithDestinationAmountLock({
+    receiveAmount: input.receiveAmount,
+    initialSettlementCryptoUsd: provisionalSendCrypto,
+    destinationRate: ycBuyTo,
+    receiveCurrency: ctx.receiveCurrency,
+    sequenceIdPrefix: "yc_cb_l2",
+    buildSubmit: async ({ settlementCryptoUsd, sequenceId }) =>
+      submitYcSend({
+        sequenceId,
+        customerUID: input.customerUID,
+        channelId: ctx.sendChannelId,
+        currency: ctx.receiveCurrency,
+        country: ctx.receiveCountry,
+        settlementCryptoAmount: settlementCryptoUsd,
+        refundMode: "cross_border_send",
+        sender: ctx.sender,
+        destination: ctx.recipientMapped.destination,
+        sendExtras: ctx.recipientMapped.root,
+        reason: "cross_border_leg2_quote",
+      }),
   })
+  const sendRes = sendLock.sendRes
+  const leg2Seq = sendLock.sequenceId
+  const lockedReceiveAmount = sendLock.lockedLocalAmount
 
   const easnerSellFrom = Number(ctx.fromLeg?.easner_sell ?? ctx.fromLeg?.yc_buy ?? 0)
   const sendLeg = {
@@ -569,6 +580,7 @@ export async function lockCrossBorderLeg2(
     receiveCountry: ctx.receiveCountry,
     customerRate: ctx.cross.rate,
     receiveAmount: input.receiveAmount,
+    lockedReceiveAmount,
     payInRail: input.payInRail,
     receiveChannelId: ctx.receiveChannelId,
     sendChannelId: ctx.sendChannelId,
@@ -1304,21 +1316,31 @@ export async function authorizeCrossBorderDraft(input: {
   const ycBuyTo = Number(toLeg?.yc_sell ?? 0)
   if (!ycBuyTo) throw new Error("YC destination rate unavailable for cross-border send leg")
 
-  const leg2Seq = `yc_cb_l2_${randomUUID()}`
   const provisionalSendCrypto = Math.round((receiveAmount / ycBuyTo) * 1_000_000) / 1_000_000
-  const sendRes = await submitYcSend({
-    sequenceId: leg2Seq,
-    customerUID: input.customerUID,
-    channelId: sendChannelId,
-    currency: receiveCurrency,
-    country: receiveCountry,
-    settlementCryptoAmount: provisionalSendCrypto,
-    refundMode: "cross_border_send",
-    sender,
-    destination: recipientMapped.destination,
-    sendExtras: recipientMapped.root,
-    reason: "cross_border_leg2_quote",
+  const sendLock = await submitYcSendWithDestinationAmountLock({
+    receiveAmount,
+    initialSettlementCryptoUsd: provisionalSendCrypto,
+    destinationRate: ycBuyTo,
+    receiveCurrency,
+    sequenceIdPrefix: "yc_cb_l2",
+    buildSubmit: async ({ settlementCryptoUsd, sequenceId }) =>
+      submitYcSend({
+        sequenceId,
+        customerUID: input.customerUID,
+        channelId: sendChannelId,
+        currency: receiveCurrency,
+        country: receiveCountry,
+        settlementCryptoAmount: settlementCryptoUsd,
+        refundMode: "cross_border_send",
+        sender,
+        destination: recipientMapped.destination,
+        sendExtras: recipientMapped.root,
+        reason: "cross_border_leg2_quote",
+      }),
   })
+  const sendRes = sendLock.sendRes
+  const leg2Seq = sendLock.sequenceId
+  const lockedReceiveAmount = sendLock.lockedLocalAmount
 
   const easnerSellFrom = Number(fromLeg?.easner_sell ?? fromLeg?.yc_buy ?? 0)
   const reportingSourceToUsdRate = Number(fromLeg?.easner_sell ?? 0)
@@ -1457,6 +1479,7 @@ export async function authorizeCrossBorderDraft(input: {
         source_network_id: networkId,
         draft: false,
         ...reportingSnapshot,
+        yc_locked_local_amount: lockedReceiveAmount,
       },
       updated_at: now,
     })

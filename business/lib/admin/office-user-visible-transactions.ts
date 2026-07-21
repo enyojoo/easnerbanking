@@ -17,6 +17,7 @@ import {
   type VolumeBalanceKpi,
   type OfficeYcMode,
 } from "@/lib/admin/office-overview-compute"
+import { filterSupersededPendingGlobalPayoutRows as filterSupersededPendingGlobalPayoutRowsShared } from "@easner/shared"
 import type { OfficeLedgerTransaction } from "@/lib/admin/office-load-transactions"
 import { enrichYcFundBalanceOfficeRows } from "@/lib/admin/enrich-yc-fund-balance-office-rows"
 
@@ -50,37 +51,9 @@ export type OfficeTransactionsSummary = {
 
 type LedgerScope = { userId: string; businessId: string | null }
 
-const PENDING_GLOBAL_PAYOUT_PREFIX = "global_payout_pending:"
-
-function easnerPayoutIdFromRow(row: Record<string, unknown>): string {
-  const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
-  const fromMeta = String(meta.easner_payout_id ?? "").trim()
-  if (fromMeta) return fromMeta
-  const ptid = String(row.provider_transaction_id ?? "").trim()
-  if (ptid.startsWith(PENDING_GLOBAL_PAYOUT_PREFIX)) {
-    return ptid.slice(PENDING_GLOBAL_PAYOUT_PREFIX.length)
-  }
-  return ""
-}
-
-/** Drop placeholder pending rows once the settled Noah payout row exists for the same easner_payout_id. */
+/** Rows are pre-filtered via `hidden_from_feed` at query time; drop superseded pending placeholders only. */
 export function filterSupersededPendingGlobalPayoutRows(rows: OfficeLedgerTransaction[]): OfficeLedgerTransaction[] {
-  const settledPayoutIds = new Set<string>()
-  for (const row of rows) {
-    const payoutId = easnerPayoutIdFromRow(row as Record<string, unknown>)
-    const ptid = String(row.provider_transaction_id ?? "").trim()
-    if (!payoutId || ptid.startsWith(PENDING_GLOBAL_PAYOUT_PREFIX)) continue
-    if (String(row.metadata?.payout_type ?? "").toLowerCase() === "global_fiat") {
-      settledPayoutIds.add(payoutId)
-    }
-  }
-
-  return rows.filter((row) => {
-    const ptid = String(row.provider_transaction_id ?? "").trim()
-    if (!ptid.startsWith(PENDING_GLOBAL_PAYOUT_PREFIX)) return true
-    const payoutId = easnerPayoutIdFromRow(row as Record<string, unknown>)
-    return !payoutId || !settledPayoutIds.has(payoutId)
-  })
+  return filterSupersededPendingGlobalPayoutRowsShared(rows) as OfficeLedgerTransaction[]
 }
 
 /** Rows are pre-filtered via `hidden_from_feed` at query time; drop superseded pending placeholders only. */

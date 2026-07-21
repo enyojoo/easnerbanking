@@ -283,6 +283,8 @@ async function probeBalancePayout(input: {
   }
 
   console.log("\nYC POST /send (live):")
+  console.log(`  localAmount (YC locked):  ${fmt(Number(sendRes.localAmount ?? 0), 2)}`)
+  console.log(`  vs quoted receive:      ${receiveAmount.toLocaleString()} ${receiveCurrency}`)
   console.log(`  cryptoAmount USDC:        $${fmt(cryptoAmount, 6)}`)
   console.log(`  networkFee USD:           $${fmt(netFee, 4)}`)
   console.log(`  serviceFee USD:           $${fmt(svcFee, 4)}`)

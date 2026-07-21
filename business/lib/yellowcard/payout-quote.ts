@@ -21,6 +21,7 @@ import {
 import { resolveYcSendChannelId, findYcSendChannel } from "@/lib/payout-providers/yellowcard-provider"
 import { mapRecipientToYcSend } from "@/lib/yellowcard/map-recipient-to-yc-send"
 import { submitYcSend, type YcSendSubmitResult } from "@/lib/yellowcard/send-submit"
+import { submitYcSendWithDestinationAmountLock } from "@/lib/yellowcard/yc-send-leg-lock"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import {
@@ -299,6 +300,7 @@ export async function lockYcBalancePayoutSend(input: {
   walletAddress: string
   pricing: ReturnType<typeof computeYcBalancePayoutPricing>
   ycLegFeesUsd: number
+  lockedLocalAmount: number
 }> {
   const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
   const countryCode = resolveRecipientPayoutCountry(input.recipient)
@@ -352,21 +354,32 @@ export async function lockYcBalancePayoutSend(input: {
     requireNgIds: true,
   })
   const sequenceId = `yc_quote_${randomUUID()}`
-  const sendRes: YcSendSubmitResult = await submitYcSend({
-    sequenceId,
-    customerUID: input.customerUID,
-    customerType: "retail",
-    channelId,
-    currency: receiveCurrency,
-    country: countryCode,
-    settlementCryptoAmount: provisionalCryptoUsd,
-    refundMode: "balance_payout",
-    userTurnkeyAddress: input.userTurnkeyAddress,
-    sender,
-    destination: recipientMapped.destination,
-    sendExtras: recipientMapped.root,
-    reason: input.paymentPurpose,
+  const sendLock = await submitYcSendWithDestinationAmountLock({
+    receiveAmount: quoteReceiveAmount,
+    initialSettlementCryptoUsd: provisionalCryptoUsd,
+    destinationRate: customerRate,
+    receiveCurrency,
+    sequenceIdPrefix: "yc_quote",
+    buildSubmit: async ({ settlementCryptoUsd, sequenceId: lockSequenceId }) =>
+      submitYcSend({
+        sequenceId: lockSequenceId,
+        customerUID: input.customerUID,
+        customerType: "retail",
+        channelId,
+        currency: receiveCurrency,
+        country: countryCode,
+        settlementCryptoAmount: settlementCryptoUsd,
+        refundMode: "balance_payout",
+        userTurnkeyAddress: input.userTurnkeyAddress,
+        sender,
+        destination: recipientMapped.destination,
+        sendExtras: recipientMapped.root,
+        reason: input.paymentPurpose,
+      }),
   })
+  const sendRes: YcSendSubmitResult = sendLock.sendRes
+  const lockedSequenceId = sendLock.sequenceId
+  const lockedLocalAmount = sendLock.lockedLocalAmount
 
   const cryptoAmount = Number(sendRes.settlementInfo?.cryptoAmount ?? sendRes.convertedAmount ?? 0)
   if (!Number.isFinite(cryptoAmount) || cryptoAmount <= 0) {
@@ -398,12 +411,13 @@ export async function lockYcBalancePayoutSend(input: {
   })
 
   return {
-    sequenceId,
+    sequenceId: lockedSequenceId,
     sendId: sendRes.id,
     channelId,
     cryptoAmount,
     walletAddress,
     pricing,
     ycLegFeesUsd,
+    lockedLocalAmount,
   }
 }

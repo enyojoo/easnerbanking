@@ -172,6 +172,7 @@ export async function confirmYcBalancePayoutOrder(
       channelId: locked.channelId,
       cryptoAmount: locked.cryptoAmount,
       walletAddress: locked.walletAddress,
+      lockedLocalAmount: locked.lockedLocalAmount,
     },
     expiresAt,
   })

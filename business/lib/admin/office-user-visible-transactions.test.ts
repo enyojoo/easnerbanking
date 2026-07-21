@@ -43,6 +43,12 @@ vi.mock("@/lib/admin/office-overview-compute", () => ({
     balanceAmount: 25,
     balanceCurrency: "USD",
   }),
+  resolveOfficeReportingUsdAmount: () => 25,
+  resolveOfficeReportingEurAmount: () => null,
+  resolveOfficeProductLabel: () => "Payout",
+  resolveOfficeYcMode: () => null,
+  resolveOfficePayInRail: () => null,
+  formatOfficeTxImpactAmount: () => "$25.00",
 }))
 
 import { filterSupersededPendingGlobalPayoutRows, filterUserVisibleOfficeLedgerRows, enrichOfficeLedgerForUserDisplay } from "./office-user-visible-transactions"

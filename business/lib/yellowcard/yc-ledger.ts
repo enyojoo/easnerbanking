@@ -250,6 +250,7 @@ export function buildYcBalancePayoutOutMetadata(input: {
   recipientSnapshot?: Record<string, unknown> | null
   walletAddress?: string | null
   transactionStartedAt?: string
+  ycLockedLocalAmount?: number | null
 }): Record<string, unknown> {
   const processingFee = Number(input.processingFee ?? 0)
   return {
@@ -280,6 +281,9 @@ export function buildYcBalancePayoutOutMetadata(input: {
     ...(input.recipientSnapshot ? { recipient_snapshot: input.recipientSnapshot } : {}),
     ...(input.walletAddress ? { yc_wallet_address: input.walletAddress } : {}),
     ...(input.ycSendId ? { yc_send_id: input.ycSendId } : {}),
+    ...(input.ycLockedLocalAmount != null && input.ycLockedLocalAmount > 0
+      ? { yc_locked_local_amount: input.ycLockedLocalAmount }
+      : {}),
     transaction_started_at: input.transactionStartedAt ?? new Date().toISOString(),
   }
 }

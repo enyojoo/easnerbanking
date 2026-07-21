@@ -53,6 +53,11 @@ import { LEDGER_DETAIL_SELECT } from "@/lib/ledger/ledger-select"
 import { restoreInboundLedgerPresentation } from "@/lib/transactions/restore-inbound-ledger-presentation"
 import { enrichYcPayInMetadataFromTransfer } from "@/lib/yellowcard/enrich-yc-pay-in-metadata"
 import { reconcileExpiredYcPayInOnDetail } from "@/lib/yellowcard/reconcile-expired-yc-pay-in"
+import {
+  easnerPayoutIdFromLedgerRow,
+  pickCanonicalLedgerDetailRow,
+  type LedgerDetailCandidate,
+} from "@/lib/transactions/pick-canonical-ledger-row"
 
 function ledgerWhenAtFromRow(row: Record<string, unknown>): string {
   return (
@@ -288,7 +293,7 @@ export async function GET(request: Request, routeCtx: Props) {
 
   const admin = createSupabaseAdmin()
 
-  function fetchOne(filter: { column: string; value: string }) {
+  function fetchMany(filter: { column: string; value: string }) {
     let q = admin
       .from("transactions")
       .select(LEDGER_DETAIL_SELECT)
@@ -298,15 +303,41 @@ export async function GET(request: Request, routeCtx: Props) {
     } else {
       q = q.eq("user_id", userId).is("business_id", null)
     }
-    return q.maybeSingle()
+    return q
   }
 
-  let { data: row, error } = await fetchOne({ column: "provider_transaction_id", value: transactionId })
+  async function resolveDetailRow(filter: { column: string; value: string }) {
+    const { data: rows, error: fetchError } = await fetchMany(filter)
+    if (fetchError) return { row: null as Record<string, unknown> | null, error: fetchError }
+    const candidates = (rows ?? []) as LedgerDetailCandidate[]
+    if (candidates.length <= 1) {
+      return { row: (candidates[0] as Record<string, unknown> | undefined) ?? null, error: null }
+    }
+
+    const payoutIds = [
+      ...new Set(candidates.map((c) => easnerPayoutIdFromLedgerRow(c)).filter(Boolean)),
+    ]
+    let preferredRowId: string | null = null
+    if (payoutIds.length === 1) {
+      const { data: transfer } = await admin
+        .from("yc_transfers")
+        .select("transaction_id")
+        .contains("metadata", { easner_payout_id: payoutIds[0] })
+        .eq("mode", "balance_payout")
+        .maybeSingle()
+      preferredRowId = transfer?.transaction_id ? String(transfer.transaction_id) : null
+    }
+
+    const picked = pickCanonicalLedgerDetailRow(candidates, { preferredRowId })
+    return { row: (picked as Record<string, unknown> | undefined) ?? null, error: null }
+  }
+
+  let { row, error } = await resolveDetailRow({ column: "provider_transaction_id", value: transactionId })
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
   if (!row) {
-    ;({ data: row, error } = await fetchOne({ column: "easner_transaction_id", value: transactionId }))
+    ;({ row, error } = await resolveDetailRow({ column: "easner_transaction_id", value: transactionId }))
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
@@ -320,13 +351,28 @@ export async function GET(request: Request, routeCtx: Props) {
     } else {
       q = q.eq("user_id", userId).is("business_id", null)
     }
-    ;({ data: row, error } = await q.maybeSingle())
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+    const { data: metaRows, error: metaError } = await q
+    if (metaError) {
+      return NextResponse.json({ error: metaError.message }, { status: 400 })
     }
+    const candidates = (metaRows ?? []) as LedgerDetailCandidate[]
+    const payoutIds = [
+      ...new Set(candidates.map((c) => easnerPayoutIdFromLedgerRow(c)).filter(Boolean)),
+    ]
+    let preferredRowId: string | null = null
+    if (payoutIds.length === 1) {
+      const { data: transfer } = await admin
+        .from("yc_transfers")
+        .select("transaction_id")
+        .contains("metadata", { easner_payout_id: payoutIds[0] })
+        .eq("mode", "balance_payout")
+        .maybeSingle()
+      preferredRowId = transfer?.transaction_id ? String(transfer.transaction_id) : null
+    }
+    row = (pickCanonicalLedgerDetailRow(candidates, { preferredRowId }) as Record<string, unknown> | undefined) ?? null
   }
   if (!row && looksLikeUuidParam(transactionId)) {
-    ;({ data: row, error } = await fetchOne({ column: "id", value: transactionId }))
+    ;({ row, error } = await resolveDetailRow({ column: "id", value: transactionId }))
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
