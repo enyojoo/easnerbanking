@@ -189,6 +189,7 @@ export {
   mergeYcNetworksIntoSchema,
   normalizeRecipientYcMetadata,
   resolveYcCorridorSchema,
+  resolveYcRecipientCountry,
   synthesizeYcSchemaFromNoah,
   unwrapNoahFieldsSchema,
   unwrapYcFieldsSchema,

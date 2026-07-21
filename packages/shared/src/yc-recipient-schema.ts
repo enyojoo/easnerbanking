@@ -1,4 +1,6 @@
+import { getCountryCodeForCurrency } from "./flags/currency-mapping"
 import type { PayoutFieldsSchemaHint } from "./payout-corridor"
+import { normalizeYcMomoPhone } from "./yc-momo-phone"
 
 /** Provider-specific extras stored on recipients.metadata (LatAm, etc.). */
 export type RecipientYcMetadata = {
@@ -438,12 +440,25 @@ export function validateYcRecipientForCorridor(input: {
   return { ok: true }
 }
 
+/** Resolve ISO2 country for YC send when recipient rows omit country_code (e.g. KES → KE). */
+export function resolveYcRecipientCountry(row: {
+  country_code?: string | null
+  currency?: string | null
+}): string {
+  const fromRow = String(row.country_code ?? "").trim().toUpperCase()
+  if (fromRow) return fromRow
+  const cur = String(row.currency ?? "").trim().toUpperCase()
+  if (!cur) return ""
+  const mapped = getCountryCodeForCurrency(cur)
+  return mapped ? mapped.toUpperCase() : ""
+}
+
 /** Build YC /send destination + root-level LatAm fields from a saved recipient row. */
 export function buildYcSendMappingFromRecipient(
   row: YcRecipientRowLike,
   input?: { networkId?: string | null },
 ): YcSendMapping {
-  const country = String(row.country_code || "").trim().toUpperCase()
+  const country = resolveYcRecipientCountry(row)
   const currency = String(row.currency || "").trim().toUpperCase()
   const metadata = normalizeRecipientYcMetadata(row.metadata)
   const name = String(row.full_name ?? "").trim()
@@ -458,11 +473,17 @@ export function buildYcSendMappingFromRecipient(
     Boolean(phone && !accountNumber)
 
   if (isMomo) {
+    const rawPhone = phone || accountNumber
+    const normalizedPhone =
+      rawPhone && country ? normalizeYcMomoPhone(rawPhone, country) : rawPhone
     const destination: Record<string, unknown> = {
       accountName: name || undefined,
       accountType: "momo",
     }
-    if (phone) destination.phoneNumber = phone
+    if (normalizedPhone) {
+      destination.accountNumber = normalizedPhone
+      destination.phoneNumber = normalizedPhone
+    }
     if (input?.networkId) destination.networkId = input.networkId
     return { destination }
   }

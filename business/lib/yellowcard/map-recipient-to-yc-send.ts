@@ -1,4 +1,8 @@
-import { buildYcSendMappingFromRecipient, pickYcSendNetworkId } from "@easner/shared"
+import {
+  buildYcSendMappingFromRecipient,
+  pickYcSendNetworkId,
+  resolveYcRecipientCountry,
+} from "@easner/shared"
 import { listYellowcardNetworks } from "@/lib/yellowcard/networks"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 
@@ -10,13 +14,13 @@ export type YcSendRecipientMapping = {
 /**
  * Map Easner recipient row → YC send destination + root-level LatAm fields.
  * Bank: accountNumber + accountBank + networkId (specific bank or Manual Input).
- * MoMo: phoneNumber + networkId from YC networks.
+ * MoMo: E.164 accountNumber + networkId from YC networks.
  */
 export async function mapRecipientToYcSend(
   row: RecipientSellPrepareRow & { metadata?: Record<string, unknown> | null },
   opts?: { channelId?: string | null },
 ): Promise<YcSendRecipientMapping> {
-  const country = String(row.country_code ?? "").trim().toUpperCase()
+  const country = resolveYcRecipientCountry(row)
   const currency = String(row.currency ?? "").trim().toUpperCase()
   const mobileProvider = String(row.mobile_provider ?? "").trim()
   const bankName = String(row.bank_name ?? "").trim()

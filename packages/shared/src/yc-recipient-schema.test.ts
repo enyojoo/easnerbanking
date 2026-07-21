@@ -153,6 +153,23 @@ describe("buildYcSendMappingFromRecipient", () => {
     expect(mapped.destination.accountNumber).toBe("20200303022")
     expect(mapped.destination.accountBank).toBe("Paga")
   })
+
+  it("maps Kenya MoMo with E.164 accountNumber when country_code omitted", () => {
+    const mapped = buildYcSendMappingFromRecipient(
+      {
+        currency: "KES",
+        full_name: "Jane Doe",
+        phone_number: "712345678",
+        mobile_provider: "M-Pesa",
+        bank_name: "Mobile Money",
+      },
+      { networkId: "net-ke-mpesa" },
+    )
+    expect(mapped.destination.accountType).toBe("momo")
+    expect(mapped.destination.accountNumber).toBe("+254712345678")
+    expect(mapped.destination.phoneNumber).toBe("+254712345678")
+    expect(mapped.destination.networkId).toBe("net-ke-mpesa")
+  })
 })
 
 describe("normalizeRecipientYcMetadata", () => {
