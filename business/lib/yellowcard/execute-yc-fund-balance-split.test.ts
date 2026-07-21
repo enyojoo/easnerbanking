@@ -60,32 +60,38 @@ const baseTransfer = {
 
 function makeAdmin(transfer: Record<string, unknown>) {
   const updates: Record<string, unknown>[] = []
+
+  function queryResult(table: string) {
+    if (table === "yc_transfers") return { data: transfer }
+    if (table === "transactions") {
+      return {
+        data: {
+          id: "tx-1",
+          metadata: {},
+          occurred_at: "2026-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          provider_transaction_id: "yc_fb_1",
+          amount: 2000,
+        },
+      }
+    }
+    return { data: null }
+  }
+
+  function fluent(table: string) {
+    const self = {
+      eq: () => self,
+      is: () => self,
+      filter: () => self,
+      maybeSingle: async () => queryResult(table),
+    }
+    return self
+  }
+
   return {
     updates,
     from: (table: string) => ({
-      select: () => ({
-        eq: (_col: string, _val: string) => ({
-          maybeSingle: async () => {
-            if (table === "yc_transfers") return { data: transfer }
-            if (table === "transactions") {
-              return {
-                data: {
-                  id: "tx-1",
-                  metadata: {},
-                  occurred_at: "2026-01-01T00:00:00.000Z",
-                  created_at: "2026-01-01T00:00:00.000Z",
-                  provider_transaction_id: "yc_fb_1",
-                  amount: 2000,
-                },
-              }
-            }
-            return { data: null }
-          },
-          filter: () => ({
-            maybeSingle: async () => ({ data: transfer }),
-          }),
-        }),
-      }),
+      select: () => fluent(table),
       update: (payload: Record<string, unknown>) => ({
         eq: async () => {
           updates.push(payload)

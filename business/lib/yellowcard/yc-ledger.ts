@@ -505,6 +505,62 @@ export async function findYcTransferForOmnibusInbound(
   return preferred ?? null
 }
 
+function ycFundBalanceAmountsRoughlyEqual(a: number, b: number): boolean {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return false
+  return Math.abs(a - b) <= Math.max(0.01, a * 0.001)
+}
+
+/**
+ * YC fund_balance vault delivery submitted but Solana hash not linked yet (Turnkey poll race).
+ * Matches Noah pending pay-in suppression when chain webhook arrives first.
+ */
+export async function findPendingYcFundBalanceVaultInbound(
+  admin: SupabaseClient,
+  input: {
+    userId: string
+    businessId: string | null
+    amount: number
+    withinHours?: number
+  },
+): Promise<YcTransferRow | null> {
+  const amount = input.amount
+  if (!Number.isFinite(amount) || amount <= 0) return null
+
+  const hours = input.withinHours ?? 72
+  const sinceIso = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
+
+  let q = admin
+    .from("yc_transfers")
+    .select("*")
+    .eq("mode", "fund_balance")
+    .neq("status", "completed")
+    .gte("updated_at", sinceIso)
+  if (input.businessId) {
+    q = q.eq("business_id", input.businessId)
+  } else {
+    q = q.eq("user_id", input.userId).is("business_id", null)
+  }
+
+  const { data: rows } = await q.order("updated_at", { ascending: false }).limit(20)
+  for (const row of rows ?? []) {
+    const transfer = mapTransfer(row as Record<string, unknown>)
+    const meta = transfer.metadata
+    if (meta.fund_balance_split_status === "completed") continue
+    const splitStatus = String(meta.fund_balance_split_status ?? "")
+    if (splitStatus !== "send_submitted") continue
+    const vaultHash = String(meta.user_vault_tx_hash ?? "").trim()
+    if (vaultHash) continue
+
+    const expected =
+      Number(meta.usd_credit ?? 0) ||
+      Number(transfer.quoted_receive ?? 0)
+    if (!ycFundBalanceAmountsRoughlyEqual(amount, expected)) continue
+
+    return transfer
+  }
+  return null
+}
+
 /** Suppress duplicate Turnkey inbound rows for YC fund_balance vault delivery. */
 export async function findYcFundBalanceChainSettlementForSuppression(
   admin: SupabaseClient,

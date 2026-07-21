@@ -206,8 +206,16 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
       ...baseInput,
       txHash: "hash-yc-vault",
+      amount: 1.781872,
     })
     expect(result.kind).toBe("suppressed_noah")
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
+    expect(tryCompleteYcFundBalanceFromUserVaultInbound).toHaveBeenCalledWith(
+      admin,
+      expect.objectContaining({
+        txHash: "hash-yc-vault",
+        amount: 1.781872,
+      }),
+    )
   })
 })

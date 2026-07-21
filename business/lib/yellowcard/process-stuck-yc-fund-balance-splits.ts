@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   triggerYcFundBalanceOmnibusSplit,
   tryCompleteYcFundBalanceFromUserVaultInbound,
+  resolveYcFundBalanceVaultTxHashFromSendId,
 } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 
 export type StuckYcFundBalanceSplitRow = {
@@ -62,8 +63,25 @@ export async function processStuckYcFundBalanceSplits(
   for (const row of jobs) {
     processed += 1
     const omnibusTxHash = String(row.metadata.leg1_omnibus_tx_hash ?? "").trim()
-    const userVaultTxHash = String(row.metadata.user_vault_tx_hash ?? "").trim()
+    let userVaultTxHash = String(row.metadata.user_vault_tx_hash ?? "").trim()
     const splitStatus = String(row.metadata.fund_balance_split_status ?? "pending")
+
+    if (splitStatus === "send_submitted" && !userVaultTxHash) {
+      const sendId = String(row.metadata.user_vault_send_id ?? "").trim()
+      if (sendId) {
+        const resolved = await resolveYcFundBalanceVaultTxHashFromSendId(sendId)
+        if (resolved) {
+          userVaultTxHash = resolved
+          await admin
+            .from("yc_transfers")
+            .update({
+              metadata: { ...row.metadata, user_vault_tx_hash: resolved },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", row.id)
+        }
+      }
+    }
 
     if (splitStatus === "send_submitted" && userVaultTxHash) {
       const done = await tryCompleteYcFundBalanceFromUserVaultInbound(admin, {

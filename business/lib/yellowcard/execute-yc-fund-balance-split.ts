@@ -12,10 +12,17 @@ import {
   sweepEasnerRevenueFromDepositOmnibus,
 } from "@/lib/processing-fee/fee-wallet-sweep"
 import { sendStablecoinFromDepositOmnibus } from "@/lib/turnkey/send-from-omnibus"
+import { getTurnkeyApiClient } from "@/lib/turnkey/client"
+import { getTurnkeyOrganizationId } from "@/lib/turnkey/config"
+import {
+  interpretTurnkeyGetSendTransactionStatus,
+  pollUntilTurnkeySendTerminal,
+} from "@/lib/turnkey/send"
 import { resolveActiveUsdcSolanaAddress } from "@/lib/wallet/resolve-active-usdc-solana-address"
 import { notifyYcFundBalanceSettledPush } from "@/lib/notifications/bank-deposit-settled-notify"
 import {
   buildYcFundBalanceReceiveMetadata,
+  findPendingYcFundBalanceVaultInbound,
   mergeYcFundBalanceLifecycle,
 } from "@/lib/yellowcard/yc-ledger"
 import { resolveLedgerOccurredAt } from "@/lib/ledger/ledger-occurred-at"
@@ -29,6 +36,91 @@ function asMeta(raw: unknown): Record<string, unknown> {
 
 export function buildYcFundBalanceCreditKey(transferId: string): string {
   return `yc_fund_balance:${String(transferId || "").trim()}`
+}
+
+/** Resolve omnibus→vault send signature when Turnkey poll timed out before hash was stored. */
+export async function resolveYcFundBalanceVaultTxHashFromSendId(
+  sendStatusId: string,
+  opts?: { timeoutMs?: number },
+): Promise<string | null> {
+  const sendId = String(sendStatusId || "").trim()
+  if (!sendId) return null
+  const orgId = getTurnkeyOrganizationId()
+  const client = getTurnkeyApiClient() as Record<string, (...args: unknown[]) => Promise<unknown>> | null
+  if (!orgId || !client) return null
+
+  const terminal = await pollUntilTurnkeySendTerminal(client, orgId, sendId, {
+    timeoutMs: opts?.timeoutMs ?? 8_000,
+    intervalMs: 500,
+  }).catch(() => null)
+  if (!terminal) return null
+  return interpretTurnkeyGetSendTransactionStatus(terminal).txHash ?? null
+}
+
+async function loadYcFundBalanceTransferByVaultTxHash(
+  admin: SupabaseClient,
+  opts: { txHash: string; userId: string; businessId: string | null },
+): Promise<Record<string, unknown> | null> {
+  const txHash = String(opts.txHash || "").trim()
+  if (!txHash) return null
+
+  let q = admin
+    .from("yc_transfers")
+    .select("*")
+    .eq("mode", "fund_balance")
+    .filter("metadata->>user_vault_tx_hash", "eq", txHash)
+  if (opts.businessId) {
+    q = q.eq("business_id", opts.businessId)
+  } else {
+    q = q.eq("user_id", opts.userId).is("business_id", null)
+  }
+  const { data } = await q.maybeSingle()
+  return (data as Record<string, unknown> | null) ?? null
+}
+
+/** Hide duplicate Turnkey stablecoin deposit; return whether wallet delta was already applied. */
+async function reconcileYcFundBalanceTurnkeyMirror(
+  admin: SupabaseClient,
+  input: {
+    txHash: string
+    userId: string
+    businessId: string | null
+    ycTransactionId: string
+  },
+): Promise<boolean> {
+  const txHash = String(input.txHash || "").trim()
+  if (!txHash) return false
+
+  let q = admin
+    .from("transactions")
+    .select("id, metadata")
+    .eq("provider", "turnkey")
+    .eq("direction", "in")
+    .eq("tx_hash", txHash)
+  if (input.businessId) {
+    q = q.eq("business_id", input.businessId)
+  } else {
+    q = q.eq("user_id", input.userId).is("business_id", null)
+  }
+  const { data: mirror } = await q.maybeSingle()
+  if (!mirror?.id) return false
+
+  const prior = asMeta(mirror.metadata)
+  await admin
+    .from("transactions")
+    .update({
+      hidden_from_feed: true,
+      metadata: {
+        ...prior,
+        suppress_in_feed: true,
+        yc_fund_balance_chain_mirror: true,
+        yc_fund_balance_transaction_id: input.ycTransactionId,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", mirror.id)
+
+  return prior.balance_delta_applied === true
 }
 
 export type YcFundBalanceEconomics = {
@@ -358,17 +450,26 @@ export async function finalizeYcFundBalanceCredit(
     .eq("id", transactionId)
     .maybeSingle()
   const prior = asMeta(txRow?.metadata)
-  if (prior.wallet_balance_credit_key === creditKey || prior.balance_delta_applied === true) {
-    return
-  }
+  if (prior.wallet_balance_credit_key === creditKey) return
 
   const creditAmt = Number(input.creditAmt)
-  await applyWalletBalanceDelta(admin, {
-    userId: transfer.business_id ? null : String(transfer.user_id),
-    businessId: transfer.business_id ? String(transfer.business_id) : null,
-    currency: "USD",
-    delta: creditAmt,
-  })
+  const mirrorAlreadyCredited = input.userVaultTxHash
+    ? await reconcileYcFundBalanceTurnkeyMirror(admin, {
+        txHash: input.userVaultTxHash,
+        userId: String(transfer.user_id),
+        businessId: transfer.business_id ? String(transfer.business_id) : null,
+        ycTransactionId: transactionId,
+      })
+    : false
+
+  if (!mirrorAlreadyCredited && !prior.balance_delta_applied) {
+    await applyWalletBalanceDelta(admin, {
+      userId: transfer.business_id ? null : String(transfer.user_id),
+      businessId: transfer.business_id ? String(transfer.business_id) : null,
+      currency: "USD",
+      delta: creditAmt,
+    })
+  }
 
   const sequenceId = String(transfer.leg1_sequence_id ?? "")
   const baseMeta = buildYcFundBalanceReceiveMetadata({
@@ -452,19 +553,34 @@ export async function tryCompleteYcFundBalanceFromUserVaultInbound(
   const txHash = String(opts.txHash || "").trim()
   if (!txHash) return false
 
-  let q = admin
-    .from("yc_transfers")
-    .select("*")
-    .eq("mode", "fund_balance")
-    .filter("metadata->>user_vault_tx_hash", "eq", txHash)
-  if (opts.businessId) {
-    q = q.eq("business_id", opts.businessId)
-  } else {
-    q = q.eq("user_id", opts.userId).is("business_id", null)
-  }
+  let transfer =
+    (await loadYcFundBalanceTransferByVaultTxHash(admin, {
+      txHash,
+      userId: opts.userId,
+      businessId: opts.businessId,
+    })) ?? null
 
-  const { data: transfer } = await q.maybeSingle()
-  if (!transfer?.id) return false
+  if (!transfer?.id) {
+    const pending = await findPendingYcFundBalanceVaultInbound(admin, {
+      userId: opts.userId,
+      businessId: opts.businessId,
+      amount: opts.amount,
+    })
+    if (!pending) return false
+    transfer = pending as unknown as Record<string, unknown>
+    const pendingMeta = asMeta(transfer.metadata)
+    await admin
+      .from("yc_transfers")
+      .update({
+        metadata: {
+          ...pendingMeta,
+          user_vault_tx_hash: txHash,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", String(transfer.id))
+    transfer.metadata = { ...pendingMeta, user_vault_tx_hash: txHash }
+  }
 
   const transferMeta = asMeta(transfer.metadata)
   if (transferMeta.fund_balance_split_status === "completed") return true
