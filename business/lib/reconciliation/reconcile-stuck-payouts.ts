@@ -7,7 +7,6 @@ import {
 import { applyNoahWebhookSideEffects } from "@/lib/noah/webhook-side-effects"
 import { applyYellowcardWebhookSideEffects } from "@/lib/yellowcard/webhook-processor"
 import { maybeExecuteCrossBorderLeg2 } from "@/lib/yellowcard/cross-border-orchestrator"
-import { handleYcBalancePayoutSendComplete } from "@/lib/yellowcard/payout-execute"
 import { pollYellowcardTransferStatus } from "@/lib/reconciliation/yc-transaction-poll"
 import {
   buildEasnerRevenueSweepMetadataPatch,
@@ -20,6 +19,7 @@ import {
 import {
   captureGlobalPayoutProcessingFeeIfPending,
   captureWalletSendFeeLegIfPending,
+  captureYcBalancePayoutProcessingFeeIfPending,
   resolveNoahAccountContextFromLedgerScope,
 } from "@/lib/processing-fee/capture-pending-processing-fee"
 import {
@@ -413,7 +413,7 @@ export async function reconcileStuckYcTransfers(
         .eq("id", String(transfer.transaction_id))
         .maybeSingle()
       if (tx?.id && String(tx.status) === "settled" && !isEasnerRevenueAlreadySwept(asMeta(tx.metadata))) {
-        await handleYcBalancePayoutSendComplete({
+        await captureYcBalancePayoutProcessingFeeIfPending(admin, {
           transactionId: String(tx.id),
           userId: String(tx.user_id),
           businessId: tx.business_id ? String(tx.business_id) : null,

@@ -65,6 +65,7 @@ import { isWalletSendRecipient } from '../../lib/recipientWalletMeta'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
 import {
   isCompletePayoutQuote,
+  isPayoutSessionReadyForExecute,
   isStashedPayoutQuoteFresh,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
@@ -95,12 +96,7 @@ function payoutSessionMatchesRecipient(
   session: PayoutPrepareSession | undefined,
   recipientId: string | undefined,
 ): boolean {
-  return Boolean(
-    session?.formSessionId &&
-      recipientId &&
-      session.recipientId.trim() === recipientId.trim() &&
-      Boolean(session.lockId || session.ycSendId),
-  )
+  return isPayoutSessionReadyForExecute(session, recipientId)
 }
 
 function walletSessionMatchesRecipient(

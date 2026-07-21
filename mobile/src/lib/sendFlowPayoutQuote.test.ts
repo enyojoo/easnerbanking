@@ -3,10 +3,12 @@ import type { PayoutQuote } from './noahService'
 import {
   clearSendPayoutQuote,
   isCompletePayoutQuote,
+  isPayoutSessionReadyForExecute,
   isStashedPayoutQuoteFresh,
   isStashedPayoutQuotePreviewFresh,
   stashSendPayoutQuote,
   stashSendPayoutQuotePreview,
+  payoutPrepareSessionFromQuote,
 } from './sendFlowPayoutQuote'
 
 function sampleQuote(overrides?: Partial<PayoutQuote>): PayoutQuote {
@@ -94,6 +96,22 @@ describe('sendFlowPayoutQuote stash', () => {
         receiveCurrency: 'NGN',
       }),
     ).toBe(false)
+  })
+
+  it('accepts Yellowcard preview session for PIN without POST /send lock', () => {
+    const quote = sampleQuote({
+      provider: 'yellowcard',
+      quotePhase: 'preview',
+      requiresConfirm: true,
+      lockId: undefined,
+      yc: { sequenceId: 'yc_preview_abc', channelId: 'ch-1', cryptoAmount: 1.5 },
+      settlement: {
+        ...sampleQuote().settlement,
+        sessionId: 'yc_preview_abc',
+      },
+    })
+    const session = payoutPrepareSessionFromQuote(quote, 'recipient-a')
+    expect(isPayoutSessionReadyForExecute(session, 'recipient-a')).toBe(true)
   })
 
   it('accepts Yellowcard preview quotes for review (lock happens at PIN execute)', () => {

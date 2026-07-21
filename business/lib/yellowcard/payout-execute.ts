@@ -1,16 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { computeYcBalancePayoutCappedFeeWalletSweep } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { reverseGlobalPayoutWalletDebitForEasnerPayoutId, linkPendingGlobalPayoutProviderTransactionId, pendingGlobalPayoutProviderTransactionId } from "@/lib/noah/global-payout-ledger"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import {
-  buildEasnerRevenueSweepMetadataPatch,
-  FEE_SWEEP_MIN,
-  readPriorSweepFromMetadata,
-  sweepEasnerRevenueFromUserTurnkeyWallet,
-} from "@/lib/processing-fee/fee-wallet-sweep"
+  captureYcBalancePayoutProcessingFeeIfPending,
+} from "@/lib/processing-fee/capture-pending-processing-fee"
+import { isEasnerRevenueAlreadySwept } from "@/lib/processing-fee/fee-wallet-sweep"
 import { createTurnkeySend } from "@/lib/turnkey/send"
 import {
   buildYcParentPayoutCryptoDepositTracking,
@@ -120,73 +116,7 @@ export async function executeYcBalancePayoutTurnkeyLeg(input: {
   }
 }
 
-async function sweepYcBalancePayoutRevenueToFeeWallet(
-  admin: SupabaseClient,
-  input: { transactionId: string; userId: string; businessId: string | null },
-): Promise<{ sweepAmt: number; feeWalletSweepTxHash: string | null; captured: boolean; turnkeySendId?: string | null }> {
-  const { data: row } = await admin
-    .from("transactions")
-    .select("id, metadata, amount")
-    .eq("id", input.transactionId)
-    .maybeSingle()
-  if (!row?.id) return { sweepAmt: 0, feeWalletSweepTxHash: null, captured: false }
-
-  const meta = asMeta(row.metadata)
-  const prior = readPriorSweepFromMetadata(meta)
-  if (prior.captured) {
-    return prior
-  }
-  if (String(meta.processing_fee_turnkey_send_id ?? "").trim()) {
-    return {
-      sweepAmt: Number(meta.fee_wallet_sweep ?? meta.easner_revenue_sweep_amount ?? 0),
-      feeWalletSweepTxHash: String(meta.fee_wallet_sweep_tx_hash ?? "") || null,
-      captured: true,
-      turnkeySendId: String(meta.processing_fee_turnkey_send_id),
-    }
-  }
-
-  const totalDebited = Number(meta.total_debited ?? row.amount ?? 0)
-  const cryptoAuthorized = Number(meta.crypto_authorized_amount ?? meta.noah_send_amount ?? 0)
-  const sweepAmt = computeYcBalancePayoutCappedFeeWalletSweep({
-    totalDebited,
-    cryptoAuthorizedAmount: cryptoAuthorized,
-    marginAmount: Number(meta.margin_amount ?? 0),
-    processingFee: Number(meta.processing_fee ?? 0),
-  })
-  if (sweepAmt < FEE_SWEEP_MIN) {
-    return { sweepAmt, feeWalletSweepTxHash: null, captured: true }
-  }
-
-  const ctx = await resolveNoahAccountContextFromLedgerScope(admin, {
-    userId: input.userId,
-    businessId: input.businessId,
-  })
-  if (!ctx) {
-    return { sweepAmt, feeWalletSweepTxHash: null, captured: false }
-  }
-
-  const easnerPayoutId = String(meta.easner_payout_id ?? "").trim()
-  const sweep = await sweepEasnerRevenueFromUserTurnkeyWallet(admin, {
-    ctx,
-    ledgerCurrency: "USD",
-    amount: sweepAmt,
-    globalPayout: easnerPayoutId
-      ? {
-          easnerPayoutId,
-          formSessionId: String(meta.form_session_id ?? meta.yc_sequence_id ?? ""),
-        }
-      : undefined,
-    logTag: "yc-balance-payout",
-  })
-
-  return {
-    sweepAmt,
-    feeWalletSweepTxHash: sweep.feeWalletSweepTxHash,
-    captured: sweep.captured,
-    turnkeySendId: sweep.turnkeySendId,
-  }
-}
-
+/** YC SEND terminal success — settle payout, then capture fee wallet leg (Noah parity). */
 export async function handleYcBalancePayoutSendComplete(input: {
   transactionId: string
   userId: string
@@ -197,18 +127,13 @@ export async function handleYcBalancePayoutSendComplete(input: {
 
   const { data: row } = await admin
     .from("transactions")
-    .select("id, user_id, business_id, metadata, amount, provider, provider_transaction_id")
+    .select("id, user_id, business_id, metadata, amount, provider, provider_transaction_id, status")
     .eq("id", input.transactionId)
     .maybeSingle()
   if (!row?.id) return
 
   const prior = asMeta(row.metadata)
-  const { sweepAmt, feeWalletSweepTxHash, captured, turnkeySendId } =
-    await sweepYcBalancePayoutRevenueToFeeWallet(admin, {
-      transactionId: row.id,
-      userId: input.userId,
-      businessId: input.businessId,
-    })
+  if (!String(prior.turnkey_send_id ?? "").trim()) return
 
   const easnerPayoutId = String(prior.easner_payout_id ?? "").trim()
   const ycSendId = String(prior.yc_send_id ?? prior.form_session_id ?? "").trim()
@@ -226,36 +151,47 @@ export async function handleYcBalancePayoutSendComplete(input: {
     providerTransactionId = ycSendId
   }
 
-  const txPatch = mergeYcPayoutLifecycle(
-    {
-      ...prior,
-      ...buildEasnerRevenueSweepMetadataPatch({
-        sweepAmt,
-        feeWalletSweepTxHash,
-        captured,
-        turnkeySendId,
-      }),
-      margin_capture_mode: "fee_wallet_deferred",
-      processing_fee_pending: false,
-    },
-    { completed_at: now, processing_at: now },
-  )
+  const alreadySettled = String(row.status ?? "").toLowerCase() === "settled"
+  if (!alreadySettled) {
+    const txPatch = mergeYcPayoutLifecycle(
+      {
+        ...prior,
+        margin_capture_mode: "fee_wallet_deferred",
+      },
+      { completed_at: now, processing_at: now },
+    )
 
-  await upsertLedgerTransaction(admin, {
-    userId: String(row.user_id),
-    businessId: row.business_id ? String(row.business_id) : null,
-    provider: String(row.provider ?? "yellowcard"),
-    providerTransactionId,
-    status: "settled",
-    amount: Number(row.amount ?? 0),
-    currency: "USD",
-    direction: "out",
-    metadata: txPatch,
-    occurredAt: now,
-    settledAt: now,
-    baseCurrency: "USD",
-    asset: "USDC",
-  })
+    await upsertLedgerTransaction(admin, {
+      userId: String(row.user_id),
+      businessId: row.business_id ? String(row.business_id) : null,
+      provider: String(row.provider ?? "yellowcard"),
+      providerTransactionId,
+      status: "settled",
+      amount: Number(row.amount ?? 0),
+      currency: "USD",
+      direction: "out",
+      metadata: txPatch,
+      occurredAt: now,
+      settledAt: now,
+      baseCurrency: "USD",
+      asset: "USDC",
+    })
+  }
+
+  if (!isEasnerRevenueAlreadySwept(prior) && prior.processing_fee_pending === true) {
+    await captureYcBalancePayoutProcessingFeeIfPending(admin, input).catch((e) => {
+      console.warn("yc_balance_payout_processing_fee_capture:", e)
+    })
+  }
+
+  const { data: after } = await admin
+    .from("transactions")
+    .select("metadata")
+    .eq("id", row.id)
+    .maybeSingle()
+  const afterMeta = asMeta(after?.metadata)
+  const sweepAmt = Number(afterMeta.fee_wallet_sweep ?? afterMeta.easner_revenue_sweep_amount ?? 0)
+  const feeWalletSweepTxHash = String(afterMeta.fee_wallet_sweep_tx_hash ?? "").trim() || null
 
   const { data: transfer } = await admin
     .from("yc_transfers")

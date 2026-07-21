@@ -106,6 +106,25 @@ export function isYellowcardPayoutQuote(quote: PayoutQuote | null | undefined): 
   return String(quote?.provider ?? '').toLowerCase() === 'yellowcard'
 }
 
+/** Review / PIN CTA — YC preview is valid before POST /send lock; Noah needs confirm lock. */
+export function isPayoutSessionReadyForExecute(
+  session: PayoutPrepareSession | undefined,
+  recipientId: string | undefined,
+): boolean {
+  if (
+    !session?.formSessionId?.trim() ||
+    !session?.cryptoAuthorizedAmount?.trim() ||
+    !session?.cryptoCurrency?.trim() ||
+    !recipientId ||
+    session.recipientId.trim() !== recipientId.trim()
+  ) {
+    return false
+  }
+  if (session.lockId || session.ycSendId) return true
+  if (session.payoutProvider === 'yellowcard' && session.ycSequenceId?.trim()) return true
+  return Boolean(session.formSessionId.trim())
+}
+
 export function stashSendPayoutQuote(quote: PayoutQuote, meta: SendPayoutQuoteStashMeta): void {
   if (!isCompletePayoutQuote(quote)) return
   stashed = quote
