@@ -6,16 +6,35 @@ import type { YcPayInRail } from "../yc-pay-in-copy"
 import type { LedgerTransactionStatusDisplay } from "./ledger-status-display"
 import { ledgerTransactionStatusDisplay } from "./ledger-status-display"
 
-export const YC_PAY_IN_AWAITING_STATUS = "awaiting_payment"
+export const YC_PAY_IN_CONFIRMING_STATUS = "confirming_payment"
 
-/** Unified hero / list status pill copy for unattested YC pay-ins. */
-export const YC_PAY_IN_AWAITING_STATUS_LABEL = "Awaiting payment"
+/** Unified hero / list status pill for in-flight YC pay-ins. */
+export const YC_PAY_IN_CONFIRMING_STATUS_LABEL = "Confirming payment"
 
-/** Lifecycle step 1 title — matches hero/list status. */
-export const YC_PAY_IN_AWAITING_STEP_TITLE = "Awaiting payment"
+/** Lifecycle step title — matches hero/list status. */
+export const YC_PAY_IN_CONFIRMING_STEP_TITLE = "Confirming payment"
 
-export const YC_PAY_IN_AWAITING_DESCRIPTION_PREFIX =
+/** @deprecated Use YC_PAY_IN_CONFIRMING_STATUS */
+export const YC_PAY_IN_AWAITING_STATUS = YC_PAY_IN_CONFIRMING_STATUS
+
+/** @deprecated Use YC_PAY_IN_CONFIRMING_STATUS_LABEL */
+export const YC_PAY_IN_AWAITING_STATUS_LABEL = YC_PAY_IN_CONFIRMING_STATUS_LABEL
+
+/** @deprecated Use YC_PAY_IN_CONFIRMING_STEP_TITLE */
+export const YC_PAY_IN_AWAITING_STEP_TITLE = YC_PAY_IN_CONFIRMING_STEP_TITLE
+
+export const YC_PAY_IN_CONFIRMING_DESCRIPTION_PREFIX =
   "Complete the transfer using the payment details "
+export const YC_PAY_IN_CROSS_BORDER_CONFIRMING_DESCRIPTION_PREFIX =
+  "Send the exact amount using the payment details "
+
+export const YC_PAY_IN_CONFIRMING_BANK_WAITING_DESCRIPTION =
+  "We're waiting for your bank to confirm the deposit."
+export const YC_PAY_IN_CROSS_BORDER_CONFIRMING_BANK_WAITING_DESCRIPTION =
+  "We're waiting for your bank to confirm the transfer."
+
+/** @deprecated Use YC_PAY_IN_CONFIRMING_DESCRIPTION_PREFIX */
+export const YC_PAY_IN_AWAITING_DESCRIPTION_PREFIX = YC_PAY_IN_CONFIRMING_DESCRIPTION_PREFIX
 export const YC_PAY_IN_AWAITING_DESCRIPTION_LINK = "here"
 export const YC_PAY_IN_AWAITING_DESCRIPTION_SUFFIX = "."
 export const YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED =
@@ -132,7 +151,7 @@ export function ycPayInAwaitingPaymentCountdownLabel(
 export const formatYcPayInPaymentWindowCountdown = formatYcPayInAwaitingPaymentCountdown
 
 export const YC_PAY_IN_CROSS_BORDER_AWAITING_DESCRIPTION_PREFIX =
-  "Send the exact amount using the payment details "
+  YC_PAY_IN_CROSS_BORDER_CONFIRMING_DESCRIPTION_PREFIX
 
 export type YcPayInPaymentDetails = {
   flowMode: "fund_balance" | "cross_border_send"
@@ -211,6 +230,19 @@ export function isYcPayInPaymentWindowOpen(
   return Number.isFinite(ms) && ms > nowMs
 }
 
+/** In-flight YC pay-in (pending/processing, not terminal). */
+export function isYcPayInInFlight(
+  meta: Record<string, unknown> | null | undefined,
+  ledgerStatus: string,
+): boolean {
+  if (!meta || !isYcPayInFlowMetadata(meta)) return false
+  const st = String(ledgerStatus ?? "").trim().toLowerCase()
+  if (st === "settled" || st === "completed" || st === "failed" || st === "cancelled") {
+    return false
+  }
+  return st === "pending" || st === "processing" || st === "unknown"
+}
+
 /** Pending YC pay-in before user taps "I've made the payment". */
 export function isYcPayInAwaitingAttestation(
   meta: Record<string, unknown> | null | undefined,
@@ -239,12 +271,12 @@ export function resolveYcPayInListWhenAt(
   return resolveYcPayInUserWhenAt(meta) ?? readYcQuoteLockedAt(meta)
 }
 
-/** Feed status override for unattested YC pay-ins. */
+/** Feed status override for in-flight YC pay-ins. */
 export function resolveYcPayInFeedStatus(
   meta: Record<string, unknown> | null | undefined,
   ledgerStatus: string,
 ): string | null {
-  if (isYcPayInAwaitingAttestation(meta, ledgerStatus)) return YC_PAY_IN_AWAITING_STATUS
+  if (isYcPayInInFlight(meta, ledgerStatus)) return YC_PAY_IN_CONFIRMING_STATUS
   return null
 }
 
@@ -252,8 +284,8 @@ export function ledgerTransactionStatusDisplayForRow(
   ledgerStatus: string,
   meta?: Record<string, unknown> | null,
 ): LedgerTransactionStatusDisplay {
-  if (resolveYcPayInFeedStatus(meta, ledgerStatus) === YC_PAY_IN_AWAITING_STATUS) {
-    return { label: YC_PAY_IN_AWAITING_STATUS_LABEL, tone: "pending" }
+  if (resolveYcPayInFeedStatus(meta, ledgerStatus) === YC_PAY_IN_CONFIRMING_STATUS) {
+    return { label: YC_PAY_IN_CONFIRMING_STATUS_LABEL, tone: "pending" }
   }
   return ledgerTransactionStatusDisplay(ledgerStatus)
 }
@@ -342,7 +374,7 @@ export function resolveYcPayInPaymentDetails(
   }
 }
 
-export type YcPayInLifecycleStepId = "awaiting_transfer" | "processing" | "completed" | "failed"
+export type YcPayInLifecycleStepId = "confirming_payment" | "completed" | "failed"
 
 export type YcPayInLifecycleStep = {
   id: YcPayInLifecycleStepId
@@ -373,16 +405,25 @@ function normalizeLedgerStatus(status: string): string {
   return s || "processing"
 }
 
-function buildAwaitingDescription(input: {
+function buildConfirmingDescription(input: {
   meta: Record<string, unknown>
   crossBorder: boolean
   nowMs: number
+  attestedAt: string | null
 }): Pick<YcPayInLifecycleStep, "description" | "showPaymentDetailsLink"> {
-  const awaitingAttestation = isYcPayInAwaitingAttestation(input.meta, "pending")
   const expiresAt = readYcPayInExpiresAt(input.meta)
   const windowClosed =
     Boolean(expiresAt) && !isYcPayInPaymentWindowOpen(input.meta, input.nowMs)
   const hasPaymentDetails = Boolean(resolveYcPayInPaymentDetails(input.meta))
+
+  if (input.attestedAt) {
+    return {
+      description: input.crossBorder
+        ? YC_PAY_IN_CROSS_BORDER_CONFIRMING_BANK_WAITING_DESCRIPTION
+        : YC_PAY_IN_CONFIRMING_BANK_WAITING_DESCRIPTION,
+      showPaymentDetailsLink: false,
+    }
+  }
 
   if (windowClosed) {
     return {
@@ -391,13 +432,11 @@ function buildAwaitingDescription(input: {
     }
   }
 
-  if (awaitingAttestation && hasPaymentDetails) {
-    const prefix = input.crossBorder
-      ? YC_PAY_IN_CROSS_BORDER_AWAITING_DESCRIPTION_PREFIX
-      : YC_PAY_IN_AWAITING_DESCRIPTION_PREFIX
-
+  if (hasPaymentDetails) {
     return {
-      description: prefix,
+      description: input.crossBorder
+        ? YC_PAY_IN_CROSS_BORDER_CONFIRMING_DESCRIPTION_PREFIX
+        : YC_PAY_IN_CONFIRMING_DESCRIPTION_PREFIX,
       showPaymentDetailsLink: true,
     }
   }
@@ -408,48 +447,34 @@ function buildAwaitingDescription(input: {
   }
 }
 
-/** Three-step tracker: awaiting payment → confirming → completed. */
+/** Two-step tracker: confirming payment → completed (failed replaces completed). */
 export function buildYcPayInLifecycle(input: BuildYcPayInLifecycleInput): YcPayInLifecycleStep[] {
   const meta = input.metadata ?? {}
   const ledgerStatus = normalizeLedgerStatus(input.status)
   const attestedAt = readYcPayInAttestedAt(meta)
   const quoteLockedAt = readYcQuoteLockedAt(meta)
-  const processingAt = readYcPayInEffectiveProcessingAt(meta)
   const completedAt = pickIso(meta.completed_at) ?? input.settledAt ?? null
   const failedAt = pickIso(meta.failed_at) ?? null
   const crossBorder = input.crossBorder === true
   const nowMs = input.nowMs ?? Date.now()
 
-  const awaitingCopy =
-    !attestedAt && ledgerStatus !== "settled" && ledgerStatus !== "failed"
-      ? buildAwaitingDescription({ meta, crossBorder, nowMs })
-      : {
-          description: crossBorder
-            ? "Send the exact amount using the payment details we provided."
-            : "Complete the transfer using the payment details we provided.",
-          showPaymentDetailsLink: false,
-        }
-
-  const awaitingOccurredAt = attestedAt ?? quoteLockedAt
-
-  const awaitingStep = (state: YcPayInLifecycleStep["state"]): YcPayInLifecycleStep => ({
-    id: "awaiting_transfer",
-    title: YC_PAY_IN_AWAITING_STEP_TITLE,
-    description: awaitingCopy.description,
-    state,
-    occurredAt: awaitingOccurredAt,
-    showPaymentDetailsLink: awaitingCopy.showPaymentDetailsLink,
+  const confirmingCopy = buildConfirmingDescription({
+    meta,
+    crossBorder,
+    nowMs,
+    attestedAt,
   })
 
-  const confirmingDescription = crossBorder
-    ? "We're waiting for your bank to confirm the transfer."
-    : "We're waiting for your bank to confirm the deposit."
+  const confirmingOccurredAt = attestedAt ?? quoteLockedAt
 
-  const processingDescription =
-    input.processingDescription ??
-    (crossBorder
-      ? "Your transfer is being processed."
-      : "Your deposit is being processed.")
+  const confirmingStep = (state: YcPayInLifecycleStep["state"]): YcPayInLifecycleStep => ({
+    id: "confirming_payment",
+    title: YC_PAY_IN_CONFIRMING_STEP_TITLE,
+    description: confirmingCopy.description,
+    state,
+    occurredAt: confirmingOccurredAt,
+    showPaymentDetailsLink: confirmingCopy.showPaymentDetailsLink,
+  })
 
   const completedDescription =
     input.completedDescription ??
@@ -461,7 +486,7 @@ export function buildYcPayInLifecycle(input: BuildYcPayInLifecycleInput): YcPayI
 
   if (ledgerStatus === "failed") {
     return [
-      awaitingStep("complete"),
+      confirmingStep("complete"),
       {
         id: "failed",
         title: "Failed",
@@ -474,14 +499,7 @@ export function buildYcPayInLifecycle(input: BuildYcPayInLifecycleInput): YcPayI
 
   if (ledgerStatus === "settled") {
     return [
-      awaitingStep("complete"),
-      {
-        id: "processing",
-        title: "Processing",
-        description: processingDescription,
-        state: "complete",
-        occurredAt: processingAt ?? attestedAt,
-      },
+      confirmingStep("complete"),
       {
         id: "completed",
         title: "Completed",
@@ -492,55 +510,8 @@ export function buildYcPayInLifecycle(input: BuildYcPayInLifecycleInput): YcPayI
     ]
   }
 
-  if (!attestedAt) {
-    return [
-      awaitingStep("current"),
-      {
-        id: "processing",
-        title: "Confirming payment",
-        description: confirmingDescription,
-        state: "upcoming",
-        occurredAt: null,
-      },
-      {
-        id: "completed",
-        title: "Completed",
-        description: completedDescription,
-        state: "upcoming",
-        occurredAt: null,
-      },
-    ]
-  }
-
-  if (!processingAt) {
-    return [
-      awaitingStep("complete"),
-      {
-        id: "processing",
-        title: "Confirming payment",
-        description: confirmingDescription,
-        state: "current",
-        occurredAt: null,
-      },
-      {
-        id: "completed",
-        title: "Completed",
-        description: completedDescription,
-        state: "upcoming",
-        occurredAt: null,
-      },
-    ]
-  }
-
   return [
-    awaitingStep("complete"),
-    {
-      id: "processing",
-      title: "Processing",
-      description: processingDescription,
-      state: "current",
-      occurredAt: processingAt,
-    },
+    confirmingStep("current"),
     {
       id: "completed",
       title: "Completed",

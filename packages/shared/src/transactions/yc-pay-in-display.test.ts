@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest"
 import {
-  YC_PAY_IN_AWAITING_STATUS,
-  YC_PAY_IN_AWAITING_DESCRIPTION_PREFIX,
+  YC_PAY_IN_CONFIRMING_STATUS,
+  YC_PAY_IN_CONFIRMING_DESCRIPTION_PREFIX,
+  YC_PAY_IN_CONFIRMING_BANK_WAITING_DESCRIPTION,
   YC_PAY_IN_REVIEW_PAYMENT_WINDOW_EXPIRED,
   buildYcPayInLifecycle,
   formatYcPayInPaymentDeadlineLabel,
   formatYcPayInDepositTimeRemaining,
   isYcPayInAwaitingAttestation,
+  isYcPayInInFlight,
   ledgerTransactionStatusDisplayForRow,
   readYcPayInEffectiveProcessingAt,
   resolveYcPayInFeedStatus,
@@ -19,16 +21,18 @@ describe("yc pay-in display", () => {
       isYcPayInAwaitingAttestation({ yc_mode: "cross_border_send" }, "pending"),
     ).toBe(true)
     expect(resolveYcPayInFeedStatus({ yc_mode: "fund_balance" }, "pending")).toBe(
-      YC_PAY_IN_AWAITING_STATUS,
+      YC_PAY_IN_CONFIRMING_STATUS,
     )
+    expect(isYcPayInInFlight({ yc_mode: "fund_balance" }, "pending")).toBe(true)
   })
 
-  it("stops awaiting after attestation", () => {
+  it("stops awaiting after attestation but stays in confirming feed status", () => {
     const meta = {
       yc_mode: "cross_border_send",
       payment_attested_at: "2026-01-02T00:00:00.000Z",
     }
     expect(isYcPayInAwaitingAttestation(meta, "pending")).toBe(false)
+    expect(resolveYcPayInFeedStatus(meta, "processing")).toBe(YC_PAY_IN_CONFIRMING_STATUS)
   })
 
   it("prefers attestation over lock for user when", () => {
@@ -48,7 +52,7 @@ describe("yc pay-in display", () => {
     ).toBe("2026-01-01T00:00:00.000Z")
   })
 
-  it("builds awaiting-payment lifecycle before attestation", () => {
+  it("builds confirming lifecycle before attestation with payment link", () => {
     const steps = buildYcPayInLifecycle({
       status: "pending",
       metadata: {
@@ -61,15 +65,16 @@ describe("yc pay-in display", () => {
       crossBorder: true,
       nowMs: Date.parse("2026-01-01T12:00:00.000Z"),
     })
-    expect(steps[0]?.id).toBe("awaiting_transfer")
-    expect(steps[0]?.title).toBe("Awaiting payment")
+    expect(steps).toHaveLength(2)
+    expect(steps[0]?.id).toBe("confirming_payment")
+    expect(steps[0]?.title).toBe("Confirming payment")
     expect(steps[0]?.state).toBe("current")
     expect(steps[0]?.occurredAt).toBe("2026-01-01T00:00:00.000Z")
     expect(steps[0]?.showPaymentDetailsLink).toBe(true)
     expect(steps[0]?.description.endsWith(" ")).toBe(true)
   })
 
-  it("marks awaiting complete at attestation and holds processing until webhook", () => {
+  it("shows bank-waiting copy after attestation in the same confirming step", () => {
     const steps = buildYcPayInLifecycle({
       status: "processing",
       metadata: {
@@ -81,30 +86,12 @@ describe("yc pay-in display", () => {
       },
       crossBorder: false,
     })
-    expect(steps[0]?.state).toBe("complete")
+    expect(steps).toHaveLength(2)
+    expect(steps[0]?.id).toBe("confirming_payment")
+    expect(steps[0]?.state).toBe("current")
     expect(steps[0]?.occurredAt).toBe("2026-01-01T00:03:00.000Z")
-    expect(steps[1]?.id).toBe("processing")
-    expect(steps[1]?.title).toBe("Confirming payment")
-    expect(steps[1]?.state).toBe("current")
-    expect(steps[1]?.occurredAt).toBeNull()
-  })
-
-  it("uses webhook processing time on processing step after attestation", () => {
-    const steps = buildYcPayInLifecycle({
-      status: "processing",
-      metadata: {
-        yc_mode: "fund_balance",
-        quote_locked_at: "2026-01-01T00:00:00.000Z",
-        payment_attested_at: "2026-01-01T00:03:00.000Z",
-        processing_at: "2026-01-01T00:10:00.000Z",
-        local_pay_in: 1000,
-        local_currency: "NGN",
-      },
-      crossBorder: false,
-    })
-    expect(steps[0]?.occurredAt).toBe("2026-01-01T00:03:00.000Z")
-    expect(steps[1]?.title).toBe("Processing")
-    expect(steps[1]?.occurredAt).toBe("2026-01-01T00:10:00.000Z")
+    expect(steps[0]?.description).toBe(YC_PAY_IN_CONFIRMING_BANK_WAITING_DESCRIPTION)
+    expect(steps[0]?.showPaymentDetailsLink).toBe(false)
   })
 
   it("ignores pre-attest processing_at from YC order-state webhooks", () => {
@@ -126,14 +113,20 @@ describe("yc pay-in display", () => {
         local_currency: "NGN",
       },
     })
-    expect(steps[1]?.title).toBe("Confirming payment")
-    expect(steps[1]?.state).toBe("current")
+    expect(steps[0]?.title).toBe("Confirming payment")
+    expect(steps[0]?.state).toBe("current")
   })
 
-  it("shows Awaiting payment label before attestation", () => {
+  it("shows Confirming payment label for in-flight YC pay-ins", () => {
     expect(
       ledgerTransactionStatusDisplayForRow("pending", { yc_mode: "fund_balance" }).label,
-    ).toBe("Awaiting payment")
+    ).toBe("Confirming payment")
+    expect(
+      ledgerTransactionStatusDisplayForRow("processing", {
+        yc_mode: "fund_balance",
+        payment_attested_at: "2026-01-01T00:00:00.000Z",
+      }).label,
+    ).toBe("Confirming payment")
   })
 
   it("formats pay-in countdown from YC deposit expiry", () => {
@@ -190,5 +183,6 @@ describe("yc pay-in display", () => {
       nowMs: Date.parse("2026-01-01T00:01:00.000Z"),
     })
     expect(steps[0]?.showPaymentDetailsLink).toBe(true)
+    expect(steps[0]?.description).toBe(YC_PAY_IN_CONFIRMING_DESCRIPTION_PREFIX)
   })
 })

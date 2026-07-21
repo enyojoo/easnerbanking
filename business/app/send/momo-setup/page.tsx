@@ -20,9 +20,8 @@ import {
 } from "@/lib/yc-local-deposit-cache"
 import {
   crossBorderQuoteToFlowState,
-  ensureCrossBorderOrderConfirmed,
-  isCompleteCrossBorderQuote,
-  peekLastCrossBorderQuoteError,
+  ensureCrossBorderQuoteStashed,
+  fetchCrossBorderQuotePreview,
 } from "@/lib/yc-cross-border-quote-cache"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { normalizeYcMomoPhone, REVIEW_ROW_LABELS } from "@easner/shared"
@@ -144,9 +143,11 @@ export default function SendMomoSetupPage() {
         networkId: momoNetworkId,
         sourceNetworkName: selectedNetwork?.name,
       }
-      const lockedQuote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
-      if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
-        setContinueError(peekLastCrossBorderQuoteError() || "Could not lock transfer details")
+      const previewQuote =
+        (await ensureCrossBorderQuoteStashed(crossBorderMeta)) ??
+        (await fetchCrossBorderQuotePreview(crossBorderMeta).catch(() => null))
+      if (!previewQuote?.localPayIn) {
+        setContinueError("Could not load transfer quote")
         return
       }
       const next: SendFlowState = {
@@ -156,14 +157,10 @@ export default function SendMomoSetupPage() {
           networkId: momoNetworkId,
           sourceNetworkName: selectedNetwork?.name,
         },
-        sendAmount: lockedQuote.localPayIn,
+        sendAmount: previewQuote.localPayIn,
         sendCurrency: payInCurrency,
-        totalAmount: lockedQuote.localPayIn,
-        transactionId:
-          lockedQuote.easnerTransactionId ||
-          lockedQuote.transactionId ||
-          state.transactionId,
-        ycCrossBorder: crossBorderQuoteToFlowState(lockedQuote, crossBorderMeta),
+        totalAmount: previewQuote.localPayIn,
+        ycCrossBorder: crossBorderQuoteToFlowState(previewQuote, crossBorderMeta),
       }
       persistSendFlowState(next)
       router.push("/send/confirm")

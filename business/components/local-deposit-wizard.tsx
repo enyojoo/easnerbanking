@@ -130,7 +130,6 @@ export function LocalDepositWizard({
     const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
     return rail === "mobile_money" && !cached?.length
   })
-  const [reviewLockLoading, setReviewLockLoading] = useState(false)
 
   const isMomo = rail === "mobile_money"
 
@@ -620,30 +619,17 @@ export function LocalDepositWizard({
 
         <Button
           className="w-full"
-          disabled={!canContinue || reviewLockLoading}
+          disabled={!canContinue}
           onClick={() => {
-            void (async () => {
-              setQuoteError(null)
-              if (isMomo) {
-                setStep("momo_setup")
-                return
-              }
-              setReviewLockLoading(true)
-              try {
-                const result = await confirmOrder()
-                if (!result?.transferId) return
-                setStep("review")
-              } finally {
-                setReviewLockLoading(false)
-              }
-            })()
+            setQuoteError(null)
+            if (isMomo) {
+              setStep("momo_setup")
+              return
+            }
+            setStep("review")
           }}
         >
-          {reviewLockLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "Continue"
-          )}
+          Continue
         </Button>
       </div>
     )
@@ -702,26 +688,13 @@ export function LocalDepositWizard({
 
         <Button
           className="w-full"
-          disabled={!momoReady || reviewLockLoading}
+          disabled={!momoReady}
           onClick={() => {
-            void (async () => {
-              setQuoteError(null)
-              setReviewLockLoading(true)
-              try {
-                const result = await confirmOrder()
-                if (!result?.transferId) return
-                setStep("review")
-              } finally {
-                setReviewLockLoading(false)
-              }
-            })()
+            setQuoteError(null)
+            setStep("review")
           }}
         >
-          {reviewLockLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "Continue"
-          )}
+          Continue
         </Button>
       </div>
     )

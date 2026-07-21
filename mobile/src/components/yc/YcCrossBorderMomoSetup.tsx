@@ -22,9 +22,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import {
-  ensureCrossBorderOrderConfirmed,
-  isCompleteCrossBorderQuote,
-  peekLastCrossBorderQuoteError,
+  ensureCrossBorderQuoteStashed,
 } from '../../lib/sendFlowCrossBorderQuote'
 
 type PayInNetwork = { id: string; name: string }
@@ -118,9 +116,9 @@ export function YcCrossBorderMomoSetup({
         networkId,
         sourceNetworkName: selectedNetwork?.name,
       }
-      const quote = await ensureCrossBorderOrderConfirmed(quoteMeta)
-      if (!quote || !isCompleteCrossBorderQuote(quote)) {
-        setContinueError(peekLastCrossBorderQuoteError() ?? 'Could not lock transfer details')
+      const previewQuote = await ensureCrossBorderQuoteStashed(quoteMeta)
+      if (!previewQuote?.localPayIn) {
+        setContinueError('Could not load transfer quote')
         return
       }
       navigation.navigate('SendConfirm' as never, {
@@ -132,8 +130,8 @@ export function YcCrossBorderMomoSetup({
         receiveCurrency,
         amountEntryMode,
         amountScreenSendAmount,
-        calculatedSendingAmount: quote.localPayIn,
-        calculatedTotalAmount: quote.localPayIn,
+        calculatedSendingAmount: previewQuote.localPayIn,
+        calculatedTotalAmount: previewQuote.localPayIn,
         sourcePhone: phone.trim(),
         networkId,
         sourceNetworkName: selectedNetwork?.name,

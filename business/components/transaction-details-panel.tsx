@@ -269,8 +269,7 @@ export function TransactionDetailsPanel({
     enabled: Boolean(transaction),
     ledgerStatus: transaction?.status ?? "",
     quoteExpiresAt: transaction?.quoteExpiresAt,
-    awaitingPayIn:
-      transaction?.status === "awaiting_payment" || Boolean(transaction?.payInAwaitingAttestation),
+    awaitingPayIn: Boolean(transaction?.payInAwaitingAttestation),
     onRefetch: refetchExpiredPayIn,
   })
 

@@ -19,8 +19,8 @@ export function formatTransactionRowDateTime(iso: string): string {
 /** Second line under amount on the right. */
 export function transactionStatusRowPresentation(status: string): { label: string; className: string } {
   const s = status.toLowerCase()
-  if (s === "awaiting_payment") {
-    return { label: "Awaiting payment", className: "text-amber-600 dark:text-amber-500" }
+  if (s === "confirming_payment" || s === "awaiting_payment") {
+    return { label: "Confirming payment", className: "text-amber-600 dark:text-amber-500" }
   }
   if (s.includes("processed") || s.includes("completed")) {
     return { label: "Completed", className: "text-emerald-600 dark:text-emerald-400" }

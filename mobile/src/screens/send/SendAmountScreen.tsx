@@ -115,10 +115,7 @@ import {
 import {
   clearCrossBorderQuote,
   ensureCrossBorderQuoteStashed,
-  ensureCrossBorderOrderConfirmed,
-  isCompleteCrossBorderQuote,
-  peekLastCrossBorderQuoteError,
-  prefetchCrossBorderQuotePipeline,
+  ensureCrossBorderQuoteStashed,
 } from '../../lib/sendFlowCrossBorderQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
@@ -1463,9 +1460,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             payInRail: rail,
             receiveAmount: receiveAmountValue,
           }
-          const lockedQuote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
-          if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
-            showError(peekLastCrossBorderQuoteError() ?? 'Could not lock transfer details')
+          const previewQuote = await ensureCrossBorderQuoteStashed(crossBorderMeta)
+          if (!previewQuote?.localPayIn) {
+            showError('Could not load transfer quote')
             return
           }
           navigation.navigate('SendConfirm' as never, {
@@ -1477,8 +1474,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             receiveCurrency: recipient.currency,
             amountEntryMode,
             amountScreenSendAmount: navAmounts.sendAmount,
-            calculatedSendingAmount: lockedQuote.localPayIn,
-            calculatedTotalAmount: lockedQuote.localPayIn,
+            calculatedSendingAmount: previewQuote.localPayIn,
+            calculatedTotalAmount: previewQuote.localPayIn,
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
           } as never)

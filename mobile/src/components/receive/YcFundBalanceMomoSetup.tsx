@@ -5,7 +5,6 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -15,9 +14,7 @@ import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
 import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
 import {
-  ensureFundBalanceOrderConfirmed,
   ensurePayInNetworksCached,
-  peekLastFundBalanceQuoteError,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { useAuth } from '../../contexts/AuthContext'
@@ -62,7 +59,6 @@ export function YcFundBalanceMomoSetup({
   )
   const [networksLoading, setNetworksLoading] = useState(!cachedNetworks?.length)
   const [networksError, setNetworksError] = useState<string | null>(null)
-  const [isContinueLoading, setIsContinueLoading] = useState(false)
   const [continueError, setContinueError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -92,43 +88,23 @@ export function YcFundBalanceMomoSetup({
   const momoReady = Boolean(phone.trim() && networkId)
   const selectedNetwork = networks.find((n) => n.id === networkId)
 
-  const onContinue = async () => {
-    if (!momoReady || isContinueLoading) return
+  const onContinue = () => {
+    if (!momoReady) return
     setContinueError(null)
     haptics.medium()
-    setIsContinueLoading(true)
-    try {
-      const quoteMeta = {
-        country: residenceCountry,
-        currency: localPayInCurrency,
-        rail: 'mobile_money' as const,
-        amountEntryMode,
-        enteredAmount,
-        sourcePhone: phone.trim(),
-        networkId,
-        sourceNetworkName: selectedNetwork?.name,
-      }
-      const quote = await ensureFundBalanceOrderConfirmed(quoteMeta)
-      if (!quote?.transferId) {
-        setContinueError(peekLastFundBalanceQuoteError() ?? 'Could not lock deposit details')
-        return
-      }
-      navigation.navigate('ReceiveLocalReview' as never, {
-        localPayInCurrency,
-        residenceCountry,
-        payInRail: 'mobile_money',
-        amountEntryMode,
-        enteredAmount,
-        usdCredit: quote.usdCredit ?? usdCredit,
-        localPayIn: quote.localPayIn ?? localPayIn,
-        customerRate: quote.customerRate ?? customerRate,
-        sourcePhone: phone.trim(),
-        networkId,
-        sourceNetworkName: selectedNetwork?.name,
-      } as never)
-    } finally {
-      setIsContinueLoading(false)
-    }
+    navigation.navigate('ReceiveLocalReview' as never, {
+      localPayInCurrency,
+      residenceCountry,
+      payInRail: 'mobile_money',
+      amountEntryMode,
+      enteredAmount,
+      usdCredit,
+      localPayIn,
+      customerRate,
+      sourcePhone: phone.trim(),
+      networkId,
+      sourceNetworkName: selectedNetwork?.name,
+    } as never)
   }
 
   return (
@@ -190,21 +166,17 @@ export function YcFundBalanceMomoSetup({
 
       <Pressable
         android_ripple={ripple.neutral}
-        style={[styles.cta, (!momoReady || isContinueLoading) && styles.ctaDisabled]}
-        onPress={() => void onContinue()}
-        disabled={!momoReady || isContinueLoading}
+        style={[styles.cta, !momoReady && styles.ctaDisabled]}
+        onPress={onContinue}
+        disabled={!momoReady}
       >
         <LinearGradient
-          colors={!momoReady || isContinueLoading ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
+          colors={!momoReady ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.ctaGradient}
         >
-          {isContinueLoading ? (
-            <ActivityIndicator color={colors.text.inverse} />
-          ) : (
-            <Text style={styles.ctaText}>Continue</Text>
-          )}
+          <Text style={styles.ctaText}>Continue</Text>
         </LinearGradient>
       </Pressable>
     </View>

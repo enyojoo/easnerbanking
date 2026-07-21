@@ -50,8 +50,9 @@ export function TransactionLifecycleTracker({
             const active = step.state === "complete" || step.state === "current"
             const isLast = index === lifecycle.length - 1
             const showDepositTimer =
-              step.id === "awaiting_transfer" &&
+              step.id === "confirming_payment" &&
               step.state === "current" &&
+              step.showPaymentDetailsLink &&
               Boolean(quoteExpiresAt) &&
               !quoteCountdown.expired
             return (

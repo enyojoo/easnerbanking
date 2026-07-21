@@ -3,9 +3,8 @@
 import { useEffect, useRef } from "react"
 import { useQuoteCountdown } from "./use-quote-countdown"
 import {
-  YC_PAY_IN_AWAITING_STATUS,
+  isYcPayInAwaitingAttestation,
   isYcPayInFlowMetadata,
-  resolveYcPayInFeedStatus,
 } from "../transactions/yc-pay-in-display"
 
 type Input = {
@@ -28,7 +27,7 @@ export function useYcPayInExpiredDetailRefetch(input: Input): void {
     (input.awaitingPayIn === true ||
       (input.metadata &&
         isYcPayInFlowMetadata(input.metadata) &&
-        resolveYcPayInFeedStatus(input.metadata, input.ledgerStatus) === YC_PAY_IN_AWAITING_STATUS))
+        isYcPayInAwaitingAttestation(input.metadata, input.ledgerStatus)))
 
   useEffect(() => {
     if (!awaitingYcPayIn || firedRef.current || !countdown.expired) return

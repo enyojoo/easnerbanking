@@ -80,6 +80,7 @@ import {
   type GlobalPayoutRecipientSnapshot,
   type YcFundBalanceDepositReviewSnapshot,
   useYcPayInExpiredDetailRefetch,
+  isYcPayInAwaitingAttestation,
 } from '@easner/shared'
 import { InboundReceiveDetailRows } from '../../components/transactions/InboundReceiveDetailRows'
 import { CrossBorderSendDetailRows } from '../../components/transactions/CrossBorderSendDetailRows'
@@ -367,7 +368,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     enabled: Boolean(transaction),
     ledgerStatus: transaction?.status ?? '',
     quoteExpiresAt: transaction?.quote_expires_at,
-    awaitingPayIn: transaction?.status === 'awaiting_payment',
+    awaitingPayIn: isYcPayInAwaitingAttestation(
+      transaction?.metadata,
+      transaction?.status ?? '',
+    ),
     onRefetch: refetchExpiredYcPayIn,
   })
 

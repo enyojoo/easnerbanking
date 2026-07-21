@@ -52,7 +52,7 @@ export interface Transaction {
   accountImpactCurrency?: string
   description: string
   date: string
-  status: "completed" | "pending" | "processing" | "failed" | "awaiting_payment"
+  status: "completed" | "pending" | "processing" | "failed" | "confirming_payment" | "awaiting_payment"
   direction: "credit" | "debit"
   cardId?: string
   /** When the ledger row includes masked card tail (e.g. future card product). */
