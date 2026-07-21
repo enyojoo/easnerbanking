@@ -702,6 +702,8 @@ export {
   easnerFeeLocalFromUsdCredit,
   ycLegFeesLocal,
   readYcSendLockedLocalAmount,
+  readYcSendLegFeeLocal,
+  resolveYcSendLegFeesFromResponse,
   checkYcSendLegDestinationAmountSufficient,
   assertYcSendLegDestinationAmountSufficient,
   bumpYcSendLegSettlementCryptoForLocalShortfall,

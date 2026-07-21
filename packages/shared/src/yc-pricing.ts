@@ -1098,32 +1098,99 @@ export function readYcSendLockedLocalAmount(
   return null
 }
 
+/** YC send leg fees deducted from gross destination fiat before recipient credit. */
+export function readYcSendLegFeeLocal(
+  sendRes: Record<string, unknown> | null | undefined,
+): number {
+  if (!sendRes) return 0
+  let total = 0
+  for (const key of [
+    "serviceFeeAmountLocal",
+    "service_fee_amount_local",
+    "networkFeeAmountLocal",
+    "network_fee_amount_local",
+    "partnerFeeAmountLocal",
+    "partner_fee_amount_local",
+  ]) {
+    const n = Number(sendRes[key] ?? 0)
+    if (Number.isFinite(n) && n > 0) total += n
+  }
+  return roundLocal(total)
+}
+
+/** Resolve YC POST /send leg fees for pricing (USD + local). */
+export function resolveYcSendLegFeesFromResponse(input: {
+  sendRes: Record<string, unknown> | null | undefined
+  destinationRate?: number
+  ycRate?: number
+}): {
+  networkFeeAmountUsd: number
+  serviceFeeAmountUsd: number
+  serviceFeeAmountLocal: number
+  totalFeeUsd: number
+} {
+  const sendRes = input.sendRes ?? {}
+  const networkFeeAmountUsd = roundUsdc(
+    Number(sendRes.networkFeeAmountUSD ?? sendRes.network_fee_amount_usd ?? 0),
+  )
+  const serviceFeeAmountUsd = roundUsdc(
+    Number(sendRes.serviceFeeAmountUSD ?? sendRes.service_fee_amount_usd ?? 0),
+  )
+  const partnerFeeAmountUsd = roundUsdc(
+    Number(sendRes.partnerFeeAmountUSD ?? sendRes.partner_fee_amount_usd ?? 0),
+  )
+  const serviceFeeAmountLocal = readYcSendLegFeeLocal(sendRes)
+  const rate =
+    Number(input.ycRate ?? sendRes.rate ?? 0) ||
+    Number(input.destinationRate ?? 0) ||
+    0
+  const feeFromLocal =
+    serviceFeeAmountLocal > 0 && rate > 0 ? roundUsdc(serviceFeeAmountLocal / rate) : 0
+  const reportedTotal = roundUsdc(networkFeeAmountUsd + serviceFeeAmountUsd + partnerFeeAmountUsd)
+  const totalFeeUsd = roundUsdc(Math.max(reportedTotal, feeFromLocal))
+  const serviceUsd = roundUsdc(
+    Math.max(serviceFeeAmountUsd + partnerFeeAmountUsd, totalFeeUsd - networkFeeAmountUsd),
+  )
+  return {
+    networkFeeAmountUsd,
+    serviceFeeAmountUsd: serviceUsd,
+    serviceFeeAmountLocal,
+    totalFeeUsd,
+  }
+}
+
 export function checkYcSendLegDestinationAmountSufficient(input: {
   quotedReceive: number
   lockedLocalAmount: number
+  /** Deducted from gross locked local before recipient credit (serviceFeeAmountLocal). */
+  sendLegFeeLocal?: number
   tolerance?: number
-}): { ok: boolean; shortfall: number } {
+}): { ok: boolean; shortfall: number; netLocalAmount: number } {
   const tolerance = input.tolerance ?? YC_SEND_LEG_DESTINATION_TOLERANCE
   const quoted = roundLocal(input.quotedReceive)
   const locked = roundLocal(input.lockedLocalAmount)
+  const feeLocal = roundLocal(input.sendLegFeeLocal ?? 0)
+  const netLocal = roundLocal(Math.max(0, locked - feeLocal))
   if (!(quoted > 0) || !(locked > 0)) {
-    return { ok: false, shortfall: quoted > 0 ? quoted : 0 }
+    return { ok: false, shortfall: quoted > 0 ? quoted : 0, netLocalAmount: netLocal }
   }
-  const shortfall = roundLocal(Math.max(0, quoted - locked - tolerance))
-  return { ok: shortfall <= 0, shortfall }
+  const shortfall = roundLocal(Math.max(0, quoted - netLocal - tolerance))
+  return { ok: shortfall <= 0, shortfall, netLocalAmount: netLocal }
 }
 
 export function assertYcSendLegDestinationAmountSufficient(input: {
   quotedReceive: number
   lockedLocalAmount: number
+  sendLegFeeLocal?: number
   tolerance?: number
   currency?: string
 }): void {
   const check = checkYcSendLegDestinationAmountSufficient(input)
   if (check.ok) return
   const currency = String(input.currency ?? "").trim().toUpperCase() || "fiat"
+  const feeLocal = roundLocal(input.sendLegFeeLocal ?? 0)
   throw new Error(
-    `yc_send_destination_shortfall: quoted ${input.quotedReceive} ${currency}, YC locked ${input.lockedLocalAmount} ${currency} (short ${check.shortfall})`,
+    `yc_send_destination_shortfall: quoted ${input.quotedReceive} ${currency}, YC net ${check.netLocalAmount} ${currency} (gross ${input.lockedLocalAmount}, fee ${feeLocal}, short ${check.shortfall})`,
   )
 }
 

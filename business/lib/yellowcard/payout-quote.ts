@@ -12,6 +12,7 @@ import {
   YC_QUOTE_TTL_MS,
   buildLegacyNoahSettlementFromLeg,
   computePayoutQuoteDisplayProcessingFee,
+  resolveYcSendLegFeesFromResponse,
   type PayoutSettlementLeg,
 } from "@easner/shared"
 import {
@@ -390,7 +391,12 @@ export async function lockYcBalancePayoutSend(input: {
 
   const networkFeeAmountUsd = Number(sendRes.networkFeeAmountUSD ?? 0)
   const serviceFeeAmountUsd = Number(sendRes.serviceFeeAmountUSD ?? 0)
-  const ycLegFeesUsd = roundUsdc(networkFeeAmountUsd + serviceFeeAmountUsd)
+  const sendLegFees = resolveYcSendLegFeesFromResponse({
+    sendRes: sendRes as Record<string, unknown>,
+    destinationRate: customerRate,
+    ycRate: Number(sendRes.rate ?? 0) || undefined,
+  })
+  const ycLegFeesUsd = sendLegFees.totalFeeUsd
   const pricing = computeYcBalancePayoutPricing({
     receiveAmount: quoteReceiveAmount,
     customerRate,
@@ -399,8 +405,8 @@ export async function lockYcBalancePayoutSend(input: {
       payoutRate?.yc_sell != null && payoutRate.yc_sell > 0
         ? roundUsdc(quoteReceiveAmount / payoutRate.yc_sell)
         : undefined,
-    networkFeeAmountUsd,
-    serviceFeeAmountUsd,
+    networkFeeAmountUsd: sendLegFees.networkFeeAmountUsd || networkFeeAmountUsd,
+    serviceFeeAmountUsd: sendLegFees.serviceFeeAmountUsd || serviceFeeAmountUsd,
   })
 
   assertYcBalancePayoutEconomicsSufficient({

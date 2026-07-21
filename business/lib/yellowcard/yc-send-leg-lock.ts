@@ -2,6 +2,7 @@ import { randomUUID } from "crypto"
 import {
   bumpYcSendLegSettlementCryptoForLocalShortfall,
   checkYcSendLegDestinationAmountSufficient,
+  readYcSendLegFeeLocal,
   readYcSendLockedLocalAmount,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,
@@ -53,10 +54,12 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     })
     lastSendRes = sendRes
     lastLockedLocal = readYcSendLockedLocalAmount(sendRes as Record<string, unknown>) ?? 0
+    const sendLegFeeLocal = readYcSendLegFeeLocal(sendRes as Record<string, unknown>)
 
     const check = checkYcSendLegDestinationAmountSufficient({
       quotedReceive: input.receiveAmount,
       lockedLocalAmount: lastLockedLocal,
+      sendLegFeeLocal,
       tolerance,
     })
     if (check.ok) {
@@ -70,7 +73,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
 
     if (attempt >= maxAttempts - 1) {
       throw new Error(
-        `Yellowcard could not lock ${input.receiveAmount} ${input.receiveCurrency}: received ${lastLockedLocal} after ${maxAttempts} attempts.`,
+        `Yellowcard could not lock ${input.receiveAmount} ${input.receiveCurrency}: net ${check.netLocalAmount} (gross ${lastLockedLocal}, fee ${sendLegFeeLocal}) after ${maxAttempts} attempts.`,
       )
     }
 

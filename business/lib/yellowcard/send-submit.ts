@@ -36,6 +36,10 @@ export type YcSendSubmitResult = {
   localAmount?: number
   networkFeeAmountUSD?: number
   serviceFeeAmountUSD?: number
+  networkFeeAmountLocal?: number
+  serviceFeeAmountLocal?: number
+  partnerFeeAmountUSD?: number
+  partnerFeeAmountLocal?: number
   settlementInfo?: {
     cryptoAmount?: number
     walletAddress?: string

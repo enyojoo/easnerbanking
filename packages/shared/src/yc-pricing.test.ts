@@ -31,6 +31,7 @@ import {
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
   bumpYcSendLegSettlementCryptoForLocalShortfall,
   checkYcSendLegDestinationAmountSufficient,
+  resolveYcSendLegFeesFromResponse,
 } from "./yc-pricing"
 
 describe("computeYcFundBalancePricing", () => {
@@ -589,7 +590,7 @@ describe("yc send leg destination amount", () => {
     expect(bumped).toBeGreaterThan(1.458672)
   })
 
-  it("accepts locked local within tolerance", () => {
+  it("accepts locked local within tolerance when no send fee", () => {
     expect(
       checkYcSendLegDestinationAmountSufficient({
         quotedReceive: 2000,
@@ -597,5 +598,41 @@ describe("yc send leg destination amount", () => {
         tolerance: 1,
       }).ok,
     ).toBe(true)
+  })
+
+  it("rejects gross local above quote when serviceFeeAmountLocal reduces net", () => {
+    const check = checkYcSendLegDestinationAmountSufficient({
+      quotedReceive: 2000,
+      lockedLocalAmount: 2011.88,
+      sendLegFeeLocal: 20.12,
+      tolerance: 1,
+    })
+    expect(check.ok).toBe(false)
+    expect(check.netLocalAmount).toBe(1991.76)
+    expect(check.shortfall).toBeGreaterThan(0)
+  })
+
+  it("accepts when net local meets quoted receive after fee", () => {
+    const check = checkYcSendLegDestinationAmountSufficient({
+      quotedReceive: 2000,
+      lockedLocalAmount: 2020.12,
+      sendLegFeeLocal: 20.12,
+      tolerance: 1,
+    })
+    expect(check.ok).toBe(true)
+    expect(check.netLocalAmount).toBe(2000)
+  })
+
+  it("resolves send leg fees from serviceFeeAmountLocal when USD fields underreport", () => {
+    const fees = resolveYcSendLegFeesFromResponse({
+      sendRes: {
+        serviceFeeAmountUSD: 0.01,
+        serviceFeeAmountLocal: 20.12,
+        rate: 1378,
+      },
+      destinationRate: 1371.11,
+    })
+    expect(fees.serviceFeeAmountLocal).toBe(20.12)
+    expect(fees.totalFeeUsd).toBeGreaterThanOrEqual(0.01)
   })
 })
