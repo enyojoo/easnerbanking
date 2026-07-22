@@ -10,6 +10,28 @@ function roundMoney(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000
 }
 
+/** Direct Turnkey is 1:1 — Sent must be receive principal, never fee-inclusive total. */
+function normalizeDirectYouSendAmount(input: {
+  executionModel: WalletSendExecutionModel | undefined
+  youSendAmount: number
+  receiveAmount: number
+  totalDebited: number
+}): number {
+  const { executionModel, youSendAmount, receiveAmount, totalDebited } = input
+  if (executionModel !== "direct_turnkey") return youSendAmount
+  if (!(receiveAmount > 0)) return youSendAmount
+  // Bad confirm path used to persist you_send_amount === total_debited (gross).
+  if (
+    !Number.isFinite(youSendAmount) ||
+    youSendAmount <= 0 ||
+    Math.abs(youSendAmount - totalDebited) < 1e-9 ||
+    youSendAmount > totalDebited + 1e-9
+  ) {
+    return receiveAmount
+  }
+  return youSendAmount
+}
+
 function readNestedPayoutReview(raw: unknown): GlobalPayoutReviewSnapshot | null {
   if (!raw || typeof raw !== "object") return null
   const o = raw as Record<string, unknown>
@@ -18,8 +40,18 @@ function readNestedPayoutReview(raw: unknown): GlobalPayoutReviewSnapshot | null
   const youSend = Number(o.you_send_amount)
   if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) return null
   if (!Number.isFinite(totalDebited) || totalDebited <= 0) return null
+  const executionModel =
+    o.execution_model === "direct_turnkey" || o.execution_model === "lifi_bridge"
+      ? o.execution_model
+      : undefined
+  const youSendAmount = normalizeDirectYouSendAmount({
+    executionModel,
+    youSendAmount: Number.isFinite(youSend) ? youSend : 0,
+    receiveAmount,
+    totalDebited,
+  })
   return {
-    you_send_amount: Number.isFinite(youSend) ? youSend : totalDebited,
+    you_send_amount: youSendAmount > 0 ? youSendAmount : totalDebited,
     total_debited: totalDebited,
     exchange_fee: Number.isFinite(Number(o.exchange_fee)) ? Number(o.exchange_fee) : 0,
     processing_fee: Number.isFinite(Number(o.processing_fee)) ? Number(o.processing_fee) : 0,
@@ -29,9 +61,7 @@ function readNestedPayoutReview(raw: unknown): GlobalPayoutReviewSnapshot | null
     receive_currency: String(o.receive_currency || "USD").toUpperCase(),
     transfer_method: String(o.transfer_method || "").trim(),
     processing_time: String(o.processing_time || "").trim(),
-    ...(o.execution_model === "direct_turnkey" || o.execution_model === "lifi_bridge"
-      ? { execution_model: o.execution_model }
-      : {}),
+    ...(executionModel ? { execution_model: executionModel } : {}),
   }
 }
 
@@ -61,12 +91,17 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
     executionModel === "direct_turnkey" ? 1 : input.session.customer_rate
 
   const youSendFromReview = Number(input.reviewSnapshot?.you_send_amount)
-  const youSendAmount =
-    Number.isFinite(youSendFromReview) && youSendFromReview > 0
-      ? youSendFromReview
-      : executionModel === "direct_turnkey"
-        ? receiveAmount
-        : roundMoney(receiveAmount / customerRate)
+  const youSendAmount = normalizeDirectYouSendAmount({
+    executionModel,
+    youSendAmount:
+      Number.isFinite(youSendFromReview) && youSendFromReview > 0
+        ? youSendFromReview
+        : executionModel === "direct_turnkey"
+          ? receiveAmount
+          : roundMoney(receiveAmount / customerRate),
+    receiveAmount,
+    totalDebited,
+  })
 
   const exchangeFeeFromReview = Number(input.reviewSnapshot?.exchange_fee)
   const channelCostFromSession =
@@ -140,6 +175,12 @@ export function resolveWalletSendPayoutReview(
     return {
       ...nested,
       execution_model: executionModel,
+      you_send_amount: normalizeDirectYouSendAmount({
+        executionModel,
+        youSendAmount: nested.you_send_amount,
+        receiveAmount: nested.receive_amount,
+        totalDebited: nested.total_debited,
+      }),
       transfer_method: resolveWalletSendTransferMethod(
         nested.transfer_method,
         nested.receive_currency,
@@ -172,14 +213,19 @@ export function resolveWalletSendPayoutReview(
   const marginAmount = Number(meta.margin_amount ?? meta.processing_fee ?? 0)
   const youSendRaw = Number(meta.you_send_amount)
   const customerRate = Number(meta.customer_rate ?? meta.exchange_rate ?? 1)
-  const youSendAmount =
-    Number.isFinite(youSendRaw) && youSendRaw > 0
-      ? youSendRaw
-      : executionModel === "direct_turnkey"
-        ? receiveAmount
-        : customerRate > 0
-          ? roundMoney(receiveAmount / customerRate)
-          : totalDebited
+  const youSendAmount = normalizeDirectYouSendAmount({
+    executionModel,
+    youSendAmount:
+      Number.isFinite(youSendRaw) && youSendRaw > 0
+        ? youSendRaw
+        : executionModel === "direct_turnkey"
+          ? receiveAmount
+          : customerRate > 0
+            ? roundMoney(receiveAmount / customerRate)
+            : totalDebited,
+    receiveAmount,
+    totalDebited,
+  })
 
   const exchangeFeeRaw = Number(meta.exchange_fee ?? meta.channel_cost ?? 0)
   const exchangeFee =

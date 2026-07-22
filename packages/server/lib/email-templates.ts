@@ -11,6 +11,7 @@ import {
   type TransactionDetailRow,
 } from "./email-generator"
 import { getEmailAudienceProfile, type EmailAudience } from "./email-audience"
+import { EASNER_CONTACT_URL } from "./email-theme"
 import type {
   EmailTemplate,
   SecurityAlertEmailData,
@@ -19,8 +20,6 @@ import type {
   VerificationEmailData,
   WelcomeEmailData,
 } from "./email-types"
-
-const CONTACT_URL = "https://www.easner.com/contact"
 
 const WELCOME_PERSONAL_PREHEADER =
   "Verify your identity and start using Easner Mobile."
@@ -131,11 +130,11 @@ function transactionFailedTemplate(): EmailTemplate {
       `
       return generateBaseEmailTemplate(data.title, "", content, {
         text: "Contact support",
-        url: CONTACT_URL,
+        url: EASNER_CONTACT_URL,
       }, { audience, preheader: data.body, showPreferencesLink: false })
     },
     text: (data: TransactionEmailData, audience = "personal") => {
-      return `${data.title}\n\n${transactionEmailIntroText(data)}${data.failureReason ? `\nReason: ${data.failureReason}` : ""}\n\nContact support: ${CONTACT_URL}`
+      return `${data.title}\n\n${transactionEmailIntroText(data)}${data.failureReason ? `\nReason: ${data.failureReason}` : ""}\n\nContact support: ${EASNER_CONTACT_URL}`
     },
   }
 }
@@ -182,7 +181,7 @@ export const emailTemplates: Record<string, EmailTemplate> = {
           <strong>Want a personalized walkthrough?</strong> We offer free 15–20 minute onboarding calls. We can walk you through the dashboard, help with KYB questions, and show you the fastest ways to send payouts or set up collections.
         </p>
         <p class="confirmation-text">
-          Book a call at <a href="${CONTACT_URL}" style="color: #007ACC;">easner.com/contact</a> or reply to this email with your preferred time.
+          Book a call at <a href="${EASNER_CONTACT_URL}" style="color: #007ACC;">easner.com/contact</a> or reply to this email with your preferred time.
         </p>
         <p class="confirmation-text">
           If you prefer to explore on your own first, our in-app chat and support team are always available. Fees and FX may apply; shown before you confirm.
@@ -210,7 +209,7 @@ Quick next steps:
 - Fund your account (bank or stablecoin where enabled)
 - Explore payouts, collections, invoicing, and team controls
 
-Book an onboarding call: ${CONTACT_URL}
+Book an onboarding call: ${EASNER_CONTACT_URL}
 
 Dashboard: ${data.dashboardUrl || profile.dashboardUrl}
 ${profile.signatureText ?? ""}`
@@ -480,7 +479,7 @@ function securityTemplate(alertType: SecurityAlertEmailData["alertType"]): Email
       `
       return generateBaseEmailTemplate(subject, "", content, {
         text: "Contact support",
-        url: CONTACT_URL,
+        url: EASNER_CONTACT_URL,
       }, { audience, showPreferencesLink: false, preheader: c.body })
     },
     text: (data: SecurityAlertEmailData, audience = "personal") => {

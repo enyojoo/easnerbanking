@@ -26,4 +26,5 @@ export {
 export {
   EASNER_COMPANY_LEGAL_NAME,
   EASNER_COMPANY_ADDRESS,
+  EASNER_CONTACT_URL,
 } from "./email-theme"

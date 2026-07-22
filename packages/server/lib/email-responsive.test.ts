@@ -4,6 +4,7 @@ import {
   EMAIL_RESPONSIVE_MARKERS,
   generateBaseEmailTemplate,
   generateSupabaseAuthEmailHtml,
+  generateTransactionDetailsTable,
 } from "./email-generator"
 import { emailTemplates } from "./email-templates"
 import { templateDefaultAudience, templateFixtures } from "./email-test-fixtures"
@@ -29,6 +30,7 @@ describe("responsive email layout", () => {
     )
     assertEmailResponsive(html)
     expect(html).toContain('class="cta-wrap"')
+    expect(html).toContain('href="https://www.easner.com/contact">Contact Support</a>')
   })
 
   it("supabase auth templates inherit responsive layout", () => {

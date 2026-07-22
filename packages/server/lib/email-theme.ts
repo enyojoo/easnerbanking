@@ -41,6 +41,9 @@ export const EASNER_LOGO_URL = EASNER_LOGO_URL_LIGHT
 
 export const EASNER_COMPANY_LEGAL_NAME = "Easner Group, Inc."
 
+/** Public contact / sales page — used for email “Contact Support” links. */
+export const EASNER_CONTACT_URL = "https://www.easner.com/contact"
+
 export const EASNER_COMPANY_ADDRESS_HTML =
   "584 Castro St, Suite 4092<br>San Francisco, CA 94114, United States"
 

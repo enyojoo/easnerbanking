@@ -25,7 +25,7 @@ describe("buildWalletSendPayoutReviewSnapshot", () => {
     expect(review.total_debited).toBe(101)
     expect(review.exchange_fee).toBe(0)
     expect(review.execution_model).toBe("direct_turnkey")
-    expect(review.transfer_method).toBe("USDC on Solana")
+    expect(review.transfer_method).toMatch(/^USDC on SOL/i)
   })
 
   it("builds LI.FI review rows that add up", () => {
@@ -71,7 +71,58 @@ describe("resolveWalletSendPayoutReview", () => {
       "USD",
     )
     expect(review?.total_debited).toBe(101)
+    expect(review?.you_send_amount).toBe(100)
     expect(review?.execution_model).toBe("direct_turnkey")
+  })
+
+  it("corrects direct Turnkey snapshots that stored gross you_send_amount", () => {
+    const review = resolveWalletSendPayoutReview(
+      {
+        activity_type: "wallet_send",
+        payout_review: {
+          you_send_amount: 3.03,
+          total_debited: 3.03,
+          exchange_fee: 0,
+          processing_fee: 0.03,
+          exchange_rate: 1,
+          send_currency: "USD",
+          receive_amount: 3,
+          receive_currency: "USDC",
+          transfer_method: "USDC on SOL",
+          processing_time: "Within seconds",
+          execution_model: "direct_turnkey",
+        },
+      },
+      3.03,
+      "USD",
+    )
+    expect(review?.you_send_amount).toBe(3)
+    expect(review?.total_debited).toBe(3.03)
+    expect(review?.processing_fee).toBe(0.03)
+  })
+
+  it("builds direct snapshot ignoring bad reviewSnapshot you_send_amount", () => {
+    const review = buildWalletSendPayoutReviewSnapshot({
+      session: {
+        receive_amount: 3,
+        receive_asset: "USDC",
+        receive_network: "Solana",
+        source_balance_currency: "USD",
+        total_debited: 3.03,
+        margin_amount: 0.03,
+        customer_rate: 1,
+        execution_model: "direct_turnkey",
+        lifi_floor: 3,
+        lifi_mid: 1,
+      },
+      reviewSnapshot: {
+        you_send_amount: 3.03,
+        total_debited: 3.03,
+        processing_fee: 0.03,
+      },
+    })
+    expect(review.you_send_amount).toBe(3)
+    expect(review.total_debited).toBe(3.03)
   })
 
   it("reconstructs legacy flat wallet_send metadata", () => {

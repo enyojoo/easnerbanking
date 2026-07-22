@@ -5,6 +5,7 @@ import {
   deriveTransactionNotification,
   descriptorToPushContent,
   formatMaskedSenderDisplay,
+  isWalletSendOutRow,
   parseCommunicationPreferences,
   personalMobileTransactionUrl,
   type DeriveTransactionNotificationInput,
@@ -21,6 +22,7 @@ import { isLedgerTransactionEmailEnabled } from "@/lib/notifications/email-rollo
 import { sendTransactionSettledPush } from "@/lib/notifications/expo-push"
 import { resolveEmailAudience } from "@/lib/notifications/resolve-email-audience"
 import { fetchUserEmailContact } from "@/lib/notifications/user-contact"
+import { resolveWalletSendPayoutReview } from "@/lib/wallet-send/build-wallet-send-payout-review"
 
 export type DispatchTransactionNotificationInput = DeriveTransactionNotificationInput & {
   userId: string
@@ -69,7 +71,12 @@ function buildEmailDetailRows(
   const meta = (input.metadata ?? {}) as Record<string, unknown>
   const direction = descriptor.direction
 
-  const payoutReview = readValidPayoutReview(meta.payout_review)
+  const payoutReview = isWalletSendOutRow({
+    direction: input.direction,
+    metadata: meta,
+  })
+    ? resolveWalletSendPayoutReview(meta, input.amount, input.currency)
+    : readValidPayoutReview(meta.payout_review)
   if (payoutReview) {
     const snap = meta.recipient_snapshot as Record<string, unknown> | undefined
     const rows = buildTransactionEmailDetailRows({

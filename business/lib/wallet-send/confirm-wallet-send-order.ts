@@ -91,17 +91,39 @@ export async function confirmWalletSendOrder(input: {
     }
   }
 
+  const principalSendAmount =
+    locked.execution_model === "direct_turnkey"
+      ? locked.receive_amount
+      : locked.customer_rate > 0
+        ? Math.round((locked.receive_amount / locked.customer_rate) * 1_000_000) / 1_000_000
+        : Math.max(0, locked.total_debited - locked.margin_amount)
+
+  // Explicit Easner processing fee leg (direct: margin_amount; LI.FI: total − floor − FX margin).
+  const processingFee =
+    locked.execution_model === "direct_turnkey"
+      ? locked.margin_amount
+      : Math.round(
+          Math.max(0, locked.total_debited - locked.lifi_floor - locked.margin_amount) * 1_000_000,
+        ) / 1_000_000
+  const displayChannelCost =
+    locked.execution_model === "lifi_bridge" && locked.lifi_mid > 0
+      ? Math.round(
+          Math.max(0, locked.lifi_floor - locked.receive_amount / locked.lifi_mid) * 1_000_000,
+        ) / 1_000_000
+      : 0
+
   const quote: WalletSendQuoteResult = {
     receiveAmount: locked.receive_amount,
     receiveCurrency: locked.receive_asset,
     receiveNetwork: locked.receive_network,
-    sendAmount: locked.total_debited,
+    // Sending/Sent is net principal — never the fee-inclusive total_debited.
+    sendAmount: principalSendAmount,
     sendCurrency: locked.source_balance_currency,
     totalDebited: locked.total_debited,
     marginAmount: locked.margin_amount,
-    channelCost: 0,
-    processingFee: locked.margin_amount,
-    displayChannelCost: 0,
+    channelCost: displayChannelCost,
+    processingFee,
+    displayChannelCost,
     networkFee: 0,
     rate: locked.customer_rate,
     customerRate: locked.customer_rate,

@@ -5,6 +5,7 @@ import {
   EASNER_COMPANY_ADDRESS,
   EASNER_COMPANY_ADDRESS_HTML,
   EASNER_COMPANY_LEGAL_NAME,
+  EASNER_CONTACT_URL,
   EASNER_LOGO_URL_DARK,
   EASNER_LOGO_URL_LIGHT,
   resolveEmailFooterNotice,
@@ -390,7 +391,7 @@ export function generateBaseEmailTemplate(
     ? ""
     : `<p class="footer-text">Need help? We're here for you.</p>
             <div class="footer-links">
-                <a href="mailto:${profile.supportEmail}">Contact Support</a>
+                <a href="${EASNER_CONTACT_URL}">Contact Support</a>
             </div>`
 
   const disclaimerBlock = options?.footerDisclaimerHtml?.trim()
@@ -495,7 +496,6 @@ export function generateAuthOtpBlock(tokenPlaceholder = "{{ .Token }}"): string 
  */
 export function generateSupabaseAuthEmailHtml(variant: SupabaseAuthEmailVariant): string {
   const copy = SUPABASE_AUTH_EMAIL_COPY[variant]
-  const profile = getEmailAudienceProfile("personal")
 
   const content = `
         <p class="confirmation-text">${copy.intro}</p>
@@ -503,7 +503,7 @@ export function generateSupabaseAuthEmailHtml(variant: SupabaseAuthEmailVariant)
         <div class="security-note"><p>${copy.note}</p></div>
         ${
           copy.includeHelpLine
-            ? `<p class="confirmation-text">Need help? <a href="mailto:${profile.supportEmail}" style="color: ${emailTheme.primary}; text-decoration: none;">Contact support</a> and we'll take care of you.</p>`
+            ? `<p class="confirmation-text">Need help? <a href="${EASNER_CONTACT_URL}" style="color: ${emailTheme.primary}; text-decoration: none;">Contact support</a> and we'll take care of you.</p>`
             : ""
         }
   `.trim()
@@ -582,11 +582,10 @@ export function generateTransactionDetails(data: {
 }
 
 export function generateFooter(): string {
-  const profile = getEmailAudienceProfile("personal")
   const year = new Date().getFullYear()
   return `
     <p class="footer-text">Need help? We're here for you.</p>
-    <div class="footer-links"><a href="mailto:${profile.supportEmail}">Contact Support</a></div>
+    <div class="footer-links"><a href="${EASNER_CONTACT_URL}">Contact Support</a></div>
     <p class="company-info">© ${year} ${EASNER_COMPANY_LEGAL_NAME} All rights reserved.<br>${EASNER_COMPANY_ADDRESS}</p>
   `
 }
