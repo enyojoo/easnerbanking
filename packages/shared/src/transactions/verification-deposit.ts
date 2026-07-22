@@ -224,7 +224,7 @@ export function formatVerificationDepositPushBody(input: {
   const sym = c === "EUR" ? "€" : c === "GBP" ? "£" : "$"
   const amountText = `${sym}${n.toFixed(2)}`
   const bank = String(input.bankName || VERIFICATION_BANK_FALLBACK).trim() || VERIFICATION_BANK_FALLBACK
-  return `Received ${amountText} from ${bank}`
+  return `You've received ${amountText} from ${bank}`
 }
 
 /**

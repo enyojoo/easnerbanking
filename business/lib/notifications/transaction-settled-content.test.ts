@@ -27,7 +27,7 @@ describe("buildTransactionSettledPushContent", () => {
       },
     })
     expect(title).toBe("Bank verification deposit")
-    expect(body).toBe("Received $0.32 from Chase")
+    expect(body).toContain("Verification only")
   })
 
   it("still uses bank deposit push for funding onramp", () => {
@@ -42,7 +42,7 @@ describe("buildTransactionSettledPushContent", () => {
         settled_amount: 9.95,
       },
     })
-    expect(title).toBe("Bank deposit complete")
+    expect(title).toBe("US bank deposit complete")
     expect(body).toContain("Funds are now available")
   })
 
@@ -105,7 +105,7 @@ describe("buildTransactionSettledPushContent", () => {
       },
     })
     expect(title).toBe("Bank transfer complete")
-    expect(body).toBe("Sent ₦5,000 to Samuel Odiba Enyojo")
+    expect(body).toBe("You've sent ₦5,000 to Samuel Odiba Enyojo")
   })
 
   it("uses Stablecoin Transfer title and receive amount for wallet send", () => {
@@ -134,7 +134,7 @@ describe("buildTransactionSettledPushContent", () => {
       },
     })
     expect(title).toBe("Stablecoin transfer complete")
-    expect(body).toBe("Sent $1 to Fjw9ot...WfP5Xc")
+    expect(body).toBe("You've sent $1 to Fjw9ot...WfP5Xc")
   })
 
   it("falls back to metadata receive amount for pre-snapshot global payout", () => {

@@ -204,9 +204,10 @@ function buildWalletSendBody(input: {
       ? formatMoneyDisplay(receiveAmount, receiveCurrency)
       : input.amountText
   const destinationLabel = walletAddress ? truncateMiddle(walletAddress, 6, 6) : ""
+  // Second person — email body follows “Hey {name},”
   return destinationLabel
-    ? `Sent ${amountDisplay} to ${destinationLabel}`
-    : `Sent ${amountDisplay}`
+    ? `You've sent ${amountDisplay} to ${destinationLabel}`
+    : `You've sent ${amountDisplay}`
 }
 
 type DescriptorDraft = Omit<
@@ -264,8 +265,8 @@ function buildGlobalPayoutOutContext(input: {
     ]),
   })
   const sentBody = recipientName
-    ? `Sent ${amountDisplay} to ${recipientName}`
-    : `Sent ${amountDisplay}`
+    ? `You've sent ${amountDisplay} to ${recipientName}`
+    : `You've sent ${amountDisplay}`
   return {
     transferMethod,
     notificationActivityLabel,
@@ -457,7 +458,7 @@ export function deriveTransactionNotification(
   }
 
   if (direction === "out" && outboundEasetag) {
-    const body = `Sent ${amountText} to @${outboundEasetag}`
+    const body = `You've sent ${amountText} to @${outboundEasetag}`
     return finalizeDescriptor(
       {
         ...base,
@@ -472,7 +473,7 @@ export function deriveTransactionNotification(
     )
   }
   if (direction === "in" && inboundEasetag) {
-    const body = `Received ${amountText} from @${inboundEasetag}`
+    const body = `You've received ${amountText} from @${inboundEasetag}`
     return finalizeDescriptor(
       {
         ...base,
@@ -489,7 +490,7 @@ export function deriveTransactionNotification(
 
   if (isCard) {
     if (direction === "in") {
-      const body = `Added ${amountText} from your card`
+      const body = `You've added ${amountText} from your card`
       return finalizeDescriptor(
         {
           ...base,
@@ -502,7 +503,9 @@ export function deriveTransactionNotification(
       )
     }
     const merchant = deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload ?? null })
-    const body = merchant ? `Paid ${amountText} to ${merchant}` : `Paid ${amountText}`
+    const body = merchant
+      ? `You've paid ${amountText} to ${merchant}`
+      : `You've paid ${amountText}`
     return finalizeDescriptor(
       {
         ...base,
@@ -558,7 +561,7 @@ export function deriveTransactionNotification(
         notification.activityLabel,
       )
     }
-    const body = `Received ${amountText} via address`
+    const body = `You've received ${amountText} via address`
     return finalizeDescriptor(
       {
         ...base,
@@ -581,7 +584,7 @@ export function deriveTransactionNotification(
             currency: input.currency,
             amountText,
           })
-        : `Sent ${amountText} to wallet address`
+        : `You've sent ${amountText} to wallet address`
     return finalizeDescriptor(
       {
         ...base,
@@ -597,8 +600,8 @@ export function deriveTransactionNotification(
 
   if (category === "Easetag Received") {
     const body = inboundEasetag
-      ? `Received ${amountText} from @${inboundEasetag}`
-      : `Received ${amountText}`
+      ? `You've received ${amountText} from @${inboundEasetag}`
+      : `You've received ${amountText}`
     return finalizeDescriptor(
       {
         ...base,
@@ -611,7 +614,9 @@ export function deriveTransactionNotification(
     )
   }
   if (category === "Easetag Send") {
-    const body = outboundEasetag ? `Sent ${amountText} to @${outboundEasetag}` : `Sent ${amountText}`
+    const body = outboundEasetag
+      ? `You've sent ${amountText} to @${outboundEasetag}`
+      : `You've sent ${amountText}`
     return finalizeDescriptor(
       {
         ...base,
@@ -792,7 +797,9 @@ export function deriveTransactionNotification(
       metadata: meta,
       payload: input.payload ?? null,
     })
-    const body = from ? `Received ${amountText} from ${from}` : `Received ${amountText}`
+    const body = from
+      ? `You've received ${amountText} from ${from}`
+      : `You've received ${amountText}`
     return finalizeDescriptor(
       {
         ...base,
@@ -808,7 +815,7 @@ export function deriveTransactionNotification(
   }
 
   const to = deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload ?? null })
-  const body = to ? `Sent ${amountText} to ${to}` : `Sent ${amountText}`
+  const body = to ? `You've sent ${amountText} to ${to}` : `You've sent ${amountText}`
   return finalizeDescriptor(
     {
       ...base,

@@ -668,8 +668,8 @@ export function resolveInboundReceiveNotification(
         : "Easetag received"
       const handle = snapshot.displayTitle.match(/@(\w+)/)?.[1]
       successBody = handle
-        ? `Received ${creditedText} from @${handle}`
-        : `Received ${creditedText}`
+        ? `You've received ${creditedText} from @${handle}`
+        : `You've received ${creditedText}`
       break
     }
   }

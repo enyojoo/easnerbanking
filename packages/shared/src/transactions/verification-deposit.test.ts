@@ -76,7 +76,7 @@ describe("formatVerificationDepositPushBody", () => {
         currency: "USD",
         bankName: "PNC Bank",
       }),
-    ).toBe("Received $0.20 from PNC Bank")
+    ).toBe("You've received $0.20 from PNC Bank")
   })
 })
 
