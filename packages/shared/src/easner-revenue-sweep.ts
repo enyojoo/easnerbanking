@@ -40,6 +40,26 @@ export function computeEasnerRevenueFeeWalletSweepAmount(
   return Math.max(quotedSurplus, ledgerSurplus)
 }
 
+/**
+ * Wallet-send fee-wallet sweep.
+ *
+ * Direct Turnkey stores the same 1% fee on both `margin_amount` and `processing_fee`
+ * (no separate FX margin). Summing them double-sweeps (e.g. $2 send → 0.02+0.02=0.04).
+ * LI.FI keeps distinct FX margin + processing legs and should still sum.
+ */
+export function computeWalletSendFeeWalletSweepAmount(input: {
+  executionModel?: string | null
+  marginAmount?: number
+  processingFee?: number
+}): number {
+  const marginAmount = roundUsdc(Number(input.marginAmount ?? 0))
+  const processingFee = roundUsdc(Number(input.processingFee ?? 0))
+  if (String(input.executionModel ?? "") === "direct_turnkey") {
+    return roundUsdc(Math.max(0, Math.max(marginAmount, processingFee)))
+  }
+  return computeEasnerRevenueFeeWalletSweepAmount({ marginAmount, processingFee })
+}
+
 /** @deprecated Prefer computeEasnerRevenueFeeWalletSweepAmount */
 export function computeYcBalancePayoutFeeWalletSweepAmount(input: {
   marginAmount?: number

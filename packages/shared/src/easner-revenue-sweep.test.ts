@@ -1,5 +1,31 @@
 import { describe, expect, it } from "vitest"
-import { computeEasnerRevenueFeeWalletSweepAmount } from "./easner-revenue-sweep"
+import {
+  computeEasnerRevenueFeeWalletSweepAmount,
+  computeWalletSendFeeWalletSweepAmount,
+} from "./easner-revenue-sweep"
+
+describe("computeWalletSendFeeWalletSweepAmount", () => {
+  it("does not double-count direct Turnkey 1% fee aliased on both fields", () => {
+    // ETID99011346 shape: $2 principal, 1% = $0.02 stored as margin_amount AND processing_fee
+    expect(
+      computeWalletSendFeeWalletSweepAmount({
+        executionModel: "direct_turnkey",
+        marginAmount: 0.02,
+        processingFee: 0.02,
+      }),
+    ).toBe(0.02)
+  })
+
+  it("sums distinct LI.FI FX margin + processing fee legs", () => {
+    expect(
+      computeWalletSendFeeWalletSweepAmount({
+        executionModel: "lifi_bridge",
+        marginAmount: 1.52,
+        processingFee: 1,
+      }),
+    ).toBe(2.52)
+  })
+})
 
 describe("computeEasnerRevenueFeeWalletSweepAmount", () => {
   it("sums margin + processing fee (YC balance payout shape)", () => {

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   computeEasnerRevenueFeeWalletSweepAmount,
+  computeWalletSendFeeWalletSweepAmount,
   computeYcBalancePayoutCappedFeeWalletSweep,
 } from "@easner/shared"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
@@ -181,7 +182,8 @@ export async function captureWalletSendFeeLegIfPending(
   if (String(meta.margin_turnkey_send_id ?? "").trim()) return { captured: false }
   if (meta.processing_fee_pending !== true) return { captured: false }
 
-  const feeLegAmount = computeEasnerRevenueFeeWalletSweepAmount({
+  const feeLegAmount = computeWalletSendFeeWalletSweepAmount({
+    executionModel: String(meta.execution_model ?? ""),
     marginAmount: Number(meta.margin_amount ?? 0),
     processingFee: Number(meta.processing_fee ?? 0),
   })

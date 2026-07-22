@@ -82,6 +82,7 @@ export {
 } from "./deposit-fee-pricing"
 export {
   computeEasnerRevenueFeeWalletSweepAmount,
+  computeWalletSendFeeWalletSweepAmount,
   computeYcBalancePayoutFeeWalletSweepAmount,
   EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
   type ComputeEasnerRevenueFeeWalletSweepInput,
