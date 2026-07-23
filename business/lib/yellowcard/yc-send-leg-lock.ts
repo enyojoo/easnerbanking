@@ -41,7 +41,6 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   const prefix = String(input.sequenceIdPrefix ?? "yc_send").trim() || "yc_send"
   let settlementCryptoUsd = input.initialSettlementCryptoUsd
   let sequenceId = `${prefix}_${randomUUID()}`
-  let lastSendRes: YcSendSubmitResult | null = null
   let lastLockedLocal = 0
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -54,21 +53,58 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       sequenceId,
       attempt,
     })
-    const sendRes = await hydrateYcSendSubmitResult(sendResRaw)
-    lastSendRes = sendRes
+    // Prefer POST body; hydrate only when fee/local fields are incomplete for the check.
+    let sendRes = sendResRaw
     lastLockedLocal = readYcSendLockedLocalAmount(sendRes as Record<string, unknown>) ?? 0
-    const sendLegFeeLocal = resolveYcSendLegFeeLocalForLock({
+    let sendLegFeeLocal = resolveYcSendLegFeeLocalForLock({
       sendRes: sendRes as Record<string, unknown>,
       lockedLocalAmount: lastLockedLocal,
       quotedReceive: input.receiveAmount,
     })
-
-    const check = checkYcSendLegDestinationAmountSufficient({
+    let check = checkYcSendLegDestinationAmountSufficient({
       quotedReceive: input.receiveAmount,
       lockedLocalAmount: lastLockedLocal,
       sendLegFeeLocal,
       tolerance,
     })
+
+    const needsHydrateForFees =
+      !check.ok &&
+      lastLockedLocal > 0 &&
+      sendLegFeeLocal <= 0 &&
+      Boolean(String(sendRes.id ?? "").trim())
+
+    if (needsHydrateForFees) {
+      sendRes = await hydrateYcSendSubmitResult(sendResRaw)
+      lastLockedLocal = readYcSendLockedLocalAmount(sendRes as Record<string, unknown>) ?? 0
+      sendLegFeeLocal = resolveYcSendLegFeeLocalForLock({
+        sendRes: sendRes as Record<string, unknown>,
+        lockedLocalAmount: lastLockedLocal,
+        quotedReceive: input.receiveAmount,
+      })
+      check = checkYcSendLegDestinationAmountSufficient({
+        quotedReceive: input.receiveAmount,
+        lockedLocalAmount: lastLockedLocal,
+        sendLegFeeLocal,
+        tolerance,
+      })
+    } else if (!check.ok && lastLockedLocal <= 0 && Boolean(String(sendRes.id ?? "").trim())) {
+      // Missing locked local on POST — one short hydrate before deciding retry.
+      sendRes = await hydrateYcSendSubmitResult(sendResRaw, { maxAttempts: 1, delayMs: 0 })
+      lastLockedLocal = readYcSendLockedLocalAmount(sendRes as Record<string, unknown>) ?? 0
+      sendLegFeeLocal = resolveYcSendLegFeeLocalForLock({
+        sendRes: sendRes as Record<string, unknown>,
+        lockedLocalAmount: lastLockedLocal,
+        quotedReceive: input.receiveAmount,
+      })
+      check = checkYcSendLegDestinationAmountSufficient({
+        quotedReceive: input.receiveAmount,
+        lockedLocalAmount: lastLockedLocal,
+        sendLegFeeLocal,
+        tolerance,
+      })
+    }
+
     if (check.ok) {
       return {
         sendRes,
@@ -88,6 +124,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       )
     }
 
+    // Retry with adjusted settlement — do not hydrate failed attempts further.
     if (check.excess > 0) {
       settlementCryptoUsd = trimYcSendLegSettlementCryptoForLocalExcess({
         settlementCryptoUsd,

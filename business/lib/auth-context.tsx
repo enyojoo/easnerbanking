@@ -222,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         const bootJson = (await bootRes.json().catch(() => ({}))) as {
           joinedViaInvite?: boolean
+          turnkeySubOrgReady?: boolean
           error?: string
           code?: string
         }
@@ -237,20 +238,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch {
             // ignore storage errors
           }
-          try {
-            const er = await fetchWithSession("/api/wallets/ensure-sub-org", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-Easner-Noah-Scope": "business",
-              },
-            })
-            if (!er.ok) {
-              const text = await er.text().catch(() => "")
-              console.warn("ensure-sub-org after bootstrap:", er.status, text)
+          if (bootJson.turnkeySubOrgReady !== true) {
+            try {
+              const er = await fetchWithSession("/api/wallets/ensure-sub-org", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Easner-Noah-Scope": "business",
+                },
+              })
+              if (!er.ok) {
+                const text = await er.text().catch(() => "")
+                console.warn("ensure-sub-org after bootstrap:", er.status, text)
+              }
+            } catch (e) {
+              console.warn("ensure-sub-org error:", e)
             }
-          } catch (e) {
-            console.warn("ensure-sub-org error:", e)
           }
         } else if (hasPendingInvite) {
           console.warn("team invite bootstrap failed:", bootRes.status, bootJson.error ?? bootJson.code)

@@ -110,20 +110,34 @@ export async function submitYcSend(input: YcSendSubmitInput): Promise<YcSendSubm
   })
 }
 
+function ycSendSubmitHasSettlementWallet(sendRes: YcSendSubmitResult): boolean {
+  const wallet = String(sendRes.settlementInfo?.walletAddress ?? "").trim()
+  return wallet.length > 0
+}
+
+function ycSendSubmitReadyWithoutHydrate(sendRes: YcSendSubmitResult): boolean {
+  const record = sendRes as Record<string, unknown>
+  if (readYcSendLegFeeLocal(record) > 0) return true
+  // POST already returned settlement wallet + locked local — skip GET poll.
+  const lockedLocal = Number(sendRes.localAmount ?? sendRes.convertedAmount ?? 0)
+  return ycSendSubmitHasSettlementWallet(sendRes) && Number.isFinite(lockedLocal) && lockedLocal > 0
+}
+
 /**
  * POST /send often omits serviceFeeAmountLocal; GET /send/{id} may lag briefly.
+ * Skip hydrate when fee locals or settlement wallet + local amount are already present.
  */
 export async function hydrateYcSendSubmitResult(
   sendRes: YcSendSubmitResult,
+  opts?: { maxAttempts?: number; delayMs?: number },
 ): Promise<YcSendSubmitResult> {
-  const record = sendRes as Record<string, unknown>
-  if (readYcSendLegFeeLocal(record) > 0) return sendRes
+  if (ycSendSubmitReadyWithoutHydrate(sendRes)) return sendRes
 
   const id = String(sendRes.id ?? "").trim()
   if (!id) return sendRes
 
-  const maxAttempts = 3
-  const delayMs = 400
+  const maxAttempts = opts?.maxAttempts ?? 2
+  const delayMs = opts?.delayMs ?? 250
   let merged: YcSendSubmitResult = sendRes
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -139,7 +153,7 @@ export async function hydrateYcSendSubmitResult(
       ...full,
       settlementInfo: full.settlementInfo ?? merged.settlementInfo,
     }
-    if (readYcSendLegFeeLocal(merged as Record<string, unknown>) > 0) {
+    if (ycSendSubmitReadyWithoutHydrate(merged)) {
       return merged
     }
   }

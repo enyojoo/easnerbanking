@@ -16,6 +16,7 @@ import { recipientService } from '../lib/recipientService'
 import {
   resolveWarmYcLocalDepositCorridor,
   ensureYcLocalDepositCachesReady,
+  hydrateReceiveRailsFromDisk,
 } from '../lib/warmYcLocalDepositCaches'
 
 /**
@@ -86,6 +87,9 @@ function AuthGatedCacheReset({ children }: { children: React.ReactNode }) {
 
 function WarmYcLocalDepositCachesOnScope({ children }: { children: React.ReactNode }) {
   const { userProfile, loading: authLoading } = useAuth()
+  React.useEffect(() => {
+    void hydrateReceiveRailsFromDisk()
+  }, [])
   React.useEffect(() => {
     if (authLoading) return
     const corridor = resolveWarmYcLocalDepositCorridor(userProfile)

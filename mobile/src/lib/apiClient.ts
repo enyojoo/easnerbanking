@@ -84,6 +84,11 @@ export async function ensureBusinessAppUserBootstrap(options?: {
       console.warn('auth bootstrap failed:', res.status, text)
       return { ok: false, status: res.status, errorText: text }
     }
+
+    const bootJson = (await res.json().catch(() => ({}))) as {
+      turnkeySubOrgReady?: boolean
+    }
+
     /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side — refresh JWT. */
     await supabase.auth.refreshSession().catch(() => undefined)
 
@@ -91,21 +96,23 @@ export async function ensureBusinessAppUserBootstrap(options?: {
       await AsyncStorage.removeItem(PENDING_RESIDENCE_COUNTRY_KEY).catch(() => undefined)
     }
 
-    /** Idempotent Turnkey sub-org + wallet queue — retries if bootstrap Turnkey step failed earlier. */
-    try {
-      const ensureRes = await fetch(`${apiBase}/api/wallets/ensure-sub-org`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
-      if (!ensureRes.ok) {
-        const text = await ensureRes.text().catch(() => '')
-        console.warn('ensure-sub-org after bootstrap:', ensureRes.status, text)
+    /** Retry ensure only when bootstrap did not link a Turnkey sub-org. */
+    if (bootJson.turnkeySubOrgReady !== true) {
+      try {
+        const ensureRes = await fetch(`${apiBase}/api/wallets/ensure-sub-org`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+        if (!ensureRes.ok) {
+          const text = await ensureRes.text().catch(() => '')
+          console.warn('ensure-sub-org after bootstrap:', ensureRes.status, text)
+        }
+      } catch (e) {
+        console.warn('ensure-sub-org after bootstrap error:', e)
       }
-    } catch (e) {
-      console.warn('ensure-sub-org after bootstrap error:', e)
     }
     return { ok: true }
   } catch (e) {

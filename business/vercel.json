@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["lhr1"],
   "installCommand": "cd .. && NODE_OPTIONS='--no-deprecation' npm ci --registry=https://registry.npmjs.org/ --no-audit --no-fund --workspace=easner-business --workspace=@easner/shared --workspace=@easner/server --workspace=@easner/rate-sync --include-workspace-root",
   "build": {
     "env": {

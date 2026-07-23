@@ -36,7 +36,9 @@ async function depositLineForVault(
   admin: SupabaseClient,
   walletOwnerId: string,
   vault: WalletVaultSpec,
+  opts?: { mode?: "fast" | "ensure" },
 ): Promise<TurnkeyDepositLine> {
+  const mode = opts?.mode === "fast" ? "fast" : "ensure"
   const label = vault.asset === "EURC" ? "EURC" : "USDC"
   const { data } = await admin
     .from("wallet_accounts")
@@ -64,6 +66,19 @@ async function depositLineForVault(
       .from("wallet_accounts")
       .update({ associated_token_account_address: derivedAta, updated_at: now })
       .eq("id", data.id)
+  }
+
+  // Warm path: trust DB/derived ATA without Solana verify or Turnkey ensure.
+  if (mode === "fast") {
+    const readyAta = ataStored || derivedAta
+    return {
+      address: readyAta,
+      ownerAddress: ownerAddr,
+      stablecoin: label,
+      chain: "Solana",
+      memo: "",
+      ataReady: Boolean(ataStored),
+    }
   }
 
   let subOrgId = String(data?.turnkey_sub_organization_id || "").trim()
@@ -118,7 +133,9 @@ async function depositLineForVault(
 export async function getTurnkeyDepositAddressesForContext(
   admin: SupabaseClient,
   ctx: NoahAccountContext,
+  opts?: { mode?: "fast" | "ensure" },
 ): Promise<TurnkeyDepositAddressesResponse> {
+  const mode = opts?.mode === "fast" ? "fast" : "ensure"
   const ownerId = await resolveWalletOwnerIdForEasnerContext(admin, ctx)
   if (!ownerId) {
     return { USD: emptyLine("USDC"), EUR: emptyLine("EURC") }
@@ -131,8 +148,8 @@ export async function getTurnkeyDepositAddressesForContext(
   }
 
   const [usd, eur] = await Promise.all([
-    depositLineForVault(admin, ownerId, usdcVault),
-    depositLineForVault(admin, ownerId, eurcVault),
+    depositLineForVault(admin, ownerId, usdcVault, { mode }),
+    depositLineForVault(admin, ownerId, eurcVault, { mode }),
   ])
 
   return { USD: usd, EUR: eur }

@@ -12,6 +12,8 @@ import { fetchFundBalanceQuote, type YcFundBalanceQuote } from '../lib/sendFlowF
 import {
   prefetchYcPayInRates,
   prefetchYcReceiveRails,
+  hydrateReceiveRailsFromDisk,
+  resolveReceiveRailsForDisplay,
   readCachedReceiveRails,
   readCachedYcPayInRates,
   type YcReceiveRailsResponse,
@@ -45,23 +47,18 @@ export function useYcReceiveRails(input: {
   const corridorKey = country && currency ? `${country}:${currency}` : ''
 
   const [rails, setRails] = useState<YcReceiveRailsResponse | null>(() =>
-    country && currency ? readCachedReceiveRails(country, currency) : null,
+    input.enabled ? resolveReceiveRailsForDisplay(country, currency) : null,
   )
-  const [loading, setLoading] = useState(() =>
-    Boolean(input.enabled && country && currency && !readCachedReceiveRails(country, currency)),
-  )
+  // Never block UI on rails — display uses cache/optimistic; network refreshes quietly.
+  const [loading, setLoading] = useState(false)
 
   const revalidate = useCallback(async () => {
     if (!input.enabled || !country || !currency) return
-    const cached = readCachedReceiveRails(country, currency)
-    if (cached) {
-      setRails(cached)
-      setLoading(false)
-    } else {
-      setLoading(true)
-    }
+    await hydrateReceiveRailsFromDisk()
+    const display = resolveReceiveRailsForDisplay(country, currency)
+    if (display) setRails(display)
     const data = await prefetchYcReceiveRails(country, currency)
-    setRails(data ?? cached ?? null)
+    setRails(data ?? display)
     setLoading(false)
   }, [input.enabled, country, currency])
 
@@ -77,17 +74,14 @@ export function useYcReceiveRails(input: {
     }
     let cancelled = false
     void (async () => {
-      const cached = readCachedReceiveRails(country, currency)
-      if (cached) {
-        setRails(cached)
-        setLoading(false)
-      } else {
-        setLoading(true)
-      }
+      await hydrateReceiveRailsFromDisk()
+      if (cancelled) return
+      const display = resolveReceiveRailsForDisplay(country, currency)
+      setRails(display)
+      setLoading(false)
       const data = await prefetchYcReceiveRails(country, currency)
       if (!cancelled) {
-        setRails(data ?? cached ?? null)
-        setLoading(false)
+        setRails(data ?? display ?? readCachedReceiveRails(country, currency))
       }
     })()
     return () => {
@@ -97,7 +91,7 @@ export function useYcReceiveRails(input: {
 
   useRevalidateOnAppActive(revalidate)
 
-  return { rails, loading, blocking: loading && !rails, revalidate }
+  return { rails, loading, blocking: false, revalidate }
 }
 
 export function useYcFundBalanceFlow(input: {

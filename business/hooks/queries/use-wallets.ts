@@ -59,7 +59,10 @@ export function useWalletBalances() {
         apiFetch<AvailableCurrencies>("/api/accounts/available-currencies", {
           headers: NOAH_HEADERS,
         }),
-        apiFetch<DepositAddresses>("/api/wallets/deposit-addresses", { headers: NOAH_HEADERS }),
+        apiFetch<DepositAddresses>("/api/wallets/deposit-addresses", {
+          query: { mode: "fast" },
+          headers: NOAH_HEADERS,
+        }),
       ])
       const detail = String(balances?.detail ?? "")
       const isTransientTurnkeyFailure =

@@ -121,7 +121,8 @@ export function isPayoutSessionReadyForExecute(
     return false
   }
   if (session.lockId || session.ycSendId) return true
-  if (session.payoutProvider === 'yellowcard' && session.ycSequenceId?.trim()) return true
+  // YC lock-on-review: preview sequenceId alone is not enough — need confirm lock.
+  if (session.payoutProvider === 'yellowcard') return false
   return Boolean(session.formSessionId.trim())
 }
 

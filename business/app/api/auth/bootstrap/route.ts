@@ -242,6 +242,7 @@ export async function POST(request: Request) {
       )
     }
     if (claim.claimed) {
+      let turnkeySubOrgReady = false
       try {
         const tk = await ensureTurnkeySubOrgForEasnerOwner({
           admin,
@@ -252,6 +253,7 @@ export async function POST(request: Request) {
           userEmail: user.email,
           displayName: resolvedBootstrapFullName,
         })
+        turnkeySubOrgReady = tk.ok
         if (!tk.ok && tk.reason !== "email_required" && tk.reason !== "turnkey_disabled") {
           console.warn("[bootstrap] Turnkey sub-org (team invite):", tk.reason)
         }
@@ -267,6 +269,7 @@ export async function POST(request: Request) {
         userId: user.id,
         businessId: claim.businessId,
         joinedViaInvite: true,
+        turnkeySubOrgReady,
       })
     }
   }
@@ -366,6 +369,7 @@ export async function POST(request: Request) {
   }
 
   if (role === "individual") {
+    let turnkeySubOrgReady = false
     try {
       const tk = await ensureTurnkeySubOrgForEasnerOwner({
         admin,
@@ -376,6 +380,7 @@ export async function POST(request: Request) {
         userEmail: user.email,
         displayName: resolvedBootstrapFullName,
       })
+      turnkeySubOrgReady = tk.ok
       if (!tk.ok && tk.reason !== "email_required" && tk.reason !== "turnkey_disabled") {
         console.warn("[bootstrap] Turnkey sub-org (individual):", tk.reason)
       }
@@ -389,7 +394,13 @@ export async function POST(request: Request) {
       isNewAccount: !userRow?.id,
     })
     await ensureDefaultCommunicationPreferences(admin, user.id)
-    return NextResponse.json({ ok: true, role, userId: user.id, businessId: userRow?.easner_business_id ?? null })
+    return NextResponse.json({
+      ok: true,
+      role,
+      userId: user.id,
+      businessId: userRow?.easner_business_id ?? null,
+      turnkeySubOrgReady,
+    })
   }
 
   let businessId = userRow?.easner_business_id ?? null
@@ -481,6 +492,7 @@ export async function POST(request: Request) {
     email: user.email ?? null,
   })
 
+  let turnkeySubOrgReady = false
   try {
     const tk = await ensureTurnkeySubOrgForEasnerOwner({
       admin,
@@ -491,6 +503,7 @@ export async function POST(request: Request) {
       userEmail: user.email,
       displayName: resolvedBootstrapFullName,
     })
+    turnkeySubOrgReady = tk.ok
     if (!tk.ok && tk.reason !== "email_required" && tk.reason !== "turnkey_disabled") {
       console.warn("[bootstrap] Turnkey sub-org (business):", tk.reason)
     }
@@ -513,5 +526,6 @@ export async function POST(request: Request) {
     userId: user.id,
     businessId,
     country: country ?? null,
+    turnkeySubOrgReady,
   })
 }

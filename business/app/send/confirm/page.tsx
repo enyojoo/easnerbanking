@@ -46,9 +46,11 @@ import {
   ensureCrossBorderOrderConfirmed,
   isCompleteCrossBorderQuote,
   isStashedCrossBorderQuoteFresh,
+  isUsableCrossBorderQuotePreview,
   peekCrossBorderLeg2DraftId,
   peekCrossBorderQuote,
   peekLastCrossBorderQuoteError,
+  prefetchCrossBorderQuotePipeline,
   type CrossBorderQuoteStashMeta,
 } from "@/lib/yc-cross-border-quote-cache"
 import {
@@ -298,9 +300,8 @@ export default function SendConfirmPage() {
   }, [state])
 
   /**
-   * Cross-border review renders only after a locked quote (transferId + bankInfo).
-   * Never hydrate review from ensureCrossBorderQuoteStashed preview-only — that
-   * caused partial cards until leg1 confirm finished (1774c762 regression).
+   * Cross-border review shows preview rates immediately. POST /receive (full lock)
+   * runs on Pay via YcPayInReviewSection — do not auto-confirm on mount.
    */
   useEffect(() => {
     if (!state || !crossBorderMeta) return
@@ -312,12 +313,9 @@ export default function SendConfirmPage() {
       return
     }
 
-    if (
-      isStashedCrossBorderQuoteFresh(crossBorderMeta) &&
-      isCompleteCrossBorderQuote(peekCrossBorderQuote())
-    ) {
+    if (isStashedCrossBorderQuoteFresh(crossBorderMeta)) {
       const stashed = peekCrossBorderQuote()
-      if (stashed) {
+      if (stashed && isUsableCrossBorderQuotePreview(stashed)) {
         const yc = crossBorderQuoteToFlowState(stashed, crossBorderMeta)
         const next: SendFlowState = {
           ...state,
@@ -330,42 +328,11 @@ export default function SendConfirmPage() {
         setState(next)
         sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
       }
-      return
     }
 
-    let cancelled = false
-    setYcQuoteError(null)
-    setYcQuoteLoading(true)
-    void (async () => {
-      try {
-        const quote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
-        if (cancelled) return
-        if (!quote || !isCompleteCrossBorderQuote(quote)) {
-          setYcQuoteError(
-            peekLastCrossBorderQuoteError() || "Could not lock transfer details",
-          )
-          return
-        }
-        const yc = crossBorderQuoteToFlowState(quote, crossBorderMeta)
-        const next: SendFlowState = {
-          ...state,
-          sendAmount: yc.localPayIn,
-          sendCurrency: crossBorderMeta.payInCurrency,
-          totalAmount: yc.localPayIn,
-          transactionId: yc.easnerTransactionId || yc.transactionId || state.transactionId,
-          ycCrossBorder: yc,
-        }
-        setState(next)
-        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
-      } finally {
-        if (!cancelled) setYcQuoteLoading(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-      setYcQuoteLoading(false)
-    }
+    // Keep leg2 warm in background; Pay still awaits confirm.
+    prefetchCrossBorderQuotePipeline(crossBorderMeta)
+    setYcQuoteLoading(false)
   }, [
     crossBorderMeta,
     state?.ycCrossBorder?.transferId,
@@ -807,15 +774,13 @@ export default function SendConfirmPage() {
   const ycQuoteFullyLocked = Boolean(
     yc?.transferId && yc.localPayIn > 0 && yc.customerRate > 0,
   )
+  const ycPreviewReady = Boolean(yc?.localPayIn && yc.localPayIn > 0 && yc.customerRate > 0)
   const ycLeg2Ready = Boolean(
-    yc?.localPayIn &&
-      yc.localPayIn > 0 &&
-      yc.customerRate > 0 &&
-      (ycQuoteFullyLocked || Boolean(peekCrossBorderLeg2DraftId())),
+    ycPreviewReady && (ycQuoteFullyLocked || Boolean(peekCrossBorderLeg2DraftId())),
   )
-  const ycQuoteLocked = ycLeg2Ready
+  const ycQuoteLocked = ycLeg2Ready || ycPreviewReady
   const quoteReady = isYcCrossBorder
-    ? ycLeg2Ready
+    ? ycPreviewReady
     : easenetSend ||
       (walletSend
         ? isWalletQuoteFresh(wq, state.amount, state.recipient.id) && !walletQuoteLoading
@@ -889,8 +854,8 @@ export default function SendConfirmPage() {
       : null
 
   const ycCrossBorderReviewReady = Boolean(
-    (yc?.transferId && yc.localPayIn > 0 && yc.customerRate > 0) ||
-      (stashedCrossBorder && isCompleteCrossBorderQuote(stashedCrossBorder)),
+    (yc?.localPayIn && yc.localPayIn > 0 && yc.customerRate > 0) ||
+      (stashedCrossBorder && isUsableCrossBorderQuotePreview(stashedCrossBorder)),
   )
 
   return (

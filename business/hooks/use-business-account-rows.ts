@@ -83,24 +83,36 @@ export function useBusinessAccountRows() {
     queryKey: scope ? qk.wallets.virtualAccounts(scope, vaCurrencies) : ["wallets", "virtual-accounts", "disabled"],
     enabled: Boolean(scope) && vaCurrencies.length > 0,
     queryFn: async () => {
-      const entries = await Promise.all(
-        vaCurrencies.map(async (code) => {
-          const cur = code.toLowerCase()
-          if (cur !== "usd" && cur !== "eur" && cur !== "gbp") {
-            return [code, null] as const
-          }
-          try {
-            const value = await apiFetch<VaJson>(`/api/noah/virtual-accounts`, {
-              query: { currency: cur },
+      const batchable = vaCurrencies
+        .map((c) => c.toLowerCase())
+        .filter((c) => c === "usd" || c === "eur" || c === "gbp")
+      const unsupported = vaCurrencies.filter((code) => {
+        const cur = code.toLowerCase()
+        return cur !== "usd" && cur !== "eur" && cur !== "gbp"
+      })
+
+      const out: Record<string, VaJson | null> = {}
+      for (const code of unsupported) out[code] = null
+
+      if (batchable.length > 0) {
+        try {
+          const data = await apiFetch<{ accounts?: Record<string, VaJson | null> }>(
+            `/api/noah/virtual-accounts`,
+            {
+              query: { currencies: batchable.join(",") },
               headers: NOAH_HEADERS,
-            })
-            return [code, value] as const
-          } catch {
-            return [code, null] as const
+            },
+          )
+          const accounts = data.accounts ?? {}
+          for (const cur of batchable) {
+            const code = cur.toUpperCase()
+            out[code] = accounts[code] ?? accounts[cur] ?? null
           }
-        }),
-      )
-      return Object.fromEntries(entries) as Record<string, VaJson | null>
+        } catch {
+          for (const cur of batchable) out[cur.toUpperCase()] = null
+        }
+      }
+      return out
     },
     staleTime: 5 * 60_000,
     gcTime: 15 * 60_000,

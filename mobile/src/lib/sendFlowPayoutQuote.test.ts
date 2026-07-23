@@ -98,8 +98,8 @@ describe('sendFlowPayoutQuote stash', () => {
     ).toBe(false)
   })
 
-  it('accepts Yellowcard preview session for PIN without POST /send lock', () => {
-    const quote = sampleQuote({
+  it('requires Yellowcard lockId (or ycSendId) for PIN after lock-on-review', () => {
+    const preview = sampleQuote({
       provider: 'yellowcard',
       quotePhase: 'preview',
       requiresConfirm: true,
@@ -110,11 +110,27 @@ describe('sendFlowPayoutQuote stash', () => {
         sessionId: 'yc_preview_abc',
       },
     })
-    const session = payoutPrepareSessionFromQuote(quote, 'recipient-a')
-    expect(isPayoutSessionReadyForExecute(session, 'recipient-a')).toBe(true)
+    expect(isPayoutSessionReadyForExecute(payoutPrepareSessionFromQuote(preview, 'recipient-a'), 'recipient-a')).toBe(
+      false,
+    )
+
+    const locked = sampleQuote({
+      provider: 'yellowcard',
+      quotePhase: 'locked',
+      requiresConfirm: false,
+      lockId: 'lock-1',
+      yc: { sequenceId: 'yc_locked_abc', sendId: 'send-1', channelId: 'ch-1', cryptoAmount: 1.5 },
+      settlement: {
+        ...sampleQuote().settlement,
+        sessionId: 'yc_locked_abc',
+      },
+    })
+    expect(isPayoutSessionReadyForExecute(payoutPrepareSessionFromQuote(locked, 'recipient-a'), 'recipient-a')).toBe(
+      true,
+    )
   })
 
-  it('accepts Yellowcard preview quotes for review (lock happens at PIN execute)', () => {
+  it('accepts Yellowcard preview quotes for review (lock happens on Continue confirm)', () => {
     expect(
       isCompletePayoutQuote(
         sampleQuote({

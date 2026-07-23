@@ -31,6 +31,10 @@ vi.mock("@/lib/wallet/resolve-wallet-owner", () => ({
   getWalletOwnerId: vi.fn(async () => "wallet-owner-1"),
 }))
 
+vi.mock("@/lib/wallet/resolve-active-usdc-solana-address", () => ({
+  resolveActiveUsdcSolanaAddress: vi.fn(async () => "user-wallet"),
+}))
+
 vi.mock("@/lib/yellowcard/payout-execute", () => ({
   executeYcBalancePayoutTurnkeyLeg: vi.fn(),
 }))
@@ -39,6 +43,7 @@ import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { applyGlobalPayoutWalletDebitForEasnerPayoutId } from "@/lib/noah/global-payout-ledger"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import { getPayoutLockSession } from "@/lib/payout/payout-lock-session"
+import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 import { executeYcBalancePayoutTurnkeyLeg } from "@/lib/yellowcard/payout-execute"
 import { executeYcBalancePayout } from "./balance-payout-execute"
 
@@ -152,5 +157,38 @@ describe("executeYcBalancePayout ledger upserts", () => {
       expect(ptid.startsWith("global_payout_pending:")).toBe(true)
       expect(ptid).not.toBe("yc-send-123")
     }
+  })
+
+  it("rejects PIN execute when lock-on-review is on but lockId is missing", async () => {
+    vi.mocked(isPayoutLockOnReviewEnabled).mockReturnValue(true)
+    const admin = mockAdmin()
+    admin.chain.maybeSingle
+      .mockResolvedValueOnce({ data: { available_balance: 100 } })
+      .mockResolvedValueOnce({ data: { residence_country: "NG", full_name: "Test" } })
+
+    const result = await executeYcBalancePayout({
+      admin: admin as never,
+      userId: "user-1",
+      businessId: null,
+      recipientRow: recipient,
+      recipientId: "rec-1",
+      fiatAmount: 2000,
+      fiatCurrency: "NGN",
+      countryCode: "NG",
+      yc: { channelId: "ch-1" },
+      pricing: {
+        totalDebited: 1.48,
+        customerPrincipal: 1.45,
+        marginAmount: 0.007,
+        processingFee: 0.014,
+        channelCost: 0.007,
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toMatch(/lock expired or invalid/i)
+    }
+    expect(getPayoutLockSession).not.toHaveBeenCalled()
   })
 })

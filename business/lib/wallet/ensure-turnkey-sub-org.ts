@@ -11,9 +11,21 @@ function sanitizeSubOrgNamePart(s: string): string {
   return s.replace(/[^a-zA-Z0-9-_.]/g, "-").slice(0, 64)
 }
 
+type EnsureResult =
+  | { ok: true; subOrganizationId: string; created: boolean }
+  | { ok: false; reason: string }
+
+const ensureInflight = new Map<string, Promise<EnsureResult>>()
+
+function ownerKey(scope: "individual" | "business", subjectUserId: string, subjectBusinessId: string | null): string {
+  if (scope === "business" && subjectBusinessId) return `business:${subjectBusinessId}`
+  return `individual:${subjectUserId}`
+}
+
 /**
  * Idempotent: if `wallet_owners` already has `turnkey_sub_organization_id`, no-op.
  * Otherwise creates a Turnkey sub-org with the parent API key and links it.
+ * Concurrent callers for the same owner share one in-flight create+link (process singleflight).
  * Errors are swallowed by callers that must not fail bootstrap (log only).
  */
 export async function ensureTurnkeySubOrgForEasnerOwner(input: {
@@ -24,10 +36,27 @@ export async function ensureTurnkeySubOrgForEasnerOwner(input: {
   noahCustomerId: string
   userEmail: string | null | undefined
   displayName: string | null | undefined
-}): Promise<
-  | { ok: true; subOrganizationId: string; created: boolean }
-  | { ok: false; reason: string }
-> {
+}): Promise<EnsureResult> {
+  const key = ownerKey(input.scope, input.subjectUserId, input.subjectBusinessId)
+  const existing = ensureInflight.get(key)
+  if (existing) return existing
+
+  const promise = ensureTurnkeySubOrgForEasnerOwnerInner(input).finally(() => {
+    if (ensureInflight.get(key) === promise) ensureInflight.delete(key)
+  })
+  ensureInflight.set(key, promise)
+  return promise
+}
+
+async function ensureTurnkeySubOrgForEasnerOwnerInner(input: {
+  admin: SupabaseClient
+  scope: "individual" | "business"
+  subjectUserId: string
+  subjectBusinessId: string | null
+  noahCustomerId: string
+  userEmail: string | null | undefined
+  displayName: string | null | undefined
+}): Promise<EnsureResult> {
   if (!isTurnkeyConfigured() || !isTurnkeyServerSubOrgCreationEnabled()) {
     return { ok: false, reason: "turnkey_disabled" }
   }

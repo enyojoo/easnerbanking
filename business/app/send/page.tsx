@@ -71,10 +71,10 @@ import {
 import {
   clearCrossBorderQuote,
   crossBorderQuoteToFlowState,
-  ensureCrossBorderOrderConfirmed,
-  isCompleteCrossBorderQuote,
+  isUsableCrossBorderQuotePreview,
   prefetchCrossBorderQuotePipeline,
   peekLastCrossBorderQuoteError,
+  warmCrossBorderQuotePipeline,
 } from "@/lib/yc-cross-border-quote-cache"
 import {
   ensureWalletSendOrderConfirmed,
@@ -145,9 +145,8 @@ function parseAmountFromDisplay(display: string): number {
 }
 
 /**
- * Cross-border bank Continue MUST await ensureCrossBorderOrderConfirmed and show
- * loading immediately. Do not navigate to review with preview-only quotes (regression
- * from 1774c762): review expects transferId + bankInfo on first paint.
+ * Cross-border bank Continue warms preview (+ background leg2). POST /receive
+ * runs on review Pay via YcPayInReviewSection — do not block Amount on full confirm.
  */
 function beginTlcContinueLoading(
   setIsContinuePending: (value: boolean) => void,
@@ -1263,23 +1262,23 @@ export default function SendPage() {
             payInRail: "bank_transfer" as const,
             receiveAmount,
           }
-          const lockedQuote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
-          if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
+          const previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
+          if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
             setAmountFieldError(
-              peekLastCrossBorderQuoteError() || "Could not lock transfer details",
+              peekLastCrossBorderQuoteError() || "Could not load transfer quote",
             )
             return
           }
           flowState = {
             ...state,
-            sendAmount: lockedQuote.localPayIn,
+            sendAmount: previewQuote.localPayIn,
             sendCurrency: otherCurrency,
-            totalAmount: lockedQuote.localPayIn,
+            totalAmount: previewQuote.localPayIn,
             transactionId:
-              lockedQuote.easnerTransactionId ||
-              lockedQuote.transactionId ||
+              previewQuote.easnerTransactionId ||
+              previewQuote.transactionId ||
               state.transactionId,
-            ycCrossBorder: crossBorderQuoteToFlowState(lockedQuote, crossBorderMeta),
+            ycCrossBorder: crossBorderQuoteToFlowState(previewQuote, crossBorderMeta),
           }
           persistSendFlowState(flowState)
           router.push("/send/confirm")

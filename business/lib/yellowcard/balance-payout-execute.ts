@@ -186,7 +186,10 @@ export async function executeYcBalancePayout(
   const useLockOnReview = isPayoutLockOnReviewEnabled("yellowcard")
   const lockId = String(input.lockId || "").trim()
 
-  if (useLockOnReview && lockId) {
+  if (useLockOnReview) {
+    if (!lockId) {
+      return { ok: false, error: "Payout lock expired or invalid. Go back and review again." }
+    }
     const lockRow = await getPayoutLockSession(admin, { lockId, userId })
     if (!lockRow || lockRow.provider !== "yellowcard") {
       return { ok: false, error: "Payout lock expired or invalid. Go back and review again." }

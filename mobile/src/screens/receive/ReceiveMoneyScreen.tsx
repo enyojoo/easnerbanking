@@ -168,7 +168,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const needsYcReceiveRails =
     verificationComplete && currency === 'USD' && Boolean(localPayInCurrency && residenceCountry)
 
-  const { rails: receiveRails, blocking: receiveRailsBlocking, revalidate: receiveRailsRevalidate } = useYcReceiveRails({
+  const { rails: receiveRails, revalidate: receiveRailsRevalidate } = useYcReceiveRails({
     country: residenceCountry || null,
     currency: localPayInCurrency,
     enabled: needsYcReceiveRails,
@@ -186,14 +186,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     }, [userProfile, verificationComplete, receiveRailsRevalidate]),
   )
 
-  const cashMethodsReady = !needsYcReceiveRails || !receiveRailsBlocking
-
-  const showLocalTab =
-    Boolean(localPayInCurrency) &&
-    verificationComplete &&
-    currency === 'USD' &&
-    cashMethodsReady &&
-    Boolean(receiveRails?.anyAvailable)
+  const expectLocalCorridor =
+    Boolean(localPayInCurrency) && verificationComplete && currency === 'USD'
+  // Instant from cache/optimistic rails — residence rarely changes.
+  const showLocalTab = expectLocalCorridor && Boolean(receiveRails?.anyAvailable)
   const showCashTab = showBankTab || showLocalTab
   const showTabBar = showCashTab && showStablecoinTab
 

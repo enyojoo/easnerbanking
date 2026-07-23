@@ -45,7 +45,7 @@ import { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from '../../h
 import { useQueryClient } from '@tanstack/react-query'
 import { useYcCrossBorderFlow, type YcPayInRail, residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
 import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
-import { warmYcPayInCorridor } from '../../lib/warmYcLocalDepositCaches'
+import { warmYcPayInCorridor, resolveReceiveRailsForDisplay } from '../../lib/warmYcLocalDepositCaches'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { useAuth } from '../../contexts/AuthContext'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
@@ -85,6 +85,7 @@ import {
   validateYcCrossBorderSendAmount,
   useDebouncedValue,
   SEND_AMOUNT_CONTINUE_CTA,
+  mapResidenceToLocalPayInCurrency,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
@@ -116,10 +117,10 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   clearCrossBorderQuote,
-  ensureCrossBorderOrderConfirmed,
-  isCompleteCrossBorderQuote,
+  isUsableCrossBorderQuotePreview,
   prefetchCrossBorderQuotePipeline,
   peekLastCrossBorderQuoteError,
+  warmCrossBorderQuotePipeline,
 } from '../../lib/sendFlowCrossBorderQuote'
 import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
@@ -317,12 +318,23 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     enteredAmount,
   })
 
-  const showThroughLocalCurrency = ycFlow.available && !isEasetagRecipient
-  const payInCurrency = ycFlow.payInCurrency
+  const residenceLocalPayInCurrency = useMemo(() => {
+    const cc = String(userProfile?.residence_country ?? '').trim().toUpperCase()
+    return cc ? mapResidenceToLocalPayInCurrency(cc) : null
+  }, [userProfile?.residence_country])
+
+  // Show TLC as soon as residence maps to a local currency (while eligibility loads),
+  // then keep it only if eligibility confirms available.
+  const showThroughLocalCurrency =
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    (ycFlow.available ||
+      (ycFlow.eligibilityLoading && Boolean(residenceLocalPayInCurrency)))
+  const payInCurrency = ycFlow.payInCurrency ?? residenceLocalPayInCurrency
   const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
   const payInCountryName = payInCountry ? resolveReceiveCountryName(payInCountry) : ''
 
-  const { rails: payInRails, blocking: payInRailsBlocking } = useYcReceiveRails({
+  const { rails: payInRails } = useYcReceiveRails({
     country: payInCountry,
     currency: payInCurrency,
     enabled: showThroughLocalCurrency && Boolean(payInCountry && payInCurrency),
@@ -334,12 +346,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }, [showThroughLocalCurrency, payInCountry, payInCurrency])
 
   const localPayInOptions = useMemo(() => {
-    if (!payInCurrency || !payInCountry || !payInRails) return []
+    if (!payInCurrency || !payInCountry) return []
+    const rails = payInRails ?? resolveReceiveRailsForDisplay(payInCountry, payInCurrency)
+    if (!rails) return []
     const opts: { rail: YcPayInRail; title: string }[] = []
-    if (payInRails.rails.bank_transfer.available) {
+    if (rails.rails.bank_transfer.available) {
       opts.push({ rail: 'bank_transfer', title: sendLocalPayInBankTitle(payInCountryName) })
     }
-    if (payInRails.rails.mobile_money.available) {
+    if (rails.rails.mobile_money.available) {
       opts.push({ rail: 'mobile_money', title: sendLocalPayInMomoTitle(payInCountryName) })
     }
     return opts
@@ -1348,27 +1362,26 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               }),
             quoteStashMeta,
           )
-          if (isYellowcardPayoutQuote(previewQuote)) {
-            if (previewQuote && isCompletePayoutQuote(previewQuote)) {
-              stashSendPayoutQuote(previewQuote, quoteStashMeta)
-            }
+          // Lock on review Continue for all providers (YC POST /send + Noah confirm).
+          stashedQuote = await ensureSendPayoutOrderConfirmed(
+            () =>
+              noahService.confirmPayoutOrder({
+                recipientId: recipient.id,
+                receiveAmount: receiveAmountValue,
+                sourceBalanceCurrency: selectedBalanceCurrency,
+                amountEntryMode,
+                ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+                  ? { sendAmount: navAmounts.sendAmount }
+                  : {}),
+                ...(note.trim() ? { note: note.trim() } : {}),
+                ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+              }),
+            quoteStashMeta,
+          )
+          if (!stashedQuote && isYellowcardPayoutQuote(previewQuote) && isCompletePayoutQuote(previewQuote)) {
+            // Fallback: allow preview navigate if confirm briefly fails; PIN path can re-lock.
+            stashSendPayoutQuote(previewQuote, quoteStashMeta)
             stashedQuote = previewQuote
-          } else {
-            stashedQuote = await ensureSendPayoutOrderConfirmed(
-              () =>
-                noahService.confirmPayoutOrder({
-                  recipientId: recipient.id,
-                  receiveAmount: receiveAmountValue,
-                  sourceBalanceCurrency: selectedBalanceCurrency,
-                  amountEntryMode,
-                  ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-                    ? { sendAmount: navAmounts.sendAmount }
-                    : {}),
-                  ...(note.trim() ? { note: note.trim() } : {}),
-                  ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-                }),
-              quoteStashMeta,
-            )
           }
         }
       }
@@ -1481,7 +1494,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             showError('Could not resolve pay-in country for bank transfer.')
             return
           }
-          // Keep spinner visible for full YC confirm; do not skip lock on Continue.
+          // Preview (+ background leg2) only — POST /receive happens on review Pay.
           setIsContinuePending(true)
           setIsContinueLoading(true)
           if (continueSpinnerTimerRef.current) {
@@ -1495,9 +1508,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             payInRail: rail,
             receiveAmount: receiveAmountValue,
           }
-          const lockedQuote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
-          if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
-            showError(peekLastCrossBorderQuoteError() || 'Could not lock transfer details')
+          const previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
+          if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
+            showError(peekLastCrossBorderQuoteError() || 'Could not load transfer quote')
             return
           }
           navigation.navigate('SendConfirm' as never, {
@@ -1509,16 +1522,16 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             receiveCurrency: recipient.currency,
             amountEntryMode,
             amountScreenSendAmount: navAmounts.sendAmount,
-            calculatedSendingAmount: lockedQuote.localPayIn,
-            calculatedTotalAmount: lockedQuote.localPayIn,
+            calculatedSendingAmount: previewQuote.localPayIn,
+            calculatedTotalAmount: previewQuote.localPayIn,
             transactionId:
-              lockedQuote.easnerTransactionId || lockedQuote.transactionId || undefined,
-            ycPreviewCustomerRate: lockedQuote.customerRate,
+              previewQuote.easnerTransactionId || previewQuote.transactionId || undefined,
+            ycPreviewCustomerRate: previewQuote.customerRate,
             ycPreviewProvisionalLocalPayIn:
-              lockedQuote.provisionalPayIn ?? lockedQuote.localPayIn,
-            ycPreviewProcessingFee: lockedQuote.processingFee,
-            ycPreviewDisplayProcessingFeeLocal: lockedQuote.displayProcessingFeeLocal,
-            ycPreviewYcLegFeesUsd: lockedQuote.ycLegFeesUsd,
+              previewQuote.provisionalPayIn ?? previewQuote.localPayIn,
+            ycPreviewProcessingFee: previewQuote.processingFee,
+            ycPreviewDisplayProcessingFeeLocal: previewQuote.displayProcessingFeeLocal,
+            ycPreviewYcLegFeesUsd: previewQuote.ycLegFeesUsd,
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
           } as never)
@@ -2182,7 +2195,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   })}
                 </View>
 
-                {showThroughLocalCurrency && !payInRailsBlocking ? (
+                {showThroughLocalCurrency ? (
                 <View style={styles.paymentSection}>
                   <Text style={styles.paymentSectionTitle}>Through Local Currency</Text>
                   {localPayInOptions.map((option) => {

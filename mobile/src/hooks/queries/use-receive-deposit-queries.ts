@@ -61,21 +61,25 @@ const RECEIVE_QUERY_META = {
 async function fetchConsumerVirtualAccountsMap(): Promise<
   Record<string, NoahVirtualAccountDisplayJson | null>
 > {
-  const entries = await Promise.all(
-    RECEIVE_VA_CURRENCIES.map(async (code) => {
-      const cur = code.toLowerCase()
-      const value = await apiFetch<NoahVirtualAccountDisplayJson>(`/api/noah/virtual-accounts`, {
-        query: { currency: cur },
-        headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
-      })
-      return [code, value] as const
-    }),
+  const currencies = RECEIVE_VA_CURRENCIES.map((c) => c.toLowerCase()).join(',')
+  const data = await apiFetch<{ accounts?: Record<string, NoahVirtualAccountDisplayJson | null> }>(
+    `/api/noah/virtual-accounts`,
+    {
+      query: { currencies },
+      headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+    },
   )
-  return Object.fromEntries(entries) as Record<string, NoahVirtualAccountDisplayJson | null>
+  const accounts = data.accounts ?? {}
+  const out: Record<string, NoahVirtualAccountDisplayJson | null> = {}
+  for (const code of RECEIVE_VA_CURRENCIES) {
+    out[code] = accounts[code] ?? accounts[code.toLowerCase()] ?? null
+  }
+  return out
 }
 
 async function fetchConsumerDepositAddresses(): Promise<TurnkeyDepositAddressesJson> {
   return apiFetch<TurnkeyDepositAddressesJson>(`/api/wallets/deposit-addresses`, {
+    query: { mode: 'fast' },
     headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
   })
 }

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   mapResidenceToLocalPayInCurrency,
   resolveNgLocalVerification,
@@ -30,9 +31,29 @@ export type YcReceiveRailsResponse = {
   momoNetworks?: { id: string; name: string }[]
 }
 
+/** Network revalidate window — stale cache still shown instantly. */
 const RECEIVE_RAILS_CACHE_TTL_MS = 5 * 60_000
 const PAY_IN_RATES_CACHE_TTL_MS = 2 * 60_000
 const NG_VERIFY_CACHE_TTL_MS = 5 * 60_000
+const RECEIVE_RAILS_DISK_KEY = 'easner_yc_receive_rails_v1'
+
+/** Corridors where MoMo pay-in is typically available (optimistic until API confirms). */
+const OPTIMISTIC_MOMO_COUNTRIES = new Set([
+  'NG',
+  'KE',
+  'GH',
+  'UG',
+  'TZ',
+  'RW',
+  'ZM',
+  'MW',
+  'CI',
+  'SN',
+  'CM',
+  'BJ',
+  'TG',
+  'BF',
+])
 
 const receiveRailsCache = new Map<string, { data: YcReceiveRailsResponse; at: number }>()
 let payInRatesCache: { rates: YcRateClientRow[]; at: number } | null = null
@@ -41,9 +62,44 @@ const ngVerifyCache = new Map<string, { missingType: NgLocalIdType | null; at: n
 const receiveRailsInflight = new Map<string, Promise<YcReceiveRailsResponse | null>>()
 let payInRatesInflight: Promise<YcRateClientRow[] | null> | null = null
 const ngVerifyInflight = new Map<string, Promise<NgLocalIdType | null>>()
+let diskHydratePromise: Promise<void> | null = null
 
 export function receiveRailsCacheKey(country: string, currency: string): string {
   return `${country.trim().toUpperCase()}:${currency.trim().toUpperCase()}`
+}
+
+/** Instant UI when residence→currency is known; API revalidate may refine. */
+export function optimisticReceiveRails(
+  country: string,
+  currency: string,
+): YcReceiveRailsResponse {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  const momo = OPTIMISTIC_MOMO_COUNTRIES.has(cc)
+  return {
+    ok: true,
+    country: cc,
+    currency: cur,
+    rails: {
+      bank_transfer: { available: true },
+      mobile_money: { available: momo },
+    },
+    anyAvailable: true,
+  }
+}
+
+/**
+ * Rails for display: memory cache (incl. stale) → optimistic from residence.
+ * Never null when country+currency are set — options appear instantly.
+ */
+export function resolveReceiveRailsForDisplay(
+  country: string | null | undefined,
+  currency: string | null | undefined,
+): YcReceiveRailsResponse | null {
+  const cc = String(country ?? '').trim().toUpperCase()
+  const cur = String(currency ?? '').trim().toUpperCase()
+  if (!cc || !cur) return null
+  return readCachedReceiveRails(cc, cur) ?? optimisticReceiveRails(cc, cur)
 }
 
 export function readCachedReceiveRails(
@@ -62,12 +118,42 @@ export function isReceiveRailsCacheFresh(country: string, currency: string): boo
   return Date.now() - hit.at <= RECEIVE_RAILS_CACHE_TTL_MS
 }
 
+function persistReceiveRailsDisk(): void {
+  const entries: Record<string, { data: YcReceiveRailsResponse; at: number }> = {}
+  for (const [key, value] of receiveRailsCache.entries()) {
+    entries[key] = value
+  }
+  void AsyncStorage.setItem(RECEIVE_RAILS_DISK_KEY, JSON.stringify(entries)).catch(() => {})
+}
+
 function writeReceiveRailsCache(
   country: string,
   currency: string,
   data: YcReceiveRailsResponse,
 ): void {
   receiveRailsCache.set(receiveRailsCacheKey(country, currency), { data, at: Date.now() })
+  persistReceiveRailsDisk()
+}
+
+/** Load persisted rails into memory so cold start / post-PIN UI is instant. */
+export function hydrateReceiveRailsFromDisk(): Promise<void> {
+  if (diskHydratePromise) return diskHydratePromise
+  diskHydratePromise = (async () => {
+    try {
+      const raw = await AsyncStorage.getItem(RECEIVE_RAILS_DISK_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Record<string, { data: YcReceiveRailsResponse; at: number }>
+      for (const [key, value] of Object.entries(parsed ?? {})) {
+        if (!value?.data || typeof value.at !== 'number') continue
+        if (!receiveRailsCache.has(key)) {
+          receiveRailsCache.set(key, value)
+        }
+      }
+    } catch {
+      // ignore corrupt disk cache
+    }
+  })()
+  return diskHydratePromise
 }
 
 export function readCachedYcPayInRates(): YcRateClientRow[] | null {
@@ -103,6 +189,8 @@ export async function prefetchYcReceiveRails(
   const cur = currency.trim().toUpperCase()
   if (!cc || !cur) return null
 
+  await hydrateReceiveRailsFromDisk()
+
   const cached = readCachedReceiveRails(cc, cur)
   if (cached && isReceiveRailsCacheFresh(cc, cur)) return cached
 
@@ -118,7 +206,7 @@ export async function prefetchYcReceiveRails(
       writeReceiveRailsCache(cc, cur, data)
       return data
     } catch {
-      return readCachedReceiveRails(cc, cur)
+      return readCachedReceiveRails(cc, cur) ?? optimisticReceiveRails(cc, cur)
     } finally {
       receiveRailsInflight.delete(key)
     }
@@ -215,6 +303,8 @@ export async function warmYcLocalDepositCaches(input: WarmYcLocalDepositInput): 
   const country = String(input.residenceCountry ?? '').trim().toUpperCase()
   const currency = String(input.localPayInCurrency ?? '').trim().toUpperCase()
   if (!input.kycApproved || !country || !currency) return
+
+  await hydrateReceiveRailsFromDisk()
 
   const tasks: Promise<unknown>[] = [
     prefetchYcReceiveRails(country, currency).then((rails) => {
