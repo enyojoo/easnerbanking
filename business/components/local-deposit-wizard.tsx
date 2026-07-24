@@ -28,6 +28,7 @@ import {
   REVIEW_ROW_LABELS,
   normalizeYcMomoPhone,
   type NgLocalIdType,
+  type YcFundBalanceAmountPreview,
   type YcRateClientRow,
   useDebouncedValue,
   QUOTE_PREFETCH_DEBOUNCE_MS,
@@ -58,10 +59,18 @@ import {
   type ReceiveRailsResponse,
 } from "@/lib/yc-local-deposit-cache"
 
+const EMPTY_AMOUNT_PREVIEW: YcFundBalanceAmountPreview = {
+  usdCredit: 0,
+  localPayIn: 0,
+  estimatedTotalLocalPayIn: 0,
+  feeInclusive: false,
+}
+
 type FundBalanceQuote = {
   ok: true
   localPayIn: number
   usdCredit: number
+  creditOrReceiveAmount?: number
   customerRate: number
   processingFee?: number
   ycChannelFeeUsd?: number
@@ -205,9 +214,9 @@ export function LocalDepositWizard({
     return resolveYcPayInYcSellRate(rates, localPayInCurrency) ?? customerRate
   }, [payInProvider, rates, localPayInCurrency, customerRate])
 
-  const preview = useMemo(() => {
+  const preview = useMemo((): YcFundBalanceAmountPreview => {
     if (!customerRate || !ycSellRate || enteredAmount <= 0) {
-      return { usdCredit: 0, localPayIn: 0 }
+      return EMPTY_AMOUNT_PREVIEW
     }
     return (
       computeYcFundBalanceAmountPreview({
@@ -216,9 +225,12 @@ export function LocalDepositWizard({
         customerSellRate: customerRate,
         ycSellRate,
         rail,
-      }) ?? { usdCredit: 0, localPayIn: 0, estimatedTotalLocalPayIn: 0, feeInclusive: false as const }
+      }) ?? EMPTY_AMOUNT_PREVIEW
     )
   }, [customerRate, ycSellRate, amountMode, enteredAmount, rail])
+
+  const previewLocalPayInForLimits =
+    preview.estimatedTotalLocalPayIn > 0 ? preview.estimatedTotalLocalPayIn : preview.localPayIn
 
   const quoteMatchesAmount = useMemo(() => {
     if (!quote?.ok || !(quote.localPayIn > 0)) return false
@@ -235,7 +247,7 @@ export function LocalDepositWizard({
         usdCredit: quote.usdCredit ?? quote.creditOrReceiveAmount ?? preview.usdCredit,
         localPayIn: quote.localPayIn,
         estimatedTotalLocalPayIn: quote.localPayIn,
-        feeInclusive: true as const,
+        feeInclusive: true,
       }
     }
     return preview
@@ -433,7 +445,7 @@ export function LocalDepositWizard({
       amountEntryMode: amountMode,
       enteredAmount,
       previewLocalPayIn:
-        amountMode === "local" ? enteredAmount : preview.localPayIn > 0 ? preview.localPayIn : null,
+        amountMode === "local" ? enteredAmount : previewLocalPayInForLimits,
       currency: localPayInCurrency,
       limits: payInLimits,
     })
