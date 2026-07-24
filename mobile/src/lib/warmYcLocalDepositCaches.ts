@@ -29,6 +29,8 @@ export type YcReceiveRailsResponse = {
   anyAvailable: boolean
   /** Present when mobile_money pay-in is available (also on receive-rails for older clients). */
   momoNetworks?: { id: string; name: string }[]
+  /** True when UI is showing residence-based placeholders (no API mins/channels yet). */
+  optimistic?: boolean
 }
 
 /** Network revalidate window — stale cache still shown instantly. */
@@ -85,6 +87,7 @@ export function optimisticReceiveRails(
       mobile_money: { available: momo },
     },
     anyAvailable: true,
+    optimistic: true,
   }
 }
 

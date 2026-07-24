@@ -126,13 +126,104 @@ export function buildYcReceiveSubmitBody(input: YcReceiveSubmitInput): Record<st
   return body
 }
 
+/** YC docs use `bankInfo.name` for the deposit bank / processor (e.g. PAGA). */
+const BANK_NAME_KEYS = [
+  "name",
+  "bankName",
+  "bank_name",
+  "bank",
+  "institutionName",
+  "institution_name",
+  "partnerName",
+  "partner_name",
+  "processorName",
+  "processor_name",
+] as const
+
+export function resolveYcBankInfoName(
+  bankInfo: Record<string, unknown> | null | undefined,
+): string {
+  if (!bankInfo || typeof bankInfo !== "object") return ""
+  for (const key of BANK_NAME_KEYS) {
+    const value = String(bankInfo[key] ?? "").trim()
+    if (value) return value
+  }
+  return ""
+}
+
+/**
+ * Normalize bankInfo for UI: ensure `bankName` is set when YC only returns `name`
+ * (Yellowcard Lookup Collection example: `{ name: "PAGA", accountNumber, accountName }`).
+ */
+export function normalizeYcBankInfo(
+  bankInfo: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (!bankInfo || typeof bankInfo !== "object") return null
+  const out: Record<string, unknown> = { ...bankInfo }
+  const bankName = resolveYcBankInfoName(out)
+  if (bankName) {
+    if (!String(out.bankName ?? "").trim()) out.bankName = bankName
+    if (!String(out.name ?? "").trim()) out.name = bankName
+  }
+  return out
+}
+
+/**
+ * POST /receive sometimes omits `bankInfo.name` for NG bank VAs.
+ * Re-fetch GET /receive/{id} when bank name is missing so pay-in UI can show Bank Name.
+ */
+export async function hydrateYcReceiveBankInfo(
+  receive: YcReceiveSubmitResult,
+): Promise<YcReceiveSubmitResult> {
+  const existing = normalizeYcBankInfo(
+    (receive.bankInfo as Record<string, unknown> | null | undefined) ?? null,
+  )
+  if (resolveYcBankInfoName(existing)) {
+    return { ...receive, bankInfo: existing ?? undefined }
+  }
+
+  const ycId = String(receive.id ?? "").trim()
+  const sequenceId = String(receive.sequenceId ?? "").trim()
+  if (!ycId && !sequenceId) {
+    return { ...receive, bankInfo: existing ?? receive.bankInfo }
+  }
+
+  try {
+    const path = ycId
+      ? `/receive/${encodeURIComponent(ycId)}`
+      : `/receive/sequence-id/${encodeURIComponent(sequenceId)}`
+    const lookedUp = await yellowcardFetch<YcReceiveSubmitResult>({
+      method: "GET",
+      path,
+    })
+    const lookedUpBank = normalizeYcBankInfo(
+      (lookedUp.bankInfo as Record<string, unknown> | null | undefined) ?? null,
+    )
+    if (!resolveYcBankInfoName(lookedUpBank) && !lookedUpBank) {
+      return { ...receive, bankInfo: existing ?? receive.bankInfo }
+    }
+    const merged = normalizeYcBankInfo({
+      ...(existing ?? {}),
+      ...(lookedUpBank ?? {}),
+    })
+    return {
+      ...receive,
+      ...(!receive.id && lookedUp.id ? { id: lookedUp.id } : {}),
+      bankInfo: merged ?? existing ?? receive.bankInfo,
+    }
+  } catch {
+    return { ...receive, bankInfo: existing ?? receive.bankInfo }
+  }
+}
+
 export async function submitYcReceive(
   input: YcReceiveSubmitInput,
 ): Promise<YcReceiveSubmitResult> {
   const body = buildYcReceiveSubmitBody(input)
-  return yellowcardFetch<YcReceiveSubmitResult>({
+  const created = await yellowcardFetch<YcReceiveSubmitResult>({
     method: "POST",
     path: "/receive",
     json: body,
   })
+  return hydrateYcReceiveBankInfo(created)
 }

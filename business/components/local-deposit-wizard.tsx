@@ -360,6 +360,18 @@ export function LocalDepositWizard({
 
   useEffect(() => {
     if (!debouncedQuotePrefetchKey || enteredAmount <= 0) return
+    if (!customerRate) return
+    const amountLimitCheck = validateYcFundBalancePayInAmount({
+      amountEntryMode: amountMode,
+      enteredAmount,
+      previewLocalPayIn:
+        amountMode === "local" ? enteredAmount : preview.localPayIn > 0 ? preview.localPayIn : null,
+      currency: localPayInCurrency,
+      limits: payInLimits,
+    })
+    // Wait for real rail mins when available; skip below-min / above-max quote spam.
+    if (payInLimits.minLocalPayIn == null && payInLimits.maxLocalPayIn == null) return
+    if (!amountLimitCheck.ok) return
     let cancelled = false
     void (async () => {
       try {
@@ -403,6 +415,9 @@ export function LocalDepositWizard({
     localPayInCurrency,
     residenceCountry,
     rail,
+    customerRate,
+    payInLimits,
+    preview.localPayIn,
   ])
 
   const reviewLockKey =

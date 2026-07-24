@@ -214,7 +214,12 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   const [debouncedFundBalanceQuotePrefetchKey] = useDebouncedValue(fundBalanceQuotePrefetchKey)
 
   useEffect(() => {
+    // Avoid spamming POST /fund-balance/quote with 400s while optimistic rails
+    // (no mins) are showing, rates are loading, or the amount is out of range.
     if (!debouncedFundBalanceQuotePrefetchKey || enteredAmount <= 0) return
+    if (receiveRails?.optimistic) return
+    if (!ycFlow.customerRate || ycFlow.ratesLoading) return
+    if (!amountLimitCheck.ok) return
     void ensureFundBalanceQuoteStashed({
       country: residenceCountry,
       currency: localPayInCurrency,
@@ -229,6 +234,10 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     payInRail,
     amountEntryMode,
     enteredAmount,
+    receiveRails?.optimistic,
+    ycFlow.customerRate,
+    ycFlow.ratesLoading,
+    amountLimitCheck.ok,
   ])
 
   const usdBalance = parseFloat(balances.USD || '0')
