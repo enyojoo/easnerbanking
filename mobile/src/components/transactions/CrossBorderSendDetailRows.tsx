@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { type ReactNode } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import {
   buildCrossBorderSendDetailRows,
@@ -18,6 +18,7 @@ type Props = {
   displayProcessingFee: number
   whenTs: string
   formatTimestamp: (ts: string) => string
+  recipientNode?: ReactNode
 }
 
 export function CrossBorderSendDetailRows({
@@ -26,6 +27,7 @@ export function CrossBorderSendDetailRows({
   displayProcessingFee,
   whenTs,
   formatTimestamp,
+  recipientNode,
 }: Props) {
   const rows = buildCrossBorderSendDetailRows({
     payoutReview,
@@ -37,7 +39,18 @@ export function CrossBorderSendDetailRows({
   return (
     <>
       {rows.map((row, index) => {
-        if (row.id === 'recipient' && recipientSnapshot) {
+        if (row.id === 'recipient' && (recipientNode || recipientSnapshot)) {
+          if (recipientNode) {
+            return (
+              <TransactionDetailSummaryRow
+                key={row.id}
+                label={row.label}
+                last={index === rows.length - 1}
+              >
+                {recipientNode}
+              </TransactionDetailSummaryRow>
+            )
+          }
           const subtitle = formatPayoutRecipientSubtitle({
             bankName: recipientSnapshot.bank_name,
             phone: recipientSnapshot.phone,

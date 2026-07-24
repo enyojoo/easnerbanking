@@ -1,4 +1,6 @@
-export type ReceiptRow = { label: string; value: string }
+import type { ReceiptVisualRow } from '@easner/shared'
+
+export type { ReceiptVisualRow }
 
 export type ReceiptDetails = {
   title: string
@@ -7,6 +9,9 @@ export type ReceiptDetails = {
   statusLabel: string
   outcome: 'success' | 'failed'
   dateText: string
-  rows: ReceiptRow[]
+  rows: ReceiptVisualRow[]
   transactionId: string
 }
+
+/** @deprecated Plain rows — use ReceiptVisualRow via buildTransactionReceiptDetailRows. */
+export type ReceiptRow = { label: string; value: string }

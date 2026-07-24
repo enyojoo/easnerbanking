@@ -11,9 +11,10 @@ import {
   Line,
   Polyline,
 } from "@react-pdf/renderer"
-import { buildTransactionEmailDetailRows, filterTransactionReceiptDetailRows } from "@easner/shared"
+import { buildTransactionReceiptDetailRows, type ReceiptVisualRow } from "@easner/shared"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
+import { PdfReceiptVisualRow } from "@/lib/receipt-pdf-visual-rows"
 
 /** Business palette — matches the original PDF tokens (blue primary, neutral text/borders). */
 const palette = {
@@ -91,69 +92,50 @@ const statusLabels: Record<string, string> = {
   failed: "Failed",
 }
 
-type ReceiptRow = { label: string; value: string }
+type ReceiptRow = ReceiptVisualRow
 
-function parseRecipientReceiptValue(value: string): { name: string; subtitle: string } | null {
-  const match = value.match(/^(.+?) \((.+)\)$/)
-  if (!match) return null
-  const name = match[1].trim()
-  const subtitle = match[2].trim()
-  if (!name || !subtitle) return null
-  return { name, subtitle }
-}
-
-function formatReceiptTimestamp(dateInput: string | Date): string {
-  const date = new Date(dateInput)
-  const month = date.toLocaleString("en-US", { month: "short" })
-  const day = date.getDate().toString().padStart(2, "0")
-  const year = date.getFullYear()
-  const hours = date.getHours()
-  const minutes = date.getMinutes().toString().padStart(2, "0")
-  const ampm = hours >= 12 ? "PM" : "AM"
-  const displayHours = hours % 12 || 12
-  return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
-}
-
-/**
- * Detail rows only — Transaction ID and hero title are rendered outside this list,
- * matching the mobile `TransactionReceiptCard` layout.
- */
-function buildReceiptDetailRows(transaction: Transaction, cardLast4?: string): ReceiptRow[] {
+function buildReceiptDetailRows(transaction: Transaction, cardLast4?: string): ReceiptVisualRow[] {
   if (transaction.inboundReceive?.kind === "easetag_receive") {
     return []
   }
 
   if (transaction.inboundReceive) {
-    return filterTransactionReceiptDetailRows(
-      buildTransactionEmailDetailRows({
-        direction: "in",
-        inboundReceive: transaction.inboundReceive,
-      }),
-    )
+    return buildTransactionReceiptDetailRows({
+      direction: "in",
+      inboundReceive: transaction.inboundReceive,
+    })
   }
 
   if (transaction.payoutReview) {
     const snap = transaction.recipientSnapshot
-    return filterTransactionReceiptDetailRows(
-      buildTransactionEmailDetailRows({
-        direction: "out",
-        payoutReview: transaction.payoutReview,
-        payoutReviewFlow: transaction.payoutReviewFlow ?? "balance_payout",
-        receiveNetwork: transaction.chain,
-        recipient: snap
-          ? {
-              fullName: snap.full_name ?? transaction.counterpartyName ?? null,
-              bankName: snap.bank_name ?? null,
-              accountNumber: snap.account_number ?? null,
-              phone: snap.phone ?? null,
-              mobileProvider: snap.mobile_provider ?? null,
-              walletNetwork: transaction.chain ?? null,
-            }
-          : transaction.counterpartyName
-            ? { fullName: transaction.counterpartyName }
-            : null,
-      }),
-    )
+    return buildTransactionReceiptDetailRows({
+      direction: "out",
+      payoutReview: transaction.payoutReview,
+      payoutReviewFlow: transaction.payoutReviewFlow ?? "balance_payout",
+      receiveNetwork: transaction.chain,
+      recipientSnapshot: snap,
+      counterpartyName: transaction.counterpartyName,
+      counterpartyAddress: transaction.counterpartyAddress ?? transaction.walletAddress,
+      recipient: snap
+        ? {
+            fullName: snap.full_name ?? transaction.counterpartyName ?? null,
+            bankName: snap.bank_name ?? null,
+            accountNumber: snap.account_number ?? null,
+            phone: snap.phone ?? null,
+            mobileProvider: snap.mobile_provider ?? null,
+            walletNetwork: transaction.chain ?? null,
+          }
+        : transaction.counterpartyName
+          ? { fullName: transaction.counterpartyName }
+          : null,
+    })
+  }
+
+  if (transaction.depositReview) {
+    return buildTransactionReceiptDetailRows({
+      direction: "in",
+      depositReview: transaction.depositReview,
+    })
   }
 
   const isEnrichedDeposit =
@@ -167,23 +149,21 @@ function buildReceiptDetailRows(transaction: Transaction, cardLast4?: string): R
   if (isEnrichedDeposit) {
     const depositCurrency =
       transaction.postedCurrency || transaction.displayCurrency || "USD"
-    return filterTransactionReceiptDetailRows(
-      buildTransactionEmailDetailRows({
-        direction: "in",
-        deposit: {
-          scheme: transaction.paymentScheme ?? null,
-          senderDisplay: transaction.counterpartyName ?? null,
-          feeAmount: transaction.fee ?? null,
-          feeCurrency: transaction.displayCurrency ?? depositCurrency,
-          postedAmount: transaction.postedAmount ?? null,
-          postedCurrency: depositCurrency,
-          narration: transaction.narration ?? null,
-        },
-      }),
-    )
+    return buildTransactionReceiptDetailRows({
+      direction: "in",
+      deposit: {
+        scheme: transaction.paymentScheme ?? null,
+        senderDisplay: transaction.counterpartyName ?? null,
+        feeAmount: transaction.fee ?? null,
+        feeCurrency: transaction.displayCurrency ?? depositCurrency,
+        postedAmount: transaction.postedAmount ?? null,
+        postedCurrency: depositCurrency,
+        narration: transaction.narration ?? null,
+      },
+    })
   }
 
-  const rows: ReceiptRow[] = []
+  const rows: ReceiptVisualRow[] = []
   const descriptionLower = transaction.description.toLowerCase()
   const isStablecoin =
     transaction.type === "stablecoin" || descriptionLower.startsWith("stablecoin")
@@ -192,24 +172,25 @@ function buildReceiptDetailRows(transaction: Transaction, cardLast4?: string): R
   const partyLabel = transaction.direction === "credit" ? "Sender" : "Recipient"
 
   if (transaction.counterpartyName) {
-    rows.push({ label: partyLabel, value: transaction.counterpartyName })
+    rows.push({ kind: "text", label: partyLabel, value: transaction.counterpartyName })
   }
   if (isBank && transaction.paymentRail) {
-    rows.push({ label: "Payment Rail", value: transaction.paymentRail.toUpperCase() })
+    rows.push({ kind: "text", label: "Payment Rail", value: transaction.paymentRail.toUpperCase() })
   }
   if (!isStablecoin && !isCard) {
-    rows.push({ label: "Type", value: transaction.type.toUpperCase() })
+    rows.push({ kind: "text", label: "Type", value: transaction.type.toUpperCase() })
   }
   if (isCard) {
-    rows.push({ label: "Card", value: cardLast4 ? `•••• ${cardLast4}` : "-" })
+    rows.push({ kind: "text", label: "Card", value: cardLast4 ? `•••• ${cardLast4}` : "-" })
   } else if (transaction.category) {
-    rows.push({ label: "Category", value: transaction.category })
+    rows.push({ kind: "text", label: "Category", value: transaction.category })
   }
   if (!isStablecoin && transaction.reference) {
-    rows.push({ label: "Reference", value: transaction.reference })
+    rows.push({ kind: "text", label: "Reference", value: transaction.reference })
   }
   if (transaction.fee !== undefined && transaction.fee > 0) {
     rows.push({
+      kind: "text",
       label: "Processing fee",
       value: formatCurrency(transaction.fee, transaction.displayCurrency || "USD"),
     })
@@ -217,30 +198,31 @@ function buildReceiptDetailRows(transaction: Transaction, cardLast4?: string): R
   return rows
 }
 
-function ReceiptDetailRow({ label, value }: ReceiptRow) {
-  if (label === "Recipient") {
-    const parsed = parseRecipientReceiptValue(value)
-    if (parsed) {
-      return (
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>{label}</Text>
-          <View style={styles.rowValueStack}>
-            <Text style={styles.rowValue}>{parsed.name}</Text>
-            <Text style={styles.rowValueSub}>({parsed.subtitle})</Text>
-          </View>
-        </View>
-      )
-    }
-  }
-
+function ReceiptDetailRow({
+  row,
+  assetBaseUrl,
+}: {
+  row: ReceiptVisualRow
+  assetBaseUrl: string
+}) {
   return (
     <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <View style={styles.rowValueStack}>
-        <Text style={styles.rowValue}>{value}</Text>
-      </View>
+      <Text style={styles.rowLabel}>{row.label}</Text>
+      <PdfReceiptVisualRow row={row} assetBaseUrl={assetBaseUrl} />
     </View>
   )
+}
+
+function formatReceiptTimestamp(dateInput: string | Date): string {
+  const date = new Date(dateInput)
+  const month = date.toLocaleString("en-US", { month: "short" })
+  const day = date.getDate().toString().padStart(2, "0")
+  const year = date.getFullYear()
+  const hours = date.getHours()
+  const minutes = date.getMinutes().toString().padStart(2, "0")
+  const ampm = hours >= 12 ? "PM" : "AM"
+  const displayHours = hours % 12 || 12
+  return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
 }
 
 const styles = StyleSheet.create({
@@ -402,12 +384,14 @@ const styles = StyleSheet.create({
 interface TransactionReceiptPDFDocumentProps {
   transaction: Transaction
   logoUrl: string
+  assetBaseUrl: string
   cardLast4?: string
 }
 
 export function TransactionReceiptPDFDocument({
   transaction,
   logoUrl,
+  assetBaseUrl,
   cardLast4,
 }: TransactionReceiptPDFDocumentProps) {
   const isCredit = transaction.direction === "credit"
@@ -455,7 +439,7 @@ export function TransactionReceiptPDFDocument({
 
           <View style={styles.rows}>
             {detailRows.map((row) => (
-              <ReceiptDetailRow key={`${row.label}:${row.value}`} {...row} />
+              <ReceiptDetailRow key={`${row.kind}:${row.label}`} row={row} assetBaseUrl={assetBaseUrl} />
             ))}
           </View>
 

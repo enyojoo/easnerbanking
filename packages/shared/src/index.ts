@@ -490,6 +490,17 @@ export {
   type TransactionEmailDetailRow,
 } from "./transactions/transaction-email-detail-rows"
 export {
+  buildTransactionReceiptDetailRows,
+  parseBalanceLabelCurrency,
+  resolveReceiptCurrencyFlagCode,
+  receiptVisualRowsToPlain,
+  type ReceiptBalanceDestinationRow,
+  type ReceiptRecipientRow,
+  type ReceiptTextRow,
+  type ReceiptVisualRow,
+  type TransactionReceiptDetailInput,
+} from "./transactions/transaction-receipt-detail-rows"
+export {
   ledgerStatusMatchesUserFilter,
   ledgerTransactionStatusDisplay,
   mapLedgerStatusToUserStatus,
@@ -509,6 +520,12 @@ export type {
   GlobalPayoutRecipientSnapshot,
   GlobalPayoutReviewSnapshot,
 } from "./transactions/global-payout-types"
+export {
+  resolveTransactionRecipientDisplay,
+  isEasetagHandleValue,
+  resolveEasetagDisplayName,
+} from "./transactions/transaction-recipient-display"
+export type { TransactionRecipientDisplay } from "./transactions/transaction-recipient-display"
 export type { YcFundBalanceLocalPayInBreakdown } from "./transactions/yc-deposit-display"
 export type {
   YcFundBalanceDepositReviewSnapshot,

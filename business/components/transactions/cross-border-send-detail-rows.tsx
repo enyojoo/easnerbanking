@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import {
   buildCrossBorderSendDetailRows,
   formatPayoutRecipientSubtitle,
@@ -14,6 +15,7 @@ type Props = {
   recipientSnapshot?: GlobalPayoutRecipientSnapshot | null
   displayProcessingFee: number
   whenAt?: string | null
+  recipientNode?: ReactNode
 }
 
 export function CrossBorderSendDetailRows({
@@ -21,6 +23,7 @@ export function CrossBorderSendDetailRows({
   recipientSnapshot,
   displayProcessingFee,
   whenAt,
+  recipientNode,
 }: Props) {
   const whenLabel = whenAt ? formatTransactionRowDateTime(whenAt) : "—"
   const rows = buildCrossBorderSendDetailRows({
@@ -33,7 +36,14 @@ export function CrossBorderSendDetailRows({
   return (
     <>
       {rows.map((row) => {
-        if (row.id === "recipient" && recipientSnapshot) {
+        if (row.id === "recipient" && (recipientNode || recipientSnapshot)) {
+          if (recipientNode) {
+            return (
+              <TransactionDetailSummaryRow key={row.id} label={row.label}>
+                {recipientNode}
+              </TransactionDetailSummaryRow>
+            )
+          }
           const subtitle = formatPayoutRecipientSubtitle({
             bankName: recipientSnapshot.bank_name,
             phone: recipientSnapshot.phone,

@@ -2,39 +2,11 @@ import React, { forwardRef } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { Check, X } from 'lucide-react-native'
 import ReceiptBrandLogo from './ReceiptBrandLogo'
+import { ReceiptVisualRowValue } from './ReceiptVisualRowValue'
 import { colors, spacing, borderRadius, textStyles, fontFamily } from '../../theme'
-import type { ReceiptRow } from './receipt-types'
+import type { ReceiptVisualRow } from './receipt-types'
 
-export type { ReceiptRow } from './receipt-types'
-
-/** Canonical rows encode recipient as "Name (Bank • account)" — split for two-line receipt layout. */
-function parseRecipientReceiptValue(value: string): { name: string; subtitle: string } | null {
-  const match = value.match(/^(.+?) \((.+)\)$/)
-  if (!match) return null
-  const name = match[1].trim()
-  const subtitle = match[2].trim()
-  if (!name || !subtitle) return null
-  return { name, subtitle }
-}
-
-function ReceiptRowValue({ label, value }: ReceiptRow) {
-  if (label === 'Recipient') {
-    const parsed = parseRecipientReceiptValue(value)
-    if (parsed) {
-      return (
-        <View style={styles.rowValueStack}>
-          <Text style={styles.rowValue}>{parsed.name}</Text>
-          <Text style={styles.rowValueSub}>({parsed.subtitle})</Text>
-        </View>
-      )
-    }
-  }
-  return (
-    <View style={styles.rowValueStack}>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  )
-}
+export type { ReceiptVisualRow, ReceiptDetails, ReceiptRow } from './receipt-types'
 
 type Props = {
   /** Hero subtitle, e.g. "Sent to Samuel Odiba" / "Received from Chase". */
@@ -45,7 +17,7 @@ type Props = {
   statusLabel: string
   outcome: 'success' | 'failed'
   dateText: string
-  rows: ReceiptRow[]
+  rows: ReceiptVisualRow[]
   transactionId: string
   /** Fixed render width so the captured image is deterministic across devices. */
   width?: number
@@ -99,9 +71,9 @@ export const TransactionReceiptCard = forwardRef<View, Props>(function Transacti
 
       <View style={styles.rows}>
         {rows.map((row) => (
-          <View key={`${row.label}:${row.value}`} style={styles.row}>
+          <View key={`${row.kind}:${row.label}`} style={styles.row}>
             <Text style={styles.rowLabel}>{row.label}</Text>
-            <ReceiptRowValue label={row.label} value={row.value} />
+            <ReceiptVisualRowValue row={row} />
           </View>
         ))}
       </View>
@@ -197,22 +169,6 @@ const styles = StyleSheet.create({
     ...textStyles.bodyMedium,
     color: colors.text.secondary,
     flexShrink: 0,
-  },
-  rowValue: {
-    ...textStyles.titleMedium,
-    color: colors.text.primary,
-    textAlign: 'right',
-  },
-  rowValueStack: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  rowValueSub: {
-    ...textStyles.titleMedium,
-    fontSize: 13,
-    color: colors.text.secondary,
-    textAlign: 'right',
-    marginTop: spacing[1],
   },
   dashedDivider: {
     borderTopWidth: 1,

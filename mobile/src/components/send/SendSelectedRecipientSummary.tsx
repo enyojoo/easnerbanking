@@ -10,6 +10,7 @@ import {
   PayoutSubtitleRow,
   resolveRecipientEasetagForUi,
 } from '../../lib/easenetRecipientUi'
+import { isEasetagHandleValue } from '@easner/shared'
 import { getPayoutRecipientSubtitleParts } from '../../lib/recipientPayoutPreview'
 import type { HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
 
@@ -28,6 +29,10 @@ function EasenetRecipientAvatar({
   easenetPreview?: HydratedEasenetProfile | null
 }) {
   const displayName = (easenetPreview?.fullName || recipient.full_name).trim()
+  const tag = resolveRecipientEasetagForUi(recipient)
+  const avatarName =
+    String(easenetPreview?.fullName ?? '').trim() ||
+    (displayName && !isEasetagHandleValue(displayName, tag) ? displayName : tag)
   const uri = String(easenetPreview?.avatarUrl || recipient.payee_avatar_url || '').trim()
   const [imgFailed, setImgFailed] = useState(false)
   useEffect(() => {
@@ -42,7 +47,7 @@ function EasenetRecipientAvatar({
           onError={() => setImgFailed(true)}
         />
       ) : (
-        <Text style={styles.avatarInitials}>{recipientInitials(displayName)}</Text>
+        <Text style={styles.avatarInitials}>{recipientInitials(avatarName)}</Text>
       )}
     </View>
   )
@@ -60,9 +65,13 @@ export function SendSelectedRecipientSummary({
   alignEnd?: boolean
 }) {
   const isEasenet = isEasenetRecipientRecord(recipient)
+  const easetag = resolveRecipientEasetagForUi(recipient)
+  const hydratedName = String(easenetPreview?.fullName ?? '').trim()
+  const storedName = String(recipient.full_name ?? '').trim()
   const displayName = isEasenet
-    ? (easenetPreview?.fullName || recipient.full_name).trim()
-    : recipient.full_name
+    ? hydratedName ||
+      (storedName && !isEasetagHandleValue(storedName, easetag) ? storedName : '')
+    : storedName
 
   if (alignEnd) {
     return (

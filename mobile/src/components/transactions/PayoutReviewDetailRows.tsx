@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { type ReactNode } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import {
   REVIEW_ROW_LABELS,
@@ -38,6 +38,7 @@ type Props = {
   sendNote?: string | null
   formatTimestamp: (ts: string) => string
   showRecipientGets?: boolean
+  recipientNode?: ReactNode
 }
 
 export function PayoutReviewDetailRows({
@@ -58,6 +59,7 @@ export function PayoutReviewDetailRows({
   sendNote,
   formatTimestamp,
   showRecipientGets = true,
+  recipientNode,
 }: Props) {
   const sendCurrency = payoutReview.send_currency
 
@@ -110,55 +112,57 @@ export function PayoutReviewDetailRows({
           valueBold
         />
       ) : null}
-      {recipientSnapshot ? (
+      {recipientSnapshot || recipientNode || isWalletSendReview ? (
         <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.recipient}>
-          <View style={styles.valueStack}>
-            <Text style={styles.valuePrimary}>{recipientSnapshot.full_name}</Text>
-            {formatPayoutRecipientSubtitle({
-              bankName: recipientSnapshot.bank_name,
-              phone: recipientSnapshot.phone,
-              mobileProvider: recipientSnapshot.mobile_provider,
-              accountNumber: recipientSnapshot.account_number,
-              fullAccountNumber: recipientSnapshot.account_number,
-              walletNetwork: walletSendReceiveNetwork,
-            }) ? (
-              <Text style={styles.valueSecondary}>
-                {formatPayoutRecipientSubtitle({
-                  bankName: recipientSnapshot.bank_name,
-                  phone: recipientSnapshot.phone,
-                  mobileProvider: recipientSnapshot.mobile_provider,
-                  accountNumber: recipientSnapshot.account_number,
-                  fullAccountNumber: recipientSnapshot.account_number,
-                  walletNetwork: walletSendReceiveNetwork,
-                })}
+          {recipientNode ? (
+            recipientNode
+          ) : recipientSnapshot ? (
+            <View style={styles.valueStack}>
+              <Text style={styles.valuePrimary}>{recipientSnapshot.full_name}</Text>
+              {formatPayoutRecipientSubtitle({
+                bankName: recipientSnapshot.bank_name,
+                phone: recipientSnapshot.phone,
+                mobileProvider: recipientSnapshot.mobile_provider,
+                accountNumber: recipientSnapshot.account_number,
+                fullAccountNumber: recipientSnapshot.account_number,
+                walletNetwork: walletSendReceiveNetwork,
+              }) ? (
+                <Text style={styles.valueSecondary}>
+                  {formatPayoutRecipientSubtitle({
+                    bankName: recipientSnapshot.bank_name,
+                    phone: recipientSnapshot.phone,
+                    mobileProvider: recipientSnapshot.mobile_provider,
+                    accountNumber: recipientSnapshot.account_number,
+                    fullAccountNumber: recipientSnapshot.account_number,
+                    walletNetwork: walletSendReceiveNetwork,
+                  })}
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.valueStack}>
+              <Text style={styles.valuePrimary}>
+                {String(
+                  displayDescription || name || counterpartyName || 'Wallet transfer',
+                )}
               </Text>
-            ) : null}
-          </View>
-        </TransactionDetailSummaryRow>
-      ) : isWalletSendReview ? (
-        <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.recipient}>
-          <View style={styles.valueStack}>
-            <Text style={styles.valuePrimary}>
-              {String(
-                displayDescription || name || counterpartyName || 'Wallet transfer',
-              )}
-            </Text>
-            {formatPayoutRecipientSubtitle({
-              bankName: recipientSnapshot?.bank_name || 'Wallet',
-              accountNumber: counterpartyAddress || destinationAddress,
-              fullAccountNumber: counterpartyAddress || destinationAddress,
-              walletNetwork: walletSendReceiveNetwork,
-            }) ? (
-              <Text style={styles.valueSecondary}>
-                {formatPayoutRecipientSubtitle({
-                  bankName: recipientSnapshot?.bank_name || 'Wallet',
-                  accountNumber: counterpartyAddress || destinationAddress,
-                  fullAccountNumber: counterpartyAddress || destinationAddress,
-                  walletNetwork: walletSendReceiveNetwork,
-                })}
-              </Text>
-            ) : null}
-          </View>
+              {formatPayoutRecipientSubtitle({
+                bankName: recipientSnapshot?.bank_name || 'Wallet',
+                accountNumber: counterpartyAddress || destinationAddress,
+                fullAccountNumber: counterpartyAddress || destinationAddress,
+                walletNetwork: walletSendReceiveNetwork,
+              }) ? (
+                <Text style={styles.valueSecondary}>
+                  {formatPayoutRecipientSubtitle({
+                    bankName: recipientSnapshot?.bank_name || 'Wallet',
+                    accountNumber: counterpartyAddress || destinationAddress,
+                    fullAccountNumber: counterpartyAddress || destinationAddress,
+                    walletNetwork: walletSendReceiveNetwork,
+                  })}
+                </Text>
+              ) : null}
+            </View>
+          )}
         </TransactionDetailSummaryRow>
       ) : null}
       <TransactionDetailSummaryRow

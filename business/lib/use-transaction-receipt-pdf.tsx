@@ -27,11 +27,13 @@ export async function downloadTransactionReceiptPdf(
   cardLast4?: string
 ): Promise<void> {
   const logoUrl = await getLogoDataUrl()
+  const assetBaseUrl = typeof window !== "undefined" ? window.location.origin : ""
 
   const blob = await pdf(
     <TransactionReceiptPDFDocument
       transaction={transaction}
       logoUrl={logoUrl}
+      assetBaseUrl={assetBaseUrl}
       cardLast4={cardLast4}
     />
   ).toBlob()

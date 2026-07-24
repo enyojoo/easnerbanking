@@ -8,6 +8,7 @@ import {
   type CachedEasenetPublicProfile,
 } from "@/lib/easenet-public-profile-cache"
 import type { PayeeAccountKind } from "@/lib/easner-brand"
+import { isEasetagHandleValue } from "@easner/shared"
 import { EasenetRecipientProfileRow } from "@/components/easenet-recipient-profile-row"
 
 type Props = {
@@ -106,7 +107,12 @@ export function EasenetRecipientProfileRowHydrated({
   }, [easetag, avatarUrl, fullName, accountKind])
 
   const mergedAvatar = String(avatarUrl || "").trim() ? avatarUrl : remote?.avatarUrl ?? null
-  const mergedName = fullName
+  const remoteName = String(remote?.fullName ?? "").trim()
+  const propName = String(fullName ?? "").trim()
+  const mergedName =
+    remoteName ||
+    (propName && !isEasetagHandleValue(propName, easetag) ? propName : "") ||
+    propName
   const mergedKind = accountKind ?? remote?.accountKind
 
   return (

@@ -15,6 +15,7 @@ import { TransactionLifecycleTracker } from "@/components/transactions/transacti
 import { TransactionDetailHero } from "@/components/transactions/transaction-detail-hero"
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
 import { CrossBorderSendDetailRows } from "@/components/transactions/cross-border-send-detail-rows"
+import { TransactionRecipientSummary } from "@/components/transactions/transaction-recipient-summary"
 import { DepositReviewDetailsRows } from "@/components/transactions/deposit-review-details-rows"
 import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
@@ -195,7 +196,14 @@ function TransactionSummaryDetails({
           <TransactionDetailSummaryRow label="Category" value={transaction.category} />
         ) : null}
 
-        {showParty ? (
+        {showParty && isEasetag && !isDeposit ? (
+          <TransactionDetailSummaryRow label={partyLabel}>
+            <TransactionRecipientSummary
+              counterpartyName={transaction.counterpartyName}
+              payeeEasetag={transaction.counterpartyName}
+            />
+          </TransactionDetailSummaryRow>
+        ) : showParty ? (
           <TransactionDetailSummaryRow label={partyLabel} value={transaction.counterpartyName} />
         ) : null}
 
@@ -324,6 +332,20 @@ export function TransactionDetailsPanel({
 
   const etidForLink = transactionWebDetailPath(transaction.id)
   const whenAt = resolveTransactionDetailWhenAt(transaction)
+  const recipientSummaryNode = (
+    <TransactionRecipientSummary
+      recipientSnapshot={transaction.recipientSnapshot}
+      counterpartyName={transaction.counterpartyName}
+      counterpartyAddress={transaction.counterpartyAddress ?? transaction.walletAddress}
+      receiveNetwork={walletReceiveNetwork}
+      receiveCurrency={transaction.payoutReview?.receive_currency}
+      payeeEasetag={
+        transaction.paymentScheme === "Easetag" && transaction.direction !== "credit"
+          ? transaction.counterpartyName
+          : undefined
+      }
+    />
+  )
 
   const tlcDetailFee =
     payoutReviewFlow === "local_pay_in" && transaction.payoutReview
@@ -350,6 +372,7 @@ export function TransactionDetailsPanel({
               recipientSnapshot={transaction.recipientSnapshot}
               displayProcessingFee={tlcDetailFee}
               whenAt={whenAt}
+              recipientNode={recipientSummaryNode}
             />
           </CardContent>
         </Card>
@@ -358,6 +381,7 @@ export function TransactionDetailsPanel({
           transactionId={transaction.id}
           payoutReview={transaction.payoutReview}
           recipientSnapshot={transaction.recipientSnapshot}
+          recipientNode={recipientSummaryNode}
           sendNote={transaction.sendNote}
           timingRows={transaction.transactionTiming}
           copiedKey={copiedKey}

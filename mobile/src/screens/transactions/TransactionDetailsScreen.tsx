@@ -71,8 +71,7 @@ import {
   isEasetagReceiveTitle,
   qk,
   scopeKey,
-  buildTransactionEmailDetailRows,
-  filterTransactionReceiptDetailRows,
+  buildTransactionReceiptDetailRows,
   formatTransactionDetailHeroTitle,
   computeDisplayProcessingFee,
   hasPayoutCrossCurrencyFx,
@@ -90,6 +89,7 @@ import {
 import { InboundReceiveDetailRows } from '../../components/transactions/InboundReceiveDetailRows'
 import { CrossBorderSendDetailRows } from '../../components/transactions/CrossBorderSendDetailRows'
 import { PayoutReviewDetailRows } from '../../components/transactions/PayoutReviewDetailRows'
+import { TransactionRecipientSummary } from '../../components/transactions/TransactionRecipientSummary'
 import { TransactionDetailSummaryRow, TransactionDetailCopyableValue } from '../../components/transactions/TransactionDetailSummaryRow'
 import { ApiError } from '../../query/api-client'
 import { useScope, useIsRestoring } from '../../query'
@@ -847,6 +847,36 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       processingFee: transaction.payout_review.processing_fee,
       exchangeFee: transaction.payout_review.exchange_fee,
     })
+  const recipientSummaryNode = (
+    <TransactionRecipientSummary
+      recipientSnapshot={transaction.recipient_snapshot}
+      recipientName={transaction.recipient_name}
+      counterpartyName={
+        typeof transaction.metadata?.counterparty_name === 'string'
+          ? transaction.metadata.counterparty_name
+          : null
+      }
+      counterpartyAddress={
+        typeof transaction.metadata?.counterparty_address === 'string'
+          ? transaction.metadata.counterparty_address
+          : null
+      }
+      destinationAddress={
+        typeof transaction.metadata?.destination_address === 'string'
+          ? transaction.metadata.destination_address
+          : null
+      }
+      receiveNetwork={walletSendReceiveNetwork || undefined}
+      receiveCurrency={
+        transaction.payout_review?.receive_currency ?? transaction.receive_currency
+      }
+      payeeEasetag={
+        typeof transaction.metadata?.payee_easetag === 'string'
+          ? transaction.metadata.payee_easetag
+          : null
+      }
+    />
+  )
   const payoutLocalFee =
     payoutReviewFlow === 'local_pay_in'
       ? transaction.payout_review?.display_processing_fee_local != null &&
@@ -885,71 +915,79 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       exchangeFee: ycDepositReview.exchange_fee,
     })
   // Downloadable receipt (image) — completed, non-Easetag. Same canonical rows as business PDF.
-  const receiptRows = filterTransactionReceiptDetailRows(
+  const receiptRows =
     transaction.status === 'completed' && !isEasetagP2p
-      ? isGlobalPayoutSend && transaction.payout_review
-        ? buildTransactionEmailDetailRows({
-            direction: 'out',
-            payoutReview: transaction.payout_review,
-            payoutReviewFlow: resolvePayoutReviewFlow(transaction.metadata),
-            receiveNetwork: isWalletSendReview ? walletSendReceiveNetwork : undefined,
-            recipient: transaction.recipient_snapshot
-              ? {
-                  fullName: transaction.recipient_snapshot.full_name,
-                  bankName: transaction.recipient_snapshot.bank_name,
-                  accountNumber: transaction.recipient_snapshot.account_number,
-                  phone: transaction.recipient_snapshot.phone,
-                  mobileProvider: transaction.recipient_snapshot.mobile_provider,
-                  walletNetwork: walletSendReceiveNetwork || undefined,
-                }
-              : isWalletSendReview
-                ? {
-                    fullName: String(
-                      transaction.display_description ||
-                        transaction.name ||
-                        transaction.metadata?.counterparty_name ||
-                        'Wallet transfer',
-                    ),
-                    bankName: 'Wallet',
-                    accountNumber:
-                      transaction.metadata?.counterparty_address ||
-                      transaction.metadata?.destination_address,
-                    walletNetwork: walletSendReceiveNetwork || undefined,
-                  }
-                : undefined,
-          })
-        : inboundReceive && inboundReceive.kind !== 'easetag_receive'
-          ? buildTransactionEmailDetailRows({
-              direction: 'in',
-              inboundReceive,
-            })
-        : isYcFundBalanceDeposit && ycDepositReview
-          ? buildTransactionEmailDetailRows({
-              direction: 'in',
-              depositReview: ycDepositReview,
-            })
-        : isBankOnrampReceive || isStablecoinReceive
-          ? buildTransactionEmailDetailRows({
-              direction: 'in',
-              deposit: {
-                scheme: formatScheme(
-                  transaction,
-                  transaction.source_payment_rail || (isStablecoinReceive ? 'solana' : ''),
-                ),
-                senderDisplay: transaction.sender_display_name,
-                feeAmount: transaction.fee_amount,
-                feeCurrency: transaction.currency,
-                postedAmount: transaction.posted_amount ?? transaction.settled_amount,
-                postedCurrency:
-                  transaction.posted_currency ||
-                  transaction.settled_currency ||
-                  transaction.currency,
-                narration: transaction.reference,
-              },
-            })
-          : []
-      : [],
-  )
+      ? buildTransactionReceiptDetailRows(
+          isGlobalPayoutSend && transaction.payout_review
+            ? {
+                direction: 'out',
+                payoutReview: transaction.payout_review,
+                payoutReviewFlow: resolvePayoutReviewFlow(transaction.metadata),
+                receiveNetwork: isWalletSendReview ? walletSendReceiveNetwork : undefined,
+                recipientSnapshot: transaction.recipient_snapshot,
+                counterpartyName:
+                  typeof transaction.metadata?.counterparty_name === 'string'
+                    ? transaction.metadata.counterparty_name
+                    : null,
+                counterpartyAddress:
+                  typeof transaction.metadata?.counterparty_address === 'string'
+                    ? transaction.metadata.counterparty_address
+                    : null,
+                destinationAddress:
+                  typeof transaction.metadata?.destination_address === 'string'
+                    ? transaction.metadata.destination_address
+                    : null,
+                recipient: transaction.recipient_snapshot
+                  ? {
+                      fullName: transaction.recipient_snapshot.full_name,
+                      bankName: transaction.recipient_snapshot.bank_name,
+                      accountNumber: transaction.recipient_snapshot.account_number,
+                      phone: transaction.recipient_snapshot.phone,
+                      mobileProvider: transaction.recipient_snapshot.mobile_provider,
+                      walletNetwork: walletSendReceiveNetwork || undefined,
+                    }
+                  : isWalletSendReview
+                    ? {
+                        fullName: String(
+                          transaction.display_description ||
+                            transaction.name ||
+                            transaction.metadata?.counterparty_name ||
+                            'Wallet transfer',
+                        ),
+                        bankName: 'Wallet',
+                        accountNumber:
+                          transaction.metadata?.counterparty_address ||
+                          transaction.metadata?.destination_address,
+                        walletNetwork: walletSendReceiveNetwork || undefined,
+                      }
+                    : undefined,
+              }
+            : inboundReceive && inboundReceive.kind !== 'easetag_receive'
+              ? { direction: 'in', inboundReceive }
+              : isYcFundBalanceDeposit && ycDepositReview
+                ? { direction: 'in', depositReview: ycDepositReview }
+                : isBankOnrampReceive || isStablecoinReceive
+                  ? {
+                      direction: 'in',
+                      deposit: {
+                        scheme: formatScheme(
+                          transaction,
+                          transaction.source_payment_rail || (isStablecoinReceive ? 'solana' : ''),
+                        ),
+                        senderDisplay: transaction.sender_display_name,
+                        feeAmount: transaction.fee_amount,
+                        feeCurrency: transaction.currency,
+                        postedAmount: transaction.posted_amount ?? transaction.settled_amount,
+                        postedCurrency:
+                          transaction.posted_currency ||
+                          transaction.settled_currency ||
+                          transaction.currency,
+                        narration: transaction.reference,
+                      },
+                    }
+                  : { direction: null },
+        )
+      : []
   const receiptEligible = receiptRows.length > 0
 
   return (
@@ -1073,15 +1111,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       )
                         .trim()
                         .replace(/^@+/, '')
-                      const recipient =
-                        String(transaction.recipient_name || '').trim() ||
-                        (payeeTag ? `@${payeeTag}` : '')
-                      if (!recipient) return null
+                      if (!payeeTag && !transaction.recipient_name) return null
                       return (
-                        <TransactionDetailSummaryRow
-                          label={REVIEW_ROW_LABELS.recipient}
-                          value={recipient}
-                        />
+                        <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.recipient}>
+                          {recipientSummaryNode}
+                        </TransactionDetailSummaryRow>
                       )
                     })()}
                     <TransactionDetailSummaryRow
@@ -1161,12 +1195,14 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       displayProcessingFee={payoutDisplayProcessingFee}
                       whenTs={whenTs}
                       formatTimestamp={formatTimestamp}
+                      recipientNode={recipientSummaryNode}
                     />
                   ) : (
                   <PayoutReviewDetailRows
                     payoutReview={transaction.payout_review}
                     payoutReviewFlow={payoutReviewFlow}
                     recipientSnapshot={transaction.recipient_snapshot}
+                    recipientNode={recipientSummaryNode}
                     showProcessingFee={showPayoutProcessingFee}
                     displayProcessingFee={payoutDisplayProcessingFee}
                     hasFx={!!payoutReviewHasFx}
