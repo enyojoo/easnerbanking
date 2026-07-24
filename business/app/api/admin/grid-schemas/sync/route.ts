@@ -20,5 +20,13 @@ export async function POST(request: Request) {
     ok: true,
     updated: result.updated,
     skipped: result.skipped,
+    provision: result.provision
+      ? {
+          inserted: result.provision.inserted,
+          updated: result.provision.updated,
+          skipped: result.provision.skipped,
+          targets: result.provision.targets,
+        }
+      : undefined,
   })
 }

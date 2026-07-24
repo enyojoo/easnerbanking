@@ -17,7 +17,7 @@ const COUNTRY_NAMES: Record<string, string> = {
   BJ: "Benin",
   BR: "Brazil",
   BW: "Botswana",
-  CD: "Democratic Republic of the Congo",
+  CD: "DR Congo",
   CI: "Côte d'Ivoire",
   CL: "Chile",
   CM: "Cameroon",

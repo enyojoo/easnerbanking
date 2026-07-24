@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  countryDisplayName,
   isBusinessProfileLockedFromKybFields,
   isProfileLockedFromKycFields,
 } from "./verified-identity"
@@ -49,5 +50,12 @@ describe("verified-identity lock helpers", () => {
         { orgKybApproved: false },
       ),
     ).toBe(false)
+  })
+})
+
+describe("countryDisplayName", () => {
+  it("uses short names for Congo countries", () => {
+    expect(countryDisplayName("CD")).toBe("DR Congo")
+    expect(countryDisplayName("CG")).toBe("Congo")
   })
 })

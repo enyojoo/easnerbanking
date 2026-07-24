@@ -63,10 +63,31 @@ export function normalizeCountryIso(value: unknown): string | null {
   return null
 }
 
+/** Short display names for countries where Intl names are too long for lists. */
+export const COUNTRY_DISPLAY_NAME_OVERRIDES: Record<string, string> = {
+  CD: "DR Congo",
+  CG: "Congo",
+}
+
+/** Primary local fiat for payout/pay-in corridors (one currency per country+rail in DB). */
+export const LOCAL_PAYMENT_CURRENCY_BY_COUNTRY: Record<string, string> = {
+  DK: "DKK",
+  GB: "GBP",
+  ET: "ETB",
+  LK: "LKR",
+}
+
+export function localPaymentCurrencyForCountry(countryCode: string | null | undefined): string | null {
+  const cc = normalizeCountryIso(countryCode) ?? ""
+  return cc ? (LOCAL_PAYMENT_CURRENCY_BY_COUNTRY[cc] ?? null) : null
+}
+
 /** Country display name for API (ISO-2 in DB). */
 export function countryDisplayName(iso: string | null | undefined, locale = "en"): string {
   const code = normalizeCountryIso(iso) ?? ""
   if (!code) return ""
+  const override = COUNTRY_DISPLAY_NAME_OVERRIDES[code]
+  if (override) return override
   try {
     const dn = new Intl.DisplayNames([locale], { type: "region" })
     return dn.of(code) ?? code

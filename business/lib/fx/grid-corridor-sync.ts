@@ -1,0 +1,274 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { currencyDisplayName, countryDisplayName, getCountryCodeForCurrency, localPaymentCurrencyForCountry } from "@easner/shared"
+import {
+  gridDiscoverySupportsCorridor,
+  listGridDiscoveries,
+} from "@/lib/grid/discoveries"
+import type { GridDiscovery } from "@/lib/grid/types"
+import { fetchLiveGridExchangeRates } from "@/lib/fx/grid-rates"
+import { isExcludedPayoutCorridorCountry } from "@/lib/payout-corridors-exclusions"
+import { upsertPayoutCorridor } from "@/lib/payout-corridors-upsert"
+
+const BRIDGE_CURRENCIES = new Set(["USD", "USDC", "USDT"])
+
+/** USD is a bridge globally but local currency in SV, EC, etc. */
+function skipBridgeCurrency(currencyCode: string, countryCode: string): boolean {
+  if (!BRIDGE_CURRENCIES.has(currencyCode)) return false
+  if (currencyCode === "USD" && countryCode && countryCode !== "US") return false
+  return true
+}
+
+export type GridCorridorTarget = {
+  countryCode: string
+  currencyCode: string
+  rail: "bank_transfer" | "mobile_money"
+}
+
+export type GridCorridorSyncResult = {
+  ok: boolean
+  inserted: number
+  updated: number
+  skipped: number
+  targets: number
+  error?: string
+}
+
+function corridorTargetKey(t: GridCorridorTarget): string {
+  return `${t.countryCode}:${t.currencyCode}:${t.rail}`
+}
+
+function countryDisplayNameFromCode(code: string): string {
+  return countryDisplayName(code.trim().toUpperCase()) || code
+}
+
+function preferLocalCurrencyTargets(targets: GridCorridorTarget[]): GridCorridorTarget[] {
+  const byCountryRail = new Map<string, GridCorridorTarget[]>()
+  for (const target of targets) {
+    const groupKey = `${target.countryCode}:${target.rail}`
+    const list = byCountryRail.get(groupKey) ?? []
+    list.push(target)
+    byCountryRail.set(groupKey, list)
+  }
+
+  const out: GridCorridorTarget[] = []
+  for (const list of byCountryRail.values()) {
+    const localCurrency = localPaymentCurrencyForCountry(list[0]?.countryCode)
+    if (localCurrency) {
+      const pick = list.find((t) => t.currencyCode === localCurrency)
+      if (pick) {
+        out.push(pick)
+        continue
+      }
+    }
+    out.push(...list)
+  }
+  return out
+}
+
+function resolveCountryForDiscovery(d: GridDiscovery, currencyCode: string): string | null {
+  const fromDiscovery = String(d.country ?? "").trim().toUpperCase()
+  if (fromDiscovery && !isExcludedPayoutCorridorCountry(fromDiscovery)) return fromDiscovery
+  const mapped = getCountryCodeForCurrency(currencyCode)
+  if (!mapped || isExcludedPayoutCorridorCountry(mapped)) return null
+  return mapped.toUpperCase()
+}
+
+/** Build unique Grid corridor targets from discoveries and USD→fiat exchange rates. */
+export function collectGridCorridorTargets(input: {
+  discoveries: GridDiscovery[]
+  exchangeRates: Array<{ from: string; to: string; country?: string }>
+}): GridCorridorTarget[] {
+  const byPair = new Map<string, GridDiscovery[]>()
+
+  for (const d of input.discoveries) {
+    const currencyCode = String(d.currency ?? "").trim().toUpperCase()
+    const countryCode = resolveCountryForDiscovery(d, currencyCode)
+    if (!currencyCode || !countryCode) continue
+    if (skipBridgeCurrency(currencyCode, countryCode)) continue
+    const key = `${countryCode}:${currencyCode}`
+    const list = byPair.get(key) ?? []
+    list.push(d)
+    byPair.set(key, list)
+  }
+
+  const targets = new Map<string, GridCorridorTarget>()
+
+  for (const [pairKey, discoveries] of byPair) {
+    const [countryCode, currencyCode] = pairKey.split(":")
+    for (const rail of ["bank_transfer", "mobile_money"] as const) {
+      if (
+        gridDiscoverySupportsCorridor({
+          discoveries,
+          countryCode,
+          currencyCode,
+          rail,
+        })
+      ) {
+        const target = { countryCode, currencyCode, rail }
+        targets.set(corridorTargetKey(target), target)
+      }
+    }
+  }
+
+  for (const rate of input.exchangeRates) {
+    if (rate.from !== "USD") continue
+    const currencyCode = rate.to.trim().toUpperCase()
+    if (!currencyCode || BRIDGE_CURRENCIES.has(currencyCode)) continue
+    const countryCode = (
+      rate.country?.trim().toUpperCase() ||
+      getCountryCodeForCurrency(currencyCode) ||
+      ""
+    ).toUpperCase()
+    if (!countryCode || isExcludedPayoutCorridorCountry(countryCode)) continue
+    const target: GridCorridorTarget = {
+      countryCode,
+      currencyCode,
+      rail: "bank_transfer",
+    }
+    targets.set(corridorTargetKey(target), target)
+  }
+
+  return preferLocalCurrencyTargets(
+    [...targets.values()].sort(
+      (a, b) =>
+        a.countryCode.localeCompare(b.countryCode) ||
+        a.currencyCode.localeCompare(b.currencyCode) ||
+        a.rail.localeCompare(b.rail),
+    ),
+  )
+}
+
+function gridOnlyRouting() {
+  return [{ provider: "grid", priority: 1, settlement_asset: "USDC" }]
+}
+
+function routingHasGrid(providerRouting: unknown): boolean {
+  if (!Array.isArray(providerRouting)) return false
+  return providerRouting.some(
+    (entry) =>
+      entry &&
+      typeof entry === "object" &&
+      String((entry as { provider?: string }).provider ?? "")
+        .trim()
+        .toLowerCase() === "grid",
+  )
+}
+
+function mergeGridCapabilityMetadata(existing: unknown): Record<string, unknown> {
+  const meta =
+    existing && typeof existing === "object" && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {}
+  meta.grid_send = true
+  meta.grid_receive = true
+  return meta
+}
+
+/** Insert missing payout_corridors rows for Grid discoveries/rates and mark Grid capability on existing rows. */
+export async function syncGridPayoutCorridors(
+  admin: SupabaseClient,
+  opts?: { forceRefresh?: boolean },
+): Promise<GridCorridorSyncResult> {
+  const discoveries = await listGridDiscoveries(opts?.forceRefresh ?? true)
+  const exchangeRates = await fetchLiveGridExchangeRates()
+  const targets = collectGridCorridorTargets({ discoveries, exchangeRates })
+  if (targets.length === 0) {
+    return { ok: true, inserted: 0, updated: 0, skipped: 0, targets: 0 }
+  }
+
+  const { data: existingRows, error } = await admin
+    .from("payout_corridors")
+    .select("id,country_code,currency_code,rail,metadata,provider_routing,country_name")
+
+  if (error) {
+    return { ok: false, inserted: 0, updated: 0, skipped: 0, targets: targets.length, error: error.message }
+  }
+
+  const existingByKey = new Map<string, (typeof existingRows)[number]>()
+  for (const row of existingRows ?? []) {
+    const key = `${String(row.country_code).toUpperCase()}:${String(row.currency_code).toUpperCase()}:${row.rail}`
+    existingByKey.set(key, row)
+  }
+
+  let inserted = 0
+  let updated = 0
+  let skipped = 0
+
+  for (const target of targets) {
+    const key = corridorTargetKey(target)
+    const existing = existingByKey.get(key)
+    const currencyName = currencyDisplayName(target.currencyCode)
+    const countryName =
+      existing?.country_name?.trim() ||
+      countryDisplayNameFromCode(target.countryCode)
+
+    if (!existing) {
+      const result = await upsertPayoutCorridor(admin, {
+        rail: target.rail,
+        country_code: target.countryCode,
+        country_name: countryName,
+        currency_code: target.currencyCode,
+        currency_name: currencyName,
+        enabled: false,
+        provider_routing: gridOnlyRouting(),
+        metadata: mergeGridCapabilityMetadata(null),
+      })
+      if (result.ok) inserted++
+      else skipped++
+      continue
+    }
+
+    const metadata = mergeGridCapabilityMetadata(existing.metadata)
+    const updates: Record<string, unknown> = {
+      metadata,
+      updated_at: new Date().toISOString(),
+    }
+    if (!existing.country_name?.trim()) {
+      updates.country_name = countryName
+    }
+    if (!routingHasGrid(existing.provider_routing)) {
+      const routing = Array.isArray(existing.provider_routing) ? [...existing.provider_routing] : []
+      routing.push({ provider: "grid", priority: routing.length + 1, settlement_asset: "USDC" })
+      updates.provider_routing = routing
+    }
+
+    const priorMeta = (existing.metadata ?? {}) as Record<string, unknown>
+    const metadataChanged =
+      priorMeta.grid_send !== true ||
+      priorMeta.grid_receive !== true ||
+      !existing.country_name?.trim()
+    const routingChanged = updates.provider_routing !== undefined
+
+    if (!metadataChanged && !routingChanged) {
+      skipped++
+      continue
+    }
+
+    const { error: upErr } = await admin
+      .from("payout_corridors")
+      .update(updates)
+      .eq("id", existing.id)
+    if (upErr) skipped++
+    else updated++
+  }
+
+  return { ok: true, inserted, updated, skipped, targets: targets.length }
+}
+
+export async function syncGridPayoutCorridorsSafe(
+  admin: SupabaseClient,
+  opts?: { forceRefresh?: boolean },
+): Promise<GridCorridorSyncResult> {
+  try {
+    return await syncGridPayoutCorridors(admin, opts)
+  } catch (e) {
+    return {
+      ok: false,
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      targets: 0,
+      error: e instanceof Error ? e.message : String(e),
+    }
+  }
+}

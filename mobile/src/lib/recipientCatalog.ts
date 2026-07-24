@@ -87,7 +87,7 @@ const noahBankCountryCurrencies: Array<{ countryCode: string; countryName: strin
   { countryCode: 'CH', countryName: 'Switzerland', currencyCode: 'CHF', currencyName: 'Swiss Franc' },
   { countryCode: 'CL', countryName: 'Chile', currencyCode: 'CLP', currencyName: 'Chilean Peso' },
   { countryCode: 'CO', countryName: 'Colombia', currencyCode: 'COP', currencyName: 'Colombian Peso' },
-  { countryCode: 'CG', countryName: 'Republic of the Congo', currencyCode: 'XAF', currencyName: 'Central African CFA Franc' },
+  { countryCode: 'CG', countryName: 'Congo', currencyCode: 'XAF', currencyName: 'Central African CFA Franc' },
   { countryCode: 'CI', countryName: "Cote D'Ivoire", currencyCode: 'XOF', currencyName: 'West African CFA Franc' },
   { countryCode: 'HR', countryName: 'Croatia', currencyCode: 'EUR', currencyName: 'Euro' },
   { countryCode: 'CZ', countryName: 'Czech Republic', currencyCode: 'CZK', currencyName: 'Czech Koruna' },

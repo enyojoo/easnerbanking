@@ -5,6 +5,7 @@ import {
   unwrapYcFieldsSchema,
   type GridCorridorSchemaHint,
 } from "@easner/shared"
+import type { GridCorridorSyncResult } from "@/lib/fx/grid-corridor-sync"
 import { isMomoGridDiscovery, listGridDiscoveries } from "@/lib/grid/discoveries"
 import type { GridDiscovery } from "@/lib/grid/types"
 
@@ -87,6 +88,7 @@ export type GridSchemaSyncResult = {
   ok: boolean
   updated: number
   skipped: number
+  provision?: GridCorridorSyncResult
   error?: string
 }
 
@@ -152,7 +154,18 @@ export async function syncGridCorridorSchemasSafe(
   admin: SupabaseClient,
 ): Promise<GridSchemaSyncResult> {
   try {
-    return await syncGridCorridorSchemas(admin, { forceRefresh: true })
+    const { syncGridPayoutCorridorsSafe } = await import("@/lib/fx/grid-corridor-sync")
+    const { syncYcPayoutCorridorsSafe } = await import("@/lib/fx/yc-corridor-sync")
+    const gridProvision = await syncGridPayoutCorridorsSafe(admin, { forceRefresh: true })
+    if (!gridProvision.ok) {
+      return { ok: false, updated: 0, skipped: 0, provision: gridProvision, error: gridProvision.error }
+    }
+    const ycProvision = await syncYcPayoutCorridorsSafe(admin)
+    if (!ycProvision.ok) {
+      return { ok: false, updated: 0, skipped: 0, error: ycProvision.error }
+    }
+    const schema = await syncGridCorridorSchemas(admin, { forceRefresh: true })
+    return { ...schema, provision: gridProvision }
   } catch (e) {
     return {
       ok: false,

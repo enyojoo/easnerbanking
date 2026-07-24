@@ -917,6 +917,8 @@ export function PayoutCorridorsAdminPanel() {
   const corridorsQuery = useOfficePayoutCorridors()
   const rows = corridorsQuery.data ?? []
   const [error, setError] = useState<string | null>(null)
+  const [syncSummary, setSyncSummary] = useState<string | null>(null)
+  const [syncingGrid, setSyncingGrid] = useState(false)
   const [railTab, setRailTab] = useState<"bank_transfer" | "mobile_money">("bank_transfer")
   const filteredRows = useMemo(
     () => rows.filter((r) => r.rail === railTab || (!r.rail && railTab === "bank_transfer")),
@@ -925,6 +927,28 @@ export function PayoutCorridorsAdminPanel() {
   const fiatRows = useMemo(() => groupFiatDestinations(filteredRows), [filteredRows])
   const showTableSkeleton = useQueryInitialLoading(corridorsQuery.isPending, corridorsQuery.data, fiatRows)
   const refreshing = corridorsQuery.isFetching && !showTableSkeleton
+
+  const handleSyncGridCorridors = async () => {
+    setSyncingGrid(true)
+    setError(null)
+    setSyncSummary(null)
+    try {
+      const result = await payoutCorridorsApi.syncGridCorridors()
+      const p = result.provision
+      const corridorPart = p
+        ? `${p.inserted} corridor${p.inserted === 1 ? "" : "s"} added, ${p.updated} updated (${p.targets} Grid targets)`
+        : null
+      const schemaPart = `schemas updated ${result.updated}, skipped ${result.skipped}`
+      setSyncSummary(
+        corridorPart ? `Grid sync done — ${corridorPart}; ${schemaPart}` : `Grid sync done — ${schemaPart}`,
+      )
+      await corridorsQuery.refetch()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Grid sync failed")
+    } finally {
+      setSyncingGrid(false)
+    }
+  }
 
   const toggleEnabled = async (row: FiatDestinationRow, enabled: boolean) => {
     const corridorIds = new Set(row.corridorIds)
@@ -1116,6 +1140,16 @@ export function PayoutCorridorsAdminPanel() {
             type="button"
             variant="outline"
             size="sm"
+            onClick={() => void handleSyncGridCorridors()}
+            disabled={syncingGrid || corridorsQuery.isFetching}
+          >
+            {syncingGrid ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Sync Grid
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => void corridorsQuery.refetch()}
             disabled={corridorsQuery.isFetching}
           >
@@ -1126,6 +1160,7 @@ export function PayoutCorridorsAdminPanel() {
       }
     >
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {syncSummary ? <p className="text-sm text-muted-foreground">{syncSummary}</p> : null}
       {corridorsQuery.error ? (
         <p className="text-sm text-destructive">
           {corridorsQuery.error instanceof Error

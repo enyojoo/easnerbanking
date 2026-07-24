@@ -67,4 +67,13 @@ export const payoutCorridorsApi = {
     const data = await asJson<{ corridor: PayoutCorridorAdminRow }>(res)
     return data.corridor
   },
+
+  async syncGridCorridors(): Promise<{
+    updated: number
+    skipped: number
+    provision?: { inserted: number; updated: number; skipped: number; targets: number }
+  }> {
+    const res = await officeFetch("/api/admin/grid-schemas/sync", { method: "POST" })
+    return asJson(res)
+  },
 }
