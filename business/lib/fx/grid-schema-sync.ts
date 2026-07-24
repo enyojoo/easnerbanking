@@ -5,10 +5,8 @@ import {
   unwrapYcFieldsSchema,
   type GridCorridorSchemaHint,
 } from "@easner/shared"
-import { listGridDiscoveries } from "@/lib/grid/discoveries"
+import { isMomoGridDiscovery, listGridDiscoveries } from "@/lib/grid/discoveries"
 import type { GridDiscovery } from "@/lib/grid/types"
-
-const MOMO_HINTS = /mobile|momo|m-pesa|mpesa|airtel|mtn|orange|tigo|wave|vodafone|moov|tnm|free money/i
 
 function corridorUsesGrid(row: {
   provider_routing?: unknown
@@ -30,13 +28,6 @@ function discoveryValue(d: GridDiscovery): string {
   return String(d.bankName ?? d.displayName ?? "").trim()
 }
 
-function isMomoDiscovery(d: GridDiscovery): boolean {
-  const label = `${discoveryLabel(d)} ${discoveryValue(d)}`
-  if (MOMO_HINTS.test(label)) return true
-  const rails = (d.paymentRails ?? []).map((r) => String(r).toUpperCase())
-  return rails.some((r) => r.includes("MOBILE") || r.includes("MOMO"))
-}
-
 export function buildGridSchemaFromDiscoveries(input: {
   discoveries: GridDiscovery[]
   countryCode: string
@@ -55,7 +46,7 @@ export function buildGridSchemaFromDiscoveries(input: {
 
   if (input.rail === "mobile_money") {
     const momo = filtered
-      .filter((d) => isMomoDiscovery(d) || !filtered.some((x) => !isMomoDiscovery(x)))
+      .filter((d) => isMomoGridDiscovery(d) || !filtered.some((x) => !isMomoGridDiscovery(x)))
       .map((d) => ({ value: discoveryValue(d), label: discoveryLabel(d) || discoveryValue(d) }))
       .filter((e) => e.value)
     const unique = [...new Map(momo.map((e) => [e.value, e])).values()]
@@ -69,7 +60,7 @@ export function buildGridSchemaFromDiscoveries(input: {
   }
 
   const banks = filtered
-    .filter((d) => !isMomoDiscovery(d))
+    .filter((d) => !isMomoGridDiscovery(d))
     .map((d) => discoveryValue(d))
     .filter(Boolean)
   const uniqueBanks = [...new Set(banks)]

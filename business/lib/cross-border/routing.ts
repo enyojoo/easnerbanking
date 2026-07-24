@@ -10,6 +10,7 @@ import { corridorSupportsGridReceive, corridorGridReceiveEnabled } from "@/lib/y
 
 function rowSupportsYcPayout(metadata: unknown, providerRouting: unknown): boolean {
   const meta = (metadata ?? {}) as Record<string, unknown>
+  if (meta.yc_send_enabled === false) return false
   if (meta.yc_send === true) return true
   const routing = Array.isArray(providerRouting) ? providerRouting : []
   return routing.some(
@@ -22,6 +23,7 @@ function rowSupportsYcPayout(metadata: unknown, providerRouting: unknown): boole
 
 function rowSupportsGridPayout(metadata: unknown, providerRouting: unknown): boolean {
   const meta = (metadata ?? {}) as Record<string, unknown>
+  if (meta.grid_send_enabled === false) return false
   if (meta.grid_send === true) return true
   const routing = Array.isArray(providerRouting) ? providerRouting : []
   return routing.some(
@@ -62,6 +64,8 @@ export async function resolveCrossBorderProviderForDestination(
   let officeChoice: CrossBorderProviderId | null = null
 
   for (const row of rows) {
+    const meta = (row.metadata ?? {}) as Record<string, unknown>
+    if (meta.cross_border_enabled === false) continue
     supportYellowcard =
       supportYellowcard || rowSupportsYcPayout(row.metadata, row.provider_routing)
     supportGrid = supportGrid || rowSupportsGridPayout(row.metadata, row.provider_routing)

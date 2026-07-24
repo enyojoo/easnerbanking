@@ -5,6 +5,16 @@ import { gridCurrencyCode, gridExchangeRateMid } from "./types"
 let discoveryCache: { at: number; rows: GridDiscovery[] } | null = null
 const DISCOVERY_TTL_MS = 5 * 60_000
 
+const MOMO_HINTS =
+  /mobile|momo|m-pesa|mpesa|airtel|mtn|orange|tigo|wave|vodafone|moov|tnm|free money/i
+
+export function isMomoGridDiscovery(d: GridDiscovery): boolean {
+  const label = `${String(d.displayName ?? d.bankName ?? "")} ${String(d.bankName ?? "")}`
+  if (MOMO_HINTS.test(label)) return true
+  const rails = (d.paymentRails ?? []).map((r) => String(r).trim().toUpperCase())
+  return rails.some((r) => r.includes("MOBILE") || r.includes("MOMO"))
+}
+
 export async function listGridDiscoveries(forceRefresh = false): Promise<GridDiscovery[]> {
   if (!forceRefresh && discoveryCache && Date.now() - discoveryCache.at < DISCOVERY_TTL_MS) {
     return discoveryCache.rows
@@ -36,11 +46,19 @@ export function gridDiscoverySupportsCorridor(input: {
     const dCountry = String(d.country ?? "").trim().toUpperCase()
     const dCurrency = String(d.currency ?? "").trim().toUpperCase()
     if (dCountry !== country || dCurrency !== currency) return false
+
+    const momo = isMomoGridDiscovery(d)
     const rails = (d.paymentRails ?? []).map((r) => String(r).trim().toUpperCase())
+    const hasBankRail = rails.some(
+      (r) => r.includes("BANK") || r.includes("SWIFT") || r.includes("WIRE"),
+    )
+
     if (input.rail === "mobile_money") {
-      return rails.some((r) => r.includes("MOBILE") || r.includes("MOMO"))
+      return momo || rails.some((r) => r.includes("MOBILE") || r.includes("MOMO"))
     }
-    return rails.some((r) => r.includes("BANK") || r.includes("SWIFT") || rails.length === 0)
+
+    if (momo && !hasBankRail) return false
+    return hasBankRail || rails.length === 0 || !momo
   })
 }
 
