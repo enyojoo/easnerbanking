@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
@@ -92,7 +92,7 @@ import { CrossBorderSendDetailRows } from '../../components/transactions/CrossBo
 import { PayoutReviewDetailRows } from '../../components/transactions/PayoutReviewDetailRows'
 import { TransactionDetailSummaryRow, TransactionDetailCopyableValue } from '../../components/transactions/TransactionDetailSummaryRow'
 import { ApiError } from '../../query/api-client'
-import { useScope } from '../../query/scope'
+import { useScope, useIsRestoring } from '../../query'
 import { haptics } from '../../lib/haptics'
 import {
   navigateBackFromTransactionDetail,
@@ -243,6 +243,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const insets = useSafeAreaInsets()
   const qc = useQueryClient()
   const { scope } = useScope()
+  const isRestoring = useIsRestoring()
   const { user } = useAuth()
   const recipientsQuery = useRecipientsList()
   const detailQuery = useTransactionDetail(transactionId)
@@ -345,7 +346,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!scope || !transactionId) return
     void seedTransactionDetailFromDisk(qc, scope, transactionId)
   }, [qc, scope, transactionId])
@@ -730,7 +731,9 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   // Prevent a partially-populated cached snapshot from rendering a mostly-empty UI.
   // If we don't have core fields yet, treat the view as loading until the detail query resolves.
   const shouldShowSkeleton =
-    detailQuery.isPending && (!transaction || !hasCoreDetailFields) && !error
+    !error &&
+    !hasCoreDetailFields &&
+    ((isRestoring && !transaction) || detailQuery.isPending || !transaction)
 
   if (shouldShowSkeleton) {
     return (

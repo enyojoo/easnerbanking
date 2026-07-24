@@ -21,6 +21,11 @@ import { analytics } from './src/lib/analytics'
 import { deepLinkService } from './src/services/DeepLinkService'
 import { pushNotificationService } from './src/lib/pushNotificationService'
 import {
+  parsePushTransactionSnapshot,
+  pushTransactionDetailAliasIds,
+  type PersonalScope,
+} from '@easner/shared'
+import {
   bootstrapPushNotificationDeepLink,
   flushPendingPushNavigation,
   stashPendingPushFromNotificationData,
@@ -28,8 +33,10 @@ import {
 import { supabase } from './src/lib/supabase'
 import {
   isMoneyMovementPush,
-  refreshMoneyFeedsForUser,
+  refreshLiveOperationalData,
 } from './src/query/refresh-money-feeds'
+import { warmTransactionDetailForNavigation } from './src/hooks/queries/use-transactions'
+import { getMobileQueryClient } from './src/query/client'
 import AppNavigator from './src/navigation/AppNavigator'
 import { webLinking } from './src/navigation/linking'
 import { setPreserveUserPathOverAuth } from './src/navigation/webLinkingGuard'
@@ -315,10 +322,17 @@ export default function App() {
           const {
             data: { session },
           } = await supabase.auth.getSession()
-          if (session?.user?.id) {
-            void refreshMoneyFeedsForUser(session.user.id)
+          if (!session?.user?.id) return
+          const scope: PersonalScope = { kind: 'personal', userId: session.user.id }
+          void refreshLiveOperationalData(scope)
+          const txId = String(data.transactionId ?? data.transaction_id ?? '').trim()
+          if (txId) {
+            void warmTransactionDetailForNavigation(getMobileQueryClient(), scope, txId, {
+              aliasIds: pushTransactionDetailAliasIds(data),
+              pushSnapshot: parsePushTransactionSnapshot(data) ?? undefined,
+            })
           }
-        }
+        },
       )
 
       const responseSubscription = pushNotificationService.addNotificationResponseReceivedListener(
@@ -326,16 +340,25 @@ export default function App() {
           console.log('Notification tapped:', response)
           const data = response.notification.request.content.data as Record<string, unknown> | undefined
           void (async () => {
+            let scope: PersonalScope | null = null
             if (isMoneyMovementPush(data)) {
               const {
                 data: { session },
               } = await supabase.auth.getSession()
               if (session?.user?.id) {
-                await refreshMoneyFeedsForUser(session.user.id)
+                scope = { kind: 'personal', userId: session.user.id }
+                void refreshLiveOperationalData(scope)
+                const txId = String(data.transactionId ?? data.transaction_id ?? '').trim()
+                if (txId) {
+                  void warmTransactionDetailForNavigation(getMobileQueryClient(), scope, txId, {
+                    aliasIds: pushTransactionDetailAliasIds(data),
+                    pushSnapshot: parsePushTransactionSnapshot(data) ?? undefined,
+                  })
+                }
               }
             }
             await stashPendingPushFromNotificationData(data)
-            flushPendingPushNavigation((global as any).rootNavigationRef?.current)
+            flushPendingPushNavigation((global as any).rootNavigationRef?.current, scope)
           })()
         },
       )

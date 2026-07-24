@@ -2,11 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Platform } from 'react-native'
 import * as BackgroundTask from 'expo-background-task'
 import * as TaskManager from 'expo-task-manager'
+import type { PersonalScope } from '@easner/shared'
 import { apiFetch } from '../query/api-client'
 import { getSessionReliable } from './authSession'
 import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from './apiClient'
 import { isDefinitiveEmptyBalanceResponse } from './wallet-balance-display'
 import { BALANCE_SNAPSHOT_KEY_PREFIX } from './wallet-balance-snapshot'
+import { refreshLiveOperationalData } from '../query/refresh-money-feeds'
+import { warmPendingPushTransactionDetail } from './pendingPushNavigation'
+import { TRANSACTIONS_LEDGER_PAGE_SIZE } from '../hooks/queries/use-transactions'
 
 export const BACKGROUND_TASK_IDENTIFIER = 'background-task'
 
@@ -17,23 +21,27 @@ type BalanceEnvelope = {
   detail?: string
 }
 
-async function refreshBackgroundSnapshots(): Promise<boolean> {
-  const session = await getSessionReliable()
-  const userId = session?.user?.id
+async function refreshBackgroundSnapshots(scope: PersonalScope): Promise<boolean> {
+  const userId = scope.userId
   if (!userId) return false
 
   const balancesResult = await Promise.allSettled([
     apiFetch<BalanceEnvelope>('/api/wallets/on-chain-balances', {
       headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
     }),
-  ]).then(([r]) => r)
+    apiFetch<{ transactions?: unknown[] }>('/api/transactions', {
+      query: { limit: TRANSACTIONS_LEDGER_PAGE_SIZE },
+      headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+    }),
+  ])
 
   const writes: [string, string][] = []
   const now = Date.now()
   let updated = false
 
-  if (balancesResult.status === 'fulfilled') {
-    const body = balancesResult.value
+  const balanceSettled = balancesResult[0]
+  if (balanceSettled.status === 'fulfilled') {
+    const body = balanceSettled.value
     const source = body?.source
     const detail = body?.detail
     const authoritative = Boolean(source && source !== 'none')
@@ -55,7 +63,10 @@ async function refreshBackgroundSnapshots(): Promise<boolean> {
     updated = true
   }
 
-  return updated
+  await refreshLiveOperationalData(scope).catch(() => undefined)
+  await warmPendingPushTransactionDetail(scope).catch(() => undefined)
+
+  return updated || balancesResult[1].status === 'fulfilled'
 }
 
 if (Platform.OS === 'ios' || Platform.OS === 'android') {
@@ -63,7 +74,14 @@ if (Platform.OS === 'ios' || Platform.OS === 'android') {
     try {
       const now = Date.now()
       console.log(`Got background task call at date: ${new Date(now).toISOString()}`)
-      const wroteSnapshots = await refreshBackgroundSnapshots()
+      const session = await getSessionReliable()
+      const userId = session?.user?.id
+      if (!userId) {
+        console.log('Background task skipped — no session')
+        return BackgroundTask.BackgroundTaskResult.Success
+      }
+      const scope: PersonalScope = { kind: 'personal', userId }
+      const wroteSnapshots = await refreshBackgroundSnapshots(scope)
       if (!wroteSnapshots) {
         console.log('Background task finished without snapshot updates')
       }

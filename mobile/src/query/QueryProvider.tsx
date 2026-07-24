@@ -1,9 +1,16 @@
 import React from 'react'
 import { AppState, AppStateStatus, Platform } from 'react-native'
-import { QueryClientProvider, focusManager } from '@tanstack/react-query'
-import { qk, isChannelHealthy } from '@easner/shared'
+import { focusManager } from '@tanstack/react-query'
+import { PersistQueryClientProvider, useIsRestoring } from '@tanstack/react-query-persist-client'
+import { qk, type PersonalScope } from '@easner/shared'
 import { getMobileQueryClient } from './client'
-import { startQueryPersistence, clearPersistedQueryCache } from './persister'
+import {
+  clearPersistedQueryCache,
+  createMobileQueryPersister,
+  MOBILE_APP_BUILD_ID,
+  MOBILE_QUERY_MAX_AGE_MS,
+  shouldPersistMobileQuery,
+} from './persister'
 import { PersonalScopeProvider, useScope } from './scope'
 import { useSupabaseRealtimeScope } from './use-supabase-realtime-scope'
 import { RealtimeHealthProvider, useRealtimeHealth } from './realtime-health-context'
@@ -18,6 +25,12 @@ import {
   ensureYcLocalDepositCachesReady,
   hydrateReceiveRailsFromDisk,
 } from '../lib/warmYcLocalDepositCaches'
+import { refreshLiveOperationalData } from './refresh-money-feeds'
+import {
+  FOREGROUND_BACKGROUND_THRESHOLD_MS,
+  hasStaleOperationalQueries,
+  shouldRefreshOnForeground,
+} from './foreground-refresh'
 
 /**
  * Root Query provider for the mobile app. Owns:
@@ -26,19 +39,10 @@ import {
  *   - AppState / NetInfo hooks for proper focus + online signals on RN
  *   - scope context for typed query keys
  *   - Supabase Realtime subscription for the active scope
- *
- * The persistence + online bridges are installed exactly once (module level)
- * so re-renders never duplicate subscriptions.
  */
 
-// ---- RN bridges into TanStack Query -----------------------------------------
-// focusManager: map AppState → focused/unfocused so `refetchOnWindowFocus`
-// works the same as web. We still keep it OFF by default in the mobile
-// QueryClient (see client.ts) but hooks can opt in per-query.
 focusManager.setEventListener((handleFocus) => {
   if (Platform.OS === 'web') {
-    // Business parity: tab visibility must not toggle query "focus" (avoids
-    // refetch/resume jank when switching browser tabs).
     if (typeof document === 'undefined') return () => {}
     handleFocus(true)
     return () => {}
@@ -49,16 +53,8 @@ focusManager.setEventListener((handleFocus) => {
   return () => sub.remove()
 })
 
-// NOTE on onlineManager: React Native has no `navigator.onLine`, so TanStack
-// Query defaults to "always online" on RN. That's acceptable here — the
-// `createBaseQueryClient` retry policy already backs off on network errors,
-// and realtime health gives the UI a clear "reconnecting" signal. If we later
-// add `@react-native-community/netinfo`, wire it in here with
-// `onlineManager.setEventListener(...)`.
-
-// Persistence is installed once at module load for the shared client.
 const qc = getMobileQueryClient()
-startQueryPersistence(qc)
+const mobilePersister = createMobileQueryPersister()
 
 function AuthGatedCacheReset({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
@@ -68,13 +64,10 @@ function AuthGatedCacheReset({ children }: { children: React.ReactNode }) {
     const prev = lastUserIdRef.current
     const next = user?.id ?? null
     if (prev && !next) {
-      // Logged out: drop in-memory + on-disk state so the next account
-      // doesn't inherit the last user's queries.
       qc.cancelQueries()
       qc.clear()
       void clearPersistedQueryCache()
     } else if (prev && next && prev !== next) {
-      // Account switch (rare on mobile; handle defensively).
       qc.cancelQueries()
       qc.clear()
       void clearPersistedQueryCache()
@@ -99,11 +92,6 @@ function WarmYcLocalDepositCachesOnScope({ children }: { children: React.ReactNo
   return <>{children}</>
 }
 
-/**
- * As soon as personal scope exists (signed-in user), warm caches for screens that should feel instant:
- * Receive deposit lines + recipient list (both rarely change; recipients also persist to disk).
- * Idempotent with Dashboard prefetch + `prefetchQuery` deduping in-flight work.
- */
 function WarmOperationalCachesOnScope({ children }: { children: React.ReactNode }) {
   const { scope, isReady } = useScope()
   const { loading: authLoading } = useAuth()
@@ -111,7 +99,6 @@ function WarmOperationalCachesOnScope({ children }: { children: React.ReactNode 
     if (!isReady || !scope || authLoading) return
     void prefetchReceiveDepositQueries(qc, scope)
     void prefetchRecipientsList(qc, scope)
-    // Warm Noah + crypto send rates for each recipient corridor (same DB rows as quote).
     void (async () => {
       try {
         const recipients = await qc.fetchQuery({
@@ -129,7 +116,6 @@ function WarmOperationalCachesOnScope({ children }: { children: React.ReactNode 
 }
 
 function ScopeRealtimeBridge({ children }: { children: React.ReactNode }) {
-  // Read scope so we only mount the realtime hook once a user is present.
   const { isReady } = useScope()
   if (!isReady) return <>{children}</>
   return <RealtimeActive>{children}</RealtimeActive>
@@ -140,27 +126,33 @@ function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) 
   const { scope, isReady } = useScope()
   const realtimeHealth = useRealtimeHealth()
   const lastRefreshAtRef = React.useRef(0)
+  const lastBackgroundAtRef = React.useRef<number | null>(null)
 
   const refreshNow = React.useCallback(() => {
-      if (!user?.id || !scope || !isReady) return
-      if (isChannelHealthy(realtimeHealth)) return
-      const now = Date.now()
-      const MIN_INTERVAL_MS = 10_000
-      if (now - lastRefreshAtRef.current < MIN_INTERVAL_MS) return
-      lastRefreshAtRef.current = now
+    if (!user?.id || !scope || !isReady) return
+    const now = Date.now()
+    const MIN_INTERVAL_MS = 10_000
+    if (now - lastRefreshAtRef.current < MIN_INTERVAL_MS) return
 
-      void qc.refetchQueries({ queryKey: qk.wallets.root(scope), type: 'active' })
-      void qc.refetchQueries({ queryKey: qk.transactions.root(scope), type: 'active' })
-      void qc.refetchQueries({ queryKey: qk.beneficiaries.root(scope), type: 'active' })
-      void qc.refetchQueries({ queryKey: ['exchange-rates', 'noah-send'], type: 'active' })
-    }, [isReady, scope, user?.id, realtimeHealth])
+    const staleOperational = hasStaleOperationalQueries(qc, scope, now)
+    const shouldRefresh = shouldRefreshOnForeground({
+      lastBackgroundAt: lastBackgroundAtRef.current,
+      nowMs: now,
+      realtimeHealth,
+      hasStaleOperationalQueries: staleOperational,
+    })
+    if (!shouldRefresh) return
+
+    lastRefreshAtRef.current = now
+    void refreshLiveOperationalData(scope as PersonalScope)
+  }, [isReady, scope, user?.id, realtimeHealth])
 
   React.useEffect(() => {
-    if (Platform.OS === 'web') {
-      // Web: realtime + pull-to-refresh only — no visibility-driven refetch storm.
-      return
-    }
+    if (Platform.OS === 'web') return
     const sub = AppState.addEventListener('change', (status) => {
+      if (status === 'background' || status === 'inactive') {
+        lastBackgroundAtRef.current = Date.now()
+      }
       if (status === 'active') {
         refreshNow()
       }
@@ -191,7 +183,18 @@ function RealtimeActive({ children }: { children: React.ReactNode }) {
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   return (
-    <QueryClientProvider client={qc}>
+    <PersistQueryClientProvider
+      client={qc}
+      persistOptions={{
+        persister: mobilePersister,
+        buster: MOBILE_APP_BUILD_ID,
+        maxAge: MOBILE_QUERY_MAX_AGE_MS,
+        dehydrateOptions: {
+          shouldDehydrateQuery: shouldPersistMobileQuery,
+          shouldDehydrateMutation: () => false,
+        },
+      }}
+    >
       <AuthGatedCacheReset>
         <PersonalScopeProvider>
           <WarmOperationalCachesOnScope>
@@ -201,7 +204,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
           </WarmOperationalCachesOnScope>
         </PersonalScopeProvider>
       </AuthGatedCacheReset>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   )
 }
 
@@ -209,5 +212,6 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
 export { useScope, useMaybeScope } from './scope'
 export { useSupabaseRealtimeScope } from './use-supabase-realtime-scope'
 export { getMobileQueryClient, resetQueryClient } from './client'
-// Silence unused Platform import in some build profiles.
+export { useIsRestoring }
+export { FOREGROUND_BACKGROUND_THRESHOLD_MS }
 void Platform

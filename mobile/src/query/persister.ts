@@ -1,9 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Constants from 'expo-constants'
+import type { Query } from '@tanstack/react-query'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
-import type { PersistedClient, Persister } from '@tanstack/react-query-persist-client'
-import type { QueryClient } from '@tanstack/react-query'
-import { persistQueryClient } from '@tanstack/react-query-persist-client'
+import type { Persister } from '@tanstack/react-query-persist-client'
 
 /**
  * Disk persistence policy for Easner mobile.
@@ -17,60 +16,40 @@ import { persistQueryClient } from '@tanstack/react-query-persist-client'
  * a shape mismatch between old persisted data and new code.
  */
 
-const APP_BUILD_ID =
-  // Native build number is the most stable rev for shipped apps.
+export const MOBILE_APP_BUILD_ID =
   (Constants.expoConfig?.ios?.buildNumber as string | undefined) ??
   (Constants.expoConfig?.android?.versionCode?.toString() as string | undefined) ??
   Constants.expoConfig?.version ??
   '0'
 
-const STORAGE_KEY = 'easner.query.cache.v2'
+export const MOBILE_QUERY_STORAGE_KEY = 'easner.query.cache.v2'
 
-function makePersister(): Persister {
+export const MOBILE_QUERY_MAX_AGE_MS = 7 * 24 * 60 * 60_000
+
+export function shouldPersistMobileQuery(query: Query): boolean {
+  return query.meta?.safePersist === true && query.state.status === 'success'
+}
+
+export function createMobileQueryPersister(): Persister {
   return createAsyncStoragePersister({
     storage: AsyncStorage,
-    key: STORAGE_KEY,
-    // Keep payloads compact; React Native's JSI bridge doesn't love MBs.
+    key: MOBILE_QUERY_STORAGE_KEY,
     throttleTime: 1_000,
   })
-}
-
-export type PersistenceHandle = {
-  unsubscribe: () => void
-}
-
-export function startQueryPersistence(qc: QueryClient): PersistenceHandle {
-  const persister = makePersister()
-  const [unsubscribe] = persistQueryClient({
-    queryClient: qc,
-    persister,
-    maxAge: 7 * 24 * 60 * 60_000, // 7 days; anything older is refetched.
-    buster: APP_BUILD_ID,
-    dehydrateOptions: {
-      // Do not persist pending/loading states; rehydrating them can replay a
-      // request before auth is ready and emit noisy unauthorized rejections.
-      shouldDehydrateQuery: (q) => q.meta?.safePersist === true && q.state.status === 'success',
-      shouldDehydrateMutation: () => false,
-    },
-    // Persisted rows are shown immediately. `staleTime: 0` isn't accepted in
-    // the hydrate options type in v5; instead we mark the persisted queries
-    // stale via the per-query `staleTime` in each hook, so the first
-    // realtime/network event upgrades them in place.
-  })
-  return { unsubscribe }
 }
 
 /** Nuke the persisted cache file. Used on sign-out to avoid leaking data. */
 export async function clearPersistedQueryCache(): Promise<void> {
   try {
-    await AsyncStorage.removeItem(STORAGE_KEY)
+    await AsyncStorage.removeItem(MOBILE_QUERY_STORAGE_KEY)
   } catch {
     // ignore — best-effort
   }
 }
 
-export { STORAGE_KEY as MOBILE_QUERY_STORAGE_KEY, APP_BUILD_ID as MOBILE_APP_BUILD_ID }
+/** @deprecated Use PersistQueryClientProvider + createMobileQueryPersister instead. */
+export function startQueryPersistence(): { unsubscribe: () => void } {
+  return { unsubscribe: () => undefined }
+}
 
-// Helper placeholder to satisfy ts-check when PersistedClient is unused;
-// real callers only need `startQueryPersistence`.
-export type { PersistedClient }
+export { MOBILE_APP_BUILD_ID as APP_BUILD_ID }

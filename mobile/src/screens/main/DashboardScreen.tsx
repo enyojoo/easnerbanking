@@ -59,7 +59,7 @@ import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/f
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isTier1Complete } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
-import { useTransactionsList, prefetchRecentTransactionDetailsInBackground, prefetchTransactionDetail, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
+import { useTransactionsList, prefetchRecentTransactionDetailsInBackground, warmTransactionDetailForNavigation, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-deposit-queries'
 import {
   resolveWarmYcLocalDepositCorridor,
@@ -935,7 +935,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                         transaction.ledger_row_id?.trim() || transaction.transaction_id || transaction.id || '',
                       ).trim()
                       if (!txId) return
-                      void prefetchTransactionDetail(qc, scope, txId)
+                      void warmTransactionDetailForNavigation(qc, scope, txId)
                     }}
                   >
                     {getTransactionIcon(iconType, isReceived)}

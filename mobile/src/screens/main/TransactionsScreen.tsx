@@ -27,7 +27,7 @@ import { PremiumModalSheet } from '../../components/premium'
 import { GroupedListCardSkeleton } from '../../components/skeletons'
 import EmptyState from '../../components/EmptyState'
 import { FilterChip, SectionCard } from '../../components/ui'
-import { useCurrenciesCatalog, useReportingFxRates, useTransactionsList, prefetchRecentTransactionDetailsInBackground, prefetchTransactionDetail, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
+import { useCurrenciesCatalog, useReportingFxRates, useTransactionsList, prefetchRecentTransactionDetailsInBackground, warmTransactionDetailForNavigation, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { useBalance } from '../../contexts/BalanceContext'
@@ -834,7 +834,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
                                 if (!scope) return
                                 const lookupId = transactionDetailLookupId(tx)
                                 if (!lookupId) return
-                                void prefetchTransactionDetail(qc, scope, lookupId)
+                                void warmTransactionDetailForNavigation(qc, scope, lookupId)
                               }}
                               onPress={() => {
                                 const lookupId = transactionDetailLookupId(tx)

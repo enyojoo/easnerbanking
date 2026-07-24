@@ -40,6 +40,7 @@ export function useRecipientsList() {
     },
     staleTime: RECIPIENTS_STALE_MS,
     gcTime: RECIPIENTS_GC_MS,
+    refetchOnWindowFocus: true,
     meta: RECIPIENTS_QUERY_META,
   })
 }

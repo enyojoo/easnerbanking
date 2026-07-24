@@ -144,11 +144,48 @@ export async function seedTransactionDetailFromDisk(
   txId: string,
 ): Promise<void> {
   if (!txId.trim()) return
-  const key = qk.transactions.detail(scope, txId)
+  const key = qk.transactions.detail(scope, txId.trim())
   if (qc.getQueryData(key)) return
-  const cached = await readCachedTransactionDetail<TransactionDetailResponse>(txId)
+  const cached = await readCachedTransactionDetail<TransactionDetailResponse>(txId.trim())
   if (!cached) return
   qc.setQueryData(key, cached)
+}
+
+/**
+ * Central warm-up for list press-in, push taps, and PIN prefetch.
+ * Seeds disk under ledger id + aliases (ETID), optionally hydrates from push snapshot, then prefetches API.
+ */
+export async function warmTransactionDetailForNavigation(
+  qc: QueryClient,
+  scope: Scope,
+  txId: string,
+  opts?: {
+    aliasIds?: string[]
+    pushSnapshot?: MobileTransactionRow | null
+  },
+): Promise<void> {
+  const id = txId.trim()
+  if (!id || id.startsWith('optimistic_')) return
+
+  const aliasIds = [...new Set([...(opts?.aliasIds ?? []).map((a) => a.trim()).filter(Boolean)])]
+  for (const alias of aliasIds) {
+    await seedTransactionDetailFromDisk(qc, scope, alias)
+  }
+  await seedTransactionDetailFromDisk(qc, scope, id)
+
+  if (opts?.pushSnapshot) {
+    const response: TransactionDetailResponse = { transaction: opts.pushSnapshot }
+    const key = qk.transactions.detail(scope, id)
+    if (!qc.getQueryData(key)) {
+      qc.setQueryData(key, response)
+    }
+    const cacheIds = [id, ...aliasIds.filter((a) => a !== id)]
+    for (const cacheId of cacheIds) {
+      void writeCachedTransactionDetail(cacheId, response).catch(() => undefined)
+    }
+  }
+
+  await prefetchTransactionDetail(qc, scope, id)
 }
 
 export function prefetchTransactionDetail(
@@ -219,7 +256,7 @@ export function useTransactionsList(filters: TxFilters = {}, pageSize = TRANSACT
     getNextPageParam: (last) => last.nextCursor,
     staleTime: 90_000,
     gcTime: 30 * 60_000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchInterval: pollActive ? pollingIntervalFor('operational', realtimeHealth) : false,
     refetchIntervalInBackground: false,
     meta: { safePersist: true, freshness: 'operational' },

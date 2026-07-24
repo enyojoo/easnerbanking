@@ -1,5 +1,6 @@
 import { markRecentMoneyActivity, qk, type PersonalScope } from '@easner/shared'
 import { bustFinancialFeedCaches } from '../lib/userCache'
+import { prefetchReceiveDepositQueries } from '../hooks/queries/use-receive-deposit-queries'
 import { getMobileQueryClient } from './client'
 
 export function isMoneyMovementPush(data: Record<string, unknown> | undefined): boolean {
@@ -10,15 +11,43 @@ export function isMoneyMovementPush(data: Record<string, unknown> | undefined): 
   return false
 }
 
+export type RefreshLiveOperationalDataOpts = {
+  /** When true, await active query refetches (legacy push refresh behavior). */
+  awaitActive?: boolean
+}
+
+/**
+ * Invalidate + refetch all live operational feeds after money movement or resume.
+ * Non-blocking by default — callers opening TransactionDetails should not await this.
+ */
+export async function refreshLiveOperationalData(
+  scope: PersonalScope,
+  opts?: RefreshLiveOperationalDataOpts,
+): Promise<void> {
+  const qc = getMobileQueryClient()
+  markRecentMoneyActivity()
+  await bustFinancialFeedCaches(scope.userId).catch(() => undefined)
+
+  const invalidations = [
+    qc.invalidateQueries({ queryKey: qk.wallets.root(scope), refetchType: 'active' }),
+    qc.invalidateQueries({ queryKey: qk.transactions.root(scope), refetchType: 'active' }),
+    qc.invalidateQueries({ queryKey: qk.beneficiaries.root(scope), refetchType: 'active' }),
+    qc.invalidateQueries({ queryKey: qk.notifications.root(scope.userId), refetchType: 'active' }),
+    qc.invalidateQueries({ queryKey: qk.notifications.unread(scope.userId), refetchType: 'active' }),
+  ]
+
+  if (opts?.awaitActive) {
+    await Promise.all(invalidations)
+  } else {
+    void Promise.all(invalidations)
+  }
+
+  void prefetchReceiveDepositQueries(qc, scope)
+}
+
 /** Invalidate wallet + transaction caches after balance/ledger changes (push, etc.). */
 export async function refreshMoneyFeedsForUser(userId: string): Promise<void> {
   if (!userId.trim()) return
   const scope: PersonalScope = { kind: 'personal', userId: userId.trim() }
-  const qc = getMobileQueryClient()
-  markRecentMoneyActivity()
-  await bustFinancialFeedCaches(userId).catch(() => undefined)
-  await Promise.all([
-    qc.invalidateQueries({ queryKey: qk.wallets.root(scope), refetchType: 'active' }),
-    qc.invalidateQueries({ queryKey: qk.transactions.root(scope), refetchType: 'active' }),
-  ])
+  await refreshLiveOperationalData(scope, { awaitActive: true })
 }

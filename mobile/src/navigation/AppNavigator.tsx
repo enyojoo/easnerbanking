@@ -20,8 +20,11 @@ import {
 import { flushPendingDeepLinkNavigation } from '../lib/pendingDeepLinkNavigation'
 import {
   flushPendingPushNavigation,
+  peekPendingPushPayload,
   setPushNavMainReady,
+  warmPendingPushTransactionDetail,
 } from '../lib/pendingPushNavigation'
+import type { PersonalScope } from '@easner/shared'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
 import { prefetchIntercomModule, prepareIntercomMessenger } from '../lib/intercom'
 import { avatarImageUri, warmAvatarCacheAsync } from '../lib/avatarCache'
@@ -603,18 +606,28 @@ export default function AppNavigator() {
     if (ready) {
       const navRef = (global as any).rootNavigationRef?.current
       enterMainAppOnWeb()
-      flushPendingPushNavigation(navRef)
+      const scope: PersonalScope | null = user?.id
+        ? { kind: 'personal', userId: user.id }
+        : null
+      flushPendingPushNavigation(navRef, scope)
       flushPendingDeepLinkNavigation(navRef)
       prefetchIntercomModule()
       void prepareIntercomMessenger()
     }
-  }, [pinGate, lockTick])
+  }, [pinGate, lockTick, user?.id])
 
-  // Warm Intercom while user is on PIN entry so Live Chat is ready right after unlock.
+  // Warm Intercom + pending push transaction detail while user is on PIN entry.
   useEffect(() => {
     if (!user?.id || pinGate !== 'pin') return
     prefetchIntercomModule()
     void prepareIntercomMessenger()
+    const scope: PersonalScope = { kind: 'personal', userId: user.id }
+    void (async () => {
+      const pending = await peekPendingPushPayload()
+      if (pending?.screen === 'TransactionDetails') {
+        await warmPendingPushTransactionDetail(scope)
+      }
+    })()
   }, [user?.id, pinGate])
 
   useEffect(() => {

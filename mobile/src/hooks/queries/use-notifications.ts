@@ -35,6 +35,7 @@ export function useNotificationsQuery() {
       apiFetch<{ notifications: NotificationRow[] }>('/api/notifications'),
     staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
+    refetchOnWindowFocus: true,
     meta: { safePersist: true, freshness: 'operational' },
   })
 }
@@ -48,6 +49,7 @@ export function useUnreadNotificationsQuery() {
       apiFetch<{ count: number }>('/api/notifications/unread'),
     staleTime: 60_000,
     gcTime: 10 * 60_000,
+    refetchOnWindowFocus: true,
     meta: { safePersist: false, freshness: 'operational' },
   })
 }

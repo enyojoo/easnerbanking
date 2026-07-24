@@ -6,6 +6,7 @@ export {
   mapLedgerRowToTransaction,
   prefetchTransactionDetail,
   prefetchRecentTransactionDetailsInBackground,
+  warmTransactionDetailForNavigation,
   transactionDetailLookupId,
   seedTransactionDetailFromDisk,
   transactionDetailQueryOptions,

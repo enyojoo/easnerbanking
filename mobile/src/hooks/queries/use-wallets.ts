@@ -83,6 +83,7 @@ export function useWalletBalances() {
     // fires when the channel is happy.
     refetchInterval: inForeground ? pollingIntervalFor('critical', realtimeHealth) : false,
     refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     // Balances are sensitive — NEVER persist to disk.
     meta: { safePersist: false, freshness: 'critical' },
   })

@@ -259,7 +259,17 @@ export async function dispatchTransactionNotification(
       transactionId: input.transactionId,
       title,
       body,
-      data: { type: "transaction_settled", transactionId: input.transactionId },
+      data: {
+        type: "transaction_settled",
+        transactionId: input.transactionId,
+        easnerTransactionId: input.easnerTransactionId ?? undefined,
+        amount: input.amount,
+        currency: input.currency,
+        direction: input.direction ?? undefined,
+        status: "settled",
+        category: descriptor.category,
+        displayTitle: descriptor.pushTitle,
+      },
     }).catch((e) => console.warn("transaction notification push (non-fatal):", e))
   }
 
