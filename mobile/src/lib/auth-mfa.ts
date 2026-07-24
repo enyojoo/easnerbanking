@@ -43,18 +43,42 @@ export function getVerifiedTotpFactorId(
   return v?.id ?? null
 }
 
+/** Factor already removed (e.g. duplicate cleanup after aborting MFA setup). */
+function isMfaFactorGoneError(error: { message?: string; status?: number } | null | undefined): boolean {
+  if (!error) return false
+  if (error.status === 404) return true
+  const msg = String(error.message || '').toLowerCase()
+  return msg.includes('not found') || msg.includes('404')
+}
+
+let unenrollUnverifiedTotpInFlight: Promise<void> | null = null
+
 /**
  * Drops TOTP factors stuck in `unverified` (abandoned enroll, duplicate friendly name on re-enroll).
  * Safe to call before `mfa.enroll`; does not remove verified factors.
+ * Concurrent calls share one in-flight request; 404 on delete is treated as success.
  */
 export async function unenrollUnverifiedTotpFactors(client: SupabaseClient): Promise<void> {
-  const { data, error } = await client.auth.mfa.listFactors()
-  if (error || !data?.all?.length) return
-  for (const f of data.all) {
-    if (f.factor_type === 'totp' && f.status === 'unverified') {
-      await client.auth.mfa.unenroll({ factorId: f.id })
-    }
+  if (unenrollUnverifiedTotpInFlight) {
+    return unenrollUnverifiedTotpInFlight
   }
+
+  unenrollUnverifiedTotpInFlight = (async () => {
+    const { data, error } = await client.auth.mfa.listFactors()
+    if (error || !data?.all?.length) return
+    for (const f of data.all) {
+      if (f.factor_type !== 'totp' || f.status !== 'unverified') continue
+      const { error: uErr } = await client.auth.mfa.unenroll({ factorId: f.id })
+      if (uErr && !isMfaFactorGoneError(uErr)) {
+        // Non-404 failures are rare; keep going so other stale factors can still be removed.
+        continue
+      }
+    }
+  })().finally(() => {
+    unenrollUnverifiedTotpInFlight = null
+  })
+
+  return unenrollUnverifiedTotpInFlight
 }
 
 export function isDuplicateMfaFriendlyNameError(message: string): boolean {

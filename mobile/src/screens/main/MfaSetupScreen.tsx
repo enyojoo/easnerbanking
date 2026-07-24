@@ -308,11 +308,10 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
     }
   }
 
-  const backFromEnroll = useCallback(async () => {
-    /** Enrollment only runs with `autoStartEnroll`; pop and clean up unverified factors. */
+  const backFromEnroll = useCallback(() => {
+    /** Enrollment only runs with `autoStartEnroll`; pop — `useFocusEffect` cleanup drops unverified factors. */
     allowRemoveRef.current = true
     navigation.goBack()
-    void unenrollUnverifiedTotpFactors(supabase)
   }, [navigation])
 
   useEffect(() => {
@@ -328,13 +327,10 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const handleHeaderBack = () => {
     haptics.tap()
     if (autoStartEnroll) {
-      void backFromEnroll()
+      backFromEnroll()
       return
     }
-    void (async () => {
-      await unenrollUnverifiedTotpFactors(supabase)
-      navigation.goBack()
-    })()
+    navigation.goBack()
   }
 
   const confirmTurnOff = () => {

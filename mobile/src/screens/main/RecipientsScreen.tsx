@@ -208,22 +208,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     })
   }, [selectedCountryCurrency, selectedRecipientType, catalogRevision])
 
-  const buildFormYcMetadata = useCallback(() => {
-    return normalizeRecipientYcMetadata({
-      pix_key_type: newRecipient.ycPixKeyType,
-      cuit: newRecipient.ycCuit,
-      identification_type: newRecipient.ycIdentificationType,
-      identification_number: newRecipient.ycIdentificationNumber,
-      account_type: newRecipient.ycAccountType,
-    })
-  }, [
-    newRecipient.ycPixKeyType,
-    newRecipient.ycCuit,
-    newRecipient.ycIdentificationType,
-    newRecipient.ycIdentificationNumber,
-    newRecipient.ycAccountType,
-  ])
-
   useFocusEffect(
     useCallback(() => {
       void refreshCatalog()
@@ -300,6 +284,22 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     ycIdentificationNumber: '',
     ycAccountType: '',
   })
+
+  const buildFormYcMetadata = useCallback(() => {
+    return normalizeRecipientYcMetadata({
+      pix_key_type: newRecipient.ycPixKeyType,
+      cuit: newRecipient.ycCuit,
+      identification_type: newRecipient.ycIdentificationType,
+      identification_number: newRecipient.ycIdentificationNumber,
+      account_type: newRecipient.ycAccountType,
+    })
+  }, [
+    newRecipient.ycPixKeyType,
+    newRecipient.ycCuit,
+    newRecipient.ycIdentificationType,
+    newRecipient.ycIdentificationNumber,
+    newRecipient.ycAccountType,
+  ])
 
   // Track screen view
   useEffect(() => {
