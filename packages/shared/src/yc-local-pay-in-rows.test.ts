@@ -36,9 +36,9 @@ describe("buildCrossBorderSendDetailRows", () => {
       "When",
     ])
     expect(labels).not.toContain("Recipient gets")
-    expect(rows.find((r) => r.id === "transfer-amount")?.value).toContain("92,251")
-    expect(rows.find((r) => r.id === "processing-fee")?.value).toContain("2,831")
-    expect(rows.find((r) => r.id === "amount-paid")?.value).toContain("94,606")
+    expect(rows.find((r) => r.id === "transfer-amount")?.value).toContain("92,250.80")
+    expect(rows.find((r) => r.id === "processing-fee")?.value).toContain("2,830.91")
+    expect(rows.find((r) => r.id === "amount-paid")?.value).toContain("94,606.30")
     expect(rows.find((r) => r.id === "amount-paid")?.valueBold).toBe(true)
     expect(rows.find((r) => r.id === "transfer-method")?.value).toBe(TLC_LOCAL_TRANSFER_METHOD)
   })
@@ -114,6 +114,25 @@ describe("buildYcLocalPayInReviewRows", () => {
     expect(rows.find((r) => r.id === "pay-amount")?.label).toBe("Total to pay")
     expect(rows.find((r) => r.id === "amount-to-credit")?.label).toBe("Amount to credit")
     expect(rows.find((r) => r.id === "pay-amount")?.valueBold).toBe(true)
+  })
+
+  it("keeps exact MoMo local pay-in kobo/cents on Total to pay", () => {
+    const rows = buildYcLocalPayInReviewRows({
+      mode: "fund_balance",
+      phase: "locked",
+      rail: "mobile_money",
+      payInCurrency: "NGN",
+      receiveCurrency: "USD",
+      customerRate: 1429.148,
+      localPayIn: 3678.96,
+      receiveAmount: 2.5,
+      usdCredit: 2.5,
+      principalLocal: 3572.87,
+      processingFeeLocal: 106.09,
+    })
+    expect(rows.find((r) => r.id === "pay-amount")?.value).toBe("₦3,678.96")
+    expect(rows.find((r) => r.id === "deposit-amount")?.value).toBe("₦3,572.87")
+    expect(rows.find((r) => r.id === "processing-fee")?.value).toBe("₦106.09")
   })
 })
 

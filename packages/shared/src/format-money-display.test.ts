@@ -14,9 +14,10 @@ describe("formatMoneyDisplay", () => {
     expect(formatMoneyDisplay(50.5, "EUR")).toBe("€50.50")
   })
 
-  it("omits fraction digits for zero-decimal payout currencies", () => {
+  it("keeps exact kobo/cents for NGN/KES (YC pay-in must not round)", () => {
     expect(formatMoneyDisplay(5000, "NGN")).toBe("₦5,000")
-    expect(formatMoneyDisplay(1500.9, "KES")).toBe("KSh1,501")
+    expect(formatMoneyDisplay(3678.96, "NGN")).toBe("₦3,678.96")
+    expect(formatMoneyDisplay(1500.9, "KES")).toBe("KSh1,500.90")
   })
 
   it("uses pegged fiat symbols for stablecoins", () => {

@@ -55,7 +55,7 @@ describe("resolveYcCrossBorderLocalPayInBreakdown", () => {
 })
 
 describe("resolveYcFundBalanceLocalPayInBreakdownForDisplay", () => {
-  it("aligns KES fund-balance bank rows so rounded principal + fee = rounded total", () => {
+  it("keeps exact KES fund-balance amounts so rows foot without whole-unit rounding", () => {
     const breakdown = resolveYcFundBalanceLocalPayInBreakdownForDisplay({
       localPayIn: 310.56,
       localCurrency: "KES",
@@ -65,15 +65,29 @@ describe("resolveYcFundBalanceLocalPayInBreakdownForDisplay", () => {
       processingFee: 0.0234,
       exchangeFee: 0.05,
     })
-    expect(breakdown.principalLocal).toBe(301)
-    expect(breakdown.feeLocal).toBe(10)
-    expect(breakdown.totalLocal).toBe(311)
-    expect(breakdown.principalLocal + breakdown.feeLocal).toBe(breakdown.totalLocal)
+    expect(breakdown.principalLocal).toBe(301.12)
+    expect(breakdown.feeLocal).toBe(9.44)
+    expect(breakdown.totalLocal).toBe(310.56)
+    expect(breakdown.principalLocal + breakdown.feeLocal).toBeCloseTo(breakdown.totalLocal, 2)
+  })
+
+  it("keeps exact NGN locked pay-in (YC requires kobo, not rounded naira)", () => {
+    const breakdown = resolveYcFundBalanceLocalPayInBreakdownForDisplay({
+      localPayIn: 3678.96,
+      localCurrency: "NGN",
+      usdCredit: 2.5,
+      exchangeRate: 1429.148,
+      displayProcessingFeeLocal: 106.09,
+      processingFee: 0.025,
+      exchangeFee: 0.05,
+    })
+    expect(breakdown.totalLocal).toBe(3678.96)
+    expect(breakdown.principalLocal + breakdown.feeLocal).toBeCloseTo(3678.96, 2)
   })
 })
 
 describe("resolveYcCrossBorderLocalPayInBreakdownForDisplay", () => {
-  it("aligns KES TLC rows so rounded principal + fee = rounded total", () => {
+  it("keeps exact KES TLC amounts without whole-unit rounding", () => {
     const breakdown = resolveYcCrossBorderLocalPayInBreakdownForDisplay({
       localPayIn: 307.94,
       payInCurrency: "KES",
@@ -82,10 +96,10 @@ describe("resolveYcCrossBorderLocalPayInBreakdownForDisplay", () => {
       provisionalPayIn: 300.04,
       displayProcessingFeeLocal: 9.45,
     })
-    expect(breakdown.principalLocal).toBe(300)
-    expect(breakdown.feeLocal).toBe(8)
-    expect(breakdown.totalLocal).toBe(308)
-    expect(breakdown.principalLocal + breakdown.feeLocal).toBe(breakdown.totalLocal)
+    expect(breakdown.principalLocal).toBe(300.04)
+    expect(breakdown.feeLocal).toBe(7.9)
+    expect(breakdown.totalLocal).toBe(307.94)
+    expect(breakdown.principalLocal + breakdown.feeLocal).toBeCloseTo(breakdown.totalLocal, 2)
   })
 })
 

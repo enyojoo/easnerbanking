@@ -21,7 +21,7 @@ export function resolveLedgerOccurredAt(input: {
   return input.fallback ?? ledgerOccurredAtForNewRow()
 }
 
-/** User-facing "When" from a ledger row — never updated_at / settled_at / webhook times. */
+/** User-facing "When" from a ledger row — first DB insert (`created_at`), never updated_at / settled_at. */
 export function resolveLedgerWhenAtFromRow(row: {
   occurred_at?: unknown
   created_at?: unknown

@@ -150,14 +150,14 @@ function formatStartedDisplay(iso: string | null): string {
 
 /**
  * Immutable user-facing "When" for a ledger row.
- * Prefer `occurred_at` (set at insert, preserved on webhook updates), then `created_at`.
- * Never use `updated_at`, `settled_at`, or webhook lifecycle timestamps.
+ * Prefer `created_at` (first insert into `transactions`), then `occurred_at`.
+ * Never use `updated_at`, `settled_at`, attestation, or webhook lifecycle timestamps.
  */
 export function resolveLedgerWhenAt(input: {
   occurredAt?: string | null
   createdAt?: string | null
 }): string | null {
-  return pickIso(input.occurredAt, input.createdAt)
+  return pickIso(input.createdAt, input.occurredAt)
 }
 
 /** @deprecated Prefer {@link resolveLedgerWhenAt} with `{ occurredAt, createdAt }`. */

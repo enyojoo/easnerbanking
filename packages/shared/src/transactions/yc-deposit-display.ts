@@ -1,5 +1,4 @@
 import { computeDisplayProcessingFee } from "../payout-processing-fee"
-import { isZeroDecimalPayoutCurrency } from "../noah-send-rates"
 import { resolveReceiveCountryName } from "../receive-cash-method-labels"
 import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
 import { isVerificationDepositMetadata } from "./verification-deposit"
@@ -161,21 +160,15 @@ export function resolveYcFundBalanceLocalPayInBreakdown(
   }
 }
 
-/** Align principal/fee/total for zero-decimal pay-in currencies so displayed rows foot. */
+/**
+ * Keep exact local pay-in amounts for display.
+ * Do not round NGN/KES to whole units — Yellowcard requires the exact amount
+ * (e.g. NGN 3,678.96, not 3,679).
+ */
 export function alignLocalPayInBreakdownForDisplay(
   breakdown: YcFundBalanceLocalPayInBreakdown,
 ): YcFundBalanceLocalPayInBreakdown {
-  if (!isZeroDecimalPayoutCurrency(breakdown.localCurrency)) {
-    return breakdown
-  }
-  const totalLocal = Math.round(breakdown.totalLocal)
-  const principalLocal = Math.round(breakdown.principalLocal)
-  return {
-    ...breakdown,
-    totalLocal,
-    principalLocal,
-    feeLocal: Math.max(0, totalLocal - principalLocal),
-  }
+  return breakdown
 }
 
 export function resolveYcFundBalanceLocalPayInBreakdownForDisplay(input: {

@@ -29,9 +29,6 @@ import {
 } from "./yc-deposit-display"
 import { deriveEasnerInboundRemitterDisplayName } from "./product-label"
 import {
-  resolveYcPayInUserWhenAt,
-} from "./yc-pay-in-display"
-import {
   BANK_VERIFICATION_COMPLETED_DESCRIPTION,
   deriveVerificationBankName,
   isVerificationDepositMetadata,
@@ -269,15 +266,13 @@ export function resolveInboundReceiveDetail(
     meta.easner_transaction_id,
     meta.transaction_id,
   )
-  const whenAt =
-    resolveYcPayInUserWhenAt(meta) ??
-    pickIso(
-      input.occurred_at,
-      input.ledger_created_at,
-      input.created_at,
-      meta.ledger_created_at,
-      meta.created_at,
-    )
+  const whenAt = pickIso(
+    input.created_at,
+    input.ledger_created_at,
+    input.occurred_at,
+    meta.ledger_created_at,
+    meta.created_at,
+  )
   const note = pickIso(input.send_note, meta.send_note, meta.note)
 
   if (kind === "yc_fund_balance") {

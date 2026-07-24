@@ -49,8 +49,15 @@ export async function creditFundBalanceFromYcReceive(
     omnibusAmount: input.omnibusAmount,
   })
   const now = new Date().toISOString()
+  const settlementInfo = asMeta(
+    input.payload.settlementInfo ?? input.payload.settlement_info ?? transfer.settlement_info,
+  )
   const omnibusTxHash = String(
-    input.omnibusTxHash ?? transferMeta.leg1_omnibus_tx_hash ?? "",
+    input.omnibusTxHash ??
+      transferMeta.leg1_omnibus_tx_hash ??
+      settlementInfo.txHash ??
+      settlementInfo.tx_hash ??
+      "",
   ).trim()
 
   await admin

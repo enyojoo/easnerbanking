@@ -33,8 +33,6 @@ import {
 } from "@easner/shared"
 
 function resolveTransactionDetailWhenAt(transaction: Transaction): string | null {
-  if (transaction.displayWhenAt) return transaction.displayWhenAt
-  if (transaction.quoteLockedAt) return transaction.quoteLockedAt
   return (
     resolveLedgerWhenAt({
       occurredAt: transaction.date,

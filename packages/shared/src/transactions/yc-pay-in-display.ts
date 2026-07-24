@@ -263,18 +263,19 @@ export function isYcPayInAwaitingAttestation(
   return st === "pending" || st === "processing" || st === "unknown"
 }
 
-/** User-facing "When" on detail — attestation time after CTA; quote lock while awaiting. */
-export function resolveYcPayInUserWhenAt(meta: Record<string, unknown> | null | undefined): string | null {
-  if (!meta) return null
-  return readYcPayInAttestedAt(meta) ?? readYcQuoteLockedAt(meta)
+/** @deprecated Prefer ledger `created_at` via {@link resolveLedgerWhenAt}. */
+export function resolveYcPayInUserWhenAt(
+  _meta: Record<string, unknown> | null | undefined,
+): string | null {
+  return null
 }
 
-/** List / feed timestamp — attestation time when present, otherwise quote lock. */
+/** @deprecated Prefer ledger `created_at` via {@link resolveLedgerWhenAt}. */
 export function resolveYcPayInListWhenAt(
-  meta: Record<string, unknown> | null | undefined,
-  ledgerStatus: string,
+  _meta: Record<string, unknown> | null | undefined,
+  _ledgerStatus: string,
 ): string | null {
-  return resolveYcPayInUserWhenAt(meta) ?? readYcQuoteLockedAt(meta)
+  return null
 }
 
 /** Feed status override for in-flight YC pay-ins — list shows Processing; detail lifecycle uses Processing payment. */

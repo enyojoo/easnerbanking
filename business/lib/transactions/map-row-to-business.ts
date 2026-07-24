@@ -24,8 +24,6 @@ import {
   resolveAccountImpactAmount,
   resolveYcPayInFeedStatus,
   ledgerTransactionStatusDisplayForRow,
-  resolveYcPayInUserWhenAt,
-  resolveYcPayInListWhenAt,
   readYcQuoteLockedAt,
   readYcPayInExpiresAt,
   isYcPayInFlowMetadata,
@@ -113,7 +111,6 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const status = (ycFeedStatus ?? mapLedgerStatusForUserFeed(ledgerStatusRaw)) as TransactionWithSource["status"]
   const statusLabel = ledgerTransactionStatusDisplayForRow(ledgerStatusRaw, meta).label
   const payInAwaitingAttestation = isYcPayInAwaitingAttestation(meta, ledgerStatusRaw)
-  const ycDisplayWhen = resolveYcPayInListWhenAt(meta, ledgerStatusRaw)
   const ycQuoteLockedAt = readYcQuoteLockedAt(meta)
   const ycQuoteExpiresAt = readYcPayInExpiresAt(meta)
 
@@ -217,12 +214,10 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     })
 
   const ledgerCreatedAt =
-    ycDisplayWhen ??
     resolveLedgerWhenAt({
       occurredAt: row.occurred_at != null ? String(row.occurred_at) : null,
       createdAt: row.created_at != null ? String(row.created_at) : null,
-    }) ??
-    undefined
+    }) ?? undefined
 
   const created = ledgerCreatedAt ?? new Date().toISOString()
 
@@ -346,7 +341,6 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     status,
     statusLabel,
     ...(payInAwaitingAttestation ? { payInAwaitingAttestation: true } : {}),
-    ...(ycDisplayWhen ? { displayWhenAt: ycDisplayWhen } : {}),
     ...(ycQuoteLockedAt ? { quoteLockedAt: ycQuoteLockedAt } : {}),
     ...(ycQuoteExpiresAt ? { quoteExpiresAt: ycQuoteExpiresAt } : {}),
     ...(ycPayInPaymentDetails ? { ycPayInPaymentDetails } : {}),

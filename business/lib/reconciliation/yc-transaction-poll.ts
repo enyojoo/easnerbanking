@@ -13,11 +13,17 @@ export function buildYellowcardPollWebhookEnvelope(
   const updatedAt = String(txData.updatedAt ?? txData.updated_at ?? new Date().toISOString())
 
   let event = leg === "send" ? "SEND.PROCESSING" : "RECEIVE.PROCESSING"
-  if (status === "complete" || status === "completed" || status === "success") {
+  if (
+    status === "complete" ||
+    status === "completed" ||
+    status === "success" ||
+    status === "settlement_complete" ||
+    status === "settlement_completed"
+  ) {
     event = leg === "send" ? "SEND.COMPLETE" : "RECEIVE.SETTLEMENT_COMPLETE"
   } else if (status === "failed" || status === "fail" || status === "cancelled" || status === "expired") {
     event = leg === "send" ? "SEND.FAILED" : "RECEIVE.FAILED"
-  } else if (status === "pending" || status === "created") {
+  } else if (status === "pending" || status === "created" || status === "pending_approval") {
     event = leg === "send" ? "SEND.PENDING" : "RECEIVE.PENDING"
   }
 
@@ -36,6 +42,8 @@ export function isYcPollTerminalStatus(status: string): boolean {
     s === "complete" ||
     s === "completed" ||
     s === "success" ||
+    s === "settlement_complete" ||
+    s === "settlement_completed" ||
     s === "failed" ||
     s === "fail" ||
     s === "cancelled" ||

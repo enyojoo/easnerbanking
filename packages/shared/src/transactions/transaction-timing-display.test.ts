@@ -20,20 +20,20 @@ describe("formatTransactionDurationMs", () => {
 })
 
 describe("resolveLedgerWhenAt", () => {
-  it("prefers occurred_at over created_at", () => {
+  it("prefers created_at (first DB insert) over occurred_at", () => {
     expect(
       resolveLedgerWhenAt({
         occurredAt: "2026-06-01T15:00:00.000Z",
         createdAt: "2026-06-01T14:00:00.000Z",
       }),
-    ).toBe("2026-06-01T15:00:00.000Z")
+    ).toBe("2026-06-01T14:00:00.000Z")
   })
 
-  it("falls back to created_at when occurred_at is missing", () => {
+  it("falls back to occurred_at when created_at is missing", () => {
     expect(
       resolveLedgerWhenAt({
-        occurredAt: null,
-        createdAt: "2026-06-01T15:00:00.000Z",
+        occurredAt: "2026-06-01T15:00:00.000Z",
+        createdAt: null,
       }),
     ).toBe("2026-06-01T15:00:00.000Z")
   })

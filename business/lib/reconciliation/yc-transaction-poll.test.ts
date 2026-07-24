@@ -48,4 +48,16 @@ describe("yc-transaction-poll", () => {
     })
     expect(isYcPollTerminalEnvelope(envelope)).toBe(false)
   })
+
+  it("maps receive settlement_complete to RECEIVE.SETTLEMENT_COMPLETE", () => {
+    expect(isYcPollTerminalStatus("settlement_complete")).toBe(true)
+    const envelope = buildYellowcardPollWebhookEnvelope("receive", {
+      sequenceId: "yc_fb_1",
+      status: "settlement_complete",
+      settlementInfo: { cryptoAmount: 3.09, txHash: "sig123" },
+      updatedAt: "2026-07-24T11:03:09.723Z",
+    })
+    expect(envelope.event).toBe("RECEIVE.SETTLEMENT_COMPLETE")
+    expect(isYcPollTerminalEnvelope(envelope)).toBe(true)
+  })
 })

@@ -32,21 +32,21 @@ describe("yc pay-in display", () => {
     expect(resolveYcPayInFeedStatus(meta, "processing")).toBe("processing_payment")
   })
 
-  it("prefers attestation over lock for user when", () => {
+  it("no longer overrides When with attestation or quote lock", () => {
     expect(
       resolveYcPayInUserWhenAt({
         quote_locked_at: "2026-01-01T00:00:00.000Z",
         payment_attested_at: "2026-01-02T00:00:00.000Z",
       }),
-    ).toBe("2026-01-02T00:00:00.000Z")
+    ).toBeNull()
   })
 
-  it("uses quote lock for user when before attestation", () => {
+  it("no longer uses quote lock for When before attestation", () => {
     expect(
       resolveYcPayInUserWhenAt({
         quote_locked_at: "2026-01-01T00:00:00.000Z",
       }),
-    ).toBe("2026-01-01T00:00:00.000Z")
+    ).toBeNull()
   })
 
   it("builds confirming lifecycle before attestation with payment link", () => {
