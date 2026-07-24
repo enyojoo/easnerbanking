@@ -7,6 +7,7 @@ import { applyNoahWebhookSideEffects } from "@/lib/noah/webhook-side-effects"
 import { applyYellowcardWebhookSideEffects } from "@/lib/yellowcard/webhook-processor"
 import { maybeExecuteCrossBorderLeg2 } from "@/lib/yellowcard/cross-border-orchestrator"
 import { pollYellowcardTransferStatus } from "@/lib/reconciliation/yc-transaction-poll"
+import { expireStaleYcPayInTransfers } from "@/lib/yellowcard/quote-key"
 import {
   buildEasnerRevenueSweepMetadataPatch,
   computeSweepAmountFromMetadata,
@@ -55,6 +56,7 @@ export type ReconcileStuckPayoutsResult = {
     polled: number
     leg2Triggered: number
     feeRetried: number
+    expiredPayIns: number
     stuckAwaitingPayIn: number
     stuckLeg2InProgress: number
     ycRefundExpected: number
@@ -340,10 +342,14 @@ export async function reconcileStuckYcTransfers(
   polled: number
   leg2Triggered: number
   feeRetried: number
+  expiredPayIns: number
   stuckAwaitingPayIn: number
   stuckLeg2InProgress: number
   ycRefundExpected: number
 }> {
+  // Local TTL expiry + ledger fail — do not wait for amount-screen visits.
+  const expiredPayIns = dryRun ? 0 : await expireStaleYcPayInTransfers(admin, { limit: 100 })
+
   const health = await countYcStuckHealth(admin, since)
   const { data: rows, error } = await admin
     .from("yc_transfers")
@@ -354,7 +360,7 @@ export async function reconcileStuckYcTransfers(
   if (error) throw error
 
   const stuckRows = (rows ?? []).filter(
-    (row) => !["completed", "failed"].includes(String(row.status ?? "")),
+    (row) => !["completed", "failed", "expired"].includes(String(row.status ?? "")),
   )
 
   let replayed = 0
@@ -433,6 +439,7 @@ export async function reconcileStuckYcTransfers(
     polled,
     leg2Triggered,
     feeRetried,
+    expiredPayIns,
     ...health,
   }
 }
@@ -648,7 +655,7 @@ export async function reconcileStuckPayouts(
   const result: ReconcileStuckPayoutsResult = {
     inbox: { failedReplayed: 0, failedErrors: 0, staleReplayed: 0, staleErrors: 0 },
     noah: { scanned: 0, patched: 0 },
-    yc: { scanned: 0, replayed: 0, polled: 0, leg2Triggered: 0, feeRetried: 0, stuckAwaitingPayIn: 0, stuckLeg2InProgress: 0, ycRefundExpected: 0 },
+    yc: { scanned: 0, replayed: 0, polled: 0, leg2Triggered: 0, feeRetried: 0, expiredPayIns: 0, stuckAwaitingPayIn: 0, stuckLeg2InProgress: 0, ycRefundExpected: 0 },
     fees: { scanned: 0, captured: 0 },
     walletSends: { scanned: 0, patched: 0 },
   }

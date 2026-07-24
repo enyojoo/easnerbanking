@@ -10,6 +10,7 @@ import {
   buildNextLedgerListCursor,
   decodeLedgerListCursor,
 } from "@/lib/transactions/ledger-list-cursor"
+import { expireStaleYcPayInTransfers } from "@/lib/yellowcard/quote-key"
 
 const DEFAULT_LIST_LIMIT = 50
 const MAX_LIST_LIMIT = 100
@@ -42,6 +43,9 @@ export async function GET(request: Request) {
   const cursor = decodeLedgerListCursor(url.searchParams.get("cursor"))
 
   const admin = createSupabaseAdmin()
+  // Sync expired YC pay-ins so list/status updates without revisiting amount screen.
+  await expireStaleYcPayInTransfers(admin, { userId: user.id, limit: 25 }).catch(() => {})
+
   let query = admin
     .from("transactions")
     .select(LEDGER_LIST_SELECT)
