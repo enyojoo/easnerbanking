@@ -20,7 +20,12 @@ import {
   ycPayInInstructionNotice,
 } from "@easner/shared"
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
-import { submitYcReceive, type YcReceiveSubmitResult } from "@/lib/yellowcard/receive-submit"
+import {
+  hydrateYcReceiveBankInfo,
+  resolveYcBankInfoName,
+  submitYcReceive,
+  type YcReceiveSubmitResult,
+} from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 import { buildYcFundBalanceReceiveMetadata } from "@/lib/yellowcard/yc-ledger"
@@ -505,16 +510,67 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
         ? String(txRow.easner_transaction_id)
         : null
     }
+    const quotedReceive = Number(existing.quoted_receive ?? meta.usd_credit ?? 0)
+    const quotedPayIn = Number(existing.quoted_pay_in ?? 0)
+    const ycLegFeesUsd = Number(meta.yc_leg_fees_usd ?? meta.yc_channel_fee_usd ?? 0)
+    const settlement = (existing.settlement_info as Record<string, unknown> | null) ?? null
+    const cryptoAmount = Number(settlement?.cryptoAmount ?? meta.omnibus_in_expected ?? 0)
+    const receiveLeg = {
+      cryptoAmountUsd: cryptoAmount > 0 ? cryptoAmount : 0,
+      networkFeeAmountUsd: ycLegFeesUsd > 0 ? ycLegFeesUsd : 0,
+      serviceFeeAmountUsd: 0,
+    }
+    // Keep locked credit/fees from the original confirm — do not re-solve credit from
+    // padded localPayIn (that inflated usdCredit, e.g. $3 → $3.09 on idempotent reuse).
+    const pricingRaw =
+      quotedReceive > 0
+        ? computeYcFundBalancePricing({
+            usdCredit: quotedReceive,
+            customerSellRate: prepared.customerRate,
+            ycSellRate: Number(prepared.leg.yc_buy),
+            receiveLeg,
+          })
+        : computeYcFundBalancePricing({
+            localPayIn: quotedPayIn,
+            customerSellRate: prepared.customerRate,
+            ycSellRate: Number(prepared.leg.yc_buy),
+            receiveLeg,
+          })
+    const pricing = {
+      ...pricingRaw,
+      localPayIn: quotedPayIn > 0 ? quotedPayIn : pricingRaw.localPayIn,
+      ...(ycLegFeesUsd > 0 ? { ycLegFeesUsd } : {}),
+    }
+
+    let bankInfo = (existing.bank_info as Record<string, unknown> | null) ?? null
+    if (!resolveYcBankInfoName(bankInfo)) {
+      try {
+        const hydrated = await hydrateYcReceiveBankInfo({
+          id: String(existing.leg1_yc_id ?? "").trim() || undefined,
+          sequenceId: String(existing.leg1_sequence_id ?? "").trim() || undefined,
+          bankInfo: bankInfo ?? undefined,
+        })
+        const nextBank =
+          (hydrated.bankInfo as Record<string, unknown> | null | undefined) ?? null
+        if (resolveYcBankInfoName(nextBank)) {
+          bankInfo = nextBank
+          await ctx.admin
+            .from("yc_transfers")
+            .update({
+              bank_info: bankInfo,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", String(existing.id))
+        }
+      } catch {
+        // Keep stored bankInfo when lookup fails.
+      }
+    }
+
     return formatFundBalanceTransferResponse({
-      transfer: existing,
+      transfer: { ...existing, bank_info: bankInfo },
       transactionEasnerId,
-      pricing: computeYcFundBalancePricing({
-        usdCredit: Number(existing.quoted_receive ?? meta.usd_credit ?? 0),
-        localPayIn: Number(existing.quoted_pay_in ?? 0),
-        customerSellRate: prepared.customerRate,
-        ycSellRate: Number(prepared.leg.yc_buy),
-        receiveLeg: { cryptoAmountUsd: 0 },
-      }),
+      pricing,
       currency: ctx.currency,
       country: ctx.country,
       customerRate: Number(existing.customer_rate ?? prepared.customerRate),
@@ -523,6 +579,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
       sourceNetworkId: ctx.sourceNetworkId,
       sourceNetworkName: ctx.sourceNetworkName,
       sequenceId: String(existing.leg1_sequence_id ?? ""),
+      provisionalPayIn: quotedPayIn > 0 ? quotedPayIn : pricing.localPayIn,
     })
   }
 

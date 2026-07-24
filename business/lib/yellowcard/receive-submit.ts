@@ -140,15 +140,51 @@ const BANK_NAME_KEYS = [
   "processor_name",
 ] as const
 
+const NESTED_BANK_KEYS = ["bank", "institution", "partner", "processor", "vendor"] as const
+
 export function resolveYcBankInfoName(
   bankInfo: Record<string, unknown> | null | undefined,
 ): string {
   if (!bankInfo || typeof bankInfo !== "object") return ""
   for (const key of BANK_NAME_KEYS) {
-    const value = String(bankInfo[key] ?? "").trim()
-    if (value) return value
+    const raw = bankInfo[key]
+    if (typeof raw === "string") {
+      const value = raw.trim()
+      if (value) return value
+    }
   }
   return ""
+}
+
+/** Flatten nested YC bank/institution objects into top-level bankInfo keys. */
+export function flattenYcBankInfo(
+  bankInfo: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (!bankInfo || typeof bankInfo !== "object") return null
+  const out: Record<string, unknown> = { ...bankInfo }
+  for (const nestKey of NESTED_BANK_KEYS) {
+    const nested = bankInfo[nestKey]
+    if (typeof nested === "string") {
+      const value = nested.trim()
+      if (value && !resolveYcBankInfoName(out)) {
+        out.bankName = value
+      }
+      continue
+    }
+    if (!nested || typeof nested !== "object" || Array.isArray(nested)) continue
+    const nestedObj = nested as Record<string, unknown>
+    for (const [key, value] of Object.entries(nestedObj)) {
+      if (value == null || value === "") continue
+      if (!(key in out) || out[key] == null || out[key] === "") {
+        out[key] = value
+      }
+    }
+    if (!resolveYcBankInfoName(out)) {
+      const nestedName = resolveYcBankInfoName(nestedObj)
+      if (nestedName) out.bankName = nestedName
+    }
+  }
+  return out
 }
 
 /**
@@ -159,8 +195,9 @@ export function resolveYcBankInfoName(
 export function normalizeYcBankInfo(
   bankInfo: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> | null {
-  if (!bankInfo || typeof bankInfo !== "object") return null
-  const out: Record<string, unknown> = { ...bankInfo }
+  const flattened = flattenYcBankInfo(bankInfo)
+  if (!flattened) return null
+  const out: Record<string, unknown> = { ...flattened }
   const bankName = resolveYcBankInfoName(out)
   if (bankName) {
     out.bankName = bankName
@@ -174,7 +211,7 @@ export function normalizeYcBankInfo(
 
 /**
  * POST /receive sometimes omits `bankInfo.name` for NG bank VAs.
- * Re-fetch GET /receive/{id} when bank name is missing so pay-in UI can show Bank Name.
+ * Re-fetch GET /receive/{id} (and sequence fallback) when bank name is missing.
  */
 export async function hydrateYcReceiveBankInfo(
   receive: YcReceiveSubmitResult,
@@ -192,31 +229,41 @@ export async function hydrateYcReceiveBankInfo(
     return { ...receive, bankInfo: existing ?? receive.bankInfo }
   }
 
-  try {
-    const path = ycId
-      ? `/receive/${encodeURIComponent(ycId)}`
-      : `/receive/sequence-id/${encodeURIComponent(sequenceId)}`
-    const lookedUp = await yellowcardFetch<YcReceiveSubmitResult>({
-      method: "GET",
-      path,
-    })
-    const lookedUpBank = normalizeYcBankInfo(
-      (lookedUp.bankInfo as Record<string, unknown> | null | undefined) ?? null,
-    )
-    if (!resolveYcBankInfoName(lookedUpBank) && !lookedUpBank) {
-      return { ...receive, bankInfo: existing ?? receive.bankInfo }
+  const lookupPaths: string[] = []
+  if (ycId) lookupPaths.push(`/receive/${encodeURIComponent(ycId)}`)
+  if (sequenceId) {
+    lookupPaths.push(`/receive/sequence-id/${encodeURIComponent(sequenceId)}`)
+  }
+
+  let lookedUpId: string | undefined
+  let lookedUpBank: Record<string, unknown> | null = null
+  for (const path of lookupPaths) {
+    try {
+      const lookedUp = await yellowcardFetch<YcReceiveSubmitResult>({
+        method: "GET",
+        path,
+      })
+      if (!lookedUpId && lookedUp.id) lookedUpId = String(lookedUp.id)
+      lookedUpBank = normalizeYcBankInfo(
+        (lookedUp.bankInfo as Record<string, unknown> | null | undefined) ?? null,
+      )
+      if (resolveYcBankInfoName(lookedUpBank)) break
+    } catch {
+      // Try next lookup path.
     }
-    const merged = normalizeYcBankInfo({
-      ...(existing ?? {}),
-      ...(lookedUpBank ?? {}),
-    })
-    return {
-      ...receive,
-      ...(!receive.id && lookedUp.id ? { id: lookedUp.id } : {}),
-      bankInfo: merged ?? existing ?? receive.bankInfo,
-    }
-  } catch {
+  }
+
+  if (!resolveYcBankInfoName(lookedUpBank) && !lookedUpBank) {
     return { ...receive, bankInfo: existing ?? receive.bankInfo }
+  }
+  const merged = normalizeYcBankInfo({
+    ...(existing ?? {}),
+    ...(lookedUpBank ?? {}),
+  })
+  return {
+    ...receive,
+    ...(!receive.id && lookedUpId ? { id: lookedUpId } : {}),
+    bankInfo: merged ?? existing ?? receive.bankInfo,
   }
 }
 

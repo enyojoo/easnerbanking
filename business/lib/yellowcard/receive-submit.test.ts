@@ -73,6 +73,21 @@ describe("normalizeYcBankInfo", () => {
     expect(resolveYcBankInfoName({ name: "PAGA" })).toBe("PAGA")
     expect(resolveYcBankInfoName({ accountName: "Sam", accountNumber: "1" })).toBe("")
   })
+
+  it("flattens nested bank object name", () => {
+    expect(
+      normalizeYcBankInfo({
+        accountName: "Sam",
+        accountNumber: "1",
+        bank: { name: "Nuvion MFB" },
+      }),
+    ).toEqual({
+      accountName: "Sam",
+      accountNumber: "1",
+      bank: { name: "Nuvion MFB" },
+      bankName: "Nuvion MFB",
+    })
+  })
 })
 
 describe("hydrateYcReceiveBankInfo", () => {
@@ -96,6 +111,35 @@ describe("hydrateYcReceiveBankInfo", () => {
       accountNumber: "845",
       bankName: "PAGA",
     })
+  })
+
+  it("falls back to sequence lookup when id lookup omits bank name", async () => {
+    vi.mocked(yellowcardFetch).mockReset()
+    vi.mocked(yellowcardFetch)
+      .mockResolvedValueOnce({
+        id: "yc-1",
+        bankInfo: { accountName: "Sam", accountNumber: "845" },
+      })
+      .mockResolvedValueOnce({
+        id: "yc-1",
+        bankInfo: { name: "Nuvion MFB", accountName: "Sam", accountNumber: "845" },
+      })
+
+    const out = await hydrateYcReceiveBankInfo({
+      id: "yc-1",
+      sequenceId: "seq-1",
+      bankInfo: { accountName: "Sam", accountNumber: "845" },
+    })
+
+    expect(yellowcardFetch).toHaveBeenNthCalledWith(1, {
+      method: "GET",
+      path: "/receive/yc-1",
+    })
+    expect(yellowcardFetch).toHaveBeenNthCalledWith(2, {
+      method: "GET",
+      path: "/receive/sequence-id/seq-1",
+    })
+    expect(out.bankInfo?.bankName).toBe("Nuvion MFB")
   })
 
   it("skips lookup when name already present", async () => {

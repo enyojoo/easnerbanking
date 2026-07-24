@@ -41,6 +41,15 @@ vi.mock("@/lib/yellowcard/quote-key", () => ({
 
 vi.mock("@/lib/yellowcard/receive-submit", () => ({
   submitYcReceive: vi.fn(),
+  hydrateYcReceiveBankInfo: vi.fn(async (receive: Record<string, unknown>) => receive),
+  resolveYcBankInfoName: (bankInfo: Record<string, unknown> | null | undefined) => {
+    if (!bankInfo || typeof bankInfo !== "object") return ""
+    for (const key of ["name", "bankName", "bank_name"]) {
+      const value = String(bankInfo[key] ?? "").trim()
+      if (value) return value
+    }
+    return ""
+  },
 }))
 
 import { computeYcFundBalancePricing } from "@easner/shared"
@@ -50,7 +59,7 @@ import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 import { findReusableYcTransfer } from "@/lib/yellowcard/quote-key"
-import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
+import { hydrateYcReceiveBankInfo, submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import {
   confirmFundBalanceOrder,
   FundBalanceQuoteServiceError,
@@ -303,5 +312,59 @@ describe("confirmFundBalanceOrder", () => {
     await expect(
       confirmFundBalanceOrder({ ...baseCtx, admin }),
     ).rejects.toBeInstanceOf(FundBalanceQuoteServiceError)
+  })
+
+  it("reuses locked transfer without re-solving padded local into usdCredit", async () => {
+    vi.mocked(findReusableYcTransfer).mockResolvedValue({
+      id: "tr-reuse",
+      transaction_id: "tx-reuse",
+      quoted_pay_in: 4403.78,
+      quoted_receive: 3,
+      customer_rate: 1411.0552763819,
+      leg1_sequence_id: "yc_fb_reuse",
+      leg1_yc_id: "yc-reuse",
+      bank_info: { accountName: "Samuel Enyojo Odiba", accountNumber: "3457074823" },
+      settlement_info: { cryptoAmount: 3.03 },
+      metadata: {
+        quote_key: "quote-key-1",
+        usd_credit: 3,
+        processing_fee: 0.03,
+        yc_leg_fees_usd: 0.09,
+        yc_channel_fee_usd: 0.09,
+        omnibus_in_expected: 3.03,
+      },
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    })
+    vi.mocked(hydrateYcReceiveBankInfo).mockResolvedValue({
+      id: "yc-reuse",
+      bankInfo: {
+        accountName: "Samuel Enyojo Odiba",
+        accountNumber: "3457074823",
+        bankName: "Nuvion MFB",
+      },
+    })
+
+    const admin = makeAdmin()
+    admin.chain.maybeSingle.mockResolvedValue({
+      data: { easner_transaction_id: "ETID33828323" },
+    })
+
+    const result = await confirmFundBalanceOrder({
+      ...baseCtx,
+      admin,
+      currency: "NGN",
+      country: "NG",
+      usdCredit: 3,
+    })
+
+    expect(submitYcReceive).not.toHaveBeenCalled()
+    expect(result.usdCredit).toBe(3)
+    expect(result.creditOrReceiveAmount).toBe(3)
+    expect(result.localPayIn).toBe(4403.78)
+    expect(result.processingFee).toBe(0.03)
+    expect(result.ycLegFeesUsd).toBe(0.09)
+    expect(result.bankInfo?.bankName).toBe("Nuvion MFB")
+    expect(hydrateYcReceiveBankInfo).toHaveBeenCalled()
   })
 })

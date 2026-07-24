@@ -56,6 +56,20 @@ describe("computeYcFundBalancePricing", () => {
     expect(p.usdCredit).toBe(100)
   })
 
+  it("prefers usdCredit when both usdCredit and padded localPayIn are provided", () => {
+    const p = computeYcFundBalancePricing({
+      ...base,
+      usdCredit: 3,
+      localPayIn: 4403.78,
+      customerSellRate: 1411.0552763819,
+      ycSellRate: 1400,
+      receiveLeg: { cryptoAmountUsd: 3.03, networkFeeAmountUsd: 0.09, serviceFeeAmountUsd: 0 },
+    })
+    expect(p.usdCredit).toBe(3)
+    expect(p.processingFee).toBe(0.03)
+    expect(p.ycLegFeesUsd).toBe(0.09)
+  })
+
   it("fixed localPayIn: processingFee is 1% × usdCredit, not omnibus + yc", () => {
     const creditTarget = computeYcFundBalancePricing({ ...base, usdCredit: 100 })
     const fixedPath = computeYcFundBalancePricing({

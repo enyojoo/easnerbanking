@@ -584,7 +584,9 @@ export function computeYcFundBalancePricing(
   let usdCredit: number
   let omnibusInUsd: number
 
-  if (input.localPayIn != null && input.localPayIn > 0) {
+  // Prefer usdCredit when both are set — padded local must not inflate the credit target.
+  const usdCreditTarget = input.usdCredit != null && Number(input.usdCredit) > 0
+  if (!usdCreditTarget && input.localPayIn != null && input.localPayIn > 0) {
     localPayIn = roundLocal(input.localPayIn)
 
     const bps = input.processingFeeBps ?? 100
@@ -593,7 +595,6 @@ export function computeYcFundBalancePricing(
     const processingFee = computePayoutProcessingFeeBps(usdCredit, {
       bps: input.processingFeeBps,
     })
-    const omnibusFromResponse = roundUsdc(input.receiveLeg.cryptoAmountUsd)
     omnibusInUsd =
       omnibusFromResponse > 0
         ? omnibusFromResponse
