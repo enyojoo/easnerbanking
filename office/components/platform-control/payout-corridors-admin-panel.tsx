@@ -68,6 +68,21 @@ function parsePrimaryProvider(routing: unknown): ProviderId {
   return "noah"
 }
 
+function parsePayInProviderFromRouting(
+  routing: unknown,
+  payoutProvider: ProviderId,
+): ProviderId | null {
+  const sorted = [...parseRouting(routing)].sort((a, b) => a.priority - b.priority)
+  if (sorted.length >= 2) {
+    const p = sorted[1].provider
+    if (p === "yellowcard" || p === "grid" || p === "noah") return p
+  }
+  if (sorted.length === 1 && sorted[0].provider === payoutProvider) {
+    return null
+  }
+  return null
+}
+
 function routingPrimaryProvider(routing: unknown): ProviderId | null {
   const sorted = [...parseRouting(routing)].sort((a, b) => a.priority - b.priority)
   const p = sorted[0]?.provider
@@ -201,8 +216,10 @@ function buildProviderRouting(
     supportYcPayIn: boolean
     supportNoahPayIn: boolean
     supportGridPayIn: boolean
+    payInProvider?: ProviderId | null
   },
 ): RoutingEntry[] {
+  const explicitPayIn = input.payInProvider ?? null
   const payoutProviders = [
     input.supportNoahPayout ? "noah" : null,
     input.supportYcPayout ? "yellowcard" : null,
@@ -214,13 +231,15 @@ function buildProviderRouting(
     const routing: RoutingEntry[] = [
       { provider: input.payoutLocked, priority: 1, settlement_asset: "USDC" },
     ]
-    const payInProvider = resolvePayInProvider({
-      payoutProvider: input.payoutLocked,
-      payoutLocked: input.payoutLocked,
-      supportYcPayIn: input.supportYcPayIn,
-      supportNoahPayIn: input.supportNoahPayIn,
-      supportGridPayIn: input.supportGridPayIn,
-    })
+    const payInProvider =
+      explicitPayIn ??
+      resolvePayInProvider({
+        payoutProvider: input.payoutLocked,
+        payoutLocked: input.payoutLocked,
+        supportYcPayIn: input.supportYcPayIn,
+        supportNoahPayIn: input.supportNoahPayIn,
+        supportGridPayIn: input.supportGridPayIn,
+      })
     if (payInProvider && payInProvider !== input.payoutLocked) {
       routing.push({ provider: payInProvider, priority: 2, settlement_asset: "USDC" })
     }
@@ -240,18 +259,34 @@ function buildProviderRouting(
     return routing
   }
 
-  const payInProvider = resolvePayInProvider({
-    payoutProvider,
-    payoutLocked: null,
-    supportYcPayIn: input.supportYcPayIn,
-    supportNoahPayIn: input.supportNoahPayIn,
-    supportGridPayIn: input.supportGridPayIn,
-  })
+  const payInProvider =
+    explicitPayIn ??
+    resolvePayInProvider({
+      payoutProvider,
+      payoutLocked: null,
+      supportYcPayIn: input.supportYcPayIn,
+      supportNoahPayIn: input.supportNoahPayIn,
+      supportGridPayIn: input.supportGridPayIn,
+    })
   if (payInProvider && payInProvider !== payoutProvider) {
     routing.push({ provider: payInProvider, priority: 2, settlement_asset: "USDC" })
   }
 
   return routing
+}
+
+function payInProviderOptions(caps: {
+  supportYcPayIn: boolean
+  supportNoahPayIn: boolean
+  supportGridPayIn: boolean
+}): ProviderId[] {
+  return (
+    [
+      caps.supportGridPayIn ? "grid" : null,
+      caps.supportYcPayIn ? "yellowcard" : null,
+      caps.supportNoahPayIn ? "noah" : null,
+    ] as Array<ProviderId | null>
+  ).filter(Boolean) as ProviderId[]
 }
 
 type CountryCurrencyCaps = {
@@ -346,13 +381,16 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
             : "grid"
         : null
     const payoutProvider = parsePrimaryProvider(r.provider_routing)
-    const payInProvider = resolvePayInProvider({
-      payoutProvider,
-      payoutLocked,
-      supportYcPayIn,
-      supportNoahPayIn,
-      supportGridPayIn,
-    })
+    const payInFromRouting = parsePayInProviderFromRouting(r.provider_routing, payoutProvider)
+    const payInProvider =
+      payInFromRouting ??
+      resolvePayInProvider({
+        payoutProvider,
+        payoutLocked,
+        supportYcPayIn,
+        supportNoahPayIn,
+        supportGridPayIn,
+      })
     const payInSupported = payInProvider !== null
     const railRows = filteredRows.filter(
       (row) => row.country_code === r.country_code && row.currency_code === r.currency_code,
@@ -478,7 +516,45 @@ export function PayoutCorridorsAdminPanel() {
   const setPayoutProvider = async (row: FiatDestinationRow, provider: ProviderId) => {
     setSavingKey(row.key)
     try {
-      const routing = buildProviderRouting(provider, row)
+      const routing = buildProviderRouting(provider, {
+        payoutLocked: row.payoutLocked,
+        supportNoahPayout: row.supportNoahPayout,
+        supportYcPayout: row.supportYcPayout,
+        supportGridPayout: row.supportGridPayout,
+        supportYcPayIn: row.supportYcPayIn,
+        supportNoahPayIn: row.supportNoahPayIn,
+        supportGridPayIn: row.supportGridPayIn,
+        payInProvider: row.payInProvider,
+      })
+      const updates = await Promise.all(
+        row.corridorIds.map((id) => payoutCorridorsApi.patch(id, { provider_routing: routing })),
+      )
+      queryClient.setQueryData<PayoutCorridorAdminRow[]>(officeKeys.payoutCorridors(), (prev) => {
+        const list = prev ?? []
+        const byId = new Map(updates.map((u) => [u.id, u]))
+        return list.map((r) => byId.get(r.id) ?? r)
+      })
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed")
+    } finally {
+      setSavingKey(null)
+    }
+  }
+
+  const setPayInProviderChoice = async (row: FiatDestinationRow, provider: ProviderId) => {
+    setSavingKey(row.key)
+    try {
+      const routing = buildProviderRouting(row.payoutProvider, {
+        payoutLocked: row.payoutLocked,
+        supportNoahPayout: row.supportNoahPayout,
+        supportYcPayout: row.supportYcPayout,
+        supportGridPayout: row.supportGridPayout,
+        supportYcPayIn: row.supportYcPayIn,
+        supportNoahPayIn: row.supportNoahPayIn,
+        supportGridPayIn: row.supportGridPayIn,
+        payInProvider: provider,
+      })
       const updates = await Promise.all(
         row.corridorIds.map((id) => payoutCorridorsApi.patch(id, { provider_routing: routing })),
       )
@@ -614,8 +690,7 @@ export function PayoutCorridorsAdminPanel() {
             </div>
           ) : fiatRows.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">
-              No fiat corridors yet. Run corridor seed + YC sync scripts (
-              <code className="text-xs">sync-yc-send-corridors.ts</code>).
+              No fiat corridors yet. Run corridor seed + provider sync scripts, then Refresh.
             </p>
           ) : (
             <Table className="min-w-[1080px]">
@@ -646,6 +721,13 @@ export function PayoutCorridorsAdminPanel() {
                     !r.crossBorderLocked &&
                     r.supportYcPayout &&
                     r.supportGridPayout
+
+                  const payInOptions = payInProviderOptions({
+                    supportYcPayIn: r.supportYcPayIn,
+                    supportNoahPayIn: r.supportNoahPayIn,
+                    supportGridPayIn: r.supportGridPayIn,
+                  })
+                  const canChoosePayIn = payInOptions.length > 1
 
                   return (
                     <TableRow key={r.key}>
@@ -706,14 +788,44 @@ export function PayoutCorridorsAdminPanel() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {!r.payInSupported || !r.payInProvider ? (
+                        {!r.payInSupported || !r.payInProvider || payInOptions.length === 0 ? (
                           <span className="text-xs text-muted-foreground">—</span>
                         ) : (
-                          <Switch
-                            checked={r.payInEnabled}
-                            disabled={savingKey === r.key}
-                            onCheckedChange={(v) => void setLocalPayIn(r, v)}
-                          />
+                          <div className="flex flex-col gap-1.5">
+                            {canChoosePayIn ? (
+                              <select
+                                className="h-8 w-full max-w-[148px] rounded-md border bg-background px-2 text-xs"
+                                value={r.payInProvider}
+                                disabled={savingKey === r.key}
+                                aria-label="Pay-in provider"
+                                onChange={(e) =>
+                                  void setPayInProviderChoice(
+                                    r,
+                                    e.target.value === "yellowcard"
+                                      ? "yellowcard"
+                                      : e.target.value === "grid"
+                                        ? "grid"
+                                        : "noah",
+                                  )
+                                }
+                              >
+                                {r.supportGridPayIn ? <option value="grid">Grid</option> : null}
+                                {r.supportYcPayIn ? (
+                                  <option value="yellowcard">Yellowcard</option>
+                                ) : null}
+                                {r.supportNoahPayIn ? <option value="noah">Noah</option> : null}
+                              </select>
+                            ) : (
+                              <span className="text-xs font-medium">
+                                {providerLabel(r.payInProvider)}
+                              </span>
+                            )}
+                            <Switch
+                              checked={r.payInEnabled}
+                              disabled={savingKey === r.key}
+                              onCheckedChange={(v) => void setLocalPayIn(r, v)}
+                            />
+                          </div>
                         )}
                       </TableCell>
                       <TableCell>

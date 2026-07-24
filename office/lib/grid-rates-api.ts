@@ -35,4 +35,21 @@ export const gridRatesApi = {
       skipped: data.skipped ?? 0,
     }
   },
+
+  async upsert(
+    rates: Array<{
+      from_currency: string
+      to_currency: string
+      rate: number
+      grid_mid?: number | null
+      margin_bps?: number
+      status: string
+    }>,
+  ): Promise<void> {
+    const res = await officeFetch("/api/admin/grid-rates", {
+      method: "PUT",
+      body: JSON.stringify({ rates }),
+    })
+    await asJson<{ ok?: boolean }>(res)
+  },
 }

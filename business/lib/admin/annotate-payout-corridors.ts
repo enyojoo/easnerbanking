@@ -1,5 +1,6 @@
 import type { ProviderHealthStatus } from "@easner/shared"
 import { hasNoahSellChannel } from "@/lib/noah/channel-availability"
+import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
 
 type AdminCorridorRow = {
@@ -30,26 +31,35 @@ export async function annotateAdminCorridorsWithProviderHealth<T extends AdminCo
       provider_health?: Record<string, ProviderHealthStatus>
       yc_send_available?: boolean
       yc_receive_available?: boolean
+      grid_send_available?: boolean
+      grid_receive_available?: boolean
       noah_sell_available?: boolean
     }
   >
 > {
   const ycAnnotated = await annotateCorridorsWithYcAvailability(rows)
+  const gridAnnotated = await annotateCorridorsWithGridAvailability(ycAnnotated)
   const out: Array<
     T & {
       provider_health?: Record<string, ProviderHealthStatus>
       yc_send_available?: boolean
       yc_receive_available?: boolean
+      grid_send_available?: boolean
+      grid_receive_available?: boolean
       noah_sell_available?: boolean
     }
   > = []
 
-  for (const row of ycAnnotated) {
+  for (const row of gridAnnotated) {
     const routing = parseRouting(row.provider_routing)
     const hasYc =
       routing.some((r) => r.provider === "yellowcard") ||
       row.yc_send_available === true ||
       row.yc_receive_available === true
+    const hasGrid =
+      routing.some((r) => r.provider === "grid") ||
+      row.grid_send_available === true ||
+      row.grid_receive_available === true
 
     const provider_health: Record<string, ProviderHealthStatus> = {}
 
@@ -63,6 +73,13 @@ export async function annotateAdminCorridorsWithProviderHealth<T extends AdminCo
     if (hasYc) {
       provider_health.yellowcard =
         row.yc_send_available === true || row.yc_receive_available === true ? "ok" : "unavailable"
+    }
+
+    if (hasGrid) {
+      provider_health.grid =
+        row.grid_send_available === true || row.grid_receive_available === true
+          ? "ok"
+          : "unavailable"
     }
 
     out.push({
