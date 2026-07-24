@@ -1,3 +1,4 @@
+export { gridPayoutProvider, corridorHasGridPayout } from "./grid-provider"
 export { noahPayoutProvider } from "./noah-provider"
 export { yellowcardPayoutProvider } from "./yellowcard-provider"
 export {

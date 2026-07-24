@@ -41,6 +41,7 @@ type Props = {
   amountScreenSendAmount: number
   note?: string
   paymentPurpose?: string
+  crossBorderProvider?: 'yellowcard' | 'grid'
   footerPadding: number
   listBottomPadding: number
 }
@@ -56,6 +57,7 @@ export function YcCrossBorderMomoSetup({
   amountScreenSendAmount,
   note,
   paymentPurpose,
+  crossBorderProvider,
   footerPadding,
   listBottomPadding,
 }: Props) {
@@ -111,6 +113,7 @@ export function YcCrossBorderMomoSetup({
       payInCountry,
       payInRail: rail,
       receiveAmount,
+      crossBorderProvider,
       sourcePhone: phone.trim(),
       networkId,
       sourceNetworkName: selectedNetwork?.name,
@@ -125,6 +128,7 @@ export function YcCrossBorderMomoSetup({
     phone,
     networkId,
     selectedNetwork?.name,
+    crossBorderProvider,
   ])
 
   const [debouncedQuotePrefetchKey] = useDebouncedValue(
@@ -178,6 +182,7 @@ export function YcCrossBorderMomoSetup({
         ycPreviewProcessingFee: lockedQuote.processingFee,
         ycPreviewDisplayProcessingFeeLocal: lockedQuote.displayProcessingFeeLocal,
         ycPreviewYcLegFeesUsd: lockedQuote.ycLegFeesUsd,
+        crossBorderProvider,
         sourcePhone: phone.trim(),
         networkId,
         sourceNetworkName: selectedNetwork?.name,

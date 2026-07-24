@@ -73,6 +73,7 @@ import {
   resolveEffectiveWalletSendMin,
   corridorMatchesCountryCurrency,
   isYcBalancePayoutCorridor,
+  isGridBalancePayoutCorridor,
   resolveEffectiveYcBalancePayoutMinReceive,
   resolveYcPayoutLimits,
   getYcBusinessPayoutMin,
@@ -91,6 +92,7 @@ import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
 import { useYcCrossBorderSendMinEnforcement } from '../../hooks/useYcCrossBorderSendMinEnforcement'
 import { useYcSendExchangeRates } from '../../hooks/queries/use-yc-send-exchange-rates'
+import { useGridSendExchangeRates } from '../../hooks/queries/use-grid-send-exchange-rates'
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
   ensureSendPayoutQuoteStashed,
@@ -786,21 +788,35 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !isWalletRecipient &&
     isYcBalancePayoutCorridor(payoutCorridorRow)
 
+  const isGridBalancePayout =
+    selectedPaymentMethod === 'balance' &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    isGridBalancePayoutCorridor(payoutCorridorRow)
+
+  const isProviderBalancePayout = isYcBalancePayout || isGridBalancePayout
+
   const { data: ycSendRates = [] } = useYcSendExchangeRates(receiveCurrency, {
     enabled: isYcBalancePayout,
   })
 
+  const { data: gridSendRates = [] } = useGridSendExchangeRates(receiveCurrency, {
+    enabled: isGridBalancePayout,
+  })
+
+  const providerPayoutRates = isGridBalancePayout ? gridSendRates : ycSendRates
+
   const ycPayoutCustomerRate = useMemo(() => {
-    if (!isYcBalancePayout) return null
+    if (!isProviderBalancePayout) return null
     const send = String(sendCurrency || '').trim().toUpperCase()
     const receive = String(receiveCurrency || '').trim().toUpperCase()
-    const row = ycSendRates.find(
+    const row = providerPayoutRates.find(
       (r) =>
         String(r.from_currency || '').toUpperCase() === send &&
         String(r.to_currency || '').toUpperCase() === receive,
     )
     return row?.rate ?? null
-  }, [isYcBalancePayout, ycSendRates, sendCurrency, receiveCurrency])
+  }, [isProviderBalancePayout, providerPayoutRates, sendCurrency, receiveCurrency])
 
   const ycPayoutRateMap = useMemo(() => {
     if (!ycPayoutCustomerRate) return {}
@@ -842,7 +858,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }, [ycFlow.payInCurrency, ycFlow.customerRate, receiveCurrency])
 
   const payoutEnforcementRateMap =
-    isYcBalancePayout && ycPayoutCustomerRate
+    isProviderBalancePayout && ycPayoutCustomerRate
       ? ycPayoutRateMap
       : selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency
         ? ycFxRateMap
@@ -853,7 +869,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !isEasetagRecipient &&
     !isWalletRecipient &&
     !isYcBalancePayout &&
-    (selectedPaymentMethod === 'balance' ||
+    (isGridBalancePayout ||
+      selectedPaymentMethod === 'balance' ||
       (selectedPaymentMethod === 'otherCurrency' && Boolean(selectedOtherCurrency)))
 
   const ycPayoutMinEnforcementEnabled =
@@ -1107,6 +1124,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       payInCountry,
       payInRail: tlcPayInRail,
       receiveAmount,
+      crossBorderProvider: ycFlow.crossBorderProvider,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedCrossBorderQuotePrefetchKey, recipient?.id])
@@ -1483,6 +1501,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             receiveCurrency: recipient.currency,
             amountEntryMode,
             amountScreenSendAmount: navAmounts.sendAmount,
+            crossBorderProvider: ycFlow.crossBorderProvider,
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
           } as never)
@@ -1507,6 +1526,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             payInCountry,
             payInRail: rail,
             receiveAmount: receiveAmountValue,
+            crossBorderProvider: ycFlow.crossBorderProvider,
           }
           const previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
           if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
@@ -1532,6 +1552,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             ycPreviewProcessingFee: previewQuote.processingFee,
             ycPreviewDisplayProcessingFeeLocal: previewQuote.displayProcessingFeeLocal,
             ycPreviewYcLegFeesUsd: previewQuote.ycLegFeesUsd,
+            crossBorderProvider: ycFlow.crossBorderProvider,
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
           } as never)

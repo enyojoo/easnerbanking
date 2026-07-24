@@ -216,6 +216,69 @@ export async function fetchYcPayInNetworks(
   return prefetchYcPayInNetworks(country, currency)
 }
 
+type GridPayInRateRow = {
+  from_currency: string
+  to_currency: string
+  rate: number
+  grid_mid?: number | null
+}
+
+const gridPayInRatesCache = new Map<string, { rates: YcRateClientRow[]; at: number }>()
+const gridPayInRatesInflight = new Map<string, Promise<YcRateClientRow[] | null>>()
+
+function mapGridRatesToPayInClient(rows: GridPayInRateRow[]): YcRateClientRow[] {
+  return rows.map((row) => ({
+    from_currency: String(row.from_currency ?? "").toUpperCase(),
+    to_currency: String(row.to_currency ?? "").toUpperCase(),
+    rate: Number(row.rate ?? 0),
+    easner_sell: Number(row.rate ?? 0),
+    yc_buy: row.grid_mid != null ? Number(row.grid_mid) : null,
+  }))
+}
+
+export function readCachedGridPayInRates(currency: string): YcRateClientRow[] | null {
+  const cur = currency.trim().toUpperCase()
+  if (!cur) return null
+  const hit = gridPayInRatesCache.get(cur)
+  if (!hit) return null
+  if (Date.now() - hit.at > PAY_IN_RATES_CACHE_TTL_MS) {
+    gridPayInRatesCache.delete(cur)
+    return null
+  }
+  return hit.rates
+}
+
+/** Grid pay-in rates: local fiat → USD (customer rate + grid mid for fee preview). */
+export async function prefetchGridPayInRates(currency: string): Promise<YcRateClientRow[] | null> {
+  const cur = currency.trim().toUpperCase()
+  if (!cur) return null
+
+  const cached = readCachedGridPayInRates(cur)
+  if (cached) return cached
+
+  const inflight = gridPayInRatesInflight.get(cur)
+  if (inflight) return inflight
+
+  const task = (async () => {
+    try {
+      const res = await fetchWithSession(
+        `/api/fx/grid-rates?destinations=${encodeURIComponent(cur)}`,
+      )
+      const data = (await res.json().catch(() => ({}))) as { rates?: GridPayInRateRow[] }
+      const rates = mapGridRatesToPayInClient(data.rates ?? [])
+      gridPayInRatesCache.set(cur, { rates, at: Date.now() })
+      return rates
+    } catch {
+      return null
+    } finally {
+      gridPayInRatesInflight.delete(cur)
+    }
+  })()
+
+  gridPayInRatesInflight.set(cur, task)
+  return task
+}
+
 export async function prefetchYcPayInRates(): Promise<YcRateClientRow[] | null> {
   const cached = readCachedYcPayInRates()
   if (cached) return cached

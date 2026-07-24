@@ -1,6 +1,28 @@
 import { apiFetch, ApiError } from '../query/api-client'
-import { ycFundBalanceQuoteErrorMessage, normalizeYcMomoPhone } from '@easner/shared'
+import { ycFundBalanceQuoteErrorMessage, normalizeYcMomoPhone, resolvePayInProvider, resolvePrimaryPayoutProvider } from '@easner/shared'
+import type { ProviderRoutingEntry } from '@easner/shared'
 import type { YcPayInRail } from '../hooks/useYcCrossBorderFlow'
+
+export type PayInProviderId = 'yellowcard' | 'noah' | 'grid'
+
+function fundBalanceApiBase(provider: PayInProviderId | undefined): string {
+  return provider === 'grid' ? '/api/grid/fund-balance' : '/api/yellowcard/fund-balance'
+}
+
+function resolveFundBalancePayInProvider(input: {
+  providerRouting?: ProviderRoutingEntry[] | null
+  metadata?: Record<string, unknown> | null
+  payInProvider?: PayInProviderId
+}): PayInProviderId {
+  if (input.payInProvider) return input.payInProvider
+  const resolved = resolvePayInProvider({
+    providerRouting: input.providerRouting,
+    metadata: input.metadata,
+  })
+  if (resolved === 'grid' || resolved === 'yellowcard') return resolved
+  if (resolvePrimaryPayoutProvider(input.providerRouting) === 'grid') return 'grid'
+  return resolved
+}
 
 export type YcFundBalanceQuote = {
   ok: true
@@ -38,6 +60,9 @@ export type FundBalanceQuoteStashMeta = {
   rail: YcPayInRail
   amountEntryMode: 'usd' | 'local'
   enteredAmount: number
+  payInProvider?: PayInProviderId
+  providerRouting?: ProviderRoutingEntry[] | null
+  metadata?: Record<string, unknown> | null
   sourcePhone?: string
   networkId?: string
   sourceNetworkName?: string
@@ -143,8 +168,10 @@ function buildFundBalanceAmountBody(meta: FundBalanceQuoteStashMeta): Record<str
 }
 
 export async function fetchFundBalanceQuotePreview(meta: FundBalanceQuoteStashMeta): Promise<YcFundBalanceQuote> {
+  const provider = resolveFundBalancePayInProvider(meta)
+  const base = fundBalanceApiBase(provider)
   const data = await apiFetch<YcFundBalanceQuote, Record<string, unknown>>(
-    '/api/yellowcard/fund-balance/quote',
+    `${base}/quote`,
     { method: 'POST', body: buildFundBalanceAmountBody(meta) },
   )
   if (!data.ok) throw new Error('Fund balance quote failed')
@@ -152,8 +179,10 @@ export async function fetchFundBalanceQuotePreview(meta: FundBalanceQuoteStashMe
 }
 
 export async function confirmFundBalanceOrder(meta: FundBalanceQuoteStashMeta): Promise<YcFundBalanceQuote> {
+  const provider = resolveFundBalancePayInProvider(meta)
+  const base = fundBalanceApiBase(provider)
   const data = await apiFetch<YcFundBalanceQuote, Record<string, unknown>>(
-    '/api/yellowcard/fund-balance/confirm',
+    `${base}/confirm`,
     { method: 'POST', body: buildFundBalanceAmountBody(meta) },
   )
   if (!data.ok || !data.transferId) throw new Error('Fund balance confirm failed')

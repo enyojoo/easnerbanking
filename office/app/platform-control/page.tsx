@@ -10,11 +10,12 @@ import {
   CryptoPanel,
   NoahRatesPanel,
   YcRatesPanel,
+  GridRatesPanel,
   CryptoRatesPanel,
   WebhookInboxPanel,
 } from "@/components/platform-control/platform-control-panels"
 
-const TABS = ["platform", "noah-rates", "yc-rates", "crypto-rates", "fiat", "crypto", "webhooks"] as const
+const TABS = ["platform", "noah-rates", "yc-rates", "grid-rates", "crypto-rates", "fiat", "crypto", "webhooks"] as const
 type PlatformControlTab = (typeof TABS)[number]
 
 function normalizeTab(raw: string | null): string | null {
@@ -63,6 +64,7 @@ function PlatformControlHubBody() {
             <TabsTrigger value="platform">Platform</TabsTrigger>
             <TabsTrigger value="noah-rates">Noah rates</TabsTrigger>
             <TabsTrigger value="yc-rates">Yellowcard rates</TabsTrigger>
+            <TabsTrigger value="grid-rates">Grid rates</TabsTrigger>
             <TabsTrigger value="crypto-rates">Crypto rates</TabsTrigger>
             <TabsTrigger value="fiat">Fiat corridors</TabsTrigger>
             <TabsTrigger value="crypto">Crypto</TabsTrigger>
@@ -76,6 +78,9 @@ function PlatformControlHubBody() {
           </TabsContent>
           <TabsContent value="yc-rates" forceMount className={TAB_CONTENT_CLASS}>
             <YcRatesPanel />
+          </TabsContent>
+          <TabsContent value="grid-rates" forceMount className={TAB_CONTENT_CLASS}>
+            <GridRatesPanel />
           </TabsContent>
           <TabsContent value="crypto-rates" forceMount className={TAB_CONTENT_CLASS}>
             <CryptoRatesPanel />

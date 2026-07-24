@@ -39,11 +39,25 @@ export type YcCorridorSchemaHint = {
   note?: string
 }
 
+export type GridCorridorSchemaHint = {
+  status: "ready" | "pending_schema"
+  channel_type: "bank" | "momo"
+  account_number_label?: string
+  account_number_hint?: string
+  extra_fields?: YcRecipientFieldDef[]
+  /** Canonical Grid bankName values for bank rails. */
+  bank_enum?: string[]
+  /** MoMo: value = Grid provider/bankName, label = displayName. */
+  momo_provider_enum?: { value: string; label: string }[]
+  note?: string
+}
+
 export type PayoutCorridorFieldsSchema =
   | PayoutFieldsSchemaHint
   | {
       noah?: PayoutFieldsSchemaHint | null
       yellowcard?: YcCorridorSchemaHint | null
+      grid?: GridCorridorSchemaHint | null
     }
 
 export type YcRecipientRowLike = {
@@ -202,10 +216,14 @@ export function ycCorridorSchemaKey(countryCode: string, currencyCode: string): 
 
 export function isNestedPayoutFieldsSchema(
   fieldsSchema: unknown,
-): fieldsSchema is { noah?: PayoutFieldsSchemaHint | null; yellowcard?: YcCorridorSchemaHint | null } {
+): fieldsSchema is {
+  noah?: PayoutFieldsSchemaHint | null
+  yellowcard?: YcCorridorSchemaHint | null
+  grid?: GridCorridorSchemaHint | null
+} {
   if (!fieldsSchema || typeof fieldsSchema !== "object") return false
   const fs = fieldsSchema as Record<string, unknown>
-  return "noah" in fs || "yellowcard" in fs
+  return "noah" in fs || "yellowcard" in fs || "grid" in fs
 }
 
 /** Noah hints from nested or legacy flat fields_schema. */
@@ -223,6 +241,13 @@ export function unwrapYcFieldsSchema(fieldsSchema: unknown): YcCorridorSchemaHin
   if (!isNestedPayoutFieldsSchema(fieldsSchema)) return null
   const yc = fieldsSchema.yellowcard
   return yc && typeof yc === "object" ? (yc as YcCorridorSchemaHint) : null
+}
+
+export function unwrapGridFieldsSchema(fieldsSchema: unknown): GridCorridorSchemaHint | null {
+  if (!fieldsSchema || typeof fieldsSchema !== "object") return null
+  if (!isNestedPayoutFieldsSchema(fieldsSchema)) return null
+  const grid = fieldsSchema.grid
+  return grid && typeof grid === "object" ? (grid as GridCorridorSchemaHint) : null
 }
 
 /**
@@ -548,4 +573,92 @@ export function mergeYcNetworksIntoSchema(
     ...schema,
     bank_enum: unique,
   }
+}
+
+export type CorridorRecipientOptions = {
+  bankOptions: string[]
+  momoOptions: string[]
+  extraFields: YcRecipientFieldDef[]
+  accountNumberLabel?: string
+  accountNumberHint?: string
+}
+
+function uniqueStrings(values: Array<string | undefined | null>): string[] {
+  return [...new Set(values.map((v) => String(v ?? "").trim()).filter(Boolean))]
+}
+
+/** Provider-agnostic recipient UI options — union of Noah, YC, and Grid corridor schemas. */
+export function resolveCorridorRecipientOptions(input: {
+  countryCode: string
+  currencyCode: string
+  rail: "bank_transfer" | "mobile_money"
+  fieldsSchema?: unknown
+  providers?: unknown
+}): CorridorRecipientOptions {
+  const noah = unwrapNoahFieldsSchema(input.fieldsSchema)
+  const yc = resolveYcCorridorSchema({
+    countryCode: input.countryCode,
+    currencyCode: input.currencyCode,
+    fieldsSchema: input.fieldsSchema,
+  })
+  const grid = unwrapGridFieldsSchema(input.fieldsSchema)
+
+  const bankOptions = uniqueStrings([
+    ...(noah?.bank_enum ?? []),
+    ...(yc?.bank_enum ?? []),
+    ...(grid?.bank_enum ?? []),
+  ])
+
+  const fromProviders = Array.isArray(input.providers)
+    ? (input.providers as unknown[]).map((p) => String(p)).filter(Boolean)
+    : []
+  const fromNoahMomo = noah?.mobile_provider_labels ?? []
+  const fromGridMomo = (grid?.momo_provider_enum ?? []).map((e) => e.label || e.value)
+  const momoOptions = uniqueStrings([...fromProviders, ...fromNoahMomo, ...fromGridMomo])
+
+  const schemaForExtras = yc ?? grid
+  const extraFields = schemaForExtras?.extra_fields ?? []
+
+  return {
+    bankOptions,
+    momoOptions,
+    extraFields,
+    accountNumberLabel:
+      schemaForExtras?.account_number_label ??
+      (input.rail === "mobile_money" ? "Phone number" : "Account number"),
+    accountNumberHint: schemaForExtras?.account_number_hint,
+  }
+}
+
+export function isBankNameAllowedForCorridor(bankName: string, options: CorridorRecipientOptions): boolean {
+  const name = String(bankName || "").trim()
+  if (!name || !options.bankOptions.length) return true
+  return options.bankOptions.includes(name)
+}
+
+export function isMomoProviderAllowedForCorridor(
+  provider: string,
+  options: CorridorRecipientOptions,
+): boolean {
+  const label = String(provider || "").trim()
+  if (!label || !options.momoOptions.length) return true
+  return options.momoOptions.includes(label)
+}
+
+/** Known label aliases: user-facing label → Grid canonical bankName/provider. */
+export const GRID_BANK_NAME_ALIASES: Record<string, string> = {
+  "M-PESA": "M-Pesa",
+  "M-Pesa": "M-Pesa",
+  MPESA: "M-Pesa",
+  "Airtel Money": "Airtel Money",
+}
+
+export function resolveGridBankName(storedBankName: string): string {
+  const trimmed = String(storedBankName || "").trim()
+  if (!trimmed) return trimmed
+  return GRID_BANK_NAME_ALIASES[trimmed] ?? trimmed
+}
+
+export function resolveGridMomoProvider(storedProvider: string): string {
+  return resolveGridBankName(storedProvider)
 }

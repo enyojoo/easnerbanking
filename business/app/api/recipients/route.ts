@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import { validateRecipientYcExtrasForSave } from "@/lib/recipients-yc-validation"
-import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone, resolveYcCorridorSchema, unwrapNoahFieldsSchema } from "@easner/shared"
+import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone, isBankNameAllowedForCorridor, resolveCorridorRecipientOptions, unwrapNoahFieldsSchema } from "@easner/shared"
 import {
   looksLikeMissingStructuredColumn,
   toRecipientLegacyPayload,
@@ -57,26 +57,22 @@ export async function POST(request: Request) {
     const rail = isMobile ? "mobile_money" : "bank_transfer"
     const { data: corridor } = await admin
       .from("payout_corridors")
-      .select("fields_schema")
+      .select("fields_schema,providers")
       .eq("country_code", cc)
       .eq("currency_code", cur)
       .eq("rail", rail)
       .maybeSingle()
-    const ycSchema = resolveYcCorridorSchema({
+    const recipientOptions = resolveCorridorRecipientOptions({
       countryCode: cc,
       currencyCode: cur,
+      rail,
       fieldsSchema: corridor?.fields_schema,
+      providers: corridor?.providers,
     })
-    const bankEnum =
-      ycSchema?.bank_enum?.length
-        ? ycSchema.bank_enum
-        : unwrapNoahFieldsSchema(corridor?.fields_schema)?.bank_enum
     if (
       !isMobile &&
-      Array.isArray(bankEnum) &&
-      bankEnum.length > 0 &&
       payload.bank_name?.trim() &&
-      !bankEnum.includes(payload.bank_name.trim())
+      !isBankNameAllowedForCorridor(payload.bank_name.trim(), recipientOptions)
     ) {
       return NextResponse.json(
         { error: "Bank must be selected from the corridor list." },

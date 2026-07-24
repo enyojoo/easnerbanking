@@ -14,9 +14,19 @@ export function corridorSupportsNoahReceive(metadata: unknown): boolean {
   return meta.noah_receive === true
 }
 
+/** Provider capability: Grid supports local pay-in on this corridor (from Grid sync). */
+export function corridorSupportsGridReceive(metadata: unknown): boolean {
+  const meta = (metadata ?? {}) as CorridorMeta
+  return meta.grid_receive === true
+}
+
 /** True when any provider supports local fiat pay-in on this corridor. */
 export function corridorSupportsLocalPayIn(metadata: unknown): boolean {
-  return corridorSupportsYcReceive(metadata) || corridorSupportsNoahReceive(metadata)
+  return (
+    corridorSupportsYcReceive(metadata) ||
+    corridorSupportsNoahReceive(metadata) ||
+    corridorSupportsGridReceive(metadata)
+  )
 }
 
 /** Office toggle: local pay-in is enabled for customers on this corridor. */
@@ -31,11 +41,18 @@ export function corridorNoahReceiveEnabled(metadata: unknown): boolean {
   return meta.noah_receive_enabled === true
 }
 
+/** Office toggle: Grid local pay-in enabled (when corridor has grid_receive). */
+export function corridorGridReceiveEnabled(metadata: unknown): boolean {
+  const meta = (metadata ?? {}) as CorridorMeta
+  return meta.grid_receive === true && meta.grid_receive_enabled === true
+}
+
 /** Office toggle on for any supported local pay-in provider. */
 export function corridorLocalPayInEnabled(metadata: unknown): boolean {
   const meta = (metadata ?? {}) as CorridorMeta
   if (meta.yc_receive === true && meta.yc_receive_enabled === true) return true
   if (meta.noah_receive === true && meta.noah_receive_enabled === true) return true
+  if (meta.grid_receive === true && meta.grid_receive_enabled === true) return true
   return false
 }
 

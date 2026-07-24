@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
+  isBankNameAllowedForCorridor,
+  isMomoProviderAllowedForCorridor,
   normalizeRecipientYcMetadata,
+  resolveCorridorRecipientOptions,
   resolveYcCorridorSchema,
-  unwrapNoahFieldsSchema,
   validateYcRecipientForCorridor,
 } from "@easner/shared"
 import type { RecipientWritePayload } from "@/lib/recipients-write-payload"
@@ -22,11 +24,35 @@ export async function validateRecipientYcExtrasForSave(
   const rail = isMobile ? "mobile_money" : "bank_transfer"
   const { data: corridor } = await admin
     .from("payout_corridors")
-    .select("fields_schema")
+    .select("fields_schema,providers")
     .eq("country_code", cc)
     .eq("currency_code", cur)
     .eq("rail", rail)
     .maybeSingle()
+
+  const recipientOptions = resolveCorridorRecipientOptions({
+    countryCode: cc,
+    currencyCode: cur,
+    rail,
+    fieldsSchema: corridor?.fields_schema,
+    providers: corridor?.providers,
+  })
+
+  if (
+    !isMobile &&
+    payload.bank_name?.trim() &&
+    !isBankNameAllowedForCorridor(payload.bank_name.trim(), recipientOptions)
+  ) {
+    return "Bank must be selected from the corridor list."
+  }
+
+  if (
+    isMobile &&
+    payload.mobile_provider?.trim() &&
+    !isMomoProviderAllowedForCorridor(payload.mobile_provider.trim(), recipientOptions)
+  ) {
+    return "Mobile money provider must be selected from the corridor list."
+  }
 
   const ycSchema = resolveYcCorridorSchema({
     countryCode: cc,
@@ -34,20 +60,6 @@ export async function validateRecipientYcExtrasForSave(
     fieldsSchema: corridor?.fields_schema,
   })
   if (!ycSchema || ycSchema.status !== "ready") return null
-
-  const bankEnum = ycSchema.bank_enum?.length
-    ? ycSchema.bank_enum
-    : unwrapNoahFieldsSchema(corridor?.fields_schema)?.bank_enum
-
-  if (
-    !isMobile &&
-    Array.isArray(bankEnum) &&
-    bankEnum.length > 0 &&
-    payload.bank_name?.trim() &&
-    !bankEnum.includes(payload.bank_name.trim())
-  ) {
-    return "Bank must be selected from the corridor list."
-  }
 
   const check = validateYcRecipientForCorridor({
     countryCode: cc,

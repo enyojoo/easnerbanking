@@ -285,6 +285,7 @@ export default function SendConfirmPage() {
         payInCountry,
         payInRail,
         receiveAmount: state.amount,
+        crossBorderProvider: state.crossBorderProvider ?? "yellowcard",
         sourcePhone: setup.sourcePhone,
         networkId: setup.networkId,
         sourceNetworkName: setup.sourceNetworkName,
@@ -296,6 +297,7 @@ export default function SendConfirmPage() {
       payInCountry,
       payInRail,
       receiveAmount: state.amount,
+      crossBorderProvider: state.crossBorderProvider ?? "yellowcard",
     }
   }, [state])
 
@@ -690,6 +692,11 @@ export default function SendConfirmPage() {
         ...(pq.ycWalletAddress ? { ycWalletAddress: pq.ycWalletAddress } : {}),
         ...(pq.ycCryptoAmount != null ? { ycCryptoAmount: pq.ycCryptoAmount } : {}),
         ...(pq.lockId ? { lockId: pq.lockId } : {}),
+        ...(pq.provider === "grid" && pq.gridQuoteId ? { gridQuoteId: pq.gridQuoteId } : {}),
+        ...(pq.provider === "grid" && pq.gridFundingAddress ? { gridFundingAddress: pq.gridFundingAddress } : {}),
+        ...(pq.provider === "grid" && pq.gridCryptoAmount != null ? { gridCryptoAmount: pq.gridCryptoAmount } : {}),
+        ...(pq.provider === "grid" && pq.gridCustomerId ? { gridCustomerId: pq.gridCustomerId } : {}),
+        ...(pq.provider === "grid" && pq.gridExternalAccountId ? { gridExternalAccountId: pq.gridExternalAccountId } : {}),
         reviewSnapshot,
       }
 

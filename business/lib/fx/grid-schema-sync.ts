@@ -1,0 +1,173 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+import {
+  isNestedPayoutFieldsSchema,
+  unwrapNoahFieldsSchema,
+  unwrapYcFieldsSchema,
+  type GridCorridorSchemaHint,
+} from "@easner/shared"
+import { listGridDiscoveries } from "@/lib/grid/discoveries"
+import type { GridDiscovery } from "@/lib/grid/types"
+
+const MOMO_HINTS = /mobile|momo|m-pesa|mpesa|airtel|mtn|orange|tigo|wave|vodafone|moov|tnm|free money/i
+
+function corridorUsesGrid(row: {
+  provider_routing?: unknown
+  metadata?: unknown
+}): boolean {
+  const routing = Array.isArray(row.provider_routing) ? row.provider_routing : []
+  if (routing.some((e) => String((e as { provider?: string }).provider ?? "").toLowerCase() === "grid")) {
+    return true
+  }
+  const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {}
+  return meta.grid_send === true || meta.grid_receive === true
+}
+
+function discoveryLabel(d: GridDiscovery): string {
+  return String(d.displayName ?? d.bankName ?? "").trim()
+}
+
+function discoveryValue(d: GridDiscovery): string {
+  return String(d.bankName ?? d.displayName ?? "").trim()
+}
+
+function isMomoDiscovery(d: GridDiscovery): boolean {
+  const label = `${discoveryLabel(d)} ${discoveryValue(d)}`
+  if (MOMO_HINTS.test(label)) return true
+  const rails = (d.paymentRails ?? []).map((r) => String(r).toUpperCase())
+  return rails.some((r) => r.includes("MOBILE") || r.includes("MOMO"))
+}
+
+export function buildGridSchemaFromDiscoveries(input: {
+  discoveries: GridDiscovery[]
+  countryCode: string
+  currencyCode: string
+  rail: "bank_transfer" | "mobile_money"
+}): GridCorridorSchemaHint | null {
+  const country = input.countryCode.trim().toUpperCase()
+  const currency = input.currencyCode.trim().toUpperCase()
+  const filtered = input.discoveries.filter((d) => {
+    const dCountry = String(d.country ?? "").trim().toUpperCase()
+    const dCurrency = String(d.currency ?? "").trim().toUpperCase()
+    return (!dCountry || dCountry === country) && (!dCurrency || dCurrency === currency)
+  })
+
+  if (!filtered.length) return null
+
+  if (input.rail === "mobile_money") {
+    const momo = filtered
+      .filter((d) => isMomoDiscovery(d) || !filtered.some((x) => !isMomoDiscovery(x)))
+      .map((d) => ({ value: discoveryValue(d), label: discoveryLabel(d) || discoveryValue(d) }))
+      .filter((e) => e.value)
+    const unique = [...new Map(momo.map((e) => [e.value, e])).values()]
+    if (!unique.length) return null
+    return {
+      status: "ready",
+      channel_type: "momo",
+      momo_provider_enum: unique,
+      note: "Synced from Grid discoveries",
+    }
+  }
+
+  const banks = filtered
+    .filter((d) => !isMomoDiscovery(d))
+    .map((d) => discoveryValue(d))
+    .filter(Boolean)
+  const uniqueBanks = [...new Set(banks)]
+  if (!uniqueBanks.length) {
+    const fallback = filtered.map((d) => discoveryValue(d)).filter(Boolean)
+    const uniqueFallback = [...new Set(fallback)]
+    if (!uniqueFallback.length) return null
+    return {
+      status: "ready",
+      channel_type: "bank",
+      bank_enum: uniqueFallback,
+      note: "Synced from Grid discoveries",
+    }
+  }
+  return {
+    status: "ready",
+    channel_type: "bank",
+    bank_enum: uniqueBanks,
+    note: "Synced from Grid discoveries",
+  }
+}
+
+export type GridSchemaSyncResult = {
+  ok: boolean
+  updated: number
+  skipped: number
+  error?: string
+}
+
+export async function syncGridCorridorSchemas(
+  admin: SupabaseClient,
+  opts?: { forceRefresh?: boolean },
+): Promise<GridSchemaSyncResult> {
+  const { data: rows, error } = await admin
+    .from("payout_corridors")
+    .select("id,country_code,currency_code,rail,fields_schema,metadata,provider_routing,providers")
+
+  if (error) return { ok: false, updated: 0, skipped: 0, error: error.message }
+
+  const targets = (rows ?? []).filter((row) => corridorUsesGrid(row))
+  if (!targets.length) return { ok: true, updated: 0, skipped: 0 }
+
+  const discoveries = await listGridDiscoveries(opts?.forceRefresh ?? true)
+  let updated = 0
+  let skipped = 0
+
+  for (const row of targets) {
+    const cc = String(row.country_code ?? "").trim().toUpperCase()
+    const cur = String(row.currency_code ?? "").trim().toUpperCase()
+    const rail = row.rail === "mobile_money" ? "mobile_money" : "bank_transfer"
+
+    const gridSchema = buildGridSchemaFromDiscoveries({
+      discoveries,
+      countryCode: cc,
+      currencyCode: cur,
+      rail,
+    })
+    if (!gridSchema) {
+      skipped++
+      continue
+    }
+
+    const prior = row.fields_schema
+    const priorNoah = isNestedPayoutFieldsSchema(prior) ? prior.noah : unwrapNoahFieldsSchema(prior)
+    const priorYc = unwrapYcFieldsSchema(prior)
+    const fieldsSchema = {
+      noah: priorNoah ?? null,
+      yellowcard: priorYc ?? null,
+      grid: gridSchema,
+    }
+
+    const updates: Record<string, unknown> = { fields_schema: fieldsSchema }
+    if (rail === "mobile_money" && gridSchema.momo_provider_enum?.length) {
+      updates.providers = gridSchema.momo_provider_enum.map((e) => e.label || e.value)
+    }
+
+    const { error: upErr } = await admin.from("payout_corridors").update(updates).eq("id", row.id)
+    if (upErr) {
+      skipped++
+      continue
+    }
+    updated++
+  }
+
+  return { ok: true, updated, skipped }
+}
+
+export async function syncGridCorridorSchemasSafe(
+  admin: SupabaseClient,
+): Promise<GridSchemaSyncResult> {
+  try {
+    return await syncGridCorridorSchemas(admin, { forceRefresh: true })
+  } catch (e) {
+    return {
+      ok: false,
+      updated: 0,
+      skipped: 0,
+      error: e instanceof Error ? e.message : String(e),
+    }
+  }
+}

@@ -95,7 +95,7 @@ export type PayoutQuoteResult = {
   expiresAt: string
   executionModel: "turnkey_workflow"
   /** Payout rail provider when not Noah. */
-  provider?: "noah" | "yellowcard"
+  provider?: "noah" | "yellowcard" | "grid"
   /** Yellowcard-specific locked send fields (balance_payout). */
   yc?: {
     sequenceId: string
@@ -103,6 +103,15 @@ export type PayoutQuoteResult = {
     channelId: string
     cryptoAmount: number
     walletAddress?: string
+  }
+  /** Grid-specific locked quote fields (balance_payout). */
+  grid?: {
+    quoteId: string
+    sequenceId: string
+    customerId: string
+    externalAccountId: string
+    cryptoAmount: number
+    fundingAddress?: string
   }
   /** Explicit YC send leg fees from POST /send (USD). */
   ycLegFeesUsd?: number
@@ -162,6 +171,58 @@ async function buildYellowcardBalancePayoutQuoteFromRow(input: {
     amountEntryMode: input.amountEntryMode,
     sendBudget: input.sendBudget,
     userTurnkeyAddress: turnkeyAddr,
+    paymentPurpose: input.paymentPurpose,
+    senderProfile: {
+      residenceCountry: userRow?.residence_country,
+      kycIdType: userRow?.kyc_id_type,
+      kycIdNumber: userRow?.kyc_id_number,
+      ngLocalIdType: userRow?.ng_local_id_type,
+      ngLocalIdNumber: userRow?.ng_local_id_number,
+      fullName: userRow?.full_name,
+      phone: userRow?.phone,
+      email: userRow?.email,
+      dateOfBirth: userRow?.date_of_birth,
+      addressStreet: userRow?.kyc_address_street,
+      addressCity: userRow?.kyc_address_city,
+      addressCountry: userRow?.kyc_address_country,
+    },
+  })
+}
+
+async function buildGridBalancePayoutQuoteFromRow(input: {
+  admin: ReturnType<typeof createSupabaseAdmin>
+  userId: string
+  recipientId?: string
+  row: RecipientSellPrepareRow
+  receiveFiatAmount: number
+  sourceBalanceCurrency: string
+  amountEntryMode?: "send" | "receive"
+  sendBudget?: number
+  paymentPurpose?: string
+}) {
+  const { confirmGridBalancePayoutOrder } = await import("@/lib/payout/confirm-grid-balance-payout")
+  const { data: userRow } = await input.admin
+    .from("users")
+    .select(
+      "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+    )
+    .eq("id", input.userId)
+    .maybeSingle()
+
+  if (!input.recipientId) {
+    throw new Error("recipientId is required for Grid payout quote.")
+  }
+
+  return confirmGridBalancePayoutOrder({
+    admin: input.admin,
+    userId: input.userId,
+    businessId: null,
+    recipientId: input.recipientId,
+    recipient: input.row,
+    receiveFiatAmount: input.receiveFiatAmount,
+    sourceBalanceCurrency: input.sourceBalanceCurrency,
+    amountEntryMode: input.amountEntryMode,
+    sendBudget: input.sendBudget,
     paymentPurpose: input.paymentPurpose,
     senderProfile: {
       residenceCountry: userRow?.residence_country,
@@ -306,6 +367,18 @@ export async function buildPayoutQuote(input: {
           amountEntryMode: input.amountEntryMode,
           sendBudget: input.sendBudget,
           paymentPurpose: input.prepareOverrides?.paymentPurpose,
+        })
+      }
+      if (provider.id === "grid") {
+        return buildGridBalancePayoutQuoteFromRow({
+          admin,
+          userId: input.userId,
+          recipientId: input.recipientId,
+          row,
+          receiveFiatAmount: input.receiveFiatAmount,
+          sourceBalanceCurrency: input.sourceBalanceCurrency,
+          amountEntryMode: input.amountEntryMode,
+          sendBudget: input.sendBudget,
         })
       }
       if (provider.id !== "noah") {

@@ -8,9 +8,14 @@ export type CrossBorderQuoteStashMeta = {
   payInCountry: string
   payInRail: YcPayInRail
   receiveAmount: number
+  crossBorderProvider?: 'yellowcard' | 'grid'
   sourcePhone?: string
   networkId?: string
   sourceNetworkName?: string
+}
+
+function crossBorderApiBase(provider: 'yellowcard' | 'grid' | undefined): string {
+  return provider === 'grid' ? '/api/grid/cross-border' : '/api/yellowcard/cross-border'
 }
 
 let stashed: YcCrossBorderQuoteResult | null = null
@@ -156,8 +161,9 @@ function buildCrossBorderQuoteBody(
 export async function fetchCrossBorderQuotePreview(
   meta: CrossBorderQuoteStashMeta,
 ): Promise<YcCrossBorderQuoteResult> {
+  const base = crossBorderApiBase(meta.crossBorderProvider)
   const data = await apiFetch<YcCrossBorderQuoteResult, Record<string, unknown>>(
-    '/api/yellowcard/cross-border/quote',
+    `${base}/quote`,
     { method: 'POST', body: buildCrossBorderQuoteBody(meta) },
   )
   if (!data.ok) throw new Error('Cross-border quote failed')
@@ -167,8 +173,9 @@ export async function fetchCrossBorderQuotePreview(
 export async function lockCrossBorderLeg2(
   meta: CrossBorderQuoteStashMeta,
 ): Promise<YcCrossBorderQuoteResult> {
+  const base = crossBorderApiBase(meta.crossBorderProvider)
   const data = await apiFetch<YcCrossBorderQuoteResult, Record<string, unknown>>(
-    '/api/yellowcard/cross-border/lock-leg2',
+    `${base}/lock-leg2`,
     { method: 'POST', body: buildCrossBorderQuoteBody(meta) },
   )
   if (!data.ok) throw new Error('Cross-border leg2 lock failed')
@@ -179,8 +186,9 @@ export async function confirmCrossBorderLeg1(
   meta: CrossBorderQuoteStashMeta,
   leg2DraftId: string,
 ): Promise<YcCrossBorderQuoteResult> {
+  const base = crossBorderApiBase(meta.crossBorderProvider)
   const data = await apiFetch<YcCrossBorderQuoteResult, Record<string, unknown>>(
-    '/api/yellowcard/cross-border/confirm',
+    `${base}/confirm`,
     { method: 'POST', body: buildCrossBorderQuoteBody(meta, { leg2DraftId }) },
   )
   if (!data.ok || !data.transferId) throw new Error('Cross-border confirm failed')
@@ -191,8 +199,9 @@ export async function confirmCrossBorderOrder(
   meta: CrossBorderQuoteStashMeta,
   leg2DraftId?: string,
 ): Promise<YcCrossBorderQuoteResult> {
+  const base = crossBorderApiBase(meta.crossBorderProvider)
   const data = await apiFetch<YcCrossBorderQuoteResult, Record<string, unknown>>(
-    '/api/yellowcard/cross-border/confirm',
+    `${base}/confirm`,
     {
       method: 'POST',
       body: buildCrossBorderQuoteBody(meta, leg2DraftId ? { leg2DraftId } : undefined),

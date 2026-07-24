@@ -12,6 +12,7 @@ import {
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   normalizeRecipientYcMetadata,
+  resolveCorridorRecipientOptions,
   resolveYcCorridorSchema,
   sortByEasnerCountryPickerOrder,
   unwrapNoahFieldsSchema,
@@ -406,6 +407,18 @@ export function RecipientForm({
       ) ?? null
     )
   }, [selectedCountry, payoutRail, bankCorridors, mobileCorridors])
+  const corridorRecipientOptions = useMemo(() => {
+    if (!selectedCountry) {
+      return { bankOptions: [] as string[], momoOptions: [] as string[], extraFields: [], accountNumberLabel: undefined, accountNumberHint: undefined }
+    }
+    return resolveCorridorRecipientOptions({
+      countryCode: selectedCountry.code,
+      currencyCode: currency,
+      rail: payoutRail,
+      fieldsSchema: selectedCorridorRow?.fields_schema,
+      providers: selectedCorridorRow?.providers,
+    })
+  }, [selectedCountry, currency, payoutRail, selectedCorridorRow])
   const payoutFormHints = unwrapNoahFieldsSchema(selectedCorridorRow?.fields_schema)
   const ycCorridorSchema = useMemo(() => {
     if (!selectedCountry) return null
@@ -416,12 +429,15 @@ export function RecipientForm({
     })
   }, [selectedCountry, currency, selectedCorridorRow])
   const bankEnumOptions =
-    ycCorridorSchema?.bank_enum?.length
-      ? ycCorridorSchema.bank_enum
-      : (payoutFormHints?.bank_enum ?? [])
+    corridorRecipientOptions.bankOptions.length
+      ? corridorRecipientOptions.bankOptions
+      : ycCorridorSchema?.bank_enum?.length
+        ? ycCorridorSchema.bank_enum
+        : (payoutFormHints?.bank_enum ?? [])
 
   const mobileProviderChoices = useMemo(() => {
     if (formData.recipientType !== "mobile") return [] as string[]
+    if (corridorRecipientOptions.momoOptions.length) return corridorRecipientOptions.momoOptions
     if (mobileFromApi && selectedCountry) {
       const row = mobileCorridors.find(
         (c) => c.country_code === selectedCountry.code && c.currency_code === selectedCountry.currency,
@@ -435,7 +451,7 @@ export function RecipientForm({
       return []
     }
     return mobileMoneyProvidersByCurrency[currency] || ["Other"]
-  }, [formData.recipientType, mobileFromApi, selectedCountry, mobileCorridors, currency])
+  }, [formData.recipientType, corridorRecipientOptions.momoOptions, mobileFromApi, selectedCountry, mobileCorridors, currency])
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}

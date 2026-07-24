@@ -16,6 +16,10 @@ import { normalizePayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-s
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { selectProviderForCorridor } from "@/lib/payout-providers"
 import {
+  executeGridBalancePayout,
+  isGridBalancePayoutQuote,
+} from "@/lib/grid/balance-payout-execute"
+import {
   executeYcBalancePayout,
   isYcBalancePayoutQuote,
 } from "@/lib/yellowcard/balance-payout-execute"
@@ -64,11 +68,16 @@ export async function POST(request: Request) {
         marginCaptureMode?: "surplus_send" | "split_debit"
         customerRate?: number
         noahMid?: number
-        payoutProvider?: "noah" | "yellowcard"
+        payoutProvider?: "noah" | "yellowcard" | "grid"
         ycSequenceId?: string
         ycSendId?: string
         ycWalletAddress?: string
         ycCryptoAmount?: number
+        gridQuoteId?: string
+        gridFundingAddress?: string
+        gridCryptoAmount?: number
+        gridCustomerId?: string
+        gridExternalAccountId?: string
         processingFee?: string | number
         channelCost?: string | number
         customerPrincipal?: string | number
@@ -170,10 +179,21 @@ export async function POST(request: Request) {
   const txUserId = orgOwner ?? user.id
 
   // Resolve payout provider: explicit body → corridor routing → quote heuristics.
-  let payoutProvider: "noah" | "yellowcard" = "noah"
+  let payoutProvider: "noah" | "yellowcard" | "grid" = "noah"
   const bodyProvider = String(body?.payoutProvider || "").toLowerCase()
   if (bodyProvider === "yellowcard") {
     payoutProvider = "yellowcard"
+  } else if (bodyProvider === "grid") {
+    payoutProvider = "grid"
+  } else if (
+    isGridBalancePayoutQuote({
+      payoutProvider: body?.payoutProvider,
+      formSessionId,
+      gridQuoteId: body?.gridQuoteId,
+      gridFundingAddress: body?.gridFundingAddress,
+    })
+  ) {
+    payoutProvider = "grid"
   } else if (
     isYcBalancePayoutQuote({
       payoutProvider: body?.payoutProvider,
@@ -198,12 +218,90 @@ export async function POST(request: Request) {
         rail,
       })
       if (provider.id === "yellowcard") payoutProvider = "yellowcard"
+      if (provider.id === "grid") payoutProvider = "grid"
     } catch {
       // keep noah default
     }
   }
 
   try {
+    if (payoutProvider === "grid") {
+      const quoteId = String(body?.gridQuoteId || formSessionId || "").trim()
+      const fundingAddress = String(body?.gridFundingAddress || "").trim()
+      const cryptoAmount = Number(body?.gridCryptoAmount ?? cryptoAuthorizedAmount)
+      const totalDebited = Number(body?.totalDebited ?? 0)
+      const marginAmount = Number(body?.marginAmount ?? 0)
+      const processingFee = Number(body?.processingFee ?? 0)
+      const channelCost = Number(body?.channelCost ?? 0)
+      const customerPrincipal = Number(body?.customerPrincipal ?? totalDebited)
+
+      if (!quoteId || !(cryptoAmount > 0) || !(totalDebited > 0) || !fundingAddress) {
+        return NextResponse.json(
+          {
+            error:
+              "Grid payout quote is incomplete. Go back and refresh the quote before authorizing.",
+          },
+          { status: 400 },
+        )
+      }
+
+      const result = await executeGridBalancePayout({
+        admin,
+        userId: txUserId,
+        businessId: noahCtx.businessId,
+        recipientRow,
+        recipientId,
+        fiatAmount: amount,
+        fiatCurrency,
+        countryCode,
+        reviewSnapshot: reviewSnapshot ?? undefined,
+        sendNote: sendNote || undefined,
+        idempotencyKey: idempotencyKey || undefined,
+        lockId: String(body?.lockId || "").trim() || undefined,
+        grid: {
+          quoteId,
+          sequenceId: formSessionId || quoteId,
+          customerId: body?.gridCustomerId,
+          externalAccountId: body?.gridExternalAccountId,
+          cryptoAmount,
+          fundingAddress,
+        },
+        pricing: {
+          totalDebited,
+          customerPrincipal,
+          marginAmount,
+          processingFee,
+          channelCost,
+          customerRate: body?.customerRate != null ? Number(body.customerRate) : undefined,
+        },
+      })
+
+      if (!result.ok) {
+        if (result.error === "insufficient_balance") {
+          return NextResponse.json({ error: "Insufficient balance for this payout." }, { status: 400 })
+        }
+        logNoahPayoutFailure("transfers_grid_offramp", new Error(result.error), {
+          recipientId,
+          countryCode,
+          fiatCurrency,
+          fiatAmount: amount,
+          userId: user.id,
+          scope: noahCtx.scope,
+        })
+        return NextResponse.json({ error: result.error || "Grid payout failed." }, { status: 400 })
+      }
+
+      return NextResponse.json({
+        id: result.easnerTransactionId,
+        transaction_id: result.easnerTransactionId,
+        easner_transaction_id: result.easnerTransactionId,
+        amount: amount.toFixed(2),
+        currency: fiatCurrency.toLowerCase(),
+        status: "pending",
+        provider: "grid",
+      })
+    }
+
     if (payoutProvider === "yellowcard") {
       const walletAddress = String(body?.ycWalletAddress || "").trim()
       const sequenceId = String(body?.ycSequenceId || formSessionId || "").trim()

@@ -59,6 +59,7 @@ export default function SendMomoSetupPage() {
       payInCountry,
       payInRail: "mobile_money" as const,
       receiveAmount: state.amount,
+      crossBorderProvider: state.crossBorderProvider ?? "yellowcard",
       sourcePhone: momoPhone.trim(),
       networkId: momoNetworkId,
       sourceNetworkName: selectedNetwork?.name,

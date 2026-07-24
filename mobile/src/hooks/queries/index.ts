@@ -23,6 +23,7 @@ export { useExchangeRatesList } from './use-exchange-rates'
 export { useReportingFxRates } from './use-reporting-fx-rates'
 export { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from './use-noah-send-exchange-rates'
 export { useYcSendExchangeRates, prefetchYcSendExchangeRates } from './use-yc-send-exchange-rates'
+export { useGridSendExchangeRates, prefetchGridSendExchangeRates } from './use-grid-send-exchange-rates'
 export {
   useCryptoSendExchangeRates,
   prefetchCryptoSendExchangeRates,

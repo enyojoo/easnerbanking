@@ -163,6 +163,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     ycPreviewProcessingFee?: number
     ycPreviewDisplayProcessingFeeLocal?: number
     ycPreviewYcLegFeesUsd?: number
+    crossBorderProvider?: 'yellowcard' | 'grid'
   }
 
   const isYcCrossBorder =
@@ -192,6 +193,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         payInCountry,
         payInRail: 'mobile_money' as const,
         receiveAmount: receiveAmountValue,
+        crossBorderProvider: params.crossBorderProvider,
         sourcePhone: params.sourcePhone.trim(),
         networkId: params.networkId,
         sourceNetworkName: params.sourceNetworkName,
@@ -203,6 +205,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       payInCountry,
       payInRail: 'bank_transfer' as const,
       receiveAmount: receiveAmountValue,
+      crossBorderProvider: params.crossBorderProvider,
     }
   }, [
     isYcCrossBorder,
@@ -212,6 +215,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     params.sourcePhone,
     params.networkId,
     params.sourceNetworkName,
+    params.crossBorderProvider,
     receiveAmountValue,
   ])
 
@@ -778,6 +782,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           clientYcLegFeesUsd={
             params.ycPreviewYcLegFeesUsd ?? stashedCrossBorderPreview?.ycLegFeesUsd
           }
+          crossBorderProvider={params.crossBorderProvider}
           footerPadding={footerPadding}
           listBottomPadding={listBottomPadding}
         />

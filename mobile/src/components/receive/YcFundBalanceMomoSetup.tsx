@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { REVIEW_ROW_LABELS, normalizeYcMomoPhone } from '@easner/shared'
+import { REVIEW_ROW_LABELS, normalizeYcMomoPhone, corridorMatchesCountryCurrency } from '@easner/shared'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
@@ -21,6 +21,7 @@ import {
   peekLastFundBalanceQuoteError,
   readCachedPayInNetworks,
 } from '../../lib/sendFlowFundBalanceQuote'
+import { getPayoutCorridorCache } from '../../lib/sendDestinations'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../ToastProvider'
 
@@ -95,6 +96,20 @@ export function YcFundBalanceMomoSetup({
   const momoReady = Boolean(phone.trim() && networkId)
   const selectedNetwork = networks.find((n) => n.id === networkId)
 
+  const payInCorridorRow = (() => {
+    const cache = getPayoutCorridorCache()
+    if (!cache || !residenceCountry || !localPayInCurrency) return null
+    return (
+      cache.mobile.find((c) =>
+        corridorMatchesCountryCurrency(c, {
+          countryCode: residenceCountry,
+          currencyCode: localPayInCurrency,
+          rail: 'mobile_money',
+        }),
+      ) ?? null
+    )
+  })()
+
   const onContinue = async () => {
     if (!momoReady || isContinueLoading) return
     setContinueError(null)
@@ -107,6 +122,7 @@ export function YcFundBalanceMomoSetup({
         rail: 'mobile_money',
         amountEntryMode,
         enteredAmount,
+        providerRouting: payInCorridorRow?.provider_routing,
         sourcePhone: phone.trim(),
         networkId,
         sourceNetworkName: selectedNetwork?.name,

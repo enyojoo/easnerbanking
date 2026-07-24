@@ -17,6 +17,7 @@ type RouteParams = {
   amountScreenSendAmount?: number
   note?: string
   paymentPurpose?: string
+  crossBorderProvider?: 'yellowcard' | 'grid'
 }
 
 export default function SendCrossBorderMomoSetupScreen({ navigation, route }: NavigationProps) {
@@ -46,6 +47,7 @@ export default function SendCrossBorderMomoSetupScreen({ navigation, route }: Na
           amountScreenSendAmount={params.amountScreenSendAmount ?? 0}
           note={params.note}
           paymentPurpose={params.paymentPurpose}
+          crossBorderProvider={params.crossBorderProvider}
           footerPadding={footerPadding}
           listBottomPadding={scrollBottomPadding}
         />

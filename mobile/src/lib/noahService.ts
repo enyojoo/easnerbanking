@@ -107,7 +107,15 @@ export interface PayoutQuote {
   /** Explicit YC send leg fees when provider is Yellowcard. */
   ycLegFeesUsd?: number
   channelId?: string
-  provider?: 'noah' | 'yellowcard'
+  provider?: 'noah' | 'yellowcard' | 'grid'
+  grid?: {
+    quoteId: string
+    sequenceId: string
+    customerId: string
+    externalAccountId: string
+    cryptoAmount: number
+    fundingAddress?: string
+  }
   settlement?: {
     totalFee: number
     feeCurrency: string
@@ -1258,11 +1266,17 @@ export const noahService = {
     marginCaptureMode?: 'surplus_send' | 'split_debit'
     customerRate?: number
     noahMid?: number
-    payoutProvider?: 'noah' | 'yellowcard'
+    payoutProvider?: 'noah' | 'yellowcard' | 'grid'
     ycSequenceId?: string
     ycSendId?: string
     ycWalletAddress?: string
     ycCryptoAmount?: number
+    gridQuoteId?: string
+    gridSequenceId?: string
+    gridCustomerId?: string
+    gridExternalAccountId?: string
+    gridCryptoAmount?: number
+    gridFundingAddress?: string
     lockId?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
@@ -1303,6 +1317,12 @@ export const noahService = {
         ...(transferData.ycSendId ? { ycSendId: transferData.ycSendId } : {}),
         ...(transferData.ycWalletAddress ? { ycWalletAddress: transferData.ycWalletAddress } : {}),
         ...(transferData.ycCryptoAmount != null ? { ycCryptoAmount: transferData.ycCryptoAmount } : {}),
+        ...(transferData.gridQuoteId ? { gridQuoteId: transferData.gridQuoteId } : {}),
+        ...(transferData.gridSequenceId ? { gridSequenceId: transferData.gridSequenceId } : {}),
+        ...(transferData.gridCustomerId ? { gridCustomerId: transferData.gridCustomerId } : {}),
+        ...(transferData.gridExternalAccountId ? { gridExternalAccountId: transferData.gridExternalAccountId } : {}),
+        ...(transferData.gridCryptoAmount != null ? { gridCryptoAmount: transferData.gridCryptoAmount } : {}),
+        ...(transferData.gridFundingAddress ? { gridFundingAddress: transferData.gridFundingAddress } : {}),
         ...(transferData.lockId ? { lockId: transferData.lockId } : {}),
       }),
     })

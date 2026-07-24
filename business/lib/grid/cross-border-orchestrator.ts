@@ -1,0 +1,269 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { randomUUID } from "crypto"
+import { generateTransactionId } from "@/lib/transaction-id"
+import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
+import { createGridExternalAccount } from "./external-account"
+import { gridFetch } from "./http"
+import { gridMinorUnits } from "./external-account"
+import { findGridRate, listGridRates } from "@/lib/fx/grid-rates"
+import { getGridQuoteTtlMs } from "./config"
+import type { GridQuote } from "./types"
+import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
+import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
+import { isGridLocalPayInEnabledForCorridor } from "./grid-receive-gate"
+
+export type GridCrossBorderQuoteResult = {
+  quoteId: string
+  transferId: string
+  sequenceId: string
+  customerId: string
+  externalAccountId: string
+  sourceCurrency: string
+  destinationCurrency: string
+  sourceAmount: number
+  receiveAmount: number
+  customerRate: number
+  paymentInstructions?: GridQuote["paymentInstructions"]
+  expiresAt: string
+  easnerTransactionId: string
+}
+
+/**
+ * Phase 3: single Grid quote for local→local cross-border (when source currency enabled).
+ */
+export async function createGridCrossBorderQuote(input: {
+  admin: SupabaseClient
+  userId: string
+  businessId: string | null
+  sourceCountry: string
+  sourceCurrency: string
+  recipient: RecipientSellPrepareRow
+  receiveAmount: number
+  profile: GridPersonProfile
+}): Promise<GridCrossBorderQuoteResult> {
+  const sourceCurrency = input.sourceCurrency.trim().toUpperCase()
+  const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
+  const sourceCountry = input.sourceCountry.trim().toUpperCase()
+  const destCountry = resolveRecipientPayoutCountry(input.recipient)?.toUpperCase()
+  if (!destCountry) throw new Error("Recipient country is required.")
+
+  const rail =
+    input.recipient.mobile_provider ||
+    String(input.recipient.bank_name || "").toLowerCase().includes("mobile money")
+      ? ("mobile_money" as const)
+      : ("bank_transfer" as const)
+
+  const sourceEnabled = await isGridLocalPayInEnabledForCorridor(input.admin, {
+    countryCode: sourceCountry,
+    currencyCode: sourceCurrency,
+    rail,
+  })
+  if (!sourceEnabled) {
+    throw new Error("grid_cross_border_source_disabled")
+  }
+
+  const rates = await listGridRates(input.admin, {
+    destinations: [receiveCurrency],
+    status: "active",
+  })
+  const crossRate =
+    findGridRate(rates, sourceCurrency, receiveCurrency) ??
+    findGridRate(rates, "USD", receiveCurrency)
+  const customerRate = crossRate?.rate ?? 0
+  if (!customerRate || customerRate <= 0) {
+    throw new Error("grid_cross_border_rate_unavailable")
+  }
+
+  const { customerId } = await ensureGridCustomer({
+    admin: input.admin,
+    userId: input.userId,
+    businessId: input.businessId,
+    profile: input.profile,
+  })
+
+  const externalAccount = await createGridExternalAccount({
+    customerId,
+    recipient: input.recipient,
+    profile: input.profile,
+    rail,
+    idempotencyKey: `grid_xb_ext_${customerId}_${String((input.recipient as { id?: string }).id ?? input.recipient.account_number ?? randomUUID())}`,
+  })
+
+  const receiveAmount = Number(input.receiveAmount)
+  const sourceAmount = Math.round((receiveAmount / customerRate) * 100) / 100
+
+  const quote = await gridFetch<GridQuote>({
+    method: "POST",
+    path: "/quotes",
+    json: {
+      source: { currency: sourceCurrency, customerId },
+      destination: {
+        currency: receiveCurrency,
+        externalAccountId: externalAccount.id,
+      },
+      lockedCurrencyAmount: gridMinorUnits(receiveAmount, 2),
+      lockedCurrencySide: "RECEIVING",
+    },
+    idempotencyKey: `grid_xb_${customerId}_${sourceCurrency}_${receiveCurrency}_${receiveAmount}`,
+  })
+
+  const sequenceId = `grid_xb_${String(quote.id).replace(/[^a-zA-Z0-9:_-]/g, "")}`
+  const expiresAt = quote.expiresAt ?? new Date(Date.now() + getGridQuoteTtlMs()).toISOString()
+  const easnerTransactionId = generateTransactionId()
+
+  const { data: inserted, error: insertError } = await input.admin
+    .from("grid_transfers")
+    .insert({
+      user_id: input.userId,
+      business_id: input.businessId,
+      mode: "cross_border_send",
+      status: "pending",
+      pay_in_currency: sourceCurrency,
+      receive_currency: receiveCurrency,
+      quoted_pay_in: sourceAmount,
+      quoted_receive: receiveAmount,
+      customer_rate: Number(quote.exchangeRate ?? customerRate),
+      grid_quote_id: String(quote.id),
+      grid_customer_id: customerId,
+      external_account_id: externalAccount.id,
+      settlement_info: { paymentInstructions: quote.paymentInstructions },
+      expires_at: expiresAt,
+      metadata: { easner_transaction_id: easnerTransactionId, sequence_id: sequenceId },
+    })
+    .select("id")
+    .single()
+
+  if (insertError) {
+    throw new Error(insertError.message || "grid_cross_border_transfer_insert_failed")
+  }
+
+  return {
+    quoteId: String(quote.id),
+    transferId: String(inserted?.id ?? ""),
+    sequenceId,
+    customerId,
+    externalAccountId: externalAccount.id,
+    sourceCurrency,
+    destinationCurrency: receiveCurrency,
+    sourceAmount,
+    receiveAmount,
+    customerRate: Number(quote.exchangeRate ?? customerRate),
+    paymentInstructions: quote.paymentInstructions,
+    expiresAt,
+    easnerTransactionId,
+  }
+}
+
+export async function confirmGridCrossBorderTransfer(input: {
+  admin: SupabaseClient
+  userId: string
+  businessId: string | null
+  quoteId: string
+}): Promise<{
+  transferId: string
+  transactionId: string
+  easnerTransactionId: string
+  localPayIn: number
+  customerRate: number
+  receiveAmount: number
+  receiveCurrency: string
+  bankInfo: Record<string, unknown> | null
+  expiresAt: string
+}> {
+  const quoteId = input.quoteId.trim()
+  const { data: transfer } = await input.admin
+    .from("grid_transfers")
+    .select("*")
+    .eq("user_id", input.userId)
+    .eq("mode", "cross_border_send")
+    .eq("grid_quote_id", quoteId)
+    .eq("status", "pending")
+    .maybeSingle()
+
+  if (!transfer) throw new Error("Grid cross-border quote not found")
+
+  const metadata = (transfer.metadata ?? {}) as Record<string, unknown>
+  const easnerTransactionId = String(metadata.easner_transaction_id ?? generateTransactionId())
+  const settlement = (transfer.settlement_info ?? {}) as {
+    paymentInstructions?: { accountOrWalletInfo?: Record<string, unknown> }
+  }
+  const now = new Date().toISOString()
+
+  const { data: tx, error: txErr } = await input.admin
+    .from("transactions")
+    .insert({
+      user_id: input.userId,
+      business_id: input.businessId,
+      provider: "grid",
+      provider_transaction_id: quoteId,
+      easner_transaction_id: easnerTransactionId,
+      type: "transfer",
+      direction: "out",
+      status: "pending",
+      amount: Number(transfer.quoted_pay_in ?? 0),
+      currency: String(transfer.pay_in_currency ?? "USD"),
+      metadata: {
+        grid_mode: "cross_border_send",
+        grid_quote_id: quoteId,
+        grid_transfer_id: transfer.id,
+        local_pay_in: transfer.quoted_pay_in,
+        local_currency: transfer.pay_in_currency,
+        receive_amount: transfer.quoted_receive,
+        receive_currency: transfer.receive_currency,
+        customer_rate: transfer.customer_rate,
+        payment_instructions: settlement.paymentInstructions,
+        quote_locked_at: now,
+      },
+    })
+    .select("id")
+    .maybeSingle()
+
+  if (txErr) throw new Error(txErr.message || "grid_cross_border_tx_insert_failed")
+
+  await input.admin
+    .from("grid_transfers")
+    .update({
+      transaction_id: tx?.id ?? null,
+      status: "awaiting_pay_in",
+      updated_at: now,
+      metadata: { ...metadata, easner_transaction_id: easnerTransactionId },
+    })
+    .eq("id", transfer.id)
+
+  return {
+    transferId: String(transfer.id),
+    transactionId: String(tx?.id ?? ""),
+    easnerTransactionId,
+    localPayIn: Number(transfer.quoted_pay_in ?? 0),
+    customerRate: Number(transfer.customer_rate ?? 0),
+    receiveAmount: Number(transfer.quoted_receive ?? 0),
+    receiveCurrency: String(transfer.receive_currency ?? ""),
+    bankInfo: settlement.paymentInstructions?.accountOrWalletInfo ?? null,
+    expiresAt: String(transfer.expires_at ?? now),
+  }
+}
+
+/** Office routing: prefer Grid cross-border when destination corridor metadata selects Grid. */
+export async function shouldUseGridCrossBorder(
+  admin: SupabaseClient,
+  input: {
+    sourceCountry: string
+    sourceCurrency: string
+    destCountry: string
+    destCurrency: string
+    rail?: "bank_transfer" | "mobile_money"
+  },
+): Promise<boolean> {
+  const { resolveCrossBorderProviderForDestination } = await import("@/lib/cross-border/routing")
+  const provider = await resolveCrossBorderProviderForDestination(admin, {
+    countryCode: input.destCountry,
+    currencyCode: input.destCurrency,
+    rail: input.rail,
+  })
+  if (provider !== "grid") return false
+  return isGridLocalPayInEnabledForCorridor(admin, {
+    countryCode: input.sourceCountry,
+    currencyCode: input.sourceCurrency,
+    rail: input.rail,
+  })
+}

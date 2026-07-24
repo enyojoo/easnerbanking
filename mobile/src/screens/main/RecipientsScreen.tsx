@@ -71,6 +71,7 @@ import { ripple } from '../../lib/androidRipple'
 import { getAllCountryCurrencies, searchCountryCurrencies, CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
   buildRecipientCatalogForType,
+  getCorridorRecipientOptions,
   getPayoutFieldsSchemaForCorridor,
   getRecipientProviders,
   getWalletAssets,
@@ -194,6 +195,18 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       fieldsSchema: selectedBankCorridor?.fields_schema,
     })
   }, [selectedCountryCurrency, selectedBankCorridor])
+
+  const corridorRecipientOptions = useMemo(() => {
+    if (!selectedCountryCurrency) {
+      return { bankOptions: [] as string[], momoOptions: [] as string[], extraFields: [] }
+    }
+    const rail = selectedRecipientType === 'mobile' ? 'mobile_money' : 'bank_transfer'
+    return getCorridorRecipientOptions({
+      countryCode: selectedCountryCurrency.countryCode,
+      currencyCode: selectedCountryCurrency.currencyCode,
+      rail,
+    })
+  }, [selectedCountryCurrency, selectedRecipientType, catalogRevision])
 
   const buildFormYcMetadata = useCallback(() => {
     return normalizeRecipientYcMetadata({
@@ -930,15 +943,17 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     }
 
     const bankEnum =
-      ycCorridorSchema?.bank_enum?.length
-        ? ycCorridorSchema.bank_enum
-        : selectedCountryCurrency && selectedRecipientType === 'bank'
-          ? getPayoutFieldsSchemaForCorridor({
-              countryCode: selectedCountryCurrency.countryCode,
-              currencyCode: selectedCountryCurrency.currencyCode,
-              rail: 'bank_transfer',
-            })?.bank_enum ?? []
-          : []
+      corridorRecipientOptions.bankOptions.length
+        ? corridorRecipientOptions.bankOptions
+        : ycCorridorSchema?.bank_enum?.length
+          ? ycCorridorSchema.bank_enum
+          : selectedCountryCurrency && selectedRecipientType === 'bank'
+            ? getPayoutFieldsSchemaForCorridor({
+                countryCode: selectedCountryCurrency.countryCode,
+                currencyCode: selectedCountryCurrency.currencyCode,
+                rail: 'bank_transfer',
+              })?.bank_enum ?? []
+            : []
     if (
       bankEnum.length > 0 &&
       newRecipient.bankName.trim() &&
@@ -2054,11 +2069,13 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     <RecipientBankNameField
                       banks={
                         selectedCountryCurrency
-                          ? getPayoutFieldsSchemaForCorridor({
-                              countryCode: selectedCountryCurrency.countryCode,
-                              currencyCode: selectedCountryCurrency.currencyCode,
-                              rail: 'bank_transfer',
-                            })?.bank_enum ?? []
+                          ? corridorRecipientOptions.bankOptions.length
+                            ? corridorRecipientOptions.bankOptions
+                            : getPayoutFieldsSchemaForCorridor({
+                                countryCode: selectedCountryCurrency.countryCode,
+                                currencyCode: selectedCountryCurrency.currencyCode,
+                                rail: 'bank_transfer',
+                              })?.bank_enum ?? []
                           : []
                       }
                       value={newRecipient.bankName}

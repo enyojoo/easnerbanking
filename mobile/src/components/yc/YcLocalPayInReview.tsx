@@ -63,6 +63,7 @@ type Props = {
   clientProcessingFee?: number
   clientDisplayProcessingFeeLocal?: number
   clientYcLegFeesUsd?: number
+  crossBorderProvider?: 'yellowcard' | 'grid'
   footerPadding: number
   listBottomPadding: number
 }
@@ -83,6 +84,7 @@ export function YcLocalPayInReview({
   clientProcessingFee,
   clientDisplayProcessingFeeLocal,
   clientYcLegFeesUsd,
+  crossBorderProvider,
   footerPadding,
   listBottomPadding,
 }: Props) {
@@ -101,6 +103,7 @@ export function YcLocalPayInReview({
           payInCountry,
           payInRail,
           receiveAmount,
+          crossBorderProvider,
           sourcePhone: sourcePhone?.trim(),
           networkId,
           sourceNetworkName,
@@ -111,6 +114,7 @@ export function YcLocalPayInReview({
           payInCountry,
           payInRail,
           receiveAmount,
+          crossBorderProvider,
         }
   }, [
     recipient.id,
@@ -118,6 +122,7 @@ export function YcLocalPayInReview({
     payInCurrency,
     payInCountry,
     payInRail,
+    crossBorderProvider,
     isMobileMoney,
     momoConfigured,
     sourcePhone,

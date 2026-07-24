@@ -3,6 +3,7 @@ import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { buildPayoutQuote } from "@/lib/noah/payout-quote"
 import { selectProviderForCorridor } from "@/lib/payout-providers"
 import { resolveRecipientPayoutCountry, type RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
+import { confirmGridBalancePayoutOrder } from "@/lib/payout/confirm-grid-balance-payout"
 import { confirmNoahPayoutOrder } from "@/lib/payout/confirm-noah-payout"
 import { confirmYcBalancePayoutOrder } from "@/lib/payout/confirm-yc-balance-payout"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
@@ -67,6 +68,59 @@ export async function confirmPayoutOrder(
     amountEntryMode === "send" && input.sendAmount != null && input.sendAmount > 0
       ? input.sendAmount
       : undefined
+
+  if (providerId === "grid" && isPayoutLockOnReviewEnabled("grid")) {
+    const walletOwnerId = await getWalletOwnerId(
+      admin,
+      input.businessId ? "business" : "individual",
+      input.businessId ?? kycUserId,
+    )
+    const { data: walletRow } = walletOwnerId
+      ? await admin
+          .from("wallet_accounts")
+          .select("address")
+          .eq("wallet_owner_id", walletOwnerId)
+          .eq("ledger_currency", "USD")
+          .eq("asset", "USDC")
+          .eq("status", "active")
+          .maybeSingle()
+      : { data: null }
+
+    const { data: userRow } = await admin
+      .from("users")
+      .select(
+        "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+      )
+      .eq("id", kycUserId)
+      .maybeSingle()
+
+    return confirmGridBalancePayoutOrder({
+      admin,
+      userId: kycUserId,
+      businessId: input.businessId,
+      recipientId: input.recipientId,
+      recipient,
+      receiveFiatAmount: input.receiveAmount,
+      sourceBalanceCurrency: input.sourceBalanceCurrency,
+      amountEntryMode,
+      sendBudget,
+      senderProfile: {
+        residenceCountry: userRow?.residence_country,
+        kycIdType: userRow?.kyc_id_type,
+        kycIdNumber: userRow?.kyc_id_number,
+        ngLocalIdType: userRow?.ng_local_id_type,
+        ngLocalIdNumber: userRow?.ng_local_id_number,
+        fullName: userRow?.full_name,
+        phone: userRow?.phone,
+        email: userRow?.email,
+        dateOfBirth: userRow?.date_of_birth,
+        addressStreet: userRow?.kyc_address_street,
+        addressCity: userRow?.kyc_address_city,
+        addressCountry: userRow?.kyc_address_country,
+      },
+      paymentPurpose: input.paymentPurpose,
+    })
+  }
 
   if (providerId === "yellowcard" && isPayoutLockOnReviewEnabled("yellowcard")) {
     const walletOwnerId = await getWalletOwnerId(

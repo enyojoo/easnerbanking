@@ -44,6 +44,8 @@ import {
   type FundBalanceQuoteStashMeta,
   type YcFundBalanceQuote,
 } from '../../lib/sendFlowFundBalanceQuote'
+import { getPayoutCorridorCache } from '../../lib/sendDestinations'
+import { corridorMatchesCountryCurrency } from '@easner/shared'
 
 type Props = {
   navigation: { goBack: () => void; navigate: (name: string, params?: object) => void }
@@ -95,16 +97,29 @@ export function YcFundBalanceReview({
   const copyToClipboard = useCopyToClipboard()
 
   const quoteMeta = useMemo(
-    (): FundBalanceQuoteStashMeta => ({
-      country: residenceCountry,
-      currency: localPayInCurrency,
-      rail: payInRail,
-      amountEntryMode,
-      enteredAmount,
-      sourcePhone: isMobileMoney ? sourcePhone?.trim() : undefined,
-      networkId: isMobileMoney ? networkId : undefined,
-      sourceNetworkName: isMobileMoney ? sourceNetworkName : undefined,
-    }),
+    (): FundBalanceQuoteStashMeta => {
+      const cache = getPayoutCorridorCache()
+      const corridors = payInRail === 'mobile_money' ? cache?.mobile : cache?.bank
+      const corridorRow =
+        corridors?.find((c) =>
+          corridorMatchesCountryCurrency(c, {
+            countryCode: residenceCountry,
+            currencyCode: localPayInCurrency,
+            rail: payInRail,
+          }),
+        ) ?? null
+      return {
+        country: residenceCountry,
+        currency: localPayInCurrency,
+        rail: payInRail,
+        amountEntryMode,
+        enteredAmount,
+        providerRouting: corridorRow?.provider_routing,
+        sourcePhone: isMobileMoney ? sourcePhone?.trim() : undefined,
+        networkId: isMobileMoney ? networkId : undefined,
+        sourceNetworkName: isMobileMoney ? sourceNetworkName : undefined,
+      }
+    },
     [
       residenceCountry,
       localPayInCurrency,

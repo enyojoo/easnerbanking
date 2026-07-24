@@ -5,6 +5,7 @@ import { PayoutCorridorsAdminPanel } from "@/components/platform-control/payout-
 import { CryptoDestinationsAdminPanel } from "@/components/platform-control/crypto-destinations-admin-panel"
 import { OfficeNoahRatesPanel } from "@/components/settings/office-noah-rates-panel"
 import { OfficeYcRatesPanel } from "@/components/settings/office-yc-rates-panel"
+import { OfficeGridRatesPanel } from "@/components/settings/office-grid-rates-panel"
 import { OfficeCryptoRatesPanel } from "@/components/settings/office-crypto-rates-panel"
 import { EventInboxPanel } from "@/components/platform-control/event-inbox-panel"
 
@@ -26,6 +27,10 @@ export function NoahRatesPanel() {
 
 export function YcRatesPanel() {
   return <OfficeYcRatesPanel />
+}
+
+export function GridRatesPanel() {
+  return <OfficeGridRatesPanel />
 }
 
 export function CryptoRatesPanel() {

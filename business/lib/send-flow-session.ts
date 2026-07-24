@@ -16,6 +16,8 @@ export interface SendFlowState {
   paymentMethod: PaymentMethodCode
   otherCurrency?: OtherCurrencyCode | "STABLECOIN"
   otherPaymentMethod?: string
+  /** Office-selected cross-border orchestrator for Through Local Currency. */
+  crossBorderProvider?: "yellowcard" | "grid"
   feeAmount?: number
   totalAmount?: number
   note: string
@@ -61,12 +63,18 @@ export interface SendFlowState {
     prepareChannelFee?: number
     /** Ticket-sized Noah mid used for pricing at quote time. */
     quoteNoahMid?: number
-    /** Payout rail when corridor routes to Yellowcard. */
-    provider?: "noah" | "yellowcard"
+    /** Payout rail when corridor routes to Yellowcard or Grid. */
+    provider?: "noah" | "yellowcard" | "grid"
     ycSequenceId?: string
     ycSendId?: string
     ycWalletAddress?: string
     ycCryptoAmount?: number
+    gridQuoteId?: string
+    gridSequenceId?: string
+    gridCustomerId?: string
+    gridExternalAccountId?: string
+    gridCryptoAmount?: number
+    gridFundingAddress?: string
     /** Locked payout session id when quotePhase is locked. */
     lockId?: string
     quotePhase?: "preview" | "locked"

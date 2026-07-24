@@ -8,13 +8,18 @@ import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { CountryFlag } from "@/components/flags"
 import { payoutCorridorsApi, type PayoutCorridorAdminRow } from "@/lib/payout-corridors-api"
+import {
+  defaultCrossBorderProvider,
+  parseCrossBorderProvider,
+  type CrossBorderProviderId,
+} from "@easner/shared"
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficePayoutCorridors, useQueryInitialLoading } from "@/hooks/queries"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Loader2 } from "lucide-react"
 
-type ProviderId = "noah" | "yellowcard"
+type ProviderId = "noah" | "yellowcard" | "grid"
 
 type FiatDestinationRow = {
   key: string
@@ -31,9 +36,14 @@ type FiatDestinationRow = {
   payInEnabled: boolean
   supportNoahPayout: boolean
   supportYcPayout: boolean
+  supportGridPayout: boolean
   supportYcPayIn: boolean
   supportNoahPayIn: boolean
+  supportGridPayIn: boolean
   payoutLocked: ProviderId | null
+  crossBorderSupported: boolean
+  crossBorderProvider: CrossBorderProviderId | null
+  crossBorderLocked: CrossBorderProviderId | null
   sample: PayoutCorridorAdminRow
 }
 
@@ -48,19 +58,20 @@ function parseRouting(routing: unknown): RoutingEntry[] {
       priority: Number((item as { priority?: number }).priority ?? 99),
       settlement_asset: String((item as { settlement_asset?: string }).settlement_asset ?? "USDC"),
     }))
-    .filter((item) => item.provider === "noah" || item.provider === "yellowcard")
+    .filter((item) => item.provider === "noah" || item.provider === "yellowcard" || item.provider === "grid")
 }
 
 function parsePrimaryProvider(routing: unknown): ProviderId {
   const sorted = [...parseRouting(routing)].sort((a, b) => a.priority - b.priority)
   const p = sorted[0]?.provider
-  return p === "yellowcard" ? "yellowcard" : "noah"
+  if (p === "yellowcard" || p === "grid") return p
+  return "noah"
 }
 
 function routingPrimaryProvider(routing: unknown): ProviderId | null {
   const sorted = [...parseRouting(routing)].sort((a, b) => a.priority - b.priority)
   const p = sorted[0]?.provider
-  if (p === "yellowcard" || p === "noah") return p
+  if (p === "yellowcard" || p === "noah" || p === "grid") return p
   return null
 }
 
@@ -82,6 +93,20 @@ function rowSupportsYcPayIn(row: PayoutCorridorAdminRow): boolean {
   return meta.yc_receive === true || row.yc_receive_available === true
 }
 
+function rowSupportsGridPayout(row: PayoutCorridorAdminRow): boolean {
+  const meta = rowMetadata(row)
+  return (
+    meta.grid_send === true ||
+    row.grid_send_available === true ||
+    routingPrimaryProvider(row.provider_routing) === "grid"
+  )
+}
+
+function rowSupportsGridPayIn(row: PayoutCorridorAdminRow): boolean {
+  const meta = rowMetadata(row)
+  return meta.grid_receive === true || row.grid_receive_available === true
+}
+
 function rowSupportsNoahPayout(row: PayoutCorridorAdminRow): boolean {
   return (
     row.noah_sell_available === true ||
@@ -99,11 +124,31 @@ function rowPayInEnabledForProvider(row: PayoutCorridorAdminRow, provider: Provi
   const meta = rowMetadata(row)
   if (provider === "yellowcard" && rowSupportsYcPayIn(row)) return meta.yc_receive_enabled === true
   if (provider === "noah" && rowSupportsNoahPayIn(row)) return meta.noah_receive_enabled === true
+  if (provider === "grid" && rowSupportsGridPayIn(row)) return meta.grid_receive_enabled === true
   return false
 }
 
 function providerLabel(provider: ProviderId): string {
-  return provider === "yellowcard" ? "Yellowcard" : "Noah"
+  if (provider === "yellowcard") return "Yellowcard"
+  if (provider === "grid") return "Grid"
+  return "Noah"
+}
+
+function crossBorderProviderLabel(provider: CrossBorderProviderId): string {
+  return provider === "grid" ? "Grid" : "Yellowcard"
+}
+
+function resolveCrossBorderProviderForRow(
+  caps: { supportYcPayout: boolean; supportGridPayout: boolean },
+  metadata: unknown,
+): CrossBorderProviderId | null {
+  return (
+    parseCrossBorderProvider(metadata) ??
+    defaultCrossBorderProvider({
+      supportYellowcard: caps.supportYcPayout,
+      supportGrid: caps.supportGridPayout,
+    })
+  )
 }
 
 function resolvePayInProvider(input: {
@@ -111,21 +156,36 @@ function resolvePayInProvider(input: {
   payoutLocked: ProviderId | null
   supportYcPayIn: boolean
   supportNoahPayIn: boolean
+  supportGridPayIn: boolean
 }): ProviderId | null {
   if (input.payoutLocked === "noah") {
+    if (input.supportGridPayIn) return "grid"
     if (input.supportYcPayIn) return "yellowcard"
     if (input.supportNoahPayIn) return "noah"
     return null
   }
   if (input.payoutLocked === "yellowcard") {
     if (input.supportYcPayIn) return "yellowcard"
+    if (input.supportGridPayIn) return "grid"
+    if (input.supportNoahPayIn) return "noah"
+    return null
+  }
+  if (input.payoutLocked === "grid") {
+    if (input.supportGridPayIn) return "grid"
+    if (input.supportYcPayIn) return "yellowcard"
     if (input.supportNoahPayIn) return "noah"
     return null
   }
 
-  const secondary: ProviderId = input.payoutProvider === "noah" ? "yellowcard" : "noah"
-  if (secondary === "yellowcard" && input.supportYcPayIn) return "yellowcard"
-  if (secondary === "noah" && input.supportNoahPayIn) return "noah"
+  const providers: ProviderId[] = ["noah", "yellowcard", "grid"].filter(
+    (p) => p !== input.payoutProvider,
+  ) as ProviderId[]
+  for (const p of providers) {
+    if (p === "grid" && input.supportGridPayIn) return "grid"
+    if (p === "yellowcard" && input.supportYcPayIn) return "yellowcard"
+    if (p === "noah" && input.supportNoahPayIn) return "noah"
+  }
+  if (input.payoutProvider === "grid" && input.supportGridPayIn) return "grid"
   if (input.payoutProvider === "yellowcard" && input.supportYcPayIn) return "yellowcard"
   if (input.payoutProvider === "noah" && input.supportNoahPayIn) return "noah"
   return null
@@ -137,11 +197,18 @@ function buildProviderRouting(
     payoutLocked: ProviderId | null
     supportNoahPayout: boolean
     supportYcPayout: boolean
+    supportGridPayout: boolean
     supportYcPayIn: boolean
     supportNoahPayIn: boolean
+    supportGridPayIn: boolean
   },
 ): RoutingEntry[] {
-  const dualPayout = !input.payoutLocked && input.supportNoahPayout && input.supportYcPayout
+  const payoutProviders = [
+    input.supportNoahPayout ? "noah" : null,
+    input.supportYcPayout ? "yellowcard" : null,
+    input.supportGridPayout ? "grid" : null,
+  ].filter(Boolean) as ProviderId[]
+  const dualPayout = !input.payoutLocked && payoutProviders.length > 1
 
   if (input.payoutLocked) {
     const routing: RoutingEntry[] = [
@@ -152,6 +219,7 @@ function buildProviderRouting(
       payoutLocked: input.payoutLocked,
       supportYcPayIn: input.supportYcPayIn,
       supportNoahPayIn: input.supportNoahPayIn,
+      supportGridPayIn: input.supportGridPayIn,
     })
     if (payInProvider && payInProvider !== input.payoutLocked) {
       routing.push({ provider: payInProvider, priority: 2, settlement_asset: "USDC" })
@@ -159,13 +227,16 @@ function buildProviderRouting(
     return routing
   }
 
-  const secondary: ProviderId = payoutProvider === "noah" ? "yellowcard" : "noah"
   const routing: RoutingEntry[] = [
     { provider: payoutProvider, priority: 1, settlement_asset: "USDC" },
   ]
 
   if (dualPayout) {
-    routing.push({ provider: secondary, priority: 2, settlement_asset: "USDC" })
+    for (const p of payoutProviders) {
+      if (p !== payoutProvider) {
+        routing.push({ provider: p, priority: routing.length + 1, settlement_asset: "USDC" })
+      }
+    }
     return routing
   }
 
@@ -174,6 +245,7 @@ function buildProviderRouting(
     payoutLocked: null,
     supportYcPayIn: input.supportYcPayIn,
     supportNoahPayIn: input.supportNoahPayIn,
+    supportGridPayIn: input.supportGridPayIn,
   })
   if (payInProvider && payInProvider !== payoutProvider) {
     routing.push({ provider: payInProvider, priority: 2, settlement_asset: "USDC" })
@@ -185,16 +257,20 @@ function buildProviderRouting(
 type CountryCurrencyCaps = {
   supportNoahPayout: boolean
   supportYcPayout: boolean
+  supportGridPayout: boolean
   supportYcPayIn: boolean
   supportNoahPayIn: boolean
+  supportGridPayIn: boolean
 }
 
 function corridorHasAnyCapability(row: PayoutCorridorAdminRow): boolean {
   return (
     rowSupportsNoahPayout(row) ||
     rowSupportsYcPayout(row) ||
+    rowSupportsGridPayout(row) ||
     rowSupportsYcPayIn(row) ||
-    rowSupportsNoahPayIn(row)
+    rowSupportsNoahPayIn(row) ||
+    rowSupportsGridPayIn(row)
   )
 }
 
@@ -202,8 +278,10 @@ function rowCaps(row: PayoutCorridorAdminRow): CountryCurrencyCaps {
   return {
     supportNoahPayout: rowSupportsNoahPayout(row),
     supportYcPayout: rowSupportsYcPayout(row),
+    supportGridPayout: rowSupportsGridPayout(row),
     supportYcPayIn: rowSupportsYcPayIn(row),
     supportNoahPayIn: rowSupportsNoahPayIn(row),
+    supportGridPayIn: rowSupportsGridPayIn(row),
   }
 }
 
@@ -211,8 +289,10 @@ function mergeCaps(a: CountryCurrencyCaps, b: CountryCurrencyCaps): CountryCurre
   return {
     supportNoahPayout: a.supportNoahPayout || b.supportNoahPayout,
     supportYcPayout: a.supportYcPayout || b.supportYcPayout,
+    supportGridPayout: a.supportGridPayout || b.supportGridPayout,
     supportYcPayIn: a.supportYcPayIn || b.supportYcPayIn,
     supportNoahPayIn: a.supportNoahPayIn || b.supportNoahPayIn,
+    supportGridPayIn: a.supportGridPayIn || b.supportGridPayIn,
   }
 }
 
@@ -223,6 +303,7 @@ function payInCorridorIdsForProvider(
   return railRows
     .filter((r) => {
       if (provider === "yellowcard") return rowSupportsYcPayIn(r)
+      if (provider === "grid") return rowSupportsGridPayIn(r)
       return rowSupportsNoahPayIn(r)
     })
     .map((r) => r.id)
@@ -241,8 +322,10 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
           {
             supportNoahPayout: existing.supportNoahPayout,
             supportYcPayout: existing.supportYcPayout,
+            supportGridPayout: existing.supportGridPayout,
             supportYcPayIn: existing.supportYcPayIn,
             supportNoahPayIn: existing.supportNoahPayIn,
+            supportGridPayIn: existing.supportGridPayIn,
           },
           rowCaps(r),
         )
@@ -250,20 +333,25 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
 
     const supportNoahPayout = caps.supportNoahPayout
     const supportYcPayout = caps.supportYcPayout
+    const supportGridPayout = caps.supportGridPayout
     const supportYcPayIn = caps.supportYcPayIn
     const supportNoahPayIn = caps.supportNoahPayIn
+    const supportGridPayIn = caps.supportGridPayIn
     const payoutLocked: ProviderId | null =
-      supportNoahPayout && !supportYcPayout
-        ? "noah"
-        : !supportNoahPayout && supportYcPayout
-          ? "yellowcard"
-          : null
+      [supportNoahPayout, supportYcPayout, supportGridPayout].filter(Boolean).length === 1
+        ? supportNoahPayout
+          ? "noah"
+          : supportYcPayout
+            ? "yellowcard"
+            : "grid"
+        : null
     const payoutProvider = parsePrimaryProvider(r.provider_routing)
     const payInProvider = resolvePayInProvider({
       payoutProvider,
       payoutLocked,
       supportYcPayIn,
       supportNoahPayIn,
+      supportGridPayIn,
     })
     const payInSupported = payInProvider !== null
     const railRows = filteredRows.filter(
@@ -273,6 +361,20 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
       payInProvider !== null
         ? railRows.some((row) => rowPayInEnabledForProvider(row, payInProvider))
         : false
+    const crossBorderSupported = supportYcPayout || supportGridPayout
+    const crossBorderProvider = crossBorderSupported
+      ? resolveCrossBorderProviderForRow(
+          { supportYcPayout, supportGridPayout },
+          rowMetadata(r),
+        )
+      : null
+    const crossBorderLocked: CrossBorderProviderId | null =
+      crossBorderSupported &&
+      [supportYcPayout, supportGridPayout].filter(Boolean).length === 1
+        ? supportYcPayout
+          ? "yellowcard"
+          : "grid"
+        : null
 
     if (!existing) {
       map.set(key, {
@@ -291,9 +393,14 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
         payInEnabled,
         supportNoahPayout,
         supportYcPayout,
+        supportGridPayout,
         supportYcPayIn,
         supportNoahPayIn,
+        supportGridPayIn,
         payoutLocked,
+        crossBorderSupported,
+        crossBorderProvider,
+        crossBorderLocked,
         sample: r,
       })
       continue
@@ -303,14 +410,30 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
     existing.enabled = existing.enabled && r.enabled
     existing.supportNoahPayout = supportNoahPayout
     existing.supportYcPayout = supportYcPayout
+    existing.supportGridPayout = supportGridPayout
     existing.supportYcPayIn = supportYcPayIn
     existing.supportNoahPayIn = supportNoahPayIn
+    existing.supportGridPayIn = supportGridPayIn
     existing.payInProvider = payInProvider
     existing.payInSupported = payInSupported
     existing.payInEnabled = payInEnabled || existing.payInEnabled
     existing.payoutLocked = payoutLocked
     existing.payInCorridorIds =
       payInProvider !== null ? payInCorridorIdsForProvider(railRows, payInProvider) : []
+    existing.crossBorderSupported = supportYcPayout || supportGridPayout
+    existing.crossBorderProvider = existing.crossBorderSupported
+      ? resolveCrossBorderProviderForRow(
+          { supportYcPayout, supportGridPayout },
+          rowMetadata(existing.sample),
+        )
+      : null
+    existing.crossBorderLocked =
+      existing.crossBorderSupported &&
+      [supportYcPayout, supportGridPayout].filter(Boolean).length === 1
+        ? supportYcPayout
+          ? "yellowcard"
+          : "grid"
+        : null
   }
 
   return [...map.values()].sort(
@@ -372,6 +495,34 @@ export function PayoutCorridorsAdminPanel() {
     }
   }
 
+  const setCrossBorderProvider = async (
+    row: FiatDestinationRow,
+    provider: CrossBorderProviderId,
+  ) => {
+    setSavingKey(row.key)
+    try {
+      const updates = await Promise.all(
+        row.corridorIds.map((id) => {
+          const existing = rows.find((r) => r.id === id)
+          const meta = { ...rowMetadata(existing ?? row.sample) }
+          return payoutCorridorsApi.patch(id, {
+            metadata: { ...meta, cross_border_provider: provider },
+          })
+        }),
+      )
+      queryClient.setQueryData<PayoutCorridorAdminRow[]>(officeKeys.payoutCorridors(), (prev) => {
+        const list = prev ?? []
+        const byId = new Map(updates.map((u) => [u.id, u]))
+        return list.map((r) => byId.get(r.id) ?? r)
+      })
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed")
+    } finally {
+      setSavingKey(null)
+    }
+  }
+
   const setLocalPayIn = async (row: FiatDestinationRow, enabled: boolean) => {
     if (!row.payInProvider) return
     setSavingKey(row.key)
@@ -388,6 +539,10 @@ export function PayoutCorridorsAdminPanel() {
           }
           if (row.payInProvider === "noah" && rowSupportsNoahPayIn(existing ?? row.sample)) {
             metadata.noah_receive_enabled = enabled
+          }
+          if (row.payInProvider === "grid" && rowSupportsGridPayIn(existing ?? row.sample)) {
+            metadata.grid_receive_enabled = enabled
+            if (enabled && meta.grid_receive !== true) metadata.grid_receive = true
           }
           return payoutCorridorsApi.patch(id, { metadata })
         }),
@@ -463,7 +618,7 @@ export function PayoutCorridorsAdminPanel() {
               <code className="text-xs">sync-yc-send-corridors.ts</code>).
             </p>
           ) : (
-            <Table className="min-w-[920px]">
+            <Table className="min-w-[1080px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[220px]">Country</TableHead>
@@ -471,6 +626,7 @@ export function PayoutCorridorsAdminPanel() {
                   <TableHead className="w-[140px]">Providers</TableHead>
                   <TableHead className="w-[160px]">Payout</TableHead>
                   <TableHead className="w-[140px]">Payin</TableHead>
+                  <TableHead className="w-[160px]">Cross-border</TableHead>
                   <TableHead className="w-[100px] text-right">Live</TableHead>
                 </TableRow>
               </TableHeader>
@@ -478,7 +634,18 @@ export function PayoutCorridorsAdminPanel() {
                 {fiatRows.map((r) => {
                   const showNoah = r.supportNoahPayout
                   const showYc = r.supportYcPayout || r.supportYcPayIn
-                  const canChoosePayout = !r.payoutLocked && r.supportNoahPayout && r.supportYcPayout
+                  const showGrid = r.supportGridPayout || r.supportGridPayIn
+                  const payoutOptions = [
+                    r.supportNoahPayout ? "noah" : null,
+                    r.supportYcPayout ? "yellowcard" : null,
+                    r.supportGridPayout ? "grid" : null,
+                  ].filter(Boolean) as ProviderId[]
+                  const canChoosePayout = !r.payoutLocked && payoutOptions.length > 1
+                  const canChooseCrossBorder =
+                    r.crossBorderSupported &&
+                    !r.crossBorderLocked &&
+                    r.supportYcPayout &&
+                    r.supportGridPayout
 
                   return (
                     <TableRow key={r.key}>
@@ -502,7 +669,10 @@ export function PayoutCorridorsAdminPanel() {
                           {showYc ? (
                             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">YC</span>
                           ) : null}
-                          {!showNoah && !showYc ? (
+                          {showGrid ? (
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">Grid</span>
+                          ) : null}
+                          {!showNoah && !showYc && !showGrid ? (
                             <span className="text-muted-foreground text-xs">—</span>
                           ) : null}
                         </div>
@@ -517,12 +687,17 @@ export function PayoutCorridorsAdminPanel() {
                             onChange={(e) =>
                               void setPayoutProvider(
                                 r,
-                                e.target.value === "yellowcard" ? "yellowcard" : "noah",
+                                e.target.value === "yellowcard"
+                                  ? "yellowcard"
+                                  : e.target.value === "grid"
+                                    ? "grid"
+                                    : "noah",
                               )
                             }
                           >
-                            <option value="noah">Noah</option>
-                            <option value="yellowcard">Yellowcard</option>
+                            {r.supportNoahPayout ? <option value="noah">Noah</option> : null}
+                            {r.supportYcPayout ? <option value="yellowcard">Yellowcard</option> : null}
+                            {r.supportGridPayout ? <option value="grid">Grid</option> : null}
                           </select>
                         ) : r.payoutLocked ? (
                           <span className="text-xs font-medium">{providerLabel(r.payoutLocked)}</span>
@@ -539,6 +714,33 @@ export function PayoutCorridorsAdminPanel() {
                             disabled={savingKey === r.key}
                             onCheckedChange={(v) => void setLocalPayIn(r, v)}
                           />
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {!r.crossBorderSupported || !r.crossBorderProvider ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : canChooseCrossBorder ? (
+                          <select
+                            className="h-8 w-full max-w-[148px] rounded-md border bg-background px-2 text-xs"
+                            value={r.crossBorderProvider}
+                            disabled={savingKey === r.key}
+                            aria-label="Cross-border"
+                            onChange={(e) =>
+                              void setCrossBorderProvider(
+                                r,
+                                e.target.value === "grid" ? "grid" : "yellowcard",
+                              )
+                            }
+                          >
+                            {r.supportYcPayout ? (
+                              <option value="yellowcard">Yellowcard</option>
+                            ) : null}
+                            {r.supportGridPayout ? <option value="grid">Grid</option> : null}
+                          </select>
+                        ) : (
+                          <span className="text-xs font-medium">
+                            {crossBorderProviderLabel(r.crossBorderProvider)}
+                          </span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">

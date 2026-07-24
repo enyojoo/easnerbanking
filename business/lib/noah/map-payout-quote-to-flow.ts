@@ -52,6 +52,12 @@ export function mapPayoutQuoteToFlowState(
       ...(q.yc?.cryptoAmount != null ? { ycCryptoAmount: q.yc.cryptoAmount } : {}),
       ...(q.lockId ? { lockId: q.lockId } : {}),
       ...(q.quotePhase ? { quotePhase: q.quotePhase } : {}),
+      ...(q.grid?.quoteId ? { gridQuoteId: q.grid.quoteId } : {}),
+      ...(q.grid?.sequenceId ? { gridSequenceId: q.grid.sequenceId } : {}),
+      ...(q.grid?.customerId ? { gridCustomerId: q.grid.customerId } : {}),
+      ...(q.grid?.externalAccountId ? { gridExternalAccountId: q.grid.externalAccountId } : {}),
+      ...(q.grid?.cryptoAmount != null ? { gridCryptoAmount: q.grid.cryptoAmount } : {}),
+      ...(q.grid?.fundingAddress ? { gridFundingAddress: q.grid.fundingAddress } : {}),
     },
   }
 }
@@ -81,7 +87,7 @@ export function isPayoutQuoteFresh(
   if (new Date(pq.expiresAt).getTime() <= Date.now()) return false
   if (pq.quotePhase === "preview") return false
   if (pq.quotePhase === "locked") {
-    return Boolean(pq.lockId || pq.ycSendId)
+    return Boolean(pq.lockId || pq.ycSendId || pq.gridQuoteId)
   }
   return true
 }

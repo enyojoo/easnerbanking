@@ -36,6 +36,14 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/sync-grid-rates",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-grid-schemas",
+      "schedule": "0 3 * * 0"
+    },
+    {
       "path": "/api/cron/process-deposit-splits",
       "schedule": "*/2 * * * *"
     },

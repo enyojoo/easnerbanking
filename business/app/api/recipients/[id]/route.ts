@@ -3,10 +3,12 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import { validateRecipientYcExtrasForSave } from "@/lib/recipients-yc-validation"
 import {
+  isBankNameAllowedForCorridor,
+  isMomoProviderAllowedForCorridor,
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
-  resolveYcCorridorSchema,
+  resolveCorridorRecipientOptions,
   unwrapNoahFieldsSchema,
 } from "@easner/shared"
 import {
@@ -62,30 +64,39 @@ export async function PATCH(request: Request, context: RouteContext) {
     const rail = isMobile ? "mobile_money" : "bank_transfer"
     const { data: corridor } = await admin
       .from("payout_corridors")
-      .select("fields_schema")
+      .select("fields_schema,providers")
       .eq("country_code", cc)
       .eq("currency_code", cur)
       .eq("rail", rail)
       .maybeSingle()
-    const ycSchema = resolveYcCorridorSchema({
+    const recipientOptions = resolveCorridorRecipientOptions({
       countryCode: cc,
       currencyCode: cur,
+      rail,
       fieldsSchema: corridor?.fields_schema,
+      providers: corridor?.providers,
     })
-    const bankEnum =
-      ycSchema?.bank_enum?.length
-        ? ycSchema.bank_enum
-        : unwrapNoahFieldsSchema(corridor?.fields_schema)?.bank_enum
     const bankName = String(payload.bank_name ?? existing.bank_name ?? "").trim()
     if (
       !isMobile &&
-      Array.isArray(bankEnum) &&
-      bankEnum.length > 0 &&
       bankName &&
-      !bankEnum.includes(bankName)
+      !isBankNameAllowedForCorridor(bankName, recipientOptions)
     ) {
       return NextResponse.json(
         { error: "Bank must be selected from the corridor list." },
+        { status: 400 },
+      )
+    }
+    const mobileProvider = String(
+      payload.mobile_provider ?? existing.mobile_provider ?? "",
+    ).trim()
+    if (
+      isMobile &&
+      mobileProvider &&
+      !isMomoProviderAllowedForCorridor(mobileProvider, recipientOptions)
+    ) {
+      return NextResponse.json(
+        { error: "Mobile money provider must be selected from the corridor list." },
         { status: 400 },
       )
     }

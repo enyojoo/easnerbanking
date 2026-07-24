@@ -15,7 +15,7 @@ import {
   type YcPayInLimits,
 } from "./yc-pay-in-limits"
 
-export type PayInProviderId = "yellowcard" | "noah"
+export type PayInProviderId = "yellowcard" | "noah" | "grid"
 
 function resolvePayInProviderFromCaps(input: {
   payoutProvider: PayInProviderId
@@ -48,13 +48,14 @@ export function resolvePayInProvider(input: {
   metadata?: Record<string, unknown> | null
 }): PayInProviderId {
   const explicit = String(input.metadata?.pay_in_provider ?? "").trim().toLowerCase()
-  if (explicit === "yellowcard" || explicit === "noah") return explicit
+  if (explicit === "yellowcard" || explicit === "noah" || explicit === "grid") return explicit
 
   const meta = input.metadata ?? {}
   const routing = input.providerRouting ?? []
   const payoutProvider = resolvePrimaryPayoutProvider(routing)
   const supportYcPayIn = meta.yc_receive === true
   const supportNoahPayIn = meta.noah_receive === true
+  const supportGridPayIn = meta.grid_receive === true
   const supportYcPayout =
     meta.yc_send === true || routing.some((e) => e.provider === "yellowcard")
   const supportNoahPayout =
@@ -73,6 +74,7 @@ export function resolvePayInProvider(input: {
     supportNoahPayIn,
   })
   if (resolved) return resolved
+  if (supportGridPayIn) return "grid"
   if (supportYcPayIn) return "yellowcard"
   return "noah"
 }

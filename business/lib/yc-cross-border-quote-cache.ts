@@ -36,9 +36,14 @@ export type CrossBorderQuoteStashMeta = {
   payInCountry: string
   payInRail: YcPayInRail
   receiveAmount: number
+  crossBorderProvider?: "yellowcard" | "grid"
   sourcePhone?: string
   networkId?: string
   sourceNetworkName?: string
+}
+
+function crossBorderApiBase(provider: "yellowcard" | "grid" | undefined): string {
+  return provider === "grid" ? "/api/grid/cross-border" : "/api/yellowcard/cross-border"
 }
 
 let stashed: CrossBorderQuoteResult | null = null
@@ -97,7 +102,9 @@ export function isCrossBorderLeg2Locked(
 export function isCompleteCrossBorderQuote(
   quote: CrossBorderQuoteResult | null | undefined,
 ): quote is CrossBorderQuoteResult {
-  return Boolean(isUsableCrossBorderQuotePreview(quote) && quote.transferId)
+  if (!isUsableCrossBorderQuotePreview(quote)) return false
+  if (quote.quotePhase === "locked") return Boolean(quote.transferId)
+  return Boolean(quote.transferId)
 }
 
 export function stashCrossBorderQuote(
@@ -186,7 +193,8 @@ function buildCrossBorderQuoteBody(
 export async function fetchCrossBorderQuotePreview(
   meta: CrossBorderQuoteStashMeta,
 ): Promise<CrossBorderQuoteResult> {
-  const res = await fetchWithSession("/api/yellowcard/cross-border/quote", {
+  const base = crossBorderApiBase(meta.crossBorderProvider)
+  const res = await fetchWithSession(`${base}/quote`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(buildCrossBorderQuoteBody(meta)),
@@ -203,10 +211,14 @@ export async function fetchCrossBorderQuotePreview(
 export async function lockCrossBorderLeg2(
   meta: CrossBorderQuoteStashMeta,
 ): Promise<CrossBorderQuoteResult> {
-  const res = await fetchWithSession("/api/yellowcard/cross-border/lock-leg2", {
+  const base = crossBorderApiBase(meta.crossBorderProvider)
+  const leg2DraftId = peekCrossBorderQuote()?.leg2DraftId?.trim()
+  const res = await fetchWithSession(`${base}/lock-leg2`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildCrossBorderQuoteBody(meta)),
+    body: JSON.stringify(
+      buildCrossBorderQuoteBody(meta, leg2DraftId ? { leg2DraftId } : undefined),
+    ),
   })
   const data = (await res.json().catch(() => ({}))) as CrossBorderQuoteResult & {
     error?: string
@@ -221,7 +233,8 @@ export async function confirmCrossBorderLeg1(
   meta: CrossBorderQuoteStashMeta,
   leg2DraftId: string,
 ): Promise<CrossBorderQuoteResult> {
-  const res = await fetchWithSession("/api/yellowcard/cross-border/confirm", {
+  const base = crossBorderApiBase(meta.crossBorderProvider)
+  const res = await fetchWithSession(`${base}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(buildCrossBorderQuoteBody(meta, { leg2DraftId })),
@@ -239,7 +252,8 @@ export async function confirmCrossBorderOrder(
   meta: CrossBorderQuoteStashMeta,
   leg2DraftId?: string,
 ): Promise<CrossBorderQuoteResult> {
-  const res = await fetchWithSession("/api/yellowcard/cross-border/confirm", {
+  const base = crossBorderApiBase(meta.crossBorderProvider)
+  const res = await fetchWithSession(`${base}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(

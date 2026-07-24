@@ -1,6 +1,6 @@
 import type { ProviderHealthStatus, ProviderRoutingEntry } from "./send-destinations"
 
-export type PayoutProviderId = "noah" | "yellowcard"
+export type PayoutProviderId = "noah" | "yellowcard" | "grid"
 
 export function resolvePrimaryPayoutProvider(
   routing: ProviderRoutingEntry[] | null | undefined,
@@ -9,7 +9,9 @@ export function resolvePrimaryPayoutProvider(
   const provider = String(sorted[0]?.provider ?? "")
     .trim()
     .toLowerCase()
-  return provider === "yellowcard" ? "yellowcard" : "noah"
+  if (provider === "yellowcard") return "yellowcard"
+  if (provider === "grid") return "grid"
+  return "noah"
 }
 
 export type PayoutRail = "bank_transfer" | "mobile_money"
@@ -96,4 +98,12 @@ export function isYcBalancePayoutCorridor(
     return true
   }
   return false
+}
+
+/** True when balance payout routes through Grid quote lock + execute. */
+export function isGridBalancePayoutCorridor(
+  corridor: Pick<PayoutCorridorPublic, "provider_routing"> | null | undefined,
+): boolean {
+  if (!corridor) return false
+  return resolvePrimaryPayoutProvider(corridor.provider_routing) === "grid"
 }

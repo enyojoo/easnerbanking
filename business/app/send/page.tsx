@@ -104,6 +104,7 @@ import {
   validateSendAmountFields,
   corridorMatchesCountryCurrency,
   isYcBalancePayoutCorridor,
+  isGridBalancePayoutCorridor,
   resolveEffectiveYcBalancePayoutMinReceive,
   resolveYcPayoutLimits,
   getYcBusinessPayoutMin,
@@ -622,7 +623,53 @@ export default function SendPage() {
     !isWalletRecipient &&
     isYcBalancePayoutCorridor(payoutCorridorRow)
 
+  const isGridBalancePayout =
+    isBalanceSource &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    isGridBalancePayoutCorridor(payoutCorridorRow)
+
   const [ycPayoutCustomerRate, setYcPayoutCustomerRate] = useState<number | null>(null)
+  const [gridPayoutCustomerRate, setGridPayoutCustomerRate] = useState<number | null>(null)
+
+  useEffect(() => {
+    const dest = (recipient?.currency || "").trim().toUpperCase()
+    if (!isGridBalancePayout || !dest || dest.length !== 3) {
+      setGridPayoutCustomerRate(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetchWithSession(
+          `/api/fx/grid-rates?destinations=${encodeURIComponent(dest)}`,
+        )
+        const data = (await res.json().catch(() => ({}))) as {
+          rates?: Array<{ from_currency: string; to_currency: string; rate: number }>
+        }
+        if (!res.ok || cancelled) return
+        const send = String(sendCurrency || "").trim().toUpperCase()
+        const row = (data.rates ?? []).find(
+          (r) =>
+            String(r.from_currency || "").toUpperCase() === send &&
+            String(r.to_currency || "").toUpperCase() === dest,
+        )
+        setGridPayoutCustomerRate(row?.rate ?? null)
+      } catch {
+        if (!cancelled) setGridPayoutCustomerRate(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isGridBalancePayout, recipient?.currency, sendCurrency])
+
+  const gridPayoutRateMap = useMemo(() => {
+    if (!gridPayoutCustomerRate) return {}
+    const send = String(sendCurrency || "").trim().toUpperCase()
+    const receive = String(receiveCurrency || "").trim().toUpperCase()
+    return { [`${send}_${receive}`]: gridPayoutCustomerRate }
+  }, [sendCurrency, receiveCurrency, gridPayoutCustomerRate])
 
   useEffect(() => {
     const dest = (recipient?.currency || "").trim().toUpperCase()
@@ -696,17 +743,20 @@ export default function SendPage() {
   }, [ycFlow.payInCurrency, ycFlow.customerRate, receiveCurrency])
 
   const payoutEnforcementRateMap =
-    isYcBalancePayout && ycPayoutCustomerRate
-      ? ycPayoutRateMap
-      : paymentMethod === "otherCurrency" && showThroughLocalCurrency
-        ? ycFxRateMap
-        : noahFxRates
+    isGridBalancePayout && gridPayoutCustomerRate
+      ? gridPayoutRateMap
+      : isYcBalancePayout && ycPayoutCustomerRate
+        ? ycPayoutRateMap
+        : paymentMethod === "otherCurrency" && showThroughLocalCurrency
+          ? ycFxRateMap
+          : noahFxRates
 
   const payoutMinEnforcementEnabled =
     Boolean(recipient) &&
     !isEasetagRecipient &&
     !isWalletRecipient &&
     !isYcBalancePayout &&
+    !isGridBalancePayout &&
     (isBalanceSource ||
       (paymentMethod === "otherCurrency" && Boolean(otherCurrency)))
 
@@ -1239,6 +1289,7 @@ export default function SendPage() {
             ...state,
             ycMomoSetup: undefined,
             ycCrossBorder: undefined,
+            crossBorderProvider: ycFlow.crossBorderProvider,
           }
           persistSendFlowState(flowState)
           router.push("/send/momo-setup")
@@ -1261,6 +1312,7 @@ export default function SendPage() {
             payInCountry,
             payInRail: "bank_transfer" as const,
             receiveAmount,
+            crossBorderProvider: ycFlow.crossBorderProvider,
           }
           const previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
           if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
@@ -1278,6 +1330,7 @@ export default function SendPage() {
               previewQuote.easnerTransactionId ||
               previewQuote.transactionId ||
               state.transactionId,
+            crossBorderProvider: ycFlow.crossBorderProvider,
             ycCrossBorder: crossBorderQuoteToFlowState(previewQuote, crossBorderMeta),
           }
           persistSendFlowState(flowState)

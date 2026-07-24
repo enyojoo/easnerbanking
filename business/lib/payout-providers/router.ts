@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { ProviderRoutingEntry } from "@easner/shared"
+import { gridPayoutProvider } from "./grid-provider"
 import { noahPayoutProvider } from "./noah-provider"
 import { yellowcardPayoutProvider } from "./yellowcard-provider"
 import type { CorridorContext, PayoutProvider, PayoutRailKind } from "./types"
@@ -8,6 +9,7 @@ import { NoProviderForCorridorError } from "./types"
 const registry: Record<string, PayoutProvider> = {
   noah: noahPayoutProvider,
   yellowcard: yellowcardPayoutProvider,
+  grid: gridPayoutProvider,
 }
 
 function parseRouting(raw: unknown): ProviderRoutingEntry[] {

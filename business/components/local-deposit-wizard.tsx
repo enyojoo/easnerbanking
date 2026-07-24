@@ -19,6 +19,7 @@ import {
   mapResidenceToLocalPayInCurrency,
   resolveYcPayInCustomerRate,
   resolveYcPayInYcSellRate,
+  resolvePayInProvider,
   computeYcFundBalanceAmountPreview,
   ycFundBalanceQuoteErrorMessage,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
@@ -49,9 +50,11 @@ import {
   prefetchYcReceiveRails,
   prefetchYcPayInNetworks,
   prefetchYcPayInRates,
+  prefetchGridPayInRates,
   readCachedReceiveRails,
   readCachedYcPayInNetworks,
   readCachedYcPayInRates,
+  readCachedGridPayInRates,
   type ReceiveRailsResponse,
 } from "@/lib/yc-local-deposit-cache"
 
@@ -77,6 +80,10 @@ type FundBalanceQuote = {
 }
 
 type YcRateRow = YcRateClientRow
+
+function fundBalanceApiBase(provider: "yellowcard" | "grid" | "noah"): string {
+  return provider === "grid" ? "/api/grid/fund-balance" : "/api/yellowcard/fund-balance"
+}
 
 type Props = {
   residenceCountry: string
@@ -131,21 +138,72 @@ export function LocalDepositWizard({
     return rail === "mobile_money" && !cached?.length
   })
   const [isContinueLoading, setIsContinueLoading] = useState(false)
+  const [payInProvider, setPayInProvider] = useState<"yellowcard" | "grid" | "noah">("yellowcard")
 
   const isMomo = rail === "mobile_money"
+  const fundBalanceBase = fundBalanceApiBase(payInProvider)
+
+  useEffect(() => {
+    if (!residenceCountry || !localPayInCurrency) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetchWithSession(
+          `/api/payout-corridors?rail=${encodeURIComponent(rail)}`,
+        )
+        const data = (await res.json().catch(() => ({}))) as {
+          corridors?: Array<{ country_code?: string; currency_code?: string; metadata?: Record<string, unknown>; provider_routing?: unknown }>
+        }
+        const row = (data.corridors ?? []).find(
+          (c) =>
+            String(c.country_code ?? "").toUpperCase() === residenceCountry.toUpperCase() &&
+            String(c.currency_code ?? "").toUpperCase() === localPayInCurrency.toUpperCase(),
+        )
+        if (!cancelled && row) {
+          setPayInProvider(
+            resolvePayInProvider({
+              providerRouting: row.provider_routing as never,
+              metadata: row.metadata ?? null,
+            }),
+          )
+        }
+      } catch {
+        // default yellowcard
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [residenceCountry, localPayInCurrency, rail])
 
   const usdBalance = parseFloat(String(walletQuery.data?.balances?.USD ?? "0").replace(/,/g, "")) || 0
   const enteredAmount = Number.parseFloat(amountStr.replace(/,/g, "")) || 0
 
-  const customerRate = useMemo(
-    () => resolveYcPayInCustomerRate(rates, localPayInCurrency),
-    [rates, localPayInCurrency],
-  )
+  const customerRate = useMemo(() => {
+    if (payInProvider === "grid") {
+      const cur = localPayInCurrency.trim().toUpperCase()
+      const row = rates.find(
+        (r) =>
+          String(r.from_currency ?? "").toUpperCase() === cur &&
+          String(r.to_currency ?? "").toUpperCase() === "USD",
+      )
+      return row?.easner_sell ?? row?.rate ?? null
+    }
+    return resolveYcPayInCustomerRate(rates, localPayInCurrency)
+  }, [payInProvider, rates, localPayInCurrency])
 
-  const ycSellRate = useMemo(
-    () => resolveYcPayInYcSellRate(rates, localPayInCurrency) ?? customerRate,
-    [rates, localPayInCurrency, customerRate],
-  )
+  const ycSellRate = useMemo(() => {
+    if (payInProvider === "grid") {
+      const cur = localPayInCurrency.trim().toUpperCase()
+      const row = rates.find(
+        (r) =>
+          String(r.from_currency ?? "").toUpperCase() === cur &&
+          String(r.to_currency ?? "").toUpperCase() === "USD",
+      )
+      return row?.yc_buy ?? row?.rate ?? customerRate
+    }
+    return resolveYcPayInYcSellRate(rates, localPayInCurrency) ?? customerRate
+  }, [payInProvider, rates, localPayInCurrency, customerRate])
 
   const preview = useMemo(() => {
     if (!customerRate || !ycSellRate || enteredAmount <= 0) {
@@ -233,16 +291,25 @@ export function LocalDepositWizard({
   useEffect(() => {
     if (!localPayInCurrency) return
     let cancelled = false
-    const cached = readCachedYcPayInRates()
-    if (cached) setRates(cached)
-    void (async () => {
-      const next = await prefetchYcPayInRates()
-      if (!cancelled) setRates(next ?? cached ?? [])
-    })()
+    if (payInProvider === "grid") {
+      const cached = readCachedGridPayInRates(localPayInCurrency)
+      if (cached) setRates(cached)
+      void (async () => {
+        const next = await prefetchGridPayInRates(localPayInCurrency)
+        if (!cancelled) setRates(next ?? cached ?? [])
+      })()
+    } else {
+      const cached = readCachedYcPayInRates()
+      if (cached) setRates(cached)
+      void (async () => {
+        const next = await prefetchYcPayInRates()
+        if (!cancelled) setRates(next ?? cached ?? [])
+      })()
+    }
     return () => {
       cancelled = true
     }
-  }, [localPayInCurrency])
+  }, [localPayInCurrency, payInProvider])
 
   useEffect(() => {
     if (!isMomo || !residenceCountry || !localPayInCurrency) return
@@ -309,7 +376,7 @@ export function LocalDepositWizard({
         const net = momoNetworks.find((n) => n.id === momoNetworkId)
         if (net?.name) body.sourceNetworkName = net.name
       }
-      const res = await fetchWithSession("/api/yellowcard/fund-balance/confirm", {
+      const res = await fetchWithSession(`${fundBalanceBase}/confirm`, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
@@ -341,6 +408,7 @@ export function LocalDepositWizard({
     momoNetworkId,
     momoNetworks,
     defaultPhone,
+    fundBalanceBase,
   ])
 
   const momoReady = useMemo(
@@ -391,7 +459,7 @@ export function LocalDepositWizard({
                 localPayIn: enteredAmount,
                 rail,
               }
-        const res = await fetchWithSession("/api/yellowcard/fund-balance/quote", {
+        const res = await fetchWithSession(`${fundBalanceBase}/quote`, {
           method: "POST",
           headers,
           body: JSON.stringify(body),
@@ -418,6 +486,7 @@ export function LocalDepositWizard({
     customerRate,
     payInLimits,
     preview.localPayIn,
+    fundBalanceBase,
   ])
 
   const reviewLockKey =

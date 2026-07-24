@@ -89,14 +89,14 @@ export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): qu
   if (!isUsablePayoutQuotePreview(quote)) return false
   if (new Date(quote.expiresAt).getTime() <= Date.now()) return false
   if (
-    quote.provider === 'yellowcard' &&
+    (quote.provider === 'yellowcard' || quote.provider === 'grid') &&
     quote.quotePhase === 'preview' &&
     quote.requiresConfirm !== false
   ) {
-    return Boolean(quote.settlement?.sessionId || quote.yc?.sequenceId)
+    return Boolean(quote.settlement?.sessionId || quote.yc?.sequenceId || quote.grid?.quoteId)
   }
   if (quote.quotePhase === 'locked') {
-    return Boolean(quote.lockId || quote.yc?.sendId || quote.settlement?.sessionId)
+    return Boolean(quote.lockId || quote.yc?.sendId || quote.grid?.quoteId || quote.settlement?.sessionId)
   }
   if (quote.quotePhase === 'preview') return false
   return Boolean(quote.settlement?.sessionId || quote.noah?.formSessionId)
@@ -120,9 +120,10 @@ export function isPayoutSessionReadyForExecute(
   ) {
     return false
   }
-  if (session.lockId || session.ycSendId) return true
+  if (session.lockId || session.ycSendId || session.gridQuoteId) return true
   // YC lock-on-review: preview sequenceId alone is not enough — need confirm lock.
   if (session.payoutProvider === 'yellowcard') return false
+  if (session.payoutProvider === 'grid') return false
   return Boolean(session.formSessionId.trim())
 }
 
@@ -294,6 +295,12 @@ export function payoutPrepareSessionFromQuote(
     ...(quote.yc?.walletAddress ? { ycWalletAddress: quote.yc.walletAddress } : {}),
     ...(quote.yc?.cryptoAmount != null ? { ycCryptoAmount: quote.yc.cryptoAmount } : {}),
     ...(quote.yc?.sendId ? { ycSendId: quote.yc.sendId } : {}),
+    ...(quote.grid?.quoteId ? { gridQuoteId: quote.grid.quoteId } : {}),
+    ...(quote.grid?.sequenceId ? { gridSequenceId: quote.grid.sequenceId } : {}),
+    ...(quote.grid?.customerId ? { gridCustomerId: quote.grid.customerId } : {}),
+    ...(quote.grid?.externalAccountId ? { gridExternalAccountId: quote.grid.externalAccountId } : {}),
+    ...(quote.grid?.cryptoAmount != null ? { gridCryptoAmount: quote.grid.cryptoAmount } : {}),
+    ...(quote.grid?.fundingAddress ? { gridFundingAddress: quote.grid.fundingAddress } : {}),
     ...(quote.lockId ? { lockId: quote.lockId } : {}),
   }
 }

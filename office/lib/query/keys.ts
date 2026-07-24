@@ -29,6 +29,7 @@ export const officeKeys = {
     [...officeKeys.root, "currencies", scope] as const,
   noahRates: () => [...officeKeys.root, "noah-rates"] as const,
   ycRates: () => [...officeKeys.root, "yc-rates"] as const,
+  gridRates: () => [...officeKeys.root, "grid-rates"] as const,
   cryptoRates: () => [...officeKeys.root, "crypto-rates"] as const,
   payoutCorridors: () => [...officeKeys.root, "payout-corridors"] as const,
   cryptoDestinations: () => [...officeKeys.root, "crypto-destinations"] as const,

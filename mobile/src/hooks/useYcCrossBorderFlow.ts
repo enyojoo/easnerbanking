@@ -5,12 +5,13 @@ export type YcPayInRail = 'bank_transfer' | 'mobile_money'
 
 export type YcEligibilityResponse = {
   throughLocalCurrency: {
+    provider?: 'yellowcard' | 'grid' | null
     payInCurrency: string | null
     available: boolean
     reason?: string
   }
   balancePayout: {
-    provider: 'noah' | 'yellowcard' | null
+    provider: 'noah' | 'yellowcard' | 'grid' | null
     available: boolean
   }
 }
@@ -93,6 +94,9 @@ export function useYcCrossBorderFlow(input: {
       (payInCurrencyOverride || eligibility?.throughLocalCurrency.available),
   )
 
+  const crossBorderProvider: 'yellowcard' | 'grid' =
+    eligibility?.throughLocalCurrency.provider === 'grid' ? 'grid' : 'yellowcard'
+
   useEffect(() => {
     if (!input.enabled || !input.recipientId) {
       setEligibility(null)
@@ -131,9 +135,11 @@ export function useYcCrossBorderFlow(input: {
     setRatesLoading(true)
     void (async () => {
       try {
-        const data = await apiFetch<{ rates?: YcRateRow[] }>('/api/fx/yc-rates', {
-          query: { destinations: dest },
-        })
+        const ratesPath =
+          crossBorderProvider === 'grid'
+            ? `/api/fx/grid-rates?destinations=${encodeURIComponent(dest)}`
+            : `/api/fx/yc-rates?destinations=${encodeURIComponent(dest)}`
+        const data = await apiFetch<{ rates?: YcRateRow[] }>(ratesPath)
         if (!cancelled) setRates(data.rates ?? [])
       } catch {
         if (!cancelled) setRates([])
@@ -144,7 +150,7 @@ export function useYcCrossBorderFlow(input: {
     return () => {
       cancelled = true
     }
-  }, [payInCurrency, input.receiveCurrency])
+  }, [payInCurrency, input.receiveCurrency, crossBorderProvider])
 
   const crossRate = useMemo(() => {
     if (!payInCurrency) return null
@@ -194,8 +200,12 @@ export function useYcCrossBorderFlow(input: {
       setQuoteLoading(true)
       setQuoteError(null)
       try {
+        const quotePath =
+          crossBorderProvider === 'grid'
+            ? '/api/grid/cross-border/quote'
+            : '/api/yellowcard/cross-border/quote'
         const data = await apiFetch<YcCrossBorderQuoteResult, Record<string, unknown>>(
-          '/api/yellowcard/cross-border/quote',
+          quotePath,
           {
             method: 'POST',
             body: {
@@ -220,7 +230,7 @@ export function useYcCrossBorderFlow(input: {
         setQuoteLoading(false)
       }
     },
-    [input.recipientId, payInCurrency, payInCountryOverride],
+    [input.recipientId, payInCurrency, payInCountryOverride, crossBorderProvider],
   )
 
   return {
@@ -228,6 +238,7 @@ export function useYcCrossBorderFlow(input: {
     eligibilityLoading,
     available,
     payInCurrency,
+    crossBorderProvider,
     rates,
     ratesLoading,
     customerRate,

@@ -23,6 +23,7 @@ import {
   REVIEW_ROW_LABELS,
   SEND_LOCAL_PAY_IN_BANK_CHIP,
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
+  corridorMatchesCountryCurrency,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -64,6 +65,7 @@ import {
   peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady } from '../../lib/warmYcLocalDepositCaches'
+import { getPayoutCorridorCache } from '../../lib/sendDestinations'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import { ReceiveLocalAmountShellWebForm } from '../../components/receive/ReceiveLocalAmountShellWebForm'
@@ -125,6 +127,33 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   )
   const amountPositive = enteredAmount > 0
 
+  const payInCorridorRow = useMemo(() => {
+    const cache = getPayoutCorridorCache()
+    if (!cache || !residenceCountry || !localPayInCurrency) return null
+    const corridors = payInRail === 'mobile_money' ? cache.mobile : cache.bank
+    return (
+      corridors.find((c) =>
+        corridorMatchesCountryCurrency(c, {
+          countryCode: residenceCountry,
+          currencyCode: localPayInCurrency,
+          rail: payInRail,
+        }),
+      ) ?? null
+    )
+  }, [residenceCountry, localPayInCurrency, payInRail])
+
+  const fundBalanceQuoteMeta = useMemo(
+    () => ({
+      country: residenceCountry,
+      currency: localPayInCurrency,
+      rail: payInRail,
+      amountEntryMode,
+      enteredAmount,
+      providerRouting: payInCorridorRow?.provider_routing,
+    }),
+    [residenceCountry, localPayInCurrency, payInRail, amountEntryMode, enteredAmount, payInCorridorRow],
+  )
+
   const ycFlow = useYcFundBalanceFlow({
     country: residenceCountry,
     currency: localPayInCurrency,
@@ -132,6 +161,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     enabled: Boolean(residenceCountry && localPayInCurrency),
     amountEntryMode,
     enteredAmount,
+    providerRouting: payInCorridorRow?.provider_routing,
   })
 
   const displayPreview = useMemo(() => ycFlow.preview, [ycFlow.preview])
@@ -220,20 +250,10 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     if (receiveRails?.optimistic) return
     if (!ycFlow.customerRate || ycFlow.ratesLoading) return
     if (!amountLimitCheck.ok) return
-    void ensureFundBalanceQuoteStashed({
-      country: residenceCountry,
-      currency: localPayInCurrency,
-      rail: payInRail,
-      amountEntryMode,
-      enteredAmount,
-    })
+    void ensureFundBalanceQuoteStashed(fundBalanceQuoteMeta)
   }, [
     debouncedFundBalanceQuotePrefetchKey,
-    residenceCountry,
-    localPayInCurrency,
-    payInRail,
-    amountEntryMode,
-    enteredAmount,
+    fundBalanceQuoteMeta,
     receiveRails?.optimistic,
     ycFlow.customerRate,
     ycFlow.ratesLoading,
@@ -375,13 +395,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     setIsContinuePending(true)
     setIsContinueLoading(true)
     try {
-      const lockedQuote = await ensureFundBalanceOrderConfirmed({
-        country: residenceCountry,
-        currency: localPayInCurrency,
-        rail: payInRail,
-        amountEntryMode,
-        enteredAmount,
-      })
+      const lockedQuote = await ensureFundBalanceOrderConfirmed(fundBalanceQuoteMeta)
       if (!lockedQuote || !isCompleteFundBalanceQuote(lockedQuote)) {
         showError(peekLastFundBalanceQuoteError() || 'Could not lock deposit details')
         return

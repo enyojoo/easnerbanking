@@ -1,6 +1,7 @@
 import {
   corridorMatchesCountryCurrency,
   findPayoutFieldsSchema,
+  resolveCorridorRecipientOptions,
   sortByEasnerCountryPickerOrder,
   type CryptoDestinationPublic,
   type PayoutCorridorPublic,
@@ -380,28 +381,73 @@ export function getRecipientFormFields(
   return match?.fields || []
 }
 
+export function getCorridorRecipientOptions(input: {
+  countryCode: string
+  currencyCode: string
+  rail: 'bank_transfer' | 'mobile_money'
+}): ReturnType<typeof resolveCorridorRecipientOptions> {
+  if (!payoutCorridorCache) {
+    return { bankOptions: [], momoOptions: [], extraFields: [] }
+  }
+  const corridors =
+    input.rail === 'mobile_money' ? payoutCorridorCache.mobile : payoutCorridorCache.bank
+  const row = corridors.find((c) =>
+    corridorMatchesCountryCurrency(c, {
+      countryCode: input.countryCode,
+      currencyCode: input.currencyCode,
+      rail: input.rail,
+    }),
+  )
+  if (!row) {
+    return { bankOptions: [], momoOptions: [], extraFields: [] }
+  }
+  return resolveCorridorRecipientOptions({
+    countryCode: input.countryCode,
+    currencyCode: input.currencyCode,
+    rail: input.rail,
+    fieldsSchema: row.fields_schema,
+    providers: row.providers,
+  })
+}
+
 export function getRecipientProviders(
   currencyCode: string,
   recipientType: RecipientType,
   countryCode?: string,
 ): string[] {
   if (recipientType === 'mobile_money' && countryCode && payoutCorridorCache?.mobile.length) {
-    const row = payoutCorridorCache.mobile.find((c) =>
-      corridorMatchesCountryCurrency(c, { countryCode, currencyCode }),
-    )
-    if (row) {
-      if (Array.isArray(row.providers) && (row.providers as string[]).length > 0) {
-        return row.providers as string[]
-      }
-      const fromSchema = row.fields_schema?.mobile_provider_labels
-      if (fromSchema?.length) return fromSchema
-    }
+    const options = getCorridorRecipientOptions({
+      countryCode,
+      currencyCode,
+      rail: 'mobile_money',
+    })
+    if (options.momoOptions.length) return options.momoOptions
     return []
+  }
+  if (recipientType === 'bank' && countryCode && payoutCorridorCache?.bank.length) {
+    const options = getCorridorRecipientOptions({
+      countryCode,
+      currencyCode,
+      rail: 'bank_transfer',
+    })
+    if (options.bankOptions.length) return options.bankOptions
   }
   const match = recipientCatalog.find(
     (entry) => entry.currencyCode === currencyCode && entry.recipientType === recipientType,
   )
   return match?.providers || []
+}
+
+export function getCorridorBankOptions(
+  currencyCode: string,
+  countryCode?: string,
+): string[] {
+  if (!countryCode || !payoutCorridorCache?.bank.length) return []
+  return getCorridorRecipientOptions({
+    countryCode,
+    currencyCode,
+    rail: 'bank_transfer',
+  }).bankOptions
 }
 
 export function getWalletAssets(): string[] {

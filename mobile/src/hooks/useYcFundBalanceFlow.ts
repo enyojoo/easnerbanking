@@ -5,10 +5,13 @@ import {
   resolveYcPayInCustomerRate,
   resolveYcPayInYcSellRate,
   computeYcFundBalanceAmountPreview,
+  resolvePayInProvider,
+  resolvePrimaryPayoutProvider,
   type YcRateClientRow,
+  type ProviderRoutingEntry,
 } from '@easner/shared'
-import { ApiError } from '../query/api-client'
-import { fetchFundBalanceQuote, type YcFundBalanceQuote } from '../lib/sendFlowFundBalanceQuote'
+import { ApiError, apiFetch } from '../query/api-client'
+import { fetchFundBalanceQuote, type YcFundBalanceQuote, type PayInProviderId } from '../lib/sendFlowFundBalanceQuote'
 import {
   prefetchYcPayInRates,
   prefetchYcReceiveRails,
@@ -19,6 +22,29 @@ import {
   type YcReceiveRailsResponse,
 } from '../lib/warmYcLocalDepositCaches'
 import type { YcPayInRail } from './useYcCrossBorderFlow'
+
+function resolveFundBalancePayInProvider(input: {
+  providerRouting?: ProviderRoutingEntry[] | null
+  metadata?: Record<string, unknown> | null
+  payInProvider?: PayInProviderId
+}): PayInProviderId {
+  if (input.payInProvider) return input.payInProvider
+  const resolved = resolvePayInProvider({
+    providerRouting: input.providerRouting,
+    metadata: input.metadata,
+  })
+  if (resolved === 'grid' || resolved === 'yellowcard') return resolved
+  if (resolvePrimaryPayoutProvider(input.providerRouting) === 'grid') return 'grid'
+  return resolved
+}
+
+async function fetchGridPayInRates(currency: string): Promise<YcRateClientRow[]> {
+  const dest = currency.trim().toUpperCase()
+  const data = await apiFetch<{ rates?: YcRateClientRow[] }>('/api/fx/grid-rates', {
+    query: dest.length === 3 ? { destinations: dest } : undefined,
+  })
+  return data.rates ?? []
+}
 
 export type { YcReceiveRailsResponse }
 
@@ -101,17 +127,36 @@ export function useYcFundBalanceFlow(input: {
   enabled: boolean
   amountEntryMode: 'usd' | 'local'
   enteredAmount: number
+  payInProvider?: PayInProviderId
+  providerRouting?: ProviderRoutingEntry[] | null
+  metadata?: Record<string, unknown> | null
 }) {
   const currency = input.currency?.trim().toUpperCase() ?? ''
+  const payInProvider = useMemo(
+    () =>
+      resolveFundBalancePayInProvider({
+        payInProvider: input.payInProvider,
+        providerRouting: input.providerRouting,
+        metadata: input.metadata,
+      }),
+    [input.payInProvider, input.providerRouting, input.metadata],
+  )
   const [rates, setRates] = useState<YcRateClientRow[]>(() => readCachedYcPayInRates() ?? [])
   const [ratesLoading, setRatesLoading] = useState(
-    () => Boolean(input.enabled && currency && !readCachedYcPayInRates()),
+    () => Boolean(input.enabled && currency && payInProvider !== 'grid' && !readCachedYcPayInRates()),
   )
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
 
   const revalidateRates = useCallback(async () => {
     if (!input.enabled || !currency) return
+    if (payInProvider === 'grid') {
+      setRatesLoading(true)
+      const next = await fetchGridPayInRates(currency).catch(() => [] as YcRateClientRow[])
+      setRates(next)
+      setRatesLoading(false)
+      return
+    }
     const cached = readCachedYcPayInRates()
     if (cached?.length) {
       setRates(cached)
@@ -122,7 +167,7 @@ export function useYcFundBalanceFlow(input: {
     const next = await prefetchYcPayInRates()
     setRates(next ?? cached ?? [])
     setRatesLoading(false)
-  }, [input.enabled, currency])
+  }, [input.enabled, currency, payInProvider])
 
   useEffect(() => {
     if (!input.enabled || !currency) {
@@ -131,6 +176,13 @@ export function useYcFundBalanceFlow(input: {
     }
     let cancelled = false
     void (async () => {
+      if (payInProvider === 'grid') {
+        setRatesLoading(true)
+        const next = await fetchGridPayInRates(currency).catch(() => [] as YcRateClientRow[])
+        if (!cancelled) setRates(next)
+        if (!cancelled) setRatesLoading(false)
+        return
+      }
       const cached = readCachedYcPayInRates()
       if (cached?.length) {
         setRates(cached)
@@ -145,14 +197,23 @@ export function useYcFundBalanceFlow(input: {
     return () => {
       cancelled = true
     }
-  }, [input.enabled, currency])
+  }, [input.enabled, currency, payInProvider])
 
   useRevalidateOnAppActive(revalidateRates)
 
-  const customerRate = useMemo(
-    () => (input.currency ? resolveYcPayInCustomerRate(rates, input.currency) : null),
-    [rates, input.currency],
-  )
+  const customerRate = useMemo(() => {
+    if (!input.currency) return null
+    if (payInProvider === 'grid') {
+      const cur = input.currency.trim().toUpperCase()
+      const row = rates.find(
+        (r) =>
+          String(r.from_currency || '').toUpperCase() === cur &&
+          String(r.to_currency || '').toUpperCase() === 'USD',
+      )
+      return row?.rate ?? null
+    }
+    return resolveYcPayInCustomerRate(rates, input.currency)
+  }, [rates, input.currency, payInProvider])
 
   const ycSellRate = useMemo(
     () =>
@@ -211,6 +272,9 @@ export function useYcFundBalanceFlow(input: {
           rail: input.rail,
           amountEntryMode: mode,
           enteredAmount,
+          payInProvider,
+          providerRouting: input.providerRouting,
+          metadata: input.metadata,
         })
         return data
       } catch (e) {
@@ -226,13 +290,14 @@ export function useYcFundBalanceFlow(input: {
         setQuoteLoading(false)
       }
     },
-    [input.country, input.currency, input.rail, input.amountEntryMode],
+    [input.country, input.currency, input.rail, input.amountEntryMode, input.providerRouting, input.metadata, payInProvider],
   )
 
   return {
     rates,
     ratesLoading: ratesLoading && rates.length === 0,
     customerRate,
+    payInProvider,
     preview,
     quoteLoading,
     quoteError,
