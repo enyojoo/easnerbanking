@@ -1,7 +1,7 @@
 import React from 'react'
 import { AppState, AppStateStatus, Platform } from 'react-native'
-import { focusManager } from '@tanstack/react-query'
-import { PersistQueryClientProvider, useIsRestoring } from '@tanstack/react-query-persist-client'
+import { focusManager, useIsRestoring } from '@tanstack/react-query'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { qk, type PersonalScope } from '@easner/shared'
 import { getMobileQueryClient } from './client'
 import {
