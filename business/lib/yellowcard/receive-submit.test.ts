@@ -62,9 +62,8 @@ describe("buildYcReceiveSource", () => {
 })
 
 describe("normalizeYcBankInfo", () => {
-  it("copies YC name into bankName for UI", () => {
+  it("mirrors YC name into bankName and drops duplicate name", () => {
     expect(normalizeYcBankInfo({ name: "PAGA", accountNumber: "1" })).toEqual({
-      name: "PAGA",
       bankName: "PAGA",
       accountNumber: "1",
     })
@@ -95,7 +94,6 @@ describe("hydrateYcReceiveBankInfo", () => {
     expect(out.bankInfo).toEqual({
       accountName: "Sam",
       accountNumber: "845",
-      name: "PAGA",
       bankName: "PAGA",
     })
   })
@@ -108,5 +106,6 @@ describe("hydrateYcReceiveBankInfo", () => {
     })
     expect(yellowcardFetch).not.toHaveBeenCalled()
     expect(out.bankInfo?.bankName).toBe("PAGA")
+    expect(out.bankInfo?.name).toBeUndefined()
   })
 })

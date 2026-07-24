@@ -61,26 +61,35 @@ function humanizeKey(key: string): string {
 
 export type YcBankInfoField = { id: string; label: string; value: string }
 
+function fieldDedupeKey(label: string, value: string): string {
+  return `${label.toLowerCase()}|${value.toLowerCase()}`
+}
+
 export function ycBankInfoFields(
   bankInfo: Record<string, unknown> | null | undefined,
 ): YcBankInfoField[] {
   if (!bankInfo || typeof bankInfo !== "object") return []
-  const seen = new Set<string>()
+  const seenKeys = new Set<string>()
+  const seenLabelValues = new Set<string>()
   const out: YcBankInfoField[] = []
 
   const push = (key: string) => {
-    if (seen.has(key)) return
+    if (seenKeys.has(key)) return
     const raw = bankInfo[key]
     if (raw == null) return
     if (typeof raw === "object") return
     const value = String(raw).trim()
     if (!value) return
-    seen.add(key)
-    out.push({
-      id: key,
-      label: LABEL_BY_KEY[key] ?? humanizeKey(key),
-      value,
-    })
+    const label = LABEL_BY_KEY[key] ?? humanizeKey(key)
+    const dedupe = fieldDedupeKey(label, value)
+    // Avoid double "Bank Name" when YC `name` is mirrored to `bankName`.
+    if (seenLabelValues.has(dedupe)) {
+      seenKeys.add(key)
+      return
+    }
+    seenKeys.add(key)
+    seenLabelValues.add(dedupe)
+    out.push({ id: key, label, value })
   }
 
   for (const key of PREFERRED_KEYS) push(key)
