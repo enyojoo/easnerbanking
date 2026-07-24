@@ -1,8 +1,7 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { CurrencyFlagCircle } from '../flags/CurrencyFlagCircle'
-import { transactionDetailRowStyles } from '../transactions/TransactionDetailSummaryRow'
-import { spacing, textStyles, fontFamily } from '../../theme'
+import { colors, spacing, textStyles, fontFamily } from '../../theme'
 
 type Props = {
   currency: string
@@ -10,14 +9,14 @@ type Props = {
   flagSize?: number
 }
 
-/** Balance chip for receipt rows — flag trailing on the right, matching detail CreditDestinationRow. */
+/** Balance chip for receipt rows — matches transaction detail CreditDestinationRow spacing. */
 export function ReceiptBalanceDestinationValue({
   currency,
   balanceLabel,
-  flagSize = 20,
+  flagSize = 22,
 }: Props) {
   return (
-    <View style={styles.wrap}>
+    <View style={styles.creditValue}>
       <CurrencyFlagCircle currency={currency} size={flagSize} />
       <Text style={styles.balanceLabel} numberOfLines={1}>
         {balanceLabel}
@@ -27,18 +26,18 @@ export function ReceiptBalanceDestinationValue({
 }
 
 const styles = StyleSheet.create({
-  wrap: {
+  creditValue: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
-    justifyContent: 'flex-end',
     flexShrink: 1,
     minWidth: 0,
     maxWidth: '72%',
+    justifyContent: 'flex-end',
   },
   balanceLabel: {
-    ...transactionDetailRowStyles.value,
     ...textStyles.body,
+    color: colors.text.primary,
     fontFamily: fontFamily.semibold,
     flexShrink: 1,
     textAlign: 'right',

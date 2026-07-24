@@ -102,7 +102,7 @@ function PdfBalanceDestinationRow({
   const flagCode = resolveReceiptCurrencyFlagCode(currency)
   return (
     <View style={styles.balanceValue}>
-      <Image src={`${assetBaseUrl}/flags/${flagCode}.png`} style={styles.avatarImage} />
+      <Image src={`${assetBaseUrl}/flags/${flagCode}.png`} style={styles.balanceFlag} />
       <Text style={styles.rowValue}>{balanceLabel}</Text>
     </View>
   )
@@ -168,8 +168,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: 6,
-    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: "72%",
+  },
+  balanceFlag: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    objectFit: "cover",
+    marginRight: 4,
   },
   avatarImage: {
     width: 18,
