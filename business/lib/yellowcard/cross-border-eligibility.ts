@@ -134,12 +134,10 @@ async function resolveGridThroughLocalCurrency(
   }
 
   const rates = await listGridRates(admin, {
-    destinations: [receiveCurrency],
+    destinations: [payInCurrency, receiveCurrency],
     status: "active",
   })
-  const cross =
-    findGridCrossRate(rates, payInCurrency, receiveCurrency) ??
-    findGridCrossRate(rates, "USD", receiveCurrency)
+  const cross = findGridCrossRate(rates, payInCurrency, receiveCurrency)
   if (!cross?.rate) {
     return {
       provider: "grid",

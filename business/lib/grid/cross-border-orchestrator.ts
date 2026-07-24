@@ -5,7 +5,7 @@ import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-custom
 import { createGridExternalAccount } from "./external-account"
 import { gridFetch } from "./http"
 import { gridMinorUnits } from "./external-account"
-import { findGridRate, listGridRates } from "@/lib/fx/grid-rates"
+import { findGridCrossRate, listGridRates } from "@/lib/fx/grid-rates"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
@@ -63,12 +63,10 @@ export async function createGridCrossBorderQuote(input: {
   }
 
   const rates = await listGridRates(input.admin, {
-    destinations: [receiveCurrency],
+    destinations: [sourceCurrency, receiveCurrency],
     status: "active",
   })
-  const crossRate =
-    findGridRate(rates, sourceCurrency, receiveCurrency) ??
-    findGridRate(rates, "USD", receiveCurrency)
+  const crossRate = findGridCrossRate(rates, sourceCurrency, receiveCurrency)
   const customerRate = crossRate?.rate ?? 0
   if (!customerRate || customerRate <= 0) {
     throw new Error("grid_cross_border_rate_unavailable")

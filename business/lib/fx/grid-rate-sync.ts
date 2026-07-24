@@ -1,8 +1,14 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import type { YcCrossPairInput } from "@easner/rate-sync"
 import {
+  applyGridCustomerCrossRate,
   applyGridMargin,
   fetchLiveGridExchangeRates,
 } from "@/lib/fx/grid-rates"
+import {
+  buildGridCrossPairsFromFiats,
+  loadGridFiatCurrenciesFromSupabase,
+} from "@/lib/fx/grid-pair-catalog"
 import { getGridPayoutMarginBps } from "@/lib/grid/config"
 
 export type GridRateSyncResult = {
@@ -12,6 +18,8 @@ export type GridRateSyncResult = {
   error?: string
 }
 
+const UPSERT_BATCH_SIZE = 200
+
 function getSupabaseServiceConfig(): { supabaseUrl: string; serviceRoleKey: string } {
   const supabaseUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim()
   const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim()
@@ -19,6 +27,79 @@ function getSupabaseServiceConfig(): { supabaseUrl: string; serviceRoleKey: stri
     throw new Error("supabase_not_configured")
   }
   return { supabaseUrl, serviceRoleKey }
+}
+
+/** Optional override: GRID_CROSS_PAIRS=NGN:KES,NGN:GHS — otherwise all corridor fiats are crossed. */
+function resolveGridCrossPairs(fiatCodes: string[]): YcCrossPairInput[] {
+  const fromEnv = (process.env.GRID_CROSS_PAIRS || "").trim()
+  if (fromEnv) {
+    return fromEnv
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => {
+        const [from, to] = p.split(":").map((s) => s.trim().toUpperCase())
+        return { from_currency: from, to_currency: to }
+      })
+      .filter((p) => p.from_currency && p.to_currency)
+  }
+  return buildGridCrossPairsFromFiats(fiatCodes)
+}
+
+type ExistingGridRateRow = {
+  from_currency: string
+  to_currency: string
+  source: string | null
+}
+
+type GridRateUpsertPayload = {
+  from_currency: string
+  to_currency: string
+  country_code: string | null
+  grid_mid: number
+  rate: number
+  margin_bps: number
+  source: string
+  as_of: string
+  status: string
+  updated_at: string
+}
+
+function resolveGridRateSource(
+  existingByKey: Map<string, ExistingGridRateRow>,
+  from: string,
+  to: string,
+): string {
+  const key = `${from}_${to}`
+  return existingByKey.get(key)?.source === "office" ? "office" : "grid_rates_sync"
+}
+
+function pushRateRow(
+  rowsByKey: Map<string, GridRateUpsertPayload>,
+  payload: GridRateUpsertPayload,
+): void {
+  rowsByKey.set(`${payload.from_currency}_${payload.to_currency}`, payload)
+}
+
+async function flushGridRateUpserts(
+  admin: SupabaseClient,
+  rows: GridRateUpsertPayload[],
+): Promise<{ upserted: number; skipped: number }> {
+  let upserted = 0
+  let skipped = 0
+  for (let i = 0; i < rows.length; i += UPSERT_BATCH_SIZE) {
+    const batch = rows.slice(i, i + UPSERT_BATCH_SIZE)
+    const { error } = await admin.from("grid_rates").upsert(batch, {
+      onConflict: "from_currency,to_currency",
+    })
+    if (error) {
+      console.warn("[grid_rates] batch upsert failed", error.message, `batch=${batch.length}`)
+      skipped += batch.length
+      continue
+    }
+    upserted += batch.length
+  }
+  return { upserted, skipped }
 }
 
 export async function syncGridExchangeRates(options?: {
@@ -35,65 +116,111 @@ export async function syncGridExchangeRates(options?: {
     return { ok: true, upserted: 0, skipped: 0 }
   }
 
+  const { data: existingRows } = await admin
+    .from("grid_rates")
+    .select("from_currency,to_currency,source")
+  const existingByKey = new Map<string, ExistingGridRateRow>()
+  for (const row of existingRows ?? []) {
+    const from = String(row.from_currency ?? "").trim().toUpperCase()
+    const to = String(row.to_currency ?? "").trim().toUpperCase()
+    if (!from || !to) continue
+    existingByKey.set(`${from}_${to}`, {
+      from_currency: from,
+      to_currency: to,
+      source: row.source != null ? String(row.source) : null,
+    })
+  }
+
   const now = new Date().toISOString()
-  let upserted = 0
+  const usdPerByFiat = new Map<string, number>()
+  const rowsByKey = new Map<string, GridRateUpsertPayload>()
+  let skipped = 0
+
   for (const row of live) {
     const customerRate = applyGridMargin(row.mid, marginBps)
-    const payload = {
-      from_currency: row.from,
-      to_currency: row.to,
+    const from = row.from.trim().toUpperCase()
+    const to = row.to.trim().toUpperCase()
+    pushRateRow(rowsByKey, {
+      from_currency: from,
+      to_currency: to,
       country_code: row.country ?? null,
       grid_mid: row.mid,
       rate: customerRate,
       margin_bps: marginBps,
-      source: "grid_rates_sync",
+      source: resolveGridRateSource(existingByKey, from, to),
       as_of: now,
       status: "active",
       updated_at: now,
-    }
-    if (options?.dryRun) {
-      upserted++
-      continue
-    }
-    const { error } = await admin.from("grid_rates").upsert(payload, {
-      onConflict: "from_currency,to_currency",
     })
-    if (error) {
-      console.warn("[grid_rates] upsert failed", row.from, row.to, error.message)
-      continue
-    }
-    upserted++
-    if (row.from === "USD" && row.to !== "USD" && row.mid > 0) {
+
+    if (from === "USD" && to !== "USD" && row.mid > 0) {
+      usdPerByFiat.set(to, row.mid)
       const payInMid = 1 / row.mid
-      const payInCustomer = applyGridMargin(payInMid, marginBps)
-      const payInPayload = {
-        from_currency: row.to,
+      pushRateRow(rowsByKey, {
+        from_currency: to,
         to_currency: "USD",
         country_code: row.country ?? null,
         grid_mid: payInMid,
-        rate: payInCustomer,
+        rate: applyGridMargin(payInMid, marginBps),
         margin_bps: marginBps,
-        source: "grid_rates_sync",
+        source: resolveGridRateSource(existingByKey, to, "USD"),
         as_of: now,
         status: "active",
         updated_at: now,
-      }
-      if (options?.dryRun) {
-        upserted++
-        continue
-      }
-      const { error: payInErr } = await admin.from("grid_rates").upsert(payInPayload, {
-        onConflict: "from_currency,to_currency",
       })
-      if (payInErr) {
-        console.warn("[grid_rates] pay-in upsert failed", row.to, "USD", payInErr.message)
-      } else {
-        upserted++
-      }
     }
   }
 
-  return { ok: true, upserted, skipped: Math.max(0, live.length * 2 - upserted) }
+  const corridorFiats = await loadGridFiatCurrenciesFromSupabase(admin)
+  const apiFiats = [...usdPerByFiat.keys()].sort()
+  const fiatsForCross =
+    corridorFiats.length > 0 ? apiFiats.filter((f) => corridorFiats.includes(f)) : apiFiats
+  const crossPairs = resolveGridCrossPairs(fiatsForCross)
+
+  for (const pair of crossPairs) {
+    const from = pair.from_currency.trim().toUpperCase()
+    const to = pair.to_currency.trim().toUpperCase()
+    if (!from || !to || from === to) {
+      skipped++
+      continue
+    }
+    const usdPerFrom = usdPerByFiat.get(from)
+    const usdPerTo = usdPerByFiat.get(to)
+    if (!usdPerFrom || !usdPerTo) {
+      skipped++
+      continue
+    }
+
+    let gridCrossMid: number
+    let rate: number
+    try {
+      ;({ gridCrossMid, rate } = applyGridCustomerCrossRate(usdPerFrom, usdPerTo, marginBps))
+    } catch {
+      skipped++
+      continue
+    }
+
+    pushRateRow(rowsByKey, {
+      from_currency: from,
+      to_currency: to,
+      country_code: pair.country_code?.trim().toUpperCase() || null,
+      grid_mid: gridCrossMid,
+      rate,
+      margin_bps: marginBps,
+      source: resolveGridRateSource(existingByKey, from, to),
+      as_of: now,
+      status: "active",
+      updated_at: now,
+    })
+  }
+
+  const payload = [...rowsByKey.values()]
+  if (options?.dryRun) {
+    return { ok: true, upserted: payload.length, skipped }
+  }
+
+  const { upserted, skipped: flushSkipped } = await flushGridRateUpserts(admin, payload)
+  return { ok: true, upserted, skipped: skipped + flushSkipped }
 }
 
 export async function syncGridRatesSafe(options?: {

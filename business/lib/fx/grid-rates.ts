@@ -115,6 +115,26 @@ export function applyGridMargin(mid: number, marginBps?: number): number {
   return mid * (1 - bps / 10_000)
 }
 
+/**
+ * Customer cross rate (destination per source) triangulated through USD legs.
+ * Each USD→fiat mid is USD per local unit (Grid /exchange-rates shape).
+ * Mirrors YC cross: (dest local per USD) / (source local per USD).
+ */
+export function applyGridCustomerCrossRate(
+  usdPerSource: number,
+  usdPerDest: number,
+  marginBps?: number,
+): { gridCrossMid: number; rate: number } {
+  if (!Number.isFinite(usdPerSource) || usdPerSource <= 0) {
+    throw new Error("usdPerSource must be positive")
+  }
+  if (!Number.isFinite(usdPerDest) || usdPerDest <= 0) {
+    throw new Error("usdPerDest must be positive")
+  }
+  const gridCrossMid = Number((usdPerSource / usdPerDest).toPrecision(14))
+  return { gridCrossMid, rate: applyGridMargin(gridCrossMid, marginBps) }
+}
+
 /** Cross-border customer rate: fromFiat → toFiat. */
 export function findGridCrossRate(
   rates: GridRateRow[],
