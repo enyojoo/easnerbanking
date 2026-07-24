@@ -881,8 +881,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       processingFee: ycDepositReview.processing_fee,
       exchangeFee: ycDepositReview.exchange_fee,
     })
-  const easetagWhenTs = whenTs
-
   // Downloadable receipt (image) — completed, non-Easetag. Same canonical rows as business PDF.
   const receiptRows = filterTransactionReceiptDetailRows(
     transaction.status === 'completed' && !isEasetagP2p
@@ -1058,6 +1056,43 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 </TransactionDetailSummaryRow>
 
                 {inboundReceive ? <InboundReceiveDetailRows snapshot={inboundReceive} /> : null}
+
+                {/* Outbound Easetag — inbound uses InboundReceiveDetailRows; send was dropped in that unification. */}
+                {isEasetagP2p && !inboundReceive ? (
+                  <>
+                    <TransactionDetailSummaryRow
+                      label={REVIEW_ROW_LABELS.scheme}
+                      value="Easetag"
+                    />
+                    {(() => {
+                      const payeeTag = String(
+                        transaction.metadata?.payee_easetag ?? '',
+                      )
+                        .trim()
+                        .replace(/^@+/, '')
+                      const recipient =
+                        String(transaction.recipient_name || '').trim() ||
+                        (payeeTag ? `@${payeeTag}` : '')
+                      if (!recipient) return null
+                      return (
+                        <TransactionDetailSummaryRow
+                          label={REVIEW_ROW_LABELS.recipient}
+                          value={recipient}
+                        />
+                      )
+                    })()}
+                    <TransactionDetailSummaryRow
+                      label={REVIEW_ROW_LABELS.when}
+                      value={formatTimestamp(whenTs)}
+                    />
+                    {depositSendNote ? (
+                      <TransactionDetailSummaryRow
+                        label={REVIEW_ROW_LABELS.note}
+                        value={depositSendNote}
+                      />
+                    ) : null}
+                  </>
+                ) : null}
 
                 {!inboundReceive &&
                 !isEasetagP2p &&

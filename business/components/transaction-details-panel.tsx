@@ -136,12 +136,13 @@ function TransactionSummaryDetails({
     (transaction.type === "book" || transaction.type === "ach" || transaction.type === "wire") &&
     Boolean(transaction.paymentRail)
   const isCard = Boolean(cardLast4) || transaction.type === "card"
+  const isEasetag = transaction.paymentScheme === "Easetag"
   const isDeposit = transaction.direction === "credit"
   const partyLabel = isDeposit ? "Sender" : "Recipient"
   const showLifecycleTracker = Boolean(transaction.lifecycle?.length)
   const displayCurrency = transaction.postedCurrency || transaction.displayCurrency || "USD"
   const showParty =
-    (isBank || isStablecoin || isCard) &&
+    (isBank || isStablecoin || isCard || isEasetag) &&
     Boolean(transaction.counterpartyName) &&
     (isDeposit || !showLifecycleTracker)
 

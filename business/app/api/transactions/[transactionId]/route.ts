@@ -197,8 +197,14 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
     isEasetagP2p
       ? "easetag"
       : String(meta?.destination_payment_rail ?? (dirRaw === "in" ? "bank" : provider === "turnkey" ? "crypto" : "bank")).toLowerCase()
+  const payeeEasetag =
+    typeof meta?.payee_easetag === "string"
+      ? meta.payee_easetag.trim().replace(/^@+/, "")
+      : ""
   const recipientName =
-    String(meta?.counterparty_name ?? (meta?.recipient_name as string | undefined) ?? "").trim() || undefined
+    String(meta?.counterparty_name ?? (meta?.recipient_name as string | undefined) ?? "").trim() ||
+    (isEasetagP2p && payeeEasetag ? `@${payeeEasetag}` : "") ||
+    undefined
   const reference =
     referenceFromMeta ||
     String(meta?.narration ?? "").trim() ||

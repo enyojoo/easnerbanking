@@ -247,13 +247,30 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
         row.chain ??
         "",
     ).trim() || undefined
+  const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
+  const easetagHandle =
+    isEasetagP2p
+      ? (() => {
+          const raw =
+            dirRaw === "out"
+              ? typeof meta?.payee_easetag === "string"
+                ? meta.payee_easetag
+                : ""
+              : typeof meta?.sender_easetag === "string"
+                ? meta.sender_easetag
+                : ""
+          const tag = raw.trim().replace(/^@+/, "")
+          return tag ? `@${tag}` : undefined
+        })()
+      : undefined
   const counterpartyName = stablecoinDepositDetail?.senderDisplay
     ? stablecoinDepositDetail.senderDisplay
-    : counterpartyNameRaw && counterpartyNameRaw !== description
-      ? counterpartyNameRaw
-      : undefined
+    : easetagHandle
+      ? easetagHandle
+      : counterpartyNameRaw && counterpartyNameRaw !== description
+        ? counterpartyNameRaw
+        : undefined
 
-  const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const displayHeroTitle =
     displaySource?.displayHeroTitle ??
     (bankDepositDetail?.displayHeroTitle
