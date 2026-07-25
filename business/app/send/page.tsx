@@ -61,13 +61,16 @@ import {
 } from "@/lib/send-flow-session"
 import {
   residenceCountryFromPayInCurrency,
-  useYcCrossBorderFlow,
-} from "@/hooks/use-yc-cross-border-flow"
+  useThroughLocalCurrencyFlow,
+  type LocalPayInRail,
+} from "@/hooks/use-through-local-currency-flow"
 import {
+  prefetchReceiveRails,
   prefetchYcPayInNetworks,
-  prefetchYcReceiveRails,
-  readCachedReceiveRails,
+  readCachedReceiveRailsForProvider,
   readCachedYcPayInNetworks,
+  resolveReceiveRailsForDisplay,
+  warmLocalDepositCaches,
   type ReceiveRailsResponse,
 } from "@/lib/yc-local-deposit-cache"
 import {
@@ -104,6 +107,8 @@ import {
   getSendAmountNoteFieldUi,
   validateBalancePayoutAmountForProvider,
   validateSendAmountFields,
+  mapResidenceToLocalPayInCurrency,
+  resolvePayInProvider,
   corridorMatchesCountryCurrency,
   isYcBalancePayoutCorridor,
   isGridBalancePayoutCorridor,
@@ -166,7 +171,8 @@ function beginTlcContinueLoading(
 
 export default function SendPage() {
   const router = useRouter()
-  const { tier1Complete, hasData, isLoading: profileLoading, businessId } = useBusinessProfile()
+  const { tier1Complete, hasData, isLoading: profileLoading, businessId, countryCode } =
+    useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
   const [amountStr, setAmountStr] = useState("")
@@ -220,62 +226,151 @@ export default function SendPage() {
   const isWalletRecipient =
     Boolean(recipient?.walletNetwork) || /wallet/i.test(recipient?.bankName || "")
   /** Bank/wallet receive currency from the recipient; easetag overrides after sendCurrency. */
-  const recipientReceiveCurrency = recipient?.currency ?? "USD"
+  const recipientReceiveCurrency = recipient?.currency?.trim().toUpperCase() ?? ""
 
-  const ycFlow = useYcCrossBorderFlow({
+  const [ownerResidenceCountry, setOwnerResidenceCountry] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetchWithSession("/api/compliance/ng-local-verification")
+        const data = (await res.json().catch(() => ({}))) as { residenceCountry?: string | null }
+        if (cancelled || !res.ok) return
+        const residence = String(data.residenceCountry ?? "").trim().toUpperCase() || null
+        setOwnerResidenceCountry(residence)
+      } catch {
+        // fall back to business countryCode below
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const residenceCountry =
+    ownerResidenceCountry || String(countryCode ?? "").trim().toUpperCase() || null
+
+  const residenceLocalPayInCurrency = useMemo(
+    () => (residenceCountry ? mapResidenceToLocalPayInCurrency(residenceCountry) : null),
+    [residenceCountry],
+  )
+
+  const expectTlcCorridor =
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    Boolean(residenceLocalPayInCurrency) &&
+    residenceLocalPayInCurrency !== recipientReceiveCurrency
+
+  const tlcPayInCountry =
+    expectTlcCorridor && residenceLocalPayInCurrency
+      ? residenceCountryFromPayInCurrency(residenceLocalPayInCurrency)
+      : null
+
+  const { bankCorridors, mobileCorridors, catalogVersion } = useSendDestinations()
+
+  const payInProvider = useMemo((): "yellowcard" | "grid" => {
+    if (!tlcPayInCountry || !residenceLocalPayInCurrency) return "yellowcard"
+    const row = [...bankCorridors, ...mobileCorridors].find((c) =>
+      corridorMatchesCountryCurrency(c, {
+        countryCode: tlcPayInCountry,
+        currencyCode: residenceLocalPayInCurrency,
+      }),
+    )
+    const resolved = row
+      ? resolvePayInProvider({
+          providerRouting: row.provider_routing as never,
+          metadata: row.metadata ?? null,
+        })
+      : "yellowcard"
+    return resolved === "grid" ? "grid" : "yellowcard"
+  }, [tlcPayInCountry, residenceLocalPayInCurrency, bankCorridors, mobileCorridors, catalogVersion])
+
+  const tlcFlow = useThroughLocalCurrencyFlow({
     recipientId: recipient?.id ?? null,
-    enabled: !isEasetagRecipient && !isWalletRecipient,
-    receiveCurrency: recipientReceiveCurrency,
+    enabled: expectTlcCorridor,
+    receiveCurrency: recipientReceiveCurrency || "USD",
     amountEntryMode,
     enteredAmount,
+    payInCurrencyOverride: expectTlcCorridor ? residenceLocalPayInCurrency : null,
+    payInCountryOverride: tlcPayInCountry,
+    crossBorderProviderOverride: expectTlcCorridor ? payInProvider : null,
   })
 
-  const showThroughLocalCurrency = ycFlow.available && !isEasetagRecipient
-  const payInCurrency = ycFlow.payInCurrency
+  const payInCurrency = tlcFlow.payInCurrency ?? residenceLocalPayInCurrency
   const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
   const payInCountryName = payInCountry ? resolveReceiveCountryName(payInCountry) : ""
 
   const [payInRails, setPayInRails] = useState<ReceiveRailsResponse | null>(() =>
-    payInCountry && payInCurrency ? readCachedReceiveRails(payInCountry, payInCurrency) : null,
+    payInCountry && payInCurrency
+      ? readCachedReceiveRailsForProvider(payInProvider, payInCountry, payInCurrency)
+      : null,
   )
   const [payInRailsLoading, setPayInRailsLoading] = useState(false)
 
+  const payInRailsDisplay = useMemo(
+    () =>
+      payInRails ??
+      (payInCountry && payInCurrency
+        ? resolveReceiveRailsForDisplay(payInCountry, payInCurrency, payInProvider)
+        : null),
+    [payInRails, payInCountry, payInCurrency, payInProvider],
+  )
+
+  const showThroughLocalCurrency =
+    expectTlcCorridor && Boolean(payInRailsDisplay?.anyAvailable)
+
   useEffect(() => {
-    if (!showThroughLocalCurrency || !payInCountry || !payInCurrency) {
+    if (!expectTlcCorridor || !payInCountry || !payInCurrency) {
       setPayInRails(null)
       setPayInRailsLoading(false)
       return
     }
     let cancelled = false
-    const cached = readCachedReceiveRails(payInCountry, payInCurrency)
-    if (cached) {
-      setPayInRails(cached)
+    const cached = readCachedReceiveRailsForProvider(payInProvider, payInCountry, payInCurrency)
+    const display =
+      cached ?? resolveReceiveRailsForDisplay(payInCountry, payInCurrency, payInProvider)
+    if (display) {
+      setPayInRails(display)
       setPayInRailsLoading(false)
     } else {
       setPayInRailsLoading(true)
     }
-    void prefetchYcReceiveRails(payInCountry, payInCurrency).then((data) => {
+    void prefetchReceiveRails({
+      provider: payInProvider,
+      country: payInCountry,
+      currency: payInCurrency,
+    }).then((data) => {
       if (!cancelled) {
-        setPayInRails(data ?? cached)
+        setPayInRails(data ?? display)
         setPayInRailsLoading(false)
       }
     })
     return () => {
       cancelled = true
     }
-  }, [showThroughLocalCurrency, payInCountry, payInCurrency])
+  }, [expectTlcCorridor, payInCountry, payInCurrency, payInProvider])
+
+  useEffect(() => {
+    if (!expectTlcCorridor || !payInCountry || !payInCurrency) return
+    void warmLocalDepositCaches({
+      residenceCountry: payInCountry,
+      localPayInCurrency: payInCurrency,
+      payInProvider,
+    })
+  }, [expectTlcCorridor, payInCountry, payInCurrency, payInProvider])
 
   const localPayInOptions = useMemo(() => {
-    if (!payInCurrency || !payInCountry || !payInRails) return []
-    const opts: Array<{ rail: "bank_transfer" | "mobile_money"; title: string }> = []
-    if (payInRails.rails.bank_transfer.available) {
+    if (!payInCurrency || !payInCountry || !payInRailsDisplay) return []
+    const opts: Array<{ rail: LocalPayInRail; title: string }> = []
+    if (payInRailsDisplay.rails.bank_transfer.available) {
       opts.push({ rail: "bank_transfer", title: sendLocalPayInBankTitle(payInCountryName) })
     }
-    if (payInRails.rails.mobile_money.available) {
+    if (payInRailsDisplay.rails.mobile_money.available) {
       opts.push({ rail: "mobile_money", title: sendLocalPayInMomoTitle(payInCountryName) })
     }
     return opts
-  }, [payInCurrency, payInCountry, payInCountryName, payInRails])
+  }, [payInCurrency, payInCountry, payInCountryName, payInRailsDisplay])
 
   useEffect(() => {
     if (showThroughLocalCurrency) return
@@ -373,7 +468,7 @@ export default function SendPage() {
     }
     const crossCurrency = sendCurrency !== receiveCurrency
     if (otherCurrency && crossCurrency && showThroughLocalCurrency) {
-      return ycFlow.preview
+      return tlcFlow.preview
     }
     if (isWalletRecipient) {
       return { sendAmount: enteredAmount, receiveAmount: enteredAmount, forwardRate: 1 }
@@ -395,7 +490,7 @@ export default function SendPage() {
     isWalletRecipient,
     otherCurrency,
     showThroughLocalCurrency,
-    ycFlow.preview,
+    tlcFlow.preview,
   ])
 
   const sendAmount = flowAmounts.sendAmount
@@ -431,14 +526,14 @@ export default function SendPage() {
   const hasValidNoahRateForPair =
     !needsNoahRateForSend || hasNoahSendRateRow(activeNoahRateRow)
 
-  const ycQuoteEnabled =
+  const tlcQuoteEnabled =
     showThroughLocalCurrency &&
     paymentMethod === "otherCurrency" &&
     Boolean(otherCurrency) &&
     sendCurrency !== receiveCurrency &&
     enteredAmount > 0
 
-  const ycRateLoading = ycQuoteEnabled && ycFlow.ratesLoading && !ycFlow.customerRate
+  const tlcRateLoading = tlcQuoteEnabled && tlcFlow.ratesLoading && !tlcFlow.customerRate
 
   const tlcPayInRail =
     otherPaymentMethod === "mobile_money" ? ("mobile_money" as const) : ("bank_transfer" as const)
@@ -458,25 +553,25 @@ export default function SendPage() {
     amountEntryMode === "receive" ? tlcSendingDisplayAmount : tlcReceivingDisplayAmount
 
   const tlcPayInLimits = useMemo(() => {
-    if (!payInRails || paymentMethod !== "otherCurrency") {
+    if (!payInRailsDisplay || paymentMethod !== "otherCurrency") {
       return { minLocalPayIn: null as number | null, maxLocalPayIn: null as number | null }
     }
     const railInfo =
       tlcPayInRail === "mobile_money"
-        ? payInRails.rails.mobile_money
-        : payInRails.rails.bank_transfer
+        ? payInRailsDisplay.rails.mobile_money
+        : payInRailsDisplay.rails.bank_transfer
     return {
       minLocalPayIn: railInfo?.minLocalPayIn ?? null,
       maxLocalPayIn: railInfo?.maxLocalPayIn ?? null,
     }
-  }, [payInRails, paymentMethod, tlcPayInRail])
+  }, [payInRailsDisplay, paymentMethod, tlcPayInRail])
 
   const tlcMinSeedKey =
     showThroughLocalCurrency &&
     paymentMethod === "otherCurrency" &&
     otherCurrency &&
     otherPaymentMethod &&
-    ycFlow.customerRate
+    tlcFlow.customerRate
       ? `${otherCurrency}:${tlcPayInRail}:${amountEntryMode}`
       : null
 
@@ -484,12 +579,12 @@ export default function SendPage() {
     enabled:
       showThroughLocalCurrency &&
       paymentMethod === "otherCurrency" &&
-      Boolean(otherCurrency && otherPaymentMethod && ycFlow.customerRate),
+      Boolean(otherCurrency && otherPaymentMethod && tlcFlow.customerRate),
     seedKey: tlcMinSeedKey,
     minLocalPayIn: tlcPayInLimits.minLocalPayIn,
     amountEntryMode,
     enteredAmount,
-    customerRate: ycFlow.customerRate,
+    customerRate: tlcFlow.customerRate,
     onApplyEnteredAmount: (amount) => {
       const rounded = Math.round(amount * 100) / 100
       setAmountStr(Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2))
@@ -498,11 +593,11 @@ export default function SendPage() {
 
   const tlcAmountLimitOk = useMemo(() => {
     if (paymentMethod !== "otherCurrency" || !showThroughLocalCurrency) return true
-    if (!enteredAmount || !ycFlow.customerRate) return true
+    if (!enteredAmount || !tlcFlow.customerRate) return true
     return validateYcCrossBorderSendAmount({
       amountEntryMode,
       enteredAmount,
-      customerRate: ycFlow.customerRate,
+      customerRate: tlcFlow.customerRate,
       payInCurrency: otherCurrency ?? payInCurrency ?? "",
       limits: tlcPayInLimits,
     }).ok
@@ -510,7 +605,7 @@ export default function SendPage() {
     paymentMethod,
     showThroughLocalCurrency,
     enteredAmount,
-    ycFlow.customerRate,
+    tlcFlow.customerRate,
     amountEntryMode,
     otherCurrency,
     payInCurrency,
@@ -520,8 +615,8 @@ export default function SendPage() {
   const exchangePreviewReady =
     sendCurrency === receiveCurrency ||
     isWalletRecipient ||
-    (ycQuoteEnabled
-      ? Boolean(ycFlow.customerRate)
+    (tlcQuoteEnabled
+      ? Boolean(tlcFlow.customerRate)
       : !needsNoahRateForSend || hasValidNoahRateForPair)
 
   const displayBalanceForSource =
@@ -579,7 +674,6 @@ export default function SendPage() {
     currencyCode: recipient?.currency,
     rail: payoutRail,
   })
-  const { bankCorridors, mobileCorridors } = useSendDestinations()
   const payoutCountryCode = recipient
     ? resolvePayoutCountryCode({
         countryCode: recipient.countryCode,
@@ -738,12 +832,12 @@ export default function SendPage() {
     payoutRail,
   ])
 
-  const ycFxRateMap = useMemo(() => {
-    const from = ycFlow.payInCurrency?.trim().toUpperCase()
+  const tlcFxRateMap = useMemo(() => {
+    const from = tlcFlow.payInCurrency?.trim().toUpperCase()
     const to = receiveCurrency.trim().toUpperCase()
-    if (!from || !to || !ycFlow.customerRate) return {}
-    return { [`${from}_${to}`]: ycFlow.customerRate }
-  }, [ycFlow.payInCurrency, ycFlow.customerRate, receiveCurrency])
+    if (!from || !to || !tlcFlow.customerRate) return {}
+    return { [`${from}_${to}`]: tlcFlow.customerRate }
+  }, [tlcFlow.payInCurrency, tlcFlow.customerRate, receiveCurrency])
 
   const payoutEnforcementRateMap =
     isGridBalancePayout && gridPayoutCustomerRate
@@ -751,7 +845,7 @@ export default function SendPage() {
       : isYcBalancePayout && ycPayoutCustomerRate
         ? ycPayoutRateMap
         : paymentMethod === "otherCurrency" && showThroughLocalCurrency
-          ? ycFxRateMap
+          ? tlcFxRateMap
           : noahFxRates
 
   const payoutMinEnforcementEnabled =
@@ -1292,7 +1386,7 @@ export default function SendPage() {
             ...state,
             ycMomoSetup: undefined,
             ycCrossBorder: undefined,
-            crossBorderProvider: ycFlow.crossBorderProvider,
+            crossBorderProvider: tlcFlow.crossBorderProvider,
           }
           persistSendFlowState(flowState)
           router.push("/send/momo-setup")
@@ -1315,7 +1409,7 @@ export default function SendPage() {
             payInCountry,
             payInRail: "bank_transfer" as const,
             receiveAmount,
-            crossBorderProvider: ycFlow.crossBorderProvider,
+            crossBorderProvider: tlcFlow.crossBorderProvider,
           }
           const previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
           if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
@@ -1333,7 +1427,7 @@ export default function SendPage() {
               previewQuote.easnerTransactionId ||
               previewQuote.transactionId ||
               state.transactionId,
-            crossBorderProvider: ycFlow.crossBorderProvider,
+            crossBorderProvider: tlcFlow.crossBorderProvider,
             ycCrossBorder: crossBorderQuoteToFlowState(previewQuote, crossBorderMeta),
           }
           persistSendFlowState(flowState)
@@ -1409,11 +1503,11 @@ export default function SendPage() {
             </Label>
             {receiveCurrency !== sendCurrency && !isWalletRecipient ? (
               <div className="flex min-w-0 flex-1 items-center justify-end text-sm text-muted-foreground">
-                {ycRateLoading ? (
+                {tlcRateLoading ? (
                   <Skeleton className="h-4 w-52 max-w-full" />
-                ) : ycQuoteEnabled && !ycFlow.customerRate ? (
+                ) : tlcQuoteEnabled && !tlcFlow.customerRate ? (
                   <span className="text-destructive text-xs">
-                    {ycFlow.quoteError ?? "Exchange rate unavailable. Try again shortly."}
+                    {tlcFlow.quoteError ?? "Exchange rate unavailable. Try again shortly."}
                   </span>
                 ) : needsNoahRateForSend && noahRatesLoading ? (
                   <Skeleton className="h-4 w-52 max-w-full" />

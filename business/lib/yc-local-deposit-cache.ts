@@ -196,6 +196,54 @@ export function readCachedReceiveRailsForProvider(
   return readCachedReceiveRails(country, currency)
 }
 
+const OPTIMISTIC_MOMO_COUNTRIES = new Set([
+  "KE",
+  "GH",
+  "UG",
+  "TZ",
+  "RW",
+  "ZM",
+  "CM",
+  "CI",
+  "SN",
+  "BF",
+  "ML",
+  "BJ",
+  "TG",
+  "GA",
+  "CG",
+  "CD",
+])
+
+/** Instant UI when residence→currency is known; API revalidate may refine. */
+export function optimisticReceiveRails(country: string, currency: string): ReceiveRailsResponse {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  const momo = OPTIMISTIC_MOMO_COUNTRIES.has(cc)
+  return {
+    ok: true,
+    country: cc,
+    currency: cur,
+    rails: {
+      bank_transfer: { available: true },
+      mobile_money: { available: momo },
+    },
+    anyAvailable: true,
+  }
+}
+
+/** Rails for display: provider cache → optimistic from residence. */
+export function resolveReceiveRailsForDisplay(
+  country: string | null | undefined,
+  currency: string | null | undefined,
+  provider: PayInProviderId = "yellowcard",
+): ReceiveRailsResponse | null {
+  const cc = String(country ?? "").trim().toUpperCase()
+  const cur = String(currency ?? "").trim().toUpperCase()
+  if (!cc || !cur) return null
+  return readCachedReceiveRailsForProvider(provider, cc, cur) ?? optimisticReceiveRails(cc, cur)
+}
+
 export async function prefetchYcReceiveRails(
   country: string,
   currency: string,
