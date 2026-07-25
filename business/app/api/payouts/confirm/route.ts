@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       mobile_provider: rec.mobile_provider,
       wallet_network: rec.wallet_network,
     },
-    { requireExecutableNoahChannel: false },
+    { requireExecutableProviderChannel: false },
   )
   if (gate) return gate
 

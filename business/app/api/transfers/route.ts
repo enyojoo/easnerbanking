@@ -168,7 +168,7 @@ export async function POST(request: Request) {
   }
 
   const gate = await payoutCorridorGate(admin, gateRow, {
-    requireExecutableNoahChannel: requireExecutableProviderChannel(),
+    requireExecutableProviderChannel: requireExecutableProviderChannel(),
   })
   if (gate) return gate
 

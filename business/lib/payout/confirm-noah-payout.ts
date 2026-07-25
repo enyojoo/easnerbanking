@@ -76,6 +76,9 @@ export async function confirmNoahPayoutOrder(
   if (provider.id === "yellowcard") {
     throw new Error("Yellowcard corridor must use YC confirm path.")
   }
+  if (provider.id === "grid") {
+    throw new Error("Grid corridor must use Grid confirm path.")
+  }
 
   const preview = await buildPayoutQuote({
     userId: input.userId,

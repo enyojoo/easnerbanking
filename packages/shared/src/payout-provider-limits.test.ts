@@ -78,6 +78,20 @@ describe("resolvePayInProvider", () => {
       }),
     ).toBe("grid")
   })
+
+  it("does not treat grid-only payout corridors as Noah payout locked", () => {
+    expect(
+      resolvePayInProvider({
+        providerRouting: [{ provider: "grid", priority: 1, settlement_asset: "USDC" }],
+        metadata: {
+          grid_send: true,
+          grid_send_enabled: true,
+          grid_receive: true,
+          grid_receive_enabled: true,
+        },
+      }),
+    ).toBe("grid")
+  })
 })
 
 describe("validatePayInAmountForProvider", () => {

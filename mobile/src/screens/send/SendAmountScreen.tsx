@@ -1777,8 +1777,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           }}
         >
           <Text style={{ color: colors.warning.dark, fontSize: 14, lineHeight: 20 }}>
-            Fiat payouts to this recipient are not available on your account yet (Noah sell channel missing).
-            Choose another recipient or a US/EUR bank corridor.
+            Fiat payouts to this recipient are not available on your account yet for this corridor.
+            Choose another recipient or try again later.
           </Text>
         </View>
       ) : null}

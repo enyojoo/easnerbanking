@@ -6,7 +6,10 @@ import type {
   SendDestinationsResponse,
 } from "@easner/shared"
 import type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail, PayoutCorridorPayInMetadata } from "@easner/shared"
+import { isBalancePayoutCorridorExecutable } from "@easner/shared"
+import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
+import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
 import { getGlobalCurrencyPolicies } from "@/lib/accounts/currency-controls"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
 import { isExcludedPayoutCorridorCountry } from "@/lib/payout-corridors-exclusions"
@@ -80,7 +83,14 @@ function parseProviderRouting(raw: unknown): ProviderRoutingEntry[] {
 }
 
 function publicCorridor(
-  row: PayoutCorridorRow & { noah_sell_available?: boolean; provider_health?: Record<string, ProviderHealthStatus> },
+  row: PayoutCorridorRow & {
+    noah_sell_available?: boolean
+    grid_send_available?: boolean
+    yc_send_available?: boolean
+    grid_receive_available?: boolean
+    yc_receive_available?: boolean
+    provider_health?: Record<string, ProviderHealthStatus>
+  },
 ): PayoutCorridorPublic {
   return {
     id: row.id,
@@ -93,6 +103,12 @@ function publicCorridor(
     providers: row.providers,
     provider_routing: parseProviderRouting(row.provider_routing),
     ...(typeof row.noah_sell_available === "boolean" ? { noah_sell_available: row.noah_sell_available } : {}),
+    ...(typeof row.grid_send_available === "boolean" ? { grid_send_available: row.grid_send_available } : {}),
+    ...(typeof row.yc_send_available === "boolean" ? { yc_send_available: row.yc_send_available } : {}),
+    ...(typeof row.grid_receive_available === "boolean"
+      ? { grid_receive_available: row.grid_receive_available }
+      : {}),
+    ...(typeof row.yc_receive_available === "boolean" ? { yc_receive_available: row.yc_receive_available } : {}),
     ...(row.provider_health ? { provider_health: row.provider_health } : {}),
     ...(row.fields_schema != null
       ? { fields_schema: row.fields_schema as PayoutFieldsSchemaHint }
@@ -163,19 +179,36 @@ export async function buildSendDestinationsCatalog(input?: {
     (r) => !isExcludedPayoutCorridorCountry(r.country_code),
   )
   if (annotateProviders) {
-    const annotated = await annotateCorridorsWithNoahAvailability(fiatRows)
-    fiatRows = annotated.map((row) => {
+    const noahAnnotated = await annotateCorridorsWithNoahAvailability(fiatRows)
+    const ycAnnotated = await annotateCorridorsWithYcAvailability(noahAnnotated)
+    const gridAnnotated = await annotateCorridorsWithGridAvailability(ycAnnotated)
+    fiatRows = gridAnnotated.map((row) => {
       const routing = parseProviderRouting(row.provider_routing)
-      const hasNoah = routing.some((r) => r.provider === "noah")
       const provider_health: Record<string, ProviderHealthStatus> = {}
-      if (hasNoah) {
+      if (routing.some((r) => r.provider === "noah")) {
         provider_health.noah = row.noah_sell_available ? "ok" : "unavailable"
+      }
+      if (routing.some((r) => r.provider === "yellowcard")) {
+        if (row.yc_send_available === false) provider_health.yellowcard = "unavailable"
+        else if (row.yc_send_available === true) provider_health.yellowcard = "ok"
+      }
+      if (routing.some((r) => r.provider === "grid")) {
+        if (row.grid_send_available === false) provider_health.grid = "unavailable"
+        else if (row.grid_send_available === true) provider_health.grid = "ok"
       }
       return { ...row, provider_health }
     })
   }
   if (executableOnly) {
-    fiatRows = fiatRows.filter((r) => (r as PayoutCorridorRow & { noah_sell_available?: boolean }).noah_sell_available)
+    fiatRows = fiatRows.filter((row) =>
+      isBalancePayoutCorridorExecutable({
+        provider_routing: parseProviderRouting(row.provider_routing),
+        noah_sell_available: row.noah_sell_available,
+        grid_send_available: row.grid_send_available,
+        yc_send_available: row.yc_send_available,
+        provider_health: row.provider_health,
+      }),
+    )
   }
 
   const bank = fiatRows.filter((r) => r.rail === "bank_transfer").map(publicCorridor)

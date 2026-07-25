@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         bank_name: gateRow.bank_name,
         mobile_provider: gateRow.mobile_provider,
       },
-      { requireExecutableNoahChannel: true }, // explicit for quote even if env default changes
+      { requireExecutableProviderChannel: true },
     )
     if (gate) return gate
 

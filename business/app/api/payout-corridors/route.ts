@@ -1,6 +1,9 @@
 import { createHash } from "crypto"
 import { NextResponse } from "next/server"
+import { isBalancePayoutCorridorExecutable, type ProviderRoutingEntry } from "@easner/shared"
+import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
+import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
 import { isExcludedPayoutCorridorCountry } from "@/lib/payout-corridors-exclusions"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
@@ -15,10 +18,35 @@ type PayoutCorridorRow = {
   currency_name: string
   sort_order: number | null
   providers: unknown
+  provider_routing?: unknown
   updated_at: string
 }
 
-function publicCorridorPayload(row: PayoutCorridorRow & { noah_sell_available?: boolean }) {
+type AnnotatedCorridorRow = PayoutCorridorRow & {
+  noah_sell_available?: boolean
+  grid_send_available?: boolean
+  yc_send_available?: boolean
+}
+
+function parseProviderRouting(raw: unknown): ProviderRoutingEntry[] {
+  if (!Array.isArray(raw)) return []
+  const out: ProviderRoutingEntry[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue
+    const o = item as Record<string, unknown>
+    const provider = String(o.provider ?? "").trim()
+    const priority = Number(o.priority)
+    if (!provider || !Number.isFinite(priority)) continue
+    out.push({
+      provider,
+      priority,
+      ...(o.settlement_asset ? { settlement_asset: String(o.settlement_asset) } : {}),
+    })
+  }
+  return out.sort((a, b) => a.priority - b.priority)
+}
+
+function publicCorridorPayload(row: AnnotatedCorridorRow) {
   return {
     id: row.id,
     rail: row.rail,
@@ -28,8 +56,15 @@ function publicCorridorPayload(row: PayoutCorridorRow & { noah_sell_available?: 
     currency_name: row.currency_name,
     sort_order: row.sort_order,
     providers: row.providers,
+    provider_routing: parseProviderRouting(row.provider_routing),
     ...(typeof row.noah_sell_available === "boolean"
       ? { noah_sell_available: row.noah_sell_available }
+      : {}),
+    ...(typeof row.grid_send_available === "boolean"
+      ? { grid_send_available: row.grid_send_available }
+      : {}),
+    ...(typeof row.yc_send_available === "boolean"
+      ? { yc_send_available: row.yc_send_available }
       : {}),
   }
 }
@@ -59,8 +94,10 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const rail = searchParams.get("rail")
   const executableOnly = searchParams.get("executable") === "true"
-  const annotateNoah =
-    searchParams.get("annotateNoah") === "true" || executableOnly
+  const annotateProviders =
+    searchParams.get("annotateProviders") === "true" ||
+    searchParams.get("annotateNoah") === "true" ||
+    executableOnly
   const railFilter =
     rail === "bank_transfer" || rail === "mobile_money" ? rail : rail === "all" || rail == null ? null : "invalid"
 
@@ -71,7 +108,9 @@ export async function GET(request: Request) {
   const admin = createSupabaseAdmin()
   let q = admin
     .from("payout_corridors")
-    .select("id,rail,country_code,country_name,currency_code,currency_name,sort_order,providers,updated_at")
+    .select(
+      "id,rail,country_code,country_name,currency_code,currency_name,sort_order,providers,provider_routing,updated_at",
+    )
     .eq("enabled", true)
     .order("sort_order", { ascending: true, nullsFirst: false })
     .order("country_name", { ascending: true })
@@ -87,11 +126,20 @@ export async function GET(request: Request) {
   }
 
   let rows = ((data ?? []) as PayoutCorridorRow[]).filter((r) => !isExcludedPayoutCorridorCountry(r.country_code))
-  if (annotateNoah) {
-    rows = await annotateCorridorsWithNoahAvailability(rows)
+  if (annotateProviders) {
+    const noahAnnotated = await annotateCorridorsWithNoahAvailability(rows)
+    const ycAnnotated = await annotateCorridorsWithYcAvailability(noahAnnotated)
+    rows = await annotateCorridorsWithGridAvailability(ycAnnotated)
   }
   if (executableOnly) {
-    rows = rows.filter((r) => (r as PayoutCorridorRow & { noah_sell_available?: boolean }).noah_sell_available)
+    rows = (rows as AnnotatedCorridorRow[]).filter((row) =>
+      isBalancePayoutCorridorExecutable({
+        provider_routing: parseProviderRouting(row.provider_routing),
+        noah_sell_available: row.noah_sell_available,
+        grid_send_available: row.grid_send_available,
+        yc_send_available: row.yc_send_available,
+      }),
+    )
   }
   const etag = weakEtagFromRows(rows)
   const inm = request.headers.get("if-none-match")
@@ -107,7 +155,7 @@ export async function GET(request: Request) {
 
   const body = {
     catalog_version: catalogVersion(rows),
-    corridors: rows.map(publicCorridorPayload),
+    corridors: (rows as AnnotatedCorridorRow[]).map(publicCorridorPayload),
   }
 
   return NextResponse.json(body, {

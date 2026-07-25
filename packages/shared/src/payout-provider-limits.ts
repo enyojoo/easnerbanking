@@ -1,5 +1,10 @@
 import type { ProviderRoutingEntry } from "./send-destinations"
-import type { PayoutFieldsSchemaHint, PayoutProviderId, PayoutRail } from "./payout-corridor"
+import type {
+  PayoutCorridorPayInMetadata,
+  PayoutFieldsSchemaHint,
+  PayoutProviderId,
+  PayoutRail,
+} from "./payout-corridor"
 import { resolvePrimaryPayoutProvider } from "./payout-corridor"
 import {
   validateNoahPayInLocalAmount,
@@ -22,20 +27,39 @@ function resolvePayInProviderFromCaps(input: {
   payoutLocked: PayInProviderId | null
   supportYcPayIn: boolean
   supportNoahPayIn: boolean
+  supportGridPayIn: boolean
 }): PayInProviderId | null {
   if (input.payoutLocked === "noah") {
     if (input.supportYcPayIn) return "yellowcard"
     if (input.supportNoahPayIn) return "noah"
+    if (input.supportGridPayIn) return "grid"
     return null
   }
   if (input.payoutLocked === "yellowcard") {
     if (input.supportYcPayIn) return "yellowcard"
     if (input.supportNoahPayIn) return "noah"
+    if (input.supportGridPayIn) return "grid"
+    return null
+  }
+  if (input.payoutLocked === "grid") {
+    if (input.supportGridPayIn) return "grid"
+    if (input.supportYcPayIn) return "yellowcard"
+    if (input.supportNoahPayIn) return "noah"
     return null
   }
 
-  const secondary: PayInProviderId = input.payoutProvider === "noah" ? "yellowcard" : "noah"
+  if (input.payoutProvider === "grid" && input.supportGridPayIn) return "grid"
+  if (input.payoutProvider === "yellowcard" && input.supportYcPayIn) return "yellowcard"
+  if (input.payoutProvider === "noah" && input.supportNoahPayIn) return "noah"
+
+  const secondary: PayInProviderId =
+    input.payoutProvider === "noah"
+      ? "yellowcard"
+      : input.payoutProvider === "grid"
+        ? "grid"
+        : "noah"
   if (secondary === "yellowcard" && input.supportYcPayIn) return "yellowcard"
+  if (secondary === "grid" && input.supportGridPayIn) return "grid"
   if (secondary === "noah" && input.supportNoahPayIn) return "noah"
   if (input.payoutProvider === "yellowcard" && input.supportYcPayIn) return "yellowcard"
   if (input.payoutProvider === "noah" && input.supportNoahPayIn) return "noah"
@@ -62,22 +86,26 @@ export function resolvePayInProvider(input: {
   const supportYcPayIn = meta.yc_receive === true && meta.yc_receive_enabled === true
   const supportNoahPayIn = meta.noah_receive === true && meta.noah_receive_enabled === true
   const supportGridPayIn = meta.grid_receive === true && meta.grid_receive_enabled === true
+  const supportGridPayout =
+    meta.grid_send === true || routing.some((e) => e.provider === "grid")
   const supportYcPayout =
     meta.yc_send === true || routing.some((e) => e.provider === "yellowcard")
-  const supportNoahPayout =
-    routing.some((e) => e.provider === "noah") || (!supportYcPayout && !supportNoahPayIn)
+  const supportNoahPayout = routing.some((e) => e.provider === "noah")
   const payoutLocked: PayInProviderId | null =
-    supportNoahPayout && !supportYcPayout
+    supportNoahPayout && !supportYcPayout && !supportGridPayout
       ? "noah"
-      : !supportNoahPayout && supportYcPayout
+      : supportYcPayout && !supportNoahPayout && !supportGridPayout
         ? "yellowcard"
-        : null
+        : supportGridPayout && !supportNoahPayout && !supportYcPayout
+          ? "grid"
+          : null
 
   const resolved = resolvePayInProviderFromCaps({
     payoutProvider,
     payoutLocked,
     supportYcPayIn,
     supportNoahPayIn,
+    supportGridPayIn,
   })
   if (resolved) return resolved
   if (supportGridPayIn) return "grid"
@@ -194,4 +222,46 @@ export function validateBalancePayoutAmountForProvider(
     rail,
     isEasetag: input.isEasetag,
   })
+}
+
+/** True when Office has enabled local pay-in for any provider on this corridor. */
+export function isPayInCorridorEnabled(
+  corridor: Pick<{ metadata?: PayoutCorridorPayInMetadata | null }, "metadata"> | null | undefined,
+): boolean {
+  if (!corridor) return false
+  const meta = corridor.metadata ?? {}
+  return (
+    meta.grid_receive_enabled === true ||
+    meta.yc_receive_enabled === true ||
+    meta.noah_receive_enabled === true
+  )
+}
+
+/** True when the Office-selected pay-in provider can execute on this corridor. */
+export function isPayInCorridorExecutable(
+  corridor:
+    | {
+        provider_routing?: ProviderRoutingEntry[] | null
+        metadata?: PayoutCorridorPayInMetadata | null
+        grid_receive_available?: boolean
+        yc_receive_available?: boolean
+        provider_health?: Record<string, "ok" | "unavailable">
+      }
+    | null
+    | undefined,
+): boolean {
+  if (!corridor || !isPayInCorridorEnabled(corridor)) return false
+  const provider = resolvePayInProvider({
+    providerRouting: corridor.provider_routing,
+    metadata: corridor.metadata as Record<string, unknown> | null | undefined,
+  })
+  if (provider === "grid") {
+    if (corridor.grid_receive_available === false) return false
+    return true
+  }
+  if (provider === "yellowcard") {
+    if (corridor.yc_receive_available === false) return false
+    return true
+  }
+  return true
 }

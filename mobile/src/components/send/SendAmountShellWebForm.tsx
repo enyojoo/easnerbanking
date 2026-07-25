@@ -247,8 +247,8 @@ export function SendAmountShellWebForm({
         {showPayoutCorridorWarning ? (
           <View style={styles.recipientWarning}>
             <Text style={styles.recipientWarningText}>
-              Fiat payouts to this recipient are not available on your account yet (Noah sell channel missing).
-              Choose another recipient or a US/EUR bank corridor.
+              Fiat payouts to this recipient are not available on your account yet for this corridor.
+              Choose another recipient or try again later.
             </Text>
           </View>
         ) : null}

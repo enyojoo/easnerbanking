@@ -187,6 +187,7 @@ export {
   isYcBalancePayoutCorridor,
   isGridBalancePayoutCorridor,
   isNoahBalancePayoutCorridor,
+  isBalancePayoutCorridorExecutable,
   resolveBalancePayoutProvider,
   resolvePrimaryPayoutProvider,
 } from "./payout-corridor"
@@ -276,6 +277,8 @@ export {
   validateBalancePayoutAmountForProvider,
   validatePayInAmountForProvider,
   resolvePayInProvider,
+  isPayInCorridorEnabled,
+  isPayInCorridorExecutable,
   type ValidateBalancePayoutAmountInput,
   type ValidatePayInAmountInput,
   type PayInProviderId,

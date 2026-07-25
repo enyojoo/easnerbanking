@@ -29,6 +29,7 @@ import {
   scaleSendAmountPrefixLineHeight,
   useDebouncedValue,
   isNoahBalancePayoutCorridor,
+  isBalancePayoutCorridorExecutable,
   resolveBalancePayoutProvider,
   type NoahWalletRateRow,
 } from "@easner/shared"
@@ -706,6 +707,11 @@ export default function SendPage() {
 
   const balancePayoutProvider = resolveBalancePayoutProvider(payoutCorridorRow)
 
+  const payoutCorridorExecutable = useMemo(() => {
+    if (!recipient || isEasetagRecipient || isWalletRecipient) return true
+    return isBalancePayoutCorridorExecutable(payoutCorridorRow)
+  }, [recipient, isEasetagRecipient, isWalletRecipient, payoutCorridorRow])
+
   const [providerPayoutCustomerRate, setProviderPayoutCustomerRate] = useState<number | null>(
     null,
   )
@@ -1054,6 +1060,7 @@ export default function SendPage() {
     isBalanceSource &&
     tier1Complete &&
     (isWalletRecipient || hasValidSendRateForPair) &&
+    payoutCorridorExecutable &&
     !payoutReceiveBelowMin &&
     !walletReceiveBelowMin &&
     (!needsProfileBeforeEasenetSend || (hasData && !profileLoading))
@@ -1601,6 +1608,16 @@ export default function SendPage() {
         selected={recipient}
         onSelect={setRecipient}
       />
+
+      {recipient && !isEasetagRecipient && !isWalletRecipient && !payoutCorridorExecutable ? (
+        <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>
+            Fiat payouts to this recipient are not available on your account yet for this corridor.
+            Choose another recipient or try again later.
+          </span>
+        </div>
+      ) : null}
 
       {recipient && (
         <div className="space-y-2">

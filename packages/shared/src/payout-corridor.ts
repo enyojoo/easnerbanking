@@ -67,6 +67,14 @@ export type PayoutCorridorPublic = {
   providers: unknown
   /** When true, Noah GET /channels/sell returns at least one channel for this corridor (executable payout). */
   noah_sell_available?: boolean
+  /** Live or synced Grid balance payout on this corridor rail. */
+  grid_send_available?: boolean
+  /** Live or synced Yellowcard send channel on this corridor rail. */
+  yc_send_available?: boolean
+  /** Live or synced Yellowcard local pay-in on this corridor rail. */
+  yc_receive_available?: boolean
+  /** Live or synced Grid local pay-in on this corridor rail. */
+  grid_receive_available?: boolean
   provider_routing?: ProviderRoutingEntry[]
   provider_health?: Record<string, ProviderHealthStatus>
   /** Noah hints and/or nested `yellowcard` schema — see yc-recipient-schema. */
@@ -102,17 +110,10 @@ export function corridorMatchesCountryCurrency(
 
 /** True when balance payout routes through Yellowcard direct settlement. */
 export function isYcBalancePayoutCorridor(
-  corridor: Pick<PayoutCorridorPublic, "provider_routing" | "noah_sell_available"> | null | undefined,
+  corridor: Pick<PayoutCorridorPublic, "provider_routing"> | null | undefined,
 ): boolean {
   if (!corridor) return false
-  if (resolvePrimaryPayoutProvider(corridor.provider_routing) === "yellowcard") return true
-  if (
-    corridor.noah_sell_available === false &&
-    (corridor.provider_routing ?? []).some((r) => r.provider === "yellowcard")
-  ) {
-    return true
-  }
-  return false
+  return resolvePrimaryPayoutProvider(corridor.provider_routing) === "yellowcard"
 }
 
 /** True when balance payout routes through Grid quote lock + execute. */
@@ -133,10 +134,44 @@ export function resolveBalancePayoutProvider(
 
 /** True when balance payout uses Noah sell/prepare (not YC direct or Grid quote lock). */
 export function isNoahBalancePayoutCorridor(
-  corridor: Pick<PayoutCorridorPublic, "provider_routing" | "noah_sell_available"> | null | undefined,
+  corridor: Pick<PayoutCorridorPublic, "provider_routing"> | null | undefined,
 ): boolean {
   if (!corridor) return false
-  return (
-    !isYcBalancePayoutCorridor(corridor) && !isGridBalancePayoutCorridor(corridor)
-  )
+  return resolvePrimaryPayoutProvider(corridor.provider_routing) === "noah"
+}
+
+/**
+ * True when the Office-selected primary payout provider can execute on this corridor.
+ * Non-Noah primaries trust routing unless explicitly marked unavailable.
+ */
+export function isBalancePayoutCorridorExecutable(
+  corridor:
+    | Pick<
+        PayoutCorridorPublic,
+        | "provider_routing"
+        | "noah_sell_available"
+        | "grid_send_available"
+        | "yc_send_available"
+        | "provider_health"
+      >
+    | null
+    | undefined,
+): boolean {
+  if (!corridor) return false
+  const primary = resolvePrimaryPayoutProvider(corridor.provider_routing)
+
+  if (primary === "grid") {
+    if (corridor.provider_health?.grid === "unavailable") return false
+    if (corridor.grid_send_available === false) return false
+    return true
+  }
+
+  if (primary === "yellowcard") {
+    if (corridor.provider_health?.yellowcard === "unavailable") return false
+    if (corridor.yc_send_available === false) return false
+    return true
+  }
+
+  if (corridor.provider_health?.noah === "unavailable") return false
+  return corridor.noah_sell_available === true
 }

@@ -2,7 +2,11 @@ import { NextResponse } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveRecipientPayoutRail } from "@easner/shared"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-payout-country"
-import { hasNoahSellChannelForRail } from "@/lib/noah/channel-availability"
+import {
+  NoProviderForCorridorError,
+  selectProviderForCorridor,
+} from "@/lib/payout-providers"
+
 type RecipientLike = {
   country_code?: string | null
   currency: string
@@ -32,10 +36,12 @@ function isMobileRow(row: RecipientLike): boolean {
 
 export type PayoutCorridorGateOptions = {
   /**
-   * When true, also require Noah GET /channels/sell (executable payout).
-   * Use for quote/send only — not recipient save. Noah may list a country on
-   * /channels/sell/countries and quote /prices without sell channels yet (e.g. NGN).
+   * When true, require a live executable provider for this corridor (Noah sell,
+   * Grid discovery, or YC send channel — whichever Office routes first).
+   * Use for quote/send only — not recipient save.
    */
+  requireExecutableProviderChannel?: boolean
+  /** @deprecated Use requireExecutableProviderChannel */
   requireExecutableNoahChannel?: boolean
 }
 
@@ -47,8 +53,17 @@ export function requireExecutableProviderChannel(): boolean {
   return process.env.NODE_ENV === "production"
 }
 
+function shouldRequireExecutableProvider(options?: PayoutCorridorGateOptions): boolean {
+  if (options?.requireExecutableProviderChannel === true) return true
+  if (options?.requireExecutableProviderChannel === false) return false
+  if (options?.requireExecutableNoahChannel === true) return true
+  if (options?.requireExecutableNoahChannel === false) return false
+  return requireExecutableProviderChannel()
+}
+
 /**
- * Returns an error response if the row maps to a disabled or mismatched payout corridor.
+ * Returns an error response if the row maps to a disabled or mismatched payout corridor,
+ * or when quote/send requires a provider that cannot execute on this corridor.
  * No-op when row is wallet/easenet or country is missing.
  */
 export async function payoutCorridorGate(
@@ -65,6 +80,8 @@ export async function payoutCorridorGate(
   if (!cc) return null
 
   const rail = isMobileRow(row) ? "mobile_money" : "bank_transfer"
+  const currency = String(row.currency || "").trim().toUpperCase()
+
   const { data, error } = await admin
     .from("payout_corridors")
     .select("enabled,currency_code")
@@ -81,28 +98,34 @@ export async function payoutCorridorGate(
       { status: 400 },
     )
   }
-  if (String(data.currency_code).toUpperCase() !== String(row.currency || "").toUpperCase()) {
+  if (String(data.currency_code).toUpperCase() !== currency) {
     return NextResponse.json(
       { error: "Country and currency do not match an active payout corridor." },
       { status: 400 },
     )
   }
 
-  if (options?.requireExecutableNoahChannel) {
-    const sellOk = await hasNoahSellChannelForRail({
-      country: cc,
-      fiatCurrency: String(row.currency || "").toUpperCase(),
-      rail,
-    })
-    if (!sellOk) {
-      return NextResponse.json(
-        {
-          error:
-            "Payouts to this country and currency are not available on your Noah program yet. You can save this recipient, but sending is not supported until Noah enables sell channels for this corridor.",
-          code: "NOAH_SELL_CHANNEL_UNAVAILABLE",
-        },
-        { status: 400 },
-      )
+  if (shouldRequireExecutableProvider(options)) {
+    try {
+      await selectProviderForCorridor(admin, {
+        countryCode: cc,
+        currencyCode: currency,
+        rail,
+        mobileProvider: row.mobile_provider,
+        bankName: row.bank_name,
+      })
+    } catch (e) {
+      if (e instanceof NoProviderForCorridorError) {
+        return NextResponse.json(
+          {
+            error:
+              "Payouts to this country and currency are not available on configured providers yet. Choose another recipient or try again later.",
+            code: "PAYOUT_PROVIDER_UNAVAILABLE",
+          },
+          { status: 400 },
+        )
+      }
+      throw e
     }
   }
 
