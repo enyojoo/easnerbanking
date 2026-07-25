@@ -42,7 +42,12 @@ describe("resolvePayInProvider", () => {
           { provider: "noah", priority: 1, settlement_asset: "USDC" },
           { provider: "yellowcard", priority: 2, settlement_asset: "USDC" },
         ],
-        metadata: { yc_receive: true, yc_send: true, noah_receive: false },
+        metadata: {
+          yc_receive: true,
+          yc_receive_enabled: true,
+          yc_send: true,
+          noah_receive: false,
+        },
       }),
     ).toBe("yellowcard")
   })
@@ -56,6 +61,20 @@ describe("resolvePayInProvider", () => {
     expect(
       resolvePayInProvider({
         metadata: { grid_receive: true, grid_receive_enabled: true },
+      }),
+    ).toBe("grid")
+  })
+
+  it("prefers grid_receive_enabled over stale yc_receive capability flag", () => {
+    expect(
+      resolvePayInProvider({
+        providerRouting: [{ provider: "grid", priority: 1, settlement_asset: "USDC" }],
+        metadata: {
+          yc_receive: true,
+          yc_receive_enabled: false,
+          grid_receive: true,
+          grid_receive_enabled: true,
+        },
       }),
     ).toBe("grid")
   })

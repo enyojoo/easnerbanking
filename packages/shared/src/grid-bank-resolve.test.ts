@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   gridBankLabelsMatch,
   isStoredBankNameAllowedForOptions,
+  normalizeGridBankAccountNumber,
   resolveGridBankName,
   resolveGridMomoProvider,
 } from "./grid-bank-resolve"
@@ -56,5 +57,20 @@ describe("resolveGridMomoProvider", () => {
     ]
     expect(resolveGridMomoProvider("M-PESA", options)).toBe("M-Pesa")
     expect(resolveGridMomoProvider("Airtel", options)).toBe("Airtel Money")
+  })
+})
+
+describe("normalizeGridBankAccountNumber", () => {
+  it("strips spaces from NGN NUBAN before Grid external account create", () => {
+    expect(normalizeGridBankAccountNumber("NGN", "1234 567 890")).toBe("1234567890")
+    expect(normalizeGridBankAccountNumber("ngn", "1234567 945")).toBe("1234567945")
+  })
+
+  it("rejects NGN account numbers longer than 10 digits", () => {
+    expect(() => normalizeGridBankAccountNumber("NGN", "12345678901")).toThrow(/10 digits/)
+  })
+
+  it("strips whitespace for other currencies", () => {
+    expect(normalizeGridBankAccountNumber("USD", "1234 5678 901")).toBe("12345678901")
   })
 })

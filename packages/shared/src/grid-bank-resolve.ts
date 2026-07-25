@@ -154,6 +154,20 @@ export function isStoredBankNameAllowedForOptions(
   return bankOptions.some((candidate) => gridBankLabelsMatch(name, candidate))
 }
 
+/** Strip display formatting before Grid external-account create. NGN NUBAN is 10 digits. */
+export function normalizeGridBankAccountNumber(currency: string, raw: string): string {
+  const cur = currency.trim().toUpperCase()
+  const compact = String(raw ?? "").replace(/\s+/g, "").trim()
+  if (cur === "NGN") {
+    const digits = compact.replace(/\D/g, "")
+    if (digits.length > 10) {
+      throw new Error("Nigerian bank account numbers must be at most 10 digits.")
+    }
+    return digits
+  }
+  return compact
+}
+
 export function isStoredMomoProviderAllowedForOptions(
   storedProvider: string,
   momoOptions: string[],

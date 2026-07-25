@@ -51,12 +51,17 @@ export function resolvePayInProvider(input: {
   if (explicit === "yellowcard" || explicit === "noah" || explicit === "grid") return explicit
 
   const meta = input.metadata ?? {}
+
+  // Match Office Platform Control toggles — capability flags alone must not activate pay-in.
+  if (meta.noah_receive_enabled === true) return "noah"
+  if (meta.yc_receive_enabled === true) return "yellowcard"
+  if (meta.grid_receive_enabled === true) return "grid"
+
   const routing = input.providerRouting ?? []
   const payoutProvider = resolvePrimaryPayoutProvider(routing)
-  const supportYcPayIn = meta.yc_receive === true
-  const supportNoahPayIn = meta.noah_receive === true
-  const supportGridPayIn =
-    meta.grid_receive === true && meta.grid_receive_enabled === true
+  const supportYcPayIn = meta.yc_receive === true && meta.yc_receive_enabled === true
+  const supportNoahPayIn = meta.noah_receive === true && meta.noah_receive_enabled === true
+  const supportGridPayIn = meta.grid_receive === true && meta.grid_receive_enabled === true
   const supportYcPayout =
     meta.yc_send === true || routing.some((e) => e.provider === "yellowcard")
   const supportNoahPayout =

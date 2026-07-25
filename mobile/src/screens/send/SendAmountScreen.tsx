@@ -356,12 +356,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   useEffect(() => {
     if (!showThroughLocalCurrency || !payInCountry || !payInCurrency) return
-    void warmYcPayInCorridor(payInCountry, payInCurrency)
-  }, [showThroughLocalCurrency, payInCountry, payInCurrency])
+    void warmYcPayInCorridor(payInCountry, payInCurrency, payInProvider)
+  }, [showThroughLocalCurrency, payInCountry, payInCurrency, payInProvider])
 
   const localPayInOptions = useMemo(() => {
     if (!payInCurrency || !payInCountry) return []
-    const rails = payInRails ?? resolveReceiveRailsForDisplay(payInCountry, payInCurrency)
+    const rails =
+      payInRails ?? resolveReceiveRailsForDisplay(payInCountry, payInCurrency, payInProvider)
     if (!rails) return []
     const opts: { rail: YcPayInRail; title: string }[] = []
     if (rails.rails.bank_transfer.available) {

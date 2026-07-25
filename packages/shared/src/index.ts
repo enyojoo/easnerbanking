@@ -204,6 +204,7 @@ export {
   resolveCorridorBankName,
   resolveCorridorMomoProvider,
   resolveCorridorRecipientOptions,
+  normalizeGridBankAccountNumber,
   resolveGridBankName,
   resolveGridMomoProvider,
   resolveYcCorridorSchema,

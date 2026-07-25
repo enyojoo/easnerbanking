@@ -101,10 +101,14 @@ export function optimisticReceiveRails(
 export function resolveReceiveRailsForDisplay(
   country: string | null | undefined,
   currency: string | null | undefined,
+  provider: PayInProviderId = 'yellowcard',
 ): YcReceiveRailsResponse | null {
   const cc = String(country ?? '').trim().toUpperCase()
   const cur = String(currency ?? '').trim().toUpperCase()
   if (!cc || !cur) return null
+  if (provider === 'grid') {
+    return readCachedGridReceiveRails(cc, cur) ?? optimisticReceiveRails(cc, cur)
+  }
   return readCachedReceiveRails(cc, cur) ?? optimisticReceiveRails(cc, cur)
 }
 
@@ -231,7 +235,7 @@ export async function prefetchGridReceiveRails(
       }
       return data
     } catch {
-      return readCachedGridReceiveRails(cc, cur)
+      return readCachedGridReceiveRails(cc, cur) ?? optimisticReceiveRails(cc, cur)
     } finally {
       gridReceiveRailsInflight.delete(key)
     }
@@ -424,6 +428,7 @@ export async function ensureYcLocalDepositCachesReady(
 export async function warmYcPayInCorridor(
   country: string | null | undefined,
   currency: string | null | undefined,
+  payInProvider?: PayInProviderId,
 ): Promise<void> {
   const cc = String(country ?? '').trim().toUpperCase()
   const cur = String(currency ?? '').trim().toUpperCase()
@@ -432,5 +437,6 @@ export async function warmYcPayInCorridor(
     residenceCountry: cc,
     localPayInCurrency: cur,
     kycApproved: true,
+    payInProvider,
   })
 }

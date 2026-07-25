@@ -79,7 +79,7 @@ export function useYcReceiveRails(input: {
     if (!input.enabled) return null
     return (
       readCachedReceiveRailsForProvider(payInProvider, country, currency) ??
-      resolveReceiveRailsForDisplay(country, currency)
+      resolveReceiveRailsForDisplay(country, currency, payInProvider)
     )
   })
   // Never block UI on rails — display uses cache/optimistic; network refreshes quietly.
@@ -90,7 +90,7 @@ export function useYcReceiveRails(input: {
     await hydrateReceiveRailsFromDisk()
     const display =
       readCachedReceiveRailsForProvider(payInProvider, country, currency) ??
-      resolveReceiveRailsForDisplay(country, currency)
+      resolveReceiveRailsForDisplay(country, currency, payInProvider)
     if (display) setRails(display)
     const data = await prefetchReceiveRails({ provider: payInProvider, country, currency })
     setRails(data ?? display)
@@ -113,7 +113,7 @@ export function useYcReceiveRails(input: {
       if (cancelled) return
       const display =
         readCachedReceiveRailsForProvider(payInProvider, country, currency) ??
-        resolveReceiveRailsForDisplay(country, currency)
+        resolveReceiveRailsForDisplay(country, currency, payInProvider)
       setRails(display)
       setLoading(false)
       const data = await prefetchReceiveRails({ provider: payInProvider, country, currency })

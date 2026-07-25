@@ -4,6 +4,7 @@ import { gridFetch } from "./http"
 import type { GridExternalAccount } from "./types"
 import type { GridPersonProfile } from "./kyc-metadata"
 import {
+  normalizeGridBankAccountNumber,
   normalizeYcMomoPhone,
   resolveGridBankName,
   resolveGridMomoProvider,
@@ -53,7 +54,10 @@ export function buildGridExternalAccountPayload(input: {
     String(input.recipient.bank_name ?? "").trim(),
     input.gridBankCandidates,
   )
-  const accountNumber = String(input.recipient.account_number ?? "").trim()
+  const accountNumber = normalizeGridBankAccountNumber(
+    currency,
+    String(input.recipient.account_number ?? ""),
+  )
   const mobileProvider = resolveGridMomoProvider(
     String(input.recipient.mobile_provider ?? "").trim(),
     input.gridMomoCandidates,
