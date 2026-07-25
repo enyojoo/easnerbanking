@@ -4,6 +4,7 @@ import {
   getNoahSendConversionRate,
   hasNoahSendRateRow,
   isNoahSendRateRowFresh,
+  mapGridBalancePayoutRateRows,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
   normalizePayoutReceiveAmount,
@@ -169,5 +170,32 @@ describe("payoutReceiveAmountsMatch", () => {
   it("treats sub-cent noise as equal after normalization", () => {
     expect(payoutReceiveAmountsMatch(9997.30385, 9997.3)).toBe(true)
     expect(payoutReceiveAmountsMatch(10_000, 9999.99)).toBe(false)
+  })
+})
+
+describe("mapGridBalancePayoutRateRows", () => {
+  it("inverts USD-per-local grid mid for send preview", () => {
+    const usdPerNgn = 1 / 1500
+    const mapped = mapGridBalancePayoutRateRows([
+      {
+        from_currency: "USD",
+        to_currency: "NGN",
+        rate: usdPerNgn,
+        grid_mid: usdPerNgn,
+        margin_bps: 50,
+      },
+    ])
+    expect(mapped).toHaveLength(1)
+    expect(mapped[0]?.rate).toBeCloseTo(1492.5, 2)
+
+    const preview = convertNoahSendFlowAmounts({
+      direction: "receive",
+      amount: 2000,
+      sendCurrency: "USD",
+      receiveCurrency: "NGN",
+      rateMap: { USD_NGN: mapped[0]!.rate },
+    })
+    expect(preview.sendAmount).toBeCloseTo(1.34, 1)
+    expect(preview.receiveAmount).toBe(2000)
   })
 })

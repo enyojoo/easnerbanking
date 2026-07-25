@@ -10,6 +10,16 @@ export type NoahWalletRateRow = {
   country_code?: string | null
 }
 
+export type GridWalletRateRow = {
+  from_currency: string
+  to_currency: string
+  rate: number
+  grid_mid?: number
+  margin_bps?: number
+  as_of?: string
+  country_code?: string | null
+}
+
 /** Default TTL for background Noah rate sync (not send gating). */
 export const NOAH_SEND_RATES_STALE_MS = 300_000
 
@@ -145,6 +155,45 @@ export function mapNoahWalletRateRows(
         updated_at: at,
       }
     })
+}
+
+/**
+ * Map Grid USD→local rows for Send balance payout preview.
+ * Grid stores USD→fiat mid as USD per local unit; payout preview needs local per 1 USD.
+ */
+export function mapGridBalancePayoutRateRows(
+  rows: GridWalletRateRow[],
+  fallbackTs = new Date().toISOString(),
+): ExchangeRate[] {
+  const out: ExchangeRate[] = []
+  for (const r of rows) {
+    if (!Number.isFinite(r.rate) || r.rate <= 0) continue
+    const from = r.from_currency.trim().toUpperCase()
+    const to = r.to_currency.trim().toUpperCase()
+    if (from !== "USD" || !to || to === "USD") continue
+
+    const storedMid = r.grid_mid ?? r.rate
+    let customerRate = r.rate
+    if (storedMid > 0 && storedMid < 1) {
+      const marginBps = r.margin_bps ?? 50
+      const localPerUsdMid = 1 / storedMid
+      customerRate = localPerUsdMid * (1 - marginBps / 10_000)
+    }
+
+    const at = r.as_of ?? fallbackTs
+    out.push({
+      id: `grid-${from}-${to}`.toLowerCase(),
+      from_currency: from,
+      to_currency: to,
+      rate: customerRate,
+      fee_type: "free",
+      fee_amount: 0,
+      status: "active",
+      created_at: at,
+      updated_at: at,
+    })
+  }
+  return out
 }
 
 /**

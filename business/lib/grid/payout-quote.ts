@@ -9,7 +9,11 @@ import {
   buildLegacyNoahSettlementFromLeg,
   type PayoutSettlementLeg,
 } from "@easner/shared"
-import { findGridRate, listGridRates } from "@/lib/fx/grid-rates"
+import {
+  findGridBalancePayoutRate,
+  listGridRates,
+  resolveGridLockedPayoutCustomerRate,
+} from "@/lib/fx/grid-rates"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import {
   resolveRecipientPayoutCountry,
@@ -114,9 +118,10 @@ export async function lockGridBalancePayoutQuote(
   })
 
   const rates = await listGridRates(admin, { destinations: [receiveCurrency], status: "active" })
-  const rateRow = findGridRate(rates, "USD", receiveCurrency)
-  const midRate = rateRow?.rate ?? rateRow?.grid_mid ?? 0
-  if (!midRate || midRate <= 0) {
+  const payoutRate = findGridBalancePayoutRate(rates, receiveCurrency)
+  const customerRate = payoutRate?.rate ?? 0
+  const gridMidLocalPerUsd = payoutRate?.grid_mid ?? 0
+  if (!customerRate || customerRate <= 0) {
     throw new Error(`Exchange rate for USD → ${receiveCurrency} is unavailable. Try again shortly.`)
   }
 
@@ -131,17 +136,20 @@ export async function lockGridBalancePayoutQuote(
     amountEntryMode,
     receiveFiatAmount: receiveAmountRaw,
     sendBudget,
-    customerRate: midRate,
+    customerRate,
     receiveCurrency,
     normalizeReceive: normalizePayoutReceiveAmountForCurrency,
   })
 
-  const provisionalCrypto = Math.round((quoteReceiveAmount / midRate) * 100) / 100
+  const provisionalCrypto = roundUsd(quoteReceiveAmount / customerRate)
   const pricingBefore = computeYcBalancePayoutPricingBeforeSend({
     receiveAmount: quoteReceiveAmount,
-    customerRate: midRate,
+    customerRate,
     provisionalCryptoUsd: provisionalCrypto,
-    ycMidUsd: rateRow?.grid_mid ?? midRate,
+    ycMidUsd:
+      gridMidLocalPerUsd > 0
+        ? roundUsd(quoteReceiveAmount / gridMidLocalPerUsd)
+        : undefined,
   })
 
   const quote = await gridFetch<GridQuote>({
@@ -164,17 +172,27 @@ export async function lockGridBalancePayoutQuote(
     })}`,
   })
 
-  const exchangeRate = Number(quote.exchangeRate ?? midRate)
+  const lockedCustomerRate = resolveGridLockedPayoutCustomerRate({
+    quoteExchangeRate: quote.exchangeRate,
+    previewCustomerRate: customerRate,
+  })
   const gridFeesUsd = roundUsd(
     Number(quote.rateDetails?.gridApiFixedFee ?? 0) / 100 +
       Number(quote.rateDetails?.gridApiVariableFeeAmount ?? 0) / 100 +
       Number(quote.rateDetails?.counterpartyFixedFee ?? 0) / 100,
   )
+  const lockedCryptoUsd = roundUsd(
+    Number(quote.totalSendingAmount ?? pricingBefore.ycFloorUsd * 100) / 100 ||
+      pricingBefore.ycFloorUsd,
+  )
   const pricing = computeYcBalancePayoutPricingBeforeSend({
     receiveAmount: quoteReceiveAmount,
-    customerRate: exchangeRate,
-    provisionalCryptoUsd: Number(quote.totalSendingAmount ?? pricingBefore.ycFloorUsd * 100) / 100 || pricingBefore.ycFloorUsd,
-    ycMidUsd: rateRow?.grid_mid ?? exchangeRate,
+    customerRate: lockedCustomerRate,
+    provisionalCryptoUsd: lockedCryptoUsd > 0 ? lockedCryptoUsd : provisionalCrypto,
+    ycMidUsd:
+      gridMidLocalPerUsd > 0
+        ? roundUsd(quoteReceiveAmount / gridMidLocalPerUsd)
+        : undefined,
   })
   if (gridFeesUsd > 0) {
     pricing.channelCost = roundUsd(pricing.channelCost + gridFeesUsd)
@@ -196,7 +214,7 @@ export async function lockGridBalancePayoutQuote(
     receiveCurrency,
     cryptoAmount: cryptoAmount > 0 ? cryptoAmount : pricing.customerPrincipal,
     fundingAddress: extractGridFundingSolanaAddress(quote),
-    exchangeRate,
+    exchangeRate: lockedCustomerRate,
     expiresAt,
     pricing: {
       customerPrincipal: pricing.customerPrincipal,
@@ -204,7 +222,7 @@ export async function lockGridBalancePayoutQuote(
       marginAmount: pricing.marginAmount,
       processingFee: pricing.processingFee,
       channelCost: pricing.channelCost,
-      customerRate: exchangeRate,
+      customerRate: lockedCustomerRate,
     },
     quote,
   }

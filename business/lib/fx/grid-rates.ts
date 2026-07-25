@@ -189,12 +189,48 @@ export function findGridBalancePayoutRate(
   rates: GridRateRow[],
   receiveCurrency: string,
 ): GridRateRow | null {
-  const row = findGridRate(rates, "USD", receiveCurrency)
-  if (!row) return null
-  return {
-    ...row,
-    rate: applyGridMargin(row.grid_mid || row.rate, row.margin_bps),
+  const local = receiveCurrency.trim().toUpperCase()
+  if (!local) return null
+
+  const localToUsd = findGridRate(rates, local, "USD")
+  if (localToUsd?.grid_mid && localToUsd.grid_mid > 0) {
+    return {
+      ...localToUsd,
+      from_currency: "USD",
+      to_currency: local,
+      grid_mid: localToUsd.grid_mid,
+      rate: applyGridMargin(localToUsd.grid_mid, localToUsd.margin_bps),
+    }
   }
+
+  const usdToLocal = findGridRate(rates, "USD", local)
+  if (!usdToLocal?.grid_mid || usdToLocal.grid_mid <= 0) return null
+
+  const localPerUsdMid = 1 / usdToLocal.grid_mid
+  return {
+    ...usdToLocal,
+    from_currency: "USD",
+    to_currency: local,
+    grid_mid: localPerUsdMid,
+    rate: applyGridMargin(localPerUsdMid, usdToLocal.margin_bps),
+  }
+}
+
+/** Normalize Grid locked quote rate to local-per-USD (Noah/YC parity). */
+export function resolveGridLockedPayoutCustomerRate(input: {
+  quoteExchangeRate?: number | null
+  previewCustomerRate: number
+}): number {
+  const preview = input.previewCustomerRate
+  const raw = input.quoteExchangeRate
+  if (raw == null || !Number.isFinite(raw) || raw <= 0) return preview
+  if (preview <= 0) return raw
+
+  const product = raw * preview
+  if (product > 0.5 && product < 2) {
+    return 1 / raw
+  }
+  return raw
 }
 
 export async function fetchLiveGridExchangeRates(): Promise<

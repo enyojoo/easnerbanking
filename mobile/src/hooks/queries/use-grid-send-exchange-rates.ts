@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery, type QueryClient } from '@tanstack/react-query'
-import { mapNoahWalletRateRows } from '@easner/shared'
+import { mapGridBalancePayoutRateRows } from '@easner/shared'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
 import type { ExchangeRate } from '../../types'
@@ -30,7 +30,7 @@ async function fetchGridSendExchangeRates(receiveCurrency: string): Promise<Exch
     error?: string
   }
   if (!res.ok) throw new Error(data.error || 'Failed to load Grid exchange rates')
-  return mapNoahWalletRateRows(data.rates ?? []) as ExchangeRate[]
+  return mapGridBalancePayoutRateRows(data.rates ?? []) as ExchangeRate[]
 }
 
 export function prefetchGridSendExchangeRates(

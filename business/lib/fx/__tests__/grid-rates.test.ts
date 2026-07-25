@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   applyGridCustomerCrossRate,
   applyGridMargin,
+  findGridBalancePayoutRate,
   findGridCrossRate,
   findGridPayInRate,
   type GridRateRow,
@@ -79,5 +80,35 @@ describe("findGridPayInRate", () => {
       }),
     ]
     expect(findGridPayInRate(rates, "NGN")?.grid_mid).toBe(1500)
+  })
+})
+
+describe("findGridBalancePayoutRate", () => {
+  it("inverts USD→local mid to local-per-USD customer rate", () => {
+    const usdPerNgn = 1 / 1500
+    const rates: GridRateRow[] = [
+      row({
+        from_currency: "USD",
+        to_currency: "NGN",
+        rate: applyGridMargin(usdPerNgn, marginBps),
+        grid_mid: usdPerNgn,
+      }),
+    ]
+    const payout = findGridBalancePayoutRate(rates, "NGN")
+    expect(payout?.grid_mid).toBeCloseTo(1500, 8)
+    expect(payout?.rate).toBeCloseTo(applyGridMargin(1500, marginBps), 8)
+  })
+
+  it("uses stored local→USD row when present", () => {
+    const rates: GridRateRow[] = [
+      row({
+        from_currency: "NGN",
+        to_currency: "USD",
+        rate: applyGridMargin(1500, marginBps),
+        grid_mid: 1500,
+      }),
+    ]
+    const payout = findGridBalancePayoutRate(rates, "NGN")
+    expect(payout?.rate).toBeCloseTo(applyGridMargin(1500, marginBps), 8)
   })
 })

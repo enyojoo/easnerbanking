@@ -319,14 +319,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     return cc ? mapResidenceToLocalPayInCurrency(cc) : null
   }, [userProfile?.residence_country])
 
-  const receiveCurrency = recipient?.currency?.trim().toUpperCase() ?? ''
+  const recipientReceiveCurrency = recipient?.currency?.trim().toUpperCase() ?? ''
 
   // TLC is cross-border only — hide when pay-in currency matches recipient (use balance instead).
   const expectTlcCorridor =
     !isEasetagRecipient &&
     !isWalletRecipient &&
     Boolean(residenceLocalPayInCurrency) &&
-    residenceLocalPayInCurrency !== receiveCurrency
+    residenceLocalPayInCurrency !== recipientReceiveCurrency
 
   const tlcPayInCountry =
     expectTlcCorridor && residenceLocalPayInCurrency
