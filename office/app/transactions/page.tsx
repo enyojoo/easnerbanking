@@ -32,6 +32,7 @@ import {
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficeTransactionsList, useQueryInitialLoading } from "@/hooks/queries"
 import type { OfficeTransaction, OfficeTransactionsSummary } from "@/lib/types/office-transaction"
+import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
 
 const STATUS_FILTER_LABELS: Record<string, string> = {
   completed: "Completed",
@@ -169,6 +170,12 @@ export default function AdminTransactionsPage() {
   const summary = transactionsQuery.data?.pages[0]?.summary
   const hasNextPage = transactionsQuery.hasNextPage
   const transactionsLoading = useQueryInitialLoading(transactionsQuery.isPending, transactionsQuery.data, transactions)
+  const transactionsError =
+    transactionsQuery.error instanceof Error
+      ? transactionsQuery.error.message
+      : transactionsQuery.error
+        ? String(transactionsQuery.error)
+        : null
 
   const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch =
@@ -293,6 +300,16 @@ export default function AdminTransactionsPage() {
             Export Data
           </Button>
         </div>
+        <div className="-mt-4 flex min-h-4 justify-end">
+          <OfficeBackgroundRefresh
+            isFetching={transactionsQuery.isFetching && !transactionsLoading}
+          />
+        </div>
+        <OfficeQueryError
+          message={transactionsError}
+          hasData={transactions.length > 0}
+          onRetry={() => void transactionsQuery.refetch()}
+        />
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Card>

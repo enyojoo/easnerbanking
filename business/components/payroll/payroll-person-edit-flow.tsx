@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
+import { PayrollFormSkeleton } from "@/components/payroll/payroll-page-skeleton"
 import { useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
 import {
   usePayrollCapabilities,
@@ -54,8 +55,12 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
     setInitializedPersonId(person.id)
   }, [initializedPersonId, person, schedules, schedulesQuery.isPending])
 
-  if (personQuery.isPending || schedulesQuery.isPending || settingsQuery.isPending) {
-    return <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-muted-foreground">Loading person details…</div>
+  if (
+    (personQuery.isPending && !person)
+    || (schedulesQuery.isPending && !schedulesQuery.data)
+    || (settingsQuery.isPending && !settingsQuery.data)
+  ) {
+    return <PayrollFormSkeleton />
   }
   if (!person) {
     return <div className="mx-auto max-w-6xl px-4 py-12"><p className="font-medium">This payroll person could not be found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/people">Back to People</Link></Button></div>

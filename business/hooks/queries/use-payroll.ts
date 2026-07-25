@@ -1,6 +1,7 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
+import { useMemo } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
@@ -27,11 +28,27 @@ export function usePayrollCapabilities() {
 
 export function usePayrollPerson(personId: string | null) {
   const { scope } = useScope()
+  const queryClient = useQueryClient()
+  const listPlaceholder = useMemo(() => {
+    if (!scope || !personId) return undefined
+    const envelope = queryClient.getQueryData<{ people: PayrollPerson[] }>(
+      qk.payroll.people.list(scope),
+    )
+    const person = envelope?.people?.find((item) => item.id === personId)
+    return person ? { person, events: [], paymentHistory: [] } : undefined
+  }, [personId, queryClient, scope])
   return useQuery({
-    queryKey: scope && personId ? ["payroll", "people", scope, personId] : ["payroll", "person", "disabled"],
+    queryKey: scope && personId ? qk.payroll.people.detail(scope, personId) : ["payroll", "person", "disabled"],
     enabled: Boolean(scope && personId),
-    queryFn: () => apiFetch<{ person: PayrollPerson; events?: unknown[]; payments?: unknown[] }>(`/api/business/payroll/people/${personId}`),
-    staleTime: 30_000,
+    queryFn: () => apiFetch<{
+      person: PayrollPerson
+      events?: unknown[]
+      paymentHistory?: unknown[]
+      connection?: unknown
+    }>(`/api/business/payroll/people/${personId}`),
+    placeholderData: listPlaceholder,
+    staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000,
     meta: { safePersist: false, webPersist: "none", freshness: "operational" },
   })
 }
@@ -43,8 +60,9 @@ export function usePayrollOverview() {
     enabled: Boolean(scope),
     queryFn: () => apiFetch<{ overview: PayrollOverview }>("/api/business/payroll/overview"),
     select: (d) => d.overview,
-    staleTime: 30_000,
-    meta: { safePersist: false, webPersist: "none", freshness: "operational" },
+    staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }
 
@@ -55,7 +73,8 @@ export function usePayrollPeople() {
     enabled: Boolean(scope),
     queryFn: () => apiFetch<{ people: PayrollPerson[] }>("/api/business/payroll/people"),
     select: (d) => d.people ?? [],
-    staleTime: 60_000,
+    staleTime: 15 * 60_000,
+    gcTime: 60 * 60_000,
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }
@@ -67,19 +86,31 @@ export function usePayrollRuns() {
     enabled: Boolean(scope),
     queryFn: () => apiFetch<{ runs: PayrollRun[] }>("/api/business/payroll/runs"),
     select: (d) => d.runs ?? [],
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000,
     meta: { safePersist: false, webPersist: "none", freshness: "operational" },
   })
 }
 
 export function usePayrollRunDetail(runId: string | null) {
   const { scope } = useScope()
+  const queryClient = useQueryClient()
+  const listPlaceholder = useMemo(() => {
+    if (!scope || !runId) return undefined
+    const envelope = queryClient.getQueryData<{ runs: PayrollRun[] }>(
+      qk.payroll.runs.list(scope),
+    )
+    const run = envelope?.runs?.find((item) => item.id === runId)
+    return run ? { run } : undefined
+  }, [queryClient, runId, scope])
   return useQuery({
     queryKey: scope && runId ? qk.payroll.runs.detail(scope, runId) : ["payroll", "run", "disabled"],
     enabled: Boolean(scope) && Boolean(runId),
     queryFn: () => apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}`),
     select: (d) => d.run,
-    staleTime: 10_000,
+    placeholderData: listPlaceholder,
+    staleTime: 60_000,
+    gcTime: 60 * 60_000,
     refetchInterval: (q) => (q.state.data?.run?.status === "executing" ? 3000 : false),
     meta: { safePersist: false, webPersist: "none", freshness: "operational" },
   })
@@ -92,7 +123,8 @@ export function usePayrollSchedules() {
     enabled: Boolean(scope),
     queryFn: () => apiFetch<{ schedules: PayrollSchedule[] }>("/api/business/payroll/schedules"),
     select: (d) => d.schedules ?? [],
-    staleTime: 60_000,
+    staleTime: 15 * 60_000,
+    gcTime: 60 * 60_000,
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }
@@ -104,7 +136,8 @@ export function usePayrollSettings() {
     enabled: Boolean(scope),
     queryFn: () => apiFetch<{ settings: PayrollSettings }>("/api/business/payroll/settings"),
     select: (d) => d.settings,
-    staleTime: 60_000,
-    meta: { safePersist: false, webPersist: "none", freshness: "operational" },
+    staleTime: 15 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }

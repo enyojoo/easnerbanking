@@ -44,12 +44,17 @@ import {
   useQueryInitialLoading,
   type OfficeUserRow,
 } from "@/hooks/queries"
+import { fetchOfficeUserMfa } from "@/hooks/queries/use-office-user-mfa"
+import { fetchOfficeUserTransactions } from "@/hooks/queries/use-office-user-transactions"
+import { OFFICE_LIST_STALE_MS } from "@/hooks/queries/constants"
 import { OfficeTransactionDetailPanel } from "@/components/transactions/office-transaction-detail-panel"
 import type { OfficeTransaction } from "@/lib/types/office-transaction"
 import {
   ledgerTransactionStatusDisplay,
   type LedgerTransactionStatusTone,
 } from "@easner/shared"
+import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
+import { OfficePageSkeleton } from "@/components/data/office-page-skeleton"
 
 /** Mirrors `public.users` (+ `email_confirmed_at` merged from auth). */
 type UserData = OfficeUserRow
@@ -318,6 +323,19 @@ export default function AdminUsersPage() {
     setMfaResetFeedback(null)
   }
 
+  const prefetchUserDetails = (userId: string) => {
+    void queryClient.prefetchQuery({
+      queryKey: officeKeys.userTransactions(userId),
+      queryFn: () => fetchOfficeUserTransactions(userId),
+      staleTime: OFFICE_LIST_STALE_MS,
+    })
+    void queryClient.prefetchQuery({
+      queryKey: officeKeys.userMfa(userId),
+      queryFn: () => fetchOfficeUserMfa(userId),
+      staleTime: 60_000,
+    })
+  }
+
   const handleConfirmResetMfa = async () => {
     if (!selectedUser) return
     setMfaResetLoading(true)
@@ -367,11 +385,7 @@ export default function AdminUsersPage() {
   if (authLoading || (dirLoading && directoryUsers.length === 0 && !dirError)) {
     return (
       <OfficeDashboardLayout>
-        <div className="p-6 space-y-4">
-          <Skeleton className="h-9 w-56" />
-          <Skeleton className="h-24 w-full max-w-4xl" />
-          <Skeleton className="h-72 w-full" />
-        </div>
+        <OfficePageSkeleton cards={2} />
       </OfficeDashboardLayout>
     )
   }
@@ -384,6 +398,7 @@ export default function AdminUsersPage() {
             <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
           </div>
           <div className="flex gap-2">
+            <OfficeBackgroundRefresh isFetching={directoryQuery.isFetching && !dirLoading} />
             <Button onClick={handleExport} variant="outline">
               <Download className="h-4 w-4 mr-2" />
               Export Users
@@ -391,11 +406,11 @@ export default function AdminUsersPage() {
           </div>
         </div>
 
-        {dirError ? (
-          <p className="text-sm text-destructive rounded-xl border border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.08)] px-4 py-3">
-            {dirError}
-          </p>
-        ) : null}
+        <OfficeQueryError
+          message={dirError}
+          hasData={directoryUsers.length > 0}
+          onRetry={() => void directoryQuery.refetch()}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
@@ -501,7 +516,13 @@ export default function AdminUsersPage() {
                       <div className="flex items-center justify-center gap-2">
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" onClick={() => handleUserSelect(user)}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onPointerEnter={() => prefetchUserDetails(user.id)}
+                              onFocus={() => prefetchUserDetails(user.id)}
+                              onClick={() => handleUserSelect(user)}
+                            >
                               <Eye className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>

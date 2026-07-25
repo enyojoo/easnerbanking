@@ -13,6 +13,8 @@ import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { PayrollCountry } from "@/components/payroll/payroll-country"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
+import { PayrollDetailSkeleton, PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
+import { PayrollDetailLink } from "@/components/payroll/payroll-detail-link"
 import { usePayrollCapabilities, usePayrollPerson, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -41,7 +43,7 @@ export default function PayrollPersonDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const detail = query.data as ({ person: NonNullable<typeof query.data>["person"]; paymentHistory?: Payment[]; events?: Event[]; connection?: { status: string; approvedAt?: string | null; preferredMethod?: { label: string } | null } | null }) | undefined
   const person = detail?.person
-  if (query.isPending) return <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-muted-foreground">Loading person…</div>
+  if (query.isPending && !person) return <PayrollDetailSkeleton />
   if (!person) return <div className="mx-auto max-w-6xl px-4 py-12"><p className="font-medium">This payroll person could not be found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/people">Back to People</Link></Button></div>
   const canPrepare = Boolean(capabilities?.canPrepare)
   const requestAction = person.rail === "easetag" && person.connectionStatus !== "approved" && person.email
@@ -81,7 +83,7 @@ export default function PayrollPersonDetailPage() {
         <Card className="shadow-soft"><CardContent className="p-6"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Payment history</h2><p className="mt-1 text-sm text-muted-foreground">Payroll payments and available pay stubs.</p></div></div>
           <div className="mt-4 divide-y">
             {(detail?.paymentHistory ?? []).length ? (detail?.paymentHistory ?? []).map((payment) => <div key={payment.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div><Link className="font-medium" href={`/payroll/runs/${payment.runId}`}>{formatCurrency(payment.amount, payment.currency)}</Link><p className="text-xs text-muted-foreground">{payment.settledAt ? formatDate(payment.settledAt) : "Not settled"} · <span className="capitalize">{payment.status}</span></p></div>
+              <div><PayrollDetailLink kind="run" id={payment.runId} className="font-medium" href={`/payroll/runs/${payment.runId}`}>{formatCurrency(payment.amount, payment.currency)}</PayrollDetailLink><p className="text-xs text-muted-foreground">{payment.settledAt ? formatDate(payment.settledAt) : "Not settled"} · <span className="capitalize">{payment.status}</span></p></div>
               {payment.documents?.[0] ? <Button variant="outline" size="sm" asChild><a href={`/api/business/payroll/documents/${payment.documents[0].id}`}><Download className="mr-2 h-4 w-4" />Pay stub</a></Button> : null}
             </div>) : <p className="py-8 text-center text-sm text-muted-foreground">No payroll payments yet.</p>}
           </div>
@@ -113,6 +115,7 @@ export default function PayrollPersonDetailPage() {
         }
       }}
     />
+    <PayrollInlineRefreshing visible={query.isFetching && !query.isPending} />
   </div>
 }
 

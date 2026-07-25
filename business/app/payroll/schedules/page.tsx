@@ -13,6 +13,7 @@ import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollPermissionAction } from "@/components/payroll/payroll-permission-action"
+import { PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { usePayrollCapabilities, usePayrollSchedules } from "@/hooks/queries/use-payroll"
 import { useDeletePayrollSchedule, useUpsertPayrollSchedule } from "@/hooks/mutations/use-payroll"
@@ -62,5 +63,6 @@ export default function PayrollSchedulesPage() {
         }
       }}
     />
+    <PayrollInlineRefreshing visible={schedulesQuery.isFetching && !schedulesQuery.isPending} />
   </div>
 }

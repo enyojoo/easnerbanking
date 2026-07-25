@@ -15,9 +15,73 @@ import type {
   PayrollSettings,
 } from "@/lib/payroll/types"
 
+type PayrollPeopleEnvelope = { people: PayrollPerson[] }
+type PayrollRunsEnvelope = { runs: PayrollRun[] }
+type PayrollSchedulesEnvelope = { schedules: PayrollSchedule[] }
+type PayrollPersonDetailEnvelope = { person: PayrollPerson; [key: string]: unknown }
+
 function invalidatePayroll(qc: ReturnType<typeof useQueryClient>, scope: ReturnType<typeof useScope>["scope"]) {
   if (!scope) return
   qc.invalidateQueries({ queryKey: qk.payroll.root(scope) })
+}
+
+function patchPeople(
+  qc: ReturnType<typeof useQueryClient>,
+  key: readonly unknown[],
+  patch: (people: PayrollPerson[]) => PayrollPerson[],
+) {
+  qc.setQueryData<PayrollPeopleEnvelope>(key, (current) =>
+    current ? { ...current, people: patch(current.people ?? []) } : current,
+  )
+}
+
+function patchRuns(
+  qc: ReturnType<typeof useQueryClient>,
+  key: readonly unknown[],
+  patch: (runs: PayrollRun[]) => PayrollRun[],
+) {
+  qc.setQueryData<PayrollRunsEnvelope>(key, (current) =>
+    current ? { ...current, runs: patch(current.runs ?? []) } : current,
+  )
+}
+
+function patchSchedules(
+  qc: ReturnType<typeof useQueryClient>,
+  key: readonly unknown[],
+  patch: (schedules: PayrollSchedule[]) => PayrollSchedule[],
+) {
+  qc.setQueryData<PayrollSchedulesEnvelope>(key, (current) =>
+    current ? { ...current, schedules: patch(current.schedules ?? []) } : current,
+  )
+}
+
+function cachePerson(
+  qc: ReturnType<typeof useQueryClient>,
+  scope: NonNullable<ReturnType<typeof useScope>["scope"]>,
+  person: PayrollPerson,
+) {
+  patchPeople(qc, qk.payroll.people.list(scope), (people) =>
+    people.some((item) => item.id === person.id)
+      ? people.map((item) => item.id === person.id ? person : item)
+      : [person, ...people],
+  )
+  qc.setQueryData<PayrollPersonDetailEnvelope>(
+    qk.payroll.people.detail(scope, person.id),
+    (current) => current ? { ...current, person } : { person },
+  )
+}
+
+function cacheRun(
+  qc: ReturnType<typeof useQueryClient>,
+  scope: NonNullable<ReturnType<typeof useScope>["scope"]>,
+  run: PayrollRun,
+) {
+  patchRuns(qc, qk.payroll.runs.list(scope), (runs) =>
+    runs.some((item) => item.id === run.id)
+      ? runs.map((item) => item.id === run.id ? run : item)
+      : [run, ...runs],
+  )
+  qc.setQueryData(qk.payroll.runs.detail(scope, run.id), { run })
 }
 
 export function useCreatePayrollPerson() {
@@ -29,7 +93,10 @@ export function useCreatePayrollPerson() {
         method: "POST",
         body: input,
       }),
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onSuccess: ({ person }) => {
+      if (scope) cachePerson(qc, scope, person)
+      invalidatePayroll(qc, scope)
+    },
   })
 }
 
@@ -42,7 +109,33 @@ export function useUpdatePayrollPerson() {
         method: "PATCH",
         body: input.patch,
       }),
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onMutate: async ({ id, patch }) => {
+      if (!scope) return {}
+      const listKey = qk.payroll.people.list(scope)
+      const detailKey = qk.payroll.people.detail(scope, id)
+      await qc.cancelQueries({ queryKey: qk.payroll.people.root(scope) })
+      const previousList = qc.getQueryData<PayrollPeopleEnvelope>(listKey)
+      const previousDetail = qc.getQueryData<PayrollPersonDetailEnvelope>(detailKey)
+      patchPeople(qc, listKey, (people) =>
+        people.map((person) => person.id === id ? { ...person, ...patch } as PayrollPerson : person),
+      )
+      if (previousDetail) {
+        qc.setQueryData(detailKey, {
+          ...previousDetail,
+          person: { ...previousDetail.person, ...patch } as PayrollPerson,
+        })
+      }
+      return { previousList, previousDetail }
+    },
+    onError: (_error, { id }, context) => {
+      if (!scope) return
+      if (context?.previousList) qc.setQueryData(qk.payroll.people.list(scope), context.previousList)
+      if (context?.previousDetail) qc.setQueryData(qk.payroll.people.detail(scope, id), context.previousDetail)
+    },
+    onSuccess: ({ person }) => {
+      if (scope) cachePerson(qc, scope, person)
+      invalidatePayroll(qc, scope)
+    },
   })
 }
 
@@ -52,7 +145,21 @@ export function useDeletePayrollPerson() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<{ ok: boolean }>(`/api/business/payroll/people/${id}`, { method: "DELETE" }),
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onMutate: async (id) => {
+      if (!scope) return {}
+      const listKey = qk.payroll.people.list(scope)
+      await qc.cancelQueries({ queryKey: qk.payroll.people.root(scope) })
+      const previous = qc.getQueryData<PayrollPeopleEnvelope>(listKey)
+      patchPeople(qc, listKey, (people) => people.filter((person) => person.id !== id))
+      return { previous }
+    },
+    onError: (_error, _id, context) => {
+      if (scope && context?.previous) qc.setQueryData(qk.payroll.people.list(scope), context.previous)
+    },
+    onSuccess: (_data, id) => {
+      if (scope) qc.removeQueries({ queryKey: qk.payroll.people.detail(scope, id) })
+      invalidatePayroll(qc, scope)
+    },
   })
 }
 
@@ -62,7 +169,21 @@ export function useDeletePayrollRun() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<{ ok: boolean }>(`/api/business/payroll/runs/${id}`, { method: "DELETE" }),
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onMutate: async (id) => {
+      if (!scope) return {}
+      const listKey = qk.payroll.runs.list(scope)
+      await qc.cancelQueries({ queryKey: qk.payroll.runs.root(scope) })
+      const previous = qc.getQueryData<PayrollRunsEnvelope>(listKey)
+      patchRuns(qc, listKey, (runs) => runs.filter((run) => run.id !== id))
+      return { previous }
+    },
+    onError: (_error, _id, context) => {
+      if (scope && context?.previous) qc.setQueryData(qk.payroll.runs.list(scope), context.previous)
+    },
+    onSuccess: (_data, id) => {
+      if (scope) qc.removeQueries({ queryKey: qk.payroll.runs.detail(scope, id) })
+      invalidatePayroll(qc, scope)
+    },
   })
 }
 
@@ -72,6 +193,17 @@ export function useDeletePayrollSchedule() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<{ ok: boolean }>(`/api/business/payroll/schedules/${id}`, { method: "DELETE" }),
+    onMutate: async (id) => {
+      if (!scope) return {}
+      const listKey = qk.payroll.schedules.list(scope)
+      await qc.cancelQueries({ queryKey: qk.payroll.schedules.root(scope) })
+      const previous = qc.getQueryData<PayrollSchedulesEnvelope>(listKey)
+      patchSchedules(qc, listKey, (schedules) => schedules.filter((schedule) => schedule.id !== id))
+      return { previous }
+    },
+    onError: (_error, _id, context) => {
+      if (scope && context?.previous) qc.setQueryData(qk.payroll.schedules.list(scope), context.previous)
+    },
     onSuccess: () => invalidatePayroll(qc, scope),
   })
 }
@@ -106,7 +238,10 @@ export function useCreatePayrollRun() {
         method: "POST",
         body: input ?? {},
       }),
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onSuccess: ({ run }) => {
+      if (scope) cacheRun(qc, scope, run)
+      invalidatePayroll(qc, scope)
+    },
   })
 }
 
@@ -138,7 +273,10 @@ export function useUpdatePayrollRun(runId: string) {
         method: "PATCH",
         body: input,
       }),
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onSuccess: ({ run }) => {
+      if (scope) cacheRun(qc, scope, run)
+      invalidatePayroll(qc, scope)
+    },
   })
 }
 
@@ -151,9 +289,29 @@ export function useSubmitPayrollRun(runId: string) {
         method: "POST",
         body: { action: "submit" },
       }),
-    onSuccess: () => {
+    onSuccess: ({ run }) => {
+      if (scope) cacheRun(qc, scope, run)
       invalidatePayroll(qc, scope)
       if (scope) qc.invalidateQueries({ queryKey: qk.approvals.root(scope) })
+    },
+  })
+}
+
+export function useSubmitPayrollRunById() {
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  return useMutation({
+    mutationFn: (runId: string) =>
+      apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}`, {
+        method: "POST",
+        body: { action: "submit" },
+      }),
+    onSuccess: ({ run }) => {
+      if (scope) {
+        cacheRun(qc, scope, run)
+        qc.invalidateQueries({ queryKey: qk.approvals.root(scope) })
+      }
+      invalidatePayroll(qc, scope)
     },
   })
 }
@@ -167,7 +325,10 @@ export function useApprovePayrollRun(runId: string) {
         method: "POST",
         body: input ?? { mode: "pay_now" },
       }),
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onSuccess: ({ run }) => {
+      if (scope) cacheRun(qc, scope, run)
+      invalidatePayroll(qc, scope)
+    },
   })
 }
 
@@ -180,7 +341,10 @@ export function useWithdrawPayrollRun(runId: string) {
         method: "POST",
         body: { action: "withdraw" },
       }),
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onSuccess: ({ run }) => {
+      if (scope) cacheRun(qc, scope, run)
+      invalidatePayroll(qc, scope)
+    },
   })
 }
 
@@ -190,7 +354,10 @@ export function useExecutePayrollRun(runId: string) {
   return useMutation({
     mutationFn: () =>
       apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}/execute`, { method: "POST" }),
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onSuccess: ({ run }) => {
+      if (scope) cacheRun(qc, scope, run)
+      invalidatePayroll(qc, scope)
+    },
   })
 }
 
@@ -233,14 +400,61 @@ export function useUpsertPayrollSchedule() {
         body: input,
       })
     },
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onMutate: async (input) => {
+      if (!scope || !input.id) return {}
+      const listKey = qk.payroll.schedules.list(scope)
+      await qc.cancelQueries({ queryKey: qk.payroll.schedules.root(scope) })
+      const previous = qc.getQueryData<PayrollSchedulesEnvelope>(listKey)
+      patchSchedules(qc, listKey, (schedules) =>
+        schedules.map((schedule) =>
+          schedule.id === input.id
+            ? { ...schedule, ...input } as PayrollSchedule
+            : schedule,
+        ),
+      )
+      return { previous }
+    },
+    onError: (_error, _input, context) => {
+      if (scope && context?.previous) {
+        qc.setQueryData(qk.payroll.schedules.list(scope), context.previous)
+      }
+    },
+    onSuccess: ({ schedule }) => {
+      if (scope) {
+        patchSchedules(qc, qk.payroll.schedules.list(scope), (schedules) =>
+          schedules.some((item) => item.id === schedule.id)
+            ? schedules.map((item) => item.id === schedule.id ? schedule : item)
+            : [schedule, ...schedules],
+        )
+      }
+      invalidatePayroll(qc, scope)
+    },
   })
 }
 
 export function useInvitePayrollPerson() {
+  const qc = useQueryClient()
+  const { scope } = useScope()
   return useMutation({
     mutationFn: (personId: string) =>
       apiFetch<{ ok: boolean }>(`/api/business/payroll/people/${personId}/invite`, { method: "POST" }),
+    onSuccess: (_data, personId) => {
+      if (!scope) return
+      patchPeople(qc, qk.payroll.people.list(scope), (people) =>
+        people.map((person) =>
+          person.id === personId
+            ? { ...person, connectionStatus: "pending" }
+            : person,
+        ),
+      )
+      qc.setQueryData<PayrollPersonDetailEnvelope>(
+        qk.payroll.people.detail(scope, personId),
+        (current) => current
+          ? { ...current, person: { ...current.person, connectionStatus: "pending" } }
+          : current,
+      )
+      qc.invalidateQueries({ queryKey: qk.payroll.overview(scope) })
+    },
   })
 }
 
@@ -253,6 +467,27 @@ export function useUpdatePayrollSettings() {
         method: "PATCH",
         body: input,
       }),
-    onSuccess: () => invalidatePayroll(qc, scope),
+    onMutate: async (input) => {
+      if (!scope) return {}
+      const key = ["payroll", "settings", scope] as const
+      await qc.cancelQueries({ queryKey: key })
+      const previous = qc.getQueryData<{ settings: PayrollSettings }>(key)
+      if (previous) {
+        qc.setQueryData(key, {
+          ...previous,
+          settings: { ...previous.settings, ...input },
+        })
+      }
+      return { previous }
+    },
+    onError: (_error, _input, context) => {
+      if (scope && context?.previous) {
+        qc.setQueryData(["payroll", "settings", scope], context.previous)
+      }
+    },
+    onSuccess: ({ settings }) => {
+      if (scope) qc.setQueryData(["payroll", "settings", scope], { settings })
+      invalidatePayroll(qc, scope)
+    },
   })
 }

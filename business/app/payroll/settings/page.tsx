@@ -14,25 +14,31 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
+import { PayrollFormSkeleton, PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
 import { usePayrollCapabilities, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useUpdatePayrollSettings } from "@/hooks/mutations/use-payroll"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import { PAYROLL_PAYDAY_TIMES, payrollTimezoneOptions } from "@/lib/payroll/options"
 import { apiFetch } from "@/lib/query/api-client"
+import { useScope } from "@/lib/query/scope"
 import { formatCurrency } from "@/lib/utils"
 
 type Assignment = { id: string; user_id: string; role: "viewer" | "preparer" | "approver"; user: { full_name?: string; email?: string; avatar_url?: string | null } | null }
 
 export default function PayrollSettingsPage() {
+  const { scope } = useScope()
   const settingsQuery = usePayrollSettings()
   const capabilities = usePayrollCapabilities().data
   const accountQuery = useBusinessAccountRows()
   const accounts = accountQuery.accountRows.filter((account) => account.currency === "USD" || account.currency === "EUR")
   const save = useUpdatePayrollSettings()
   const accessQuery = useQuery({
-    queryKey: ["payroll", "access"],
-    enabled: Boolean(capabilities?.canApprove),
+    queryKey: scope ? ["payroll", "access", scope] : ["payroll", "access", "disabled"],
+    enabled: Boolean(scope && capabilities?.canApprove),
     queryFn: () => apiFetch<{ assignments: Assignment[] }>("/api/business/payroll/access"),
+    staleTime: 15 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
   const [editing, setEditing] = useState(false)
   const [timezone, setTimezone] = useState("UTC")
@@ -72,6 +78,11 @@ export default function PayrollSettingsPage() {
       },
       onError: (error) => toast.error(error.message),
     })
+  }
+
+  if (settingsQuery.isPending && !settingsQuery.data) return <PayrollFormSkeleton />
+  if (settingsQuery.isError && !settingsQuery.data) {
+    return <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6"><Card><CardContent className="p-8 text-center"><p className="font-medium">Payroll settings couldn’t be loaded</p><p className="mt-2 text-sm text-muted-foreground">Your saved settings have not been changed.</p><Button className="mt-4" variant="outline" onClick={() => void settingsQuery.refetch()}>Try again</Button></CardContent></Card></div>
   }
 
   return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -121,6 +132,7 @@ export default function PayrollSettingsPage() {
         })}{capabilities?.canApprove && !accessQuery.isPending && !(accessQuery.data?.assignments.length) ? <p className="text-sm text-muted-foreground">No explicit Payroll roles have been assigned.</p> : null}{!capabilities?.canApprove ? <p className="text-sm text-muted-foreground">Only a Payroll approver can view or change role assignments.</p> : null}</div>
       </CardContent></Card>
     </div>
+    <PayrollInlineRefreshing visible={settingsQuery.isFetching && !settingsQuery.isPending} />
   </div>
 }
 

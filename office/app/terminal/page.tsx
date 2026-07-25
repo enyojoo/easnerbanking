@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useOfficeTerminalSessions, useQueryInitialLoading } from "@/hooks/queries"
+import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
 
 type Row = {
   id: string
@@ -44,8 +45,15 @@ export default function TerminalPage() {
   return (
     <OfficeDashboardLayout>
       <div className="p-6 space-y-4">
-        <h1 className="text-2xl font-bold">Terminal</h1>
-        {message && <p className="text-sm text-destructive">{message}</p>}
+        <div className="flex min-h-8 items-center justify-between gap-4">
+          <h1 className="text-2xl font-bold">Terminal</h1>
+          <OfficeBackgroundRefresh isFetching={terminalQuery.isFetching && !loading} />
+        </div>
+        <OfficeQueryError
+          message={message}
+          hasData={rows.length > 0}
+          onRetry={() => void terminalQuery.refetch()}
+        />
         <Card>
           <CardHeader>
             <CardTitle>All terminal sessions</CardTitle>

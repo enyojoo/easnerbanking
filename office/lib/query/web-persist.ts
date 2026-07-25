@@ -2,7 +2,7 @@
 
 import type { PersistedClient, Persister } from "@tanstack/react-query-persist-client"
 
-export const OFFICE_WEB_QUERY_CACHE_BUSTER = "office-web-query-cache-v2"
+export const OFFICE_WEB_QUERY_CACHE_BUSTER = "office-web-query-cache-v3-memory-only"
 export const OFFICE_WEB_QUERY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 
 const OFFICE_WEB_QUERY_CACHE_KEY_PREFIX = "easner_office_query_cache_v1_"

@@ -33,6 +33,8 @@ import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollPermissionAction } from "@/components/payroll/payroll-permission-action"
 import { PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
+import { PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
+import { PayrollDetailLink } from "@/components/payroll/payroll-detail-link"
 import { usePayrollCapabilities, usePayrollOverview } from "@/hooks/queries/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
@@ -172,7 +174,7 @@ export default function PayrollOverviewPage() {
                 <TableBody>
                   {(overview?.recentRuns ?? []).map((run) => (
                     <TableRow key={run.id} className="cursor-pointer">
-                      <TableCell><Link className="font-medium" href={`/payroll/runs/${run.id}`}>{String(run.metadata?.name || "Payroll run")}</Link></TableCell>
+                      <TableCell><PayrollDetailLink kind="run" id={run.id} className="font-medium" href={`/payroll/runs/${run.id}`}>{String(run.metadata?.name || "Payroll run")}</PayrollDetailLink></TableCell>
                       <TableCell>{run.payday ? formatDate(run.payday) : "—"}</TableCell>
                       <TableCell className="tabular-nums">{formatCurrency(run.totalSource, run.sourceCurrency)}</TableCell>
                       <TableCell><PayrollRunStatusBadge status={run.status} /></TableCell>
@@ -185,6 +187,7 @@ export default function PayrollOverviewPage() {
         </>
       )}
       <PayrollLegalNote className="mt-8" />
+      <PayrollInlineRefreshing visible={overviewQuery.isFetching && !overviewQuery.isPending} />
     </div>
   )
 }

@@ -14,6 +14,7 @@ import {
   CryptoRatesPanel,
   WebhookInboxPanel,
 } from "@/components/platform-control/platform-control-panels"
+import { OfficePageSkeleton } from "@/components/data/office-page-skeleton"
 
 const TABS = ["platform", "noah-rates", "yc-rates", "grid-rates", "crypto-rates", "fiat", "crypto", "webhooks"] as const
 type PlatformControlTab = (typeof TABS)[number]
@@ -102,7 +103,7 @@ function PlatformControlHubBody() {
 
 export default function PlatformControlPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<OfficeDashboardLayout><OfficePageSkeleton cards={0} /></OfficeDashboardLayout>}>
       <PlatformControlHubBody />
     </Suspense>
   )

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
+import { PayrollFormSkeleton } from "@/components/payroll/payroll-page-skeleton"
 import { useUpdatePayrollRun } from "@/hooks/mutations/use-payroll"
 import { usePayrollCapabilities, usePayrollPeople, usePayrollRunDetail, usePayrollSchedules } from "@/hooks/queries/use-payroll"
 import { formatCurrency } from "@/lib/utils"
@@ -53,8 +54,13 @@ export function PayrollRunEditFlow({ runId }: { runId: string }) {
     return () => window.removeEventListener("beforeunload", warn)
   }, [dirty])
 
-  if (runQuery.isPending || peopleQuery.isPending || schedulesQuery.isPending || capabilitiesQuery.isPending) {
-    return <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-muted-foreground">Loading payroll run…</div>
+  if (
+    (runQuery.isPending && !run)
+    || (peopleQuery.isPending && !peopleQuery.data)
+    || (schedulesQuery.isPending && !schedulesQuery.data)
+    || (capabilitiesQuery.isPending && !capabilitiesQuery.data)
+  ) {
+    return <PayrollFormSkeleton />
   }
   if (!run) {
     return <div className="mx-auto max-w-6xl px-4 py-12"><p className="font-medium">This payroll run could not be found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/runs">Back to Runs</Link></Button></div>

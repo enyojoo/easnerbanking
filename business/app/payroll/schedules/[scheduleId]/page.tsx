@@ -17,6 +17,8 @@ import {
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
+import { PayrollDetailSkeleton, PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
+import { PayrollDetailLink } from "@/components/payroll/payroll-detail-link"
 import { useDeletePayrollSchedule, useUpsertPayrollSchedule } from "@/hooks/mutations/use-payroll"
 import { usePayrollCapabilities, usePayrollPeople, usePayrollSchedules } from "@/hooks/queries/use-payroll"
 import { formatDate } from "@/lib/utils"
@@ -31,7 +33,9 @@ export default function PayrollScheduleDetailPage() {
   const updateSchedule = useUpsertPayrollSchedule()
   const [deleteOpen, setDeleteOpen] = useState(false)
   const schedule = schedulesQuery.data?.find((item) => item.id === scheduleId)
-  if (schedulesQuery.isPending || peopleQuery.isPending) return <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-muted-foreground">Loading schedule…</div>
+  if ((schedulesQuery.isPending && !schedule) || (peopleQuery.isPending && !peopleQuery.data)) {
+    return <PayrollDetailSkeleton sidebar={false} />
+  }
   if (!schedule) return <div className="mx-auto max-w-6xl px-4 py-12"><p className="font-medium">Schedule not found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/schedules">Back to Schedules</Link></Button></div>
   const template = schedule.template ?? {}
   const includedPeople = (peopleQuery.data ?? []).filter((person) => schedule.personIds?.includes(person.id))
@@ -115,14 +119,16 @@ export default function PayrollScheduleDetailPage() {
             <div className="mt-4 max-h-96 overflow-y-auto rounded-xl border bg-border">
               <div className="grid gap-px sm:grid-cols-2">
                 {includedPeople.map((person) => (
-                  <Link
+                  <PayrollDetailLink
                     key={person.id}
+                    kind="person"
+                    id={person.id}
                     href={`/payroll/people/${person.id}`}
                     className="flex min-w-0 items-center justify-between gap-3 bg-card p-3 text-sm hover:bg-muted"
                   >
                     <span className="truncate font-medium">{person.fullName}</span>
                     <span className="shrink-0 capitalize text-muted-foreground">{person.type}</span>
-                  </Link>
+                  </PayrollDetailLink>
                 ))}
               </div>
             </div>
@@ -150,6 +156,9 @@ export default function PayrollScheduleDetailPage() {
           throw error
         }
       }}
+    />
+    <PayrollInlineRefreshing
+      visible={(schedulesQuery.isFetching && !schedulesQuery.isPending) || (peopleQuery.isFetching && !peopleQuery.isPending)}
     />
   </div>
 }

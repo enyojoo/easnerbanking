@@ -22,6 +22,8 @@ import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollPermissionAction } from "@/components/payroll/payroll-permission-action"
+import { PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
+import { PayrollDetailLink } from "@/components/payroll/payroll-detail-link"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { PayrollCountry } from "@/components/payroll/payroll-country"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
@@ -110,10 +112,10 @@ export default function PayrollPeoplePage() {
             <TableBody>
               {people.map((person) => (
                 <TableRow key={person.id}>
-                  <TableCell><Link href={`/payroll/people/${person.id}`} className="flex items-center gap-3">
+                  <TableCell><PayrollDetailLink kind="person" id={person.id} href={`/payroll/people/${person.id}`} className="flex items-center gap-3">
                     <Avatar><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
                     <span className="min-w-0"><span className="block truncate font-medium">{person.fullName}</span><span className="block truncate text-xs text-muted-foreground">{person.easetag ? `@${person.easetag.replace(/^@/, "")}` : person.email || person.internalReference || "Manual setup"}</span></span>
-                  </Link></TableCell>
+                  </PayrollDetailLink></TableCell>
                   <TableCell className="capitalize">{person.type}</TableCell>
                   <TableCell><PayrollReceivingMethod person={person} typeOnly /></TableCell>
                   <TableCell className="tabular-nums">{formatCurrency(person.defaultAmount, payrollCurrency || person.payCurrency)}</TableCell>
@@ -150,6 +152,7 @@ export default function PayrollPeoplePage() {
           }
         }}
       />
+      <PayrollInlineRefreshing visible={peopleQuery.isFetching && !peopleQuery.isPending} />
     </div>
   )
 }

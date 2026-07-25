@@ -25,6 +25,7 @@ import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollLineStatusBadge, PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
 import { PayrollRailBadge } from "@/components/payroll/payroll-rail-badge"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
+import { PayrollDetailSkeleton, PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
 import { usePayrollCapabilities, usePayrollRunDetail } from "@/hooks/queries/use-payroll"
 import {
   useSubmitPayrollRun,
@@ -181,8 +182,8 @@ export default function PayrollRunDetailPage() {
     }
   }
 
-  if (runQuery.isLoading) {
-    return <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-muted-foreground">Loading run…</div>
+  if (runQuery.isPending && !run) {
+    return <PayrollDetailSkeleton />
   }
 
   if (!run) {
@@ -460,6 +461,7 @@ export default function PayrollRunDetailPage() {
           }
         }}
       />
+      <PayrollInlineRefreshing visible={runQuery.isFetching && !runQuery.isPending} />
 
       {user?.id ? (
         <PinChallengeDialog

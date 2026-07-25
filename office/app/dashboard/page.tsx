@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { formatMoneyDisplay } from "@easner/shared"
 import type { OfficeVolumeBalance } from "@/lib/types/office-overview"
 import { useOfficeOverview, useQueryInitialLoading } from "@/hooks/queries"
+import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
 
 const OVERVIEW_PRESET = "7d" as const
 
@@ -32,6 +33,8 @@ export default function AdminDashboardPage() {
   const {
     data: overview,
     isPending,
+    isFetching,
+    refetch,
     error: overviewError,
   } = useOfficeOverview(OVERVIEW_PRESET)
 
@@ -94,11 +97,16 @@ export default function AdminDashboardPage() {
   return (
     <OfficeDashboardLayout>
       <div className="p-6 space-y-6">
-        <div>
+        <div className="flex min-h-8 items-center justify-between gap-4">
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <OfficeBackgroundRefresh isFetching={isFetching && !loading} />
         </div>
 
-        {loadError && <p className="text-sm text-destructive">{loadError}</p>}
+        <OfficeQueryError
+          message={loadError}
+          hasData={Boolean(overview)}
+          onRetry={() => void refetch()}
+        />
 
         {/* KPI strip */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

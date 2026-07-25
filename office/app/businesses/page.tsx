@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Eye, Building2, Search } from "lucide-react"
 import { useOfficeBusinesses, useQueryInitialLoading } from "@/hooks/queries"
 import { businessTypeDisplayText } from "@/lib/business-type-label"
+import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
 
 /** Mirrors `public.businesses` (+ owner fields from admin API). */
 type BusinessRow = {
@@ -171,13 +172,14 @@ function BusinessesPageInner() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Business directory</h1>
           </div>
+          <OfficeBackgroundRefresh isFetching={businessesQuery.isFetching && !loading} />
         </div>
 
-        {error ? (
-          <p className="text-sm text-destructive rounded-xl border border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.08)] px-4 py-3">
-            {error}
-          </p>
-        ) : null}
+        <OfficeQueryError
+          message={error}
+          hasData={rows.length > 0}
+          onRetry={() => void businessesQuery.refetch()}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
