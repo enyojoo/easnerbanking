@@ -4,11 +4,12 @@ import { generateTransactionId } from "@/lib/transaction-id"
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
 import {
   buildGridFundBalanceQuoteBody,
+  gridQuoteFeesUsd,
   resolveGridCustomerInternalAccountId,
 } from "./quote-request"
 import { gridFetch } from "./http"
 import { gridMinorUnits } from "./external-account"
-import { findGridRate, findGridPayInRate, listGridRates } from "@/lib/fx/grid-rates"
+import { findGridPayInRate, listGridRates } from "@/lib/fx/grid-rates"
 import { isGridLocalPayInEnabledForCorridor } from "./grid-receive-gate"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
@@ -23,6 +24,7 @@ export type GridFundBalanceSessionResult = {
   usdCredit: number
   customerRate: number
   processingFee: number
+  gridFeesUsd?: number
   paymentInstructions: GridQuote["paymentInstructions"]
   expiresAt: string
   transactionId: string
@@ -142,6 +144,21 @@ export async function createGridFundBalanceSession(input: {
     idempotencyKey: `grid_fund_${customerId}_${currency}_${preview.localPayIn}`,
   })
 
+  const gridFeesUsd = gridQuoteFeesUsd(quote)
+  const lockedLocalPayIn =
+    quote.totalSendingAmount != null && quote.totalSendingAmount > 0
+      ? Math.round(quote.totalSendingAmount) / 100
+      : preview.localPayIn
+  const lockedUsdCredit =
+    quote.totalReceivingAmount != null && quote.totalReceivingAmount > 0
+      ? Math.round(quote.totalReceivingAmount) / 100
+      : preview.usdCredit
+  const lockedCustomerRate =
+    quote.exchangeRate != null && quote.exchangeRate > 0
+      ? quote.exchangeRate
+      : preview.customerRate
+  const processingFee = Math.round((preview.processingFee + gridFeesUsd) * 100) / 100
+
   const sequenceId = `grid_fund_${String(quote.id).replace(/[^a-zA-Z0-9:_-]/g, "")}`
   const easnerTransactionId = generateTransactionId()
   const expiresAt = quote.expiresAt ?? new Date(Date.now() + getGridQuoteTtlMs()).toISOString()
@@ -157,17 +174,19 @@ export async function createGridFundBalanceSession(input: {
       type: "deposit",
       direction: "in",
       status: "pending",
-      amount: preview.usdCredit,
+      amount: lockedUsdCredit,
       currency: "USD",
       metadata: {
         pay_in_provider: "grid",
         pay_in_rail: input.rail,
         grid_quote_id: quote.id,
         grid_sequence_id: sequenceId,
-        local_pay_in: preview.localPayIn,
+        local_pay_in: lockedLocalPayIn,
         local_currency: currency,
         country_code: country,
-        customer_rate: preview.customerRate,
+        customer_rate: lockedCustomerRate,
+        grid_fees_usd: gridFeesUsd,
+        processing_fee: processingFee,
         payment_instructions: quote.paymentInstructions,
         ...(input.sourcePhone ? { source_phone: input.sourcePhone } : {}),
         ...(input.sourceNetworkId ? { source_network_id: input.sourceNetworkId } : {}),
@@ -185,9 +204,9 @@ export async function createGridFundBalanceSession(input: {
     status: "pending",
     pay_in_currency: currency,
     receive_currency: "USD",
-    quoted_pay_in: preview.localPayIn,
-    quoted_receive: preview.usdCredit,
-    customer_rate: preview.customerRate,
+    quoted_pay_in: lockedLocalPayIn,
+    quoted_receive: lockedUsdCredit,
+    customer_rate: lockedCustomerRate,
     grid_quote_id: String(quote.id),
     grid_customer_id: customerId,
     settlement_info: { paymentInstructions: quote.paymentInstructions },
@@ -206,11 +225,12 @@ export async function createGridFundBalanceSession(input: {
     sequenceId,
     quoteId: String(quote.id),
     customerId,
-    localPayIn: preview.localPayIn,
+    localPayIn: lockedLocalPayIn,
     localCurrency: currency,
-    usdCredit: preview.usdCredit,
-    customerRate: preview.customerRate,
-    processingFee: preview.processingFee,
+    usdCredit: lockedUsdCredit,
+    customerRate: lockedCustomerRate,
+    processingFee,
+    gridFeesUsd,
     paymentInstructions: quote.paymentInstructions,
     expiresAt,
     transactionId: String(tx?.id ?? randomUUID()),

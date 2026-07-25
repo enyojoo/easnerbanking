@@ -3,6 +3,10 @@ import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createGridFundBalanceSession } from "@/lib/grid/fund-balance-session"
+import {
+  logGridFundBalanceConfirmError,
+  mapGridFundBalanceConfirmError,
+} from "@/lib/grid/fund-balance-errors"
 import { normalizeYcMomoPhone } from "@easner/shared"
 
 export const runtime = "nodejs"
@@ -94,6 +98,7 @@ export async function POST(request: Request) {
       customerRate: session.customerRate,
       usdCredit: session.usdCredit,
       processingFee: session.processingFee,
+      gridFees: session.gridFeesUsd ?? 0,
       bankInfo,
       expiresAt: session.expiresAt,
       payInRail: rail,
@@ -102,7 +107,10 @@ export async function POST(request: Request) {
       sourceNetworkName,
     })
   } catch (e) {
-    const message = e instanceof Error ? e.message : "grid_fund_balance_confirm_failed"
-    return NextResponse.json({ error: message }, { status: 400 })
+    logGridFundBalanceConfirmError(e, { country, currency, rail, userId: kycUserId })
+    const message = mapGridFundBalanceConfirmError(e)
+    const status =
+      e instanceof Error && e.message === "grid_corridor_disabled" ? 403 : 400
+    return NextResponse.json({ error: message }, { status })
   }
 }

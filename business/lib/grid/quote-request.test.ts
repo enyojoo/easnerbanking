@@ -5,6 +5,8 @@ import {
   buildGridCrossBorderQuoteBody,
   buildGridFundBalanceQuoteBody,
   buildGridRealtimeFundingSource,
+  gridQuoteFeesUsd,
+  pickGridInternalAccountForCurrency,
 } from "./quote-request"
 
 describe("buildGridRealtimeFundingSource", () => {
@@ -112,5 +114,41 @@ describe("buildGridCrossBorderQuoteBody", () => {
       purposeOfPayment: "GIFT",
       destination: { accountId: "ExternalAccount:dest" },
     })
+  })
+})
+
+describe("pickGridInternalAccountForCurrency", () => {
+  it("selects the ACTIVE USD account, not another currency", () => {
+    expect(
+      pickGridInternalAccountForCurrency(
+        [
+          {
+            id: "InternalAccount:usdc",
+            status: "ACTIVE",
+            balance: { currency: { code: "USDC" } },
+          },
+          {
+            id: "InternalAccount:usd",
+            status: "ACTIVE",
+            balance: { currency: { code: "USD" } },
+          },
+        ],
+        "USD",
+      ),
+    ).toBe("InternalAccount:usd")
+  })
+})
+
+describe("gridQuoteFeesUsd", () => {
+  it("sums Grid quote rateDetails into USD major units", () => {
+    expect(
+      gridQuoteFeesUsd({
+        rateDetails: {
+          gridApiFixedFee: 50,
+          gridApiVariableFeeAmount: 25,
+          counterpartyFixedFee: 25,
+        },
+      }),
+    ).toBe(1)
   })
 })

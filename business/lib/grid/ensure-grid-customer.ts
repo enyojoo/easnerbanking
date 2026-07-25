@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { gridFetch } from "./http"
+import { gridFetch, GridHttpError } from "./http"
 import { buildGridIndividualCustomerPayload, type GridPersonProfile } from "./kyc-metadata"
 export type { GridPersonProfile } from "./kyc-metadata"
 import {
@@ -7,6 +7,7 @@ import {
   gridPlatformCustomerIdFromBusinessId,
   gridPlatformCustomerIdFromUserId,
 } from "./customer-id"
+import { normalizeGridCustomerId } from "./quote-request"
 import type { GridCustomer } from "./types"
 
 async function readStoredGridCustomerId(
@@ -47,6 +48,34 @@ async function persistGridCustomerId(
     .eq("id", input.userId)
 }
 
+async function clearStoredGridCustomerId(
+  admin: SupabaseClient,
+  input: { userId: string; businessId?: string | null; scope?: "individual" | "business" },
+): Promise<void> {
+  const now = new Date().toISOString()
+  if (input.scope === "business" && input.businessId) {
+    await admin
+      .from("businesses")
+      .update({ grid_customer_id: null, updated_at: now })
+      .eq("id", input.businessId)
+    return
+  }
+  await admin
+    .from("users")
+    .update({ grid_customer_id: null, updated_at: now })
+    .eq("id", input.userId)
+}
+
+async function verifyGridCustomerExists(customerId: string): Promise<boolean> {
+  try {
+    await gridFetch({ method: "GET", path: `/customers/${encodeURIComponent(customerId)}` })
+    return true
+  } catch (e) {
+    if (e instanceof GridHttpError && e.status === 404) return false
+    throw e
+  }
+}
+
 async function findGridCustomerByPlatformId(platformCustomerId: string): Promise<GridCustomer | null> {
   const qs = new URLSearchParams({ platformCustomerId })
   const res = await gridFetch<{ data?: GridCustomer[] }>({
@@ -76,18 +105,31 @@ export async function ensureGridCustomer(input: {
 
   const stored = await readStoredGridCustomerId(input.admin, input)
   if (stored) {
-    return { customerId: stored, platformCustomerId }
+    const customerId = normalizeGridCustomerId(stored)
+    if (await verifyGridCustomerExists(customerId)) {
+      if (customerId !== stored) {
+        await persistGridCustomerId(input.admin, {
+          userId: input.userId,
+          businessId: input.businessId,
+          scope: input.scope,
+          customerId,
+        })
+      }
+      return { customerId, platformCustomerId }
+    }
+    await clearStoredGridCustomerId(input.admin, input)
   }
 
   const existing = await findGridCustomerByPlatformId(platformCustomerId).catch(() => null)
   if (existing?.id) {
+    const customerId = normalizeGridCustomerId(existing.id)
     await persistGridCustomerId(input.admin, {
       userId: input.userId,
       businessId: input.businessId,
       scope: input.scope,
-      customerId: existing.id,
+      customerId,
     })
-    return { customerId: existing.id, platformCustomerId }
+    return { customerId, platformCustomerId }
   }
 
   const payload = buildGridIndividualCustomerPayload({
@@ -102,7 +144,7 @@ export async function ensureGridCustomer(input: {
     idempotencyKey: platformCustomerId,
   })
 
-  const customerId = String(created.id ?? "").trim()
+  const customerId = normalizeGridCustomerId(String(created.id ?? ""))
   if (!customerId) {
     throw new Error("Grid customer create did not return id")
   }
