@@ -243,7 +243,7 @@ function applyPayoutChoiceToCorridor(
 
   if (choice === "disabled") {
     disableAllPayoutSendFlags(metadata, corridor)
-    return { ...corridor, metadata }
+    return { ...corridor, metadata, provider_routing: [] }
   }
 
   applyPayoutSendFlags(metadata, corridor, choice, true)
@@ -334,7 +334,12 @@ function mergeCorridorUpdatesInCache(
   queryClient.setQueryData<PayoutCorridorAdminRow[]>(officeKeys.payoutCorridors(), (prev) => {
     const list = prev ?? []
     const byId = new Map(updates.map((u) => [u.id, u]))
-    return list.map((r) => byId.get(r.id) ?? r)
+    return list.map((r) => {
+      const patch = byId.get(r.id)
+      if (!patch) return r
+      // PATCH returns DB rows without live annotation fields — merge, do not replace.
+      return { ...r, ...patch }
+    })
   })
 }
 
@@ -535,6 +540,18 @@ function corridorMatchesRailTab(
   return normalizeCorridorRail(row.rail) === railTab
 }
 
+function hasOpsConfiguration(meta: Record<string, unknown>): boolean {
+  return (
+    meta.noah_send_enabled === true ||
+    meta.yc_send_enabled === true ||
+    meta.grid_send_enabled === true ||
+    meta.noah_receive_enabled === true ||
+    meta.yc_receive_enabled === true ||
+    meta.grid_receive_enabled === true ||
+    meta.cross_border_enabled === true
+  )
+}
+
 function corridorHasRailCapability(row: PayoutCorridorAdminRow): boolean {
   const cc = row.country_code.trim().toUpperCase()
   const cur = row.currency_code.trim().toUpperCase()
@@ -551,10 +568,12 @@ function corridorHasRailCapability(row: PayoutCorridorAdminRow): boolean {
     return true
   }
 
+  const meta = rowMetadata(row)
+  if (hasOpsConfiguration(meta)) return true
+
   const routing = parseRouting(row.provider_routing)
   if (routing.length === 0) return false
 
-  const meta = rowMetadata(row)
   return (
     meta.yc_send === true ||
     meta.yc_receive === true ||

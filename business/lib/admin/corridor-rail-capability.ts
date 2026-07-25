@@ -43,6 +43,18 @@ function hasSyncedMetadataCapability(meta: Record<string, unknown>): boolean {
   )
 }
 
+function hasOpsConfiguration(meta: Record<string, unknown>): boolean {
+  return (
+    meta.noah_send_enabled === true ||
+    meta.yc_send_enabled === true ||
+    meta.grid_send_enabled === true ||
+    meta.noah_receive_enabled === true ||
+    meta.yc_receive_enabled === true ||
+    meta.grid_receive_enabled === true ||
+    meta.cross_border_enabled === true
+  )
+}
+
 /** True when a corridor row should appear on the fiat admin tab for its rail. */
 export function corridorHasRailCapability(row: CorridorRow): boolean {
   if (
@@ -61,10 +73,13 @@ export function corridorHasRailCapability(row: CorridorRow): boolean {
     return true
   }
 
+  const meta = rowMetadata(row)
+  if (hasOpsConfiguration(meta)) return true
+
   const routing = parseRouting(row.provider_routing)
   if (routing.length === 0) return false
 
-  return hasSyncedMetadataCapability(rowMetadata(row))
+  return hasSyncedMetadataCapability(meta)
 }
 
 /** Rows safe to delete: product exclusions or empty shells with no live or configured capability. */
