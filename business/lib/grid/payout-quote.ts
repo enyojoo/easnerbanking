@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   computeYcBalancePayoutPricingBeforeSend,
@@ -22,11 +21,11 @@ import {
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
 import { createGridExternalAccount, extractGridFundingSolanaAddress, gridMinorUnits } from "./external-account"
 import { loadGridRecipientBankCandidates } from "./grid-bank-candidates"
+import { buildGridIdempotencyKey } from "./idempotency"
 import { buildGridBalancePayoutQuoteBody } from "./quote-request"
 import { gridFetch } from "./http"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
-import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
 
 function roundUsd(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -104,9 +103,6 @@ export async function lockGridBalancePayoutQuote(
     rail,
   })
 
-  const recipientKey = String(
-    (input.recipient as { id?: string }).id ?? input.recipient.account_number ?? randomUUID(),
-  )
   const externalAccount = await createGridExternalAccount({
     customerId,
     recipient: input.recipient,
@@ -114,7 +110,6 @@ export async function lockGridBalancePayoutQuote(
     rail,
     gridBankCandidates: gridCandidates.bankNames,
     gridMomoCandidates: gridCandidates.momoProviders,
-    idempotencyKey: `grid_ext_${customerId}_${recipientKey}`,
   })
 
   const rates = await listGridRates(admin, { destinations: [receiveCurrency], status: "active" })
@@ -152,24 +147,18 @@ export async function lockGridBalancePayoutQuote(
         : undefined,
   })
 
+  const quoteBody = buildGridBalancePayoutQuoteBody({
+    customerId,
+    externalAccountId: externalAccount.id,
+    receiveCurrency,
+    lockedReceiveMinor: gridMinorUnits(quoteReceiveAmount, 2),
+    purposeOfPayment: input.paymentPurpose,
+  })
   const quote = await gridFetch<GridQuote>({
     method: "POST",
     path: "/quotes",
-    json: buildGridBalancePayoutQuoteBody({
-      customerId,
-      externalAccountId: externalAccount.id,
-      receiveCurrency,
-      lockedReceiveMinor: gridMinorUnits(quoteReceiveAmount, 2),
-      purposeOfPayment: input.paymentPurpose,
-    }),
-    idempotencyKey: `grid_quote_${customerId}_${buildPayoutQuoteKey({
-      recipientId: recipientKey,
-      sourceBalanceCurrency,
-      amountEntryMode,
-      receiveAmount: quoteReceiveAmount,
-      sendBudget,
-      paymentPurpose: input.paymentPurpose,
-    })}`,
+    json: quoteBody,
+    idempotencyKey: buildGridIdempotencyKey(`grid_quote_${customerId}`, quoteBody),
   })
 
   const lockedCustomerRate = resolveGridLockedPayoutCustomerRate({

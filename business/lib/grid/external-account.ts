@@ -1,5 +1,6 @@
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
+import { buildGridIdempotencyKey } from "./idempotency"
 import { gridFetch } from "./http"
 import type { GridExternalAccount } from "./types"
 import type { GridPersonProfile } from "./kyc-metadata"
@@ -100,11 +101,14 @@ export async function createGridExternalAccount(input: {
   gridMomoCandidates?: GridMomoProviderOption[]
 }): Promise<GridExternalAccount> {
   const payload = buildGridExternalAccountPayload(input)
+  const idempotencyKey =
+    input.idempotencyKey?.trim() ||
+    buildGridIdempotencyKey(`grid_ext_${input.customerId}`, payload)
   return gridFetch<GridExternalAccount>({
     method: "POST",
     path: "/customers/external-accounts",
     json: payload,
-    idempotencyKey: input.idempotencyKey,
+    idempotencyKey,
   })
 }
 

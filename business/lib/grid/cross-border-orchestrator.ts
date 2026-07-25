@@ -1,9 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { randomUUID } from "crypto"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
 import { createGridExternalAccount } from "./external-account"
 import { loadGridRecipientBankCandidates } from "./grid-bank-candidates"
+import { buildGridIdempotencyKey } from "./idempotency"
 import { buildGridCrossBorderQuoteBody } from "./quote-request"
 import { gridFetch } from "./http"
 import { gridMinorUnits } from "./external-account"
@@ -99,22 +99,22 @@ export async function createGridCrossBorderQuote(input: {
     rail: payoutRail,
     gridBankCandidates: gridCandidates.bankNames,
     gridMomoCandidates: gridCandidates.momoProviders,
-    idempotencyKey: `grid_xb_ext_${customerId}_${String((input.recipient as { id?: string }).id ?? input.recipient.account_number ?? randomUUID())}`,
   })
 
   const receiveAmount = Number(input.receiveAmount)
   const sourceAmount = Math.round((receiveAmount / customerRate) * 100) / 100
 
+  const quoteBody = buildGridCrossBorderQuoteBody({
+    customerId,
+    sourceCurrency,
+    externalAccountId: externalAccount.id,
+    lockedReceiveMinor: gridMinorUnits(receiveAmount, 2),
+  })
   const quote = await gridFetch<GridQuote>({
     method: "POST",
     path: "/quotes",
-    json: buildGridCrossBorderQuoteBody({
-      customerId,
-      sourceCurrency,
-      externalAccountId: externalAccount.id,
-      lockedReceiveMinor: gridMinorUnits(receiveAmount, 2),
-    }),
-    idempotencyKey: `grid_xb_${customerId}_${sourceCurrency}_${receiveCurrency}_${receiveAmount}`,
+    json: quoteBody,
+    idempotencyKey: buildGridIdempotencyKey(`grid_xb_${customerId}`, quoteBody),
   })
 
   const sequenceId = `grid_xb_${String(quote.id).replace(/[^a-zA-Z0-9:_-]/g, "")}`

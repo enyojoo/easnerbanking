@@ -6,6 +6,7 @@ import {
   verifyGridWebhookSignature,
 } from "@/lib/grid/webhook-verify"
 import { buildGridIndividualCustomerPayload } from "@/lib/grid/kyc-metadata"
+import { buildGridIdempotencyKey } from "@/lib/grid/idempotency"
 import { resolvePrimaryPayoutProvider } from "@easner/shared"
 
 describe("gridDiscoverySupportsCorridor", () => {
@@ -65,6 +66,25 @@ describe("buildGridIndividualCustomerPayload", () => {
     expect(payload.platformCustomerId).toBe("easner_user_abc")
     expect(payload.customerType).toBe("INDIVIDUAL")
     expect(payload.fullName).toBe("Jane Doe")
+  })
+})
+
+describe("buildGridIdempotencyKey", () => {
+  it("is stable for identical bodies and changes when body differs", () => {
+    const bodyA = {
+      source: { sourceType: "REALTIME_FUNDING", customerId: "Customer:abc", currency: "USDC" },
+      destination: { destinationType: "ACCOUNT", accountId: "ext_1" },
+      lockedCurrencyAmount: 200000,
+      lockedCurrencySide: "RECEIVING",
+      purposeOfPayment: "FAMILY_SUPPORT",
+    }
+    const bodyB = { ...bodyA, destination: { destinationType: "ACCOUNT", accountId: "ext_2" } }
+    const keyA1 = buildGridIdempotencyKey("grid_quote_Customer:abc", bodyA)
+    const keyA2 = buildGridIdempotencyKey("grid_quote_Customer:abc", bodyA)
+    const keyB = buildGridIdempotencyKey("grid_quote_Customer:abc", bodyB)
+    expect(keyA1).toBe(keyA2)
+    expect(keyA1).not.toBe(keyB)
+    expect(keyA1.startsWith("grid_quote_Customer:abc_")).toBe(true)
   })
 })
 
