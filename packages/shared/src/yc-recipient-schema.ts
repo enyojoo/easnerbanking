@@ -14,6 +14,7 @@ export {
   CORRIDOR_BANK_NAME_ALIASES,
   GRID_BANK_NAME_ALIASES,
   gridBankLabelsMatch,
+  normalizeGridBankAccountNumber,
   resolveCorridorBankName,
   resolveCorridorMomoProvider,
   resolveGridBankName,
