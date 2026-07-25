@@ -22,7 +22,6 @@ import {
   readCachedYcPayInRates,
   type YcReceiveRailsResponse,
 } from '../lib/warmYcLocalDepositCaches'
-import type { PayInProviderId } from '../lib/sendFlowFundBalanceQuote'
 import type { YcPayInRail } from './useYcCrossBorderFlow'
 
 function resolveFundBalancePayInProvider(input: {
