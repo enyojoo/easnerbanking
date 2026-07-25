@@ -68,6 +68,15 @@ export default function PayrollRunDetailPage() {
   const failedLines = lines.filter((l) => l.status === "failed")
   const hasPayStubs = lines.some((line) => Boolean(line.payrollDocumentId))
   const awaitingApproval = run?.status === "pending_approval" || run?.status === "needs_reapproval"
+  const futurePayday = Boolean(
+    run?.payday
+      && new Date(`${run.payday.slice(0, 10)}T23:59:59`).getTime() > Date.now(),
+  )
+  const canApproveDraftDirectly = Boolean(
+    run?.status === "draft"
+      && canApprove
+      && !capabilities?.requireSeparateApprover,
+  )
 
   const railSummary = useMemo(() => {
     const mix: Record<string, number> = {}
@@ -206,15 +215,6 @@ export default function PayrollRunDetailPage() {
                 </Link>
               </Button>
             ) : null}
-            {awaitingApproval && canApprove ? (
-              <Button
-                variant="outline"
-                onClick={() => void handleApproveAndSchedule()}
-                disabled={approveRun.isPending || !(run.payday || run.scheduledFor)}
-              >
-                Approve and schedule
-              </Button>
-            ) : null}
             {(run.status === "approved" || run.status === "partial") && canApprove ? (
               <Button variant="primary" onClick={() => void handleExecute()} disabled={executeRun.isPending}>
                 Execute with PIN
@@ -237,7 +237,7 @@ export default function PayrollRunDetailPage() {
                 Retry failed
               </Button>
             ) : null}
-            {run.status === "draft" && canPrepare ? (
+            {run.status === "draft" && canPrepare && !canApproveDraftDirectly ? (
               <Button
                 variant="primary"
                 onClick={() =>
@@ -251,13 +251,13 @@ export default function PayrollRunDetailPage() {
                 Submit for approval
               </Button>
             ) : null}
-            {awaitingApproval && canApprove ? (
+            {(awaitingApproval || canApproveDraftDirectly) && canApprove ? (
               <Button
                 variant="primary"
-                onClick={() => void handleApproveAndPay()}
+                onClick={() => void (futurePayday ? handleApproveAndSchedule() : handleApproveAndPay())}
                 disabled={approveRun.isPending || executeRun.isPending}
               >
-                Approve and pay
+                {futurePayday ? "Approve and schedule" : "Approve and pay"}
               </Button>
             ) : null}
             {(

@@ -13,11 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
-import { usePayrollCapabilities, usePayrollPeople, usePayrollSchedules, usePayrollSettings } from "@/hooks/queries/use-payroll"
+import { usePayrollPeople, usePayrollSchedules, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useCreatePayrollRun, usePreviewPayrollRun } from "@/hooks/mutations/use-payroll"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import { useBusinessProfile } from "@/lib/use-business-profile"
-import { apiFetch } from "@/lib/query/api-client"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { PayrollRunDraftInput, PayrollRunPreview } from "@/lib/payroll/types"
 import { cn } from "@/lib/utils"
@@ -49,7 +48,6 @@ export default function NewPayrollRunPage() {
   const peopleQuery = usePayrollPeople()
   const schedules = usePayrollSchedules().data ?? []
   const payrollSettings = usePayrollSettings().data
-  const capabilities = usePayrollCapabilities().data
   const accounts = useBusinessAccountRows()
   const createRun = useCreatePayrollRun()
   const previewRun = usePreviewPayrollRun()
@@ -147,20 +145,12 @@ export default function NewPayrollRunPage() {
     }
   }
 
-  async function persist(action: "draft" | "submit" | "pay" | "schedule") {
+  async function persist() {
     try {
       const result = await createRun.mutateAsync(runInput)
-      const runId = result.run.id
-      if (action !== "draft") {
-        await apiFetch(`/api/business/payroll/runs/${runId}`, { method: "POST", body: { action: "submit" } })
-      }
       sessionStorage.removeItem(storageKey)
-      if (action === "pay" || action === "schedule") {
-        router.push(`/payroll/runs/${runId}?action=${action}`)
-      } else {
-        toast.success(action === "draft" ? "Payroll draft saved" : "Payroll submitted for approval")
-        router.push(`/payroll/runs/${runId}`)
-      }
+      toast.success("Payroll run created")
+      router.push(`/payroll/runs/${result.run.id}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save payroll")
     }
@@ -191,11 +181,9 @@ export default function NewPayrollRunPage() {
           <Button variant="ghost" onClick={() => setStep((value) => Math.max(0, value - 1))} disabled={step === 0}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>
           <div className="flex flex-wrap gap-2">
             {step === 4 ? <>
-              <Button variant="outline" onClick={() => void persist("draft")} disabled={createRun.isPending}>Save draft</Button>
-              <Button variant="outline" onClick={() => void persist("submit")} disabled={createRun.isPending || Boolean(preview?.issues.some((issue) => issue.severity === "blocking"))}>Submit for approval</Button>
-              {capabilities?.canApprove ? (new Date(`${draft.payday}T23:59:59`).getTime() > Date.now()
-                ? <Button variant="primary" onClick={() => void persist("schedule")} disabled={createRun.isPending || Boolean(preview?.issues.some((issue) => issue.severity === "blocking"))}>Approve and schedule</Button>
-                : <Button variant="primary" onClick={() => void persist("pay")} disabled={createRun.isPending || Boolean(preview?.issues.some((issue) => issue.severity === "blocking"))}>Approve and pay</Button>) : null}
+              <Button variant="primary" onClick={() => void persist()} disabled={createRun.isPending}>
+                {createRun.isPending ? "Creating…" : "Create run"}
+              </Button>
             </> : <Button variant="primary" onClick={() => {
               if (step === 2) void loadPreview()
               else if (step === 3) setStep(4)
@@ -218,9 +206,9 @@ function DetailsStep({ draft, setDraft, accounts, schedules }: { draft: Draft; s
     <div className="mt-6 space-y-5">
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Run name"><Input value={draft.name} onChange={(e) => update("name", e.target.value)} /></Field>
+        <Field label="Source account"><div className="flex h-10 items-center justify-between rounded-md border bg-muted/40 px-3 text-sm"><span>{draft.sourceCurrency} account</span><span className="text-muted-foreground">{sourceAccount ? `${formatCurrency(sourceAccount.availableBalance ?? sourceAccount.balance, sourceAccount.currency)} available` : "Set in Payroll Settings"}</span></div><Link className="text-xs text-primary hover:underline" href="/payroll/settings">Change in Payroll Settings</Link></Field>
         <Field label="Run type"><Select value={draft.offCycle ? "off-cycle" : "regular"} onValueChange={(v) => update("offCycle", v === "off-cycle")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">Regular payroll</SelectItem><SelectItem value="off-cycle">Off-cycle payroll</SelectItem></SelectContent></Select></Field>
         <Field label="Schedule (optional)"><Select value={draft.scheduleId || "none"} onValueChange={(v) => update("scheduleId", v === "none" ? undefined : v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No schedule</SelectItem>{(schedules ?? []).map((schedule) => <SelectItem key={schedule.id} value={schedule.id}>{schedule.name}</SelectItem>)}</SelectContent></Select></Field>
-        <Field label="Payroll source account"><div className="flex h-10 items-center justify-between rounded-md border bg-muted/40 px-3 text-sm"><span>{draft.sourceCurrency} account</span><span className="text-muted-foreground">{sourceAccount ? `${formatCurrency(sourceAccount.availableBalance ?? sourceAccount.balance, sourceAccount.currency)} available` : "Set in Payroll Settings"}</span></div><Link className="text-xs text-primary hover:underline" href="/payroll/settings">Change in Payroll Settings</Link></Field>
       </div>
       <div className="grid gap-5 md:grid-cols-3">
       <Field label="Pay period start"><Input type="date" value={draft.payPeriodStart} onChange={(e) => update("payPeriodStart", e.target.value)} /></Field>
@@ -238,7 +226,7 @@ function PeopleStep({ people, selected, search, setSearch, onToggle, onSelectAll
       const isReady = person.status === "active" && person.readinessStatus === "ready"
       return <label key={person.id} className={cn("flex items-center gap-3 p-4", isReady ? "cursor-pointer hover:bg-muted/40" : "opacity-60")}>
         <input type="checkbox" checked={selected.includes(person.id)} disabled={!isReady} onChange={() => onToggle(person.id, person.defaultAmount)} />
-        <span className="min-w-0 flex-1"><span className="block font-medium">{person.fullName}</span><span className="block text-xs text-muted-foreground"><PayrollReceivingMethod person={person} /></span></span>
+        <span className="min-w-0 flex-1"><span className="block font-medium">{person.fullName}</span><span className="block text-xs text-muted-foreground"><PayrollReceivingMethod person={person} typeOnly /></span></span>
         <PayrollStatusBadge status={person.status !== "active" ? person.status : person.readinessStatus} />
       </label>
     })}</div>
@@ -248,7 +236,7 @@ function PeopleStep({ people, selected, search, setSearch, onToggle, onSelectAll
 
 function AmountsStep({ people, draft, setDraft }: { people: NonNullable<ReturnType<typeof usePayrollPeople>["data"]>; draft: Draft; setDraft: React.Dispatch<React.SetStateAction<Draft>> }) {
   return <div><div className="flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Amounts</h2><p className="mt-1 text-sm text-muted-foreground">Confirm what each person receives.</p></div><Button variant="outline" size="sm" onClick={() => setDraft((current) => ({ ...current, amounts: Object.fromEntries(people.map((person) => [person.id, person.defaultAmount])) }))}>Use saved amounts</Button></div>
-    <div className="mt-5 divide-y rounded-xl border">{people.map((person) => <div key={person.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center"><div><p className="font-medium">{person.fullName}</p><div className="mt-1 text-xs text-muted-foreground"><PayrollReceivingMethod person={person} /> · {draft.sourceCurrency}</div></div><Input inputMode="decimal" className="tabular-nums" value={String(draft.amounts[person.id] || "")} onChange={(e) => setDraft((current) => ({ ...current, amounts: { ...current.amounts, [person.id]: Number(e.target.value.replace(/[^\d.]/g, "")) } }))} /></div>)}</div>
+    <div className="mt-5 divide-y rounded-xl border">{people.map((person) => <div key={person.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center"><div><p className="font-medium">{person.fullName}</p><div className="mt-1 text-xs text-muted-foreground"><PayrollReceivingMethod person={person} typeOnly /> · {draft.sourceCurrency}</div></div><Input inputMode="decimal" className="tabular-nums" value={String(draft.amounts[person.id] || "")} onChange={(e) => setDraft((current) => ({ ...current, amounts: { ...current.amounts, [person.id]: Number(e.target.value.replace(/[^\d.]/g, "")) } }))} /></div>)}</div>
   </div>
 }
 
@@ -263,7 +251,7 @@ function ReadinessStep({ preview, onRefresh }: { preview: PayrollRunPreview | nu
 function ReviewStep({ draft, people, preview }: { draft: Draft; people: NonNullable<ReturnType<typeof usePayrollPeople>["data"]>; preview: PayrollRunPreview | null }) {
   return <div><h2 className="text-lg font-semibold">Review payroll</h2><p className="mt-1 text-sm text-muted-foreground">Confirm the approved payroll details before saving or sending for approval.</p>
     <dl className="mt-6 grid gap-5 rounded-xl border p-5 sm:grid-cols-3"><ReviewItem label="Pay period" value={`${formatDate(draft.payPeriodStart)} – ${formatDate(draft.payPeriodEnd)}`} /><ReviewItem label="Payday" value={formatDate(draft.payday)} /><ReviewItem label="People" value={String(people.length)} /><ReviewItem label="Amount" value={formatCurrency(preview?.payrollTotal ?? 0, draft.sourceCurrency)} /><ReviewItem label="Fees" value={formatCurrency(preview?.fees ?? 0, draft.sourceCurrency)} /><ReviewItem label="Total debit" value={formatCurrency(preview?.sourceDebit ?? 0, draft.sourceCurrency)} /></dl>
-    <div className="mt-5 divide-y rounded-xl border">{people.map((person) => <div key={person.id} className="flex items-center justify-between gap-4 p-4"><div><p className="font-medium">{person.fullName}</p><PayrollReceivingMethod person={person} /></div><p className="font-medium tabular-nums">{formatCurrency(draft.amounts[person.id] || 0, draft.sourceCurrency)}</p></div>)}</div>
+    <div className="mt-5 divide-y rounded-xl border">{people.map((person) => <div key={person.id} className="flex items-center justify-between gap-4 p-4"><div><p className="font-medium">{person.fullName}</p><PayrollReceivingMethod person={person} typeOnly /></div><p className="font-medium tabular-nums">{formatCurrency(draft.amounts[person.id] || 0, draft.sourceCurrency)}</p></div>)}</div>
   </div>
 }
 

@@ -13,7 +13,7 @@ const copy: Record<string, string> = {
   held: "On hold",
   terminated: "Inactive",
   manual: "Manual",
-  approved: "Connected",
+  approved: "Verified",
 }
 
 export function payrollStatusLabel(status: string | null | undefined): string {

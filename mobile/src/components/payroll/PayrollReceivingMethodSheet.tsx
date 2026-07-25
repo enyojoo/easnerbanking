@@ -1,18 +1,63 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Building2, Check, ChevronDown, Smartphone, Wallet, X } from 'lucide-react-native'
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
+import {
+  Building2,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  Smartphone,
+  Wallet,
+  X,
+} from 'lucide-react-native'
+import { MobileMoneyProviderIcon } from '@easner/shared'
 import { WebAwareModal } from '../WebAwareModal'
-import { Button, TextField } from '../ui'
+import { Button } from '../ui'
 import { apiFetch } from '../../query/api-client'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
 import {
   buildRecipientCatalogForType,
+  getCorridorRecipientOptions,
   type RecipientCatalogEntry,
   type RecipientFieldKey,
 } from '../../lib/recipientCatalog'
-import { borderRadius, colors, fontFamily, spacing, textStyles } from '../../theme'
+import {
+  borderRadius,
+  colors,
+  compactFormInputStyle,
+  dropdownSearchInputStyle,
+  dropdownSearchRowStyle,
+  fontFamily,
+  spacing,
+  surfaceFrameStyle,
+  textStyles,
+} from '../../theme'
 import { useAuth } from '../../contexts/AuthContext'
 import { recipientService } from '../../lib/recipientService'
+import { CountryFlag } from '../flags/CountryFlag'
+import { CachedImage } from '../CachedImage'
+import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
+import RecipientFormDropdownList from '../recipients/RecipientFormDropdownList'
+import {
+  RecipientFormDropdownHost,
+  RegisterRecipientDropdownSheet,
+} from '../recipients/RecipientFormDropdownHost'
+import { RecipientBankNameField } from '../recipients/RecipientBankNameField'
+import { WalletAddressField } from '../recipients/WalletAddressField'
+import { EmbeddedWalletAddressQrScanner } from '../recipients/WalletAddressQrScanner'
+import {
+  formatAccountNumber,
+  formatIBAN,
+  formatRoutingNumber,
+  formatSortCode,
+} from '../../utils/formatters'
 
 export type PayrollExternalMethodType = 'bank' | 'mobile_money' | 'stablecoin'
 
@@ -78,12 +123,13 @@ function resultFromApi(
   return {
     id: String(value.id),
     type: String(value.type) as PayrollExternalMethodType,
-    label: String(value.label || methodTitle(String(value.type) as PayrollExternalMethodType)),
-    maskedDetails: (
-      value.maskedDetails
-      ?? value.masked_details
-      ?? {}
-    ) as Record<string, string>,
+    label: String(
+      value.label ||
+        methodTitle(String(value.type) as PayrollExternalMethodType),
+    ),
+    maskedDetails: (value.maskedDetails ??
+      value.masked_details ??
+      {}) as Record<string, string>,
     preferred,
   }
 }
@@ -97,27 +143,44 @@ export function PayrollReceivingMethodSheet({
   onSaved,
 }: Props) {
   const { userProfile } = useAuth()
-  const { bankCorridors, mobileCorridors, cryptoDestinations, catalogRevision } = useSendDestinations()
-  const [selectedType, setSelectedType] = useState<PayrollExternalMethodType | null>(null)
-  const [selectedDestination, setSelectedDestination] = useState<RecipientCatalogEntry | null>(null)
+  const {
+    bankCorridors,
+    mobileCorridors,
+    cryptoDestinations,
+    catalogRevision,
+  } = useSendDestinations()
+  const [selectedType, setSelectedType] =
+    useState<PayrollExternalMethodType | null>(null)
+  const [selectedDestination, setSelectedDestination] =
+    useState<RecipientCatalogEntry | null>(null)
   const [fields, setFields] = useState<Record<string, string>>({})
   const [destinationOpen, setDestinationOpen] = useState(false)
   const [destinationSearch, setDestinationSearch] = useState('')
+  const [providerOpen, setProviderOpen] = useState(false)
+  const [providerSearch, setProviderSearch] = useState('')
+  const [bankOpen, setBankOpen] = useState(false)
+  const [bankSearch, setBankSearch] = useState('')
+  const [showWalletScanner, setShowWalletScanner] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const catalogType = selectedType === 'stablecoin'
-    ? 'wallet'
-    : selectedType
+  const catalogType = selectedType === 'stablecoin' ? 'wallet' : selectedType
   const destinations = useMemo(
-    () => catalogType
-      ? buildRecipientCatalogForType(catalogType, {
-          bank: bankCorridors,
-          mobile: mobileCorridors,
-          crypto: cryptoDestinations,
-        })
-      : [],
-    [bankCorridors, catalogRevision, catalogType, cryptoDestinations, mobileCorridors],
+    () =>
+      catalogType
+        ? buildRecipientCatalogForType(catalogType, {
+            bank: bankCorridors,
+            mobile: mobileCorridors,
+            crypto: cryptoDestinations,
+          })
+        : [],
+    [
+      bankCorridors,
+      catalogRevision,
+      catalogType,
+      cryptoDestinations,
+      mobileCorridors,
+    ],
   )
   const visibleDestinations = useMemo(() => {
     const query = destinationSearch.trim().toLowerCase()
@@ -137,27 +200,62 @@ export function PayrollReceivingMethodSheet({
     setFields({})
     setDestinationOpen(false)
     setDestinationSearch('')
+    setProviderOpen(false)
+    setProviderSearch('')
+    setBankOpen(false)
+    setBankSearch('')
+    setShowWalletScanner(false)
     setSubmitting(false)
     setError('')
   }, [editingMethod, visible])
 
   useEffect(() => {
-    if (!selectedType || destinations.length === 0 || selectedDestination) return
+    if (!selectedType || destinations.length === 0 || selectedDestination)
+      return
     setSelectedDestination(destinations[0])
   }, [destinations, selectedDestination, selectedType])
 
   const formFields = selectedDestination?.fields ?? []
-  const providerField = selectedType === 'mobile_money'
-    ? 'provider'
-    : selectedType === 'stablecoin'
-      ? 'network'
-      : 'bankName'
-  const providerOptions = selectedDestination?.providers ?? []
+  const providerOptions = useMemo(() => {
+    if (!selectedDestination) return []
+    if (selectedType === 'mobile_money') {
+      const options = getCorridorRecipientOptions({
+        countryCode: selectedDestination.countryCode,
+        currencyCode: selectedDestination.currencyCode,
+        rail: 'mobile_money',
+      }).momoOptions
+      if (options.length) return options
+    }
+    return selectedDestination.providers ?? []
+  }, [catalogRevision, selectedDestination, selectedType])
+  const bankOptions = useMemo(() => {
+    if (selectedType !== 'bank' || !selectedDestination) return []
+    return getCorridorRecipientOptions({
+      countryCode: selectedDestination.countryCode,
+      currencyCode: selectedDestination.currencyCode,
+      rail: 'bank_transfer',
+    }).bankOptions
+  }, [catalogRevision, selectedDestination, selectedType])
+  const filteredProviderOptions = useMemo(() => {
+    const query = providerSearch.trim().toLowerCase()
+    return providerOptions.filter(
+      (option) => !query || option.toLowerCase().includes(query),
+    )
+  }, [providerOptions, providerSearch])
+  const formComplete = Boolean(
+    selectedDestination &&
+    formFields.every(
+      (field) => !field.required || String(fields[field.key] ?? '').trim(),
+    ),
+  )
 
   function chooseType(type: PayrollExternalMethodType) {
     setSelectedType(type)
     setSelectedDestination(null)
     setFields({})
+    setDestinationOpen(false)
+    setProviderOpen(false)
+    setBankOpen(false)
     setError('')
   }
 
@@ -166,16 +264,33 @@ export function PayrollReceivingMethodSheet({
     setFields({})
     setDestinationOpen(false)
     setDestinationSearch('')
+    setProviderOpen(false)
+    setProviderSearch('')
+    setBankOpen(false)
+    setBankSearch('')
     setError('')
   }
 
   function updateField(key: RecipientFieldKey | string, value: string) {
-    setFields((current) => ({ ...current, [key]: value }))
+    const formatted =
+      key === 'routingNumber'
+        ? formatRoutingNumber(value)
+        : key === 'sortCode'
+          ? formatSortCode(value)
+          : key === 'accountNumber'
+            ? formatAccountNumber(value)
+            : key === 'iban'
+              ? formatIBAN(value)
+              : key === 'swiftBic'
+                ? value.toUpperCase()
+                : value
+    setFields((current) => ({ ...current, [key]: formatted }))
     if (error) setError('')
   }
 
   function validate(): string | null {
-    if (!selectedType || !selectedDestination) return 'Choose a receiving method and destination.'
+    if (!selectedType || !selectedDestination)
+      return 'Choose a receiving method and destination.'
     for (const field of formFields) {
       if (field.required && !String(fields[field.key] ?? '').trim()) {
         return `${field.label} is required.`
@@ -200,15 +315,19 @@ export function PayrollReceivingMethodSheet({
     if (type === 'stablecoin') {
       details.asset = selectedDestination.currencyCode
     }
-    const label = type === 'bank'
-      ? fields.bankName
-      : type === 'mobile_money'
-        ? fields.provider
-        : `${selectedDestination.currencyCode} on ${fields.network}`
+    const label =
+      type === 'bank'
+        ? fields.bankName
+        : type === 'mobile_money'
+          ? fields.provider
+          : `${selectedDestination.currencyCode} on ${fields.network}`
     setSubmitting(true)
     setError('')
     try {
-      if (!userProfile?.id) throw new Error('Your account could not be verified. Please sign in again.')
+      if (!userProfile?.id)
+        throw new Error(
+          'Your account could not be verified. Please sign in again.',
+        )
       const recipient = await recipientService.create(userProfile.id, {
         fullName: fields.fullName,
         accountNumber:
@@ -240,20 +359,27 @@ export function PayrollReceivingMethodSheet({
       const path = invitationId
         ? `/api/payroll/invitations/${invitationId}/methods`
         : `/api/payroll/connections/${connectionId}/methods`
-      const response = await apiFetch<{ method: Record<string, unknown> }>(path, {
-        method: 'POST',
-        body: {
-          type,
-          label,
-          details,
-          providerRecipientId: recipient.id,
-          ...(connectionId ? { preferred: true } : {}),
+      const response = await apiFetch<{ method: Record<string, unknown> }>(
+        path,
+        {
+          method: 'POST',
+          body: {
+            type,
+            label,
+            details,
+            providerRecipientId: recipient.id,
+            ...(connectionId ? { preferred: true } : {}),
+          },
         },
-      })
+      )
       await onSaved(resultFromApi(response.method, Boolean(connectionId)))
       onClose()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not save receiving method')
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Could not save receiving method',
+      )
     } finally {
       setSubmitting(false)
     }
@@ -272,197 +398,426 @@ export function PayrollReceivingMethodSheet({
       nativePanelStyle={selectedType ? styles.formPanel : styles.typePanel}
       webPanelStyle={selectedType ? styles.webFormPanel : undefined}
     >
-      <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>
-            {selectedType
-              ? `${editingMethod ? 'Update' : 'Add'} ${methodTitle(selectedType).toLowerCase()}`
-              : 'Add a receiving method'}
-          </Text>
-          <Text style={styles.subtitle}>
-            {selectedType && editingMethod
-              ? 'Re-enter the details to securely replace this receiving method.'
-              : selectedType
-                ? 'These details are used only for payroll payments.'
-                : 'Choose where you want to receive payroll.'}
-          </Text>
-        </View>
-        <Pressable
-          onPress={close}
-          disabled={submitting}
-          style={styles.closeButton}
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-        >
-          <X size={22} color={colors.text.secondary} />
-        </Pressable>
-      </View>
-
-      {!selectedType ? (
-        <View style={styles.typeOptions}>
-          {TYPE_OPTIONS.map((option) => {
-            const Icon = option.icon
-            return (
-              <Pressable
-                key={option.type}
-                style={styles.typeOption}
-                onPress={() => chooseType(option.type)}
-                accessibilityRole="button"
-              >
-                <View style={styles.typeIcon}>
-                  <Icon size={22} color={colors.primary.main} />
-                </View>
-                <View style={styles.grow}>
-                  <Text style={styles.optionTitle}>{option.title}</Text>
-                  <Text style={styles.optionSubtitle}>{option.description}</Text>
-                </View>
-              </Pressable>
-            )
-          })}
-        </View>
-      ) : (
-        <>
-          <ScrollView
-            style={styles.formScroll}
-            contentContainerStyle={styles.formContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+      <RecipientFormDropdownHost>
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>
+              {showWalletScanner
+                ? 'Scan wallet address'
+                : selectedType
+                  ? `${editingMethod ? 'Update' : 'Add'} ${methodTitle(selectedType).toLowerCase()}`
+                  : 'Add a receiving method'}
+            </Text>
+            <Text style={styles.subtitle}>
+              {selectedType && editingMethod
+                ? 'Re-enter the details to securely replace this receiving method.'
+                : selectedType
+                  ? 'These details are used only for payroll payments.'
+                  : 'Choose where you want to receive payroll.'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => {
+              if (showWalletScanner) {
+                setShowWalletScanner(false)
+                return
+              }
+              close()
+            }}
+            disabled={submitting}
+            style={styles.closeButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
           >
-            <Pressable
-              style={styles.destinationButton}
-              onPress={() => setDestinationOpen((open) => !open)}
-              accessibilityRole="button"
-            >
-              <View style={styles.grow}>
-                <Text style={styles.destinationLabel}>
-                  {selectedType === 'stablecoin' ? 'Asset' : 'Country and currency'}
-                </Text>
-                <Text style={styles.destinationValue}>
-                  {selectedDestination
-                    ? selectedType === 'stablecoin'
-                      ? `${selectedDestination.currencyCode} · ${selectedDestination.currencyName}`
-                      : `${selectedDestination.countryName} · ${selectedDestination.currencyCode}`
-                    : 'Select'}
-                </Text>
-              </View>
-              <ChevronDown size={18} color={colors.text.secondary} />
-            </Pressable>
+            <X size={22} color={colors.text.secondary} />
+          </Pressable>
+        </View>
 
-            {destinationOpen ? (
-              <View style={styles.destinationMenu}>
-                <TextField
-                  label="Search"
-                  value={destinationSearch}
-                  onChangeText={setDestinationSearch}
-                  placeholder="Country or currency"
-                  autoCapitalize="none"
-                  containerStyle={styles.searchField}
-                />
-                <ScrollView style={styles.destinationList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                  {visibleDestinations.map((destination) => {
-                    const selected =
-                      destination.countryCode === selectedDestination?.countryCode
-                      && destination.currencyCode === selectedDestination?.currencyCode
-                    return (
-                      <Pressable
-                        key={`${destination.countryCode}-${destination.currencyCode}`}
-                        style={styles.destinationOption}
-                        onPress={() => chooseDestination(destination)}
-                      >
-                        <View style={styles.grow}>
-                          <Text style={styles.optionTitle}>
-                            {selectedType === 'stablecoin'
-                              ? destination.currencyCode
-                              : destination.countryName}
-                          </Text>
-                          <Text style={styles.optionSubtitle}>
-                            {selectedType === 'stablecoin'
-                              ? destination.currencyName
-                              : `${destination.currencyCode} · ${destination.currencyName}`}
-                          </Text>
-                        </View>
-                        {selected ? <Check size={17} color={colors.primary.main} /> : null}
-                      </Pressable>
-                    )
-                  })}
-                </ScrollView>
-              </View>
-            ) : null}
-
-            {formFields.map((field) => {
-              const options = field.key === providerField ? providerOptions : []
+        {!selectedType ? (
+          <View style={styles.typeOptions}>
+            {TYPE_OPTIONS.map((option) => {
+              const Icon = option.icon
               return (
-                <View key={field.key}>
-                  <TextField
-                    label={field.label}
-                    value={fields[field.key] ?? ''}
-                    onChangeText={(value) => updateField(field.key, value)}
-                    placeholder={field.placeholder}
-                    keyboardType={field.keyboardType}
-                    autoCapitalize={
-                      field.key === 'walletAddress' || field.key === 'iban' || field.key === 'swiftBic'
-                        ? 'characters'
-                        : 'words'
-                    }
-                  />
-                  {options.length > 0 ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.optionChips}
-                    >
-                      {options.map((option) => {
-                        const selected = fields[field.key] === option
-                        return (
-                          <Pressable
-                            key={option}
-                            style={[styles.optionChip, selected && styles.optionChipSelected]}
-                            onPress={() => updateField(field.key, option)}
-                          >
-                            <Text style={[styles.optionChipText, selected && styles.optionChipTextSelected]}>
-                              {option}
-                            </Text>
-                          </Pressable>
-                        )
-                      })}
-                    </ScrollView>
-                  ) : null}
-                </View>
+                <Pressable
+                  key={option.type}
+                  style={styles.typeOption}
+                  onPress={() => chooseType(option.type)}
+                  accessibilityRole="button"
+                >
+                  <View style={styles.typeIcon}>
+                    <Icon size={22} color={colors.primary.main} />
+                  </View>
+                  <View style={styles.grow}>
+                    <Text style={styles.optionTitle}>{option.title}</Text>
+                    <Text style={styles.optionSubtitle}>
+                      {option.description}
+                    </Text>
+                  </View>
+                </Pressable>
               )
             })}
-
-            {destinations.length === 0 ? (
-              <Text style={styles.errorText}>
-                Receiving-method options are unavailable. Check your connection and try again.
-              </Text>
-            ) : null}
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          </ScrollView>
-
-          <View style={styles.footer}>
-            {!editingMethod ? (
-              <Button
-                title="Back"
-                variant="ghost"
-                onPress={() => {
-                  setSelectedType(null)
-                  setSelectedDestination(null)
-                  setFields({})
-                  setError('')
-                }}
-                disabled={submitting}
-              />
-            ) : null}
-            <Button
-              title={editingMethod ? 'Update method' : 'Add method'}
-              onPress={() => void save()}
-              loading={submitting}
-              disabled={!selectedDestination}
-              style={styles.saveButton}
-            />
           </View>
-        </>
-      )}
+        ) : (
+          <>
+            <ScrollView
+              style={styles.formScroll}
+              contentContainerStyle={styles.formContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {showWalletScanner && selectedType === 'stablecoin' ? (
+                <EmbeddedWalletAddressQrScanner
+                  visible
+                  showHeader={false}
+                  onClose={() => setShowWalletScanner(false)}
+                  onScan={(address) => {
+                    updateField('walletAddress', address)
+                    setShowWalletScanner(false)
+                  }}
+                />
+              ) : (
+                <>
+                  <View
+                    style={[
+                      styles.selectorWrapper,
+                      destinationOpen && styles.selectorWrapperActive,
+                    ]}
+                  >
+                    <Pressable
+                      style={styles.selector}
+                      onPress={() => {
+                        setDestinationOpen((open) => !open)
+                        setProviderOpen(false)
+                        setBankOpen(false)
+                      }}
+                      accessibilityRole="button"
+                    >
+                      <View style={styles.selectorContent}>
+                        {selectedDestination ? (
+                          selectedType === 'stablecoin' &&
+                          getTokenIconUrl(selectedDestination.currencyCode) ? (
+                            <CachedImage
+                              uri={getTokenIconUrl(
+                                selectedDestination.currencyCode,
+                              )!}
+                              style={styles.optionIcon}
+                              contentFit="cover"
+                            />
+                          ) : (
+                            <CountryFlag
+                              code={selectedDestination.countryCode}
+                              size={22}
+                            />
+                          )
+                        ) : null}
+                        <Text style={styles.selectorText}>
+                          {selectedDestination
+                            ? selectedType === 'stablecoin'
+                              ? selectedDestination.currencyCode
+                              : `${selectedDestination.currencyCode} - ${selectedDestination.countryName}`
+                            : selectedType === 'stablecoin'
+                              ? 'Select asset'
+                              : 'Select currency'}
+                        </Text>
+                        {destinationOpen ? (
+                          <ChevronUp size={16} color={colors.brand.slate} />
+                        ) : (
+                          <ChevronDown size={16} color={colors.brand.slate} />
+                        )}
+                      </View>
+                    </Pressable>
+                    <RegisterRecipientDropdownSheet
+                      visible={destinationOpen}
+                      onClose={() => {
+                        setDestinationOpen(false)
+                        setDestinationSearch('')
+                      }}
+                    >
+                      <View style={styles.dropdownSearch}>
+                        <Search size={18} color={colors.neutral[400]} />
+                        <TextInput
+                          style={styles.dropdownSearchInput}
+                          value={destinationSearch}
+                          onChangeText={setDestinationSearch}
+                          placeholder={
+                            selectedType === 'stablecoin'
+                              ? 'Search asset…'
+                              : 'Search currencies…'
+                          }
+                          placeholderTextColor={colors.neutral[400]}
+                          autoCorrect={false}
+                        />
+                      </View>
+                      <RecipientFormDropdownList>
+                        {visibleDestinations.map((destination) => {
+                          const selected =
+                            destination.countryCode ===
+                              selectedDestination?.countryCode &&
+                            destination.currencyCode ===
+                              selectedDestination?.currencyCode
+                          return (
+                            <Pressable
+                              key={`${destination.countryCode}-${destination.currencyCode}`}
+                              style={[
+                                styles.dropdownItem,
+                                selected && styles.dropdownItemSelected,
+                              ]}
+                              onPress={() => chooseDestination(destination)}
+                            >
+                              {selectedType === 'stablecoin' &&
+                              getTokenIconUrl(destination.currencyCode) ? (
+                                <CachedImage
+                                  uri={getTokenIconUrl(
+                                    destination.currencyCode,
+                                  )!}
+                                  style={styles.optionIcon}
+                                  contentFit="cover"
+                                />
+                              ) : (
+                                <CountryFlag
+                                  code={destination.countryCode}
+                                  size={22}
+                                />
+                              )}
+                              <View style={styles.grow}>
+                                <Text style={styles.optionTitle}>
+                                  {selectedType === 'stablecoin'
+                                    ? destination.currencyCode
+                                    : destination.currencyCode}
+                                </Text>
+                                <Text style={styles.optionSubtitle}>
+                                  {selectedType === 'stablecoin'
+                                    ? destination.currencyName
+                                    : destination.countryName}
+                                </Text>
+                              </View>
+                              {selected ? (
+                                <Check size={18} color={colors.primary.main} />
+                              ) : null}
+                            </Pressable>
+                          )
+                        })}
+                      </RecipientFormDropdownList>
+                    </RegisterRecipientDropdownSheet>
+                  </View>
+
+                  {formFields.map((field) => {
+                    if (field.key === 'bankName') {
+                      return (
+                        <RecipientBankNameField
+                          key={field.key}
+                          banks={bankOptions}
+                          value={fields.bankName ?? ''}
+                          onChange={(value) => updateField('bankName', value)}
+                          placeholder={field.placeholder}
+                          disabled={submitting}
+                          showDropdown={bankOpen}
+                          onToggleDropdown={() => {
+                            setBankOpen((open) => !open)
+                            setDestinationOpen(false)
+                            setProviderOpen(false)
+                          }}
+                          searchTerm={bankSearch}
+                          onSearchTermChange={setBankSearch}
+                          onCloseDropdown={() => setBankOpen(false)}
+                        />
+                      )
+                    }
+
+                    if (field.key === 'provider' || field.key === 'network') {
+                      const isNetwork = field.key === 'network'
+                      return (
+                        <View
+                          key={field.key}
+                          style={[
+                            styles.selectorWrapper,
+                            providerOpen && styles.selectorWrapperActive,
+                          ]}
+                        >
+                          <Pressable
+                            style={styles.selector}
+                            onPress={() => {
+                              setProviderOpen((open) => !open)
+                              setDestinationOpen(false)
+                              setBankOpen(false)
+                            }}
+                            disabled={submitting}
+                          >
+                            <View style={styles.selectorContent}>
+                              {fields[field.key] ? (
+                                isNetwork ? (
+                                  getNetworkIconUrl(fields[field.key]) ? (
+                                    <CachedImage
+                                      uri={getNetworkIconUrl(
+                                        fields[field.key],
+                                      )!}
+                                      style={styles.optionIcon}
+                                      contentFit="cover"
+                                    />
+                                  ) : null
+                                ) : (
+                                  <MobileMoneyProviderIcon
+                                    provider={fields[field.key]}
+                                    size={22}
+                                  />
+                                )
+                              ) : null}
+                              <Text style={styles.selectorText}>
+                                {fields[field.key] || field.placeholder}
+                              </Text>
+                              {providerOpen ? (
+                                <ChevronUp
+                                  size={16}
+                                  color={colors.brand.slate}
+                                />
+                              ) : (
+                                <ChevronDown
+                                  size={16}
+                                  color={colors.brand.slate}
+                                />
+                              )}
+                            </View>
+                          </Pressable>
+                          <RegisterRecipientDropdownSheet
+                            visible={providerOpen}
+                            onClose={() => {
+                              setProviderOpen(false)
+                              setProviderSearch('')
+                            }}
+                          >
+                            <View style={styles.dropdownSearch}>
+                              <Search size={18} color={colors.neutral[400]} />
+                              <TextInput
+                                style={styles.dropdownSearchInput}
+                                value={providerSearch}
+                                onChangeText={setProviderSearch}
+                                placeholder={
+                                  isNetwork
+                                    ? 'Search networks…'
+                                    : 'Search providers…'
+                                }
+                                placeholderTextColor={colors.neutral[400]}
+                                autoCorrect={false}
+                              />
+                            </View>
+                            <RecipientFormDropdownList>
+                              {filteredProviderOptions.map((option) => (
+                                <Pressable
+                                  key={option}
+                                  style={[
+                                    styles.dropdownItem,
+                                    fields[field.key] === option &&
+                                      styles.dropdownItemSelected,
+                                  ]}
+                                  onPress={() => {
+                                    updateField(field.key, option)
+                                    setProviderOpen(false)
+                                    setProviderSearch('')
+                                  }}
+                                >
+                                  {isNetwork ? (
+                                    getNetworkIconUrl(option) ? (
+                                      <CachedImage
+                                        uri={getNetworkIconUrl(option)!}
+                                        style={styles.optionIcon}
+                                        contentFit="cover"
+                                      />
+                                    ) : null
+                                  ) : (
+                                    <MobileMoneyProviderIcon
+                                      provider={option}
+                                      size={22}
+                                    />
+                                  )}
+                                  <Text style={styles.dropdownItemText}>
+                                    {option}
+                                  </Text>
+                                  {fields[field.key] === option ? (
+                                    <Check
+                                      size={18}
+                                      color={colors.primary.main}
+                                    />
+                                  ) : null}
+                                </Pressable>
+                              ))}
+                            </RecipientFormDropdownList>
+                          </RegisterRecipientDropdownSheet>
+                        </View>
+                      )
+                    }
+
+                    if (field.key === 'walletAddress') {
+                      return (
+                        <WalletAddressField
+                          key={field.key}
+                          value={fields.walletAddress ?? ''}
+                          onChangeText={(value) =>
+                            updateField('walletAddress', value)
+                          }
+                          onScanPress={() => setShowWalletScanner(true)}
+                          editable={!submitting}
+                        />
+                      )
+                    }
+
+                    return (
+                      <TextInput
+                        key={field.key}
+                        style={styles.formInput}
+                        value={fields[field.key] ?? ''}
+                        onChangeText={(value) => updateField(field.key, value)}
+                        placeholder={`${field.placeholder}${field.required ? ' *' : ''}`}
+                        placeholderTextColor={colors.text.secondary}
+                        keyboardType={field.keyboardType}
+                        autoCapitalize={
+                          field.key === 'iban' || field.key === 'swiftBic'
+                            ? 'characters'
+                            : 'words'
+                        }
+                        autoCorrect={false}
+                        editable={!submitting}
+                      />
+                    )
+                  })}
+                </>
+              )}
+
+              {destinations.length === 0 ? (
+                <Text style={styles.errorText}>
+                  Receiving-method options are unavailable. Check your
+                  connection and try again.
+                </Text>
+              ) : null}
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            </ScrollView>
+
+            {!showWalletScanner ? (
+              <View style={styles.footer}>
+                {!editingMethod ? (
+                  <Button
+                    title="Back"
+                    variant="ghost"
+                    onPress={() => {
+                      setSelectedType(null)
+                      setSelectedDestination(null)
+                      setFields({})
+                      setError('')
+                    }}
+                    disabled={submitting}
+                  />
+                ) : null}
+                <Button
+                  title={editingMethod ? 'Update method' : 'Add method'}
+                  onPress={() => void save()}
+                  loading={submitting}
+                  disabled={!formComplete}
+                  style={styles.saveButton}
+                />
+              </View>
+            ) : null}
+          </>
+        )}
+      </RecipientFormDropdownHost>
     </WebAwareModal>
   )
 }
@@ -480,7 +835,11 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   headerText: { flex: 1, gap: spacing[1] },
-  title: { ...textStyles.headingSmall, color: colors.text.primary, fontFamily: fontFamily.semibold },
+  title: {
+    ...textStyles.headingSmall,
+    color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+  },
   subtitle: { ...textStyles.bodySmall, color: colors.text.secondary },
   closeButton: {
     width: 40,
@@ -510,61 +869,89 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary.main + '12',
   },
   grow: { flex: 1, minWidth: 0 },
-  optionTitle: { ...textStyles.titleSmall, color: colors.text.primary, fontFamily: fontFamily.semibold },
-  optionSubtitle: { ...textStyles.bodySmall, color: colors.text.secondary, marginTop: 2 },
+  optionTitle: {
+    ...textStyles.titleSmall,
+    color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+  },
+  optionSubtitle: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
   formScroll: { flex: 1 },
   formContent: { paddingHorizontal: spacing[5], paddingBottom: spacing[5] },
-  destinationButton: {
-    minHeight: 62,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    paddingHorizontal: spacing[4],
+  selectorWrapper: {
     marginBottom: spacing[4],
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    borderRadius: borderRadius.lg,
+    zIndex: 1000,
   },
-  destinationLabel: { ...textStyles.labelSmall, color: colors.text.secondary },
-  destinationValue: { ...textStyles.bodyMedium, color: colors.text.primary, marginTop: 2 },
-  destinationMenu: {
-    marginTop: -spacing[2],
-    marginBottom: spacing[4],
+  selectorWrapperActive: {
+    zIndex: 4000,
+  },
+  selector: {
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.full }),
     padding: spacing[3],
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.background.primary,
   },
-  searchField: { marginBottom: spacing[2] },
-  destinationList: { maxHeight: 220 },
-  destinationOption: {
-    minHeight: 58,
+  selectorContent: {
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: spacing[2],
+  },
+  selectorText: {
+    flex: 1,
+    minWidth: 0,
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    fontFamily: fontFamily.regular,
+  },
+  optionIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  dropdownSearch: {
+    ...dropdownSearchRowStyle,
+    borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
   },
-  optionChips: { gap: spacing[2], paddingBottom: spacing[4] },
-  optionChip: {
-    minHeight: 36,
-    justifyContent: 'center',
+  dropdownSearchInput: {
+    ...dropdownSearchInputStyle,
+    color: colors.text.primary,
+  },
+  dropdownItem: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
     paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+  },
+  dropdownItemSelected: {
+    backgroundColor: colors.primary.main + '12',
+  },
+  dropdownItemText: {
+    flex: 1,
+    minWidth: 0,
+    ...textStyles.bodyMedium,
+    color: colors.text.primary,
+    fontFamily: fontFamily.regular,
+  },
+  formInput: {
+    borderWidth: 1.5,
+    borderColor: colors.frame.border,
     borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    backgroundColor: colors.background.primary,
+    paddingHorizontal: spacing[4],
+    ...compactFormInputStyle,
+    color: colors.text.primary,
+    marginBottom: spacing[2],
+    backgroundColor: colors.frame.background,
   },
-  optionChipSelected: {
-    borderColor: colors.primary.main,
-    backgroundColor: colors.primary.main + '10',
+  errorText: {
+    ...textStyles.bodySmall,
+    color: colors.error.main,
+    marginBottom: spacing[3],
   },
-  optionChipText: { ...textStyles.bodySmall, color: colors.text.secondary },
-  optionChipTextSelected: { color: colors.primary.main, fontFamily: fontFamily.semibold },
-  errorText: { ...textStyles.bodySmall, color: colors.error.main, marginBottom: spacing[3] },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',

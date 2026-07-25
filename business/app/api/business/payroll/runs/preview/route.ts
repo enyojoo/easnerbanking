@@ -71,8 +71,8 @@ export async function POST(request: Request) {
   if (sourceDebit > availableBalance) {
     issues.push({
       code: "insufficient_funds",
-      severity: "blocking",
-      message: `Add ${(sourceDebit - availableBalance).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sourceCurrency} before paying.`,
+      severity: "warning",
+      message: `Fund ${(sourceDebit - availableBalance).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sourceCurrency} before this payroll is paid.`,
       actionLabel: "View accounts",
       actionHref: "/accounts",
     })

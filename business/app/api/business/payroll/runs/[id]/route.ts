@@ -213,11 +213,9 @@ export async function POST(
       (line.rail === "easetag" && !String((line.recipient_snapshot as Record<string, unknown>)?.easetag ?? "").trim()) ||
       (line.rail !== "easetag" && !(line.recipient_snapshot as Record<string, unknown>)?.recipientId)
     )
-    if (activeLines.length === 0 || invalid.length > 0 || Number(current.shortfall_cents ?? 0) > 0) {
+    if (activeLines.length === 0 || invalid.length > 0) {
       return NextResponse.json({
-        error: Number(current.shortfall_cents ?? 0) > 0
-          ? "Fund the payroll account before submitting."
-          : "Resolve all amount and receiving-method issues before submitting.",
+        error: "Resolve all amount and receiving-method issues before submitting.",
         issues: invalid.map((line) => ({ lineId: line.id, code: "not_ready" })),
       }, { status: 400 })
     }

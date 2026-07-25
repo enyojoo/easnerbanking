@@ -12,13 +12,14 @@ import { Label } from "@/components/ui/label"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { useUpdatePayrollRun } from "@/hooks/mutations/use-payroll"
-import { usePayrollCapabilities, usePayrollPeople, usePayrollRunDetail } from "@/hooks/queries/use-payroll"
+import { usePayrollCapabilities, usePayrollPeople, usePayrollRunDetail, usePayrollSchedules } from "@/hooks/queries/use-payroll"
 import { formatCurrency } from "@/lib/utils"
 
 export function PayrollRunEditFlow({ runId }: { runId: string }) {
   const router = useRouter()
   const runQuery = usePayrollRunDetail(runId)
   const peopleQuery = usePayrollPeople()
+  const schedulesQuery = usePayrollSchedules()
   const capabilitiesQuery = usePayrollCapabilities()
   const updateRun = useUpdatePayrollRun(runId)
   const run = runQuery.data
@@ -52,7 +53,7 @@ export function PayrollRunEditFlow({ runId }: { runId: string }) {
     return () => window.removeEventListener("beforeunload", warn)
   }, [dirty])
 
-  if (runQuery.isPending || peopleQuery.isPending || capabilitiesQuery.isPending) {
+  if (runQuery.isPending || peopleQuery.isPending || schedulesQuery.isPending || capabilitiesQuery.isPending) {
     return <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-muted-foreground">Loading payroll run…</div>
   }
   if (!run) {
@@ -65,6 +66,9 @@ export function PayrollRunEditFlow({ runId }: { runId: string }) {
     return <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6"><Card><CardContent className="p-8 text-center"><h1 className="text-lg font-semibold">You can’t edit payroll runs</h1><p className="mt-2 text-sm text-muted-foreground">Ask a Payroll preparer or approver to update this draft.</p><Button className="mt-5" variant="outline" asChild><Link href={`/payroll/runs/${run.id}`}>Back to run</Link></Button></CardContent></Card></div>
   }
   const currentRun = run
+  const scheduleName =
+    schedulesQuery.data?.find((schedule) => schedule.id === run.scheduleId)?.name
+    || (run.scheduleId ? "Selected schedule" : "No schedule")
 
   const total = lines.reduce((sum, line) => sum + Number(amounts[line.id] || 0), 0)
   const invalidAmount = lines.some((line) => !Number.isFinite(Number(amounts[line.id])) || Number(amounts[line.id]) <= 0)
@@ -113,12 +117,22 @@ export function PayrollRunEditFlow({ runId }: { runId: string }) {
                 <p className="mt-1 text-sm text-muted-foreground">The source account and currency were set when this run was created.</p>
               </div>
               <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Name">
+                <Field label="Run name">
                   <Input value={name} onChange={(event) => setField(() => setName(event.target.value))} />
                 </Field>
                 <Field label="Source account">
                   <div className="flex h-10 items-center rounded-md border bg-muted/30 px-3 text-sm">
                     {run.sourceCurrency} account
+                  </div>
+                </Field>
+                <Field label="Run type">
+                  <div className="flex h-10 items-center rounded-md border bg-muted/30 px-3 text-sm">
+                    {run.metadata?.offCycle ? "Off-cycle payroll" : "Regular payroll"}
+                  </div>
+                </Field>
+                <Field label="Schedule">
+                  <div className="flex h-10 items-center rounded-md border bg-muted/30 px-3 text-sm">
+                    {scheduleName}
                   </div>
                 </Field>
               </div>
@@ -150,7 +164,7 @@ export function PayrollRunEditFlow({ runId }: { runId: string }) {
                     <div key={line.id} className="grid gap-4 px-6 py-5 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-center sm:px-8">
                       <div className="min-w-0">
                         <p className="font-medium">{line.personName || person?.fullName || "Person"}</p>
-                        {person ? <div className="mt-1"><PayrollReceivingMethod person={person} /></div> : null}
+                        {person ? <div className="mt-1"><PayrollReceivingMethod person={person} typeOnly /></div> : null}
                       </div>
                       <Field label="Amount">
                         <div className="relative">
