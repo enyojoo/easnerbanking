@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { maskPayrollMethod } from "@/lib/payroll/personal-payroll"
-import { PERSONAL_PAYROLL_CONNECTION_DETAIL_SELECT } from "@/lib/payroll/personal-connection-selects"
+import {
+  PERSONAL_PAYROLL_CONNECTION_DETAIL_SELECT,
+  PERSONAL_PAYROLL_METHOD_SELECT,
+} from "@/lib/payroll/personal-connection-selects"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(request)
@@ -14,7 +17,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     .eq("id", id).eq("user_id", auth.user.id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!row) return NextResponse.json({ error: "Connection not found" }, { status: 404 })
-  const methods = (row.payroll_payment_methods as Array<Record<string, unknown>> ?? [])
+  const { data: methodRows, error: methodsError } = await admin
+    .from("payroll_payment_methods")
+    .select(PERSONAL_PAYROLL_METHOD_SELECT)
+    .eq("connection_id", row.id)
+    .eq("status", "active")
+  if (methodsError) {
+    return NextResponse.json({ error: methodsError.message }, { status: 500 })
+  }
+  const methods = ((methodRows ?? []) as Array<Record<string, unknown>>)
     .filter((method) => method.status === "active")
     .map((method) => ({
       id: String(method.id),

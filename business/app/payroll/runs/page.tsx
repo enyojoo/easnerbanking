@@ -51,24 +51,26 @@ export default function PayrollRunsPage() {
             <DropdownMenuItem asChild><Link href={`/payroll/runs/${run.id}`}><Eye />View details</Link></DropdownMenuItem>
             {run.status === "draft" && canPrepare ? <DropdownMenuItem asChild><Link href={`/payroll/runs/${run.id}/edit`}><Pencil />Edit run</Link></DropdownMenuItem> : null}
             {run.status === "draft" && canPrepare ? <DropdownMenuItem onClick={() => void submitRun(run.id)}><Send />Submit for approval</DropdownMenuItem> : null}
-            {run.status === "draft" && canPrepare ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(run)}><Trash2 />Delete draft</DropdownMenuItem></> : null}
+            {(run.status === "draft" || run.status === "failed") && canPrepare ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(run)}><Trash2 />{run.status === "failed" ? "Delete failed run" : "Delete draft"}</DropdownMenuItem></> : null}
           </DropdownMenuContent></DropdownMenu>
         </TableCell></TableRow>)}
       </TableBody></Table></Card>}
     <PayrollDeleteDialog
       open={Boolean(deleteTarget)}
       onOpenChange={(open) => !open && setDeleteTarget(null)}
-      title="Delete this payroll draft?"
-      description="This permanently removes the draft and its unsent payment lines. Submitted or completed payroll history cannot be deleted."
-      label="Delete draft"
+      title={deleteTarget?.status === "failed" ? "Delete this failed payroll run?" : "Delete this payroll draft?"}
+      description={deleteTarget?.status === "failed"
+        ? "This permanently removes the failed run and its unsuccessful payment lines. No completed payment history will be deleted."
+        : "This permanently removes the draft and its unsent payment lines. Submitted or completed payroll history cannot be deleted."}
+      label={deleteTarget?.status === "failed" ? "Delete failed run" : "Delete draft"}
       pending={deleteRun.isPending}
       onDelete={async () => {
         if (!deleteTarget) return
         try {
           await deleteRun.mutateAsync(deleteTarget.id)
-          toast.success("Payroll draft deleted")
+          toast.success(deleteTarget.status === "failed" ? "Failed payroll run deleted" : "Payroll draft deleted")
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Payroll draft could not be deleted")
+          toast.error(error instanceof Error ? error.message : "Payroll run could not be deleted")
           throw error
         }
       }}

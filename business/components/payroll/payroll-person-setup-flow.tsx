@@ -15,7 +15,10 @@ import { RecipientForm } from "@/components/recipient-form"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { useCreatePayrollPerson, useInvitePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { usePayrollCapabilities, usePayrollSchedules, usePayrollSettings } from "@/hooks/queries/use-payroll"
-import { fetchEasenetProfileByTag, type EasenetPublicProfile } from "@/lib/easenet-profile"
+import {
+  fetchPayrollEasetagProfileByTag,
+  type PayrollEasetagProfile,
+} from "@/lib/easenet-profile"
 import type { Beneficiary } from "@/lib/recipient-types"
 import type { PayrollPerson, PayrollPersonType, PayrollRail } from "@/lib/payroll/types"
 import { cn } from "@/lib/utils"
@@ -46,7 +49,7 @@ export function PayrollPersonSetupFlow() {
   const schedules = usePayrollSchedules().data ?? []
   const [method, setMethod] = useState<Method | null>(null)
   const [step, setStep] = useState<Step>("method")
-  const [profile, setProfile] = useState<EasenetPublicProfile | null>(null)
+  const [profile, setProfile] = useState<PayrollEasetagProfile | null>(null)
   const [lookup, setLookup] = useState("")
   const [lookupState, setLookupState] = useState<"idle" | "loading" | "missing" | "invalid">("idle")
   const [type, setType] = useState<PayrollPersonType>("employee")
@@ -69,7 +72,8 @@ export function PayrollPersonSetupFlow() {
 
   async function findEasetag() {
     setLookupState("loading")
-    const result = await fetchEasenetProfileByTag(lookup).catch(() => ({ found: false } as const))
+    const result = await fetchPayrollEasetagProfileByTag(lookup)
+      .catch(() => ({ found: false } as const))
     if (!result.found) {
       setProfile(null)
       setLookupState("missing")
@@ -179,10 +183,18 @@ export function PayrollPersonSetupFlow() {
                 {profile ? (
                   <div className="flex items-center gap-3 rounded-xl border p-3">
                     <Avatar className="h-10 w-10"><AvatarImage src={profile.avatarUrl ?? undefined} /><AvatarFallback>{profile.fullName.slice(0, 1)}</AvatarFallback></Avatar>
-                    <div><p className="text-sm font-medium">{profile.fullName}</p><p className="text-xs text-muted-foreground">@{profile.easetag} · {profile.accountKind === "personal" ? "Personal account" : "Business account"} · {profile.verified ? "Verified" : "Not verified"}</p></div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{profile.fullName}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {profile.email || "No email available"} · @{profile.easetag.replace(/^@/, "")}
+                      </p>
+                    </div>
                   </div>
                 ) : null}
                 {lookupState === "invalid" ? <p className="text-sm text-amber-700">Payroll requests can only be sent to verified personal EASETAG accounts.</p> : null}
+                {profile?.accountKind === "personal" && profile.verified && !profile.email ? (
+                  <p className="text-sm text-amber-700">This EASETAG does not have an email available for a payroll request.</p>
+                ) : null}
               </div>
             ) : (
               <div className="rounded-xl border bg-muted/30 p-4 text-sm">
@@ -197,7 +209,7 @@ export function PayrollPersonSetupFlow() {
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  The payroll request will be sent to the email connected to this EASETAG.
+                  The payroll request will be sent to {profile?.email || "the email connected to this EASETAG"}.
                 </p>
               )}
               <div className="grid gap-4 sm:grid-cols-2">
@@ -223,7 +235,13 @@ export function PayrollPersonSetupFlow() {
             ) : null}
             <div className="flex justify-between pt-2">
               <Button variant="ghost" onClick={() => { setStep("method"); setMethod(null) }}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>
-              <Button variant="primary" onClick={() => setStep(method === "manual" ? "payment" : "review")} disabled={settingsQuery.isPending || !Number(amount) || (method === "easetag" && !profile)}>Continue<ArrowRight className="ml-2 h-4 w-4" /></Button>
+              <Button
+                variant="primary"
+                onClick={() => setStep(method === "manual" ? "payment" : "review")}
+                disabled={settingsQuery.isPending || !Number(amount) || (method === "easetag" && (!profile || (sendInvitation && !profile.email)))}
+              >
+                Continue<ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
           </CardContent></Card>
           <SetupSummary method={method} profile={profile} type={type} amount={amount} currency={businessCurrency} />
@@ -256,7 +274,7 @@ export function PayrollPersonSetupFlow() {
                 <li>The receiving method they approve for this business</li>
               </ul>
             </div>
-            <div className="rounded-xl border p-4 text-sm"><span className="font-medium">Default receiving method:</span> @{profile.easetag}</div>
+            <div className="rounded-xl border p-4 text-sm"><span className="font-medium">Receiving method:</span> Easetag</div>
             <div className="flex flex-wrap justify-between gap-2">
               <Button variant="ghost" onClick={() => setStep("details")}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>
               <Button variant="primary" onClick={() => void createEasetagPerson()} disabled={createPerson.isPending || invitePerson.isPending}>
@@ -296,7 +314,7 @@ function MethodCard({ icon: Icon, title, description, badge, onClick }: { icon: 
   </button>
 }
 
-function SetupSummary({ method, profile, type, amount, currency }: { method: Method | null; profile: EasenetPublicProfile | null; type: PayrollPersonType; amount: string; currency: string }) {
+function SetupSummary({ method, profile, type, amount, currency }: { method: Method | null; profile: PayrollEasetagProfile | null; type: PayrollPersonType; amount: string; currency: string }) {
   return <Card className="h-fit shadow-soft lg:sticky lg:top-6"><CardContent className="p-5">
     <p className="text-sm font-medium">Setup summary</p>
     <dl className="mt-4 space-y-3 text-sm">

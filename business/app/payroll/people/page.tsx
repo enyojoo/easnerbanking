@@ -16,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CountryFlag } from "@/components/flags"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
@@ -24,12 +23,12 @@ import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollPermissionAction } from "@/components/payroll/payroll-permission-action"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
+import { PayrollCountry } from "@/components/payroll/payroll-country"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { usePayrollCapabilities, usePayrollPeople, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency } from "@/lib/utils"
 import type { PayrollPerson } from "@/lib/payroll/types"
-import { countries } from "@/lib/countries"
 
 type Filter = "all" | "ready" | "awaiting" | "attention" | "inactive"
 
@@ -106,7 +105,7 @@ export default function PayrollPeoplePage() {
         <Card className="overflow-hidden shadow-soft">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Person</TableHead><TableHead>Classification</TableHead><TableHead>Receiving method</TableHead><TableHead>Amount</TableHead><TableHead>Country</TableHead><TableHead>Last paid</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
+              <TableHead>Person</TableHead><TableHead>Classification</TableHead><TableHead>Receiving method</TableHead><TableHead>Amount</TableHead><TableHead>Country</TableHead><TableHead>Connection</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {people.map((person) => (
@@ -119,7 +118,7 @@ export default function PayrollPeoplePage() {
                   <TableCell><PayrollReceivingMethod person={person} typeOnly /></TableCell>
                   <TableCell className="tabular-nums">{formatCurrency(person.defaultAmount, payrollCurrency || person.payCurrency)}</TableCell>
                   <TableCell><PayrollCountry country={person.country} /></TableCell>
-                  <TableCell>{person.lastPaidAt ? formatDate(person.lastPaidAt) : "—"}</TableCell>
+                  <TableCell><PayrollStatusBadge status={person.connectionStatus} /></TableCell>
                   <TableCell><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={`Actions for ${person.fullName}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
                     <DropdownMenuItem asChild><Link href={`/payroll/people/${person.id}`}><Eye />View details</Link></DropdownMenuItem>
                     {canPrepare ? <DropdownMenuItem asChild><Link href={`/payroll/people/${person.id}/edit`}><Pencil />Edit person</Link></DropdownMenuItem> : null}
@@ -152,21 +151,5 @@ export default function PayrollPeoplePage() {
         }}
       />
     </div>
-  )
-}
-
-function PayrollCountry({ country }: { country: string | null }) {
-  const value = String(country || "").trim()
-  if (!value) return <span className="text-muted-foreground">—</span>
-  const normalized = value.toLowerCase()
-  const match = countries.find((item) =>
-    item.code.toLowerCase() === normalized || item.name.toLowerCase() === normalized
-  )
-  if (!match) return <span>{value}</span>
-  return (
-    <span className="inline-flex items-center gap-2">
-      <CountryFlag code={match.code} size={20} className="shrink-0" />
-      <span>{match.name}</span>
-    </span>
   )
 }

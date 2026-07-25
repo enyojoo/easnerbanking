@@ -211,6 +211,23 @@ export default function PayrollRunDetailPage() {
               </Button>
             </>
           ) : null}
+          {run.status === "failed" && canPrepare ? (
+            <PayrollDeleteAction
+              label="Delete failed run"
+              title="Delete this failed payroll run?"
+              description="This permanently removes the failed run and its unsuccessful payment lines. No completed payment history will be deleted."
+              pending={deleteRun.isPending}
+              onDelete={async () => {
+                try {
+                  await deleteRun.mutateAsync(runId)
+                  toast.success("Failed payroll run deleted")
+                  router.push("/payroll/runs")
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Failed payroll run could not be deleted")
+                }
+              }}
+            />
+          ) : null}
           {awaitingApproval && canPrepare ? (
               <Button
                 variant="outline"

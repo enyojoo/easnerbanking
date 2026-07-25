@@ -12,6 +12,10 @@ import { recalculateRunTotals } from "@/lib/payroll/run-utils"
 import { approvePayrollRun, executePayrollRun } from "@/lib/payroll/execute-run"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import { sendPayrollStubEmailsForRun } from "@/lib/payroll/send-stub-email"
+import {
+  canDeletePayrollRun,
+  DELETABLE_PAYROLL_RUN_STATUSES,
+} from "@/lib/payroll/run-deletion"
 
 async function loadRun(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string, id: string) {
   const { data: runRow } = await admin
@@ -356,19 +360,49 @@ export async function DELETE(
     .eq("business_id", ctx.businessId)
     .maybeSingle()
   if (!run) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  if (run.status !== "draft") {
+  if (!canDeletePayrollRun(run.status)) {
     return NextResponse.json(
-      { error: "Only draft payroll runs can be deleted. Payroll history must be retained." },
+      { error: "Only draft or failed payroll runs can be deleted. Payroll history must be retained." },
       { status: 409 },
     )
   }
 
-  const { error } = await admin.from("payroll_runs")
+  if (run.status === "failed") {
+    const { count, error: paidLineError } = await admin
+      .from("payroll_lines")
+      .select("id", { count: "exact", head: true })
+      .eq("run_id", id)
+      .eq("status", "paid")
+    if (paidLineError) {
+      return NextResponse.json({ error: paidLineError.message }, { status: 500 })
+    }
+    if ((count ?? 0) > 0) {
+      return NextResponse.json(
+        { error: "This failed run includes completed payments and must be retained." },
+        { status: 409 },
+      )
+    }
+  }
+
+  await admin.from("business_approvals")
+    .delete()
+    .eq("business_id", ctx.businessId)
+    .eq("subject_type", "payroll_run")
+    .eq("subject_id", id)
+
+  const { data: deleted, error } = await admin.from("payroll_runs")
     .delete()
     .eq("id", id)
     .eq("business_id", ctx.businessId)
-    .eq("status", "draft")
+    .in("status", [...DELETABLE_PAYROLL_RUN_STATUSES])
+    .select("id")
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!deleted?.length) {
+    return NextResponse.json(
+      { error: "This payroll run changed and can no longer be deleted." },
+      { status: 409 },
+    )
+  }
   return NextResponse.json({ ok: true })
 }
 

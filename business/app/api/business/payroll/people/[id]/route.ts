@@ -44,8 +44,9 @@ export async function GET(
 
   const [{ data: connection }, { data: lines }, { data: events }] = await Promise.all([
     admin.from("payroll_connections")
-      .select("id,status,approved_at,declined_at,revoked_at,preferred_method_id,payroll_payment_methods(id,type,label,masked_details,status)")
+      .select("id,status,approved_at,declined_at,revoked_at,preferred_method_id")
       .eq("person_id", id)
+      .eq("business_id", ctx.businessId)
       .maybeSingle(),
     admin.from("payroll_lines")
       .select("id,run_id,amount_cents,pay_currency,status,settled_at,payroll_documents(id,type,status,filename,generated_at)")
@@ -58,9 +59,17 @@ export async function GET(
       .order("created_at", { ascending: false })
       .limit(100),
   ])
-  const methods = (
-    (connection?.payroll_payment_methods as Array<Record<string, unknown>> | null) ?? []
-  ).filter((method) => method.status === "active")
+  const { data: methodRows, error: methodsError } = connection
+    ? await admin.from("payroll_payment_methods")
+        .select("id,type,label,masked_details,status")
+        .eq("connection_id", connection.id)
+        .eq("status", "active")
+    : { data: [], error: null }
+  if (methodsError) {
+    return NextResponse.json({ error: methodsError.message }, { status: 500 })
+  }
+  const methods = ((methodRows ?? []) as Array<Record<string, unknown>>)
+    .filter((method) => method.status === "active")
   return NextResponse.json({
     person,
     connection: connection ? {

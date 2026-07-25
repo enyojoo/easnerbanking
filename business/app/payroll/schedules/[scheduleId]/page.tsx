@@ -47,8 +47,7 @@ export default function PayrollScheduleDetailPage() {
         }} />
       </> : undefined}
     />
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <Card className="shadow-card"><CardContent className="space-y-7 p-6">
+    <Card className="shadow-card"><CardContent className="space-y-7 p-6">
         <section>
           <div className="flex items-center justify-between"><h2 className="font-semibold">Schedule details</h2><PayrollStatusBadge status={schedule.active ? "active" : "held"} /></div>
           <dl className="mt-5 grid gap-5 sm:grid-cols-2">
@@ -66,9 +65,42 @@ export default function PayrollScheduleDetailPage() {
             <Detail label="Funding reminder" value={`${Number(template.fundingReminderDays ?? 3)} days before payday`} />
           </dl>
         </section>
+        <section className="border-t pt-6">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="font-semibold">Included people</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {includedPeople.length} {includedPeople.length === 1 ? "person" : "people"} in this schedule.
+              </p>
+            </div>
+            {canPrepare ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/payroll/schedules/${schedule.id}/edit`}>Manage people</Link>
+              </Button>
+            ) : null}
+          </div>
+          {includedPeople.length ? (
+            <div className="mt-4 max-h-96 overflow-y-auto rounded-xl border bg-border">
+              <div className="grid gap-px sm:grid-cols-2">
+                {includedPeople.map((person) => (
+                  <Link
+                    key={person.id}
+                    href={`/payroll/people/${person.id}`}
+                    className="flex min-w-0 items-center justify-between gap-3 bg-card p-3 text-sm hover:bg-muted"
+                  >
+                    <span className="truncate font-medium">{person.fullName}</span>
+                    <span className="shrink-0 capitalize text-muted-foreground">{person.type}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-4 rounded-xl bg-muted/40 p-4 text-sm text-muted-foreground">
+              No people have been added to this schedule.
+            </p>
+          )}
+        </section>
       </CardContent></Card>
-      <Card className="h-fit shadow-soft"><CardContent className="p-5"><h2 className="font-semibold">Included people</h2><p className="mt-1 text-xs text-muted-foreground">{includedPeople.length} {includedPeople.length === 1 ? "person" : "people"} in this schedule.</p><div className="mt-4 space-y-2">{includedPeople.length ? includedPeople.map((person) => <Link key={person.id} href={`/payroll/people/${person.id}`} className="flex items-center justify-between rounded-xl border p-3 text-sm hover:bg-muted/40"><span className="font-medium">{person.fullName}</span><span className="capitalize text-muted-foreground">{person.type}</span></Link>) : <p className="rounded-xl bg-muted/40 p-4 text-sm text-muted-foreground">No people have been added to this schedule.</p>}</div></CardContent></Card>
-    </div>
   </div>
 }
 

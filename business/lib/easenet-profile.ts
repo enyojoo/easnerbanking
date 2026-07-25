@@ -15,6 +15,43 @@ export type EasenetPublicProfile = {
   verified: boolean
 }
 
+export type PayrollEasetagProfile = EasenetPublicProfile & {
+  email: string | null
+}
+
+export async function fetchPayrollEasetagProfileByTag(
+  rawTag: string,
+): Promise<PayrollEasetagProfile | { found: false; reason?: string }> {
+  const clean = normalizeEasetag(String(rawTag || "").trim())
+  if (clean.length < 4) return { found: false }
+
+  const res = await fetchWithSession(
+    `/api/business/payroll/easetag-profile?easetag=${encodeURIComponent(clean)}`,
+  )
+  const data = (await res.json().catch(() => ({}))) as {
+    found?: boolean
+    reason?: string
+    easetag?: string
+    fullName?: string
+    email?: string | null
+    avatarUrl?: string | null
+    accountKind?: string
+    verified?: boolean
+  }
+  if (!res.ok || !data.found) {
+    return { found: false, reason: data.reason }
+  }
+  return {
+    found: true,
+    easetag: String(data.easetag || clean),
+    fullName: String(data.fullName || clean),
+    email: data.email ? String(data.email).trim().toLowerCase() : null,
+    avatarUrl: data.avatarUrl ?? null,
+    accountKind: data.accountKind === "business" ? "business" : "personal",
+    verified: data.verified === true,
+  }
+}
+
 export async function fetchEasenetProfileByTag(rawTag: string): Promise<EasenetPublicProfile | { found: false; reason?: string }> {
   const clean = normalizeEasetag(String(rawTag || "").trim())
   if (clean.length < 4) {

@@ -210,7 +210,7 @@ function MoreContent({ navigation }: NavigationProps) {
         }
       }
       void refreshMfaStatus()
-      void apiFetch<{ pendingCount?: number }>('/api/payroll/connections')
+      void apiFetch<{ pendingCount?: number }>('/api/payroll/connections?summary=true')
         .then((result) => setPendingPayrollCount(Number(result.pendingCount ?? 0)))
         .catch(() => undefined)
     }, [user?.id, refreshUserProfile, refreshMfaStatus]),

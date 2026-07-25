@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
+import { PayrollCountry } from "@/components/payroll/payroll-country"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { usePayrollCapabilities, usePayrollPerson, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
@@ -71,7 +72,7 @@ export default function PayrollPersonDetailPage() {
         <Card className="shadow-soft"><CardContent className="p-6"><h2 className="font-semibold">Payroll details</h2><dl className="mt-5 grid gap-5 sm:grid-cols-2">
           <Detail label="Classification" value={person.type} capitalize />
           <Detail label="Amount" value={formatCurrency(person.defaultAmount, businessCurrency)} />
-          <Detail label="Residence country" value={person.country || "Not shared"} />
+          <div><dt className="text-xs text-muted-foreground">Residence country</dt><dd className="mt-1 text-sm"><PayrollCountry country={person.country} /></dd></div>
           <Detail label="Internal reference" value={person.internalReference || "—"} />
           <Detail label="Email" value={person.email || "—"} />
           <div><dt className="text-xs text-muted-foreground">Receiving method</dt><dd className="mt-1"><PayrollReceivingMethod person={person} typeOnly /></dd></div>
