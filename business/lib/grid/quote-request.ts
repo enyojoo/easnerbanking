@@ -109,7 +109,7 @@ export async function resolveGridCustomerInternalAccountId(input: {
   if (!customerId || !currency) return null
 
   const rows = await gridFetchAllPages<GridInternalAccountRow>({
-    path: "/internal-accounts",
+    path: "/customers/internal-accounts",
     query: { customerId, currency },
     mapPage: (page) => page.data ?? [],
   })
