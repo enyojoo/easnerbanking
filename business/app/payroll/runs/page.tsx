@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
-import { usePayrollRuns } from "@/hooks/queries/use-payroll"
+import { usePayrollCapabilities, usePayrollRuns } from "@/hooks/queries/use-payroll"
 import { useCreatePayrollRun } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
@@ -14,6 +14,8 @@ import { useRouter } from "next/navigation"
 
 export default function PayrollRunsPage() {
   const runsQuery = usePayrollRuns()
+  const capabilities = usePayrollCapabilities().data
+  const canPrepare = Boolean(capabilities?.enabled && capabilities.canPrepare)
   const createRun = useCreatePayrollRun()
   const router = useRouter()
 
@@ -24,7 +26,7 @@ export default function PayrollRunsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Runs</h1>
           <p className="mt-1 text-sm text-muted-foreground">Payroll batches and history.</p>
         </div>
-        <Button
+        {canPrepare ? <Button
           variant="primary"
           onClick={() =>
             createRun.mutate(
@@ -39,7 +41,7 @@ export default function PayrollRunsPage() {
         >
           <Plus className="h-4 w-4 mr-2" />
           New run
-        </Button>
+        </Button> : null}
       </div>
 
       <PayrollNavTabs />

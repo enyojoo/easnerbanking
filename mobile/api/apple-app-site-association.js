@@ -18,6 +18,10 @@ function buildAppleAppSiteAssociation(teamId) {
               comment: 'In-app deep-link paths mapped in mobile DeepLinkService',
             },
             {
+              '/': '/payroll*',
+              comment: 'Payroll approval and employee self-service links',
+            },
+            {
               '/': '*',
               exclude: true,
               comment: 'Web app and other paths stay in browser unless explicitly listed',

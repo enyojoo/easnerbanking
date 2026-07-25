@@ -22,6 +22,7 @@ export type PendingPushPayload =
       initialTransaction?: PushTransactionSnapshotRow
     }
   | { at: number; screen: 'TransactionCard' }
+  | { at: number; screen: 'PayrollApproval'; invitationId: string }
   | { at: number; screen: 'InAppNotifications' }
 
 export function setPushNavMainReady(ready: boolean): void {
@@ -35,6 +36,10 @@ function isPushNavMainReady(): boolean {
 function parsePushData(data: Record<string, unknown> | undefined): PendingPushPayload | null {
   if (!data || typeof data !== 'object') return null
   const now = Date.now()
+  const invitationId = String(data.payrollInvitationId ?? data.invitationId ?? '').trim()
+  if (invitationId) {
+    return { at: now, screen: 'PayrollApproval', invitationId }
+  }
   const transactionId = String(data.transactionId ?? data.transaction_id ?? '').trim()
   if (transactionId) {
     const initialTransaction = parsePushTransactionSnapshot(data) ?? undefined
@@ -165,6 +170,9 @@ export function flushPendingPushNavigation(
         }
         case 'TransactionCard':
           navigationRef.navigate('TransactionCard' as never, {} as never)
+          break
+        case 'PayrollApproval':
+          navigationRef.navigate('PayrollApproval' as never, { invitationId: pending.invitationId } as never)
           break
         case 'InAppNotifications':
           navigationRef.navigate('InAppNotifications' as never, {} as never)

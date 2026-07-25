@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
+import { enforcePayrollRateLimit } from "@/lib/payroll/rate-limit"
 
 /**
  * Authenticated lookup of another party's public Easetag profile (user or business).
@@ -21,6 +22,12 @@ export async function GET(request: Request) {
   const excludeSelf = url.searchParams.get("excludeSelf") !== "false"
 
   const admin = createSupabaseAdmin()
+  if (!(await enforcePayrollRateLimit(admin, `easetag_lookup:${user.id}`, {
+    limit: 60,
+    windowSeconds: 60,
+  }))) {
+    return NextResponse.json({ error: "Too many EASETAG lookups. Try again shortly." }, { status: 429 })
+  }
 
   const { data: me, error: meErr } = await admin
     .from("users")
@@ -36,7 +43,7 @@ export async function GET(request: Request) {
 
   const { data: userRow, error: uerr } = await admin
     .from("users")
-    .select("id,easetag,full_name,avatar_url")
+    .select("id,easetag,full_name,avatar_url,noah_kyc_status")
     .eq("easetag", clean)
     .maybeSingle()
 
@@ -57,12 +64,13 @@ export async function GET(request: Request) {
       fullName: String(resolvedUserRow.full_name || "").trim() || clean,
       avatarUrl: (resolvedUserRow.avatar_url as string | null) || null,
       accountKind: "personal" as const,
+      verified: resolvedUserRow.noah_kyc_status === "approved",
     })
   }
 
   const { data: bizRow, error: berr } = await admin
     .from("businesses")
-    .select("id,easetag,name,logo_url")
+    .select("id,easetag,name,logo_url,noah_kyb_status")
     .eq("easetag", clean)
     .maybeSingle()
 
@@ -81,6 +89,7 @@ export async function GET(request: Request) {
       fullName: String(bizRow.name || "").trim() || clean,
       avatarUrl: (bizRow.logo_url as string | null) || null,
       accountKind: "business" as const,
+      verified: bizRow.noah_kyb_status === "approved",
     })
   }
 

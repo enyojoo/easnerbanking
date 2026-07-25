@@ -12,6 +12,7 @@ export type EasenetPublicProfile = {
   fullName: string
   avatarUrl: string | null
   accountKind: PayeeAccountKind
+  verified: boolean
 }
 
 export async function fetchEasenetProfileByTag(rawTag: string): Promise<EasenetPublicProfile | { found: false; reason?: string }> {
@@ -28,6 +29,7 @@ export async function fetchEasenetProfileByTag(rawTag: string): Promise<EasenetP
     fullName?: string
     avatarUrl?: string | null
     accountKind?: string
+    verified?: boolean
   }
   if (!res.ok || !data.found) {
     return { found: false, reason: data.reason }
@@ -39,6 +41,7 @@ export async function fetchEasenetProfileByTag(rawTag: string): Promise<EasenetP
     fullName: String(data.fullName || clean),
     avatarUrl: data.avatarUrl ?? null,
     accountKind,
+    verified: data.verified === true,
   }
   // Persist to cache so settings/send flows reuse the same avatar/name without refetch.
   writeEasenetPublicProfileCache(profile.easetag, {

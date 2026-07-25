@@ -1,13 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, Users } from "lucide-react"
+import { ArrowRight, CalendarDays, Plus, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
 import { PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
-import { usePayrollOverview } from "@/hooks/queries/use-payroll"
+import { usePayrollCapabilities, usePayrollOverview } from "@/hooks/queries/use-payroll"
 import { useCreatePayrollRun } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { railLabel } from "@/lib/payroll/helpers"
@@ -17,6 +17,8 @@ import { useRouter } from "next/navigation"
 export default function PayrollOverviewPage() {
   const router = useRouter()
   const overviewQuery = usePayrollOverview()
+  const capabilities = usePayrollCapabilities().data
+  const canPrepare = Boolean(capabilities?.enabled && capabilities.canPrepare)
   const createRun = useCreatePayrollRun()
   const overview = overviewQuery.data
 
@@ -56,6 +58,27 @@ export default function PayrollOverviewPage() {
 
       <PayrollNavTabs />
 
+      {capabilities && !capabilities.enabled ? (
+        <Card className="shadow-soft border-border/70 mb-6">
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            Payroll V2 is read-only for this business until the <code>payroll_v2</code> rollout is enabled.
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canPrepare ? <div className="mb-6 flex flex-wrap gap-2">
+        <Button variant="primary" onClick={() => void handleRunPayroll()}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create payroll run
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href="/payroll/people"><Users className="mr-2 h-4 w-4" />Add person</Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href="/payroll/schedules"><CalendarDays className="mr-2 h-4 w-4" />Create schedule</Link>
+        </Button>
+      </div> : null}
+
       <Card className="shadow-card border-border/70 mb-6">
         <CardContent className="p-6 sm:p-8">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
@@ -71,7 +94,7 @@ export default function PayrollOverviewPage() {
                 </span>
               </p>
             </div>
-            <Button
+            {canPrepare ? <Button
               variant="primary"
               size="lg"
               className="min-w-[160px]"
@@ -80,7 +103,7 @@ export default function PayrollOverviewPage() {
             >
               {primaryLabel}
               <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+            </Button> : null}
           </div>
 
           <div className="mt-6 flex flex-wrap gap-4 text-sm">
@@ -88,6 +111,12 @@ export default function PayrollOverviewPage() {
               <Users className="inline h-4 w-4 mr-1 text-primary" />
               {overview?.activeCount ?? 0} active
             </span>
+            <span>{overview?.connectedCount ?? 0} connected</span>
+            {(overview?.pendingConnectionCount ?? 0) > 0 ? (
+              <span className="text-amber-700 dark:text-amber-400">
+                {overview?.pendingConnectionCount} awaiting approval
+              </span>
+            ) : null}
             <span className="tabular-nums">
               {overview?.funded ? (
                 <span className="text-emerald-700 dark:text-emerald-400">Funded</span>
@@ -110,11 +139,11 @@ export default function PayrollOverviewPage() {
         </CardContent>
       </Card>
 
-      {overview?.needsDestinationCount ? (
+      {(overview?.attentionCount ?? overview?.needsDestinationCount ?? 0) > 0 ? (
         <Card className="shadow-soft border-border/70 mb-6">
           <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-sm">
-              {overview.needsDestinationCount} people need a destination (EASETAG or recipient).
+              {overview?.attentionCount ?? overview?.needsDestinationCount ?? 0} people need a payroll connection or receiving method.
             </p>
             <Button variant="outline" asChild>
               <Link href="/payroll/people">Fix in People</Link>

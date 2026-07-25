@@ -88,6 +88,12 @@ export function useUpdatePayrollRun(runId: string) {
     mutationFn: (input: {
       lines?: Array<{ id: string; amount?: number; status?: string }>
       sourceCurrency?: string
+      revision?: number
+      payPeriodStart?: string | null
+      payPeriodEnd?: string | null
+      payday?: string | null
+      name?: string | null
+      note?: string | null
     }) =>
       apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}`, {
         method: "PATCH",
@@ -117,8 +123,24 @@ export function useApprovePayrollRun(runId: string) {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
+    mutationFn: (input?: { mode?: "pay_now" | "schedule"; scheduledAt?: string }) =>
+      apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}/approve`, {
+        method: "POST",
+        body: input ?? { mode: "pay_now" },
+      }),
+    onSuccess: () => invalidatePayroll(qc, scope),
+  })
+}
+
+export function useWithdrawPayrollRun(runId: string) {
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  return useMutation({
     mutationFn: () =>
-      apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}/approve`, { method: "POST" }),
+      apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}`, {
+        method: "POST",
+        body: { action: "withdraw" },
+      }),
     onSuccess: () => invalidatePayroll(qc, scope),
   })
 }
@@ -150,7 +172,14 @@ export function useUpsertPayrollSchedule() {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
-    mutationFn: (input: Partial<PayrollSchedule> & { id?: string }) => {
+    mutationFn: (input: Partial<PayrollSchedule> & {
+      id?: string
+      timezone?: string
+      draftLeadDays?: number
+      approvalLeadDays?: number
+      weekendPolicy?: "previous_business_day" | "next_business_day"
+      sourceCurrency?: string
+    }) => {
       if (input.id) {
         return apiFetch<{ schedule: PayrollSchedule }>(`/api/business/payroll/schedules/${input.id}`, {
           method: "PATCH",

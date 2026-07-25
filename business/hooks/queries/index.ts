@@ -26,6 +26,7 @@ export type { TreasurySummary, CashflowPoint } from "./use-treasury"
 
 export { useInvoicesList, useInvoiceDetail } from "./use-invoices"
 export {
+  usePayrollCapabilities,
   usePayrollOverview,
   usePayrollPeople,
   usePayrollRuns,

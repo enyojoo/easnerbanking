@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireBusinessOrgWithRole } from "@/lib/b2b/require-role"
+import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   mapRowToPayrollPerson,
@@ -17,7 +17,7 @@ import { summarizeRailMix } from "@/lib/payroll/run-utils"
 import type { PayrollOverview, PayrollRail } from "@/lib/payroll/types"
 
 export async function GET(request: Request) {
-  const ctx = await requireBusinessOrgWithRole(request)
+  const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
@@ -86,6 +86,9 @@ export async function GET(request: Request) {
     activeCount: active.length,
     heldCount: held.length,
     needsDestinationCount: needsDestination.length,
+    connectedCount: people.filter((p) => p.connectionStatus === "approved").length,
+    pendingConnectionCount: people.filter((p) => p.connectionStatus === "pending").length,
+    attentionCount: active.filter((p) => p.readinessStatus !== "ready").length,
     funded: shortfall <= 0,
     shortfall,
     availableBalance,

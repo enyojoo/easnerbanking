@@ -59,6 +59,7 @@ export type LedgerNotificationDirection = "in" | "out"
 export type NotificationOutcome = "success" | "failed" | "reversed"
 
 export type TransactionNotificationKind =
+  | "payroll_payment"
   | "easetag_send"
   | "easetag_receive"
   | "card_topup"
@@ -337,6 +338,31 @@ export function deriveTransactionNotification(
     transactionId: input.transactionId,
     easnerTransactionId: input.easnerTransactionId,
     failureReason: input.failureReason,
+  }
+
+  if (
+    String(meta?.product ?? "").trim().toLowerCase() === "payroll" &&
+    direction === "in" &&
+    outcome === "success"
+  ) {
+    const businessName = String(meta?.payroll_business_name ?? "").trim()
+    const body = businessName
+      ? `You received ${amountText} from ${businessName}.`
+      : `You received a payroll payment of ${amountText}.`
+    return {
+      ...base,
+      kind: "payroll_payment",
+      title: "Payroll payment received",
+      body,
+      pushTitle: "Payroll payment received",
+      pushBody: body,
+      emailSubject: businessName ? `You've been paid by ${businessName}` : "Payroll payment received",
+      category: "Payroll payment",
+      counterpartyLabel: "Employer",
+      counterpartyName: businessName || undefined,
+      // Payroll sends its own settlement email with the authoritative PDF attached.
+      emailEnabled: false,
+    }
   }
 
   if (outcome === "failed") {

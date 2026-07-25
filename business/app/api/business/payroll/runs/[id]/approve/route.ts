@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireBusinessRole } from "@/lib/b2b/require-role"
+import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { approvePayrollRun } from "@/lib/payroll/execute-run"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
@@ -16,10 +16,14 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const ctx = await requireBusinessRole(request, ["Owner", "Admin"])
+  const ctx = await requirePayrollAccess(request, ["approver"])
   if (!ctx.ok) return ctx.response
 
   const { id } = await params
+  const body = (await request.json().catch(() => ({}))) as {
+    mode?: "pay_now" | "schedule"
+    scheduledAt?: string
+  }
   const admin = createSupabaseAdmin()
 
   const { data: runRow } = await admin
@@ -30,8 +34,21 @@ export async function POST(
     .maybeSingle()
 
   if (!runRow) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  if (runRow.status !== "pending_approval" && runRow.status !== "draft") {
+  if (!["pending_approval", "needs_reapproval", "draft"].includes(String(runRow.status))) {
     return NextResponse.json({ error: "Run is not pending approval" }, { status: 400 })
+  }
+  const { data: payrollSettings } = await admin
+    .from("payroll_settings")
+    .select("require_separate_approver")
+    .eq("business_id", ctx.businessId)
+    .maybeSingle()
+  if (
+    payrollSettings?.require_separate_approver &&
+    String(runRow.submitted_by ?? "") === ctx.userId
+  ) {
+    return NextResponse.json({
+      error: "A different payroll approver must approve this run.",
+    }, { status: 403 })
   }
 
   const acc = await resolveNoahAccountContextFromLedgerScope(admin, {
@@ -58,6 +75,16 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 403 })
   }
 
+  const { data: approvalLines } = await admin
+    .from("payroll_lines")
+    .select("id,person_id,recipient_snapshot,amount_cents,pay_currency,payment_method_snapshot,rail")
+    .eq("run_id", id)
+    .neq("status", "skipped")
+  const scheduleMode = body.mode === "schedule"
+  if (scheduleMode && !body.scheduledAt) {
+    return NextResponse.json({ error: "scheduledAt is required" }, { status: 400 })
+  }
+
   try {
     await approvePayrollRun({
       admin,
@@ -70,6 +97,45 @@ export async function POST(
     const msg = e instanceof Error ? e.message : "Approval failed"
     return NextResponse.json({ error: msg }, { status: 500 })
   }
+
+  const { data: lockedRun } = await admin
+    .from("payroll_runs")
+    .select("total_source_cents")
+    .eq("id", id)
+    .single()
+  const approvedDebit = Number(lockedRun?.total_source_cents ?? 0) / 100
+  const approvedAt = new Date().toISOString()
+  const approvalSnapshot = {
+    revision: Number(runRow.revision ?? 1),
+    totalSource: approvedDebit,
+    sourceCurrency: String(runRow.source_currency || "USD"),
+    approvedDebit,
+    approvedAt,
+    people: (approvalLines ?? []).map((line) => ({
+      lineId: line.id,
+      personId: line.person_id,
+      name: String((line.recipient_snapshot as Record<string, unknown>)?.fullName || "Payee"),
+      amount: Number(line.amount_cents ?? 0) / 100,
+      currency: String(line.pay_currency || "USD"),
+      method: Object.keys((line.payment_method_snapshot as Record<string, unknown>) ?? {}).length
+        ? line.payment_method_snapshot
+        : { rail: line.rail },
+    })),
+  }
+  await admin.from("payroll_runs").update({
+    status: scheduleMode ? "scheduled" : "approved",
+    approval_snapshot: approvalSnapshot,
+    approved_at: approvedAt,
+    ...(scheduleMode ? { scheduled_at: body.scheduledAt } : {}),
+    updated_at: approvedAt,
+  }).eq("id", id)
+  await admin.from("payroll_run_events").insert({
+    business_id: ctx.businessId,
+    run_id: id,
+    actor_user_id: ctx.userId,
+    event_type: scheduleMode ? "run.scheduled" : "run.approved",
+    data: { revision: approvalSnapshot.revision, approvedDebit },
+  })
 
   await recalculateRunTotals(admin, id, ctx.businessId)
 

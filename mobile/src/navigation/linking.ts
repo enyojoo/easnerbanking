@@ -73,6 +73,7 @@ export const webLinking: LinkingOptions<Record<string, unknown>> = {
       OpenCurrencyAccount: 'user/accounts/open',
       TransactionDetails: 'user/transactions/:transactionId',
       TransactionCard: 'user/transactions/card/:transactionId',
+      PayrollApproval: 'payroll',
     },
   },
 }

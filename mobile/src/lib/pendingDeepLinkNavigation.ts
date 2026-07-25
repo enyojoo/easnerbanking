@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { NavigationContainerRef } from '@react-navigation/native'
 import { isMobileDeepLinkHost } from '@easner/shared'
+import { storePayrollApprovalToken } from './payrollApprovalTokenStore'
 
 const STORAGE_KEY = '@easner_pending_deep_link_v1'
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
@@ -26,7 +27,7 @@ export function isUserDeepLinkUrl(url: string): boolean {
   if (/^easner:\/\//.test(url)) {
     const rest = url.replace(/^easner:\/\//, '').split('?')[0]?.split('#')[0] ?? ''
     const path = rest.startsWith('/') ? rest : `/${rest}`
-    return path === '/user' || path.startsWith('/user/')
+    return path === '/payroll' || path.startsWith('/payroll/') || path === '/user' || path.startsWith('/user/')
   }
 
   try {
@@ -34,7 +35,7 @@ export function isUserDeepLinkUrl(url: string): boolean {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
     if (!isMobileDeepLinkHost(parsed.hostname)) return false
     const path = parsed.pathname
-    return path === '/user' || path.startsWith('/user/')
+    return path === '/payroll' || path.startsWith('/payroll/') || path === '/user' || path.startsWith('/user/')
   } catch {
     return false
   }
@@ -44,8 +45,14 @@ export function parseDeepLinkFromUrl(url: string): PendingDeepLinkPayload | null
   if (!isUserDeepLinkUrl(url)) return null
 
   try {
-    const cleanUrl = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]?.split('#')[0] ?? ''
+    const cleanUrl = /^easner:\/\//.test(url)
+      ? `/${url.replace(/^easner:\/\//, '').split('?')[0]?.split('#')[0] ?? ''}`
+      : new URL(url).pathname
     const segments = cleanUrl.split('/').filter(Boolean)
+
+    if (segments[0] === 'payroll') {
+      return { at: Date.now(), screen: 'PayrollApproval' }
+    }
 
     if (segments.length === 0) {
       return { at: Date.now(), screen: 'Dashboard' }
@@ -108,6 +115,10 @@ export async function stashPendingDeepLinkFromUrl(url: string): Promise<void> {
   const pending = parseDeepLinkFromUrl(url)
   if (!pending) return
   try {
+    if (pending.screen === 'PayrollApproval') {
+      const token = new URL(url).searchParams.get('token')
+      if (token) await storePayrollApprovalToken(token)
+    }
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(pending))
   } catch (e) {
     console.warn('stashPendingDeepLinkFromUrl:', e)
@@ -148,6 +159,9 @@ function navigateToDeepLinkScreen(
       break
     case 'TransactionDetails':
       navigationRef.navigate('TransactionDetails' as never, params as never)
+      break
+    case 'PayrollApproval':
+      navigationRef.navigate('PayrollApproval' as never, {} as never)
       break
     default:
       navigationRef.navigate('MainTabs' as never, { screen: 'Dashboard' } as never)

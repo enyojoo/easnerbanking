@@ -58,7 +58,7 @@
             {
               "scheme": "https",
               "host": "app.easner.com",
-              "pathPrefix": "/user"
+              "pathPrefix": "/"
             }
           ],
           "category": [

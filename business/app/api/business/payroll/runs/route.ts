@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireBusinessOrgWithRole, requireBusinessRole } from "@/lib/b2b/require-role"
+import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   mapRowToPayrollRun,
@@ -9,10 +9,11 @@ import {
   type PayrollLineRow,
   type PayrollPersonRow,
 } from "@/lib/payroll/map-payroll"
-import { buildLineFromPerson, recalculateRunTotals } from "@/lib/payroll/run-utils"
+import { recalculateRunTotals } from "@/lib/payroll/run-utils"
+import { buildPayrollLines } from "@/lib/payroll/build-lines"
 
 export async function GET(request: Request) {
-  const ctx = await requireBusinessOrgWithRole(request)
+  const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireBusinessRole(request, ["Owner", "Admin", "Member"])
+  const ctx = await requirePayrollAccess(request, ["preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   const body = (await request.json().catch(() => ({}))) as {
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
 
   if (runErr) return NextResponse.json({ error: runErr.message }, { status: 500 })
 
-  const linePayloads = people.map((p) => buildLineFromPerson(String(runRow.id), p))
+  const linePayloads = await buildPayrollLines(admin, String(runRow.id), people)
   const { error: linesErr } = await admin.from("payroll_lines").insert(linePayloads)
   if (linesErr) return NextResponse.json({ error: linesErr.message }, { status: 500 })
 

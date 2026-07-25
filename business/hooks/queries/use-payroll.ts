@@ -4,7 +4,25 @@ import { useQuery } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
-import type { PayrollOverview, PayrollPerson, PayrollRun, PayrollSchedule } from "@/lib/payroll/types"
+import type {
+  PayrollCapabilities,
+  PayrollOverview,
+  PayrollPerson,
+  PayrollRun,
+  PayrollSchedule,
+} from "@/lib/payroll/types"
+
+export function usePayrollCapabilities() {
+  const { scope } = useScope()
+  return useQuery({
+    queryKey: scope ? ["payroll", "capabilities", scope] : ["payroll", "capabilities", "disabled"],
+    enabled: Boolean(scope),
+    queryFn: () => apiFetch<{ capabilities: PayrollCapabilities }>("/api/business/payroll/capabilities"),
+    select: (d) => d.capabilities,
+    staleTime: 60_000,
+    meta: { safePersist: false, webPersist: "none", freshness: "operational" },
+  })
+}
 
 export function usePayrollOverview() {
   const { scope } = useScope()

@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
-import Link from "next/link"
 import { Download, Mail, MoreHorizontal, Pause, Plus, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -22,7 +21,7 @@ import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
 import { PayrollRailBadge } from "@/components/payroll/payroll-rail-badge"
 import { PayrollPersonForm } from "@/components/payroll/payroll-person-form"
-import { usePayrollPeople } from "@/hooks/queries/use-payroll"
+import { usePayrollCapabilities, usePayrollPeople } from "@/hooks/queries/use-payroll"
 import {
   useCreatePayrollPerson,
   useUpdatePayrollPerson,
@@ -36,6 +35,8 @@ import type { PayrollPerson } from "@/lib/payroll/types"
 
 export default function PayrollPeoplePage() {
   const peopleQuery = usePayrollPeople()
+  const capabilities = usePayrollCapabilities().data
+  const canPrepare = Boolean(capabilities?.enabled && capabilities.canPrepare)
   const createPerson = useCreatePayrollPerson()
   const updatePerson = useUpdatePayrollPerson()
   const importPeople = useImportPayrollPeople()
@@ -45,15 +46,21 @@ export default function PayrollPeoplePage() {
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<PayrollPerson | null>(null)
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "ready" | "pending" | "declined" | "expired" | "revoked" | "needs_method"
+  >("all")
 
   const people = useMemo(() => {
     const list = peopleQuery.data ?? []
     const q = search.trim().toLowerCase()
-    if (!q) return list
-    return list.filter(
+    const searched = q ? list.filter(
       (p) => p.fullName.toLowerCase().includes(q) || (p.email ?? "").toLowerCase().includes(q),
-    )
-  }, [peopleQuery.data, search])
+    ) : list
+    if (statusFilter === "all") return searched
+    if (statusFilter === "ready") return searched.filter((p) => p.readinessStatus === "ready")
+    if (statusFilter === "needs_method") return searched.filter((p) => p.readinessStatus !== "ready")
+    return searched.filter((p) => p.connectionStatus === statusFilter)
+  }, [peopleQuery.data, search, statusFilter])
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -63,26 +70,30 @@ export default function PayrollPeoplePage() {
           <p className="mt-1 text-sm text-muted-foreground">Employees and contractors you pay.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild>
-            <a href="/api/business/payroll/people/import" download>
-              <Download className="h-4 w-4 mr-2" />
-              Template
-            </a>
-          </Button>
-          <Button variant="outline" onClick={() => fileRef.current?.click()}>
-            <Upload className="h-4 w-4 mr-2" />
-            Import CSV
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              setEditing(null)
-              setDialogOpen(true)
-            }}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add person
-          </Button>
+          {canPrepare ? (
+            <>
+              <Button variant="outline" asChild>
+                <a href="/api/business/payroll/people/import" download>
+                  <Download className="h-4 w-4 mr-2" />
+                  Template
+                </a>
+              </Button>
+              <Button variant="outline" onClick={() => fileRef.current?.click()}>
+                <Upload className="h-4 w-4 mr-2" />
+                Import CSV
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setEditing(null)
+                  setDialogOpen(true)
+                }}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add person
+              </Button>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -95,6 +106,26 @@ export default function PayrollPeoplePage() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
         />
+      </div>
+      <div className="mb-4 flex flex-wrap gap-2" aria-label="Filter payroll people">
+        {([
+          ["all", "All"],
+          ["ready", "Ready"],
+          ["pending", "Invitation pending"],
+          ["declined", "Declined"],
+          ["expired", "Expired"],
+          ["revoked", "Revoked"],
+          ["needs_method", "Needs attention"],
+        ] as const).map(([value, label]) => (
+          <Button
+            key={value}
+            variant={statusFilter === value ? "primary" : "outline"}
+            size="sm"
+            onClick={() => setStatusFilter(value)}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
 
       <div className="space-y-3">
@@ -119,6 +150,11 @@ export default function PayrollPeoplePage() {
                       {person.status === "held" ? (
                         <span className="text-xs text-amber-700">Held</span>
                       ) : null}
+                      <span className="text-xs capitalize text-muted-foreground">
+                        {person.connectionStatus === "manual"
+                          ? "Manual"
+                          : `Connection ${person.connectionStatus}`}
+                      </span>
                     </div>
                     <p className="text-sm text-muted-foreground truncate">{person.email || "No email"}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -131,7 +167,7 @@ export default function PayrollPeoplePage() {
                       ) : null}
                     </div>
                   </div>
-                  <DropdownMenu>
+                  {canPrepare ? <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon">
                         <MoreHorizontal className="h-4 w-4" />
@@ -183,11 +219,8 @@ export default function PayrollPeoplePage() {
                           Reactivate
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem asChild>
-                        <Link href={`/settings?tab=recipients`}>Manage recipients</Link>
-                      </DropdownMenuItem>
                     </DropdownMenuContent>
-                  </DropdownMenu>
+                  </DropdownMenu> : null}
                 </CardContent>
               </Card>
             )

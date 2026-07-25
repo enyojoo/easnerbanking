@@ -71,6 +71,7 @@ import MfaSetupScreen from '../screens/main/MfaSetupScreen'
 import NotificationsScreen from '../screens/main/NotificationsScreen'
 import InAppNotificationsScreen from '../screens/main/InAppNotificationsScreen'
 import LegalScreen from '../screens/main/LegalScreen'
+import PayrollApprovalScreen from '../screens/payroll/PayrollApprovalScreen'
 
 // Transaction Screens — lazy-loaded so receipt capture native modules never run at app launch.
 function loadTransactionDetailsScreen() {
@@ -443,6 +444,7 @@ function MainStack() {
       <Stack.Screen name="MfaSetup" component={MfaSetupScreen} options={transitionOptions('MfaSetup')} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={transitionOptions('Notifications')} />
       <Stack.Screen name="InAppNotifications" component={InAppNotificationsScreen} options={transitionOptions('InAppNotifications')} />
+      <Stack.Screen name="PayrollApproval" component={PayrollApprovalScreen} options={transitionOptions('PayrollApproval')} />
     </Stack.Navigator>
     </View>
   )
@@ -916,4 +918,3 @@ export default function AppNavigator() {
 
   return <AuthStack key="auth-stack-no-user" />
 }
-

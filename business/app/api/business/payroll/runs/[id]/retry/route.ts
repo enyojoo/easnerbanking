@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireBusinessRole } from "@/lib/b2b/require-role"
+import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { executePayrollLine } from "@/lib/payroll/execute-run"
 import type { PayrollLineRow, PayrollRunRow } from "@/lib/payroll/map-payroll"
@@ -9,7 +9,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const ctx = await requireBusinessRole(request, ["Owner", "Admin"])
+  const ctx = await requirePayrollAccess(request, ["approver"])
   if (!ctx.ok) return ctx.response
 
   const { id: runId } = await params
@@ -40,7 +40,7 @@ export async function POST(
       businessId: ctx.businessId,
       line: row,
       run: runRow as PayrollRunRow,
-      idempotencyKey: `payroll_line_retry:${row.id}:${Date.now()}`,
+      idempotencyKey: `payroll_line:${row.id}`,
     })
 
     if (result.ok) {
@@ -49,6 +49,7 @@ export async function POST(
         .update({
           status: "paid",
           transfer_etid: result.transferEtid,
+          settled_at: new Date().toISOString(),
           error_code: null,
           error_message: null,
           updated_at: new Date().toISOString(),
@@ -60,6 +61,25 @@ export async function POST(
       failed.push({ id: row.id, error: result.error })
     }
   }
+
+  const { data: finalLines } = await admin.from("payroll_lines")
+    .select("status").eq("run_id", runId).neq("status", "skipped")
+  const paidCount = (finalLines ?? []).filter((line) => line.status === "paid").length
+  const failedCount = (finalLines ?? []).filter((line) => line.status === "failed").length
+  const finalStatus = failedCount > 0
+    ? (paidCount > 0 ? "partial" : "failed")
+    : "completed"
+  await admin.from("payroll_runs").update({
+    status: finalStatus,
+    updated_at: new Date().toISOString(),
+  }).eq("id", runId)
+  await admin.from("payroll_run_events").insert({
+    business_id: ctx.businessId,
+    run_id: runId,
+    actor_user_id: ctx.userId,
+    event_type: "run.retry_completed",
+    data: { retried, failed },
+  })
 
   return NextResponse.json({ retried, failed })
 }

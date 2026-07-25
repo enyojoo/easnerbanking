@@ -76,6 +76,18 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/internal/payroll/execute-scheduled",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/payroll/retry-document-deliveries",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/internal/payroll/process-reversals",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/process-account-deletions",
       "schedule": "0 * * * *"
     }

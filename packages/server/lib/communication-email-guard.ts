@@ -27,6 +27,8 @@ const TEMPLATE_PREFERENCE: Record<string, EmailPreferenceCategory> = {
   teamInvitation: "transactional",
   payrollEasetagInvite: "transactional",
   payrollPaid: "transactional",
+  payrollConnectionApproved: "transactional",
+  payrollConnectionDeclined: "transactional",
   passwordChanged: "security_alerts",
   passwordResetCompleted: "security_alerts",
   mfaEnabled: "security_alerts",

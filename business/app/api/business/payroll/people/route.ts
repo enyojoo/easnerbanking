@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireBusinessOrgWithRole, requireBusinessRole } from "@/lib/b2b/require-role"
+import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   mapRowToPayrollPerson,
@@ -9,7 +9,7 @@ import {
 import type { PayrollPersonInput } from "@/lib/payroll/types"
 
 export async function GET(request: Request) {
-  const ctx = await requireBusinessOrgWithRole(request)
+  const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireBusinessRole(request, ["Owner", "Admin", "Member"])
+  const ctx = await requirePayrollAccess(request, ["preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   let body: PayrollPersonInput

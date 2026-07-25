@@ -5,10 +5,12 @@ const runVariant: Record<PayrollRunStatus, "neutral" | "amber" | "emerald" | "ox
   draft: "neutral",
   pending_approval: "amber",
   approved: "amber",
+  scheduled: "amber",
   executing: "amber",
   completed: "emerald",
   partial: "amber",
   failed: "oxblood",
+  needs_reapproval: "oxblood",
   cancelled: "slate",
 }
 

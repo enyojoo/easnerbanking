@@ -78,6 +78,8 @@ export type ExecuteEasetagTransferInput = {
   reservedDebitEtid?: string | null
   /** User note from send flow — shown on transaction detail only. */
   sendNote?: string | null
+  /** Trusted server-side product metadata copied to both ledger legs. */
+  productMetadata?: Record<string, unknown>
 }
 
 export type ExecuteEasetagTransferResult =
@@ -157,6 +159,7 @@ export async function executeEasetagTransfer(
 
   const now = new Date().toISOString()
   const debitMeta: Record<string, unknown> = {
+    ...(input.productMetadata ?? {}),
     easner_transaction_id: etid,
     source: "easetag_p2p",
     idempotency_key: key,
@@ -171,6 +174,7 @@ export async function executeEasetagTransfer(
   }
 
   const creditMeta: Record<string, unknown> = {
+    ...(input.productMetadata ?? {}),
     easner_transaction_id: etid,
     source: "easetag_p2p",
     idempotency_key: key,

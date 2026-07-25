@@ -57,6 +57,7 @@ export type ScreenRouteName =
   | 'ReceiveLocalReview'
   | 'OpenCurrencyAccount'
   | 'TransactionDetails'
+  | 'PayrollApproval'
   | 'Recipients'
   | 'TransactionCard'
   | 'Support'
@@ -121,6 +122,7 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
 
   // Detail drill-down
   TransactionDetails: { intent: 'detail' },
+  PayrollApproval: { intent: 'detail' },
   ReceiveTransactionDetails: { intent: 'detail' },
   TransactionCard: { intent: 'detail' },
 

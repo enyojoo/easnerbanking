@@ -10,13 +10,14 @@ import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
 import { PayrollLineStatusBadge, PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
 import { PayrollRailBadge } from "@/components/payroll/payroll-rail-badge"
-import { usePayrollRunDetail } from "@/hooks/queries/use-payroll"
+import { usePayrollCapabilities, usePayrollRunDetail } from "@/hooks/queries/use-payroll"
 import {
   useUpdatePayrollRun,
   useSubmitPayrollRun,
   useApprovePayrollRun,
   useExecutePayrollRun,
   useRetryPayrollRun,
+  useWithdrawPayrollRun,
 } from "@/hooks/mutations/use-payroll"
 import { useConfirmWithPin } from "@/components/app-lock/use-confirm-with-pin"
 import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
@@ -24,24 +25,37 @@ import { useAuth } from "@/lib/auth-context"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 import type { PayrollLine } from "@/lib/payroll/types"
+import { apiFetch } from "@/lib/query/api-client"
 
 export default function PayrollRunDetailPage() {
   const params = useParams<{ id: string }>()
   const runId = params.id
   const runQuery = usePayrollRunDetail(runId)
+  const capabilities = usePayrollCapabilities().data
+  const canPrepare = Boolean(capabilities?.enabled && capabilities.canPrepare)
+  const canApprove = Boolean(capabilities?.enabled && capabilities.canApprove)
   const updateRun = useUpdatePayrollRun(runId)
   const submitRun = useSubmitPayrollRun(runId)
   const approveRun = useApprovePayrollRun(runId)
   const executeRun = useExecutePayrollRun(runId)
   const retryRun = useRetryPayrollRun(runId)
+  const withdrawRun = useWithdrawPayrollRun(runId)
   const { user } = useAuth()
   const confirmWithPin = useConfirmWithPin()
 
   const run = runQuery.data
   const [amountEdits, setAmountEdits] = useState<Record<string, string>>({})
+  const [runName, setRunName] = useState("")
+  const [payPeriodStart, setPayPeriodStart] = useState("")
+  const [payPeriodEnd, setPayPeriodEnd] = useState("")
+  const [payday, setPayday] = useState("")
+  const [detailsDirty, setDetailsDirty] = useState(false)
+  const hasUnsavedChanges = Object.keys(amountEdits).length > 0 || detailsDirty
 
   const lines = useMemo(() => run?.lines ?? [], [run?.lines])
   const failedLines = lines.filter((l) => l.status === "failed")
+  const hasPayStubs = lines.some((line) => Boolean(line.payrollDocumentId))
+  const awaitingApproval = run?.status === "pending_approval" || run?.status === "needs_reapproval"
 
   const railSummary = useMemo(() => {
     const mix: Record<string, number> = {}
@@ -57,11 +71,19 @@ export default function PayrollRunDetailPage() {
     const patchLines = Object.entries(amountEdits)
       .map(([id, amount]) => ({ id, amount: Number(amount) }))
       .filter((l) => Number.isFinite(l.amount) && l.amount > 0)
-    if (patchLines.length === 0) return
+    if (patchLines.length === 0 && !detailsDirty) return
     try {
-      await updateRun.mutateAsync({ lines: patchLines })
+      await updateRun.mutateAsync({
+        lines: patchLines,
+        revision: run?.revision,
+        name: runName || undefined,
+        payPeriodStart: payPeriodStart || undefined,
+        payPeriodEnd: payPeriodEnd || undefined,
+        payday: payday || undefined,
+      })
       toast.success("Amounts updated")
       setAmountEdits({})
+      setDetailsDirty(false)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Update failed")
     }
@@ -77,6 +99,56 @@ export default function PayrollRunDetailPage() {
     }
   }
 
+  async function handleApproveAndPay() {
+    if (!(await confirmWithPin.requestConfirm())) return
+    try {
+      await approveRun.mutateAsync({ mode: "pay_now" })
+      await executeRun.mutateAsync()
+      toast.success("Payroll approved and sent")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Payroll could not be sent")
+    }
+  }
+
+  async function handleApproveAndSchedule() {
+    if (!run) return
+    if (!(await confirmWithPin.requestConfirm())) return
+    const date = run.payday || run.scheduledFor
+    if (!date) {
+      toast.error("Choose a payday before scheduling")
+      return
+    }
+    try {
+      await approveRun.mutateAsync({
+        mode: "schedule",
+        scheduledAt: `${date.slice(0, 10)}T09:00:00.000Z`,
+      })
+      toast.success("Payroll approved and scheduled")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Payroll could not be scheduled")
+    }
+  }
+
+  async function downloadPayStub(documentId: string) {
+    try {
+      const response = await apiFetch<{ document: { downloadUrl: string } }>(
+        `/api/payroll/documents/${documentId}?download=1`,
+      )
+      window.open(response.document.downloadUrl, "_blank", "noopener,noreferrer")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not download pay stub")
+    }
+  }
+
+  async function resendPayStub(documentId: string) {
+    try {
+      await apiFetch(`/api/business/payroll/documents/${documentId}/resend`, { method: "POST" })
+      toast.success("Pay stub email queued")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not resend pay stub")
+    }
+  }
+
   if (runQuery.isLoading) {
     return <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-muted-foreground">Loading run…</div>
   }
@@ -85,7 +157,7 @@ export default function PayrollRunDetailPage() {
     return <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-muted-foreground">Run not found.</div>
   }
 
-  const editable = run.status === "draft" || run.status === "pending_approval"
+  const editable = run.status === "draft"
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -103,7 +175,14 @@ export default function PayrollRunDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {run.status === "draft" ? (
+          {hasPayStubs ? (
+            <Button variant="outline" asChild>
+              <a href={`/api/business/payroll/runs/${runId}/documents/export`} download>
+                Download pay stubs
+              </a>
+            </Button>
+          ) : null}
+          {run.status === "draft" && canPrepare ? (
             <>
               <Button variant="outline" onClick={() => void saveAmounts()} disabled={updateRun.isPending}>
                 Save amounts
@@ -116,32 +195,48 @@ export default function PayrollRunDetailPage() {
                     onError: (e) => toast.error(e.message),
                   })
                 }
-                disabled={submitRun.isPending}
+                disabled={submitRun.isPending || hasUnsavedChanges}
               >
                 Submit for approval
               </Button>
             </>
           ) : null}
-          {run.status === "pending_approval" ? (
-            <Button
-              variant="primary"
-              onClick={() =>
-                approveRun.mutate(undefined, {
-                  onSuccess: () => toast.success("Approved — FX locked"),
+          {awaitingApproval && canPrepare ? (
+              <Button
+                variant="outline"
+                onClick={() => withdrawRun.mutate(undefined, {
+                  onSuccess: () => toast.success("Run returned to draft"),
                   onError: (e) => toast.error(e.message),
-                })
-              }
-              disabled={approveRun.isPending}
-            >
-              Approve run
-            </Button>
+                })}
+                disabled={withdrawRun.isPending}
+              >
+                Withdraw
+              </Button>
           ) : null}
-          {run.status === "approved" || run.status === "partial" ? (
+          {awaitingApproval && canApprove ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => void handleApproveAndSchedule()}
+                disabled={approveRun.isPending || !(run.payday || run.scheduledFor)}
+              >
+                Approve and schedule
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => void handleApproveAndPay()}
+                disabled={approveRun.isPending || executeRun.isPending}
+              >
+                Approve and pay
+              </Button>
+            </>
+          ) : null}
+          {(run.status === "approved" || run.status === "partial") && canApprove ? (
             <Button variant="primary" onClick={() => void handleExecute()} disabled={executeRun.isPending}>
               Execute with PIN
             </Button>
           ) : null}
-          {failedLines.length > 0 ? (
+          {failedLines.length > 0 && canApprove ? (
             <Button
               variant="outline"
               onClick={() =>
@@ -171,7 +266,27 @@ export default function PayrollRunDetailPage() {
         </Card>
       ) : null}
 
+      {run.status === "draft" && canPrepare ? (
+        <Card className="shadow-soft mb-4">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium mb-3">1. Payroll details</p>
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Input placeholder="Run name" value={runName} onChange={(e) => { setRunName(e.target.value); setDetailsDirty(true) }} />
+              <Input aria-label="Pay period start" type="date" value={payPeriodStart} onChange={(e) => { setPayPeriodStart(e.target.value); setDetailsDirty(true) }} />
+              <Input aria-label="Pay period end" type="date" value={payPeriodEnd} onChange={(e) => { setPayPeriodEnd(e.target.value); setDetailsDirty(true) }} />
+              <Input aria-label="Payday" type="date" value={payday} onChange={(e) => { setPayday(e.target.value); setDetailsDirty(true) }} />
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Save payroll details and amount changes before submitting for approval.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="shadow-card mb-6">
+        <div className="px-4 pt-4 text-sm font-medium">
+          {run.status === "draft" ? "2. People and amounts" : "People and payment results"}
+        </div>
         <CardContent className="p-0 divide-y divide-border/60">
           {lines.map((line: PayrollLine) => (
             <div key={line.id} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -186,7 +301,7 @@ export default function PayrollRunDetailPage() {
                 ) : null}
               </div>
               <div className="flex items-center gap-3">
-                {editable ? (
+                {editable && canPrepare ? (
                   <Input
                     className="w-32 tabular-nums"
                     defaultValue={String(line.amount)}
@@ -199,6 +314,21 @@ export default function PayrollRunDetailPage() {
                     {formatCurrency(line.amount, line.payCurrency)}
                   </span>
                 )}
+                {line.payrollDocumentId ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => void downloadPayStub(line.payrollDocumentId!)}>
+                      Download pay stub
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => void resendPayStub(line.payrollDocumentId!)}>
+                      Resend email
+                    </Button>
+                    {line.documentDeliveryStatus ? (
+                      <span className="text-xs capitalize text-muted-foreground">
+                        Email {line.documentDeliveryStatus}
+                      </span>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
             </div>
           ))}

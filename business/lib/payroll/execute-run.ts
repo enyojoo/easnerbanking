@@ -176,6 +176,19 @@ export async function executePayrollLine(input: {
   const meta = (line.metadata as Record<string, unknown>) ?? {}
   const executePayload = (meta.executePayload as Record<string, unknown>) ?? {}
   const sourceCurrency = String(run.source_currency || "USD").toUpperCase() as "USD" | "EUR"
+  if (line.person_id) {
+    const { data: connection } = await admin.from("payroll_connections")
+      .select("status")
+      .eq("person_id", line.person_id)
+      .maybeSingle()
+    if (connection && connection.status !== "approved") {
+      return {
+        ok: false,
+        error: "The employee's payroll connection is no longer approved.",
+        errorCode: "connection_not_approved",
+      }
+    }
+  }
 
   if (rail === "easetag") {
     if (!isEasetagLedgerP2PEnabled()) {
@@ -194,6 +207,9 @@ export async function executePayrollLine(input: {
 
     const orgOwner = await resolveBusinessOrgOwnerUserId(admin, businessId)
     const senderUserId = orgOwner ?? userId
+    const { data: senderBusiness } = await admin.from("businesses")
+      .select("name").eq("id", businessId).maybeSingle()
+    const runMeta = (run.metadata as Record<string, unknown>) ?? {}
 
     const reservedDebitEtid = generateTransactionId()
     const result = await executeEasetagTransfer(admin, {
@@ -207,6 +223,20 @@ export async function executePayrollLine(input: {
       payeeEasetag: payee.payeeEasetag,
       reservedDebitEtid,
       sendNote: "Payroll",
+      productMetadata: {
+        product: "payroll",
+        payroll_run_id: run.id,
+        payroll_line_id: line.id,
+        payroll_person_id: line.person_id,
+        payroll_business_id: businessId,
+        payroll_business_name: String(senderBusiness?.name || "Easner Business"),
+        payroll_period_start: run.pay_period_start ?? null,
+        payroll_period_end: run.pay_period_end ?? null,
+        payroll_payday: run.payday ?? run.scheduled_for ?? null,
+        payroll_method: "easetag",
+        payroll_reference: run.id,
+        payroll_run_name: typeof runMeta.name === "string" ? runMeta.name : null,
+      },
     })
 
     if (!result.ok) {
@@ -399,6 +429,7 @@ export async function approvePayrollRun(input: {
 
   const fxSnapshot: Record<string, unknown> = { lockedAt: new Date().toISOString(), lines: {} }
   let totalSourceCents = 0
+  const quoteFailures: string[] = []
 
   for (const line of lines ?? []) {
     const row = line as PayrollLineRow
@@ -438,6 +469,7 @@ export async function approvePayrollRun(input: {
       ;(fxSnapshot.lines as Record<string, unknown>)[row.id] = locked.executePayload
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Quote lock failed"
+      quoteFailures.push(`${row.id}: ${msg}`)
       await input.admin
         .from("payroll_lines")
         .update({
@@ -447,6 +479,14 @@ export async function approvePayrollRun(input: {
         })
         .eq("id", row.id)
     }
+  }
+
+  if (quoteFailures.length > 0) {
+    await input.admin.from("payroll_runs").update({
+      status: "pending_approval",
+      updated_at: new Date().toISOString(),
+    }).eq("id", input.runId)
+    throw new Error("Resolve failed receiving-method or quote checks before approving payroll.")
   }
 
   await input.admin
@@ -521,6 +561,7 @@ export async function executePayrollRun(input: {
         .update({
           status: "paid",
           transfer_etid: result.transferEtid,
+          settled_at: new Date().toISOString(),
           error_code: null,
           error_message: null,
           updated_at: new Date().toISOString(),

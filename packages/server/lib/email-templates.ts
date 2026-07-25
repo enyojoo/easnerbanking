@@ -311,26 +311,61 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
 
   payrollEasetagInvite: {
     subject: (data: PayrollEasetagInviteEmailData) =>
-      `${data.businessName} wants to pay you via EASETAG`,
+      `Payroll connection request from ${data.businessName}`,
     html: (data: PayrollEasetagInviteEmailData) => {
       const content = `
         <p class="confirmation-text">
-          Hi ${data.recipientName}, <strong>${data.businessName}</strong> added you to payroll on Easner.
+          Hi ${data.recipientName}, <strong>${data.businessName}</strong> wants to connect with you for payroll on Easner.
         </p>
         <p class="confirmation-text">
-          Claim your EASETAG on Easner Personal Banking to receive payments instantly and for free.
+          Review the information you will share and choose how you want to receive payroll payments.
         </p>
       `
       return generateBaseEmailTemplate(
-        "Get paid via EASETAG",
+        "Payroll connection request",
         "",
         content,
-        { text: "Join Easner", url: data.signupUrl },
+        { text: "Review payroll request", url: data.signupUrl },
         { audience: "personal", showPreferencesLink: false },
       )
     },
     text: (data: PayrollEasetagInviteEmailData) =>
-      `${data.businessName} wants to pay you via EASETAG. Join Easner: ${data.signupUrl}`,
+      `${data.businessName} wants to connect with you for payroll. Review the request: ${data.signupUrl}`,
+  },
+
+  payrollConnectionApproved: {
+    subject: (data: { businessName: string; forBusiness?: boolean }) =>
+      data.forBusiness ? `Payroll connection approved` : `You've been added to payroll at ${data.businessName}`,
+    html: (data: { businessName: string; recipientName: string; forBusiness?: boolean }) => {
+      const message = data.forBusiness
+        ? `<strong>${data.recipientName}</strong> approved your payroll connection request.`
+        : `You've been added to payroll at <strong>${data.businessName}</strong>. You can manage your receiving method in Payroll Approval.`
+      return generateBaseEmailTemplate(data.forBusiness ? "Payroll connection approved" : "You've been added to payroll", "", `<p class="confirmation-text">${message}</p>`, undefined, {
+        audience: data.forBusiness ? "business" : "personal",
+        showPreferencesLink: false,
+      })
+    },
+    text: (data: { businessName: string; recipientName: string; forBusiness?: boolean }) =>
+      data.forBusiness
+        ? `${data.recipientName} approved your payroll connection request.`
+        : `You've been added to payroll at ${data.businessName}. You can manage your receiving method in Payroll Approval.`,
+  },
+
+  payrollConnectionDeclined: {
+    subject: () => "Payroll connection declined",
+    html: (data: { businessName: string; recipientName: string; forBusiness?: boolean }) => {
+      const message = data.forBusiness
+        ? `<strong>${data.recipientName}</strong> declined your payroll connection request.`
+        : `You declined the payroll connection request from <strong>${data.businessName}</strong>.`
+      return generateBaseEmailTemplate("Payroll connection declined", "", `<p class="confirmation-text">${message}</p>`, undefined, {
+        audience: data.forBusiness ? "business" : "personal",
+        showPreferencesLink: false,
+      })
+    },
+    text: (data: { businessName: string; recipientName: string; forBusiness?: boolean }) =>
+      data.forBusiness
+        ? `${data.recipientName} declined your payroll connection request.`
+        : `You declined the payroll connection request from ${data.businessName}.`,
   },
 
   payrollPaid: {

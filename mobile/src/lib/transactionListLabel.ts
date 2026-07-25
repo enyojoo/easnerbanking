@@ -26,6 +26,10 @@ export function resolveTransactionRowType(row: TransactionListRow): string {
 /** Shared list-row title for Home recent activity and Transactions tab. */
 export function getTransactionListName(row: TransactionListRow): string {
   const transactionType = resolveTransactionRowType(row)
+  if (String(row.metadata?.product ?? "").toLowerCase() === 'payroll') {
+    const businessName = String(row.metadata?.payroll_business_name ?? '').trim()
+    return businessName ? `Payment from ${businessName}` : 'Payroll payment'
+  }
 
   if (transactionType === 'card_funding') {
     return 'Card Top-Up'

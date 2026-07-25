@@ -25,6 +25,11 @@ export type TransactionListLabelInput = {
 
 /** Inbound row title (dashboard, transactions list). */
 export function resolveInboundTransactionListLabel(input: TransactionListLabelInput): string {
+  if (String(input.metadata?.product ?? "").toLowerCase() === "payroll") {
+    const businessName = String(input.metadata?.payroll_business_name ?? "").trim()
+    return businessName ? `Payment from ${businessName}` : "Payroll payment"
+  }
+
   if (input.source_type === "liquidation_address" || input.source_liquidation_address_id) {
     return "Stablecoin Deposit"
   }

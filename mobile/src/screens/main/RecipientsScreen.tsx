@@ -120,6 +120,7 @@ import { YcRecipientExtraFields } from '../../components/recipients/YcRecipientE
 import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
 import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import { haptics } from '../../lib/haptics'
+import { apiFetch } from '../../query/api-client'
 
 function RecipientsContent({ navigation, route }: NavigationProps) {
   const { user, userProfile } = useAuth()
@@ -134,6 +135,14 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const listBottomPadding = useScrollPaddingAboveFooter()
   const footerPadding = useFixedFooterPadding(spacing[4])
+  const payrollInvitationId = typeof route.params?.payrollInvitationId === 'string'
+    ? route.params.payrollInvitationId
+    : null
+  const payrollConnectionId = typeof route.params?.payrollConnectionId === 'string'
+    ? route.params.payrollConnectionId
+    : null
+  const payrollMode = route.params?.payrollMode === true && Boolean(payrollInvitationId || payrollConnectionId)
+  const payrollSetupOpened = useRef(false)
   const [uiRecipients, setUiRecipients] = useState<Recipient[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -305,8 +314,14 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
 
   // Track screen view
   useEffect(() => {
-    analytics.trackScreenView('Recipients')
-  }, [])
+    analytics.trackScreenView(payrollMode ? 'PayrollReceivingMethod' : 'Recipients')
+  }, [payrollMode])
+
+  useEffect(() => {
+    if (!payrollMode || payrollSetupOpened.current) return
+    payrollSetupOpened.current = true
+    setShowRecipientTypeModal(true)
+  }, [payrollMode])
 
   // Refresh when screen comes into focus if data is stale
   useFocusRefresh(
@@ -505,6 +520,40 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     setShowBankDropdown(false)
     setBankSearchTerm('')
   }
+
+  const attachPayrollReceivingMethod = async (
+    createdRecipient: Recipient,
+    selectedType: 'wallet' | 'bank' | 'mobile' | 'easenet' | null,
+  ) => {
+    if (!payrollMode || selectedType === 'easenet') return false
+    const type = selectedType === 'wallet'
+      ? 'stablecoin'
+      : selectedType === 'mobile'
+        ? 'mobile_money'
+        : 'bank'
+    const path = payrollInvitationId
+      ? `/api/payroll/invitations/${payrollInvitationId}/methods`
+      : `/api/payroll/connections/${payrollConnectionId}/methods`
+    await apiFetch(path, {
+      method: 'POST',
+      body: {
+        type,
+        providerRecipientId: createdRecipient.id,
+        ...(payrollConnectionId ? { preferred: true } : {}),
+      },
+    })
+    resetForm()
+    setShowBankAccountForm(false)
+    setShowRecipientTypeModal(false)
+    showSuccess('Receiving method added')
+    navigation.navigate('PayrollApproval', {
+      ...(payrollInvitationId ? { invitationId: payrollInvitationId } : {}),
+      ...(payrollConnectionId ? { connectionId: payrollConnectionId } : {}),
+      methodUpdatedAt: Date.now(),
+    })
+    return true
+  }
+
   const handleAddRecipient = async () => {
     if (!userProfile?.id) {
       showError('User not authenticated')
@@ -610,6 +659,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
             : undefined,
         metadata: selectedRecipientType === 'bank' ? buildFormYcMetadata() : undefined,
       })
+      if (await attachPayrollReceivingMethod(createdRecipient, selectedRecipientType)) return
       setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
 
       // Refresh recipients data
@@ -1269,7 +1319,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
             <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
           </Pressable>
           <View style={styles.headerContent}>
-        <Text style={styles.title}>Recipients</Text>
+        <Text style={styles.title}>{payrollMode ? 'Receiving method' : 'Recipients'}</Text>
       </View>
         </Animated.View>
 
@@ -1293,7 +1343,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               style={styles.searchInput}
               value={searchTerm}
               onChangeText={setSearchTerm}
-              placeholder="Search recipients..."
+              placeholder={payrollMode ? 'Search receiving methods...' : 'Search recipients...'}
               placeholderTextColor={colors.text.secondary}
               returnKeyType="done"
               onSubmitEditing={() => Keyboard.dismiss()}
@@ -1345,14 +1395,14 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               ListEmptyComponent={
                 <EmptyState
                   icon={Users}
-                  title={searchTerm.trim() ? 'No matches' : 'No recipients found'}
+                  title={searchTerm.trim() ? 'No matches' : payrollMode ? 'No receiving methods found' : 'No recipients found'}
                   message={
-                    searchTerm.trim() ? 'Try another search' : 'Add a new recipient to get started'
+                    searchTerm.trim() ? 'Try another search' : payrollMode ? 'Add a method to receive payroll' : 'Add a new recipient to get started'
                   }
                   action={
                     !searchTerm.trim()
                       ? {
-                          label: 'Add recipient',
+                          label: payrollMode ? 'Add receiving method' : 'Add recipient',
                           onPress: () => {
                             resetForm()
                             setShowRecipientTypeModal(true)
@@ -1376,7 +1426,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               resetForm()
               setShowRecipientTypeModal(true)
             }} >
-            <Text style={styles.addRecipientButtonText}>Add new recipient</Text>
+            <Text style={styles.addRecipientButtonText}>{payrollMode ? 'Add receiving method' : 'Add new recipient'}</Text>
           </Pressable>
         </View>
       </View>
@@ -1389,6 +1439,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         onRequestClose={() => {
           setShowRecipientTypeModal(false)
           resetForm()
+          if (payrollMode) navigation.goBack()
         }}
         nativePanelStyle={[
           styles.recipientTypeModal,
@@ -1396,12 +1447,13 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         ]}
       >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add a new</Text>
+              <Text style={styles.modalTitle}>{payrollMode ? 'How do you want to receive payroll?' : 'Add a new'}</Text>
               <Pressable
                android_ripple={ripple.neutral}
                 onPress={() => {
                   setShowRecipientTypeModal(false)
                   resetForm()
+                  if (payrollMode) navigation.goBack()
                 }}
                 style={styles.closeButton}
               >
@@ -1428,7 +1480,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 </View>
                 <View style={styles.recipientTypeContent}>
                   <Text style={styles.recipientTypeTitle}>Wallet Address</Text>
-                  <Text style={styles.recipientTypeSubtitle}>Send stablecoins to an address</Text>
+                  <Text style={styles.recipientTypeSubtitle}>{payrollMode ? 'Receive stablecoins at a wallet address' : 'Send stablecoins to an address'}</Text>
                 </View>
               </Pressable>
 
@@ -1455,7 +1507,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 </View>
                 <View style={styles.recipientTypeContent}>
                   <Text style={styles.recipientTypeTitle}>Bank Account</Text>
-                  <Text style={styles.recipientTypeSubtitle}>Send cash to a bank account</Text>
+                  <Text style={styles.recipientTypeSubtitle}>{payrollMode ? 'Receive payroll in a bank account' : 'Send cash to a bank account'}</Text>
                 </View>
               </Pressable>
 
@@ -1485,11 +1537,12 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 </View>
                 <View style={styles.recipientTypeContent}>
                   <Text style={styles.recipientTypeTitle}>Mobile Money</Text>
-                  <Text style={styles.recipientTypeSubtitle}>Send cash via mobile money</Text>
+                  <Text style={styles.recipientTypeSubtitle}>{payrollMode ? 'Receive payroll via mobile money' : 'Send cash via mobile money'}</Text>
                 </View>
               </Pressable>
 
-              {/* Easetag (P2P wallet) */}
+              {/* Easetag is already the default Payroll method. */}
+              {!payrollMode ? (
               <Pressable
                android_ripple={ripple.neutral}
                 style={styles.recipientTypeOption}
@@ -1524,6 +1577,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                   <Text style={styles.recipientTypeSubtitle}>Send cash via Easner handle</Text>
                 </View>
               </Pressable>
+              ) : null}
             </View>
       </WebAwareModal>
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireBusinessRole } from "@/lib/b2b/require-role"
+import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { mapRowToPayrollPerson, payrollPersonToDbPayload } from "@/lib/payroll/map-payroll"
 import type { PayrollPersonRow } from "@/lib/payroll/map-payroll"
@@ -60,7 +60,7 @@ function parseCsv(text: string): CsvRow[] {
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireBusinessRole(request, ["Owner", "Admin", "Member"])
+  const ctx = await requirePayrollAccess(request, ["preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   const form = await request.formData().catch(() => null)

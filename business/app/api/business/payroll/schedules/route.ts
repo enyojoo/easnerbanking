@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireBusinessOrgWithRole, requireBusinessRole } from "@/lib/b2b/require-role"
+import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   mapRowToPayrollSchedule,
@@ -9,7 +9,7 @@ import {
 import type { PayrollScheduleFrequency } from "@/lib/payroll/types"
 
 export async function GET(request: Request) {
-  const ctx = await requireBusinessOrgWithRole(request)
+  const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireBusinessRole(request, ["Owner", "Admin"])
+  const ctx = await requirePayrollAccess(request, ["preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   const body = (await request.json().catch(() => ({}))) as {
@@ -34,6 +34,11 @@ export async function POST(request: Request) {
     frequency?: PayrollScheduleFrequency
     nextRunAt?: string
     active?: boolean
+    timezone?: string
+    draftLeadDays?: number
+    approvalLeadDays?: number
+    weekendPolicy?: "previous_business_day" | "next_business_day"
+    sourceCurrency?: string
   }
 
   const frequency = body.frequency ?? "monthly"
@@ -48,7 +53,13 @@ export async function POST(request: Request) {
       frequency,
       next_run_at: nextRunAt,
       active: body.active ?? true,
-      template: {},
+      template: {
+        timezone: body.timezone || "UTC",
+        draftLeadDays: Math.max(0, Number(body.draftLeadDays ?? 5)),
+        approvalLeadDays: Math.max(0, Number(body.approvalLeadDays ?? 2)),
+        weekendPolicy: body.weekendPolicy || "previous_business_day",
+        sourceCurrency: String(body.sourceCurrency || "USD").toUpperCase(),
+      },
       updated_at: new Date().toISOString(),
     })
     .select("*")

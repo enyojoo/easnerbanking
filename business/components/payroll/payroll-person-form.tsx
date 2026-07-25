@@ -12,8 +12,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { PayrollPerson, PayrollPersonInput, PayrollRail } from "@/lib/payroll/types"
+import { useRecipientsCached } from "@/hooks/use-recipients-cached"
+import { fetchEasenetProfileByTag, type EasenetPublicProfile } from "@/lib/easenet-profile"
 
-const rails: PayrollRail[] = ["easetag", "bank", "mobile", "intl_bank", "crypto"]
+function railForDestination(input: { mobileProvider?: string; walletNetwork?: string }): PayrollRail {
+  if (input.mobileProvider) return "mobile"
+  if (input.walletNetwork) return "crypto"
+  return "bank"
+}
 
 export function PayrollPersonForm({
   initial,
@@ -34,6 +40,14 @@ export function PayrollPersonForm({
   const [payCurrency, setPayCurrency] = useState(initial?.payCurrency ?? "USD")
   const [rail, setRail] = useState<PayrollRail>(initial?.rail ?? "bank")
   const [easetag, setEasetag] = useState(initial?.easetag ?? "")
+  const [creationMethod, setCreationMethod] = useState<"easetag" | "manual">(
+    initial?.rail === "easetag" ? "easetag" : "manual",
+  )
+  const [recipientId, setRecipientId] = useState(initial?.recipientId ?? "")
+  const destinationsQuery = useRecipientsCached(creationMethod === "manual")
+  const destinations = (destinationsQuery.data ?? []).filter((item) => !item.payeeEasetag)
+  const [easetagProfile, setEasetagProfile] = useState<EasenetPublicProfile | null>(null)
+  const [checkingEasetag, setCheckingEasetag] = useState(false)
 
   return (
     <form
@@ -49,6 +63,7 @@ export function PayrollPersonForm({
           payCurrency,
           rail,
           easetag: rail === "easetag" ? easetag.replace(/^@+/, "") : null,
+          recipientId: rail === "easetag" ? null : recipientId || null,
           payBasis: "fixed",
         })
       }}
@@ -67,17 +82,18 @@ export function PayrollPersonForm({
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>Rail</Label>
-          <Select value={rail} onValueChange={(v) => setRail(v as PayrollRail)}>
+          <Label>Add with</Label>
+          <Select value={creationMethod} onValueChange={(v) => {
+            const method = v as "easetag" | "manual"
+            setCreationMethod(method)
+            if (method === "easetag") setRail("easetag")
+          }}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {rails.map((r) => (
-                <SelectItem key={r} value={r}>
-                  {r}
-                </SelectItem>
-              ))}
+              <SelectItem value="easetag">EASETAG connection</SelectItem>
+              <SelectItem value="manual">Manual person</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -93,25 +109,81 @@ export function PayrollPersonForm({
         <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
       </div>
 
-      {rail === "easetag" ? (
+      {creationMethod === "easetag" ? (
         <div className="space-y-2">
           <Label>EASETAG</Label>
           <Input
             value={easetag}
-            onChange={(e) => setEasetag(e.target.value)}
+            onChange={(e) => { setEasetag(e.target.value); setEasetagProfile(null) }}
             placeholder="handle"
             required
           />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={checkingEasetag || easetag.trim().length < 4}
+            onClick={async () => {
+              setCheckingEasetag(true)
+              const profile = await fetchEasenetProfileByTag(easetag).catch(() => ({ found: false } as const))
+              setCheckingEasetag(false)
+              if (!profile.found) {
+                setEasetagProfile(null)
+                return
+              }
+              setEasetagProfile(profile)
+              setEasetag(profile.easetag)
+              if (!fullName.trim()) setFullName(profile.fullName)
+            }}
+          >
+            {checkingEasetag ? "Checking…" : "Verify EASETAG"}
+          </Button>
+          {easetagProfile ? (
+            <div className="rounded-xl border border-border/70 bg-muted/40 p-3 text-sm">
+              <p className="font-medium">{easetagProfile.fullName}</p>
+              <p className="text-muted-foreground">
+                @{easetagProfile.easetag} · {easetagProfile.accountKind} · {easetagProfile.verified ? "Verified" : "Unverified"}
+              </p>
+              {!easetagProfile.verified || easetagProfile.accountKind !== "personal" ? (
+                <p className="mt-2 text-amber-700">
+                  Payroll connections require a verified personal EASETAG.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : (
-        <div className="space-y-2">
-          <Label>Country</Label>
-          <Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="US" />
-          <p className="text-xs text-muted-foreground">
-            Link a saved recipient from Settings after creating this person, or add bank/MoMo details
-            there first.
-          </p>
-        </div>
+        <>
+          <div className="space-y-2">
+            <Label>Payment method</Label>
+            <Select value={recipientId} onValueChange={(id) => {
+              setRecipientId(id)
+              const destination = destinations.find((item) => item.id === id)
+              if (!destination) return
+              setRail(railForDestination(destination))
+              setPayCurrency(destination.currency || payCurrency)
+              setCountry(destination.countryCode || country)
+            }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose bank, mobile money, or stablecoin" />
+              </SelectTrigger>
+              <SelectContent>
+                {destinations.map((destination) => (
+                  <SelectItem key={destination.id} value={destination.id}>
+                    {destination.name} · {destination.mobileProvider || destination.walletNetwork || destination.bankName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Payroll keeps this method private and uses the existing verified payout details internally.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>Country</Label>
+            <Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="US" />
+          </div>
+        </>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -135,7 +207,14 @@ export function PayrollPersonForm({
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" variant="primary" disabled={submitting}>
+        <Button type="submit" variant="primary" disabled={
+          submitting ||
+          (creationMethod === "manual" && !recipientId) ||
+          (creationMethod === "easetag" && (
+            (!easetagProfile && !initial) ||
+            Boolean(easetagProfile && (!easetagProfile.verified || easetagProfile.accountKind !== "personal"))
+          ))
+        }>
           Save
         </Button>
       </div>

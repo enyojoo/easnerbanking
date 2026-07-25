@@ -21,6 +21,7 @@ import {
   CircleHelp,
   CircleX,
   Clock,
+  FileText,
   HelpCircle,
   Share2,
 } from 'lucide-react-native'
@@ -100,6 +101,7 @@ import {
 } from '../../navigation/transactionDetailNavigation'
 import { YcPayInPaymentDetailsSheet } from '../../components/yc/YcPayInPaymentDetailsSheet'
 import { buildDynamicAmountTextStyle } from '../../lib/dynamicAmountFontSize'
+import { PayStubSheet } from '../../components/payroll/PayStubSheet'
 
 interface LedgerTransaction {
   id: string
@@ -459,6 +461,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }, [heroAmountLabel, transaction?.transaction_type])
 
   const [receiptSheetOpen, setReceiptSheetOpen] = useState(false)
+  const [payStubSheetOpen, setPayStubSheetOpen] = useState(false)
   const [ycPayInSheetOpen, setYcPayInSheetOpen] = useState(false)
 
   const formatTimestamp = (dateString: string) => {
@@ -537,6 +540,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }
   
   const getTransactionTypeDisplay = (): string => {
+    if (String(transaction.metadata?.product ?? '').toLowerCase() === 'payroll') {
+      const businessName = String(transaction.metadata?.payroll_business_name ?? '').trim()
+      return businessName ? `Payment from ${businessName}` : 'Payroll payment'
+    }
     let heroTitle = String(transaction.display_hero_title || '').trim()
     if (heroTitle.startsWith('Deposit from ') && isEasetagReceiveTitle(heroTitle.replace(/^Deposit from /i, ''))) {
       heroTitle = heroTitle.replace(/^Deposit from /i, '')
@@ -592,6 +599,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const getTransactionName = (): string => {
     if (!transaction) return ''
+    if (String(transaction.metadata?.product ?? '').toLowerCase() === 'payroll') {
+      const businessName = String(transaction.metadata?.payroll_business_name ?? '').trim()
+      return businessName ? `Payment from ${businessName}` : 'Payroll payment'
+    }
 
     if (transaction.transaction_type === 'receive') {
       if (transaction.source_type === 'liquidation_address') {
@@ -989,6 +1000,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         )
       : []
   const receiptEligible = receiptRows.length > 0
+  const payrollDocumentId = String(transaction.metadata?.payroll_document_id ?? '').trim()
+  const isPayrollPayment = String(transaction.metadata?.product ?? '').toLowerCase() === 'payroll'
 
   return (
     <ScreenWrapper>
@@ -1096,7 +1109,36 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   />
                 </TransactionDetailSummaryRow>
 
-                {inboundReceive ? <InboundReceiveDetailRows snapshot={inboundReceive} /> : null}
+                {isPayrollPayment ? (
+                  <>
+                    <TransactionDetailSummaryRow label="Category" value="Payroll payment" />
+                    <TransactionDetailSummaryRow
+                      label="Employer"
+                      value={String(transaction.metadata?.payroll_business_name ?? 'Easner Business')}
+                    />
+                    {transaction.metadata?.payroll_period_start && transaction.metadata?.payroll_period_end ? (
+                      <TransactionDetailSummaryRow
+                        label="Pay period"
+                        value={`${transaction.metadata.payroll_period_start} – ${transaction.metadata.payroll_period_end}`}
+                      />
+                    ) : null}
+                    {transaction.metadata?.payroll_payday ? (
+                      <TransactionDetailSummaryRow
+                        label="Payday"
+                        value={String(transaction.metadata.payroll_payday)}
+                      />
+                    ) : null}
+                    <TransactionDetailSummaryRow label="Receiving method" value="EASETAG" />
+                    <TransactionDetailSummaryRow
+                      label="Payroll reference"
+                      value={String(transaction.metadata?.payroll_reference ?? '')}
+                    />
+                    <TransactionDetailSummaryRow
+                      label="Paid on"
+                      value={formatTimestamp(whenTs)}
+                    />
+                  </>
+                ) : inboundReceive ? <InboundReceiveDetailRows snapshot={inboundReceive} /> : null}
 
                 {/* Outbound Easetag — inbound uses InboundReceiveDetailRows; send was dropped in that unification. */}
                 {isEasetagP2p && !inboundReceive ? (
@@ -1319,6 +1361,23 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 </Pressable>
               </View>
             ) : null}
+            {isPayrollPayment && payrollDocumentId ? (
+              <View style={styles.receiptActions}>
+                <Pressable
+                  android_ripple={ripple.neutral}
+                  style={({ pressed }) => [styles.outlineButton, pressed && styles.outlineButtonPressed]}
+                  onPress={() => {
+                    haptics.tap()
+                    setPayStubSheetOpen(true)
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="View pay stub"
+                >
+                  <FileText size={18} color={colors.primary.main} strokeWidth={2.25} />
+                  <Text style={styles.outlineButtonText}>Pay stub</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </Animated.View>
         </ScrollView>
 
@@ -1336,6 +1395,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               rows: receiptRows,
               transactionId: transaction.transaction_id,
             }}
+          />
+        ) : null}
+        {isPayrollPayment && payrollDocumentId ? (
+          <PayStubSheet
+            visible={payStubSheetOpen}
+            documentId={payrollDocumentId}
+            onClose={() => setPayStubSheetOpen(false)}
           />
         ) : null}
 

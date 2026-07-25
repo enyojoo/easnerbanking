@@ -12,6 +12,7 @@ import { haptics } from '../../lib/haptics'
 import type { LucideIcon } from 'lucide-react-native'
 import {
   Bell,
+  Banknote,
   Check,
   ChevronRight,
   Copy,
@@ -68,6 +69,7 @@ import {
   TIER3_COMPLETE_PLACEHOLDER,
 } from '../../lib/compliance'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
+import { apiFetch } from '../../query/api-client'
 
 type TierBadge = { label: string; tone: 'green' | 'yellow' }
 
@@ -120,6 +122,7 @@ function MoreContent({ navigation }: NavigationProps) {
   const [mfaStatusLine, setMfaStatusLine] = useState('')
   /** False until MFA status is read from cache or `listFactors` — avoids showing the MFA banner while loading or on errors. */
   const [mfaStatusResolved, setMfaStatusResolved] = useState(false)
+  const [pendingPayrollCount, setPendingPayrollCount] = useState(0)
   const lastKycProfileRefreshRef = useRef(0)
   /** Latest profile for focus handler — avoids putting `noah_kyc_status` in `useFocusEffect` deps (would re-run MFA listFactors on every profile poll while More stays focused). */
   const userProfileRef = useRef(userProfile)
@@ -207,6 +210,9 @@ function MoreContent({ navigation }: NavigationProps) {
         }
       }
       void refreshMfaStatus()
+      void apiFetch<{ pendingCount?: number }>('/api/payroll/connections')
+        .then((result) => setPendingPayrollCount(Number(result.pendingCount ?? 0)))
+        .catch(() => undefined)
     }, [user?.id, refreshUserProfile, refreshMfaStatus]),
   )
 
@@ -541,6 +547,19 @@ function MoreContent({ navigation }: NavigationProps) {
                   () => navigateFromMoreTab('Notifications'),
                   Bell,
                   undefined,
+                  false,
+                  false,
+                )}
+                {renderMenuItem(
+                  'Payroll Approval',
+                  'Companies, receiving methods, and pay stubs',
+                  () => navigateFromMoreTab('PayrollApproval'),
+                  Banknote,
+                  pendingPayrollCount > 0 ? (
+                    <View style={styles.badgeYellow}>
+                      <Text style={styles.badgeTextYellow}>{pendingPayrollCount}</Text>
+                    </View>
+                  ) : undefined,
                   false,
                   false,
                 )}
@@ -953,4 +972,3 @@ const styles = StyleSheet.create({
 export default function MoreScreen(props: NavigationProps) {
   return <MoreContent {...props} />
 }
-

@@ -9,10 +9,12 @@ export type PayrollRunStatus =
   | "draft"
   | "pending_approval"
   | "approved"
+  | "scheduled"
   | "executing"
   | "completed"
   | "partial"
   | "failed"
+  | "needs_reapproval"
   | "cancelled"
 
 export type PayrollLineStatus = "pending" | "quoting" | "locked" | "paid" | "failed" | "skipped"
@@ -32,6 +34,10 @@ export interface PayrollPerson {
   easetag: string | null
   rail: PayrollRail
   status: PayrollPersonStatus
+  connectionId: string | null
+  connectionStatus: "manual" | PayrollConnectionStatus
+  readinessStatus: string
+  identitySnapshot: Record<string, unknown>
   metadata: Record<string, unknown>
   createdAt: string
   updatedAt: string
@@ -54,12 +60,21 @@ export interface PayrollRun {
   businessId: string
   status: PayrollRunStatus
   scheduledFor: string | null
+  scheduleId: string | null
+  payPeriodStart: string | null
+  payPeriodEnd: string | null
+  payday: string | null
+  revision: number
   sourceCurrency: string
   totalSource: number
   shortfall: number
   draftedBy: string | null
   approvedBy: string | null
   approvedAt: string | null
+  submittedAt: string | null
+  submittedBy?: string | null
+  scheduledAt: string | null
+  approvalSnapshot: PayrollApprovalSnapshot | null
   executedAt: string | null
   fxSnapshot: Record<string, unknown>
   metadata: Record<string, unknown>
@@ -83,6 +98,10 @@ export interface PayrollLine {
   errorCode: string | null
   errorMessage: string | null
   stubStoragePath: string | null
+  payrollDocumentId: string | null
+  payrollDocumentFilename?: string | null
+  documentDeliveryStatus?: "queued" | "sent" | "delivered" | "failed" | null
+  settledAt: string | null
   metadata: Record<string, unknown>
   createdAt: string
   updatedAt: string
@@ -99,6 +118,9 @@ export interface PayrollOverview {
   activeCount: number
   heldCount: number
   needsDestinationCount: number
+  connectedCount: number
+  pendingConnectionCount: number
+  attentionCount: number
   funded: boolean
   shortfall: number
   availableBalance: number
@@ -106,6 +128,172 @@ export interface PayrollOverview {
   draftRunId: string | null
   pendingApprovalRunId: string | null
   recentRuns: PayrollRun[]
+}
+
+export type PayrollConnectionStatus = "pending" | "approved" | "declined" | "expired" | "revoked"
+export type PayrollReceivingMethodType = "easetag" | "bank" | "mobile_money" | "stablecoin"
+export type PayrollAccessRole = "viewer" | "preparer" | "approver"
+export type PayrollDocumentDeliveryStatus = "queued" | "sent" | "delivered" | "failed"
+
+export interface PayrollCapabilities {
+  feature: "payroll_v2"
+  enabled: boolean
+  canView: boolean
+  canPrepare: boolean
+  canApprove: boolean
+  requireSeparateApprover: boolean
+}
+
+export interface PayrollReceivingMethodSummary {
+  id: string
+  type: PayrollReceivingMethodType
+  label: string
+  maskedDetails: Record<string, string>
+  preferred: boolean
+  ownerType: "employee" | "business"
+  status: "active" | "deleted"
+}
+
+export interface PayrollReceivingMethod extends PayrollReceivingMethodSummary {
+  details?: Record<string, string>
+}
+
+export interface PayrollConnectionSummary {
+  id: string
+  businessId: string
+  businessName: string
+  personId: string
+  status: PayrollConnectionStatus
+  preferredMethod: PayrollReceivingMethodSummary | null
+  approvedAt: string | null
+  revokedAt: string | null
+}
+
+export interface PayrollConnectionDetail extends PayrollConnectionSummary {
+  sharedIdentity: {
+    userId?: string
+    legalName?: string
+    residenceCountry?: string
+    profilePhoto?: string
+    easetag?: string
+    verificationState?: string
+    verifiedAt?: string
+  }
+  methods: PayrollReceivingMethodSummary[]
+  paymentHistory: PayrollPaymentHistoryItem[]
+}
+
+export interface PayrollInvitationSummary {
+  id: string
+  connectionId: string
+  businessId: string
+  businessName: string
+  businessEasetag: string | null
+  personName: string
+  status: PayrollConnectionStatus
+  expiresAt: string
+  sharedFields: string[]
+  methods: PayrollReceivingMethodSummary[]
+}
+
+export interface PayrollReadinessIssue {
+  code: string
+  severity: "blocking" | "warning"
+  personId?: string
+  message: string
+}
+
+export interface PayrollFundingSummary {
+  currency: string
+  total: number
+  available: number
+  shortfall: number
+  funded: boolean
+}
+
+export interface PayrollDeliveryEstimate {
+  rail: PayrollReceivingMethodType
+  label: string
+  estimatedArrival: string | null
+}
+
+export interface PayrollRunProgress {
+  total: number
+  paid: number
+  processing: number
+  failed: number
+  skipped: number
+}
+
+export interface PayrollApprovalSnapshot {
+  revision: number
+  totalSource: number
+  sourceCurrency: string
+  approvedDebit: number
+  approvedAt?: string
+  people: Array<{
+    lineId: string
+    personId: string | null
+    name: string
+    amount: number
+    currency: string
+    method: Record<string, unknown>
+  }>
+}
+
+export interface PayrollRunEvent {
+  id: string
+  runId: string | null
+  personId: string | null
+  eventType: string
+  data: Record<string, unknown>
+  actorUserId: string | null
+  createdAt: string
+}
+
+export interface PayrollDocument {
+  id: string
+  type: "pay_stub" | "payment_reversal"
+  filename: string
+  storagePath: string
+  status: "generating" | "ready" | "failed"
+  templateVersion: number
+  metadata: PayrollPayStubMeta
+  generatedAt: string
+}
+
+export interface PayrollDocumentDelivery {
+  id: string
+  documentId: string
+  channel: "email"
+  destinationMasked: string
+  status: PayrollDocumentDeliveryStatus
+  attempts: number
+  lastError: string | null
+}
+
+export interface PayrollPayStubMeta {
+  documentReference: string
+  businessName: string
+  payeeName: string
+  amount: number
+  currency: string
+  payPeriodStart: string | null
+  payPeriodEnd: string | null
+  payday: string | null
+  paidAt: string
+  rail: string
+  transferEtid: string | null
+}
+
+export interface PayrollPaymentHistoryItem {
+  lineId: string
+  businessName: string
+  amount: number
+  currency: string
+  status: PayrollLineStatus
+  paidAt: string | null
+  document: PayrollDocument | null
 }
 
 export interface PayrollPersonInput {

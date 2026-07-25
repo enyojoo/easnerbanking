@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select"
 import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
-import { usePayrollSchedules } from "@/hooks/queries/use-payroll"
+import { usePayrollCapabilities, usePayrollSchedules } from "@/hooks/queries/use-payroll"
 import { useUpsertPayrollSchedule } from "@/hooks/mutations/use-payroll"
 import { formatDate } from "@/lib/utils"
 import { toast } from "sonner"
@@ -22,11 +22,18 @@ import type { PayrollScheduleFrequency } from "@/lib/payroll/types"
 
 export default function PayrollSchedulesPage() {
   const schedulesQuery = usePayrollSchedules()
+  const capabilities = usePayrollCapabilities().data
+  const canPrepare = Boolean(capabilities?.enabled && capabilities.canPrepare)
   const upsertSchedule = useUpsertPayrollSchedule()
 
   const [name, setName] = useState("Monthly payroll")
   const [frequency, setFrequency] = useState<PayrollScheduleFrequency>("monthly")
   const [nextRunAt, setNextRunAt] = useState(new Date().toISOString().slice(0, 10))
+  const [timezone, setTimezone] = useState("UTC")
+  const [draftLeadDays, setDraftLeadDays] = useState("5")
+  const [approvalLeadDays, setApprovalLeadDays] = useState("2")
+  const [weekendPolicy, setWeekendPolicy] = useState<"previous_business_day" | "next_business_day">("previous_business_day")
+  const [sourceCurrency, setSourceCurrency] = useState("USD")
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -39,7 +46,7 @@ export default function PayrollSchedulesPage() {
 
       <PayrollNavTabs />
 
-      <Card className="shadow-card mb-6">
+      {canPrepare ? <Card className="shadow-card mb-6">
         <CardContent className="p-6 space-y-4">
           <h2 className="text-sm font-medium">Create schedule</h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -62,15 +69,45 @@ export default function PayrollSchedulesPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Next run</Label>
+              <Label>Next payday</Label>
               <Input type="date" value={nextRunAt} onChange={(e) => setNextRunAt(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Business timezone</Label>
+              <Input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Africa/Lagos" />
+            </div>
+            <div className="space-y-2">
+              <Label>Draft lead days</Label>
+              <Input inputMode="numeric" value={draftLeadDays} onChange={(e) => setDraftLeadDays(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Approval lead days</Label>
+              <Input inputMode="numeric" value={approvalLeadDays} onChange={(e) => setApprovalLeadDays(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Weekend handling</Label>
+              <Select value={weekendPolicy} onValueChange={(v) => setWeekendPolicy(v as typeof weekendPolicy)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="previous_business_day">Pay previous business day</SelectItem>
+                  <SelectItem value="next_business_day">Pay next business day</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Source currency</Label>
+              <Input value={sourceCurrency} onChange={(e) => setSourceCurrency(e.target.value.toUpperCase())} />
             </div>
           </div>
           <Button
             variant="primary"
             onClick={() =>
               upsertSchedule.mutate(
-                { name, frequency, nextRunAt, active: true },
+                {
+                  name, frequency, nextRunAt, active: true, timezone,
+                  draftLeadDays: Number(draftLeadDays), approvalLeadDays: Number(approvalLeadDays),
+                  weekendPolicy, sourceCurrency,
+                },
                 {
                   onSuccess: () => toast.success("Schedule saved"),
                   onError: (e) => toast.error(e.message),
@@ -82,7 +119,7 @@ export default function PayrollSchedulesPage() {
             Save schedule
           </Button>
         </CardContent>
-      </Card>
+      </Card> : null}
 
       <div className="space-y-3">
         {(schedulesQuery.data ?? []).map((schedule) => (
@@ -94,7 +131,7 @@ export default function PayrollSchedulesPage() {
                   {schedule.frequency} · Next {formatDate(schedule.nextRunAt)}
                 </p>
               </div>
-              <Button
+              {canPrepare ? <Button
                 variant="outline"
                 size="sm"
                 onClick={() =>
@@ -105,7 +142,7 @@ export default function PayrollSchedulesPage() {
                 }
               >
                 {schedule.active ? "Pause" : "Activate"}
-              </Button>
+              </Button> : null}
             </CardContent>
           </Card>
         ))}

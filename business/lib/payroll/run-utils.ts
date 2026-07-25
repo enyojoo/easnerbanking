@@ -60,10 +60,14 @@ export function buildLineFromPerson(
   }
 
   const sourceAmount = overrides?.sourceAmount ?? amount
+  const preferredMethod = (
+    person.metadata?.preferredPaymentMethod as Record<string, unknown> | undefined
+  ) ?? null
 
   return {
     run_id: runId,
     person_id: person.id,
+    recipient_id: person.recipientId,
     recipient_snapshot: {
       fullName: person.fullName,
       email: person.email,
@@ -76,8 +80,16 @@ export function buildLineFromPerson(
     pay_currency: person.payCurrency,
     source_amount_cents: amountToCents(sourceAmount),
     rail: person.rail,
+    payment_method_id: preferredMethod?.id ? String(preferredMethod.id) : null,
+    payment_method_snapshot: preferredMethod ?? {},
     status: "pending",
-    metadata: {},
+    metadata: {
+      ...(preferredMethod?.maskedDetails
+        ? { maskedDestination: Object.values(
+            preferredMethod.maskedDetails as Record<string, unknown>,
+          ).filter(Boolean).join(" · ") }
+        : {}),
+    },
     updated_at: new Date().toISOString(),
   }
 }
