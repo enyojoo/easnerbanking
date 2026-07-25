@@ -112,21 +112,31 @@ export async function createGridExternalAccount(input: {
   })
 }
 
-export function extractGridFundingSolanaAddress(
-  quote: { paymentInstructions?: { accountOrWalletInfo?: Record<string, unknown> } },
-): string | null {
-  const info = quote.paymentInstructions?.accountOrWalletInfo ?? {}
+function extractSolanaAddressFromWalletInfo(info: Record<string, unknown> | undefined): string | null {
+  if (!info) return null
   const candidates = [
     info.solanaAddress,
+    info.depositAddress,
     info.address,
     info.walletAddress,
+    info.publicKey,
     info.accountNumber,
   ]
   for (const c of candidates) {
     const v = String(c ?? "").trim()
-    if (v.length >= 32) return v
+    if (v.length >= 32 && v.length <= 64 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(v)) return v
   }
   return null
+}
+
+export function extractGridFundingSolanaAddress(quote: {
+  paymentInstructions?: { accountOrWalletInfo?: Record<string, unknown> }
+  fundingPaymentInstructions?: { accountOrWalletInfo?: Record<string, unknown> }
+}): string | null {
+  return (
+    extractSolanaAddressFromWalletInfo(quote.paymentInstructions?.accountOrWalletInfo) ??
+    extractSolanaAddressFromWalletInfo(quote.fundingPaymentInstructions?.accountOrWalletInfo)
+  )
 }
 
 export function gridMinorUnits(amount: number, decimals = 2): number {

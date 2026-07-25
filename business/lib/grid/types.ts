@@ -19,6 +19,12 @@ export type GridQuote = {
     instructionsNotes?: string
     isPlatformAccount?: boolean
   }
+  /** Present on some internal-account / platform responses. */
+  fundingPaymentInstructions?: {
+    accountOrWalletInfo?: Record<string, unknown>
+    instructionsNotes?: string
+    isPlatformAccount?: boolean
+  }
   rateDetails?: {
     gridApiFixedFee?: number
     gridApiVariableFeeAmount?: number

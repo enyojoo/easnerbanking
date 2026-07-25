@@ -106,6 +106,18 @@ export function isYellowcardPayoutQuote(quote: PayoutQuote | null | undefined): 
   return String(quote?.provider ?? '').toLowerCase() === 'yellowcard'
 }
 
+export function isGridPayoutQuote(quote: PayoutQuote | null | undefined): boolean {
+  return String(quote?.provider ?? '').toLowerCase() === 'grid'
+}
+
+/** True when `/confirm` must run (Noah + YC + Grid preview). False when quote response is already locked. */
+export function payoutQuoteNeedsConfirmLock(quote: PayoutQuote | null | undefined): boolean {
+  if (!quote) return true
+  if (quote.quotePhase === 'locked' && quote.requiresConfirm === false) return false
+  if (quote.requiresConfirm === false && (quote.lockId || quote.grid?.quoteId)) return false
+  return quote.requiresConfirm !== false
+}
+
 /** Review / PIN CTA — YC preview is valid before POST /send lock; Noah needs confirm lock. */
 export function isPayoutSessionReadyForExecute(
   session: PayoutPrepareSession | undefined,
@@ -223,7 +235,11 @@ export async function ensureSendPayoutQuoteStashed(
         lastPayoutQuoteError = 'Incomplete payout quote response.'
         return null
       }
-      stashSendPayoutQuotePreview(quote, meta)
+      if (isCompletePayoutQuote(quote)) {
+        stashSendPayoutQuote(quote, meta)
+      } else {
+        stashSendPayoutQuotePreview(quote, meta)
+      }
       return quote
     })
     .catch((err) => {
@@ -236,6 +252,26 @@ export async function ensureSendPayoutQuoteStashed(
     })
 
   return inflightQuote
+}
+
+/** Preview (if needed) + optional confirm — one provider lock call when confirm is required. */
+export async function ensureSendPayoutQuoteLocked(
+  fetchQuote: () => Promise<PayoutQuote>,
+  fetchConfirm: () => Promise<PayoutQuote>,
+  meta: SendPayoutQuoteStashMeta,
+): Promise<PayoutQuote | null> {
+  if (isStashedPayoutQuoteFresh(meta)) return peekSendPayoutQuote()
+
+  const preview =
+    (isStashedPayoutQuotePreviewFresh(meta) ? peekSendPayoutQuotePreview() : null) ??
+    (await ensureSendPayoutQuoteStashed(fetchQuote, meta))
+
+  if (preview && !payoutQuoteNeedsConfirmLock(preview) && isCompletePayoutQuote(preview)) {
+    stashSendPayoutQuote(preview, meta)
+    return preview
+  }
+
+  return ensureSendPayoutOrderConfirmed(fetchConfirm, meta)
 }
 
 /** Lock payout order at review — idempotent by quote key on server. */

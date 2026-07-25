@@ -101,14 +101,12 @@ import { resolveRecipientBalancePayoutProvider } from '../../lib/resolveRecipien
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
   ensureSendPayoutQuoteStashed,
-  ensureSendPayoutOrderConfirmed,
+  ensureSendPayoutQuoteLocked,
   isCompletePayoutQuote,
-  isYellowcardPayoutQuote,
   isStashedPayoutQuoteFresh,
   peekLastPayoutQuoteError,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
-  stashSendPayoutQuote,
 } from '../../lib/sendFlowPayoutQuote'
 import {
   ensureSendWalletQuoteStashed,
@@ -1491,7 +1489,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             ? peekSendWalletQuote()
             : null
 
-      let stashedQuote: Awaited<ReturnType<typeof ensureSendPayoutOrderConfirmed>> = null
+      let stashedQuote: Awaited<ReturnType<typeof ensureSendPayoutQuoteLocked>> = null
       if (
         selectedPaymentMethod === 'balance' &&
         !isEasetagRecipient &&
@@ -1501,7 +1499,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
           stashedQuote = peekSendPayoutQuote()
         } else {
-          const previewQuote = await ensureSendPayoutQuoteStashed(
+          stashedQuote = await ensureSendPayoutQuoteLocked(
             () =>
               noahService.createPayoutQuote({
                 recipientId: recipient.id,
@@ -1514,10 +1512,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 ...(note.trim() ? { note: note.trim() } : {}),
                 ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
               }),
-            quoteStashMeta,
-          )
-          // Lock on review Continue for all providers (YC POST /send + Noah confirm).
-          stashedQuote = await ensureSendPayoutOrderConfirmed(
             () =>
               noahService.confirmPayoutOrder({
                 recipientId: recipient.id,
@@ -1532,11 +1526,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               }),
             quoteStashMeta,
           )
-          if (!stashedQuote && isYellowcardPayoutQuote(previewQuote) && isCompletePayoutQuote(previewQuote)) {
-            // Fallback: allow preview navigate if confirm briefly fails; PIN path can re-lock.
-            stashSendPayoutQuote(previewQuote, quoteStashMeta)
-            stashedQuote = previewQuote
-          }
         }
       }
 

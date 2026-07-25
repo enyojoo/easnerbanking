@@ -131,11 +131,28 @@ export async function markPayoutLockSessionExecuted(
 }
 
 export function lockedQuoteFromSession(row: PayoutLockSessionRow): PayoutQuoteResult {
-  return {
+  const payload = row.provider_payload_json ?? {}
+  const quote: PayoutQuoteResult = {
     ...row.pricing_json,
     lockId: row.id,
     quoteKey: row.quote_key,
     quotePhase: "locked",
     requiresConfirm: false,
   }
+  if (row.provider === "grid") {
+    const fundingAddress = String(payload.fundingAddress ?? "").trim()
+    if (fundingAddress) {
+      quote.grid = {
+        ...(quote.grid ?? {
+          quoteId: String(payload.quoteId ?? ""),
+          sequenceId: String(payload.sequenceId ?? ""),
+          customerId: String(payload.customerId ?? ""),
+          externalAccountId: String(payload.externalAccountId ?? ""),
+          cryptoAmount: Number(payload.cryptoAmount ?? 0),
+        }),
+        fundingAddress,
+      }
+    }
+  }
+  return quote
 }

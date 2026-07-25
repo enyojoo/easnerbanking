@@ -2,7 +2,7 @@ import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { pickNoahWorkflowIdFromResponse } from "@/lib/noah/bank-onramp-workflow"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { buildPayoutQuote, type PayoutQuoteResult } from "@/lib/noah/payout-quote"
+import { lockNoahBalancePayoutQuote, type PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import {
   cryptoCurrencyForBalanceCurrency,
   type QuotedPayoutSession,
@@ -80,7 +80,7 @@ export async function confirmNoahPayoutOrder(
     throw new Error("Grid corridor must use Grid confirm path.")
   }
 
-  const preview = await buildPayoutQuote({
+  const preview = await lockNoahBalancePayoutQuote({
     userId: input.userId,
     noahCustomerId: input.noahCustomerId,
     recipientId: input.recipientId,

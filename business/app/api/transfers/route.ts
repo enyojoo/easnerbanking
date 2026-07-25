@@ -19,6 +19,7 @@ import {
   executeGridBalancePayout,
   isGridBalancePayoutQuote,
 } from "@/lib/grid/balance-payout-execute"
+import { getPayoutLockSession } from "@/lib/payout/payout-lock-session"
 import {
   executeYcBalancePayout,
   isYcBalancePayoutQuote,
@@ -227,13 +228,20 @@ export async function POST(request: Request) {
   try {
     if (payoutProvider === "grid") {
       const quoteId = String(body?.gridQuoteId || formSessionId || "").trim()
-      const fundingAddress = String(body?.gridFundingAddress || "").trim()
+      let fundingAddress = String(body?.gridFundingAddress || "").trim()
+      const lockId = String(body?.lockId || "").trim()
       const cryptoAmount = Number(body?.gridCryptoAmount ?? cryptoAuthorizedAmount)
       const totalDebited = Number(body?.totalDebited ?? 0)
       const marginAmount = Number(body?.marginAmount ?? 0)
       const processingFee = Number(body?.processingFee ?? 0)
       const channelCost = Number(body?.channelCost ?? 0)
       const customerPrincipal = Number(body?.customerPrincipal ?? totalDebited)
+
+      if (!fundingAddress && lockId) {
+        const lockRow = await getPayoutLockSession(admin, { lockId, userId: txUserId })
+        const fromPayload = lockRow?.provider_payload_json?.fundingAddress
+        if (fromPayload) fundingAddress = String(fromPayload).trim()
+      }
 
       if (!quoteId || !(cryptoAmount > 0) || !(totalDebited > 0) || !fundingAddress) {
         return NextResponse.json(

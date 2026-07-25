@@ -1,4 +1,5 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { randomUUID } from "crypto"
 import { getNoahEurCryptoTicker, getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
 import { findNoahRate, listNoahRates } from "@/lib/fx/noah-rates"
 import {
@@ -31,7 +32,7 @@ import {
   resolveNoahOfframpPaymentMethodKey,
 } from "@/lib/noah/noah-offramp-fee-schedule"
 
-/** Easner fee slice on payout quotes (Noah prepare is authoritative; no DB pricing engine). */
+/** Easner fee slice on payout quotes (Noah prepare is authoritative at lock; preview uses noah_rates). */
 export type EasnerPayoutQuoteSlice = {
   quoteId: string
   expiresAt: string
@@ -200,44 +201,21 @@ async function buildGridBalancePayoutQuoteFromRow(input: {
   sendBudget?: number
   paymentPurpose?: string
 }) {
-  const { confirmGridBalancePayoutOrder } = await import("@/lib/payout/confirm-grid-balance-payout")
-  const { data: userRow } = await input.admin
-    .from("users")
-    .select(
-      "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
-    )
-    .eq("id", input.userId)
-    .maybeSingle()
+  const { buildGridBalancePayoutPreview } = await import("@/lib/grid/payout-quote")
 
   if (!input.recipientId) {
     throw new Error("recipientId is required for Grid payout quote.")
   }
 
-  return confirmGridBalancePayoutOrder({
+  return buildGridBalancePayoutPreview({
     admin: input.admin,
-    userId: input.userId,
-    businessId: null,
-    recipientId: input.recipientId,
     recipient: input.row,
+    recipientId: input.recipientId,
     receiveFiatAmount: input.receiveFiatAmount,
     sourceBalanceCurrency: input.sourceBalanceCurrency,
     amountEntryMode: input.amountEntryMode,
     sendBudget: input.sendBudget,
     paymentPurpose: input.paymentPurpose,
-    senderProfile: {
-      residenceCountry: userRow?.residence_country,
-      kycIdType: userRow?.kyc_id_type,
-      kycIdNumber: userRow?.kyc_id_number,
-      ngLocalIdType: userRow?.ng_local_id_type,
-      ngLocalIdNumber: userRow?.ng_local_id_number,
-      fullName: userRow?.full_name,
-      phone: userRow?.phone,
-      email: userRow?.email,
-      dateOfBirth: userRow?.date_of_birth,
-      addressStreet: userRow?.kyc_address_street,
-      addressCity: userRow?.kyc_address_city,
-      addressCountry: userRow?.kyc_address_country,
-    },
   })
 }
 
@@ -295,7 +273,13 @@ function settlementCryptoForBalance(balanceCurrency: string): string {
     : getNoahSettlementCryptoCurrency()
 }
 
-export async function buildPayoutQuote(input: {
+function roundUsdc(n: number): number {
+  if (!Number.isFinite(n)) return 0
+  return Math.round(n * 1_000_000) / 1_000_000
+}
+
+/** DB-only Noah balance payout preview — no prepare (lock on `/confirm`). */
+export async function buildNoahBalancePayoutPreview(input: {
   userId: string
   noahCustomerId: string
   recipientId?: string
@@ -303,7 +287,211 @@ export async function buildPayoutQuote(input: {
   receiveFiatAmount: number
   sourceBalanceCurrency: string
   amountEntryMode?: "send" | "receive"
-  /** When user entered send-side principal (USD/EUR). */
+  sendBudget?: number
+  prepareOverrides?: SellPrepareOverrides
+}): Promise<PayoutQuoteResult> {
+  const receiveAmountRaw = normalizePayoutReceiveAmount(Number(input.receiveFiatAmount))
+  if (!Number.isFinite(receiveAmountRaw) || receiveAmountRaw <= 0) {
+    throw new Error("receiveFiatAmount must be positive.")
+  }
+
+  const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
+  const sendBudget =
+    input.sendBudget != null && Number.isFinite(input.sendBudget) && input.sendBudget > 0
+      ? input.sendBudget
+      : undefined
+
+  const sourceBalanceCurrency = input.sourceBalanceCurrency.trim().toUpperCase()
+  if (sourceBalanceCurrency !== "USD" && sourceBalanceCurrency !== "EUR") {
+    throw new Error("sourceBalanceCurrency must be USD or EUR.")
+  }
+
+  const admin = createSupabaseAdmin()
+  let row = input.recipient
+  if (input.recipientId) {
+    const { data, error } = await admin
+      .from("recipients")
+      .select("*")
+      .eq("id", input.recipientId)
+      .eq("user_id", input.userId)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    if (!data) throw new Error("Recipient not found.")
+    row = data as RecipientSellPrepareRow
+  }
+  if (!row) throw new Error("recipientId or recipient row is required.")
+
+  const receiveCurrency = String(row.currency || "").trim().toUpperCase()
+  const cryptoCurrency = settlementCryptoForBalance(sourceBalanceCurrency)
+  const countryCode = resolveRecipientPayoutCountry(row)
+
+  let dbRow: ReturnType<typeof findNoahRate> = null
+  if (sourceBalanceCurrency !== receiveCurrency) {
+    const dbRates = await listNoahRates(admin, {
+      destinations: [receiveCurrency],
+      status: "active",
+    })
+    dbRow = findNoahRate(dbRates, sourceBalanceCurrency, receiveCurrency)
+  }
+
+  let providerRate = 1
+  let noahMid: number | undefined
+  if (sourceBalanceCurrency !== receiveCurrency) {
+    if (dbRow) {
+      providerRate = dbRow.rate
+      noahMid = dbRow.noah_mid
+    } else {
+      throw new Error(
+        `Exchange rate for ${sourceBalanceCurrency} → ${receiveCurrency} is unavailable. Try again shortly.`,
+      )
+    }
+  }
+
+  const quoteReceiveAmount = normalizeGlobalPayoutQuoteReceiveAmount({
+    amountEntryMode,
+    receiveFiatAmount: receiveAmountRaw,
+    sendBudget,
+    customerRate: providerRate,
+    receiveCurrency,
+    normalizeReceive: normalizePayoutReceiveAmountForCurrency,
+  })
+
+  const marginCaptureMode = getGlobalPayoutMarginCaptureMode()
+  const paymentMethodKey = resolveNoahOfframpPaymentMethodKey({
+    bankName: row.bank_name,
+    mobileProvider: row.mobile_provider,
+  })
+
+  const provisionalCrypto = roundUsdc(quoteReceiveAmount / providerRate)
+  const scheduleFee =
+    sourceBalanceCurrency !== receiveCurrency
+      ? computeNoahOfframpScheduleFee({
+          currency: receiveCurrency,
+          countryCode: countryCode ?? undefined,
+          paymentMethodKey,
+          basisAmount: provisionalCrypto,
+        })
+      : null
+
+  const paddedFloor =
+    scheduleFee != null
+      ? roundUsdc(provisionalCrypto + scheduleFee)
+      : roundUsdc(provisionalCrypto * 1.01)
+
+  const sameCurrencyProcessingFee = computePayoutProcessingFeeBps(quoteReceiveAmount)
+  const pricing =
+    sourceBalanceCurrency === receiveCurrency
+      ? {
+          customerPrincipal: quoteReceiveAmount,
+          midNotional: quoteReceiveAmount,
+          marginAmount: 0,
+          channelCost: 0,
+          processingFee: sameCurrencyProcessingFee,
+          displayChannelCost: 0,
+          totalDebited: roundUsdc(quoteReceiveAmount + sameCurrencyProcessingFee),
+          noahSendAmount: quoteReceiveAmount,
+          triggerAmount: quoteReceiveAmount,
+          marginCaptureMode,
+          receiveAmount: quoteReceiveAmount,
+          customerRate: 1,
+          noahMid: 1,
+          noahFloor: quoteReceiveAmount,
+        }
+      : computeGlobalPayoutPricing({
+          receiveAmount: quoteReceiveAmount,
+          customerRate: providerRate,
+          noahMid: noahMid!,
+          noahFloor: paddedFloor,
+          marginCaptureMode,
+          ...(scheduleFee != null ? { prepareChannelFee: scheduleFee } : {}),
+        })
+
+  const quoteKey = buildPayoutQuoteKey({
+    recipientId: String(input.recipientId || ""),
+    sourceBalanceCurrency: input.sourceBalanceCurrency,
+    amountEntryMode,
+    receiveAmount: quoteReceiveAmount,
+    sendBudget,
+    note: input.prepareOverrides?.note,
+    paymentPurpose: input.prepareOverrides?.paymentPurpose,
+  })
+  const sequenceId = `noah_preview_${randomUUID()}`
+  const expiresAt = new Date(Date.now() + QUOTE_TTL_MS).toISOString()
+
+  const easner = buildEasnerSlice({
+    sourceAmount: pricing.customerPrincipal,
+    sourceCurrency: sourceBalanceCurrency,
+    destinationCurrency: receiveCurrency,
+    receiveAmount: quoteReceiveAmount,
+    providerRate,
+    marginAmount: pricing.marginAmount,
+    channelCost: pricing.channelCost,
+  })
+
+  const effectiveRate =
+    pricing.totalDebited > 0 ? quoteReceiveAmount / pricing.totalDebited : providerRate
+
+  const settlement: PayoutSettlementLeg = {
+    totalFee: scheduleFee ?? pricing.channelCost,
+    feeCurrency: sourceBalanceCurrency,
+    cryptoAuthorizedAmount: String(pricing.noahFloor),
+    cryptoFloor: String(pricing.noahFloor),
+    cryptoSendAmount: String(pricing.noahSendAmount),
+    cryptoCurrency,
+    sessionId: sequenceId,
+    customerRate: providerRate,
+    ...(noahMid != null && noahMid > 0 ? { providerMid: noahMid } : {}),
+    effectiveRate,
+    marginCaptureMode,
+    channelCost: pricing.channelCost,
+    marginAmount: pricing.marginAmount,
+    customerPrincipal: pricing.customerPrincipal,
+  }
+
+  return {
+    receiveAmount: quoteReceiveAmount,
+    receiveCurrency,
+    customerPrincipal: pricing.customerPrincipal,
+    sendAmount: pricing.noahSendAmount,
+    sendCurrency: sourceBalanceCurrency,
+    totalDebited: pricing.totalDebited,
+    channelCost: pricing.channelCost,
+    marginAmount: pricing.marginAmount,
+    processingFee: pricing.processingFee,
+    displayChannelCost: pricing.displayChannelCost,
+    settlement,
+    noah: buildLegacyNoahSettlementFromLeg(settlement, {
+      ...(scheduleFee != null ? { scheduleFee } : {}),
+      ...(noahMid != null && noahMid > 0 ? { quoteNoahMid: noahMid } : {}),
+    }),
+    displayProcessingFee: computePayoutQuoteDisplayProcessingFee({
+      processingFee: pricing.processingFee,
+      displayChannelCost: pricing.displayChannelCost,
+      channelCost: pricing.channelCost,
+    }),
+    easner: { ...easner, quoteId: sequenceId, expiresAt },
+    pricingQuoteId: sequenceId,
+    expiresAt,
+    executionModel: "turnkey_workflow",
+    provider: "noah",
+    quotePhase: "preview",
+    requiresConfirm: true,
+    quoteKey,
+  }
+}
+
+/**
+ * Lock Noah balance payout: one prepare call (used from `/confirm` only).
+ * May fall back to Yellowcard preview when Noah prepare fails on a dual-rail corridor.
+ */
+export async function lockNoahBalancePayoutQuote(input: {
+  userId: string
+  noahCustomerId: string
+  recipientId?: string
+  recipient?: RecipientSellPrepareRow
+  receiveFiatAmount: number
+  sourceBalanceCurrency: string
+  amountEntryMode?: "send" | "receive"
   sendBudget?: number
   prepareOverrides?: SellPrepareOverrides
 }): Promise<PayoutQuoteResult> {
@@ -345,7 +533,6 @@ export async function buildPayoutQuote(input: {
   const cryptoCurrency = settlementCryptoForBalance(sourceBalanceCurrency)
 
   const countryCode = resolveRecipientPayoutCountry(row)
-  let selectedProviderId = "noah"
   if (countryCode) {
     try {
       const provider = await selectProviderForCorridor(admin, {
@@ -354,35 +541,8 @@ export async function buildPayoutQuote(input: {
         mobileProvider: row.mobile_provider,
         bankName: row.bank_name,
       })
-      selectedProviderId = provider.id
-      if (provider.id === "yellowcard") {
-        return buildYellowcardBalancePayoutQuoteFromRow({
-          admin,
-          userId: input.userId,
-          noahCustomerId: input.noahCustomerId,
-          recipientId: input.recipientId,
-          row,
-          receiveFiatAmount: input.receiveFiatAmount,
-          sourceBalanceCurrency: input.sourceBalanceCurrency,
-          amountEntryMode: input.amountEntryMode,
-          sendBudget: input.sendBudget,
-          paymentPurpose: input.prepareOverrides?.paymentPurpose,
-        })
-      }
-      if (provider.id === "grid") {
-        return buildGridBalancePayoutQuoteFromRow({
-          admin,
-          userId: input.userId,
-          recipientId: input.recipientId,
-          row,
-          receiveFiatAmount: input.receiveFiatAmount,
-          sourceBalanceCurrency: input.sourceBalanceCurrency,
-          amountEntryMode: input.amountEntryMode,
-          sendBudget: input.sendBudget,
-        })
-      }
       if (provider.id !== "noah") {
-        throw new Error(`Payout provider "${provider.id}" is not wired for quotes yet.`)
+        throw new Error(`Payout provider "${provider.id}" must use its own confirm path.`)
       }
     } catch (e) {
       if (e instanceof NoProviderForCorridorError) {
@@ -393,7 +553,6 @@ export async function buildPayoutQuote(input: {
       throw e
     }
   }
-  void selectedProviderId
 
   const runPrepare = (fiatAmount: number) =>
     prepareSellFromRecipientRow({
@@ -684,7 +843,7 @@ export async function buildPayoutQuote(input: {
       channelCost: pricing.channelCost,
     }),
     easner,
-    pricingQuoteId: "",
+    pricingQuoteId: formSessionId,
     expiresAt: easner.expiresAt,
     executionModel: "turnkey_workflow",
     provider: "noah",
@@ -693,11 +852,101 @@ export async function buildPayoutQuote(input: {
     quoteKey: buildPayoutQuoteKey({
       recipientId: String(input.recipientId || ""),
       sourceBalanceCurrency: input.sourceBalanceCurrency,
-      amountEntryMode: input.amountEntryMode === "send" ? "send" : "receive",
+      amountEntryMode,
       receiveAmount: quoteReceiveAmount,
       sendBudget,
       note: input.prepareOverrides?.note,
       paymentPurpose: input.prepareOverrides?.paymentPurpose,
     }),
   }
+}
+
+/** Route by corridor provider; Noah/YC/Grid previews are DB-only (lock on `/confirm`). */
+export async function buildPayoutQuote(input: {
+  userId: string
+  noahCustomerId: string
+  recipientId?: string
+  recipient?: RecipientSellPrepareRow
+  receiveFiatAmount: number
+  sourceBalanceCurrency: string
+  amountEntryMode?: "send" | "receive"
+  /** When user entered send-side principal (USD/EUR). */
+  sendBudget?: number
+  prepareOverrides?: SellPrepareOverrides
+}): Promise<PayoutQuoteResult> {
+  const receiveAmountRaw = normalizePayoutReceiveAmount(Number(input.receiveFiatAmount))
+  if (!Number.isFinite(receiveAmountRaw) || receiveAmountRaw <= 0) {
+    throw new Error("receiveFiatAmount must be positive.")
+  }
+
+  const sourceBalanceCurrency = input.sourceBalanceCurrency.trim().toUpperCase()
+  if (sourceBalanceCurrency !== "USD" && sourceBalanceCurrency !== "EUR") {
+    throw new Error("sourceBalanceCurrency must be USD or EUR.")
+  }
+
+  const admin = createSupabaseAdmin()
+  let row = input.recipient
+  if (input.recipientId) {
+    const { data, error } = await admin
+      .from("recipients")
+      .select("*")
+      .eq("id", input.recipientId)
+      .eq("user_id", input.userId)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    if (!data) throw new Error("Recipient not found.")
+    row = data as RecipientSellPrepareRow
+  }
+  if (!row) throw new Error("recipientId or recipient row is required.")
+
+  const receiveCurrency = String(row.currency || "").trim().toUpperCase()
+  const countryCode = resolveRecipientPayoutCountry(row)
+  if (countryCode) {
+    try {
+      const provider = await selectProviderForCorridor(admin, {
+        countryCode,
+        currencyCode: receiveCurrency,
+        mobileProvider: row.mobile_provider,
+        bankName: row.bank_name,
+      })
+      if (provider.id === "yellowcard") {
+        return buildYellowcardBalancePayoutQuoteFromRow({
+          admin,
+          userId: input.userId,
+          noahCustomerId: input.noahCustomerId,
+          recipientId: input.recipientId,
+          row,
+          receiveFiatAmount: input.receiveFiatAmount,
+          sourceBalanceCurrency: input.sourceBalanceCurrency,
+          amountEntryMode: input.amountEntryMode,
+          sendBudget: input.sendBudget,
+          paymentPurpose: input.prepareOverrides?.paymentPurpose,
+        })
+      }
+      if (provider.id === "grid") {
+        return buildGridBalancePayoutQuoteFromRow({
+          admin,
+          userId: input.userId,
+          recipientId: input.recipientId,
+          row,
+          receiveFiatAmount: input.receiveFiatAmount,
+          sourceBalanceCurrency: input.sourceBalanceCurrency,
+          amountEntryMode: input.amountEntryMode,
+          sendBudget: input.sendBudget,
+        })
+      }
+      if (provider.id !== "noah") {
+        throw new Error(`Payout provider "${provider.id}" is not wired for quotes yet.`)
+      }
+    } catch (e) {
+      if (e instanceof NoProviderForCorridorError) {
+        throw new Error(
+          "Payouts to this country and currency are not available on configured providers yet.",
+        )
+      }
+      throw e
+    }
+  }
+
+  return buildNoahBalancePayoutPreview(input)
 }

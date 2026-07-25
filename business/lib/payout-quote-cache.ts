@@ -54,6 +54,13 @@ export function isCompletePayoutQuoteLocked(
   return isCompleteLockedPayoutQuote(quote)
 }
 
+export function payoutQuoteNeedsConfirmLock(quote: PayoutQuoteResult | null | undefined): boolean {
+  if (!quote) return true
+  if (quote.quotePhase === "locked" && quote.requiresConfirm === false) return false
+  if (quote.requiresConfirm === false && (quote.lockId || quote.grid?.quoteId)) return false
+  return quote.requiresConfirm !== false
+}
+
 export function stashPayoutQuote(quote: PayoutQuoteResult, meta: PayoutQuoteStashMeta): void {
   if (!isCompletePayoutQuoteLocked(quote)) return
   stashed = quote
@@ -144,7 +151,11 @@ export async function ensurePayoutQuoteStashed(
         return null
       }
       if (isUsablePayoutQuotePreview(data.quote)) {
-        stashPayoutQuotePreview(data.quote, meta)
+        if (isCompletePayoutQuoteLocked(data.quote)) {
+          stashPayoutQuote(data.quote, meta)
+        } else {
+          stashPayoutQuotePreview(data.quote, meta)
+        }
       }
       return data.quote
     } catch (e) {
@@ -204,6 +215,25 @@ export async function ensurePayoutOrderConfirmed(
   })
 
   return inflightConfirm
+}
+
+/** Preview when needed, then confirm only if the provider requires a lock step. */
+export async function ensurePayoutQuoteLocked(
+  meta: PayoutQuoteStashMeta,
+  businessId?: string | null,
+): Promise<PayoutQuoteResult | null> {
+  if (isStashedPayoutQuoteFresh(meta)) return peekPayoutQuote()
+
+  const preview =
+    (isStashedPayoutQuotePreviewFresh(meta) ? peekPayoutQuotePreview() : null) ??
+    (await ensurePayoutQuoteStashed(meta, businessId))
+
+  if (preview && !payoutQuoteNeedsConfirmLock(preview) && isCompletePayoutQuoteLocked(preview)) {
+    stashPayoutQuote(preview, meta)
+    return preview
+  }
+
+  return ensurePayoutOrderConfirmed(meta, businessId)
 }
 
 export function payoutQuoteToFlowState(
