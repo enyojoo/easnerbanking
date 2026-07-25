@@ -1,19 +1,16 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
 import { PayrollLineStatusBadge, PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
 import { PayrollRailBadge } from "@/components/payroll/payroll-rail-badge"
 import { PayrollDeleteAction } from "@/components/payroll/payroll-delete-action"
 import { usePayrollCapabilities, usePayrollRunDetail } from "@/hooks/queries/use-payroll"
 import {
-  useUpdatePayrollRun,
   useSubmitPayrollRun,
   useApprovePayrollRun,
   useExecutePayrollRun,
@@ -39,7 +36,6 @@ export default function PayrollRunDetailPage() {
   const capabilities = usePayrollCapabilities().data
   const canPrepare = Boolean(capabilities?.canPrepare)
   const canApprove = Boolean(capabilities?.canApprove)
-  const updateRun = useUpdatePayrollRun(runId)
   const submitRun = useSubmitPayrollRun(runId)
   const approveRun = useApprovePayrollRun(runId)
   const executeRun = useExecutePayrollRun(runId)
@@ -51,14 +47,6 @@ export default function PayrollRunDetailPage() {
   const autoActionStarted = useRef(false)
 
   const run = runQuery.data
-  const [amountEdits, setAmountEdits] = useState<Record<string, string>>({})
-  const [runName, setRunName] = useState("")
-  const [payPeriodStart, setPayPeriodStart] = useState("")
-  const [payPeriodEnd, setPayPeriodEnd] = useState("")
-  const [payday, setPayday] = useState("")
-  const [detailsDirty, setDetailsDirty] = useState(false)
-  const hasUnsavedChanges = Object.keys(amountEdits).length > 0 || detailsDirty
-
   const lines = useMemo(() => run?.lines ?? [], [run?.lines])
   const failedLines = lines.filter((l) => l.status === "failed")
   const hasPayStubs = lines.some((line) => Boolean(line.payrollDocumentId))
@@ -73,28 +61,6 @@ export default function PayrollRunDetailPage() {
       .map(([rail, n]) => `${n} ${railLabel(rail as PayrollLine["rail"])}`)
       .join(" · ")
   }, [lines])
-
-  async function saveAmounts() {
-    const patchLines = Object.entries(amountEdits)
-      .map(([id, amount]) => ({ id, amount: Number(amount) }))
-      .filter((l) => Number.isFinite(l.amount) && l.amount > 0)
-    if (patchLines.length === 0 && !detailsDirty) return
-    try {
-      await updateRun.mutateAsync({
-        lines: patchLines,
-        revision: run?.revision,
-        name: runName || undefined,
-        payPeriodStart: payPeriodStart || undefined,
-        payPeriodEnd: payPeriodEnd || undefined,
-        payday: payday || undefined,
-      })
-      toast.success("Amounts updated")
-      setAmountEdits({})
-      setDetailsDirty(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Update failed")
-    }
-  }
 
   async function handleExecute() {
     if (!(await confirmWithPin.requestConfirm())) return
@@ -197,8 +163,6 @@ export default function PayrollRunDetailPage() {
     return <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-muted-foreground">Run not found.</div>
   }
 
-  const editable = run.status === "draft"
-
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -224,9 +188,17 @@ export default function PayrollRunDetailPage() {
           ) : null}
           {run.status === "draft" && canPrepare ? (
             <>
-              <PayrollDeleteAction label="Delete draft" title="Delete this payroll draft?" description="This permanently removes the draft and its unsent payment lines. Submitted or completed payroll history cannot be deleted." pending={deleteRun.isPending} onDelete={() => deleteRun.mutateAsync(runId).then(() => { toast.success("Payroll draft deleted"); router.push("/payroll/runs") }).catch((error) => toast.error(error.message))} />
-              <Button variant="outline" onClick={() => void saveAmounts()} disabled={updateRun.isPending}>
-                Save amounts
+              <PayrollDeleteAction label="Delete draft" title="Delete this payroll draft?" description="This permanently removes the draft and its unsent payment lines. Submitted or completed payroll history cannot be deleted." pending={deleteRun.isPending} onDelete={async () => {
+                try {
+                  await deleteRun.mutateAsync(runId)
+                  toast.success("Payroll draft deleted")
+                  router.push("/payroll/runs")
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Payroll draft could not be deleted")
+                }
+              }} />
+              <Button variant="outline" asChild>
+                <Link href={`/payroll/runs/${runId}/edit`}>Continue editing</Link>
               </Button>
               <Button
                 variant="primary"
@@ -236,7 +208,7 @@ export default function PayrollRunDetailPage() {
                     onError: (e) => toast.error(e.message),
                   })
                 }
-                disabled={submitRun.isPending || hasUnsavedChanges}
+                disabled={submitRun.isPending}
               >
                 Submit for approval
               </Button>
@@ -300,8 +272,6 @@ export default function PayrollRunDetailPage() {
         </div>
       </div>
 
-      <PayrollNavTabs />
-
       {run.shortfall > 0 ? (
         <Card className="shadow-soft border-amber-200/60 mb-4">
           <CardContent className="p-4 text-sm text-amber-800 dark:text-amber-300">
@@ -311,26 +281,23 @@ export default function PayrollRunDetailPage() {
         </Card>
       ) : null}
 
-      {run.status === "draft" && canPrepare ? (
+      {run.status === "draft" ? (
         <Card className="shadow-soft mb-4">
           <CardContent className="p-4">
-            <p className="text-sm font-medium mb-3">1. Payroll details</p>
-            <div className="grid gap-3 sm:grid-cols-4">
-              <Input placeholder="Run name" value={runName} onChange={(e) => { setRunName(e.target.value); setDetailsDirty(true) }} />
-              <Input aria-label="Pay period start" type="date" value={payPeriodStart} onChange={(e) => { setPayPeriodStart(e.target.value); setDetailsDirty(true) }} />
-              <Input aria-label="Pay period end" type="date" value={payPeriodEnd} onChange={(e) => { setPayPeriodEnd(e.target.value); setDetailsDirty(true) }} />
-              <Input aria-label="Payday" type="date" value={payday} onChange={(e) => { setPayday(e.target.value); setDetailsDirty(true) }} />
+            <p className="mb-3 text-sm font-medium">Payroll details</p>
+            <div className="grid gap-4 text-sm sm:grid-cols-4">
+              <Detail label="Name" value={String(run.metadata?.name || "Payroll run")} />
+              <Detail label="Pay period start" value={run.payPeriodStart ? formatDate(run.payPeriodStart) : "—"} />
+              <Detail label="Pay period end" value={run.payPeriodEnd ? formatDate(run.payPeriodEnd) : "—"} />
+              <Detail label="Payday" value={run.payday ? formatDate(run.payday) : "—"} />
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Save payroll details and amount changes before submitting for approval.
-            </p>
           </CardContent>
         </Card>
       ) : null}
 
       <Card className="shadow-card mb-6">
         <div className="px-4 pt-4 text-sm font-medium">
-          {run.status === "draft" ? "2. People and amounts" : "People and payment results"}
+          {run.status === "draft" ? "People and amounts" : "People and payment results"}
         </div>
         <CardContent className="p-0 divide-y divide-border/60">
           {lines.map((line: PayrollLine) => (
@@ -346,19 +313,9 @@ export default function PayrollRunDetailPage() {
                 ) : null}
               </div>
               <div className="flex items-center gap-3">
-                {editable && canPrepare ? (
-                  <Input
-                    className="w-32 tabular-nums"
-                    defaultValue={String(line.amount)}
-                    onChange={(e) =>
-                      setAmountEdits((prev) => ({ ...prev, [line.id]: e.target.value }))
-                    }
-                  />
-                ) : (
-                  <span className="text-sm font-medium tabular-nums">
-                    {formatCurrency(line.amount, line.payCurrency)}
-                  </span>
-                )}
+                <span className="text-sm font-medium tabular-nums">
+                  {formatCurrency(line.amount, line.payCurrency)}
+                </span>
                 {line.payrollDocumentId ? (
                   <>
                     <Button variant="outline" size="sm" onClick={() => void downloadPayStub(line.payrollDocumentId!)}>
@@ -438,5 +395,14 @@ export default function PayrollRunDetailPage() {
         />
       ) : null}
     </div>
+  )
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <p>
+      <span className="block text-xs text-muted-foreground">{label}</span>
+      <span className="mt-1 block">{value}</span>
+    </p>
   )
 }

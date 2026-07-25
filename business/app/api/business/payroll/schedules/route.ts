@@ -14,15 +14,6 @@ export async function GET(request: Request) {
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
-  let payrollDefaults
-  try {
-    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
-  } catch (cause) {
-    return NextResponse.json(
-      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
-      { status: 500 },
-    )
-  }
   const { data, error } = await admin
     .from("payroll_schedules")
     .select("*")
@@ -70,6 +61,15 @@ export async function POST(request: Request) {
   const nextRunAt = body.nextRunAt ?? new Date().toISOString().slice(0, 10)
 
   const admin = createSupabaseAdmin()
+  let payrollDefaults
+  try {
+    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
+  } catch (cause) {
+    return NextResponse.json(
+      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
+      { status: 500 },
+    )
+  }
   const { data, error } = await admin
     .from("payroll_schedules")
     .insert({

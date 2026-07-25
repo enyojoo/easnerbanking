@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
-import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { usePayrollCapabilities, usePayrollPeople, usePayrollSchedules, usePayrollSettings } from "@/hooks/queries/use-payroll"
@@ -170,7 +169,6 @@ export default function NewPayrollRunPage() {
   return <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
     <Button variant="ghost" size="sm" className="mb-4" asChild><Link href="/payroll/runs"><ArrowLeft className="mr-2 h-4 w-4" />Back to Runs</Link></Button>
     <PayrollPageHeader title="Run payroll" description="Build, check, and approve a payroll run before any money moves." />
-    <PayrollNavTabs />
     <div className="mb-8 flex items-center gap-2 overflow-x-auto" aria-label="Payroll run steps">
       {stepLabels.map((label, index) => <button type="button" key={label} onClick={() => index < step && setStep(index)} className="flex shrink-0 items-center gap-2">
         <span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold", index <= step ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>{index < step ? <Check className="h-4 w-4" /> : index + 1}</span>
@@ -217,14 +215,18 @@ function DetailsStep({ draft, setDraft, accounts, schedules }: { draft: Draft; s
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }))
   const sourceAccount = accounts.find((account) => account.id === draft.sourceAccountId)
   return <div><h2 className="text-lg font-semibold">Payroll details</h2><p className="mt-1 text-sm text-muted-foreground">Set the period, payday, and account this payroll uses.</p>
-    <div className="mt-6 grid gap-5 sm:grid-cols-2">
-      <Field label="Run name"><Input value={draft.name} onChange={(e) => update("name", e.target.value)} /></Field>
-      <Field label="Run type"><Select value={draft.offCycle ? "off-cycle" : "regular"} onValueChange={(v) => update("offCycle", v === "off-cycle")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">Regular payroll</SelectItem><SelectItem value="off-cycle">Off-cycle payroll</SelectItem></SelectContent></Select></Field>
-      <Field label="Schedule (optional)"><Select value={draft.scheduleId || "none"} onValueChange={(v) => update("scheduleId", v === "none" ? undefined : v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No schedule</SelectItem>{(schedules ?? []).map((schedule) => <SelectItem key={schedule.id} value={schedule.id}>{schedule.name}</SelectItem>)}</SelectContent></Select></Field>
-      <Field label="Payroll source account"><div className="flex h-10 items-center justify-between rounded-md border bg-muted/40 px-3 text-sm"><span>{draft.sourceCurrency} account</span><span className="text-muted-foreground">{sourceAccount ? `${formatCurrency(sourceAccount.availableBalance ?? sourceAccount.balance, sourceAccount.currency)} available` : "Set in Payroll Settings"}</span></div><Link className="text-xs text-primary hover:underline" href="/payroll/settings">Change in Payroll Settings</Link></Field>
+    <div className="mt-6 space-y-5">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Run name"><Input value={draft.name} onChange={(e) => update("name", e.target.value)} /></Field>
+        <Field label="Run type"><Select value={draft.offCycle ? "off-cycle" : "regular"} onValueChange={(v) => update("offCycle", v === "off-cycle")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">Regular payroll</SelectItem><SelectItem value="off-cycle">Off-cycle payroll</SelectItem></SelectContent></Select></Field>
+        <Field label="Schedule (optional)"><Select value={draft.scheduleId || "none"} onValueChange={(v) => update("scheduleId", v === "none" ? undefined : v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No schedule</SelectItem>{(schedules ?? []).map((schedule) => <SelectItem key={schedule.id} value={schedule.id}>{schedule.name}</SelectItem>)}</SelectContent></Select></Field>
+        <Field label="Payroll source account"><div className="flex h-10 items-center justify-between rounded-md border bg-muted/40 px-3 text-sm"><span>{draft.sourceCurrency} account</span><span className="text-muted-foreground">{sourceAccount ? `${formatCurrency(sourceAccount.availableBalance ?? sourceAccount.balance, sourceAccount.currency)} available` : "Set in Payroll Settings"}</span></div><Link className="text-xs text-primary hover:underline" href="/payroll/settings">Change in Payroll Settings</Link></Field>
+      </div>
+      <div className="grid gap-5 md:grid-cols-3">
       <Field label="Pay period start"><Input type="date" value={draft.payPeriodStart} onChange={(e) => update("payPeriodStart", e.target.value)} /></Field>
       <Field label="Pay period end"><Input type="date" value={draft.payPeriodEnd} onChange={(e) => update("payPeriodEnd", e.target.value)} /></Field>
       <Field label="Payday"><Input type="date" value={draft.payday} onChange={(e) => update("payday", e.target.value)} /></Field>
+      </div>
     </div>
   </div>
 }
@@ -245,7 +247,7 @@ function PeopleStep({ people, selected, search, setSearch, onToggle, onSelectAll
 }
 
 function AmountsStep({ people, draft, setDraft }: { people: NonNullable<ReturnType<typeof usePayrollPeople>["data"]>; draft: Draft; setDraft: React.Dispatch<React.SetStateAction<Draft>> }) {
-  return <div><div className="flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Amounts</h2><p className="mt-1 text-sm text-muted-foreground">Confirm what each person receives.</p></div><Button variant="outline" size="sm" onClick={() => setDraft((current) => ({ ...current, amounts: Object.fromEntries(people.map((person) => [person.id, person.defaultAmount])) }))}>Use payroll amounts</Button></div>
+  return <div><div className="flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Amounts</h2><p className="mt-1 text-sm text-muted-foreground">Confirm what each person receives.</p></div><Button variant="outline" size="sm" onClick={() => setDraft((current) => ({ ...current, amounts: Object.fromEntries(people.map((person) => [person.id, person.defaultAmount])) }))}>Use saved amounts</Button></div>
     <div className="mt-5 divide-y rounded-xl border">{people.map((person) => <div key={person.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center"><div><p className="font-medium">{person.fullName}</p><div className="mt-1 text-xs text-muted-foreground"><PayrollReceivingMethod person={person} /> · {draft.sourceCurrency}</div></div><Input inputMode="decimal" className="tabular-nums" value={String(draft.amounts[person.id] || "")} onChange={(e) => setDraft((current) => ({ ...current, amounts: { ...current.amounts, [person.id]: Number(e.target.value.replace(/[^\d.]/g, "")) } }))} /></div>)}</div>
   </div>
 }
@@ -260,14 +262,14 @@ function ReadinessStep({ preview, onRefresh }: { preview: PayrollRunPreview | nu
 
 function ReviewStep({ draft, people, preview }: { draft: Draft; people: NonNullable<ReturnType<typeof usePayrollPeople>["data"]>; preview: PayrollRunPreview | null }) {
   return <div><h2 className="text-lg font-semibold">Review payroll</h2><p className="mt-1 text-sm text-muted-foreground">Confirm the approved payroll details before saving or sending for approval.</p>
-    <dl className="mt-6 grid gap-5 rounded-xl border p-5 sm:grid-cols-3"><ReviewItem label="Pay period" value={`${formatDate(draft.payPeriodStart)} – ${formatDate(draft.payPeriodEnd)}`} /><ReviewItem label="Payday" value={formatDate(draft.payday)} /><ReviewItem label="People" value={String(people.length)} /><ReviewItem label="Payroll amount" value={formatCurrency(preview?.payrollTotal ?? 0, draft.sourceCurrency)} /><ReviewItem label="Fees" value={formatCurrency(preview?.fees ?? 0, draft.sourceCurrency)} /><ReviewItem label="Total debit" value={formatCurrency(preview?.sourceDebit ?? 0, draft.sourceCurrency)} /></dl>
+    <dl className="mt-6 grid gap-5 rounded-xl border p-5 sm:grid-cols-3"><ReviewItem label="Pay period" value={`${formatDate(draft.payPeriodStart)} – ${formatDate(draft.payPeriodEnd)}`} /><ReviewItem label="Payday" value={formatDate(draft.payday)} /><ReviewItem label="People" value={String(people.length)} /><ReviewItem label="Amount" value={formatCurrency(preview?.payrollTotal ?? 0, draft.sourceCurrency)} /><ReviewItem label="Fees" value={formatCurrency(preview?.fees ?? 0, draft.sourceCurrency)} /><ReviewItem label="Total debit" value={formatCurrency(preview?.sourceDebit ?? 0, draft.sourceCurrency)} /></dl>
     <div className="mt-5 divide-y rounded-xl border">{people.map((person) => <div key={person.id} className="flex items-center justify-between gap-4 p-4"><div><p className="font-medium">{person.fullName}</p><PayrollReceivingMethod person={person} /></div><p className="font-medium tabular-nums">{formatCurrency(draft.amounts[person.id] || 0, draft.sourceCurrency)}</p></div>)}</div>
   </div>
 }
 
 function RunSummary({ draft, people, preview }: { draft: Draft; people: NonNullable<ReturnType<typeof usePayrollPeople>["data"]>; preview: PayrollRunPreview | null }) {
   const total = people.reduce((sum, person) => sum + Number(draft.amounts[person.id] || 0), 0)
-  return <Card className="h-fit shadow-soft xl:sticky xl:top-6"><CardContent className="p-5"><p className="font-medium">Payroll summary</p><dl className="mt-5 space-y-4 text-sm"><ReviewItem label="People" value={String(people.length)} row /><ReviewItem label="Payroll amount" value={formatCurrency(total, draft.sourceCurrency)} row /><ReviewItem label="Fees" value={formatCurrency(preview?.fees ?? 0, draft.sourceCurrency)} row /><div className="border-t pt-4"><ReviewItem label="Total debit" value={formatCurrency(preview?.sourceDebit ?? total, draft.sourceCurrency)} row strong /></div><ReviewItem label="Available balance" value={preview ? formatCurrency(preview.availableBalance, draft.sourceCurrency) : "Checked at readiness"} row /><ReviewItem label="Payday" value={draft.payday ? formatDate(draft.payday) : "—"} row /></dl></CardContent></Card>
+  return <Card className="h-fit shadow-soft xl:sticky xl:top-6"><CardContent className="p-5"><p className="font-medium">Payroll summary</p><dl className="mt-5 space-y-4 text-sm"><ReviewItem label="People" value={String(people.length)} row /><ReviewItem label="Amount" value={formatCurrency(total, draft.sourceCurrency)} row /><ReviewItem label="Fees" value={formatCurrency(preview?.fees ?? 0, draft.sourceCurrency)} row /><div className="border-t pt-4"><ReviewItem label="Total debit" value={formatCurrency(preview?.sourceDebit ?? total, draft.sourceCurrency)} row strong /></div><ReviewItem label="Available balance" value={preview ? formatCurrency(preview.availableBalance, draft.sourceCurrency) : "Checked at readiness"} row /><ReviewItem label="Payday" value={draft.payday ? formatDate(draft.payday) : "—"} row /></dl></CardContent></Card>
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="space-y-2"><Label>{label}</Label>{children}</div> }

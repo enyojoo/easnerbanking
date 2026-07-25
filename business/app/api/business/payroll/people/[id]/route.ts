@@ -130,6 +130,10 @@ export async function PATCH(
       easetag: body.easetag !== undefined ? body.easetag : current.easetag,
       rail: body.rail ?? current.rail,
       status: (body as { status?: typeof current.status }).status ?? current.status,
+      internalReference: body.internalReference !== undefined
+        ? body.internalReference
+        : current.internalReference,
+      metadata: current.metadata,
     },
   })
 
@@ -159,6 +163,22 @@ export async function PATCH(
       metadata: draftLine.metadata,
       updated_at: new Date().toISOString(),
     }).eq("person_id", id).in("run_id", draftIds)
+  }
+  if (body.scheduleIds !== undefined) {
+    const unique = [...new Set(body.scheduleIds)]
+    const { data: validSchedules } = unique.length
+      ? await admin.from("payroll_schedules").select("id")
+          .eq("business_id", ctx.businessId).in("id", unique)
+      : { data: [] }
+    await admin.from("payroll_schedule_people").delete()
+      .eq("person_id", id).eq("business_id", ctx.businessId)
+    if (validSchedules?.length) {
+      await admin.from("payroll_schedule_people").insert(validSchedules.map((schedule) => ({
+        schedule_id: schedule.id,
+        person_id: id,
+        business_id: ctx.businessId,
+      })))
+    }
   }
   await admin.from("payroll_run_events").insert({
     business_id: ctx.businessId,

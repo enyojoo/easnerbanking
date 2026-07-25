@@ -99,7 +99,7 @@ export default function PayrollPeoplePage() {
         <Card className="overflow-hidden shadow-soft">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Person</TableHead><TableHead>Classification</TableHead><TableHead>Connection</TableHead><TableHead>Receiving method</TableHead><TableHead>Payroll amount</TableHead><TableHead>Readiness</TableHead><TableHead>Last paid</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
+              <TableHead>Person</TableHead><TableHead>Classification</TableHead><TableHead>Connection</TableHead><TableHead>Receiving method</TableHead><TableHead>Amount</TableHead><TableHead>Readiness</TableHead><TableHead>Last paid</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {people.map((person) => (

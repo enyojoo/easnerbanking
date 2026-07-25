@@ -2,20 +2,14 @@
 
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
 import { ArrowLeft, Download, Mail, Pause, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { PayrollDeleteAction } from "@/components/payroll/payroll-delete-action"
-import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { usePayrollCapabilities, usePayrollPerson, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -41,20 +35,8 @@ export default function PayrollPersonDetailPage() {
   const update = useUpdatePayrollPerson()
   const invite = useInvitePayrollPerson()
   const deletePerson = useDeletePayrollPerson()
-  const [editOpen, setEditOpen] = useState(false)
-  const [editName, setEditName] = useState("")
-  const [editEmail, setEditEmail] = useState("")
-  const [editType, setEditType] = useState<"employee" | "contractor">("employee")
-  const [editAmount, setEditAmount] = useState("")
   const detail = query.data as ({ person: NonNullable<typeof query.data>["person"]; paymentHistory?: Payment[]; events?: Event[]; connection?: { status: string; approvedAt?: string | null; preferredMethod?: { label: string } | null } | null }) | undefined
   const person = detail?.person
-  useEffect(() => {
-    if (!person) return
-    setEditName(person.fullName)
-    setEditEmail(person.email || "")
-    setEditType(person.type)
-    setEditAmount(String(person.defaultAmount))
-  }, [person])
   if (query.isPending) return <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-muted-foreground">Loading person…</div>
   if (!person) return <div className="mx-auto max-w-6xl px-4 py-12"><p className="font-medium">This payroll person could not be found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/people">Back to People</Link></Button></div>
   const canPrepare = Boolean(capabilities?.canPrepare)
@@ -68,25 +50,26 @@ export default function PayrollPersonDetailPage() {
         <div><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold">{person.fullName}</h1><PayrollStatusBadge status={person.status !== "active" ? person.status : person.readinessStatus} /></div><p className="mt-1 text-sm text-muted-foreground">{person.easetag ? `@${person.easetag.replace(/^@/, "")}` : person.email || "Manual payroll person"}</p></div>
       </div>
       {canPrepare ? <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={() => setEditOpen(true)}><Pencil className="mr-2 h-4 w-4" />Edit details</Button>
+        <Button variant="outline" asChild><Link href={`/payroll/people/${person.id}/edit`}><Pencil className="mr-2 h-4 w-4" />Edit details</Link></Button>
         {requestAction ? <Button variant="primary" onClick={() => invite.mutate(person.id, { onSuccess: () => toast.success("Payroll request sent"), onError: (e) => toast.error(e.message) })}><Mail className="mr-2 h-4 w-4" />{person.connectionStatus === "pending" ? "Resend request" : "Send payroll request"}</Button> : null}
         <Button variant="outline" onClick={() => update.mutate({ id: person.id, patch: { status: person.status === "active" ? "held" : "active" } }, { onSuccess: () => toast.success(person.status === "active" ? "Person put on hold" : "Person reactivated") })}><Pause className="mr-2 h-4 w-4" />{person.status === "active" ? "Put on hold" : "Reactivate"}</Button>
-        <PayrollDeleteAction label="Delete person" title={`Delete ${person.fullName}?`} description="This permanently removes the person if they have never been included in a payroll run. People with payroll history must be put on hold instead." pending={deletePerson.isPending} onDelete={() => deletePerson.mutateAsync(person.id).then(() => { toast.success("Person deleted"); router.push("/payroll/people") }).catch((error) => toast.error(error.message))} />
+        <PayrollDeleteAction label="Delete person" title={`Delete ${person.fullName}?`} description="This permanently removes the person if they have never been included in a payroll run. People with payroll history must be put on hold instead." pending={deletePerson.isPending} onDelete={async () => {
+          try {
+            await deletePerson.mutateAsync(person.id)
+            toast.success("Person deleted")
+            router.push("/payroll/people")
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Person could not be deleted")
+          }
+        }} />
       </div> : null}
     </div>
-    <PayrollNavTabs />
-    <Dialog open={editOpen} onOpenChange={setEditOpen}><DialogContent><DialogHeader><DialogTitle>Edit payroll details</DialogTitle></DialogHeader><div className="grid gap-4 sm:grid-cols-2">
-      {person.rail !== "easetag" ? <Field label="Full name"><Input value={editName} onChange={(e) => setEditName(e.target.value)} /></Field> : null}
-      {person.rail !== "easetag" ? <Field label="Email"><Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} /></Field> : null}
-      <Field label="Classification"><Select value={editType} onValueChange={(value) => setEditType(value as typeof editType)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="employee">Employee</SelectItem><SelectItem value="contractor">Contractor</SelectItem></SelectContent></Select></Field>
-      <Field label="Payroll amount"><div className="relative"><span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground">{businessCurrency}</span><Input className="pl-14" inputMode="decimal" value={editAmount} onChange={(e) => setEditAmount(e.target.value.replace(/[^\d.]/g, ""))} /></div></Field>
-    </div><div className="mt-3 flex justify-end gap-2"><Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button><Button variant="primary" disabled={update.isPending || !editName.trim() || !Number(editAmount)} onClick={() => update.mutate({ id: person.id, patch: { fullName: editName, email: editEmail || null, type: editType, defaultAmount: Number(editAmount), payCurrency: businessCurrency } }, { onSuccess: () => { toast.success("Payroll details updated"); setEditOpen(false); void query.refetch() }, onError: (error) => toast.error(error.message) })}>Save changes</Button></div></DialogContent></Dialog>
 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-6">
         <Card className="shadow-soft"><CardContent className="p-6"><h2 className="font-semibold">Payroll details</h2><dl className="mt-5 grid gap-5 sm:grid-cols-2">
           <Detail label="Classification" value={person.type} capitalize />
-          <Detail label="Payroll amount" value={formatCurrency(person.defaultAmount, businessCurrency)} />
+          <Detail label="Amount" value={formatCurrency(person.defaultAmount, businessCurrency)} />
           <Detail label="Residence country" value={person.country || "Not shared"} />
           <Detail label="Internal reference" value={person.internalReference || "—"} />
           <Detail label="Email" value={person.rail === "easetag" ? "Managed through EASETAG" : person.email || "—"} />
@@ -115,8 +98,4 @@ export default function PayrollPersonDetailPage() {
 
 function Detail({ label, value, capitalize }: { label: string; value: string; capitalize?: boolean }) {
   return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className={`mt-1 text-sm ${capitalize ? "capitalize" : ""}`}>{value}</dd></div>
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-2"><Label>{label}</Label>{children}</div>
 }

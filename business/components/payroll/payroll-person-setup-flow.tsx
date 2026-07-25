@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { RecipientForm } from "@/components/recipient-form"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
-import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { useCreatePayrollPerson, useInvitePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { usePayrollCapabilities, usePayrollSchedules, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { fetchEasenetProfileByTag, type EasenetPublicProfile } from "@/lib/easenet-profile"
@@ -136,7 +135,6 @@ export function PayrollPersonSetupFlow() {
         <Link href={returnTo}><ArrowLeft className="mr-2 h-4 w-4" />{returnTo === "/payroll" ? "Back to Payroll" : returnTo.includes("/runs/new") ? "Back to payroll run" : "Back to People"}</Link>
       </Button>
       <PayrollPageHeader title="Add person" description="Set up an employee or contractor and how they receive payroll." />
-      <PayrollNavTabs />
       <div className="mb-8 flex items-center gap-2 overflow-x-auto" aria-label="Setup progress">
         {steps.map((label, index) => (
           <div key={label} className="flex shrink-0 items-center gap-2">
@@ -207,7 +205,7 @@ export function PayrollPersonSetupFlow() {
                 <Field label="Schedule (optional)"><Select value={scheduleId || "none"} onValueChange={(v) => setScheduleId(v === "none" ? "" : v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No schedule</SelectItem>{schedules.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></Field>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Payroll amount">
+                <Field label="Amount">
                   <div className="relative">
                     <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground">{businessCurrency}</span>
                     <Input className="pl-14" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="0.00" />
@@ -305,7 +303,7 @@ function SetupSummary({ method, profile, type, amount, currency }: { method: Met
       <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Method</dt><dd>{method === "easetag" ? "EASETAG" : "Manual"}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Person</dt><dd className="truncate">{profile?.fullName || "Payment details"}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Classification</dt><dd className="capitalize">{type}</dd></div>
-      <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Payroll amount</dt><dd className="tabular-nums">{amount ? `${currency} ${Number(amount).toLocaleString()}` : "—"}</dd></div>
+      <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Amount</dt><dd className="tabular-nums">{amount ? `${currency} ${Number(amount).toLocaleString()}` : "—"}</dd></div>
     </dl>
   </CardContent></Card>
 }

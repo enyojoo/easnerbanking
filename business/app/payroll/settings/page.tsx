@@ -89,13 +89,13 @@ export default function PayrollSettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-7">
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-3">
             <Field label="Payroll source account">
               <Select value={accountId} onValueChange={setAccountId} disabled={!editing || accountQuery.loading}>
                 <SelectTrigger><SelectValue placeholder={accountQuery.loading ? "Loading accounts…" : "Choose account"} /></SelectTrigger>
                 <SelectContent>{accounts.map((account) => <SelectItem key={account.id} value={account.id}>{account.currency} · {formatCurrency(account.availableBalance ?? account.balance, account.currency)} available</SelectItem>)}</SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">All Payroll amounts use this account’s {payrollCurrency} currency.</p>
+              <p className="text-xs text-muted-foreground">All amounts use this account’s {payrollCurrency} currency.</p>
             </Field>
             <Field label="Business timezone">
               <Select value={timezone} onValueChange={setTimezone} disabled={!editing}>
