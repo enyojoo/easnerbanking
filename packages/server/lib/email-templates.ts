@@ -368,6 +368,26 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
         : `You declined the payroll connection request from ${data.businessName}.`,
   },
 
+  payrollConnectionRevoked: {
+    subject: (data: { businessName: string; forBusiness?: boolean }) =>
+      data.forBusiness
+        ? "Payroll connection revoked"
+        : `Payroll connection with ${data.businessName} revoked`,
+    html: (data: { businessName: string; recipientName: string; forBusiness?: boolean }) => {
+      const message = data.forBusiness
+        ? `<strong>${data.recipientName}</strong> revoked their payroll connection with <strong>${data.businessName}</strong>. They can no longer be included in future payroll payments unless they approve a new request.`
+        : `You revoked your payroll connection with <strong>${data.businessName}</strong>. The business can no longer include you in future payroll payments unless you approve a new request. Your completed payment history and pay stubs remain available.`
+      return generateBaseEmailTemplate("Payroll connection revoked", "", `<p class="confirmation-text">${message}</p>`, undefined, {
+        audience: data.forBusiness ? "business" : "personal",
+        showPreferencesLink: false,
+      })
+    },
+    text: (data: { businessName: string; recipientName: string; forBusiness?: boolean }) =>
+      data.forBusiness
+        ? `${data.recipientName} revoked their payroll connection with ${data.businessName}. They can no longer be included in future payroll payments unless they approve a new request.`
+        : `You revoked your payroll connection with ${data.businessName}. The business can no longer include you in future payroll payments unless you approve a new request. Your completed payment history and pay stubs remain available.`,
+  },
+
   payrollPaid: {
     subject: (data: PayrollPaidEmailData) => `You've been paid — ${data.businessName}`,
     html: (data: PayrollPaidEmailData) => {

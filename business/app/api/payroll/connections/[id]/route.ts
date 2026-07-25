@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { maskPayrollMethod } from "@/lib/payroll/personal-payroll"
+import {
+  maskPayrollMethod,
+  sendPayrollConnectionRevokedEmails,
+} from "@/lib/payroll/personal-payroll"
 import {
   PERSONAL_PAYROLL_CONNECTION_DETAIL_SELECT,
   PERSONAL_PAYROLL_METHOD_SELECT,
@@ -84,13 +87,22 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const { data: connection } = await admin.from("payroll_connections")
     .select("business_id,person_id,status").eq("id", id).eq("user_id", auth.user.id).maybeSingle()
   if (!connection) return NextResponse.json({ error: "Connection not found" }, { status: 404 })
+  if (connection.status === "revoked") {
+    return NextResponse.json({ ok: true, status: "revoked", alreadyRevoked: true })
+  }
   const now = new Date().toISOString()
-  await admin.from("payroll_connections").update({
+  const { error: connectionError } = await admin.from("payroll_connections").update({
     status: "revoked", revoked_at: now, updated_at: now,
   }).eq("id", id)
-  await admin.from("payroll_people").update({
+  if (connectionError) {
+    return NextResponse.json({ error: connectionError.message }, { status: 500 })
+  }
+  const { error: personError } = await admin.from("payroll_people").update({
     connection_status: "revoked", readiness_status: "connection_revoked", updated_at: now,
   }).eq("id", connection.person_id)
+  if (personError) {
+    return NextResponse.json({ error: personError.message }, { status: 500 })
+  }
   const { data: affectedLines } = await admin.from("payroll_lines")
     .select("run_id")
     .eq("person_id", connection.person_id)
@@ -112,5 +124,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     business_id: connection.business_id, person_id: connection.person_id,
     actor_user_id: auth.user.id, event_type: "connection.revoked", data: { affectedRunIds },
   })
-  return NextResponse.json({ ok: true })
+  const [{ data: business }, { data: person }] = await Promise.all([
+    admin.from("businesses").select("name").eq("id", connection.business_id).maybeSingle(),
+    admin.from("payroll_people").select("full_name").eq("id", connection.person_id).maybeSingle(),
+  ])
+  await sendPayrollConnectionRevokedEmails({
+    admin,
+    businessId: String(connection.business_id),
+    employeeEmail: String(auth.user.email ?? ""),
+    businessName: String(business?.name || "Easner Business"),
+    recipientName: String(person?.full_name || auth.user.user_metadata?.full_name || "Payroll recipient"),
+  })
+  return NextResponse.json({ ok: true, status: "revoked", revokedAt: now })
 }

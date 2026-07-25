@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Pressable,
   RefreshControl,
@@ -120,7 +120,6 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   const routeToken = typeof route.params?.token === 'string' ? route.params.token : null
   const routeConnectionId = typeof route.params?.connectionId === 'string' ? route.params.connectionId : null
   const routeInvitationId = typeof route.params?.invitationId === 'string' ? route.params.invitationId : null
-  const openedFromRouteRef = useRef(Boolean(routeToken || routeConnectionId || routeInvitationId))
   const [bootstrapping, setBootstrapping] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -246,27 +245,21 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     if (routeConnectionId) setSelectedConnectionId(routeConnectionId)
   }, [routeConnectionId])
 
-  useEffect(() => {
-    if (routeToken || routeConnectionId || routeInvitationId) {
-      openedFromRouteRef.current = true
-    }
-  }, [routeConnectionId, routeInvitationId, routeToken])
-
-  const goBackFromBusiness = useCallback(() => {
+  const goBackFromBusiness = useCallback(async () => {
     setError('')
     setMethodSheet(null)
     setMethodDeleteTarget(null)
+    setSelectedDocumentId('')
     setSelectedConnectionId(null)
     setInvitation(null)
-
-    if (!openedFromRouteRef.current) return
-    openedFromRouteRef.current = false
+    setSelectedMethodId('')
+    setCompletedMessage('')
+    await clearPayrollApprovalToken()
     navigation.setParams?.({
       token: undefined,
       connectionId: undefined,
       invitationId: undefined,
     })
-    if (navigation.canGoBack?.()) navigation.goBack()
   }, [navigation])
 
   useEffect(() => {
@@ -409,16 +402,35 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
 
   async function revokeConnection() {
     if (!detail) return
+    const revokedConnectionId = detail.id
+    const revokedBusinessName = detail.businessName
+    const revokedAt = new Date().toISOString()
     setBusy(true)
+    setError('')
     try {
       await apiFetch(`/api/payroll/connections/${detail.id}`, { method: 'DELETE' })
-      setCompletedMessage(`Payroll connection with ${detail.businessName} was revoked.`)
+      queryClient.setQueryData<ConnectionsResponse>(connectionsKey, (current) => {
+        if (!current) return current
+        return {
+          ...current,
+          connections: current.connections.map((connection) =>
+            connection.id === revokedConnectionId
+              ? {
+                  ...connection,
+                  status: 'revoked',
+                  revokedAt,
+                }
+              : connection,
+          ),
+        }
+      })
+      setCompletedMessage(`Payroll connection with ${revokedBusinessName} has been revoked.`)
       setSelectedConnectionId(null)
       queryClient.removeQueries({
-        queryKey: ['personal', scope?.userId, 'payroll', 'connections', detail.id],
+        queryKey: ['personal', scope?.userId, 'payroll', 'connections', revokedConnectionId],
         exact: true,
       })
-      await queryClient.invalidateQueries({ queryKey: connectionsKey })
+      void queryClient.invalidateQueries({ queryKey: connectionsKey })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not revoke approval')
     } finally {
@@ -784,7 +796,6 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
                     logoUrl={pending.businessLogoUrl}
                     showDivider={index < pendingInvitations.length - 1}
                     onPress={() => {
-                      openedFromRouteRef.current = false
                       setInvitation(pending)
                       const preferred = pending.methods.find((method) => method.preferred)
                         ?? pending.methods.find((method) => method.type === 'easetag')
@@ -804,7 +815,6 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
                     logoUrl={connection.businessLogoUrl}
                     showDivider={index < approvedConnections.length - 1}
                     onPress={() => {
-                      openedFromRouteRef.current = false
                       setError('')
                       setSelectedConnectionId(connection.id)
                     }}
@@ -822,7 +832,6 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
                     logoUrl={connection.businessLogoUrl}
                     showDivider={index < inactiveConnections.length - 1}
                     onPress={() => {
-                      openedFromRouteRef.current = false
                       setError('')
                       setSelectedConnectionId(connection.id)
                     }}

@@ -132,3 +132,39 @@ export async function sendPayrollConnectionResponseEmails(input: {
     }).catch(() => undefined)
   }
 }
+
+export async function sendPayrollConnectionRevokedEmails(input: {
+  admin: SupabaseClient
+  businessId: string
+  employeeEmail: string
+  businessName: string
+  recipientName: string
+}) {
+  const { emailService } = await import("@easner/server")
+  await emailService.sendEmail({
+    to: input.employeeEmail,
+    template: "payrollConnectionRevoked",
+    audience: "personal",
+    data: {
+      businessName: input.businessName,
+      recipientName: input.recipientName,
+      forBusiness: false,
+    },
+  }).catch(() => undefined)
+
+  const { data: businessUsers } = await input.admin.from("users")
+    .select("email").eq("easner_business_id", input.businessId)
+  for (const businessUser of businessUsers ?? []) {
+    if (!businessUser.email) continue
+    await emailService.sendEmail({
+      to: String(businessUser.email),
+      template: "payrollConnectionRevoked",
+      audience: "business",
+      data: {
+        businessName: input.businessName,
+        recipientName: input.recipientName,
+        forBusiness: true,
+      },
+    }).catch(() => undefined)
+  }
+}
