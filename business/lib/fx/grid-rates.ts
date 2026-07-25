@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { resolveGridBalancePayoutCustomerRate } from "@easner/shared"
 import { listGridExchangeRates, findGridExchangeRate } from "@/lib/grid/discoveries"
 import { gridCurrencyCode, gridExchangeRateMid } from "@/lib/grid/types"
 import { getGridPayoutMarginBps } from "@/lib/grid/config"
@@ -192,27 +193,27 @@ export function findGridBalancePayoutRate(
   const local = receiveCurrency.trim().toUpperCase()
   if (!local) return null
 
+  const customerRate = resolveGridBalancePayoutCustomerRate(rates, local)
+  if (!customerRate || customerRate <= 0) return null
+
   const localToUsd = findGridRate(rates, local, "USD")
-  if (localToUsd?.grid_mid && localToUsd.grid_mid > 0) {
-    return {
-      ...localToUsd,
-      from_currency: "USD",
-      to_currency: local,
-      grid_mid: localToUsd.grid_mid,
-      rate: applyGridMargin(localToUsd.grid_mid, localToUsd.margin_bps),
-    }
-  }
-
   const usdToLocal = findGridRate(rates, "USD", local)
-  if (!usdToLocal?.grid_mid || usdToLocal.grid_mid <= 0) return null
+  const source = localToUsd ?? usdToLocal
+  if (!source) return null
 
-  const localPerUsdMid = 1 / usdToLocal.grid_mid
+  const gridMid =
+    localToUsd?.grid_mid && localToUsd.grid_mid >= 1
+      ? localToUsd.grid_mid
+      : usdToLocal?.grid_mid && usdToLocal.grid_mid > 0 && usdToLocal.grid_mid < 1
+        ? 1 / usdToLocal.grid_mid
+        : customerRate
+
   return {
-    ...usdToLocal,
+    ...source,
     from_currency: "USD",
     to_currency: local,
-    grid_mid: localPerUsdMid,
-    rate: applyGridMargin(localPerUsdMid, usdToLocal.margin_bps),
+    grid_mid: gridMid,
+    rate: customerRate,
   }
 }
 

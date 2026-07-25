@@ -69,9 +69,11 @@ export type SendAmountShellWebFormProps = {
   needsNoahRateForSend: boolean
   needsCryptoRateForSend: boolean
   noahRatesLoading: boolean
+  providerPayoutRateLoading?: boolean
   cryptoRatesLoading: boolean
   manualQuoteLoading: boolean
-  hasNoahRateForPair: boolean
+  /** Provider-aware send preview (Grid/YC/Noah). Prefer over legacy Noah-only flag. */
+  hasSendPreviewRateForPair: boolean
   hasValidCryptoRateForPair: boolean
   selectedPaymentMethod: 'balance' | 'linkBank' | 'virtualBank' | 'otherCurrency'
   selectedBalanceCurrency: string
@@ -120,9 +122,10 @@ export function SendAmountShellWebForm({
   needsNoahRateForSend,
   needsCryptoRateForSend,
   noahRatesLoading,
+  providerPayoutRateLoading = false,
   cryptoRatesLoading,
   manualQuoteLoading,
-  hasNoahRateForPair,
+  hasSendPreviewRateForPair,
   hasValidCryptoRateForPair,
   selectedPaymentMethod,
   selectedBalanceCurrency,
@@ -172,7 +175,7 @@ export function SendAmountShellWebForm({
     if (needsCryptoRateForSend && cryptoRatesLoading) {
       return <SkeletonLoader width={200} height={14} borderRadius={7} />
     }
-    if (needsNoahRateForSend && noahRatesLoading) {
+    if (needsNoahRateForSend && (noahRatesLoading || providerPayoutRateLoading)) {
       return <SkeletonLoader width={200} height={14} borderRadius={7} />
     }
     if (needsCryptoRateForSend && !hasValidCryptoRateForPair) {
@@ -182,7 +185,7 @@ export function SendAmountShellWebForm({
         </Text>
       )
     }
-    if (needsNoahRateForSend && !hasNoahRateForPair) {
+    if (needsNoahRateForSend && !hasSendPreviewRateForPair) {
       return (
         <Text style={styles.exchangeError} numberOfLines={2}>
           Exchange rate unavailable. Try again shortly.

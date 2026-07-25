@@ -70,6 +70,10 @@ export function useProviderSendExchangeRates(
     gcTime: GC_MS,
     enabled,
     placeholderData: keepPreviousData,
+    refetchOnMount: (query) => {
+      const rows = query.state.data
+      return !rows || rows.length === 0
+    },
     meta: PROVIDER_SEND_RATES_META,
   })
 }

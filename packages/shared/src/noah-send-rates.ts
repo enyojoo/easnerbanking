@@ -176,9 +176,14 @@ export function resolveGridBalancePayoutCustomerRate(
       r.from_currency.trim().toUpperCase() === local &&
       r.to_currency.trim().toUpperCase() === "USD",
   )
-  if (localToUsd?.grid_mid && localToUsd.grid_mid > 0 && localToUsd.grid_mid >= 1) {
-    if (Number.isFinite(localToUsd.rate) && localToUsd.rate > 0) return localToUsd.rate
-    return applyGridCustomerMargin(localToUsd.grid_mid, localToUsd.margin_bps)
+  if (localToUsd) {
+    const mid = localToUsd.grid_mid
+    if (mid != null && Number.isFinite(mid) && mid > 0 && mid >= 1) {
+      if (Number.isFinite(localToUsd.rate) && localToUsd.rate > 0) return localToUsd.rate
+      return applyGridCustomerMargin(mid, localToUsd.margin_bps)
+    }
+    // PHP→USD and similar legs store local-per-USD on the inverted row.
+    if (Number.isFinite(localToUsd.rate) && localToUsd.rate >= 1) return localToUsd.rate
   }
 
   const usdToLocal = rows.find(
@@ -186,16 +191,26 @@ export function resolveGridBalancePayoutCustomerRate(
       r.from_currency.trim().toUpperCase() === "USD" &&
       r.to_currency.trim().toUpperCase() === local,
   )
-  if (!usdToLocal?.grid_mid || usdToLocal.grid_mid <= 0) return null
+  if (!usdToLocal) return null
 
-  if (usdToLocal.grid_mid < 1) {
-    const localPerUsdMid = 1 / usdToLocal.grid_mid
-    if (Number.isFinite(usdToLocal.rate) && usdToLocal.rate >= 1) return usdToLocal.rate
-    return applyGridCustomerMargin(localPerUsdMid, usdToLocal.margin_bps)
+  const mid = usdToLocal.grid_mid
+  if (mid != null && Number.isFinite(mid) && mid > 0) {
+    if (mid < 1) {
+      const localPerUsdMid = 1 / mid
+      if (Number.isFinite(usdToLocal.rate) && usdToLocal.rate >= 1) return usdToLocal.rate
+      return applyGridCustomerMargin(localPerUsdMid, usdToLocal.margin_bps)
+    }
+    if (Number.isFinite(usdToLocal.rate) && usdToLocal.rate > 0) return usdToLocal.rate
+    return applyGridCustomerMargin(mid, usdToLocal.margin_bps)
   }
 
-  if (Number.isFinite(usdToLocal.rate) && usdToLocal.rate > 0) return usdToLocal.rate
-  return applyGridCustomerMargin(usdToLocal.grid_mid, usdToLocal.margin_bps)
+  // Rate-only rows (older API clients / partial payloads).
+  if (Number.isFinite(usdToLocal.rate) && usdToLocal.rate > 0 && usdToLocal.rate < 1) {
+    return applyGridCustomerMargin(1 / usdToLocal.rate, usdToLocal.margin_bps)
+  }
+  if (Number.isFinite(usdToLocal.rate) && usdToLocal.rate >= 1) return usdToLocal.rate
+
+  return null
 }
 
 /**

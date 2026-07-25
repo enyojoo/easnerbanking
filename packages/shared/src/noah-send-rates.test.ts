@@ -238,4 +238,13 @@ describe("mapGridBalancePayoutRateRows", () => {
     expect(mapped[0]?.to_currency).toBe("PHP")
     expect(mapped[0]?.rate).toBeCloseTo(61.45, 1)
   })
+
+  it("resolves PHP send preview from rate-only rows", () => {
+    const mapped = mapGridBalancePayoutRateRows([
+      { from_currency: "PHP", to_currency: "USD", rate: 61.45 },
+      { from_currency: "USD", to_currency: "PHP", rate: 0.0161 },
+    ])
+    expect(mapped).toHaveLength(1)
+    expect(mapped[0]?.rate).toBeCloseTo(61.45, 0)
+  })
 })

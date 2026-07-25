@@ -1852,9 +1852,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       needsNoahRateForSend={needsNoahRateForSend}
       needsCryptoRateForSend={false}
       noahRatesLoading={noahRatesLoading}
+      providerPayoutRateLoading={providerPayoutRateLoading}
       cryptoRatesLoading={false}
       manualQuoteLoading={ycRateLoading}
-      hasNoahRateForPair={hasNoahRateForPair}
+      hasSendPreviewRateForPair={hasSendPreviewRateForPair}
       hasValidCryptoRateForPair
       selectedPaymentMethod={selectedPaymentMethod}
       selectedBalanceCurrency={selectedBalanceCurrency}
