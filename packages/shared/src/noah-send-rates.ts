@@ -157,6 +157,47 @@ export function mapNoahWalletRateRows(
     })
 }
 
+function applyGridCustomerMargin(mid: number, marginBps?: number): number {
+  const bps = marginBps ?? 50
+  if (!Number.isFinite(mid) || mid <= 0) return 0
+  return mid * (1 - bps / 10_000)
+}
+
+/** Same normalization as server `findGridBalancePayoutRate` — local fiat per 1 USD. */
+export function resolveGridBalancePayoutCustomerRate(
+  rows: GridWalletRateRow[],
+  receiveCurrency: string,
+): number | null {
+  const local = receiveCurrency.trim().toUpperCase()
+  if (!local) return null
+
+  const localToUsd = rows.find(
+    (r) =>
+      r.from_currency.trim().toUpperCase() === local &&
+      r.to_currency.trim().toUpperCase() === "USD",
+  )
+  if (localToUsd?.grid_mid && localToUsd.grid_mid > 0 && localToUsd.grid_mid >= 1) {
+    if (Number.isFinite(localToUsd.rate) && localToUsd.rate > 0) return localToUsd.rate
+    return applyGridCustomerMargin(localToUsd.grid_mid, localToUsd.margin_bps)
+  }
+
+  const usdToLocal = rows.find(
+    (r) =>
+      r.from_currency.trim().toUpperCase() === "USD" &&
+      r.to_currency.trim().toUpperCase() === local,
+  )
+  if (!usdToLocal?.grid_mid || usdToLocal.grid_mid <= 0) return null
+
+  if (usdToLocal.grid_mid < 1) {
+    const localPerUsdMid = 1 / usdToLocal.grid_mid
+    if (Number.isFinite(usdToLocal.rate) && usdToLocal.rate >= 1) return usdToLocal.rate
+    return applyGridCustomerMargin(localPerUsdMid, usdToLocal.margin_bps)
+  }
+
+  if (Number.isFinite(usdToLocal.rate) && usdToLocal.rate > 0) return usdToLocal.rate
+  return applyGridCustomerMargin(usdToLocal.grid_mid, usdToLocal.margin_bps)
+}
+
 /**
  * Map Grid USD→local rows for Send balance payout preview.
  * Grid stores USD→fiat mid as USD per local unit; payout preview needs local per 1 USD.
@@ -165,26 +206,30 @@ export function mapGridBalancePayoutRateRows(
   rows: GridWalletRateRow[],
   fallbackTs = new Date().toISOString(),
 ): ExchangeRate[] {
-  const out: ExchangeRate[] = []
+  const destinations = new Set<string>()
   for (const r of rows) {
-    if (!Number.isFinite(r.rate) || r.rate <= 0) continue
     const from = r.from_currency.trim().toUpperCase()
     const to = r.to_currency.trim().toUpperCase()
-    if (from !== "USD" || !to || to === "USD") continue
+    if (from === "USD" && to && to !== "USD") destinations.add(to)
+    if (to === "USD" && from && from !== "USD") destinations.add(from)
+  }
 
-    const storedMid = r.grid_mid ?? r.rate
-    let customerRate = r.rate
-    if (storedMid > 0 && storedMid < 1) {
-      const marginBps = r.margin_bps ?? 50
-      const localPerUsdMid = 1 / storedMid
-      customerRate = localPerUsdMid * (1 - marginBps / 10_000)
-    }
-
-    const at = r.as_of ?? fallbackTs
+  const out: ExchangeRate[] = []
+  for (const dest of destinations) {
+    const customerRate = resolveGridBalancePayoutCustomerRate(rows, dest)
+    if (!customerRate || customerRate <= 0) continue
+    const at =
+      rows.find(
+        (r) =>
+          (r.from_currency.trim().toUpperCase() === "USD" &&
+            r.to_currency.trim().toUpperCase() === dest) ||
+          (r.from_currency.trim().toUpperCase() === dest &&
+            r.to_currency.trim().toUpperCase() === "USD"),
+      )?.as_of ?? fallbackTs
     out.push({
-      id: `grid-${from}-${to}`.toLowerCase(),
-      from_currency: from,
-      to_currency: to,
+      id: `grid-usd-${dest}`.toLowerCase(),
+      from_currency: "USD",
+      to_currency: dest,
       rate: customerRate,
       fee_type: "free",
       fee_amount: 0,

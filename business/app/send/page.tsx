@@ -807,6 +807,46 @@ export default function SendPage() {
     return { [`${send}_${receive}`]: ycPayoutCustomerRate }
   }, [sendCurrency, receiveCurrency, ycPayoutCustomerRate])
 
+  const providerSendPreviewAmounts = useMemo(() => {
+    if (isWalletRecipient || !recipient || enteredAmount <= 0) return null
+    if (otherCurrency && showThroughLocalCurrency) return null
+    const rateMap =
+      isGridBalancePayout && gridPayoutCustomerRate
+        ? gridPayoutRateMap
+        : isYcBalancePayout && ycPayoutCustomerRate
+          ? ycPayoutRateMap
+          : null
+    if (!rateMap) return null
+    return convertNoahSendFlowAmounts({
+      direction: amountEntryMode,
+      amount: enteredAmount,
+      sendCurrency,
+      receiveCurrency,
+      rateMap,
+    })
+  }, [
+    isWalletRecipient,
+    recipient,
+    enteredAmount,
+    otherCurrency,
+    showThroughLocalCurrency,
+    isGridBalancePayout,
+    gridPayoutCustomerRate,
+    gridPayoutRateMap,
+    isYcBalancePayout,
+    ycPayoutCustomerRate,
+    ycPayoutRateMap,
+    amountEntryMode,
+    sendCurrency,
+    receiveCurrency,
+  ])
+
+  const displaySendAmount = providerSendPreviewAmounts?.sendAmount ?? sendAmount
+  const displayForwardRate = providerSendPreviewAmounts?.forwardRate ?? forwardRate
+  const displayRateLabel = hasFx
+    ? formatSendRateLabel(sendCurrency, receiveCurrency, displayForwardRate)
+    : null
+
   const ycPayoutLimits = useMemo(() => {
     if (!isYcBalancePayout || !payoutCountryCode) return null
     return resolveYcPayoutLimits({
@@ -1516,7 +1556,7 @@ export default function SendPage() {
                   <span className="text-destructive text-xs">
                     Exchange rate unavailable. Try again shortly.
                   </span>
-                ) : hasFx && rateDisplay ? (
+                ) : hasFx && (displayRateLabel ?? rateDisplay) ? (
                   <div className="flex max-w-full flex-col items-end gap-0.5 text-sm text-muted-foreground">
                     <div className="flex max-w-full items-center justify-end gap-x-1 whitespace-nowrap">
                       <button
@@ -1536,15 +1576,15 @@ export default function SendPage() {
                           {getSendAmountFieldSymbol(
                             amountEntryMode === "receive" ? sendCurrency : receiveCurrency,
                           )}
-                          {tlcExchangeDisplayAmount.toLocaleString("en-US", {
+                          {(amountEntryMode === "receive" ? displaySendAmount : receiveAmount).toLocaleString("en-US", {
                             minimumFractionDigits:
-                              Math.abs(tlcExchangeDisplayAmount % 1) >= 0.01 ? 2 : 0,
+                              Math.abs((amountEntryMode === "receive" ? displaySendAmount : receiveAmount) % 1) >= 0.01 ? 2 : 0,
                             maximumFractionDigits: 2,
                           })}
                           </>}
                         </span>
                       </button>
-                      <span className="shrink-0">• Rate: {rateDisplay}</span>
+                      <span className="shrink-0">• Rate: {displayRateLabel ?? rateDisplay}</span>
                     </div>
                   </div>
                 ) : (

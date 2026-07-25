@@ -724,74 +724,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     })
   }, [isWalletRecipient, resolvedWalletNetwork, receiveCurrency])
 
-  const noahRatesLoading =
-    needsNoahRateForSend &&
-    !hasNoahRateForPair &&
-    !noahRatesFetched
-
-  const exchangePreviewReady =
-    !showCrossCurrencyExchangeUi ||
-    isWalletRecipient ||
-    (ycQuoteEnabled ? Boolean(ycFlow.customerRate) : !needsNoahRateForSend || hasNoahRateForPair)
-
-  const flowAmounts = useMemo(() => {
-    if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) {
-      return { sendAmount: enteredAmount, receiveAmount: enteredAmount, forwardRate: 1 }
-    }
-    if (selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency && ycFlow.customerRate) {
-      return ycFlow.preview
-    }
-    if (!hasNoahRateForPair) {
-      const fallback = convertNoahSendFlowAmounts({
-        direction: amountEntryMode,
-        amount: enteredAmount,
-        sendCurrency,
-        receiveCurrency,
-        rateMap: noahRateMap,
-      })
-      return {
-        sendAmount: fallback.sendAmount,
-        receiveAmount: fallback.receiveAmount,
-        forwardRate: fallback.forwardRate,
-      }
-    }
-    return convertNoahSendFlowAmounts({
-      direction: amountEntryMode,
-      amount: enteredAmount,
-      sendCurrency,
-      receiveCurrency,
-      rateMap: noahRateMap,
-    })
-  }, [
-    showCrossCurrencyExchangeUi,
-    enteredAmount,
-    amountEntryMode,
-    sendCurrency,
-    receiveCurrency,
-    noahRateMap,
-    selectedPaymentMethod,
-    showThroughLocalCurrency,
-    ycFlow.preview,
-    ycFlow.customerRate,
-    hasNoahRateForPair,
-  ])
-
-  const receiveAmount = normalizePayoutReceiveAmountForCurrency(
-    receiveCurrency,
-    flowAmounts.receiveAmount,
-  )
-  const sendingAmount = flowAmounts.sendAmount
-  const exchangeRate = flowAmounts.forwardRate
-
-  useEffect(() => {
-    clearCrossBorderQuote()
-  }, [recipient?.id, selectedOtherCurrency, tlcPayInRail])
-
-  const tlcSendingDisplayAmount = useMemo(() => {
-    if (!showThroughLocalCurrency || amountEntryMode !== 'receive') return sendingAmount
-    return sendingAmount
-  }, [showThroughLocalCurrency, amountEntryMode, sendingAmount])
-
   const payoutMinReceive = useMemo(
     () =>
       recipient && !isEasetagRecipient
@@ -835,11 +767,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const isProviderBalancePayout = isYcBalancePayout || isGridBalancePayout
 
-  const { data: ycSendRates = [] } = useYcSendExchangeRates(receiveCurrency, {
+  const { data: ycSendRates = [], isLoading: ycSendRatesLoading } = useYcSendExchangeRates(receiveCurrency, {
     enabled: isYcBalancePayout,
   })
 
-  const { data: gridSendRates = [] } = useGridSendExchangeRates(receiveCurrency, {
+  const { data: gridSendRates = [], isLoading: gridSendRatesLoading } = useGridSendExchangeRates(receiveCurrency, {
     enabled: isGridBalancePayout,
   })
 
@@ -863,6 +795,79 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     const receive = String(receiveCurrency || '').trim().toUpperCase()
     return { [`${send}_${receive}`]: ycPayoutCustomerRate }
   }, [sendCurrency, receiveCurrency, ycPayoutCustomerRate])
+
+  const providerBalancePayoutRateMap =
+    isProviderBalancePayout && ycPayoutCustomerRate ? ycPayoutRateMap : null
+
+  const sendPreviewRateMap = providerBalancePayoutRateMap ?? noahRateMap
+
+  const hasSendPreviewRateForPair = useMemo(() => {
+    if (isProviderBalancePayout) return Boolean(ycPayoutCustomerRate)
+    return hasNoahRateForPair
+  }, [isProviderBalancePayout, ycPayoutCustomerRate, hasNoahRateForPair])
+
+  const noahRatesLoading =
+    needsNoahRateForSend &&
+    !isProviderBalancePayout &&
+    !hasSendPreviewRateForPair &&
+    !noahRatesFetched
+
+  const providerPayoutRateLoading =
+    isProviderBalancePayout &&
+    !ycPayoutCustomerRate &&
+    (isGridBalancePayout ? gridSendRatesLoading : ycSendRatesLoading)
+
+  const exchangePreviewReady =
+    !showCrossCurrencyExchangeUi ||
+    isWalletRecipient ||
+    (ycQuoteEnabled
+      ? Boolean(ycFlow.customerRate)
+      : isProviderBalancePayout
+        ? Boolean(ycPayoutCustomerRate)
+        : !needsNoahRateForSend || hasSendPreviewRateForPair)
+
+  const flowAmounts = useMemo(() => {
+    if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) {
+      return { sendAmount: enteredAmount, receiveAmount: enteredAmount, forwardRate: 1 }
+    }
+    if (selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency && ycFlow.customerRate) {
+      return ycFlow.preview
+    }
+    return convertNoahSendFlowAmounts({
+      direction: amountEntryMode,
+      amount: enteredAmount,
+      sendCurrency,
+      receiveCurrency,
+      rateMap: sendPreviewRateMap,
+    })
+  }, [
+    showCrossCurrencyExchangeUi,
+    enteredAmount,
+    amountEntryMode,
+    sendCurrency,
+    receiveCurrency,
+    sendPreviewRateMap,
+    selectedPaymentMethod,
+    showThroughLocalCurrency,
+    ycFlow.preview,
+    ycFlow.customerRate,
+  ])
+
+  const receiveAmount = normalizePayoutReceiveAmountForCurrency(
+    receiveCurrency,
+    flowAmounts.receiveAmount,
+  )
+  const sendingAmount = flowAmounts.sendAmount
+  const exchangeRate = flowAmounts.forwardRate
+
+  const tlcSendingDisplayAmount = useMemo(() => {
+    if (!showThroughLocalCurrency || amountEntryMode !== 'receive') return sendingAmount
+    return sendingAmount
+  }, [showThroughLocalCurrency, amountEntryMode, sendingAmount])
+
+  useEffect(() => {
+    clearCrossBorderQuote()
+  }, [recipient?.id, selectedOtherCurrency, tlcPayInRail])
 
   const ycPayoutLimits = useMemo(() => {
     if (!isYcBalancePayout || !payoutCountryCode) return null
@@ -1213,7 +1218,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     exchangeInfoAmountPositive &&
     showCrossCurrencyExchangeUi &&
     !exchangePreviewReady &&
-    (noahRatesLoading || ycRateLoading)
+    (noahRatesLoading || ycRateLoading || providerPayoutRateLoading)
 
   const displayBalanceForSource =
     selectedPaymentMethod === 'balance'
@@ -1946,7 +1951,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         </Text>
                       </View>
                     </View>
-                  ) : needsNoahRateForSend && !noahRatesLoading && !hasNoahRateForPair ? (
+                  ) : needsNoahRateForSend && !noahRatesLoading && !providerPayoutRateLoading && !hasSendPreviewRateForPair ? (
                     <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>
                       Exchange rate unavailable. Try again shortly.
                     </Text>

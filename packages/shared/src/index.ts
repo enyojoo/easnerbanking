@@ -165,6 +165,7 @@ export {
   NOAH_SEND_RATES_STALE_MS,
   mapNoahWalletRateRows,
   mapGridBalancePayoutRateRows,
+  resolveGridBalancePayoutCustomerRate,
   type GridWalletRateRow,
   getNoahSendConversionRate,
   convertNoahSendFlowAmounts,

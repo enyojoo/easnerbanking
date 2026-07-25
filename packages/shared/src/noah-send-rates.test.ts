@@ -198,4 +198,20 @@ describe("mapGridBalancePayoutRateRows", () => {
     expect(preview.sendAmount).toBeCloseTo(1.34, 1)
     expect(preview.receiveAmount).toBe(2000)
   })
+
+  it("uses NGN→USD row when present (matches server findGridBalancePayoutRate)", () => {
+    const mapped = mapGridBalancePayoutRateRows([
+      {
+        from_currency: "NGN",
+        to_currency: "USD",
+        grid_mid: 1500,
+        rate: 1492.5,
+        margin_bps: 50,
+      },
+    ])
+    expect(mapped).toHaveLength(1)
+    expect(mapped[0]?.from_currency).toBe("USD")
+    expect(mapped[0]?.to_currency).toBe("NGN")
+    expect(mapped[0]?.rate).toBe(1492.5)
+  })
 })
