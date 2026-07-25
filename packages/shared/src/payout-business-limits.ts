@@ -59,7 +59,7 @@ const PAYOUT_BUSINESS_MIN_BANK: Record<string, number> = {
   SGD: 5,
   MYR: 10,
   THB: 50,
-  PHP: 50,
+  PHP: 100,
   INR: 100,
   LKR: 500,
   KRW: 1000,
@@ -82,7 +82,7 @@ const PAYOUT_BUSINESS_MIN_MOBILE: Record<string, number> = {
   MWK: 2000,
   BWP: 150,
   CDF: 10_000,
-  PHP: 50,
+  PHP: 100,
   INR: 100,
   EGP: 100,
 }

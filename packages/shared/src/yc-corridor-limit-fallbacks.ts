@@ -63,7 +63,7 @@ export const YC_SEND_LIMITS_FALLBACK: Record<string, YcCorridorLimitFallback> = 
   "GH:GHS:bank_transfer": { min: 20, max: 500_000 },
   "ID:IDR:bank_transfer": { min: 10_000 },
   "IN:INR:bank_transfer": { min: 100 },
-  "PH:PHP:bank_transfer": { min: 50 },
+  "PH:PHP:bank_transfer": { min: 100 },
   "TH:THB:bank_transfer": { min: 50 },
   /** Major currencies — YC channel JSON often omits limits */
   "FR:EUR:bank_transfer": { min: 10 },
@@ -125,7 +125,7 @@ export const YC_RECEIVE_LIMITS_FALLBACK: Record<string, YcCorridorLimitFallback>
   "GB:GBP:bank_transfer": { min: 10, max: 1_000_000 },
   "ID:IDR:bank_transfer": { min: 10_000 },
   "IN:INR:bank_transfer": { min: 100 },
-  "PH:PHP:bank_transfer": { min: 50 },
+  "PH:PHP:bank_transfer": { min: 100 },
   "TH:THB:bank_transfer": { min: 50 },
   /** Major currencies — YC channel JSON often omits limits */
   "FR:EUR:bank_transfer": { min: 10 },

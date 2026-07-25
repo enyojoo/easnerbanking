@@ -47,4 +47,18 @@ describe("resolveGridPayoutLimits", () => {
       maxLocalReceive: 30_000_000,
     })
   })
+
+  it("applies Grid API minimum for PH PHP bank", () => {
+    expect(
+      resolveGridPayoutLimits({
+        country: "PH",
+        currency: "PHP",
+        rail: "bank_transfer",
+      }),
+    ).toEqual({
+      minSendUsd: 1.01,
+      minLocalReceive: 100,
+      maxLocalReceive: null,
+    })
+  })
 })

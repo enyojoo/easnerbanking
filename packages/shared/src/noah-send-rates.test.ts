@@ -214,4 +214,28 @@ describe("mapGridBalancePayoutRateRows", () => {
     expect(mapped[0]?.to_currency).toBe("NGN")
     expect(mapped[0]?.rate).toBe(1492.5)
   })
+
+  it("resolves PHP send preview from USD-per-PHP grid mid", () => {
+    const usdPerPhp = 0.01619190127775986
+    const mapped = mapGridBalancePayoutRateRows([
+      {
+        from_currency: "USD",
+        to_currency: "PHP",
+        grid_mid: usdPerPhp,
+        rate: usdPerPhp * (1 - 50 / 10_000),
+        margin_bps: 50,
+      },
+      {
+        from_currency: "PHP",
+        to_currency: "USD",
+        grid_mid: 1 / usdPerPhp,
+        rate: 61.45047347630925,
+        margin_bps: 50,
+      },
+    ])
+    expect(mapped).toHaveLength(1)
+    expect(mapped[0]?.from_currency).toBe("USD")
+    expect(mapped[0]?.to_currency).toBe("PHP")
+    expect(mapped[0]?.rate).toBeCloseTo(61.45, 1)
+  })
 })

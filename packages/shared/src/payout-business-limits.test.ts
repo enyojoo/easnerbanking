@@ -18,7 +18,7 @@ describe("getBusinessPayoutMin", () => {
     expect(getBusinessPayoutMin("AUD")).toBe(10)
     expect(getBusinessPayoutMin("HKD")).toBe(50)
     expect(getBusinessPayoutMin("INR")).toBe(100)
-    expect(getBusinessPayoutMin("PHP", "mobile_money")).toBe(50)
+    expect(getBusinessPayoutMin("PHP", "mobile_money")).toBe(100)
     expect(getBusinessPayoutMin("TRY")).toBe(100)
     expect(getBusinessPayoutMin("VUV")).toBe(500)
   })

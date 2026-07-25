@@ -36,7 +36,7 @@ const YC_PAYIN_BUSINESS_MIN_BANK: Record<string, number> = {
   AED: 20,
   CNY: 50,
   EGP: 100,
-  PHP: 50,
+  PHP: 100,
   THB: 50,
   INR: 100,
   IDR: 10_000,
