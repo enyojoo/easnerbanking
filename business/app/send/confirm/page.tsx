@@ -287,7 +287,10 @@ export default function SendConfirmPage() {
         payInCountry,
         payInRail,
         receiveAmount: state.amount,
-        crossBorderProvider: state.crossBorderProvider ?? "yellowcard",
+        crossBorderProvider:
+          state.crossBorderProvider ??
+          (peekCrossBorderQuote()?.provider === "grid" ? "grid" : undefined) ??
+          "yellowcard",
         sourcePhone: setup.sourcePhone,
         networkId: setup.networkId,
         sourceNetworkName: setup.sourceNetworkName,
@@ -299,7 +302,10 @@ export default function SendConfirmPage() {
       payInCountry,
       payInRail,
       receiveAmount: state.amount,
-      crossBorderProvider: state.crossBorderProvider ?? "yellowcard",
+      crossBorderProvider:
+        state.crossBorderProvider ??
+        (peekCrossBorderQuote()?.provider === "grid" ? "grid" : undefined) ??
+        "yellowcard",
     }
   }, [state])
 

@@ -18,6 +18,7 @@ export type YcEligibilityResponse = {
 
 export type YcCrossBorderQuoteResult = {
   ok: true
+  provider?: 'yellowcard' | 'grid'
   quotePhase?: 'preview' | 'leg2_locked' | 'locked'
   quoteKey?: string
   leg2DraftId?: string

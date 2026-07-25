@@ -5,6 +5,7 @@ export type YcPayInRail = "bank_transfer" | "mobile_money"
 
 export type CrossBorderQuoteResult = {
   ok: true
+  provider?: "yellowcard" | "grid"
   quotePhase?: "preview" | "leg2_locked" | "locked"
   quoteKey?: string
   leg2DraftId?: string
@@ -46,9 +47,19 @@ function crossBorderApiBase(provider: "yellowcard" | "grid" | undefined): string
   return provider === "grid" ? "/api/grid/cross-border" : "/api/yellowcard/cross-border"
 }
 
-/** Grid cross-border uses one POST /quotes; Yellowcard splits preview + leg2 lock. */
-function usesGridSingleQuote(provider: "yellowcard" | "grid" | undefined): boolean {
-  return provider === "grid"
+function resolveCrossBorderProvider(
+  meta: CrossBorderQuoteStashMeta,
+): "yellowcard" | "grid" {
+  if (meta.crossBorderProvider) return meta.crossBorderProvider
+  const stashed = peekCrossBorderQuote()
+  if (stashed?.provider === "grid" || stashed?.provider === "yellowcard") {
+    return stashed.provider
+  }
+  return "yellowcard"
+}
+
+function isGridCrossBorder(meta: CrossBorderQuoteStashMeta): boolean {
+  return resolveCrossBorderProvider(meta) === "grid"
 }
 
 let stashed: CrossBorderQuoteResult | null = null
@@ -322,23 +333,16 @@ export async function ensureCrossBorderQuoteStashed(
 export async function ensureCrossBorderLeg2Locked(
   meta: CrossBorderQuoteStashMeta,
 ): Promise<CrossBorderQuoteResult | null> {
+  // Grid: preview-only until `/confirm` locks with Grid POST /quotes.
+  if (isGridCrossBorder(meta)) {
+    return ensureCrossBorderQuoteStashed(meta)
+  }
+
   if (
     isStashedCrossBorderQuoteFresh(meta) &&
     isCrossBorderLeg2Locked(peekCrossBorderQuote(), peekCrossBorderLeg2DraftId())
   ) {
     return peekCrossBorderQuote()
-  }
-
-  if (usesGridSingleQuote(meta.crossBorderProvider)) {
-    const preview = isStashedCrossBorderQuoteFresh(meta)
-      ? peekCrossBorderQuote()
-      : await ensureCrossBorderQuoteStashed(meta)
-    const leg2DraftId = preview?.leg2DraftId?.trim()
-    if (!preview || !leg2DraftId || !isCrossBorderLeg2Locked(preview, leg2DraftId)) {
-      return null
-    }
-    stashCrossBorderLeg2Lock(preview, meta, leg2DraftId)
-    return preview
   }
 
   const key = quoteMetaKey(meta)
@@ -385,6 +389,18 @@ export async function ensureCrossBorderOrderConfirmed(
   inflightConfirmKey = key
   lastQuoteError = null
   inflightConfirm = (async () => {
+    if (isGridCrossBorder(meta)) {
+      const preview = await ensureCrossBorderQuoteStashed(meta)
+      if (!preview) return null
+      const quote = await confirmCrossBorderOrder(meta)
+      if (!isCompleteCrossBorderQuote(quote)) {
+        lastQuoteError = "Incomplete cross-border confirm response."
+        return null
+      }
+      stashCrossBorderQuote(quote, meta, quote.leg2DraftId)
+      return quote
+    }
+
     if (!peekCrossBorderLeg2DraftId()) {
       const leg2 = await ensureCrossBorderLeg2Locked(meta)
       if (!leg2) return null
@@ -415,20 +431,26 @@ export async function ensureCrossBorderOrderConfirmed(
   return inflightConfirm
 }
 
-/** Fire-and-forget preview + leg2 lock while user is on amount / MoMo setup. */
+/** Fire-and-forget preview (+ YC leg2 lock) while user is on amount / MoMo setup. */
 export function prefetchCrossBorderQuotePipeline(meta: CrossBorderQuoteStashMeta): void {
   void ensureCrossBorderQuoteStashed(meta)
-    .then((quote) => (quote ? ensureCrossBorderLeg2Locked(meta) : null))
+    .then((quote) =>
+      quote && !isGridCrossBorder(meta)
+        ? ensureCrossBorderLeg2Locked(meta)
+        : null,
+    )
     .catch(() => {})
 }
 
-/** Await preview stash and warm leg2 before navigating to review. */
+/** Await preview stash (+ YC leg2 warm) before navigating to review. */
 export async function warmCrossBorderQuotePipeline(
   meta: CrossBorderQuoteStashMeta,
 ): Promise<CrossBorderQuoteResult | null> {
   const preview = await ensureCrossBorderQuoteStashed(meta)
   if (!preview) return null
-  await ensureCrossBorderLeg2Locked(meta).catch(() => {})
+  if (!isGridCrossBorder(meta)) {
+    await ensureCrossBorderLeg2Locked(meta).catch(() => {})
+  }
   return peekCrossBorderQuote()
 }
 

@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { computeYcCrossBorderPricing } from "@easner/shared"
 import { generateTransactionId } from "@/lib/transaction-id"
+import { buildCrossBorderQuoteSummary } from "@/lib/yellowcard/build-yc-quote-response"
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
 import { createGridExternalAccount } from "./external-account"
 import { loadGridRecipientBankCandidates } from "./grid-bank-candidates"
@@ -7,13 +9,33 @@ import { buildGridIdempotencyKey } from "./idempotency"
 import { buildGridCrossBorderQuoteBody } from "./quote-request"
 import { gridFetch } from "./http"
 import { gridMinorUnits } from "./external-account"
-import { findGridCrossRate, listGridRates } from "@/lib/fx/grid-rates"
+import {
+  findGridBalancePayoutRate,
+  findGridCrossRate,
+  findGridPayInRate,
+  listGridRates,
+} from "@/lib/fx/grid-rates"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
 import { isGridLocalPayInEnabledForCorridor } from "./grid-receive-gate"
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
+
+export type GridCrossBorderTransferInput = {
+  admin: SupabaseClient
+  userId: string
+  businessId: string | null
+  sourceCountry: string
+  sourceCurrency: string
+  recipient: RecipientSellPrepareRow
+  receiveAmount: number
+  profile: GridPersonProfile
+  payInRail?: "bank_transfer" | "mobile_money"
+  sourcePhone?: string
+  sourceNetworkId?: string
+  sourceNetworkName?: string
+}
 
 export type GridCrossBorderQuoteResult = {
   quoteId: string
@@ -31,35 +53,25 @@ export type GridCrossBorderQuoteResult = {
   easnerTransactionId: string
 }
 
-/**
- * Phase 3: single Grid quote for local→local cross-border (when source currency enabled).
- */
-export async function createGridCrossBorderQuote(input: {
-  admin: SupabaseClient
-  userId: string
-  businessId: string | null
-  sourceCountry: string
-  sourceCurrency: string
-  recipient: RecipientSellPrepareRow
-  receiveAmount: number
-  profile: GridPersonProfile
-  payInRail?: "bank_transfer" | "mobile_money"
-  sourcePhone?: string
-  sourceNetworkId?: string
-  sourceNetworkName?: string
-}): Promise<GridCrossBorderQuoteResult> {
+async function prepareGridCrossBorderQuote(input: GridCrossBorderTransferInput) {
+  if (input.payInRail === "mobile_money") {
+    const phone = String(input.sourcePhone ?? "").trim()
+    const netId = String(input.sourceNetworkId ?? "").trim()
+    if (!phone || !netId) {
+      throw new Error("Mobile number and network are required for mobile_money pay-in")
+    }
+  }
+
   const sourceCurrency = input.sourceCurrency.trim().toUpperCase()
   const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
   const sourceCountry = input.sourceCountry.trim().toUpperCase()
   const destCountry = resolveRecipientPayoutCountry(input.recipient)?.toUpperCase()
   if (!destCountry) throw new Error("Recipient country is required.")
+  if (sourceCurrency === receiveCurrency) {
+    throw new Error("Through Local Currency requires cross-currency corridors")
+  }
 
   const payInRail = input.payInRail === "mobile_money" ? "mobile_money" : "bank_transfer"
-  const payoutRail =
-    input.recipient.mobile_provider ||
-    String(input.recipient.bank_name || "").toLowerCase().includes("mobile money")
-      ? ("mobile_money" as const)
-      : ("bank_transfer" as const)
 
   const sourceEnabled = await isGridLocalPayInEnabledForCorridor(input.admin, {
     countryCode: sourceCountry,
@@ -79,6 +91,110 @@ export async function createGridCrossBorderQuote(input: {
   if (!customerRate || customerRate <= 0) {
     throw new Error("grid_cross_border_rate_unavailable")
   }
+
+  const fromLeg = findGridPayInRate(rates, sourceCurrency)
+  const toLeg = findGridBalancePayoutRate(rates, receiveCurrency)
+  const receiveAmount = Number(input.receiveAmount)
+  const pricing = computeYcCrossBorderPricing({
+    receiveAmount,
+    customerRate,
+    ycSellFrom: Number(fromLeg?.grid_mid ?? crossRate.grid_mid ?? 0),
+    ycBuyTo: Number(toLeg?.grid_mid ?? 0),
+    receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    sendLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+  })
+
+  const payInLimitCheck = await validateFundBalancePayInAmountLimits({
+    admin: input.admin,
+    countryCode: sourceCountry,
+    currencyCode: sourceCurrency,
+    rail: payInRail,
+    localPayIn: pricing.localPayIn,
+  })
+  if (!payInLimitCheck.ok) {
+    throw new Error(payInLimitCheck.message)
+  }
+
+  return {
+    sourceCurrency,
+    receiveCurrency,
+    sourceCountry,
+    destCountry,
+    payInRail,
+    crossRate,
+    customerRate,
+    pricing,
+    receiveAmount,
+    sourceAmount: pricing.localPayIn,
+  }
+}
+
+/** Indicative cross-border pricing from `grid_rates` — no Grid API calls. */
+export async function previewGridCrossBorderQuote(input: GridCrossBorderTransferInput) {
+  const prepared = await prepareGridCrossBorderQuote(input)
+  const expiresAt = new Date(Date.now() + getGridQuoteTtlMs()).toISOString()
+  const quoteSummary = buildCrossBorderQuoteSummary({
+    pricing: prepared.pricing,
+    payInCurrency: prepared.sourceCurrency,
+    receiveCurrency: prepared.receiveCurrency,
+    customerRate: prepared.customerRate,
+    rail: input.payInRail === "mobile_money" ? "mobile_money" : "bank_transfer",
+    expiresAt,
+    transactionId: "",
+    transferId: "",
+    bankInfo: null,
+    sourcePhone: input.sourcePhone,
+    sourceNetworkId: input.sourceNetworkId,
+    sourceNetworkName: input.sourceNetworkName,
+    easnerSellFrom: prepared.customerRate,
+  })
+
+  return {
+    ok: true as const,
+    provider: "grid" as const,
+    quotePhase: "preview" as const,
+    requiresConfirm: true,
+    localPayIn: prepared.pricing.localPayIn,
+    customerRate: prepared.customerRate,
+    processingFee: prepared.pricing.processingFee,
+    ycLegFeesUsd: prepared.pricing.ycLegFeesUsd,
+    displayProcessingFee: quoteSummary.displayProcessingFee,
+    displayProcessingFeeLocal: quoteSummary.displayProcessingFeeLocal ?? 0,
+    displayProcessingFeeCurrency: prepared.sourceCurrency,
+    provisionalPayIn: prepared.pricing.provisionalPayIn,
+    receiveAmount: prepared.receiveAmount,
+    receiveCurrency: prepared.receiveCurrency,
+    expiresAt,
+    payInRail: input.payInRail === "mobile_money" ? ("mobile_money" as const) : ("bank_transfer" as const),
+    sourcePhone: input.sourcePhone,
+    sourceNetworkId: input.sourceNetworkId,
+    sourceNetworkName: input.sourceNetworkName,
+  }
+}
+
+/**
+ * Lock Grid cross-border quote: customer + external account + POST /quotes + grid_transfers row.
+ */
+export async function createGridCrossBorderQuote(
+  input: GridCrossBorderTransferInput,
+): Promise<GridCrossBorderQuoteResult> {
+  const prepared = await prepareGridCrossBorderQuote(input)
+  const {
+    sourceCurrency,
+    receiveCurrency,
+    sourceCountry,
+    destCountry,
+    payInRail,
+    customerRate,
+    receiveAmount,
+    sourceAmount,
+  } = prepared
+
+  const payoutRail =
+    input.recipient.mobile_provider ||
+    String(input.recipient.bank_name || "").toLowerCase().includes("mobile money")
+      ? ("mobile_money" as const)
+      : ("bank_transfer" as const)
 
   const { customerId } = await ensureGridCustomer({
     admin: input.admin,
@@ -101,20 +217,6 @@ export async function createGridCrossBorderQuote(input: {
     gridBankCandidates: gridCandidates.bankNames,
     gridMomoCandidates: gridCandidates.momoProviders,
   })
-
-  const receiveAmount = Number(input.receiveAmount)
-  const sourceAmount = Math.round((receiveAmount / customerRate) * 100) / 100
-
-  const payInLimitCheck = await validateFundBalancePayInAmountLimits({
-    admin: input.admin,
-    countryCode: sourceCountry,
-    currencyCode: sourceCurrency,
-    rail: payInRail,
-    localPayIn: sourceAmount,
-  })
-  if (!payInLimitCheck.ok) {
-    throw new Error(payInLimitCheck.message)
-  }
 
   const quoteBody = buildGridCrossBorderQuoteBody({
     customerId,
@@ -274,6 +376,35 @@ export async function confirmGridCrossBorderTransfer(input: {
     receiveCurrency: String(transfer.receive_currency ?? ""),
     bankInfo: settlement.paymentInstructions?.accountOrWalletInfo ?? null,
     expiresAt: String(transfer.expires_at ?? now),
+  }
+}
+
+/** Lock with Grid POST /quotes, then promote grid_transfers to awaiting_pay_in. */
+export async function lockAndConfirmGridCrossBorderOrder(
+  input: GridCrossBorderTransferInput,
+): Promise<
+  Awaited<ReturnType<typeof confirmGridCrossBorderTransfer>> & {
+    leg2DraftId: string
+    quotePhase: "locked"
+    provider: "grid"
+    ok: true
+    bankInfo: Record<string, unknown> | null
+  }
+> {
+  const locked = await createGridCrossBorderQuote(input)
+  const confirmed = await confirmGridCrossBorderTransfer({
+    admin: input.admin,
+    userId: input.userId,
+    businessId: input.businessId,
+    quoteId: locked.quoteId,
+  })
+  return {
+    ok: true,
+    provider: "grid",
+    quotePhase: "locked",
+    leg2DraftId: locked.quoteId,
+    ...confirmed,
+    bankInfo: confirmed.bankInfo,
   }
 }
 

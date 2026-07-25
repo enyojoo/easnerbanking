@@ -422,7 +422,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     enteredAmount,
     payInCurrencyOverride: expectTlcCorridor ? residenceLocalPayInCurrency : null,
     payInCountryOverride: tlcPayInCountry,
-    crossBorderProviderOverride: expectTlcCorridor ? payInProvider : null,
   })
 
   const payInCurrency = ycFlow.payInCurrency ?? residenceLocalPayInCurrency

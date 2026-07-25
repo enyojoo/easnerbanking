@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { createGridCrossBorderQuote } from "@/lib/grid/cross-border-orchestrator"
+import { previewGridCrossBorderQuote } from "@/lib/grid/cross-border-orchestrator"
 import { GridHttpError } from "@/lib/grid/http"
 import { isGridLocalPayInEnabledForCorridor } from "@/lib/grid/grid-receive-gate"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
     .maybeSingle()
 
   try {
-    const result = await createGridCrossBorderQuote({
+    const preview = await previewGridCrossBorderQuote({
       admin,
       userId: kycUserId,
       businessId,
@@ -140,28 +140,7 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({
-      ok: true,
-      provider: "grid",
-      /** Grid locks pay-in + payout in one POST /quotes — no separate YC-style leg2 lock. */
-      quotePhase: "leg2_locked",
-      requiresConfirm: true,
-      leg2DraftId: result.quoteId,
-      transferId: result.transferId,
-      localPayIn: result.sourceAmount,
-      customerRate: result.customerRate,
-      receiveAmount: result.receiveAmount,
-      receiveCurrency: result.destinationCurrency,
-      bankInfo: result.paymentInstructions?.accountOrWalletInfo ?? null,
-      expiresAt: result.expiresAt,
-      payInRail,
-      sourcePhone:
-        payInRail === "mobile_money"
-          ? normalizeYcMomoPhone(String(body?.sourcePhone ?? "").trim(), payInCountry)
-          : body?.sourcePhone,
-      sourceNetworkId: body?.networkId,
-      sourceNetworkName: body?.sourceNetworkName,
-    })
+    return NextResponse.json(preview)
   } catch (e) {
     const message = mapGridCrossBorderQuoteError(e)
     return gridCrossBorderQuoteError("grid_cross_border_quote_failed", message, 400)

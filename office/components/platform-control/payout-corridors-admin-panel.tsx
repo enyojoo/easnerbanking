@@ -120,6 +120,8 @@ function corridorShowsNoahBadge(row: PayoutCorridorAdminRow): boolean {
   return (
     row.noah_sell_available === true ||
     meta.noah_receive === true ||
+    meta.noah_send_enabled === true ||
+    routingPrimaryProvider(row.provider_routing) === "noah" ||
     String(row.settlement_backend ?? "").toLowerCase() === "noah"
   )
 }
@@ -948,9 +950,9 @@ export function PayoutCorridorsAdminPanel() {
             variant="outline"
             size="sm"
             onClick={() => void handleSyncCorridors()}
-            disabled={syncingCorridors || corridorsQuery.isFetching}
+            disabled={syncingCorridors}
           >
-            {syncingCorridors || corridorsQuery.isFetching ? (
+            {syncingCorridors ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : null}
             Sync corridors

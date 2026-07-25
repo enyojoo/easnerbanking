@@ -298,7 +298,6 @@ export default function SendPage() {
     enteredAmount,
     payInCurrencyOverride: expectTlcCorridor ? residenceLocalPayInCurrency : null,
     payInCountryOverride: tlcPayInCountry,
-    crossBorderProviderOverride: expectTlcCorridor ? payInProvider : null,
   })
 
   const payInCurrency = tlcFlow.payInCurrency ?? residenceLocalPayInCurrency
@@ -1552,7 +1551,10 @@ export default function SendPage() {
           router.push("/send/confirm")
           return
         }
-        persistSendFlowState(flowState)
+        persistSendFlowState({
+          ...flowState,
+          crossBorderProvider: tlcFlow.crossBorderProvider,
+        })
         router.push("/send/confirm")
         return
       }
