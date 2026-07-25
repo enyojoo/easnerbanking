@@ -11,8 +11,8 @@ export type GridQuote = {
   exchangeRate?: number
   totalReceivingAmount?: number
   totalSendingAmount?: number
-  receivingCurrency?: { code?: string }
-  sendingCurrency?: { code?: string }
+  receivingCurrency?: { code?: string; decimals?: number }
+  sendingCurrency?: { code?: string; decimals?: number }
   transactionId?: string
   paymentInstructions?: {
     accountOrWalletInfo?: Record<string, unknown>

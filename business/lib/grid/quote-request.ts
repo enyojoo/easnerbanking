@@ -1,5 +1,6 @@
 import { gridFetch, gridFetchAllPages } from "./http"
 import type { GridQuote } from "./types"
+import { gridMajorUnits } from "./external-account"
 
 export type GridQuoteAccountDestination = {
   destinationType: "ACCOUNT"
@@ -50,13 +51,41 @@ export function pickGridInternalAccountForCurrency(
   return active?.id?.trim() || null
 }
 
-export function gridQuoteFeesUsd(quote: Pick<GridQuote, "rateDetails">): number {
+export function resolveGridCurrencyDecimals(
+  currency?: { code?: string; decimals?: number } | null,
+): number {
+  if (currency?.decimals != null && Number.isFinite(currency.decimals)) {
+    return currency.decimals
+  }
+  const code = String(currency?.code ?? "").trim().toUpperCase()
+  if (code === "USDC" || code === "USDT") return 6
+  return 2
+}
+
+export function gridQuoteSendingAmountMajor(quote: Pick<GridQuote, "totalSendingAmount" | "sendingCurrency">): number | null {
+  const minor = quote.totalSendingAmount
+  if (minor == null || !Number.isFinite(Number(minor)) || Number(minor) <= 0) return null
+  return gridMajorUnits(Number(minor), resolveGridCurrencyDecimals(quote.sendingCurrency))
+}
+
+export function gridQuoteReceivingAmountMajor(
+  quote: Pick<GridQuote, "totalReceivingAmount" | "receivingCurrency">,
+): number | null {
+  const minor = quote.totalReceivingAmount
+  if (minor == null || !Number.isFinite(Number(minor)) || Number(minor) <= 0) return null
+  return gridMajorUnits(Number(minor), resolveGridCurrencyDecimals(quote.receivingCurrency))
+}
+
+export function gridQuoteFeesUsd(
+  quote: Pick<GridQuote, "rateDetails" | "sendingCurrency">,
+): number {
   const rd = quote.rateDetails
   if (!rd) return 0
+  const factor = 10 ** resolveGridCurrencyDecimals(quote.sendingCurrency)
   const total =
-    Number(rd.gridApiFixedFee ?? 0) / 100 +
-    Number(rd.gridApiVariableFeeAmount ?? 0) / 100 +
-    Number(rd.counterpartyFixedFee ?? 0) / 100
+    Number(rd.gridApiFixedFee ?? 0) / factor +
+    Number(rd.gridApiVariableFeeAmount ?? 0) / factor +
+    Number(rd.counterpartyFixedFee ?? 0) / factor
   return Number.isFinite(total) && total > 0 ? Math.round(total * 100) / 100 : 0
 }
 

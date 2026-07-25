@@ -6,6 +6,7 @@ import {
   buildGridFundBalanceQuoteBody,
   buildGridRealtimeFundingSource,
   gridQuoteFeesUsd,
+  gridQuoteSendingAmountMajor,
   pickGridInternalAccountForCurrency,
 } from "./quote-request"
 
@@ -140,9 +141,10 @@ describe("pickGridInternalAccountForCurrency", () => {
 })
 
 describe("gridQuoteFeesUsd", () => {
-  it("sums Grid quote rateDetails into USD major units", () => {
+  it("sums fiat quote fees in major units (2 decimals)", () => {
     expect(
       gridQuoteFeesUsd({
+        sendingCurrency: { code: "USD", decimals: 2 },
         rateDetails: {
           gridApiFixedFee: 50,
           gridApiVariableFeeAmount: 25,
@@ -150,5 +152,38 @@ describe("gridQuoteFeesUsd", () => {
         },
       }),
     ).toBe(1)
+  })
+
+  it("sums USDC quote fees in major units (6 decimals)", () => {
+    expect(
+      gridQuoteFeesUsd({
+        sendingCurrency: { code: "USDC", decimals: 6 },
+        rateDetails: {
+          gridApiFixedFee: 1_000_000,
+          gridApiVariableFeeAmount: 500_000,
+          counterpartyFixedFee: 500_000,
+        },
+      }),
+    ).toBe(2)
+  })
+})
+
+describe("gridQuoteSendingAmountMajor", () => {
+  it("converts USDC minor units with 6 decimals", () => {
+    expect(
+      gridQuoteSendingAmountMajor({
+        totalSendingAmount: 1_512_651,
+        sendingCurrency: { code: "USDC", decimals: 6 },
+      }),
+    ).toBe(1.512651)
+  })
+
+  it("converts NGN minor units with 2 decimals", () => {
+    expect(
+      gridQuoteSendingAmountMajor({
+        totalSendingAmount: 5_000_000,
+        sendingCurrency: { code: "NGN", decimals: 2 },
+      }),
+    ).toBe(50_000)
   })
 })

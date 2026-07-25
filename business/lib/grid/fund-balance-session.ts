@@ -5,6 +5,8 @@ import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-custom
 import {
   buildGridFundBalanceQuoteBody,
   gridQuoteFeesUsd,
+  gridQuoteReceivingAmountMajor,
+  gridQuoteSendingAmountMajor,
   resolveGridCustomerInternalAccountId,
 } from "./quote-request"
 import { gridFetch } from "./http"
@@ -145,14 +147,8 @@ export async function createGridFundBalanceSession(input: {
   })
 
   const gridFeesUsd = gridQuoteFeesUsd(quote)
-  const lockedLocalPayIn =
-    quote.totalSendingAmount != null && quote.totalSendingAmount > 0
-      ? Math.round(quote.totalSendingAmount) / 100
-      : preview.localPayIn
-  const lockedUsdCredit =
-    quote.totalReceivingAmount != null && quote.totalReceivingAmount > 0
-      ? Math.round(quote.totalReceivingAmount) / 100
-      : preview.usdCredit
+  const lockedLocalPayIn = gridQuoteSendingAmountMajor(quote) ?? preview.localPayIn
+  const lockedUsdCredit = gridQuoteReceivingAmountMajor(quote) ?? preview.usdCredit
   const lockedCustomerRate =
     quote.exchangeRate != null && quote.exchangeRate > 0
       ? quote.exchangeRate

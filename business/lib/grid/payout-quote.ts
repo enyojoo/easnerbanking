@@ -22,7 +22,11 @@ import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-custom
 import { createGridExternalAccount, extractGridFundingSolanaAddress, gridMinorUnits } from "./external-account"
 import { loadGridRecipientBankCandidates } from "./grid-bank-candidates"
 import { buildGridIdempotencyKey } from "./idempotency"
-import { buildGridBalancePayoutQuoteBody } from "./quote-request"
+import {
+  buildGridBalancePayoutQuoteBody,
+  gridQuoteFeesUsd,
+  gridQuoteSendingAmountMajor,
+} from "./quote-request"
 import { gridFetch } from "./http"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
@@ -137,15 +141,6 @@ export async function lockGridBalancePayoutQuote(
   })
 
   const provisionalCrypto = roundUsd(quoteReceiveAmount / customerRate)
-  const pricingBefore = computeYcBalancePayoutPricingBeforeSend({
-    receiveAmount: quoteReceiveAmount,
-    customerRate,
-    provisionalCryptoUsd: provisionalCrypto,
-    ycMidUsd:
-      gridMidLocalPerUsd > 0
-        ? roundUsd(quoteReceiveAmount / gridMidLocalPerUsd)
-        : undefined,
-  })
 
   const quoteBody = buildGridBalancePayoutQuoteBody({
     customerId,
@@ -165,15 +160,8 @@ export async function lockGridBalancePayoutQuote(
     quoteExchangeRate: quote.exchangeRate,
     previewCustomerRate: customerRate,
   })
-  const gridFeesUsd = roundUsd(
-    Number(quote.rateDetails?.gridApiFixedFee ?? 0) / 100 +
-      Number(quote.rateDetails?.gridApiVariableFeeAmount ?? 0) / 100 +
-      Number(quote.rateDetails?.counterpartyFixedFee ?? 0) / 100,
-  )
-  const lockedCryptoUsd = roundUsd(
-    Number(quote.totalSendingAmount ?? pricingBefore.ycFloorUsd * 100) / 100 ||
-      pricingBefore.ycFloorUsd,
-  )
+  const lockedCryptoUsd = gridQuoteSendingAmountMajor(quote) ?? provisionalCrypto
+  const gridFeesUsd = gridQuoteFeesUsd(quote)
   const pricing = computeYcBalancePayoutPricingBeforeSend({
     receiveAmount: quoteReceiveAmount,
     customerRate: lockedCustomerRate,
@@ -188,7 +176,7 @@ export async function lockGridBalancePayoutQuote(
     pricing.totalDebited = roundUsd(pricing.totalDebited + gridFeesUsd)
   }
 
-  const cryptoAmount = roundUsd(Number(quote.totalSendingAmount ?? pricingBefore.customerPrincipal) / 100)
+  const cryptoAmount = roundUsd(lockedCryptoUsd > 0 ? lockedCryptoUsd : pricing.customerPrincipal)
   const sequenceId = `grid_quote_${String(quote.id).replace(/[^a-zA-Z0-9:_-]/g, "")}`
   const expiresAt =
     quote.expiresAt ?? new Date(Date.now() + getGridQuoteTtlMs()).toISOString()
