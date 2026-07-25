@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Pressable,
   RefreshControl,
@@ -7,7 +7,16 @@ import {
   Text,
   View,
 } from 'react-native'
-import { Building2, Check, ChevronRight, FileText, ShieldCheck } from 'lucide-react-native'
+import {
+  Building2,
+  Check,
+  ChevronRight,
+  FileText,
+  Pencil,
+  Plus,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { Button, SectionCard, StatusPill } from '../../components/ui'
@@ -27,6 +36,13 @@ import {
 } from '../../lib/payrollApprovalTokenStore'
 import { PayStubSheet } from '../../components/payroll/PayStubSheet'
 import { CachedImage } from '../../components/CachedImage'
+import { markPayrollActivityVisible } from '../../lib/payrollActivityVisibility'
+import {
+  PayrollReceivingMethodSheet,
+  type PayrollExternalMethodType,
+  type PayrollReceivingMethodResult,
+} from '../../components/payroll/PayrollReceivingMethodSheet'
+import { EasnerAlertSheet } from '../../components/premium'
 
 type Method = {
   id: string
@@ -104,6 +120,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   const routeToken = typeof route.params?.token === 'string' ? route.params.token : null
   const routeConnectionId = typeof route.params?.connectionId === 'string' ? route.params.connectionId : null
   const routeInvitationId = typeof route.params?.invitationId === 'string' ? route.params.invitationId : null
+  const openedFromRouteRef = useRef(Boolean(routeToken || routeConnectionId || routeInvitationId))
   const [bootstrapping, setBootstrapping] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -112,6 +129,20 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   const [selectedMethodId, setSelectedMethodId] = useState('')
   const [completedMessage, setCompletedMessage] = useState('')
   const [selectedDocumentId, setSelectedDocumentId] = useState('')
+  const [methodSheet, setMethodSheet] = useState<{
+    invitationId?: string
+    connectionId?: string
+    editingMethod?: {
+      id: string
+      type: PayrollExternalMethodType
+      label: string
+    } | null
+  } | null>(null)
+  const [methodDeleteTarget, setMethodDeleteTarget] = useState<{
+    id: string
+    label: string
+    invitation: boolean
+  } | null>(null)
 
   const connectionsKey = useMemo(
     () => scope
@@ -146,6 +177,15 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   const connections = connectionsQuery.data?.connections ?? []
   const pendingInvitations = connectionsQuery.data?.pendingInvitations ?? []
   const detail = detailQuery.data ?? null
+
+  useEffect(() => {
+    if (
+      scope?.userId
+      && (invitation || connections.length > 0 || pendingInvitations.length > 0)
+    ) {
+      void markPayrollActivityVisible(scope.userId)
+    }
+  }, [connections.length, invitation, pendingInvitations.length, scope?.userId])
 
   const refreshConnections = useCallback(async () => {
     await connectionsQuery.refetch()
@@ -193,7 +233,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
           }
         } catch (e) {
           if (!cancelled) {
-            setError(e instanceof Error ? e.message : 'Could not load payroll approvals')
+            setError(e instanceof Error ? e.message : 'Could not load payroll connections')
           }
         }
       }
@@ -207,17 +247,66 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   }, [routeConnectionId])
 
   useEffect(() => {
+    if (routeToken || routeConnectionId || routeInvitationId) {
+      openedFromRouteRef.current = true
+    }
+  }, [routeConnectionId, routeInvitationId, routeToken])
+
+  const goBackFromBusiness = useCallback(() => {
+    setError('')
+    setMethodSheet(null)
+    setMethodDeleteTarget(null)
+    setSelectedConnectionId(null)
+    setInvitation(null)
+
+    if (!openedFromRouteRef.current) return
+    openedFromRouteRef.current = false
+    navigation.setParams?.({
+      token: undefined,
+      connectionId: undefined,
+      invitationId: undefined,
+    })
+    if (navigation.canGoBack?.()) navigation.goBack()
+  }, [navigation])
+
+  useEffect(() => {
     if (!route.params?.methodUpdatedAt || !selectedConnectionId) return
     void detailQuery.refetch()
     void connectionsQuery.refetch()
   }, [connectionsQuery.refetch, detailQuery.refetch, route.params?.methodUpdatedAt, selectedConnectionId])
 
-  function openReceivingMethodSetup(context: { invitationId?: string; connectionId?: string }) {
-    navigation.navigate('Recipients', {
-      payrollMode: true,
-      payrollInvitationId: context.invitationId,
-      payrollConnectionId: context.connectionId,
-    })
+  function openReceivingMethodSetup(
+    context: { invitationId?: string; connectionId?: string },
+    editingMethod?: Method,
+  ) {
+    const externalMethod = editingMethod && editingMethod.type !== 'easetag'
+      ? {
+          id: editingMethod.id,
+          type: editingMethod.type as PayrollExternalMethodType,
+          label: editingMethod.label,
+        }
+      : null
+    setMethodSheet({ ...context, editingMethod: externalMethod })
+  }
+
+  async function handleReceivingMethodSaved(method: PayrollReceivingMethodResult) {
+    if (methodSheet?.invitationId) {
+      setInvitation((current) => current
+        ? {
+            ...current,
+            methods: [
+              ...current.methods.filter((item) => item.type === 'easetag'),
+              method,
+            ],
+          }
+        : current)
+      setSelectedMethodId(method.id)
+      return
+    }
+    await Promise.all([
+      detailQuery.refetch(),
+      queryClient.invalidateQueries({ queryKey: connectionsKey }),
+    ])
   }
 
   async function selectConnectionMethod(methodId: string) {
@@ -237,8 +326,8 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     }
   }
 
-  async function deleteConnectionMethod(methodId: string) {
-    if (!detail) return
+  async function deleteConnectionMethod(methodId: string): Promise<boolean> {
+    if (!detail) return false
     setBusy(true)
     setError('')
     try {
@@ -247,11 +336,46 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
         detailQuery.refetch(),
         queryClient.invalidateQueries({ queryKey: connectionsKey }),
       ])
+      return true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not delete receiving method')
+      return false
     } finally {
       setBusy(false)
     }
+  }
+
+  async function deleteInvitationMethod(methodId: string): Promise<boolean> {
+    if (!invitation) return false
+    setBusy(true)
+    setError('')
+    try {
+      await apiFetch(
+        `/api/payroll/invitations/${invitation.id}/methods/${methodId}`,
+        { method: 'DELETE' },
+      )
+      setInvitation((current) => current
+        ? { ...current, methods: current.methods.filter((method) => method.id !== methodId) }
+        : current)
+      if (selectedMethodId === methodId) {
+        const easetag = invitation.methods.find((method) => method.type === 'easetag')
+        setSelectedMethodId(easetag?.id ?? '')
+      }
+      return true
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete receiving method')
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmDeleteReceivingMethod() {
+    if (!methodDeleteTarget) return
+    const deleted = methodDeleteTarget.invitation
+      ? await deleteInvitationMethod(methodDeleteTarget.id)
+      : await deleteConnectionMethod(methodDeleteTarget.id)
+    if (deleted) setMethodDeleteTarget(null)
   }
 
   async function respond(action: 'approve' | 'decline') {
@@ -288,7 +412,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     setBusy(true)
     try {
       await apiFetch(`/api/payroll/connections/${detail.id}`, { method: 'DELETE' })
-      setCompletedMessage(`Payroll approval for ${detail.businessName} was revoked.`)
+      setCompletedMessage(`Payroll connection with ${detail.businessName} was revoked.`)
       setSelectedConnectionId(null)
       queryClient.removeQueries({
         queryKey: ['personal', scope?.userId, 'payroll', 'connections', detail.id],
@@ -311,8 +435,8 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     return (
       <ScreenWrapper>
         <InternalHeader
-          title={showDetail ? 'Payroll details' : 'Payroll Approval'}
-          onBack={showDetail ? () => setSelectedConnectionId(null) : undefined}
+          title={showDetail ? 'Payroll details' : 'Payroll Connections'}
+          onBack={showDetail ? goBackFromBusiness : undefined}
         />
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
@@ -327,7 +451,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   if (invitation) {
     return (
       <ScreenWrapper>
-        <InternalHeader title="Payroll Approval" onBack={() => setInvitation(null)} />
+        <InternalHeader title="Payroll Connections" onBack={goBackFromBusiness} />
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
           showsVerticalScrollIndicator={false}
@@ -363,23 +487,41 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
 
           <Text style={styles.label}>Receive payroll via</Text>
           {invitation.methods.map((method) => (
-            <Pressable
+            <View
               key={method.id}
-              onPress={() => setSelectedMethodId(method.id)}
               style={[styles.method, selectedMethodId === method.id && styles.methodSelected]}
             >
-              <View style={[styles.radio, selectedMethodId === method.id && styles.radioSelected]}>
-                {selectedMethodId === method.id ? <View style={styles.radioDot} /> : null}
-              </View>
-              <View style={styles.grow}>
-                <Text style={styles.methodTitle}>{method.type === 'easetag' ? 'EASETAG' : method.label}</Text>
-                <Text style={styles.muted}>{methodDescription(method)}</Text>
-              </View>
-            </Pressable>
+              <Pressable
+                onPress={() => setSelectedMethodId(method.id)}
+                style={styles.methodSelect}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selectedMethodId === method.id }}
+              >
+                <View style={[styles.radio, selectedMethodId === method.id && styles.radioSelected]}>
+                  {selectedMethodId === method.id ? <View style={styles.radioDot} /> : null}
+                </View>
+                <View style={styles.grow}>
+                  <Text style={styles.methodTitle}>{method.type === 'easetag' ? 'Easetag' : method.label}</Text>
+                  <Text style={styles.muted}>{methodDescription(method)}</Text>
+                </View>
+              </Pressable>
+              {method.type !== 'easetag' ? (
+                <MethodActions
+                  disabled={busy}
+                  onEdit={() => openReceivingMethodSetup({ invitationId: invitation.id }, method)}
+                  onDelete={() => setMethodDeleteTarget({
+                    id: method.id,
+                    label: method.label,
+                    invitation: true,
+                  })}
+                />
+              ) : null}
+            </View>
           ))}
 
-          <Button title="Add bank, mobile money, or stablecoin" variant="outline"
-            onPress={() => openReceivingMethodSetup({ invitationId: invitation.id })} fullWidth />
+          <AddReceivingMethodButton
+            onPress={() => openReceivingMethodSetup({ invitationId: invitation.id })}
+          />
 
           {error ? (
             <InlineError
@@ -395,6 +537,28 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
               disabled={busy} fullWidth />
           </View>
         </ScrollView>
+        <PayrollReceivingMethodSheet
+          visible={Boolean(methodSheet)}
+          invitationId={methodSheet?.invitationId}
+          connectionId={methodSheet?.connectionId}
+          editingMethod={methodSheet?.editingMethod}
+          onClose={() => setMethodSheet(null)}
+          onSaved={handleReceivingMethodSaved}
+        />
+        <EasnerAlertSheet
+          visible={Boolean(methodDeleteTarget)}
+          onDismiss={() => {
+            if (!busy) setMethodDeleteTarget(null)
+          }}
+          title="Delete receiving method?"
+          message={`Delete ${methodDeleteTarget?.label ?? 'this receiving method'} from Payroll?`}
+          primaryLabel="Delete"
+          onPrimary={() => void confirmDeleteReceivingMethod()}
+          secondaryLabel="Cancel"
+          onSecondary={() => setMethodDeleteTarget(null)}
+          primaryDestructive
+          primaryLoading={busy}
+        />
       </ScreenWrapper>
     )
   }
@@ -402,7 +566,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   if (detail) {
     return (
       <ScreenWrapper>
-        <InternalHeader title={detail.businessName} onBack={() => setSelectedConnectionId(null)} />
+        <InternalHeader title={detail.businessName} onBack={goBackFromBusiness} />
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
           showsVerticalScrollIndicator={false}
@@ -440,19 +604,26 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
                       {method.preferred ? <View style={styles.radioDot} /> : null}
                     </View>
                     <View style={styles.grow}>
-                      <Text style={styles.methodTitle}>{method.type === 'easetag' ? 'EASETAG' : method.label}</Text>
+                      <Text style={styles.methodTitle}>{method.type === 'easetag' ? 'Easetag' : method.label}</Text>
                       <Text style={styles.muted}>{methodDescription(method)}</Text>
                     </View>
                   </Pressable>
                   {method.type !== 'easetag' ? (
-                    <Pressable disabled={busy} onPress={() => void deleteConnectionMethod(method.id)}>
-                      <Text style={styles.deleteText}>Delete</Text>
-                    </Pressable>
+                    <MethodActions
+                      disabled={busy}
+                      onEdit={() => openReceivingMethodSetup({ connectionId: detail.id }, method)}
+                      onDelete={() => setMethodDeleteTarget({
+                        id: method.id,
+                        label: method.label,
+                        invitation: false,
+                      })}
+                    />
                   ) : null}
                 </View>
               ))}
-              <Button title="Add or replace receiving method" variant="outline"
-                onPress={() => openReceivingMethodSetup({ connectionId: detail.id })} fullWidth />
+              <AddReceivingMethodButton
+                onPress={() => openReceivingMethodSetup({ connectionId: detail.id })}
+              />
             </>
           ) : null}
           <Text style={styles.label}>Payment history</Text>
@@ -486,6 +657,28 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
           documentId={selectedDocumentId}
           onClose={() => setSelectedDocumentId('')}
         />
+        <PayrollReceivingMethodSheet
+          visible={Boolean(methodSheet)}
+          invitationId={methodSheet?.invitationId}
+          connectionId={methodSheet?.connectionId}
+          editingMethod={methodSheet?.editingMethod}
+          onClose={() => setMethodSheet(null)}
+          onSaved={handleReceivingMethodSaved}
+        />
+        <EasnerAlertSheet
+          visible={Boolean(methodDeleteTarget)}
+          onDismiss={() => {
+            if (!busy) setMethodDeleteTarget(null)
+          }}
+          title="Delete receiving method?"
+          message={`Delete ${methodDeleteTarget?.label ?? 'this receiving method'} from Payroll?`}
+          primaryLabel="Delete"
+          onPrimary={() => void confirmDeleteReceivingMethod()}
+          secondaryLabel="Cancel"
+          onSecondary={() => setMethodDeleteTarget(null)}
+          primaryDestructive
+          primaryLoading={busy}
+        />
       </ScreenWrapper>
     )
   }
@@ -493,7 +686,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   if (showDetail && detailQuery.error) {
     return (
       <ScreenWrapper>
-        <InternalHeader title="Payroll details" onBack={() => setSelectedConnectionId(null)} />
+        <InternalHeader title="Payroll details" onBack={goBackFromBusiness} />
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}>
           <SectionCard>
             <EmptyState
@@ -513,7 +706,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   if (!connectionsQuery.data && connectionsQuery.error) {
     return (
       <ScreenWrapper>
-        <InternalHeader title="Payroll Approval" />
+        <InternalHeader title="Payroll Connections" />
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
           refreshControl={
@@ -527,7 +720,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
           <SectionCard>
             <EmptyState
               icon={Building2}
-              title="Payroll approvals unavailable"
+              title="Payroll connections unavailable"
               message={connectionsQuery.error instanceof Error
                 ? connectionsQuery.error.message
                 : 'Check your connection and try again.'}
@@ -548,7 +741,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   return (
     <ScreenWrapper>
       <InternalHeader
-        title="Payroll Approval"
+        title="Payroll Connections"
         subtitle={pendingInvitations.length > 0
           ? `${pendingInvitations.length} request${pendingInvitations.length === 1 ? '' : 's'} waiting`
           : 'Manage who can pay you'}
@@ -591,6 +784,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
                     logoUrl={pending.businessLogoUrl}
                     showDivider={index < pendingInvitations.length - 1}
                     onPress={() => {
+                      openedFromRouteRef.current = false
                       setInvitation(pending)
                       const preferred = pending.methods.find((method) => method.preferred)
                         ?? pending.methods.find((method) => method.type === 'easetag')
@@ -610,6 +804,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
                     logoUrl={connection.businessLogoUrl}
                     showDivider={index < approvedConnections.length - 1}
                     onPress={() => {
+                      openedFromRouteRef.current = false
                       setError('')
                       setSelectedConnectionId(connection.id)
                     }}
@@ -627,6 +822,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
                     logoUrl={connection.businessLogoUrl}
                     showDivider={index < inactiveConnections.length - 1}
                     onPress={() => {
+                      openedFromRouteRef.current = false
                       setError('')
                       setSelectedConnectionId(connection.id)
                     }}
@@ -639,6 +835,59 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
         {error ? <InlineError message={error} actionLabel="Dismiss" onRetry={() => setError('')} /> : null}
       </ScrollView>
     </ScreenWrapper>
+  )
+}
+
+function AddReceivingMethodButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.addMethod, pressed && styles.connectionRowPressed]}
+      accessibilityRole="button"
+      accessibilityLabel="Add a receiving method. Either a bank account, mobile money or wallet address."
+    >
+      <View style={styles.addMethodIcon}>
+        <Plus size={20} color={colors.primary.main} />
+      </View>
+      <View style={styles.grow}>
+        <Text style={styles.methodTitle}>Add a receiving method</Text>
+        <Text style={styles.muted}>Either a bank account, mobile money or wallet address</Text>
+      </View>
+      <ChevronRight size={18} color={colors.text.tertiary} />
+    </Pressable>
+  )
+}
+
+function MethodActions({
+  disabled,
+  onEdit,
+  onDelete,
+}: {
+  disabled: boolean
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  return (
+    <View style={styles.methodActions}>
+      <Pressable
+        disabled={disabled}
+        onPress={onEdit}
+        style={styles.methodAction}
+        accessibilityRole="button"
+        accessibilityLabel="Edit receiving method"
+      >
+        <Pencil size={17} color={colors.text.primary} />
+      </Pressable>
+      <Pressable
+        disabled={disabled}
+        onPress={onDelete}
+        style={styles.methodAction}
+        accessibilityRole="button"
+        accessibilityLabel="Delete receiving method"
+      >
+        <Trash2 size={17} color={colors.error.main} />
+      </Pressable>
+    </View>
   )
 }
 
@@ -789,7 +1038,10 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
   documentButton: { flexDirection: 'row', alignItems: 'center', gap: spacing[1], padding: spacing[2] },
   documentButtonText: { ...textStyles.titleSmall, color: colors.primary.main },
-  deleteText: { ...textStyles.bodySmall, color: colors.error.main, fontFamily: fontFamily.semibold },
+  methodActions: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  methodAction: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: colors.background.secondary },
+  addMethod: { minHeight: 76, padding: spacing[4], borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border.default, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  addMethodIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary.main + '12' },
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderRadius: borderRadius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.error.main + '45', backgroundColor: colors.error.main + '0D' },
   errorBannerText: { ...textStyles.bodySmall, color: colors.text.primary, flex: 1 },
   retryText: { ...textStyles.labelMedium, color: colors.primary.main, fontFamily: fontFamily.semibold },

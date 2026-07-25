@@ -9,7 +9,7 @@ jest.mock('../payrollApprovalTokenStore', () => ({
 
 import { isUserDeepLinkUrl, parseDeepLinkFromUrl } from '../pendingDeepLinkNavigation'
 
-describe('Payroll approval links', () => {
+describe('Payroll connection links', () => {
   it('accepts the canonical HTTPS payroll URL', () => {
     const url = 'https://app.easner.com/payroll?token=opaque'
     expect(isUserDeepLinkUrl(url)).toBe(true)

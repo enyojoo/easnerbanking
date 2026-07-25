@@ -31,7 +31,6 @@ import { isNavPathActive } from "@/lib/navigation/is-nav-path-active"
 function deriveOpenGroups(pathname: string) {
   const openGroups = new Set<string>()
   if (
-    pathname.startsWith("/invoices") ||
     pathname.startsWith("/terminal") ||
     pathname.startsWith("/qr-pay")
   ) {
@@ -82,13 +81,13 @@ export function DashboardNav() {
     { href: "/send", label: "Send", icon: Send, type: "single" as const },
     { href: "/payroll", label: "Payroll", icon: Users, type: "single" as const },
     { href: "/cards", label: "Cards", icon: CreditCard, type: "single" as const },
+    { href: "/invoices", label: "Invoices", icon: ReceiptText, type: "single" as const },
     {
       key: "collections",
       label: "Collections",
       icon: Inbox,
       type: "group" as const,
       items: [
-        { href: "/invoices", label: "Invoices", icon: ReceiptText },
         { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
         { href: "/qr-pay", label: "QR Pay", icon: QrCode },
       ],

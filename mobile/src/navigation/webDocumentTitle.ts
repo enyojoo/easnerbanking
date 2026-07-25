@@ -42,6 +42,7 @@ const ROUTE_TITLES: Record<string, string> = {
   OpenCurrencyAccount: 'Open Account',
   TransactionCard: 'Card Transactions',
   ScanWalletAddress: 'Scan Address',
+  PayrollApproval: 'Payroll Connections',
 }
 
 function humanizeRouteName(name: string): string {

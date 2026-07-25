@@ -70,6 +70,11 @@ import {
 } from '../../lib/compliance'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { apiFetch } from '../../query/api-client'
+import {
+  loadPayrollActivityVisible,
+  markPayrollActivityVisible,
+  peekPayrollActivityVisible,
+} from '../../lib/payrollActivityVisibility'
 
 type TierBadge = { label: string; tone: 'green' | 'yellow' }
 
@@ -123,6 +128,9 @@ function MoreContent({ navigation }: NavigationProps) {
   /** False until MFA status is read from cache or `listFactors` — avoids showing the MFA banner while loading or on errors. */
   const [mfaStatusResolved, setMfaStatusResolved] = useState(false)
   const [pendingPayrollCount, setPendingPayrollCount] = useState(0)
+  const [payrollActivityVisible, setPayrollActivityVisible] = useState(
+    () => Boolean(user?.id && peekPayrollActivityVisible(user.id)),
+  )
   const lastKycProfileRefreshRef = useRef(0)
   /** Latest profile for focus handler — avoids putting `noah_kyc_status` in `useFocusEffect` deps (would re-run MFA listFactors on every profile poll while More stays focused). */
   const userProfileRef = useRef(userProfile)
@@ -132,6 +140,31 @@ function MoreContent({ navigation }: NavigationProps) {
     if (!user?.id) {
       setMfaStatusLine('')
       setMfaStatusResolved(false)
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    let active = true
+    const userId = user?.id
+
+    setPendingPayrollCount(0)
+    if (!userId) {
+      setPayrollActivityVisible(false)
+      return () => {
+        active = false
+      }
+    }
+
+    const visibleInMemory = peekPayrollActivityVisible(userId)
+    setPayrollActivityVisible(visibleInMemory)
+    if (!visibleInMemory) {
+      void loadPayrollActivityVisible(userId).then((visible) => {
+        if (active && visible) setPayrollActivityVisible(true)
+      })
+    }
+
+    return () => {
+      active = false
     }
   }, [user?.id])
 
@@ -194,6 +227,8 @@ function MoreContent({ navigation }: NavigationProps) {
   useFocusEffect(
     useCallback(() => {
       if (!user?.id) return
+      let active = true
+      const userId = user.id
       const mem = peekMfaVerified(user.id)
       if (mem === true) {
         setMfaStatusLine('On')
@@ -210,9 +245,22 @@ function MoreContent({ navigation }: NavigationProps) {
         }
       }
       void refreshMfaStatus()
-      void apiFetch<{ pendingCount?: number }>('/api/payroll/connections?summary=true')
-        .then((result) => setPendingPayrollCount(Number(result.pendingCount ?? 0)))
+      void apiFetch<{ pendingCount?: number; hasActivity?: boolean }>(
+        '/api/payroll/connections?summary=true',
+      )
+        .then((result) => {
+          if (!active) return
+          setPendingPayrollCount(Number(result.pendingCount ?? 0))
+          if (result.hasActivity === true) {
+            setPayrollActivityVisible(true)
+            void markPayrollActivityVisible(userId)
+          }
+        })
         .catch(() => undefined)
+
+      return () => {
+        active = false
+      }
     }, [user?.id, refreshUserProfile, refreshMfaStatus]),
   )
 
@@ -550,19 +598,21 @@ function MoreContent({ navigation }: NavigationProps) {
                   false,
                   false,
                 )}
-                {renderMenuItem(
-                  'Payroll Approval',
-                  'Companies, receiving methods, and pay stubs',
-                  () => navigateFromMoreTab('PayrollApproval'),
-                  Banknote,
-                  pendingPayrollCount > 0 ? (
-                    <View style={styles.badgeYellow}>
-                      <Text style={styles.badgeTextYellow}>{pendingPayrollCount}</Text>
-                    </View>
-                  ) : undefined,
-                  false,
-                  false,
-                )}
+                {payrollActivityVisible
+                  ? renderMenuItem(
+                      'Payroll Connections',
+                      'Companies, receiving methods, and pay stubs',
+                      () => navigateFromMoreTab('PayrollApproval'),
+                      Banknote,
+                      pendingPayrollCount > 0 ? (
+                        <View style={styles.badgeYellow}>
+                          <Text style={styles.badgeTextYellow}>{pendingPayrollCount}</Text>
+                        </View>
+                      ) : undefined,
+                      false,
+                      false,
+                    )
+                  : null}
                 {renderMenuItem(
                   'Recipients',
                   'Saved people and payout destinations',

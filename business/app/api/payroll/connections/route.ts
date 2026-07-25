@@ -23,15 +23,35 @@ export async function GET(request: Request) {
   const summaryOnly = new URL(request.url).searchParams.get("summary") === "true"
 
   if (summaryOnly) {
-    const { count, error } = await admin
-      .from("payroll_connection_invitations")
-      .select("id", { count: "exact", head: true })
-      .eq("email", email)
-      .eq("status", "pending")
-      .gt("expires_at", now)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const [
+      { count: pendingCount, error: pendingError },
+      { count: invitationCount, error: invitationError },
+      { count: connectionCount, error: connectionError },
+    ] = await Promise.all([
+      admin
+        .from("payroll_connection_invitations")
+        .select("id", { count: "exact", head: true })
+        .eq("email", email)
+        .eq("status", "pending")
+        .gt("expires_at", now),
+      admin
+        .from("payroll_connection_invitations")
+        .select("id", { count: "exact", head: true })
+        .eq("email", email),
+      admin
+        .from("payroll_connections")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", auth.user.id),
+    ])
+    const summaryError = pendingError ?? invitationError ?? connectionError
+    if (summaryError) {
+      return NextResponse.json({ error: summaryError.message }, { status: 500 })
+    }
     return NextResponse.json(
-      { pendingCount: count ?? 0 },
+      {
+        pendingCount: pendingCount ?? 0,
+        hasActivity: (invitationCount ?? 0) > 0 || (connectionCount ?? 0) > 0,
+      },
       { headers: { "Cache-Control": "no-store" } },
     )
   }
