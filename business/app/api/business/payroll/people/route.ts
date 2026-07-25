@@ -46,10 +46,22 @@ export async function GET(request: Request) {
     const id = String(payment.person_id)
     if (!lastPaidByPerson.has(id) && payment.settled_at) lastPaidByPerson.set(id, String(payment.settled_at))
   }
-  const people = (data ?? []).map((row) => {
-    const person = mapRowToPayrollPerson(row as PayrollPersonRow)
+  const mappedPeople = (data ?? []).map((row) => mapRowToPayrollPerson(row as PayrollPersonRow))
+  const missingEmailTags = [...new Set(mappedPeople
+    .filter((person) => person.easetag && !person.email)
+    .map((person) => normalizeEasetag(person.easetag!)))]
+  const { data: easetagProfiles } = missingEmailTags.length
+    ? await admin.from("users").select("easetag,email").in("easetag", missingEmailTags)
+    : { data: [] }
+  const emailByEasetag = new Map((easetagProfiles ?? []).map((profile) => [
+    normalizeEasetag(String(profile.easetag || "")),
+    String(profile.email || "").trim().toLowerCase(),
+  ]))
+  const people = (data ?? []).map((row, index) => {
+    const person = mappedPeople[index]
     return {
       ...person,
+      email: person.email || (person.easetag ? emailByEasetag.get(normalizeEasetag(person.easetag)) : null) || null,
       lastPaidAt: lastPaidByPerson.get(person.id) ?? person.lastPaidAt ?? null,
       scheduleSummaries: (scheduleIdsByPerson.get(person.id) ?? []).map((id) => ({
         id,

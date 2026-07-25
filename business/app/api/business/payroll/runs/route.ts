@@ -28,7 +28,19 @@ export async function GET(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const runs = (data ?? []).map((r) => mapRowToPayrollRun(r as PayrollRunRow))
+  const runIds = (data ?? []).map((row) => String(row.id))
+  const { data: lineRows } = runIds.length
+    ? await admin.from("payroll_lines").select("run_id").in("run_id", runIds)
+    : { data: [] }
+  const peopleCountByRun = new Map<string, number>()
+  for (const line of lineRows ?? []) {
+    const runId = String(line.run_id)
+    peopleCountByRun.set(runId, (peopleCountByRun.get(runId) ?? 0) + 1)
+  }
+  const runs = (data ?? []).map((row) => ({
+    ...mapRowToPayrollRun(row as PayrollRunRow),
+    peopleCount: peopleCountByRun.get(String(row.id)) ?? 0,
+  }))
   return NextResponse.json({ runs })
 }
 

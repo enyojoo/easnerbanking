@@ -1,7 +1,13 @@
 import { Landmark, Smartphone, Tag, Wallet } from "lucide-react"
 import type { PayrollPerson } from "@/lib/payroll/types"
 
-export function PayrollReceivingMethod({ person }: { person: PayrollPerson }) {
+export function PayrollReceivingMethod({
+  person,
+  typeOnly = false,
+}: {
+  person: PayrollPerson
+  typeOnly?: boolean
+}) {
   const method = person.receivingMethodSummary
   const type = method?.type ?? (
     person.rail === "easetag" ? "easetag"
@@ -10,8 +16,12 @@ export function PayrollReceivingMethod({ person }: { person: PayrollPerson }) {
           : "bank"
   )
   const Icon = type === "easetag" ? Tag : type === "mobile_money" ? Smartphone : type === "stablecoin" ? Wallet : Landmark
-  const label = method?.label || (
-    type === "easetag" ? (person.easetag ? `@${person.easetag.replace(/^@/, "")}` : "EASETAG")
+  const typeLabel = type === "easetag" ? "Easetag"
+    : type === "mobile_money" ? "Mobile money"
+      : type === "stablecoin" ? "Stablecoin wallet"
+        : "Bank account"
+  const label = typeOnly ? typeLabel : method?.label || (
+    type === "easetag" ? (person.easetag ? `@${person.easetag.replace(/^@/, "")}` : "Easetag")
       : type === "mobile_money" ? "Mobile money"
         : type === "stablecoin" ? "Stablecoin wallet"
           : "Bank account"

@@ -1,15 +1,17 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Download, Mail, Pause, Pencil } from "lucide-react"
+import { ArrowLeft, Download, Mail, MoreHorizontal, Pause, Pencil, Play, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
-import { PayrollDeleteAction } from "@/components/payroll/payroll-delete-action"
+import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { usePayrollCapabilities, usePayrollPerson, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -35,6 +37,7 @@ export default function PayrollPersonDetailPage() {
   const update = useUpdatePayrollPerson()
   const invite = useInvitePayrollPerson()
   const deletePerson = useDeletePayrollPerson()
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const detail = query.data as ({ person: NonNullable<typeof query.data>["person"]; paymentHistory?: Payment[]; events?: Event[]; connection?: { status: string; approvedAt?: string | null; preferredMethod?: { label: string } | null } | null }) | undefined
   const person = detail?.person
   if (query.isPending) return <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-muted-foreground">Loading person…</div>
@@ -47,21 +50,19 @@ export default function PayrollPersonDetailPage() {
     <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-4">
         <Avatar className="h-14 w-14"><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
-        <div><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold">{person.fullName}</h1><PayrollStatusBadge status={person.status !== "active" ? person.status : person.readinessStatus} /></div><p className="mt-1 text-sm text-muted-foreground">{person.easetag ? `@${person.easetag.replace(/^@/, "")}` : person.email || "Manual payroll person"}</p></div>
+        <div><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold">{person.fullName}</h1><PayrollStatusBadge status={person.status !== "active" ? person.status : person.readinessStatus} /></div><p className="mt-1 text-sm text-muted-foreground">{person.easetag ? <><span>Easetag:</span> <span className="text-foreground">@{person.easetag.replace(/^@/, "")}</span></> : person.email || "Manual payroll person"}</p></div>
       </div>
-      {canPrepare ? <div className="flex flex-wrap gap-2">
-        <Button variant="outline" asChild><Link href={`/payroll/people/${person.id}/edit`}><Pencil className="mr-2 h-4 w-4" />Edit details</Link></Button>
-        {requestAction ? <Button variant="primary" onClick={() => invite.mutate(person.id, { onSuccess: () => toast.success("Payroll request sent"), onError: (e) => toast.error(e.message) })}><Mail className="mr-2 h-4 w-4" />{person.connectionStatus === "pending" ? "Resend request" : "Send payroll request"}</Button> : null}
-        <Button variant="outline" onClick={() => update.mutate({ id: person.id, patch: { status: person.status === "active" ? "held" : "active" } }, { onSuccess: () => toast.success(person.status === "active" ? "Person put on hold" : "Person reactivated") })}><Pause className="mr-2 h-4 w-4" />{person.status === "active" ? "Put on hold" : "Reactivate"}</Button>
-        <PayrollDeleteAction label="Delete person" title={`Delete ${person.fullName}?`} description="This permanently removes the person if they have never been included in a payroll run. People with payroll history must be put on hold instead." pending={deletePerson.isPending} onDelete={async () => {
-          try {
-            await deletePerson.mutateAsync(person.id)
-            toast.success("Person deleted")
-            router.push("/payroll/people")
-          } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Person could not be deleted")
-          }
-        }} />
+      {canPrepare ? <div className="flex shrink-0 items-center gap-2 overflow-x-auto">
+        <Button variant="outline" asChild><Link href={`/payroll/people/${person.id}/edit`}><Pencil className="mr-2 h-4 w-4" />Edit</Link></Button>
+        {requestAction ? <Button variant="primary" onClick={() => invite.mutate(person.id, { onSuccess: () => toast.success("Payroll request sent"), onError: (e) => toast.error(e.message) })}><Mail className="mr-2 h-4 w-4" />{person.connectionStatus === "pending" ? "Resend request" : "Send request"}</Button> : null}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild><Button variant="outline" size="icon" aria-label={`More actions for ${person.fullName}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => update.mutate({ id: person.id, patch: { status: person.status === "active" ? "held" : "active" } }, { onSuccess: () => toast.success(person.status === "active" ? "Person put on hold" : "Person reactivated") })}>{person.status === "active" ? <Pause /> : <Play />}{person.status === "active" ? "Put on hold" : "Reactivate"}</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}><Trash2 />Delete person</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div> : null}
     </div>
 
@@ -72,8 +73,8 @@ export default function PayrollPersonDetailPage() {
           <Detail label="Amount" value={formatCurrency(person.defaultAmount, businessCurrency)} />
           <Detail label="Residence country" value={person.country || "Not shared"} />
           <Detail label="Internal reference" value={person.internalReference || "—"} />
-          <Detail label="Email" value={person.rail === "easetag" ? "Managed through EASETAG" : person.email || "—"} />
-          <div><dt className="text-xs text-muted-foreground">Receiving method</dt><dd className="mt-1"><PayrollReceivingMethod person={person} /></dd></div>
+          <Detail label="Email" value={person.email || "—"} />
+          <div><dt className="text-xs text-muted-foreground">Receiving method</dt><dd className="mt-1"><PayrollReceivingMethod person={person} typeOnly /></dd></div>
         </dl></CardContent></Card>
 
         <Card className="shadow-soft"><CardContent className="p-6"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Payment history</h2><p className="mt-1 text-sm text-muted-foreground">Payroll payments and available pay stubs.</p></div></div>
@@ -93,6 +94,24 @@ export default function PayrollPersonDetailPage() {
         </ol></CardContent></Card>
       </div>
     </div>
+    <PayrollDeleteDialog
+      open={deleteOpen}
+      onOpenChange={setDeleteOpen}
+      title={`Delete ${person.fullName}?`}
+      description="This permanently removes the person if they have never been included in a payroll run. People with payroll history must be put on hold instead."
+      label="Delete person"
+      pending={deletePerson.isPending}
+      onDelete={async () => {
+        try {
+          await deletePerson.mutateAsync(person.id)
+          toast.success("Person deleted")
+          router.push("/payroll/people")
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Person could not be deleted")
+          throw error
+        }
+      }}
+    />
   </div>
 }
 

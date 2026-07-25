@@ -89,6 +89,8 @@ export interface PayrollRun {
   updatedAt: string
   lines?: PayrollLine[]
   events?: PayrollRunEvent[]
+  /** Hydrated for list views without loading every payment line. */
+  peopleCount?: number
 }
 
 export interface PayrollLine {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { maskPayrollMethod } from "@/lib/payroll/personal-payroll"
+import { PERSONAL_PAYROLL_CONNECTION_LIST_SELECT } from "@/lib/payroll/personal-connection-selects"
 
 function firstRelation(value: unknown): Record<string, unknown> {
   if (Array.isArray(value)) {
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
   const admin = createSupabaseAdmin()
   const [{ data, error }, { data: pendingRows, count: pendingCount }] = await Promise.all([
     admin.from("payroll_connections")
-    .select("*,businesses(name,easetag,logo_url,noah_kyb_status),payroll_people(full_name),payroll_payment_methods(id,type,label,masked_details,owner_type,status)")
+    .select(PERSONAL_PAYROLL_CONNECTION_LIST_SELECT)
     .eq("user_id", auth.user.id)
     .order("created_at", { ascending: false }),
     admin.from("payroll_connection_invitations")

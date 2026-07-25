@@ -2,15 +2,17 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { maskPayrollMethod } from "@/lib/payroll/personal-payroll"
+import { PERSONAL_PAYROLL_CONNECTION_DETAIL_SELECT } from "@/lib/payroll/personal-connection-selects"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { id } = await params
   const admin = createSupabaseAdmin()
-  const { data: row } = await admin.from("payroll_connections")
-    .select("*,businesses(name,easetag,logo_url,noah_kyb_status),payroll_people(full_name,readiness_status),payroll_payment_methods(id,type,label,masked_details,owner_type,status)")
+  const { data: row, error } = await admin.from("payroll_connections")
+    .select(PERSONAL_PAYROLL_CONNECTION_DETAIL_SELECT)
     .eq("id", id).eq("user_id", auth.user.id).maybeSingle()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!row) return NextResponse.json({ error: "Connection not found" }, { status: 404 })
   const methods = (row.payroll_payment_methods as Array<Record<string, unknown>> ?? [])
     .filter((method) => method.status === "active")
@@ -23,10 +25,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       ownerType: String(method.owner_type),
       status: String(method.status),
     }))
-  const { data: lines } = await admin.from("payroll_lines")
-    .select("id,amount_cents,pay_currency,status,settled_at,payroll_documents(*)")
-    .eq("person_id", row.person_id)
-    .order("created_at", { ascending: false })
+  const [{ data: lines }, { data: person }] = await Promise.all([
+    admin.from("payroll_lines")
+      .select("id,amount_cents,pay_currency,status,settled_at,payroll_documents(*)")
+      .eq("person_id", row.person_id)
+      .order("created_at", { ascending: false }),
+    admin.from("payroll_people")
+      .select("readiness_status")
+      .eq("id", row.person_id)
+      .maybeSingle(),
+  ])
   return NextResponse.json({
     connection: {
       id: String(row.id),
@@ -41,9 +49,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       sharedIdentity: row.shared_identity ?? {},
       methods,
       preferredMethod: methods.find((method) => method.preferred) ?? null,
-      readinessStatus: Array.isArray(row.payroll_people)
-        ? row.payroll_people[0]?.readiness_status ?? null
-        : (row.payroll_people as Record<string, unknown> | null)?.readiness_status ?? null,
+      readinessStatus: person?.readiness_status ?? null,
       paymentHistory: (lines ?? []).map((line) => ({
         lineId: String(line.id),
         businessName: String((row.businesses as Record<string, unknown>)?.name || "Easner Business"),

@@ -10,6 +10,7 @@ import type { PayrollPersonInput } from "@/lib/payroll/types"
 import { maskPayrollMethod } from "@/lib/payroll/personal-payroll"
 import { buildPayrollLines } from "@/lib/payroll/build-lines"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
+import { normalizeEasetag } from "@/lib/easetag-validation"
 
 export async function GET(
   request: Request,
@@ -29,6 +30,17 @@ export async function GET(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  const mappedPerson = mapRowToPayrollPerson(data as PayrollPersonRow)
+  const { data: easetagProfile } = mappedPerson.easetag && !mappedPerson.email
+    ? await admin.from("users")
+        .select("email")
+        .eq("easetag", normalizeEasetag(mappedPerson.easetag))
+        .maybeSingle()
+    : { data: null }
+  const person = {
+    ...mappedPerson,
+    email: mappedPerson.email || String(easetagProfile?.email || "").trim().toLowerCase() || null,
+  }
 
   const [{ data: connection }, { data: lines }, { data: events }] = await Promise.all([
     admin.from("payroll_connections")
@@ -50,7 +62,7 @@ export async function GET(
     (connection?.payroll_payment_methods as Array<Record<string, unknown>> | null) ?? []
   ).filter((method) => method.status === "active")
   return NextResponse.json({
-    person: mapRowToPayrollPerson(data as PayrollPersonRow),
+    person,
     connection: connection ? {
       id: connection.id,
       status: connection.status,

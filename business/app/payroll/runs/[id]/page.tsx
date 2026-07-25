@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
+import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
+import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollLineStatusBadge, PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
 import { PayrollRailBadge } from "@/components/payroll/payroll-rail-badge"
 import { PayrollDeleteAction } from "@/components/payroll/payroll-delete-action"
@@ -165,20 +167,15 @@ export default function PayrollRunDetailPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <Link href="/payroll/runs" className="text-sm text-muted-foreground hover:text-foreground">
-            ← Runs
-          </Link>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">
-            {formatCurrency(run.totalSource, run.sourceCurrency)}
-          </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <PayrollRunStatusBadge status={run.status} />
-            <span className="text-sm text-muted-foreground">{railSummary}</span>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <Button variant="ghost" size="sm" className="mb-4" asChild>
+        <Link href="/payroll/runs"><ArrowLeft className="mr-2 h-4 w-4" />Back to Runs</Link>
+      </Button>
+      <PayrollPageHeader
+        title={String(run.metadata?.name || "Payroll run")}
+        description={run.payPeriodStart && run.payPeriodEnd
+          ? `${formatDate(run.payPeriodStart)} – ${formatDate(run.payPeriodEnd)}`
+          : "Payroll payment details and results."}
+        actions={<>
           {hasPayStubs ? (
             <Button variant="outline" asChild>
               <a href={`/api/business/payroll/runs/${runId}/documents/export`} download>
@@ -188,6 +185,9 @@ export default function PayrollRunDetailPage() {
           ) : null}
           {run.status === "draft" && canPrepare ? (
             <>
+              <Button variant="outline" asChild>
+                <Link href={`/payroll/runs/${runId}/edit`}>Edit run</Link>
+              </Button>
               <PayrollDeleteAction label="Delete draft" title="Delete this payroll draft?" description="This permanently removes the draft and its unsent payment lines. Submitted or completed payroll history cannot be deleted." pending={deleteRun.isPending} onDelete={async () => {
                 try {
                   await deleteRun.mutateAsync(runId)
@@ -197,9 +197,6 @@ export default function PayrollRunDetailPage() {
                   toast.error(error instanceof Error ? error.message : "Payroll draft could not be deleted")
                 }
               }} />
-              <Button variant="outline" asChild>
-                <Link href={`/payroll/runs/${runId}/edit`}>Continue editing</Link>
-              </Button>
               <Button
                 variant="primary"
                 onClick={() =>
@@ -269,11 +266,13 @@ export default function PayrollRunDetailPage() {
               Retry failed
             </Button>
           ) : null}
-        </div>
-      </div>
+        </>}
+      />
 
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-6">
       {run.shortfall > 0 ? (
-        <Card className="shadow-soft border-amber-200/60 mb-4">
+        <Card className="shadow-soft border-amber-200/60">
           <CardContent className="p-4 text-sm text-amber-800 dark:text-amber-300">
             Need {formatCurrency(run.shortfall, run.sourceCurrency)} more in {run.sourceCurrency} before
             execute.
@@ -281,21 +280,18 @@ export default function PayrollRunDetailPage() {
         </Card>
       ) : null}
 
-      {run.status === "draft" ? (
-        <Card className="shadow-soft mb-4">
-          <CardContent className="p-4">
-            <p className="mb-3 text-sm font-medium">Payroll details</p>
-            <div className="grid gap-4 text-sm sm:grid-cols-4">
-              <Detail label="Name" value={String(run.metadata?.name || "Payroll run")} />
+        <Card className="shadow-soft">
+          <CardContent className="p-5">
+            <p className="mb-4 text-sm font-medium">Payroll details</p>
+            <div className="grid gap-4 text-sm sm:grid-cols-3">
               <Detail label="Pay period start" value={run.payPeriodStart ? formatDate(run.payPeriodStart) : "—"} />
               <Detail label="Pay period end" value={run.payPeriodEnd ? formatDate(run.payPeriodEnd) : "—"} />
               <Detail label="Payday" value={run.payday ? formatDate(run.payday) : "—"} />
             </div>
           </CardContent>
         </Card>
-      ) : null}
 
-      <Card className="shadow-card mb-6">
+      <Card className="shadow-card">
         <div className="px-4 pt-4 text-sm font-medium">
           {run.status === "draft" ? "People and amounts" : "People and payment results"}
         </div>
@@ -338,7 +334,7 @@ export default function PayrollRunDetailPage() {
       </Card>
 
       {run.approvalSnapshot ? (
-        <Card className="shadow-soft mb-6">
+        <Card className="shadow-soft">
           <CardContent className="p-5">
             <h2 className="text-sm font-medium">Approved payroll details</h2>
             <div className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
@@ -350,7 +346,7 @@ export default function PayrollRunDetailPage() {
         </Card>
       ) : null}
 
-      <Card className="shadow-soft mb-6">
+      <Card className="shadow-soft">
         <CardContent className="p-4 text-sm space-y-2">
           <p>
             <span className="text-muted-foreground">Scheduled for:</span>{" "}
@@ -369,7 +365,7 @@ export default function PayrollRunDetailPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-soft mb-6">
+      <Card className="shadow-soft">
         <CardContent className="p-5">
           <h2 className="text-sm font-medium">Activity</h2>
           <ol className="mt-4 space-y-4">
@@ -383,8 +379,25 @@ export default function PayrollRunDetailPage() {
           </ol>
         </CardContent>
       </Card>
-
-      <PayrollLegalNote />
+        </div>
+        <div className="space-y-6">
+          <Card className="h-fit shadow-soft lg:sticky lg:top-6">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-semibold">Run summary</h2>
+                <PayrollRunStatusBadge status={run.status} />
+              </div>
+              <dl className="mt-5 space-y-4 text-sm">
+                <SummaryDetail label="Amount" value={formatCurrency(run.totalSource, run.sourceCurrency)} strong />
+                <SummaryDetail label="People" value={String(lines.length)} />
+                <SummaryDetail label="Receiving methods" value={railSummary || "—"} />
+                <SummaryDetail label="Created" value={formatDate(run.createdAt)} />
+              </dl>
+            </CardContent>
+          </Card>
+          <PayrollLegalNote />
+        </div>
+      </div>
 
       {user?.id ? (
         <PinChallengeDialog
@@ -394,6 +407,15 @@ export default function PayrollRunDetailPage() {
           onVerified={confirmWithPin.onVerified}
         />
       ) : null}
+    </div>
+  )
+}
+
+function SummaryDetail({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={strong ? "text-right font-semibold tabular-nums" : "text-right"}>{value}</dd>
     </div>
   )
 }

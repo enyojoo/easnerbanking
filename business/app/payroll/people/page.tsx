@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Mail, MoreHorizontal, Pause, Plus, Search, Upload } from "lucide-react"
+import { Eye, Mail, MoreHorizontal, Pause, Pencil, Plus, Search, Trash2, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -12,19 +12,24 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { CountryFlag } from "@/components/flags"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
+import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollPermissionAction } from "@/components/payroll/payroll-permission-action"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { usePayrollCapabilities, usePayrollPeople, usePayrollSettings } from "@/hooks/queries/use-payroll"
-import { useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
+import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import type { PayrollPerson } from "@/lib/payroll/types"
+import { countries } from "@/lib/countries"
 
 type Filter = "all" | "ready" | "awaiting" | "attention" | "inactive"
 
@@ -36,7 +41,9 @@ export default function PayrollPeoplePage() {
   const canPrepare = Boolean(capabilitiesQuery.data?.canPrepare)
   const updatePerson = useUpdatePayrollPerson()
   const invitePerson = useInvitePayrollPerson()
+  const deletePerson = useDeletePayrollPerson()
   const [search, setSearch] = useState("")
+  const [deleteTarget, setDeleteTarget] = useState<PayrollPerson | null>(null)
   const initial = searchParams.get("status")
   const [filter, setFilter] = useState<Filter>(
     initial === "awaiting" || initial === "attention" || initial === "inactive" ? initial : "all",
@@ -99,7 +106,7 @@ export default function PayrollPeoplePage() {
         <Card className="overflow-hidden shadow-soft">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Person</TableHead><TableHead>Classification</TableHead><TableHead>Connection</TableHead><TableHead>Receiving method</TableHead><TableHead>Amount</TableHead><TableHead>Readiness</TableHead><TableHead>Last paid</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
+              <TableHead>Person</TableHead><TableHead>Classification</TableHead><TableHead>Receiving method</TableHead><TableHead>Amount</TableHead><TableHead>Country</TableHead><TableHead>Last paid</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {people.map((person) => (
@@ -109,15 +116,16 @@ export default function PayrollPeoplePage() {
                     <span className="min-w-0"><span className="block truncate font-medium">{person.fullName}</span><span className="block truncate text-xs text-muted-foreground">{person.easetag ? `@${person.easetag.replace(/^@/, "")}` : person.email || person.internalReference || "Manual setup"}</span></span>
                   </Link></TableCell>
                   <TableCell className="capitalize">{person.type}</TableCell>
-                  <TableCell><PayrollStatusBadge status={person.connectionStatus} /></TableCell>
-                  <TableCell><PayrollReceivingMethod person={person} /></TableCell>
+                  <TableCell><PayrollReceivingMethod person={person} typeOnly /></TableCell>
                   <TableCell className="tabular-nums">{formatCurrency(person.defaultAmount, payrollCurrency || person.payCurrency)}</TableCell>
-                  <TableCell><PayrollStatusBadge status={person.status !== "active" ? person.status : person.readinessStatus} /></TableCell>
+                  <TableCell><PayrollCountry country={person.country} /></TableCell>
                   <TableCell>{person.lastPaidAt ? formatDate(person.lastPaidAt) : "—"}</TableCell>
-                  <TableCell><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild><Link href={`/payroll/people/${person.id}`}>View details</Link></DropdownMenuItem>
-                    {person.rail === "easetag" && person.email && person.connectionStatus !== "approved" ? <DropdownMenuItem onClick={() => invitePerson.mutate(person.id, { onSuccess: () => toast.success("Payroll request sent"), onError: (e) => toast.error(e.message) })}><Mail className="mr-2 h-4 w-4" />{person.connectionStatus === "pending" ? "Resend request" : "Send request"}</DropdownMenuItem> : null}
-                    <DropdownMenuItem onClick={() => updatePerson.mutate({ id: person.id, patch: { status: person.status === "active" ? "held" : "active" } }, { onSuccess: () => toast.success(person.status === "active" ? "Person put on hold" : "Person reactivated") })}><Pause className="mr-2 h-4 w-4" />{person.status === "active" ? "Put on hold" : "Reactivate"}</DropdownMenuItem>
+                  <TableCell><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={`Actions for ${person.fullName}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild><Link href={`/payroll/people/${person.id}`}><Eye />View details</Link></DropdownMenuItem>
+                    {canPrepare ? <DropdownMenuItem asChild><Link href={`/payroll/people/${person.id}/edit`}><Pencil />Edit person</Link></DropdownMenuItem> : null}
+                    {canPrepare && person.rail === "easetag" && person.email && person.connectionStatus !== "approved" ? <DropdownMenuItem onClick={() => invitePerson.mutate(person.id, { onSuccess: () => toast.success("Payroll request sent"), onError: (e) => toast.error(e.message) })}><Mail />{person.connectionStatus === "pending" ? "Resend request" : "Send request"}</DropdownMenuItem> : null}
+                    {canPrepare ? <DropdownMenuItem onClick={() => updatePerson.mutate({ id: person.id, patch: { status: person.status === "active" ? "held" : "active" } }, { onSuccess: () => toast.success(person.status === "active" ? "Person put on hold" : "Person reactivated") })}><Pause />{person.status === "active" ? "Put on hold" : "Reactivate"}</DropdownMenuItem> : null}
+                    {canPrepare ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(person)}><Trash2 />Delete person</DropdownMenuItem></> : null}
                   </DropdownMenuContent></DropdownMenu></TableCell>
                 </TableRow>
               ))}
@@ -125,6 +133,40 @@ export default function PayrollPeoplePage() {
           </Table>
         </Card>
       )}
+      <PayrollDeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={deleteTarget ? `Delete ${deleteTarget.fullName}?` : "Delete person?"}
+        description="This permanently removes the person if they have never been included in a payroll run. People with payroll history must be put on hold instead."
+        label="Delete person"
+        pending={deletePerson.isPending}
+        onDelete={async () => {
+          if (!deleteTarget) return
+          try {
+            await deletePerson.mutateAsync(deleteTarget.id)
+            toast.success("Person deleted")
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Person could not be deleted")
+            throw error
+          }
+        }}
+      />
     </div>
+  )
+}
+
+function PayrollCountry({ country }: { country: string | null }) {
+  const value = String(country || "").trim()
+  if (!value) return <span className="text-muted-foreground">—</span>
+  const normalized = value.toLowerCase()
+  const match = countries.find((item) =>
+    item.code.toLowerCase() === normalized || item.name.toLowerCase() === normalized
+  )
+  if (!match) return <span>{value}</span>
+  return (
+    <span className="inline-flex items-center gap-2">
+      <CountryFlag code={match.code} size={20} className="shrink-0" />
+      <span>{match.name}</span>
+    </span>
   )
 }

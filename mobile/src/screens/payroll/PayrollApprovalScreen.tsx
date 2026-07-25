@@ -1,18 +1,25 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native'
-import { ArrowLeft, Building2, Check, ChevronRight, FileText, ShieldCheck } from 'lucide-react-native'
+import { Building2, Check, ChevronRight, FileText, ShieldCheck } from 'lucide-react-native'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { Button, SectionCard, StatusPill } from '../../components/ui'
+import InternalHeader from '../../components/InternalHeader'
+import EmptyState from '../../components/EmptyState'
+import { ListRowSkeleton } from '../../components/skeletons'
 import { NavigationProps } from '../../types'
 import { apiFetch } from '../../query/api-client'
 import { colors, borderRadius, fontFamily, spacing, textStyles } from '../../theme'
+import { useScope } from '../../query/scope'
+import { useFocusRefresh } from '../../hooks/useFocusRefresh'
+import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import {
   clearPayrollApprovalToken,
   readPayrollApprovalToken,
@@ -69,6 +76,13 @@ type ConnectionDetail = Connection & {
   }>
 }
 
+type ConnectionsResponse = {
+  connections: Connection[]
+  pendingInvitations?: Invitation[]
+}
+
+const PAYROLL_CONNECTIONS_STALE_MS = 5 * 60_000
+
 function methodDescription(method: Method | null): string {
   if (!method) return 'Receiving method needed'
   const masked = Object.values(method.maskedDetails ?? {}).filter(Boolean).join(' · ')
@@ -84,42 +98,62 @@ function money(amount: number, currency: string): string {
 }
 
 export default function PayrollApprovalScreen({ navigation, route }: NavigationProps) {
+  const { scope } = useScope()
+  const queryClient = useQueryClient()
+  const scrollBottomPadding = useScrollBottomPadding(spacing[6])
   const routeToken = typeof route.params?.token === 'string' ? route.params.token : null
   const routeConnectionId = typeof route.params?.connectionId === 'string' ? route.params.connectionId : null
   const routeInvitationId = typeof route.params?.invitationId === 'string' ? route.params.invitationId : null
-  const [loading, setLoading] = useState(true)
+  const [bootstrapping, setBootstrapping] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [invitation, setInvitation] = useState<Invitation | null>(null)
-  const [connections, setConnections] = useState<Connection[]>([])
-  const [pendingInvitations, setPendingInvitations] = useState<Invitation[]>([])
-  const [detail, setDetail] = useState<ConnectionDetail | null>(null)
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(routeConnectionId)
   const [selectedMethodId, setSelectedMethodId] = useState('')
   const [completedMessage, setCompletedMessage] = useState('')
   const [selectedDocumentId, setSelectedDocumentId] = useState('')
 
-  const loadConnections = useCallback(async () => {
-    const response = await apiFetch<{ connections: Connection[]; pendingInvitations?: Invitation[] }>('/api/payroll/connections')
-    setConnections(response.connections ?? [])
-    setPendingInvitations(response.pendingInvitations ?? [])
-    return response
-  }, [])
+  const connectionsKey = useMemo(
+    () => scope
+      ? ['personal', scope.userId, 'payroll', 'connections'] as const
+      : ['personal', 'payroll', 'connections', 'disabled'] as const,
+    [scope],
+  )
+  const connectionsQuery = useQuery({
+    queryKey: connectionsKey,
+    enabled: Boolean(scope),
+    queryFn: () => apiFetch<ConnectionsResponse>('/api/payroll/connections'),
+    staleTime: PAYROLL_CONNECTIONS_STALE_MS,
+    gcTime: 60 * 60_000,
+    refetchOnWindowFocus: true,
+    meta: { safePersist: true, freshness: 'operational' },
+  })
+  const detailQuery = useQuery({
+    queryKey: scope && selectedConnectionId
+      ? ['personal', scope.userId, 'payroll', 'connections', selectedConnectionId] as const
+      : ['personal', 'payroll', 'connection', 'disabled'] as const,
+    enabled: Boolean(scope && selectedConnectionId),
+    queryFn: () =>
+      apiFetch<{ connection: ConnectionDetail }>(
+        `/api/payroll/connections/${selectedConnectionId}`,
+      ).then((response) => response.connection),
+    staleTime: 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: true,
+    // Payment history is intentionally kept in memory only.
+    meta: { safePersist: false, freshness: 'operational' },
+  })
+  const connections = connectionsQuery.data?.connections ?? []
+  const pendingInvitations = connectionsQuery.data?.pendingInvitations ?? []
+  const detail = detailQuery.data ?? null
 
-  const loadDetail = useCallback(async (id: string) => {
-    setLoading(true)
-    setError('')
-    try {
-      const response = await apiFetch<{ connection: ConnectionDetail }>(`/api/payroll/connections/${id}`)
-      setDetail(response.connection)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load payroll connection')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const refreshConnections = useCallback(async () => {
+    await connectionsQuery.refetch()
+  }, [connectionsQuery.refetch])
+
+  useFocusRefresh(refreshConnections, PAYROLL_CONNECTIONS_STALE_MS)
 
   const resolveInvitation = useCallback(async (token: string) => {
-    setLoading(true)
     setError('')
     try {
       const response = await apiFetch<{ invitation: Invitation }>('/api/payroll/invitations/resolve', {
@@ -132,8 +166,6 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
       setSelectedMethodId(preferred?.id ?? '')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open payroll invitation')
-    } finally {
-      setLoading(false)
     }
   }, [])
 
@@ -149,27 +181,36 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
       if (cancelled) return
       if (storedToken) {
         await resolveInvitation(storedToken)
-      } else if (routeConnectionId) {
-        await loadDetail(routeConnectionId)
-      } else {
+      } else if (routeInvitationId) {
         try {
-          const response = await loadConnections()
-          const requested = response.pendingInvitations?.find((item) => item.id === routeInvitationId)
-          if (requested) {
+          const response = await connectionsQuery.refetch()
+          const requested = response.data?.pendingInvitations?.find((item) => item.id === routeInvitationId)
+          if (requested && !cancelled) {
             setInvitation(requested)
             const preferred = requested.methods.find((method) => method.preferred)
               ?? requested.methods.find((method) => method.type === 'easetag')
             setSelectedMethodId(preferred?.id ?? '')
           }
         } catch (e) {
-          setError(e instanceof Error ? e.message : 'Could not load payroll approvals')
-        } finally {
-          if (!cancelled) setLoading(false)
+          if (!cancelled) {
+            setError(e instanceof Error ? e.message : 'Could not load payroll approvals')
+          }
         }
       }
+      if (!cancelled) setBootstrapping(false)
     })()
     return () => { cancelled = true }
-  }, [loadConnections, loadDetail, navigation, resolveInvitation, route.params?.methodUpdatedAt, routeConnectionId, routeInvitationId, routeToken])
+  }, [connectionsQuery.refetch, navigation, resolveInvitation, route.params?.methodUpdatedAt, routeInvitationId, routeToken])
+
+  useEffect(() => {
+    if (routeConnectionId) setSelectedConnectionId(routeConnectionId)
+  }, [routeConnectionId])
+
+  useEffect(() => {
+    if (!route.params?.methodUpdatedAt || !selectedConnectionId) return
+    void detailQuery.refetch()
+    void connectionsQuery.refetch()
+  }, [connectionsQuery.refetch, detailQuery.refetch, route.params?.methodUpdatedAt, selectedConnectionId])
 
   function openReceivingMethodSetup(context: { invitationId?: string; connectionId?: string }) {
     navigation.navigate('Recipients', {
@@ -185,7 +226,10 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     setError('')
     try {
       await apiFetch(`/api/payroll/connections/${detail.id}/methods/${methodId}`, { method: 'PATCH' })
-      await loadDetail(detail.id)
+      await Promise.all([
+        detailQuery.refetch(),
+        queryClient.invalidateQueries({ queryKey: connectionsKey }),
+      ])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not change receiving method')
     } finally {
@@ -199,7 +243,10 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     setError('')
     try {
       await apiFetch(`/api/payroll/connections/${detail.id}/methods/${methodId}`, { method: 'DELETE' })
-      await loadDetail(detail.id)
+      await Promise.all([
+        detailQuery.refetch(),
+        queryClient.invalidateQueries({ queryKey: connectionsKey }),
+      ])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not delete receiving method')
     } finally {
@@ -228,7 +275,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
             : `You've approved ${invitation.businessName}. Your receiving method still needs verification before payroll can be sent.`
           : `You've declined ${invitation.businessName}'s payroll request.`,
       )
-      await loadConnections()
+      await queryClient.invalidateQueries({ queryKey: connectionsKey })
     } catch (e) {
       setError(e instanceof Error ? e.message : `Could not ${action} invitation`)
     } finally {
@@ -242,8 +289,12 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     try {
       await apiFetch(`/api/payroll/connections/${detail.id}`, { method: 'DELETE' })
       setCompletedMessage(`Payroll approval for ${detail.businessName} was revoked.`)
-      setDetail(null)
-      await loadConnections()
+      setSelectedConnectionId(null)
+      queryClient.removeQueries({
+        queryKey: ['personal', scope?.userId, 'payroll', 'connections', detail.id],
+        exact: true,
+      })
+      await queryClient.invalidateQueries({ queryKey: connectionsKey })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not revoke approval')
     } finally {
@@ -251,23 +302,24 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     }
   }
 
-  function Header({ title }: { title: string }) {
-    return (
-      <View style={styles.header}>
-        <Pressable onPress={() => detail ? setDetail(null) : navigation.goBack()} accessibilityLabel="Back">
-          <ArrowLeft size={22} color={colors.text.primary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>{title}</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-    )
-  }
+  const showDetail = Boolean(selectedConnectionId)
+  const initialListLoading = !connectionsQuery.data && connectionsQuery.isPending
+  const initialDetailLoading = showDetail && !detail && detailQuery.isPending
+  const loading = bootstrapping || (!invitation && (initialListLoading || initialDetailLoading))
 
   if (loading) {
     return (
       <ScreenWrapper>
-        <Header title="Payroll Approval" />
-        <View style={styles.center}><ActivityIndicator color={colors.primary.main} /></View>
+        <InternalHeader
+          title={showDetail ? 'Payroll details' : 'Payroll Approval'}
+          onBack={showDetail ? () => setSelectedConnectionId(null) : undefined}
+        />
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <PayrollScreenSkeleton detail={showDetail} />
+        </ScrollView>
       </ScreenWrapper>
     )
   }
@@ -275,9 +327,12 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   if (invitation) {
     return (
       <ScreenWrapper>
-        <Header title="Payroll Approval" />
-        <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.businessHero}>
+        <InternalHeader title="Payroll Approval" onBack={() => setInvitation(null)} />
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <SectionCard style={styles.businessHero}>
             {invitation.businessLogoUrl ? (
               <CachedImage uri={invitation.businessLogoUrl} style={styles.businessLogo} contentFit="cover" />
             ) : (
@@ -290,7 +345,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
               <Text style={styles.muted}>{invitation.businessVerified ? 'Verified business' : 'Business verification pending'}</Text>
             </View>
             <Text style={styles.body}>wants to connect with you for payroll payments.</Text>
-          </View>
+          </SectionCard>
 
           <SectionCard style={styles.card}>
             <View style={styles.sectionHeading}>
@@ -326,7 +381,13 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
           <Button title="Add bank, mobile money, or stablecoin" variant="outline"
             onPress={() => openReceivingMethodSetup({ invitationId: invitation.id })} fullWidth />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? (
+            <InlineError
+              message={error}
+              actionLabel="Dismiss"
+              onRetry={() => setError('')}
+            />
+          ) : null}
           <View style={styles.actions}>
             <Button title="Approve" onPress={() => void respond('approve')} loading={busy}
               disabled={!selectedMethodId} fullWidth />
@@ -341,11 +402,27 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   if (detail) {
     return (
       <ScreenWrapper>
-        <Header title={detail.businessName} />
-        <ScrollView contentContainerStyle={styles.content}>
+        <InternalHeader title={detail.businessName} onBack={() => setSelectedConnectionId(null)} />
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={detailQuery.isRefetching}
+              onRefresh={() => void detailQuery.refetch()}
+              tintColor={colors.primary.main}
+            />
+          }
+        >
+          {detailQuery.error ? (
+            <InlineError
+              message={detailQuery.error instanceof Error ? detailQuery.error.message : 'Could not refresh payroll details'}
+              onRetry={() => void detailQuery.refetch()}
+            />
+          ) : null}
           <SectionCard style={styles.card}>
             <Text style={styles.sectionTitle}>Payroll connection</Text>
-            <View style={styles.detailRow}><Text style={styles.muted}>Status</Text><StatusPill label={detail.status} tone={detail.status === 'approved' ? 'success' : 'neutral'} /></View>
+            <View style={styles.detailRow}><Text style={styles.muted}>Status</Text><StatusPill label={detail.status} tone={detail.status === 'approved' ? 'completed' : 'neutral'} /></View>
             <View style={styles.detailRow}><Text style={styles.muted}>Payroll readiness</Text><Text style={styles.rowText}>{detail.readinessStatus === 'ready' ? 'Ready' : 'Needs attention'}</Text></View>
             <View style={styles.detailRow}><Text style={styles.muted}>Receiving via</Text><Text style={styles.rowText}>{methodDescription(detail.preferredMethod)}</Text></View>
           </SectionCard>
@@ -379,23 +456,27 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
             </>
           ) : null}
           <Text style={styles.label}>Payment history</Text>
-          {detail.paymentHistory.length === 0 ? <Text style={styles.muted}>No payroll payments yet.</Text> : detail.paymentHistory.map((payment) => (
-            <SectionCard key={payment.lineId} style={styles.card}>
-              <View style={styles.detailRow}>
-                <View>
-                  <Text style={styles.methodTitle}>{money(payment.amount, payment.currency)}</Text>
-                  <Text style={styles.muted}>{payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : payment.status}</Text>
-                </View>
-                {payment.document?.id ? (
-                  <Pressable onPress={() => setSelectedDocumentId(String(payment.document?.id))} style={styles.documentButton}>
-                    <FileText size={16} color={colors.primary.main} />
-                    <Text style={styles.documentButtonText}>Pay stub</Text>
-                  </Pressable>
-                ) : null}
-              </View>
+          {detail.paymentHistory.length === 0 ? (
+            <SectionCard>
+              <Text style={styles.emptyCardText}>Payments and pay stubs from this business will appear here.</Text>
             </SectionCard>
-          ))}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          ) : detail.paymentHistory.map((payment) => (
+              <SectionCard key={payment.lineId} style={styles.card}>
+                <View style={styles.detailRow}>
+                  <View>
+                    <Text style={styles.methodTitle}>{money(payment.amount, payment.currency)}</Text>
+                    <Text style={styles.muted}>{payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : payment.status}</Text>
+                  </View>
+                  {payment.document?.id ? (
+                    <Pressable onPress={() => setSelectedDocumentId(String(payment.document?.id))} style={styles.documentButton}>
+                      <FileText size={16} color={colors.primary.main} />
+                      <Text style={styles.documentButtonText}>Pay stub</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </SectionCard>
+            ))}
+          {error ? <InlineError message={error} actionLabel="Dismiss" onRetry={() => setError('')} /> : null}
           {detail.status === 'approved' ? (
             <Button title="Revoke approval" variant="destructive" onPress={() => void revokeConnection()} loading={busy} fullWidth />
           ) : null}
@@ -409,68 +490,271 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     )
   }
 
+  if (showDetail && detailQuery.error) {
+    return (
+      <ScreenWrapper>
+        <InternalHeader title="Payroll details" onBack={() => setSelectedConnectionId(null)} />
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}>
+          <SectionCard>
+            <EmptyState
+              icon={Building2}
+              title="Could not load payroll details"
+              message={detailQuery.error instanceof Error
+                ? detailQuery.error.message
+                : 'Check your connection and try again.'}
+              action={{ label: 'Try again', onPress: () => void detailQuery.refetch() }}
+            />
+          </SectionCard>
+        </ScrollView>
+      </ScreenWrapper>
+    )
+  }
+
+  if (!connectionsQuery.data && connectionsQuery.error) {
+    return (
+      <ScreenWrapper>
+        <InternalHeader title="Payroll Approval" />
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
+          refreshControl={
+            <RefreshControl
+              refreshing={connectionsQuery.isRefetching}
+              onRefresh={() => void connectionsQuery.refetch()}
+              tintColor={colors.primary.main}
+            />
+          }
+        >
+          <SectionCard>
+            <EmptyState
+              icon={Building2}
+              title="Payroll approvals unavailable"
+              message={connectionsQuery.error instanceof Error
+                ? connectionsQuery.error.message
+                : 'Check your connection and try again.'}
+              action={{ label: 'Try again', onPress: () => void connectionsQuery.refetch() }}
+            />
+          </SectionCard>
+        </ScrollView>
+      </ScreenWrapper>
+    )
+  }
+
+  const approvedConnections = connections.filter((item) => item.status === 'approved')
+  const inactiveConnections = connections.filter((item) => item.status !== 'approved')
+  const isEmpty = pendingInvitations.length === 0
+    && approvedConnections.length === 0
+    && inactiveConnections.length === 0
+
   return (
     <ScreenWrapper>
-      <Header title="Payroll Approval" />
-      <ScrollView contentContainerStyle={styles.content}>
+      <InternalHeader
+        title="Payroll Approval"
+        subtitle={pendingInvitations.length > 0
+          ? `${pendingInvitations.length} request${pendingInvitations.length === 1 ? '' : 's'} waiting`
+          : 'Manage who can pay you'}
+      />
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={connectionsQuery.isRefetching}
+            onRefresh={() => void connectionsQuery.refetch()}
+            tintColor={colors.primary.main}
+          />
+        }
+      >
         {completedMessage ? <View style={styles.successBox}><Check size={18} color={colors.success.main} /><Text style={styles.successText}>{completedMessage}</Text></View> : null}
-        <Text style={styles.label}>Pending</Text>
-        {pendingInvitations.length === 0 ? (
-          <Text style={styles.muted}>No pending payroll requests.</Text>
-        ) : pendingInvitations.map((pending) => (
-          <Pressable key={pending.id} style={styles.connectionRow} onPress={() => {
-            setInvitation(pending)
-            const preferred = pending.methods.find((method) => method.preferred)
-              ?? pending.methods.find((method) => method.type === 'easetag')
-            setSelectedMethodId(preferred?.id ?? '')
-          }}>
-            <View style={styles.businessIcon}><Building2 size={20} color={colors.primary.main} /></View>
-            <View style={styles.grow}>
-              <Text style={styles.methodTitle}>{pending.businessName}</Text>
-              <Text style={styles.muted}>Review payroll connection request</Text>
-            </View>
-            <ChevronRight size={18} color={colors.text.tertiary} />
-          </Pressable>
-        ))}
-        <Text style={styles.label}>Approved</Text>
-        {connections.filter((item) => item.status === 'approved').length === 0 ? (
-          <Text style={styles.muted}>No approved payroll connections.</Text>
-        ) : connections.filter((item) => item.status === 'approved').map((connection) => (
-          <Pressable key={connection.id} style={styles.connectionRow} onPress={() => void loadDetail(connection.id)}>
-            <View style={styles.businessIcon}><Building2 size={20} color={colors.primary.main} /></View>
-            <View style={styles.grow}>
-              <Text style={styles.methodTitle}>{connection.businessName}</Text>
-              <Text style={styles.muted}>{methodDescription(connection.preferredMethod)}</Text>
-            </View>
-            <ChevronRight size={18} color={colors.text.tertiary} />
-          </Pressable>
-        ))}
-        <Text style={styles.label}>Inactive</Text>
-        {connections.filter((item) => item.status !== 'approved').length === 0 ? (
-          <Text style={styles.muted}>No inactive connections.</Text>
-        ) : connections.filter((item) => item.status !== 'approved').map((connection) => (
-          <Pressable key={connection.id} style={styles.connectionRow} onPress={() => void loadDetail(connection.id)}>
-            <View style={styles.grow}>
-              <Text style={styles.methodTitle}>{connection.businessName}</Text>
-              <Text style={styles.muted}>{connection.status}</Text>
-            </View>
-            <ChevronRight size={18} color={colors.text.tertiary} />
-          </Pressable>
-        ))}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {connectionsQuery.error ? (
+          <InlineError
+            message="Some payroll information may be out of date."
+            onRetry={() => void connectionsQuery.refetch()}
+          />
+        ) : null}
+        {isEmpty ? (
+          <SectionCard>
+            <EmptyState
+              icon={Building2}
+              title="No payroll connections"
+              message="Payroll requests from businesses will appear here for you to review."
+            />
+          </SectionCard>
+        ) : (
+          <>
+            {pendingInvitations.length > 0 ? (
+              <ConnectionSection title="Pending" count={pendingInvitations.length}>
+                {pendingInvitations.map((pending, index) => (
+                  <ConnectionRow
+                    key={pending.id}
+                    title={pending.businessName}
+                    subtitle="Review payroll request"
+                    logoUrl={pending.businessLogoUrl}
+                    showDivider={index < pendingInvitations.length - 1}
+                    onPress={() => {
+                      setInvitation(pending)
+                      const preferred = pending.methods.find((method) => method.preferred)
+                        ?? pending.methods.find((method) => method.type === 'easetag')
+                      setSelectedMethodId(preferred?.id ?? '')
+                    }}
+                  />
+                ))}
+              </ConnectionSection>
+            ) : null}
+            {approvedConnections.length > 0 ? (
+              <ConnectionSection title="Approved" count={approvedConnections.length}>
+                {approvedConnections.map((connection, index) => (
+                  <ConnectionRow
+                    key={connection.id}
+                    title={connection.businessName}
+                    subtitle={methodDescription(connection.preferredMethod)}
+                    logoUrl={connection.businessLogoUrl}
+                    showDivider={index < approvedConnections.length - 1}
+                    onPress={() => {
+                      setError('')
+                      setSelectedConnectionId(connection.id)
+                    }}
+                  />
+                ))}
+              </ConnectionSection>
+            ) : null}
+            {inactiveConnections.length > 0 ? (
+              <ConnectionSection title="Inactive" count={inactiveConnections.length}>
+                {inactiveConnections.map((connection, index) => (
+                  <ConnectionRow
+                    key={connection.id}
+                    title={connection.businessName}
+                    subtitle={connection.status.charAt(0).toUpperCase() + connection.status.slice(1)}
+                    logoUrl={connection.businessLogoUrl}
+                    showDivider={index < inactiveConnections.length - 1}
+                    onPress={() => {
+                      setError('')
+                      setSelectedConnectionId(connection.id)
+                    }}
+                  />
+                ))}
+              </ConnectionSection>
+            ) : null}
+          </>
+        )}
+        {error ? <InlineError message={error} actionLabel="Dismiss" onRetry={() => setError('')} /> : null}
       </ScrollView>
     </ScreenWrapper>
   )
 }
 
+function PayrollScreenSkeleton({ detail }: { detail: boolean }) {
+  return (
+    <>
+      {detail ? (
+        <SectionCard style={styles.skeletonSummary}>
+          <ListRowSkeleton variant="plain" showDivider />
+          <ListRowSkeleton variant="plain" showDivider />
+          <ListRowSkeleton variant="plain" showDivider={false} />
+        </SectionCard>
+      ) : (
+        <>
+          <View style={styles.skeletonSectionLabel} />
+          <SectionCard flush>
+            <ListRowSkeleton variant="recipient" showDivider />
+            <ListRowSkeleton variant="recipient" showDivider={false} />
+          </SectionCard>
+          <View style={styles.skeletonSectionLabel} />
+          <SectionCard flush>
+            <ListRowSkeleton variant="recipient" showDivider />
+            <ListRowSkeleton variant="recipient" showDivider={false} />
+          </SectionCard>
+        </>
+      )}
+    </>
+  )
+}
+
+function InlineError({
+  message,
+  onRetry,
+  actionLabel = 'Retry',
+}: {
+  message: string
+  onRetry: () => void
+  actionLabel?: string
+}) {
+  return (
+    <View style={styles.errorBanner} accessibilityRole="alert">
+      <Text style={styles.errorBannerText}>{message}</Text>
+      <Pressable onPress={onRetry} accessibilityRole="button">
+        <Text style={styles.retryText}>{actionLabel}</Text>
+      </Pressable>
+    </View>
+  )
+}
+
+function ConnectionSection({
+  title,
+  count,
+  children,
+}: {
+  title: string
+  count: number
+  children: React.ReactNode
+}) {
+  return (
+    <View style={styles.connectionSection}>
+      <View style={styles.connectionSectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{count}</Text>
+        </View>
+      </View>
+      <SectionCard flush>{children}</SectionCard>
+    </View>
+  )
+}
+
+function ConnectionRow({
+  title,
+  subtitle,
+  logoUrl,
+  showDivider,
+  onPress,
+}: {
+  title: string
+  subtitle: string
+  logoUrl?: string | null
+  showDivider: boolean
+  onPress: () => void
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.connectionRow,
+        showDivider && styles.connectionRowDivider,
+        pressed && styles.connectionRowPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${subtitle}`}
+    >
+      {logoUrl ? (
+        <CachedImage uri={logoUrl} style={styles.connectionLogo} contentFit="cover" />
+      ) : (
+        <View style={styles.businessIcon}>
+          <Building2 size={20} color={colors.primary.main} />
+        </View>
+      )}
+      <View style={styles.grow}>
+        <Text style={styles.methodTitle}>{title}</Text>
+        <Text style={styles.muted}>{subtitle}</Text>
+      </View>
+      <ChevronRight size={18} color={colors.text.tertiary} />
+    </Pressable>
+  )
+}
+
 const styles = StyleSheet.create({
-  header: { minHeight: 56, paddingHorizontal: spacing[4], flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border.default },
-  headerTitle: { ...textStyles.titleMedium, fontFamily: fontFamily.semibold, color: colors.text.primary, flex: 1, textAlign: 'center' },
-  headerSpacer: { width: 22 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: spacing[4], paddingBottom: spacing[10], gap: spacing[4], width: '100%', maxWidth: 680, alignSelf: 'center' },
-  businessHero: { alignItems: 'center', gap: spacing[2], paddingVertical: spacing[4] },
+  content: { paddingHorizontal: spacing[5], paddingTop: spacing[2], gap: spacing[5], width: '100%', maxWidth: 680, alignSelf: 'center' },
+  businessHero: { alignItems: 'center', gap: spacing[2], paddingVertical: spacing[6] },
   businessIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary.main + '12', alignItems: 'center', justifyContent: 'center' },
+  connectionLogo: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background.secondary },
   businessLogo: { width: 56, height: 56, borderRadius: borderRadius.lg, backgroundColor: colors.background.secondary },
   verifiedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
   businessName: { ...textStyles.headingMedium, fontFamily: fontFamily.semibold, color: colors.text.primary, textAlign: 'center' },
@@ -492,12 +776,23 @@ const styles = StyleSheet.create({
   grow: { flex: 1, gap: 2 },
   methodTitle: { ...textStyles.titleSmall, color: colors.text.primary, fontFamily: fontFamily.semibold },
   actions: { gap: spacing[2], marginTop: spacing[2] },
-  error: { ...textStyles.bodySmall, color: colors.error.main },
+  emptyCardText: { ...textStyles.bodyMedium, color: colors.text.secondary, textAlign: 'center', paddingVertical: spacing[5] },
   successBox: { flexDirection: 'row', gap: spacing[2], padding: spacing[4], borderRadius: borderRadius.lg, backgroundColor: colors.success.main + '12' },
   successText: { ...textStyles.bodyMedium, color: colors.text.primary, flex: 1 },
-  connectionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderWidth: 1, borderColor: colors.border.default, borderRadius: borderRadius.lg, backgroundColor: colors.background.primary },
+  connectionSection: { gap: spacing[3] },
+  connectionSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing[1] },
+  countBadge: { minWidth: 24, height: 24, borderRadius: 12, paddingHorizontal: spacing[2], alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary.main + '12' },
+  countText: { ...textStyles.labelSmall, color: colors.primary.main, fontFamily: fontFamily.semibold },
+  connectionRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
+  connectionRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border.light },
+  connectionRowPressed: { opacity: 0.72 },
   detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
   documentButton: { flexDirection: 'row', alignItems: 'center', gap: spacing[1], padding: spacing[2] },
   documentButtonText: { ...textStyles.titleSmall, color: colors.primary.main },
   deleteText: { ...textStyles.bodySmall, color: colors.error.main, fontFamily: fontFamily.semibold },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderRadius: borderRadius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.error.main + '45', backgroundColor: colors.error.main + '0D' },
+  errorBannerText: { ...textStyles.bodySmall, color: colors.text.primary, flex: 1 },
+  retryText: { ...textStyles.labelMedium, color: colors.primary.main, fontFamily: fontFamily.semibold },
+  skeletonSummary: { padding: 0, overflow: 'hidden' },
+  skeletonSectionLabel: { width: 88, height: 18, marginLeft: spacing[1], borderRadius: borderRadius.sm, backgroundColor: colors.neutral[200] },
 })
