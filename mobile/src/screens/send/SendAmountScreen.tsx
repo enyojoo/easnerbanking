@@ -104,8 +104,11 @@ import {
   ensureSendPayoutQuoteLocked,
   isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
+  isStashedPayoutQuotePreviewFresh,
   peekLastPayoutQuoteError,
   peekSendPayoutQuote,
+  peekSendPayoutQuotePreview,
+  payoutDisplayAmountsFromQuote,
   clearSendPayoutQuote,
 } from '../../lib/sendFlowPayoutQuote'
 import {
@@ -1463,7 +1466,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         needsQuoteAwait &&
         (isWalletRecipient
           ? isStashedWalletQuoteFresh(quoteStashMeta)
-          : isStashedPayoutQuoteFresh(quoteStashMeta))
+          : isStashedPayoutQuoteFresh(quoteStashMeta) ||
+            isStashedPayoutQuotePreviewFresh(quoteStashMeta))
 
       if (needsQuoteAwait && !quoteAlreadyWarm) {
         setIsContinuePending(true)
@@ -1534,7 +1538,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         !isEasetagRecipient &&
         !isWalletRecipient &&
         receiveAmountValue > 0 &&
-        !isCompletePayoutQuote(stashedQuote)
+        !isCompletePayoutQuote(stashedQuote) &&
+        !isStashedPayoutQuotePreviewFresh(quoteStashMeta)
       ) {
         showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
         return
@@ -1554,7 +1559,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         stashedQuote?.settlement?.customerRate ?? stashedQuote?.noah?.rate ?? exchangeRate
       let calculatedSendingAmount =
         stashedRate > 0 ? receiveAmountValue / stashedRate : navAmounts.sendAmount
-      const calculatedFeeAmount = 0
+      const previewForFees =
+        stashedQuote ??
+        (isStashedPayoutQuotePreviewFresh(quoteStashMeta) ? peekSendPayoutQuotePreview() : null)
+      const feeDisplay = previewForFees ? payoutDisplayAmountsFromQuote(previewForFees) : null
+      const calculatedFeeAmount = feeDisplay?.displayProcessingFee ?? 0
       let calculatedTotalAmount =
         stashedQuote?.totalDebited && stashedQuote.totalDebited > 0
           ? stashedQuote.totalDebited

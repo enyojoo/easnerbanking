@@ -174,6 +174,50 @@ describe('sendFlowPayoutQuote stash', () => {
     ).toBe(false)
   })
 
+  it('stores Grid preview quotes in preview stash only (confirm required before lock)', () => {
+    const meta = {
+      recipientId: 'recipient-a',
+      amountEntryMode: 'receive' as const,
+      entryAmount: 100,
+      receiveCurrency: 'PHP',
+    }
+    stashSendPayoutQuotePreview(
+      sampleQuote({
+        receiveAmount: 100,
+        receiveCurrency: 'PHP',
+        provider: 'grid',
+        quotePhase: 'preview',
+        requiresConfirm: true,
+        lockId: undefined,
+        processingFee: 0.016,
+        displayChannelCost: 0.032,
+        displayProcessingFee: 0.048,
+        settlement: {
+          ...sampleQuote().settlement,
+          sessionId: 'grid_preview_session',
+        },
+      }),
+      meta,
+    )
+
+    expect(isStashedPayoutQuotePreviewFresh(meta)).toBe(true)
+    expect(isStashedPayoutQuoteFresh(meta)).toBe(false)
+    expect(
+      isCompletePayoutQuote(
+        sampleQuote({
+          provider: 'grid',
+          quotePhase: 'preview',
+          requiresConfirm: true,
+          lockId: undefined,
+          settlement: {
+            ...sampleQuote().settlement,
+            sessionId: 'grid_preview_session',
+          },
+        }),
+      ),
+    ).toBe(true)
+  })
+
   it('stores preview quotes separately from locked stash', () => {
     const meta = {
       recipientId: 'recipient-a',
