@@ -55,6 +55,8 @@ export type YcCorridorSchemaHint = {
   account_number_hint?: string
   extra_fields?: YcRecipientFieldDef[]
   bank_enum?: string[]
+  /** MoMo: value = YC network name, label = display name. */
+  momo_provider_enum?: { value: string; label: string }[]
   note?: string
 }
 
