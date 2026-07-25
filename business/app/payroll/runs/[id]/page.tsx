@@ -1,16 +1,30 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import {
+  ArrowLeft,
+  CalendarX2,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Undo2,
+  XCircle,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollLineStatusBadge, PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
 import { PayrollRailBadge } from "@/components/payroll/payroll-rail-badge"
-import { PayrollDeleteAction } from "@/components/payroll/payroll-delete-action"
+import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { usePayrollCapabilities, usePayrollRunDetail } from "@/hooks/queries/use-payroll"
 import {
   useSubmitPayrollRun,
@@ -47,6 +61,7 @@ export default function PayrollRunDetailPage() {
   const { user } = useAuth()
   const confirmWithPin = useConfirmWithPin()
   const autoActionStarted = useRef(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const run = runQuery.data
   const lines = useMemo(() => run?.lines ?? [], [run?.lines])
@@ -175,74 +190,23 @@ export default function PayrollRunDetailPage() {
         description={run.payPeriodStart && run.payPeriodEnd
           ? `${formatDate(run.payPeriodStart)} – ${formatDate(run.payPeriodEnd)}`
           : "Payroll payment details and results."}
-        actions={<>
-          {hasPayStubs ? (
-            <Button variant="outline" asChild>
-              <a href={`/api/business/payroll/runs/${runId}/documents/export`} download>
-                Download pay stubs
-              </a>
-            </Button>
-          ) : null}
-          {run.status === "draft" && canPrepare ? (
-            <>
+        actions={
+          <div className="flex shrink-0 items-center gap-2 overflow-x-auto">
+            {hasPayStubs ? (
               <Button variant="outline" asChild>
-                <Link href={`/payroll/runs/${runId}/edit`}>Edit run</Link>
+                <a href={`/api/business/payroll/runs/${runId}/documents/export`} download>
+                  Download pay stubs
+                </a>
               </Button>
-              <PayrollDeleteAction label="Delete draft" title="Delete this payroll draft?" description="This permanently removes the draft and its unsent payment lines. Submitted or completed payroll history cannot be deleted." pending={deleteRun.isPending} onDelete={async () => {
-                try {
-                  await deleteRun.mutateAsync(runId)
-                  toast.success("Payroll draft deleted")
-                  router.push("/payroll/runs")
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Payroll draft could not be deleted")
-                }
-              }} />
-              <Button
-                variant="primary"
-                onClick={() =>
-                  submitRun.mutate(undefined, {
-                    onSuccess: () => toast.success("Submitted for approval"),
-                    onError: (e) => toast.error(e.message),
-                  })
-                }
-                disabled={submitRun.isPending}
-              >
-                Submit for approval
+            ) : null}
+            {run.status === "draft" && canPrepare ? (
+              <Button variant="outline" asChild>
+                <Link href={`/payroll/runs/${runId}/edit`}>
+                  <Pencil className="mr-2 h-4 w-4" />Edit
+                </Link>
               </Button>
-            </>
-          ) : null}
-          {run.status === "failed" && canPrepare ? (
-            <PayrollDeleteAction
-              label="Delete failed run"
-              title="Delete this failed payroll run?"
-              description="This permanently removes the failed run and its unsuccessful payment lines. No completed payment history will be deleted."
-              pending={deleteRun.isPending}
-              onDelete={async () => {
-                try {
-                  await deleteRun.mutateAsync(runId)
-                  toast.success("Failed payroll run deleted")
-                  router.push("/payroll/runs")
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Failed payroll run could not be deleted")
-                }
-              }}
-            />
-          ) : null}
-          {awaitingApproval && canPrepare ? (
-              <Button
-                variant="outline"
-                onClick={() => withdrawRun.mutate(undefined, {
-                  onSuccess: () => toast.success("Run returned to draft"),
-                  onError: (e) => toast.error(e.message),
-                })}
-                disabled={withdrawRun.isPending}
-              >
-                Withdraw
-              </Button>
-          ) : null}
-          {awaitingApproval && canApprove ? (
-            <>
-              <Button variant="ghost" onClick={() => void rejectRun()}>Reject</Button>
+            ) : null}
+            {awaitingApproval && canApprove ? (
               <Button
                 variant="outline"
                 onClick={() => void handleApproveAndSchedule()}
@@ -250,6 +214,44 @@ export default function PayrollRunDetailPage() {
               >
                 Approve and schedule
               </Button>
+            ) : null}
+            {(run.status === "approved" || run.status === "partial") && canApprove ? (
+              <Button variant="primary" onClick={() => void handleExecute()} disabled={executeRun.isPending}>
+                Execute with PIN
+              </Button>
+            ) : null}
+            {failedLines.length > 0 && canApprove ? (
+              <Button
+                variant={run.status === "failed" ? "primary" : "outline"}
+                onClick={() =>
+                  retryRun.mutate(
+                    failedLines.map((line) => line.id),
+                    {
+                      onSuccess: (result) => toast.success(`Retried ${result.retried.length} payments`),
+                      onError: (error) => toast.error(error.message),
+                    },
+                  )
+                }
+                disabled={retryRun.isPending}
+              >
+                Retry failed
+              </Button>
+            ) : null}
+            {run.status === "draft" && canPrepare ? (
+              <Button
+                variant="primary"
+                onClick={() =>
+                  submitRun.mutate(undefined, {
+                    onSuccess: () => toast.success("Submitted for approval"),
+                    onError: (error) => toast.error(error.message),
+                  })
+                }
+                disabled={submitRun.isPending}
+              >
+                Submit for approval
+              </Button>
+            ) : null}
+            {awaitingApproval && canApprove ? (
               <Button
                 variant="primary"
                 onClick={() => void handleApproveAndPay()}
@@ -257,33 +259,55 @@ export default function PayrollRunDetailPage() {
               >
                 Approve and pay
               </Button>
-            </>
-          ) : null}
-          {run.status === "scheduled" && canApprove ? (
-            <Button variant="outline" onClick={() => void cancelSchedule()}>Cancel schedule</Button>
-          ) : null}
-          {(run.status === "approved" || run.status === "partial") && canApprove ? (
-            <Button variant="primary" onClick={() => void handleExecute()} disabled={executeRun.isPending}>
-              Execute with PIN
-            </Button>
-          ) : null}
-          {failedLines.length > 0 && canApprove ? (
-            <Button
-              variant="outline"
-              onClick={() =>
-                retryRun.mutate(
-                  failedLines.map((l) => l.id),
-                  {
-                    onSuccess: (res) => toast.success(`Retried ${res.retried.length} payments`),
-                    onError: (e) => toast.error(e.message),
-                  },
-                )
-              }
-            >
-              Retry failed
-            </Button>
-          ) : null}
-        </>}
+            ) : null}
+            {(
+              (run.status === "draft" && canPrepare)
+              || (run.status === "failed" && canPrepare)
+              || (awaitingApproval && (canPrepare || canApprove))
+              || (run.status === "scheduled" && canApprove)
+            ) ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label={`More actions for ${String(run.metadata?.name || "payroll run")}`}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {awaitingApproval && canPrepare ? (
+                    <DropdownMenuItem
+                      disabled={withdrawRun.isPending}
+                      onClick={() => withdrawRun.mutate(undefined, {
+                        onSuccess: () => toast.success("Run returned to draft"),
+                        onError: (error) => toast.error(error.message),
+                      })}
+                    >
+                      <Undo2 />Withdraw to draft
+                    </DropdownMenuItem>
+                  ) : null}
+                  {awaitingApproval && canApprove ? (
+                    <DropdownMenuItem onClick={() => void rejectRun()}>
+                      <XCircle />Reject
+                    </DropdownMenuItem>
+                  ) : null}
+                  {run.status === "scheduled" && canApprove ? (
+                    <DropdownMenuItem onClick={() => void cancelSchedule()}>
+                      <CalendarX2 />Cancel schedule
+                    </DropdownMenuItem>
+                  ) : null}
+                  {(run.status === "draft" || run.status === "failed") && canPrepare ? (
+                    <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+                      <Trash2 />{run.status === "failed" ? "Delete failed run" : "Delete draft"}
+                    </DropdownMenuItem>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        }
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -415,6 +439,27 @@ export default function PayrollRunDetailPage() {
           <PayrollLegalNote />
         </div>
       </div>
+
+      <PayrollDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={run.status === "failed" ? "Delete this failed payroll run?" : "Delete this payroll draft?"}
+        description={run.status === "failed"
+          ? "This permanently removes the failed run and its unsuccessful payment lines. No completed payment history will be deleted."
+          : "This permanently removes the draft and its unsent payment lines. Submitted or completed payroll history cannot be deleted."}
+        label={run.status === "failed" ? "Delete failed run" : "Delete draft"}
+        pending={deleteRun.isPending}
+        onDelete={async () => {
+          try {
+            await deleteRun.mutateAsync(runId)
+            toast.success(run.status === "failed" ? "Failed payroll run deleted" : "Payroll draft deleted")
+            router.push("/payroll/runs")
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Payroll run could not be deleted")
+            throw error
+          }
+        }}
+      />
 
       {user?.id ? (
         <PinChallengeDialog
