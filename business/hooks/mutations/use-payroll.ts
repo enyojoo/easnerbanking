@@ -4,7 +4,16 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
-import type { PayrollPerson, PayrollPersonInput, PayrollRun, PayrollSchedule } from "@/lib/payroll/types"
+import type {
+  CreatePayrollPersonCommand,
+  PayrollPerson,
+  PayrollPersonInput,
+  PayrollRun,
+  PayrollRunDraftInput,
+  PayrollRunPreview,
+  PayrollSchedule,
+  PayrollSettings,
+} from "@/lib/payroll/types"
 
 function invalidatePayroll(qc: ReturnType<typeof useQueryClient>, scope: ReturnType<typeof useScope>["scope"]) {
   if (!scope) return
@@ -15,7 +24,7 @@ export function useCreatePayrollPerson() {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
-    mutationFn: (input: PayrollPersonInput) =>
+    mutationFn: (input: PayrollPersonInput | CreatePayrollPersonCommand) =>
       apiFetch<{ person: PayrollPerson }>("/api/business/payroll/people", {
         method: "POST",
         body: input,
@@ -72,12 +81,22 @@ export function useCreatePayrollRun() {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
-    mutationFn: (input?: { personIds?: string[]; offCycle?: boolean }) =>
+    mutationFn: (input: PayrollRunDraftInput | { personIds?: string[]; offCycle?: boolean }) =>
       apiFetch<{ run: PayrollRun }>("/api/business/payroll/runs", {
         method: "POST",
         body: input ?? {},
       }),
     onSuccess: () => invalidatePayroll(qc, scope),
+  })
+}
+
+export function usePreviewPayrollRun() {
+  return useMutation({
+    mutationFn: (input: PayrollRunDraftInput) =>
+      apiFetch<{ preview: PayrollRunPreview }>("/api/business/payroll/runs/preview", {
+        method: "POST",
+        body: input,
+      }),
   })
 }
 
@@ -179,6 +198,9 @@ export function useUpsertPayrollSchedule() {
       approvalLeadDays?: number
       weekendPolicy?: "previous_business_day" | "next_business_day"
       sourceCurrency?: string
+      sourceAccountId?: string
+      fundingReminderDays?: number
+      personIds?: string[]
     }) => {
       if (input.id) {
         return apiFetch<{ schedule: PayrollSchedule }>(`/api/business/payroll/schedules/${input.id}`, {
@@ -199,5 +221,18 @@ export function useInvitePayrollPerson() {
   return useMutation({
     mutationFn: (personId: string) =>
       apiFetch<{ ok: boolean }>(`/api/business/payroll/people/${personId}/invite`, { method: "POST" }),
+  })
+}
+
+export function useUpdatePayrollSettings() {
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  return useMutation({
+    mutationFn: (input: Partial<PayrollSettings>) =>
+      apiFetch<{ settings: PayrollSettings }>("/api/business/payroll/settings", {
+        method: "PATCH",
+        body: input,
+      }),
+    onSuccess: () => invalidatePayroll(qc, scope),
   })
 }

@@ -9,13 +9,14 @@ const tabs = [
   { href: "/payroll/people", label: "People" },
   { href: "/payroll/runs", label: "Runs" },
   { href: "/payroll/schedules", label: "Schedules" },
+  { href: "/payroll/settings", label: "Settings" },
 ]
 
 export function PayrollNavTabs() {
   const pathname = usePathname()
 
   return (
-    <nav className="flex flex-wrap gap-2 border-b border-border/70 pb-3 mb-6">
+    <nav aria-label="Payroll" className="mb-6 flex gap-1 overflow-x-auto border-b border-border/70 pb-3">
       {tabs.map((tab) => {
         const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href)
         return (
@@ -23,7 +24,7 @@ export function PayrollNavTabs() {
             key={tab.href}
             href={tab.href}
             className={cn(
-              "rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+              "shrink-0 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
               active
                 ? "bg-card text-foreground shadow-soft border border-border/70"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted/60",

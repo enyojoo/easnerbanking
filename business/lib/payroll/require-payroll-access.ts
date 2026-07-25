@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireBusinessOrgWithRole } from "@/lib/b2b/require-role"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { isPayrollV2Enabled } from "@/lib/payroll/feature"
 
 export type PayrollAccessRole = "viewer" | "preparer" | "approver"
 
@@ -49,20 +48,6 @@ export async function requirePayrollAccess(
         { error: "You do not have permission to perform this payroll action." },
         { status: 403 },
       ),
-    }
-  }
-
-  // Read access preserves V1 history while V2 mutations remain behind payroll_v2.
-  if (!allowed.includes("viewer")) {
-    const enabled = await isPayrollV2Enabled(createSupabaseAdmin(), business.businessId)
-    if (!enabled) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          { error: "Payroll V2 is not enabled for this business.", feature: "payroll_v2" },
-          { status: 403 },
-        ),
-      }
     }
   }
 

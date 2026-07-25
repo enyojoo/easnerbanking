@@ -57,11 +57,27 @@ async function loadRun(admin: ReturnType<typeof createSupabaseAdmin>, businessId
         : null,
     }
   })
+  const { data: events } = await admin.from("payroll_run_events")
+    .select("id,run_id,person_id,event_type,data,actor_user_id,created_at")
+    .eq("run_id", id)
+    .order("created_at", { ascending: false })
+    .limit(100)
 
-  return mapRowToPayrollRun(
+  return {
+    ...mapRowToPayrollRun(
     runRow as PayrollRunRow,
     mappedLines,
-  )
+    ),
+    events: (events ?? []).map((event) => ({
+      id: String(event.id),
+      runId: event.run_id ? String(event.run_id) : null,
+      personId: event.person_id ? String(event.person_id) : null,
+      eventType: String(event.event_type),
+      data: (event.data as Record<string, unknown>) ?? {},
+      actorUserId: event.actor_user_id ? String(event.actor_user_id) : null,
+      createdAt: String(event.created_at),
+    })),
+  }
 }
 
 export async function GET(
@@ -170,7 +186,7 @@ export async function POST(
   if (!ctx.ok) return ctx.response
 
   const { id } = await params
-  const body = (await request.json().catch(() => ({}))) as { action?: string }
+  const body = (await request.json().catch(() => ({}))) as { action?: string; reason?: string }
   const action = body.action ?? "submit"
 
   const admin = createSupabaseAdmin()
@@ -272,6 +288,53 @@ export async function POST(
     await admin.from("payroll_run_events").insert({
       business_id: ctx.businessId, run_id: id, actor_user_id: ctx.userId,
       event_type: "run.withdrawn", data: {},
+    })
+    return NextResponse.json({ run: await loadRun(admin, ctx.businessId, id) })
+  }
+
+  if (action === "reject") {
+    if (ctx.payrollRole !== "approver") {
+      return NextResponse.json({ error: "Only a Payroll approver can reject this run." }, { status: 403 })
+    }
+    const reason = body.reason?.trim()
+    if (!reason) return NextResponse.json({ error: "A reason is required." }, { status: 400 })
+    const { data } = await admin.from("payroll_runs").update({
+      status: "draft",
+      submitted_at: null,
+      submitted_by: null,
+      approval_snapshot: null,
+      revision: awaitRevisionIncrement(admin, id),
+      metadata: { rejectionReason: reason },
+      updated_at: new Date().toISOString(),
+    }).eq("id", id).eq("business_id", ctx.businessId).in("status", ["pending_approval", "needs_reapproval"]).select("id")
+    if (!data?.length) return NextResponse.json({ error: "Run cannot be rejected." }, { status: 409 })
+    await admin.from("business_approvals").update({ status: "rejected" })
+      .eq("subject_type", "payroll_run").eq("subject_id", id).eq("status", "open")
+    await admin.from("payroll_run_events").insert({
+      business_id: ctx.businessId, run_id: id, actor_user_id: ctx.userId,
+      event_type: "run.rejected", data: { reason },
+    })
+    return NextResponse.json({ run: await loadRun(admin, ctx.businessId, id) })
+  }
+
+  if (action === "cancel") {
+    if (ctx.payrollRole !== "approver") {
+      return NextResponse.json({ error: "Only a Payroll approver can cancel a schedule." }, { status: 403 })
+    }
+    const { data } = await admin.from("payroll_runs").update({
+      status: "cancelled",
+      fx_snapshot: {},
+      updated_at: new Date().toISOString(),
+    }).eq("id", id).eq("business_id", ctx.businessId).eq("status", "scheduled").select("id")
+    if (!data?.length) return NextResponse.json({ error: "Only a scheduled payroll can be cancelled." }, { status: 409 })
+    await admin.from("payroll_lines").update({
+      status: "pending",
+      lock_id: null,
+      updated_at: new Date().toISOString(),
+    }).eq("run_id", id).in("status", ["locked", "quoting"])
+    await admin.from("payroll_run_events").insert({
+      business_id: ctx.businessId, run_id: id, actor_user_id: ctx.userId,
+      event_type: "run.cancelled", data: {},
     })
     return NextResponse.json({ run: await loadRun(admin, ctx.businessId, id) })
   }

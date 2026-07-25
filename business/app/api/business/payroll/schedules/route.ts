@@ -21,7 +21,19 @@ export async function GET(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const schedules = (data ?? []).map((r) => mapRowToPayrollSchedule(r as PayrollScheduleRow))
+  const scheduleIds = (data ?? []).map((row) => String(row.id))
+  const { data: memberships } = scheduleIds.length
+    ? await admin.from("payroll_schedule_people").select("schedule_id,person_id").in("schedule_id", scheduleIds)
+    : { data: [] }
+  const peopleBySchedule = new Map<string, string[]>()
+  for (const membership of memberships ?? []) {
+    const id = String(membership.schedule_id)
+    peopleBySchedule.set(id, [...(peopleBySchedule.get(id) ?? []), String(membership.person_id)])
+  }
+  const schedules = (data ?? []).map((r) => ({
+    ...mapRowToPayrollSchedule(r as PayrollScheduleRow),
+    personIds: peopleBySchedule.get(String(r.id)) ?? [],
+  }))
   return NextResponse.json({ schedules })
 }
 
@@ -39,6 +51,9 @@ export async function POST(request: Request) {
     approvalLeadDays?: number
     weekendPolicy?: "previous_business_day" | "next_business_day"
     sourceCurrency?: string
+    sourceAccountId?: string
+    fundingReminderDays?: number
+    personIds?: string[]
   }
 
   const frequency = body.frequency ?? "monthly"
@@ -59,6 +74,8 @@ export async function POST(request: Request) {
         approvalLeadDays: Math.max(0, Number(body.approvalLeadDays ?? 2)),
         weekendPolicy: body.weekendPolicy || "previous_business_day",
         sourceCurrency: String(body.sourceCurrency || "USD").toUpperCase(),
+        sourceAccountId: body.sourceAccountId || null,
+        fundingReminderDays: Math.max(0, Number(body.fundingReminderDays ?? 3)),
       },
       updated_at: new Date().toISOString(),
     })
@@ -66,5 +83,16 @@ export async function POST(request: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ schedule: mapRowToPayrollSchedule(data as PayrollScheduleRow) })
+  if (body.personIds?.length) {
+    const { data: validPeople } = await admin.from("payroll_people").select("id")
+      .eq("business_id", ctx.businessId).in("id", [...new Set(body.personIds)])
+    await admin.from("payroll_schedule_people").insert((validPeople ?? []).map((person) => ({
+      schedule_id: data.id,
+      person_id: person.id,
+      business_id: ctx.businessId,
+    })))
+  }
+  return NextResponse.json({
+    schedule: { ...mapRowToPayrollSchedule(data as PayrollScheduleRow), personIds: body.personIds ?? [] },
+  })
 }

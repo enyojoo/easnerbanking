@@ -32,6 +32,7 @@ export type PayrollPersonRow = {
   readiness_status?: string | null
   identity_snapshot?: unknown
   metadata: unknown
+  internal_reference?: string | null
   created_at: string
   updated_at: string
 }
@@ -53,6 +54,7 @@ export type PayrollRunRow = {
   business_id: string
   status: string
   scheduled_for: string | null
+  source_account_id?: string | null
   schedule_id?: string | null
   pay_period_start?: string | null
   pay_period_end?: string | null
@@ -183,6 +185,19 @@ export function mapRowToPayrollPerson(row: PayrollPersonRow): PayrollPerson {
     )),
     identitySnapshot: (row.identity_snapshot as Record<string, unknown>) ?? {},
     metadata: (row.metadata as Record<string, unknown>) ?? {},
+    internalReference: row.internal_reference ?? null,
+    avatarUrl: typeof (row.identity_snapshot as Record<string, unknown> | null)?.profilePhoto === "string"
+      ? String((row.identity_snapshot as Record<string, unknown>).profilePhoto)
+      : typeof ((row.metadata as Record<string, unknown> | null)?.avatarUrl) === "string"
+        ? String((row.metadata as Record<string, unknown>).avatarUrl)
+        : null,
+    receivingMethodSummary: ((row.metadata as Record<string, unknown> | null)?.preferredPaymentMethod as PayrollPerson["receivingMethodSummary"]) ?? null,
+    lastPaidAt: typeof ((row.metadata as Record<string, unknown> | null)?.lastPaidAt) === "string"
+      ? String((row.metadata as Record<string, unknown>).lastPaidAt)
+      : null,
+    scheduleSummaries: Array.isArray((row.metadata as Record<string, unknown> | null)?.scheduleSummaries)
+      ? (row.metadata as Record<string, unknown>).scheduleSummaries as PayrollPerson["scheduleSummaries"]
+      : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -208,6 +223,7 @@ export function payrollPersonToDbPayload(input: {
     rail: p.rail,
     status: p.status ?? "active",
     metadata: p.metadata ?? {},
+    internal_reference: p.internalReference ?? null,
     updated_at: new Date().toISOString(),
   }
 }
@@ -233,6 +249,7 @@ export function mapRowToPayrollRun(row: PayrollRunRow, lines?: PayrollLine[]): P
     status: normalizeRunStatus(row.status),
     scheduledFor: row.scheduled_for,
     scheduleId: row.schedule_id ?? null,
+    sourceAccountId: row.source_account_id ?? null,
     payPeriodStart: row.pay_period_start ?? null,
     payPeriodEnd: row.pay_period_end ?? null,
     payday: row.payday ?? null,

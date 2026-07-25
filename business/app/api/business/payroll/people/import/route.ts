@@ -39,9 +39,12 @@ function parseCsv(text: string): CsvRow[] {
     if (!Number.isFinite(amount) || amount <= 0) errors.push("Invalid amount")
 
     const currency = (cols[idx("currency")] || cols[idx("pay_currency")] || "USD").toUpperCase()
-    const railRaw = (cols[idx("rail")] || "bank").toLowerCase() as PayrollRail
-    const allowed: PayrollRail[] = ["easetag", "bank", "mobile", "intl_bank", "crypto"]
-    const rail = allowed.includes(railRaw) ? railRaw : "bank"
+    const receivingMethod = (cols[idx("receiving_method")] || cols[idx("rail")] || "bank account").toLowerCase()
+    const rail: PayrollRail =
+      receivingMethod.includes("easetag") ? "easetag"
+        : receivingMethod.includes("mobile") ? "mobile"
+          : receivingMethod.includes("stablecoin") || receivingMethod.includes("wallet") || receivingMethod === "crypto" ? "crypto"
+            : "bank"
 
     rows.push({
       fullName,
@@ -111,14 +114,18 @@ export async function POST(request: Request) {
     created.push(mapRowToPayrollPerson(data as PayrollPersonRow))
   }
 
-  return NextResponse.json({ created, invalid, imported: created.length })
+  return NextResponse.json({
+    created,
+    invalid: invalid.map((row, index) => ({ row: index + 2, name: row.fullName, errors: row.errors })),
+    imported: created.length,
+  })
 }
 
 export async function GET() {
   const template = [
-    "name,email,type,amount,currency,rail,country,easetag,recipient_id",
-    "Jane Doe,jane@example.com,employee,2500,USD,easetag,,janedoe,",
-    "John Contractor,john@example.com,contractor,1800,USD,bank,US,,",
+    "name,email,type,amount,currency,receiving_method,country,easetag",
+    "Jane Doe,jane@example.com,employee,2500,USD,EASETAG,,janedoe",
+    "John Contractor,john@example.com,contractor,1800,USD,Bank account,US,",
   ].join("\n")
 
   return new NextResponse(template, {

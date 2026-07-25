@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS payroll_people (
   type text NOT NULL CHECK (type IN ('employee', 'contractor')),
   full_name text NOT NULL,
   email text,
+  internal_reference text,
   country text,
   default_amount_cents bigint NOT NULL DEFAULT 0,
   pay_currency text NOT NULL DEFAULT 'USD',
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS payroll_runs (
     )
   ),
   scheduled_for date,
+  source_account_id text,
   source_currency text NOT NULL DEFAULT 'USD',
   total_source_cents bigint NOT NULL DEFAULT 0,
   shortfall_cents bigint NOT NULL DEFAULT 0,
@@ -313,14 +315,37 @@ CREATE TABLE IF NOT EXISTS payroll_access_assignments (
 
 CREATE TABLE IF NOT EXISTS payroll_settings (
   business_id uuid PRIMARY KEY REFERENCES businesses(id) ON DELETE CASCADE,
-  enabled boolean NOT NULL DEFAULT false,
   require_separate_approver boolean NOT NULL DEFAULT false,
   timezone text NOT NULL DEFAULT 'UTC',
+  default_source_account_id text,
+  default_currency text NOT NULL DEFAULT 'USD',
+  default_payday_time text NOT NULL DEFAULT '09:00',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Existing owners and administrators retain approval access during rollout.
+-- Payroll is a standard Business feature. Remove the retired rollout flag from
+-- databases that previously applied an earlier Payroll V2 migration.
+ALTER TABLE payroll_settings DROP COLUMN IF EXISTS enabled;
+
+ALTER TABLE payroll_people ADD COLUMN IF NOT EXISTS internal_reference text;
+ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS source_account_id text;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS default_source_account_id text;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS default_currency text NOT NULL DEFAULT 'USD';
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS default_payday_time text NOT NULL DEFAULT '09:00';
+
+CREATE TABLE IF NOT EXISTS payroll_schedule_people (
+  schedule_id uuid NOT NULL REFERENCES payroll_schedules(id) ON DELETE CASCADE,
+  person_id uuid NOT NULL REFERENCES payroll_people(id) ON DELETE CASCADE,
+  business_id uuid NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (schedule_id, person_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_payroll_schedule_people_business
+  ON payroll_schedule_people(business_id, schedule_id);
+
+-- Existing owners and administrators retain payroll approval access.
 INSERT INTO payroll_access_assignments (business_id, user_id, role)
 SELECT easner_business_id, id, 'approver'
 FROM users
@@ -447,6 +472,7 @@ ALTER TABLE payroll_connection_invitations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_payment_methods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_access_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payroll_schedule_people ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_run_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_document_deliveries ENABLE ROW LEVEL SECURITY;

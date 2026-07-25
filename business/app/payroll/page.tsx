@@ -1,185 +1,212 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, CalendarDays, Plus, Users } from "lucide-react"
+import {
+  AlertCircle,
+  ArrowRight,
+  CalendarDays,
+  ChevronDown,
+  CircleDollarSign,
+  Plus,
+  Upload,
+  Users,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Skeleton } from "@/components/ui/skeleton"
 import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
+import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollPermissionAction } from "@/components/payroll/payroll-permission-action"
 import { PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
 import { usePayrollCapabilities, usePayrollOverview } from "@/hooks/queries/use-payroll"
-import { useCreatePayrollRun } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { railLabel } from "@/lib/payroll/helpers"
-import { toast } from "sonner"
-import { useRouter } from "next/navigation"
 
 export default function PayrollOverviewPage() {
-  const router = useRouter()
   const overviewQuery = usePayrollOverview()
-  const capabilities = usePayrollCapabilities().data
-  const canPrepare = Boolean(capabilities?.enabled && capabilities.canPrepare)
-  const createRun = useCreatePayrollRun()
+  const capabilitiesQuery = usePayrollCapabilities()
+  const canPrepare = Boolean(capabilitiesQuery.data?.canPrepare)
   const overview = overviewQuery.data
+  const empty = !overviewQuery.isPending && (overview?.headcount ?? 0) === 0
 
-  const primaryHref = overview?.pendingApprovalRunId
-    ? `/payroll/runs/${overview.pendingApprovalRunId}`
-    : overview?.draftRunId
-      ? `/payroll/runs/${overview.draftRunId}`
-      : null
-
-  const primaryLabel = overview?.pendingApprovalRunId
-    ? "Review draft"
-    : overview?.draftRunId
-      ? "Continue draft"
-      : "Run payroll"
-
-  async function handleRunPayroll() {
-    if (primaryHref) {
-      router.push(primaryHref)
-      return
-    }
-    try {
-      const res = await createRun.mutateAsync({})
-      router.push(`/payroll/runs/${res.run.id}`)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not start payroll run")
-    }
-  }
+  const actions = (
+    <>
+      <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">
+              Add
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild><Link href="/payroll/people/new">Add person</Link></DropdownMenuItem>
+            <DropdownMenuItem asChild><Link href="/payroll/schedules/new">Create schedule</Link></DropdownMenuItem>
+            <DropdownMenuItem asChild><Link href="/payroll/people/import">Import people</Link></DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PayrollPermissionAction>
+      <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}>
+        <Button variant="primary" asChild>
+          <Link href="/payroll/runs/new"><Plus className="mr-2 h-4 w-4" />Run payroll</Link>
+        </Button>
+      </PayrollPermissionAction>
+    </>
+  )
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Payroll</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pay employees and contractors from one balance — any rail.
-        </p>
-      </div>
-
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <PayrollPageHeader
+        title="Payroll"
+        description="Pay employees and contractors, manage approvals, and keep every payment document in one place."
+        actions={actions}
+      />
       <PayrollNavTabs />
 
-      {capabilities && !capabilities.enabled ? (
-        <Card className="shadow-soft border-border/70 mb-6">
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            Payroll V2 is read-only for this business until the <code>payroll_v2</code> rollout is enabled.
+      {capabilitiesQuery.isError ? (
+        <Card className="mb-6 border-destructive/30">
+          <CardContent className="flex items-center justify-between gap-4 p-4 text-sm">
+            <span>We couldn’t check your Payroll permissions.</span>
+            <Button variant="outline" size="sm" onClick={() => void capabilitiesQuery.refetch()}>Retry</Button>
           </CardContent>
         </Card>
       ) : null}
 
-      {canPrepare ? <div className="mb-6 flex flex-wrap gap-2">
-        <Button variant="primary" onClick={() => void handleRunPayroll()}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create payroll run
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href="/payroll/people"><Users className="mr-2 h-4 w-4" />Add person</Link>
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href="/payroll/schedules"><CalendarDays className="mr-2 h-4 w-4" />Create schedule</Link>
-        </Button>
-      </div> : null}
-
-      <Card className="shadow-card border-border/70 mb-6">
-        <CardContent className="p-6 sm:p-8">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+      {overviewQuery.isPending ? (
+        <div className="grid gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}
+        </div>
+      ) : overviewQuery.isError ? (
+        <Card><CardContent className="p-8 text-center">
+          <p className="font-medium">Payroll couldn’t be loaded</p>
+          <p className="mt-1 text-sm text-muted-foreground">Your data is safe. Try loading it again.</p>
+          <Button className="mt-4" variant="outline" onClick={() => void overviewQuery.refetch()}>Try again</Button>
+        </CardContent></Card>
+      ) : empty ? (
+        <Card className="overflow-hidden border-primary/15 shadow-card">
+          <CardContent className="grid gap-8 p-6 sm:p-10 lg:grid-cols-[1.1fr_.9fr]">
             <div>
-              <p className="text-sm text-muted-foreground">Next payday</p>
-              <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">
-                {overview?.nextPayday ? formatDate(overview.nextPayday) : "Not scheduled"}
+              <div className="mb-4 inline-flex rounded-2xl bg-primary/10 p-3 text-primary"><Users className="h-6 w-6" /></div>
+              <h2 className="text-xl font-semibold">Set up your payroll</h2>
+              <p className="mt-2 max-w-lg text-sm text-muted-foreground">
+                Add who you pay, confirm how they receive money, then create your first payroll run.
               </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Estimated total{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatCurrency(overview?.estimatedTotal ?? 0, overview?.sourceCurrency ?? "USD")}
-                </span>
-              </p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}>
+                  <Button variant="primary" asChild><Link href="/payroll/people/new">Add your first person</Link></Button>
+                </PayrollPermissionAction>
+                <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}>
+                  <Button variant="outline" asChild><Link href="/payroll/people/import"><Upload className="mr-2 h-4 w-4" />Import people</Link></Button>
+                </PayrollPermissionAction>
+              </div>
             </div>
-            {canPrepare ? <Button
-              variant="primary"
-              size="lg"
-              className="min-w-[160px]"
-              onClick={() => void handleRunPayroll()}
-              disabled={createRun.isPending || (overview?.activeCount ?? 0) === 0}
-            >
-              {primaryLabel}
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button> : null}
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-4 text-sm">
-            <span>
-              <Users className="inline h-4 w-4 mr-1 text-primary" />
-              {overview?.activeCount ?? 0} active
-            </span>
-            <span>{overview?.connectedCount ?? 0} connected</span>
-            {(overview?.pendingConnectionCount ?? 0) > 0 ? (
-              <span className="text-amber-700 dark:text-amber-400">
-                {overview?.pendingConnectionCount} awaiting approval
-              </span>
-            ) : null}
-            <span className="tabular-nums">
-              {overview?.funded ? (
-                <span className="text-emerald-700 dark:text-emerald-400">Funded</span>
-              ) : (
-                <span className="text-amber-700 dark:text-amber-400">
-                  Short {formatCurrency(overview?.shortfall ?? 0, overview?.sourceCurrency ?? "USD")}
-                </span>
-              )}
-            </span>
-            {overview?.railMix
-              ? Object.entries(overview.railMix)
-                  .filter(([, n]) => n > 0)
-                  .map(([rail, n]) => (
-                    <span key={rail}>
-                      {n} {railLabel(rail as keyof typeof overview.railMix)}
-                    </span>
-                  ))
-              : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      {(overview?.attentionCount ?? overview?.needsDestinationCount ?? 0) > 0 ? (
-        <Card className="shadow-soft border-border/70 mb-6">
-          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <p className="text-sm">
-              {overview?.attentionCount ?? overview?.needsDestinationCount ?? 0} people need a payroll connection or receiving method.
-            </p>
-            <Button variant="outline" asChild>
-              <Link href="/payroll/people">Fix in People</Link>
-            </Button>
+            <ol className="space-y-4">
+              {[
+                ["1", "Add an employee or contractor", "Use a verified EASETAG or enter payment details manually."],
+                ["2", "Confirm their receiving method", "See who is ready before you include them in a run."],
+                ["3", "Create your first payroll run", "Review funding, approve, and track every payment."],
+              ].map(([n, title, description]) => (
+                <li key={n} className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{n}</span>
+                  <div><p className="text-sm font-medium">{title}</p><p className="text-xs text-muted-foreground">{description}</p></div>
+                </li>
+              ))}
+            </ol>
           </CardContent>
         </Card>
-      ) : null}
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard icon={CalendarDays} label="Next payday" value={overview?.nextPayday ? formatDate(overview.nextPayday) : "Not scheduled"} />
+            <MetricCard icon={CircleDollarSign} label="Estimated payroll" value={formatCurrency(overview?.estimatedTotal ?? 0, overview?.sourceCurrency ?? "USD")} />
+            <MetricCard icon={Users} label="People ready" value={`${Math.max(0, (overview?.activeCount ?? 0) - (overview?.attentionCount ?? 0))} of ${overview?.activeCount ?? 0}`} />
+            <MetricCard
+              icon={AlertCircle}
+              label="Funding readiness"
+              value={overview?.funded ? "Ready" : `${formatCurrency(overview?.shortfall ?? 0, overview?.sourceCurrency ?? "USD")} short`}
+              tone={overview?.funded ? "positive" : "warning"}
+            />
+          </div>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Recent runs</h2>
-        {(overview?.recentRuns ?? []).length === 0 ? (
-          <Card className="shadow-soft">
-            <CardContent className="p-6 text-sm text-muted-foreground">
-              No payroll runs yet. Add people, then run payroll.
-            </CardContent>
-          </Card>
-        ) : (
-          overview?.recentRuns.map((run) => (
-            <Link key={run.id} href={`/payroll/runs/${run.id}`}>
-              <Card className="shadow-soft hover:shadow-card transition-shadow">
-                <CardContent className="p-4 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="font-medium tabular-nums">
-                      {formatCurrency(run.totalSource, run.sourceCurrency)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{formatDate(run.createdAt)}</p>
-                  </div>
-                  <PayrollRunStatusBadge status={run.status} />
-                </CardContent>
-              </Card>
-            </Link>
-          ))
-        )}
-      </section>
+          {(overview?.attentionItems ?? []).length > 0 ? (
+            <section className="mt-8">
+              <h2 className="mb-3 text-base font-semibold">Needs attention</h2>
+              <div className="grid gap-3 lg:grid-cols-2">
+                {overview?.attentionItems.map((item) => (
+                  <Card key={`${item.code}-${item.actionHref}`} className="shadow-soft">
+                    <CardContent className="flex items-start justify-between gap-4 p-4">
+                      <div>
+                        <p className="text-sm font-medium">{item.title}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                      </div>
+                      <Button variant="outline" size="sm" asChild><Link href={item.actionHref}>{item.actionLabel}</Link></Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
+          <section className="mt-8">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Recent runs</h2>
+              <Button variant="ghost" size="sm" asChild><Link href="/payroll/runs">View all <ArrowRight className="ml-1 h-4 w-4" /></Link></Button>
+            </div>
+            <Card className="overflow-hidden shadow-soft">
+              <Table>
+                <TableHeader><TableRow><TableHead>Run</TableHead><TableHead>Payday</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(overview?.recentRuns ?? []).map((run) => (
+                    <TableRow key={run.id} className="cursor-pointer">
+                      <TableCell><Link className="font-medium" href={`/payroll/runs/${run.id}`}>{String(run.metadata?.name || "Payroll run")}</Link></TableCell>
+                      <TableCell>{run.payday ? formatDate(run.payday) : "—"}</TableCell>
+                      <TableCell className="tabular-nums">{formatCurrency(run.totalSource, run.sourceCurrency)}</TableCell>
+                      <TableCell><PayrollRunStatusBadge status={run.status} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          </section>
+        </>
+      )}
       <PayrollLegalNote className="mt-8" />
     </div>
+  )
+}
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: typeof Users
+  label: string
+  value: string
+  tone?: "positive" | "warning"
+}) {
+  return (
+    <Card className="shadow-soft">
+      <CardContent className="p-5">
+        <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-xl bg-muted"><Icon className="h-4 w-4" /></div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className={`mt-1 text-lg font-semibold ${tone === "positive" ? "text-emerald-700 dark:text-emerald-300" : tone === "warning" ? "text-amber-700 dark:text-amber-300" : ""}`}>{value}</p>
+      </CardContent>
+    </Card>
   )
 }

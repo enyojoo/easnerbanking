@@ -39,6 +39,11 @@ export interface PayrollPerson {
   readinessStatus: string
   identitySnapshot: Record<string, unknown>
   metadata: Record<string, unknown>
+  internalReference?: string | null
+  avatarUrl?: string | null
+  receivingMethodSummary?: PayrollReceivingMethodSummary | null
+  lastPaidAt?: string | null
+  scheduleSummaries?: Array<{ id: string; name: string }>
   createdAt: string
   updatedAt: string
 }
@@ -51,6 +56,7 @@ export interface PayrollSchedule {
   nextRunAt: string
   active: boolean
   template: Record<string, unknown>
+  personIds?: string[]
   createdAt: string
   updatedAt: string
 }
@@ -61,6 +67,7 @@ export interface PayrollRun {
   status: PayrollRunStatus
   scheduledFor: string | null
   scheduleId: string | null
+  sourceAccountId: string | null
   payPeriodStart: string | null
   payPeriodEnd: string | null
   payday: string | null
@@ -81,6 +88,7 @@ export interface PayrollRun {
   createdAt: string
   updatedAt: string
   lines?: PayrollLine[]
+  events?: PayrollRunEvent[]
 }
 
 export interface PayrollLine {
@@ -128,6 +136,16 @@ export interface PayrollOverview {
   draftRunId: string | null
   pendingApprovalRunId: string | null
   recentRuns: PayrollRun[]
+  attentionItems: PayrollAttentionItem[]
+}
+
+export interface PayrollAttentionItem {
+  code: string
+  severity: "info" | "warning" | "critical"
+  title: string
+  description: string
+  actionLabel: string
+  actionHref: string
 }
 
 export type PayrollConnectionStatus = "pending" | "approved" | "declined" | "expired" | "revoked"
@@ -136,8 +154,6 @@ export type PayrollAccessRole = "viewer" | "preparer" | "approver"
 export type PayrollDocumentDeliveryStatus = "queued" | "sent" | "delivered" | "failed"
 
 export interface PayrollCapabilities {
-  feature: "payroll_v2"
-  enabled: boolean
   canView: boolean
   canPrepare: boolean
   canApprove: boolean
@@ -201,6 +217,8 @@ export interface PayrollReadinessIssue {
   severity: "blocking" | "warning"
   personId?: string
   message: string
+  actionLabel?: string
+  actionHref?: string
 }
 
 export interface PayrollFundingSummary {
@@ -309,4 +327,102 @@ export interface PayrollPersonInput {
   easetag?: string | null
   rail: PayrollRail
   status?: PayrollPersonStatus
+  internalReference?: string | null
+  scheduleIds?: string[]
+}
+
+export interface PayrollBankInput {
+  type: "bank"
+  countryCode: string
+  currency: string
+  bankName: string
+  accountNumber: string
+  routingNumber?: string
+  sortCode?: string
+  iban?: string
+  swiftBic?: string
+  transferType?: "ACH" | "Wire"
+  checkingOrSavings?: "checking" | "savings"
+  phoneNumber?: string
+  addressLine1?: string
+  city?: string
+  state?: string
+  postalCode?: string
+}
+
+export interface PayrollMobileMoneyInput {
+  type: "mobile_money"
+  countryCode: string
+  currency: string
+  provider: string
+  phoneNumber: string
+}
+
+export interface PayrollStablecoinInput {
+  type: "stablecoin"
+  currency: string
+  asset: string
+  network: string
+  walletAddress: string
+}
+
+export type PayrollExternalReceivingMethodInput =
+  | PayrollBankInput
+  | PayrollMobileMoneyInput
+  | PayrollStablecoinInput
+
+export type CreatePayrollPersonCommand =
+  | {
+      mode: "easetag"
+      easetag: string
+      email: string
+      type: PayrollPersonType
+      defaultAmount: number
+      payCurrency: string
+      internalReference?: string
+      scheduleIds?: string[]
+      sendInvitation: boolean
+    }
+  | {
+      mode: "manual"
+      fullName: string
+      email?: string
+      country: string
+      type: PayrollPersonType
+      defaultAmount: number
+      payCurrency: string
+      internalReference?: string
+      scheduleIds?: string[]
+      receivingMethod: PayrollExternalReceivingMethodInput
+    }
+
+export interface PayrollRunDraftInput {
+  name: string
+  offCycle: boolean
+  scheduleId?: string
+  payPeriodStart: string
+  payPeriodEnd: string
+  payday: string
+  sourceAccountId: string
+  sourceCurrency: string
+  lines: Array<{ personId: string; amount: number }>
+}
+
+export interface PayrollRunPreview {
+  peopleCount: number
+  payrollTotal: number
+  fees: number
+  sourceDebit: number
+  availableBalance: number
+  remainingBalance: number
+  deliveryEstimates: PayrollDeliveryEstimate[]
+  issues: PayrollReadinessIssue[]
+}
+
+export interface PayrollSettings {
+  requireSeparateApprover: boolean
+  timezone: string
+  defaultSourceAccountId: string | null
+  defaultCurrency: string
+  defaultPaydayTime: string
 }

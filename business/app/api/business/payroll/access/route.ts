@@ -11,7 +11,15 @@ export async function GET(request: Request) {
     .eq("business_id", ctx.businessId)
     .order("created_at")
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ assignments: data ?? [] })
+  const userIds = (data ?? []).map((assignment) => String(assignment.user_id))
+  const { data: users } = userIds.length
+    ? await createSupabaseAdmin().from("users").select("id,full_name,email,avatar_url").in("id", userIds)
+    : { data: [] }
+  const userById = new Map((users ?? []).map((user) => [String(user.id), user]))
+  return NextResponse.json({ assignments: (data ?? []).map((assignment) => ({
+    ...assignment,
+    user: userById.get(String(assignment.user_id)) ?? null,
+  })) })
 }
 
 export async function PUT(request: Request) {

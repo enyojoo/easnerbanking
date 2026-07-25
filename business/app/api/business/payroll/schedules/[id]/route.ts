@@ -22,6 +22,9 @@ export async function PATCH(
     approvalLeadDays?: number
     weekendPolicy?: "previous_business_day" | "next_business_day"
     sourceCurrency?: string
+    sourceAccountId?: string
+    fundingReminderDays?: number
+    personIds?: string[]
   }
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -31,7 +34,8 @@ export async function PATCH(
   if (body.active != null) patch.active = body.active
   if (
     body.timezone != null || body.draftLeadDays != null || body.approvalLeadDays != null ||
-    body.weekendPolicy != null || body.sourceCurrency != null
+    body.weekendPolicy != null || body.sourceCurrency != null || body.sourceAccountId != null ||
+    body.fundingReminderDays != null
   ) {
     const { data: existing } = await createSupabaseAdmin().from("payroll_schedules")
       .select("template").eq("id", id).eq("business_id", ctx.businessId).maybeSingle()
@@ -42,6 +46,8 @@ export async function PATCH(
       ...(body.approvalLeadDays != null ? { approvalLeadDays: Math.max(0, Number(body.approvalLeadDays)) } : {}),
       ...(body.weekendPolicy != null ? { weekendPolicy: body.weekendPolicy } : {}),
       ...(body.sourceCurrency != null ? { sourceCurrency: body.sourceCurrency.toUpperCase() } : {}),
+      ...(body.sourceAccountId != null ? { sourceAccountId: body.sourceAccountId } : {}),
+      ...(body.fundingReminderDays != null ? { fundingReminderDays: Math.max(0, Number(body.fundingReminderDays)) } : {}),
     }
   }
 
@@ -55,7 +61,23 @@ export async function PATCH(
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ schedule: mapRowToPayrollSchedule(data as PayrollScheduleRow) })
+  if (body.personIds) {
+    const unique = [...new Set(body.personIds)]
+    const { data: validPeople } = unique.length
+      ? await admin.from("payroll_people").select("id").eq("business_id", ctx.businessId).in("id", unique)
+      : { data: [] }
+    await admin.from("payroll_schedule_people").delete().eq("schedule_id", id).eq("business_id", ctx.businessId)
+    if (validPeople?.length) {
+      await admin.from("payroll_schedule_people").insert(validPeople.map((person) => ({
+        schedule_id: id,
+        person_id: person.id,
+        business_id: ctx.businessId,
+      })))
+    }
+  }
+  return NextResponse.json({
+    schedule: { ...mapRowToPayrollSchedule(data as PayrollScheduleRow), personIds: body.personIds },
+  })
 }
 
 export async function DELETE(

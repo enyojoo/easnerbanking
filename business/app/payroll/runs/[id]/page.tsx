@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -26,14 +26,16 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 import type { PayrollLine } from "@/lib/payroll/types"
 import { apiFetch } from "@/lib/query/api-client"
+import { railLabel } from "@/lib/payroll/helpers"
 
 export default function PayrollRunDetailPage() {
   const params = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
   const runId = params.id
   const runQuery = usePayrollRunDetail(runId)
   const capabilities = usePayrollCapabilities().data
-  const canPrepare = Boolean(capabilities?.enabled && capabilities.canPrepare)
-  const canApprove = Boolean(capabilities?.enabled && capabilities.canApprove)
+  const canPrepare = Boolean(capabilities?.canPrepare)
+  const canApprove = Boolean(capabilities?.canApprove)
   const updateRun = useUpdatePayrollRun(runId)
   const submitRun = useSubmitPayrollRun(runId)
   const approveRun = useApprovePayrollRun(runId)
@@ -42,6 +44,7 @@ export default function PayrollRunDetailPage() {
   const withdrawRun = useWithdrawPayrollRun(runId)
   const { user } = useAuth()
   const confirmWithPin = useConfirmWithPin()
+  const autoActionStarted = useRef(false)
 
   const run = runQuery.data
   const [amountEdits, setAmountEdits] = useState<Record<string, string>>({})
@@ -63,7 +66,7 @@ export default function PayrollRunDetailPage() {
       mix[line.rail] = (mix[line.rail] ?? 0) + 1
     }
     return Object.entries(mix)
-      .map(([rail, n]) => `${n} ${rail}`)
+      .map(([rail, n]) => `${n} ${railLabel(rail as PayrollLine["rail"])}`)
       .join(" · ")
   }, [lines])
 
@@ -126,6 +129,39 @@ export default function PayrollRunDetailPage() {
       toast.success("Payroll approved and scheduled")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Payroll could not be scheduled")
+    }
+  }
+
+  useEffect(() => {
+    const action = searchParams.get("action")
+    if (autoActionStarted.current || !run || !canApprove || !awaitingApproval) return
+    if (action !== "pay" && action !== "schedule") return
+    autoActionStarted.current = true
+    if (action === "pay") void handleApproveAndPay()
+    else void handleApproveAndSchedule()
+    // The action is intentionally consumed once after the newly-created run loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awaitingApproval, canApprove, run, searchParams])
+
+  async function rejectRun() {
+    const reason = window.prompt("Why are you returning this payroll to draft?")
+    if (!reason?.trim()) return
+    try {
+      await apiFetch(`/api/business/payroll/runs/${runId}`, { method: "POST", body: { action: "reject", reason } })
+      toast.success("Payroll returned to draft")
+      await runQuery.refetch()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Payroll could not be rejected")
+    }
+  }
+
+  async function cancelSchedule() {
+    try {
+      await apiFetch(`/api/business/payroll/runs/${runId}`, { method: "POST", body: { action: "cancel" } })
+      toast.success("Scheduled payroll cancelled")
+      await runQuery.refetch()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Schedule could not be cancelled")
     }
   }
 
@@ -215,6 +251,7 @@ export default function PayrollRunDetailPage() {
           ) : null}
           {awaitingApproval && canApprove ? (
             <>
+              <Button variant="ghost" onClick={() => void rejectRun()}>Reject</Button>
               <Button
                 variant="outline"
                 onClick={() => void handleApproveAndSchedule()}
@@ -230,6 +267,9 @@ export default function PayrollRunDetailPage() {
                 Approve and pay
               </Button>
             </>
+          ) : null}
+          {run.status === "scheduled" && canApprove ? (
+            <Button variant="outline" onClick={() => void cancelSchedule()}>Cancel schedule</Button>
           ) : null}
           {(run.status === "approved" || run.status === "partial") && canApprove ? (
             <Button variant="primary" onClick={() => void handleExecute()} disabled={executeRun.isPending}>
@@ -291,7 +331,7 @@ export default function PayrollRunDetailPage() {
           {lines.map((line: PayrollLine) => (
             <div key={line.id} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="font-medium">{line.personName || "Payee"}</p>
+                <p className="font-medium">{line.personName || "Person"}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <PayrollRailBadge rail={line.rail} />
                   <PayrollLineStatusBadge status={line.status} />
@@ -335,6 +375,19 @@ export default function PayrollRunDetailPage() {
         </CardContent>
       </Card>
 
+      {run.approvalSnapshot ? (
+        <Card className="shadow-soft mb-6">
+          <CardContent className="p-5">
+            <h2 className="text-sm font-medium">Approved payroll details</h2>
+            <div className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
+              <p><span className="block text-xs text-muted-foreground">Approved debit</span>{formatCurrency(run.approvalSnapshot.approvedDebit, run.approvalSnapshot.sourceCurrency)}</p>
+              <p><span className="block text-xs text-muted-foreground">People</span>{run.approvalSnapshot.people.length}</p>
+              <p><span className="block text-xs text-muted-foreground">Approved</span>{run.approvedAt ? formatDate(run.approvedAt) : "—"}</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="shadow-soft mb-6">
         <CardContent className="p-4 text-sm space-y-2">
           <p>
@@ -351,6 +404,21 @@ export default function PayrollRunDetailPage() {
               <span className="text-muted-foreground">Executed:</span> {formatDate(run.executedAt)}
             </p>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-soft mb-6">
+        <CardContent className="p-5">
+          <h2 className="text-sm font-medium">Activity</h2>
+          <ol className="mt-4 space-y-4">
+            {(run.events ?? []).length ? run.events?.map((event) => (
+              <li key={event.id} className="relative border-l pl-4">
+                <span className="absolute -left-1 top-1 h-2 w-2 rounded-full bg-primary" />
+                <p className="text-sm">{event.eventType.replaceAll(".", " ").replace(/\b\w/g, (c) => c.toUpperCase())}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(event.createdAt)}</p>
+              </li>
+            )) : <li className="text-sm text-muted-foreground">No activity recorded yet.</li>}
+          </ol>
         </CardContent>
       </Card>
 

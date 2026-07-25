@@ -73,6 +73,8 @@ interface RecipientFormProps {
   allowedRecipientTypes?: RecipientFormRecipientKind[]
   /** Overrides primary submit label in add mode (e.g. "Save payout"). */
   submitButtonLabel?: string
+  /** Payroll embeds the same validation without recipient-management terminology. */
+  terminology?: "recipient" | "payroll"
 }
 
 function inferRecipientType(recipient?: Beneficiary): "bank" | "mobile" | "wallet" | "easenet" {
@@ -109,6 +111,7 @@ export function RecipientForm({
   onSuccessWithData,
   allowedRecipientTypes,
   submitButtonLabel,
+  terminology = "recipient",
 }: RecipientFormProps) {
   const recipientTypeTabs = useMemo(() => {
     if (!allowedRecipientTypes?.length) return RECIPIENT_TYPE_TABS
@@ -817,7 +820,7 @@ export function RecipientForm({
     <form onSubmit={handleSubmit} className="min-w-0 space-y-6">
       {recipientTypeTabs.length > 1 ? (
         <div className="space-y-2 max-w-3xl">
-          <label className="text-sm font-medium">Recipient Type</label>
+          <label className="text-sm font-medium">{terminology === "payroll" ? "Receiving method" : "Recipient Type"}</label>
           <div className="relative flex rounded-xl border border-input bg-muted/45 p-1 shadow-inner">
             <div
               aria-hidden
@@ -893,7 +896,7 @@ export function RecipientForm({
         <div className="space-y-2">
           <label className="text-sm font-medium flex items-center gap-2">
             <User className="h-4 w-4 text-muted-foreground" />
-              Recipient Name
+              {terminology === "payroll" ? "Account holder name" : "Recipient Name"}
           </label>
           <Input
             id="name"
@@ -942,7 +945,9 @@ export function RecipientForm({
                       <CommandEmpty>
                         {payoutCorridorsLoading
                           ? "Loading payout corridors…"
-                          : "No payout corridors for this recipient type. Try again later or contact support."}
+                          : terminology === "payroll"
+                            ? "This receiving method is not available here yet. Try again later or contact support."
+                            : "No payout corridors for this recipient type. Try again later or contact support."}
                       </CommandEmpty>
                       <CommandGroup>
                         {countryOptions.map((country) => (
@@ -1111,7 +1116,7 @@ export function RecipientForm({
               <Input
                 value={formData.walletAddress}
                 onChange={(e) => handleInputChange("walletAddress", e.target.value)}
-                placeholder="Recipient wallet address"
+                placeholder={terminology === "payroll" ? "Wallet address" : "Recipient wallet address"}
                 className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.walletAddress ? "border-red-500" : ""}`}
               />
               {errors.walletAddress && <p className="text-xs text-red-500">{errors.walletAddress}</p>}
