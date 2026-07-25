@@ -25,6 +25,8 @@ const TEMPLATE_PREFERENCE: Record<string, EmailPreferenceCategory> = {
   kycApproved: "transactional",
   kycRejected: "transactional",
   teamInvitation: "transactional",
+  payrollEasetagInvite: "transactional",
+  payrollPaid: "transactional",
   passwordChanged: "security_alerts",
   passwordResetCompleted: "security_alerts",
   mfaEnabled: "security_alerts",

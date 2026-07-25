@@ -68,6 +68,14 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/internal/payroll/generate-drafts",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/internal/payroll/reconcile-stuck",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/process-account-deletions",
       "schedule": "0 * * * *"
     }

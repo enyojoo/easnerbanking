@@ -104,6 +104,26 @@ export const qk = {
     detail: (scope: Scope, id: string) =>
       [...scopeKey(scope), "invoices", id] as const,
   },
+  payroll: {
+    root: (scope: Scope) => [...scopeKey(scope), "payroll"] as const,
+    overview: (scope: Scope) => [...scopeKey(scope), "payroll", "overview"] as const,
+    people: {
+      root: (scope: Scope) => [...scopeKey(scope), "payroll", "people"] as const,
+      list: (scope: Scope) => [...scopeKey(scope), "payroll", "people", "list"] as const,
+      detail: (scope: Scope, id: string) =>
+        [...scopeKey(scope), "payroll", "people", id] as const,
+    },
+    runs: {
+      root: (scope: Scope) => [...scopeKey(scope), "payroll", "runs"] as const,
+      list: (scope: Scope) => [...scopeKey(scope), "payroll", "runs", "list"] as const,
+      detail: (scope: Scope, id: string) =>
+        [...scopeKey(scope), "payroll", "runs", id] as const,
+    },
+    schedules: {
+      root: (scope: Scope) => [...scopeKey(scope), "payroll", "schedules"] as const,
+      list: (scope: Scope) => [...scopeKey(scope), "payroll", "schedules", "list"] as const,
+    },
+  },
   customers: {
     root: (scope: Scope) => [...scopeKey(scope), "customers"] as const,
     list: (scope: Scope) => [...scopeKey(scope), "customers", "list"] as const,

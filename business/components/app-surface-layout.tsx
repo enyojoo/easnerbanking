@@ -10,6 +10,7 @@ const DASHBOARD_SHELL_ROOTS = [
   "/dashboard",
   "/developers",
   "/invoices",
+  "/payroll",
   "/qr-pay",
   "/send",
   "/settings",

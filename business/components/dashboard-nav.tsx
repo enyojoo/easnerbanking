@@ -15,6 +15,7 @@ import {
   Building2,
   QrCode,
   SmartphoneNfc,
+  Users,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -78,6 +79,7 @@ export function DashboardNav() {
   const menuItems = [
     { href: "/dashboard", label: "Home", icon: LayoutDashboard, type: "single" as const },
     { href: "/send", label: "Send", icon: Send, type: "single" as const },
+    { href: "/payroll", label: "Payroll", icon: Users, type: "single" as const },
     { href: "/cards", label: "Cards", icon: CreditCard, type: "single" as const },
     {
       key: "collections",

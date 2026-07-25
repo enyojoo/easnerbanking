@@ -15,7 +15,7 @@ export interface ApprovalRow {
   requester_id: string
   created_at: string
   updated_at: string
-  subject_type: "transfer" | "payout" | "invoice" | "card"
+  subject_type: "transfer" | "payout" | "invoice" | "card" | "payroll_run"
   subject_id: string
   memo: string | null
 }

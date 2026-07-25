@@ -25,6 +25,13 @@ export { useTreasurySummary, useTreasuryCashflow } from "./use-treasury"
 export type { TreasurySummary, CashflowPoint } from "./use-treasury"
 
 export { useInvoicesList, useInvoiceDetail } from "./use-invoices"
+export {
+  usePayrollOverview,
+  usePayrollPeople,
+  usePayrollRuns,
+  usePayrollRunDetail,
+  usePayrollSchedules,
+} from "./use-payroll"
 export { useCustomersList } from "./use-customers"
 export { useFxRates, persistFxRates } from "./use-fx"
 export type { FxRate } from "./use-fx"

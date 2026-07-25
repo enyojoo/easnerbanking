@@ -1,17 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { getBusinessRoleForUser } from "@/lib/b2b/require-role"
+
+const OWNER_ONLY_THRESHOLD_USD = 10_000
 
 /**
  * Phase 2: multi-approver / policy-before-sign for business spend.
- * Phase 1: no blocking — hook stays centralized for later policy tags + thresholds.
+ * Payroll runs above threshold require Owner role at approve/execute time.
  */
 export async function assertBusinessTransferAllowed(
-  _admin: SupabaseClient,
-  _businessId: string,
-  _amountSourceCurrency: number,
-  _sourceCurrency: string,
+  admin: SupabaseClient,
+  businessId: string,
+  amountSourceCurrency: number,
+  sourceCurrency: string,
+  userId: string,
 ): Promise<void> {
-  void _admin
-  void _businessId
-  void _amountSourceCurrency
-  void _sourceCurrency
+  if (sourceCurrency.toUpperCase() !== "USD" && sourceCurrency.toUpperCase() !== "EUR") return
+  if (amountSourceCurrency < OWNER_ONLY_THRESHOLD_USD) return
+
+  const role = await getBusinessRoleForUser(admin, userId, businessId)
+  if (role !== "Owner") {
+    throw new Error(`Payments of ${amountSourceCurrency} ${sourceCurrency} or more require Owner approval.`)
+  }
 }

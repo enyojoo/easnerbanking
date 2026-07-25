@@ -74,6 +74,18 @@ export interface TeamInviteEmailData {
   recipientHasEasnerAccount?: boolean
 }
 
+export interface PayrollEasetagInviteEmailData {
+  recipientName: string
+  businessName: string
+  signupUrl: string
+}
+
+export interface PayrollPaidEmailData {
+  recipientName: string
+  businessName: string
+  amountDisplay: string
+}
+
 export interface SecurityAlertEmailData {
   email: string
   firstName?: string

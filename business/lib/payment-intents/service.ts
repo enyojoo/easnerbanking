@@ -130,6 +130,7 @@ export async function createOffRampPaymentIntent(input: {
       input.ctx.subjectBusinessId,
       input.fiatAmount,
       String(input.recipientRow.currency || "USD"),
+      input.userId,
     )
   }
 

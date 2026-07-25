@@ -58,6 +58,7 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
     const secondaryRoutes = [
       "/cards",
       "/invoices",
+      "/payroll",
       "/terminal",
       "/qr-pay",
       "/settings",

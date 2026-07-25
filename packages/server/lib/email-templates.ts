@@ -16,6 +16,8 @@ import type {
   EmailTemplate,
   SecurityAlertEmailData,
   TeamInviteEmailData,
+  PayrollEasetagInviteEmailData,
+  PayrollPaidEmailData,
   TransactionEmailData,
   VerificationEmailData,
   WelcomeEmailData,
@@ -305,6 +307,48 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
     },
     text: (data: TeamInviteEmailData) =>
       `${formatEasnerUserGreetingPlain(undefined)}\n\n${data.inviterName} invited you to ${data.businessName} as ${data.role}.\n\nUse ${data.inviteeEmail} when you create an account or sign in.\n\nAccept: ${data.acceptUrl}`,
+  },
+
+  payrollEasetagInvite: {
+    subject: (data: PayrollEasetagInviteEmailData) =>
+      `${data.businessName} wants to pay you via EASETAG`,
+    html: (data: PayrollEasetagInviteEmailData) => {
+      const content = `
+        <p class="confirmation-text">
+          Hi ${data.recipientName}, <strong>${data.businessName}</strong> added you to payroll on Easner.
+        </p>
+        <p class="confirmation-text">
+          Claim your EASETAG on Easner Personal Banking to receive payments instantly and for free.
+        </p>
+      `
+      return generateBaseEmailTemplate(
+        "Get paid via EASETAG",
+        "",
+        content,
+        { text: "Join Easner", url: data.signupUrl },
+        { audience: "personal", showPreferencesLink: false },
+      )
+    },
+    text: (data: PayrollEasetagInviteEmailData) =>
+      `${data.businessName} wants to pay you via EASETAG. Join Easner: ${data.signupUrl}`,
+  },
+
+  payrollPaid: {
+    subject: (data: PayrollPaidEmailData) => `You've been paid — ${data.businessName}`,
+    html: (data: PayrollPaidEmailData) => {
+      const content = `
+        <p class="confirmation-text">
+          Hi ${data.recipientName}, you received <strong>${data.amountDisplay}</strong> from <strong>${data.businessName}</strong>.
+        </p>
+        <p class="confirmation-text">Your pay stub is attached to this email.</p>
+      `
+      return generateBaseEmailTemplate("You've been paid", "", content, undefined, {
+        audience: "personal",
+        showPreferencesLink: false,
+      })
+    },
+    text: (data: PayrollPaidEmailData) =>
+      `You've been paid ${data.amountDisplay} by ${data.businessName}.`,
   },
 
   passwordChanged: securityTemplate("password_changed"),
