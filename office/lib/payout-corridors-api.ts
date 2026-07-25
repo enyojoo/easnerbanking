@@ -69,9 +69,12 @@ export const payoutCorridorsApi = {
   },
 
   async syncGridCorridors(): Promise<{
-    updated: number
-    skipped: number
     provision?: { inserted: number; updated: number; skipped: number; targets: number }
+    schemas: {
+      noah: { updated: number; skipped: number }
+      yellowcard: { updated: number; skipped: number }
+      grid: { updated: number; skipped: number }
+    }
   }> {
     const res = await officeFetch("/api/admin/grid-schemas/sync", { method: "POST" })
     return asJson(res)

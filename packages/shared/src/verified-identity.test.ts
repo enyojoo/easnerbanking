@@ -58,4 +58,8 @@ describe("countryDisplayName", () => {
     expect(countryDisplayName("CD")).toBe("DR Congo")
     expect(countryDisplayName("CG")).toBe("Congo")
   })
+
+  it("uses Hong Kong instead of Intl SAR China label", () => {
+    expect(countryDisplayName("HK")).toBe("Hong Kong")
+  })
 })

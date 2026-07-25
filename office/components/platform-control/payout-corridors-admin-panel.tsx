@@ -702,12 +702,15 @@ type CountryCurrencyCaps = {
   supportGridPayIn: boolean
 }
 
-function corridorHasAnyCapability(row: PayoutCorridorAdminRow): boolean {
-  return (
-    corridorShowsNoahBadge(row) ||
-    corridorShowsYcBadge(row) ||
-    corridorShowsGridBadge(row)
-  )
+function normalizeCorridorRail(rail: string | null | undefined): "bank_transfer" | "mobile_money" {
+  return rail === "mobile_money" ? "mobile_money" : "bank_transfer"
+}
+
+function corridorMatchesRailTab(
+  row: PayoutCorridorAdminRow,
+  railTab: "bank_transfer" | "mobile_money",
+): boolean {
+  return normalizeCorridorRail(row.rail) === railTab
 }
 
 function rowCaps(row: PayoutCorridorAdminRow): CountryCurrencyCaps {
@@ -749,8 +752,6 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
   const map = new Map<string, FiatDestinationRow>()
 
   for (const r of filteredRows) {
-    if (!corridorHasAnyCapability(r)) continue
-
     const key = `${r.country_code}:${r.currency_code}`
     const existing = map.get(key)
     const caps = existing
@@ -918,35 +919,35 @@ export function PayoutCorridorsAdminPanel() {
   const rows = corridorsQuery.data ?? []
   const [error, setError] = useState<string | null>(null)
   const [syncSummary, setSyncSummary] = useState<string | null>(null)
-  const [syncingGrid, setSyncingGrid] = useState(false)
+  const [syncingCorridors, setSyncingCorridors] = useState(false)
   const [railTab, setRailTab] = useState<"bank_transfer" | "mobile_money">("bank_transfer")
   const filteredRows = useMemo(
-    () => rows.filter((r) => r.rail === railTab || (!r.rail && railTab === "bank_transfer")),
+    () => rows.filter((r) => corridorMatchesRailTab(r, railTab)),
     [rows, railTab],
   )
   const fiatRows = useMemo(() => groupFiatDestinations(filteredRows), [filteredRows])
   const showTableSkeleton = useQueryInitialLoading(corridorsQuery.isPending, corridorsQuery.data, fiatRows)
-  const refreshing = corridorsQuery.isFetching && !showTableSkeleton
 
-  const handleSyncGridCorridors = async () => {
-    setSyncingGrid(true)
+  const handleSyncCorridors = async () => {
+    setSyncingCorridors(true)
     setError(null)
     setSyncSummary(null)
     try {
       const result = await payoutCorridorsApi.syncGridCorridors()
       const p = result.provision
+      const s = result.schemas
       const corridorPart = p
-        ? `${p.inserted} corridor${p.inserted === 1 ? "" : "s"} added, ${p.updated} updated (${p.targets} Grid targets)`
+        ? `${p.inserted} corridor${p.inserted === 1 ? "" : "s"} added, ${p.updated} updated`
         : null
-      const schemaPart = `schemas updated ${result.updated}, skipped ${result.skipped}`
+      const schemaPart = `schemas — Noah ${s.noah.updated}, YC ${s.yellowcard.updated}, Grid ${s.grid.updated}`
       setSyncSummary(
-        corridorPart ? `Grid sync done — ${corridorPart}; ${schemaPart}` : `Grid sync done — ${schemaPart}`,
+        corridorPart ? `Sync done — ${corridorPart}; ${schemaPart}` : `Sync done — ${schemaPart}`,
       )
       await corridorsQuery.refetch()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Grid sync failed")
+      setError(e instanceof Error ? e.message : "Corridor sync failed")
     } finally {
-      setSyncingGrid(false)
+      setSyncingCorridors(false)
     }
   }
 
@@ -1140,21 +1141,13 @@ export function PayoutCorridorsAdminPanel() {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => void handleSyncGridCorridors()}
-            disabled={syncingGrid || corridorsQuery.isFetching}
+            onClick={() => void handleSyncCorridors()}
+            disabled={syncingCorridors || corridorsQuery.isFetching}
           >
-            {syncingGrid ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Sync Grid
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void corridorsQuery.refetch()}
-            disabled={corridorsQuery.isFetching}
-          >
-            {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Refresh
+            {syncingCorridors || corridorsQuery.isFetching ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            Sync corridors
           </Button>
         </div>
       }
@@ -1179,7 +1172,8 @@ export function PayoutCorridorsAdminPanel() {
             </div>
           ) : fiatRows.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">
-              No fiat corridors yet. Run corridor seed + provider sync scripts, then Refresh.
+              No {railTab === "mobile_money" ? "mobile money" : "bank"} corridors yet. Run Sync corridors to
+              provision from provider coverage.
             </p>
           ) : (
             <Table className="min-w-[960px]">

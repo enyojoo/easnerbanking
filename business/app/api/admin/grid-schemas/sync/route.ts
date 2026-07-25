@@ -18,8 +18,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    updated: result.updated,
-    skipped: result.skipped,
     provision: result.provision
       ? {
           inserted: result.provision.inserted,
@@ -28,5 +26,6 @@ export async function POST(request: Request) {
           targets: result.provision.targets,
         }
       : undefined,
+    schemas: result.schemas,
   })
 }

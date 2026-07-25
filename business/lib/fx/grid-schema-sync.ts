@@ -5,7 +5,9 @@ import {
   unwrapYcFieldsSchema,
   type GridCorridorSchemaHint,
 } from "@easner/shared"
-import type { GridCorridorSyncResult } from "@/lib/fx/grid-corridor-sync"
+import type { AllCorridorSchemaSyncResult } from "@/lib/fx/provider-schema-sync-types"
+import { syncNoahCorridorSchemasSafe } from "@/lib/fx/noah-schema-sync"
+import { syncYcCorridorSchemasSafe } from "@/lib/fx/yc-schema-sync"
 import { isMomoGridDiscovery, listGridDiscoveries } from "@/lib/grid/discoveries"
 import type { GridDiscovery } from "@/lib/grid/types"
 
@@ -88,7 +90,6 @@ export type GridSchemaSyncResult = {
   ok: boolean
   updated: number
   skipped: number
-  provision?: GridCorridorSyncResult
   error?: string
 }
 
@@ -150,28 +151,65 @@ export async function syncGridCorridorSchemas(
   return { ok: true, updated, skipped }
 }
 
-export async function syncGridCorridorSchemasSafe(
+export async function syncAllCorridorSchemasSafe(
   admin: SupabaseClient,
-): Promise<GridSchemaSyncResult> {
+): Promise<AllCorridorSchemaSyncResult> {
+  const emptySchemas = {
+    noah: { updated: 0, skipped: 0 },
+    yellowcard: { updated: 0, skipped: 0 },
+    grid: { updated: 0, skipped: 0 },
+  }
+
   try {
     const { syncGridPayoutCorridorsSafe } = await import("@/lib/fx/grid-corridor-sync")
     const { syncYcPayoutCorridorsSafe } = await import("@/lib/fx/yc-corridor-sync")
+
     const gridProvision = await syncGridPayoutCorridorsSafe(admin, { forceRefresh: true })
     if (!gridProvision.ok) {
-      return { ok: false, updated: 0, skipped: 0, provision: gridProvision, error: gridProvision.error }
+      return { ok: false, provision: gridProvision, schemas: emptySchemas, error: gridProvision.error }
     }
+
     const ycProvision = await syncYcPayoutCorridorsSafe(admin)
     if (!ycProvision.ok) {
-      return { ok: false, updated: 0, skipped: 0, error: ycProvision.error }
+      return { ok: false, provision: gridProvision, schemas: emptySchemas, error: ycProvision.error }
     }
-    const schema = await syncGridCorridorSchemas(admin, { forceRefresh: true })
-    return { ...schema, provision: gridProvision }
+
+    const noah = await syncNoahCorridorSchemasSafe(admin)
+    if (!noah.ok) {
+      return { ok: false, provision: gridProvision, schemas: emptySchemas, error: noah.error }
+    }
+
+    const yellowcard = await syncYcCorridorSchemasSafe(admin)
+    if (!yellowcard.ok) {
+      return { ok: false, provision: gridProvision, schemas: emptySchemas, error: yellowcard.error }
+    }
+
+    const grid = await syncGridCorridorSchemas(admin, { forceRefresh: true })
+    if (!grid.ok) {
+      return { ok: false, provision: gridProvision, schemas: emptySchemas, error: grid.error }
+    }
+
+    return {
+      ok: true,
+      provision: gridProvision,
+      schemas: {
+        noah: { updated: noah.updated, skipped: noah.skipped },
+        yellowcard: { updated: yellowcard.updated, skipped: yellowcard.skipped },
+        grid: { updated: grid.updated, skipped: grid.skipped },
+      },
+    }
   } catch (e) {
     return {
       ok: false,
-      updated: 0,
-      skipped: 0,
+      schemas: emptySchemas,
       error: e instanceof Error ? e.message : String(e),
     }
   }
+}
+
+/** Full corridor sync: provision Grid/YC rows, then refresh Noah, YC, and Grid field schemas. */
+export async function syncGridCorridorSchemasSafe(
+  admin: SupabaseClient,
+): Promise<AllCorridorSchemaSyncResult> {
+  return syncAllCorridorSchemasSafe(admin)
 }

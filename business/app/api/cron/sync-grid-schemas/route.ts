@@ -22,8 +22,8 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    updated: result.updated,
-    skipped: result.skipped,
+    provision: result.provision,
+    schemas: result.schemas,
   })
 }
 

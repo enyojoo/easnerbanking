@@ -67,6 +67,7 @@ export function normalizeCountryIso(value: unknown): string | null {
 export const COUNTRY_DISPLAY_NAME_OVERRIDES: Record<string, string> = {
   CD: "DR Congo",
   CG: "Congo",
+  HK: "Hong Kong",
 }
 
 /** Primary local fiat for payout/pay-in corridors (one currency per country+rail in DB). */
