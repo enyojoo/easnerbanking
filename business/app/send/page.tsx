@@ -1260,6 +1260,7 @@ export default function SendPage() {
       payInCountry,
       payInRail: "bank_transfer",
       receiveAmount,
+      crossBorderProvider: tlcFlow.crossBorderProvider,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedCrossBorderBankQuotePrefetchKey, recipient?.id, otherCurrency])

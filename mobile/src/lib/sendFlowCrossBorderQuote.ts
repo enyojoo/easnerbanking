@@ -18,6 +18,11 @@ function crossBorderApiBase(provider: 'yellowcard' | 'grid' | undefined): string
   return provider === 'grid' ? '/api/grid/cross-border' : '/api/yellowcard/cross-border'
 }
 
+/** Grid cross-border uses one POST /quotes; Yellowcard splits preview + leg2 lock. */
+function usesGridSingleQuote(provider: 'yellowcard' | 'grid' | undefined): boolean {
+  return provider === 'grid'
+}
+
 let stashed: YcCrossBorderQuoteResult | null = null
 let stashedMeta: CrossBorderQuoteStashMeta | null = null
 let stashedLeg2DraftId: string | null = null
@@ -172,11 +177,16 @@ export async function fetchCrossBorderQuotePreview(
 
 export async function lockCrossBorderLeg2(
   meta: CrossBorderQuoteStashMeta,
+  leg2DraftId?: string,
 ): Promise<YcCrossBorderQuoteResult> {
   const base = crossBorderApiBase(meta.crossBorderProvider)
+  const draftId = leg2DraftId?.trim() || peekCrossBorderLeg2DraftId()?.trim()
   const data = await apiFetch<YcCrossBorderQuoteResult, Record<string, unknown>>(
     `${base}/lock-leg2`,
-    { method: 'POST', body: buildCrossBorderQuoteBody(meta) },
+    {
+      method: 'POST',
+      body: buildCrossBorderQuoteBody(meta, draftId ? { leg2DraftId: draftId } : undefined),
+    },
   )
   if (!data.ok) throw new Error('Cross-border leg2 lock failed')
   return data
@@ -236,6 +246,7 @@ export async function ensureCrossBorderQuoteStashed(
       }
       stashed = quote
       stashedMeta = meta
+      stashedLeg2DraftId = quote.leg2DraftId?.trim() || null
       lastQuoteError = null
       return quote
     })
@@ -266,12 +277,26 @@ export async function ensureCrossBorderLeg2Locked(
     return peekCrossBorderQuote()
   }
 
+  // Grid: /quote already created the locked provider quote — skip YC leg2 lock API.
+  if (usesGridSingleQuote(meta.crossBorderProvider)) {
+    const preview = isStashedCrossBorderQuoteFresh(meta)
+      ? peekCrossBorderQuote()
+      : await ensureCrossBorderQuoteStashed(meta)
+    const leg2DraftId = preview?.leg2DraftId?.trim()
+    if (!preview || !leg2DraftId || !isCrossBorderLeg2Locked(preview, leg2DraftId)) {
+      return null
+    }
+    stashCrossBorderLeg2Lock(preview, meta, leg2DraftId)
+    return preview
+  }
+
   const key = quoteMetaKey(meta)
   if (inflightLeg2Lock && inflightLeg2LockKey === key) return inflightLeg2Lock
 
   inflightLeg2LockKey = key
   lastQuoteError = null
-  inflightLeg2Lock = lockCrossBorderLeg2(meta)
+  const draftId = peekCrossBorderLeg2DraftId()?.trim()
+  inflightLeg2Lock = lockCrossBorderLeg2(meta, draftId)
     .then((quote) => {
       if (quote.quotePhase === 'locked' && isCompleteCrossBorderQuote(quote)) {
         stashCrossBorderQuote(quote, meta, quote.leg2DraftId)
@@ -357,7 +382,7 @@ export async function ensureCrossBorderOrderConfirmed(
 /** Fire-and-forget preview + leg2 lock while user is on amount / MoMo setup. */
 export function prefetchCrossBorderQuotePipeline(meta: CrossBorderQuoteStashMeta): void {
   void ensureCrossBorderQuoteStashed(meta)
-    .then(() => ensureCrossBorderLeg2Locked(meta))
+    .then((quote) => (quote ? ensureCrossBorderLeg2Locked(meta) : null))
     .catch(() => {})
 }
 

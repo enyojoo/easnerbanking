@@ -3,6 +3,7 @@ import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createGridCrossBorderQuote } from "@/lib/grid/cross-border-orchestrator"
+import { GridHttpError } from "@/lib/grid/http"
 import { isGridLocalPayInEnabledForCorridor } from "@/lib/grid/grid-receive-gate"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { normalizeYcMomoPhone } from "@easner/shared"
@@ -17,6 +18,17 @@ function gridCrossBorderQuoteError(
 ) {
   console.warn("[grid-cross-border-quote]", { code, error, ...extra })
   return NextResponse.json({ error, code, ...extra }, { status })
+}
+
+function mapGridCrossBorderQuoteError(e: unknown): string {
+  if (e instanceof GridHttpError) {
+    const body = (e.body ?? {}) as { reason?: string; message?: string }
+    if (body.reason?.trim()) return body.reason.trim()
+    if (body.message?.trim()) return body.message.trim()
+    return e.message
+  }
+  if (e instanceof Error) return e.message
+  return "Cross-border quote failed"
 }
 
 export async function POST(request: Request) {
@@ -131,9 +143,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       provider: "grid",
-      quotePhase: "preview",
+      /** Grid locks pay-in + payout in one POST /quotes — no separate YC-style leg2 lock. */
+      quotePhase: "leg2_locked",
       requiresConfirm: true,
       leg2DraftId: result.quoteId,
+      transferId: result.transferId,
       localPayIn: result.sourceAmount,
       customerRate: result.customerRate,
       receiveAmount: result.receiveAmount,
@@ -149,7 +163,7 @@ export async function POST(request: Request) {
       sourceNetworkName: body?.sourceNetworkName,
     })
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Cross-border quote failed"
+    const message = mapGridCrossBorderQuoteError(e)
     return gridCrossBorderQuoteError("grid_cross_border_quote_failed", message, 400)
   }
 }
