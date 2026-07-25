@@ -21,11 +21,13 @@ import {
   convertNoahSendFlowAmounts,
   hasNoahSendRateRow,
   isWideSendAmountSymbol,
+  mapGridBalancePayoutRateRows,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
   useDebouncedValue,
+  type GridWalletRateRow,
   type NoahWalletRateRow,
 } from "@easner/shared"
 import { getCurrencySymbol, getSendAmountFieldSymbol } from "@/lib/utils"
@@ -645,11 +647,12 @@ export default function SendPage() {
           `/api/fx/grid-rates?destinations=${encodeURIComponent(dest)}`,
         )
         const data = (await res.json().catch(() => ({}))) as {
-          rates?: Array<{ from_currency: string; to_currency: string; rate: number }>
+          rates?: GridWalletRateRow[]
         }
         if (!res.ok || cancelled) return
         const send = String(sendCurrency || "").trim().toUpperCase()
-        const row = (data.rates ?? []).find(
+        const mapped = mapGridBalancePayoutRateRows(data.rates ?? [])
+        const row = mapped.find(
           (r) =>
             String(r.from_currency || "").toUpperCase() === send &&
             String(r.to_currency || "").toUpperCase() === dest,
