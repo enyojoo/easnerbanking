@@ -46,16 +46,12 @@ export async function hydrateGridQuotePaymentInstructions(quote: GridQuote): Pro
   if (quoteId) {
     try {
       const retrieved = await retrieveGridQuote(quoteId)
+      const retrievedFunding = (retrieved as { fundingPaymentInstructions?: GridPaymentInstructions })
+        .fundingPaymentInstructions
       const merged: GridQuote = {
         ...quote,
         paymentInstructions: retrieved.paymentInstructions ?? quote.paymentInstructions,
-        ...(retrieved as { fundingPaymentInstructions?: GridPaymentInstructions })
-          .fundingPaymentInstructions
-          ? {
-              fundingPaymentInstructions: (retrieved as { fundingPaymentInstructions?: GridPaymentInstructions })
-                .fundingPaymentInstructions,
-            }
-          : {}),
+        ...(retrievedFunding ? { fundingPaymentInstructions: retrievedFunding } : {}),
       }
       if (extractGridFundingSolanaAddress(merged)) return merged
       quote = merged
