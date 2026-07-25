@@ -56,6 +56,26 @@ export function useDeletePayrollPerson() {
   })
 }
 
+export function useDeletePayrollRun() {
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ ok: boolean }>(`/api/business/payroll/runs/${id}`, { method: "DELETE" }),
+    onSuccess: () => invalidatePayroll(qc, scope),
+  })
+}
+
+export function useDeletePayrollSchedule() {
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ ok: boolean }>(`/api/business/payroll/schedules/${id}`, { method: "DELETE" }),
+    onSuccess: () => invalidatePayroll(qc, scope),
+  })
+}
+
 export function useImportPayrollPeople() {
   const qc = useQueryClient()
   const { scope } = useScope()

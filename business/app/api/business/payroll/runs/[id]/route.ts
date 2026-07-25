@@ -133,12 +133,11 @@ export async function PATCH(
     )
   }
 
-  if (body.sourceCurrency || body.payPeriodStart !== undefined || body.payPeriodEnd !== undefined || body.payday !== undefined || body.name !== undefined || body.note !== undefined) {
+  if (body.payPeriodStart !== undefined || body.payPeriodEnd !== undefined || body.payday !== undefined || body.name !== undefined || body.note !== undefined) {
     const metadata = ((runRow.metadata as Record<string, unknown>) ?? {})
     await admin
       .from("payroll_runs")
       .update({
-        ...(body.sourceCurrency ? { source_currency: body.sourceCurrency.toUpperCase() } : {}),
         ...(body.payPeriodStart !== undefined ? { pay_period_start: body.payPeriodStart } : {}),
         ...(body.payPeriodEnd !== undefined ? { pay_period_end: body.payPeriodEnd } : {}),
         ...(body.payday !== undefined ? { payday: body.payday } : {}),
@@ -340,6 +339,37 @@ export async function POST(
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 })
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const ctx = await requirePayrollAccess(request, ["preparer", "approver"])
+  if (!ctx.ok) return ctx.response
+
+  const { id } = await params
+  const admin = createSupabaseAdmin()
+  const { data: run } = await admin.from("payroll_runs")
+    .select("status")
+    .eq("id", id)
+    .eq("business_id", ctx.businessId)
+    .maybeSingle()
+  if (!run) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  if (run.status !== "draft") {
+    return NextResponse.json(
+      { error: "Only draft payroll runs can be deleted. Payroll history must be retained." },
+      { status: 409 },
+    )
+  }
+
+  const { error } = await admin.from("payroll_runs")
+    .delete()
+    .eq("id", id)
+    .eq("business_id", ctx.businessId)
+    .eq("status", "draft")
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
 }
 
 async function awaitRevisionIncrement(

@@ -16,12 +16,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Skeleton } from "@/components/ui/skeleton"
 import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollPermissionAction } from "@/components/payroll/payroll-permission-action"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
-import { usePayrollCapabilities, usePayrollPeople } from "@/hooks/queries/use-payroll"
+import { usePayrollCapabilities, usePayrollPeople, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
@@ -31,6 +32,7 @@ export default function PayrollPeoplePage() {
   const searchParams = useSearchParams()
   const peopleQuery = usePayrollPeople()
   const capabilitiesQuery = usePayrollCapabilities()
+  const payrollCurrency = usePayrollSettings().data?.defaultCurrency
   const canPrepare = Boolean(capabilitiesQuery.data?.canPrepare)
   const updatePerson = useUpdatePayrollPerson()
   const invitePerson = useInvitePayrollPerson()
@@ -65,7 +67,7 @@ export default function PayrollPeoplePage() {
         description="Employees and contractors, their payroll readiness, and how they receive payment."
         actions={<>
           <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}><Button variant="outline" asChild><Link href="/payroll/people/import"><Upload className="mr-2 h-4 w-4" />Import people</Link></Button></PayrollPermissionAction>
-          <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}><Button variant="primary" asChild><Link href="/payroll/people/new"><Plus className="mr-2 h-4 w-4" />Add person</Link></Button></PayrollPermissionAction>
+          <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}><Button variant="primary" asChild><Link href="/payroll/people/new?returnTo=/payroll/people"><Plus className="mr-2 h-4 w-4" />Add person</Link></Button></PayrollPermissionAction>
         </>}
       />
       <PayrollNavTabs />
@@ -83,19 +85,21 @@ export default function PayrollPeoplePage() {
         </div>
       </div>
 
-      {peopleQuery.isError ? (
+      {peopleQuery.isPending ? (
+        <Card className="overflow-hidden shadow-soft"><CardContent className="space-y-3 p-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-14 w-full rounded-xl" />)}</CardContent></Card>
+      ) : peopleQuery.isError ? (
         <Card><CardContent className="p-8 text-center"><p className="font-medium">People couldn’t be loaded</p><Button className="mt-4" variant="outline" onClick={() => void peopleQuery.refetch()}>Try again</Button></CardContent></Card>
       ) : people.length === 0 ? (
         <Card className="shadow-soft"><CardContent className="p-10 text-center">
           <h2 className="font-semibold">{all.length ? "No people match this view" : "Add the people you pay"}</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{all.length ? "Try another filter or search." : "Connect with EASETAG or add bank, mobile-money, or stablecoin details manually."}</p>
-          {!all.length ? <div className="mt-5 flex justify-center gap-2"><Button variant="primary" asChild><Link href="/payroll/people/new">Add person</Link></Button><Button variant="outline" asChild><Link href="/payroll/people/import">Import people</Link></Button></div> : null}
+          {!all.length ? <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}><div className="mt-5 flex justify-center gap-2"><Button variant="primary" asChild><Link href="/payroll/people/new?returnTo=/payroll/people">Add person</Link></Button><Button variant="outline" asChild><Link href="/payroll/people/import">Import people</Link></Button></div></PayrollPermissionAction> : null}
         </CardContent></Card>
       ) : (
         <Card className="overflow-hidden shadow-soft">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Person</TableHead><TableHead>Classification</TableHead><TableHead>Connection</TableHead><TableHead>Receiving method</TableHead><TableHead>Default pay</TableHead><TableHead>Readiness</TableHead><TableHead>Last paid</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
+              <TableHead>Person</TableHead><TableHead>Classification</TableHead><TableHead>Connection</TableHead><TableHead>Receiving method</TableHead><TableHead>Payroll amount</TableHead><TableHead>Readiness</TableHead><TableHead>Last paid</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {people.map((person) => (
@@ -107,7 +111,7 @@ export default function PayrollPeoplePage() {
                   <TableCell className="capitalize">{person.type}</TableCell>
                   <TableCell><PayrollStatusBadge status={person.connectionStatus} /></TableCell>
                   <TableCell><PayrollReceivingMethod person={person} /></TableCell>
-                  <TableCell className="tabular-nums">{formatCurrency(person.defaultAmount, person.payCurrency)}</TableCell>
+                  <TableCell className="tabular-nums">{formatCurrency(person.defaultAmount, payrollCurrency || person.payCurrency)}</TableCell>
                   <TableCell><PayrollStatusBadge status={person.status !== "active" ? person.status : person.readinessStatus} /></TableCell>
                   <TableCell>{person.lastPaidAt ? formatDate(person.lastPaidAt) : "—"}</TableCell>
                   <TableCell><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">

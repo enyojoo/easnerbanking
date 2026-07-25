@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { useImportPayrollPeople } from "@/hooks/mutations/use-payroll"
 
 export default function ImportPayrollPeoplePage() {
@@ -16,11 +17,12 @@ export default function ImportPayrollPeoplePage() {
   return <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
     <Button variant="ghost" size="sm" className="mb-4" asChild><Link href="/payroll/people"><ArrowLeft className="mr-2 h-4 w-4" />Back to People</Link></Button>
     <PayrollPageHeader title="Import people" description="Upload a CSV to add payroll people in bulk. You can review readiness before creating a run." />
+    <PayrollNavTabs />
     <Card className="shadow-card"><CardContent className="p-6 sm:p-8">
       <div className="rounded-2xl border border-dashed p-8 text-center">
         <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
         <h2 className="mt-4 font-semibold">Upload your people CSV</h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Use the template so names, classifications, amounts, currencies, and payment details are mapped correctly.</p>
+        <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Use the template so names, classifications, payroll amounts, and receiving details are mapped correctly. Amounts use your Payroll source account currency.</p>
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           <Button variant="outline" asChild><a href="/api/business/payroll/people/import" download><Download className="mr-2 h-4 w-4" />Download template</a></Button>
           <Button variant="primary" onClick={() => fileRef.current?.click()} disabled={mutation.isPending}>{mutation.isPending ? "Importing…" : "Choose CSV"}</Button>

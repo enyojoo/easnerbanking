@@ -4,6 +4,7 @@ import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { isCounterPayPath } from "@/lib/pwa/is-counter-pay-path"
 
 const DISMISS_KEY = "easner_pwa_install_dismissed_at"
 const COOLDOWN_MS = 60 * 60 * 1000
@@ -70,7 +71,7 @@ export function PwaInstallProvider({ children }: { children: React.ReactNode }) 
   }, [])
 
   useEffect(() => {
-    if (!pathname.startsWith("/pay")) {
+    if (!isCounterPayPath(pathname)) {
       setShowAndroid(false)
       setShowIosCard(false)
       return
@@ -99,7 +100,7 @@ export function PwaInstallProvider({ children }: { children: React.ReactNode }) 
   }
 
   const install = async () => {
-    if (!pathnameRef.current.startsWith("/pay") || !deferredPrompt) return
+    if (!isCounterPayPath(pathnameRef.current) || !deferredPrompt) return
     try {
       await deferredPrompt.prompt()
     } catch {
@@ -111,7 +112,7 @@ export function PwaInstallProvider({ children }: { children: React.ReactNode }) 
   return (
     <>
       {children}
-      {pathname.startsWith("/pay") && showAndroid ? (
+      {isCounterPayPath(pathname) && showAndroid ? (
         <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md rounded-lg border bg-card p-4 shadow-lg md:left-auto">
           <p className="text-sm font-medium">Install counter app</p>
           <p className="text-muted-foreground mt-1 text-xs">
@@ -127,7 +128,7 @@ export function PwaInstallProvider({ children }: { children: React.ReactNode }) 
           </div>
         </div>
       ) : null}
-      {pathname.startsWith("/pay") && showIosCard ? (
+      {isCounterPayPath(pathname) && showIosCard ? (
         <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md rounded-lg border bg-card p-3 text-xs shadow-lg md:left-auto">
           <p className="font-medium text-foreground">Install on iPhone / iPad</p>
           <p className="text-muted-foreground mt-2">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -8,10 +8,10 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { usePayrollPeople } from "@/hooks/queries/use-payroll"
+import { usePayrollPeople, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useUpsertPayrollSchedule } from "@/hooks/mutations/use-payroll"
-import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import { payrollPaydayPreview, type PayrollWeekendPolicy } from "@/lib/payroll/schedule-preview"
+import { payrollTimezoneOptions } from "@/lib/payroll/options"
 import { formatDate } from "@/lib/utils"
 import type { PayrollSchedule, PayrollScheduleFrequency } from "@/lib/payroll/types"
 
@@ -19,7 +19,7 @@ export function PayrollScheduleForm({ schedule }: { schedule?: PayrollSchedule }
   const router = useRouter()
   const save = useUpsertPayrollSchedule()
   const people = usePayrollPeople().data ?? []
-  const accounts = useBusinessAccountRows().accountRows
+  const payrollSettings = usePayrollSettings().data
   const template = schedule?.template ?? {}
   const [name, setName] = useState(schedule?.name ?? "Monthly payroll")
   const [frequency, setFrequency] = useState<PayrollScheduleFrequency>(schedule?.frequency ?? "monthly")
@@ -29,10 +29,18 @@ export function PayrollScheduleForm({ schedule }: { schedule?: PayrollSchedule }
   const [draftLeadDays, setDraftLeadDays] = useState(String(template.draftLeadDays ?? 5))
   const [approvalLeadDays, setApprovalLeadDays] = useState(String(template.approvalLeadDays ?? 2))
   const [fundingReminderDays, setFundingReminderDays] = useState(String(template.fundingReminderDays ?? 3))
-  const [sourceAccountId, setSourceAccountId] = useState(String(template.sourceAccountId || accounts[0]?.id || ""))
-  const [sourceCurrency, setSourceCurrency] = useState(String(template.sourceCurrency || accounts[0]?.currency || "USD"))
+  const [sourceAccountId, setSourceAccountId] = useState(String(template.sourceAccountId || ""))
+  const [sourceCurrency, setSourceCurrency] = useState(String(template.sourceCurrency || "USD"))
   const [personIds, setPersonIds] = useState<string[]>(schedule?.personIds ?? [])
   const preview = useMemo(() => payrollPaydayPreview({ frequency, firstPayday: nextRunAt, weekendPolicy }), [frequency, nextRunAt, weekendPolicy])
+  const timezoneOptions = useMemo(() => payrollTimezoneOptions(timezone), [timezone])
+
+  useEffect(() => {
+    if (!payrollSettings) return
+    setSourceAccountId(payrollSettings.defaultSourceAccountId || "")
+    setSourceCurrency(payrollSettings.defaultCurrency)
+    if (!schedule) setTimezone(payrollSettings.timezone)
+  }, [payrollSettings, schedule])
 
   return <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
     <Card className="shadow-card"><CardContent className="space-y-7 p-6 sm:p-8">
@@ -40,9 +48,9 @@ export function PayrollScheduleForm({ schedule }: { schedule?: PayrollSchedule }
         <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <Field label="Frequency"><Select value={frequency} onValueChange={(v) => setFrequency(v as PayrollScheduleFrequency)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="weekly">Weekly</SelectItem><SelectItem value="biweekly">Biweekly</SelectItem><SelectItem value="monthly">Monthly</SelectItem><SelectItem value="semimonthly">Twice monthly</SelectItem></SelectContent></Select></Field>
         <Field label="First payday"><Input type="date" value={nextRunAt} onChange={(e) => setNextRunAt(e.target.value)} /></Field>
-        <Field label="Business timezone"><Input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Africa/Lagos" /></Field>
+        <Field label="Business timezone"><Select value={timezone} onValueChange={setTimezone}><SelectTrigger><SelectValue placeholder="Choose timezone" /></SelectTrigger><SelectContent className="max-h-80">{timezoneOptions.map((value) => <SelectItem key={value} value={value}>{value.replaceAll("_", " ")}</SelectItem>)}</SelectContent></Select></Field>
         <Field label="Weekend and holiday handling"><Select value={weekendPolicy} onValueChange={(v) => setWeekendPolicy(v as PayrollWeekendPolicy)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="previous_business_day">Previous business day</SelectItem><SelectItem value="next_business_day">Next business day</SelectItem></SelectContent></Select></Field>
-        <Field label="Source account"><Select value={sourceAccountId} onValueChange={(id) => { const account = accounts.find((item) => item.id === id); setSourceAccountId(id); setSourceCurrency(account?.currency || sourceCurrency) }}><SelectTrigger><SelectValue placeholder="Choose account" /></SelectTrigger><SelectContent>{accounts.map((account) => <SelectItem key={account.id} value={account.id}>{account.currency} account</SelectItem>)}</SelectContent></Select></Field>
+        <Field label="Payroll source account"><div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm">{sourceCurrency} account</div><p className="text-xs text-muted-foreground">Change the Payroll source account in Payroll Settings.</p></Field>
       </div></section>
       <section><h2 className="font-semibold">Preparation timeline</h2><div className="mt-4 grid gap-5 sm:grid-cols-3"><Field label="Draft lead days"><Input inputMode="numeric" value={draftLeadDays} onChange={(e) => setDraftLeadDays(e.target.value.replace(/\D/g, ""))} /></Field><Field label="Approval deadline"><Input inputMode="numeric" value={approvalLeadDays} onChange={(e) => setApprovalLeadDays(e.target.value.replace(/\D/g, ""))} /></Field><Field label="Funding reminder"><Input inputMode="numeric" value={fundingReminderDays} onChange={(e) => setFundingReminderDays(e.target.value.replace(/\D/g, ""))} /></Field></div></section>
       <section><h2 className="font-semibold">Included people</h2><p className="mt-1 text-sm text-muted-foreground">People can be added or removed without changing completed runs.</p><div className="mt-4 max-h-72 divide-y overflow-y-auto rounded-xl border">{people.map((person) => <label key={person.id} className="flex cursor-pointer items-center gap-3 p-3"><input type="checkbox" checked={personIds.includes(person.id)} onChange={() => setPersonIds((current) => current.includes(person.id) ? current.filter((id) => id !== person.id) : [...current, person.id])} /><span className="flex-1 text-sm">{person.fullName}</span><span className="text-xs capitalize text-muted-foreground">{person.type}</span></label>)}</div></section>

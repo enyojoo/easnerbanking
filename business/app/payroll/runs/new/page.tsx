@@ -11,9 +11,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
-import { usePayrollCapabilities, usePayrollPeople, usePayrollSchedules } from "@/hooks/queries/use-payroll"
+import { usePayrollCapabilities, usePayrollPeople, usePayrollSchedules, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useCreatePayrollRun, usePreviewPayrollRun } from "@/hooks/mutations/use-payroll"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -48,6 +49,7 @@ export default function NewPayrollRunPage() {
   const profile = useBusinessProfile()
   const peopleQuery = usePayrollPeople()
   const schedules = usePayrollSchedules().data ?? []
+  const payrollSettings = usePayrollSettings().data
   const capabilities = usePayrollCapabilities().data
   const accounts = useBusinessAccountRows()
   const createRun = useCreatePayrollRun()
@@ -58,6 +60,7 @@ export default function NewPayrollRunPage() {
   const [preview, setPreview] = useState<PayrollRunPreview | null>(null)
   const [hydrated, setHydrated] = useState(false)
   const [addedPersonApplied, setAddedPersonApplied] = useState(false)
+  const [sourceSettingsApplied, setSourceSettingsApplied] = useState(false)
   const storageKey = `payroll_run_builder:${profile.businessId || "business"}`
   const people = useMemo(() => peopleQuery.data ?? [], [peopleQuery.data])
   const ready = people.filter((person) => person.status === "active" && person.readinessStatus === "ready")
@@ -88,6 +91,18 @@ export default function NewPayrollRunPage() {
   }, [accounts.accountRows, hydrated, profile.baseCurrency, profile.businessId, storageKey])
 
   useEffect(() => {
+    if (!payrollSettings || sourceSettingsApplied) return
+    const account = accounts.accountRows.find((row) => row.id === payrollSettings.defaultSourceAccountId)
+      ?? accounts.accountRows.find((row) => row.currency === payrollSettings.defaultCurrency)
+    setDraft((current) => ({
+      ...current,
+      sourceAccountId: account?.id || payrollSettings.defaultSourceAccountId || current.sourceAccountId,
+      sourceCurrency: account?.currency || payrollSettings.defaultCurrency,
+    }))
+    setSourceSettingsApplied(true)
+  }, [accounts.accountRows, payrollSettings, sourceSettingsApplied])
+
+  useEffect(() => {
     if (!hydrated) return
     sessionStorage.setItem(storageKey, JSON.stringify(draft))
   }, [draft, hydrated, storageKey])
@@ -116,7 +131,7 @@ export default function NewPayrollRunPage() {
     router.replace("/payroll/runs/new")
   }, [addedPersonApplied, people, router, searchParams])
 
-  const detailsValid = Boolean(draft.name.trim() && draft.payPeriodStart && draft.payPeriodEnd && draft.payday && draft.sourceAccountId)
+  const detailsValid = Boolean(payrollSettings && draft.name.trim() && draft.payPeriodStart && draft.payPeriodEnd && draft.payday && draft.sourceAccountId)
   const amountsValid = draft.selected.every((id) => Number(draft.amounts[id]) > 0)
   const filteredPeople = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -155,6 +170,7 @@ export default function NewPayrollRunPage() {
   return <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
     <Button variant="ghost" size="sm" className="mb-4" asChild><Link href="/payroll/runs"><ArrowLeft className="mr-2 h-4 w-4" />Back to Runs</Link></Button>
     <PayrollPageHeader title="Run payroll" description="Build, check, and approve a payroll run before any money moves." />
+    <PayrollNavTabs />
     <div className="mb-8 flex items-center gap-2 overflow-x-auto" aria-label="Payroll run steps">
       {stepLabels.map((label, index) => <button type="button" key={label} onClick={() => index < step && setStep(index)} className="flex shrink-0 items-center gap-2">
         <span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold", index <= step ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>{index < step ? <Check className="h-4 w-4" /> : index + 1}</span>
@@ -199,12 +215,13 @@ export default function NewPayrollRunPage() {
 
 function DetailsStep({ draft, setDraft, accounts, schedules }: { draft: Draft; setDraft: React.Dispatch<React.SetStateAction<Draft>>; accounts: Array<{ id: string; currency: string; availableBalance?: number; balance: number }>; schedules: ReturnType<typeof usePayrollSchedules>["data"] }) {
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }))
+  const sourceAccount = accounts.find((account) => account.id === draft.sourceAccountId)
   return <div><h2 className="text-lg font-semibold">Payroll details</h2><p className="mt-1 text-sm text-muted-foreground">Set the period, payday, and account this payroll uses.</p>
     <div className="mt-6 grid gap-5 sm:grid-cols-2">
       <Field label="Run name"><Input value={draft.name} onChange={(e) => update("name", e.target.value)} /></Field>
       <Field label="Run type"><Select value={draft.offCycle ? "off-cycle" : "regular"} onValueChange={(v) => update("offCycle", v === "off-cycle")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">Regular payroll</SelectItem><SelectItem value="off-cycle">Off-cycle payroll</SelectItem></SelectContent></Select></Field>
       <Field label="Schedule (optional)"><Select value={draft.scheduleId || "none"} onValueChange={(v) => update("scheduleId", v === "none" ? undefined : v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No schedule</SelectItem>{(schedules ?? []).map((schedule) => <SelectItem key={schedule.id} value={schedule.id}>{schedule.name}</SelectItem>)}</SelectContent></Select></Field>
-      <Field label="Source account"><Select value={draft.sourceAccountId} onValueChange={(id) => { const account = accounts.find((item) => item.id === id); setDraft((current) => ({ ...current, sourceAccountId: id, sourceCurrency: account?.currency || current.sourceCurrency })) }}><SelectTrigger><SelectValue placeholder="Choose account" /></SelectTrigger><SelectContent>{accounts.map((account) => <SelectItem key={account.id} value={account.id}>{account.currency} · {formatCurrency(account.availableBalance ?? account.balance, account.currency)} available</SelectItem>)}</SelectContent></Select></Field>
+      <Field label="Payroll source account"><div className="flex h-10 items-center justify-between rounded-md border bg-muted/40 px-3 text-sm"><span>{draft.sourceCurrency} account</span><span className="text-muted-foreground">{sourceAccount ? `${formatCurrency(sourceAccount.availableBalance ?? sourceAccount.balance, sourceAccount.currency)} available` : "Set in Payroll Settings"}</span></div><Link className="text-xs text-primary hover:underline" href="/payroll/settings">Change in Payroll Settings</Link></Field>
       <Field label="Pay period start"><Input type="date" value={draft.payPeriodStart} onChange={(e) => update("payPeriodStart", e.target.value)} /></Field>
       <Field label="Pay period end"><Input type="date" value={draft.payPeriodEnd} onChange={(e) => update("payPeriodEnd", e.target.value)} /></Field>
       <Field label="Payday"><Input type="date" value={draft.payday} onChange={(e) => update("payday", e.target.value)} /></Field>
@@ -228,8 +245,8 @@ function PeopleStep({ people, selected, search, setSearch, onToggle, onSelectAll
 }
 
 function AmountsStep({ people, draft, setDraft }: { people: NonNullable<ReturnType<typeof usePayrollPeople>["data"]>; draft: Draft; setDraft: React.Dispatch<React.SetStateAction<Draft>> }) {
-  return <div><div className="flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Amounts</h2><p className="mt-1 text-sm text-muted-foreground">Confirm what each person receives.</p></div><Button variant="outline" size="sm" onClick={() => setDraft((current) => ({ ...current, amounts: Object.fromEntries(people.map((person) => [person.id, person.defaultAmount])) }))}>Reset to defaults</Button></div>
-    <div className="mt-5 divide-y rounded-xl border">{people.map((person) => <div key={person.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center"><div><p className="font-medium">{person.fullName}</p><div className="mt-1 text-xs text-muted-foreground"><PayrollReceivingMethod person={person} /> · {person.payCurrency}</div></div><Input inputMode="decimal" className="tabular-nums" value={String(draft.amounts[person.id] || "")} onChange={(e) => setDraft((current) => ({ ...current, amounts: { ...current.amounts, [person.id]: Number(e.target.value.replace(/[^\d.]/g, "")) } }))} /></div>)}</div>
+  return <div><div className="flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Amounts</h2><p className="mt-1 text-sm text-muted-foreground">Confirm what each person receives.</p></div><Button variant="outline" size="sm" onClick={() => setDraft((current) => ({ ...current, amounts: Object.fromEntries(people.map((person) => [person.id, person.defaultAmount])) }))}>Use payroll amounts</Button></div>
+    <div className="mt-5 divide-y rounded-xl border">{people.map((person) => <div key={person.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center"><div><p className="font-medium">{person.fullName}</p><div className="mt-1 text-xs text-muted-foreground"><PayrollReceivingMethod person={person} /> · {draft.sourceCurrency}</div></div><Input inputMode="decimal" className="tabular-nums" value={String(draft.amounts[person.id] || "")} onChange={(e) => setDraft((current) => ({ ...current, amounts: { ...current.amounts, [person.id]: Number(e.target.value.replace(/[^\d.]/g, "")) } }))} /></div>)}</div>
   </div>
 }
 

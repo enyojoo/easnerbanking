@@ -26,6 +26,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
 import { BusinessOnboardingChecklist } from "@/components/business-onboarding-checklist"
 import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
+import { isNavPathActive } from "@/lib/navigation/is-nav-path-active"
 
 function deriveOpenGroups(pathname: string) {
   const openGroups = new Set<string>()
@@ -147,8 +148,7 @@ export function DashboardNav() {
         {menuItems.map((item) => {
           if (item.type === "single") {
             const Icon = item.icon
-            const isActive =
-              item.href === "/send" ? pathname === "/send" || pathname.startsWith("/send/") : pathname === item.href
+            const isActive = isNavPathActive(pathname, item.href)
             return (
               <Link
                 key={item.href}
@@ -171,7 +171,7 @@ export function DashboardNav() {
             )
           } else {
             const isOpen = openGroups.has(item.key || "")
-            const hasActiveChild = item.items?.some((child) => pathname === child.href) || false
+            const hasActiveChild = item.items?.some((child) => isNavPathActive(pathname, child.href)) || false
 
             return (
               <div key={item.key} className="flex flex-col gap-1">
@@ -198,7 +198,7 @@ export function DashboardNav() {
                   <div className="ml-5 flex flex-col gap-0.5 border-l border-sidebar-border pl-2">
                     {item.items?.map((child) => {
                       const ChildIcon = child.icon
-                      const isActive = pathname === child.href
+                      const isActive = isNavPathActive(pathname, child.href)
                       return (
                         <Link
                           key={child.href}

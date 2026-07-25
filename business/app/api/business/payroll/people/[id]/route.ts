@@ -9,6 +9,7 @@ import {
 import type { PayrollPersonInput } from "@/lib/payroll/types"
 import { maskPayrollMethod } from "@/lib/payroll/personal-payroll"
 import { buildPayrollLines } from "@/lib/payroll/build-lines"
+import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 
 export async function GET(
   request: Request,
@@ -103,6 +104,16 @@ export async function PATCH(
 
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
+  let payrollDefaults
+  try {
+    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
+  } catch (cause) {
+    return NextResponse.json(
+      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
+      { status: 500 },
+    )
+  }
+  const businessCurrency = payrollDefaults.currency
   const current = mapRowToPayrollPerson(existing as PayrollPersonRow)
   const payload = payrollPersonToDbPayload({
     businessId: ctx.businessId,
@@ -112,7 +123,7 @@ export async function PATCH(
       email: body.email !== undefined ? body.email : current.email,
       country: body.country !== undefined ? body.country : current.country,
       defaultAmount: body.defaultAmount ?? current.defaultAmount,
-      payCurrency: body.payCurrency ?? current.payCurrency,
+      payCurrency: businessCurrency,
       payBasis: body.payBasis ?? current.payBasis,
       hourlyRate: body.hourlyRate !== undefined ? body.hourlyRate : current.hourlyRate,
       recipientId: body.recipientId !== undefined ? body.recipientId : current.recipientId,
@@ -168,6 +179,24 @@ export async function DELETE(
 
   const { id } = await params
   const admin = createSupabaseAdmin()
+
+  const { data: person } = await admin.from("payroll_people")
+    .select("id")
+    .eq("id", id)
+    .eq("business_id", ctx.businessId)
+    .maybeSingle()
+  if (!person) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+  const { count } = await admin
+    .from("payroll_lines")
+    .select("id", { count: "exact", head: true })
+    .eq("person_id", id)
+  if ((count ?? 0) > 0) {
+    return NextResponse.json(
+      { error: "This person is part of payroll history and cannot be deleted. Put them on hold instead." },
+      { status: 409 },
+    )
+  }
 
   const { error } = await admin
     .from("payroll_people")

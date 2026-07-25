@@ -375,7 +375,6 @@ export type CreatePayrollPersonCommand =
   | {
       mode: "easetag"
       easetag: string
-      email: string
       type: PayrollPersonType
       defaultAmount: number
       payCurrency: string

@@ -8,6 +8,7 @@ import {
 } from "@/lib/payroll/map-payroll"
 import type { CreatePayrollPersonCommand, PayrollPersonInput } from "@/lib/payroll/types"
 import { normalizeEasetag } from "@/lib/easetag-validation"
+import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 
 export async function GET(request: Request) {
   const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
@@ -71,12 +72,23 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
+  let payrollDefaults
+  try {
+    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
+  } catch (cause) {
+    return NextResponse.json(
+      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
+      { status: 500 },
+    )
+  }
+  const businessCurrency = payrollDefaults.currency
+
   if ("mode" in body && body.mode === "easetag") {
     const command = body as unknown as Extract<CreatePayrollPersonCommand, { mode: "easetag" }>
     const easetag = normalizeEasetag(command.easetag)
     const { data: profile } = await admin
       .from("users")
-      .select("id,easetag,full_name,avatar_url,noah_kyc_status")
+      .select("id,easetag,full_name,email,avatar_url,noah_kyc_status")
       .eq("easetag", easetag)
       .maybeSingle()
     if (!profile) return NextResponse.json({ error: "EASETAG not found." }, { status: 404 })
@@ -86,14 +98,21 @@ export async function POST(request: Request) {
     if (profile.noah_kyc_status !== "approved") {
       return NextResponse.json({ error: "This personal EASETAG is not verified." }, { status: 400 })
     }
+    const profileEmail = String(profile.email || "").trim().toLowerCase()
+    if (command.sendInvitation && !profileEmail) {
+      return NextResponse.json(
+        { error: "This EASETAG does not have an email available for a payroll request." },
+        { status: 400 },
+      )
+    }
     const commandPayload = payrollPersonToDbPayload({
       businessId: ctx.businessId,
       person: {
         type: command.type,
         fullName: String(profile.full_name || easetag),
-        email: command.email,
+        email: profileEmail || null,
         defaultAmount: command.defaultAmount,
-        payCurrency: command.payCurrency,
+        payCurrency: businessCurrency,
         easetag,
         rail: "easetag",
         status: "active",
@@ -154,7 +173,7 @@ export async function POST(request: Request) {
       email: body.email ?? null,
       country: body.country ?? null,
       defaultAmount: body.defaultAmount ?? 0,
-      payCurrency: body.payCurrency ?? "USD",
+      payCurrency: businessCurrency,
       payBasis: body.payBasis ?? "fixed",
       hourlyRate: body.hourlyRate ?? null,
       recipientId: body.recipientId ?? null,

@@ -16,9 +16,16 @@ const copy: Record<string, string> = {
   approved: "Connected",
 }
 
-export function PayrollStatusBadge({ status }: { status: string }) {
-  const positive = status === "ready" || status === "active" || status === "approved"
-  const warning = status === "pending" || status === "pending_consent" || status === "held"
+export function payrollStatusLabel(status: string | null | undefined): string {
+  const normalized = String(status || "").trim()
+  if (!normalized) return "Needs attention"
+  return copy[normalized] ?? normalized.replaceAll("_", " ")
+}
+
+export function PayrollStatusBadge({ status }: { status?: string | null }) {
+  const normalized = String(status || "").trim()
+  const positive = normalized === "ready" || normalized === "active" || normalized === "approved"
+  const warning = normalized === "pending" || normalized === "pending_consent" || normalized === "held"
   return (
     <Badge
       variant="outline"
@@ -30,12 +37,12 @@ export function PayrollStatusBadge({ status }: { status: string }) {
             : ""
       }
     >
-      {copy[status] ?? status.replaceAll("_", " ")}
+      {payrollStatusLabel(normalized)}
     </Badge>
   )
 }
 
 export function personReadinessLabel(person: PayrollPerson) {
-  if (person.status !== "active") return copy[person.status] ?? "Inactive"
-  return copy[person.readinessStatus] ?? "Needs attention"
+  if (person.status !== "active") return payrollStatusLabel(person.status)
+  return payrollStatusLabel(person.readinessStatus)
 }

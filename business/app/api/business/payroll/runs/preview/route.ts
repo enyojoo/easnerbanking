@@ -9,6 +9,7 @@ import type {
   PayrollRunDraftInput,
   PayrollRunPreview,
 } from "@/lib/payroll/types"
+import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 
 const deliveryByRail: Record<string, PayrollDeliveryEstimate> = {
   easetag: { rail: "easetag", label: "Usually instant", estimatedArrival: "Instant after settlement" },
@@ -26,6 +27,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid payroll run." }, { status: 400 })
   }
   const admin = createSupabaseAdmin()
+  let payrollDefaults
+  try {
+    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
+  } catch (cause) {
+    return NextResponse.json(
+      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
+      { status: 500 },
+    )
+  }
+  const sourceCurrency = payrollDefaults.currency
   const ids = [...new Set(input.lines.map((line) => String(line.personId)))]
   const { data } = ids.length
     ? await admin.from("payroll_people").select("*").eq("business_id", ctx.businessId).in("id", ids)
@@ -52,19 +63,16 @@ export async function POST(request: Request) {
     if (!Number.isFinite(Number(line.amount)) || Number(line.amount) <= 0) {
       issues.push({ code: "invalid_amount", severity: "blocking", personId: person.id, message: `Enter a valid amount for ${person.fullName}.` })
     }
-    if (person.payCurrency !== input.sourceCurrency.toUpperCase()) {
-      issues.push({ code: "currency_mismatch", severity: "blocking", personId: person.id, message: `${person.fullName} is set up for ${person.payCurrency}.` })
-    }
   }
   const payrollTotal = input.lines.reduce((sum, line) => sum + (Number.isFinite(Number(line.amount)) ? Number(line.amount) : 0), 0)
   const fees = 0
   const sourceDebit = payrollTotal + fees
-  const availableBalance = await readBusinessAvailableBalance(admin, ctx.businessId, input.sourceCurrency)
+  const availableBalance = await readBusinessAvailableBalance(admin, ctx.businessId, sourceCurrency)
   if (sourceDebit > availableBalance) {
     issues.push({
       code: "insufficient_funds",
       severity: "blocking",
-      message: `Add ${(sourceDebit - availableBalance).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${input.sourceCurrency} before paying.`,
+      message: `Add ${(sourceDebit - availableBalance).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sourceCurrency} before paying.`,
       actionLabel: "View accounts",
       actionHref: "/accounts",
     })

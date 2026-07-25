@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { useParams, useSearchParams } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,7 @@ import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
 import { PayrollLineStatusBadge, PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
 import { PayrollRailBadge } from "@/components/payroll/payroll-rail-badge"
+import { PayrollDeleteAction } from "@/components/payroll/payroll-delete-action"
 import { usePayrollCapabilities, usePayrollRunDetail } from "@/hooks/queries/use-payroll"
 import {
   useUpdatePayrollRun,
@@ -18,6 +19,7 @@ import {
   useExecutePayrollRun,
   useRetryPayrollRun,
   useWithdrawPayrollRun,
+  useDeletePayrollRun,
 } from "@/hooks/mutations/use-payroll"
 import { useConfirmWithPin } from "@/components/app-lock/use-confirm-with-pin"
 import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
@@ -30,6 +32,7 @@ import { railLabel } from "@/lib/payroll/helpers"
 
 export default function PayrollRunDetailPage() {
   const params = useParams<{ id: string }>()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const runId = params.id
   const runQuery = usePayrollRunDetail(runId)
@@ -42,6 +45,7 @@ export default function PayrollRunDetailPage() {
   const executeRun = useExecutePayrollRun(runId)
   const retryRun = useRetryPayrollRun(runId)
   const withdrawRun = useWithdrawPayrollRun(runId)
+  const deleteRun = useDeletePayrollRun()
   const { user } = useAuth()
   const confirmWithPin = useConfirmWithPin()
   const autoActionStarted = useRef(false)
@@ -220,6 +224,7 @@ export default function PayrollRunDetailPage() {
           ) : null}
           {run.status === "draft" && canPrepare ? (
             <>
+              <PayrollDeleteAction label="Delete draft" title="Delete this payroll draft?" description="This permanently removes the draft and its unsent payment lines. Submitted or completed payroll history cannot be deleted." pending={deleteRun.isPending} onDelete={() => deleteRun.mutateAsync(runId).then(() => { toast.success("Payroll draft deleted"); router.push("/payroll/runs") }).catch((error) => toast.error(error.message))} />
               <Button variant="outline" onClick={() => void saveAmounts()} disabled={updateRun.isPending}>
                 Save amounts
               </Button>

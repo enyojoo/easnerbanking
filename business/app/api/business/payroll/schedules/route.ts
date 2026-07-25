@@ -7,12 +7,22 @@ import {
   type PayrollScheduleRow,
 } from "@/lib/payroll/map-payroll"
 import type { PayrollScheduleFrequency } from "@/lib/payroll/types"
+import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 
 export async function GET(request: Request) {
   const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
+  let payrollDefaults
+  try {
+    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
+  } catch (cause) {
+    return NextResponse.json(
+      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
+      { status: 500 },
+    )
+  }
   const { data, error } = await admin
     .from("payroll_schedules")
     .select("*")
@@ -69,12 +79,12 @@ export async function POST(request: Request) {
       next_run_at: nextRunAt,
       active: body.active ?? true,
       template: {
-        timezone: body.timezone || "UTC",
+        timezone: body.timezone || payrollDefaults.timezone,
         draftLeadDays: Math.max(0, Number(body.draftLeadDays ?? 5)),
         approvalLeadDays: Math.max(0, Number(body.approvalLeadDays ?? 2)),
         weekendPolicy: body.weekendPolicy || "previous_business_day",
-        sourceCurrency: String(body.sourceCurrency || "USD").toUpperCase(),
-        sourceAccountId: body.sourceAccountId || null,
+        sourceCurrency: payrollDefaults.currency,
+        sourceAccountId: payrollDefaults.sourceAccountId,
         fundingReminderDays: Math.max(0, Number(body.fundingReminderDays ?? 3)),
       },
       updated_at: new Date().toISOString(),

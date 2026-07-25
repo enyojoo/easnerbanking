@@ -3,6 +3,7 @@ import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { mapRowToPayrollSchedule, type PayrollScheduleRow } from "@/lib/payroll/map-payroll"
 import type { PayrollScheduleFrequency } from "@/lib/payroll/types"
+import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 
 export async function PATCH(
   request: Request,
@@ -27,31 +28,34 @@ export async function PATCH(
     personIds?: string[]
   }
 
+  const admin = createSupabaseAdmin()
+  let payrollDefaults
+  try {
+    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
+  } catch (cause) {
+    return NextResponse.json(
+      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
+      { status: 500 },
+    )
+  }
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (body.name != null) patch.name = body.name.trim()
   if (body.frequency != null) patch.frequency = body.frequency
   if (body.nextRunAt != null) patch.next_run_at = body.nextRunAt
   if (body.active != null) patch.active = body.active
-  if (
-    body.timezone != null || body.draftLeadDays != null || body.approvalLeadDays != null ||
-    body.weekendPolicy != null || body.sourceCurrency != null || body.sourceAccountId != null ||
-    body.fundingReminderDays != null
-  ) {
-    const { data: existing } = await createSupabaseAdmin().from("payroll_schedules")
-      .select("template").eq("id", id).eq("business_id", ctx.businessId).maybeSingle()
-    patch.template = {
-      ...((existing?.template as Record<string, unknown>) ?? {}),
-      ...(body.timezone != null ? { timezone: body.timezone } : {}),
-      ...(body.draftLeadDays != null ? { draftLeadDays: Math.max(0, Number(body.draftLeadDays)) } : {}),
-      ...(body.approvalLeadDays != null ? { approvalLeadDays: Math.max(0, Number(body.approvalLeadDays)) } : {}),
-      ...(body.weekendPolicy != null ? { weekendPolicy: body.weekendPolicy } : {}),
-      ...(body.sourceCurrency != null ? { sourceCurrency: body.sourceCurrency.toUpperCase() } : {}),
-      ...(body.sourceAccountId != null ? { sourceAccountId: body.sourceAccountId } : {}),
-      ...(body.fundingReminderDays != null ? { fundingReminderDays: Math.max(0, Number(body.fundingReminderDays)) } : {}),
-    }
+  const { data: existing } = await admin.from("payroll_schedules")
+    .select("template").eq("id", id).eq("business_id", ctx.businessId).maybeSingle()
+  patch.template = {
+    ...((existing?.template as Record<string, unknown>) ?? {}),
+    ...(body.timezone != null ? { timezone: body.timezone } : {}),
+    ...(body.draftLeadDays != null ? { draftLeadDays: Math.max(0, Number(body.draftLeadDays)) } : {}),
+    ...(body.approvalLeadDays != null ? { approvalLeadDays: Math.max(0, Number(body.approvalLeadDays)) } : {}),
+    ...(body.weekendPolicy != null ? { weekendPolicy: body.weekendPolicy } : {}),
+    sourceCurrency: payrollDefaults.currency,
+    sourceAccountId: payrollDefaults.sourceAccountId,
+    ...(body.fundingReminderDays != null ? { fundingReminderDays: Math.max(0, Number(body.fundingReminderDays)) } : {}),
   }
 
-  const admin = createSupabaseAdmin()
   const { data, error } = await admin
     .from("payroll_schedules")
     .update(patch)

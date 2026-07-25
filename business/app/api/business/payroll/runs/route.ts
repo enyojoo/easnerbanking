@@ -13,6 +13,7 @@ import {
 import { recalculateRunTotals } from "@/lib/payroll/run-utils"
 import { buildPayrollLines } from "@/lib/payroll/build-lines"
 import type { PayrollRunDraftInput } from "@/lib/payroll/types"
+import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 
 export async function GET(request: Request) {
   const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
@@ -41,7 +42,16 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const sourceCurrency = String(body.sourceCurrency || "USD").toUpperCase()
+  let payrollDefaults
+  try {
+    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
+  } catch (cause) {
+    return NextResponse.json(
+      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
+      { status: 500 },
+    )
+  }
+  const sourceCurrency = payrollDefaults.currency
 
   const completeDraft = Array.isArray(body.lines)
   let personIds = completeDraft ? body.lines!.map((line) => line.personId) : body.personIds ?? []
@@ -71,8 +81,7 @@ export async function POST(request: Request) {
   if (completeDraft) {
     const invalidPeople = people.filter((person) =>
       person.status !== "active" ||
-      person.readinessStatus !== "ready" ||
-      person.payCurrency !== sourceCurrency
+      person.readinessStatus !== "ready"
     )
     const invalidLines = body.lines!.filter((line) => !Number.isFinite(Number(line.amount)) || Number(line.amount) <= 0)
     if (invalidPeople.length || invalidLines.length) {
@@ -84,7 +93,7 @@ export async function POST(request: Request) {
         ],
       }, { status: 400 })
     }
-    if (!body.name?.trim() || !body.payPeriodStart || !body.payPeriodEnd || !body.payday || !body.sourceAccountId) {
+    if (!body.name?.trim() || !body.payPeriodStart || !body.payPeriodEnd || !body.payday) {
       return NextResponse.json({ error: "Complete the payroll details before saving." }, { status: 400 })
     }
   }
@@ -100,7 +109,7 @@ export async function POST(request: Request) {
         pay_period_start: body.payPeriodStart,
         pay_period_end: body.payPeriodEnd,
         payday: body.payday,
-        source_account_id: body.sourceAccountId,
+        source_account_id: payrollDefaults.sourceAccountId,
       } : {}),
       source_currency: sourceCurrency,
       drafted_by: ctx.userId,
@@ -113,6 +122,7 @@ export async function POST(request: Request) {
   if (runErr) return NextResponse.json({ error: runErr.message }, { status: 500 })
 
   const linePayloads = await buildPayrollLines(admin, String(runRow.id), people)
+  for (const line of linePayloads) line.pay_currency = sourceCurrency
   if (completeDraft) {
     const amountByPerson = new Map(body.lines!.map((line) => [line.personId, Number(line.amount)]))
     for (const line of linePayloads) {
@@ -144,7 +154,7 @@ export async function POST(request: Request) {
     run_id: runRow.id,
     actor_user_id: ctx.userId,
     event_type: "run.created",
-    data: { peopleCount: people.length, sourceAccountId: body.sourceAccountId ?? null },
+    data: { peopleCount: people.length, sourceAccountId: payrollDefaults.sourceAccountId },
   })
   return NextResponse.json({ run }, { status: 201 })
 }

@@ -3,14 +3,14 @@ import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { mapRowToPayrollPerson, payrollPersonToDbPayload } from "@/lib/payroll/map-payroll"
 import type { PayrollPersonRow } from "@/lib/payroll/map-payroll"
-import type { PayrollPersonInput, PayrollRail } from "@/lib/payroll/types"
+import type { PayrollRail } from "@/lib/payroll/types"
+import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 
 type CsvRow = {
   fullName: string
   email?: string
   type: "employee" | "contractor"
   amount: number
-  currency: string
   rail: PayrollRail
   country?: string
   easetag?: string
@@ -35,10 +35,9 @@ function parseCsv(text: string): CsvRow[] {
     const typeRaw = (cols[idx("type")] || "employee").toLowerCase()
     const type = typeRaw === "contractor" ? "contractor" : "employee"
 
-    const amount = Number(cols[idx("amount")] || cols[idx("default_amount")] || 0)
+    const amount = Number(cols[idx("payroll_amount")] || cols[idx("amount")] || cols[idx("default_amount")] || 0)
     if (!Number.isFinite(amount) || amount <= 0) errors.push("Invalid amount")
 
-    const currency = (cols[idx("currency")] || cols[idx("pay_currency")] || "USD").toUpperCase()
     const receivingMethod = (cols[idx("receiving_method")] || cols[idx("rail")] || "bank account").toLowerCase()
     const rail: PayrollRail =
       receivingMethod.includes("easetag") ? "easetag"
@@ -51,7 +50,6 @@ function parseCsv(text: string): CsvRow[] {
       email: cols[idx("email")] || undefined,
       type,
       amount,
-      currency,
       rail,
       country: cols[idx("country")] || undefined,
       easetag: cols[idx("easetag")] || undefined,
@@ -79,6 +77,15 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
+  let payrollDefaults
+  try {
+    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
+  } catch (cause) {
+    return NextResponse.json(
+      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
+      { status: 500 },
+    )
+  }
   const created: ReturnType<typeof mapRowToPayrollPerson>[] = []
   const invalid: CsvRow[] = []
 
@@ -96,7 +103,7 @@ export async function POST(request: Request) {
         email: row.email ?? null,
         country: row.country ?? null,
         defaultAmount: row.amount,
-        payCurrency: row.currency,
+        payCurrency: payrollDefaults.currency,
         payBasis: "fixed",
         hourlyRate: null,
         recipientId: row.recipientId ?? null,
@@ -123,9 +130,9 @@ export async function POST(request: Request) {
 
 export async function GET() {
   const template = [
-    "name,email,type,amount,currency,receiving_method,country,easetag",
-    "Jane Doe,jane@example.com,employee,2500,USD,EASETAG,,janedoe",
-    "John Contractor,john@example.com,contractor,1800,USD,Bank account,US,",
+    "name,email,type,payroll_amount,receiving_method,country,easetag",
+    "Jane Doe,jane@example.com,employee,2500,EASETAG,,janedoe",
+    "John Contractor,john@example.com,contractor,1800,Bank account,US,",
   ].join("\n")
 
   return new NextResponse(template, {

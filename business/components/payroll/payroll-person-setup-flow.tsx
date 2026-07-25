@@ -1,8 +1,9 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, ArrowRight, CheckCircle2, Landmark, Search, Sparkles, UserRound, WalletCards } from "lucide-react"
+import { ArrowLeft, ArrowRight, CheckCircle2, Landmark, Search, Sparkles, WalletCards } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -12,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { RecipientForm } from "@/components/recipient-form"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { useCreatePayrollPerson, useInvitePayrollPerson } from "@/hooks/mutations/use-payroll"
-import { usePayrollCapabilities, usePayrollSchedules } from "@/hooks/queries/use-payroll"
+import { usePayrollCapabilities, usePayrollSchedules, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { fetchEasenetProfileByTag, type EasenetPublicProfile } from "@/lib/easenet-profile"
 import type { Beneficiary } from "@/lib/recipient-types"
 import type { PayrollPerson, PayrollPersonType, PayrollRail } from "@/lib/payroll/types"
@@ -29,7 +31,7 @@ function railFromBeneficiary(person: Beneficiary): PayrollRail {
 }
 
 function safeReturnTo(value: string | null) {
-  return value?.startsWith("/payroll") ? value : "/payroll/people"
+  return value === "/payroll" || value?.startsWith("/payroll/") ? value : "/payroll"
 }
 
 export function PayrollPersonSetupFlow() {
@@ -39,6 +41,9 @@ export function PayrollPersonSetupFlow() {
   const createPerson = useCreatePayrollPerson()
   const invitePerson = useInvitePayrollPerson()
   const capabilitiesQuery = usePayrollCapabilities()
+  const settingsQuery = usePayrollSettings()
+  const settings = settingsQuery.data
+  const businessCurrency = String(settings?.defaultCurrency || "USD").toUpperCase()
   const schedules = usePayrollSchedules().data ?? []
   const [method, setMethod] = useState<Method | null>(null)
   const [step, setStep] = useState<Step>("method")
@@ -49,7 +54,6 @@ export function PayrollPersonSetupFlow() {
   const [email, setEmail] = useState("")
   const [country, setCountry] = useState("")
   const [amount, setAmount] = useState("")
-  const [currency, setCurrency] = useState("USD")
   const [reference, setReference] = useState("")
   const [scheduleId, setScheduleId] = useState("")
   const [sendInvitation, setSendInvitation] = useState(true)
@@ -87,10 +91,9 @@ export function PayrollPersonSetupFlow() {
       const result = await createPerson.mutateAsync({
         mode: "easetag",
         easetag: profile.easetag,
-        email,
         type,
         defaultAmount: Number(amount),
-        payCurrency: currency,
+        payCurrency: businessCurrency,
         internalReference: reference || undefined,
         scheduleIds: scheduleId ? [scheduleId] : [],
         sendInvitation,
@@ -113,7 +116,7 @@ export function PayrollPersonSetupFlow() {
         email: email || destination.email || null,
         country: country || destination.countryCode || null,
         defaultAmount: Number(amount),
-        payCurrency: currency || destination.currency,
+        payCurrency: businessCurrency,
         recipientId: destination.id,
         rail: railFromBeneficiary(destination),
         status: "active",
@@ -129,7 +132,11 @@ export function PayrollPersonSetupFlow() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <Button variant="ghost" size="sm" className="mb-4" asChild>
+        <Link href={returnTo}><ArrowLeft className="mr-2 h-4 w-4" />{returnTo === "/payroll" ? "Back to Payroll" : returnTo.includes("/runs/new") ? "Back to payroll run" : "Back to People"}</Link>
+      </Button>
       <PayrollPageHeader title="Add person" description="Set up an employee or contractor and how they receive payroll." />
+      <PayrollNavTabs />
       <div className="mb-8 flex items-center gap-2 overflow-x-auto" aria-label="Setup progress">
         {steps.map((label, index) => (
           <div key={label} className="flex shrink-0 items-center gap-2">
@@ -181,17 +188,34 @@ export function PayrollPersonSetupFlow() {
               </div>
             ) : (
               <div className="rounded-xl border bg-muted/30 p-4 text-sm">
-                Enter the person’s payroll defaults now. You’ll add and validate their payment details on the next step.
+                Enter the person’s payroll details now. You’ll add and validate their receiving method on the next step.
               </div>
             )}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Classification"><Select value={type} onValueChange={(v) => setType(v as PayrollPersonType)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="employee">Employee</SelectItem><SelectItem value="contractor">Contractor</SelectItem></SelectContent></Select></Field>
-              <Field label={method === "easetag" ? "Invitation email" : "Email (optional)"}><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-              {method === "manual" ? <Field label="Residence country"><Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Country or code" /></Field> : null}
-              <Field label="Default amount"><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} /></Field>
-              <Field label="Currency"><Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} /></Field>
-              <Field label="Internal reference (optional)"><Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="EMP-001" /></Field>
-              <Field label="Schedule (optional)"><Select value={scheduleId || "none"} onValueChange={(v) => setScheduleId(v === "none" ? "" : v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No schedule</SelectItem>{schedules.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></Field>
+            <div className="space-y-5">
+              {method === "manual" ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Email (optional)"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+                  <Field label="Residence country"><Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Country or code" /></Field>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  The payroll request will be sent to the email connected to this EASETAG.
+                </p>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Classification"><Select value={type} onValueChange={(v) => setType(v as PayrollPersonType)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="employee">Employee</SelectItem><SelectItem value="contractor">Contractor</SelectItem></SelectContent></Select></Field>
+                <Field label="Schedule (optional)"><Select value={scheduleId || "none"} onValueChange={(v) => setScheduleId(v === "none" ? "" : v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No schedule</SelectItem>{schedules.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></Field>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Payroll amount">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground">{businessCurrency}</span>
+                    <Input className="pl-14" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="0.00" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">This amount prefills the person’s payment when you create a payroll run.</p>
+                </Field>
+                <Field label="Internal reference (optional)"><Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="EMP-001" /></Field>
+              </div>
             </div>
             {method === "easetag" ? (
               <label className="flex items-start gap-3 rounded-xl border p-3 text-sm">
@@ -201,10 +225,10 @@ export function PayrollPersonSetupFlow() {
             ) : null}
             <div className="flex justify-between pt-2">
               <Button variant="ghost" onClick={() => { setStep("method"); setMethod(null) }}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>
-              <Button variant="primary" onClick={() => setStep(method === "manual" ? "payment" : "review")} disabled={!Number(amount) || !currency || (method === "easetag" && (!profile || !email))}>Continue<ArrowRight className="ml-2 h-4 w-4" /></Button>
+              <Button variant="primary" onClick={() => setStep(method === "manual" ? "payment" : "review")} disabled={settingsQuery.isPending || !Number(amount) || (method === "easetag" && !profile)}>Continue<ArrowRight className="ml-2 h-4 w-4" /></Button>
             </div>
           </CardContent></Card>
-          <SetupSummary method={method} profile={profile} type={type} amount={amount} currency={currency} />
+          <SetupSummary method={method} profile={profile} type={type} amount={amount} currency={businessCurrency} />
         </div>
       ) : null}
 
@@ -242,7 +266,7 @@ export function PayrollPersonSetupFlow() {
               </Button>
             </div>
           </CardContent></Card>
-          <SetupSummary method={method} profile={profile} type={type} amount={amount} currency={currency} />
+          <SetupSummary method={method} profile={profile} type={type} amount={amount} currency={businessCurrency} />
         </div>
       ) : null}
 
@@ -254,7 +278,7 @@ export function PayrollPersonSetupFlow() {
           <div className="mt-6 flex flex-wrap justify-center gap-2">
             <Button variant="outline" onClick={() => window.location.assign(`/payroll/people/new?returnTo=${encodeURIComponent(returnTo)}`)}>Add another person</Button>
             <Button variant="outline" onClick={() => router.push(`/payroll/people/${created.id}`)}>View person</Button>
-            <Button variant="primary" onClick={() => router.push(returnTo === "/payroll/runs/new" ? `${returnTo}?addedPerson=${created.id}` : returnTo)}>{returnTo === "/payroll/runs/new" ? "Return to payroll run" : "Go to People"}</Button>
+            <Button variant="primary" onClick={() => router.push(returnTo === "/payroll/runs/new" ? `${returnTo}?addedPerson=${created.id}` : returnTo)}>{returnTo === "/payroll/runs/new" ? "Return to payroll run" : returnTo === "/payroll" ? "Go to Payroll" : "Go to People"}</Button>
           </div>
         </CardContent></Card>
       ) : null}
@@ -281,7 +305,7 @@ function SetupSummary({ method, profile, type, amount, currency }: { method: Met
       <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Method</dt><dd>{method === "easetag" ? "EASETAG" : "Manual"}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Person</dt><dd className="truncate">{profile?.fullName || "Payment details"}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Classification</dt><dd className="capitalize">{type}</dd></div>
-      <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Default pay</dt><dd className="tabular-nums">{amount ? `${currency} ${Number(amount).toLocaleString()}` : "—"}</dd></div>
+      <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Payroll amount</dt><dd className="tabular-nums">{amount ? `${currency} ${Number(amount).toLocaleString()}` : "—"}</dd></div>
     </dl>
   </CardContent></Card>
 }
