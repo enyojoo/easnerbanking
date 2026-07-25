@@ -17,6 +17,7 @@ import {
 } from "@/lib/terminal/recipient-sell-prepare"
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
 import { createGridExternalAccount, extractGridFundingSolanaAddress, gridMinorUnits } from "./external-account"
+import { loadGridRecipientBankCandidates } from "./grid-bank-candidates"
 import { gridFetch } from "./http"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
@@ -92,6 +93,12 @@ export async function lockGridBalancePayoutQuote(
     profile: input.senderProfile,
   })
 
+  const gridCandidates = await loadGridRecipientBankCandidates(admin, {
+    countryCode,
+    currencyCode: receiveCurrency,
+    rail,
+  })
+
   const recipientKey = String(
     (input.recipient as { id?: string }).id ?? input.recipient.account_number ?? randomUUID(),
   )
@@ -100,6 +107,8 @@ export async function lockGridBalancePayoutQuote(
     recipient: input.recipient,
     profile: input.senderProfile,
     rail,
+    gridBankCandidates: gridCandidates.bankNames,
+    gridMomoCandidates: gridCandidates.momoProviders,
     idempotencyKey: `grid_ext_${customerId}_${recipientKey}`,
   })
 

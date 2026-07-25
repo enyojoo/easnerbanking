@@ -13,6 +13,7 @@ import {
   pickChannelForRail,
 } from "@/lib/noah/form-schema-hints"
 import { isExcludedPayoutCorridorCountry } from "@/lib/payout-corridors-exclusions"
+import { mergeCorridorProvidersColumn } from "@/lib/fx/corridor-providers-merge"
 import type { ProviderSchemaSyncResult } from "@/lib/fx/provider-schema-sync-types"
 
 type CorridorRow = {
@@ -21,6 +22,7 @@ type CorridorRow = {
   currency_code: string
   rail: string
   fields_schema?: unknown
+  providers?: unknown
 }
 
 function corridorKey(country: string, currency: string, rail: string): string {
@@ -47,7 +49,7 @@ export async function syncNoahCorridorSchemas(
   const settlement = getNoahSettlementCryptoCurrency()
   const { data: rows, error: rowsErr } = await admin
     .from("payout_corridors")
-    .select("id,country_code,currency_code,rail,fields_schema")
+    .select("id,country_code,currency_code,rail,fields_schema,providers")
 
   if (rowsErr) return { ok: false, updated: 0, skipped: 0, error: rowsErr.message }
 
@@ -133,7 +135,7 @@ export async function syncNoahCorridorSchemas(
           updated_at: new Date().toISOString(),
         }
         if (rail === "mobile_money" && mobileLabels.length > 0) {
-          updates.providers = mobileLabels
+          updates.providers = mergeCorridorProvidersColumn(existing.providers, mobileLabels)
         }
 
         const { error: upErr } = await admin

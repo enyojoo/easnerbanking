@@ -1,6 +1,8 @@
 import { markRecentMoneyActivity, qk, type PersonalScope } from '@easner/shared'
 import { bustFinancialFeedCaches } from '../lib/userCache'
 import { prefetchReceiveDepositQueries } from '../hooks/queries/use-receive-deposit-queries'
+import { refreshSendDestinations } from '../lib/sendDestinations'
+import { warmOperationalRecipientCaches } from '../lib/warmOperationalRecipientCaches'
 import { getMobileQueryClient } from './client'
 
 export function isMoneyMovementPush(data: Record<string, unknown> | undefined): boolean {
@@ -31,7 +33,6 @@ export async function refreshLiveOperationalData(
   const invalidations = [
     qc.invalidateQueries({ queryKey: qk.wallets.root(scope), refetchType: 'active' }),
     qc.invalidateQueries({ queryKey: qk.transactions.root(scope), refetchType: 'active' }),
-    qc.invalidateQueries({ queryKey: qk.beneficiaries.root(scope), refetchType: 'active' }),
     qc.invalidateQueries({ queryKey: qk.notifications.root(scope.userId), refetchType: 'active' }),
     qc.invalidateQueries({ queryKey: qk.notifications.unread(scope.userId), refetchType: 'active' }),
   ]
@@ -43,6 +44,9 @@ export async function refreshLiveOperationalData(
   }
 
   void prefetchReceiveDepositQueries(qc, scope)
+  // Payout corridor catalog (bank/MoMo enums, fields_schema) — office can change without app release.
+  void refreshSendDestinations().catch(() => undefined)
+  void warmOperationalRecipientCaches(qc, scope).catch(() => undefined)
 }
 
 /** Invalidate wallet + transaction caches after balance/ledger changes (push, etc.). */

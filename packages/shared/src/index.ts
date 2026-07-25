@@ -192,12 +192,17 @@ export {
 } from "./cross-border-routing"
 export {
   buildYcSendMappingFromRecipient,
+  CORRIDOR_BANK_NAME_ALIASES,
+  extractCorridorRecipientCandidates,
   GRID_BANK_NAME_ALIASES,
+  gridBankLabelsMatch,
   isBankNameAllowedForCorridor,
   isMomoProviderAllowedForCorridor,
   isNestedPayoutFieldsSchema,
   mergeYcNetworksIntoSchema,
   normalizeRecipientYcMetadata,
+  resolveCorridorBankName,
+  resolveCorridorMomoProvider,
   resolveCorridorRecipientOptions,
   resolveGridBankName,
   resolveGridMomoProvider,

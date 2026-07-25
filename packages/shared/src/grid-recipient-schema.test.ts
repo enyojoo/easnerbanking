@@ -3,6 +3,7 @@ import { isGridBalancePayoutCorridor } from "./payout-corridor"
 import {
   resolveCorridorRecipientOptions,
   resolveGridBankName,
+  isBankNameAllowedForCorridor,
 } from "./yc-recipient-schema"
 
 describe("resolveCorridorRecipientOptions", () => {
@@ -43,7 +44,11 @@ describe("resolveCorridorRecipientOptions", () => {
 describe("resolveGridBankName", () => {
   it("maps known aliases to Grid canonical names", () => {
     expect(resolveGridBankName("M-PESA")).toBe("M-Pesa")
-    expect(resolveGridBankName("GTBank")).toBe("GTBank")
+    expect(resolveGridBankName("Kuda")).toBe("Kuda Microfinance Bank")
+  })
+
+  it("fuzzy-matches against corridor bank_enum when provided", () => {
+    expect(resolveGridBankName("GTBank", ["GT Bank", "Access Bank"])).toBe("GT Bank")
   })
 })
 
@@ -54,5 +59,25 @@ describe("isGridBalancePayoutCorridor", () => {
         provider_routing: [{ provider: "grid", priority: 1, settlement_asset: "USDC" }],
       }),
     ).toBe(true)
+  })
+})
+
+describe("isBankNameAllowedForCorridor", () => {
+  it("allows Noah-style bank names when they fuzzy-match Grid bank_enum", () => {
+    const options = resolveCorridorRecipientOptions({
+      countryCode: "NG",
+      currencyCode: "NGN",
+      rail: "bank_transfer",
+      fieldsSchema: {
+        grid: {
+          status: "ready",
+          channel_type: "bank",
+          bank_enum: ["Kuda Microfinance Bank", "GT Bank"],
+        },
+      },
+    })
+    expect(isBankNameAllowedForCorridor("Kuda", options)).toBe(true)
+    expect(isBankNameAllowedForCorridor("GTBank", options)).toBe(true)
+    expect(isBankNameAllowedForCorridor("Made Up Bank", options)).toBe(false)
   })
 })

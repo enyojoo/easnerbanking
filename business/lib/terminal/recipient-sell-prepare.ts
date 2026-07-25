@@ -1,4 +1,5 @@
-import { mobileProviderPrepareSubstrings } from "@/lib/noah/form-schema-hints"
+import { mobileProviderPrepareSubstrings, bankEnumFromFormSchema, mobileProviderLabelsFromSellItems } from "@/lib/noah/form-schema-hints"
+import { resolveCorridorBankName, resolveCorridorMomoProvider } from "@easner/shared"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-payout-country"
 import { normalizeBankAccountNumber } from "@/lib/noah/sell-form-builders"
 import {
@@ -136,8 +137,13 @@ export async function prepareSellFromRecipientRow(input: {
       throw new Error("Mobile payout recipients require full name and phone number.")
     }
     const items = await fetchSellChannelItems({ country, fiatCurrency, cryptoCurrency })
+    const momoLabels = mobileProviderLabelsFromSellItems(items, country)
+    const resolvedProvider = resolveCorridorMomoProvider(
+      String(row.mobile_provider ?? ""),
+      momoLabels.map((label) => ({ value: label, label })),
+    )
     const picked = findIdentifierSellChannel(items, {
-      paymentMethodSubstrings: mobileProviderPrepareSubstrings(row.mobile_provider),
+      paymentMethodSubstrings: mobileProviderPrepareSubstrings(resolvedProvider || row.mobile_provider),
     })
     if (!picked) {
       throw new Error(
@@ -361,10 +367,6 @@ export async function prepareSellFromRecipientRow(input: {
       .trim()
       .replace(/\s/g, "")
       .replace(/[^\d]/g, "")
-    const bankName = String(row.bank_name || "").trim()
-    if (!accountNumber || !bankName) {
-      throw new Error("Bank recipient requires account number and bank name.")
-    }
     const channel = await findBankSellChannelId({
       country,
       fiatCurrency,
@@ -376,6 +378,13 @@ export async function prepareSellFromRecipientRow(input: {
       throw new Error(
         `No bank payout channel is available for ${country} ${fiatCurrency}.`,
       )
+    }
+    const bankName = resolveCorridorBankName(
+      String(row.bank_name || "").trim(),
+      bankEnumFromFormSchema(channel.formSchema) ?? [],
+    )
+    if (!accountNumber || !bankName) {
+      throw new Error("Bank recipient requires account number and bank name.")
     }
     const form = buildBankLocalSellForm(channel.formSchema, {
       accountNumber,

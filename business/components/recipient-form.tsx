@@ -12,6 +12,8 @@ import {
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   normalizeRecipientYcMetadata,
+  isBankNameAllowedForCorridor,
+  isMomoProviderAllowedForCorridor,
   resolveCorridorRecipientOptions,
   resolveYcCorridorSchema,
   sortByEasnerCountryPickerOrder,
@@ -409,7 +411,7 @@ export function RecipientForm({
   }, [selectedCountry, payoutRail, bankCorridors, mobileCorridors])
   const corridorRecipientOptions = useMemo(() => {
     if (!selectedCountry) {
-      return { bankOptions: [] as string[], momoOptions: [] as string[], extraFields: [], accountNumberLabel: undefined, accountNumberHint: undefined }
+      return { bankOptions: [] as string[], momoOptions: [] as string[], momoCandidates: [], extraFields: [], accountNumberLabel: undefined, accountNumberHint: undefined }
     }
     return resolveCorridorRecipientOptions({
       countryCode: selectedCountry.code,
@@ -530,9 +532,18 @@ export function RecipientForm({
       formData.recipientType === "bank" &&
       bankEnumOptions.length > 0 &&
       formData.bankName.trim() &&
-      !bankEnumOptions.includes(formData.bankName.trim())
+      !isBankNameAllowedForCorridor(formData.bankName.trim(), corridorRecipientOptions)
     ) {
       newErrors.bankName = "Select a bank from the list"
+    }
+
+    if (
+      formData.recipientType === "mobile" &&
+      corridorRecipientOptions.momoOptions.length > 0 &&
+      formData.mobileProvider.trim() &&
+      !isMomoProviderAllowedForCorridor(formData.mobileProvider.trim(), corridorRecipientOptions)
+    ) {
+      newErrors.mobileProvider = "Select a provider from the list"
     }
 
     if (formData.recipientType === "bank" && currency === "USD" && formData.transferType === "Wire") {

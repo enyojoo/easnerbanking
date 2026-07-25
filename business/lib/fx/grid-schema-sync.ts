@@ -9,6 +9,7 @@ import type { AllCorridorSchemaSyncResult } from "@/lib/fx/provider-schema-sync-
 import { syncNoahCorridorSchemasSafe } from "@/lib/fx/noah-schema-sync"
 import { syncYcCorridorSchemasSafe } from "@/lib/fx/yc-schema-sync"
 import { pruneZombiePayoutCorridors } from "@/lib/admin/prune-zombie-payout-corridors"
+import { mergeCorridorProvidersColumn } from "@/lib/fx/corridor-providers-merge"
 import { isMomoGridDiscovery, listGridDiscoveries } from "@/lib/grid/discoveries"
 import type { GridDiscovery } from "@/lib/grid/types"
 
@@ -138,7 +139,10 @@ export async function syncGridCorridorSchemas(
 
     const updates: Record<string, unknown> = { fields_schema: fieldsSchema }
     if (rail === "mobile_money" && gridSchema.momo_provider_enum?.length) {
-      updates.providers = gridSchema.momo_provider_enum.map((e) => e.label || e.value)
+      updates.providers = mergeCorridorProvidersColumn(
+        row.providers,
+        gridSchema.momo_provider_enum.map((e) => e.label || e.value),
+      )
     }
 
     const { error: upErr } = await admin.from("payout_corridors").update(updates).eq("id", row.id)

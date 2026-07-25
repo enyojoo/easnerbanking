@@ -17,15 +17,10 @@ import { RealtimeHealthProvider, useRealtimeHealth } from './realtime-health-con
 import { useAuth } from '../contexts/AuthContext'
 import { registerAppLockListener } from '../lib/app-lock-bus'
 import { prefetchReceiveDepositQueries } from '../hooks/queries/use-receive-deposit-queries'
-import { prefetchRecipientsList, RECIPIENTS_STALE_MS } from '../hooks/queries/use-recipients'
-import { warmSendRateCachesFromRecipients } from '../lib/warmSendRateCaches'
-import { recipientService } from '../lib/recipientService'
-import {
-  resolveWarmYcLocalDepositCorridor,
-  ensureYcLocalDepositCachesReady,
-  hydrateReceiveRailsFromDisk,
-} from '../lib/warmYcLocalDepositCaches'
+import { hydrateReceiveRailsFromDisk } from '../lib/warmYcLocalDepositCaches'
+import { warmOperationalRecipientCaches } from '../lib/warmOperationalRecipientCaches'
 import { refreshLiveOperationalData } from './refresh-money-feeds'
+import { refreshSendDestinations } from '../lib/sendDestinations'
 import {
   FOREGROUND_BACKGROUND_THRESHOLD_MS,
   hasStaleOperationalQueries,
@@ -79,39 +74,21 @@ function AuthGatedCacheReset({ children }: { children: React.ReactNode }) {
 }
 
 function WarmYcLocalDepositCachesOnScope({ children }: { children: React.ReactNode }) {
-  const { userProfile, loading: authLoading } = useAuth()
   React.useEffect(() => {
     void hydrateReceiveRailsFromDisk()
   }, [])
-  React.useEffect(() => {
-    if (authLoading) return
-    const corridor = resolveWarmYcLocalDepositCorridor(userProfile)
-    if (!corridor) return
-    void ensureYcLocalDepositCachesReady(corridor)
-  }, [userProfile?.residence_country, userProfile?.noah_kyc_status, authLoading])
   return <>{children}</>
 }
 
 function WarmOperationalCachesOnScope({ children }: { children: React.ReactNode }) {
   const { scope, isReady } = useScope()
-  const { loading: authLoading } = useAuth()
+  const { userProfile, loading: authLoading } = useAuth()
   React.useEffect(() => {
     if (!isReady || !scope || authLoading) return
     void prefetchReceiveDepositQueries(qc, scope)
-    void prefetchRecipientsList(qc, scope)
-    void (async () => {
-      try {
-        const recipients = await qc.fetchQuery({
-          queryKey: qk.beneficiaries.list(scope),
-          queryFn: () => recipientService.getByUserId(scope.userId),
-          staleTime: RECIPIENTS_STALE_MS,
-        })
-        await warmSendRateCachesFromRecipients(qc, recipients)
-      } catch {
-        // Best-effort; SendAmount hooks refetch if cache miss.
-      }
-    })()
-  }, [isReady, scope, authLoading])
+    void refreshSendDestinations().catch(() => undefined)
+    void warmOperationalRecipientCaches(qc, scope, { profile: userProfile }).catch(() => undefined)
+  }, [isReady, scope, authLoading, userProfile?.residence_country, userProfile?.noah_kyc_status])
   return <>{children}</>
 }
 
@@ -148,7 +125,18 @@ function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) 
   }, [isReady, scope, user?.id, realtimeHealth])
 
   React.useEffect(() => {
-    if (Platform.OS === 'web') return
+    if (Platform.OS === 'web') {
+      if (typeof document === 'undefined') return
+      const onVisible = () => {
+        if (document.visibilityState === 'visible') {
+          refreshNow()
+        } else {
+          lastBackgroundAtRef.current = Date.now()
+        }
+      }
+      document.addEventListener('visibilitychange', onVisible)
+      return () => document.removeEventListener('visibilitychange', onVisible)
+    }
     const sub = AppState.addEventListener('change', (status) => {
       if (status === 'background' || status === 'inactive') {
         lastBackgroundAtRef.current = Date.now()

@@ -104,6 +104,8 @@ import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import {
   getCountryCodeForCurrency,
+  isBankNameAllowedForCorridor,
+  isMomoProviderAllowedForCorridor,
   normalizeRecipientYcMetadata,
   recipientFormNeedsAddress,
   recipientFormNeedsBankCode,
@@ -198,7 +200,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
 
   const corridorRecipientOptions = useMemo(() => {
     if (!selectedCountryCurrency) {
-      return { bankOptions: [] as string[], momoOptions: [] as string[], extraFields: [] }
+      return { bankOptions: [] as string[], momoOptions: [] as string[], momoCandidates: [], extraFields: [] }
     }
     const rail = selectedRecipientType === 'mobile' ? 'mobile_money' : 'bank_transfer'
     return getCorridorRecipientOptions({
@@ -942,22 +944,20 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       }
     }
 
-    const bankEnum =
-      corridorRecipientOptions.bankOptions.length
-        ? corridorRecipientOptions.bankOptions
-        : ycCorridorSchema?.bank_enum?.length
-          ? ycCorridorSchema.bank_enum
-          : selectedCountryCurrency && selectedRecipientType === 'bank'
-            ? getPayoutFieldsSchemaForCorridor({
-                countryCode: selectedCountryCurrency.countryCode,
-                currencyCode: selectedCountryCurrency.currencyCode,
-                rail: 'bank_transfer',
-              })?.bank_enum ?? []
-            : []
+    const bankEnum = corridorRecipientOptions.bankOptions
     if (
       bankEnum.length > 0 &&
       newRecipient.bankName.trim() &&
-      !bankEnum.includes(newRecipient.bankName.trim())
+      !isBankNameAllowedForCorridor(newRecipient.bankName.trim(), corridorRecipientOptions)
+    ) {
+      return false
+    }
+
+    if (
+      selectedRecipientType === 'mobile' &&
+      corridorRecipientOptions.momoOptions.length > 0 &&
+      newRecipient.provider.trim() &&
+      !isMomoProviderAllowedForCorridor(newRecipient.provider.trim(), corridorRecipientOptions)
     ) {
       return false
     }
@@ -2068,15 +2068,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     {/* Bank Name */}
                     <RecipientBankNameField
                       banks={
-                        selectedCountryCurrency
-                          ? corridorRecipientOptions.bankOptions.length
-                            ? corridorRecipientOptions.bankOptions
-                            : getPayoutFieldsSchemaForCorridor({
-                                countryCode: selectedCountryCurrency.countryCode,
-                                currencyCode: selectedCountryCurrency.currencyCode,
-                                rail: 'bank_transfer',
-                              })?.bank_enum ?? []
-                          : []
+                        selectedCountryCurrency ? corridorRecipientOptions.bankOptions : []
                       }
                       value={newRecipient.bankName}
                       onChange={(bank) => {

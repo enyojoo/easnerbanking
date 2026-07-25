@@ -1,6 +1,25 @@
 import { getCountryCodeForCurrency } from "./flags/currency-mapping"
 import type { PayoutFieldsSchemaHint } from "./payout-corridor"
+import {
+  GRID_BANK_NAME_ALIASES,
+  isStoredBankNameAllowedForOptions,
+  isStoredMomoProviderAllowedForOptions,
+  resolveGridBankName,
+  resolveGridMomoProvider,
+  type GridMomoProviderOption,
+} from "./grid-bank-resolve"
 import { normalizeYcMomoPhone } from "./yc-momo-phone"
+
+export {
+  CORRIDOR_BANK_NAME_ALIASES,
+  GRID_BANK_NAME_ALIASES,
+  gridBankLabelsMatch,
+  resolveCorridorBankName,
+  resolveCorridorMomoProvider,
+  resolveGridBankName,
+  resolveGridMomoProvider,
+  type GridMomoProviderOption,
+} from "./grid-bank-resolve"
 
 /** Provider-specific extras stored on recipients.metadata (LatAm, etc.). */
 export type RecipientYcMetadata = {
@@ -458,8 +477,16 @@ export function validateYcRecipientForCorridor(input: {
     if (err) return { ok: false, message: err }
   }
 
-  if (schema.bank_enum?.length && bankName && !schema.bank_enum.includes(bankName)) {
-    return { ok: false, message: "Select a bank from the corridor list." }
+  if (schema.bank_enum?.length && bankName) {
+    const options = resolveCorridorRecipientOptions({
+      countryCode: cc,
+      currencyCode: cur,
+      rail: isMomo ? "mobile_money" : "bank_transfer",
+      fieldsSchema: input.fieldsSchema,
+    })
+    if (!isBankNameAllowedForCorridor(bankName, options)) {
+      return { ok: false, message: "Select a bank from the corridor list." }
+    }
   }
 
   return { ok: true }
@@ -575,9 +602,86 @@ export function mergeYcNetworksIntoSchema(
   }
 }
 
+export type CorridorRecipientCandidates = {
+  bankNames: string[]
+  momoLabels: string[]
+  momoCandidates: GridMomoProviderOption[]
+}
+
+function momoOption(value: string, label?: string): GridMomoProviderOption {
+  const v = value.trim()
+  return { value: v, label: (label ?? v).trim() || v }
+}
+
+function appendMomoOptions(
+  out: Map<string, GridMomoProviderOption>,
+  entries: GridMomoProviderOption[],
+): void {
+  for (const entry of entries) {
+    const value = String(entry.value ?? "").trim()
+    if (!value) continue
+    const label = String(entry.label ?? value).trim() || value
+    out.set(value.toLowerCase(), { value, label })
+  }
+}
+
+/** Union Noah / YC / Grid bank_enum and MoMo provider names from a corridor row. */
+export function extractCorridorRecipientCandidates(input: {
+  countryCode?: string
+  currencyCode?: string
+  rail?: "bank_transfer" | "mobile_money"
+  fieldsSchema?: unknown
+  providers?: unknown
+}): CorridorRecipientCandidates {
+  const noah = unwrapNoahFieldsSchema(input.fieldsSchema)
+  const yc =
+    input.countryCode && input.currencyCode
+      ? resolveYcCorridorSchema({
+          countryCode: input.countryCode,
+          currencyCode: input.currencyCode,
+          fieldsSchema: input.fieldsSchema,
+        })
+      : unwrapYcFieldsSchema(input.fieldsSchema)
+  const grid = unwrapGridFieldsSchema(input.fieldsSchema)
+
+  const bankNames = uniqueStrings([
+    ...(noah?.bank_enum ?? []),
+    ...(yc?.bank_enum ?? []),
+    ...(grid?.bank_enum ?? []),
+  ])
+
+  const momoMap = new Map<string, GridMomoProviderOption>()
+  appendMomoOptions(
+    momoMap,
+    (Array.isArray(input.providers) ? input.providers : []).map((p) =>
+      momoOption(String(p)),
+    ),
+  )
+  appendMomoOptions(
+    momoMap,
+    (noah?.mobile_provider_labels ?? []).map((label) => momoOption(label)),
+  )
+  appendMomoOptions(momoMap, yc?.momo_provider_enum ?? [])
+  appendMomoOptions(momoMap, grid?.momo_provider_enum ?? [])
+
+  const momoCandidates = [...momoMap.values()].sort((a, b) => a.label.localeCompare(b.label))
+  const momoLabels = uniqueStrings([
+    ...(Array.isArray(input.providers)
+      ? (input.providers as unknown[]).map((p) => String(p))
+      : []),
+    ...(noah?.mobile_provider_labels ?? []),
+    ...(yc?.momo_provider_enum ?? []).map((entry) => entry.label || entry.value),
+    ...(grid?.momo_provider_enum ?? []).map((entry) => entry.label || entry.value),
+    ...momoCandidates.map((entry) => entry.label),
+  ])
+
+  return { bankNames, momoLabels, momoCandidates }
+}
+
 export type CorridorRecipientOptions = {
   bankOptions: string[]
   momoOptions: string[]
+  momoCandidates: GridMomoProviderOption[]
   extraFields: YcRecipientFieldDef[]
   accountNumberLabel?: string
   accountNumberHint?: string
@@ -595,34 +699,26 @@ export function resolveCorridorRecipientOptions(input: {
   fieldsSchema?: unknown
   providers?: unknown
 }): CorridorRecipientOptions {
-  const noah = unwrapNoahFieldsSchema(input.fieldsSchema)
+  const candidates = extractCorridorRecipientCandidates({
+    countryCode: input.countryCode,
+    currencyCode: input.currencyCode,
+    rail: input.rail,
+    fieldsSchema: input.fieldsSchema,
+    providers: input.providers,
+  })
   const yc = resolveYcCorridorSchema({
     countryCode: input.countryCode,
     currencyCode: input.currencyCode,
     fieldsSchema: input.fieldsSchema,
   })
   const grid = unwrapGridFieldsSchema(input.fieldsSchema)
-
-  const bankOptions = uniqueStrings([
-    ...(noah?.bank_enum ?? []),
-    ...(yc?.bank_enum ?? []),
-    ...(grid?.bank_enum ?? []),
-  ])
-
-  const fromProviders = Array.isArray(input.providers)
-    ? (input.providers as unknown[]).map((p) => String(p)).filter(Boolean)
-    : []
-  const fromNoahMomo = noah?.mobile_provider_labels ?? []
-  const fromGridMomo = (grid?.momo_provider_enum ?? []).map((e) => e.label || e.value)
-  const momoOptions = uniqueStrings([...fromProviders, ...fromNoahMomo, ...fromGridMomo])
-
   const schemaForExtras = yc ?? grid
-  const extraFields = schemaForExtras?.extra_fields ?? []
 
   return {
-    bankOptions,
-    momoOptions,
-    extraFields,
+    bankOptions: candidates.bankNames,
+    momoOptions: candidates.momoLabels,
+    momoCandidates: candidates.momoCandidates,
+    extraFields: schemaForExtras?.extra_fields ?? [],
     accountNumberLabel:
       schemaForExtras?.account_number_label ??
       (input.rail === "mobile_money" ? "Phone number" : "Account number"),
@@ -631,34 +727,16 @@ export function resolveCorridorRecipientOptions(input: {
 }
 
 export function isBankNameAllowedForCorridor(bankName: string, options: CorridorRecipientOptions): boolean {
-  const name = String(bankName || "").trim()
-  if (!name || !options.bankOptions.length) return true
-  return options.bankOptions.includes(name)
+  return isStoredBankNameAllowedForOptions(bankName, options.bankOptions)
 }
 
 export function isMomoProviderAllowedForCorridor(
   provider: string,
   options: CorridorRecipientOptions,
 ): boolean {
-  const label = String(provider || "").trim()
-  if (!label || !options.momoOptions.length) return true
-  return options.momoOptions.includes(label)
-}
-
-/** Known label aliases: user-facing label → Grid canonical bankName/provider. */
-export const GRID_BANK_NAME_ALIASES: Record<string, string> = {
-  "M-PESA": "M-Pesa",
-  "M-Pesa": "M-Pesa",
-  MPESA: "M-Pesa",
-  "Airtel Money": "Airtel Money",
-}
-
-export function resolveGridBankName(storedBankName: string): string {
-  const trimmed = String(storedBankName || "").trim()
-  if (!trimmed) return trimmed
-  return GRID_BANK_NAME_ALIASES[trimmed] ?? trimmed
-}
-
-export function resolveGridMomoProvider(storedProvider: string): string {
-  return resolveGridBankName(storedProvider)
+  return isStoredMomoProviderAllowedForOptions(
+    provider,
+    options.momoOptions,
+    options.momoCandidates,
+  )
 }

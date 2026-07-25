@@ -5,6 +5,8 @@ export class GridHttpError extends Error {
     message: string,
     public readonly status: number,
     public readonly body?: unknown,
+    public readonly method?: string,
+    public readonly path?: string,
   ) {
     super(message)
     this.name = "GridHttpError"
@@ -82,7 +84,7 @@ export async function gridFetch<T>(opts: GridFetchOptions): Promise<T> {
             typeof (parsed as { error?: unknown }).error === "string"
           ? (parsed as { error: string }).error
           : `Grid HTTP ${res.status}`
-    throw new GridHttpError(message, res.status, parsed)
+    throw new GridHttpError(message, res.status, parsed, opts.method, path)
   }
 
   return parsed as T

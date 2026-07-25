@@ -387,7 +387,7 @@ export function getCorridorRecipientOptions(input: {
   rail: 'bank_transfer' | 'mobile_money'
 }): ReturnType<typeof resolveCorridorRecipientOptions> {
   if (!payoutCorridorCache) {
-    return { bankOptions: [], momoOptions: [], extraFields: [] }
+    return { bankOptions: [], momoOptions: [], momoCandidates: [], extraFields: [] }
   }
   const corridors =
     input.rail === 'mobile_money' ? payoutCorridorCache.mobile : payoutCorridorCache.bank
@@ -399,7 +399,7 @@ export function getCorridorRecipientOptions(input: {
     }),
   )
   if (!row) {
-    return { bankOptions: [], momoOptions: [], extraFields: [] }
+    return { bankOptions: [], momoOptions: [], momoCandidates: [], extraFields: [] }
   }
   return resolveCorridorRecipientOptions({
     countryCode: input.countryCode,

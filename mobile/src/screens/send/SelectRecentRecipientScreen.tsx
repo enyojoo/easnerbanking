@@ -80,6 +80,8 @@ import { getAccountTypeConfigFromCurrency } from '../../lib/currencyAccountTypes
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
 import { CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
+  isBankNameAllowedForCorridor,
+  isMomoProviderAllowedForCorridor,
   recipientFormNeedsAddress,
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
@@ -90,6 +92,7 @@ import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFi
 import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import {
   buildRecipientCatalogForType,
+  getCorridorRecipientOptions,
   getPayoutFieldsSchemaForCorridor,
   getRecipientProviders,
   getWalletAssets,
@@ -241,6 +244,18 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       }),
     [bankCorridors, mobileCorridors, cryptoDestinations],
   )
+
+  const corridorRecipientOptions = useMemo(() => {
+    if (!selectedCountryCurrency) {
+      return { bankOptions: [] as string[], momoOptions: [] as string[], momoCandidates: [], extraFields: [] }
+    }
+    const rail = selectedRecipientType === 'mobile' ? 'mobile_money' : 'bank_transfer'
+    return getCorridorRecipientOptions({
+      countryCode: selectedCountryCurrency.countryCode,
+      currencyCode: selectedCountryCurrency.currencyCode,
+      rail,
+    })
+  }, [selectedCountryCurrency, selectedRecipientType, catalogRevision])
 
   const [newRecipient, setNewRecipient] = useState({
     fullName: '',
@@ -545,18 +560,20 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       }
     }
 
-    const bankEnum =
-      selectedCountryCurrency && selectedRecipientType === 'bank'
-        ? getPayoutFieldsSchemaForCorridor({
-            countryCode: selectedCountryCurrency.countryCode,
-            currencyCode: selectedCountryCurrency.currencyCode,
-            rail: 'bank_transfer',
-          })?.bank_enum ?? []
-        : []
+    const bankEnum = corridorRecipientOptions.bankOptions
     if (
       bankEnum.length > 0 &&
       newRecipient.bankName.trim() &&
-      !bankEnum.includes(newRecipient.bankName.trim())
+      !isBankNameAllowedForCorridor(newRecipient.bankName.trim(), corridorRecipientOptions)
+    ) {
+      return false
+    }
+
+    if (
+      selectedRecipientType === 'mobile' &&
+      corridorRecipientOptions.momoOptions.length > 0 &&
+      newRecipient.provider.trim() &&
+      !isMomoProviderAllowedForCorridor(newRecipient.provider.trim(), corridorRecipientOptions)
     ) {
       return false
     }
@@ -1663,13 +1680,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
                     <RecipientBankNameField
                       banks={
-                        selectedCountryCurrency
-                          ? getPayoutFieldsSchemaForCorridor({
-                              countryCode: selectedCountryCurrency.countryCode,
-                              currencyCode: selectedCountryCurrency.currencyCode,
-                              rail: 'bank_transfer',
-                            })?.bank_enum ?? []
-                          : []
+                        selectedCountryCurrency ? corridorRecipientOptions.bankOptions : []
                       }
                       value={newRecipient.bankName}
                       onChange={(bank) =>

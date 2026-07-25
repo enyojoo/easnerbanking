@@ -3,6 +3,7 @@ import { randomUUID } from "crypto"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
 import { createGridExternalAccount } from "./external-account"
+import { loadGridRecipientBankCandidates } from "./grid-bank-candidates"
 import { gridFetch } from "./http"
 import { gridMinorUnits } from "./external-account"
 import { findGridCrossRate, listGridRates } from "@/lib/fx/grid-rates"
@@ -84,11 +85,19 @@ export async function createGridCrossBorderQuote(input: {
     profile: input.profile,
   })
 
+  const gridCandidates = await loadGridRecipientBankCandidates(input.admin, {
+    countryCode: destCountry,
+    currencyCode: receiveCurrency,
+    rail: payoutRail,
+  })
+
   const externalAccount = await createGridExternalAccount({
     customerId,
     recipient: input.recipient,
     profile: input.profile,
     rail: payoutRail,
+    gridBankCandidates: gridCandidates.bankNames,
+    gridMomoCandidates: gridCandidates.momoProviders,
     idempotencyKey: `grid_xb_ext_${customerId}_${String((input.recipient as { id?: string }).id ?? input.recipient.account_number ?? randomUUID())}`,
   })
 

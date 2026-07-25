@@ -3,7 +3,12 @@ import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-pre
 import { gridFetch } from "./http"
 import type { GridExternalAccount } from "./types"
 import type { GridPersonProfile } from "./kyc-metadata"
-import { normalizeYcMomoPhone, resolveGridBankName, resolveGridMomoProvider } from "@easner/shared"
+import {
+  normalizeYcMomoPhone,
+  resolveGridBankName,
+  resolveGridMomoProvider,
+  type GridMomoProviderOption,
+} from "@easner/shared"
 
 function currencyAccountType(currency: string): string {
   return `${currency.trim().toUpperCase()}_ACCOUNT`
@@ -35,6 +40,8 @@ export function buildGridExternalAccountPayload(input: {
   recipient: RecipientSellPrepareRow
   profile?: GridPersonProfile
   rail: "bank_transfer" | "mobile_money"
+  gridBankCandidates?: string[]
+  gridMomoCandidates?: GridMomoProviderOption[]
 }): { currency: string; customerId: string; accountInfo: Record<string, unknown> } {
   const currency = String(input.recipient.currency || "").trim().toUpperCase()
   const country = resolveRecipientPayoutCountry(input.recipient)?.toUpperCase()
@@ -42,9 +49,15 @@ export function buildGridExternalAccountPayload(input: {
 
   const beneficiary = beneficiaryFromRecipient(input)
   const accountType = currencyAccountType(currency)
-  const bankName = resolveGridBankName(String(input.recipient.bank_name ?? "").trim())
+  const bankName = resolveGridBankName(
+    String(input.recipient.bank_name ?? "").trim(),
+    input.gridBankCandidates,
+  )
   const accountNumber = String(input.recipient.account_number ?? "").trim()
-  const mobileProvider = resolveGridMomoProvider(String(input.recipient.mobile_provider ?? "").trim())
+  const mobileProvider = resolveGridMomoProvider(
+    String(input.recipient.mobile_provider ?? "").trim(),
+    input.gridMomoCandidates,
+  )
 
   const accountInfo: Record<string, unknown> = {
     accountType,
@@ -79,11 +92,13 @@ export async function createGridExternalAccount(input: {
   profile?: GridPersonProfile
   rail: "bank_transfer" | "mobile_money"
   idempotencyKey?: string
+  gridBankCandidates?: string[]
+  gridMomoCandidates?: GridMomoProviderOption[]
 }): Promise<GridExternalAccount> {
   const payload = buildGridExternalAccountPayload(input)
   return gridFetch<GridExternalAccount>({
     method: "POST",
-    path: "/customers/externalAccounts",
+    path: "/customers/external-accounts",
     json: payload,
     idempotencyKey: input.idempotencyKey,
   })

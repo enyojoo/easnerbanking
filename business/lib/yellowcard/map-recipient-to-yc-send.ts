@@ -1,6 +1,8 @@
 import {
   buildYcSendMappingFromRecipient,
   pickYcSendNetworkId,
+  resolveCorridorBankName,
+  resolveCorridorMomoProvider,
   resolveYcRecipientCountry,
 } from "@easner/shared"
 import { listYellowcardNetworks } from "@/lib/yellowcard/networks"
@@ -33,14 +35,28 @@ export async function mapRecipientToYcSend(
     Boolean(phone && !accountNumber)
 
   let networkId: string | undefined
+  let resolvedBankName = bankName
+  let resolvedMobileProvider = mobileProvider
   if (isMomo || (country && currency)) {
     try {
       const networks = await listYellowcardNetworks({ country, currency })
+      const networkNames = networks
+        .map((n) => String(n.name ?? n.code ?? "").trim())
+        .filter(Boolean)
+      if (!isMomo && bankName) {
+        resolvedBankName = resolveCorridorBankName(bankName, networkNames)
+      }
+      if (isMomo && mobileProvider) {
+        resolvedMobileProvider = resolveCorridorMomoProvider(
+          mobileProvider,
+          networkNames.map((name) => ({ value: name, label: name })),
+        )
+      }
       networkId = pickYcSendNetworkId({
         networks,
         channelId: opts?.channelId,
-        bankName,
-        mobileProvider,
+        bankName: resolvedBankName,
+        mobileProvider: resolvedMobileProvider,
         isMomo,
       })
     } catch {
@@ -48,5 +64,11 @@ export async function mapRecipientToYcSend(
     }
   }
 
-  return buildYcSendMappingFromRecipient(row, { networkId })
+  const mappedRow = {
+    ...row,
+    ...(resolvedBankName ? { bank_name: resolvedBankName } : {}),
+    ...(resolvedMobileProvider ? { mobile_provider: resolvedMobileProvider } : {}),
+  }
+
+  return buildYcSendMappingFromRecipient(mappedRow, { networkId })
 }

@@ -10,6 +10,7 @@ import {
 } from "@easner/shared"
 import { listYellowcardNetworks } from "@/lib/yellowcard/networks"
 import type { ProviderSchemaSyncResult } from "@/lib/fx/provider-schema-sync-types"
+import { mergeCorridorProvidersColumn } from "@/lib/fx/corridor-providers-merge"
 
 const LATAM = new Set(["MX", "BR", "AR", "CO", "CL", "PE"])
 
@@ -43,14 +44,55 @@ function momoLabelsFromProviders(providers: unknown): { value: string; label: st
   }))
 }
 
-function buildYcMomoSchema(providers: unknown): YcCorridorSchemaHint | null {
-  const momo = momoLabelsFromProviders(providers)
+async function buildYcMomoSchema(input: {
+  providers?: unknown
+  fieldsSchema?: unknown
+  countryCode: string
+  currencyCode: string
+}): Promise<YcCorridorSchemaHint | null> {
+  const momoMap = new Map<string, { value: string; label: string }>()
+  for (const entry of momoLabelsFromProviders(input.providers)) {
+    momoMap.set(entry.value.toLowerCase(), entry)
+  }
+  const noah = unwrapNoahFieldsSchema(input.fieldsSchema)
+  for (const label of noah?.mobile_provider_labels ?? []) {
+    const trimmed = String(label).trim()
+    if (trimmed) momoMap.set(trimmed.toLowerCase(), { value: trimmed, label: trimmed })
+  }
+  const grid = unwrapGridFieldsSchema(input.fieldsSchema)
+  for (const entry of grid?.momo_provider_enum ?? []) {
+    const value = String(entry.value ?? "").trim()
+    if (!value) continue
+    momoMap.set(value.toLowerCase(), {
+      value,
+      label: String(entry.label ?? value).trim() || value,
+    })
+  }
+
+  const cc = input.countryCode.trim().toUpperCase()
+  const cur = input.currencyCode.trim().toUpperCase()
+
+  try {
+    const networks = await listYellowcardNetworks({ country: cc, currency: cur })
+    for (const network of networks) {
+      const name = String(network.name ?? network.code ?? "").trim()
+      if (!name) continue
+      if (!/mobile|momo|m-pesa|mpesa|airtel|mtn|orange|wave|vodafone|tigo|tnm/i.test(name)) {
+        continue
+      }
+      momoMap.set(name.toLowerCase(), { value: name, label: name })
+    }
+  } catch {
+    // keep corridor-derived momo labels
+  }
+
+  const momo = [...momoMap.values()]
   if (!momo.length) return null
   return {
     status: "ready",
     channel_type: "momo",
     momo_provider_enum: momo,
-    note: "Synced from YC corridor providers",
+    note: "Synced from YC/Noah/Grid MoMo sources",
   }
 }
 
@@ -90,7 +132,12 @@ export async function syncYcCorridorSchemas(admin: SupabaseClient): Promise<Prov
     let ycSchema: YcCorridorSchemaHint | null = null
 
     if (rail === "mobile_money") {
-      ycSchema = buildYcMomoSchema(row.providers)
+      ycSchema = await buildYcMomoSchema({
+        providers: row.providers,
+        fieldsSchema: row.fields_schema,
+        countryCode: cc,
+        currencyCode: cur,
+      })
     } else {
       ycSchema =
         YC_STATIC_CORRIDOR_SCHEMAS[key] ??
@@ -135,7 +182,10 @@ export async function syncYcCorridorSchemas(admin: SupabaseClient): Promise<Prov
     }
 
     if (rail === "mobile_money" && ycSchema.momo_provider_enum?.length) {
-      updates.providers = ycSchema.momo_provider_enum.map((e) => e.label || e.value)
+      updates.providers = mergeCorridorProvidersColumn(
+        row.providers,
+        ycSchema.momo_provider_enum.map((e) => e.label || e.value),
+      )
     }
 
     const { error: upErr } = await admin.from("payout_corridors").update(updates).eq("id", row.id)

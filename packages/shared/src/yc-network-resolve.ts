@@ -1,3 +1,5 @@
+import { gridBankLabelsMatch } from "./grid-bank-resolve"
+
 export type YcNetworkLike = {
   id?: string
   networkId?: string
@@ -11,21 +13,6 @@ function networkIdFrom(row: YcNetworkLike | undefined): string | undefined {
   if (!row) return undefined
   const id = String(row.id ?? row.networkId ?? "").trim()
   return id || undefined
-}
-
-function normalizeNetworkLabel(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/\b(plc|ltd|limited|nigeria|ng)\b/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-}
-
-function labelsMatch(needle: string, haystack: string): boolean {
-  const n = normalizeNetworkLabel(needle)
-  const h = normalizeNetworkLabel(haystack)
-  if (!n || !h) return false
-  return h.includes(n) || n.includes(h)
 }
 
 function isManualInputNetwork(row: YcNetworkLike): boolean {
@@ -59,7 +46,7 @@ export function pickYcSendNetworkId(input: {
     if (needle) {
       const match = rows.find((n) => {
         const label = `${n.name ?? ""} ${n.code ?? ""} ${n.networkId ?? ""}`
-        return labelsMatch(needle, label)
+        return gridBankLabelsMatch(needle, label)
       })
       if (match) return networkIdFrom(match)
     }
@@ -72,7 +59,7 @@ export function pickYcSendNetworkId(input: {
   if (bankName && !bankName.toLowerCase().includes("mobile money")) {
     const match = rows.find((n) => {
       const label = `${n.name ?? ""} ${n.code ?? ""}`
-      return labelsMatch(bankName, label)
+      return gridBankLabelsMatch(bankName, label)
     })
     if (match) return networkIdFrom(match)
   }

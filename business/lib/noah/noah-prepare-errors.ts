@@ -1,3 +1,4 @@
+import { GridHttpError } from "@/lib/grid/http"
 import { NoahHttpError } from "@/lib/noah/http"
 
 export type NoahPayoutErrorStage = "prepare" | "sell" | "quote"
@@ -153,6 +154,21 @@ export function mapNoahPayoutUserError(
   e: unknown,
   stage: NoahPayoutErrorStage = "prepare",
 ): string {
+  if (e instanceof GridHttpError) {
+    if (e.status === 404) {
+      return stage === "quote"
+        ? "Exchange rate or payout corridor is unavailable right now. Try again shortly."
+        : "Payout channel is unavailable right now. Try again in a moment."
+    }
+    if (e.status === 422 || e.status === 400) {
+      return "We couldn't price this payout. Check the recipient details, then try again."
+    }
+    const detail = e.message.trim()
+    if (detail && detail.length <= 200 && !detail.toLowerCase().startsWith("grid http")) {
+      return detail
+    }
+    return "Something went wrong with this payout. Please try again in a moment."
+  }
   if (e instanceof NoahHttpError) {
     const validations = noahValidationDescriptions(e.body)
     const validationBlob = validations.join(" ").toLowerCase()
