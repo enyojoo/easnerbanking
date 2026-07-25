@@ -4,6 +4,7 @@ import { generateTransactionId } from "@/lib/transaction-id"
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
 import { createGridExternalAccount } from "./external-account"
 import { loadGridRecipientBankCandidates } from "./grid-bank-candidates"
+import { buildGridCrossBorderQuoteBody } from "./quote-request"
 import { gridFetch } from "./http"
 import { gridMinorUnits } from "./external-account"
 import { findGridCrossRate, listGridRates } from "@/lib/fx/grid-rates"
@@ -107,15 +108,12 @@ export async function createGridCrossBorderQuote(input: {
   const quote = await gridFetch<GridQuote>({
     method: "POST",
     path: "/quotes",
-    json: {
-      source: { currency: sourceCurrency, customerId },
-      destination: {
-        currency: receiveCurrency,
-        externalAccountId: externalAccount.id,
-      },
-      lockedCurrencyAmount: gridMinorUnits(receiveAmount, 2),
-      lockedCurrencySide: "RECEIVING",
-    },
+    json: buildGridCrossBorderQuoteBody({
+      customerId,
+      sourceCurrency,
+      externalAccountId: externalAccount.id,
+      lockedReceiveMinor: gridMinorUnits(receiveAmount, 2),
+    }),
     idempotencyKey: `grid_xb_${customerId}_${sourceCurrency}_${receiveCurrency}_${receiveAmount}`,
   })
 

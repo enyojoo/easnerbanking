@@ -41,6 +41,8 @@ import {
 import { ripple } from '../../lib/androidRipple'
 import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { useYcFundBalanceFlow, useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
+import { useSendDestinations } from '../../hooks/useSendDestinations'
+import { resolveMobilePayInProvider } from '../../lib/resolveMobilePayInProvider'
 import { useYcPayInMinEnforcement } from '../../hooks/useYcPayInMinEnforcement'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { haptics } from '../../lib/haptics'
@@ -142,6 +144,19 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     )
   }, [residenceCountry, localPayInCurrency, payInRail])
 
+  const { catalogRevision } = useSendDestinations()
+  const payInProvider = useMemo(
+    () =>
+      residenceCountry && localPayInCurrency
+        ? resolveMobilePayInProvider({
+            countryCode: residenceCountry,
+            currencyCode: localPayInCurrency,
+            rail: payInRail,
+          })
+        : 'yellowcard',
+    [residenceCountry, localPayInCurrency, payInRail, catalogRevision],
+  )
+
   const fundBalanceQuoteMeta = useMemo(
     () => ({
       country: residenceCountry,
@@ -161,6 +176,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     enabled: Boolean(residenceCountry && localPayInCurrency),
     amountEntryMode,
     enteredAmount,
+    payInProvider,
     providerRouting: payInCorridorRow?.provider_routing,
     metadata: payInCorridorRow?.metadata as Record<string, unknown> | undefined,
   })

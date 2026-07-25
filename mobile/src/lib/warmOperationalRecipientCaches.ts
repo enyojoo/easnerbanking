@@ -3,6 +3,7 @@ import { qk, type PersonalScope } from '@easner/shared'
 import { prefetchRecipientsList } from '../hooks/queries/use-recipients'
 import { peekProfileSnapshot, readProfileSnapshot } from './profileSnapshot'
 import { warmSendRateCachesFromRecipients } from './warmSendRateCaches'
+import { resolveMobilePayInProvider } from './resolveMobilePayInProvider'
 import {
   ensureYcLocalDepositCachesReady,
   resolveWarmYcLocalDepositCorridor,
@@ -45,9 +46,9 @@ export async function warmOperationalRecipientCaches(
   const corridor = resolveWarmYcLocalDepositCorridor(profile)
   if (!corridor) return
 
-  // Warm both pay-in providers — office can switch routing without an app release.
-  await Promise.allSettled([
-    ensureYcLocalDepositCachesReady({ ...corridor, payInProvider: 'yellowcard' }),
-    ensureYcLocalDepositCachesReady({ ...corridor, payInProvider: 'grid' }),
-  ])
+  const payInProvider = resolveMobilePayInProvider({
+    countryCode: corridor.residenceCountry ?? '',
+    currencyCode: corridor.localPayInCurrency ?? '',
+  })
+  await ensureYcLocalDepositCachesReady({ ...corridor, payInProvider }).catch(() => undefined)
 }

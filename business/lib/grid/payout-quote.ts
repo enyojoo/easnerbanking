@@ -18,6 +18,7 @@ import {
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
 import { createGridExternalAccount, extractGridFundingSolanaAddress, gridMinorUnits } from "./external-account"
 import { loadGridRecipientBankCandidates } from "./grid-bank-candidates"
+import { buildGridBalancePayoutQuoteBody } from "./quote-request"
 import { gridFetch } from "./http"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
@@ -146,16 +147,13 @@ export async function lockGridBalancePayoutQuote(
   const quote = await gridFetch<GridQuote>({
     method: "POST",
     path: "/quotes",
-    json: {
-      source: { currency: "USD" },
-      destination: {
-        currency: receiveCurrency,
-        externalAccountId: externalAccount.id,
-      },
-      lockedCurrencyAmount: gridMinorUnits(quoteReceiveAmount, 2),
-      lockedCurrencySide: "RECEIVING",
-      ...(input.paymentPurpose ? { purposeOfPayment: input.paymentPurpose } : {}),
-    },
+    json: buildGridBalancePayoutQuoteBody({
+      customerId,
+      externalAccountId: externalAccount.id,
+      receiveCurrency,
+      lockedReceiveMinor: gridMinorUnits(quoteReceiveAmount, 2),
+      purposeOfPayment: input.paymentPurpose,
+    }),
     idempotencyKey: `grid_quote_${customerId}_${buildPayoutQuoteKey({
       recipientId: recipientKey,
       sourceBalanceCurrency,

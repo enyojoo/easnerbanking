@@ -2,6 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { randomUUID } from "crypto"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
+import {
+  buildGridFundBalanceQuoteBody,
+  resolveGridCustomerInternalAccountId,
+} from "./quote-request"
 import { gridFetch } from "./http"
 import { gridMinorUnits } from "./external-account"
 import { findGridRate, findGridPayInRate, listGridRates } from "@/lib/fx/grid-rates"
@@ -118,15 +122,23 @@ export async function createGridFundBalanceSession(input: {
     profile: input.profile,
   })
 
+  const usdInternalAccountId = await resolveGridCustomerInternalAccountId({
+    customerId,
+    currency: "USD",
+  })
+  if (!usdInternalAccountId) {
+    throw new Error("Grid USD internal account is not ready for this customer yet.")
+  }
+
   const quote = await gridFetch<GridQuote>({
     method: "POST",
     path: "/quotes",
-    json: {
-      source: { currency },
-      destination: { currency: "USD", customerId },
-      lockedCurrencyAmount: gridMinorUnits(preview.localPayIn, 2),
-      lockedCurrencySide: "SENDING",
-    },
+    json: buildGridFundBalanceQuoteBody({
+      customerId,
+      sourceCurrency: currency,
+      destinationInternalAccountId: usdInternalAccountId,
+      lockedSendMinor: gridMinorUnits(preview.localPayIn, 2),
+    }),
     idempotencyKey: `grid_fund_${customerId}_${currency}_${preview.localPayIn}`,
   })
 
