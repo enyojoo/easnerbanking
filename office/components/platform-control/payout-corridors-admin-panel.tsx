@@ -8,11 +8,7 @@ import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { CountryFlag } from "@/components/flags"
 import { payoutCorridorsApi, type PayoutCorridorAdminRow } from "@/lib/payout-corridors-api"
-import {
-  defaultCrossBorderProvider,
-  parseCrossBorderProvider,
-  type CrossBorderProviderId,
-} from "@easner/shared"
+import { parseCrossBorderProvider, type CrossBorderProviderId } from "@easner/shared"
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficePayoutCorridors, useQueryInitialLoading } from "@/hooks/queries"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
@@ -31,7 +27,7 @@ type FiatDestinationRow = {
   corridorIds: string[]
   payInCorridorIds: string[]
   enabled: boolean
-  payoutProvider: ProviderId
+  payoutProvider: ProviderId | null
   payoutSelection: FeatureSelection<ProviderId>
   payInProvider: ProviderId | null
   payInSelection: FeatureSelection<ProviderId>
@@ -43,11 +39,9 @@ type FiatDestinationRow = {
   supportYcPayIn: boolean
   supportNoahPayIn: boolean
   supportGridPayIn: boolean
-  payoutLocked: ProviderId | null
   crossBorderSupported: boolean
   crossBorderProvider: CrossBorderProviderId | null
   crossBorderSelection: FeatureSelection<CrossBorderProviderId>
-  crossBorderLocked: CrossBorderProviderId | null
   /** Stable provider discovery badges — not affected by routing or enable toggles. */
   showNoahBadge: boolean
   showYcBadge: boolean
@@ -67,28 +61,6 @@ function parseRouting(routing: unknown): RoutingEntry[] {
       settlement_asset: String((item as { settlement_asset?: string }).settlement_asset ?? "USDC"),
     }))
     .filter((item) => item.provider === "noah" || item.provider === "yellowcard" || item.provider === "grid")
-}
-
-function parsePrimaryProvider(routing: unknown): ProviderId {
-  const sorted = [...parseRouting(routing)].sort((a, b) => a.priority - b.priority)
-  const p = sorted[0]?.provider
-  if (p === "yellowcard" || p === "grid") return p
-  return "noah"
-}
-
-function parsePayInProviderFromRouting(
-  routing: unknown,
-  payoutProvider: ProviderId,
-): ProviderId | null {
-  const sorted = [...parseRouting(routing)].sort((a, b) => a.priority - b.priority)
-  if (sorted.length >= 2) {
-    const p = sorted[1].provider
-    if (p === "yellowcard" || p === "grid" || p === "noah") return p
-  }
-  if (sorted.length === 1 && sorted[0].provider === payoutProvider) {
-    return null
-  }
-  return null
 }
 
 function routingPrimaryProvider(routing: unknown): ProviderId | null {
@@ -180,46 +152,31 @@ function rowPayInEnabledForProvider(row: PayoutCorridorAdminRow, provider: Provi
   return false
 }
 
-function corridorPayoutDisabled(row: PayoutCorridorAdminRow): boolean {
+function selectedPayoutProvider(
+  row: PayoutCorridorAdminRow,
+  caps: CountryCurrencyCaps,
+): ProviderId | null {
   const meta = rowMetadata(row)
-  const caps = rowCaps(row)
-  let anySupported = false
-  if (caps.supportNoahPayout) {
-    anySupported = true
-    if (meta.noah_send_enabled !== false) return false
-  }
-  if (caps.supportYcPayout) {
-    anySupported = true
-    if (meta.yc_send_enabled !== false) return false
-  }
-  if (caps.supportGridPayout) {
-    anySupported = true
-    if (meta.grid_send_enabled !== false) return false
-  }
-  return anySupported
+  if (caps.supportNoahPayout && meta.noah_send_enabled === true) return "noah"
+  if (caps.supportYcPayout && meta.yc_send_enabled === true) return "yellowcard"
+  if (caps.supportGridPayout && meta.grid_send_enabled === true) return "grid"
+  return null
 }
 
-function corridorPayInDisabled(row: PayoutCorridorAdminRow): boolean {
+function selectedPayInProvider(row: PayoutCorridorAdminRow, caps: CountryCurrencyCaps): ProviderId | null {
   const meta = rowMetadata(row)
-  const caps = rowCaps(row)
-  let anySupported = false
-  if (caps.supportNoahPayIn) {
-    anySupported = true
-    if (meta.noah_receive_enabled !== false) return false
-  }
-  if (caps.supportYcPayIn) {
-    anySupported = true
-    if (meta.yc_receive_enabled !== false) return false
-  }
-  if (caps.supportGridPayIn) {
-    anySupported = true
-    if (meta.grid_receive_enabled !== false) return false
-  }
-  return anySupported
+  if (caps.supportNoahPayIn && meta.noah_receive_enabled === true) return "noah"
+  if (caps.supportYcPayIn && meta.yc_receive_enabled === true) return "yellowcard"
+  if (caps.supportGridPayIn && meta.grid_receive_enabled === true) return "grid"
+  return null
 }
 
-function corridorCrossBorderDisabled(metadata: Record<string, unknown>): boolean {
-  return metadata.cross_border_enabled === false
+function selectedCrossBorderProvider(
+  metadata: Record<string, unknown>,
+  crossBorderSupported: boolean,
+): CrossBorderProviderId | null {
+  if (!crossBorderSupported || metadata.cross_border_enabled !== true) return null
+  return parseCrossBorderProvider(metadata)
 }
 
 function applyPayoutSendFlags(
@@ -294,17 +251,7 @@ function applyPayoutChoiceToCorridor(
   if (row.supportYcPayout && choice !== "yellowcard") metadata.yc_send_enabled = false
   if (row.supportGridPayout && choice !== "grid") metadata.grid_send_enabled = false
 
-  const routing = buildProviderRouting(choice, {
-    payoutLocked: row.payoutLocked,
-    supportNoahPayout: row.supportNoahPayout,
-    supportYcPayout: row.supportYcPayout,
-    supportGridPayout: row.supportGridPayout,
-    supportYcPayIn: row.supportYcPayIn,
-    supportNoahPayIn: row.supportNoahPayIn,
-    supportGridPayIn: row.supportGridPayIn,
-    payInProvider,
-    payInDisabled,
-  })
+  const routing = buildProviderRouting(choice, payInDisabled ? null : payInProvider)
   return { ...corridor, metadata, provider_routing: routing }
 }
 
@@ -316,17 +263,10 @@ function applyPayInChoiceToCorridors(
 ): PayoutCorridorAdminRow[] {
   const payInDisabled = choice === "disabled"
   const provider = payInDisabled ? null : choice
-  const routing = buildProviderRouting(row.payoutProvider, {
-    payoutLocked: row.payoutLocked,
-    supportNoahPayout: row.supportNoahPayout,
-    supportYcPayout: row.supportYcPayout,
-    supportGridPayout: row.supportGridPayout,
-    supportYcPayIn: row.supportYcPayIn,
-    supportNoahPayIn: row.supportNoahPayIn,
-    supportGridPayIn: row.supportGridPayIn,
-    payInProvider: provider,
-    payInDisabled,
-  })
+  const routing =
+    row.payoutSelection === "disabled" || row.payoutProvider === null
+      ? []
+      : buildProviderRouting(row.payoutProvider, payInDisabled ? null : provider)
   const payInCorridorIds =
     provider !== null
       ? payInCorridorIdsForProvider(
@@ -492,132 +432,16 @@ function crossBorderProviderLabel(provider: CrossBorderProviderId): string {
   return provider === "grid" ? "Grid" : "Yellowcard"
 }
 
-function resolveCrossBorderProviderForRow(
-  caps: { supportYcPayout: boolean; supportGridPayout: boolean },
-  metadata: unknown,
-): CrossBorderProviderId | null {
-  return (
-    parseCrossBorderProvider(metadata) ??
-    defaultCrossBorderProvider({
-      supportYellowcard: caps.supportYcPayout,
-      supportGrid: caps.supportGridPayout,
-    })
-  )
-}
-
-function resolvePayInProvider(input: {
-  payoutProvider: ProviderId
-  payoutLocked: ProviderId | null
-  supportYcPayIn: boolean
-  supportNoahPayIn: boolean
-  supportGridPayIn: boolean
-}): ProviderId | null {
-  if (input.payoutLocked === "noah") {
-    if (input.supportGridPayIn) return "grid"
-    if (input.supportYcPayIn) return "yellowcard"
-    if (input.supportNoahPayIn) return "noah"
-    return null
-  }
-  if (input.payoutLocked === "yellowcard") {
-    if (input.supportYcPayIn) return "yellowcard"
-    if (input.supportGridPayIn) return "grid"
-    if (input.supportNoahPayIn) return "noah"
-    return null
-  }
-  if (input.payoutLocked === "grid") {
-    if (input.supportGridPayIn) return "grid"
-    if (input.supportYcPayIn) return "yellowcard"
-    if (input.supportNoahPayIn) return "noah"
-    return null
-  }
-
-  const providers: ProviderId[] = ["noah", "yellowcard", "grid"].filter(
-    (p) => p !== input.payoutProvider,
-  ) as ProviderId[]
-  for (const p of providers) {
-    if (p === "grid" && input.supportGridPayIn) return "grid"
-    if (p === "yellowcard" && input.supportYcPayIn) return "yellowcard"
-    if (p === "noah" && input.supportNoahPayIn) return "noah"
-  }
-  if (input.payoutProvider === "grid" && input.supportGridPayIn) return "grid"
-  if (input.payoutProvider === "yellowcard" && input.supportYcPayIn) return "yellowcard"
-  if (input.payoutProvider === "noah" && input.supportNoahPayIn) return "noah"
-  return null
-}
-
 function buildProviderRouting(
   payoutProvider: ProviderId,
-  input: {
-    payoutLocked: ProviderId | null
-    supportNoahPayout: boolean
-    supportYcPayout: boolean
-    supportGridPayout: boolean
-    supportYcPayIn: boolean
-    supportNoahPayIn: boolean
-    supportGridPayIn: boolean
-    payInProvider?: ProviderId | null
-    payInDisabled?: boolean
-  },
+  payInProvider: ProviderId | null,
 ): RoutingEntry[] {
-  const explicitPayIn = input.payInDisabled ? null : (input.payInProvider ?? null)
-  const payoutProviders = [
-    input.supportNoahPayout ? "noah" : null,
-    input.supportYcPayout ? "yellowcard" : null,
-    input.supportGridPayout ? "grid" : null,
-  ].filter(Boolean) as ProviderId[]
-  const dualPayout = !input.payoutLocked && payoutProviders.length > 1
-
-  if (input.payoutLocked) {
-    const routing: RoutingEntry[] = [
-      { provider: input.payoutLocked, priority: 1, settlement_asset: "USDC" },
-    ]
-    if (!input.payInDisabled) {
-      const payInProvider =
-        explicitPayIn ??
-        resolvePayInProvider({
-          payoutProvider: input.payoutLocked,
-          payoutLocked: input.payoutLocked,
-          supportYcPayIn: input.supportYcPayIn,
-          supportNoahPayIn: input.supportNoahPayIn,
-          supportGridPayIn: input.supportGridPayIn,
-        })
-      if (payInProvider && payInProvider !== input.payoutLocked) {
-        routing.push({ provider: payInProvider, priority: 2, settlement_asset: "USDC" })
-      }
-    }
-    return routing
-  }
-
   const routing: RoutingEntry[] = [
     { provider: payoutProvider, priority: 1, settlement_asset: "USDC" },
   ]
-
-  if (dualPayout) {
-    for (const p of payoutProviders) {
-      if (p !== payoutProvider) {
-        routing.push({ provider: p, priority: routing.length + 1, settlement_asset: "USDC" })
-      }
-    }
-    return routing
-  }
-
-  if (input.payInDisabled) {
-    return routing
-  }
-
-  const payInProvider =
-    explicitPayIn ??
-    resolvePayInProvider({
-      payoutProvider,
-      payoutLocked: null,
-      supportYcPayIn: input.supportYcPayIn,
-      supportNoahPayIn: input.supportNoahPayIn,
-      supportGridPayIn: input.supportGridPayIn,
-    })
   if (payInProvider && payInProvider !== payoutProvider) {
     routing.push({ provider: payInProvider, priority: 2, settlement_asset: "USDC" })
   }
-
   return routing
 }
 
@@ -801,26 +625,14 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
     const supportYcPayIn = caps.supportYcPayIn
     const supportNoahPayIn = caps.supportNoahPayIn
     const supportGridPayIn = caps.supportGridPayIn
-    const payoutLocked: ProviderId | null =
-      [supportNoahPayout, supportYcPayout, supportGridPayout].filter(Boolean).length === 1
-        ? supportNoahPayout
-          ? "noah"
-          : supportYcPayout
-            ? "yellowcard"
-            : "grid"
-        : null
-    const payoutProvider = parsePrimaryProvider(r.provider_routing)
-    const payInFromRouting = parsePayInProviderFromRouting(r.provider_routing, payoutProvider)
-    const payInProvider =
-      payInFromRouting ??
-      resolvePayInProvider({
-        payoutProvider,
-        payoutLocked,
+    const payoutProvider = selectedPayoutProvider(r, caps)
+    const payInProvider = selectedPayInProvider(r, caps)
+    const payInSupported =
+      payInProviderOptions({
         supportYcPayIn,
         supportNoahPayIn,
         supportGridPayIn,
-      })
-    const payInSupported = payInProvider !== null
+      }).length > 0
     const railRows = filteredRows.filter(
       (row) => row.country_code === r.country_code && row.currency_code === r.currency_code,
     )
@@ -829,29 +641,12 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
         ? railRows.some((row) => rowPayInEnabledForProvider(row, payInProvider))
         : false
     const crossBorderSupported = supportYcPayout || supportGridPayout
-    const crossBorderProvider = crossBorderSupported
-      ? resolveCrossBorderProviderForRow(
-          { supportYcPayout, supportGridPayout },
-          rowMetadata(r),
-        )
-      : null
-    const crossBorderLocked: CrossBorderProviderId | null =
-      crossBorderSupported &&
-      [supportYcPayout, supportGridPayout].filter(Boolean).length === 1
-        ? supportYcPayout
-          ? "yellowcard"
-          : "grid"
-        : null
     const meta = rowMetadata(r)
-    const payoutSelection: FeatureSelection<ProviderId> = corridorPayoutDisabled(r)
-      ? "disabled"
-      : payoutProvider
-    const payInSelection: FeatureSelection<ProviderId> =
-      !payInSupported || !payInProvider || corridorPayInDisabled(r) ? "disabled" : payInProvider
+    const crossBorderProvider = selectedCrossBorderProvider(meta, crossBorderSupported)
+    const payoutSelection: FeatureSelection<ProviderId> = payoutProvider ?? "disabled"
+    const payInSelection: FeatureSelection<ProviderId> = payInProvider ?? "disabled"
     const crossBorderSelection: FeatureSelection<CrossBorderProviderId> =
-      !crossBorderSupported || !crossBorderProvider || corridorCrossBorderDisabled(meta)
-        ? "disabled"
-        : crossBorderProvider
+      crossBorderProvider ?? "disabled"
     const showNoahBadge = corridorShowsNoahBadge(r)
     const showYcBadge = corridorShowsYcBadge(r)
     const showGridBadge = corridorShowsGridBadge(r)
@@ -879,11 +674,9 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
         supportYcPayIn,
         supportNoahPayIn,
         supportGridPayIn,
-        payoutLocked,
         crossBorderSupported,
         crossBorderProvider,
         crossBorderSelection,
-        crossBorderLocked,
         showNoahBadge,
         showYcBadge,
         showGridBadge,
@@ -904,35 +697,16 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
     existing.payInSupported = payInSupported
     existing.payInEnabled = payInEnabled || existing.payInEnabled
     existing.payoutProvider = payoutProvider
-    existing.payoutSelection = corridorPayoutDisabled(r) ? "disabled" : payoutProvider
-    existing.payInSelection =
-      !payInSupported || !payInProvider || corridorPayInDisabled(r) ? "disabled" : payInProvider
-    existing.payoutLocked = payoutLocked
+    existing.payoutSelection = payoutProvider ?? "disabled"
+    existing.payInSelection = payInProvider ?? "disabled"
     existing.payInCorridorIds =
       payInProvider !== null ? payInCorridorIdsForProvider(railRows, payInProvider) : []
-    existing.crossBorderSupported = supportYcPayout || supportGridPayout
-    existing.crossBorderProvider = existing.crossBorderSupported
-      ? resolveCrossBorderProviderForRow(
-          { supportYcPayout, supportGridPayout },
-          rowMetadata(existing.sample),
-        )
-      : null
-    existing.crossBorderSelection =
-      !existing.crossBorderSupported ||
-      !existing.crossBorderProvider ||
-      corridorCrossBorderDisabled(rowMetadata(existing.sample))
-        ? "disabled"
-        : existing.crossBorderProvider
+    existing.crossBorderSupported = crossBorderSupported
+    existing.crossBorderProvider = crossBorderProvider
+    existing.crossBorderSelection = crossBorderProvider ?? "disabled"
     existing.showNoahBadge = existing.showNoahBadge || corridorShowsNoahBadge(r)
     existing.showYcBadge = existing.showYcBadge || corridorShowsYcBadge(r)
     existing.showGridBadge = existing.showGridBadge || corridorShowsGridBadge(r)
-    existing.crossBorderLocked =
-      existing.crossBorderSupported &&
-      [supportYcPayout, supportGridPayout].filter(Boolean).length === 1
-        ? supportYcPayout
-          ? "yellowcard"
-          : "grid"
-        : null
   }
 
   return [...map.values()].sort(
@@ -1032,23 +806,13 @@ export function PayoutCorridorsAdminPanel() {
           const metadata = { ...rowMetadata(existing) }
           if (choice === "disabled") {
             disableAllPayoutSendFlags(metadata, existing)
-            return payoutCorridorsApi.patch(id, { metadata })
+            return payoutCorridorsApi.patch(id, { metadata, provider_routing: [] })
           }
           applyPayoutSendFlags(metadata, existing, choice, true)
           if (row.supportNoahPayout && choice !== "noah") metadata.noah_send_enabled = false
           if (row.supportYcPayout && choice !== "yellowcard") metadata.yc_send_enabled = false
           if (row.supportGridPayout && choice !== "grid") metadata.grid_send_enabled = false
-          const routing = buildProviderRouting(choice, {
-            payoutLocked: row.payoutLocked,
-            supportNoahPayout: row.supportNoahPayout,
-            supportYcPayout: row.supportYcPayout,
-            supportGridPayout: row.supportGridPayout,
-            supportYcPayIn: row.supportYcPayIn,
-            supportNoahPayIn: row.supportNoahPayIn,
-            supportGridPayIn: row.supportGridPayIn,
-            payInProvider,
-            payInDisabled,
-          })
+          const routing = buildProviderRouting(choice, payInDisabled ? null : payInProvider)
           return payoutCorridorsApi.patch(id, { provider_routing: routing, metadata })
         }),
       )
@@ -1068,17 +832,10 @@ export function PayoutCorridorsAdminPanel() {
     try {
       const payInDisabled = choice === "disabled"
       const provider = payInDisabled ? null : choice
-      const routing = buildProviderRouting(row.payoutProvider, {
-        payoutLocked: row.payoutLocked,
-        supportNoahPayout: row.supportNoahPayout,
-        supportYcPayout: row.supportYcPayout,
-        supportGridPayout: row.supportGridPayout,
-        supportYcPayIn: row.supportYcPayIn,
-        supportNoahPayIn: row.supportNoahPayIn,
-        supportGridPayIn: row.supportGridPayIn,
-        payInProvider: provider,
-        payInDisabled,
-      })
+      const routing =
+        row.payoutSelection === "disabled" || row.payoutProvider === null
+          ? []
+          : buildProviderRouting(row.payoutProvider, payInDisabled ? null : provider)
       const routingUpdates = await Promise.all(
         row.corridorIds.map((id) => payoutCorridorsApi.patch(id, { provider_routing: routing })),
       )
