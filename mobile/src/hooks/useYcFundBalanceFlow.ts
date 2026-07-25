@@ -75,16 +75,22 @@ export function useYcReceiveRails(input: {
   const corridorKey = country && currency ? `${country}:${currency}` : ''
   const payInProvider = input.payInProvider ?? 'yellowcard'
 
-  const [rails, setRails] = useState<YcReceiveRailsResponse | null>(() =>
-    input.enabled ? resolveReceiveRailsForDisplay(country, currency) : null,
-  )
+  const [rails, setRails] = useState<YcReceiveRailsResponse | null>(() => {
+    if (!input.enabled) return null
+    return (
+      readCachedReceiveRailsForProvider(payInProvider, country, currency) ??
+      resolveReceiveRailsForDisplay(country, currency)
+    )
+  })
   // Never block UI on rails — display uses cache/optimistic; network refreshes quietly.
   const [loading, setLoading] = useState(false)
 
   const revalidate = useCallback(async () => {
     if (!input.enabled || !country || !currency) return
     await hydrateReceiveRailsFromDisk()
-    const display = resolveReceiveRailsForDisplay(country, currency)
+    const display =
+      readCachedReceiveRailsForProvider(payInProvider, country, currency) ??
+      resolveReceiveRailsForDisplay(country, currency)
     if (display) setRails(display)
     const data = await prefetchReceiveRails({ provider: payInProvider, country, currency })
     setRails(data ?? display)
@@ -105,7 +111,9 @@ export function useYcReceiveRails(input: {
     void (async () => {
       await hydrateReceiveRailsFromDisk()
       if (cancelled) return
-      const display = resolveReceiveRailsForDisplay(country, currency)
+      const display =
+        readCachedReceiveRailsForProvider(payInProvider, country, currency) ??
+        resolveReceiveRailsForDisplay(country, currency)
       setRails(display)
       setLoading(false)
       const data = await prefetchReceiveRails({ provider: payInProvider, country, currency })

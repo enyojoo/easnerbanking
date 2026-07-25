@@ -5,7 +5,7 @@ import type {
   ProviderRoutingEntry,
   SendDestinationsResponse,
 } from "@easner/shared"
-import type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from "@easner/shared"
+import type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail, PayoutCorridorPayInMetadata } from "@easner/shared"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
 import { getGlobalCurrencyPolicies } from "@/lib/accounts/currency-controls"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
@@ -23,7 +23,31 @@ type PayoutCorridorRow = {
   providers: unknown
   provider_routing: unknown
   fields_schema: unknown
+  metadata?: unknown
   updated_at: string
+}
+
+function publicPayInMetadata(raw: unknown): PayoutCorridorPayInMetadata | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  const m = raw as Record<string, unknown>
+  const out: PayoutCorridorPayInMetadata = {}
+  const keys = [
+    "pay_in_provider",
+    "yc_receive",
+    "yc_receive_enabled",
+    "grid_receive",
+    "grid_receive_enabled",
+    "noah_receive",
+    "noah_receive_enabled",
+    "yc_send",
+    "grid_send",
+  ] as const
+  for (const key of keys) {
+    if (m[key] !== undefined) {
+      ;(out as Record<string, unknown>)[key] = m[key]
+    }
+  }
+  return Object.keys(out).length ? out : null
 }
 
 type CryptoRow = {
@@ -73,6 +97,7 @@ function publicCorridor(
     ...(row.fields_schema != null
       ? { fields_schema: row.fields_schema as PayoutFieldsSchemaHint }
       : {}),
+    ...(row.metadata != null ? { metadata: publicPayInMetadata(row.metadata) } : {}),
   }
 }
 
@@ -117,7 +142,7 @@ export async function buildSendDestinationsCatalog(input?: {
     admin
       .from("payout_corridors")
       .select(
-        "id,rail,country_code,country_name,currency_code,currency_name,sort_order,providers,provider_routing,fields_schema,updated_at",
+        "id,rail,country_code,country_name,currency_code,currency_name,sort_order,providers,provider_routing,fields_schema,metadata,updated_at",
       )
       .eq("enabled", true)
       .order("sort_order", { ascending: true, nullsFirst: false })

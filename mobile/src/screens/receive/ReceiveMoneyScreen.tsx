@@ -44,6 +44,8 @@ import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { NgLocalVerificationNotice } from '../../components/compliance/NgLocalVerificationNotice'
 import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
+import { useSendDestinations } from '../../hooks/useSendDestinations'
+import { resolveMobilePayInProvider } from '../../lib/resolveMobilePayInProvider'
 import { ReceiveCashMethodList } from '../../components/receive/ReceiveCashMethodList'
 import {
   resolveWarmYcLocalDepositCorridor,
@@ -165,6 +167,19 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const residenceCountry = String(userProfile?.residence_country ?? '').trim().toUpperCase()
 
+  const { catalogRevision } = useSendDestinations()
+
+  const payInProvider = useMemo(
+    () =>
+      residenceCountry && localPayInCurrency
+        ? resolveMobilePayInProvider({
+            countryCode: residenceCountry,
+            currencyCode: localPayInCurrency,
+          })
+        : 'yellowcard',
+    [residenceCountry, localPayInCurrency, catalogRevision],
+  )
+
   const needsYcReceiveRails =
     verificationComplete && currency === 'USD' && Boolean(localPayInCurrency && residenceCountry)
 
@@ -172,6 +187,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     country: residenceCountry || null,
     currency: localPayInCurrency,
     enabled: needsYcReceiveRails,
+    payInProvider,
   })
 
   useFocusEffect(
@@ -180,10 +196,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         kycApproved: verificationComplete,
       })
       if (!corridor) return
-      void ensureYcLocalDepositCachesReady(corridor).then(() => {
+      void ensureYcLocalDepositCachesReady({ ...corridor, payInProvider }).then(() => {
         void receiveRailsRevalidate()
       })
-    }, [userProfile, verificationComplete, receiveRailsRevalidate]),
+    }, [userProfile, verificationComplete, receiveRailsRevalidate, payInProvider]),
   )
 
   const expectLocalCorridor =

@@ -46,6 +46,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useYcCrossBorderFlow, type YcPayInRail, residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
 import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
 import { warmYcPayInCorridor, resolveReceiveRailsForDisplay } from '../../lib/warmYcLocalDepositCaches'
+import { useSendDestinations } from '../../hooks/useSendDestinations'
+import { resolveMobilePayInProvider } from '../../lib/resolveMobilePayInProvider'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { useAuth } from '../../contexts/AuthContext'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
@@ -336,10 +338,20 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
   const payInCountryName = payInCountry ? resolveReceiveCountryName(payInCountry) : ''
 
+  const { catalogRevision } = useSendDestinations()
+  const payInProvider = useMemo(
+    () =>
+      payInCountry && payInCurrency
+        ? resolveMobilePayInProvider({ countryCode: payInCountry, currencyCode: payInCurrency })
+        : 'yellowcard',
+    [payInCountry, payInCurrency, catalogRevision],
+  )
+
   const { rails: payInRails } = useYcReceiveRails({
     country: payInCountry,
     currency: payInCurrency,
     enabled: showThroughLocalCurrency && Boolean(payInCountry && payInCurrency),
+    payInProvider,
   })
 
   useEffect(() => {

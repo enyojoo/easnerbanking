@@ -38,6 +38,19 @@ export type PayoutFieldsSchemaHint = {
   amount_field_mode: "note" | "payment_purpose" | "note_optional_only"
 }
 
+/** Office corridor flags used to pick YC vs Grid vs Noah for local pay-in. */
+export type PayoutCorridorPayInMetadata = {
+  pay_in_provider?: string
+  yc_receive?: boolean
+  yc_receive_enabled?: boolean
+  grid_receive?: boolean
+  grid_receive_enabled?: boolean
+  noah_receive?: boolean
+  noah_receive_enabled?: boolean
+  yc_send?: boolean
+  grid_send?: boolean
+}
+
 /** Public shape returned by GET /api/payout-corridors */
 export type PayoutCorridorPublic = {
   id: string
@@ -58,6 +71,8 @@ export type PayoutCorridorPublic = {
   provider_health?: Record<string, ProviderHealthStatus>
   /** Noah hints and/or nested `yellowcard` schema — see yc-recipient-schema. */
   fields_schema?: PayoutFieldsSchemaHint | import("./yc-recipient-schema").PayoutCorridorFieldsSchema | null
+  /** Pay-in routing flags from Office (subset of corridor metadata). */
+  metadata?: PayoutCorridorPayInMetadata | null
 }
 
 export function corridorDisplayLabel(c: Pick<PayoutCorridorPublic, "country_name" | "currency_code" | "currency_name">): string {
