@@ -314,55 +314,81 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const enteredAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
 
-  const ycFlow = useYcCrossBorderFlow({
-    recipientId: recipient?.id ?? null,
-    enabled: !isEasetagRecipient && !isWalletRecipient,
-    receiveCurrency: recipient?.currency || 'USD',
-    amountEntryMode,
-    enteredAmount,
-  })
-
   const residenceLocalPayInCurrency = useMemo(() => {
     const cc = String(userProfile?.residence_country ?? '').trim().toUpperCase()
     return cc ? mapResidenceToLocalPayInCurrency(cc) : null
   }, [userProfile?.residence_country])
 
-  // Show TLC as soon as residence maps to a local currency (while eligibility loads),
-  // then keep it only if eligibility confirms available.
-  const showThroughLocalCurrency =
+  const receiveCurrency = recipient?.currency?.trim().toUpperCase() ?? ''
+
+  // TLC is cross-border only — hide when pay-in currency matches recipient (use balance instead).
+  const expectTlcCorridor =
     !isEasetagRecipient &&
     !isWalletRecipient &&
-    (ycFlow.available ||
-      (ycFlow.eligibilityLoading && Boolean(residenceLocalPayInCurrency)))
-  const payInCurrency = ycFlow.payInCurrency ?? residenceLocalPayInCurrency
-  const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
-  const payInCountryName = payInCountry ? resolveReceiveCountryName(payInCountry) : ''
+    Boolean(residenceLocalPayInCurrency) &&
+    residenceLocalPayInCurrency !== receiveCurrency
+
+  const tlcPayInCountry =
+    expectTlcCorridor && residenceLocalPayInCurrency
+      ? residenceCountryFromPayInCurrency(residenceLocalPayInCurrency)
+      : null
 
   const { catalogRevision } = useSendDestinations()
   const payInProvider = useMemo(
     () =>
-      payInCountry && payInCurrency
-        ? resolveMobilePayInProvider({ countryCode: payInCountry, currencyCode: payInCurrency })
+      tlcPayInCountry && residenceLocalPayInCurrency
+        ? resolveMobilePayInProvider({
+            countryCode: tlcPayInCountry,
+            currencyCode: residenceLocalPayInCurrency,
+          })
         : 'yellowcard',
-    [payInCountry, payInCurrency, catalogRevision],
+    [tlcPayInCountry, residenceLocalPayInCurrency, catalogRevision],
   )
 
+  const ycFlow = useYcCrossBorderFlow({
+    recipientId: recipient?.id ?? null,
+    enabled: expectTlcCorridor,
+    receiveCurrency: recipient?.currency || 'USD',
+    amountEntryMode,
+    enteredAmount,
+    payInCurrencyOverride: expectTlcCorridor ? residenceLocalPayInCurrency : null,
+    payInCountryOverride: tlcPayInCountry,
+    crossBorderProviderOverride: expectTlcCorridor ? payInProvider : null,
+  })
+
+  const payInCurrency = ycFlow.payInCurrency ?? residenceLocalPayInCurrency
+  const payInCountry = payInCurrency ? residenceCountryFromPayInCurrency(payInCurrency) : null
+  const payInCountryName = payInCountry ? resolveReceiveCountryName(payInCountry) : ''
+
+  // Match Receive: prefetch residence pay-in rails independently of eligibility resolution.
   const { rails: payInRails } = useYcReceiveRails({
     country: payInCountry,
     currency: payInCurrency,
-    enabled: showThroughLocalCurrency && Boolean(payInCountry && payInCurrency),
+    enabled: expectTlcCorridor && Boolean(payInCountry && payInCurrency),
     payInProvider,
   })
 
+  const payInRailsDisplay = useMemo(
+    () =>
+      payInRails ??
+      (payInCountry && payInCurrency
+        ? resolveReceiveRailsForDisplay(payInCountry, payInCurrency, payInProvider)
+        : null),
+    [payInRails, payInCountry, payInCurrency, payInProvider],
+  )
+
+  // Match Receive: show local pay-in from residence rails, not eligibility resolution.
+  const showThroughLocalCurrency =
+    expectTlcCorridor && Boolean(payInRailsDisplay?.anyAvailable)
+
   useEffect(() => {
-    if (!showThroughLocalCurrency || !payInCountry || !payInCurrency) return
+    if (!expectTlcCorridor || !payInCountry || !payInCurrency) return
     void warmYcPayInCorridor(payInCountry, payInCurrency, payInProvider)
-  }, [showThroughLocalCurrency, payInCountry, payInCurrency, payInProvider])
+  }, [expectTlcCorridor, payInCountry, payInCurrency, payInProvider])
 
   const localPayInOptions = useMemo(() => {
     if (!payInCurrency || !payInCountry) return []
-    const rails =
-      payInRails ?? resolveReceiveRailsForDisplay(payInCountry, payInCurrency, payInProvider)
+    const rails = payInRailsDisplay
     if (!rails) return []
     const opts: { rail: YcPayInRail; title: string }[] = []
     if (rails.rails.bank_transfer.available) {
@@ -372,7 +398,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       opts.push({ rail: 'mobile_money', title: sendLocalPayInMomoTitle(payInCountryName) })
     }
     return opts
-  }, [payInCurrency, payInCountry, payInCountryName, payInRails])
+  }, [payInCurrency, payInCountry, payInCountryName, payInRailsDisplay])
 
   useEffect(() => {
     if (showThroughLocalCurrency) return

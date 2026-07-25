@@ -77,6 +77,8 @@ export function useYcCrossBorderFlow(input: {
   /** User-selected pay-in currency from the amount screen (skips waiting on eligibility). */
   payInCurrencyOverride?: string | null
   payInCountryOverride?: string | null
+  /** Office routing for pay-in / cross-border quotes (skips waiting on eligibility). */
+  crossBorderProviderOverride?: 'yellowcard' | 'grid' | null
 }) {
   const [eligibility, setEligibility] = useState<YcEligibilityResponse | null>(null)
   const [eligibilityLoading, setEligibilityLoading] = useState(false)
@@ -95,7 +97,8 @@ export function useYcCrossBorderFlow(input: {
   )
 
   const crossBorderProvider: 'yellowcard' | 'grid' =
-    eligibility?.throughLocalCurrency.provider === 'grid' ? 'grid' : 'yellowcard'
+    input.crossBorderProviderOverride ??
+    (eligibility?.throughLocalCurrency.provider === 'grid' ? 'grid' : 'yellowcard')
 
   useEffect(() => {
     if (!input.enabled || !input.recipientId) {
