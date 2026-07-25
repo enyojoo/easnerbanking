@@ -104,12 +104,10 @@ import {
   ensureSendPayoutQuoteLocked,
   isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
-  isStashedPayoutQuotePreviewFresh,
   peekLastPayoutQuoteError,
   peekSendPayoutQuote,
-  peekSendPayoutQuotePreview,
-  payoutDisplayAmountsFromQuote,
   clearSendPayoutQuote,
+  payoutDisplayAmountsFromQuote,
 } from '../../lib/sendFlowPayoutQuote'
 import {
   ensureSendWalletQuoteStashed,
@@ -1466,8 +1464,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         needsQuoteAwait &&
         (isWalletRecipient
           ? isStashedWalletQuoteFresh(quoteStashMeta)
-          : isStashedPayoutQuoteFresh(quoteStashMeta) ||
-            isStashedPayoutQuotePreviewFresh(quoteStashMeta))
+          : isStashedPayoutQuoteFresh(quoteStashMeta))
 
       if (needsQuoteAwait && !quoteAlreadyWarm) {
         setIsContinuePending(true)
@@ -1538,8 +1535,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         !isEasetagRecipient &&
         !isWalletRecipient &&
         receiveAmountValue > 0 &&
-        !isCompletePayoutQuote(stashedQuote) &&
-        !isStashedPayoutQuotePreviewFresh(quoteStashMeta)
+        !isCompletePayoutQuote(stashedQuote)
       ) {
         showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
         return
@@ -1559,11 +1555,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         stashedQuote?.settlement?.customerRate ?? stashedQuote?.noah?.rate ?? exchangeRate
       let calculatedSendingAmount =
         stashedRate > 0 ? receiveAmountValue / stashedRate : navAmounts.sendAmount
-      const previewForFees =
-        stashedQuote ??
-        (isStashedPayoutQuotePreviewFresh(quoteStashMeta) ? peekSendPayoutQuotePreview() : null)
-      const feeDisplay = previewForFees ? payoutDisplayAmountsFromQuote(previewForFees) : null
-      const calculatedFeeAmount = feeDisplay?.displayProcessingFee ?? 0
+      const calculatedFeeAmount = stashedQuote
+        ? payoutDisplayAmountsFromQuote(stashedQuote).displayProcessingFee
+        : 0
       let calculatedTotalAmount =
         stashedQuote?.totalDebited && stashedQuote.totalDebited > 0
           ? stashedQuote.totalDebited

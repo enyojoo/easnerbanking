@@ -64,17 +64,17 @@ import { getSendDestinationsMemory } from '../../lib/sendDestinations'
 import { isWalletSendRecipient } from '../../lib/recipientWalletMeta'
 import { isEasnerClientTransactionIdFormat } from '../../lib/transactionId'
 import {
+  ensureSendPayoutOrderConfirmed,
   isCompletePayoutQuote,
   isPayoutSessionReadyForExecute,
   isStashedPayoutQuoteFresh,
   isStashedPayoutQuotePreviewFresh,
+  peekLastPayoutQuoteError,
   peekSendPayoutQuote,
   peekSendPayoutQuotePreview,
-  peekLastPayoutQuoteError,
   clearSendPayoutQuote,
   payoutDisplayAmountsFromQuote,
   payoutPrepareSessionFromQuote,
-  ensureSendPayoutQuoteLocked,
 } from '../../lib/sendFlowPayoutQuote'
 import {
   ensureSendWalletOrderConfirmed,
@@ -284,6 +284,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         quoteError: null as string | null,
       }
     }
+    const stashed = peekSendPayoutQuote()
     const meta = {
       recipientId: params.recipient?.id ?? '',
       amountEntryMode: params.amountEntryMode ?? 'receive',
@@ -293,11 +294,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           : (params.receiveAmountValue ?? 0),
       receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
     }
-    const stashed = peekSendPayoutQuote()
-    const preview =
-      isStashedPayoutQuotePreviewFresh(meta) ? peekSendPayoutQuotePreview() : null
-    const useLocked = stashed && isStashedPayoutQuoteFresh(meta)
-    if (useLocked) {
+    const useStashed = stashed && isStashedPayoutQuoteFresh(meta) && isCompletePayoutQuote(stashed)
+    if (useStashed) {
       const display = payoutDisplayAmountsFromQuote(stashed)
       const easnerFeeAmt = display.marginAmount
       const payoutSessionFromQuote = payoutPrepareSessionFromQuote(stashed, params.recipient?.id ?? '')
@@ -317,7 +315,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         quoteError: null as string | null,
       }
     }
-    const usePreview = preview && isCompletePayoutQuote(preview)
+    const preview = peekSendPayoutQuotePreview()
+    const usePreview = preview && isStashedPayoutQuotePreviewFresh(meta)
     if (usePreview) {
       const display = payoutDisplayAmountsFromQuote(preview)
       return {
@@ -336,7 +335,9 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         quoteError: null as string | null,
       }
     }
-    const needsQuoteLock = !isWalletRecipient && !useLocked
+    const needsQuoteLock =
+      !isWalletRecipient &&
+      !(stashed && isStashedPayoutQuoteFresh(meta) && isCompletePayoutQuote(stashed))
     const hasClientPayoutPreview =
       (params.calculatedSendingAmount ?? 0) > 0 && (params.calculatedTotalAmount ?? 0) > 0
     return {
@@ -447,24 +448,20 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     }
     return 0
   }, [quoteDisplay?.customerRate, pricingQuoteResult?.providerRate, youSendAmount, quotedReceiveAmount])
-  const processingFee = quoteDisplay?.processingFee ?? quoteDisplay?.marginAmount ?? easnerFee ?? 0
+  const processingFee = quoteDisplay?.marginAmount ?? easnerFee ?? calculatedFeeAmount
   const exchangeFee = quoteDisplay?.exchangeFee ?? 0
   const networkFee = isWalletRecipient ? (quoteDisplay as { networkFee?: number } | null)?.networkFee ?? 0 : 0
   const displayProcessingFee =
     quoteDisplay?.displayProcessingFee ??
-    (calculatedFeeAmount > 0
-      ? calculatedFeeAmount
-      : computeDisplayProcessingFee({
-          processingFee,
-          exchangeFee,
-        }))
+    computeDisplayProcessingFee({
+      processingFee,
+      exchangeFee,
+    })
   const walletExecutionModel =
     (quoteDisplay as { executionModel?: string } | null)?.executionModel ??
     walletSession?.executionModel ??
     peekSendWalletQuote()?.executionModel
-  const showProcessingFee =
-    shouldShowPayoutReviewFeeRow({ processingFee, exchangeFee }) ||
-    displayProcessingFee > 0.005
+  const showProcessingFee = shouldShowPayoutReviewFeeRow({ processingFee, exchangeFee })
   const transferMethod = recipient
     ? isWalletRecipient
       ? formatWalletSendTransferMethod(receiveCurrency, walletNetwork)
@@ -567,21 +564,21 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     }
     if (payoutSessionMatchesRecipient(payoutSession, recipient.id)) return
     if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
-      const locked = peekSendPayoutQuote()
-      if (locked) {
-        setQuotedReceiveAmount(locked.receiveAmount)
-        const display = payoutDisplayAmountsFromQuote(locked)
-        const payoutSessionFromQuote = payoutPrepareSessionFromQuote(locked, recipient.id)
+      const stashed = peekSendPayoutQuote()
+      if (stashed && isCompletePayoutQuote(stashed)) {
+        setQuotedReceiveAmount(stashed.receiveAmount)
+        const display = payoutDisplayAmountsFromQuote(stashed)
+        const payoutSessionFromQuote = payoutPrepareSessionFromQuote(stashed, recipient.id)
         setPricing((prev) => ({
           ...prev,
           calculatedSendingAmount: display.youSendAmount,
           calculatedFeeAmount: display.displayProcessingFee,
           calculatedTotalAmount: display.totalDebited,
-          noahFee: locked.noah.totalFee ?? 0,
+          noahFee: stashed.noah.totalFee ?? 0,
           easnerFee: display.marginAmount,
-          pricingQuoteId: locked.pricingQuoteId,
-          pricingQuoteExpiry: locked.expiresAt,
-          pricingQuoteResult: locked.easner,
+          pricingQuoteId: stashed.pricingQuoteId,
+          pricingQuoteExpiry: stashed.expiresAt,
+          pricingQuoteResult: stashed.easner,
           payoutSession: payoutSessionFromQuote,
           quoteDisplay: display,
           quoteLoading: false,
@@ -592,44 +589,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     }
 
     let cancelled = false
-    if (isStashedPayoutQuotePreviewFresh(quoteStashMeta)) {
-      const previewQuote = peekSendPayoutQuotePreview()
-      if (previewQuote && isCompletePayoutQuote(previewQuote)) {
-        setQuotedReceiveAmount(previewQuote.receiveAmount)
-        const display = payoutDisplayAmountsFromQuote(previewQuote)
-        setPricing((prev) => ({
-          ...prev,
-          calculatedSendingAmount: display.youSendAmount,
-          calculatedFeeAmount: display.displayProcessingFee,
-          calculatedTotalAmount: display.totalDebited,
-          easnerFee: display.marginAmount,
-          pricingQuoteId: previewQuote.pricingQuoteId,
-          pricingQuoteExpiry: previewQuote.expiresAt,
-          pricingQuoteResult: previewQuote.easner,
-          quoteDisplay: display,
-          quoteLoading: true,
-          quoteError: null,
-        }))
-      }
-    } else {
-      setPricing((prev) => ({ ...prev, quoteLoading: true, quoteError: null }))
-    }
-
+    setPricing((prev) => ({ ...prev, quoteLoading: true, quoteError: null }))
     void (async () => {
       try {
-        const locked = await ensureSendPayoutQuoteLocked(
-          () =>
-            noahService.createPayoutQuote({
-              recipientId: recipient.id,
-              receiveAmount: receiveAmountValue,
-              sourceBalanceCurrency: selectedBalanceCurrency,
-              amountEntryMode,
-              ...(amountEntryMode === 'send' && amountScreenSendAmount > 0
-                ? { sendAmount: amountScreenSendAmount }
-                : {}),
-              ...(sendNote ? { note: sendNote } : {}),
-              ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
-            }),
+        const q = await ensureSendPayoutOrderConfirmed(
           () =>
             noahService.confirmPayoutOrder({
               recipientId: recipient.id,
@@ -645,10 +608,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           quoteStashMeta,
         )
         if (cancelled) return
-        if (!locked || !isPayoutSessionReadyForExecute(
-          payoutPrepareSessionFromQuote(locked, recipient.id),
-          recipient.id,
-        )) {
+        if (!q || !isCompletePayoutQuote(q)) {
           setPricing((prev) => ({
             ...prev,
             quoteLoading: false,
@@ -656,19 +616,20 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           }))
           return
         }
-        setQuotedReceiveAmount(locked.receiveAmount)
-        const display = payoutDisplayAmountsFromQuote(locked)
+        setQuotedReceiveAmount(q.receiveAmount)
+        const display = payoutDisplayAmountsFromQuote(q)
+        const payoutSessionFromQuote = payoutPrepareSessionFromQuote(q, recipient.id)
         setPricing((prev) => ({
           ...prev,
           calculatedSendingAmount: display.youSendAmount,
           calculatedFeeAmount: display.displayProcessingFee,
           calculatedTotalAmount: display.totalDebited,
-          noahFee: locked.noah.totalFee ?? 0,
+          noahFee: q.noah.totalFee ?? 0,
           easnerFee: display.marginAmount,
-          pricingQuoteId: locked.pricingQuoteId,
-          pricingQuoteExpiry: locked.expiresAt,
-          pricingQuoteResult: locked.easner,
-          payoutSession: payoutPrepareSessionFromQuote(locked, recipient.id),
+          pricingQuoteId: q.pricingQuoteId,
+          pricingQuoteExpiry: q.expiresAt,
+          pricingQuoteResult: q.easner,
+          payoutSession: payoutSessionFromQuote,
           quoteDisplay: display,
           quoteLoading: false,
           quoteError: null,

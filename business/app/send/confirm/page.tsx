@@ -19,6 +19,7 @@ import {
   SEND_REVIEW_CONFIRM_CTA,
   YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
   attestPayInPayment,
+  shouldShowPayoutReviewFeeRow,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -58,14 +59,11 @@ import {
   ensurePayoutOrderConfirmed,
   isCompletePayoutQuoteLocked,
   isStashedPayoutQuoteFresh,
-  isStashedPayoutQuotePreviewFresh,
   payoutQuoteToFlowState,
   peekLastPayoutQuoteError,
   peekPayoutQuote,
-  peekPayoutQuotePreview,
   type PayoutQuoteStashMeta,
 } from "@/lib/payout-quote-cache"
-import { isPayoutQuotePreviewFresh } from "@/lib/noah/map-payout-quote-to-flow"
 import {
   ensureWalletSendOrderConfirmed,
   walletQuoteToFlowState,
@@ -249,9 +247,6 @@ export default function SendConfirmPage() {
           if (isStashedPayoutQuoteFresh(payoutMeta)) {
             const locked = peekPayoutQuote()
             if (locked) hydrated = payoutQuoteToFlowState(hydrated, locked)
-          } else if (isStashedPayoutQuotePreviewFresh(payoutMeta)) {
-            const preview = peekPayoutQuotePreview()
-            if (preview) hydrated = payoutQuoteToFlowState(hydrated, preview)
           }
         }
         setState(hydrated)
@@ -376,15 +371,6 @@ export default function SendConfirmPage() {
           sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
           return
         }
-      }
-    }
-
-    if (isStashedPayoutQuotePreviewFresh(meta)) {
-      const preview = peekPayoutQuotePreview()
-      if (preview && !state.payoutQuote?.processingFee) {
-        const next = payoutQuoteToFlowState(state, preview)
-        setState(next)
-        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
       }
     }
 
@@ -802,9 +788,6 @@ export default function SendConfirmPage() {
     ycPreviewReady && (ycQuoteFullyLocked || Boolean(peekCrossBorderLeg2DraftId())),
   )
   const ycQuoteLocked = ycLeg2Ready || ycPreviewReady
-  const payoutFeePreviewReady = Boolean(
-    pq && isPayoutQuotePreviewFresh(pq, state.amount, state.recipient.id),
-  )
   const quoteReady = isYcCrossBorder
     ? ycPreviewReady
     : easenetSend ||
@@ -1078,7 +1061,14 @@ export default function SendConfirmPage() {
           }
           copiedKey={copiedKey}
           onCopy={handleCopy}
-          showFeeBreakdown={!easenetSend && (quoteReady || payoutFeePreviewReady)}
+          showFeeBreakdown={
+            !easenetSend &&
+            (quoteReady ||
+              shouldShowPayoutReviewFeeRow({
+                processingFee: easnerFee,
+                exchangeFee,
+              }))
+          }
           globalFiatPayout={!walletSend && !easenetSend}
           receiveNetwork={walletSend ? walletNetwork : undefined}
           walletSendExecutionModel={walletSend ? wq?.executionModel : undefined}

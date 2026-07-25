@@ -84,34 +84,14 @@ export function isUsablePayoutQuotePreview(quote: PayoutQuote | null | undefined
   )
 }
 
-/** Locked order from `/confirm` — required before authorize. */
-export function isCompletePayoutQuoteLocked(
-  quote: PayoutQuote | null | undefined,
-): quote is PayoutQuote {
+/** Locked order from `/confirm` — required before PIN execute. DB `/quote` previews are never complete. */
+export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
   if (!isUsablePayoutQuotePreview(quote)) return false
   if (new Date(quote.expiresAt).getTime() <= Date.now()) return false
   if (quote.quotePhase === 'preview') return false
   if (quote.quotePhase === 'locked') {
-    return Boolean(
-      quote.lockId || quote.yc?.sendId || quote.grid?.quoteId || quote.settlement?.sessionId,
-    )
+    return Boolean(quote.lockId || quote.yc?.sendId || quote.grid?.quoteId || quote.settlement?.sessionId)
   }
-  return Boolean(quote.settlement?.sessionId || quote.noah?.formSessionId)
-}
-
-/** Usable for Continue / review display — includes Grid/YC DB preview before confirm lock. */
-export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
-  if (!isUsablePayoutQuotePreview(quote)) return false
-  if (new Date(quote.expiresAt).getTime() <= Date.now()) return false
-  if (isCompletePayoutQuoteLocked(quote)) return true
-  if (
-    (quote.provider === 'yellowcard' || quote.provider === 'grid') &&
-    quote.quotePhase === 'preview' &&
-    quote.requiresConfirm !== false
-  ) {
-    return Boolean(quote.settlement?.sessionId || quote.yc?.sequenceId || quote.grid?.quoteId)
-  }
-  if (quote.quotePhase === 'preview') return false
   return Boolean(quote.settlement?.sessionId || quote.noah?.formSessionId)
 }
 
@@ -153,7 +133,7 @@ export function isPayoutSessionReadyForExecute(
 }
 
 export function stashSendPayoutQuote(quote: PayoutQuote, meta: SendPayoutQuoteStashMeta): void {
-  if (!isCompletePayoutQuoteLocked(quote)) return
+  if (!isCompletePayoutQuote(quote)) return
   stashed = quote
   stashedMeta = meta
   lastPayoutQuoteError = null
@@ -203,7 +183,7 @@ export function clearSendPayoutQuote(): void {
 }
 
 export function isStashedPayoutQuoteFresh(input: SendPayoutQuoteStashMeta): boolean {
-  if (!isCompletePayoutQuoteLocked(stashed) || !stashedMeta) return false
+  if (!isCompletePayoutQuote(stashed) || !stashedMeta) return false
   if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
   if (stashedMeta.recipientId.trim() !== input.recipientId.trim()) return false
   if (stashedMeta.amountEntryMode !== input.amountEntryMode) return false
@@ -248,7 +228,7 @@ export async function ensureSendPayoutQuoteStashed(
         lastPayoutQuoteError = 'Incomplete payout quote response.'
         return null
       }
-      if (isCompletePayoutQuoteLocked(quote)) {
+      if (isCompletePayoutQuote(quote)) {
         stashSendPayoutQuote(quote, meta)
       } else {
         stashSendPayoutQuotePreview(quote, meta)
@@ -279,7 +259,7 @@ export async function ensureSendPayoutQuoteLocked(
     (isStashedPayoutQuotePreviewFresh(meta) ? peekSendPayoutQuotePreview() : null) ??
     (await ensureSendPayoutQuoteStashed(fetchQuote, meta))
 
-  if (preview && !payoutQuoteNeedsConfirmLock(preview) && isCompletePayoutQuoteLocked(preview)) {
+  if (preview && !payoutQuoteNeedsConfirmLock(preview) && isCompletePayoutQuote(preview)) {
     stashSendPayoutQuote(preview, meta)
     return preview
   }
@@ -301,7 +281,7 @@ export async function ensureSendPayoutOrderConfirmed(
   lastPayoutQuoteError = null
   inflightConfirm = fetchConfirm()
     .then((quote) => {
-      if (!isCompletePayoutQuoteLocked(quote)) {
+      if (!isCompletePayoutQuote(quote)) {
         lastPayoutQuoteError = 'Incomplete locked payout quote.'
         return null
       }
