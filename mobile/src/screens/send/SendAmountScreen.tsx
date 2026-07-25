@@ -76,8 +76,11 @@ import {
   corridorMatchesCountryCurrency,
   isYcBalancePayoutCorridor,
   isGridBalancePayoutCorridor,
+  isNoahBalancePayoutCorridor,
+  resolveBalancePayoutProvider,
   resolveEffectiveYcBalancePayoutMinReceive,
   resolveYcPayoutLimits,
+  resolveGridPayoutLimits,
   getYcBusinessPayoutMin,
   YC_DIRECT_SETTLEMENT_MIN_SEND_USDC_EXCLUSIVE,
   resolveReceiveCountryName,
@@ -93,8 +96,8 @@ import {
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
 import { useYcCrossBorderSendMinEnforcement } from '../../hooks/useYcCrossBorderSendMinEnforcement'
-import { useYcSendExchangeRates } from '../../hooks/queries/use-yc-send-exchange-rates'
-import { useGridSendExchangeRates } from '../../hooks/queries/use-grid-send-exchange-rates'
+import { useProviderSendExchangeRates, prefetchProviderSendExchangeRates } from '../../hooks/queries/use-provider-send-exchange-rates'
+import { resolveRecipientBalancePayoutProvider } from '../../lib/resolveRecipientBalancePayoutProvider'
 import { noahService, type WalletSendQuote } from '../../lib/noahService'
 import {
   ensureSendPayoutQuoteStashed,
@@ -238,17 +241,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const isWalletRecipientEarly = isWalletSendRecipient(recipient)
   const skipNoahExchangeRatesForEasetagP2p =
     isEasetagRecipient && selectedPaymentMethod === 'balance'
-  const {
-    data: exchangeRatesFromContext = [],
-    isFetched: noahRatesFetched,
-  } = useNoahSendExchangeRates(recipient?.currency, {
-    enabled: !skipNoahExchangeRatesForEasetagP2p && !isWalletRecipientEarly,
-  })
-
-  useEffect(() => {
-    if (!recipient?.currency || skipNoahExchangeRatesForEasetagP2p || isWalletRecipientEarly) return
-    void prefetchNoahSendExchangeRates(qc, recipient.currency)
-  }, [recipient?.currency, skipNoahExchangeRatesForEasetagP2p, isWalletRecipientEarly, qc])
 
   const isWalletRecipient = isWalletRecipientEarly
 
@@ -311,6 +303,84 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     isEasetag: isEasetagRecipient,
     receiveCurrency: isEasetagRecipient ? selectedBalanceCurrency : recipient?.currency,
   })
+
+  const payoutCorridorRow = useMemo(() => {
+    if (!sendDestinations || !recipient || !payoutCountryCode) return null
+    const corridors =
+      payoutRail === 'mobile_money'
+        ? sendDestinations.fiat.mobile_money
+        : sendDestinations.fiat.bank_transfer
+    return (
+      corridors.find((c) =>
+        corridorMatchesCountryCurrency(c, {
+          countryCode: payoutCountryCode,
+          currencyCode: recipient.currency,
+          rail: payoutRail,
+        }),
+      ) ?? null
+    )
+  }, [sendDestinations, recipient, payoutCountryCode, payoutRail])
+
+  const balancePayoutProvider = useMemo(
+    () => resolveBalancePayoutProvider(payoutCorridorRow),
+    [payoutCorridorRow],
+  )
+
+  const isNoahBalancePayout =
+    selectedPaymentMethod === 'balance' &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    isNoahBalancePayoutCorridor(payoutCorridorRow)
+
+  const isYcBalancePayout =
+    selectedPaymentMethod === 'balance' &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    isYcBalancePayoutCorridor(payoutCorridorRow)
+
+  const isGridBalancePayout =
+    selectedPaymentMethod === 'balance' &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    isGridBalancePayoutCorridor(payoutCorridorRow)
+
+  const isProviderBalancePayout = isYcBalancePayout || isGridBalancePayout
+
+  const {
+    data: exchangeRatesFromContext = [],
+    isFetched: noahRatesFetched,
+  } = useNoahSendExchangeRates(recipient?.currency, {
+    enabled:
+      !skipNoahExchangeRatesForEasetagP2p &&
+      !isWalletRecipient &&
+      isNoahBalancePayout,
+  })
+
+  const {
+    data: providerSendRates = [],
+    isLoading: providerSendRatesLoading,
+  } = useProviderSendExchangeRates(recipient?.currency, balancePayoutProvider, {
+    enabled: isProviderBalancePayout && balancePayoutProvider != null,
+  })
+
+  useEffect(() => {
+    if (!recipient?.currency || skipNoahExchangeRatesForEasetagP2p || isWalletRecipient) return
+    if (isNoahBalancePayout) {
+      void prefetchNoahSendExchangeRates(qc, recipient.currency)
+      return
+    }
+    if (isProviderBalancePayout && balancePayoutProvider) {
+      void prefetchProviderSendExchangeRates(qc, recipient.currency, balancePayoutProvider)
+    }
+  }, [
+    recipient?.currency,
+    skipNoahExchangeRatesForEasetagP2p,
+    isWalletRecipient,
+    isNoahBalancePayout,
+    isProviderBalancePayout,
+    balancePayoutProvider,
+    qc,
+  ])
 
   const enteredAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
 
@@ -736,58 +806,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     [recipient, isEasetagRecipient, payoutHints, receiveCurrency, payoutRail],
   )
 
-  const payoutCorridorRow = useMemo(() => {
-    if (!sendDestinations || !recipient || !payoutCountryCode) return null
-    const corridors =
-      payoutRail === 'mobile_money'
-        ? sendDestinations.fiat.mobile_money
-        : sendDestinations.fiat.bank_transfer
-    return (
-      corridors.find((c) =>
-        corridorMatchesCountryCurrency(c, {
-          countryCode: payoutCountryCode,
-          currencyCode: recipient.currency,
-          rail: payoutRail,
-        }),
-      ) ?? null
-    )
-  }, [sendDestinations, recipient, payoutCountryCode, payoutRail])
-
-  const isYcBalancePayout =
-    selectedPaymentMethod === 'balance' &&
-    !isEasetagRecipient &&
-    !isWalletRecipient &&
-    isYcBalancePayoutCorridor(payoutCorridorRow)
-
-  const isGridBalancePayout =
-    selectedPaymentMethod === 'balance' &&
-    !isEasetagRecipient &&
-    !isWalletRecipient &&
-    isGridBalancePayoutCorridor(payoutCorridorRow)
-
-  const isProviderBalancePayout = isYcBalancePayout || isGridBalancePayout
-
-  const { data: ycSendRates = [], isLoading: ycSendRatesLoading } = useYcSendExchangeRates(receiveCurrency, {
-    enabled: isYcBalancePayout,
-  })
-
-  const { data: gridSendRates = [], isLoading: gridSendRatesLoading } = useGridSendExchangeRates(receiveCurrency, {
-    enabled: isGridBalancePayout,
-  })
-
-  const providerPayoutRates = isGridBalancePayout ? gridSendRates : ycSendRates
-
   const ycPayoutCustomerRate = useMemo(() => {
     if (!isProviderBalancePayout) return null
     const send = String(sendCurrency || '').trim().toUpperCase()
     const receive = String(receiveCurrency || '').trim().toUpperCase()
-    const row = providerPayoutRates.find(
+    const row = providerSendRates.find(
       (r) =>
         String(r.from_currency || '').toUpperCase() === send &&
         String(r.to_currency || '').toUpperCase() === receive,
     )
     return row?.rate ?? null
-  }, [isProviderBalancePayout, providerPayoutRates, sendCurrency, receiveCurrency])
+  }, [isProviderBalancePayout, providerSendRates, sendCurrency, receiveCurrency])
 
   const ycPayoutRateMap = useMemo(() => {
     if (!ycPayoutCustomerRate) return {}
@@ -803,19 +832,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const hasSendPreviewRateForPair = useMemo(() => {
     if (isProviderBalancePayout) return Boolean(ycPayoutCustomerRate)
+    if (isNoahBalancePayout) return hasNoahRateForPair
     return hasNoahRateForPair
-  }, [isProviderBalancePayout, ycPayoutCustomerRate, hasNoahRateForPair])
+  }, [isProviderBalancePayout, isNoahBalancePayout, ycPayoutCustomerRate, hasNoahRateForPair])
 
   const noahRatesLoading =
     needsNoahRateForSend &&
-    !isProviderBalancePayout &&
+    isNoahBalancePayout &&
     !hasSendPreviewRateForPair &&
     !noahRatesFetched
 
   const providerPayoutRateLoading =
-    isProviderBalancePayout &&
-    !ycPayoutCustomerRate &&
-    (isGridBalancePayout ? gridSendRatesLoading : ycSendRatesLoading)
+    isProviderBalancePayout && !ycPayoutCustomerRate && providerSendRatesLoading
 
   const exchangePreviewReady =
     !showCrossCurrencyExchangeUi ||
@@ -824,7 +852,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       ? Boolean(ycFlow.customerRate)
       : isProviderBalancePayout
         ? Boolean(ycPayoutCustomerRate)
-        : !needsNoahRateForSend || hasSendPreviewRateForPair)
+        : isNoahBalancePayout
+          ? hasNoahRateForPair || noahRatesFetched
+          : !needsNoahRateForSend || hasSendPreviewRateForPair)
 
   const flowAmounts = useMemo(() => {
     if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) {
@@ -870,16 +900,25 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }, [recipient?.id, selectedOtherCurrency, tlcPayInRail])
 
   const ycPayoutLimits = useMemo(() => {
-    if (!isYcBalancePayout || !payoutCountryCode) return null
+    if ((!isYcBalancePayout && !isGridBalancePayout) || !payoutCountryCode) return null
+    if (isGridBalancePayout) {
+      return resolveGridPayoutLimits({
+        country: payoutCountryCode,
+        currency: receiveCurrency,
+        rail: payoutRail,
+      })
+    }
     return resolveYcPayoutLimits({
       country: payoutCountryCode,
       currency: receiveCurrency,
       rail: payoutRail,
     })
-  }, [isYcBalancePayout, payoutCountryCode, receiveCurrency, payoutRail])
+  }, [isYcBalancePayout, isGridBalancePayout, payoutCountryCode, receiveCurrency, payoutRail])
 
   const ycPayoutMinReceive = useMemo(() => {
-    if (!isYcBalancePayout || !ycPayoutCustomerRate || !ycPayoutLimits) return null
+    if ((!isYcBalancePayout && !isGridBalancePayout) || !ycPayoutCustomerRate || !ycPayoutLimits) {
+      return null
+    }
     return resolveEffectiveYcBalancePayoutMinReceive({
       customerRate: ycPayoutCustomerRate,
       receiveCurrency,
@@ -888,6 +927,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     })
   }, [
     isYcBalancePayout,
+    isGridBalancePayout,
     ycPayoutCustomerRate,
     receiveCurrency,
     ycPayoutLimits,
@@ -913,15 +953,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !isEasetagRecipient &&
     !isWalletRecipient &&
     !isYcBalancePayout &&
-    (isGridBalancePayout ||
-      selectedPaymentMethod === 'balance' ||
+    !isGridBalancePayout &&
+    (selectedPaymentMethod === 'balance' ||
       (selectedPaymentMethod === 'otherCurrency' && Boolean(selectedOtherCurrency)))
 
   const ycPayoutMinEnforcementEnabled =
     Boolean(recipient) &&
     !isEasetagRecipient &&
     !isWalletRecipient &&
-    isYcBalancePayout &&
+    (isYcBalancePayout || isGridBalancePayout) &&
     Boolean(ycPayoutCustomerRate && ycPayoutMinReceive)
 
   const payoutMinSeedKey = recipient
@@ -979,6 +1019,63 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       setSendAmount(formatAmount(amount.toFixed(2)))
     },
   })
+
+  const effectivePayoutMinReceive =
+    isProviderBalancePayout && ycPayoutMinReceive != null
+      ? ycPayoutMinReceive
+      : payoutMinReceive
+
+  const payoutReceiveBelowMin =
+    effectivePayoutMinReceive != null &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    receiveAmount > 0 &&
+    receiveAmount < effectivePayoutMinReceive
+
+  const payoutAmountLimitCheck = useMemo(() => {
+    if (
+      !recipient ||
+      isEasetagRecipient ||
+      isWalletRecipient ||
+      selectedPaymentMethod !== 'balance' ||
+      receiveAmount <= 0
+    ) {
+      return { ok: true as const }
+    }
+    if (!exchangePreviewReady) return { ok: true as const }
+    return validateBalancePayoutAmountForProvider({
+      providerRouting: payoutCorridorRow?.provider_routing,
+      sourceBalanceCurrency: sendCurrency,
+      amountEntryMode,
+      receiveAmount,
+      sendAmount: sendingAmount,
+      customerRate:
+        isProviderBalancePayout && ycPayoutCustomerRate ? ycPayoutCustomerRate : exchangeRate,
+      sendCurrency,
+      receiveCurrency,
+      rail: payoutRail,
+      noahHints: payoutHints,
+      ycLimits: ycPayoutLimits,
+    })
+  }, [
+    recipient,
+    isEasetagRecipient,
+    isWalletRecipient,
+    selectedPaymentMethod,
+    receiveAmount,
+    exchangePreviewReady,
+    payoutCorridorRow?.provider_routing,
+    sendCurrency,
+    amountEntryMode,
+    sendingAmount,
+    isProviderBalancePayout,
+    ycPayoutCustomerRate,
+    exchangeRate,
+    receiveCurrency,
+    payoutRail,
+    payoutHints,
+    ycPayoutLimits,
+  ])
 
   const feeAmount = 0
   const totalAmount =
@@ -1052,6 +1149,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     receiveAmount > 0 &&
     Boolean(recipient?.id)
 
+  const payoutQuotePrefetchReady =
+    needsBackgroundPayoutQuote &&
+    exchangePreviewReady &&
+    !payoutReceiveBelowMin &&
+    payoutAmountLimitCheck.ok
+
   const payoutQuotePrefetchKey = useMemo(() => {
     if (!needsBackgroundPayoutQuote || !recipient?.id) return ''
     return [
@@ -1074,6 +1177,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   useEffect(() => {
     if (!debouncedPayoutQuotePrefetchKey || !recipient?.id) return
+    if (!payoutQuotePrefetchReady) return
     const meta = {
       recipientId: recipient.id,
       amountEntryMode,
@@ -1094,7 +1198,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       meta,
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedPayoutQuotePrefetchKey, recipient?.id])
+  }, [debouncedPayoutQuotePrefetchKey, recipient?.id, payoutQuotePrefetchReady])
 
   const needsBackgroundWalletSendQuote =
     selectedPaymentMethod === 'balance' &&
@@ -1181,18 +1285,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const exchangeInfoAmountPositive =
     !!(recipient && sendAmount && Number.parseFloat(sendAmount.replace(/,/g, '')) > 0)
-
-  const effectivePayoutMinReceive =
-    isYcBalancePayout && ycPayoutMinReceive != null
-      ? ycPayoutMinReceive
-      : payoutMinReceive
-
-  const payoutReceiveBelowMin =
-    effectivePayoutMinReceive != null &&
-    !isEasetagRecipient &&
-    !isWalletRecipient &&
-    receiveAmount > 0 &&
-    receiveAmount < effectivePayoutMinReceive
 
   const sendButtonDisabled =
     isContinuePending ||

@@ -1,13 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   resolvePayInProvider,
+  resolveGridPayInLimits,
   resolveYcPayInLimits,
   unwrapNoahFieldsSchema,
   validatePayInAmountForProvider,
   type PayoutRail,
 } from "@easner/shared"
 import { loadCorridorRouting } from "@/lib/payout-providers"
-import { resolveGridReceiveRailAvailability } from "@/lib/grid/receive-rails"
 import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 
@@ -59,15 +59,11 @@ export async function validateFundBalancePayInAmountLimits(input: {
       channel: (channel as Record<string, unknown> | null) ?? null,
     })
   } else if (provider === "grid") {
-    const rails = await resolveGridReceiveRailAvailability(input.admin, {
-      countryCode,
-      currencyCode,
+    gridLimits = resolveGridPayInLimits({
+      country: countryCode,
+      currency: currencyCode,
+      rail,
     })
-    const railInfo = rails[rail]
-    gridLimits = {
-      minLocalPayIn: railInfo.minLocalPayIn,
-      maxLocalPayIn: railInfo.maxLocalPayIn,
-    }
   }
 
   const check = validatePayInAmountForProvider({

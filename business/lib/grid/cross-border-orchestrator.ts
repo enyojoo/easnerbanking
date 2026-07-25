@@ -13,6 +13,7 @@ import type { GridQuote } from "./types"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
 import { isGridLocalPayInEnabledForCorridor } from "./grid-receive-gate"
+import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 
 export type GridCrossBorderQuoteResult = {
   quoteId: string
@@ -103,6 +104,17 @@ export async function createGridCrossBorderQuote(input: {
 
   const receiveAmount = Number(input.receiveAmount)
   const sourceAmount = Math.round((receiveAmount / customerRate) * 100) / 100
+
+  const payInLimitCheck = await validateFundBalancePayInAmountLimits({
+    admin: input.admin,
+    countryCode: sourceCountry,
+    currencyCode: sourceCurrency,
+    rail: payInRail,
+    localPayIn: sourceAmount,
+  })
+  if (!payInLimitCheck.ok) {
+    throw new Error(payInLimitCheck.message)
+  }
 
   const quoteBody = buildGridCrossBorderQuoteBody({
     customerId,

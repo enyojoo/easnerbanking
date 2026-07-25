@@ -26,6 +26,7 @@ import {
   YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
   validateYcFundBalancePayInAmount,
   validatePayInAmountForProvider,
+  unwrapNoahFieldsSchema,
   attestPayInPayment,
   REVIEW_ROW_LABELS,
   normalizeYcMomoPhone,
@@ -150,6 +151,7 @@ export function LocalDepositWizard({
   })
   const [isContinueLoading, setIsContinueLoading] = useState(false)
   const [payInProvider, setPayInProvider] = useState<"yellowcard" | "grid" | "noah">("yellowcard")
+  const [payInCorridorSchema, setPayInCorridorSchema] = useState<unknown>(null)
 
   const isMomo = rail === "mobile_money"
   const fundBalanceBase = fundBalanceApiBase(payInProvider)
@@ -163,7 +165,13 @@ export function LocalDepositWizard({
           `/api/payout-corridors?rail=${encodeURIComponent(rail)}`,
         )
         const data = (await res.json().catch(() => ({}))) as {
-          corridors?: Array<{ country_code?: string; currency_code?: string; metadata?: Record<string, unknown>; provider_routing?: unknown }>
+          corridors?: Array<{
+            country_code?: string
+            currency_code?: string
+            metadata?: Record<string, unknown>
+            provider_routing?: unknown
+            fields_schema?: unknown
+          }>
         }
         const row = (data.corridors ?? []).find(
           (c) =>
@@ -171,6 +179,7 @@ export function LocalDepositWizard({
             String(c.currency_code ?? "").toUpperCase() === localPayInCurrency.toUpperCase(),
         )
         if (!cancelled && row) {
+          setPayInCorridorSchema(row.fields_schema ?? null)
           setPayInProvider(
             resolvePayInProvider({
               providerRouting: row.provider_routing as never,
@@ -673,9 +682,20 @@ export function LocalDepositWizard({
                   : displayPreview.localPayIn,
               currency: localPayInCurrency,
               rail,
-              ycLimits: payInLimits,
+              gridLimits: payInLimits,
             })
-          : validateYcFundBalancePayInAmount({
+          : payInProvider === "noah"
+            ? validatePayInAmountForProvider({
+                provider: "noah",
+                localPayIn:
+                  displayPreview.estimatedTotalLocalPayIn > 0
+                    ? displayPreview.estimatedTotalLocalPayIn
+                    : displayPreview.localPayIn,
+                currency: localPayInCurrency,
+                rail,
+                noahHints: unwrapNoahFieldsSchema(payInCorridorSchema),
+              })
+            : validateYcFundBalancePayInAmount({
               amountEntryMode: amountMode,
               enteredAmount,
               previewLocalPayIn:

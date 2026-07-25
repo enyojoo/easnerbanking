@@ -21,13 +21,15 @@ import {
   convertNoahSendFlowAmounts,
   hasNoahSendRateRow,
   isWideSendAmountSymbol,
-  mapGridBalancePayoutRateRows,
+  mapProviderBalancePayoutRateRows,
+  providerSendRatesQueryPath,
   noahSendRatesQueryPath,
   noahWalletRowsToRateMap,
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
   useDebouncedValue,
-  type GridWalletRateRow,
+  isNoahBalancePayoutCorridor,
+  resolveBalancePayoutProvider,
   type NoahWalletRateRow,
 } from "@easner/shared"
 import { getCurrencySymbol, getSendAmountFieldSymbol } from "@/lib/utils"
@@ -114,6 +116,7 @@ import {
   isGridBalancePayoutCorridor,
   resolveEffectiveYcBalancePayoutMinReceive,
   resolveYcPayoutLimits,
+  resolveGridPayoutLimits,
   getYcBusinessPayoutMin,
   resolvePayoutCountryCode,
   YC_DIRECT_SETTLEMENT_MIN_SEND_USDC_EXCLUSIVE,
@@ -415,38 +418,6 @@ export default function SendPage() {
   }, [showThroughLocalCurrency, paymentMethod, otherPaymentMethod, otherCurrency])
 
   useEffect(() => {
-    const dest = (recipient?.currency || "").trim().toUpperCase()
-    if (!dest || dest.length !== 3 || isWalletRecipient) {
-      if (!isWalletRecipient) setNoahRatesLoading(false)
-      return
-    }
-    let cancelled = false
-    setNoahRatesLoading(true)
-    void (async () => {
-      try {
-        const res = await fetchWithSession(noahSendRatesQueryPath(dest))
-        const data = (await res.json().catch(() => ({}))) as {
-          rates?: NoahWalletRateRow[]
-        }
-        if (!res.ok || cancelled) return
-        const rows = data.rates || []
-        setNoahRateRows(rows)
-        setNoahFxRates(noahWalletRowsToRateMap(rows))
-      } catch {
-        if (!cancelled) {
-          setNoahFxRates({})
-          setNoahRateRows([])
-        }
-      } finally {
-        if (!cancelled) setNoahRatesLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [recipient?.currency, isWalletRecipient])
-
-  useEffect(() => {
     if (isWalletRecipient && amountEntryMode !== "receive") {
       setAmountEntryMode("receive")
     }
@@ -725,97 +696,111 @@ export default function SendPage() {
     !isWalletRecipient &&
     isGridBalancePayoutCorridor(payoutCorridorRow)
 
-  const [ycPayoutCustomerRate, setYcPayoutCustomerRate] = useState<number | null>(null)
-  const [gridPayoutCustomerRate, setGridPayoutCustomerRate] = useState<number | null>(null)
+  const isNoahBalancePayout =
+    isBalanceSource &&
+    !isEasetagRecipient &&
+    !isWalletRecipient &&
+    isNoahBalancePayoutCorridor(payoutCorridorRow)
+
+  const isProviderBalancePayout = isYcBalancePayout || isGridBalancePayout
+
+  const balancePayoutProvider = resolveBalancePayoutProvider(payoutCorridorRow)
+
+  const [providerPayoutCustomerRate, setProviderPayoutCustomerRate] = useState<number | null>(
+    null,
+  )
 
   useEffect(() => {
     const dest = (recipient?.currency || "").trim().toUpperCase()
-    if (!isGridBalancePayout || !dest || dest.length !== 3) {
-      setGridPayoutCustomerRate(null)
+    if (!dest || dest.length !== 3 || isWalletRecipient || !isNoahBalancePayout) {
+      if (!isNoahBalancePayout) {
+        setNoahFxRates({})
+        setNoahRateRows([])
+        setNoahRatesLoading(false)
+      }
       return
     }
     let cancelled = false
+    setNoahRatesLoading(true)
     void (async () => {
       try {
-        const res = await fetchWithSession(
-          `/api/fx/grid-rates?destinations=${encodeURIComponent(dest)}`,
-        )
+        const res = await fetchWithSession(noahSendRatesQueryPath(dest))
         const data = (await res.json().catch(() => ({}))) as {
-          rates?: GridWalletRateRow[]
+          rates?: NoahWalletRateRow[]
         }
         if (!res.ok || cancelled) return
-        const send = String(sendCurrency || "").trim().toUpperCase()
-        const mapped = mapGridBalancePayoutRateRows(data.rates ?? [])
-        const row = mapped.find(
-          (r) =>
-            String(r.from_currency || "").toUpperCase() === send &&
-            String(r.to_currency || "").toUpperCase() === dest,
-        )
-        setGridPayoutCustomerRate(row?.rate ?? null)
+        const rows = data.rates || []
+        setNoahRateRows(rows)
+        setNoahFxRates(noahWalletRowsToRateMap(rows))
       } catch {
-        if (!cancelled) setGridPayoutCustomerRate(null)
+        if (!cancelled) {
+          setNoahFxRates({})
+          setNoahRateRows([])
+        }
+      } finally {
+        if (!cancelled) setNoahRatesLoading(false)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [isGridBalancePayout, recipient?.currency, sendCurrency])
-
-  const gridPayoutRateMap = useMemo(() => {
-    if (!gridPayoutCustomerRate) return {}
-    const send = String(sendCurrency || "").trim().toUpperCase()
-    const receive = String(receiveCurrency || "").trim().toUpperCase()
-    return { [`${send}_${receive}`]: gridPayoutCustomerRate }
-  }, [sendCurrency, receiveCurrency, gridPayoutCustomerRate])
+  }, [recipient?.currency, isWalletRecipient, isNoahBalancePayout])
 
   useEffect(() => {
     const dest = (recipient?.currency || "").trim().toUpperCase()
-    if (!isYcBalancePayout || !dest || dest.length !== 3) {
-      setYcPayoutCustomerRate(null)
+    if (
+      !isProviderBalancePayout ||
+      !balancePayoutProvider ||
+      !dest ||
+      dest.length !== 3
+    ) {
+      setProviderPayoutCustomerRate(null)
       return
     }
     let cancelled = false
     void (async () => {
       try {
         const res = await fetchWithSession(
-          `/api/fx/yc-rates?destinations=${encodeURIComponent(dest)}`,
+          providerSendRatesQueryPath(balancePayoutProvider, dest),
         )
         const data = (await res.json().catch(() => ({}))) as {
           rates?: Array<{ from_currency: string; to_currency: string; rate: number }>
         }
         if (!res.ok || cancelled) return
         const send = String(sendCurrency || "").trim().toUpperCase()
-        const row = (data.rates ?? []).find(
+        const mapped = mapProviderBalancePayoutRateRows(balancePayoutProvider, data.rates ?? [])
+        const row = mapped.find(
           (r) =>
             String(r.from_currency || "").toUpperCase() === send &&
             String(r.to_currency || "").toUpperCase() === dest,
         )
-        setYcPayoutCustomerRate(row?.rate ?? null)
+        setProviderPayoutCustomerRate(row?.rate ?? null)
       } catch {
-        if (!cancelled) setYcPayoutCustomerRate(null)
+        if (!cancelled) setProviderPayoutCustomerRate(null)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [isYcBalancePayout, recipient?.currency, sendCurrency])
+  }, [
+    isProviderBalancePayout,
+    balancePayoutProvider,
+    recipient?.currency,
+    sendCurrency,
+  ])
 
-  const ycPayoutRateMap = useMemo(() => {
-    if (!ycPayoutCustomerRate) return {}
+  const providerPayoutRateMap = useMemo(() => {
+    if (!providerPayoutCustomerRate) return {}
     const send = String(sendCurrency || "").trim().toUpperCase()
     const receive = String(receiveCurrency || "").trim().toUpperCase()
-    return { [`${send}_${receive}`]: ycPayoutCustomerRate }
-  }, [sendCurrency, receiveCurrency, ycPayoutCustomerRate])
+    return { [`${send}_${receive}`]: providerPayoutCustomerRate }
+  }, [sendCurrency, receiveCurrency, providerPayoutCustomerRate])
 
   const providerSendPreviewAmounts = useMemo(() => {
     if (isWalletRecipient || !recipient || enteredAmount <= 0) return null
     if (otherCurrency && showThroughLocalCurrency) return null
     const rateMap =
-      isGridBalancePayout && gridPayoutCustomerRate
-        ? gridPayoutRateMap
-        : isYcBalancePayout && ycPayoutCustomerRate
-          ? ycPayoutRateMap
-          : null
+      isProviderBalancePayout && providerPayoutCustomerRate ? providerPayoutRateMap : null
     if (!rateMap) return null
     return convertNoahSendFlowAmounts({
       direction: amountEntryMode,
@@ -830,43 +815,64 @@ export default function SendPage() {
     enteredAmount,
     otherCurrency,
     showThroughLocalCurrency,
-    isGridBalancePayout,
-    gridPayoutCustomerRate,
-    gridPayoutRateMap,
-    isYcBalancePayout,
-    ycPayoutCustomerRate,
-    ycPayoutRateMap,
+    isProviderBalancePayout,
+    providerPayoutCustomerRate,
+    providerPayoutRateMap,
     amountEntryMode,
     sendCurrency,
     receiveCurrency,
   ])
 
   const displaySendAmount = providerSendPreviewAmounts?.sendAmount ?? sendAmount
+  const displayReceiveAmount = providerSendPreviewAmounts?.receiveAmount ?? receiveAmount
   const displayForwardRate = providerSendPreviewAmounts?.forwardRate ?? forwardRate
   const displayRateLabel = hasFx
     ? formatSendRateLabel(sendCurrency, receiveCurrency, displayForwardRate)
     : null
 
+  const previewBalanceDebitAmount =
+    quotedTotalDebited != null && quotedTotalDebited > 0
+      ? quotedTotalDebited
+      : displaySendAmount
+
+  const hasValidSendRateForPair =
+    !needsNoahRateForSend ||
+    (isProviderBalancePayout
+      ? Boolean(providerPayoutCustomerRate)
+      : isNoahBalancePayout
+        ? hasValidNoahRateForPair
+        : hasValidNoahRateForPair)
+
+  const providerRatesLoading =
+    isProviderBalancePayout && !providerPayoutCustomerRate
+
   const ycPayoutLimits = useMemo(() => {
-    if (!isYcBalancePayout || !payoutCountryCode) return null
+    if (!isProviderBalancePayout || !payoutCountryCode) return null
+    if (isGridBalancePayout) {
+      return resolveGridPayoutLimits({
+        country: payoutCountryCode,
+        currency: receiveCurrency,
+        rail: payoutRail,
+      })
+    }
     return resolveYcPayoutLimits({
       country: payoutCountryCode,
       currency: receiveCurrency,
       rail: payoutRail,
     })
-  }, [isYcBalancePayout, payoutCountryCode, receiveCurrency, payoutRail])
+  }, [isProviderBalancePayout, isGridBalancePayout, payoutCountryCode, receiveCurrency, payoutRail])
 
   const ycPayoutMinReceive = useMemo(() => {
-    if (!isYcBalancePayout || !ycPayoutCustomerRate || !ycPayoutLimits) return null
+    if (!isProviderBalancePayout || !providerPayoutCustomerRate || !ycPayoutLimits) return null
     return resolveEffectiveYcBalancePayoutMinReceive({
-      customerRate: ycPayoutCustomerRate,
+      customerRate: providerPayoutCustomerRate,
       receiveCurrency,
       limits: ycPayoutLimits,
       businessMinReceive: getYcBusinessPayoutMin(receiveCurrency, payoutRail),
     })
   }, [
-    isYcBalancePayout,
-    ycPayoutCustomerRate,
+    isProviderBalancePayout,
+    providerPayoutCustomerRate,
     receiveCurrency,
     ycPayoutLimits,
     payoutRail,
@@ -880,20 +886,17 @@ export default function SendPage() {
   }, [tlcFlow.payInCurrency, tlcFlow.customerRate, receiveCurrency])
 
   const payoutEnforcementRateMap =
-    isGridBalancePayout && gridPayoutCustomerRate
-      ? gridPayoutRateMap
-      : isYcBalancePayout && ycPayoutCustomerRate
-        ? ycPayoutRateMap
-        : paymentMethod === "otherCurrency" && showThroughLocalCurrency
-          ? tlcFxRateMap
-          : noahFxRates
+    isProviderBalancePayout && providerPayoutCustomerRate
+      ? providerPayoutRateMap
+      : paymentMethod === "otherCurrency" && showThroughLocalCurrency
+        ? tlcFxRateMap
+        : noahFxRates
 
   const payoutMinEnforcementEnabled =
     Boolean(recipient) &&
     !isEasetagRecipient &&
     !isWalletRecipient &&
-    !isYcBalancePayout &&
-    !isGridBalancePayout &&
+    !isProviderBalancePayout &&
     (isBalanceSource ||
       (paymentMethod === "otherCurrency" && Boolean(otherCurrency)))
 
@@ -901,8 +904,8 @@ export default function SendPage() {
     Boolean(recipient) &&
     !isEasetagRecipient &&
     !isWalletRecipient &&
-    isYcBalancePayout &&
-    Boolean(ycPayoutCustomerRate && ycPayoutMinReceive)
+    isProviderBalancePayout &&
+    Boolean(providerPayoutCustomerRate && ycPayoutMinReceive)
 
   const payoutMinSeedKey = recipient
     ? `${recipient.id}:${receiveCurrency}:${payoutRail}:${paymentMethod}:${otherCurrency ?? ""}`
@@ -931,8 +934,8 @@ export default function SendPage() {
     enteredAmount,
     sendCurrency,
     receiveCurrency,
-    customerRate: ycPayoutCustomerRate,
-    rateMap: ycPayoutRateMap,
+    customerRate: providerPayoutCustomerRate,
+    rateMap: providerPayoutRateMap,
     onApplyEnteredAmount: (amount) => {
       setAmountStr(formatAmountForDisplay(amount.toFixed(2)))
     },
@@ -983,27 +986,74 @@ export default function SendPage() {
   })
 
   const effectivePayoutMinReceive =
-    isYcBalancePayout && ycPayoutMinReceive != null
+    isProviderBalancePayout && ycPayoutMinReceive != null
       ? ycPayoutMinReceive
       : payoutMinReceive
 
   const payoutReceiveBelowMin =
     effectivePayoutMinReceive != null &&
-    receiveAmount > 0 &&
-    receiveAmount < effectivePayoutMinReceive
+    displayReceiveAmount > 0 &&
+    displayReceiveAmount < effectivePayoutMinReceive
+
+  const payoutAmountLimitCheck = useMemo(() => {
+    if (
+      !recipient ||
+      isEasetagRecipient ||
+      isWalletRecipient ||
+      !isBalanceSource ||
+      displayReceiveAmount <= 0
+    ) {
+      return { ok: true as const }
+    }
+    if (!hasValidSendRateForPair) return { ok: true as const }
+    return validateBalancePayoutAmountForProvider({
+      providerRouting: payoutCorridorRow?.provider_routing,
+      sourceBalanceCurrency: sendCurrency,
+      amountEntryMode,
+      receiveAmount: displayReceiveAmount,
+      sendAmount: displaySendAmount,
+      customerRate:
+        isProviderBalancePayout && providerPayoutCustomerRate
+          ? providerPayoutCustomerRate
+          : forwardRate,
+      sendCurrency,
+      receiveCurrency,
+      rail: payoutRail,
+      noahHints: payoutHints,
+      ycLimits: ycPayoutLimits,
+    })
+  }, [
+    recipient,
+    isEasetagRecipient,
+    isWalletRecipient,
+    isBalanceSource,
+    displayReceiveAmount,
+    hasValidSendRateForPair,
+    payoutCorridorRow?.provider_routing,
+    sendCurrency,
+    amountEntryMode,
+    displaySendAmount,
+    isProviderBalancePayout,
+    providerPayoutCustomerRate,
+    forwardRate,
+    receiveCurrency,
+    payoutRail,
+    payoutHints,
+    ycPayoutLimits,
+  ])
 
   const walletReceiveBelowMin =
     isWalletRecipient && receiveAmount > 0 && receiveAmount < walletMinReceive
 
   const canContinueBalance =
     recipient !== null &&
-    receiveAmount > 0 &&
+    displayReceiveAmount > 0 &&
     sourceAccountId !== null &&
     sourceAccount &&
-    sourceAccount.availableBalance >= balanceDebitAmount &&
+    sourceAccount.availableBalance >= previewBalanceDebitAmount &&
     isBalanceSource &&
     tier1Complete &&
-    (isWalletRecipient || hasValidNoahRateForPair) &&
+    (isWalletRecipient || hasValidSendRateForPair) &&
     !payoutReceiveBelowMin &&
     !walletReceiveBelowMin &&
     (!needsProfileBeforeEasenetSend || (hasData && !profileLoading))
@@ -1022,8 +1072,8 @@ export default function SendPage() {
   const hasInsufficientBalance =
     isBalanceSource &&
     sourceAccount &&
-    receiveAmount > 0 &&
-    sourceAccount.availableBalance < balanceDebitAmount
+    displayReceiveAmount > 0 &&
+    sourceAccount.availableBalance < previewBalanceDebitAmount
 
   const formatSwitchAmount = (raw: number): string => {
     const rounded = Math.round((Number.isFinite(raw) ? raw : 0) * 100) / 100
@@ -1035,14 +1085,14 @@ export default function SendPage() {
   const handleToggleAmountDirection = () => {
     if (!recipient || !hasFx) return
     if (amountEntryMode === "receive") {
-      if (sendAmount <= 0) return
+      if (displaySendAmount <= 0) return
       setAmountEntryMode("send")
-      setAmountStr(formatSwitchAmount(sendAmount))
+      setAmountStr(formatSwitchAmount(displaySendAmount))
       return
     }
-    if (receiveAmount <= 0) return
+    if (displayReceiveAmount <= 0) return
     setAmountEntryMode("receive")
-    setAmountStr(formatSwitchAmount(receiveAmount))
+    setAmountStr(formatSwitchAmount(displayReceiveAmount))
   }
 
   const amountInputCurrency = amountEntryMode === "receive" ? receiveCurrency : sendCurrency
@@ -1056,7 +1106,7 @@ export default function SendPage() {
     : 52
   const shortfallAmount =
     hasInsufficientBalance && sourceAccount
-      ? sendAmount - sourceAccount.availableBalance
+      ? previewBalanceDebitAmount - sourceAccount.availableBalance
       : 0
 
   const getSourceDisplayLabel = () => {
@@ -1080,7 +1130,13 @@ export default function SendPage() {
     isBalanceSource &&
     !isEasetagRecipient &&
     !isWalletRecipient &&
-    receiveAmount > 0
+    displayReceiveAmount > 0
+
+  const payoutQuotePrefetchReady =
+    needsPayoutQuoteBeforeConfirm &&
+    hasValidSendRateForPair &&
+    !payoutReceiveBelowMin &&
+    payoutAmountLimitCheck.ok
 
   const needsWalletQuoteBeforeConfirm =
     isBalanceSource &&
@@ -1093,14 +1149,14 @@ export default function SendPage() {
   }, [recipient?.id, receiveAmount, sendCurrency])
 
   const payoutQuotePrefetchKey = useMemo(() => {
-    if (!recipient?.id || !(receiveAmount > 0)) return ""
+    if (!recipient?.id || !(displayReceiveAmount > 0)) return ""
     return [
       recipient.id,
       amountEntryMode,
-      amountEntryMode === "send" ? sendAmount : receiveAmount,
+      amountEntryMode === "send" ? displaySendAmount : displayReceiveAmount,
       sendCurrency,
     ].join("|")
-  }, [recipient?.id, amountEntryMode, sendAmount, receiveAmount, sendCurrency])
+  }, [recipient?.id, amountEntryMode, displaySendAmount, displayReceiveAmount, sendCurrency])
 
   const payoutQuoteCacheKey = useMemo(() => {
     if (!payoutQuotePrefetchKey) return ""
@@ -1166,10 +1222,12 @@ export default function SendPage() {
           headers,
           body: JSON.stringify({
             recipientId: recipient.id,
-            receiveAmount,
+            receiveAmount: displayReceiveAmount,
             sourceBalanceCurrency: sendCurrency,
             amountEntryMode,
-            ...(amountEntryMode === "send" && sendAmount > 0 ? { sendAmount } : {}),
+            ...(amountEntryMode === "send" && displaySendAmount > 0
+              ? { sendAmount: displaySendAmount }
+              : {}),
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
           }),
@@ -1184,7 +1242,10 @@ export default function SendPage() {
         const previewMeta: PayoutQuoteStashMeta = {
           recipientId: recipient.id,
           amountEntryMode,
-          entryAmount: amountEntryMode === "send" && sendAmount > 0 ? sendAmount : receiveAmount,
+          entryAmount:
+            amountEntryMode === "send" && displaySendAmount > 0
+              ? displaySendAmount
+              : displayReceiveAmount,
           receiveCurrency,
           sourceBalanceCurrency: sendCurrency,
           ...(note.trim() ? { note: note.trim() } : {}),
@@ -1210,8 +1271,8 @@ export default function SendPage() {
     needsPayoutQuoteBeforeConfirm,
     payoutQuoteCacheKey,
     recipient?.id,
-    receiveAmount,
-    sendAmount,
+    displayReceiveAmount,
+    displaySendAmount,
     amountEntryMode,
     sendCurrency,
     note,
@@ -1286,9 +1347,15 @@ export default function SendPage() {
 
   useEffect(() => {
     if (!needsPayoutQuoteBeforeConfirm || !debouncedPayoutQuotePrefetchKey || !recipient?.id) return
+    if (!payoutQuotePrefetchReady) return
     void fetchPayoutQuote()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsPayoutQuoteBeforeConfirm, debouncedPayoutQuotePrefetchKey, recipient?.id])
+  }, [
+    needsPayoutQuoteBeforeConfirm,
+    debouncedPayoutQuotePrefetchKey,
+    recipient?.id,
+    payoutQuotePrefetchReady,
+  ])
 
   useEffect(() => {
     if (!debouncedCrossBorderBankQuotePrefetchKey || !recipient?.id || !otherCurrency) return
@@ -1332,9 +1399,12 @@ export default function SendPage() {
         providerRouting: payoutCorridorRow?.provider_routing,
         sourceBalanceCurrency: sendCurrency,
         amountEntryMode,
-        receiveAmount,
-        sendAmount,
-        customerRate: forwardRate,
+        receiveAmount: displayReceiveAmount,
+        sendAmount: displaySendAmount,
+        customerRate:
+          isProviderBalancePayout && providerPayoutCustomerRate
+            ? providerPayoutCustomerRate
+            : forwardRate,
         sendCurrency,
         receiveCurrency,
         rail: payoutRail,
@@ -1550,9 +1620,9 @@ export default function SendPage() {
                   <span className="text-destructive text-xs">
                     {tlcFlow.quoteError ?? "Exchange rate unavailable. Try again shortly."}
                   </span>
-                ) : needsNoahRateForSend && noahRatesLoading ? (
+                ) : needsNoahRateForSend && (noahRatesLoading || providerRatesLoading) ? (
                   <Skeleton className="h-4 w-52 max-w-full" />
-                ) : needsNoahRateForSend && !hasValidNoahRateForPair ? (
+                ) : needsNoahRateForSend && !hasValidSendRateForPair ? (
                   <span className="text-destructive text-xs">
                     Exchange rate unavailable. Try again shortly.
                   </span>

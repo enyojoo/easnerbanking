@@ -304,6 +304,16 @@ export function validateNoahPayInLocalAmount(input: {
       message: `Minimum deposit is ${formatMoneyDisplay(effectiveMin, currency)}.`,
     }
   }
+  const maxRaw = input.hints?.limits?.max
+  if (maxRaw != null && String(maxRaw).trim() !== "") {
+    const max = Number.parseFloat(String(maxRaw).replace(/,/g, ""))
+    if (Number.isFinite(max) && max > 0 && amount > max) {
+      return {
+        ok: false,
+        message: `Maximum deposit is ${formatMoneyDisplay(max, currency)}.`,
+      }
+    }
+  }
   return { ok: true }
 }
 

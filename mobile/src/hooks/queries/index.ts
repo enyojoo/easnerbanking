@@ -26,6 +26,10 @@ export { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from './use-n
 export { useYcSendExchangeRates, prefetchYcSendExchangeRates } from './use-yc-send-exchange-rates'
 export { useGridSendExchangeRates, prefetchGridSendExchangeRates } from './use-grid-send-exchange-rates'
 export {
+  useProviderSendExchangeRates,
+  prefetchProviderSendExchangeRates,
+} from './use-provider-send-exchange-rates'
+export {
   useCryptoSendExchangeRates,
   prefetchCryptoSendExchangeRates,
 } from './use-crypto-send-exchange-rates'

@@ -12,6 +12,7 @@ import {
 import { gridFetch } from "./http"
 import { gridMinorUnits } from "./external-account"
 import { findGridPayInRate, listGridRates } from "@/lib/fx/grid-rates"
+import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 import { isGridLocalPayInEnabledForCorridor } from "./grid-receive-gate"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
@@ -82,6 +83,17 @@ export async function previewGridFundBalanceQuote(input: {
     ycSellRate: payInRate?.grid_mid ?? customerRate,
     rail: input.rail,
   })
+
+  const limitCheck = await validateFundBalancePayInAmountLimits({
+    admin: input.admin,
+    countryCode: country,
+    currencyCode: currency,
+    rail: input.rail,
+    localPayIn: provisional.localPayIn,
+  })
+  if (!limitCheck.ok) {
+    throw new Error(limitCheck.message)
+  }
 
   return {
     localPayIn,

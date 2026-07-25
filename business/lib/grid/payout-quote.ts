@@ -6,6 +6,8 @@ import {
   normalizePayoutReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
   buildLegacyNoahSettlementFromLeg,
+  resolveGridPayoutLimits,
+  validateBalancePayoutAmountForProvider,
   type PayoutSettlementLeg,
 } from "@easner/shared"
 import {
@@ -139,6 +141,27 @@ export async function lockGridBalancePayoutQuote(
     receiveCurrency,
     normalizeReceive: normalizePayoutReceiveAmountForCurrency,
   })
+
+  const gridLimits = resolveGridPayoutLimits({
+    country: countryCode,
+    currency: receiveCurrency,
+    rail,
+  })
+  const limitCheck = validateBalancePayoutAmountForProvider({
+    provider: "grid",
+    sourceBalanceCurrency,
+    amountEntryMode,
+    receiveAmount: quoteReceiveAmount,
+    sendAmount: sendBudget,
+    customerRate,
+    sendCurrency: sourceBalanceCurrency,
+    receiveCurrency,
+    rail,
+    ycLimits: gridLimits,
+  })
+  if (!limitCheck.ok) {
+    throw new Error(limitCheck.message)
+  }
 
   const provisionalCrypto = roundUsd(quoteReceiveAmount / customerRate)
 

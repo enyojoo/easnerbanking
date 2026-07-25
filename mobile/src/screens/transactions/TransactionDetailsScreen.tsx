@@ -56,10 +56,10 @@ import {
 import {
   useTransactionDetail,
   useRecipientsList,
-  prefetchNoahSendExchangeRates,
   seedTransactionDetailFromDisk,
   unwrapTransactionDetailPayload,
 } from '../../hooks/queries'
+import { prefetchSendRatesForRecipient } from '../../lib/warmSendRateCaches'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   resolveSendAgainAmountPrefill,
@@ -668,7 +668,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       return
     }
 
-    void prefetchNoahSendExchangeRates(qc, recipient.currency)
+    prefetchSendRatesForRecipient(qc, recipient)
     const pref = String(
       transaction.ledger_currency ||
         transaction.payout_review?.send_currency ||

@@ -122,3 +122,21 @@ export function isGridBalancePayoutCorridor(
   if (!corridor) return false
   return resolvePrimaryPayoutProvider(corridor.provider_routing) === "grid"
 }
+
+/** Primary Office provider for USD balance → local fiat payout on this corridor. */
+export function resolveBalancePayoutProvider(
+  corridor: Pick<PayoutCorridorPublic, "provider_routing"> | null | undefined,
+): PayoutProviderId | null {
+  if (!corridor) return null
+  return resolvePrimaryPayoutProvider(corridor.provider_routing)
+}
+
+/** True when balance payout uses Noah sell/prepare (not YC direct or Grid quote lock). */
+export function isNoahBalancePayoutCorridor(
+  corridor: Pick<PayoutCorridorPublic, "provider_routing" | "noah_sell_available"> | null | undefined,
+): boolean {
+  if (!corridor) return false
+  return (
+    !isYcBalancePayoutCorridor(corridor) && !isGridBalancePayoutCorridor(corridor)
+  )
+}

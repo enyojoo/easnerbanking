@@ -32,6 +32,14 @@ const YC_PAYIN_BUSINESS_MIN_BANK: Record<string, number> = {
   USD: 20,
   EUR: 10,
   GBP: 10,
+  CAD: 10,
+  AED: 20,
+  CNY: 50,
+  EGP: 100,
+  PHP: 50,
+  THB: 50,
+  INR: 100,
+  IDR: 10_000,
   LKR: 500,
 }
 
@@ -49,6 +57,7 @@ const YC_PAYIN_BUSINESS_MIN_MOBILE: Record<string, number> = {
   MWK: 2000,
   BWP: 150,
   CDF: 10_000,
+  EGP: 100,
 }
 
 export function getYcBusinessPayInMin(

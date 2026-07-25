@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { resolveGridPayInLimits } from "@easner/shared"
 import {
   gridDiscoverySupportsCorridor,
   isMomoGridDiscovery,
@@ -71,7 +72,16 @@ export async function resolveGridReceiveRailAvailability(
       rail,
     })
     if (discoveryOk) {
-      out[rail] = { available: true, minLocalPayIn: null, maxLocalPayIn: null }
+      const limits = resolveGridPayInLimits({
+        country,
+        currency,
+        rail,
+      })
+      out[rail] = {
+        available: true,
+        minLocalPayIn: limits.minLocalPayIn,
+        maxLocalPayIn: limits.maxLocalPayIn,
+      }
     }
   }
 

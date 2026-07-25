@@ -20,6 +20,8 @@ import {
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
   validateYcFundBalancePayInAmount,
+  validatePayInAmountForProvider,
+  unwrapNoahFieldsSchema,
   REVIEW_ROW_LABELS,
   SEND_LOCAL_PAY_IN_BANK_CHIP,
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
@@ -208,6 +210,29 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
   const amountLimitCheck = useMemo(() => {
     if (!amountPositive || !ycFlow.customerRate) return { ok: true as const }
+    const localPayIn =
+      amountEntryMode === 'local' && enteredAmount > 0
+        ? enteredAmount
+        : previewLocalPayInForLimits
+
+    if (payInProvider === 'grid') {
+      return validatePayInAmountForProvider({
+        provider: 'grid',
+        localPayIn,
+        currency: localPayInCurrency,
+        rail: payInRail,
+        gridLimits: payInLimits,
+      })
+    }
+    if (payInProvider === 'noah') {
+      return validatePayInAmountForProvider({
+        provider: 'noah',
+        localPayIn,
+        currency: localPayInCurrency,
+        rail: payInRail,
+        noahHints: unwrapNoahFieldsSchema(payInCorridorRow?.fields_schema),
+      })
+    }
     return validateYcFundBalancePayInAmount({
       amountEntryMode,
       enteredAmount,
@@ -220,9 +245,11 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     amountPositive,
     enteredAmount,
     localPayInCurrency,
+    payInCorridorRow?.fields_schema,
     payInLimits,
+    payInProvider,
+    payInRail,
     ycFlow.customerRate,
-    displayPreview.localPayIn,
     previewLocalPayInForLimits,
   ])
 

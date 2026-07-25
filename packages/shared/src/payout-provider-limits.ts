@@ -161,7 +161,7 @@ export function validateBalancePayoutAmountForProvider(
   const customerRate = input.customerRate ?? 0
 
   if (
-    provider === "yellowcard" &&
+    (provider === "yellowcard" || provider === "grid") &&
     source === "USD" &&
     input.ycLimits &&
     Number.isFinite(customerRate) &&

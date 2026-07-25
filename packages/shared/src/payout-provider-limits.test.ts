@@ -103,6 +103,17 @@ describe("validatePayInAmountForProvider", () => {
     if (!result.ok) expect(result.message).toContain("1,000")
   })
 
+  it("rejects Grid pay-in below configured limits", () => {
+    const result = validatePayInAmountForProvider({
+      provider: "grid",
+      localPayIn: 100,
+      currency: "NGN",
+      gridLimits: { minLocalPayIn: 2500, maxLocalPayIn: 5_000_000 },
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.message).toContain("2,500")
+  })
+
   it("allows Grid pay-in when no limits are configured", () => {
     const result = validatePayInAmountForProvider({
       provider: "grid",

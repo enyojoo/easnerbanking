@@ -60,6 +60,8 @@ describe("resolveGridReceiveRailAvailability", () => {
     })
 
     expect(rails.mobile_money.available).toBe(true)
+    expect(rails.mobile_money.minLocalPayIn).toBe(20)
+    expect(rails.mobile_money.maxLocalPayIn).toBeNull()
     expect(rails.bank_transfer.available).toBe(false)
   })
 })

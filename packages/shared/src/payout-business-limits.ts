@@ -53,6 +53,8 @@ const PAYOUT_BUSINESS_MIN_BANK: Record<string, number> = {
   UYU: 100,
   /** Asia-Pacific */
   AED: 20,
+  CNY: 50,
+  EGP: 100,
   HKD: 50,
   SGD: 5,
   MYR: 10,
@@ -82,6 +84,7 @@ const PAYOUT_BUSINESS_MIN_MOBILE: Record<string, number> = {
   CDF: 10_000,
   PHP: 50,
   INR: 100,
+  EGP: 100,
 }
 
 function normalizeCurrency(currencyCode: string): string {

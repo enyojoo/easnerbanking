@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   resolvePrimaryPayoutProvider,
+  resolveGridPayoutLimits,
   resolveYcPayoutLimits,
   unwrapNoahFieldsSchema,
   validateBalancePayoutAmountForProvider,
   type PayoutRail,
 } from "@easner/shared"
+import { findGridBalancePayoutRate, listGridRates } from "@/lib/fx/grid-rates"
 import { findYcBalancePayoutRate, listYcRates } from "@/lib/fx/yc-rates"
 import { loadCorridorRouting } from "@/lib/payout-providers"
 import { findYcSendChannel } from "@/lib/payout-providers/yellowcard-provider"
@@ -55,25 +57,35 @@ export async function validatePayoutQuoteAmountLimits(input: {
 
   let ycLimits = null
   let customerRate: number | undefined
-  if (provider === "yellowcard" && input.sourceBalanceCurrency.trim().toUpperCase() === "USD") {
-    if (countryCode) {
-      const sendChannel = await findYcSendChannel({
-        countryCode,
-        currencyCode,
-        rail,
-      })
-      ycLimits = resolveYcPayoutLimits({
-        country: countryCode,
-        currency: currencyCode,
-        rail,
-        channel: sendChannel as Record<string, unknown> | null,
-      })
-    }
+  const sourceUsd = input.sourceBalanceCurrency.trim().toUpperCase() === "USD"
+  if (provider === "yellowcard" && sourceUsd && countryCode) {
+    const sendChannel = await findYcSendChannel({
+      countryCode,
+      currencyCode,
+      rail,
+    })
+    ycLimits = resolveYcPayoutLimits({
+      country: countryCode,
+      currency: currencyCode,
+      rail,
+      channel: sendChannel as Record<string, unknown> | null,
+    })
     const rates = await listYcRates(input.admin, {
       destinations: [currencyCode],
       status: "active",
     })
     customerRate = findYcBalancePayoutRate(rates, currencyCode)?.rate
+  } else if (provider === "grid" && sourceUsd && countryCode) {
+    ycLimits = resolveGridPayoutLimits({
+      country: countryCode,
+      currency: currencyCode,
+      rail,
+    })
+    const rates = await listGridRates(input.admin, {
+      destinations: [currencyCode],
+      status: "active",
+    })
+    customerRate = findGridBalancePayoutRate(rates, currencyCode)?.rate
   }
 
   const check = validateBalancePayoutAmountForProvider({
