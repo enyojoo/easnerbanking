@@ -280,7 +280,9 @@ export async function previewCrossBorderQuote(input: CrossBorderTransferInput) {
     sourcePhone: input.sourcePhone,
     sourceNetworkId: input.sourceNetworkId,
     sourceNetworkName: input.sourceNetworkName,
-    easnerSellFrom: prepared.pricing.customerRate,
+    easnerSellFrom:
+      Number(prepared.fromLeg?.easner_sell ?? prepared.fromLeg?.yc_buy ?? prepared.fromLeg?.rate ?? 0) ||
+      prepared.pricing.customerRate,
   })
 
   return {

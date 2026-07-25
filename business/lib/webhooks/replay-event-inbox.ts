@@ -4,6 +4,8 @@ import { applyNoahWebhookSideEffects } from "@/lib/noah/webhook-side-effects"
 import { applyTurnkeyWebhookSideEffects } from "@/lib/turnkey/chain-sync"
 import { applyYellowcardWebhookSideEffects } from "@/lib/yellowcard/webhook-processor"
 
+import { applyGridWebhookSideEffects } from "@/lib/grid/webhook-processor"
+
 export async function replayFailedNoahEventInbox(limit: number): Promise<{
   replayed: number
   failed: number
@@ -12,7 +14,7 @@ export async function replayFailedNoahEventInbox(limit: number): Promise<{
 }
 
 export async function replayStaleReceivedEventInbox(
-  provider: "noah" | "turnkey" | "yellowcard",
+  provider: "noah" | "turnkey" | "yellowcard" | "grid",
   limit: number,
   minAgeMinutes: number,
 ): Promise<{ replayed: number; failed: number }> {
@@ -38,6 +40,8 @@ export async function replayStaleReceivedEventInbox(
         await applyNoahWebhookSideEffects(admin, row.payload)
       } else if (provider === "turnkey") {
         await applyTurnkeyWebhookSideEffects(admin, row.payload, eventId)
+      } else if (provider === "grid") {
+        await applyGridWebhookSideEffects(admin, row.payload)
       } else {
         await applyYellowcardWebhookSideEffects(admin, row.payload as Record<string, unknown>)
       }
@@ -57,7 +61,7 @@ export async function replayStaleReceivedEventInbox(
 }
 
 export async function replayFailedEventInbox(
-  provider: "noah" | "turnkey" | "yellowcard",
+  provider: "noah" | "turnkey" | "yellowcard" | "grid",
   limit: number,
 ): Promise<{ replayed: number; failed: number }> {
   const admin = createSupabaseAdmin()
@@ -80,6 +84,8 @@ export async function replayFailedEventInbox(
         await applyNoahWebhookSideEffects(admin, row.payload)
       } else if (provider === "turnkey") {
         await applyTurnkeyWebhookSideEffects(admin, row.payload, eventId)
+      } else if (provider === "grid") {
+        await applyGridWebhookSideEffects(admin, row.payload)
       } else {
         await applyYellowcardWebhookSideEffects(admin, row.payload as Record<string, unknown>)
       }

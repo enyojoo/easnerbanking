@@ -31,11 +31,16 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       provider: "grid",
+      quotePhase: "preview",
+      requiresConfirm: true,
       localPayIn: preview.localPayIn,
       usdCredit: preview.usdCredit,
       customerRate: preview.customerRate,
       processingFee: preview.processingFee,
       displayProcessingFee: preview.displayProcessingFee,
+      displayProcessingFeeLocal: preview.displayProcessingFeeLocal,
+      displayProcessingFeeCurrency: preview.displayProcessingFeeCurrency,
+      provisionalPayIn: preview.provisionalPayIn,
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : "grid_fund_balance_quote_failed"

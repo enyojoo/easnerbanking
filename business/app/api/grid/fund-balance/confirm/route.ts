@@ -91,6 +91,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       provider: "grid",
+      quotePhase: "locked",
       transferId: session.transactionId,
       transactionId: session.easnerTransactionId,
       easnerTransactionId: session.easnerTransactionId,
@@ -98,6 +99,10 @@ export async function POST(request: Request) {
       customerRate: session.customerRate,
       usdCredit: session.usdCredit,
       processingFee: session.processingFee,
+      displayProcessingFee: session.displayProcessingFee,
+      displayProcessingFeeLocal: session.displayProcessingFeeLocal,
+      displayProcessingFeeCurrency: session.displayProcessingFeeCurrency,
+      provisionalPayIn: session.provisionalPayIn,
       gridFees: session.gridFeesUsd ?? 0,
       bankInfo,
       expiresAt: session.expiresAt,

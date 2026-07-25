@@ -43,6 +43,9 @@ export function buildYcLocalPayInReviewRows(input: {
   const isLocked = input.phase === "locked"
   const isMomo = input.rail === "mobile_money"
   const isCrossBorderBankLocked = isCrossBorder && isLocked && !isMomo
+  /** Bank TLC preview/locked: show principal + fee when we have a footing breakdown. */
+  const isCrossBorderBankBreakdown =
+    isCrossBorder && !isMomo && (input.principalLocal ?? 0) > 0
   /** Fund-balance review uses locked /confirm order data for bank and MoMo. */
   const isFundBalanceLockedBreakdown = isFundBalance && isLocked
   const transferMethod = isFundBalance
@@ -76,7 +79,10 @@ export function buildYcLocalPayInReviewRows(input: {
       exchangeFee: input.exchangeFeeUsd ?? 0,
     })
 
-  if ((isFundBalanceLockedBreakdown || isCrossBorderBankLocked) && (input.principalLocal ?? 0) > 0) {
+  if (
+    (isFundBalanceLockedBreakdown || isCrossBorderBankLocked || isCrossBorderBankBreakdown) &&
+    (input.principalLocal ?? 0) > 0
+  ) {
     const principalLabel = isCrossBorder
       ? REVIEW_ROW_LABELS.transferAmount
       : REVIEW_ROW_LABELS.depositAmount

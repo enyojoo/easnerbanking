@@ -94,6 +94,7 @@ async function prepareGridCrossBorderQuote(input: GridCrossBorderTransferInput) 
 
   const fromLeg = findGridPayInRate(rates, sourceCurrency)
   const toLeg = findGridBalancePayoutRate(rates, receiveCurrency)
+  const payInSellFrom = Number(fromLeg?.rate ?? fromLeg?.grid_mid ?? 0)
   const receiveAmount = Number(input.receiveAmount)
   const pricing = computeYcCrossBorderPricing({
     receiveAmount,
@@ -123,6 +124,7 @@ async function prepareGridCrossBorderQuote(input: GridCrossBorderTransferInput) 
     payInRail,
     crossRate,
     customerRate,
+    payInSellFrom,
     pricing,
     receiveAmount,
     sourceAmount: pricing.localPayIn,
@@ -146,7 +148,7 @@ export async function previewGridCrossBorderQuote(input: GridCrossBorderTransfer
     sourcePhone: input.sourcePhone,
     sourceNetworkId: input.sourceNetworkId,
     sourceNetworkName: input.sourceNetworkName,
-    easnerSellFrom: prepared.customerRate,
+    easnerSellFrom: prepared.payInSellFrom > 0 ? prepared.payInSellFrom : prepared.customerRate,
   })
 
   return {

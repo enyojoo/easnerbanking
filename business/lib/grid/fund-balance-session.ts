@@ -16,7 +16,7 @@ import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 import { isGridLocalPayInEnabledForCorridor } from "./grid-receive-gate"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
-import { computeYcFundBalancePricingBeforeReceive } from "@easner/shared"
+import { computeYcFundBalancePricingBeforeReceive, buildYcFundBalanceDisplayFees, computeYcFundBalancePrincipalLocalPayIn } from "@easner/shared"
 
 export type GridFundBalanceSessionResult = {
   sequenceId: string
@@ -28,6 +28,10 @@ export type GridFundBalanceSessionResult = {
   customerRate: number
   processingFee: number
   gridFeesUsd?: number
+  displayProcessingFee: number
+  displayProcessingFeeLocal: number
+  displayProcessingFeeCurrency: string
+  provisionalPayIn: number
   paymentInstructions: GridQuote["paymentInstructions"]
   expiresAt: string
   transactionId: string
@@ -41,6 +45,25 @@ export type GridFundBalancePreviewResult = {
   customerRate: number
   processingFee: number
   displayProcessingFee: number
+  displayProcessingFeeLocal: number
+  displayProcessingFeeCurrency: string
+  provisionalPayIn: number
+}
+
+function gridFundBalanceDisplayFees(input: {
+  usdCredit: number
+  processingFee: number
+  gridFeesUsd?: number
+  customerRate: number
+  payInCurrency: string
+}) {
+  return buildYcFundBalanceDisplayFees({
+    usdCredit: input.usdCredit,
+    processingFee: input.processingFee,
+    ycLegFeesUsd: input.gridFeesUsd ?? 0,
+    easnerSellRate: input.customerRate,
+    payInCurrency: input.payInCurrency,
+  })
 }
 
 export async function previewGridFundBalanceQuote(input: {
@@ -95,13 +118,27 @@ export async function previewGridFundBalanceQuote(input: {
     throw new Error(limitCheck.message)
   }
 
+  const displayFees = gridFundBalanceDisplayFees({
+    usdCredit,
+    processingFee: provisional.processingFee,
+    customerRate,
+    payInCurrency: currency,
+  })
+  const provisionalPayIn = computeYcFundBalancePrincipalLocalPayIn({
+    usdCredit,
+    exchangeRate: customerRate,
+  })
+
   return {
-    localPayIn,
+    localPayIn: provisional.localPayIn,
     localCurrency: currency,
     usdCredit,
     customerRate,
     processingFee: provisional.processingFee,
-    displayProcessingFee: provisional.processingFee,
+    displayProcessingFee: displayFees.displayProcessingFee,
+    displayProcessingFeeLocal: displayFees.displayProcessingFeeLocal,
+    displayProcessingFeeCurrency: displayFees.displayProcessingFeeCurrency,
+    provisionalPayIn,
   }
 }
 
@@ -229,6 +266,18 @@ export async function createGridFundBalanceSession(input: {
     },
   })
 
+  const displayFees = gridFundBalanceDisplayFees({
+    usdCredit: lockedUsdCredit,
+    processingFee,
+    gridFeesUsd,
+    customerRate: lockedCustomerRate,
+    payInCurrency: currency,
+  })
+  const provisionalPayIn = computeYcFundBalancePrincipalLocalPayIn({
+    usdCredit: lockedUsdCredit,
+    exchangeRate: lockedCustomerRate,
+  })
+
   return {
     sequenceId,
     quoteId: String(quote.id),
@@ -239,6 +288,10 @@ export async function createGridFundBalanceSession(input: {
     customerRate: lockedCustomerRate,
     processingFee,
     gridFeesUsd,
+    displayProcessingFee: displayFees.displayProcessingFee,
+    displayProcessingFeeLocal: displayFees.displayProcessingFeeLocal,
+    displayProcessingFeeCurrency: displayFees.displayProcessingFeeCurrency,
+    provisionalPayIn,
     paymentInstructions: quote.paymentInstructions,
     expiresAt,
     transactionId: String(tx?.id ?? randomUUID()),

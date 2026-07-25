@@ -22,37 +22,10 @@ export function getGridRatesRefreshTtlMs(): number {
   return parsed
 }
 
-export async function listGridRates(
-  admin: SupabaseClient,
-  filters?: { destinations?: string[]; status?: string },
-  options?: { backgroundRefresh?: boolean },
-): Promise<GridRateRow[]> {
-  let q = admin
-    .from("grid_rates")
-    .select(
-      "from_currency,to_currency,country_code,grid_mid,rate,margin_bps,source,as_of,status",
-    )
+const GRID_RATES_PAGE_SIZE = 1000
 
-  const status = filters?.status ?? "active"
-  if (status !== "all") {
-    q = q.eq("status", status)
-  }
-
-  const dests = filters?.destinations?.map((d) => d.trim().toUpperCase()).filter(Boolean)
-  if (dests?.length) {
-    const orClause = dests
-      .flatMap((d) => [`from_currency.eq.${d}`, `to_currency.eq.${d}`])
-      .join(",")
-    q = q.or(orClause)
-  }
-
-  const { data, error } = await q.order("to_currency").order("from_currency")
-  if (error) {
-    console.warn("[grid_rates] list:", error.message)
-    return []
-  }
-
-  const rows = (data ?? []).map((row) => ({
+function mapGridRateRow(row: Record<string, unknown>): GridRateRow {
+  return {
     from_currency: String(row.from_currency ?? "").toUpperCase(),
     to_currency: String(row.to_currency ?? "").toUpperCase(),
     country_code: row.country_code != null ? String(row.country_code).toUpperCase() : null,
@@ -62,7 +35,49 @@ export async function listGridRates(
     source: String(row.source ?? ""),
     as_of: String(row.as_of ?? new Date().toISOString()),
     status: String(row.status ?? ""),
-  }))
+  }
+}
+
+export async function listGridRates(
+  admin: SupabaseClient,
+  filters?: { destinations?: string[]; status?: string },
+  options?: { backgroundRefresh?: boolean },
+): Promise<GridRateRow[]> {
+  const select =
+    "from_currency,to_currency,country_code,grid_mid,rate,margin_bps,source,as_of,status"
+
+  const status = filters?.status ?? "active"
+  const dests = filters?.destinations?.map((d) => d.trim().toUpperCase()).filter(Boolean)
+
+  const rows: GridRateRow[] = []
+  for (let offset = 0; ; offset += GRID_RATES_PAGE_SIZE) {
+    let q = admin.from("grid_rates").select(select)
+
+    if (status !== "all") {
+      q = q.eq("status", status)
+    }
+
+    if (dests?.length) {
+      const orClause = dests
+        .flatMap((d) => [`from_currency.eq.${d}`, `to_currency.eq.${d}`])
+        .join(",")
+      q = q.or(orClause)
+    }
+
+    const { data, error } = await q
+      .order("to_currency")
+      .order("from_currency")
+      .range(offset, offset + GRID_RATES_PAGE_SIZE - 1)
+
+    if (error) {
+      console.warn("[grid_rates] list:", error.message)
+      break
+    }
+
+    const batch = (data ?? []).map((row) => mapGridRateRow(row as Record<string, unknown>))
+    rows.push(...batch)
+    if (batch.length < GRID_RATES_PAGE_SIZE) break
+  }
 
   if (options?.backgroundRefresh !== false) {
     triggerGridRatesBackgroundRefresh(admin, rows, getGridRatesRefreshTtlMs())

@@ -66,6 +66,24 @@ describe("buildYcLocalPayInReviewRows", () => {
     expect(rows.find((r) => r.id === "pay-amount")?.valueBold).toBe(true)
   })
 
+  it("shows TLC bank preview with transfer amount and processing fee", () => {
+    const rows = buildYcLocalPayInReviewRows({
+      mode: "cross_border_send",
+      phase: "preview",
+      rail: "bank_transfer",
+      payInCurrency: "NGN",
+      receiveCurrency: "PHP",
+      customerRate: 0.0444,
+      localPayIn: 3393.9,
+      receiveAmount: 150,
+      principalLocal: 3377.01,
+      processingFeeLocal: 16.89,
+    })
+    expect(rows.find((r) => r.id === "deposit-amount")?.label).toBe("Transfer amount")
+    expect(rows.find((r) => r.id === "processing-fee")?.value).toContain("16.89")
+    expect(rows.find((r) => r.id === "recipient-gets")?.value).toContain("150")
+  })
+
   it("keeps TLC MoMo preview with Estimated to pay", () => {
     const rows = buildYcLocalPayInReviewRows({
       mode: "cross_border_send",

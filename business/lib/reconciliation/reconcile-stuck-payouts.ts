@@ -65,7 +65,7 @@ export type ReconcileStuckPayoutsResult = {
   walletSends: { scanned: number; patched: number }
 }
 
-const WEBHOOK_PROVIDERS = ["noah", "yellowcard", "turnkey"] as const
+const WEBHOOK_PROVIDERS = ["noah", "yellowcard", "turnkey", "grid"] as const
 
 function asMeta(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}

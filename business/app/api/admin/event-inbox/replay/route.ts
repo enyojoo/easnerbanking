@@ -9,12 +9,12 @@ export const runtime = "nodejs"
 
 type ReplayBody = {
   limit?: number
-  provider?: "noah" | "yellowcard" | "turnkey" | "all"
+  provider?: "noah" | "yellowcard" | "turnkey" | "grid" | "all"
   includeStaleReceived?: boolean
   minAgeMinutes?: number
 }
 
-const PROVIDERS = ["noah", "yellowcard", "turnkey"] as const
+const PROVIDERS = ["noah", "yellowcard", "turnkey", "grid"] as const
 
 export async function POST(request: Request) {
   const auth = await requireOfficeAdmin(request)

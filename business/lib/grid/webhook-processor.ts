@@ -1,11 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { mergeGridPayoutLifecycle } from "./grid-ledger"
 import type { GridWebhookEvent } from "./types"
+import {
+  gridWebhookQuoteId,
+  gridWebhookTransactionId,
+} from "./webhook-event-id"
 
 function eventType(payload: GridWebhookEvent): string {
   return String(payload.eventType ?? payload.type ?? "").trim().toUpperCase()
+}
+
+function webhookData(event: GridWebhookEvent): Record<string, unknown> | undefined {
+  return event.data && typeof event.data === "object"
+    ? (event.data as Record<string, unknown>)
+    : undefined
 }
 
 export async function handleGridBalancePayoutWebhook(
@@ -18,7 +27,7 @@ export async function handleGridBalancePayoutWebhook(
   },
 ): Promise<{ handled: boolean }> {
   const quoteId = String(
-    input.quoteId ?? input.event.data?.quoteId ?? input.event.data?.quote_id ?? "",
+    input.quoteId ?? gridWebhookQuoteId(webhookData(input.event)) ?? "",
   ).trim()
   if (!quoteId) return { handled: false }
 
@@ -48,7 +57,9 @@ export async function handleGridBalancePayoutWebhook(
     .from("grid_transfers")
     .update({
       status: terminalSuccess ? "settled" : terminalFailed ? "failed" : transfer.status,
-      grid_transaction_id: String(input.transactionId ?? input.event.data?.transactionId ?? ""),
+      grid_transaction_id: String(
+        input.transactionId ?? gridWebhookTransactionId(webhookData(input.event)) ?? "",
+      ),
       updated_at: now,
     })
     .eq("id", transfer.id)
@@ -97,7 +108,7 @@ export async function handleGridCrossBorderSendWebhook(
   },
 ): Promise<{ handled: boolean }> {
   const quoteId = String(
-    input.quoteId ?? input.event.data?.quoteId ?? input.event.data?.quote_id ?? "",
+    input.quoteId ?? gridWebhookQuoteId(webhookData(input.event)) ?? "",
   ).trim()
   if (!quoteId) return { handled: false }
 
@@ -130,7 +141,9 @@ export async function handleGridCrossBorderSendWebhook(
     .from("grid_transfers")
     .update({
       status: outgoingComplete ? "settled" : terminalFailed ? "failed" : incomingComplete ? "processing" : transfer.status,
-      grid_transaction_id: String(input.transactionId ?? input.event.data?.transactionId ?? ""),
+      grid_transaction_id: String(
+        input.transactionId ?? gridWebhookTransactionId(webhookData(input.event)) ?? "",
+      ),
       updated_at: now,
     })
     .eq("id", transfer.id)
@@ -174,7 +187,7 @@ export async function handleGridFundBalanceWebhook(
   input: { event: GridWebhookEvent; quoteId?: string; status?: string },
 ): Promise<{ handled: boolean }> {
   const quoteId = String(
-    input.quoteId ?? input.event.data?.quoteId ?? input.event.data?.quote_id ?? "",
+    input.quoteId ?? gridWebhookQuoteId(webhookData(input.event)) ?? "",
   ).trim()
   if (!quoteId) return { handled: false }
 
@@ -204,36 +217,36 @@ export async function handleGridFundBalanceWebhook(
   return { handled: true }
 }
 
-export async function processGridWebhookPayload(payload: unknown): Promise<{ skipped: boolean }> {
-  const admin = createSupabaseAdmin()
+export async function applyGridWebhookSideEffects(
+  admin: SupabaseClient,
+  payload: unknown,
+): Promise<void> {
   const event = (payload && typeof payload === "object" ? payload : {}) as GridWebhookEvent
+  const data = webhookData(event)
   const type = eventType(event)
-  const quoteId = String(event.data?.quoteId ?? event.data?.quote_id ?? "").trim()
-  const transactionId = String(event.data?.transactionId ?? event.data?.transaction_id ?? "").trim()
-  const status = String(event.data?.status ?? "").trim()
+  const quoteId = gridWebhookQuoteId(data)
+  const transactionId = gridWebhookTransactionId(data)
+  const status = String(data?.status ?? "").trim()
 
   if (type.includes("OUTGOING")) {
     const xb = await handleGridCrossBorderSendWebhook(admin, { event, quoteId, transactionId, status })
-    if (xb.handled) return { skipped: false }
-    const res = await handleGridBalancePayoutWebhook(admin, { event, quoteId, transactionId, status })
-    return { skipped: !res.handled }
+    if (xb.handled) return
+    await handleGridBalancePayoutWebhook(admin, { event, quoteId, transactionId, status })
+    return
   }
 
   if (type.includes("INCOMING")) {
     const xb = await handleGridCrossBorderSendWebhook(admin, { event, quoteId, transactionId, status })
-    if (xb.handled) return { skipped: false }
-    const res = await handleGridFundBalanceWebhook(admin, { event, quoteId, status })
-    return { skipped: !res.handled }
+    if (xb.handled) return
+    await handleGridFundBalanceWebhook(admin, { event, quoteId, status })
+    return
   }
 
   if (quoteId) {
     const xb = await handleGridCrossBorderSendWebhook(admin, { event, quoteId, transactionId, status })
-    if (xb.handled) return { skipped: false }
+    if (xb.handled) return
     const payout = await handleGridBalancePayoutWebhook(admin, { event, quoteId, transactionId, status })
-    if (payout.handled) return { skipped: false }
-    const payin = await handleGridFundBalanceWebhook(admin, { event, quoteId, status })
-    return { skipped: !payin.handled }
+    if (payout.handled) return
+    await handleGridFundBalanceWebhook(admin, { event, quoteId, status })
   }
-
-  return { skipped: true }
 }
