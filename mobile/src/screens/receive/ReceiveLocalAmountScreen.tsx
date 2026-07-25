@@ -162,6 +162,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     amountEntryMode,
     enteredAmount,
     providerRouting: payInCorridorRow?.provider_routing,
+    metadata: payInCorridorRow?.metadata as Record<string, unknown> | undefined,
   })
 
   const displayPreview = useMemo(() => ycFlow.preview, [ycFlow.preview])
@@ -175,6 +176,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     country: residenceCountry,
     currency: localPayInCurrency,
     enabled: Boolean(residenceCountry && localPayInCurrency),
+    payInProvider: ycFlow.payInProvider,
   })
 
   const payInLimits = useMemo(() => {

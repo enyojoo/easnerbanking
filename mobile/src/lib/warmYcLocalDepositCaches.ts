@@ -4,6 +4,7 @@ import {
   resolveNgLocalVerification,
   YC_PAY_IN_RATES_DESTINATION,
   type NgLocalIdType,
+  type PayInProviderId,
   type YcRateClientRow,
 } from '@easner/shared'
 import { apiFetch } from '../query/api-client'
@@ -58,10 +59,12 @@ const OPTIMISTIC_MOMO_COUNTRIES = new Set([
 ])
 
 const receiveRailsCache = new Map<string, { data: YcReceiveRailsResponse; at: number }>()
+const gridReceiveRailsCache = new Map<string, { data: YcReceiveRailsResponse; at: number }>()
 let payInRatesCache: { rates: YcRateClientRow[]; at: number } | null = null
 const ngVerifyCache = new Map<string, { missingType: NgLocalIdType | null; at: number }>()
 
 const receiveRailsInflight = new Map<string, Promise<YcReceiveRailsResponse | null>>()
+const gridReceiveRailsInflight = new Map<string, Promise<YcReceiveRailsResponse | null>>()
 let payInRatesInflight: Promise<YcRateClientRow[] | null> | null = null
 const ngVerifyInflight = new Map<string, Promise<NgLocalIdType | null>>()
 let diskHydratePromise: Promise<void> | null = null
@@ -184,6 +187,71 @@ export function readCachedNgLocalMissingType(residenceCountry: string): NgLocalI
   return hit.missingType
 }
 
+export function readCachedGridReceiveRails(
+  country: string,
+  currency: string,
+): YcReceiveRailsResponse | null {
+  const key = receiveRailsCacheKey(country, currency)
+  const hit = gridReceiveRailsCache.get(key)
+  return hit?.data ?? null
+}
+
+export function readCachedReceiveRailsForProvider(
+  provider: PayInProviderId,
+  country: string,
+  currency: string,
+): YcReceiveRailsResponse | null {
+  if (provider === 'grid') return readCachedGridReceiveRails(country, currency)
+  return readCachedReceiveRails(country, currency)
+}
+
+export async function prefetchGridReceiveRails(
+  country: string,
+  currency: string,
+): Promise<YcReceiveRailsResponse | null> {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  if (!cc || !cur) return null
+
+  const cached = readCachedGridReceiveRails(cc, cur)
+  if (cached) return cached
+
+  const key = receiveRailsCacheKey(cc, cur)
+  const inflight = gridReceiveRailsInflight.get(key)
+  if (inflight) return inflight
+
+  const task = (async () => {
+    try {
+      const data = await apiFetch<YcReceiveRailsResponse>('/api/grid/receive-rails', {
+        query: { country: cc, currency: cur },
+      })
+      gridReceiveRailsCache.set(key, { data, at: Date.now() })
+      if (data.momoNetworks?.length) {
+        seedCachedPayInNetworks(cc, cur, data.momoNetworks)
+      }
+      return data
+    } catch {
+      return readCachedGridReceiveRails(cc, cur)
+    } finally {
+      gridReceiveRailsInflight.delete(key)
+    }
+  })()
+
+  gridReceiveRailsInflight.set(key, task)
+  return task
+}
+
+export async function prefetchReceiveRails(input: {
+  provider: PayInProviderId
+  country: string
+  currency: string
+}): Promise<YcReceiveRailsResponse | null> {
+  if (input.provider === 'grid') {
+    return prefetchGridReceiveRails(input.country, input.currency)
+  }
+  return prefetchYcReceiveRails(input.country, input.currency)
+}
+
 export async function prefetchYcReceiveRails(
   country: string,
   currency: string,
@@ -243,6 +311,19 @@ export async function prefetchYcPayInRates(): Promise<YcRateClientRow[] | null> 
   return payInRatesInflight
 }
 
+async function prefetchGridPayInRates(currency: string): Promise<YcRateClientRow[] | null> {
+  const cur = currency.trim().toUpperCase()
+  if (!cur) return null
+  try {
+    const data = await apiFetch<{ rates?: YcRateClientRow[] }>('/api/fx/grid-rates', {
+      query: { destinations: cur },
+    })
+    return data.rates ?? []
+  } catch {
+    return null
+  }
+}
+
 export async function prefetchNgLocalVerification(
   residenceCountry: string,
 ): Promise<NgLocalIdType | null> {
@@ -288,6 +369,7 @@ export type WarmYcLocalDepositInput = {
   residenceCountry?: string | null
   localPayInCurrency?: string | null
   kycApproved?: boolean
+  payInProvider?: PayInProviderId
 }
 
 export function resolveWarmYcLocalDepositCorridor(
@@ -309,17 +391,21 @@ export async function warmYcLocalDepositCaches(input: WarmYcLocalDepositInput): 
 
   await hydrateReceiveRailsFromDisk()
 
-  const tasks: Promise<unknown>[] = [
-    prefetchYcReceiveRails(country, currency).then((rails) => {
-      if (!rails?.rails.mobile_money.available) return rails
-      if (rails.momoNetworks?.length) {
-        seedCachedPayInNetworks(country, currency, rails.momoNetworks)
-        return rails
-      }
-      return ensurePayInNetworksCached(country, currency).then(() => rails)
-    }),
-    prefetchYcPayInRates(),
-  ]
+  const provider = input.payInProvider ?? 'yellowcard'
+  const tasks: Promise<unknown>[] =
+    provider === 'grid'
+      ? [prefetchGridReceiveRails(country, currency), prefetchGridPayInRates(currency)]
+      : [
+          prefetchYcReceiveRails(country, currency).then((rails) => {
+            if (!rails?.rails.mobile_money.available) return rails
+            if (rails.momoNetworks?.length) {
+              seedCachedPayInNetworks(country, currency, rails.momoNetworks)
+              return rails
+            }
+            return ensurePayInNetworksCached(country, currency).then(() => rails)
+          }),
+          prefetchYcPayInRates(),
+        ]
   if (currency === 'NGN') {
     tasks.push(prefetchNgLocalVerification(country))
   }

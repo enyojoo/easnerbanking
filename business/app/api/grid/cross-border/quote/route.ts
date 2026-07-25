@@ -102,6 +102,16 @@ export async function POST(request: Request) {
       sourceCurrency: payInCurrency,
       recipient: recipient as RecipientSellPrepareRow,
       receiveAmount,
+      payInRail,
+      sourcePhone:
+        payInRail === "mobile_money"
+          ? normalizeYcMomoPhone(String(body?.sourcePhone ?? "").trim(), payInCountry)
+          : undefined,
+      sourceNetworkId: payInRail === "mobile_money" ? String(body?.networkId ?? "").trim() : undefined,
+      sourceNetworkName:
+        payInRail === "mobile_money"
+          ? String(body?.sourceNetworkName ?? "").trim() || undefined
+          : undefined,
       profile: {
         residenceCountry: userRow?.residence_country ?? payInCountry,
         kycIdType: userRow?.kyc_id_type,

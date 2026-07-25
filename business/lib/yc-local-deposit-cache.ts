@@ -1,5 +1,6 @@
 import {
   YC_PAY_IN_RATES_DESTINATION,
+  type PayInProviderId,
   type YcRateClientRow,
 } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
@@ -28,9 +29,11 @@ const RECEIVE_RAILS_CACHE_TTL_MS = 5 * 60_000
 const PAY_IN_RATES_CACHE_TTL_MS = 2 * 60_000
 
 const receiveRailsCache = new Map<string, { data: ReceiveRailsResponse; at: number }>()
+const gridReceiveRailsCache = new Map<string, { data: ReceiveRailsResponse; at: number }>()
 let payInRatesCache: { rates: YcRateClientRow[]; at: number } | null = null
 
 const receiveRailsInflight = new Map<string, Promise<ReceiveRailsResponse | null>>()
+const gridReceiveRailsInflight = new Map<string, Promise<ReceiveRailsResponse | null>>()
 let payInRatesInflight: Promise<YcRateClientRow[] | null> | null = null
 
 const PAY_IN_NETWORKS_CACHE_TTL_MS = 5 * 60_000
@@ -109,6 +112,88 @@ export function readCachedYcPayInRates(): YcRateClientRow[] | null {
 
 function writeYcPayInRatesCache(rates: YcRateClientRow[]): void {
   payInRatesCache = { rates, at: Date.now() }
+}
+
+export function readCachedGridReceiveRails(
+  country: string,
+  currency: string,
+): ReceiveRailsResponse | null {
+  const key = receiveRailsCacheKey(country, currency)
+  const hit = gridReceiveRailsCache.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.at > RECEIVE_RAILS_CACHE_TTL_MS) {
+    gridReceiveRailsCache.delete(key)
+    return null
+  }
+  return hit.data
+}
+
+function writeGridReceiveRailsCache(
+  country: string,
+  currency: string,
+  data: ReceiveRailsResponse,
+): void {
+  gridReceiveRailsCache.set(receiveRailsCacheKey(country, currency), { data, at: Date.now() })
+  if (data.momoNetworks?.length) {
+    seedCachedYcPayInNetworks(country, currency, data.momoNetworks)
+  }
+}
+
+export async function prefetchGridReceiveRails(
+  country: string,
+  currency: string,
+): Promise<ReceiveRailsResponse | null> {
+  const cc = country.trim().toUpperCase()
+  const cur = currency.trim().toUpperCase()
+  if (!cc || !cur) return null
+
+  const cached = readCachedGridReceiveRails(cc, cur)
+  if (cached) return cached
+
+  const key = receiveRailsCacheKey(cc, cur)
+  const inflight = gridReceiveRailsInflight.get(key)
+  if (inflight) return inflight
+
+  const task = (async () => {
+    try {
+      const res = await fetchWithSession(
+        `/api/grid/receive-rails?country=${encodeURIComponent(cc)}&currency=${encodeURIComponent(cur)}`,
+      )
+      const data = (await res.json().catch(() => ({}))) as ReceiveRailsResponse
+      if (res.ok) {
+        writeGridReceiveRailsCache(cc, cur, data)
+        return data
+      }
+      return null
+    } catch {
+      return null
+    } finally {
+      gridReceiveRailsInflight.delete(key)
+    }
+  })()
+
+  gridReceiveRailsInflight.set(key, task)
+  return task
+}
+
+export async function prefetchReceiveRails(input: {
+  provider: PayInProviderId
+  country: string
+  currency: string
+}): Promise<ReceiveRailsResponse | null> {
+  if (input.provider === "grid") {
+    return prefetchGridReceiveRails(input.country, input.currency)
+  }
+  return prefetchYcReceiveRails(input.country, input.currency)
+}
+
+export function readCachedReceiveRailsForProvider(
+  provider: PayInProviderId,
+  country: string,
+  currency: string,
+): ReceiveRailsResponse | null {
+  if (provider === "grid") return readCachedGridReceiveRails(country, currency)
+  return readCachedReceiveRails(country, currency)
 }
 
 export async function prefetchYcReceiveRails(
@@ -307,10 +392,27 @@ export async function prefetchYcPayInRates(): Promise<YcRateClientRow[] | null> 
 export async function warmYcLocalDepositCaches(input: {
   residenceCountry: string
   localPayInCurrency: string
+  payInProvider?: PayInProviderId
+}): Promise<void> {
+  return warmLocalDepositCaches(input)
+}
+
+export async function warmLocalDepositCaches(input: {
+  residenceCountry: string
+  localPayInCurrency: string
+  payInProvider?: PayInProviderId
 }): Promise<void> {
   const country = input.residenceCountry.trim().toUpperCase()
   const currency = input.localPayInCurrency.trim().toUpperCase()
   if (!country || !currency) return
+  const provider = input.payInProvider ?? "yellowcard"
+  if (provider === "grid") {
+    await Promise.allSettled([
+      prefetchGridReceiveRails(country, currency),
+      prefetchGridPayInRates(currency),
+    ])
+    return
+  }
   await Promise.allSettled([
     prefetchYcReceiveRails(country, currency).then((rails) => {
       if (!rails?.rails.mobile_money.available) return rails

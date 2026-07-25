@@ -46,6 +46,19 @@ describe("resolvePayInProvider", () => {
       }),
     ).toBe("yellowcard")
   })
+
+  it("requires grid_receive_enabled for Grid pay-in", () => {
+    expect(
+      resolvePayInProvider({
+        metadata: { grid_receive: true, grid_receive_enabled: false },
+      }),
+    ).not.toBe("grid")
+    expect(
+      resolvePayInProvider({
+        metadata: { grid_receive: true, grid_receive_enabled: true },
+      }),
+    ).toBe("grid")
+  })
 })
 
 describe("validatePayInAmountForProvider", () => {
@@ -69,6 +82,15 @@ describe("validatePayInAmountForProvider", () => {
     })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.message).toContain("1,000")
+  })
+
+  it("allows Grid pay-in when no limits are configured", () => {
+    const result = validatePayInAmountForProvider({
+      provider: "grid",
+      localPayIn: 100,
+      currency: "GHS",
+    })
+    expect(result.ok).toBe(true)
   })
 })
 

@@ -40,6 +40,10 @@ export async function createGridCrossBorderQuote(input: {
   recipient: RecipientSellPrepareRow
   receiveAmount: number
   profile: GridPersonProfile
+  payInRail?: "bank_transfer" | "mobile_money"
+  sourcePhone?: string
+  sourceNetworkId?: string
+  sourceNetworkName?: string
 }): Promise<GridCrossBorderQuoteResult> {
   const sourceCurrency = input.sourceCurrency.trim().toUpperCase()
   const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
@@ -47,7 +51,8 @@ export async function createGridCrossBorderQuote(input: {
   const destCountry = resolveRecipientPayoutCountry(input.recipient)?.toUpperCase()
   if (!destCountry) throw new Error("Recipient country is required.")
 
-  const rail =
+  const payInRail = input.payInRail === "mobile_money" ? "mobile_money" : "bank_transfer"
+  const payoutRail =
     input.recipient.mobile_provider ||
     String(input.recipient.bank_name || "").toLowerCase().includes("mobile money")
       ? ("mobile_money" as const)
@@ -56,7 +61,7 @@ export async function createGridCrossBorderQuote(input: {
   const sourceEnabled = await isGridLocalPayInEnabledForCorridor(input.admin, {
     countryCode: sourceCountry,
     currencyCode: sourceCurrency,
-    rail,
+    rail: payInRail,
   })
   if (!sourceEnabled) {
     throw new Error("grid_cross_border_source_disabled")
@@ -83,7 +88,7 @@ export async function createGridCrossBorderQuote(input: {
     customerId,
     recipient: input.recipient,
     profile: input.profile,
-    rail,
+    rail: payoutRail,
     idempotencyKey: `grid_xb_ext_${customerId}_${String((input.recipient as { id?: string }).id ?? input.recipient.account_number ?? randomUUID())}`,
   })
 
@@ -126,7 +131,14 @@ export async function createGridCrossBorderQuote(input: {
       external_account_id: externalAccount.id,
       settlement_info: { paymentInstructions: quote.paymentInstructions },
       expires_at: expiresAt,
-      metadata: { easner_transaction_id: easnerTransactionId, sequence_id: sequenceId },
+      metadata: {
+        easner_transaction_id: easnerTransactionId,
+        sequence_id: sequenceId,
+        pay_in_rail: payInRail,
+        ...(input.sourcePhone ? { source_phone: input.sourcePhone } : {}),
+        ...(input.sourceNetworkId ? { source_network_id: input.sourceNetworkId } : {}),
+        ...(input.sourceNetworkName ? { source_network_name: input.sourceNetworkName } : {}),
+      },
     })
     .select("id")
     .single()
@@ -204,6 +216,7 @@ export async function confirmGridCrossBorderTransfer(input: {
         grid_mode: "cross_border_send",
         grid_quote_id: quoteId,
         grid_transfer_id: transfer.id,
+        pay_in_provider: "grid",
         local_pay_in: transfer.quoted_pay_in,
         local_currency: transfer.pay_in_currency,
         receive_amount: transfer.quoted_receive,
@@ -211,6 +224,10 @@ export async function confirmGridCrossBorderTransfer(input: {
         customer_rate: transfer.customer_rate,
         payment_instructions: settlement.paymentInstructions,
         quote_locked_at: now,
+        ...(metadata.pay_in_rail ? { pay_in_rail: metadata.pay_in_rail } : {}),
+        ...(metadata.source_phone ? { source_phone: metadata.source_phone } : {}),
+        ...(metadata.source_network_id ? { source_network_id: metadata.source_network_id } : {}),
+        ...(metadata.source_network_name ? { source_network_name: metadata.source_network_name } : {}),
       },
     })
     .select("id")

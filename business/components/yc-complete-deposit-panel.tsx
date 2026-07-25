@@ -12,6 +12,8 @@ import {
   ycPayInCompleteCta,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
   ycPayInCompleteNotice,
+  attestPayInPayment,
+  type PayInProviderId,
   type YcPayInRail,
 } from "@easner/shared"
 import { ycBankInfoFields } from "@/lib/yc-bank-info-fields"
@@ -44,6 +46,7 @@ export type YcCompleteDepositPanelProps = {
   readOnly?: boolean
   /** Channel deposit window expiry (ISO) — awaiting payment countdown. */
   depositExpiresAt?: string | null
+  payInProvider?: PayInProviderId
 }
 
 export function YcCompleteDepositPanel({
@@ -68,6 +71,7 @@ export function YcCompleteDepositPanel({
   returnTo = "dashboard",
   readOnly = false,
   depositExpiresAt,
+  payInProvider = "yellowcard",
 }: YcCompleteDepositPanelProps) {
   const router = useRouter()
   const [attestLoading, setAttestLoading] = useState(false)
@@ -86,15 +90,19 @@ export function YcCompleteDepositPanel({
     setAttestError(null)
     setAttestLoading(true)
     try {
-      const res = await fetch("/api/yellowcard/pay-in/attest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactionId, transferId }),
+      await attestPayInPayment({
+        provider: payInProvider === "grid" ? "grid" : "yellowcard",
+        transactionId,
+        transferId,
+        fetch: async (url, init) => {
+          const res = await fetch(url, init)
+          return {
+            ok: res.ok,
+            status: res.status,
+            json: () => res.json(),
+          }
+        },
       })
-      const data = (await res.json().catch(() => null)) as { ok?: boolean; message?: string } | null
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.message || "Could not confirm payment")
-      }
       router.replace(transactionWebDetailPath(transactionId, { returnTo }))
     } catch (e) {
       setAttestError(e instanceof Error ? e.message : "Could not confirm payment")

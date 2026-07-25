@@ -266,6 +266,11 @@ export {
   type PayInProviderId,
 } from "./payout-provider-limits"
 export {
+  attestPayInPayment,
+  type PayInAttestFetch,
+  type PayInAttestResult,
+} from "./pay-in-attest-client"
+export {
   getBusinessWalletSendMin,
   isDirectTurnkeyWalletCorridor,
   isWalletSendRecipient,

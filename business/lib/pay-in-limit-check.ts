@@ -7,6 +7,7 @@ import {
   type PayoutRail,
 } from "@easner/shared"
 import { loadCorridorRouting } from "@/lib/payout-providers"
+import { resolveGridReceiveRailAvailability } from "@/lib/grid/receive-rails"
 import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 
@@ -43,6 +44,7 @@ export async function validateFundBalancePayInAmountLimits(input: {
   const noahHints = unwrapNoahFieldsSchema(corridor?.fields_schema)
 
   let ycLimits = null
+  let gridLimits = null
   if (provider === "yellowcard") {
     const channels = await listYellowcardChannels()
     const channel = findYcReceiveChannel(channels, {
@@ -56,16 +58,28 @@ export async function validateFundBalancePayInAmountLimits(input: {
       rail,
       channel: (channel as Record<string, unknown> | null) ?? null,
     })
+  } else if (provider === "grid") {
+    const rails = await resolveGridReceiveRailAvailability(input.admin, {
+      countryCode,
+      currencyCode,
+    })
+    const railInfo = rails[rail]
+    gridLimits = {
+      minLocalPayIn: railInfo.minLocalPayIn,
+      maxLocalPayIn: railInfo.maxLocalPayIn,
+    }
   }
 
   const check = validatePayInAmountForProvider({
     providerRouting: routing,
     metadata,
+    provider,
     localPayIn: input.localPayIn,
     currency: currencyCode,
     rail,
     noahHints,
     ycLimits,
+    gridLimits,
   })
 
   return check.ok ? { ok: true } : { ok: false, message: check.message }

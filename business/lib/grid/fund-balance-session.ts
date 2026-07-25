@@ -22,6 +22,7 @@ export type GridFundBalanceSessionResult = {
   paymentInstructions: GridQuote["paymentInstructions"]
   expiresAt: string
   transactionId: string
+  easnerTransactionId: string
 }
 
 export type GridFundBalancePreviewResult = {
@@ -93,6 +94,9 @@ export async function createGridFundBalanceSession(input: {
   rail: "bank_transfer" | "mobile_money"
   usdCredit?: number
   localPayIn?: number
+  sourcePhone?: string
+  sourceNetworkId?: string
+  sourceNetworkName?: string
   profile: GridPersonProfile
 }): Promise<GridFundBalanceSessionResult> {
   const country = input.country.trim().toUpperCase()
@@ -145,6 +149,7 @@ export async function createGridFundBalanceSession(input: {
       currency: "USD",
       metadata: {
         pay_in_provider: "grid",
+        pay_in_rail: input.rail,
         grid_quote_id: quote.id,
         grid_sequence_id: sequenceId,
         local_pay_in: preview.localPayIn,
@@ -152,6 +157,9 @@ export async function createGridFundBalanceSession(input: {
         country_code: country,
         customer_rate: preview.customerRate,
         payment_instructions: quote.paymentInstructions,
+        ...(input.sourcePhone ? { source_phone: input.sourcePhone } : {}),
+        ...(input.sourceNetworkId ? { source_network_id: input.sourceNetworkId } : {}),
+        ...(input.sourceNetworkName ? { source_network_name: input.sourceNetworkName } : {}),
       },
     })
     .select("id")
@@ -172,7 +180,14 @@ export async function createGridFundBalanceSession(input: {
     grid_customer_id: customerId,
     settlement_info: { paymentInstructions: quote.paymentInstructions },
     expires_at: expiresAt,
-    metadata: { easner_transaction_id: easnerTransactionId, sequence_id: sequenceId },
+    metadata: {
+      easner_transaction_id: easnerTransactionId,
+      sequence_id: sequenceId,
+      pay_in_rail: input.rail,
+      ...(input.sourcePhone ? { source_phone: input.sourcePhone } : {}),
+      ...(input.sourceNetworkId ? { source_network_id: input.sourceNetworkId } : {}),
+      ...(input.sourceNetworkName ? { source_network_name: input.sourceNetworkName } : {}),
+    },
   })
 
   return {
@@ -187,5 +202,6 @@ export async function createGridFundBalanceSession(input: {
     paymentInstructions: quote.paymentInstructions,
     expiresAt,
     transactionId: String(tx?.id ?? randomUUID()),
+    easnerTransactionId,
   }
 }

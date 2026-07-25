@@ -18,6 +18,7 @@ import {
   resolveSendConfirmArrivalHint,
   SEND_REVIEW_CONFIRM_CTA,
   YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
+  attestPayInPayment,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -1000,20 +1001,22 @@ export default function SendConfirmPage() {
           onCopy={handleCopy}
           attest={{
             onAttest: async ({ transactionId, transferId }) => {
-              const res = await fetchWithSession("/api/yellowcard/pay-in/attest", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ transactionId, transferId }),
+              const provider =
+                state.crossBorderProvider === "grid" ? ("grid" as const) : ("yellowcard" as const)
+              const result = await attestPayInPayment({
+                provider,
+                transactionId,
+                transferId,
+                fetch: async (url, init) => {
+                  const res = await fetchWithSession(url, init)
+                  return {
+                    ok: res.ok,
+                    status: res.status,
+                    json: () => res.json(),
+                  }
+                },
               })
-              const data = (await res.json().catch(() => null)) as {
-                ok?: boolean
-                attestedAt?: string
-                message?: string
-              } | null
-              if (!res.ok || !data?.ok || !data.attestedAt) {
-                throw new Error(data?.message || "Could not confirm payment")
-              }
-              return { attestedAt: data.attestedAt }
+              return { attestedAt: result.attestedAt }
             },
             onSuccess: (transactionId) => finishSend(transactionId),
           }}

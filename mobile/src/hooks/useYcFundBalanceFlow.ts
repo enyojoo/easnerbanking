@@ -14,13 +14,15 @@ import { ApiError, apiFetch } from '../query/api-client'
 import { fetchFundBalanceQuote, type YcFundBalanceQuote, type PayInProviderId } from '../lib/sendFlowFundBalanceQuote'
 import {
   prefetchYcPayInRates,
-  prefetchYcReceiveRails,
+  prefetchReceiveRails,
   hydrateReceiveRailsFromDisk,
   resolveReceiveRailsForDisplay,
   readCachedReceiveRails,
+  readCachedReceiveRailsForProvider,
   readCachedYcPayInRates,
   type YcReceiveRailsResponse,
 } from '../lib/warmYcLocalDepositCaches'
+import type { PayInProviderId } from '../lib/sendFlowFundBalanceQuote'
 import type { YcPayInRail } from './useYcCrossBorderFlow'
 
 function resolveFundBalancePayInProvider(input: {
@@ -67,10 +69,12 @@ export function useYcReceiveRails(input: {
   country: string | null
   currency: string | null
   enabled: boolean
+  payInProvider?: PayInProviderId
 }) {
   const country = input.country?.trim().toUpperCase() ?? ''
   const currency = input.currency?.trim().toUpperCase() ?? ''
   const corridorKey = country && currency ? `${country}:${currency}` : ''
+  const payInProvider = input.payInProvider ?? 'yellowcard'
 
   const [rails, setRails] = useState<YcReceiveRailsResponse | null>(() =>
     input.enabled ? resolveReceiveRailsForDisplay(country, currency) : null,
@@ -83,10 +87,10 @@ export function useYcReceiveRails(input: {
     await hydrateReceiveRailsFromDisk()
     const display = resolveReceiveRailsForDisplay(country, currency)
     if (display) setRails(display)
-    const data = await prefetchYcReceiveRails(country, currency)
+    const data = await prefetchReceiveRails({ provider: payInProvider, country, currency })
     setRails(data ?? display)
     setLoading(false)
-  }, [input.enabled, country, currency])
+  }, [input.enabled, country, currency, payInProvider])
 
   useEffect(() => {
     if (!corridorKey) {
@@ -105,15 +109,19 @@ export function useYcReceiveRails(input: {
       const display = resolveReceiveRailsForDisplay(country, currency)
       setRails(display)
       setLoading(false)
-      const data = await prefetchYcReceiveRails(country, currency)
+      const data = await prefetchReceiveRails({ provider: payInProvider, country, currency })
       if (!cancelled) {
-        setRails(data ?? display ?? readCachedReceiveRails(country, currency))
+        setRails(
+          data ??
+            display ??
+            readCachedReceiveRailsForProvider(payInProvider, country, currency),
+        )
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [input.enabled, corridorKey, country, currency])
+  }, [input.enabled, corridorKey, country, currency, payInProvider])
 
   useRevalidateOnAppActive(revalidate)
 

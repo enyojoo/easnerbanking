@@ -207,7 +207,12 @@ export function YcLocalPayInReview({
   })
 
   const { attestLoading, attestError, attestPayment } = useYcPayInAttest({
-    attest: attestYcPayInPayment,
+    attest: ({ transactionId, transferId }) =>
+      attestYcPayInPayment({
+        transactionId,
+        transferId,
+        provider: crossBorderProvider === 'grid' ? 'grid' : 'yellowcard',
+      }),
     onSuccess: (transactionId) => {
       navigateToTransactionDetailAfterPayIn(navigation, transactionId, 'SendFlow')
     },

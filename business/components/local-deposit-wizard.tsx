@@ -25,6 +25,8 @@ import {
   YC_PAY_IN_SEND_EXACTLY_LABEL,
   YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
   validateYcFundBalancePayInAmount,
+  validatePayInAmountForProvider,
+  attestPayInPayment,
   REVIEW_ROW_LABELS,
   normalizeYcMomoPhone,
   type NgLocalIdType,
@@ -48,11 +50,11 @@ type WizardStep = "rail" | "amount" | "momo_setup" | "review"
 type AmountMode = "usd" | "local"
 
 import {
-  prefetchYcReceiveRails,
+  prefetchReceiveRails,
   prefetchYcPayInNetworks,
   prefetchYcPayInRates,
   prefetchGridPayInRates,
-  readCachedReceiveRails,
+  readCachedReceiveRailsForProvider,
   readCachedYcPayInNetworks,
   readCachedYcPayInRates,
   readCachedGridPayInRates,
@@ -124,10 +126,10 @@ export function LocalDepositWizard({
     initialStep === "amount" && initialRail ? "amount" : "rail",
   )
   const [rails, setRails] = useState<ReceiveRailsResponse | null>(() =>
-    readCachedReceiveRails(residenceCountry, localPayInCurrency),
+    readCachedReceiveRailsForProvider("yellowcard", residenceCountry, localPayInCurrency),
   )
   const [railsLoading, setRailsLoading] = useState(
-    () => !readCachedReceiveRails(residenceCountry, localPayInCurrency),
+    () => !readCachedReceiveRailsForProvider("yellowcard", residenceCountry, localPayInCurrency),
   )
   const [rail, setRail] = useState<LocalRail>(initialRail ?? "bank_transfer")
   const [amountMode, setAmountMode] = useState<AmountMode>("usd")
@@ -281,7 +283,7 @@ export function LocalDepositWizard({
 
   useEffect(() => {
     let cancelled = false
-    const cached = readCachedReceiveRails(residenceCountry, localPayInCurrency)
+    const cached = readCachedReceiveRailsForProvider(payInProvider, residenceCountry, localPayInCurrency)
     if (cached) {
       setRails(cached)
       setRailsLoading(false)
@@ -289,7 +291,11 @@ export function LocalDepositWizard({
       setRailsLoading(true)
     }
     void (async () => {
-      const data = await prefetchYcReceiveRails(residenceCountry, localPayInCurrency)
+      const data = await prefetchReceiveRails({
+        provider: payInProvider,
+        country: residenceCountry,
+        currency: localPayInCurrency,
+      })
       if (!cancelled) {
         setRails(data ?? cached)
         setRailsLoading(false)
@@ -298,7 +304,7 @@ export function LocalDepositWizard({
     return () => {
       cancelled = true
     }
-  }, [residenceCountry, localPayInCurrency])
+  }, [residenceCountry, localPayInCurrency, payInProvider])
 
   useEffect(() => {
     if (!localPayInCurrency) return
@@ -327,7 +333,23 @@ export function LocalDepositWizard({
     if (!isMomo || !residenceCountry || !localPayInCurrency) return
     if (step !== "amount" && step !== "momo_setup") return
     let cancelled = false
-    const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
+    const loadNetworks = async () => {
+      if (payInProvider === "grid") {
+        const railsData = await prefetchReceiveRails({
+          provider: "grid",
+          country: residenceCountry,
+          currency: localPayInCurrency,
+        })
+        return railsData?.momoNetworks ?? []
+      }
+      const cached = readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
+      if (cached?.length) return cached
+      return prefetchYcPayInNetworks(residenceCountry, localPayInCurrency)
+    }
+    const cached =
+      payInProvider === "grid"
+        ? readCachedReceiveRailsForProvider("grid", residenceCountry, localPayInCurrency)?.momoNetworks
+        : readCachedYcPayInNetworks(residenceCountry, localPayInCurrency)
     if (cached?.length) {
       setMomoNetworks(cached)
       if (cached.length === 1 && !momoNetworkId) setMomoNetworkId(cached[0].id)
@@ -337,7 +359,7 @@ export function LocalDepositWizard({
     }
     void (async () => {
       try {
-        const res = await prefetchYcPayInNetworks(residenceCountry, localPayInCurrency)
+        const res = await loadNetworks()
         if (!cancelled) {
           setMomoNetworks(res)
           if (res.length === 1 && !momoNetworkId) setMomoNetworkId(res[0].id)
@@ -349,7 +371,7 @@ export function LocalDepositWizard({
     return () => {
       cancelled = true
     }
-  }, [isMomo, residenceCountry, localPayInCurrency, step, momoNetworkId])
+  }, [isMomo, residenceCountry, localPayInCurrency, step, momoNetworkId, payInProvider])
 
   useEffect(() => {
     if (initialStep === "amount" && initialRail) return
@@ -642,16 +664,27 @@ export function LocalDepositWizard({
   if (step === "amount") {
     const amountLimitCheck =
       enteredAmount > 0 && customerRate
-        ? validateYcFundBalancePayInAmount({
-            amountEntryMode: amountMode,
-            enteredAmount,
-            previewLocalPayIn:
-              displayPreview.estimatedTotalLocalPayIn > 0
-                ? displayPreview.estimatedTotalLocalPayIn
-                : displayPreview.localPayIn,
-            currency: localPayInCurrency,
-            limits: payInLimits,
-          })
+        ? payInProvider === "grid"
+          ? validatePayInAmountForProvider({
+              provider: "grid",
+              localPayIn:
+                displayPreview.estimatedTotalLocalPayIn > 0
+                  ? displayPreview.estimatedTotalLocalPayIn
+                  : displayPreview.localPayIn,
+              currency: localPayInCurrency,
+              rail,
+              ycLimits: payInLimits,
+            })
+          : validateYcFundBalancePayInAmount({
+              amountEntryMode: amountMode,
+              enteredAmount,
+              previewLocalPayIn:
+                displayPreview.estimatedTotalLocalPayIn > 0
+                  ? displayPreview.estimatedTotalLocalPayIn
+                  : displayPreview.localPayIn,
+              currency: localPayInCurrency,
+              limits: payInLimits,
+            })
         : { ok: true as const }
     const canContinue = enteredAmount > 0 && Boolean(customerRate) && amountLimitCheck.ok
     return (
@@ -867,20 +900,20 @@ export function LocalDepositWizard({
           onCopy={onCopy}
           attest={{
             onAttest: async ({ transactionId, transferId }) => {
-              const res = await fetchWithSession("/api/yellowcard/pay-in/attest", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ transactionId, transferId }),
+              const result = await attestPayInPayment({
+                provider: payInProvider === "grid" ? "grid" : "yellowcard",
+                transactionId,
+                transferId,
+                fetch: async (url, init) => {
+                  const res = await fetchWithSession(url, init)
+                  return {
+                    ok: res.ok,
+                    status: res.status,
+                    json: () => res.json(),
+                  }
+                },
               })
-              const data = (await res.json().catch(() => null)) as {
-                ok?: boolean
-                attestedAt?: string
-                message?: string
-              } | null
-              if (!res.ok || !data?.ok || !data.attestedAt) {
-                throw new Error(data?.message || "Could not confirm payment")
-              }
-              return { attestedAt: data.attestedAt }
+              return { attestedAt: result.attestedAt }
             },
             onSuccess: (transactionId) => {
               router.replace(transactionWebDetailPath(transactionId, { returnTo: "dashboard" }))

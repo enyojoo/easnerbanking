@@ -55,7 +55,8 @@ export function resolvePayInProvider(input: {
   const payoutProvider = resolvePrimaryPayoutProvider(routing)
   const supportYcPayIn = meta.yc_receive === true
   const supportNoahPayIn = meta.noah_receive === true
-  const supportGridPayIn = meta.grid_receive === true
+  const supportGridPayIn =
+    meta.grid_receive === true && meta.grid_receive_enabled === true
   const supportYcPayout =
     meta.yc_send === true || routing.some((e) => e.provider === "yellowcard")
   const supportNoahPayout =
@@ -88,6 +89,7 @@ export type ValidatePayInAmountInput = {
   rail?: PayoutRail
   noahHints?: PayoutFieldsSchemaHint | null
   ycLimits?: YcPayInLimits | null
+  gridLimits?: YcPayInLimits | null
 }
 
 /** Validate fund-balance / pay-in amounts for the Office-selected provider. */
@@ -102,6 +104,18 @@ export function validatePayInAmountForProvider(
       currency: input.currency,
       limits: input.ycLimits,
     })
+  }
+  if (provider === "grid") {
+    const limits = input.gridLimits ?? input.ycLimits
+    if (limits?.minLocalPayIn != null || limits?.maxLocalPayIn != null) {
+      return validateYcPayInLocalAmount({
+        localPayIn: input.localPayIn,
+        currency: input.currency,
+        limits,
+      })
+    }
+    if (input.localPayIn > 0) return { ok: true }
+    return { ok: false, message: "Enter a valid amount." }
   }
   return validateNoahPayInLocalAmount({
     localPayIn: input.localPayIn,

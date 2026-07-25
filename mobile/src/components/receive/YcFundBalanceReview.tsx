@@ -14,6 +14,7 @@ import {
   computeYcFundBalancePrincipalLocalPayIn,
   resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   REVIEW_ROW_LABELS,
+  resolvePayInProvider,
   useYcFundBalancePayInLock,
   useYcPayInAttest,
   YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
@@ -133,6 +134,23 @@ export function YcFundBalanceReview({
     ],
   )
 
+  const payInProvider = useMemo(() => {
+    const cache = getPayoutCorridorCache()
+    const corridors = payInRail === 'mobile_money' ? cache?.mobile : cache?.bank
+    const corridorRow =
+      corridors?.find((c) =>
+        corridorMatchesCountryCurrency(c, {
+          countryCode: residenceCountry,
+          currencyCode: localPayInCurrency,
+          rail: payInRail,
+        }),
+      ) ?? null
+    return resolvePayInProvider({
+      providerRouting: corridorRow?.provider_routing,
+      metadata: (corridorRow?.metadata ?? null) as Record<string, unknown> | null,
+    })
+  }, [residenceCountry, localPayInCurrency, payInRail])
+
   const lockKey = fundBalanceLockKey(quoteMeta)
 
   const getCachedLocked = useCallback((): YcFundBalanceQuote | null => {
@@ -201,7 +219,12 @@ export function YcFundBalanceReview({
   })
 
   const { attestLoading, attestError, attestPayment } = useYcPayInAttest({
-    attest: attestYcPayInPayment,
+    attest: ({ transactionId, transferId }) =>
+      attestYcPayInPayment({
+        transactionId,
+        transferId,
+        provider: payInProvider === 'grid' ? 'grid' : 'yellowcard',
+      }),
     onSuccess: (transactionId) => {
       navigateToTransactionDetailAfterPayIn(navigation, transactionId, 'ReceiveFlow')
     },

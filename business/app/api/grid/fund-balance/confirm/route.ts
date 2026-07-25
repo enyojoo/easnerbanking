@@ -3,6 +3,7 @@ import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createGridFundBalanceSession } from "@/lib/grid/fund-balance-session"
+import { normalizeYcMomoPhone } from "@easner/shared"
 
 export const runtime = "nodejs"
 
@@ -22,6 +23,21 @@ export async function POST(request: Request) {
   }
 
   const rail = body?.rail === "mobile_money" ? "mobile_money" : "bank_transfer"
+  const sourcePhone =
+    rail === "mobile_money"
+      ? normalizeYcMomoPhone(String(body?.sourcePhone ?? "").trim(), country)
+      : undefined
+  const sourceNetworkId = rail === "mobile_money" ? String(body?.networkId ?? "").trim() : undefined
+  const sourceNetworkName =
+    rail === "mobile_money" ? String(body?.sourceNetworkName ?? "").trim() || undefined : undefined
+
+  if (rail === "mobile_money" && (!sourcePhone || !sourceNetworkId)) {
+    return NextResponse.json(
+      { error: "Mobile money pay-in requires sourcePhone and networkId.", code: "momo_source_required" },
+      { status: 400 },
+    )
+  }
+
   const admin = createSupabaseAdmin()
   const businessId = noahCtxResult.scope === "business" ? noahCtxResult.businessId : null
   const orgOwnerId =
@@ -48,6 +64,9 @@ export async function POST(request: Request) {
       rail,
       usdCredit: body?.usdCredit != null && Number(body.usdCredit) > 0 ? Number(body.usdCredit) : undefined,
       localPayIn: body?.localPayIn != null && Number(body.localPayIn) > 0 ? Number(body.localPayIn) : undefined,
+      sourcePhone,
+      sourceNetworkId,
+      sourceNetworkName,
       profile: {
         residenceCountry: userRow?.residence_country ?? country,
         kycIdType: userRow?.kyc_id_type,
@@ -69,7 +88,8 @@ export async function POST(request: Request) {
       ok: true,
       provider: "grid",
       transferId: session.transactionId,
-      transactionId: session.transactionId,
+      transactionId: session.easnerTransactionId,
+      easnerTransactionId: session.easnerTransactionId,
       localPayIn: session.localPayIn,
       customerRate: session.customerRate,
       usdCredit: session.usdCredit,
@@ -77,6 +97,9 @@ export async function POST(request: Request) {
       bankInfo,
       expiresAt: session.expiresAt,
       payInRail: rail,
+      sourcePhone,
+      sourceNetworkId,
+      sourceNetworkName,
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : "grid_fund_balance_confirm_failed"
