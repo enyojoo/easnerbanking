@@ -33,7 +33,7 @@ describe("collectGridCorridorTargets", () => {
     )
   })
 
-  it("adds bank_transfer targets from USD exchange rates when discoveries are sparse", () => {
+  it("does not add targets from USD exchange rates without discoveries", () => {
     const targets = collectGridCorridorTargets({
       discoveries: [],
       exchangeRates: [
@@ -42,12 +42,24 @@ describe("collectGridCorridorTargets", () => {
       ],
     })
 
-    expect(targets).toEqual(
-      expect.arrayContaining([
-        { countryCode: "IN", currencyCode: "INR", rail: "bank_transfer" },
-        { countryCode: "BR", currencyCode: "BRL", rail: "bank_transfer" },
-      ]),
-    )
+    expect(targets).toEqual([])
+  })
+
+  it("excludes NG mobile money corridor target", () => {
+    const targets = collectGridCorridorTargets({
+      discoveries: [
+        {
+          country: "NG",
+          currency: "NGN",
+          bankName: "MTN MoMo",
+          displayName: "MTN MoMo",
+          paymentRails: ["MOBILE_MONEY"],
+        },
+      ],
+      exchangeRates: [],
+    })
+
+    expect(targets.some((t) => t.countryCode === "NG" && t.rail === "mobile_money")).toBe(false)
   })
 
   it("includes USD local-currency corridors when country is explicit", () => {

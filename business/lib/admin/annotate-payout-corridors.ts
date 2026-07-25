@@ -1,5 +1,5 @@
 import type { ProviderHealthStatus } from "@easner/shared"
-import { hasNoahSellChannel } from "@/lib/noah/channel-availability"
+import { hasNoahSellChannelForRail } from "@/lib/noah/channel-availability"
 import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
 
@@ -64,9 +64,11 @@ export async function annotateAdminCorridorsWithProviderHealth<T extends AdminCo
     const provider_health: Record<string, ProviderHealthStatus> = {}
 
     // Probe Noah sell regardless of current routing (YC-only rows may still overlap Noah).
-    const noahOk = await hasNoahSellChannel({
+    const rail = row.rail === "mobile_money" ? "mobile_money" : "bank_transfer"
+    const noahOk = await hasNoahSellChannelForRail({
       country: row.country_code,
       fiatCurrency: row.currency_code,
+      rail,
     })
     provider_health.noah = noahOk ? "ok" : "unavailable"
 

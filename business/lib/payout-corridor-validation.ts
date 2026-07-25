@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveRecipientPayoutRail } from "@easner/shared"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-payout-country"
-import { hasNoahSellChannel } from "@/lib/noah/channel-availability"
+import { hasNoahSellChannelForRail } from "@/lib/noah/channel-availability"
 type RecipientLike = {
   country_code?: string | null
   currency: string
@@ -89,9 +89,10 @@ export async function payoutCorridorGate(
   }
 
   if (options?.requireExecutableNoahChannel) {
-    const sellOk = await hasNoahSellChannel({
+    const sellOk = await hasNoahSellChannelForRail({
       country: cc,
       fiatCurrency: String(row.currency || "").toUpperCase(),
+      rail,
     })
     if (!sellOk) {
       return NextResponse.json(

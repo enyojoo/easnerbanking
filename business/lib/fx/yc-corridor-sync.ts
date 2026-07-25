@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { currencyDisplayName, countryDisplayName } from "@easner/shared"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
-import { isExcludedPayoutCorridorCountry } from "@/lib/payout-corridors-exclusions"
+import { isExcludedPayoutCorridorCountry, isExcludedPayoutCorridorTarget } from "@/lib/payout-corridors-exclusions"
 import { upsertPayoutCorridor } from "@/lib/payout-corridors-upsert"
 
 export type YcCorridorTarget = {
@@ -48,6 +48,7 @@ export function collectYcCorridorTargets(
     const ycSend = ramp.includes("withdraw") || ramp.includes("send")
     const ycReceive = ramp.includes("deposit") || ramp.includes("receive")
     if (!ycSend && !ycReceive) continue
+    if (isExcludedPayoutCorridorTarget(countryCode, currencyCode, rail)) continue
 
     const key = corridorTargetKey({ countryCode, currencyCode, rail, ycSend, ycReceive })
     const existing = map.get(key)

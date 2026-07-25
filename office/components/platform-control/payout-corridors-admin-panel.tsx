@@ -133,7 +133,6 @@ function rowSupportsGridPayIn(row: PayoutCorridorAdminRow): boolean {
 function rowSupportsNoahPayout(row: PayoutCorridorAdminRow): boolean {
   return (
     row.noah_sell_available === true ||
-    row.provider_health?.noah === "ok" ||
     String(row.settlement_backend ?? "").toLowerCase() === "noah" ||
     routingPrimaryProvider(row.provider_routing) === "noah"
   )
@@ -149,7 +148,6 @@ function corridorShowsNoahBadge(row: PayoutCorridorAdminRow): boolean {
   return (
     row.noah_sell_available === true ||
     meta.noah_receive === true ||
-    row.provider_health?.noah === "ok" ||
     String(row.settlement_backend ?? "").toLowerCase() === "noah"
   )
 }
@@ -713,6 +711,35 @@ function corridorMatchesRailTab(
   return normalizeCorridorRail(row.rail) === railTab
 }
 
+function corridorHasRailCapability(row: PayoutCorridorAdminRow): boolean {
+  const cc = row.country_code.trim().toUpperCase()
+  const cur = row.currency_code.trim().toUpperCase()
+  const rail = normalizeCorridorRail(row.rail)
+  if (cc === "NG" && cur === "NGN" && rail === "mobile_money") return false
+
+  if (
+    row.noah_sell_available === true ||
+    row.yc_send_available === true ||
+    row.yc_receive_available === true ||
+    row.grid_send_available === true ||
+    row.grid_receive_available === true
+  ) {
+    return true
+  }
+
+  const routing = parseRouting(row.provider_routing)
+  if (routing.length === 0) return false
+
+  const meta = rowMetadata(row)
+  return (
+    meta.yc_send === true ||
+    meta.yc_receive === true ||
+    meta.grid_send === true ||
+    meta.grid_receive === true ||
+    meta.noah_receive === true
+  )
+}
+
 function rowCaps(row: PayoutCorridorAdminRow): CountryCurrencyCaps {
   return {
     supportNoahPayout: rowSupportsNoahPayout(row),
@@ -922,7 +949,10 @@ export function PayoutCorridorsAdminPanel() {
   const [syncingCorridors, setSyncingCorridors] = useState(false)
   const [railTab, setRailTab] = useState<"bank_transfer" | "mobile_money">("bank_transfer")
   const filteredRows = useMemo(
-    () => rows.filter((r) => corridorMatchesRailTab(r, railTab)),
+    () =>
+      rows.filter(
+        (r) => corridorMatchesRailTab(r, railTab) && corridorHasRailCapability(r),
+      ),
     [rows, railTab],
   )
   const fiatRows = useMemo(() => groupFiatDestinations(filteredRows), [filteredRows])

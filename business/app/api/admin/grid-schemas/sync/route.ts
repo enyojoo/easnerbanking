@@ -23,6 +23,7 @@ export async function POST(request: Request) {
           inserted: result.provision.inserted,
           updated: result.provision.updated,
           skipped: result.provision.skipped,
+          pruned: result.provision.pruned,
           targets: result.provision.targets,
         }
       : undefined,

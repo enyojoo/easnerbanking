@@ -8,6 +8,7 @@ import {
 import type { AllCorridorSchemaSyncResult } from "@/lib/fx/provider-schema-sync-types"
 import { syncNoahCorridorSchemasSafe } from "@/lib/fx/noah-schema-sync"
 import { syncYcCorridorSchemasSafe } from "@/lib/fx/yc-schema-sync"
+import { pruneZombiePayoutCorridors } from "@/lib/admin/prune-zombie-payout-corridors"
 import { isMomoGridDiscovery, listGridDiscoveries } from "@/lib/grid/discoveries"
 import type { GridDiscovery } from "@/lib/grid/types"
 
@@ -189,9 +190,16 @@ export async function syncAllCorridorSchemasSafe(
       return { ok: false, provision: gridProvision, schemas: emptySchemas, error: grid.error }
     }
 
+    const prune = await pruneZombiePayoutCorridors(admin)
+    if (!prune.ok) {
+      return { ok: false, provision: gridProvision, schemas: emptySchemas, error: prune.error }
+    }
+
+    const provision = { ...gridProvision, pruned: prune.pruned }
+
     return {
       ok: true,
-      provision: gridProvision,
+      provision,
       schemas: {
         noah: { updated: noah.updated, skipped: noah.skipped },
         yellowcard: { updated: yellowcard.updated, skipped: yellowcard.skipped },

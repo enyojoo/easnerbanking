@@ -22,7 +22,7 @@ export type PayoutCorridorAdminRow = {
   grid_send_available?: boolean
   /** Live or synced Grid local pay-in on this corridor rail. */
   grid_receive_available?: boolean
-  /** Live Noah sell channel for this country + currency. */
+  /** Live Noah sell channel for this country + currency + rail. */
   noah_sell_available?: boolean
   /** Optional ops hint (e.g. noah); null = unspecified. Does not replace runtime capability checks. */
   settlement_backend: string | null

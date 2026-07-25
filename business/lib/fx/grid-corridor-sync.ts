@@ -5,8 +5,7 @@ import {
   listGridDiscoveries,
 } from "@/lib/grid/discoveries"
 import type { GridDiscovery } from "@/lib/grid/types"
-import { fetchLiveGridExchangeRates } from "@/lib/fx/grid-rates"
-import { isExcludedPayoutCorridorCountry } from "@/lib/payout-corridors-exclusions"
+import { isExcludedPayoutCorridorCountry, isExcludedPayoutCorridorTarget } from "@/lib/payout-corridors-exclusions"
 import { upsertPayoutCorridor } from "@/lib/payout-corridors-upsert"
 
 const BRIDGE_CURRENCIES = new Set(["USD", "USDC", "USDT"])
@@ -29,6 +28,7 @@ export type GridCorridorSyncResult = {
   inserted: number
   updated: number
   skipped: number
+  pruned: number
   targets: number
   error?: string
 }
@@ -73,10 +73,10 @@ function resolveCountryForDiscovery(d: GridDiscovery, currencyCode: string): str
   return mapped.toUpperCase()
 }
 
-/** Build unique Grid corridor targets from discoveries and USD→fiat exchange rates. */
+/** Build unique Grid corridor targets from discoveries (rail-specific capability required). */
 export function collectGridCorridorTargets(input: {
   discoveries: GridDiscovery[]
-  exchangeRates: Array<{ from: string; to: string; country?: string }>
+  exchangeRates?: Array<{ from: string; to: string; country?: string }>
 }): GridCorridorTarget[] {
   const byPair = new Map<string, GridDiscovery[]>()
 
@@ -102,30 +102,13 @@ export function collectGridCorridorTargets(input: {
           countryCode,
           currencyCode,
           rail,
-        })
+        }) &&
+        !isExcludedPayoutCorridorTarget(countryCode, currencyCode, rail)
       ) {
         const target = { countryCode, currencyCode, rail }
         targets.set(corridorTargetKey(target), target)
       }
     }
-  }
-
-  for (const rate of input.exchangeRates) {
-    if (rate.from !== "USD") continue
-    const currencyCode = rate.to.trim().toUpperCase()
-    if (!currencyCode || BRIDGE_CURRENCIES.has(currencyCode)) continue
-    const countryCode = (
-      rate.country?.trim().toUpperCase() ||
-      getCountryCodeForCurrency(currencyCode) ||
-      ""
-    ).toUpperCase()
-    if (!countryCode || isExcludedPayoutCorridorCountry(countryCode)) continue
-    const target: GridCorridorTarget = {
-      countryCode,
-      currencyCode,
-      rail: "bank_transfer",
-    }
-    targets.set(corridorTargetKey(target), target)
   }
 
   return preferLocalCurrencyTargets(
@@ -170,10 +153,9 @@ export async function syncGridPayoutCorridors(
   opts?: { forceRefresh?: boolean },
 ): Promise<GridCorridorSyncResult> {
   const discoveries = await listGridDiscoveries(opts?.forceRefresh ?? true)
-  const exchangeRates = await fetchLiveGridExchangeRates()
-  const targets = collectGridCorridorTargets({ discoveries, exchangeRates })
+  const targets = collectGridCorridorTargets({ discoveries })
   if (targets.length === 0) {
-    return { ok: true, inserted: 0, updated: 0, skipped: 0, targets: 0 }
+    return { ok: true, inserted: 0, updated: 0, skipped: 0, pruned: 0, targets: 0 }
   }
 
   const { data: existingRows, error } = await admin
@@ -181,7 +163,7 @@ export async function syncGridPayoutCorridors(
     .select("id,country_code,currency_code,rail,metadata,provider_routing,country_name")
 
   if (error) {
-    return { ok: false, inserted: 0, updated: 0, skipped: 0, targets: targets.length, error: error.message }
+    return { ok: false, inserted: 0, updated: 0, skipped: 0, pruned: 0, targets: targets.length, error: error.message }
   }
 
   const existingByKey = new Map<string, (typeof existingRows)[number]>()
@@ -195,6 +177,11 @@ export async function syncGridPayoutCorridors(
   let skipped = 0
 
   for (const target of targets) {
+    if (isExcludedPayoutCorridorTarget(target.countryCode, target.currencyCode, target.rail)) {
+      skipped++
+      continue
+    }
+
     const key = corridorTargetKey(target)
     const existing = existingByKey.get(key)
     const currencyName = currencyDisplayName(target.currencyCode)
@@ -252,7 +239,7 @@ export async function syncGridPayoutCorridors(
     else updated++
   }
 
-  return { ok: true, inserted, updated, skipped, targets: targets.length }
+  return { ok: true, inserted, updated, skipped, pruned: 0, targets: targets.length }
 }
 
 export async function syncGridPayoutCorridorsSafe(
@@ -267,6 +254,7 @@ export async function syncGridPayoutCorridorsSafe(
       inserted: 0,
       updated: 0,
       skipped: 0,
+      pruned: 0,
       targets: 0,
       error: e instanceof Error ? e.message : String(e),
     }
