@@ -32,6 +32,7 @@ export async function GET(request: Request) {
   const active = people.filter((p) => p.status === "active")
   const held = people.filter((p) => p.status === "held")
   const needsDestination = active.filter((p) =>
+    p.readinessStatus !== "ready" &&
     personNeedsDestination({ rail: p.rail, recipientId: p.recipientId, easetag: p.easetag }),
   )
 

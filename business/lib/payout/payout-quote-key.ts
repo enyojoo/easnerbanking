@@ -2,6 +2,7 @@ import { buildYcQuoteKey } from "@/lib/yellowcard/quote-key"
 
 export function buildPayoutQuoteKey(parts: {
   recipientId: string
+  destinationRef?: string
   sourceBalanceCurrency: string
   amountEntryMode: "send" | "receive"
   receiveAmount: number
@@ -11,7 +12,7 @@ export function buildPayoutQuoteKey(parts: {
 }): string {
   return buildYcQuoteKey({
     mode: "balance_payout",
-    recipient_id: parts.recipientId,
+    destination_ref: parts.destinationRef || `recipient:${parts.recipientId}`,
     source: parts.sourceBalanceCurrency,
     entry_mode: parts.amountEntryMode,
     receive_amount: parts.receiveAmount,

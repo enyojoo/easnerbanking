@@ -6,7 +6,7 @@ export type PayrollMethodSummary = {
   id: string
   type: PayrollMethodType
   label: string
-  maskedDetails: Record<string, string>
+  details: Record<string, string>
   preferred: boolean
 }
 
@@ -80,17 +80,26 @@ export function payrollMethodTitle(method: PayrollMethodSummary | null): string 
 
 export function payrollMethodDescription(method: PayrollMethodSummary | null): string {
   if (!method) return 'Choose where you want to receive payroll'
-  const detailKeys =
-    method.type === 'bank'
-      ? ['account', 'ending']
-      : method.type === 'mobile_money'
-        ? ['phone', 'ending']
-        : method.type === 'stablecoin'
-          ? ['wallet', 'ending']
-          : ['easetag']
-  const masked = detailKeys
-    .map((key) => method.maskedDetails?.[key])
-    .filter(Boolean)
-    .join(' · ')
-  return masked || payrollMethodTitle(method)
+  if (method.type === 'bank') {
+    return [
+      method.details.bankName,
+      method.details.accountNumber,
+      method.details.currency,
+    ].filter(Boolean).join(' · ') || payrollMethodTitle(method)
+  }
+  if (method.type === 'mobile_money') {
+    return [
+      method.details.provider,
+      method.details.phoneNumber,
+      method.details.currency,
+    ].filter(Boolean).join(' · ') || payrollMethodTitle(method)
+  }
+  if (method.type === 'stablecoin') {
+    return [
+      method.details.walletAddress,
+      method.details.asset || method.details.currency,
+      method.details.network,
+    ].filter(Boolean).join(' · ') || payrollMethodTitle(method)
+  }
+  return method.details.easetag || payrollMethodTitle(method)
 }

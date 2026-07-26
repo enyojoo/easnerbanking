@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireNoahEnv } from "../../_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
-import { buildPayoutQuote } from "@/lib/noah/payout-quote"
 import { mapNoahPayoutUserError } from "@/lib/noah/noah-prepare-errors"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
@@ -13,6 +12,8 @@ import {
 } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
+import { sendDestinationFromRow } from "@/lib/send-destination"
+import { quoteSendDestination } from "@/lib/send-destination-operations"
 
 /**
  * Executable payout quote: Noah sell/prepare + Easner pricing in one call.
@@ -130,15 +131,26 @@ export async function POST(request: Request) {
           }
         : undefined
 
-    const quote = await buildPayoutQuote({
+    if (!gateRow) throw new Error("Recipient not found.")
+    const destination = sendDestinationFromRow({
+      ...(gateRow as unknown as Record<string, unknown>),
+      id: recipientId || String((gateRow as unknown as { id?: string }).id || "inline"),
+    }, "recipient")
+    const quote = await quoteSendDestination({
+      admin,
+      accountContext: acc.ctx,
       userId: user.id,
+      businessId: acc.ctx.scope === "business" ? acc.ctx.subjectBusinessId : null,
+      sourceCurrency: sourceBalanceCurrency,
       noahCustomerId: acc.ctx.noahCustomerId,
-      recipientId,
-      recipient: inlineRecipient,
-      receiveFiatAmount: receiveAmount,
-      sourceBalanceCurrency,
+    }, {
+      destination,
+      amount: receiveAmount,
       amountEntryMode,
-      sendBudget,
+      sendAmount: sendBudget,
+      note,
+      purpose: paymentPurpose,
+      idempotencyKey: `quote:${destination.destinationRef}`,
       prepareOverrides,
     })
     return NextResponse.json({ ok: true, quote })

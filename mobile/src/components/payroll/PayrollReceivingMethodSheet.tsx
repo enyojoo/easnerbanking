@@ -23,8 +23,6 @@ import {
   surfaceFrameStyle,
   textStyles,
 } from '../../theme'
-import { useAuth } from '../../contexts/AuthContext'
-import { recipientService } from '../../lib/recipientService'
 import { CountryFlag } from '../flags/CountryFlag'
 import { CachedImage } from '../CachedImage'
 import { getNetworkIconUrl, getTokenIconUrl } from '../../lib/cryptoIcons'
@@ -35,6 +33,7 @@ import { WalletAddressField } from '../recipients/WalletAddressField'
 import { EmbeddedWalletAddressQrScanner } from '../recipients/WalletAddressQrScanner'
 import { formatAccountNumber, formatIBAN, formatRoutingNumber, formatSortCode } from '../../utils/formatters'
 import { resolvePayrollReceivingDestination } from '../../features/payroll/receivingMethodDefaults'
+import { useAuth } from '../../contexts/AuthContext'
 
 export type PayrollExternalMethodType = 'bank' | 'mobile_money' | 'stablecoin'
 
@@ -42,7 +41,7 @@ export type PayrollReceivingMethodResult = {
   id: string
   type: PayrollExternalMethodType
   label: string
-  maskedDetails: Record<string, string>
+  details: Record<string, string>
   preferred: boolean
 }
 
@@ -50,7 +49,7 @@ type ExistingMethod = {
   id: string
   type: PayrollExternalMethodType
   label: string
-  maskedDetails?: Record<string, string>
+  details?: Record<string, string>
 }
 
 type Props = {
@@ -99,7 +98,7 @@ function resultFromApi(value: Record<string, unknown>, preferred: boolean): Payr
     id: String(value.id),
     type: String(value.type) as PayrollExternalMethodType,
     label: String(value.label || methodTitle(String(value.type) as PayrollExternalMethodType)),
-    maskedDetails: (value.maskedDetails ?? value.masked_details ?? {}) as Record<string, string>,
+    details: (value.details ?? {}) as Record<string, string>,
     preferred,
   }
 }
@@ -126,6 +125,7 @@ export function PayrollReceivingMethodSheet({
   const [showWalletScanner, setShowWalletScanner] = useState(false)
   const [reviewing, setReviewing] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [loadingExisting, setLoadingExisting] = useState(false)
   const [error, setError] = useState('')
 
   const catalogType = selectedType === 'stablecoin' ? 'wallet' : selectedType
@@ -149,16 +149,17 @@ export function PayrollReceivingMethodSheet({
   }, [destinationSearch, destinations])
 
   const residenceCountry = String(
-    userProfile?.residence_country ??
+    editingMethod?.details?.countryCode ??
+      userProfile?.residence_country ??
       userProfile?.profile?.residence_country ??
       userProfile?.profile?.country_code ??
       '',
   )
   const savedDestination = useMemo(() => {
     if (!editingMethod) return null
-    const countryCode = String(editingMethod.maskedDetails?.countryCode || '').trim().toUpperCase()
+    const countryCode = String(editingMethod.details?.countryCode || '').trim().toUpperCase()
     const currencyCode = String(
-      editingMethod.maskedDetails?.asset || editingMethod.maskedDetails?.currency || '',
+      editingMethod.details?.asset || editingMethod.details?.currency || '',
     ).trim().toUpperCase()
     if (!currencyCode) return null
     return destinations.find((destination) => (
@@ -200,7 +201,30 @@ export function PayrollReceivingMethodSheet({
     setReviewing(false)
     setSubmitting(false)
     setError('')
-  }, [editingMethod, visible])
+  }, [editingMethod?.id, editingMethod?.type, visible])
+
+  useEffect(() => {
+    if (!visible || !connectionId || !editingMethod?.id) return
+    let active = true
+    setLoadingExisting(true)
+    apiFetch<{ method: { details?: Record<string, string> } }>(
+      `/api/payroll/connections/${connectionId}/methods/${editingMethod.id}`,
+    )
+      .then((response) => {
+        if (!active) return
+        setFields(response.method.details ?? {})
+      })
+      .catch((caught) => {
+        if (!active) return
+        setError(caught instanceof Error ? caught.message : 'Could not load receiving details')
+      })
+      .finally(() => {
+        if (active) setLoadingExisting(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [connectionId, editingMethod?.id, visible])
 
   const formFields = effectiveDestination?.fields ?? []
   const providerOptions = useMemo(() => {
@@ -313,34 +337,7 @@ export function PayrollReceivingMethodSheet({
           : `${effectiveDestination.currencyCode} on ${fields.network}`
     setSubmitting(true)
     setError('')
-    let createdRecipientId = ''
     try {
-      if (!userProfile?.id) throw new Error('Your account could not be verified. Please sign in again.')
-      const recipient = await recipientService.create(userProfile.id, {
-        fullName: fields.fullName,
-        accountNumber:
-          type === 'bank' ? fields.accountNumber : type === 'mobile_money' ? fields.phoneNumber : fields.walletAddress,
-        bankName:
-          type === 'bank'
-            ? fields.bankName
-            : type === 'mobile_money'
-              ? `Mobile Money (${fields.provider})`
-              : `Wallet (${effectiveDestination.currencyCode}/${fields.network})`,
-        currency: effectiveDestination.currencyCode,
-        countryCode: effectiveDestination.countryCode,
-        phoneNumber: type === 'mobile_money' ? fields.phoneNumber : undefined,
-        mobileProvider: type === 'mobile_money' ? fields.provider : undefined,
-        walletNetwork: type === 'stablecoin' ? fields.network : undefined,
-        routingNumber: fields.routingNumber || undefined,
-        sortCode: fields.sortCode || undefined,
-        iban: fields.iban || undefined,
-        swiftBic: fields.swiftBic || undefined,
-        addressLine1: fields.addressLine1 || undefined,
-        city: fields.city || undefined,
-        state: fields.state || undefined,
-        postalCode: fields.postalCode || undefined,
-      })
-      createdRecipientId = recipient.id
       const path = invitationId
         ? `/api/payroll/invitations/${invitationId}/methods`
         : connectionId
@@ -355,16 +352,12 @@ export function PayrollReceivingMethodSheet({
           type,
           label,
           details,
-          providerRecipientId: recipient.id,
           ...(connectionId ? { preferred: true } : {}),
         },
       })
       await onSaved(resultFromApi(response.method, Boolean(connectionId)))
       onClose()
     } catch (caught) {
-      if (createdRecipientId && userProfile?.id) {
-        void recipientService.delete(createdRecipientId, userProfile.id).catch(() => undefined)
-      }
       setError(caught instanceof Error ? caught.message : 'Could not save receiving method')
     } finally {
       setSubmitting(false)
@@ -453,7 +446,11 @@ export function PayrollReceivingMethodSheet({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              {reviewing && effectiveDestination ? (
+              {loadingExisting ? (
+                <View style={styles.loadingExisting}>
+                  <Text style={styles.muted}>Loading saved receiving details…</Text>
+                </View>
+              ) : reviewing && effectiveDestination ? (
                 <View style={styles.reviewCard}>
                   <Text style={styles.reviewTitle}>{methodTitle(selectedType)}</Text>
                   <View style={styles.reviewRow}>
@@ -847,6 +844,12 @@ const styles = StyleSheet.create({
   },
   formScroll: { flex: 1 },
   formContent: { paddingHorizontal: spacing[5], paddingBottom: spacing[5] },
+  loadingExisting: {
+    minHeight: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  muted: { ...textStyles.bodySmall, color: colors.text.secondary },
   selectorWrapper: {
     marginBottom: spacing[4],
     zIndex: 1000,

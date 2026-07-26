@@ -74,8 +74,40 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const admin = createSupabaseAdmin()
   const run = await loadRun(admin, ctx.businessId, id)
   if (!run) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  const { data: executionJob } = await admin
+    .from("payroll_execution_jobs")
+    .select("id,status,phase,attempts,processed_lines,total_lines,last_error,updated_at")
+    .eq("run_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  return NextResponse.json({ run })
+  return NextResponse.json({
+    run: {
+      ...run,
+      metadata: {
+        ...run.metadata,
+        executionJob: executionJob
+          ? {
+              id: executionJob.id,
+              status: executionJob.status,
+              phase: executionJob.phase,
+              attempts: executionJob.attempts,
+              processedLines: executionJob.processed_lines,
+              totalLines: executionJob.total_lines,
+              errorCode:
+                executionJob.last_error === "insufficient_funds" ||
+                executionJob.last_error === "needs_reapproval"
+                  ? executionJob.last_error
+                  : executionJob.status === "dead_letter"
+                    ? "execution_failed"
+                    : null,
+              updatedAt: executionJob.updated_at,
+            }
+          : null,
+      },
+    },
+  })
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -378,7 +410,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         !String(line.rail ?? "").trim() ||
         (line.rail === "easetag" &&
           !String((line.recipient_snapshot as Record<string, unknown>)?.easetag ?? "").trim()) ||
-        (line.rail !== "easetag" && !(line.recipient_snapshot as Record<string, unknown>)?.recipientId),
+        (line.rail !== "easetag" && !line.payment_method_id),
     )
     if (activeLines.length === 0 || invalid.length > 0) {
       return NextResponse.json(

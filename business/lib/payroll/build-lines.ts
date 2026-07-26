@@ -1,14 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { PayrollPerson } from "@/lib/payroll/types"
 import { buildLineFromPerson } from "@/lib/payroll/run-utils"
+import {
+  maskPayrollMethod,
+  payrollMethodDetails,
+} from "@/lib/payroll/personal-payroll"
 
 type PayrollMethodRow = {
   id: unknown
   person_id: unknown
   type: unknown
   label: unknown
-  masked_details: unknown
-  provider_recipient_id: unknown
+  account_number?: unknown
   owner_type: unknown
   connection_id: unknown
 }
@@ -28,20 +31,14 @@ export function applySelectedPayrollMethod(
   const rail = railByMethodType[methodType]
   if (!rail) return line
 
-  const providerRecipientId =
-    methodType === "easetag" || !method.provider_recipient_id
-      ? null
-      : String(method.provider_recipient_id)
-  const maskedDetails =
-    method.masked_details && typeof method.masked_details === "object"
-      ? (method.masked_details as Record<string, unknown>)
-      : {}
+  const details = payrollMethodDetails(method as unknown as Record<string, unknown>)
+  const displayDetails = maskPayrollMethod(method as unknown as Record<string, unknown>)
   const snapshot = {
     id: String(method.id),
     type: methodType,
     label: String(method.label),
-    maskedDetails,
-    providerRecipientId,
+    details,
+    payrollOwned: methodType === "easetag" || Boolean(method.account_number),
   }
 
   return {
@@ -49,13 +46,13 @@ export function applySelectedPayrollMethod(
     rail,
     recipient_snapshot: {
       ...line.recipient_snapshot,
-      recipientId: providerRecipientId,
+      recipientId: null,
     },
     payment_method_id: String(method.id),
     payment_method_snapshot: snapshot,
     metadata: {
       ...line.metadata,
-      maskedDestination: Object.values(maskedDetails).filter(Boolean).join(" · "),
+      maskedDestination: Object.values(displayDetails).filter(Boolean).join(" · "),
     },
   }
 }
@@ -72,7 +69,7 @@ export async function buildPayrollLines(
       .select("person_id,preferred_method_id")
       .in("person_id", personIds),
     admin.from("payroll_payment_methods")
-      .select("id,person_id,type,label,masked_details,provider_recipient_id,owner_type,connection_id")
+      .select("id,person_id,type,label,account_number,owner_type,connection_id,full_name,country_code,currency,bank_name,phone_number,email,mobile_provider,wallet_network,routing_number,sort_code,iban,swift_bic,transfer_type,checking_or_savings,address_line1,city,state,postal_code,metadata")
       .in("person_id", personIds)
       .eq("status", "active"),
   ])

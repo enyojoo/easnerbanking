@@ -75,7 +75,15 @@ function mockAdmin() {
 describe("executeYcBalancePayout ledger upserts", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(upsertLedgerTransaction).mockResolvedValue({ transactionId: "tx-canonical" })
+    vi.mocked(upsertLedgerTransaction).mockResolvedValue({
+      transactionId: "tx-canonical",
+      inserted: true,
+      updated: false,
+      previousStatus: null,
+      nextStatus: "pending",
+      becameSettled: false,
+      becameFailed: false,
+    })
     vi.mocked(applyGlobalPayoutWalletDebitForEasnerPayoutId).mockResolvedValue(undefined)
     vi.mocked(resolveNoahAccountContextFromLedgerScope).mockResolvedValue({
       scope: "individual",
@@ -88,6 +96,7 @@ describe("executeYcBalancePayout ledger upserts", () => {
       id: "lock-1",
       provider: "yellowcard",
       recipient_id: "rec-1",
+      destination_ref: "recipient:rec-1",
       recipient_snapshot_hash: "hash",
       provider_payload_json: {
         sequenceId: "yc_quote_abc",

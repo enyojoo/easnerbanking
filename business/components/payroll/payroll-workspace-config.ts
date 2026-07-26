@@ -20,12 +20,15 @@ export interface PayrollListViewState {
   filter: string
 }
 
+export const PAYROLL_WORKSPACE_DESCRIPTION =
+  "Pay your team, resolve what needs attention, and follow every payroll payment."
+
 export const PAYROLL_WORKSPACE_TABS: PayrollWorkspaceTabConfig[] = [
   {
     id: "overview",
     href: "/payroll",
     label: "Overview",
-    description: "Pay your team, resolve what needs attention, and follow every payroll payment.",
+    description: PAYROLL_WORKSPACE_DESCRIPTION,
     primaryAction: { label: "Run payroll", href: "/payroll/runs/new", kind: "primary" },
     secondaryActions: [
       { label: "Add person", href: "/payroll/people/new", kind: "secondary" },
@@ -37,7 +40,7 @@ export const PAYROLL_WORKSPACE_TABS: PayrollWorkspaceTabConfig[] = [
     id: "people",
     href: "/payroll/people",
     label: "People",
-    description: "Manage who you pay, their identity status, amounts, and receiving methods.",
+    description: PAYROLL_WORKSPACE_DESCRIPTION,
     primaryAction: {
       label: "Add person",
       href: "/payroll/people/new?returnTo=/payroll/people",
@@ -51,14 +54,14 @@ export const PAYROLL_WORKSPACE_TABS: PayrollWorkspaceTabConfig[] = [
     id: "runs",
     href: "/payroll/runs",
     label: "Runs",
-    description: "Create, approve, schedule, and monitor payroll payments.",
+    description: PAYROLL_WORKSPACE_DESCRIPTION,
     primaryAction: { label: "Run payroll", href: "/payroll/runs/new", kind: "primary" },
   },
   {
     id: "schedules",
     href: "/payroll/schedules",
     label: "Schedules",
-    description: "Manage recurring paydays and the people included in each schedule.",
+    description: PAYROLL_WORKSPACE_DESCRIPTION,
     primaryAction: {
       label: "Create schedule",
       href: "/payroll/schedules/new",
@@ -69,7 +72,7 @@ export const PAYROLL_WORKSPACE_TABS: PayrollWorkspaceTabConfig[] = [
     id: "settings",
     href: "/payroll/settings",
     label: "Settings",
-    description: "Control the Payroll account, timing, approvals, and team access.",
+    description: PAYROLL_WORKSPACE_DESCRIPTION,
   },
 ]
 

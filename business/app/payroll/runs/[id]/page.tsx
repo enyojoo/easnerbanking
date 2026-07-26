@@ -69,6 +69,15 @@ export default function PayrollRunDetailPage() {
   const [rejectReason, setRejectReason] = useState("")
 
   const run = runQuery.data
+  const executionJob = run?.metadata?.executionJob as
+    | {
+        status?: string
+        phase?: string
+        processedLines?: number
+        totalLines?: number
+        errorCode?: string | null
+      }
+    | undefined
   const lines = useMemo(() => run?.lines ?? [], [run?.lines])
   const failedLines = lines.filter((l) => l.status === "failed")
   const paymentResultsVisible = Boolean(
@@ -102,7 +111,7 @@ export default function PayrollRunDetailPage() {
     if (!(await confirmWithPin.requestConfirm())) return
     try {
       await executeRun.mutateAsync()
-      toast.success("Payroll executed")
+      toast.success("Payroll queued for sending")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Execute failed")
     }
@@ -113,7 +122,7 @@ export default function PayrollRunDetailPage() {
     try {
       await approveRun.mutateAsync({ mode: "pay_now" })
       await executeRun.mutateAsync()
-      toast.success("Payroll approved and sent")
+      toast.success("Payroll approved and queued")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Payroll could not be sent")
     }
@@ -226,9 +235,12 @@ export default function PayrollRunDetailPage() {
                 </Link>
               </Button>
             ) : null}
-            {(run.status === "approved" || run.status === "partial") && canApprove ? (
+            {(run.status === "approved" ||
+              run.status === "partial" ||
+              (run.status === "executing" && executionJob?.status === "dead_letter")) &&
+            canApprove ? (
               <Button variant="primary" onClick={() => void handleExecute()} disabled={executeRun.isPending}>
-                Execute with PIN
+                {executionJob?.status === "dead_letter" ? "Retry sending" : "Execute with PIN"}
               </Button>
             ) : null}
             {failedLines.length > 0 && canApprove ? (
@@ -238,7 +250,10 @@ export default function PayrollRunDetailPage() {
                   retryRun.mutate(
                     failedLines.map((line) => line.id),
                     {
-                      onSuccess: (result) => toast.success(`Retried ${result.retried.length} payments`),
+                      onSuccess: (result) =>
+                        toast.success(
+                          `${result.retried.length} failed ${result.retried.length === 1 ? "payment" : "payments"} queued`,
+                        ),
                       onError: (error) => toast.error(error.message),
                     },
                   )
@@ -324,6 +339,29 @@ export default function PayrollRunDetailPage() {
           </div>
         }
       >
+      {["queued", "processing", "retry"].includes(String(executionJob?.status || "")) ? (
+        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
+          <p className="font-medium">
+            {executionJob?.phase === "reconciling"
+              ? "Confirming payroll payments"
+              : executionJob?.phase === "funding"
+                ? "Payroll is waiting for funding"
+                : executionJob?.phase === "quoting"
+                  ? "Preparing payroll payment quotes"
+                : executionJob?.status === "processing"
+                  ? "Sending payroll payments"
+              : executionJob?.status === "retry"
+                ? "Payroll is waiting to retry"
+                : "Payroll is queued for sending"}
+          </p>
+          <p className="mt-1 opacity-80">
+            {Number(executionJob?.totalLines || 0) > 0
+              ? `${Number(executionJob?.processedLines || 0)} of ${Number(executionJob?.totalLines || 0)} payments processed. `
+              : ""}
+            This page updates automatically.
+          </p>
+        </div>
+      ) : null}
 
       {selfApprovalBlocked ? (
         <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">

@@ -23,7 +23,10 @@ export function usePayrollConnections() {
     staleTime: PAYROLL_CONNECTIONS_STALE_MS,
     gcTime: 60 * 60_000,
     refetchOnWindowFocus: true,
-    meta: { safePersist: true, freshness: 'operational' },
+    // Receiving destinations contain full employee-owned details. Keep this
+    // authenticated cache in memory only; the lightweight summary endpoint
+    // remains the source for persisted More-screen visibility.
+    meta: { safePersist: false, freshness: 'operational' },
   })
 }
 

@@ -217,7 +217,14 @@ export function usePayrollRunDetail(runId: string | null) {
     placeholderData: listPlaceholder,
     staleTime: 60_000,
     gcTime: 60 * 60_000,
-    refetchInterval: (q) => (q.state.data?.run?.status === "executing" ? 3000 : false),
+    refetchInterval: (q) => {
+      const run = q.state.data?.run
+      const job = run?.metadata?.executionJob as { status?: string } | undefined
+      return run?.status === "executing" ||
+        ["queued", "processing", "retry"].includes(String(job?.status || ""))
+        ? 3000
+        : false
+    },
     meta: { safePersist: false, webPersist: "none", freshness: "operational" },
   })
 }

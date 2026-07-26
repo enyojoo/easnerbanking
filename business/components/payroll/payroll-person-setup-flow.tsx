@@ -16,18 +16,61 @@ import { PayrollCountrySelect } from "@/components/payroll/payroll-country-selec
 import { useCreatePayrollPerson, useInvitePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { usePayrollCapabilities, usePayrollSchedules, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { fetchPayrollEasetagProfileByTag, type PayrollEasetagProfile } from "@/lib/easenet-profile"
-import type { Beneficiary } from "@/lib/recipient-types"
-import type { PayrollPerson, PayrollPersonType, PayrollRail } from "@/lib/payroll/types"
+import type { RecipientUpsertInput } from "@/lib/recipients-store"
+import type {
+  PayrollExternalReceivingMethodInput,
+  PayrollPerson,
+  PayrollPersonType,
+} from "@/lib/payroll/types"
 import { cn } from "@/lib/utils"
 
 type Method = "easetag" | "manual"
 type Step = "method" | "details" | "payment" | "review" | "success"
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-function railFromBeneficiary(person: Beneficiary): PayrollRail {
-  if (person.mobileProvider) return "mobile"
-  if (person.walletNetwork) return "crypto"
-  return "bank"
+function toPayrollReceivingMethod(input: RecipientUpsertInput): PayrollExternalReceivingMethodInput {
+  const common = {
+    fullName: input.fullName,
+    currency: input.currency,
+    email: input.email,
+  }
+  if (input.recipientType === "mobile") {
+    return {
+      ...common,
+      type: "mobile_money",
+      countryCode: input.countryCode || "",
+      provider: input.mobileProvider || "",
+      phoneNumber: input.phoneNumber || input.accountNumber,
+    }
+  }
+  if (input.recipientType === "wallet") {
+    return {
+      ...common,
+      type: "stablecoin",
+      countryCode: input.countryCode,
+      asset: input.walletAsset || input.currency,
+      network: input.walletNetwork || "",
+      walletAddress: input.accountNumber,
+    }
+  }
+  return {
+    ...common,
+    type: "bank",
+    countryCode: input.countryCode || "",
+    bankName: input.bankName,
+    accountNumber: input.accountNumber,
+    routingNumber: input.routingNumber,
+    sortCode: input.sortCode,
+    iban: input.iban,
+    swiftBic: input.swiftBic,
+    transferType: input.transferType,
+    checkingOrSavings: input.checkingOrSavings,
+    phoneNumber: input.phoneNumber,
+    addressLine1: input.addressLine1,
+    city: input.city,
+    state: input.state,
+    postalCode: input.postalCode,
+  }
 }
 
 function safeReturnTo(value: string | null) {
@@ -123,20 +166,19 @@ export function PayrollPersonSetupFlow() {
     }
   }
 
-  async function createManualPerson(destination: Beneficiary) {
+  async function createManualPerson(destination: RecipientUpsertInput) {
     try {
       const result = await createPerson.mutateAsync({
+        mode: "manual",
         type,
-        fullName: destination.name,
+        fullName: destination.fullName,
         email: email.trim().toLowerCase(),
         country,
         defaultAmount: Number(amount),
         payCurrency: businessCurrency,
-        recipientId: destination.id,
-        rail: railFromBeneficiary(destination),
-        status: "active",
-        internalReference: reference || null,
+        internalReference: reference || undefined,
         scheduleIds: scheduleId ? [scheduleId] : [],
+        receivingMethod: toPayrollReceivingMethod(destination),
       })
       setCreated(result.person)
       setStep("success")
@@ -409,7 +451,7 @@ export function PayrollPersonSetupFlow() {
                 submitButtonLabel="Save person"
                 terminology="payroll"
                 onSuccess={() => undefined}
-                onSuccessWithData={(destination) => void createManualPerson(destination)}
+                onValidatedSubmit={createManualPerson}
               />
               <Button className="mt-3" variant="ghost" onClick={() => setStep("details")}>
                 <ArrowLeft className="mr-2 h-4 w-4" />

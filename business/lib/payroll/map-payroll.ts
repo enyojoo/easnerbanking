@@ -149,7 +149,15 @@ function normalizeRunStatus(v: string | null | undefined): PayrollRunStatus {
 }
 
 function normalizeLineStatus(v: string | null | undefined): PayrollLineStatus {
-  const allowed: PayrollLineStatus[] = ["pending", "quoting", "locked", "paid", "failed", "skipped"]
+  const allowed: PayrollLineStatus[] = [
+    "pending",
+    "quoting",
+    "locked",
+    "processing",
+    "paid",
+    "failed",
+    "skipped",
+  ]
   const x = (v ?? "pending").toLowerCase() as PayrollLineStatus
   return allowed.includes(x) ? x : "pending"
 }

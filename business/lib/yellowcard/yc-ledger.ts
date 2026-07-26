@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { YcFundBalanceDepositReviewSnapshot } from "@easner/shared"
 import { mergeBankDepositLifecycleMetadata, mergeGlobalPayoutLifecycleMetadata } from "@/lib/noah/bank-onramp-tx"
 import { pendingGlobalPayoutProviderTransactionId } from "@/lib/noah/global-payout-ledger"
+import { destinationMetadata } from "@/lib/destination-reference"
 
 export type YcMode = "fund_balance" | "balance_payout" | "cross_border_send"
 
@@ -246,7 +247,7 @@ export function buildYcBalancePayoutOutMetadata(input: {
   receiveAmount?: number
   receiveCurrency?: string
   customerRate?: number
-  recipientId?: string | null
+  destinationRef: string
   recipientSnapshot?: Record<string, unknown> | null
   walletAddress?: string | null
   transactionStartedAt?: string
@@ -277,7 +278,8 @@ export function buildYcBalancePayoutOutMetadata(input: {
     ...(input.receiveAmount != null ? { receive_amount: input.receiveAmount } : {}),
     ...(input.receiveCurrency ? { receive_currency: input.receiveCurrency, fiat_currency: input.receiveCurrency } : {}),
     ...(input.customerRate != null ? { customer_rate: input.customerRate } : {}),
-    ...(input.recipientId ? { recipient_id: input.recipientId } : {}),
+    destination_ref: input.destinationRef,
+    ...destinationMetadata(input.destinationRef),
     ...(input.recipientSnapshot ? { recipient_snapshot: input.recipientSnapshot } : {}),
     ...(input.walletAddress ? { yc_wallet_address: input.walletAddress } : {}),
     ...(input.ycSendId ? { yc_send_id: input.ycSendId } : {}),

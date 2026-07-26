@@ -5,7 +5,7 @@ function method(patch: Partial<PayrollMethodSummary>): PayrollMethodSummary {
     id: 'method-1',
     type: 'easetag',
     label: 'Easetag',
-    maskedDetails: {},
+    details: { easetag: '@amina' },
     preferred: true,
     ...patch,
   }
@@ -16,16 +16,16 @@ describe('Payroll receiving-method presentation', () => {
     expect(payrollMethodTitle(method({ type: 'easetag' }))).toBe('Easetag')
   })
 
-  it('prefers masked destination details over the generic label', () => {
+  it('shows the saved destination details instead of a masked database summary', () => {
     expect(
       payrollMethodDescription(
         method({
           type: 'bank',
           label: 'Access Bank',
-          maskedDetails: { ending: '••••4921' },
+          details: { accountNumber: '12344921', currency: 'USD' },
         }),
       ),
-    ).toBe('••••4921')
+    ).toBe('12344921 · USD')
   })
 
   it('provides an actionable empty state', () => {

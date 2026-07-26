@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { sendDestinationFromRow } from "@/lib/send-destination"
 
 export async function GET(
   request: Request,
@@ -13,7 +14,7 @@ export async function GET(
   const admin = createSupabaseAdmin()
   const { data: person, error: personError } = await admin
     .from("payroll_people")
-    .select("recipient_id")
+    .select("id")
     .eq("id", id)
     .eq("business_id", ctx.businessId)
     .maybeSingle()
@@ -24,31 +25,42 @@ export async function GET(
   if (!person) {
     return NextResponse.json({ error: "Payroll person not found." }, { status: 404 })
   }
-  if (!person.recipient_id) {
-    return NextResponse.json(
-      { error: "This person does not have a saved receiving method." },
-      { status: 404 },
-    )
-  }
-
-  const { data: recipient, error: recipientError } = await admin
-    .from("recipients")
-    .select("*")
-    .eq("id", person.recipient_id)
+  const { data: payrollMethod, error: methodError } = await admin
+    .from("payroll_payment_methods")
+    .select("id,type,full_name,country_code,currency,account_number,bank_name,phone_number,email,mobile_provider,wallet_network,routing_number,sort_code,iban,swift_bic,transfer_type,checking_or_savings,address_line1,city,state,postal_code,metadata")
+    .eq("person_id", id)
+    .eq("business_id", ctx.businessId)
+    .eq("owner_type", "business")
+    .eq("status", "active")
     .maybeSingle()
-
-  if (recipientError) {
-    return NextResponse.json({ error: recipientError.message }, { status: 500 })
+  if (methodError) {
+    return NextResponse.json({ error: methodError.message }, { status: 500 })
   }
-  if (!recipient) {
-    return NextResponse.json(
-      { error: "The saved receiving method could not be found." },
-      { status: 404 },
-    )
+  if (payrollMethod?.account_number) {
+    try {
+      const destination = sendDestinationFromRow(payrollMethod, "payroll_method")
+      return NextResponse.json(
+        {
+          recipient: {
+            ...destination,
+            user_id: ctx.userId,
+            metadata: {
+              ...(destination.metadata ?? {}),
+              payrollOwned: true,
+            },
+          },
+        },
+        { headers: { "Cache-Control": "private, no-store" } },
+      )
+    } catch {
+      return NextResponse.json(
+        { error: "The saved receiving method could not be loaded." },
+        { status: 500 },
+      )
+    }
   }
-
   return NextResponse.json(
-    { recipient },
-    { headers: { "Cache-Control": "private, no-store" } },
+    { error: "This person does not have Payroll-owned payment details." },
+    { status: 404 },
   )
 }

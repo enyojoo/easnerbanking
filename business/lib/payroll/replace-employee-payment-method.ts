@@ -7,16 +7,13 @@ export interface EmployeePayrollMethodReplacement {
   selectAsPreferred: boolean
   type: "bank" | "mobile_money" | "stablecoin"
   label: string
-  maskedDetails: Record<string, string>
-  encryptedDetails: string
-  providerRecipientId: string | null
+  destination: Record<string, unknown>
 }
 
 export interface EmployeePayrollMethodRow {
   id: string
   type: "bank" | "mobile_money" | "stablecoin"
   label: string
-  masked_details: Record<string, string>
   owner_type: "employee"
   status: "active"
 }
@@ -56,9 +53,7 @@ export async function replaceEmployeePayrollMethod(
     p_connection_id: input.connectionId,
     p_type: input.type,
     p_label: input.label,
-    p_masked_details: input.maskedDetails,
-    p_encrypted_details: input.encryptedDetails,
-    p_provider_recipient_id: input.providerRecipientId,
+    p_destination: input.destination,
     p_preferred: shouldSelectNew,
   })
 
@@ -98,11 +93,9 @@ export async function replaceEmployeePayrollMethod(
       owner_type: "employee",
       type: input.type,
       label: input.label,
-      masked_details: input.maskedDetails,
-      encrypted_details: input.encryptedDetails,
-      provider_recipient_id: input.providerRecipientId,
+      ...input.destination,
     })
-    .select("id,type,label,masked_details,owner_type,status")
+    .select("id,type,label,owner_type,status,full_name,country_code,currency,account_number,bank_name,phone_number,email,mobile_provider,wallet_network,routing_number,sort_code,iban,swift_bic,transfer_type,checking_or_savings,address_line1,city,state,postal_code,metadata")
     .single()
   if (inserted.error) {
     await restorePreviousMethod(admin, previousMethodId)

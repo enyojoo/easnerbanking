@@ -1,4 +1,5 @@
 import type { GlobalPayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
+import { destinationMetadata } from "@/lib/destination-reference"
 
 export function buildGridBalancePayoutOutMetadata(input: {
   easnerPayoutId: string
@@ -10,7 +11,7 @@ export function buildGridBalancePayoutOutMetadata(input: {
   fiatAmount: number
   fiatCurrency: string
   countryCode: string
-  recipientId: string
+  destinationRef: string
   recipientSnapshot: Record<string, unknown>
   reviewSnapshot?: GlobalPayoutReviewSnapshot | null
   sendNote?: string
@@ -37,7 +38,8 @@ export function buildGridBalancePayoutOutMetadata(input: {
     grid_funding_address: input.fundingAddress,
     form_session_id: input.sequenceId,
     idempotency_key: input.idempotencyKey || undefined,
-    recipient_id: input.recipientId,
+    destination_ref: input.destinationRef,
+    ...destinationMetadata(input.destinationRef),
     recipient_snapshot: input.recipientSnapshot,
     country_code: input.countryCode,
     fiat_amount: input.fiatAmount,

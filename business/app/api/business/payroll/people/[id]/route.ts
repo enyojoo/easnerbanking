@@ -3,11 +3,13 @@ import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { mapRowToPayrollPerson, payrollPersonToDbPayload, type PayrollPersonRow } from "@/lib/payroll/map-payroll"
 import type { PayrollPersonInput } from "@/lib/payroll/types"
-import { maskPayrollMethod } from "@/lib/payroll/personal-payroll"
+import { payrollMethodDetails } from "@/lib/payroll/personal-payroll"
 import { buildPayrollLines } from "@/lib/payroll/build-lines"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { normalizePayrollResidenceCountry } from "@/lib/payroll/residence-country"
+import { normalizePayrollReceivingMethodInput } from "@/lib/payroll/receiving-method-input"
+import { payrollMethodDbPayload } from "@/lib/send-destination"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -57,19 +59,41 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .order("created_at", { ascending: false })
       .limit(50),
   ])
+  const methodQuery = admin
+    .from("payroll_payment_methods")
+    .select("id,type,label,status,full_name,country_code,currency,account_number,bank_name,phone_number,email,mobile_provider,wallet_network,routing_number,sort_code,iban,swift_bic,transfer_type,checking_or_savings,address_line1,city,state,postal_code,metadata")
+    .eq("person_id", id)
+    .eq("business_id", ctx.businessId)
+    .eq("status", "active")
   const { data: methodRows, error: methodsError } = connection
-    ? await admin
-        .from("payroll_payment_methods")
-        .select("id,type,label,masked_details,status")
-        .eq("connection_id", connection.id)
-        .eq("status", "active")
-    : { data: [], error: null }
+    ? connection.status === "approved"
+      ? await methodQuery.eq("connection_id", connection.id)
+      : { data: [], error: null }
+    : await methodQuery.eq("owner_type", "business").is("connection_id", null)
   if (methodsError) {
     return NextResponse.json({ error: methodsError.message }, { status: 500 })
   }
   const methods = ((methodRows ?? []) as Array<Record<string, unknown>>).filter((method) => method.status === "active")
+  const selectedMethod =
+    methods.find((method) => String(method.id) === String(connection?.preferred_method_id || "")) ??
+    methods[0] ??
+    null
+  const preferredMethod = selectedMethod
+    ? {
+        id: String(selectedMethod.id),
+        type: String(selectedMethod.type),
+        label: String(selectedMethod.label),
+        details: payrollMethodDetails(selectedMethod),
+        preferred: true,
+        ownerType: connection ? "employee" : "business",
+        status: "active",
+      }
+    : null
   return NextResponse.json({
-    person,
+    person: {
+      ...person,
+      receivingMethodSummary: preferredMethod ?? person.receivingMethodSummary,
+    },
     connection: connection
       ? {
           id: connection.id,
@@ -77,15 +101,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           approvedAt: connection.approved_at,
           declinedAt: connection.declined_at,
           revokedAt: connection.revoked_at,
-          preferredMethod:
-            methods
-              .filter((method) => String(method.id) === String(connection.preferred_method_id))
-              .map((method) => ({
-                id: method.id,
-                type: method.type,
-                label: method.label,
-                maskedDetails: maskPayrollMethod(method),
-              }))[0] ?? null,
+          preferredMethod,
         }
       : null,
     paymentHistory: (lines ?? []).map((line) => ({
@@ -134,18 +150,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const businessCurrency = payrollDefaults.currency
   const current = mapRowToPayrollPerson(existing as PayrollPersonRow)
   const isEasetagPerson = Boolean(current.easetag || current.connectionId || current.connectionStatus !== "manual")
-  const nextRail = body.rail ?? current.rail
+  let nextRail = body.rail ?? current.rail
   const nextEmail = String(body.email !== undefined ? body.email || "" : current.email || "")
     .trim()
     .toLowerCase()
   const nextCountry = normalizePayrollResidenceCountry(body.country !== undefined ? body.country : current.country)
-  const nextRecipientId = body.recipientId !== undefined ? body.recipientId : current.recipientId
   let manualDestination: {
-    id: string
-    bank_name: string | null
-    account_number: string | null
-    mobile_provider: string | null
-    wallet_network: string | null
+    label: string
+    details: Record<string, string>
   } | null = null
 
   if (!isEasetagPerson) {
@@ -158,30 +170,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!nextCountry) {
       return NextResponse.json({ error: "Country of residence is required." }, { status: 400 })
     }
-    if (!nextRecipientId) {
-      return NextResponse.json({ error: "A receiving method is required." }, { status: 400 })
-    }
-    const { data: destination } = await admin
-      .from("recipients")
-      .select("id,bank_name,account_number,mobile_provider,wallet_network")
-      .eq("id", nextRecipientId)
-      .maybeSingle()
-    if (!destination) {
-      return NextResponse.json({ error: "The saved receiving method is not available." }, { status: 400 })
-    }
-    const destinationBelongsToCurrentPerson = String(nextRecipientId) === String(current.recipientId)
-    if (!destinationBelongsToCurrentPerson) {
-      const { data: ownedDestination } = await admin
-        .from("recipients")
-        .select("id")
-        .eq("id", nextRecipientId)
-        .eq("user_id", ctx.userId)
-        .maybeSingle()
-      if (!ownedDestination) {
-        return NextResponse.json({ error: "The saved receiving method is not available." }, { status: 400 })
+    if (body.receivingMethod) {
+      try {
+        const normalized = normalizePayrollReceivingMethodInput(
+          {
+            ...body.receivingMethod,
+            fullName: body.fullName ?? current.fullName,
+          },
+          body.fullName ?? current.fullName,
+        )
+        nextRail = normalized.rail
+        manualDestination = {
+          label: normalized.label,
+          details: normalized.details,
+        }
+      } catch (cause) {
+        return NextResponse.json(
+          { error: cause instanceof Error ? cause.message : "The receiving method is invalid." },
+          { status: 400 },
+        )
       }
+    } else if (body.recipientId) {
+      return NextResponse.json(
+        { error: "Update Payroll payment details directly in Payroll." },
+        { status: 400 },
+      )
     }
-    manualDestination = destination
   }
   const payload = payrollPersonToDbPayload({
     businessId: ctx.businessId,
@@ -194,9 +208,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       payCurrency: businessCurrency,
       payBasis: body.payBasis ?? current.payBasis,
       hourlyRate: body.hourlyRate !== undefined ? body.hourlyRate : current.hourlyRate,
-      recipientId: isEasetagPerson ? current.recipientId : nextRecipientId,
+      recipientId: isEasetagPerson ? current.recipientId : null,
       easetag: isEasetagPerson ? current.easetag : body.easetag !== undefined ? body.easetag : current.easetag,
-      rail: isEasetagPerson ? current.rail : (body.rail ?? current.rail),
+      rail: isEasetagPerson ? current.rail : nextRail,
       status: (body as { status?: typeof current.status }).status ?? current.status,
       internalReference: body.internalReference !== undefined ? body.internalReference : current.internalReference,
       metadata: current.metadata,
@@ -215,70 +229,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   let person = mapRowToPayrollPerson(data as PayrollPersonRow)
   if (manualDestination) {
     const methodType = nextRail === "mobile" ? "mobile_money" : nextRail === "crypto" ? "stablecoin" : "bank"
-    const account = String(manualDestination.account_number || "")
-    const label =
-      methodType === "mobile_money"
-        ? String(manualDestination.mobile_provider || "Mobile money")
-        : methodType === "stablecoin"
-          ? `${String(manualDestination.wallet_network || "Stablecoin")} wallet`
-          : String(manualDestination.bank_name || "Bank account")
-    const maskedDetails = { ending: account ? `••••${account.slice(-4)}` : "Protected" }
-    const { data: existingMethod } = await admin
-      .from("payroll_payment_methods")
-      .select("id")
-      .eq("person_id", id)
-      .eq("business_id", ctx.businessId)
-      .eq("owner_type", "business")
-      .eq("status", "active")
-      .limit(1)
-      .maybeSingle()
-    const methodResult = existingMethod
-      ? await admin
-          .from("payroll_payment_methods")
-          .update({
-            type: methodType,
-            label,
-            masked_details: maskedDetails,
-            provider_recipient_id: manualDestination.id,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingMethod.id)
-          .select("id")
-          .single()
-      : await admin
-          .from("payroll_payment_methods")
-          .insert({
-            person_id: id,
-            business_id: ctx.businessId,
-            owner_type: "business",
-            type: methodType,
-            label,
-            masked_details: maskedDetails,
-            provider_recipient_id: manualDestination.id,
-          })
-          .select("id")
-          .single()
+    const label = manualDestination.label
+    const destinationPayload = payrollMethodDbPayload(methodType, manualDestination.details)
+    const methodResult = await admin.rpc("replace_payroll_business_payment_method", {
+      p_person_id: id,
+      p_business_id: ctx.businessId,
+      p_type: methodType,
+      p_label: label,
+      p_destination: destinationPayload,
+    })
     if (methodResult.error) {
       return NextResponse.json({ error: methodResult.error.message }, { status: 500 })
     }
-    const metadata = {
-      ...person.metadata,
-      preferredPaymentMethod: {
-        id: methodResult.data.id,
-        type: methodType,
-        label,
-        maskedDetails,
-        preferred: true,
-        ownerType: "business",
-        status: "active",
-      },
-    }
     const refreshed = await admin
       .from("payroll_people")
-      .update({ metadata, readiness_status: "ready", updated_at: new Date().toISOString() })
+      .select("*")
       .eq("id", id)
       .eq("business_id", ctx.businessId)
-      .select("*")
       .single()
     if (refreshed.error) {
       return NextResponse.json({ error: refreshed.error.message }, { status: 500 })

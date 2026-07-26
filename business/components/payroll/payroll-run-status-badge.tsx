@@ -18,6 +18,7 @@ const lineVariant: Record<PayrollLineStatus, "neutral" | "amber" | "emerald" | "
   pending: "neutral",
   quoting: "amber",
   locked: "amber",
+  processing: "amber",
   paid: "emerald",
   failed: "oxblood",
   skipped: "slate",

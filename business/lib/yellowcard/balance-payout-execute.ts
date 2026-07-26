@@ -51,6 +51,7 @@ export type ExecuteYcBalancePayoutInput = {
   businessId: string | null
   recipientRow: RecipientSellPrepareRow
   recipientId: string
+  destinationRef?: string
   fiatAmount: number
   fiatCurrency: string
   countryCode: string
@@ -194,7 +195,10 @@ export async function executeYcBalancePayout(
     if (!lockRow || lockRow.provider !== "yellowcard") {
       return { ok: false, error: "Payout lock expired or invalid. Go back and review again." }
     }
-    if (lockRow.recipient_id !== recipientId) {
+    if (
+      lockRow.destination_ref !==
+      (input.destinationRef || `recipient:${recipientId}`)
+    ) {
       return { ok: false, error: "Payout lock does not match this recipient." }
     }
     const snapshotHash = hashRecipientSnapshot(recipientRow)
@@ -218,7 +222,7 @@ export async function executeYcBalancePayout(
         customerRate: pricing.settlement?.customerRate,
       },
         ycLegFeesUsd: pricing.ycLegFeesUsd ?? 0,
-        lockedLocalAmount: Number(payload.lockedLocalAmount ?? pricing.lockedLocalAmount ?? 0),
+        lockedLocalAmount: Number(payload.lockedLocalAmount ?? 0),
       }
     if (!(locked.cryptoAmount > 0) || !locked.walletAddress) {
       return { ok: false, error: "Locked Yellowcard payout is incomplete." }
@@ -286,14 +290,15 @@ export async function executeYcBalancePayout(
     receiveAmount: fiatAmount,
     receiveCurrency: fiatCurrency,
     customerRate: locked.pricing.customerRate,
-    recipientId,
+    destinationRef: input.destinationRef || `recipient:${recipientId}`,
     recipientSnapshot,
     walletAddress,
     transactionStartedAt: now,
-    ycLockedLocalAmount:
-      "lockedLocalAmount" in locked && locked.lockedLocalAmount > 0
-        ? locked.lockedLocalAmount
-        : null,
+    ycLockedLocalAmount: (() => {
+      const amount =
+        "lockedLocalAmount" in locked ? Number(locked.lockedLocalAmount ?? 0) : 0
+      return amount > 0 ? amount : null
+    })(),
   })
   if (idempotencyKey) metadata.idempotency_key = idempotencyKey
   if (sendNote?.trim()) {

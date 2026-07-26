@@ -69,6 +69,8 @@ export async function buildWalletSendQuote(input: {
   receiveAmount?: number
   sendAmount?: number
   probeFromAddress?: string
+  destinationRef?: string
+  sessionUserId?: string
 }): Promise<WalletSendQuoteResult> {
   const recipient = coerceWalletRecipientRow(input.recipient)
   const gate = validateWalletRecipientForSend(recipient)
@@ -219,8 +221,9 @@ export async function buildWalletSendQuote(input: {
 
   await createWalletSendSession(input.admin, {
     form_session_id: formSessionId,
-    user_id: recipient.user_id,
-    recipient_id: recipient.id,
+    user_id: input.sessionUserId || recipient.user_id,
+    recipient_id: input.destinationRef?.startsWith("payroll_method:") ? null : recipient.id,
+    destination_ref: input.destinationRef || `recipient:${recipient.id}`,
     source_balance_currency: sourceBalanceCurrency,
     receive_asset: receiveAsset,
     receive_network: receiveNetwork,

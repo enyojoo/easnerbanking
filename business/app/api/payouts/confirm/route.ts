@@ -12,7 +12,9 @@ import {
 } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
-import { confirmPayoutOrder } from "@/lib/payout/confirm-payout-order"
+import { sendDestinationFromRow } from "@/lib/send-destination"
+import { lockSendDestination } from "@/lib/send-destination-operations"
+import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 
 /** Lock balance payout order after user reaches review (Noah + YC). */
 export async function POST(request: Request) {
@@ -99,20 +101,32 @@ export async function POST(request: Request) {
   }
 
   try {
-    const quote = await confirmPayoutOrder({
-      ctx: acc.ctx,
-      userId: user.id,
-      businessId: noahCtxResult.scope === "business" ? noahCtxResult.businessId : null,
+    const businessId =
+      noahCtxResult.scope === "business" ? noahCtxResult.businessId : null
+    const operationUserId =
+      (businessId
+        ? await resolveBusinessOrgOwnerUserId(admin, businessId).catch(() => null)
+        : null) ?? user.id
+    const locked = await lockSendDestination({
+      admin,
+      accountContext: acc.ctx,
+      userId: operationUserId,
+      businessId,
+      sourceCurrency: sourceBalanceCurrency,
       noahCustomerId: noahCtxResult.noahCustomerId,
-      recipientId,
-      receiveAmount,
-      sourceBalanceCurrency,
+    }, {
+      destination: sendDestinationFromRow(
+        { ...recipientRow, id: recipientId },
+        "recipient",
+      ),
+      amount: receiveAmount,
       amountEntryMode,
       sendAmount: sendAmountRaw > 0 ? sendAmountRaw : undefined,
       note: typeof body?.note === "string" ? body.note.trim() : undefined,
-      paymentPurpose: typeof body?.paymentPurpose === "string" ? body.paymentPurpose.trim() : undefined,
+      purpose: typeof body?.paymentPurpose === "string" ? body.paymentPurpose.trim() : undefined,
+      idempotencyKey: `send_lock:${operationUserId}:${recipientId}:${Date.now()}`,
     })
-    return NextResponse.json({ ok: true, quote })
+    return NextResponse.json({ ok: true, quote: locked.rawQuote })
   } catch (e) {
     logNoahPayoutFailure("payout_confirm", e, { recipientId, receiveAmount })
     const msg = e instanceof Error ? e.message : "Payout confirm failed"

@@ -1,130 +1,103 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
+import {
+  requireAuth,
+  requireNoahEnv,
+  resolveNoahContextAsync,
+} from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
-import { payoutCorridorGate, requireExecutableProviderChannel } from "@/lib/payout-corridor-validation"
+import {
+  payoutCorridorGate,
+  requireExecutableProviderChannel,
+} from "@/lib/payout-corridor-validation"
 import { mapNoahPayoutUserError } from "@/lib/noah/noah-prepare-errors"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
-import {
-  cryptoCurrencyForBalanceCurrency,
-  executeTurnkeyOfframpPayout,
-} from "@/lib/noah/turnkey-offramp-orchestration"
 import { normalizePayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
-import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { selectProviderForCorridor } from "@/lib/payout-providers"
-import {
-  executeGridBalancePayout,
-  isGridBalancePayoutQuote,
-} from "@/lib/grid/balance-payout-execute"
-import { getPayoutLockSession } from "@/lib/payout/payout-lock-session"
-import {
-  executeYcBalancePayout,
-  isYcBalancePayoutQuote,
-} from "@/lib/yellowcard/balance-payout-execute"
+import { sendDestinationFromRow } from "@/lib/send-destination"
+import { executeSendDestination } from "@/lib/send-destination-operations"
 
-/** Execute balance payout (Noah or Yellowcard) after review lock + PIN. */
+type TransferRequest = {
+  amount?: string | number
+  currency?: string
+  formSessionId?: string
+  cryptoAuthorizedAmount?: string
+  cryptoCurrency?: string
+  countryCode?: string
+  channelId?: string
+  recipientId?: string
+  note?: string
+  paymentPurpose?: string
+  idempotencyKey?: string
+  reservedDebitEtid?: string
+  reviewSnapshot?: Record<string, unknown>
+  noahFloor?: string
+  noahSendAmount?: string
+  totalDebited?: string
+  marginAmount?: string
+  marginCaptureMode?: "surplus_send" | "split_debit"
+  customerRate?: number
+  noahMid?: number
+  payoutProvider?: "noah" | "yellowcard" | "grid"
+  ycSequenceId?: string
+  ycSendId?: string
+  ycWalletAddress?: string
+  ycCryptoAmount?: number
+  gridQuoteId?: string
+  gridFundingAddress?: string
+  gridCryptoAmount?: number
+  gridCustomerId?: string
+  gridExternalAccountId?: string
+  processingFee?: string | number
+  channelCost?: string | number
+  customerPrincipal?: string | number
+  lockId?: string
+}
+
+/** Execute a locked normalized Send destination after review and PIN. */
 export async function POST(request: Request) {
-  const mis = requireNoahEnv()
-  if (mis) return mis
+  const environmentError = requireNoahEnv()
+  if (environmentError) return environmentError
+
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
-  const noahCtxResult = await resolveNoahContextAsync(user.id, request)
-  if (!noahCtxResult.ok) return noahCtxResult.response
-  const noahCtx = noahCtxResult
 
-  const acc = await resolveNoahAccountContext(request, user.id)
-  if (!acc.ok) return acc.response
+  const noahContext = await resolveNoahContextAsync(user.id, request)
+  if (!noahContext.ok) return noahContext.response
+  const account = await resolveNoahAccountContext(request, user.id)
+  if (!account.ok) return account.response
+
   const guard = await requireNoahVerificationApproved(
-    acc.ctx.subjectUserId,
-    acc.ctx.scope,
-    acc.ctx.subjectBusinessId,
+    account.ctx.subjectUserId,
+    account.ctx.scope,
+    account.ctx.subjectBusinessId,
   )
   if (guard) return guard
 
-  const body = (await request.json().catch(() => null)) as
-    | {
-        amount?: string | number
-        currency?: string
-        /** Legacy — ignored; Noah CustomerID resolved from auth. */
-        sourceWalletId?: string
-        formSessionId?: string
-        cryptoAuthorizedAmount?: string
-        cryptoCurrency?: string
-        countryCode?: string
-        channelId?: string
-        recipientId?: string
-        note?: string
-        paymentPurpose?: string
-        idempotencyKey?: string
-        reservedDebitEtid?: string
-        reviewSnapshot?: Record<string, unknown>
-        noahFloor?: string
-        noahSendAmount?: string
-        totalDebited?: string
-        marginAmount?: string
-        marginCaptureMode?: "surplus_send" | "split_debit"
-        customerRate?: number
-        noahMid?: number
-        payoutProvider?: "noah" | "yellowcard" | "grid"
-        ycSequenceId?: string
-        ycSendId?: string
-        ycWalletAddress?: string
-        ycCryptoAmount?: number
-        gridQuoteId?: string
-        gridFundingAddress?: string
-        gridCryptoAmount?: number
-        gridCustomerId?: string
-        gridExternalAccountId?: string
-        processingFee?: string | number
-        channelCost?: string | number
-        customerPrincipal?: string | number
-        lockId?: string
-      }
-    | null
-
-  const cryptoCurrencyRaw = String(
-    body?.cryptoCurrency || getNoahSettlementCryptoCurrency(),
-  ).trim()
-  const amountRaw = String(body?.amount ?? "").trim()
-  const currencyRaw = String(body?.currency || "").trim().toUpperCase()
-  const isIsoFiat = /^[A-Z]{3}$/.test(currencyRaw)
-  const fiatCurrency = isIsoFiat ? currencyRaw : ""
-  const amount = Number.parseFloat(amountRaw)
-
+  const body = (await request.json().catch(() => null)) as TransferRequest | null
+  const amount = Number.parseFloat(String(body?.amount ?? "").trim())
+  const receiveCurrency = String(body?.currency || "").trim().toUpperCase()
   const countryCode = String(body?.countryCode || "").trim().toUpperCase()
-  const channelId = String(body?.channelId || "").trim()
   const recipientId = String(body?.recipientId || "").trim()
-  const sendNote = typeof body?.note === "string" ? body.note.trim() : ""
-  const sendPaymentPurpose =
-    typeof body?.paymentPurpose === "string" ? body.paymentPurpose.trim() : ""
-  const reviewSnapshot = normalizePayoutReviewSnapshot(body?.reviewSnapshot)
+  const channelId = String(body?.channelId || "").trim()
   const idempotencyKey = String(
-    body?.idempotencyKey || body?.reservedDebitEtid || request.headers.get("idempotency-key") || "",
+    body?.idempotencyKey ||
+      body?.reservedDebitEtid ||
+      request.headers.get("idempotency-key") ||
+      "",
   ).trim()
-  const formSessionId = String(body?.formSessionId || "").trim()
-  const cryptoAuthorizedAmount = String(body?.cryptoAuthorizedAmount || "").trim()
 
-  const isValidPayout =
-    Boolean(fiatCurrency) &&
-    Boolean(countryCode) &&
-    Boolean(recipientId) &&
-    Number.isFinite(amount) &&
-    amount > 0
-
-  if (!isValidPayout) {
-    console.warn("[balance_payout]", {
-      stage: "transfers_validation",
-      userId: user.id,
-      scope: noahCtx.scope,
-      fiatCurrency,
-      countryCode,
-      recipientId: recipientId || null,
-      amount,
-    })
+  if (
+    !recipientId ||
+    !countryCode ||
+    !/^[A-Z]{3}$/.test(receiveCurrency) ||
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
     return NextResponse.json(
       {
         error:
@@ -135,30 +108,22 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-
-  const { data: rec } = await admin
+  const { data: recipient } = await admin
     .from("recipients")
     .select("*")
     .eq("id", recipientId)
     .eq("user_id", user.id)
     .maybeSingle()
-  if (!rec) {
+  if (!recipient) {
     return NextResponse.json({ error: "Recipient not found." }, { status: 404 })
   }
 
-  const recipientRow = rec as RecipientSellPrepareRow
-  const bankLabel = String(rec.bank_name || "").toLowerCase()
-  const isEasetagRecipient =
-    bankLabel.includes("easetag") || bankLabel.includes("easenet")
-  const gateRow = {
-    country_code: String(rec.country_code || countryCode).toUpperCase(),
-    currency: String(rec.currency || fiatCurrency).toUpperCase(),
-    bank_name: rec.bank_name,
-    mobile_provider: rec.mobile_provider,
-    wallet_network: rec.wallet_network,
-  }
-
-  if (gateRow.wallet_network || isEasetagRecipient) {
+  const bankLabel = String(recipient.bank_name || "").toLowerCase()
+  if (
+    recipient.wallet_network ||
+    bankLabel.includes("easetag") ||
+    bankLabel.includes("easenet")
+  ) {
     return NextResponse.json(
       {
         error:
@@ -168,303 +133,137 @@ export async function POST(request: Request) {
     )
   }
 
-  const gate = await payoutCorridorGate(admin, gateRow, {
+  const gateRow = {
+    country_code: String(recipient.country_code || countryCode).toUpperCase(),
+    currency: String(recipient.currency || receiveCurrency).toUpperCase(),
+    bank_name: recipient.bank_name,
+    mobile_provider: recipient.mobile_provider,
+    wallet_network: recipient.wallet_network,
+  }
+  const corridorError = await payoutCorridorGate(admin, gateRow, {
     requireExecutableProviderChannel: requireExecutableProviderChannel(),
   })
-  if (gate) return gate
+  if (corridorError) return corridorError
 
-  const orgOwner =
-    noahCtx.scope === "business" && noahCtx.businessId
-      ? await resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId).catch(() => null)
-      : null
-  const txUserId = orgOwner ?? user.id
-
-  // Resolve payout provider: explicit body → corridor routing → quote heuristics.
-  let payoutProvider: "noah" | "yellowcard" | "grid" = "noah"
-  const bodyProvider = String(body?.payoutProvider || "").toLowerCase()
-  if (bodyProvider === "yellowcard") {
-    payoutProvider = "yellowcard"
-  } else if (bodyProvider === "grid") {
-    payoutProvider = "grid"
-  } else if (
-    isGridBalancePayoutQuote({
-      payoutProvider: body?.payoutProvider,
-      formSessionId,
-      gridQuoteId: body?.gridQuoteId,
-      gridFundingAddress: body?.gridFundingAddress,
-    })
-  ) {
-    payoutProvider = "grid"
-  } else if (
-    isYcBalancePayoutQuote({
-      payoutProvider: body?.payoutProvider,
-      formSessionId,
-      ycSequenceId: body?.ycSequenceId,
-      ycWalletAddress: body?.ycWalletAddress,
-    })
-  ) {
-    payoutProvider = "yellowcard"
-  } else {
+  let provider = String(body?.payoutProvider || "").toLowerCase()
+  if (!["noah", "yellowcard", "grid"].includes(provider)) {
     try {
-      const bankLabel = String(rec.bank_name || "").toLowerCase()
-      const rail =
-        rec.mobile_provider || bankLabel.includes("mobile money")
-          ? ("mobile_money" as const)
-          : ("bank_transfer" as const)
-      const provider = await selectProviderForCorridor(admin, {
+      const route = await selectProviderForCorridor(admin, {
         countryCode,
-        currencyCode: fiatCurrency,
-        mobileProvider: rec.mobile_provider,
-        bankName: rec.bank_name,
-        rail,
+        currencyCode: receiveCurrency,
+        mobileProvider: recipient.mobile_provider,
+        bankName: recipient.bank_name,
+        rail: recipient.mobile_provider ? "mobile_money" : "bank_transfer",
       })
-      if (provider.id === "yellowcard") payoutProvider = "yellowcard"
-      if (provider.id === "grid") payoutProvider = "grid"
+      provider = route.id
     } catch {
-      // keep noah default
+      provider = "noah"
     }
   }
 
+  const businessId =
+    noahContext.scope === "business" ? noahContext.businessId : null
+  const organizationOwner =
+    businessId
+      ? await resolveBusinessOrgOwnerUserId(admin, businessId).catch(() => null)
+      : null
+  const transactionUserId = organizationOwner ?? user.id
+  const cryptoCurrency = String(
+    body?.cryptoCurrency || getNoahSettlementCryptoCurrency(),
+  ).toUpperCase()
+  const sourceCurrency = cryptoCurrency.startsWith("EUR") ? "EUR" : "USD"
+  const destination = sendDestinationFromRow(
+    { ...recipient, id: recipientId },
+    "recipient",
+  )
+
   try {
-    if (payoutProvider === "grid") {
-      const quoteId = String(body?.gridQuoteId || formSessionId || "").trim()
-      let fundingAddress = String(body?.gridFundingAddress || "").trim()
-      const lockId = String(body?.lockId || "").trim()
-      const cryptoAmount = Number(body?.gridCryptoAmount ?? cryptoAuthorizedAmount)
-      const totalDebited = Number(body?.totalDebited ?? 0)
-      const marginAmount = Number(body?.marginAmount ?? 0)
-      const processingFee = Number(body?.processingFee ?? 0)
-      const channelCost = Number(body?.channelCost ?? 0)
-      const customerPrincipal = Number(body?.customerPrincipal ?? totalDebited)
-
-      if (!fundingAddress && lockId) {
-        const lockRow = await getPayoutLockSession(admin, { lockId, userId: txUserId })
-        const fromPayload = lockRow?.provider_payload_json?.fundingAddress
-        if (fromPayload) fundingAddress = String(fromPayload).trim()
-      }
-
-      if (!quoteId || !(cryptoAmount > 0) || !(totalDebited > 0) || !fundingAddress) {
-        return NextResponse.json(
-          {
-            error:
-              "Grid payout quote is incomplete. Go back and refresh the quote before authorizing.",
+    const result = await executeSendDestination(
+      {
+        admin,
+        accountContext: account.ctx,
+        userId: transactionUserId,
+        businessId,
+        sourceCurrency,
+        noahCustomerId: noahContext.noahCustomerId,
+      },
+      {
+        destination,
+        amount,
+        amountEntryMode: "receive",
+        purpose: String(body?.paymentPurpose || "").trim() || undefined,
+        note: String(body?.note || "").trim() || undefined,
+        idempotencyKey,
+        reviewSnapshot:
+          normalizePayoutReviewSnapshot(body?.reviewSnapshot) ?? undefined,
+        locked: {
+          lockId: String(body?.lockId || "").trim() || null,
+          sourceAmount: Number(body?.totalDebited ?? amount),
+          payload: {
+            kind: "fiat_payout",
+            destinationRef: destination.destinationRef,
+            receiveAmount: amount,
+            receiveCurrency,
+            countryCode,
+            payoutProvider: provider,
+            channelId,
+            lockId: body?.lockId,
+            formSessionId: body?.formSessionId,
+            cryptoAuthorizedAmount: body?.cryptoAuthorizedAmount,
+            totalDebited: body?.totalDebited,
+            marginAmount: body?.marginAmount,
+            processingFee: body?.processingFee,
+            channelCost: body?.channelCost,
+            customerPrincipal: body?.customerPrincipal,
+            customerRate: body?.customerRate,
+            noahFloor: body?.noahFloor,
+            noahSendAmount: body?.noahSendAmount,
+            marginCaptureMode: body?.marginCaptureMode,
+            noahMid: body?.noahMid,
+            ycSequenceId: body?.ycSequenceId,
+            ycSendId: body?.ycSendId,
+            ycWalletAddress: body?.ycWalletAddress,
+            ycCryptoAmount: body?.ycCryptoAmount,
+            gridQuoteId: body?.gridQuoteId,
+            gridFundingAddress: body?.gridFundingAddress,
+            gridCryptoAmount: body?.gridCryptoAmount,
+            gridCustomerId: body?.gridCustomerId,
+            gridExternalAccountId: body?.gridExternalAccountId,
           },
+        },
+      },
+    )
+
+    if (result.state === "failed") {
+      if (result.message === "insufficient_balance") {
+        return NextResponse.json(
+          { error: "Insufficient balance for this payout." },
           { status: 400 },
         )
       }
-
-      const result = await executeGridBalancePayout({
-        admin,
-        userId: txUserId,
-        businessId: noahCtx.businessId,
-        recipientRow,
-        recipientId,
-        fiatAmount: amount,
-        fiatCurrency,
-        countryCode,
-        reviewSnapshot: reviewSnapshot ?? undefined,
-        sendNote: sendNote || undefined,
-        idempotencyKey: idempotencyKey || undefined,
-        lockId: String(body?.lockId || "").trim() || undefined,
-        grid: {
-          quoteId,
-          sequenceId: formSessionId || quoteId,
-          customerId: body?.gridCustomerId,
-          externalAccountId: body?.gridExternalAccountId,
-          cryptoAmount,
-          fundingAddress,
-        },
-        pricing: {
-          totalDebited,
-          customerPrincipal,
-          marginAmount,
-          processingFee,
-          channelCost,
-          customerRate: body?.customerRate != null ? Number(body.customerRate) : undefined,
-        },
-      })
-
-      if (!result.ok) {
-        if (result.error === "insufficient_balance") {
-          return NextResponse.json({ error: "Insufficient balance for this payout." }, { status: 400 })
-        }
-        logNoahPayoutFailure("transfers_grid_offramp", new Error(result.error), {
-          recipientId,
-          countryCode,
-          fiatCurrency,
-          fiatAmount: amount,
-          userId: user.id,
-          scope: noahCtx.scope,
-        })
-        return NextResponse.json({ error: result.error || "Grid payout failed." }, { status: 400 })
-      }
-
-      return NextResponse.json({
-        id: result.easnerTransactionId,
-        transaction_id: result.easnerTransactionId,
-        easner_transaction_id: result.easnerTransactionId,
-        amount: amount.toFixed(2),
-        currency: fiatCurrency.toLowerCase(),
-        status: "pending",
-        provider: "grid",
-      })
-    }
-
-    if (payoutProvider === "yellowcard") {
-      const walletAddress = String(body?.ycWalletAddress || "").trim()
-      const sequenceId = String(body?.ycSequenceId || formSessionId || "").trim()
-      const cryptoAmount = Number(body?.ycCryptoAmount ?? cryptoAuthorizedAmount)
-      const totalDebited = Number(body?.totalDebited ?? 0)
-      const marginAmount = Number(body?.marginAmount ?? 0)
-      const processingFee = Number(body?.processingFee ?? 0)
-      const channelCost = Number(body?.channelCost ?? 0)
-      const customerPrincipal = Number(body?.customerPrincipal ?? totalDebited)
-
-      if (!(cryptoAmount > 0) || !(totalDebited > 0)) {
-        return NextResponse.json(
-          {
-            error:
-              "Yellowcard payout quote is incomplete. Go back and refresh the quote before authorizing.",
-          },
-          { status: 400 },
-        )
-      }
-
-      const result = await executeYcBalancePayout({
-        admin,
-        userId: txUserId,
-        businessId: noahCtx.businessId,
-        recipientRow,
-        recipientId,
-        fiatAmount: amount,
-        fiatCurrency,
-        countryCode,
-        channelId: channelId || undefined,
-        reviewSnapshot: reviewSnapshot ?? undefined,
-        sendNote: sendNote || undefined,
-        idempotencyKey: idempotencyKey || undefined,
-        lockId: String(body?.lockId || "").trim() || undefined,
-        yc: {
-          sequenceId: sequenceId || undefined,
-          sendId: body?.ycSendId ?? formSessionId ?? null,
-          cryptoAmount,
-          walletAddress: walletAddress || undefined,
-          channelId: channelId || String(body?.channelId || ""),
-        },
-        pricing: {
-          totalDebited,
-          customerPrincipal,
-          marginAmount,
-          processingFee,
-          channelCost,
-          customerRate: body?.customerRate != null ? Number(body.customerRate) : undefined,
-        },
-      })
-
-      if (!result.ok) {
-        if (result.error === "insufficient_balance") {
-          return NextResponse.json({ error: "Insufficient balance for this payout." }, { status: 400 })
-        }
-        logNoahPayoutFailure("transfers_yc_offramp", new Error(result.error), {
-          recipientId,
-          countryCode,
-          fiatCurrency,
-          fiatAmount: amount,
-          userId: user.id,
-          scope: noahCtx.scope,
-        })
-        return NextResponse.json({ error: result.error || "Yellowcard payout failed." }, { status: 400 })
-      }
-
-      return NextResponse.json({
-        id: result.easnerTransactionId,
-        transaction_id: result.easnerTransactionId,
-        easner_transaction_id: result.easnerTransactionId,
-        amount: amount.toFixed(2),
-        currency: fiatCurrency.toLowerCase(),
-        status: "pending",
-        provider: "yellowcard",
-      })
-    }
-
-    const result = await executeTurnkeyOfframpPayout({
-      admin,
-      ctx: acc.ctx,
-      userId: txUserId,
-      businessId: noahCtx.businessId,
-      recipientRow,
-      recipientId,
-      fiatAmount: amount,
-      fiatCurrency,
-      cryptoCurrency: cryptoCurrencyRaw || cryptoCurrencyForBalanceCurrency(fiatCurrency),
-      countryCode,
-      channelId: channelId || undefined,
-      overrides:
-        sendNote || sendPaymentPurpose
-          ? {
-              ...(sendNote ? { note: sendNote } : {}),
-              ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
-            }
-          : undefined,
-      reviewSnapshot: reviewSnapshot ?? undefined,
-      sendNote: sendNote || undefined,
-      idempotencyKey: idempotencyKey || undefined,
-      ...(formSessionId && cryptoAuthorizedAmount
-        ? {
-            quotedSession: {
-              formSessionId,
-              cryptoAuthorizedAmount,
-              ...(channelId ? { channelId } : {}),
-              ...(body?.noahFloor ? { noahFloor: String(body.noahFloor) } : {}),
-              ...(body?.noahSendAmount ? { noahSendAmount: String(body.noahSendAmount) } : {}),
-              ...(body?.totalDebited ? { totalDebited: String(body.totalDebited) } : {}),
-              ...(body?.marginAmount ? { marginAmount: String(body.marginAmount) } : {}),
-              ...(body?.marginCaptureMode ? { marginCaptureMode: body.marginCaptureMode } : {}),
-              ...(body?.customerRate != null ? { customerRate: Number(body.customerRate) } : {}),
-              ...(body?.noahMid != null ? { noahMid: Number(body.noahMid) } : {}),
-            },
-          }
-        : {}),
-      lockId: String(body?.lockId || "").trim() || undefined,
-    })
-
-    if (!result.ok) {
-      const err = result.error
-      if (err === "insufficient_balance") {
-        return NextResponse.json({ error: "Insufficient balance for this payout." }, { status: 400 })
-      }
-      logNoahPayoutFailure("transfers_offramp", new Error(err), {
-        recipientId,
-        countryCode,
-        fiatCurrency,
-        fiatAmount: amount,
-        cryptoCurrency: cryptoCurrencyRaw,
-        userId: user.id,
-        scope: noahCtx.scope,
-      })
-      return NextResponse.json({ error: mapNoahPayoutUserError(new Error(err), "sell") }, { status: 400 })
+      throw new Error(result.message)
     }
 
     return NextResponse.json({
-      id: result.easnerTransactionId,
-      transaction_id: result.easnerTransactionId,
-      easner_transaction_id: result.easnerTransactionId,
+      id: result.transactionId,
+      transaction_id: result.transactionId,
+      easner_transaction_id: result.transactionId,
       amount: amount.toFixed(2),
-      currency: fiatCurrency.toLowerCase(),
-      status: "pending",
+      currency: receiveCurrency.toLowerCase(),
+      status: result.state === "settled" ? "completed" : "pending",
+      provider,
     })
-  } catch (e: unknown) {
-    logNoahPayoutFailure("transfers_offramp", e, {
+  } catch (cause) {
+    logNoahPayoutFailure("transfers_offramp", cause, {
       recipientId,
       countryCode,
-      fiatCurrency,
+      fiatCurrency: receiveCurrency,
       fiatAmount: amount,
-      cryptoCurrency: cryptoCurrencyRaw,
       userId: user.id,
-      scope: noahCtx.scope,
+      scope: noahContext.scope,
     })
     return NextResponse.json(
-      { error: mapNoahPayoutUserError(e, "sell") },
+      { error: mapNoahPayoutUserError(cause, "sell") },
       { status: 400 },
     )
   }

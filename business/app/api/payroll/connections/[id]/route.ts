@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
-  maskPayrollMethod,
+  payrollMethodDetails,
   sendPayrollConnectionRevokedEmails,
 } from "@/lib/payroll/personal-payroll"
 import {
@@ -37,7 +37,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       id: String(method.id),
       type: String(method.type),
       label: String(method.label),
-      maskedDetails: maskPayrollMethod(method),
+      details: payrollMethodDetails(method),
       preferred: String(row.preferred_method_id) === String(method.id),
       ownerType: String(method.owner_type),
       status: String(method.status),

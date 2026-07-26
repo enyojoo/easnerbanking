@@ -81,6 +81,7 @@ describe("yc-ledger metadata builders", () => {
       receiveAmount: 75000,
       receiveCurrency: "NGN",
       channelId: "ch-1",
+      destinationRef: "recipient:recipient-1",
     })
     expect(meta.payout_type).toBe("global_fiat")
     expect(meta.payout_provider).toBe("yellowcard")

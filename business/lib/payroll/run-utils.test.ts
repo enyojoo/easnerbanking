@@ -45,7 +45,7 @@ describe("buildLineFromPerson", () => {
         preferredPaymentMethod: {
           id: "method-1",
           type: "easetag",
-          maskedDetails: { easetag: "@amina" },
+          details: { easetag: "@amina" },
         },
       },
     }))

@@ -283,7 +283,7 @@ export async function buildNoahBalancePayoutPreview(input: {
   userId: string
   noahCustomerId: string
   recipientId?: string
-  recipient?: RecipientSellPrepareRow
+  recipient: RecipientSellPrepareRow
   receiveFiatAmount: number
   sourceBalanceCurrency: string
   amountEntryMode?: "send" | "receive"
@@ -307,19 +307,7 @@ export async function buildNoahBalancePayoutPreview(input: {
   }
 
   const admin = createSupabaseAdmin()
-  let row = input.recipient
-  if (input.recipientId) {
-    const { data, error } = await admin
-      .from("recipients")
-      .select("*")
-      .eq("id", input.recipientId)
-      .eq("user_id", input.userId)
-      .maybeSingle()
-    if (error) throw new Error(error.message)
-    if (!data) throw new Error("Recipient not found.")
-    row = data as RecipientSellPrepareRow
-  }
-  if (!row) throw new Error("recipientId or recipient row is required.")
+  const row = input.recipient
 
   const receiveCurrency = String(row.currency || "").trim().toUpperCase()
   const cryptoCurrency = settlementCryptoForBalance(sourceBalanceCurrency)
@@ -488,7 +476,7 @@ export async function lockNoahBalancePayoutQuote(input: {
   userId: string
   noahCustomerId: string
   recipientId?: string
-  recipient?: RecipientSellPrepareRow
+  recipient: RecipientSellPrepareRow
   receiveFiatAmount: number
   sourceBalanceCurrency: string
   amountEntryMode?: "send" | "receive"
@@ -512,22 +500,7 @@ export async function lockNoahBalancePayoutQuote(input: {
   }
 
   const admin = createSupabaseAdmin()
-  let row = input.recipient
-  if (input.recipientId) {
-    const { data, error } = await admin
-      .from("recipients")
-      .select("*")
-      .eq("id", input.recipientId)
-      .eq("user_id", input.userId)
-      .maybeSingle()
-    if (error) throw new Error(error.message)
-    if (!data) throw new Error("Recipient not found.")
-    row = data as RecipientSellPrepareRow
-  }
-
-  if (!row) {
-    throw new Error("recipientId or recipient row is required.")
-  }
+  const row = input.recipient
 
   const receiveCurrency = String(row.currency || "").trim().toUpperCase()
   const cryptoCurrency = settlementCryptoForBalance(sourceBalanceCurrency)
@@ -538,6 +511,10 @@ export async function lockNoahBalancePayoutQuote(input: {
       const provider = await selectProviderForCorridor(admin, {
         countryCode,
         currencyCode: receiveCurrency,
+        rail:
+          row.mobile_provider || String(row.bank_name || "").toLowerCase().includes("mobile money")
+            ? "mobile_money"
+            : "bank_transfer",
         mobileProvider: row.mobile_provider,
         bankName: row.bank_name,
       })
@@ -866,7 +843,7 @@ export async function buildPayoutQuote(input: {
   userId: string
   noahCustomerId: string
   recipientId?: string
-  recipient?: RecipientSellPrepareRow
+  recipient: RecipientSellPrepareRow
   receiveFiatAmount: number
   sourceBalanceCurrency: string
   amountEntryMode?: "send" | "receive"
@@ -885,19 +862,7 @@ export async function buildPayoutQuote(input: {
   }
 
   const admin = createSupabaseAdmin()
-  let row = input.recipient
-  if (input.recipientId) {
-    const { data, error } = await admin
-      .from("recipients")
-      .select("*")
-      .eq("id", input.recipientId)
-      .eq("user_id", input.userId)
-      .maybeSingle()
-    if (error) throw new Error(error.message)
-    if (!data) throw new Error("Recipient not found.")
-    row = data as RecipientSellPrepareRow
-  }
-  if (!row) throw new Error("recipientId or recipient row is required.")
+  const row = input.recipient
 
   const receiveCurrency = String(row.currency || "").trim().toUpperCase()
   const countryCode = resolveRecipientPayoutCountry(row)
@@ -906,6 +871,10 @@ export async function buildPayoutQuote(input: {
       const provider = await selectProviderForCorridor(admin, {
         countryCode,
         currencyCode: receiveCurrency,
+        rail:
+          row.mobile_provider || String(row.bank_name || "").toLowerCase().includes("mobile money")
+            ? "mobile_money"
+            : "bank_transfer",
         mobileProvider: row.mobile_provider,
         bankName: row.bank_name,
       })

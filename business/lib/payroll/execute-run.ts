@@ -1,71 +1,75 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
-import { confirmPayoutOrder } from "@/lib/payout/confirm-payout-order"
-import { cryptoCurrencyForBalanceCurrency, executeTurnkeyOfframpPayout } from "@/lib/noah/turnkey-offramp-orchestration"
-import { executeYcBalancePayout } from "@/lib/yellowcard/balance-payout-execute"
-import { executeGridBalancePayout } from "@/lib/grid/balance-payout-execute"
 import {
-  deterministicTransferGroupUuid,
   executeEasetagTransfer,
   isEasetagLedgerP2PEnabled,
 } from "@/lib/ledger/easetag-transfer"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
 import { normalizePayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
-import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
-import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
 import { generateTransactionId } from "@/lib/transaction-id"
 import type { PayrollLineRow, PayrollRunRow } from "@/lib/payroll/map-payroll"
+import {
+  sendDestinationFromRow,
+  type SendDestinationRow,
+} from "@/lib/send-destination"
+import { readBusinessAvailableBalance } from "@/lib/payroll/helpers"
+import {
+  executeSendDestination,
+  lockSendDestination,
+} from "@/lib/send-destination-operations"
+import { sanitizePayrollExecutionError } from "@/lib/payroll/execution-error"
+import { classifyPayrollSettlementStatus } from "@/lib/payroll/settlement-status"
 
 export type ExecutePayrollLineResult =
-  | { ok: true; transferEtid: string }
-  | { ok: false; error: string; errorCode?: string }
+  | { state: "settled"; transactionId: string }
+  | { state: "submitted"; transactionId: string }
+  | { state: "failed"; code: string; message: string }
 
 async function resolvePayrollExternalRecipient(
   admin: SupabaseClient,
   businessId: string,
   line: PayrollLineRow,
-): Promise<{ recipientId: string; ownerUserId: string; recipient: RecipientSellPrepareRow }> {
+): Promise<{
+  recipientId: string
+  destinationRef: string
+  senderUserId: string
+  recipient: SendDestinationRow
+}> {
   const snapshot = (line.payment_method_snapshot as Record<string, unknown> | null) ?? {}
   const recipientSnapshot = (line.recipient_snapshot as Record<string, unknown> | null) ?? {}
   const methodId = String(line.payment_method_id || snapshot.id || "")
-  const recipientId = String(snapshot.providerRecipientId || recipientSnapshot.recipientId || "")
-  if (!recipientId) throw new Error("Receiving method is missing its payment destination.")
+  const legacyRecipientId = String(snapshot.providerRecipientId || recipientSnapshot.recipientId || "")
 
   if (methodId) {
     const { data: method } = await admin
       .from("payroll_payment_methods")
-      .select("id,person_id,provider_recipient_id")
+      .select("id,person_id,business_id,connection_id,owner_type,type,full_name,country_code,currency,account_number,bank_name,phone_number,email,mobile_provider,wallet_network,routing_number,sort_code,iban,swift_bic,transfer_type,checking_or_savings,address_line1,city,state,postal_code,metadata")
       .eq("id", methodId)
       .eq("person_id", line.person_id)
-      .maybeSingle()
-    if (!method || String(method.provider_recipient_id || "") !== recipientId) {
-      throw new Error("The approved receiving method could not be verified.")
-    }
-  } else {
-    const { data: person } = await admin
-      .from("payroll_people")
-      .select("id,recipient_id")
-      .eq("id", line.person_id)
       .eq("business_id", businessId)
       .maybeSingle()
-    if (!person || String(person.recipient_id || "") !== recipientId) {
-      throw new Error("The payroll payment destination could not be verified.")
+    if (!method) {
+      throw new Error("The approved receiving method could not be verified.")
+    }
+    if (!method.account_number || !method.currency || !method.full_name) {
+      throw new Error("The approved receiving method is incomplete.")
+    }
+    const senderUserId = String(await resolveBusinessOrgOwnerUserId(admin, businessId) || "")
+    if (!senderUserId) throw new Error("Business sender could not be verified.")
+    const recipient = sendDestinationFromRow(method, "payroll_method")
+    return {
+      recipientId: String(method.id),
+      destinationRef: recipient.destinationRef,
+      senderUserId,
+      recipient,
     }
   }
-
-  const { data: recipient } = await admin
-    .from("recipients")
-    .select("*")
-    .eq("id", recipientId)
-    .maybeSingle()
-  if (!recipient?.user_id) throw new Error("Receiving method not found.")
-  return {
-    recipientId,
-    ownerUserId: String(recipient.user_id),
-    recipient: recipient as RecipientSellPrepareRow,
+  if (legacyRecipientId) {
+    throw new Error("This legacy Payroll method must be migrated before it can be sent.")
   }
+  throw new Error("Receiving method is missing its payment destination.")
 }
 
 async function resolvePayeeFromEasetag(
@@ -161,53 +165,27 @@ export async function lockPayrollLineQuote(input: {
   })
   if (!acc) throw new Error("Could not resolve business account context.")
 
-  const quote = await confirmPayoutOrder({
-    ctx: acc,
-    userId: destination.ownerUserId,
+  const locked = await lockSendDestination({
+    admin: input.admin,
+    accountContext: acc,
+    userId: destination.senderUserId,
     businessId: input.businessId,
+    sourceCurrency: input.sourceCurrency,
     noahCustomerId: input.noahCustomerId,
-    recipientId: destination.recipientId,
-    receiveAmount: amount,
-    sourceBalanceCurrency: input.sourceCurrency,
+  }, {
+    destination: destination.recipient,
+    amount,
+    amountEntryMode: "receive",
+    purpose: "payroll",
     note: "Payroll",
-    paymentPurpose: "payroll",
+    idempotencyKey: `payroll_line:${input.line.id}`,
   })
-
-  const lockId = quote.lockId ?? null
-  const sourceAmount = quote.totalDebited ?? quote.sendAmount ?? amount
-
   return {
-    lockId,
-    sourceAmount,
+    lockId: locked.lockId,
+    sourceAmount: locked.sourceAmount,
     executePayload: {
       rail,
-      recipientId: destination.recipientId,
-      receiveAmount: amount,
-      receiveCurrency: quote.receiveCurrency,
-      channelId: quote.channelId,
-      payoutProvider: quote.provider ?? "noah",
-      lockId,
-      formSessionId: quote.noah?.formSessionId ?? quote.grid?.sequenceId,
-      cryptoAuthorizedAmount: quote.noah?.cryptoAuthorizedAmount ?? String(quote.grid?.cryptoAmount ?? ""),
-      totalDebited: quote.totalDebited,
-      marginAmount: quote.marginAmount,
-      processingFee: quote.processingFee,
-      channelCost: quote.channelCost,
-      customerPrincipal: quote.customerPrincipal,
-      customerRate: quote.noah?.effectiveRate ?? quote.easner?.effectiveRate,
-      ycSequenceId: quote.yc?.sequenceId,
-      ycSendId: quote.yc?.sendId,
-      ycWalletAddress: quote.yc?.walletAddress,
-      ycCryptoAmount: quote.yc?.cryptoAmount,
-      gridQuoteId: quote.grid?.quoteId,
-      gridFundingAddress: quote.grid?.fundingAddress,
-      gridCryptoAmount: quote.grid?.cryptoAmount,
-      gridCustomerId: quote.grid?.customerId,
-      gridExternalAccountId: quote.grid?.externalAccountId,
-      noahFloor: quote.noah?.noahFloor,
-      noahSendAmount: quote.noah?.noahSendAmount,
-      marginCaptureMode: quote.noah?.marginCaptureMode,
-      noahMid: quote.noah?.noahMid,
+      ...locked.payload,
     },
   }
 }
@@ -232,16 +210,16 @@ export async function executePayrollLine(input: {
       .maybeSingle()
     if (connection && connection.status !== "approved") {
       return {
-        ok: false,
-        error: "The employee's payroll connection is no longer approved.",
-        errorCode: "connection_not_approved",
+        state: "failed",
+        message: "The employee's payroll connection is no longer approved.",
+        code: "connection_not_approved",
       }
     }
   }
 
   if (rail === "easetag") {
     if (!isEasetagLedgerP2PEnabled()) {
-      return { ok: false, error: "EASETAG transfers are not enabled.", errorCode: "easetag_disabled" }
+      return { state: "failed", message: "EASETAG transfers are not enabled.", code: "easetag_disabled" }
     }
 
     const snap = (line.recipient_snapshot as Record<string, unknown>) ?? {}
@@ -252,7 +230,7 @@ export async function executePayrollLine(input: {
         : Number(line.source_amount_cents ?? 0)) / 100
 
     const payee = await resolvePayeeFromEasetag(admin, tag, businessId)
-    if (!payee.ok) return { ok: false, error: payee.error }
+    if (!payee.ok) return { state: "failed", message: payee.error, code: "easetag_payee_invalid" }
 
     const orgOwner = await resolveBusinessOrgOwnerUserId(admin, businessId)
     const senderUserId = orgOwner ?? userId
@@ -289,10 +267,14 @@ export async function executePayrollLine(input: {
     })
 
     if (!result.ok) {
-      return { ok: false, error: result.error || "EASETAG transfer failed.", errorCode: result.error }
+      return {
+        state: "failed",
+        message: result.error || "EASETAG transfer failed.",
+        code: result.error || "easetag_transfer_failed",
+      }
     }
 
-    return { ok: true, transferEtid: result.easnerTransactionId }
+    return { state: "settled", transactionId: result.easnerTransactionId }
   }
 
   let destination
@@ -300,18 +282,13 @@ export async function executePayrollLine(input: {
     destination = await resolvePayrollExternalRecipient(admin, businessId, line)
   } catch (cause) {
     return {
-      ok: false,
-      error: cause instanceof Error ? cause.message : "Receiving method not found.",
-      errorCode: "receiving_method_unavailable",
+      state: "failed",
+      message: cause instanceof Error ? cause.message : "Receiving method not found.",
+      code: "receiving_method_unavailable",
     }
   }
-  const recipientId = destination.recipientId
   const recipientRow = destination.recipient
   const fiatAmount = Number(executePayload.receiveAmount ?? 0)
-  const fiatCurrency = String(executePayload.receiveCurrency || recipientRow.currency || "USD").toUpperCase()
-  const countryCode = String(
-    executePayload.countryCode || resolveRecipientPayoutCountry(recipientRow) || "",
-  ).toUpperCase()
 
   const orgOwner = await resolveBusinessOrgOwnerUserId(admin, businessId)
   const txUserId = orgOwner ?? userId
@@ -320,137 +297,38 @@ export async function executePayrollLine(input: {
     userId,
     businessId,
   })
-  if (!acc) return { ok: false, error: "Could not resolve business account context." }
-
-  const lockId = String(line.lock_id || executePayload.lockId || "").trim() || undefined
+  if (!acc) {
+    return {
+      state: "failed",
+      message: "Could not resolve business account context.",
+      code: "business_account_unavailable",
+    }
+  }
   const reviewSnapshot = normalizePayoutReviewSnapshot(meta.reviewSnapshot)
-
-  const payoutProvider = String(executePayload.payoutProvider || "noah").toLowerCase()
-
-  if (payoutProvider === "grid") {
-    const result = await executeGridBalancePayout({
-      admin,
-      userId: txUserId,
-      businessId,
-      recipientRow,
-      recipientId,
-      fiatAmount,
-      fiatCurrency,
-      countryCode,
-      reviewSnapshot: reviewSnapshot ?? undefined,
-      sendNote: "Payroll",
-      idempotencyKey,
-      lockId,
-      grid: {
-        quoteId: String(executePayload.gridQuoteId || executePayload.formSessionId || ""),
-        sequenceId: String(executePayload.formSessionId || executePayload.gridQuoteId || ""),
-        customerId: executePayload.gridCustomerId as string | undefined,
-        externalAccountId: executePayload.gridExternalAccountId as string | undefined,
-        cryptoAmount: Number(executePayload.gridCryptoAmount ?? 0),
-        fundingAddress: String(executePayload.gridFundingAddress || ""),
-      },
-      pricing: {
-        totalDebited: Number(executePayload.totalDebited ?? 0),
-        customerPrincipal: Number(executePayload.customerPrincipal ?? executePayload.totalDebited ?? 0),
-        marginAmount: Number(executePayload.marginAmount ?? 0),
-        processingFee: Number(executePayload.processingFee ?? 0),
-        channelCost: Number(executePayload.channelCost ?? 0),
-        customerRate:
-          executePayload.customerRate != null ? Number(executePayload.customerRate) : undefined,
-      },
-    })
-
-    if (!result.ok) return { ok: false, error: result.error || "Grid payout failed." }
-    return { ok: true, transferEtid: result.easnerTransactionId }
-  }
-
-  if (payoutProvider === "yellowcard") {
-    const result = await executeYcBalancePayout({
-      admin,
-      userId: txUserId,
-      businessId,
-      recipientRow,
-      recipientId,
-      fiatAmount,
-      fiatCurrency,
-      countryCode,
-      channelId: String(executePayload.channelId || "") || undefined,
-      reviewSnapshot: reviewSnapshot ?? undefined,
-      sendNote: "Payroll",
-      idempotencyKey,
-      lockId,
-      yc: {
-        sequenceId: String(executePayload.ycSequenceId || executePayload.formSessionId || "") || undefined,
-        sendId: (executePayload.ycSendId as string | null) ?? null,
-        cryptoAmount: Number(executePayload.ycCryptoAmount ?? 0),
-        walletAddress: String(executePayload.ycWalletAddress || "") || undefined,
-        channelId: String(executePayload.channelId || ""),
-      },
-      pricing: {
-        totalDebited: Number(executePayload.totalDebited ?? 0),
-        customerPrincipal: Number(executePayload.customerPrincipal ?? executePayload.totalDebited ?? 0),
-        marginAmount: Number(executePayload.marginAmount ?? 0),
-        processingFee: Number(executePayload.processingFee ?? 0),
-        channelCost: Number(executePayload.channelCost ?? 0),
-        customerRate:
-          executePayload.customerRate != null ? Number(executePayload.customerRate) : undefined,
-      },
-    })
-
-    if (!result.ok) return { ok: false, error: result.error || "Yellowcard payout failed." }
-    return { ok: true, transferEtid: result.easnerTransactionId }
-  }
-
-  const result = await executeTurnkeyOfframpPayout({
+  return executeSendDestination({
     admin,
-    ctx: acc,
+    accountContext: acc,
     userId: txUserId,
     businessId,
-    recipientRow,
-    recipientId,
-    fiatAmount,
-    fiatCurrency,
-    cryptoCurrency: cryptoCurrencyForBalanceCurrency(fiatCurrency),
-    countryCode,
-    channelId: String(executePayload.channelId || "") || undefined,
-    reviewSnapshot: reviewSnapshot ?? undefined,
-    sendNote: "Payroll",
+    sourceCurrency,
+    noahCustomerId: acc.noahCustomerId,
+  }, {
+    destination: recipientRow,
+    amount: fiatAmount,
+    amountEntryMode: "receive",
+    purpose: "payroll",
+    note: "Payroll",
     idempotencyKey,
-    lockId,
-    ...(executePayload.formSessionId && executePayload.cryptoAuthorizedAmount
-      ? {
-          quotedSession: {
-            formSessionId: String(executePayload.formSessionId),
-            cryptoAuthorizedAmount: String(executePayload.cryptoAuthorizedAmount),
-            ...(executePayload.channelId ? { channelId: String(executePayload.channelId) } : {}),
-            ...(executePayload.noahFloor ? { noahFloor: String(executePayload.noahFloor) } : {}),
-            ...(executePayload.noahSendAmount
-              ? { noahSendAmount: String(executePayload.noahSendAmount) }
-              : {}),
-            ...(executePayload.totalDebited
-              ? { totalDebited: String(executePayload.totalDebited) }
-              : {}),
-            ...(executePayload.marginAmount
-              ? { marginAmount: String(executePayload.marginAmount) }
-              : {}),
-            ...(executePayload.marginCaptureMode
-              ? {
-                  marginCaptureMode: executePayload.marginCaptureMode as
-                    | "surplus_send"
-                    | "split_debit",
-                }
-              : {}),
-            ...(executePayload.customerRate != null
-              ? { customerRate: Number(executePayload.customerRate) }
-              : {}),
-            ...(executePayload.noahMid != null ? { noahMid: Number(executePayload.noahMid) } : {}),
-          },
-        }
-      : {}),
+    locked: {
+      lockId: String(line.lock_id || executePayload.lockId || "").trim() || null,
+      sourceAmount:
+        executePayload.totalDebited != null
+          ? Number(executePayload.totalDebited)
+          : Number(line.source_amount_cents ?? 0) / 100,
+      payload: executePayload,
+    },
+    reviewSnapshot,
   })
-
-  if (!result.ok) return { ok: false, error: result.error || "Payout failed." }
-  return { ok: true, transferEtid: result.easnerTransactionId }
 }
 
 export async function approvePayrollRun(input: {
@@ -486,11 +364,13 @@ export async function approvePayrollRun(input: {
       const recipient = (row.recipient_snapshot as Record<string, unknown> | null) ?? {}
       const method = (row.payment_method_snapshot as Record<string, unknown> | null) ?? {}
       const rail = String(row.rail || "")
-      const externalRecipientId = String(method.providerRecipientId || recipient.recipientId || "")
+      const payrollMethodId = String(row.payment_method_id || method.id || "")
       const usable =
         Number.isFinite(amountCents) &&
         amountCents > 0 &&
-        (rail === "easetag" ? Boolean(String(recipient.easetag || "")) : Boolean(externalRecipientId))
+        (rail === "easetag"
+          ? Boolean(String(recipient.easetag || ""))
+          : Boolean(payrollMethodId))
       if (!usable) {
         invalidLines.push(String(row.id))
         continue
@@ -568,7 +448,7 @@ export async function approvePayrollRun(input: {
 
       ;(fxSnapshot.lines as Record<string, unknown>)[row.id] = locked.executePayload
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Quote lock failed"
+      const msg = sanitizePayrollExecutionError(e instanceof Error ? e.message : "Quote lock failed")
       quoteFailures.push(`${row.id}: ${msg}`)
       await input.admin
         .from("payroll_lines")
@@ -607,7 +487,18 @@ export async function executePayrollRun(input: {
   userId: string
   businessId: string
   runId: string
-}): Promise<{ completed: number; failed: number; partial: boolean }> {
+  batchLimit?: number
+  maxDurationMs?: number
+}): Promise<{
+  completed: number
+  failed: number
+  partial: boolean
+  blocked?: "insufficient_funds" | "needs_reapproval"
+  shortfall?: number
+  hasMore?: boolean
+  processing?: number
+  phase?: "quoting" | "executing"
+}> {
   const { admin, userId, businessId, runId } = input
 
   const { data: run } = await admin
@@ -622,18 +513,162 @@ export async function executePayrollRun(input: {
     throw new Error("Run is not approved for execution.")
   }
 
-  await admin
-    .from("payroll_runs")
-    .update({ status: "executing", updated_at: new Date().toISOString() })
-    .eq("id", runId)
+  const startedAt = Date.now()
+  const batchLimit = Math.max(1, Math.min(input.batchLimit ?? 10, 25))
+  const maxDurationMs = Math.max(5_000, input.maxDurationMs ?? 45_000)
 
-  const { data: lines } = await admin
+  let { data: lines } = await admin
     .from("payroll_lines")
     .select("*")
     .eq("run_id", runId)
-    .in("status", ["pending", "locked"])
+    .in("status", ["pending", "quoting", "locked"])
 
-  for (const line of lines ?? []) {
+  const unquotedLines = (lines ?? []).filter((line) => {
+    const metadata = (line.metadata as Record<string, unknown> | null) ?? {}
+    const executePayload =
+      (metadata.executePayload as Record<string, unknown> | null) ?? {}
+    return Object.keys(executePayload).length === 0
+  })
+  if (unquotedLines.length > 0) {
+    const account = await resolveNoahAccountContextFromLedgerScope(admin, {
+      userId,
+      businessId,
+    })
+    if (!account) throw new Error("Could not resolve business account context.")
+
+    let quotedThisPass = 0
+    for (const line of unquotedLines) {
+      if (
+        quotedThisPass >= batchLimit ||
+        Date.now() - startedAt >= maxDurationMs
+      ) {
+        break
+      }
+      const row = line as PayrollLineRow
+      await admin.from("payroll_lines").update({
+        status: "quoting",
+        updated_at: new Date().toISOString(),
+      }).eq("id", row.id).eq("run_id", runId)
+      try {
+        const locked = await lockPayrollLineQuote({
+          admin,
+          userId,
+          businessId,
+          line: row,
+          sourceCurrency: String(run.source_currency || "USD"),
+          noahCustomerId: account.noahCustomerId,
+        })
+        await admin.from("payroll_lines").update({
+          status: locked.lockId ? "locked" : "pending",
+          lock_id: locked.lockId,
+          source_amount_cents: Math.round(locked.sourceAmount * 100),
+          metadata: {
+            ...((row.metadata as Record<string, unknown> | null) ?? {}),
+            executePayload: locked.executePayload,
+          },
+          error_code: null,
+          error_message: null,
+          updated_at: new Date().toISOString(),
+        }).eq("id", row.id).eq("run_id", runId)
+      } catch (cause) {
+        await admin.from("payroll_lines").update({
+          status: "failed",
+          error_code: "quote_failed",
+          error_message: sanitizePayrollExecutionError(cause),
+          updated_at: new Date().toISOString(),
+        }).eq("id", row.id).eq("run_id", runId)
+      }
+      quotedThisPass++
+    }
+
+    if (quotedThisPass < unquotedLines.length) {
+      const { data: currentLines } = await admin
+        .from("payroll_lines")
+        .select("status")
+        .eq("run_id", runId)
+        .neq("status", "skipped")
+      return {
+        completed: (currentLines ?? []).filter((line) => line.status === "paid").length,
+        failed: (currentLines ?? []).filter((line) => line.status === "failed").length,
+        partial: false,
+        hasMore: true,
+        phase: "quoting",
+      }
+    }
+
+    const refreshed = await admin
+      .from("payroll_lines")
+      .select("*")
+      .eq("run_id", runId)
+      .in("status", ["pending", "quoting", "locked"])
+    lines = refreshed.data
+  }
+
+  const required =
+    (lines ?? []).reduce((sum, line) => sum + Number(line.source_amount_cents ?? line.amount_cents ?? 0), 0) / 100
+  await admin.from("payroll_runs").update({
+    total_source_cents: Math.round(required * 100),
+    updated_at: new Date().toISOString(),
+  }).eq("id", runId).eq("business_id", businessId)
+  const approvedDebit = Number(
+    ((run.approval_snapshot as Record<string, unknown> | null) ?? {}).approvedDebit ?? 0,
+  )
+  if (approvedDebit > 0 && required > approvedDebit + 1e-9) {
+    await admin.from("payroll_runs").update({
+      status: "needs_reapproval",
+      updated_at: new Date().toISOString(),
+    }).eq("id", runId)
+    await admin.from("payroll_run_events").insert({
+      business_id: businessId,
+      run_id: runId,
+      event_type: "run.reapproval_required",
+      data: { approvedDebit, exactDebit: required },
+    })
+    return {
+      completed: 0,
+      failed: 0,
+      partial: false,
+      blocked: "needs_reapproval",
+    }
+  }
+  const currency = String(run.source_currency || "USD").toUpperCase()
+  const available = await readBusinessAvailableBalance(admin, businessId, currency)
+  if (available + 1e-9 < required) {
+    const shortfall = Math.max(0, required - available)
+    const runMetadata = (run.metadata as Record<string, unknown> | null) ?? {}
+    await admin.from("payroll_runs").update({
+      shortfall_cents: Math.round(shortfall * 100),
+      metadata: {
+        ...runMetadata,
+        executionBlocker: {
+          code: "insufficient_funds",
+          requiredAmount: required,
+          availableAmount: available,
+          shortfall,
+          checkedAt: new Date().toISOString(),
+        },
+      },
+      updated_at: new Date().toISOString(),
+    }).eq("id", runId)
+    return { completed: 0, failed: 0, partial: false, blocked: "insufficient_funds", shortfall }
+  }
+
+  await admin
+    .from("payroll_runs")
+    .update({
+      status: "executing",
+      shortfall_cents: 0,
+      metadata: {
+        ...((run.metadata as Record<string, unknown> | null) ?? {}),
+        executionBlocker: null,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", runId)
+
+  const batch = (lines ?? []).slice(0, batchLimit)
+  for (const line of batch) {
+    if (Date.now() - startedAt >= maxDurationMs) break
     const row = line as PayrollLineRow
     const idempotencyKey = `payroll_line:${row.id}`
 
@@ -651,13 +686,24 @@ export async function executePayrollRun(input: {
       idempotencyKey,
     })
 
-    if (result.ok) {
+    if (result.state === "settled") {
       await admin
         .from("payroll_lines")
         .update({
           status: "paid",
-          transfer_etid: result.transferEtid,
+          transfer_etid: result.transactionId,
           settled_at: new Date().toISOString(),
+          error_code: null,
+          error_message: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+    } else if (result.state === "submitted") {
+      await admin
+        .from("payroll_lines")
+        .update({
+          status: "processing",
+          transfer_etid: result.transactionId,
           error_code: null,
           error_message: null,
           updated_at: new Date().toISOString(),
@@ -668,8 +714,8 @@ export async function executePayrollRun(input: {
         .from("payroll_lines")
         .update({
           status: "failed",
-          error_code: result.errorCode ?? "execute_failed",
-          error_message: result.error,
+          error_code: result.code,
+          error_message: sanitizePayrollExecutionError(result.message),
           updated_at: new Date().toISOString(),
         })
         .eq("id", row.id)
@@ -681,6 +727,38 @@ export async function executePayrollRun(input: {
   const paidCount = (allLines ?? []).filter((l) => l.status === "paid").length
   const failCount = (allLines ?? []).filter((l) => l.status === "failed").length
   const totalActive = (allLines ?? []).filter((l) => l.status !== "skipped").length
+  const remainingCount = (allLines ?? []).filter((l) =>
+    ["pending", "locked", "quoting"].includes(String(l.status)),
+  ).length
+  const processingCount = (allLines ?? []).filter((l) => l.status === "processing").length
+
+  if (remainingCount > 0) {
+    await admin.from("payroll_runs").update({
+      status: "executing",
+      updated_at: new Date().toISOString(),
+    }).eq("id", runId)
+    return {
+      completed: paidCount,
+      failed: failCount,
+      partial: false,
+      hasMore: true,
+      processing: processingCount,
+      phase: "executing",
+    }
+  }
+
+  if (processingCount > 0) {
+    await admin.from("payroll_runs").update({
+      status: "executing",
+      updated_at: new Date().toISOString(),
+    }).eq("id", runId)
+    return {
+      completed: paidCount,
+      failed: failCount,
+      partial: false,
+      processing: processingCount,
+    }
+  }
 
   let finalStatus: string = "completed"
   if (failCount > 0 && paidCount > 0) finalStatus = "partial"
@@ -696,5 +774,87 @@ export async function executePayrollRun(input: {
     })
     .eq("id", runId)
 
-  return { completed: paidCount, failed: failCount, partial: finalStatus === "partial" }
+  return {
+    completed: paidCount,
+    failed: failCount,
+    partial: finalStatus === "partial",
+    processing: 0,
+  }
+}
+
+export async function reconcilePayrollRunSettlements(input: {
+  admin: SupabaseClient
+  businessId: string
+  runId: string
+}): Promise<{
+  terminal: boolean
+  completed: number
+  failed: number
+  processing: number
+  status: "executing" | "completed" | "partial" | "failed"
+}> {
+  const { admin, businessId, runId } = input
+  const { data: processingLines } = await admin
+    .from("payroll_lines")
+    .select("id,transfer_etid")
+    .eq("run_id", runId)
+    .eq("status", "processing")
+
+  for (const line of processingLines ?? []) {
+    const transactionId = String(line.transfer_etid || "").trim()
+    if (!transactionId) continue
+    const { data: transaction } = await admin
+      .from("ledger_transactions")
+      .select("status,settled_at,metadata")
+      .eq("easner_transaction_id", transactionId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const settlementState = classifyPayrollSettlementStatus(transaction?.status)
+    if (settlementState === "settled") {
+      await admin.from("payroll_lines").update({
+        status: "paid",
+        settled_at: transaction?.settled_at || new Date().toISOString(),
+        error_code: null,
+        error_message: null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", line.id).eq("status", "processing")
+    } else if (settlementState === "failed") {
+      const metadata = (transaction?.metadata as Record<string, unknown> | null) ?? {}
+      await admin.from("payroll_lines").update({
+        status: "failed",
+        error_code: "provider_settlement_failed",
+        error_message: sanitizePayrollExecutionError(
+          metadata.failure_reason || "The payment provider reported a failed payment.",
+        ),
+        updated_at: new Date().toISOString(),
+      }).eq("id", line.id).eq("status", "processing")
+    }
+  }
+
+  const { data: lines } = await admin
+    .from("payroll_lines")
+    .select("status")
+    .eq("run_id", runId)
+    .neq("status", "skipped")
+  const completed = (lines ?? []).filter((line) => line.status === "paid").length
+  const failed = (lines ?? []).filter((line) => line.status === "failed").length
+  const processing = (lines ?? []).filter((line) =>
+    ["pending", "quoting", "locked", "processing"].includes(String(line.status)),
+  ).length
+  const status =
+    processing > 0
+      ? "executing"
+      : failed > 0 && completed > 0
+        ? "partial"
+        : failed > 0
+          ? "failed"
+          : "completed"
+  await admin.from("payroll_runs").update({
+    status,
+    ...(processing === 0 ? { executed_at: new Date().toISOString() } : {}),
+    updated_at: new Date().toISOString(),
+  }).eq("id", runId).eq("business_id", businessId)
+
+  return { terminal: processing === 0, completed, failed, processing, status }
 }

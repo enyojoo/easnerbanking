@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { payrollMethodDetails } from "@/lib/payroll/personal-payroll"
 
 const railByMethod = {
   easetag: "easetag",
@@ -24,7 +25,7 @@ export async function syncPayrollPersonReceivingMethod(
 
   const { data: method } = await admin
     .from("payroll_payment_methods")
-    .select("id,type,label,masked_details,provider_recipient_id,status")
+    .select("id,type,label,account_number,status,full_name,country_code,currency,bank_name,phone_number,email,mobile_provider,wallet_network,routing_number,sort_code,iban,swift_bic,transfer_type,checking_or_savings,address_line1,city,state,postal_code,metadata")
     .eq("id", connection.preferred_method_id)
     .eq("connection_id", connectionId)
     .eq("status", "active")
@@ -36,18 +37,22 @@ export async function syncPayrollPersonReceivingMethod(
   if (!rail) throw new Error("Unsupported payroll receiving method")
 
   const identity = (connection.shared_identity as Record<string, unknown> | null) ?? {}
-  const providerRecipientId = method.provider_recipient_id
-    ? String(method.provider_recipient_id)
-    : null
   const easetag = methodType === "easetag" ? String(identity.easetag ?? "") : ""
-  const ready = methodType === "easetag" ? Boolean(easetag) : Boolean(providerRecipientId)
-  const recipientId = methodType === "easetag" ? null : providerRecipientId
+  const payrollOwned = methodType === "easetag" || Boolean(method.account_number)
+  const ready = methodType === "easetag" ? Boolean(easetag) : payrollOwned
   const paymentMethodSnapshot = {
     id: String(method.id),
     type: methodType,
     label: String(method.label || methodType),
-    maskedDetails: method.masked_details ?? {},
-    providerRecipientId,
+    details: payrollMethodDetails(method as Record<string, unknown>),
+    payrollOwned,
+  }
+  const paymentMethodSummary = {
+    id: paymentMethodSnapshot.id,
+    type: paymentMethodSnapshot.type,
+    label: paymentMethodSnapshot.label,
+    details: {},
+    payrollOwned,
   }
   const now = new Date().toISOString()
   const { data: person } = await admin.from("payroll_people")
@@ -59,18 +64,17 @@ export async function syncPayrollPersonReceivingMethod(
     email: person?.email ?? null,
     type: person?.type ?? "employee",
     easetag: easetag || person?.easetag || null,
-    recipientId,
     country: identity.residenceCountry ?? person?.country ?? null,
     connectionId,
   }
 
   await admin.from("payroll_people").update({
     rail,
-    recipient_id: recipientId,
+    recipient_id: null,
     readiness_status: ready ? "ready" : "method_verification_required",
     metadata: {
       ...((person?.metadata as Record<string, unknown> | null) ?? {}),
-      preferredPaymentMethod: paymentMethodSnapshot,
+      preferredPaymentMethod: paymentMethodSummary,
     },
     updated_at: now,
   }).eq("id", connection.person_id)

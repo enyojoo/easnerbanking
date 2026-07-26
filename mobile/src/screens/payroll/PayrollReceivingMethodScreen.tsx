@@ -132,7 +132,7 @@ export default function PayrollReceivingMethodScreen({ navigation, route }: Navi
                 id: existingMethod.id,
                 type: existingMethod.type as PayrollExternalMethodType,
                 label: existingMethod.label,
-                maskedDetails: existingMethod.maskedDetails,
+                details: existingMethod.details,
               }
             : null
         }

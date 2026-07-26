@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowLeft, ChevronRight } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { ReactNode } from "react"
@@ -7,9 +7,6 @@ import type { ReactNode } from "react"
 export function PayrollSubpageShell({
   backHref,
   backLabel,
-  section,
-  sectionHref,
-  current,
   title,
   description,
   leading,
@@ -39,17 +36,6 @@ export function PayrollSubpageShell({
           {backLabel}
         </Link>
       </Button>
-      <nav aria-label="Breadcrumb" className="mb-4 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-        <Link href="/payroll" className="hover:text-foreground">Payroll</Link>
-        <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-        <Link href={sectionHref ?? backHref} className="hover:text-foreground">{section}</Link>
-        {current ? (
-          <>
-            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate text-foreground">{current}</span>
-          </>
-        ) : null}
-      </nav>
       <header className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex min-w-0 items-center gap-4">
           {leading ? <div className="shrink-0">{leading}</div> : null}

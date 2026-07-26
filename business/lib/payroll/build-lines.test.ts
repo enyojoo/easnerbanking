@@ -32,15 +32,16 @@ function person(overrides: Partial<PayrollPerson> = {}): PayrollPerson {
 
 function selectedMethod(
   type: "easetag" | "bank" | "mobile_money" | "stablecoin",
-  providerRecipientId: string | null,
+  accountNumber: string | null,
 ) {
   return {
     id: `method-${type}`,
     person_id: "person-1",
     type,
     label: type,
-    masked_details: { ending: "••••1234" },
-    provider_recipient_id: providerRecipientId,
+    currency: type === "stablecoin" ? "USDC" : "NGN",
+    wallet_network: type === "stablecoin" ? "Solana" : null,
+    account_number: accountNumber,
     owner_type: "employee",
     connection_id: "connection-1",
   }
@@ -56,15 +57,15 @@ describe("applySelectedPayrollMethod", () => {
     (methodType, expectedRail) => {
       const line = applySelectedPayrollMethod(
         buildLineFromPerson("run-1", person()),
-        selectedMethod(methodType, "recipient-selected"),
+        selectedMethod(methodType, "destination-value"),
       )
 
       expect(line.rail).toBe(expectedRail)
-      expect(line.recipient_snapshot.recipientId).toBe("recipient-selected")
+      expect(line.recipient_snapshot.recipientId).toBeNull()
       expect(line.payment_method_snapshot).toMatchObject({
         id: `method-${methodType}`,
         type: methodType,
-        providerRecipientId: "recipient-selected",
+        payrollOwned: true,
       })
     },
   )
@@ -75,7 +76,7 @@ describe("applySelectedPayrollMethod", () => {
         "run-1",
         person({ rail: "bank", recipientId: "recipient-stale" }),
       ),
-      selectedMethod("easetag", "recipient-should-not-be-used"),
+      selectedMethod("easetag", null),
     )
 
     expect(line.rail).toBe("easetag")
@@ -85,7 +86,21 @@ describe("applySelectedPayrollMethod", () => {
     })
     expect(line.payment_method_snapshot).toMatchObject({
       type: "easetag",
-      providerRecipientId: null,
     })
+    expect(line.payment_method_snapshot).not.toHaveProperty("providerRecipientId")
+  })
+
+  it("marks a Payroll-owned method without creating a Send recipient reference", () => {
+    const line = applySelectedPayrollMethod(
+      buildLineFromPerson("run-1", person()),
+      selectedMethod("bank", "0123456789"),
+    )
+
+    expect(line.recipient_snapshot.recipientId).toBeNull()
+    expect(line.payment_method_snapshot).toMatchObject({
+      type: "bank",
+      payrollOwned: true,
+    })
+    expect(line.payment_method_snapshot).not.toHaveProperty("providerRecipientId")
   })
 })

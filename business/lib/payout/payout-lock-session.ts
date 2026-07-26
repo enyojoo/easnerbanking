@@ -7,7 +7,8 @@ export type PayoutLockSessionRow = {
   id: string
   user_id: string
   business_id: string | null
-  recipient_id: string
+  recipient_id: string | null
+  destination_ref: string
   provider: PayoutLockProvider
   quote_key: string
   status: "locked" | "executed" | "expired"
@@ -22,7 +23,10 @@ function rowFromDb(data: Record<string, unknown>): PayoutLockSessionRow {
     id: String(data.id),
     user_id: String(data.user_id),
     business_id: data.business_id == null ? null : String(data.business_id),
-    recipient_id: String(data.recipient_id),
+    recipient_id: data.recipient_id == null ? null : String(data.recipient_id),
+    destination_ref:
+      String(data.destination_ref || "").trim() ||
+      (data.recipient_id == null ? "" : `recipient:${String(data.recipient_id)}`),
     provider: String(data.provider) as PayoutLockProvider,
     quote_key: String(data.quote_key),
     status: String(data.status) as PayoutLockSessionRow["status"],
@@ -84,6 +88,7 @@ export async function upsertPayoutLockSession(
     userId: string
     businessId: string | null
     recipientId: string
+    destinationRef?: string
     provider: PayoutLockProvider
     quoteKey: string
     recipientSnapshotHash: string
@@ -99,7 +104,9 @@ export async function upsertPayoutLockSession(
       {
         user_id: input.userId,
         business_id: input.businessId,
-        recipient_id: input.recipientId,
+        recipient_id:
+          input.destinationRef?.startsWith("payroll_method:") ? null : input.recipientId,
+        destination_ref: input.destinationRef || `recipient:${input.recipientId}`,
         provider: input.provider,
         quote_key: input.quoteKey,
         status: "locked",

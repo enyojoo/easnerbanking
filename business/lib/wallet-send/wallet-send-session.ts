@@ -6,7 +6,8 @@ export const WALLET_SEND_QUOTE_TTL_MS = 15 * 60 * 1000
 export type WalletSendSessionRow = {
   form_session_id: string
   user_id: string
-  recipient_id: string
+  recipient_id: string | null
+  destination_ref: string
   source_balance_currency: string
   receive_asset: string
   receive_network: string
@@ -28,7 +29,10 @@ function rowFromDb(data: Record<string, unknown>): WalletSendSessionRow {
   return {
     form_session_id: String(data.form_session_id),
     user_id: String(data.user_id),
-    recipient_id: String(data.recipient_id),
+    recipient_id: data.recipient_id == null ? null : String(data.recipient_id),
+    destination_ref:
+      String(data.destination_ref || "").trim() ||
+      (data.recipient_id == null ? "" : `recipient:${String(data.recipient_id)}`),
     source_balance_currency: String(data.source_balance_currency),
     receive_asset: String(data.receive_asset),
     receive_network: String(data.receive_network),
@@ -56,6 +60,7 @@ export async function createWalletSendSession(
     form_session_id: input.form_session_id,
     user_id: input.user_id,
     recipient_id: input.recipient_id,
+    destination_ref: input.destination_ref,
     source_balance_currency: input.source_balance_currency,
     receive_asset: input.receive_asset,
     receive_network: input.receive_network,
@@ -99,7 +104,7 @@ export async function getWalletSendSession(
   admin: SupabaseClient,
   formSessionId: string,
   userId: string,
-  opts?: { allowQuoted?: boolean },
+  opts?: { allowQuoted?: boolean; allowExecuted?: boolean },
 ): Promise<WalletSendSessionRow | null> {
   const { data, error } = await admin
     .from("wallet_send_sessions")
@@ -120,7 +125,9 @@ export async function getWalletSendSession(
 
   const row = rowFromDb(data as Record<string, unknown>)
   const allowed =
-    row.status === "locked" || (opts?.allowQuoted && row.status === "quoted")
+    row.status === "locked" ||
+    (opts?.allowQuoted && row.status === "quoted") ||
+    ((opts as { allowExecuted?: boolean } | undefined)?.allowExecuted && row.status === "executed")
   if (!allowed) return null
   if (new Date(row.expires_at).getTime() <= Date.now()) return null
   return row

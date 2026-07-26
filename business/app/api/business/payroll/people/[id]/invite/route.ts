@@ -106,7 +106,6 @@ export async function POST(
       owner_type: "employee",
       type: "easetag",
       label: `@${person.easetag.replace(/^@/, "")}`,
-      masked_details: { easetag: `@${person.easetag.replace(/^@/, "")}` },
     }).select("id").single()
     if (method.error) return NextResponse.json({ error: method.error.message }, { status: 500 })
     methodId = String(method.data.id)

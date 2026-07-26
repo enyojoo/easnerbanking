@@ -20,6 +20,7 @@ export type ConfirmGridBalancePayoutInput = {
   userId: string
   businessId: string | null
   recipientId: string
+  destinationRef?: string
   recipient: RecipientSellPrepareRow
   receiveFiatAmount: number
   sourceBalanceCurrency: string
@@ -35,6 +36,7 @@ export async function confirmGridBalancePayoutOrder(
   const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
   const quoteKey = buildPayoutQuoteKey({
     recipientId: input.recipientId,
+    destinationRef: input.destinationRef,
     sourceBalanceCurrency: input.sourceBalanceCurrency,
     amountEntryMode,
     receiveAmount: input.receiveFiatAmount,
@@ -77,6 +79,7 @@ export async function confirmGridBalancePayoutOrder(
     userId: input.userId,
     businessId: input.businessId,
     recipientId: input.recipientId,
+    destinationRef: input.destinationRef,
     provider: "grid",
     quoteKey,
     recipientSnapshotHash: hashRecipientSnapshot(input.recipient),

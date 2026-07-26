@@ -17,36 +17,28 @@ export type ConfirmPayoutOrderInput = {
   businessId: string | null
   noahCustomerId: string
   recipientId: string
+  destinationRef?: string
   receiveAmount: number
   sourceBalanceCurrency: string
   amountEntryMode?: "send" | "receive"
   sendAmount?: number
   note?: string
   paymentPurpose?: string
+  recipient: RecipientSellPrepareRow
 }
 
 export async function confirmPayoutOrder(
   input: ConfirmPayoutOrderInput,
 ): Promise<PayoutQuoteResult> {
   const admin = createSupabaseAdmin()
-  const { data: rec, error } = await admin
-    .from("recipients")
-    .select("*")
-    .eq("id", input.recipientId)
-    .eq("user_id", input.userId)
-    .maybeSingle()
-
-  if (error) throw new Error(error.message)
-  if (!rec) throw new Error("Recipient not found.")
-
-  const recipient = rec as RecipientSellPrepareRow
+  const recipient = input.recipient
   const receiveCurrency = String(recipient.currency || "").trim().toUpperCase()
   const countryCode = resolveRecipientPayoutCountry(recipient)
   if (!countryCode) throw new Error("Recipient country is required for payout.")
 
   const orgOwner =
-    input.ctx.scope === "business" && input.ctx.businessId
-      ? await resolveBusinessOrgOwnerUserId(admin, input.ctx.businessId).catch(() => null)
+    input.ctx.scope === "business" && input.businessId
+      ? await resolveBusinessOrgOwnerUserId(admin, input.businessId).catch(() => null)
       : null
   const kycUserId = orgOwner ?? input.userId
 
@@ -55,6 +47,10 @@ export async function confirmPayoutOrder(
     const provider = await selectProviderForCorridor(admin, {
       countryCode,
       currencyCode: receiveCurrency,
+      rail:
+        recipient.mobile_provider || String(recipient.bank_name || "").toLowerCase().includes("mobile money")
+          ? "mobile_money"
+          : "bank_transfer",
       mobileProvider: recipient.mobile_provider,
       bankName: recipient.bank_name,
     })
@@ -99,6 +95,7 @@ export async function confirmPayoutOrder(
       userId: kycUserId,
       businessId: input.businessId,
       recipientId: input.recipientId,
+      destinationRef: input.destinationRef,
       recipient,
       receiveFiatAmount: input.receiveAmount,
       sourceBalanceCurrency: input.sourceBalanceCurrency,
@@ -156,6 +153,7 @@ export async function confirmPayoutOrder(
       userId: kycUserId,
       businessId: input.businessId,
       recipientId: input.recipientId,
+      destinationRef: input.destinationRef,
       recipient,
       receiveFiatAmount: input.receiveAmount,
       sourceBalanceCurrency: input.sourceBalanceCurrency,
@@ -188,6 +186,7 @@ export async function confirmPayoutOrder(
       businessId: input.businessId,
       noahCustomerId: input.noahCustomerId,
       recipientId: input.recipientId,
+      destinationRef: input.destinationRef,
       recipient,
       receiveFiatAmount: input.receiveAmount,
       sourceBalanceCurrency: input.sourceBalanceCurrency,

@@ -106,14 +106,23 @@ export async function POST(request: Request) {
         payCurrency: payrollDefaults.currency,
         payBasis: "fixed",
         hourlyRate: null,
-        recipientId: row.recipientId ?? null,
+        // CSV imports never attach Send recipients. Receiving methods are added
+        // through Payroll so their credentials can be encrypted in Payroll.
+        recipientId: null,
         easetag: row.easetag ?? null,
         rail: row.rail,
         status: "active",
       },
     })
 
-    const { data, error } = await admin.from("payroll_people").insert(payload).select("*").single()
+    const { data, error } = await admin
+      .from("payroll_people")
+      .insert({
+        ...payload,
+        readiness_status: row.rail === "easetag" ? "pending_consent" : "missing_payment_method",
+      })
+      .select("*")
+      .single()
     if (error) {
       invalid.push({ ...row, errors: [error.message] })
       continue

@@ -10,6 +10,8 @@ import type { CreatePayrollPersonCommand, PayrollPersonInput } from "@/lib/payro
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 import { normalizePayrollResidenceCountry } from "@/lib/payroll/residence-country"
+import { normalizePayrollReceivingMethodInput } from "@/lib/payroll/receiving-method-input"
+import { payrollMethodDbPayload } from "@/lib/send-destination"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -169,6 +171,125 @@ export async function POST(request: Request) {
     }, { status: 201 })
   }
 
+  if ("mode" in body && body.mode === "manual") {
+    const command = body as Extract<CreatePayrollPersonCommand, { mode: "manual" }>
+    const fullName = String(command.fullName || "").trim()
+    const manualEmail = String(command.email || "").trim().toLowerCase()
+    const residenceCountry = normalizePayrollResidenceCountry(command.country)
+    if (!fullName) return NextResponse.json({ error: "Full name is required." }, { status: 400 })
+    if (!EMAIL_PATTERN.test(manualEmail)) {
+      return NextResponse.json(
+        { error: "A valid email is required for payroll confirmations and pay stubs." },
+        { status: 400 },
+      )
+    }
+    if (!residenceCountry) {
+      return NextResponse.json({ error: "Country of residence is required." }, { status: 400 })
+    }
+
+    let receivingMethod
+    try {
+      receivingMethod = normalizePayrollReceivingMethodInput(command.receivingMethod, fullName)
+    } catch (cause) {
+      return NextResponse.json(
+        { error: cause instanceof Error ? cause.message : "Receiving method is invalid." },
+        { status: 400 },
+      )
+    }
+
+    const payload = payrollPersonToDbPayload({
+      businessId: ctx.businessId,
+      person: {
+        type: command.type,
+        fullName,
+        email: manualEmail,
+        country: residenceCountry,
+        defaultAmount: command.defaultAmount,
+        payCurrency: businessCurrency,
+        rail: receivingMethod.rail,
+        status: "active",
+        internalReference: command.internalReference ?? null,
+        metadata: { scheduleIds: command.scheduleIds ?? [] },
+      },
+    })
+    const created = await admin
+      .from("payroll_people")
+      .insert({ ...payload, readiness_status: "ready", connection_status: "manual" })
+      .select("*")
+      .single()
+    if (created.error) return NextResponse.json({ error: created.error.message }, { status: 500 })
+
+    const method = await admin
+      .from("payroll_payment_methods")
+      .insert({
+        person_id: created.data.id,
+        business_id: ctx.businessId,
+        owner_type: "business",
+        type: receivingMethod.type,
+        label: receivingMethod.label,
+        ...payrollMethodDbPayload(receivingMethod.type, receivingMethod.details),
+      })
+      .select("id,type,label,full_name,country_code,currency,account_number,bank_name,phone_number,email,mobile_provider,wallet_network,routing_number,sort_code,iban,swift_bic,transfer_type,checking_or_savings,address_line1,city,state,postal_code,metadata")
+      .single()
+    if (method.error) {
+      await admin.from("payroll_people").delete().eq("id", created.data.id).eq("business_id", ctx.businessId)
+      return NextResponse.json({ error: method.error.message }, { status: 500 })
+    }
+
+    const mapped = mapRowToPayrollPerson(created.data as PayrollPersonRow)
+    const metadata = {
+      ...mapped.metadata,
+      preferredPaymentMethod: {
+        id: method.data.id,
+        type: method.data.type,
+        label: method.data.label,
+        details: {},
+        preferred: true,
+        ownerType: "business",
+        status: "active",
+      },
+    }
+    const updated = await admin
+      .from("payroll_people")
+      .update({ metadata, updated_at: new Date().toISOString() })
+      .eq("id", created.data.id)
+      .eq("business_id", ctx.businessId)
+      .select("*")
+      .single()
+    if (updated.error) {
+      await admin.from("payroll_payment_methods").delete().eq("id", method.data.id)
+      await admin.from("payroll_people").delete().eq("id", created.data.id).eq("business_id", ctx.businessId)
+      return NextResponse.json({ error: updated.error.message }, { status: 500 })
+    }
+    if (command.scheduleIds?.length) {
+      const { data: validSchedules } = await admin
+        .from("payroll_schedules")
+        .select("id")
+        .eq("business_id", ctx.businessId)
+        .in("id", [...new Set(command.scheduleIds)])
+      if (validSchedules?.length) {
+        await admin.from("payroll_schedule_people").insert(
+          validSchedules.map((schedule) => ({
+            schedule_id: schedule.id,
+            person_id: created.data.id,
+            business_id: ctx.businessId,
+          })),
+        )
+      }
+    }
+    await admin.from("payroll_run_events").insert({
+      business_id: ctx.businessId,
+      person_id: created.data.id,
+      actor_user_id: ctx.userId,
+      event_type: "person.created",
+      data: { mode: "manual" },
+    })
+    return NextResponse.json(
+      { person: mapRowToPayrollPerson(updated.data as PayrollPersonRow) },
+      { status: 201 },
+    )
+  }
+
   if ("mode" in body) {
     return NextResponse.json(
       { error: "Manual setup must include a validated receiving method." },
@@ -178,6 +299,12 @@ export async function POST(request: Request) {
 
   if (!body.fullName?.trim()) {
     return NextResponse.json({ error: "Full name is required" }, { status: 400 })
+  }
+  if (body.recipientId) {
+    return NextResponse.json(
+      { error: "Create Payroll payment details directly in Payroll." },
+      { status: 400 },
+    )
   }
   const manualEmail = String(body.email || "").trim().toLowerCase()
   if (!EMAIL_PATTERN.test(manualEmail)) {
@@ -202,7 +329,7 @@ export async function POST(request: Request) {
       payCurrency: businessCurrency,
       payBasis: body.payBasis ?? "fixed",
       hourlyRate: body.hourlyRate ?? null,
-      recipientId: body.recipientId ?? null,
+      recipientId: null,
       easetag: body.easetag ?? null,
       rail: body.rail,
       status: body.status ?? "active",
@@ -213,55 +340,11 @@ export async function POST(request: Request) {
 
   const { data, error } = await admin.from("payroll_people").insert({
     ...payload,
-    readiness_status: body.recipientId ? "ready" : "missing_payment_method",
+    readiness_status: "missing_payment_method",
     connection_status: "manual",
   }).select("*").single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  if (body.recipientId) {
-    const { data: destination } = await admin.from("recipients")
-      .select("id,user_id,bank_name,account_number,mobile_provider,wallet_network")
-      .eq("id", body.recipientId).eq("user_id", ctx.userId).maybeSingle()
-    if (!destination) {
-      await admin.from("payroll_people").delete().eq("id", data.id).eq("business_id", ctx.businessId)
-      return NextResponse.json({ error: "The selected payment details are not available." }, { status: 400 })
-    }
-    const methodType = body.rail === "mobile" ? "mobile_money" : body.rail === "crypto" ? "stablecoin" : "bank"
-    const account = String(destination.account_number || "")
-    const method = await admin.from("payroll_payment_methods").insert({
-      person_id: data.id,
-      business_id: ctx.businessId,
-      owner_type: "business",
-      type: methodType,
-      label: methodType === "mobile_money"
-        ? String(destination.mobile_provider || "Mobile money")
-        : methodType === "stablecoin"
-          ? `${String(destination.wallet_network || "Stablecoin")} wallet`
-          : String(destination.bank_name || "Bank account"),
-      masked_details: { ending: account ? `••••${account.slice(-4)}` : "Protected" },
-      provider_recipient_id: destination.id,
-    }).select("id,type,label,masked_details").single()
-    if (method.error) {
-      await admin.from("payroll_people").delete().eq("id", data.id).eq("business_id", ctx.businessId)
-      return NextResponse.json({ error: method.error.message }, { status: 500 })
-    }
-    const mapped = mapRowToPayrollPerson(data as PayrollPersonRow)
-    const metadata = {
-      ...mapped.metadata,
-      preferredPaymentMethod: {
-        id: method.data.id,
-        type: method.data.type,
-        label: method.data.label,
-        maskedDetails: method.data.masked_details,
-        preferred: true,
-        ownerType: "business",
-        status: "active",
-      },
-    }
-    await admin.from("payroll_people").update({ metadata, updated_at: new Date().toISOString() })
-      .eq("id", data.id).eq("business_id", ctx.businessId)
-    data.metadata = metadata
-  }
   if (body.scheduleIds?.length) {
     const { data: validSchedules } = await admin.from("payroll_schedules").select("id")
       .eq("business_id", ctx.businessId).in("id", [...new Set(body.scheduleIds)])

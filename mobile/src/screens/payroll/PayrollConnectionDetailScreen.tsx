@@ -393,7 +393,7 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
                 id: editingMethod.id,
                 type: editingMethod.type as PayrollExternalMethodType,
                 label: editingMethod.label,
-                maskedDetails: editingMethod.maskedDetails,
+                details: editingMethod.details,
               }
             : null
         }

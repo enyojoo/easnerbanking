@@ -500,7 +500,7 @@ export function useExecutePayrollRun(runId: string) {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
-    mutationFn: () => apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}/execute`, { method: "POST" }),
+    mutationFn: () => apiFetch<{ queued: true; jobId: string; status: string }>(`/api/business/payroll/runs/${runId}/execute`, { method: "POST" }),
     onMutate: async () => {
       if (!scope) return {}
       await qc.cancelQueries({ queryKey: qk.payroll.runs.root(scope) })
@@ -509,8 +509,7 @@ export function useExecutePayrollRun(runId: string) {
     onError: (_error, _variables, context) => {
       if (scope) restoreOptimisticRun(qc, scope, runId, context)
     },
-    onSuccess: ({ run }) => {
-      if (scope) cacheRun(qc, scope, run)
+    onSuccess: () => {
       invalidatePayroll(qc, scope)
     },
   })
@@ -521,7 +520,7 @@ export function useRetryPayrollRun(runId: string) {
   const { scope } = useScope()
   return useMutation({
     mutationFn: (lineIds?: string[]) =>
-      apiFetch<{ retried: string[]; failed: Array<{ id: string; error: string }> }>(
+      apiFetch<{ queued: true; retried: string[]; jobId: string }>(
         `/api/business/payroll/runs/${runId}/retry`,
         { method: "POST", body: { lineIds } },
       ),

@@ -17,7 +17,14 @@ export type PayrollRunStatus =
   | "needs_reapproval"
   | "cancelled"
 
-export type PayrollLineStatus = "pending" | "quoting" | "locked" | "paid" | "failed" | "skipped"
+export type PayrollLineStatus =
+  | "pending"
+  | "quoting"
+  | "locked"
+  | "processing"
+  | "paid"
+  | "failed"
+  | "skipped"
 
 export interface PayrollPerson {
   id: string
@@ -166,15 +173,13 @@ export interface PayrollReceivingMethodSummary {
   id: string
   type: PayrollReceivingMethodType
   label: string
-  maskedDetails: Record<string, string>
+  details: Record<string, string>
   preferred: boolean
   ownerType: "employee" | "business"
   status: "active" | "deleted"
 }
 
-export interface PayrollReceivingMethod extends PayrollReceivingMethodSummary {
-  details?: Record<string, string>
-}
+export interface PayrollReceivingMethod extends PayrollReceivingMethodSummary {}
 
 export interface PayrollConnectionSummary {
   id: string
@@ -321,10 +326,12 @@ export interface PayrollPersonInput {
   status?: PayrollPersonStatus
   internalReference?: string | null
   scheduleIds?: string[]
+  receivingMethod?: PayrollExternalReceivingMethodInput
 }
 
 export interface PayrollBankInput {
   type: "bank"
+  fullName?: string
   countryCode: string
   currency: string
   bankName: string
@@ -340,22 +347,28 @@ export interface PayrollBankInput {
   city?: string
   state?: string
   postalCode?: string
+  email?: string
 }
 
 export interface PayrollMobileMoneyInput {
   type: "mobile_money"
+  fullName?: string
   countryCode: string
   currency: string
   provider: string
   phoneNumber: string
+  email?: string
 }
 
 export interface PayrollStablecoinInput {
   type: "stablecoin"
+  fullName?: string
+  countryCode?: string
   currency: string
   asset: string
   network: string
   walletAddress: string
+  email?: string
 }
 
 export type PayrollExternalReceivingMethodInput =

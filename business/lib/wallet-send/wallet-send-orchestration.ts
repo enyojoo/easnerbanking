@@ -22,6 +22,7 @@ import { buildWalletSendPayoutReviewSnapshot } from "./build-wallet-send-payout-
 import {
   captureWalletSendFeeLegIfPending,
 } from "@/lib/processing-fee/capture-pending-processing-fee"
+import { destinationMetadata } from "@/lib/destination-reference"
 
 export type ExecuteWalletSendInput = {
   admin: SupabaseClient
@@ -32,6 +33,7 @@ export type ExecuteWalletSendInput = {
   formSessionId: string
   reservedDebitEtid?: string
   reviewSnapshot?: Record<string, unknown>
+  destinationRef?: string
 }
 
 export type ExecuteWalletSendResult =
@@ -47,7 +49,7 @@ export type ExecuteWalletSendResult =
 
 const MARGIN_DUST = 0.000_001
 
-function walletSendRecipientMetadata(recipient: WalletRecipientRow) {
+function walletSendRecipientMetadata(recipient: WalletRecipientRow, destinationRef: string) {
   const recipientSnapshot = buildRecipientSnapshotFromRow({
     full_name: String(recipient.full_name || "").trim() || "Wallet transfer",
     account_number: String(recipient.account_number || "").trim(),
@@ -59,7 +61,8 @@ function walletSendRecipientMetadata(recipient: WalletRecipientRow) {
   return {
     counterparty_name: counterpartyName,
     recipient_name: counterpartyName,
-    recipient_id: recipient.id,
+    destination_ref: destinationRef,
+    ...destinationMetadata(destinationRef),
     recipient_snapshot: recipientSnapshot,
   }
 }
@@ -127,12 +130,34 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
 
   const session = await getWalletSendSession(input.admin, input.formSessionId, input.userId, {
     allowQuoted: !isPayoutLockOnReviewEnabled("wallet"),
+    allowExecuted: true,
   })
   if (!session) {
     return { ok: false, error: "quote_expired" }
   }
-  if (session.recipient_id !== input.recipient.id) {
+  const expectedDestinationRef = input.destinationRef || `recipient:${input.recipient.id}`
+  if (session.destination_ref !== expectedDestinationRef) {
     return { ok: false, error: "recipient_mismatch" }
+  }
+  if (session.status === "executed") {
+    let query = input.admin
+      .from("ledger_transactions")
+      .select("provider,provider_transaction_id,status,tx_hash,metadata")
+      .contains("metadata", { form_session_id: session.form_session_id })
+      .limit(1)
+    query = input.businessId ? query.eq("business_id", input.businessId) : query.eq("user_id", input.userId)
+    const { data: existing } = await query.maybeSingle()
+    const metadata = (existing?.metadata as Record<string, unknown> | null) ?? {}
+    const easnerTransactionId = String(metadata.easner_transaction_id || "")
+    if (!existing || !easnerTransactionId) return { ok: false, error: "executed_result_unavailable" }
+    return {
+      ok: true,
+      easnerTransactionId,
+      status: String(existing.status) === "failed" ? "failed" : String(existing.status) === "pending" ? "pending" : "settled",
+      provider: String(existing.provider) === "lifi" ? "lifi" : "turnkey",
+      providerTransactionId: String(existing.provider_transaction_id || ""),
+      txHash: existing.tx_hash == null ? null : String(existing.tx_hash),
+    }
   }
 
   const executionModel = resolveWalletSendExecutionModel(session.receive_asset, session.receive_network)
@@ -224,7 +249,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
           easner_transaction_id: easnerTransactionId,
           fee_destination_address: feeAddress,
           payout_review: payoutReview,
-          ...walletSendRecipientMetadata(input.recipient),
+          ...walletSendRecipientMetadata(input.recipient, expectedDestinationRef),
           ...(marginAmount > MARGIN_DUST ? { processing_fee_pending: true } : {}),
           ...(input.reviewSnapshot ?? {}),
         },
@@ -330,7 +355,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
       form_session_id: session.form_session_id,
       easner_transaction_id: easnerTransactionId,
       payout_review: payoutReview,
-      ...walletSendRecipientMetadata(input.recipient),
+      ...walletSendRecipientMetadata(input.recipient, expectedDestinationRef),
       ...(feeLegAmount > MARGIN_DUST ? { processing_fee_pending: true } : {}),
       ...(input.reviewSnapshot ?? {}),
     },

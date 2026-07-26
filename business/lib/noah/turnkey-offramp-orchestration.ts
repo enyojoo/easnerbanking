@@ -41,6 +41,7 @@ import {
 } from "@/lib/payout/payout-lock-session"
 import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
+import { destinationMetadata } from "@/lib/destination-reference"
 
 const NOAH_OFFRAMP_NETWORK = "Solana"
 
@@ -64,6 +65,7 @@ export type ExecuteTurnkeyOfframpPayoutInput = {
   businessId: string | null
   recipientRow: RecipientSellPrepareRow
   recipientId?: string
+  destinationRef?: string
   fiatAmount: number
   fiatCurrency: string
   cryptoCurrency: string
@@ -235,6 +237,7 @@ export async function executeTurnkeyOfframpPayout(
   let destinationAddress = ""
   let noahWorkflowId: string | undefined
   let sourceAddress = ""
+  let workflowRaw: Record<string, unknown> = {}
   let lockId = String(input.lockId || "").trim()
 
   const lockRow =
@@ -243,7 +246,10 @@ export async function executeTurnkeyOfframpPayout(
       : null
 
   if (lockRow) {
-    if (lockRow.recipient_id !== String(recipientId || "").trim()) {
+    if (
+      lockRow.destination_ref !==
+      (input.destinationRef || `recipient:${String(recipientId || "").trim()}`)
+    ) {
       return { ok: false, error: "Payout lock does not match this recipient." }
     }
     if (hashRecipientSnapshot(recipientRow) !== lockRow.recipient_snapshot_hash) {
@@ -294,15 +300,14 @@ export async function executeTurnkeyOfframpPayout(
       return { ok: false, error: "Could not prepare payout session. Go back and get a fresh quote." }
     }
 
-    sourceAddress = (
+    sourceAddress = ((
       await resolveTurnkeyAddressForNoahPair(admin, ctx, cryptoCurrency, NOAH_OFFRAMP_NETWORK)
-    )?.trim()
+    )?.trim() ?? "")
     if (!sourceAddress) {
       return { ok: false, error: "No Turnkey wallet found for this payout. Complete wallet setup first." }
     }
 
     const cryptoTrigger = pickTriggerCryptoAmount(cryptoAuthorizedAmount, cryptoAuthorizedAmount)
-    let workflowRaw: Record<string, unknown>
     try {
       workflowRaw = await startOnchainDepositToPaymentWorkflow({
         customerId: ctx.noahCustomerId,
@@ -329,7 +334,7 @@ export async function executeTurnkeyOfframpPayout(
       return { ok: false, error: "Noah did not return a deposit address for this payout." }
     }
 
-    noahWorkflowId = pickNoahWorkflowIdFromResponse(workflowRaw)
+    noahWorkflowId = pickNoahWorkflowIdFromResponse(workflowRaw) ?? undefined
   }
 
   if (!formSessionId || !cryptoAuthorizedAmount || !destinationAddress) {
@@ -435,7 +440,14 @@ export async function executeTurnkeyOfframpPayout(
     ...(payoutReview ? { payout_review: payoutReview } : {}),
     ...(noteFromOverrides ? { send_note: noteFromOverrides, note: noteFromOverrides } : {}),
     ...(resolvedChannelId ? { channel_id: resolvedChannelId } : {}),
-    ...(recipientId ? { recipient_id: recipientId } : {}),
+    ...(input.destinationRef
+      ? {
+          destination_ref: input.destinationRef,
+          ...destinationMetadata(input.destinationRef),
+        }
+      : recipientId
+        ? { destination_ref: `recipient:${recipientId}`, recipient_id: recipientId }
+        : {}),
     ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
   }
 

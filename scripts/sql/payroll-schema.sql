@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS payroll_lines (
   source_amount_cents bigint NOT NULL DEFAULT 0,
   rail text NOT NULL CHECK (rail IN ('easetag', 'bank', 'mobile', 'intl_bank', 'crypto')),
   status text NOT NULL DEFAULT 'pending' CHECK (
-    status IN ('pending', 'quoting', 'locked', 'paid', 'failed', 'skipped')
+    status IN ('pending', 'quoting', 'locked', 'processing', 'paid', 'failed', 'skipped')
   ),
   lock_id text,
   transfer_etid text,
@@ -212,9 +212,26 @@ CREATE TABLE IF NOT EXISTS payroll_payment_methods (
   owner_type text NOT NULL CHECK (owner_type IN ('employee', 'business')),
   type text NOT NULL CHECK (type IN ('easetag', 'bank', 'mobile_money', 'stablecoin')),
   label text NOT NULL,
-  masked_details jsonb NOT NULL DEFAULT '{}'::jsonb,
-  encrypted_details text,
-  provider_recipient_id uuid REFERENCES recipients(id) ON DELETE SET NULL,
+  full_name text,
+  country_code text,
+  currency text,
+  account_number text,
+  bank_name text,
+  phone_number text,
+  email text,
+  mobile_provider text,
+  wallet_network text,
+  routing_number text,
+  sort_code text,
+  iban text,
+  swift_bic text,
+  transfer_type text,
+  checking_or_savings text,
+  address_line1 text,
+  city text,
+  state text,
+  postal_code text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'deleted')),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -249,18 +266,9 @@ CREATE OR REPLACE FUNCTION replace_payroll_employee_external_method(
   p_connection_id uuid,
   p_type text,
   p_label text,
-  p_masked_details jsonb,
-  p_encrypted_details text,
-  p_provider_recipient_id uuid,
+  p_destination jsonb,
   p_preferred boolean DEFAULT true
-) RETURNS TABLE (
-  id uuid,
-  type text,
-  label text,
-  masked_details jsonb,
-  owner_type text,
-  status text
-)
+) RETURNS SETOF payroll_payment_methods
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
@@ -293,11 +301,23 @@ BEGIN
 
   INSERT INTO payroll_payment_methods (
     connection_id, person_id, business_id, owner_type, type, label,
-    masked_details, encrypted_details, provider_recipient_id, status
+    full_name, country_code, currency, account_number,
+    bank_name, phone_number, email, mobile_provider, wallet_network,
+    routing_number, sort_code, iban, swift_bic, transfer_type,
+    checking_or_savings, address_line1, city, state, postal_code, metadata, status
   ) VALUES (
     p_connection_id, v_person_id, v_business_id, 'employee', p_type, p_label,
-    COALESCE(p_masked_details, '{}'::jsonb), p_encrypted_details,
-    p_provider_recipient_id, 'active'
+    p_destination->>'full_name',
+    p_destination->>'country_code', p_destination->>'currency',
+    p_destination->>'account_number', p_destination->>'bank_name',
+    p_destination->>'phone_number', p_destination->>'email',
+    p_destination->>'mobile_provider', p_destination->>'wallet_network',
+    p_destination->>'routing_number', p_destination->>'sort_code',
+    p_destination->>'iban', p_destination->>'swift_bic',
+    p_destination->>'transfer_type', p_destination->>'checking_or_savings',
+    p_destination->>'address_line1', p_destination->>'city',
+    p_destination->>'state', p_destination->>'postal_code',
+    COALESCE(p_destination->'metadata', '{}'::jsonb), 'active'
   ) RETURNING * INTO v_method;
 
   IF p_preferred THEN
@@ -306,17 +326,15 @@ BEGIN
      WHERE payroll_connections.id = p_connection_id;
   END IF;
 
-  RETURN QUERY SELECT
-    v_method.id, v_method.type, v_method.label, v_method.masked_details,
-    v_method.owner_type, v_method.status;
+  RETURN NEXT v_method;
 END;
 $$;
 
 REVOKE ALL ON FUNCTION replace_payroll_employee_external_method(
-  uuid, text, text, jsonb, text, uuid, boolean
+  uuid, text, text, jsonb, boolean
 ) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION replace_payroll_employee_external_method(
-  uuid, text, text, jsonb, text, uuid, boolean
+  uuid, text, text, jsonb, boolean
 ) TO service_role;
 
 CREATE INDEX IF NOT EXISTS idx_payroll_connections_user ON payroll_connections(user_id, status);
@@ -337,15 +355,33 @@ SET
   END
 WHERE connection_id IS NULL;
 
--- Existing provider recipient IDs become Payroll-owned method references.
+-- Copy legacy Send destinations into Payroll-owned normalized fields.
 INSERT INTO payroll_payment_methods (
   person_id,
   business_id,
   owner_type,
   type,
   label,
-  masked_details,
-  provider_recipient_id
+  full_name,
+  country_code,
+  currency,
+  account_number,
+  bank_name,
+  phone_number,
+  email,
+  mobile_provider,
+  wallet_network,
+  routing_number,
+  sort_code,
+  iban,
+  swift_bic,
+  transfer_type,
+  checking_or_savings,
+  address_line1,
+  city,
+  state,
+  postal_code,
+  metadata
 )
 SELECT
   p.id,
@@ -357,13 +393,26 @@ SELECT
     ELSE 'bank'
   END,
   COALESCE(NULLIF(r.bank_name, ''), 'Payroll payout method'),
-  jsonb_strip_nulls(jsonb_build_object(
-    'provider', NULLIF(r.mobile_provider, ''),
-    'bank', NULLIF(r.bank_name, ''),
-    'ending', CASE WHEN r.account_number IS NOT NULL THEN right(r.account_number, 4) END,
-    'network', NULLIF(r.wallet_network, '')
-  )),
-  p.recipient_id
+  r.full_name,
+  r.country_code,
+  r.currency,
+  r.account_number,
+  r.bank_name,
+  r.phone_number,
+  r.email,
+  r.mobile_provider,
+  r.wallet_network,
+  r.routing_number,
+  r.sort_code,
+  r.iban,
+  r.swift_bic,
+  r.transfer_type,
+  r.checking_or_savings,
+  r.address_line1,
+  r.city,
+  r.state,
+  r.postal_code,
+  COALESCE(r.metadata, '{}'::jsonb)
 FROM payroll_people p
 JOIN recipients r ON r.id = p.recipient_id
 WHERE p.rail <> 'easetag'
@@ -552,3 +601,186 @@ ALTER TABLE payroll_run_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_document_deliveries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_rate_limits ENABLE ROW LEVEL SECURITY;
+
+-- ---------------------------------------------------------------------------
+-- Durable Payroll execution jobs
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS payroll_execution_jobs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id uuid NOT NULL REFERENCES payroll_runs(id) ON DELETE CASCADE,
+  business_id uuid NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  status text NOT NULL DEFAULT 'queued' CHECK (
+    status IN ('queued', 'processing', 'retry', 'completed', 'dead_letter')
+  ),
+  phase text NOT NULL DEFAULT 'quoting' CHECK (
+    phase IN ('quoting', 'funding', 'executing', 'reconciling')
+  ),
+  attempts integer NOT NULL DEFAULT 0,
+  failure_attempts integer NOT NULL DEFAULT 0,
+  processed_lines integer NOT NULL DEFAULT 0,
+  total_lines integer NOT NULL DEFAULT 0,
+  next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  lease_expires_at timestamptz,
+  last_error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_execution_jobs_active_run
+  ON payroll_execution_jobs(run_id)
+  WHERE status IN ('queued', 'processing', 'retry');
+CREATE INDEX IF NOT EXISTS idx_payroll_execution_jobs_ready
+  ON payroll_execution_jobs(status, next_attempt_at);
+
+ALTER TABLE payroll_execution_jobs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE payroll_execution_jobs FROM anon, authenticated;
+GRANT ALL ON TABLE payroll_execution_jobs TO service_role;
+
+CREATE OR REPLACE FUNCTION claim_payroll_execution_jobs(
+  p_limit integer DEFAULT 5,
+  p_lease_seconds integer DEFAULT 300
+)
+RETURNS SETOF payroll_execution_jobs
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY
+  WITH candidates AS (
+    SELECT candidate.id
+    FROM payroll_execution_jobs AS candidate
+    WHERE
+      (candidate.status IN ('queued', 'retry') AND candidate.next_attempt_at <= now())
+      OR (candidate.status = 'processing' AND candidate.lease_expires_at <= now())
+    ORDER BY candidate.next_attempt_at, candidate.created_at
+    FOR UPDATE SKIP LOCKED
+    LIMIT GREATEST(1, LEAST(p_limit, 25))
+  )
+  UPDATE payroll_execution_jobs AS job
+  SET
+    status = 'processing',
+    attempts = job.attempts + 1,
+    lease_expires_at = now() + make_interval(secs => p_lease_seconds),
+    updated_at = now()
+  FROM candidates
+  WHERE job.id = candidates.id
+  RETURNING job.*;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION claim_payroll_execution_jobs(integer, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION claim_payroll_execution_jobs(integer, integer) TO service_role;
+
+CREATE OR REPLACE FUNCTION replace_payroll_business_payment_method(
+  p_person_id uuid,
+  p_business_id uuid,
+  p_type text,
+  p_label text,
+  p_destination jsonb
+) RETURNS SETOF payroll_payment_methods
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_person payroll_people%ROWTYPE;
+  v_method payroll_payment_methods%ROWTYPE;
+BEGIN
+  IF p_type NOT IN ('bank', 'mobile_money', 'stablecoin') THEN
+    RAISE EXCEPTION 'Invalid Payroll receiving method';
+  END IF;
+
+  SELECT * INTO v_person
+  FROM payroll_people
+  WHERE id = p_person_id AND business_id = p_business_id
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Payroll person not found'; END IF;
+  IF v_person.connection_status <> 'manual' THEN
+    RAISE EXCEPTION 'Connected receiving methods are employee managed';
+  END IF;
+
+  UPDATE payroll_payment_methods
+  SET status = 'deleted', updated_at = now()
+  WHERE person_id = p_person_id
+    AND business_id = p_business_id
+    AND owner_type = 'business'
+    AND status = 'active';
+
+  INSERT INTO payroll_payment_methods (
+    person_id, business_id, owner_type, type, label,
+    full_name, country_code, currency, account_number, bank_name,
+    phone_number, email, mobile_provider, wallet_network, routing_number,
+    sort_code, iban, swift_bic, transfer_type, checking_or_savings,
+    address_line1, city, state, postal_code, metadata, status
+  ) VALUES (
+    p_person_id, p_business_id, 'business', p_type, p_label,
+    p_destination->>'full_name', p_destination->>'country_code',
+    p_destination->>'currency', p_destination->>'account_number',
+    p_destination->>'bank_name', p_destination->>'phone_number',
+    p_destination->>'email', p_destination->>'mobile_provider',
+    p_destination->>'wallet_network', p_destination->>'routing_number',
+    p_destination->>'sort_code', p_destination->>'iban',
+    p_destination->>'swift_bic', p_destination->>'transfer_type',
+    p_destination->>'checking_or_savings', p_destination->>'address_line1',
+    p_destination->>'city', p_destination->>'state',
+    p_destination->>'postal_code',
+    COALESCE(p_destination->'metadata', '{}'::jsonb), 'active'
+  ) RETURNING * INTO v_method;
+
+  UPDATE payroll_people
+  SET
+    rail = CASE p_type
+      WHEN 'mobile_money' THEN 'mobile'
+      WHEN 'stablecoin' THEN 'crypto'
+      ELSE 'bank'
+    END,
+    recipient_id = NULL,
+    readiness_status = 'ready',
+    metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
+      'preferredPaymentMethod',
+      jsonb_build_object(
+        'id', v_method.id,
+        'type', v_method.type,
+        'label', v_method.label,
+        'details', '{}'::jsonb,
+        'ownerType', 'business',
+        'status', 'active',
+        'preferred', true
+      )
+    ),
+    updated_at = now()
+  WHERE id = p_person_id AND business_id = p_business_id;
+
+  UPDATE payroll_lines AS line
+  SET
+    rail = CASE p_type
+      WHEN 'mobile_money' THEN 'mobile'
+      WHEN 'stablecoin' THEN 'crypto'
+      ELSE 'bank'
+    END,
+    payment_method_id = v_method.id,
+    payment_method_snapshot = jsonb_build_object(
+      'id', v_method.id,
+      'type', v_method.type,
+      'label', v_method.label,
+      'details', p_destination,
+      'payrollOwned', true
+    ),
+    updated_at = now()
+  FROM payroll_runs AS run
+  WHERE line.run_id = run.id
+    AND line.person_id = p_person_id
+    AND run.business_id = p_business_id
+    AND run.status = 'draft';
+
+  RETURN NEXT v_method;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION replace_payroll_business_payment_method(
+  uuid, uuid, text, text, jsonb
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION replace_payroll_business_payment_method(
+  uuid, uuid, text, text, jsonb
+) TO service_role;

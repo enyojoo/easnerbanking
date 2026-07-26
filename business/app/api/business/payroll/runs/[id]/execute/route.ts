@@ -1,16 +1,8 @@
 import { NextResponse } from "next/server"
 import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { approvePayrollRun, executePayrollRun } from "@/lib/payroll/execute-run"
-import { sendPayrollStubEmailsForRun } from "@/lib/payroll/send-stub-email"
-import { sendPayrollRunSummaryEmail } from "@/lib/payroll/send-run-summary-email"
-import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
-import {
-  mapRowToPayrollRun,
-  mapRowToPayrollLine,
-  type PayrollRunRow,
-  type PayrollLineRow,
-} from "@/lib/payroll/map-payroll"
+import { enqueuePayrollExecution } from "@/lib/payroll/execution-jobs"
+import { sanitizePayrollExecutionError } from "@/lib/payroll/execution-error"
 
 export async function POST(
   request: Request,
@@ -21,6 +13,7 @@ export async function POST(
 
   const { id } = await params
   const admin = createSupabaseAdmin()
+  let transitionedScheduled = false
 
   try {
     const { data: pendingRun } = await admin
@@ -33,73 +26,28 @@ export async function POST(
       if (!pendingRun.scheduled_at || new Date(pendingRun.scheduled_at).getTime() > Date.now()) {
         return NextResponse.json({ error: "This payroll is scheduled for a later time" }, { status: 409 })
       }
-      const account = await resolveNoahAccountContextFromLedgerScope(admin, {
-        userId: ctx.userId,
-        businessId: ctx.businessId,
-      })
-      if (!account) return NextResponse.json({ error: "Business account not ready" }, { status: 400 })
-      const approvedDebit = Number(
-        (pendingRun.approval_snapshot as Record<string, unknown> | null)?.approvedDebit ?? 0,
-      )
-      await approvePayrollRun({
-        admin,
-        userId: ctx.userId,
-        businessId: ctx.businessId,
-        runId: id,
-        noahCustomerId: account.noahCustomerId,
-        allowQuoteFailures: true,
-      })
-      const { data: requoted } = await admin
-        .from("payroll_runs")
-        .select("total_source_cents")
-        .eq("id", id)
-        .single()
-      const newDebit = Number(requoted?.total_source_cents ?? 0) / 100
-      if (newDebit > approvedDebit) {
-        await admin.from("payroll_runs").update({
-          status: "needs_reapproval",
-          updated_at: new Date().toISOString(),
-        }).eq("id", id)
-        await admin.from("payroll_run_events").insert({
-          business_id: ctx.businessId,
-          run_id: id,
-          actor_user_id: ctx.userId,
-          event_type: "run.reapproval_required",
-          data: { approvedDebit, newDebit },
-        })
-        return NextResponse.json({
-          error: "The source debit increased. Review and approve this payroll again.",
-        }, { status: 409 })
-      }
+      await admin.from("payroll_runs").update({
+        status: "approved",
+        updated_at: new Date().toISOString(),
+      }).eq("id", id).eq("business_id", ctx.businessId).eq("status", "scheduled")
+      transitionedScheduled = true
     }
-    const result = await executePayrollRun({
-      admin,
-      userId: ctx.userId,
-      businessId: ctx.businessId,
+    const job = await enqueuePayrollExecution(admin, {
       runId: id,
+      businessId: ctx.businessId,
     })
-
-    await sendPayrollStubEmailsForRun(admin, ctx.businessId, id).catch(() => undefined)
-    await sendPayrollRunSummaryEmail({
-      admin,
-      businessId: ctx.businessId,
-      runId: id,
-      completed: result.completed,
-      failed: result.failed,
-    }).catch(() => undefined)
-
-    const { data: runRow } = await admin.from("payroll_runs").select("*").eq("id", id).maybeSingle()
-    const { data: lines } = await admin.from("payroll_lines").select("*").eq("run_id", id)
-    const run = runRow
-      ? mapRowToPayrollRun(
-          runRow as PayrollRunRow,
-          (lines ?? []).map((l) => mapRowToPayrollLine(l as PayrollLineRow)),
-        )
-      : null
-
-    return NextResponse.json({ run, ...result })
+    return NextResponse.json(
+      { queued: true, jobId: job.id, status: job.status },
+      { status: 202 },
+    )
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Execution failed"
+    if (transitionedScheduled) {
+      await admin.from("payroll_runs").update({
+        status: "scheduled",
+        updated_at: new Date().toISOString(),
+      }).eq("id", id).eq("business_id", ctx.businessId).eq("status", "approved")
+    }
+    const msg = sanitizePayrollExecutionError(e)
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

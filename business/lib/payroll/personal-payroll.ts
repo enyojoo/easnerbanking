@@ -1,5 +1,7 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js"
 import { hashPayrollInvitationToken } from "./invitations"
+import { maskPayrollMethodDetails } from "./payment-method-security"
+import { payrollDetailsForReceivingMethodForm } from "./payment-method-destination"
 
 export const PAYROLL_SHARED_IDENTITY_FIELDS = [
   "Legal name",
@@ -12,9 +14,26 @@ export const PAYROLL_SHARED_IDENTITY_FIELDS = [
 export function maskPayrollMethod(
   method: Record<string, unknown>,
 ): Record<string, string> {
-  const masked = (method.masked_details as Record<string, unknown>) ?? {}
-  return Object.fromEntries(
-    Object.entries(masked).map(([key, value]) => [key, String(value)]),
+  const type = String(method.type || "")
+  if (!["bank", "mobile_money", "stablecoin"].includes(type)) {
+    return method.label ? { easetag: String(method.label) } : {}
+  }
+  return maskPayrollMethodDetails(
+    type as "bank" | "mobile_money" | "stablecoin",
+    payrollMethodDetails(method),
+  )
+}
+
+export function payrollMethodDetails(
+  method: Record<string, unknown>,
+): Record<string, string> {
+  return payrollDetailsForReceivingMethodForm(
+    Object.fromEntries(
+      Object.entries(method).map(([key, value]) => [
+        key,
+        value == null ? "" : String(value),
+      ]),
+    ),
   )
 }
 
@@ -44,7 +63,7 @@ export async function resolvePayrollInvitation(
   }
 
   const { data: methods } = await admin.from("payroll_payment_methods")
-    .select("id,type,label,masked_details,owner_type,status")
+    .select("id,type,label,owner_type,status,full_name,country_code,currency,account_number,bank_name,phone_number,email,mobile_provider,wallet_network,routing_number,sort_code,iban,swift_bic,transfer_type,checking_or_savings,address_line1,city,state,postal_code,metadata")
     .eq("connection_id", invitation.connection_id)
     .eq("status", "active")
   const connection = invitation.payroll_connections as Record<string, unknown>
@@ -68,7 +87,7 @@ export async function resolvePayrollInvitation(
         id: String(method.id),
         type: String(method.type),
         label: String(method.label),
-        maskedDetails: maskPayrollMethod(method as Record<string, unknown>),
+        details: payrollMethodDetails(method as Record<string, unknown>),
         preferred: String(connection?.preferred_method_id || "") === String(method.id),
         ownerType: String(method.owner_type),
         status: String(method.status),

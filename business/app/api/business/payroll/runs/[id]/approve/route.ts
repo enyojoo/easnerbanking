@@ -14,6 +14,7 @@ import { assertBusinessTransferAllowed } from "@/lib/business/high-value-policy"
 import { requiresDifferentPayrollApprover } from "@/lib/payroll/approval-policy"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 import { payrollDateTimeToUtc } from "@/lib/payroll/schedule-preview"
+import { enqueuePayrollExecution } from "@/lib/payroll/execution-jobs"
 
 export async function POST(
   request: Request,
@@ -82,7 +83,9 @@ export async function POST(
 
   const { data: approvalLines } = await admin
     .from("payroll_lines")
-    .select("id,person_id,recipient_snapshot,amount_cents,pay_currency,payment_method_snapshot,rail")
+    .select(
+      "id,person_id,recipient_snapshot,amount_cents,pay_currency,payment_method_id,payment_method_snapshot,rail",
+    )
     .eq("run_id", id)
     .neq("status", "skipped")
   const scheduleMode = body.mode === "schedule"
@@ -103,7 +106,8 @@ export async function POST(
       businessId: ctx.businessId,
       runId: id,
       noahCustomerId: acc.noahCustomerId,
-      deferQuotes: scheduleMode,
+      deferQuotes: true,
+      allowQuoteFailures: true,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Approval failed"
@@ -129,6 +133,7 @@ export async function POST(
       name: String((line.recipient_snapshot as Record<string, unknown>)?.fullName || "Payee"),
       amount: Number(line.amount_cents ?? 0) / 100,
       currency: String(line.pay_currency || "USD"),
+      methodId: line.payment_method_id,
       method: Object.keys((line.payment_method_snapshot as Record<string, unknown>) ?? {}).length
         ? line.payment_method_snapshot
         : { rail: line.rail },
@@ -159,11 +164,23 @@ export async function POST(
     .eq("subject_id", id)
     .eq("status", "open")
 
+  const executionJob = scheduleMode
+    ? null
+    : await enqueuePayrollExecution(admin, {
+        runId: id,
+        businessId: ctx.businessId,
+      })
+
   const { data: lines } = await admin.from("payroll_lines").select("*").eq("run_id", id)
   const run = mapRowToPayrollRun(
     (await admin.from("payroll_runs").select("*").eq("id", id).single()).data as PayrollRunRow,
     (lines ?? []).map((l) => mapRowToPayrollLine(l as PayrollLineRow)),
   )
 
-  return NextResponse.json({ run })
+  return NextResponse.json({
+    run,
+    ...(executionJob
+      ? { queued: true, jobId: executionJob.id, jobStatus: executionJob.status }
+      : {}),
+  })
 }

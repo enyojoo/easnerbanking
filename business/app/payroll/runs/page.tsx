@@ -89,10 +89,10 @@ export default function PayrollRunsPage() {
       filters={[
         { value: "all", label: "All", count: counts.all },
         { value: "draft", label: "Draft", count: counts.draft },
-        { value: "awaiting", label: "Awaiting approval", count: counts.awaiting },
+        { value: "awaiting", label: "Awaiting", count: counts.awaiting },
         { value: "scheduled", label: "Scheduled", count: counts.scheduled },
         { value: "completed", label: "Completed", count: counts.completed },
-        { value: "attention", label: "Needs attention", count: counts.attention },
+        { value: "attention", label: "Attention", count: counts.attention },
       ]}
     />
     {runsQuery.isPending ? <Card className="shadow-soft"><CardContent className="space-y-3 p-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-12 w-full rounded-xl" />)}</CardContent></Card> :

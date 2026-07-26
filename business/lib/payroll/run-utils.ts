@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { amountToCents } from "@/lib/payroll/map-payroll"
 import type { PayrollPerson, PayrollRun } from "@/lib/payroll/types"
 import { readBusinessAvailableBalance, computeShortfall } from "@/lib/payroll/helpers"
+import { maskPayrollMethodDetails } from "@/lib/payroll/payment-method-security"
 
 export async function recalculateRunTotals(
   admin: SupabaseClient,
@@ -83,9 +84,12 @@ export function buildLineFromPerson(
     payment_method_snapshot: preferredMethod ?? {},
     status: "pending",
     metadata: {
-      ...(preferredMethod?.maskedDetails
+      ...(preferredMethod?.details && preferredMethod.type !== "easetag"
         ? { maskedDestination: Object.values(
-            preferredMethod.maskedDetails as Record<string, unknown>,
+            maskPayrollMethodDetails(
+              preferredMethod.type as "bank" | "mobile_money" | "stablecoin",
+              preferredMethod.details as Record<string, string>,
+            ),
           ).filter(Boolean).join(" · ") }
         : {}),
     },

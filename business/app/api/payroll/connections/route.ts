@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { maskPayrollMethod } from "@/lib/payroll/personal-payroll"
+import { payrollMethodDetails } from "@/lib/payroll/personal-payroll"
 import {
   PERSONAL_PAYROLL_CONNECTION_LIST_SELECT,
   PERSONAL_PAYROLL_METHOD_SELECT,
@@ -113,7 +113,7 @@ export async function GET(request: Request) {
         id: String(preferred.id),
         type: String(preferred.type),
         label: String(preferred.label),
-        maskedDetails: maskPayrollMethod(preferred),
+        details: payrollMethodDetails(preferred),
         preferred: true,
         ownerType: String(preferred.owner_type),
         status: String(preferred.status),
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
           id: String(method.id),
           type: String(method.type),
           label: String(method.label),
-          maskedDetails: maskPayrollMethod(method),
+          details: payrollMethodDetails(method),
           preferred: String(connection.preferred_method_id || "") === String(method.id),
           ownerType: String(method.owner_type),
           status: String(method.status),

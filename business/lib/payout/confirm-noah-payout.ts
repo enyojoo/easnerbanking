@@ -32,6 +32,7 @@ export type ConfirmNoahPayoutInput = {
   businessId: string | null
   noahCustomerId: string
   recipientId: string
+  destinationRef?: string
   recipient: RecipientSellPrepareRow
   receiveFiatAmount: number
   sourceBalanceCurrency: string
@@ -47,6 +48,7 @@ export async function confirmNoahPayoutOrder(
   const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
   const quoteKey = buildPayoutQuoteKey({
     recipientId: input.recipientId,
+    destinationRef: input.destinationRef,
     sourceBalanceCurrency: input.sourceBalanceCurrency,
     amountEntryMode,
     receiveAmount: input.receiveFiatAmount,
@@ -70,6 +72,11 @@ export async function confirmNoahPayoutOrder(
   const provider = await selectProviderForCorridor(input.admin, {
     countryCode,
     currencyCode: receiveCurrency,
+    rail:
+      input.recipient.mobile_provider ||
+      String(input.recipient.bank_name || "").toLowerCase().includes("mobile money")
+        ? "mobile_money"
+        : "bank_transfer",
     mobileProvider: input.recipient.mobile_provider,
     bankName: input.recipient.bank_name,
   })
@@ -154,6 +161,7 @@ export async function confirmNoahPayoutOrder(
     userId: input.userId,
     businessId: input.businessId,
     recipientId: input.recipientId,
+    destinationRef: input.destinationRef,
     provider: "noah",
     quoteKey,
     recipientSnapshotHash: hashRecipientSnapshot(input.recipient),

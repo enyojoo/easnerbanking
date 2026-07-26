@@ -28,7 +28,8 @@ import {
   usePayrollSettings,
 } from "@/hooks/queries/use-payroll"
 import type { PayrollPersonType } from "@/lib/payroll/types"
-import type { Beneficiary } from "@/lib/recipient-types"
+import type { RecipientUpsertInput } from "@/lib/recipients-store"
+import type { PayrollExternalReceivingMethodInput } from "@/lib/payroll/types"
 import { formatCurrency } from "@/lib/utils"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -39,10 +40,75 @@ function receivingMethodKind(person: { rail: string }): RecipientFormRecipientKi
   return "bank"
 }
 
-function railFromBeneficiary(destination: Beneficiary) {
-  if (destination.mobileProvider) return "mobile" as const
-  if (destination.walletNetwork) return "crypto" as const
-  return "bank" as const
+function receivingMethodDetails(method: {
+  type: string
+  details: Record<string, string>
+}): string {
+  if (method.type === "bank") {
+    return [method.details.bankName, method.details.accountNumber, method.details.currency]
+      .filter(Boolean)
+      .join(" · ")
+  }
+  if (method.type === "mobile_money") {
+    return [method.details.provider, method.details.phoneNumber, method.details.currency]
+      .filter(Boolean)
+      .join(" · ")
+  }
+  if (method.type === "stablecoin") {
+    return [
+      method.details.walletAddress,
+      method.details.asset || method.details.currency,
+      method.details.network,
+    ]
+      .filter(Boolean)
+      .join(" · ")
+  }
+  return ""
+}
+
+function toPayrollReceivingMethod(input: RecipientUpsertInput): PayrollExternalReceivingMethodInput {
+  const common = {
+    fullName: input.fullName,
+    currency: input.currency,
+    email: input.email,
+  }
+  if (input.recipientType === "mobile") {
+    return {
+      ...common,
+      type: "mobile_money",
+      countryCode: input.countryCode || "",
+      provider: input.mobileProvider || "",
+      phoneNumber: input.phoneNumber || input.accountNumber,
+    }
+  }
+  if (input.recipientType === "wallet") {
+    return {
+      ...common,
+      type: "stablecoin",
+      countryCode: input.countryCode,
+      asset: input.walletAsset || input.currency,
+      network: input.walletNetwork || "",
+      walletAddress: input.accountNumber,
+    }
+  }
+  return {
+    ...common,
+    type: "bank",
+    countryCode: input.countryCode || "",
+    bankName: input.bankName,
+    accountNumber: input.accountNumber,
+    routingNumber: input.routingNumber,
+    sortCode: input.sortCode,
+    iban: input.iban,
+    swiftBic: input.swiftBic,
+    transferType: input.transferType,
+    checkingOrSavings: input.checkingOrSavings,
+    phoneNumber: input.phoneNumber,
+    addressLine1: input.addressLine1,
+    city: input.city,
+    state: input.state,
+    postalCode: input.postalCode,
+  }
 }
 
 export function PayrollPersonEditFlow({ personId }: { personId: string }) {
@@ -57,7 +123,10 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
     person?.easetag || person?.connectionId || (person && person.connectionStatus !== "manual"),
   )
   const recipientsCache = useRecipientsCached(Boolean(person?.recipientId && !isEasetagPerson))
-  const destinationQuery = usePayrollReceivingDestination(personId, isEasetagPerson ? null : person?.recipientId)
+  const destinationQuery = usePayrollReceivingDestination(
+    personId,
+    isEasetagPerson ? null : person?.recipientId ?? "payroll-owned",
+  )
   const schedules = useMemo(() => schedulesQuery.data ?? [], [schedulesQuery.data])
   const currency = String(settingsQuery.data?.defaultCurrency || person?.payCurrency || "USD").toUpperCase()
   const [initializedPersonId, setInitializedPersonId] = useState("")
@@ -68,15 +137,13 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
   const [amount, setAmount] = useState("")
   const [reference, setReference] = useState("")
   const [scheduleId, setScheduleId] = useState("")
-  const [updatedDestination, setUpdatedDestination] = useState<Beneficiary | null>(null)
   const [receivingMethodSaving, setReceivingMethodSaving] = useState(false)
   const savedDestination = useMemo(
     () =>
-      updatedDestination ??
       destinationQuery.data ??
       recipientsCache.data.find((destination) => destination.id === person?.recipientId) ??
       null,
-    [destinationQuery.data, person?.recipientId, recipientsCache.data, updatedDestination],
+    [destinationQuery.data, person?.recipientId, recipientsCache.data],
   )
   const employeePreferredMethod =
     personQuery.data?.connection?.preferredMethod ?? person?.receivingMethodSummary ?? null
@@ -129,7 +196,7 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
   }
   const currentPerson = person
 
-  async function save(destination?: Beneficiary) {
+  async function save(destination?: RecipientUpsertInput) {
     try {
       const manualDestination = !isEasetagPerson ? destination : undefined
       await update.mutateAsync({
@@ -145,20 +212,11 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
           scheduleIds: scheduleId ? [scheduleId] : [],
           ...(manualDestination
             ? {
-                recipientId: manualDestination.id,
-                rail: railFromBeneficiary(manualDestination),
+                receivingMethod: toPayrollReceivingMethod(manualDestination),
               }
             : {}),
         },
       })
-      if (manualDestination) {
-        setUpdatedDestination(manualDestination)
-        recipientsCache.setData((current) =>
-          current.some((item) => item.id === manualDestination.id)
-            ? current.map((item) => (item.id === manualDestination.id ? manualDestination : item))
-            : [manualDestination, ...current],
-        )
-      }
       toast.success("Person updated")
       router.push(`/payroll/people/${currentPerson.id}`)
     } catch (error) {
@@ -312,7 +370,7 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
                 </div>
                 {employeePreferredMethod && employeePreferredMethod.type !== "easetag" ? (
                   <p className="mt-1 text-right text-xs text-muted-foreground">
-                    {Object.values(employeePreferredMethod.maskedDetails).filter(Boolean).join(" · ")}
+                    {receivingMethodDetails(employeePreferredMethod)}
                   </p>
                 ) : null}
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -341,7 +399,7 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
                     allowedRecipientTypes={["bank", "mobile", "wallet"]}
                     terminology="payroll"
                     onSuccess={() => undefined}
-                    onSuccessWithData={(destination) => void save(destination)}
+                    onValidatedSubmit={save}
                     onSubmittingChange={setReceivingMethodSaving}
                   />
                 )}
@@ -390,13 +448,9 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
                 value={
                   isEasetagPerson
                     ? payrollMethodTypeLabel(employeePreferredMethod?.type)
-                    : receivingMethodKind(
-                          updatedDestination ? { rail: railFromBeneficiary(updatedDestination) } : person,
-                        ) === "mobile"
+                    : receivingMethodKind(person) === "mobile"
                       ? "Mobile money"
-                      : receivingMethodKind(
-                            updatedDestination ? { rail: railFromBeneficiary(updatedDestination) } : person,
-                          ) === "wallet"
+                      : receivingMethodKind(person) === "wallet"
                         ? "Stablecoin wallet"
                         : "Bank account"
                 }

@@ -16,6 +16,7 @@ export type ConfirmYcBalancePayoutInput = {
   userId: string
   businessId: string | null
   recipientId: string
+  destinationRef?: string
   recipient: RecipientSellPrepareRow
   receiveFiatAmount: number
   sourceBalanceCurrency: string
@@ -118,6 +119,7 @@ export async function confirmYcBalancePayoutOrder(
   const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
   const quoteKey = buildPayoutQuoteKey({
     recipientId: input.recipientId,
+    destinationRef: input.destinationRef,
     sourceBalanceCurrency: input.sourceBalanceCurrency,
     amountEntryMode,
     receiveAmount: input.receiveFiatAmount,
@@ -170,6 +172,7 @@ export async function confirmYcBalancePayoutOrder(
     userId: input.userId,
     businessId: input.businessId,
     recipientId: input.recipientId,
+    destinationRef: input.destinationRef,
     provider: "yellowcard",
     quoteKey,
     recipientSnapshotHash: hashRecipientSnapshot(input.recipient),

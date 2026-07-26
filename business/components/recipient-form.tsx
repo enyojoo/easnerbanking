@@ -70,6 +70,11 @@ interface RecipientFormProps {
   /** When provided and in add mode, called with the new beneficiary before onSuccess */
   onSuccessWithData?: (beneficiary: Beneficiary) => void
   /**
+   * Receives a fully validated form payload without writing to the recipients
+   * store. Payroll uses this to keep receiving details inside Payroll.
+   */
+  onValidatedSubmit?: (input: RecipientUpsertInput) => void | Promise<void>
+  /**
    * Limits the Recipient Type control (e.g. terminal payouts: bank + mobile only).
    * When omitted, all types are available.
    */
@@ -115,6 +120,7 @@ export function RecipientForm({
   hideSubmitButton = false,
   onSubmittingChange,
   onSuccessWithData,
+  onValidatedSubmit,
   allowedRecipientTypes,
   submitButtonLabel,
   terminology = "recipient",
@@ -655,6 +661,11 @@ export function RecipientForm({
       }
       try {
         setIsSubmitting(true)
+        if (onValidatedSubmit) {
+          await onValidatedSubmit(payload)
+          onSuccess()
+          return
+        }
         const beneficiary =
           isEdit && recipient?.id ? await updateRecipient(recipient.id, payload) : await createRecipient(payload)
         onSuccessWithData?.(beneficiary)
@@ -717,6 +728,11 @@ export function RecipientForm({
 
     try {
       setIsSubmitting(true)
+      if (onValidatedSubmit) {
+        await onValidatedSubmit(payload)
+        onSuccess()
+        return
+      }
       const beneficiary =
         isEdit && recipient?.id ? await updateRecipient(recipient.id, payload) : await createRecipient(payload)
       onSuccessWithData?.(beneficiary)

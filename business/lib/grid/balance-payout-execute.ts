@@ -49,6 +49,7 @@ export type ExecuteGridBalancePayoutInput = {
   businessId: string | null
   recipientRow: RecipientSellPrepareRow
   recipientId: string
+  destinationRef?: string
   fiatAmount: number
   fiatCurrency: string
   countryCode: string
@@ -172,7 +173,10 @@ export async function executeGridBalancePayout(
     if (!lockRow || lockRow.provider !== "grid") {
       return { ok: false, error: "Payout lock expired or invalid. Go back and review again." }
     }
-    if (lockRow.recipient_id !== recipientId) {
+    if (
+      lockRow.destination_ref !==
+      (input.destinationRef || `recipient:${recipientId}`)
+    ) {
       return { ok: false, error: "Payout lock does not match this recipient." }
     }
     const snapshotHash = hashRecipientSnapshot(recipientRow)
@@ -202,7 +206,7 @@ export async function executeGridBalancePayout(
     fiatAmount,
     fiatCurrency,
     countryCode,
-    recipientId,
+    destinationRef: input.destinationRef || `recipient:${recipientId}`,
     recipientSnapshot,
     reviewSnapshot,
     sendNote,
