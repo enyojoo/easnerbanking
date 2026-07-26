@@ -14,6 +14,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { id } = await params
+  if (!id || id === "null" || id === "undefined") {
+    return NextResponse.json({ error: "A valid connection is required" }, { status: 400 })
+  }
   const admin = createSupabaseAdmin()
   const { data: row, error } = await admin.from("payroll_connections")
     .select(PERSONAL_PAYROLL_CONNECTION_DETAIL_SELECT)

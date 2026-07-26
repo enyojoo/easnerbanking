@@ -44,6 +44,7 @@ export default function InternalHeader({
     <View style={[styles.header, style]}>
       <Pressable
         onPress={handleBack}
+        hitSlop={8}
         style={({ pressed }) => [
           styles.backButton,
           pressed && Platform.OS === 'ios' && styles.hitPressedIOS,
@@ -134,7 +135,6 @@ function createStyles(c: Colors) {
     },
   })
 }
-
 
 
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Pressable,
   RefreshControl,
@@ -122,6 +122,8 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   const routeInvitationId = typeof route.params?.invitationId === 'string' ? route.params.invitationId : null
   const [bootstrapping, setBootstrapping] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [selectingMethodId, setSelectingMethodId] = useState('')
+  const [revoking, setRevoking] = useState(false)
   const [error, setError] = useState('')
   const [invitation, setInvitation] = useState<Invitation | null>(null)
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(routeConnectionId)
@@ -142,6 +144,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     label: string
     invitation: boolean
   } | null>(null)
+  const closedRouteConnectionIdRef = useRef<string | null>(null)
 
   const connectionsKey = useMemo(
     () => scope
@@ -158,15 +161,22 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     refetchOnWindowFocus: true,
     meta: { safePersist: true, freshness: 'operational' },
   })
-  const detailQuery = useQuery({
-    queryKey: scope && selectedConnectionId
+  const detailKey = useMemo(
+    () => scope && selectedConnectionId
       ? ['personal', scope.userId, 'payroll', 'connections', selectedConnectionId] as const
       : ['personal', 'payroll', 'connection', 'disabled'] as const,
+    [scope, selectedConnectionId],
+  )
+  const detailQuery = useQuery({
+    queryKey: detailKey,
     enabled: Boolean(scope && selectedConnectionId),
-    queryFn: () =>
-      apiFetch<{ connection: ConnectionDetail }>(
-        `/api/payroll/connections/${selectedConnectionId}`,
-      ).then((response) => response.connection),
+    queryFn: ({ queryKey }) => {
+      const connectionId = String(queryKey[4] ?? '')
+      if (!connectionId) throw new Error('Payroll connection is unavailable.')
+      return apiFetch<{ connection: ConnectionDetail }>(
+        `/api/payroll/connections/${connectionId}`,
+      ).then((response) => response.connection)
+    },
     staleTime: 60_000,
     gcTime: 30 * 60_000,
     refetchOnWindowFocus: true,
@@ -242,10 +252,26 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   }, [connectionsQuery.refetch, navigation, resolveInvitation, route.params?.methodUpdatedAt, routeInvitationId, routeToken])
 
   useEffect(() => {
-    if (routeConnectionId) setSelectedConnectionId(routeConnectionId)
+    if (!routeConnectionId) {
+      closedRouteConnectionIdRef.current = null
+      return
+    }
+    if (closedRouteConnectionIdRef.current !== routeConnectionId) {
+      setSelectedConnectionId(routeConnectionId)
+    }
   }, [routeConnectionId])
 
-  const goBackFromBusiness = useCallback(async () => {
+  const goBackFromBusiness = useCallback(() => {
+    // Clear the route source before closing the local detail. On native and
+    // Expo web, route params may settle a render later; remember the closed ID
+    // so that render cannot reopen the business detail.
+    closedRouteConnectionIdRef.current = routeConnectionId ?? selectedConnectionId
+    navigation.setParams?.({
+      token: undefined,
+      connectionId: undefined,
+      invitationId: undefined,
+      methodUpdatedAt: undefined,
+    })
     setError('')
     setMethodSheet(null)
     setMethodDeleteTarget(null)
@@ -254,13 +280,8 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     setInvitation(null)
     setSelectedMethodId('')
     setCompletedMessage('')
-    await clearPayrollApprovalToken()
-    navigation.setParams?.({
-      token: undefined,
-      connectionId: undefined,
-      invitationId: undefined,
-    })
-  }, [navigation])
+    void clearPayrollApprovalToken()
+  }, [navigation, routeConnectionId, selectedConnectionId])
 
   useEffect(() => {
     if (!route.params?.methodUpdatedAt || !selectedConnectionId) return
@@ -296,26 +317,87 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
       setSelectedMethodId(method.id)
       return
     }
-    await Promise.all([
-      detailQuery.refetch(),
+    const connectionId = methodSheet?.connectionId ?? selectedConnectionId
+    if (!scope || !connectionId) {
+      setError('The receiving method was saved. Reopen the business to refresh it.')
+      void queryClient.invalidateQueries({ queryKey: connectionsKey })
+      return
+    }
+    const savedMethod: Method = { ...method, preferred: true }
+    const savedDetailKey = [
+      'personal',
+      scope.userId,
+      'payroll',
+      'connections',
+      connectionId,
+    ] as const
+    queryClient.setQueryData<ConnectionDetail>(savedDetailKey, (current) => current
+      ? {
+          ...current,
+          methods: [
+            ...current.methods.filter((item) => item.type === 'easetag'),
+            savedMethod,
+          ],
+          preferredMethod: savedMethod,
+          readinessStatus: 'ready',
+        }
+      : current)
+    queryClient.setQueryData<ConnectionsResponse>(connectionsKey, (current) => current
+      ? {
+          ...current,
+          connections: current.connections.map((connection) =>
+            connection.id === connectionId
+              ? { ...connection, preferredMethod: savedMethod }
+              : connection),
+        }
+      : current)
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: savedDetailKey, exact: true }),
       queryClient.invalidateQueries({ queryKey: connectionsKey }),
     ])
   }
 
   async function selectConnectionMethod(methodId: string) {
-    if (!detail) return
-    setBusy(true)
+    if (!detail || selectingMethodId) return
+    const connectionId = detail.id
+    const selectedMethod = detail.methods.find((method) => method.id === methodId)
+    if (!selectedMethod) return
+    const previousDetail = queryClient.getQueryData<ConnectionDetail>(detailKey)
+    const previousConnections = queryClient.getQueryData<ConnectionsResponse>(connectionsKey)
+    const nextMethod = { ...selectedMethod, preferred: true }
+    setSelectingMethodId(methodId)
     setError('')
+    queryClient.setQueryData<ConnectionDetail>(detailKey, (current) => current
+      ? {
+          ...current,
+          methods: current.methods.map((method) => ({
+            ...method,
+            preferred: method.id === methodId,
+          })),
+          preferredMethod: nextMethod,
+        }
+      : current)
+    queryClient.setQueryData<ConnectionsResponse>(connectionsKey, (current) => current
+      ? {
+          ...current,
+          connections: current.connections.map((connection) =>
+            connection.id === connectionId
+              ? { ...connection, preferredMethod: nextMethod }
+              : connection),
+        }
+      : current)
     try {
-      await apiFetch(`/api/payroll/connections/${detail.id}/methods/${methodId}`, { method: 'PATCH' })
-      await Promise.all([
-        detailQuery.refetch(),
+      await apiFetch(`/api/payroll/connections/${connectionId}/methods/${methodId}`, { method: 'PATCH' })
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: detailKey, exact: true }),
         queryClient.invalidateQueries({ queryKey: connectionsKey }),
       ])
     } catch (e) {
+      queryClient.setQueryData(detailKey, previousDetail)
+      queryClient.setQueryData(connectionsKey, previousConnections)
       setError(e instanceof Error ? e.message : 'Could not change receiving method')
     } finally {
-      setBusy(false)
+      setSelectingMethodId('')
     }
   }
 
@@ -401,11 +483,11 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
   }
 
   async function revokeConnection() {
-    if (!detail) return
+    if (!detail || revoking) return
     const revokedConnectionId = detail.id
     const revokedBusinessName = detail.businessName
     const revokedAt = new Date().toISOString()
-    setBusy(true)
+    setRevoking(true)
     setError('')
     try {
       await apiFetch(`/api/payroll/connections/${detail.id}`, { method: 'DELETE' })
@@ -434,7 +516,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not revoke approval')
     } finally {
-      setBusy(false)
+      setRevoking(false)
     }
   }
 
@@ -609,7 +691,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
                 <View key={method.id} style={[styles.method, method.preferred && styles.methodSelected]}>
                   <Pressable
                     style={styles.methodSelect}
-                    disabled={busy || method.preferred}
+                    disabled={Boolean(selectingMethodId) || revoking || method.preferred}
                     onPress={() => void selectConnectionMethod(method.id)}
                   >
                     <View style={[styles.radio, method.preferred && styles.radioSelected]}>
@@ -622,7 +704,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
                   </Pressable>
                   {method.type !== 'easetag' ? (
                     <MethodActions
-                      disabled={busy}
+                      disabled={busy || Boolean(selectingMethodId) || revoking}
                       onEdit={() => openReceivingMethodSetup({ connectionId: detail.id }, method)}
                       onDelete={() => setMethodDeleteTarget({
                         id: method.id,
@@ -661,7 +743,7 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
             ))}
           {error ? <InlineError message={error} actionLabel="Dismiss" onRetry={() => setError('')} /> : null}
           {detail.status === 'approved' ? (
-            <Button title="Revoke approval" variant="destructive" onPress={() => void revokeConnection()} loading={busy} fullWidth />
+            <Button title="Revoke approval" variant="destructive" onPress={() => void revokeConnection()} loading={revoking} disabled={busy || Boolean(selectingMethodId)} fullWidth />
           ) : null}
         </ScrollView>
         <PayStubSheet

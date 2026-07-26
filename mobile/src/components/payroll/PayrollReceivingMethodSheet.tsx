@@ -358,7 +358,12 @@ export function PayrollReceivingMethodSheet({
       })
       const path = invitationId
         ? `/api/payroll/invitations/${invitationId}/methods`
-        : `/api/payroll/connections/${connectionId}/methods`
+        : connectionId
+          ? `/api/payroll/connections/${connectionId}/methods`
+          : null
+      if (!path) {
+        throw new Error('This payroll connection is no longer open. Close this form and try again.')
+      }
       const response = await apiFetch<{ method: Record<string, unknown> }>(
         path,
         {
