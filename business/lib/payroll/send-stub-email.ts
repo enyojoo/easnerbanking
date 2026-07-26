@@ -11,6 +11,7 @@ import {
 import type { PayrollLineRow, PayrollRunRow } from "@/lib/payroll/map-payroll"
 import type { PayrollRail } from "@/lib/payroll/types"
 import { formatCurrency } from "@/lib/utils"
+import { formatPayrollZonedDateTime } from "@/lib/payroll/schedule-preview"
 
 let apiKeyInitialized = false
 
@@ -64,11 +65,14 @@ export async function sendPayrollStubForLine(
   const lineMeta = (lineRow.metadata as Record<string, unknown>) ?? {}
   const settledAt = String(lineRow.settled_at || lineRow.updated_at || new Date().toISOString())
   const documentOccurredAt = options.reversalOccurredAt || settledAt
-  const settledAtDisplay = `${new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }).format(new Date(documentOccurredAt))} UTC`
+  const approvalSnapshot =
+    ((runRow as PayrollRunRow).approval_snapshot as Record<string, unknown> | null) ?? {}
+  const executionSchedule =
+    (approvalSnapshot.executionSchedule as Record<string, unknown> | null) ?? {}
+  const payrollTimezone = String(executionSchedule.timezone || "UTC")
+  const settledAtDisplay =
+    formatPayrollZonedDateTime(documentOccurredAt, payrollTimezone, "en-GB") ??
+    documentOccurredAt
   const documentType = options.documentType ?? "pay_stub"
   const isReversal = documentType === "payment_reversal"
   const documentReference = `${isReversal ? "PR" : "PS"}-${String(lineRow.id).slice(0, 8).toUpperCase()}`
@@ -163,6 +167,8 @@ export async function sendPayrollStubForLine(
           payPeriodEnd: runRow.pay_period_end ?? null,
           payday: runRow.payday ?? runRow.scheduled_for ?? null,
           paidAt: settledAt,
+          timezone: payrollTimezone,
+          executionSchedule,
           reversalOccurredAt: options.reversalOccurredAt ?? null,
           rail,
           transferEtid: lineRow.transfer_etid,

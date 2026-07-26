@@ -549,13 +549,7 @@ export function useUpsertPayrollSchedule() {
     mutationFn: (
       input: Partial<PayrollSchedule> & {
         id?: string
-        timezone?: string
-        draftLeadDays?: number
-        approvalLeadDays?: number
         weekendPolicy?: "previous_business_day" | "next_business_day"
-        sourceCurrency?: string
-        sourceAccountId?: string
-        fundingReminderDays?: number
         personIds?: string[]
       },
     ) => {

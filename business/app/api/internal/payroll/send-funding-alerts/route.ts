@@ -3,6 +3,13 @@ import { assertInternalCronAuthorized } from "@/lib/api/internal-auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { recalculateRunTotals } from "@/lib/payroll/run-utils"
 import { sendPayrollFundingReminderEmail } from "@/lib/payroll/send-funding-reminder-email"
+import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
+import {
+  addPayrollCalendarDays,
+  formatPayrollZonedDateTime,
+  payrollDateTimeToUtc,
+  payrollLocalDate,
+} from "@/lib/payroll/schedule-preview"
 
 const FUNDING_ALERT_DAYS = 3
 const UPCOMING_STATUSES = ["draft", "pending_approval", "approved", "scheduled", "needs_reapproval"]
@@ -21,7 +28,11 @@ function formatMoney(amount: number, currency: string): string {
   }).format(amount)
 }
 
-function formatPayday(value: string): string {
+function formatPayday(value: string, scheduledAt: string | null, timezone: string): string {
+  if (scheduledAt) {
+    const formatted = formatPayrollZonedDateTime(scheduledAt, timezone)
+    if (formatted) return formatted
+  }
   return new Intl.DateTimeFormat("en", {
     dateStyle: "long",
     timeZone: "UTC",
@@ -37,11 +48,11 @@ export async function GET(request: Request) {
 
   const admin = createSupabaseAdmin()
   const today = new Date()
-  const from = today.toISOString().slice(0, 10)
-  const through = addUtcDays(today, FUNDING_ALERT_DAYS).toISOString().slice(0, 10)
+  const from = addUtcDays(today, -1).toISOString().slice(0, 10)
+  const through = addUtcDays(today, FUNDING_ALERT_DAYS + 1).toISOString().slice(0, 10)
   const { data: runs, error } = await admin
     .from("payroll_runs")
-    .select("id,business_id,payday,source_currency,metadata")
+    .select("id,business_id,payday,source_currency,metadata,approval_snapshot")
     .not("schedule_id", "is", null)
     .in("status", UPCOMING_STATUSES)
     .gte("payday", from)
@@ -61,6 +72,28 @@ export async function GET(request: Request) {
     try {
       const runId = String(run.id)
       const businessId = String(run.business_id)
+      const defaults = await resolvePayrollSourceDefaults(admin, businessId)
+      const frozenTiming = (
+        (run.approval_snapshot as Record<string, unknown> | null)?.executionSchedule as
+          | { localTime?: string; timezone?: string; scheduledAt?: string }
+          | undefined
+      )
+      const timezone = String(frozenTiming?.timezone || defaults.timezone)
+      const localTime = String(frozenTiming?.localTime || defaults.paydayTime)
+      const payday = String(run.payday || "").slice(0, 10)
+      const reminderDate = addPayrollCalendarDays(payday, -FUNDING_ALERT_DAYS)
+      const reminderAt = reminderDate
+        ? payrollDateTimeToUtc(reminderDate, localTime, timezone)
+        : null
+      const localToday = payrollLocalDate(today, timezone)
+      if (
+        !reminderAt ||
+        new Date(reminderAt).getTime() > today.getTime() ||
+        !localToday ||
+        localToday > payday
+      ) {
+        continue
+      }
       const { totalSource, shortfall } = await recalculateRunTotals(admin, runId, businessId)
       if (shortfall <= 0) {
         skippedFunded++
@@ -86,7 +119,11 @@ export async function GET(request: Request) {
         businessId,
         runId,
         runName: String(metadata.name || "Payroll run"),
-        paydayDisplay: formatPayday(String(run.payday)),
+        paydayDisplay: formatPayday(
+          payday,
+          typeof frozenTiming?.scheduledAt === "string" ? frozenTiming.scheduledAt : null,
+          timezone,
+        ),
         requiredDisplay: formatMoney(totalSource, currency),
         availableDisplay: formatMoney(Math.max(0, totalSource - shortfall), currency),
         shortfallDisplay: formatMoney(shortfall, currency),
@@ -102,7 +139,10 @@ export async function GET(request: Request) {
           totalSource,
           shortfall,
           sourceCurrency: currency,
-          payday: run.payday,
+          payday,
+          reminderAt,
+          timezone,
+          localTime,
         },
       })
       alerted++

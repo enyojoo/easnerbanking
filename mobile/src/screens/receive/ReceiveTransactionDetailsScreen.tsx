@@ -484,7 +484,7 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
             style={[styles.bottomButton, styles.primaryButton]} 
             onPress={() => navigation.navigate('ReceiveMoney')}
           >
-            <Text style={styles.primaryButtonText}>Receive More</Text>
+            <Text style={styles.primaryButtonText}>Add money</Text>
           </Pressable>
         </View>
       </ScrollView>

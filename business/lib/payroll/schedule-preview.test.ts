@@ -4,6 +4,8 @@ import {
   payrollPayPeriodForPayday,
   payrollScheduleOccurrence,
   payrollDateTimeToUtc,
+  payrollLocalDate,
+  payrollTimingPreview,
 } from "./schedule-preview"
 
 describe("payrollPaydayPreview", () => {
@@ -52,5 +54,39 @@ describe("payrollPaydayPreview", () => {
     expect(payrollDateTimeToUtc("2026-07-24", "09:00", "Africa/Lagos")).toBe(
       "2026-07-24T08:00:00.000Z",
     )
+    expect(payrollDateTimeToUtc("2026-07-24", "09:00", "Europe/London")).toBe(
+      "2026-07-24T08:00:00.000Z",
+    )
+    expect(payrollDateTimeToUtc("2026-07-24", "09:00", "America/New_York")).toBe(
+      "2026-07-24T13:00:00.000Z",
+    )
+    expect(payrollDateTimeToUtc("2026-07-24", "09:00", "Asia/Dubai")).toBe(
+      "2026-07-24T05:00:00.000Z",
+    )
+    expect(payrollDateTimeToUtc("2026-07-24", "09:00", "Australia/Sydney")).toBe(
+      "2026-07-23T23:00:00.000Z",
+    )
+  })
+
+  it("handles skipped and repeated daylight-saving times deterministically", () => {
+    expect(payrollDateTimeToUtc("2026-03-08", "02:30", "America/New_York")).toBe(
+      "2026-03-08T07:30:00.000Z",
+    )
+    expect(payrollDateTimeToUtc("2026-11-01", "01:30", "America/New_York")).toBe(
+      "2026-11-01T05:30:00.000Z",
+    )
+  })
+
+  it("resolves the business-local date and timing preview", () => {
+    expect(payrollLocalDate("2026-07-24T23:30:00.000Z", "Africa/Lagos")).toBe("2026-07-25")
+    expect(payrollTimingPreview({
+      payday: "2026-07-24",
+      localTime: "09:00",
+      timezone: "Africa/Lagos",
+    })).toMatchObject({
+      scheduledAt: "2026-07-24T08:00:00.000Z",
+      localTime: "09:00",
+      timezone: "Africa/Lagos",
+    })
   })
 })

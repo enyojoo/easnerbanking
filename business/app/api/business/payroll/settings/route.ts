@@ -6,6 +6,7 @@ import {
   payrollCurrencyFromSourceAccountId,
   resolvePayrollSourceDefaults,
 } from "@/lib/payroll/source-account"
+import { isPayrollPaydayTime } from "@/lib/payroll/schedule-preview"
 
 export async function GET(request: Request) {
   const ctx = await requireBusinessRole(request, ["Owner", "Admin", "Member", "Viewer"])
@@ -73,7 +74,7 @@ export async function PATCH(request: Request) {
   }
   const currency = payrollCurrencyFromSourceAccountId(sourceAccountId)
   const paydayTime = body.defaultPaydayTime || current.paydayTime
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(paydayTime)) {
+  if (!isPayrollPaydayTime(paydayTime)) {
     return NextResponse.json({ error: "Choose a valid payday time." }, { status: 400 })
   }
   const { data, error } = await admin.from("payroll_settings").upsert({

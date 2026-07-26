@@ -8,6 +8,7 @@ import { sendPayrollRunSummaryEmail } from "@/lib/payroll/send-run-summary-email
 import { sendPayrollStubEmailsForRun } from "@/lib/payroll/send-stub-email"
 import { sendPayrollFundingReminderEmail } from "@/lib/payroll/send-funding-reminder-email"
 import { sanitizePayrollExecutionError } from "@/lib/payroll/execution-error"
+import { formatPayrollZonedDateTime } from "@/lib/payroll/schedule-preview"
 
 export type PayrollExecutionJob = {
   id: string
@@ -133,7 +134,7 @@ export async function processPayrollExecutionJobs(
       }
       if (result.blocked) {
         const { data: run } = await admin.from("payroll_runs")
-          .select("payday,source_currency,total_source_cents,metadata")
+          .select("payday,source_currency,total_source_cents,metadata,approval_snapshot")
           .eq("id", job.run_id)
           .maybeSingle()
         const { data: priorAlert } = await admin.from("payroll_run_events")
@@ -160,15 +161,30 @@ export async function processPayrollExecutionJobs(
               currencyDisplay: "code",
             }).format(amount)
           if (fundingRequirementChanged) {
+            const executionSchedule = (
+              (run.approval_snapshot as Record<string, unknown> | null)?.executionSchedule as
+                | { scheduledAt?: string; timezone?: string }
+                | undefined
+            )
+            const paydayDisplay = executionSchedule?.scheduledAt && executionSchedule.timezone
+              ? formatPayrollZonedDateTime(
+                  executionSchedule.scheduledAt,
+                  executionSchedule.timezone,
+                )
+              : null
             const recipients = await sendPayrollFundingReminderEmail({
               admin,
               businessId: job.business_id,
               runId: job.run_id,
               runName: String((run.metadata as Record<string, unknown> | null)?.name || "Payroll run"),
-              paydayDisplay: run.payday ? new Date(`${run.payday}T12:00:00Z`).toLocaleDateString("en", {
-                dateStyle: "long",
-                timeZone: "UTC",
-              }) : "As soon as the account is funded",
+              paydayDisplay:
+                paydayDisplay ??
+                (run.payday
+                  ? new Date(`${run.payday}T12:00:00Z`).toLocaleDateString("en", {
+                      dateStyle: "long",
+                      timeZone: "UTC",
+                    })
+                  : "As soon as the account is funded"),
               requiredDisplay: money(required),
               availableDisplay: money(Math.max(0, required - shortfall)),
               shortfallDisplay: money(shortfall),

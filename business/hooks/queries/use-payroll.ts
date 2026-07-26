@@ -14,6 +14,7 @@ import type {
   PayrollRun,
   PayrollSchedule,
   PayrollSettings,
+  PayrollTimingPreview,
 } from "@/lib/payroll/types"
 
 type PayrollScope = NonNullable<ReturnType<typeof useScope>["scope"]>
@@ -254,5 +255,34 @@ export function usePayrollSettings() {
     staleTime: 15 * 60_000,
     gcTime: 60 * 60_000,
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
+  })
+}
+
+export function usePayrollTimingPreview(
+  payday: string | null | undefined,
+  overrides?: { timezone?: string; localTime?: string },
+) {
+  const { scope } = useScope()
+  const timezone = overrides?.timezone || ""
+  const localTime = overrides?.localTime || ""
+  return useQuery<{ timing: PayrollTimingPreview }, Error, PayrollTimingPreview>({
+    queryKey:
+      scope && payday
+        ? ["payroll", "timing-preview", scope, payday, timezone, localTime]
+        : ["payroll", "timing-preview", "disabled"],
+    enabled: Boolean(scope && payday),
+    queryFn: () =>
+      apiFetch<{ timing: PayrollTimingPreview }>("/api/business/payroll/timing-preview", {
+        method: "POST",
+        body: {
+          payday,
+          ...(timezone ? { timezone } : {}),
+          ...(localTime ? { localTime } : {}),
+        },
+      }),
+    select: (data) => data.timing,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    meta: { safePersist: false, webPersist: "none", freshness: "operational" },
   })
 }

@@ -7,7 +7,6 @@ import {
   type PayrollScheduleRow,
 } from "@/lib/payroll/map-payroll"
 import type { PayrollScheduleFrequency } from "@/lib/payroll/types"
-import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 
 export async function GET(request: Request) {
   const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
@@ -47,10 +46,7 @@ export async function POST(request: Request) {
     frequency?: PayrollScheduleFrequency
     nextRunAt?: string
     active?: boolean
-    timezone?: string
     weekendPolicy?: "previous_business_day" | "next_business_day"
-    sourceCurrency?: string
-    sourceAccountId?: string
     personIds?: string[]
   }
 
@@ -58,15 +54,6 @@ export async function POST(request: Request) {
   const nextRunAt = body.nextRunAt ?? new Date().toISOString().slice(0, 10)
 
   const admin = createSupabaseAdmin()
-  let payrollDefaults
-  try {
-    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
-  } catch (cause) {
-    return NextResponse.json(
-      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
-      { status: 500 },
-    )
-  }
   const { data, error } = await admin
     .from("payroll_schedules")
     .insert({
@@ -76,11 +63,8 @@ export async function POST(request: Request) {
       next_run_at: nextRunAt,
       active: body.active ?? true,
       template: {
-        timezone: body.timezone || payrollDefaults.timezone,
         draftLeadDays: 5,
         weekendPolicy: body.weekendPolicy || "previous_business_day",
-        sourceCurrency: payrollDefaults.currency,
-        sourceAccountId: payrollDefaults.sourceAccountId,
       },
       updated_at: new Date().toISOString(),
     })

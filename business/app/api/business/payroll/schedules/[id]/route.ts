@@ -3,7 +3,6 @@ import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { mapRowToPayrollSchedule, type PayrollScheduleRow } from "@/lib/payroll/map-payroll"
 import type { PayrollScheduleFrequency } from "@/lib/payroll/types"
-import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 
 export async function PATCH(
   request: Request,
@@ -18,23 +17,11 @@ export async function PATCH(
     frequency?: PayrollScheduleFrequency
     nextRunAt?: string
     active?: boolean
-    timezone?: string
     weekendPolicy?: "previous_business_day" | "next_business_day"
-    sourceCurrency?: string
-    sourceAccountId?: string
     personIds?: string[]
   }
 
   const admin = createSupabaseAdmin()
-  let payrollDefaults
-  try {
-    payrollDefaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
-  } catch (cause) {
-    return NextResponse.json(
-      { error: cause instanceof Error ? cause.message : "Could not load Payroll account settings." },
-      { status: 500 },
-    )
-  }
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (body.name != null) patch.name = body.name.trim()
   if (body.frequency != null) patch.frequency = body.frequency
@@ -44,12 +31,12 @@ export async function PATCH(
     .select("template").eq("id", id).eq("business_id", ctx.businessId).maybeSingle()
   patch.template = {
     ...((existing?.template as Record<string, unknown>) ?? {}),
-    ...(body.timezone != null ? { timezone: body.timezone } : {}),
     draftLeadDays: 5,
     ...(body.weekendPolicy != null ? { weekendPolicy: body.weekendPolicy } : {}),
-    sourceCurrency: payrollDefaults.currency,
-    sourceAccountId: payrollDefaults.sourceAccountId,
   }
+  delete (patch.template as Record<string, unknown>).timezone
+  delete (patch.template as Record<string, unknown>).sourceCurrency
+  delete (patch.template as Record<string, unknown>).sourceAccountId
 
   const { data, error } = await admin
     .from("payroll_schedules")

@@ -792,7 +792,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             )}
           </View>
 
-          {/* Receive and Send Buttons */}
+          {/* Add money and Send money */}
           <View style={styles.actionButtons}>
             <Pressable
               android_ripple={ripple.heroOnLight}
@@ -800,17 +800,15 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               onPressIn={warmReceiveLocalDeposit}
               onPress={() => {
                 haptics.tap()
-                // Navigate immediately — never block Receive on YC rails/rates warmup.
                 warmReceiveLocalDeposit()
                 navigation.navigate('ReceiveMoney' as never, {
                   currency: selectedCurrency,
                 } as never)
               }}
               accessibilityRole="button"
-              accessibilityLabel="Receive"
+              accessibilityLabel="Add money"
             >
-              <ArrowDownLeft size={18} color={palette.primary.main} strokeWidth={2.5} />
-              <Text style={styles.heroReceiveLabel}>Receive</Text>
+              <Text style={styles.heroReceiveLabel}>Add money</Text>
             </Pressable>
             <Pressable
               android_ripple={ripple.heroOnDark}
@@ -825,10 +823,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 } as never)
               }}
               accessibilityRole="button"
-              accessibilityLabel="Send"
+              accessibilityLabel="Send money"
             >
-              <ArrowUpRight size={18} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.heroSendLabel}>Send</Text>
+              <Text style={styles.heroSendLabel}>Send money</Text>
             </Pressable>
           </View>
           </View>
@@ -874,7 +871,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             <EmptyState
               icon={Receipt}
               title="No transactions yet"
-              message="Your recent transactions will appear here once you send, receive or spend money"
+              message="Your recent transactions will appear here once you add money, send, or spend"
               action={{
                 label: 'Send money',
                 onPress: () => {
@@ -1308,7 +1305,6 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[2],
     height: 52,
     borderRadius: borderRadius.full,
     backgroundColor: '#FFFFFF',
@@ -1325,7 +1321,6 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[2],
     height: 52,
     borderRadius: borderRadius.full,
     backgroundColor: 'rgba(255,255,255,0.18)',

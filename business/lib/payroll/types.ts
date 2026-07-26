@@ -256,6 +256,7 @@ export interface PayrollApprovalSnapshot {
   sourceCurrency: string
   approvedDebit: number
   approvedAt?: string
+  executionSchedule?: PayrollExecutionSchedule
   people: Array<{
     lineId: string
     personId: string | null
@@ -264,6 +265,17 @@ export interface PayrollApprovalSnapshot {
     currency: string
     method: Record<string, unknown>
   }>
+}
+
+export interface PayrollExecutionSchedule {
+  payday: string
+  localTime: string
+  timezone: string
+  scheduledAt: string
+}
+
+export interface PayrollTimingPreview extends PayrollExecutionSchedule {
+  display: string
 }
 
 export interface PayrollDocument {
@@ -297,6 +309,8 @@ export interface PayrollPayStubMeta {
   payPeriodEnd: string | null
   payday: string | null
   paidAt: string
+  timezone?: string
+  executionSchedule?: PayrollExecutionSchedule | Record<string, never>
   rail: string
   transferEtid: string | null
 }

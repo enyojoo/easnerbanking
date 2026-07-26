@@ -602,7 +602,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerContent}>
-              <Text style={styles.title}>Receive Money</Text>
+              <Text style={styles.title}>Add money</Text>
               <View style={styles.currencyDisplay}>
                 <CurrencyFlag currency={currency} size={24} style={styles.currencyFlag} />
                 <Text style={styles.currencyText}>{currency}</Text>

@@ -9,15 +9,13 @@ import {
 } from "@/lib/payroll/map-payroll"
 import { buildPayrollLines } from "@/lib/payroll/build-lines"
 import type { PayrollScheduleFrequency } from "@/lib/payroll/types"
-import { payrollPayPeriodForPayday } from "@/lib/payroll/schedule-preview"
+import {
+  addPayrollCalendarDays,
+  payrollLocalDate,
+  payrollPayPeriodForPayday,
+} from "@/lib/payroll/schedule-preview"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 import { recalculateRunTotals } from "@/lib/payroll/run-utils"
-
-function addUtcDays(date: Date, days: number): Date {
-  const result = new Date(date)
-  result.setUTCDate(result.getUTCDate() + days)
-  return result
-}
 
 function dateOnly(date: Date): string {
   return date.toISOString().slice(0, 10)
@@ -42,7 +40,7 @@ export async function GET(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const today = new Date().toISOString().slice(0, 10)
+  const now = new Date()
 
   const { data: schedules, error } = await admin
     .from("payroll_schedules")
@@ -57,9 +55,16 @@ export async function GET(request: Request) {
     const schedule = sched as PayrollScheduleRow
     const businessId = schedule.business_id
     const template = (schedule.template as Record<string, unknown> | null) ?? {}
+    let payrollDefaults
+    try {
+      payrollDefaults = await resolvePayrollSourceDefaults(admin, businessId)
+    } catch {
+      continue
+    }
+    const localToday = payrollLocalDate(now, payrollDefaults.timezone)
+    const draftOn = addPayrollCalendarDays(String(schedule.next_run_at).slice(0, 10), -5)
+    if (!localToday || !draftOn || localToday < draftOn) continue
     const nominalPayday = new Date(`${schedule.next_run_at}T12:00:00.000Z`)
-    const draftLeadDays = 5
-    if (today < dateOnly(addUtcDays(nominalPayday, -draftLeadDays))) continue
     const weekendPolicy = template.weekendPolicy === "next_business_day"
       ? "next_business_day"
       : "previous_business_day"
@@ -99,13 +104,6 @@ export async function GET(request: Request) {
     const includedPersonIds = new Set((memberships ?? []).map((membership) => String(membership.person_id)))
     const includedPeople = (peopleRows ?? []).filter((person) => includedPersonIds.has(String(person.id)))
     if (!includedPeople?.length) continue
-    let payrollDefaults
-    try {
-      payrollDefaults = await resolvePayrollSourceDefaults(admin, businessId)
-    } catch {
-      continue
-    }
-
     const { data: runRow, error: runErr } = await admin
       .from("payroll_runs")
       .insert({
@@ -123,7 +121,6 @@ export async function GET(request: Request) {
           scheduleId: schedule.id,
           scheduleName: schedule.name,
           autoDraft: true,
-          timezone: payrollDefaults.timezone,
         },
         updated_at: new Date().toISOString(),
       })

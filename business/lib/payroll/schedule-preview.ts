@@ -6,6 +6,79 @@ function dateOnly(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
+function wallClockParts(instant: number, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  })
+  const parts = Object.fromEntries(
+    formatter
+      .formatToParts(new Date(instant))
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  )
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour: parts.hour,
+    minute: parts.minute,
+  }
+}
+
+function wallClockValue(
+  parts: ReturnType<typeof wallClockParts>,
+): number {
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute)
+}
+
+function offsetAt(instant: number, timeZone: string): number {
+  return wallClockValue(wallClockParts(instant, timeZone)) - instant
+}
+
+function matchingInstants(desiredWallClock: number, timeZone: string): number[] {
+  const offsets = new Set<number>()
+  for (let hours = -36; hours <= 36; hours += 6) {
+    const sample = desiredWallClock + hours * 60 * 60 * 1000
+    offsets.add(offsetAt(sample, timeZone))
+  }
+  return [...offsets]
+    .map((offset) => desiredWallClock - offset)
+    .filter((instant) => wallClockValue(wallClockParts(instant, timeZone)) === desiredWallClock)
+    .sort((a, b) => a - b)
+}
+
+export function isPayrollPaydayTime(value: string): boolean {
+  return /^([01]\d|2[0-3]):(?:00|30)$/.test(value)
+}
+
+export function payrollLocalDate(
+  instant: Date | string | number,
+  timeZone: string,
+): string | null {
+  const value = instant instanceof Date ? instant.getTime() : new Date(instant).getTime()
+  if (!Number.isFinite(value)) return null
+  try {
+    const parts = wallClockParts(value, timeZone)
+    return `${String(parts.year).padStart(4, "0")}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`
+  } catch {
+    return null
+  }
+}
+
+export function addPayrollCalendarDays(value: string, days: number): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const date = new Date(`${value}T12:00:00.000Z`)
+  if (Number.isNaN(date.getTime())) return null
+  date.setUTCDate(date.getUTCDate() + days)
+  return dateOnly(date)
+}
+
 function applyWeekendPolicy(date: Date, policy: PayrollWeekendPolicy) {
   const day = date.getUTCDay()
   if (day === 6) date.setUTCDate(date.getUTCDate() + (policy === "previous_business_day" ? -1 : 2))
@@ -81,35 +154,71 @@ export function payrollDateTimeToUtc(
   time: string,
   timeZone: string,
 ): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isPayrollPaydayTime(time)) {
     return null
   }
   const [year, month, day] = date.split("-").map(Number)
   const [hour, minute] = time.split(":").map(Number)
   const desiredWallClock = Date.UTC(year, month - 1, day, hour, minute)
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  })
-  const offsetAt = (instant: number) => {
-    const parts = Object.fromEntries(
-      formatter
-        .formatToParts(new Date(instant))
-        .filter((part) => part.type !== "literal")
-        .map((part) => [part.type, Number(part.value)]),
-    )
-    return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute) - instant
-  }
   try {
-    let instant = desiredWallClock - offsetAt(desiredWallClock)
-    instant = desiredWallClock - offsetAt(instant)
-    return new Date(instant).toISOString()
+    const exact = matchingInstants(desiredWallClock, timeZone)
+    if (exact.length > 0) {
+      // Repeated wall-clock times use the first occurrence.
+      return new Date(exact[0]).toISOString()
+    }
+
+    // A skipped wall-clock time moves forward by the daylight-saving gap.
+    const before = offsetAt(desiredWallClock - 12 * 60 * 60 * 1000, timeZone)
+    const after = offsetAt(desiredWallClock + 12 * 60 * 60 * 1000, timeZone)
+    const gap = after - before
+    if (gap <= 0) return null
+    const shifted = matchingInstants(desiredWallClock + gap, timeZone)
+    return shifted.length > 0 ? new Date(shifted[0]).toISOString() : null
   } catch {
     return null
+  }
+}
+
+export function formatPayrollZonedDateTime(
+  value: string,
+  timeZone: string,
+  locale = "en",
+): string | null {
+  const instant = new Date(value)
+  if (Number.isNaN(instant.getTime())) return null
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+      timeZoneName: "short",
+    }).format(instant)
+  } catch {
+    return null
+  }
+}
+
+export function payrollTimingPreview(input: {
+  payday: string
+  localTime: string
+  timezone: string
+}): {
+  payday: string
+  localTime: string
+  timezone: string
+  scheduledAt: string
+  display: string
+} | null {
+  const scheduledAt = payrollDateTimeToUtc(input.payday, input.localTime, input.timezone)
+  if (!scheduledAt) return null
+  return {
+    ...input,
+    scheduledAt,
+    display:
+      formatPayrollZonedDateTime(scheduledAt, input.timezone) ??
+      `${input.payday} ${input.localTime} (${input.timezone})`,
   }
 }

@@ -28,6 +28,9 @@ import { BusinessOnboardingChecklist } from "@/components/business-onboarding-ch
 import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
 import { isNavPathActive } from "@/lib/navigation/is-nav-path-active"
 
+/** Hide Collections (Terminal, QR Pay) in sidebar — routes and pages stay available via direct URL. */
+const SHOW_COLLECTIONS_IN_NAV = false
+
 function deriveOpenGroups(pathname: string) {
   const openGroups = new Set<string>()
   if (
@@ -82,16 +85,20 @@ export function DashboardNav() {
     { href: "/payroll", label: "Payroll", icon: Users, type: "single" as const },
     { href: "/cards", label: "Cards", icon: CreditCard, type: "single" as const },
     { href: "/invoices", label: "Invoices", icon: ReceiptText, type: "single" as const },
-    {
-      key: "collections",
-      label: "Collections",
-      icon: Inbox,
-      type: "group" as const,
-      items: [
-        { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
-        { href: "/qr-pay", label: "QR Pay", icon: QrCode },
-      ],
-    },
+    ...(SHOW_COLLECTIONS_IN_NAV
+      ? [
+          {
+            key: "collections",
+            label: "Collections",
+            icon: Inbox,
+            type: "group" as const,
+            items: [
+              { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
+              { href: "/qr-pay", label: "QR Pay", icon: QrCode },
+            ],
+          },
+        ]
+      : []),
     { href: "/transactions", label: "Transactions", icon: List, type: "single" as const },
     { href: "/accounts", label: "Accounts", icon: Wallet, type: "single" as const },
   ]

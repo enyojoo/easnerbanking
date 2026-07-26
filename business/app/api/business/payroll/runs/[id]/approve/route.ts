@@ -13,7 +13,7 @@ import { recalculateRunTotals } from "@/lib/payroll/run-utils"
 import { assertBusinessTransferAllowed } from "@/lib/business/high-value-policy"
 import { requiresDifferentPayrollApprover } from "@/lib/payroll/approval-policy"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
-import { payrollDateTimeToUtc } from "@/lib/payroll/schedule-preview"
+import { payrollTimingPreview } from "@/lib/payroll/schedule-preview"
 import { enqueuePayrollExecution } from "@/lib/payroll/execution-jobs"
 
 export async function POST(
@@ -89,12 +89,16 @@ export async function POST(
     .eq("run_id", id)
     .neq("status", "skipped")
   const scheduleMode = body.mode === "schedule"
-  let scheduledAt: string | null = null
+  let executionSchedule: ReturnType<typeof payrollTimingPreview> = null
   if (scheduleMode) {
     const payday = String(runRow.payday || runRow.scheduled_for || "").slice(0, 10)
     const defaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
-    scheduledAt = payrollDateTimeToUtc(payday, defaults.paydayTime, defaults.timezone)
-    if (!scheduledAt) {
+    executionSchedule = payrollTimingPreview({
+      payday,
+      localTime: defaults.paydayTime,
+      timezone: defaults.timezone,
+    })
+    if (!executionSchedule) {
       return NextResponse.json({ error: "This payroll does not have a valid scheduled payday." }, { status: 400 })
     }
   }
@@ -127,6 +131,7 @@ export async function POST(
     sourceCurrency: String(runRow.source_currency || "USD"),
     approvedDebit,
     approvedAt,
+    ...(executionSchedule ? { executionSchedule } : {}),
     people: (approvalLines ?? []).map((line) => ({
       lineId: line.id,
       personId: line.person_id,
@@ -143,7 +148,7 @@ export async function POST(
     status: scheduleMode ? "scheduled" : "approved",
     approval_snapshot: approvalSnapshot,
     approved_at: approvedAt,
-    ...(scheduleMode ? { scheduled_at: scheduledAt } : {}),
+    ...(executionSchedule ? { scheduled_at: executionSchedule.scheduledAt } : {}),
     updated_at: approvedAt,
   }).eq("id", id)
   await admin.from("payroll_run_events").insert({
@@ -151,7 +156,11 @@ export async function POST(
     run_id: id,
     actor_user_id: ctx.userId,
     event_type: scheduleMode ? "run.scheduled" : "run.approved",
-    data: { revision: approvalSnapshot.revision, approvedDebit },
+    data: {
+      revision: approvalSnapshot.revision,
+      approvedDebit,
+      ...(executionSchedule ? { executionSchedule } : {}),
+    },
   })
 
   await recalculateRunTotals(admin, id, ctx.businessId)

@@ -19,12 +19,17 @@ import {
   usePayrollRunDetail,
   usePayrollSchedules,
   usePayrollSettings,
+  usePayrollTimingPreview,
 } from "@/hooks/queries/use-payroll"
 import { useCreatePayrollRun, usePreviewPayrollRun, useUpdatePayrollRun } from "@/hooks/mutations/use-payroll"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import type { PayrollRunDraftInput, PayrollRunPreview } from "@/lib/payroll/types"
+import type {
+  PayrollRunDraftInput,
+  PayrollRunPreview,
+  PayrollTimingPreview,
+} from "@/lib/payroll/types"
 import { cn } from "@/lib/utils"
 import {
   payrollPaydayPreview,
@@ -73,6 +78,7 @@ export default function NewPayrollRunPage() {
   const [hydrated, setHydrated] = useState(false)
   const [addedPersonApplied, setAddedPersonApplied] = useState(false)
   const [sourceSettingsApplied, setSourceSettingsApplied] = useState(false)
+  const timingQuery = usePayrollTimingPreview(draft.payday)
   const storageKey = `payroll_run_builder:${profile.businessId || "business"}${editRunId ? `:edit:${editRunId}` : ""}`
   const people = useMemo(() => peopleQuery.data ?? [], [peopleQuery.data])
   const ready = people.filter((person) => person.status === "active" && person.readinessStatus === "ready")
@@ -384,7 +390,14 @@ export default function NewPayrollRunPage() {
                 onRefresh={() => void loadPreview(false)}
               />
             ) : null}
-            {step === 4 ? <ReviewStep draft={draft} people={selectedPeople} preview={preview} /> : null}
+            {step === 4 ? (
+              <ReviewStep
+                draft={draft}
+                people={selectedPeople}
+                preview={preview}
+                timing={timingQuery.data ?? null}
+              />
+            ) : null}
 
             <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
               <Button variant="ghost" onClick={() => setStep((value) => Math.max(0, value - 1))} disabled={step === 0}>
@@ -435,7 +448,12 @@ export default function NewPayrollRunPage() {
             </div>
           </CardContent>
         </Card>
-        <RunSummary draft={draft} people={selectedPeople} preview={preview} />
+        <RunSummary
+          draft={draft}
+          people={selectedPeople}
+          preview={preview}
+          timing={timingQuery.data ?? null}
+        />
       </div>
     </PayrollSubpageShell>
   )
@@ -807,10 +825,12 @@ function ReviewStep({
   draft,
   people,
   preview,
+  timing,
 }: {
   draft: Draft
   people: NonNullable<ReturnType<typeof usePayrollPeople>["data"]>
   preview: PayrollRunPreview | null
+  timing: PayrollTimingPreview | null
 }) {
   return (
     <div>
@@ -824,6 +844,7 @@ function ReviewStep({
           value={`${formatDate(draft.payPeriodStart)} – ${formatDate(draft.payPeriodEnd)}`}
         />
         <ReviewItem label={draft.scheduleId ? "Scheduled payday" : "Payday"} value={formatDate(draft.payday)} />
+        <ReviewItem label="Scheduled payment time" value={timing?.display ?? "Calculated when approved"} />
         <ReviewItem label="People" value={String(people.length)} />
         <ReviewItem label="Amount" value={formatCurrency(preview?.payrollTotal ?? 0, draft.sourceCurrency)} />
         <ReviewItem label="Fees" value={formatCurrency(preview?.fees ?? 0, draft.sourceCurrency)} />
@@ -850,10 +871,12 @@ function RunSummary({
   draft,
   people,
   preview,
+  timing,
 }: {
   draft: Draft
   people: NonNullable<ReturnType<typeof usePayrollPeople>["data"]>
   preview: PayrollRunPreview | null
+  timing: PayrollTimingPreview | null
 }) {
   const total = people.reduce((sum, person) => sum + Number(draft.amounts[person.id] || 0), 0)
   return (
@@ -880,6 +903,11 @@ function RunSummary({
           <ReviewItem
             label={draft.scheduleId ? "Scheduled payday" : "Payday"}
             value={draft.payday ? formatDate(draft.payday) : "—"}
+            row
+          />
+          <ReviewItem
+            label="Payment time"
+            value={timing?.display ?? "Calculated at approval"}
             row
           />
         </dl>

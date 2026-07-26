@@ -22,7 +22,11 @@ import { PayrollLineStatusBadge, PayrollRunStatusBadge } from "@/components/payr
 import { PayrollRailBadge } from "@/components/payroll/payroll-rail-badge"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { PayrollDetailSkeleton, PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
-import { usePayrollCapabilities, usePayrollRunDetail } from "@/hooks/queries/use-payroll"
+import {
+  usePayrollCapabilities,
+  usePayrollRunDetail,
+  usePayrollTimingPreview,
+} from "@/hooks/queries/use-payroll"
 import {
   useSubmitPayrollRun,
   useApprovePayrollRun,
@@ -42,6 +46,7 @@ import type { PayrollLine } from "@/lib/payroll/types"
 import { apiFetch } from "@/lib/query/api-client"
 import { railLabel } from "@/lib/payroll/helpers"
 import { safePayrollReturnTo } from "@/lib/payroll/navigation"
+import { formatPayrollZonedDateTime } from "@/lib/payroll/schedule-preview"
 
 export default function PayrollRunDetailPage() {
   const params = useParams<{ id: string }>()
@@ -69,6 +74,18 @@ export default function PayrollRunDetailPage() {
   const [rejectReason, setRejectReason] = useState("")
 
   const run = runQuery.data
+  const timingPreview = usePayrollTimingPreview(
+    run && !run.approvalSnapshot?.executionSchedule ? run.payday : null,
+  )
+  const executionSchedule = run?.approvalSnapshot?.executionSchedule
+  const scheduledPaymentDisplay = executionSchedule
+    ? formatPayrollZonedDateTime(
+        executionSchedule.scheduledAt,
+        executionSchedule.timezone,
+      ) ?? `${executionSchedule.payday} ${executionSchedule.localTime} (${executionSchedule.timezone})`
+    : run?.scheduledAt
+      ? formatPayrollZonedDateTime(run.scheduledAt, "UTC") ?? run.scheduledAt
+      : timingPreview.data?.display ?? null
   const executionJob = run?.metadata?.executionJob as
     | {
         status?: string
@@ -395,6 +412,10 @@ export default function PayrollRunDetailPage() {
                 }
               />
               <Detail label="Payday" value={run.payday ? formatDate(run.payday) : "—"} />
+              <Detail
+                label="Payment time"
+                value={scheduledPaymentDisplay ?? "Calculated when approved"}
+              />
               <Detail label="Amount" value={formatCurrency(run.totalSource, run.sourceCurrency)} />
               <Detail label="People" value={String(lines.length)} />
               <Detail label="Source account" value={`${run.sourceCurrency} account`} />
@@ -436,7 +457,7 @@ export default function PayrollRunDetailPage() {
                 label={run.status === "scheduled" ? "Scheduled for" : "Payment date"}
                 value={
                   run.status === "scheduled" && run.scheduledAt
-                    ? formatDate(run.scheduledAt)
+                    ? scheduledPaymentDisplay ?? formatDate(run.scheduledAt)
                     : run.payday
                       ? formatDate(run.payday)
                       : "—"
@@ -546,6 +567,12 @@ export default function PayrollRunDetailPage() {
                 />
                 <Detail label="People" value={String(run.approvalSnapshot.people.length)} />
                 <Detail label="Approved" value={run.approvedAt ? formatDate(run.approvedAt) : "—"} />
+                {run.approvalSnapshot.executionSchedule ? (
+                  <Detail
+                    label="Scheduled payment"
+                    value={scheduledPaymentDisplay ?? "—"}
+                  />
+                ) : null}
               </dl>
             </section>
           ) : null}

@@ -26,9 +26,7 @@ export function PayrollScheduleForm({ schedule }: { schedule?: PayrollSchedule }
   const [weekendPolicy, setWeekendPolicy] = useState<PayrollWeekendPolicy>((template.weekendPolicy as PayrollWeekendPolicy) || "previous_business_day")
   const [personIds, setPersonIds] = useState<string[]>(schedule?.personIds ?? [])
   const preview = useMemo(() => payrollPaydayPreview({ frequency, firstPayday: nextRunAt, weekendPolicy }), [frequency, nextRunAt, weekendPolicy])
-  const timezone = payrollSettings?.timezone || "UTC"
   const sourceAccountId = payrollSettings?.defaultSourceAccountId || ""
-  const sourceCurrency = payrollSettings?.defaultCurrency || "USD"
 
   return <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
     <Card className="shadow-card"><CardContent className="space-y-7 p-6 sm:p-8">
@@ -40,8 +38,8 @@ export function PayrollScheduleForm({ schedule }: { schedule?: PayrollSchedule }
       </div></section>
       <section><h2 className="font-semibold">Included people</h2><p className="mt-1 text-sm text-muted-foreground">People can be added or removed without changing completed runs.</p><div className="mt-4 max-h-72 divide-y overflow-y-auto rounded-xl border">{people.map((person) => <label key={person.id} className="flex cursor-pointer items-center gap-3 p-3"><input type="checkbox" checked={personIds.includes(person.id)} onChange={() => setPersonIds((current) => current.includes(person.id) ? current.filter((id) => id !== person.id) : [...current, person.id])} /><span className="flex-1 text-sm">{person.fullName}</span><span className="text-xs capitalize text-muted-foreground">{person.type}</span></label>)}</div></section>
       <div className="flex justify-end gap-2 border-t pt-5"><Button variant="outline" onClick={() => router.push("/payroll/schedules")}>Cancel</Button><Button variant="primary" disabled={save.isPending || !name.trim() || !nextRunAt || !sourceAccountId} onClick={() => save.mutate({
-        id: schedule?.id, name, frequency, nextRunAt, active: schedule?.active ?? true, timezone,
-        weekendPolicy, sourceCurrency, sourceAccountId, personIds,
+        id: schedule?.id, name, frequency, nextRunAt, active: schedule?.active ?? true,
+        weekendPolicy, personIds,
       } as never, { onSuccess: (result) => { toast.success("Schedule saved"); router.push(`/payroll/schedules/${result.schedule.id}`) }, onError: (error) => toast.error(error.message) })}>{save.isPending ? "Saving…" : "Save schedule"}</Button></div>
     </CardContent></Card>
     <Card className="h-fit shadow-soft lg:sticky lg:top-6"><CardContent className="p-5"><h2 className="font-semibold">Upcoming paydays</h2><ol className="mt-4 space-y-3">{preview.map((date, index) => <li key={date} className="flex items-center justify-between rounded-xl bg-muted/50 p-3 text-sm"><span>{index === 0 ? "Next" : `After ${index}`}</span><span className="font-medium">{formatDate(date)}</span></li>)}</ol><p className="mt-4 text-xs text-muted-foreground">Dates are adjusted using the selected weekend policy.</p></CardContent></Card>
