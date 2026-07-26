@@ -3,23 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import {
-  ArrowLeft,
-  CalendarX2,
-  MoreHorizontal,
-  Pencil,
-  Trash2,
-  Undo2,
-  XCircle,
-} from "lucide-react"
+import { ArrowLeft, CalendarX2, MoreHorizontal, Pencil, Trash2, Undo2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollLineStatusBadge, PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
@@ -69,14 +56,9 @@ export default function PayrollRunDetailPage() {
   const failedLines = lines.filter((l) => l.status === "failed")
   const hasPayStubs = lines.some((line) => Boolean(line.payrollDocumentId))
   const awaitingApproval = run?.status === "pending_approval" || run?.status === "needs_reapproval"
-  const futurePayday = Boolean(
-    run?.payday
-      && new Date(`${run.payday.slice(0, 10)}T23:59:59`).getTime() > Date.now(),
-  )
+  const futurePayday = Boolean(run?.payday && new Date(`${run.payday.slice(0, 10)}T23:59:59`).getTime() > Date.now())
   const canApproveDraftDirectly = Boolean(
-    run?.status === "draft"
-      && canApprove
-      && !capabilities?.requireSeparateApprover,
+    run?.status === "draft" && canApprove && !capabilities?.requireSeparateApprover,
   )
 
   const railSummary = useMemo(() => {
@@ -193,13 +175,18 @@ export default function PayrollRunDetailPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <Button variant="ghost" size="sm" className="mb-4" asChild>
-        <Link href="/payroll/runs"><ArrowLeft className="mr-2 h-4 w-4" />Back to Runs</Link>
+        <Link href="/payroll/runs">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Runs
+        </Link>
       </Button>
       <PayrollPageHeader
         title={String(run.metadata?.name || "Payroll run")}
-        description={run.payPeriodStart && run.payPeriodEnd
-          ? `${formatDate(run.payPeriodStart)} – ${formatDate(run.payPeriodEnd)}`
-          : "Payroll payment details and results."}
+        description={
+          run.payPeriodStart && run.payPeriodEnd
+            ? `${formatDate(run.payPeriodStart)} – ${formatDate(run.payPeriodEnd)}`
+            : "Payroll payment details and results."
+        }
         actions={
           <div className="flex shrink-0 items-center gap-2 overflow-x-auto">
             {hasPayStubs ? (
@@ -211,8 +198,9 @@ export default function PayrollRunDetailPage() {
             ) : null}
             {run.status === "draft" && canPrepare ? (
               <Button variant="outline" asChild>
-                <Link href={`/payroll/runs/${runId}/edit`}>
-                  <Pencil className="mr-2 h-4 w-4" />Edit
+                <Link href={`/payroll/runs/new?edit=${encodeURIComponent(runId)}`}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
                 </Link>
               </Button>
             ) : null}
@@ -261,12 +249,10 @@ export default function PayrollRunDetailPage() {
                 {futurePayday ? "Approve and schedule" : "Approve and pay"}
               </Button>
             ) : null}
-            {(
-              (run.status === "draft" && canPrepare)
-              || (run.status === "failed" && canPrepare)
-              || (awaitingApproval && (canPrepare || canApprove))
-              || (run.status === "scheduled" && canApprove)
-            ) ? (
+            {(run.status === "draft" && canPrepare) ||
+            (run.status === "failed" && canPrepare) ||
+            (awaitingApproval && (canPrepare || canApprove)) ||
+            (run.status === "scheduled" && canApprove) ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -281,27 +267,33 @@ export default function PayrollRunDetailPage() {
                   {awaitingApproval && canPrepare ? (
                     <DropdownMenuItem
                       disabled={withdrawRun.isPending}
-                      onClick={() => withdrawRun.mutate(undefined, {
-                        onSuccess: () => toast.success("Run returned to draft"),
-                        onError: (error) => toast.error(error.message),
-                      })}
+                      onClick={() =>
+                        withdrawRun.mutate(undefined, {
+                          onSuccess: () => toast.success("Run returned to draft"),
+                          onError: (error) => toast.error(error.message),
+                        })
+                      }
                     >
-                      <Undo2 />Withdraw to draft
+                      <Undo2 />
+                      Withdraw to draft
                     </DropdownMenuItem>
                   ) : null}
                   {awaitingApproval && canApprove ? (
                     <DropdownMenuItem onClick={() => void rejectRun()}>
-                      <XCircle />Reject
+                      <XCircle />
+                      Reject
                     </DropdownMenuItem>
                   ) : null}
                   {run.status === "scheduled" && canApprove ? (
                     <DropdownMenuItem onClick={() => void cancelSchedule()}>
-                      <CalendarX2 />Cancel schedule
+                      <CalendarX2 />
+                      Cancel schedule
                     </DropdownMenuItem>
                   ) : null}
                   {(run.status === "draft" || run.status === "failed") && canPrepare ? (
                     <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-                      <Trash2 />{run.status === "failed" ? "Delete failed run" : "Delete draft"}
+                      <Trash2 />
+                      {run.status === "failed" ? "Delete failed run" : "Delete draft"}
                     </DropdownMenuItem>
                   ) : null}
                 </DropdownMenuContent>
@@ -313,114 +305,130 @@ export default function PayrollRunDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
-      {run.shortfall > 0 ? (
-        <Card className="shadow-soft border-amber-200/60">
-          <CardContent className="p-4 text-sm text-amber-800 dark:text-amber-300">
-            Need {formatCurrency(run.shortfall, run.sourceCurrency)} more in {run.sourceCurrency} before
-            execute.
-          </CardContent>
-        </Card>
-      ) : null}
+          {run.shortfall > 0 ? (
+            <Card className="shadow-soft border-amber-200/60">
+              <CardContent className="p-4 text-sm text-amber-800 dark:text-amber-300">
+                Need {formatCurrency(run.shortfall, run.sourceCurrency)} more in {run.sourceCurrency} before execute.
+              </CardContent>
+            </Card>
+          ) : null}
 
-        <Card className="shadow-soft">
-          <CardContent className="p-5">
-            <p className="mb-4 text-sm font-medium">Payroll details</p>
-            <div className="grid gap-4 text-sm sm:grid-cols-3">
-              <Detail label="Pay period start" value={run.payPeriodStart ? formatDate(run.payPeriodStart) : "—"} />
-              <Detail label="Pay period end" value={run.payPeriodEnd ? formatDate(run.payPeriodEnd) : "—"} />
-              <Detail label="Payday" value={run.payday ? formatDate(run.payday) : "—"} />
-            </div>
-          </CardContent>
-        </Card>
-
-      <Card className="shadow-card">
-        <div className="px-4 pt-4 text-sm font-medium">
-          {run.status === "draft" ? "People and amounts" : "People and payment results"}
-        </div>
-        <CardContent className="p-0 divide-y divide-border/60">
-          {lines.map((line: PayrollLine) => (
-            <div key={line.id} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="font-medium">{line.personName || "Person"}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <PayrollRailBadge rail={line.rail} />
-                  <PayrollLineStatusBadge status={line.status} />
-                </div>
-                {line.errorMessage ? (
-                  <p className="mt-1 text-xs text-destructive">{line.errorMessage}</p>
-                ) : null}
+          <Card className="shadow-soft">
+            <CardContent className="p-5">
+              <p className="mb-4 text-sm font-medium">Payroll details</p>
+              <div className="grid gap-4 text-sm sm:grid-cols-3">
+                <Detail label="Pay period start" value={run.payPeriodStart ? formatDate(run.payPeriodStart) : "—"} />
+                <Detail label="Pay period end" value={run.payPeriodEnd ? formatDate(run.payPeriodEnd) : "—"} />
+                <Detail label="Payday" value={run.payday ? formatDate(run.payday) : "—"} />
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium tabular-nums">
-                  {formatCurrency(line.amount, line.payCurrency)}
-                </span>
-                {line.payrollDocumentId ? (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => void downloadPayStub(line.payrollDocumentId!)}>
-                      Download pay stub
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => void resendPayStub(line.payrollDocumentId!)}>
-                      Resend email
-                    </Button>
-                    {line.documentDeliveryStatus ? (
-                      <span className="text-xs capitalize text-muted-foreground">
-                        Email {line.documentDeliveryStatus}
-                      </span>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card">
+            <div className="px-4 pt-4 text-sm font-medium">
+              {run.status === "draft" ? "People and amounts" : "People and payment results"}
+            </div>
+            <CardContent className="p-0 divide-y divide-border/60">
+              {lines.map((line: PayrollLine) => (
+                <div key={line.id} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-medium">{line.personName || "Person"}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <PayrollRailBadge rail={line.rail} />
+                      <PayrollLineStatusBadge status={line.status} />
+                    </div>
+                    {line.errorMessage ? <p className="mt-1 text-xs text-destructive">{line.errorMessage}</p> : null}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium tabular-nums">
+                      {formatCurrency(line.amount, line.payCurrency)}
+                    </span>
+                    {line.payrollDocumentId ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void downloadPayStub(line.payrollDocumentId!)}
+                        >
+                          Download pay stub
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => void resendPayStub(line.payrollDocumentId!)}>
+                          Resend email
+                        </Button>
+                        {line.documentDeliveryStatus ? (
+                          <span className="text-xs capitalize text-muted-foreground">
+                            Email {line.documentDeliveryStatus}
+                          </span>
+                        ) : null}
+                      </>
                     ) : null}
-                  </>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
-      {run.approvalSnapshot ? (
-        <Card className="shadow-soft">
-          <CardContent className="p-5">
-            <h2 className="text-sm font-medium">Approved payroll details</h2>
-            <div className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
-              <p><span className="block text-xs text-muted-foreground">Approved debit</span>{formatCurrency(run.approvalSnapshot.approvedDebit, run.approvalSnapshot.sourceCurrency)}</p>
-              <p><span className="block text-xs text-muted-foreground">People</span>{run.approvalSnapshot.people.length}</p>
-              <p><span className="block text-xs text-muted-foreground">Approved</span>{run.approvedAt ? formatDate(run.approvedAt) : "—"}</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Card className="shadow-soft">
-        <CardContent className="p-4 text-sm space-y-2">
-          <p>
-            <span className="text-muted-foreground">Scheduled for:</span>{" "}
-            {run.scheduledFor ? formatDate(run.scheduledFor) : "—"}
-          </p>
-          {run.approvedAt ? (
-            <p>
-              <span className="text-muted-foreground">Approved:</span> {formatDate(run.approvedAt)}
-            </p>
+          {run.approvalSnapshot ? (
+            <Card className="shadow-soft">
+              <CardContent className="p-5">
+                <h2 className="text-sm font-medium">Approved payroll details</h2>
+                <div className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
+                  <p>
+                    <span className="block text-xs text-muted-foreground">Approved debit</span>
+                    {formatCurrency(run.approvalSnapshot.approvedDebit, run.approvalSnapshot.sourceCurrency)}
+                  </p>
+                  <p>
+                    <span className="block text-xs text-muted-foreground">People</span>
+                    {run.approvalSnapshot.people.length}
+                  </p>
+                  <p>
+                    <span className="block text-xs text-muted-foreground">Approved</span>
+                    {run.approvedAt ? formatDate(run.approvedAt) : "—"}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           ) : null}
-          {run.executedAt ? (
-            <p>
-              <span className="text-muted-foreground">Executed:</span> {formatDate(run.executedAt)}
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
 
-      <Card className="shadow-soft">
-        <CardContent className="p-5">
-          <h2 className="text-sm font-medium">Activity</h2>
-          <ol className="mt-4 space-y-4">
-            {(run.events ?? []).length ? run.events?.map((event) => (
-              <li key={event.id} className="relative border-l pl-4">
-                <span className="absolute -left-1 top-1 h-2 w-2 rounded-full bg-primary" />
-                <p className="text-sm">{event.eventType.replaceAll(".", " ").replace(/\b\w/g, (c) => c.toUpperCase())}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(event.createdAt)}</p>
-              </li>
-            )) : <li className="text-sm text-muted-foreground">No activity recorded yet.</li>}
-          </ol>
-        </CardContent>
-      </Card>
+          <Card className="shadow-soft">
+            <CardContent className="p-4 text-sm space-y-2">
+              <p>
+                <span className="text-muted-foreground">Scheduled for:</span>{" "}
+                {run.scheduledFor ? formatDate(run.scheduledFor) : "—"}
+              </p>
+              {run.approvedAt ? (
+                <p>
+                  <span className="text-muted-foreground">Approved:</span> {formatDate(run.approvedAt)}
+                </p>
+              ) : null}
+              {run.executedAt ? (
+                <p>
+                  <span className="text-muted-foreground">Executed:</span> {formatDate(run.executedAt)}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-soft">
+            <CardContent className="p-5">
+              <h2 className="text-sm font-medium">Activity</h2>
+              <ol className="mt-4 space-y-4">
+                {(run.events ?? []).length ? (
+                  run.events?.map((event) => (
+                    <li key={event.id} className="relative border-l pl-4">
+                      <span className="absolute -left-1 top-1 h-2 w-2 rounded-full bg-primary" />
+                      <p className="text-sm">
+                        {event.eventType.replaceAll(".", " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(event.createdAt)}</p>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-sm text-muted-foreground">No activity recorded yet.</li>
+                )}
+              </ol>
+            </CardContent>
+          </Card>
         </div>
         <div className="space-y-6">
           <Card className="h-fit shadow-soft lg:sticky lg:top-6">
@@ -445,9 +453,11 @@ export default function PayrollRunDetailPage() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title={run.status === "failed" ? "Delete this failed payroll run?" : "Delete this payroll draft?"}
-        description={run.status === "failed"
-          ? "This permanently removes the failed run and its unsuccessful payment lines. No completed payment history will be deleted."
-          : "This permanently removes the draft and its unsent payment lines. Submitted or completed payroll history cannot be deleted."}
+        description={
+          run.status === "failed"
+            ? "This permanently removes the failed run and its unsuccessful payment lines. No completed payment history will be deleted."
+            : "This permanently removes the draft and its unsent payment lines. Submitted or completed payroll history cannot be deleted."
+        }
         label={run.status === "failed" ? "Delete failed run" : "Delete draft"}
         pending={deleteRun.isPending}
         onDelete={async () => {

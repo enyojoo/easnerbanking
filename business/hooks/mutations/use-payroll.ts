@@ -62,12 +62,11 @@ function cachePerson(
 ) {
   patchPeople(qc, qk.payroll.people.list(scope), (people) =>
     people.some((item) => item.id === person.id)
-      ? people.map((item) => item.id === person.id ? person : item)
+      ? people.map((item) => (item.id === person.id ? person : item))
       : [person, ...people],
   )
-  qc.setQueryData<PayrollPersonDetailEnvelope>(
-    qk.payroll.people.detail(scope, person.id),
-    (current) => current ? { ...current, person } : { person },
+  qc.setQueryData<PayrollPersonDetailEnvelope>(qk.payroll.people.detail(scope, person.id), (current) =>
+    current ? { ...current, person } : { person },
   )
 }
 
@@ -77,9 +76,7 @@ function cacheRun(
   run: PayrollRun,
 ) {
   patchRuns(qc, qk.payroll.runs.list(scope), (runs) =>
-    runs.some((item) => item.id === run.id)
-      ? runs.map((item) => item.id === run.id ? run : item)
-      : [run, ...runs],
+    runs.some((item) => item.id === run.id) ? runs.map((item) => (item.id === run.id ? run : item)) : [run, ...runs],
   )
   qc.setQueryData(qk.payroll.runs.detail(scope, run.id), { run })
 }
@@ -117,7 +114,7 @@ export function useUpdatePayrollPerson() {
       const previousList = qc.getQueryData<PayrollPeopleEnvelope>(listKey)
       const previousDetail = qc.getQueryData<PayrollPersonDetailEnvelope>(detailKey)
       patchPeople(qc, listKey, (people) =>
-        people.map((person) => person.id === id ? { ...person, ...patch } as PayrollPerson : person),
+        people.map((person) => (person.id === id ? ({ ...person, ...patch } as PayrollPerson) : person)),
       )
       if (previousDetail) {
         qc.setQueryData(detailKey, {
@@ -143,8 +140,7 @@ export function useDeletePayrollPerson() {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
-    mutationFn: (id: string) =>
-      apiFetch<{ ok: boolean }>(`/api/business/payroll/people/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => apiFetch<{ ok: boolean }>(`/api/business/payroll/people/${id}`, { method: "DELETE" }),
     onMutate: async (id) => {
       if (!scope) return {}
       const listKey = qk.payroll.people.list(scope)
@@ -167,8 +163,7 @@ export function useDeletePayrollRun() {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
-    mutationFn: (id: string) =>
-      apiFetch<{ ok: boolean }>(`/api/business/payroll/runs/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => apiFetch<{ ok: boolean }>(`/api/business/payroll/runs/${id}`, { method: "DELETE" }),
     onMutate: async (id) => {
       if (!scope) return {}
       const listKey = qk.payroll.runs.list(scope)
@@ -260,6 +255,7 @@ export function useUpdatePayrollRun(runId: string) {
   const { scope } = useScope()
   return useMutation({
     mutationFn: (input: {
+      draft?: PayrollRunDraftInput
       lines?: Array<{ id: string; amount?: number; status?: string }>
       sourceCurrency?: string
       revision?: number
@@ -352,8 +348,7 @@ export function useExecutePayrollRun(runId: string) {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
-    mutationFn: () =>
-      apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}/execute`, { method: "POST" }),
+    mutationFn: () => apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}/execute`, { method: "POST" }),
     onSuccess: ({ run }) => {
       if (scope) cacheRun(qc, scope, run)
       invalidatePayroll(qc, scope)
@@ -378,17 +373,19 @@ export function useUpsertPayrollSchedule() {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
-    mutationFn: (input: Partial<PayrollSchedule> & {
-      id?: string
-      timezone?: string
-      draftLeadDays?: number
-      approvalLeadDays?: number
-      weekendPolicy?: "previous_business_day" | "next_business_day"
-      sourceCurrency?: string
-      sourceAccountId?: string
-      fundingReminderDays?: number
-      personIds?: string[]
-    }) => {
+    mutationFn: (
+      input: Partial<PayrollSchedule> & {
+        id?: string
+        timezone?: string
+        draftLeadDays?: number
+        approvalLeadDays?: number
+        weekendPolicy?: "previous_business_day" | "next_business_day"
+        sourceCurrency?: string
+        sourceAccountId?: string
+        fundingReminderDays?: number
+        personIds?: string[]
+      },
+    ) => {
       if (input.id) {
         return apiFetch<{ schedule: PayrollSchedule }>(`/api/business/payroll/schedules/${input.id}`, {
           method: "PATCH",
@@ -407,9 +404,7 @@ export function useUpsertPayrollSchedule() {
       const previous = qc.getQueryData<PayrollSchedulesEnvelope>(listKey)
       patchSchedules(qc, listKey, (schedules) =>
         schedules.map((schedule) =>
-          schedule.id === input.id
-            ? { ...schedule, ...input } as PayrollSchedule
-            : schedule,
+          schedule.id === input.id ? ({ ...schedule, ...input } as PayrollSchedule) : schedule,
         ),
       )
       return { previous }
@@ -423,7 +418,7 @@ export function useUpsertPayrollSchedule() {
       if (scope) {
         patchSchedules(qc, qk.payroll.schedules.list(scope), (schedules) =>
           schedules.some((item) => item.id === schedule.id)
-            ? schedules.map((item) => item.id === schedule.id ? schedule : item)
+            ? schedules.map((item) => (item.id === schedule.id ? schedule : item))
             : [schedule, ...schedules],
         )
       }
@@ -441,17 +436,10 @@ export function useInvitePayrollPerson() {
     onSuccess: (_data, personId) => {
       if (!scope) return
       patchPeople(qc, qk.payroll.people.list(scope), (people) =>
-        people.map((person) =>
-          person.id === personId
-            ? { ...person, connectionStatus: "pending" }
-            : person,
-        ),
+        people.map((person) => (person.id === personId ? { ...person, connectionStatus: "pending" } : person)),
       )
-      qc.setQueryData<PayrollPersonDetailEnvelope>(
-        qk.payroll.people.detail(scope, personId),
-        (current) => current
-          ? { ...current, person: { ...current.person, connectionStatus: "pending" } }
-          : current,
+      qc.setQueryData<PayrollPersonDetailEnvelope>(qk.payroll.people.detail(scope, personId), (current) =>
+        current ? { ...current, person: { ...current.person, connectionStatus: "pending" } } : current,
       )
       qc.invalidateQueries({ queryKey: qk.payroll.overview(scope) })
     },

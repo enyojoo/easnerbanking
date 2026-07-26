@@ -4,14 +4,7 @@
  */
 
 export type ScreenTransitionIntent =
-  | 'tabRoot'
-  | 'stackEntry'
-  | 'flowStep'
-  | 'flowHub'
-  | 'modalSheet'
-  | 'detail'
-  | 'authGate'
-  | 'settingsLeaf'
+  'tabRoot' | 'stackEntry' | 'flowStep' | 'flowHub' | 'modalSheet' | 'detail' | 'authGate' | 'settingsLeaf'
 
 export type HubGroup = 'sendHub' | 'receiveLocalHub'
 
@@ -58,6 +51,10 @@ export type ScreenRouteName =
   | 'OpenCurrencyAccount'
   | 'TransactionDetails'
   | 'PayrollApproval'
+  | 'PayrollConnections'
+  | 'PayrollConnectionDetail'
+  | 'PayrollInvitation'
+  | 'PayrollReceivingMethod'
   | 'Recipients'
   | 'TransactionCard'
   | 'Support'
@@ -123,6 +120,10 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   // Detail drill-down
   TransactionDetails: { intent: 'detail' },
   PayrollApproval: { intent: 'detail' },
+  PayrollConnections: { intent: 'stackEntry' },
+  PayrollConnectionDetail: { intent: 'detail' },
+  PayrollInvitation: { intent: 'detail' },
+  PayrollReceivingMethod: { intent: 'flowStep' },
   ReceiveTransactionDetails: { intent: 'detail' },
   TransactionCard: { intent: 'detail' },
 
@@ -134,9 +135,7 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   InAppNotifications: { intent: 'settingsLeaf' },
 }
 
-export function getScreenTransitionEntry(
-  routeName: string | undefined,
-): ScreenTransitionEntry | undefined {
+export function getScreenTransitionEntry(routeName: string | undefined): ScreenTransitionEntry | undefined {
   if (!routeName) return undefined
   return SCREEN_TRANSITION_MAP[routeName as ScreenRouteName]
 }
@@ -146,20 +145,14 @@ export function isHubRoute(routeName: string | undefined): boolean {
   return entry?.intent === 'flowHub' && !!entry.hubGroup
 }
 
-export function routesShareHubGroup(
-  a: string | undefined,
-  b: string | undefined,
-): boolean {
+export function routesShareHubGroup(a: string | undefined, b: string | undefined): boolean {
   const entryA = getScreenTransitionEntry(a)
   const entryB = getScreenTransitionEntry(b)
   if (!entryA?.hubGroup || !entryB?.hubGroup) return false
   return entryA.hubGroup === entryB.hubGroup
 }
 
-export function isRouteInHubGroup(
-  routeName: string | undefined,
-  hubGroup: HubGroup,
-): boolean {
+export function isRouteInHubGroup(routeName: string | undefined, hubGroup: HubGroup): boolean {
   return HUB_GROUPS[hubGroup].includes(routeName as ScreenRouteName)
 }
 

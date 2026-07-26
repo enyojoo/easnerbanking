@@ -43,14 +43,24 @@ const ROUTE_TITLES: Record<string, string> = {
   TransactionCard: 'Card Transactions',
   ScanWalletAddress: 'Scan Address',
   PayrollApproval: 'Payroll Connections',
+  PayrollConnections: 'Payroll Connections',
+  PayrollConnectionDetail: 'Payroll Connection',
+  PayrollInvitation: 'Payroll Request',
+  PayrollReceivingMethod: 'Receiving Method',
 }
 
 function humanizeRouteName(name: string): string {
-  const spaced = name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/Gate$/i, '').trim()
+  const spaced = name
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/Gate$/i, '')
+    .trim()
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-function resolvePageTitle(options: { title?: string } | undefined, route: { name?: string } | undefined): string | null {
+function resolvePageTitle(
+  options: { title?: string } | undefined,
+  route: { name?: string } | undefined,
+): string | null {
   const raw = options?.title ?? route?.name
   if (typeof raw !== 'string' || raw.length === 0) return null
   return ROUTE_TITLES[raw] ?? humanizeRouteName(raw)

@@ -10,6 +10,7 @@ import type {
   PayrollCapabilities,
   PayrollOverview,
   PayrollPerson,
+  PayrollReceivingMethodSummary,
   PayrollRun,
   PayrollSchedule,
   PayrollSettings,
@@ -32,21 +33,24 @@ export function usePayrollPerson(personId: string | null) {
   const queryClient = useQueryClient()
   const listPlaceholder = useMemo(() => {
     if (!scope || !personId) return undefined
-    const envelope = queryClient.getQueryData<{ people: PayrollPerson[] }>(
-      qk.payroll.people.list(scope),
-    )
+    const envelope = queryClient.getQueryData<{ people: PayrollPerson[] }>(qk.payroll.people.list(scope))
     const person = envelope?.people?.find((item) => item.id === personId)
     return person ? { person, events: [], paymentHistory: [] } : undefined
   }, [personId, queryClient, scope])
   return useQuery({
     queryKey: scope && personId ? qk.payroll.people.detail(scope, personId) : ["payroll", "person", "disabled"],
     enabled: Boolean(scope && personId),
-    queryFn: () => apiFetch<{
-      person: PayrollPerson
-      events?: unknown[]
-      paymentHistory?: unknown[]
-      connection?: unknown
-    }>(`/api/business/payroll/people/${personId}`),
+    queryFn: () =>
+      apiFetch<{
+        person: PayrollPerson
+        events?: unknown[]
+        paymentHistory?: unknown[]
+        connection?: {
+          id: string
+          status: string
+          preferredMethod: PayrollReceivingMethodSummary | null
+        } | null
+      }>(`/api/business/payroll/people/${personId}`),
     placeholderData: listPlaceholder,
     staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
@@ -54,19 +58,16 @@ export function usePayrollPerson(personId: string | null) {
   })
 }
 
-export function usePayrollReceivingDestination(
-  personId: string | null,
-  recipientId: string | null | undefined,
-) {
+export function usePayrollReceivingDestination(personId: string | null, recipientId: string | null | undefined) {
   const { scope } = useScope()
   return useQuery({
-    queryKey: scope && personId && recipientId
-      ? ["payroll", "person", scope, personId, "receiving-destination", recipientId]
-      : ["payroll", "person", "receiving-destination", "disabled"],
+    queryKey:
+      scope && personId && recipientId
+        ? ["payroll", "person", scope, personId, "receiving-destination", recipientId]
+        : ["payroll", "person", "receiving-destination", "disabled"],
     enabled: Boolean(scope && personId && recipientId),
-    queryFn: () => apiFetch<{ recipient: RecipientRow }>(
-      `/api/business/payroll/people/${personId}/receiving-destination`,
-    ),
+    queryFn: () =>
+      apiFetch<{ recipient: RecipientRow }>(`/api/business/payroll/people/${personId}/receiving-destination`),
     select: (data) => toBeneficiary(data.recipient),
     staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
@@ -118,9 +119,7 @@ export function usePayrollRunDetail(runId: string | null) {
   const queryClient = useQueryClient()
   const listPlaceholder = useMemo(() => {
     if (!scope || !runId) return undefined
-    const envelope = queryClient.getQueryData<{ runs: PayrollRun[] }>(
-      qk.payroll.runs.list(scope),
-    )
+    const envelope = queryClient.getQueryData<{ runs: PayrollRun[] }>(qk.payroll.runs.list(scope))
     const run = envelope?.runs?.find((item) => item.id === runId)
     return run ? { run } : undefined
   }, [queryClient, runId, scope])

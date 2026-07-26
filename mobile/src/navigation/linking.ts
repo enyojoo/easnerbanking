@@ -3,9 +3,19 @@ import { getPathFromState as getPathFromStateDefault } from '@react-navigation/n
 import * as Linking from 'expo-linking'
 import { shouldPreserveUserPathOverAuth } from './webLinkingGuard'
 
-const prefix = Linking.createURL('/')
+function resolveLinkingPrefix(): string {
+  try {
+    return Linking.createURL('/')
+  } catch {
+    // Tests and pre-manifest bootstrap can run before Expo Constants has loaded
+    // the application scheme. Production still resolves through createURL.
+    return 'easner:///'
+  }
+}
 
-const NON_SERIALIZABLE_QUERY_KEYS = ['initialTransaction'] as const
+const prefix = resolveLinkingPrefix()
+
+const NON_SERIALIZABLE_QUERY_KEYS = ['initialTransaction', 'existingMethod'] as const
 
 function stripNonSerializableQueryParams(path: string): string {
   const qIndex = path.indexOf('?')
@@ -74,6 +84,10 @@ export const webLinking: LinkingOptions<Record<string, unknown>> = {
       TransactionDetails: 'user/transactions/:transactionId',
       TransactionCard: 'user/transactions/card/:transactionId',
       PayrollApproval: 'payroll',
+      PayrollConnections: 'payroll/connections',
+      PayrollConnectionDetail: 'payroll/connections/:connectionId',
+      PayrollInvitation: 'payroll/request',
+      PayrollReceivingMethod: 'payroll/receiving-method',
     },
   },
 }

@@ -4,18 +4,19 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   mapRowToPayrollRun,
   mapRowToPayrollLine,
+  mapRowToPayrollPerson,
   amountToCents,
   type PayrollRunRow,
   type PayrollLineRow,
+  type PayrollPersonRow,
 } from "@/lib/payroll/map-payroll"
 import { recalculateRunTotals } from "@/lib/payroll/run-utils"
+import { buildPayrollLines } from "@/lib/payroll/build-lines"
+import type { PayrollRunDraftInput } from "@/lib/payroll/types"
 import { approvePayrollRun, executePayrollRun } from "@/lib/payroll/execute-run"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import { sendPayrollStubEmailsForRun } from "@/lib/payroll/send-stub-email"
-import {
-  canDeletePayrollRun,
-  DELETABLE_PAYROLL_RUN_STATUSES,
-} from "@/lib/payroll/run-deletion"
+import { canDeletePayrollRun, DELETABLE_PAYROLL_RUN_STATUSES } from "@/lib/payroll/run-deletion"
 
 async function loadRun(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string, id: string) {
   const { data: runRow } = await admin
@@ -28,21 +29,21 @@ async function loadRun(admin: ReturnType<typeof createSupabaseAdmin>, businessId
   if (!runRow) return null
 
   const { data: lines } = await admin.from("payroll_lines").select("*").eq("run_id", id)
-  const { data: documents } = await admin.from("payroll_documents")
+  const { data: documents } = await admin
+    .from("payroll_documents")
     .select("id,line_id,filename")
     .eq("run_id", id)
     .eq("type", "pay_stub")
   const documentIds = (documents ?? []).map((document) => String(document.id))
-  const { data: deliveries } = documentIds.length > 0
-    ? await admin.from("payroll_document_deliveries")
-        .select("document_id,status,created_at")
-        .in("document_id", documentIds)
-        .order("created_at", { ascending: false })
-    : { data: [] }
-  const documentByLine = new Map((documents ?? []).map((document) => [
-    String(document.line_id),
-    document,
-  ]))
+  const { data: deliveries } =
+    documentIds.length > 0
+      ? await admin
+          .from("payroll_document_deliveries")
+          .select("document_id,status,created_at")
+          .in("document_id", documentIds)
+          .order("created_at", { ascending: false })
+      : { data: [] }
+  const documentByLine = new Map((documents ?? []).map((document) => [String(document.line_id), document]))
   const latestDeliveryByDocument = new Map<string, string>()
   for (const delivery of deliveries ?? []) {
     const documentId = String(delivery.document_id)
@@ -57,21 +58,19 @@ async function loadRun(admin: ReturnType<typeof createSupabaseAdmin>, businessId
       ...mapped,
       payrollDocumentFilename: document?.filename ? String(document.filename) : null,
       documentDeliveryStatus: document
-        ? latestDeliveryByDocument.get(String(document.id)) as typeof mapped.documentDeliveryStatus
+        ? (latestDeliveryByDocument.get(String(document.id)) as typeof mapped.documentDeliveryStatus)
         : null,
     }
   })
-  const { data: events } = await admin.from("payroll_run_events")
+  const { data: events } = await admin
+    .from("payroll_run_events")
     .select("id,run_id,person_id,event_type,data,actor_user_id,created_at")
     .eq("run_id", id)
     .order("created_at", { ascending: false })
     .limit(100)
 
   return {
-    ...mapRowToPayrollRun(
-    runRow as PayrollRunRow,
-    mappedLines,
-    ),
+    ...mapRowToPayrollRun(runRow as PayrollRunRow, mappedLines),
     events: (events ?? []).map((event) => ({
       id: String(event.id),
       runId: event.run_id ? String(event.run_id) : null,
@@ -84,10 +83,7 @@ async function loadRun(admin: ReturnType<typeof createSupabaseAdmin>, businessId
   }
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
@@ -99,15 +95,13 @@ export async function GET(
   return NextResponse.json({ run })
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePayrollAccess(request, ["preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   const { id } = await params
   const body = (await request.json().catch(() => ({}))) as {
+    draft?: PayrollRunDraftInput
     lines?: Array<{ id: string; amount?: number; sourceAmount?: number; status?: string }>
     sourceCurrency?: string
     revision?: number
@@ -137,8 +131,116 @@ export async function PATCH(
     )
   }
 
-  if (body.payPeriodStart !== undefined || body.payPeriodEnd !== undefined || body.payday !== undefined || body.name !== undefined || body.note !== undefined) {
-    const metadata = ((runRow.metadata as Record<string, unknown>) ?? {})
+  if (body.draft) {
+    const draft = body.draft
+    const personIds = draft.lines.map((line) => line.personId)
+    const uniquePersonIds = [...new Set(personIds)]
+    if (
+      !draft.name?.trim() ||
+      !draft.payPeriodStart ||
+      !draft.payPeriodEnd ||
+      !draft.payday ||
+      uniquePersonIds.length === 0 ||
+      uniquePersonIds.length !== personIds.length ||
+      draft.payPeriodStart > draft.payPeriodEnd ||
+      draft.lines.some((line) => !Number.isFinite(Number(line.amount)) || Number(line.amount) <= 0)
+    ) {
+      return NextResponse.json(
+        { error: "Complete the payroll details, people, and amounts before saving." },
+        { status: 400 },
+      )
+    }
+
+    const { data: peopleRows } = await admin
+      .from("payroll_people")
+      .select("*")
+      .eq("business_id", ctx.businessId)
+      .in("id", uniquePersonIds)
+    const people = (peopleRows ?? []).map((row) => mapRowToPayrollPerson(row as PayrollPersonRow))
+    if (
+      people.length !== uniquePersonIds.length ||
+      people.some((person) => person.status !== "active" || person.readinessStatus !== "ready")
+    ) {
+      return NextResponse.json(
+        { error: "One or more selected people are unavailable or not ready for payroll." },
+        { status: 400 },
+      )
+    }
+
+    const replacementLines = await buildPayrollLines(admin, id, people)
+    const amountByPerson = new Map(draft.lines.map((line) => [line.personId, Number(line.amount)]))
+    for (const line of replacementLines) {
+      const amount = amountByPerson.get(String(line.person_id)) ?? 0
+      line.amount_cents = amountToCents(amount)
+      line.source_amount_cents = amountToCents(amount)
+      line.pay_currency = String(draft.sourceCurrency || "USD").toUpperCase()
+    }
+
+    const { data: oldLines } = await admin.from("payroll_lines").select("id").eq("run_id", id)
+    const { data: insertedLines, error: insertError } = await admin
+      .from("payroll_lines")
+      .insert(replacementLines)
+      .select("id")
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 })
+    }
+    const insertedIds = (insertedLines ?? []).map((line) => String(line.id))
+    const oldIds = (oldLines ?? []).map((line) => String(line.id))
+    if (oldIds.length) {
+      const deleted = await admin.from("payroll_lines").delete().in("id", oldIds).eq("run_id", id)
+      if (deleted.error) {
+        if (insertedIds.length) await admin.from("payroll_lines").delete().in("id", insertedIds)
+        return NextResponse.json({ error: deleted.error.message }, { status: 500 })
+      }
+    }
+
+    const metadata = (runRow.metadata as Record<string, unknown>) ?? {}
+    const updatedRun = await admin
+      .from("payroll_runs")
+      .update({
+        schedule_id: draft.scheduleId || null,
+        pay_period_start: draft.payPeriodStart,
+        pay_period_end: draft.payPeriodEnd,
+        payday: draft.payday,
+        scheduled_for: draft.payday,
+        source_currency: String(draft.sourceCurrency || "USD").toUpperCase(),
+        metadata: {
+          ...metadata,
+          name: draft.name.trim(),
+          offCycle: Boolean(draft.offCycle),
+        },
+        revision: Number(runRow.revision ?? 1) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("business_id", ctx.businessId)
+    if (updatedRun.error) {
+      return NextResponse.json({ error: updatedRun.error.message }, { status: 500 })
+    }
+
+    await recalculateRunTotals(admin, id, ctx.businessId)
+    await admin.from("payroll_run_events").insert({
+      business_id: ctx.businessId,
+      run_id: id,
+      actor_user_id: ctx.userId,
+      event_type: "run.updated",
+      data: {
+        previousRevision: Number(runRow.revision ?? 1),
+        peopleCount: people.length,
+      },
+    })
+    const run = await loadRun(admin, ctx.businessId, id)
+    return NextResponse.json({ run })
+  }
+
+  if (
+    body.payPeriodStart !== undefined ||
+    body.payPeriodEnd !== undefined ||
+    body.payday !== undefined ||
+    body.name !== undefined ||
+    body.note !== undefined
+  ) {
+    const metadata = (runRow.metadata as Record<string, unknown>) ?? {}
     await admin
       .from("payroll_runs")
       .update({
@@ -181,10 +283,7 @@ export async function PATCH(
   return NextResponse.json({ run })
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePayrollAccess(request, ["preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
@@ -205,19 +304,25 @@ export async function POST(
     if (current.status !== "draft") {
       return NextResponse.json({ error: "Only a draft can be submitted" }, { status: 400 })
     }
-    const activeLines = ((current.payroll_lines as Array<Record<string, unknown>>) ?? [])
-      .filter((line) => line.status !== "skipped")
-    const invalid = activeLines.filter((line) =>
-      Number(line.amount_cents ?? 0) <= 0 ||
-      !String(line.rail ?? "").trim() ||
-      (line.rail === "easetag" && !String((line.recipient_snapshot as Record<string, unknown>)?.easetag ?? "").trim()) ||
-      (line.rail !== "easetag" && !(line.recipient_snapshot as Record<string, unknown>)?.recipientId)
+    const activeLines = ((current.payroll_lines as Array<Record<string, unknown>>) ?? []).filter(
+      (line) => line.status !== "skipped",
+    )
+    const invalid = activeLines.filter(
+      (line) =>
+        Number(line.amount_cents ?? 0) <= 0 ||
+        !String(line.rail ?? "").trim() ||
+        (line.rail === "easetag" &&
+          !String((line.recipient_snapshot as Record<string, unknown>)?.easetag ?? "").trim()) ||
+        (line.rail !== "easetag" && !(line.recipient_snapshot as Record<string, unknown>)?.recipientId),
     )
     if (activeLines.length === 0 || invalid.length > 0) {
-      return NextResponse.json({
-        error: "Resolve all amount and receiving-method issues before submitting.",
-        issues: invalid.map((line) => ({ lineId: line.id, code: "not_ready" })),
-      }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Resolve all amount and receiving-method issues before submitting.",
+          issues: invalid.map((line) => ({ lineId: line.id, code: "not_ready" })),
+        },
+        { status: 400 },
+      )
     }
 
     const submittedAt = new Date().toISOString()
@@ -284,11 +389,18 @@ export async function POST(
       .in("status", ["pending_approval", "needs_reapproval"])
       .select("id")
     if (!data?.length) return NextResponse.json({ error: "Run cannot be withdrawn" }, { status: 409 })
-    await admin.from("business_approvals").update({ status: "rejected" })
-      .eq("subject_type", "payroll_run").eq("subject_id", id).eq("status", "open")
+    await admin
+      .from("business_approvals")
+      .update({ status: "rejected" })
+      .eq("subject_type", "payroll_run")
+      .eq("subject_id", id)
+      .eq("status", "open")
     await admin.from("payroll_run_events").insert({
-      business_id: ctx.businessId, run_id: id, actor_user_id: ctx.userId,
-      event_type: "run.withdrawn", data: {},
+      business_id: ctx.businessId,
+      run_id: id,
+      actor_user_id: ctx.userId,
+      event_type: "run.withdrawn",
+      data: {},
     })
     return NextResponse.json({ run: await loadRun(admin, ctx.businessId, id) })
   }
@@ -299,21 +411,34 @@ export async function POST(
     }
     const reason = body.reason?.trim()
     if (!reason) return NextResponse.json({ error: "A reason is required." }, { status: 400 })
-    const { data } = await admin.from("payroll_runs").update({
-      status: "draft",
-      submitted_at: null,
-      submitted_by: null,
-      approval_snapshot: null,
-      revision: awaitRevisionIncrement(admin, id),
-      metadata: { rejectionReason: reason },
-      updated_at: new Date().toISOString(),
-    }).eq("id", id).eq("business_id", ctx.businessId).in("status", ["pending_approval", "needs_reapproval"]).select("id")
+    const { data } = await admin
+      .from("payroll_runs")
+      .update({
+        status: "draft",
+        submitted_at: null,
+        submitted_by: null,
+        approval_snapshot: null,
+        revision: awaitRevisionIncrement(admin, id),
+        metadata: { rejectionReason: reason },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("business_id", ctx.businessId)
+      .in("status", ["pending_approval", "needs_reapproval"])
+      .select("id")
     if (!data?.length) return NextResponse.json({ error: "Run cannot be rejected." }, { status: 409 })
-    await admin.from("business_approvals").update({ status: "rejected" })
-      .eq("subject_type", "payroll_run").eq("subject_id", id).eq("status", "open")
+    await admin
+      .from("business_approvals")
+      .update({ status: "rejected" })
+      .eq("subject_type", "payroll_run")
+      .eq("subject_id", id)
+      .eq("status", "open")
     await admin.from("payroll_run_events").insert({
-      business_id: ctx.businessId, run_id: id, actor_user_id: ctx.userId,
-      event_type: "run.rejected", data: { reason },
+      business_id: ctx.businessId,
+      run_id: id,
+      actor_user_id: ctx.userId,
+      event_type: "run.rejected",
+      data: { reason },
     })
     return NextResponse.json({ run: await loadRun(admin, ctx.businessId, id) })
   }
@@ -322,20 +447,34 @@ export async function POST(
     if (ctx.payrollRole !== "approver") {
       return NextResponse.json({ error: "Only a Payroll approver can cancel a schedule." }, { status: 403 })
     }
-    const { data } = await admin.from("payroll_runs").update({
-      status: "cancelled",
-      fx_snapshot: {},
-      updated_at: new Date().toISOString(),
-    }).eq("id", id).eq("business_id", ctx.businessId).eq("status", "scheduled").select("id")
-    if (!data?.length) return NextResponse.json({ error: "Only a scheduled payroll can be cancelled." }, { status: 409 })
-    await admin.from("payroll_lines").update({
-      status: "pending",
-      lock_id: null,
-      updated_at: new Date().toISOString(),
-    }).eq("run_id", id).in("status", ["locked", "quoting"])
+    const { data } = await admin
+      .from("payroll_runs")
+      .update({
+        status: "cancelled",
+        fx_snapshot: {},
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("business_id", ctx.businessId)
+      .eq("status", "scheduled")
+      .select("id")
+    if (!data?.length)
+      return NextResponse.json({ error: "Only a scheduled payroll can be cancelled." }, { status: 409 })
+    await admin
+      .from("payroll_lines")
+      .update({
+        status: "pending",
+        lock_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("run_id", id)
+      .in("status", ["locked", "quoting"])
     await admin.from("payroll_run_events").insert({
-      business_id: ctx.businessId, run_id: id, actor_user_id: ctx.userId,
-      event_type: "run.cancelled", data: {},
+      business_id: ctx.businessId,
+      run_id: id,
+      actor_user_id: ctx.userId,
+      event_type: "run.cancelled",
+      data: {},
     })
     return NextResponse.json({ run: await loadRun(admin, ctx.businessId, id) })
   }
@@ -343,16 +482,14 @@ export async function POST(
   return NextResponse.json({ error: "Unknown action" }, { status: 400 })
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePayrollAccess(request, ["preparer", "approver"])
   if (!ctx.ok) return ctx.response
 
   const { id } = await params
   const admin = createSupabaseAdmin()
-  const { data: run } = await admin.from("payroll_runs")
+  const { data: run } = await admin
+    .from("payroll_runs")
     .select("status")
     .eq("id", id)
     .eq("business_id", ctx.businessId)
@@ -382,13 +519,15 @@ export async function DELETE(
     }
   }
 
-  await admin.from("business_approvals")
+  await admin
+    .from("business_approvals")
     .delete()
     .eq("business_id", ctx.businessId)
     .eq("subject_type", "payroll_run")
     .eq("subject_id", id)
 
-  const { data: deleted, error } = await admin.from("payroll_runs")
+  const { data: deleted, error } = await admin
+    .from("payroll_runs")
     .delete()
     .eq("id", id)
     .eq("business_id", ctx.businessId)
@@ -396,18 +535,12 @@ export async function DELETE(
     .select("id")
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!deleted?.length) {
-    return NextResponse.json(
-      { error: "This payroll run changed and can no longer be deleted." },
-      { status: 409 },
-    )
+    return NextResponse.json({ error: "This payroll run changed and can no longer be deleted." }, { status: 409 })
   }
   return NextResponse.json({ ok: true })
 }
 
-async function awaitRevisionIncrement(
-  admin: ReturnType<typeof createSupabaseAdmin>,
-  runId: string,
-): Promise<number> {
+async function awaitRevisionIncrement(admin: ReturnType<typeof createSupabaseAdmin>, runId: string): Promise<number> {
   const { data } = await admin.from("payroll_runs").select("revision").eq("id", runId).maybeSingle()
   return Number(data?.revision ?? 1) + 1
 }

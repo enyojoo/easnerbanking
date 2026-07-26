@@ -1,3 +1,7 @@
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+)
+
 import { webLinking } from '../src/navigation/linking'
 import { parseDeepLinkFromUrl } from '../src/lib/pendingDeepLinkNavigation'
 

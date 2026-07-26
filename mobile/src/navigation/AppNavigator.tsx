@@ -35,10 +35,7 @@ import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
 import { MobileAppLockShell } from '../components/MobileAppLockShell'
 import { enterMainAppOnWeb } from './webMainEntry'
 import { webStackScreenListeners } from './webStackScreenListeners'
-import {
-  staticScreenTransitionOptions,
-  useMainStackTransitionOptionsFactory,
-} from './useScreenTransitionOptions'
+import { staticScreenTransitionOptions, useMainStackTransitionOptionsFactory } from './useScreenTransitionOptions'
 import { createWebLazyScreen } from './createWebLazyScreen'
 
 // Onboarding Screen
@@ -72,6 +69,10 @@ import NotificationsScreen from '../screens/main/NotificationsScreen'
 import InAppNotificationsScreen from '../screens/main/InAppNotificationsScreen'
 import LegalScreen from '../screens/main/LegalScreen'
 import PayrollApprovalScreen from '../screens/payroll/PayrollApprovalScreen'
+import PayrollConnectionsScreen from '../screens/payroll/PayrollConnectionsScreen'
+import PayrollConnectionDetailScreen from '../screens/payroll/PayrollConnectionDetailScreen'
+import PayrollInvitationScreen from '../screens/payroll/PayrollInvitationScreen'
+import PayrollReceivingMethodScreen from '../screens/payroll/PayrollReceivingMethodScreen'
 
 // Transaction Screens — lazy-loaded so receipt capture native modules never run at app launch.
 function loadTransactionDetailsScreen() {
@@ -99,10 +100,7 @@ import ReceiveTransactionDetailsScreenNative from '../screens/receive/ReceiveTra
 // Verification Screens
 import AccountVerificationScreenNative from '../screens/verification/AccountVerificationScreen'
 
-const SendAmountScreen = createWebLazyScreen(
-  () => import('../screens/send/SendAmountScreen'),
-  SendAmountScreenNative,
-)
+const SendAmountScreen = createWebLazyScreen(() => import('../screens/send/SendAmountScreen'), SendAmountScreenNative)
 const SelectRecentRecipientScreen = createWebLazyScreen(
   () => import('../screens/send/SelectRecentRecipientScreen'),
   SelectRecentRecipientScreenNative,
@@ -123,15 +121,9 @@ const SendCrossBorderMomoSetupScreen = createWebLazyScreen(
   () => import('../screens/send/SendCrossBorderMomoSetupScreen'),
   SendCrossBorderMomoSetupScreenNative,
 )
-const SendPinScreen = createWebLazyScreen(
-  () => import('../screens/send/SendPinScreen'),
-  SendPinScreenNative,
-)
+const SendPinScreen = createWebLazyScreen(() => import('../screens/send/SendPinScreen'), SendPinScreenNative)
 
-const CardScreen = createWebLazyScreen(
-  () => import('../screens/main/CardScreen'),
-  CardScreenNative,
-)
+const CardScreen = createWebLazyScreen(() => import('../screens/main/CardScreen'), CardScreenNative)
 const ReceiveMoneyScreen = createWebLazyScreen(
   () => import('../screens/receive/ReceiveMoneyScreen'),
   ReceiveMoneyScreenNative,
@@ -176,12 +168,9 @@ const FLOW_STACK_SCREEN_OPTIONS = {
 
 function OnboardingStack() {
   return (
-    <Stack.Navigator 
-      screenOptions={FLOW_STACK_SCREEN_OPTIONS}
-      screenListeners={webStackScreenListeners}
-    >
-      <Stack.Screen 
-        name="Onboarding" 
+    <Stack.Navigator screenOptions={FLOW_STACK_SCREEN_OPTIONS} screenListeners={webStackScreenListeners}>
+      <Stack.Screen
+        name="Onboarding"
         component={OnboardingScreen}
         options={staticScreenTransitionOptions('Onboarding')}
       />
@@ -191,51 +180,33 @@ function OnboardingStack() {
 
 function MfaStack() {
   return (
-    <Stack.Navigator
-      screenOptions={FLOW_STACK_SCREEN_OPTIONS}
-      screenListeners={webStackScreenListeners}
-    >
-      <Stack.Screen
-        name="MfaVerify"
-        component={MfaVerifyScreen}
-        options={staticScreenTransitionOptions('MfaVerify')}
-      />
+    <Stack.Navigator screenOptions={FLOW_STACK_SCREEN_OPTIONS} screenListeners={webStackScreenListeners}>
+      <Stack.Screen name="MfaVerify" component={MfaVerifyScreen} options={staticScreenTransitionOptions('MfaVerify')} />
     </Stack.Navigator>
   )
 }
 
 function AuthStack() {
   return (
-    <Stack.Navigator 
-      screenOptions={FLOW_STACK_SCREEN_OPTIONS}
-      screenListeners={webStackScreenListeners}
-    >
-      <Stack.Screen 
-        name="Auth" 
-        component={AuthScreen}
-        options={staticScreenTransitionOptions('Auth')}
-      />
-      <Stack.Screen 
-        name="ForgotPassword" 
+    <Stack.Navigator screenOptions={FLOW_STACK_SCREEN_OPTIONS} screenListeners={webStackScreenListeners}>
+      <Stack.Screen name="Auth" component={AuthScreen} options={staticScreenTransitionOptions('Auth')} />
+      <Stack.Screen
+        name="ForgotPassword"
         component={ForgotPasswordScreen}
         options={staticScreenTransitionOptions('ForgotPassword')}
       />
-      <Stack.Screen 
-        name="ResetPassword" 
+      <Stack.Screen
+        name="ResetPassword"
         component={ResetPasswordScreen}
         options={staticScreenTransitionOptions('ResetPassword')}
       />
-      <Stack.Screen 
-        name="PinSetup" 
+      <Stack.Screen
+        name="PinSetup"
         component={PinSetupScreen}
         options={staticScreenTransitionOptions('PinSetup')}
         initialParams={{ mandatory: false }}
       />
-      <Stack.Screen 
-        name="PinEntry" 
-        component={PinEntryScreen}
-        options={staticScreenTransitionOptions('PinEntry')}
-      />
+      <Stack.Screen name="PinEntry" component={PinEntryScreen} options={staticScreenTransitionOptions('PinEntry')} />
     </Stack.Navigator>
   )
 }
@@ -302,11 +273,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ focused }) => (
-            <House
-              size={22}
-              color={focused ? activeColor : inactiveColor}
-              strokeWidth={focused ? 2.25 : 1.75}
-            />
+            <House size={22} color={focused ? activeColor : inactiveColor} strokeWidth={focused ? 2.25 : 1.75} />
           ),
         }}
       />
@@ -316,11 +283,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Cards',
           tabBarIcon: ({ focused }) => (
-            <CreditCard
-              size={22}
-              color={focused ? activeColor : inactiveColor}
-              strokeWidth={focused ? 2.25 : 1.75}
-            />
+            <CreditCard size={22} color={focused ? activeColor : inactiveColor} strokeWidth={focused ? 2.25 : 1.75} />
           ),
         }}
       />
@@ -330,11 +293,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Transactions',
           tabBarIcon: ({ focused }) => (
-            <ActivityIcon
-              size={22}
-              color={focused ? activeColor : inactiveColor}
-              strokeWidth={focused ? 2.25 : 1.75}
-            />
+            <ActivityIcon size={22} color={focused ? activeColor : inactiveColor} strokeWidth={focused ? 2.25 : 1.75} />
           ),
         }}
       />
@@ -344,11 +303,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'More',
           tabBarIcon: ({ focused }) => (
-            <Grip
-              size={22}
-              color={focused ? activeColor : inactiveColor}
-              strokeWidth={focused ? 2.25 : 1.75}
-            />
+            <Grip size={22} color={focused ? activeColor : inactiveColor} strokeWidth={focused ? 2.25 : 1.75} />
           ),
         }}
       />
@@ -387,11 +342,7 @@ function MainStackWithPinPrompt({ showPinPrompt }: { showPinPrompt: boolean }) {
   return (
     <>
       <MainStack />
-      <PinSetupPrompt
-        visible={pinPromptVisible}
-        onSetup={handlePinSetup}
-        onDismiss={handleDismissPinPrompt}
-      />
+      <PinSetupPrompt visible={pinPromptVisible} onSetup={handlePinSetup} onDismiss={handleDismissPinPrompt} />
     </>
   )
 }
@@ -408,44 +359,136 @@ function MainStack() {
         return false
       }}
     >
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-      screenListeners={webStackScreenListeners}
-    >
-      <Stack.Screen name="MainTabs" component={MainTabs} options={transitionOptions('MainTabs')} />
-      <Stack.Screen name="PinSetup" component={PinSetupScreen} options={transitionOptions('PinSetup')} />
-      <Stack.Screen name="SelectRecentRecipient" component={SelectRecentRecipientScreen} options={transitionOptions('SelectRecentRecipient')} />
-      <Stack.Screen name="ScanWalletAddress" component={ScanWalletAddressScreen} options={transitionOptions('ScanWalletAddress')} />
-      <Stack.Screen name="SendAmount" component={SendAmountScreen} options={transitionOptions('SendAmount')} />
-      <Stack.Screen name="SelectRecipient" component={SelectRecipientScreen} options={transitionOptions('SelectRecipient')} />
-      <Stack.Screen name="SendCrossBorderMomoSetup" component={SendCrossBorderMomoSetupScreen} options={transitionOptions('SendCrossBorderMomoSetup')} />
-      <Stack.Screen name="SendConfirm" component={SendConfirmScreen} options={transitionOptions('SendConfirm')} />
-      <Stack.Screen name="SendPin" component={SendPinScreen} options={transitionOptions('SendPin')} />
-      <Stack.Screen name="ReceiveMoney" component={ReceiveMoneyScreen} options={transitionOptions('ReceiveMoney')} />
-      <Stack.Screen name="ReceiveBankDetails" component={ReceiveBankDetailsScreen} options={transitionOptions('ReceiveBankDetails')} />
-      <Stack.Screen name="ReceiveLocalRail" component={ReceiveLocalRailScreen} options={transitionOptions('ReceiveLocalRail')} />
-      <Stack.Screen name="ReceiveLocalAmount" component={ReceiveLocalAmountScreen} options={transitionOptions('ReceiveLocalAmount')} />
-      <Stack.Screen name="ReceiveLocalMomoSetup" component={ReceiveLocalMomoSetupScreen} options={transitionOptions('ReceiveLocalMomoSetup')} />
-      <Stack.Screen name="ReceiveLocalReview" component={ReceiveLocalReviewScreen} options={transitionOptions('ReceiveLocalReview')} />
-      <Stack.Screen name="OpenCurrencyAccount" component={OpenCurrencyAccountScreen} options={transitionOptions('OpenCurrencyAccount')} />
-      <Stack.Screen name="TransactionDetails" getComponent={loadTransactionDetailsScreen} options={transitionOptions('TransactionDetails')} />
-      <Stack.Screen name="Recipients" component={RecipientsScreen} options={transitionOptions('Recipients')} />
-      <Stack.Screen name="Card" component={CardScreen} options={transitionOptions('Card')} />
-      <Stack.Screen name="TransactionCard" component={TransactionCardScreen} options={transitionOptions('TransactionCard')} />
-      <Stack.Screen name="Support" component={SupportScreen} options={transitionOptions('Support')} />
-      <Stack.Screen name="Legal" component={LegalScreen} options={transitionOptions('Legal')} />
-      <Stack.Screen name="ReceiveTransactionDetails" component={ReceiveTransactionDetailsScreen} options={transitionOptions('ReceiveTransactionDetails')} />
-      <Stack.Screen name="AccountVerification" component={AccountVerificationScreen} options={transitionOptions('AccountVerification')} />
-      <Stack.Screen name="Profile" component={ProfileEditScreen} options={transitionOptions('Profile')} />
-      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={transitionOptions('ChangePassword')} />
-      <Stack.Screen name="ChangePin" component={ChangePinScreen} options={transitionOptions('ChangePin')} />
-      <Stack.Screen name="MfaSetup" component={MfaSetupScreen} options={transitionOptions('MfaSetup')} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} options={transitionOptions('Notifications')} />
-      <Stack.Screen name="InAppNotifications" component={InAppNotificationsScreen} options={transitionOptions('InAppNotifications')} />
-      <Stack.Screen name="PayrollApproval" component={PayrollApprovalScreen} options={transitionOptions('PayrollApproval')} />
-    </Stack.Navigator>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+        }}
+        screenListeners={webStackScreenListeners}
+      >
+        <Stack.Screen name="MainTabs" component={MainTabs} options={transitionOptions('MainTabs')} />
+        <Stack.Screen name="PinSetup" component={PinSetupScreen} options={transitionOptions('PinSetup')} />
+        <Stack.Screen
+          name="SelectRecentRecipient"
+          component={SelectRecentRecipientScreen}
+          options={transitionOptions('SelectRecentRecipient')}
+        />
+        <Stack.Screen
+          name="ScanWalletAddress"
+          component={ScanWalletAddressScreen}
+          options={transitionOptions('ScanWalletAddress')}
+        />
+        <Stack.Screen name="SendAmount" component={SendAmountScreen} options={transitionOptions('SendAmount')} />
+        <Stack.Screen
+          name="SelectRecipient"
+          component={SelectRecipientScreen}
+          options={transitionOptions('SelectRecipient')}
+        />
+        <Stack.Screen
+          name="SendCrossBorderMomoSetup"
+          component={SendCrossBorderMomoSetupScreen}
+          options={transitionOptions('SendCrossBorderMomoSetup')}
+        />
+        <Stack.Screen name="SendConfirm" component={SendConfirmScreen} options={transitionOptions('SendConfirm')} />
+        <Stack.Screen name="SendPin" component={SendPinScreen} options={transitionOptions('SendPin')} />
+        <Stack.Screen name="ReceiveMoney" component={ReceiveMoneyScreen} options={transitionOptions('ReceiveMoney')} />
+        <Stack.Screen
+          name="ReceiveBankDetails"
+          component={ReceiveBankDetailsScreen}
+          options={transitionOptions('ReceiveBankDetails')}
+        />
+        <Stack.Screen
+          name="ReceiveLocalRail"
+          component={ReceiveLocalRailScreen}
+          options={transitionOptions('ReceiveLocalRail')}
+        />
+        <Stack.Screen
+          name="ReceiveLocalAmount"
+          component={ReceiveLocalAmountScreen}
+          options={transitionOptions('ReceiveLocalAmount')}
+        />
+        <Stack.Screen
+          name="ReceiveLocalMomoSetup"
+          component={ReceiveLocalMomoSetupScreen}
+          options={transitionOptions('ReceiveLocalMomoSetup')}
+        />
+        <Stack.Screen
+          name="ReceiveLocalReview"
+          component={ReceiveLocalReviewScreen}
+          options={transitionOptions('ReceiveLocalReview')}
+        />
+        <Stack.Screen
+          name="OpenCurrencyAccount"
+          component={OpenCurrencyAccountScreen}
+          options={transitionOptions('OpenCurrencyAccount')}
+        />
+        <Stack.Screen
+          name="TransactionDetails"
+          getComponent={loadTransactionDetailsScreen}
+          options={transitionOptions('TransactionDetails')}
+        />
+        <Stack.Screen name="Recipients" component={RecipientsScreen} options={transitionOptions('Recipients')} />
+        <Stack.Screen name="Card" component={CardScreen} options={transitionOptions('Card')} />
+        <Stack.Screen
+          name="TransactionCard"
+          component={TransactionCardScreen}
+          options={transitionOptions('TransactionCard')}
+        />
+        <Stack.Screen name="Support" component={SupportScreen} options={transitionOptions('Support')} />
+        <Stack.Screen name="Legal" component={LegalScreen} options={transitionOptions('Legal')} />
+        <Stack.Screen
+          name="ReceiveTransactionDetails"
+          component={ReceiveTransactionDetailsScreen}
+          options={transitionOptions('ReceiveTransactionDetails')}
+        />
+        <Stack.Screen
+          name="AccountVerification"
+          component={AccountVerificationScreen}
+          options={transitionOptions('AccountVerification')}
+        />
+        <Stack.Screen name="Profile" component={ProfileEditScreen} options={transitionOptions('Profile')} />
+        <Stack.Screen
+          name="ChangePassword"
+          component={ChangePasswordScreen}
+          options={transitionOptions('ChangePassword')}
+        />
+        <Stack.Screen name="ChangePin" component={ChangePinScreen} options={transitionOptions('ChangePin')} />
+        <Stack.Screen name="MfaSetup" component={MfaSetupScreen} options={transitionOptions('MfaSetup')} />
+        <Stack.Screen
+          name="Notifications"
+          component={NotificationsScreen}
+          options={transitionOptions('Notifications')}
+        />
+        <Stack.Screen
+          name="InAppNotifications"
+          component={InAppNotificationsScreen}
+          options={transitionOptions('InAppNotifications')}
+        />
+        <Stack.Screen
+          name="PayrollApproval"
+          component={PayrollApprovalScreen}
+          options={transitionOptions('PayrollApproval')}
+        />
+        <Stack.Screen
+          name="PayrollConnections"
+          component={PayrollConnectionsScreen}
+          options={transitionOptions('PayrollConnections')}
+        />
+        <Stack.Screen
+          name="PayrollConnectionDetail"
+          component={PayrollConnectionDetailScreen}
+          options={transitionOptions('PayrollConnectionDetail')}
+        />
+        <Stack.Screen
+          name="PayrollInvitation"
+          component={PayrollInvitationScreen}
+          options={transitionOptions('PayrollInvitation')}
+        />
+        <Stack.Screen
+          name="PayrollReceivingMethod"
+          component={PayrollReceivingMethodScreen}
+          options={transitionOptions('PayrollReceivingMethod')}
+        />
+      </Stack.Navigator>
     </View>
   )
 }
@@ -454,10 +497,7 @@ const ONBOARDING_COMPLETED_KEY = '@easner_onboarding_completed'
 
 function PinGateSetupStack() {
   return (
-    <Stack.Navigator
-      screenOptions={FLOW_STACK_SCREEN_OPTIONS}
-      screenListeners={webStackScreenListeners}
-    >
+    <Stack.Navigator screenOptions={FLOW_STACK_SCREEN_OPTIONS} screenListeners={webStackScreenListeners}>
       <Stack.Screen
         name="PinSetupGate"
         component={PinSetupScreen}
@@ -470,10 +510,7 @@ function PinGateSetupStack() {
 
 function PinGateEntryStack() {
   return (
-    <Stack.Navigator
-      screenOptions={FLOW_STACK_SCREEN_OPTIONS}
-      screenListeners={webStackScreenListeners}
-    >
+    <Stack.Navigator screenOptions={FLOW_STACK_SCREEN_OPTIONS} screenListeners={webStackScreenListeners}>
       <Stack.Screen
         name="PinEntryGate"
         component={PinEntryScreen}
@@ -484,13 +521,7 @@ function PinGateEntryStack() {
 }
 
 /** Same canvas as PIN screens — avoids blank frames during auth / PIN / main handoffs. */
-function AuthFlowLoadingShell({
-  palette,
-  testId,
-}: {
-  palette: ReturnType<typeof useThemeColors>
-  testId?: string
-}) {
+function AuthFlowLoadingShell({ palette, testId }: { palette: ReturnType<typeof useThemeColors>; testId?: string }) {
   return (
     <View
       style={[
@@ -515,9 +546,7 @@ export default function AppNavigator() {
   const palette = useThemeColors()
   const [pinGate, setPinGate] = useState<'loading' | 'setup' | 'pin' | 'main'>('loading')
   const [lockTick, setLockTick] = useState(0)
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(
-    Platform.OS === 'web' ? true : null,
-  )
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(Platform.OS === 'web' ? true : null)
   // PIN TEMPORARILY DISABLED - keeping state variables for easy re-enable
   // const [pinSetup, setPinSetup] = useState<boolean | null>(null)
   // const [sessionValid, setSessionValid] = useState<boolean | null>(null)
@@ -608,9 +637,7 @@ export default function AppNavigator() {
     if (ready) {
       const navRef = (global as any).rootNavigationRef?.current
       enterMainAppOnWeb()
-      const scope: PersonalScope | null = user?.id
-        ? { kind: 'personal', userId: user.id }
-        : null
+      const scope: PersonalScope | null = user?.id ? { kind: 'personal', userId: user.id } : null
       flushPendingPushNavigation(navRef, scope)
       flushPendingDeepLinkNavigation(navRef)
       prefetchIntercomModule()
@@ -700,7 +727,7 @@ export default function AppNavigator() {
     const subscription = AppState.addEventListener('change', handleAppStateChange)
     return () => subscription.remove()
   }, [user?.id, pinGate, signOut])
-  
+
   // Re-check onboarding when app comes to foreground (in case it was changed)
   useEffect(() => {
     if (Platform.OS === 'web') return
@@ -722,7 +749,7 @@ export default function AppNavigator() {
       subscription?.remove()
     }
   }, [onboardingCompleted])
-  
+
   // Poll for onboarding completion when showing onboarding screen
   // This ensures we detect when user completes onboarding
   useEffect(() => {
@@ -738,11 +765,11 @@ export default function AppNavigator() {
           console.error('Error polling onboarding status:', error)
         }
       }, 500) // Check every 500ms
-      
+
       return () => clearInterval(interval)
     }
   }, [onboardingCompleted])
-  
+
   // Poll for onboarding reset when showing auth screen (user clicked back button)
   // This ensures we detect when user resets onboarding from auth screen
   useEffect(() => {
@@ -759,11 +786,11 @@ export default function AppNavigator() {
           console.error('Error polling onboarding status from auth:', error)
         }
       }, 500) // Check every 500ms
-      
+
       return () => clearInterval(interval)
     }
   }, [onboardingCompleted, user])
-  
+
   // Expose function to trigger onboarding re-check (for AuthScreen back button)
   useEffect(() => {
     ;(global as any).triggerOnboardingCheck = () => {
@@ -773,7 +800,7 @@ export default function AppNavigator() {
       delete (global as any).triggerOnboardingCheck
     }
   }, [checkOnboardingState]) // Update when checkOnboardingState changes
-  
+
   // Re-check onboarding when user logs out (to allow seeing onboarding again if needed)
   useEffect(() => {
     if (!user && onboardingCompleted !== null) {
@@ -781,7 +808,7 @@ export default function AppNavigator() {
       checkOnboardingState()
     }
   }, [user, checkOnboardingState])
-  
+
   // PIN TEMPORARILY DISABLED - All PIN-related useEffects commented out
   // Fast polling specifically for session validity check after PIN entry
   // useEffect(() => {
@@ -799,7 +826,7 @@ export default function AppNavigator() {
   //   }, 100)
   //   return () => clearInterval(fastCheckInterval)
   // }, [pinSetup, sessionValid])
-  
+
   // Listen for PIN verification to trigger immediate check
   // React.useEffect(() => {
   //   const checkPinVerification = async () => {
@@ -815,7 +842,7 @@ export default function AppNavigator() {
   //     checkPinVerification()
   //   }
   // }, [forceCheck, pinSetup, user, sessionValid])
-  
+
   // Expose trigger function globally for PIN entry/setup screens
   // React.useEffect(() => {
   //   ;(global as any).triggerPinCheck = () => {

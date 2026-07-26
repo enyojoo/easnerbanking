@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Platform,
-} from 'react-native'
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native'
 import { haptics } from '../../lib/haptics'
 import type { LucideIcon } from 'lucide-react-native'
 import {
@@ -31,14 +24,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps, KYCSubmission } from '../../types'
 import { kycService } from '../../lib/kycService'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import {
-  colors,
-  textStyles,
-  borderRadius,
-  spacing,
-  fontFamily,
-  userAvatarStyles,
-} from '../../theme'
+import { colors, textStyles, borderRadius, spacing, fontFamily, userAvatarStyles } from '../../theme'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { ripple } from '../../lib/androidRipple'
 import { EasnerAlertSheet } from '../../components/premium'
@@ -63,11 +49,7 @@ import {
   saveMfaVerified,
   shouldListFactorsForMfaRow,
 } from '../../lib/mfaStatusCache'
-import {
-  isTier1Complete,
-  TIER2_COMPLETE_PLACEHOLDER,
-  TIER3_COMPLETE_PLACEHOLDER,
-} from '../../lib/compliance'
+import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER, TIER3_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { apiFetch } from '../../query/api-client'
 import {
@@ -95,7 +77,9 @@ function tierBadgeForProfile(
 }
 
 function MoreContent({ navigation }: NavigationProps) {
-  const scrollBottomPadding = useScrollBottomPadding(spacing[2], { tabScreen: true })
+  const scrollBottomPadding = useScrollBottomPadding(spacing[2], {
+    tabScreen: true,
+  })
   const { user, userProfile, refreshUserProfile, signOut, loading: authLoading } = useAuth()
   const { showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
@@ -128,8 +112,8 @@ function MoreContent({ navigation }: NavigationProps) {
   /** False until MFA status is read from cache or `listFactors` — avoids showing the MFA banner while loading or on errors. */
   const [mfaStatusResolved, setMfaStatusResolved] = useState(false)
   const [pendingPayrollCount, setPendingPayrollCount] = useState(0)
-  const [payrollActivityVisible, setPayrollActivityVisible] = useState(
-    () => Boolean(user?.id && peekPayrollActivityVisible(user.id)),
+  const [payrollActivityVisible, setPayrollActivityVisible] = useState(() =>
+    Boolean(user?.id && peekPayrollActivityVisible(user.id)),
   )
   const lastKycProfileRefreshRef = useRef(0)
   /** Latest profile for focus handler — avoids putting `noah_kyc_status` in `useFocusEffect` deps (would re-run MFA listFactors on every profile poll while More stays focused). */
@@ -245,9 +229,7 @@ function MoreContent({ navigation }: NavigationProps) {
         }
       }
       void refreshMfaStatus()
-      void apiFetch<{ pendingCount?: number; hasActivity?: boolean }>(
-        '/api/payroll/connections?summary=true',
-      )
+      void apiFetch<{ pendingCount?: number; hasActivity?: boolean }>('/api/payroll/connections?summary=true')
         .then((result) => {
           if (!active) return
           setPendingPayrollCount(Number(result.pendingCount ?? 0))
@@ -272,12 +254,15 @@ function MoreContent({ navigation }: NavigationProps) {
       try {
         const submissions = await kycService.getByUserId(userProfile.id)
         setKycSubmissions(submissions || [])
-        
+
         const CACHE_KEY = `easner_kyc_submissions_${userProfile.id}`
-        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
-          value: submissions || [],
-          timestamp: Date.now()
-        }))
+        await AsyncStorage.setItem(
+          CACHE_KEY,
+          JSON.stringify({
+            value: submissions || [],
+            timestamp: Date.now(),
+          }),
+        )
       } catch (error) {
         console.error('Error fetching submissions:', error)
       }
@@ -287,7 +272,7 @@ function MoreContent({ navigation }: NavigationProps) {
       try {
         const CACHE_KEY = `easner_kyc_submissions_${userProfile.id}`
         const cached = await AsyncStorage.getItem(CACHE_KEY)
-        
+
         if (cached) {
           const { value, timestamp } = JSON.parse(cached)
           if (Date.now() - timestamp < 5 * 60 * 1000) {
@@ -305,7 +290,7 @@ function MoreContent({ navigation }: NavigationProps) {
     }
 
     loadKycSubmissions()
-    
+
     // Set up focus listener to refresh when screen comes into focus
     const unsubscribe = navigation.addListener('focus', () => {
       fetchSubmissions()
@@ -314,24 +299,20 @@ function MoreContent({ navigation }: NavigationProps) {
     return unsubscribe
   }, [userProfile?.id, navigation])
 
-  const getVerificationStatus = (): "approved" | "in_review" | "take_action" => {
+  const getVerificationStatus = (): 'approved' | 'in_review' | 'take_action' => {
     const noahStatus =
       userProfile?.noah_kyc_status ??
       (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
 
-    if (noahStatus === "approved") {
-      return "approved"
+    if (noahStatus === 'approved') {
+      return 'approved'
     }
 
-    if (
-      noahStatus === "pending" ||
-      noahStatus === "in_review" ||
-      noahStatus === "under_review"
-    ) {
-      return "in_review"
+    if (noahStatus === 'pending' || noahStatus === 'in_review' || noahStatus === 'under_review') {
+      return 'in_review'
     }
 
-    return "take_action"
+    return 'take_action'
   }
 
   const verificationStatus = getVerificationStatus()
@@ -422,10 +403,8 @@ function MoreContent({ navigation }: NavigationProps) {
   // Conditional gradient banner — verify identity OR set up MFA when applicable.
   const profileReady = !authLoading && userProfile != null
   const tier1Complete = isTier1Complete(userProfile)
-  const showVerifyBanner =
-    profileReady && !tier1Complete && verificationStatus !== 'in_review'
-  const showMfaBanner =
-    profileReady && !showVerifyBanner && mfaStatusResolved && mfaStatusLine === 'Off'
+  const showVerifyBanner = profileReady && !tier1Complete && verificationStatus !== 'in_review'
+  const showMfaBanner = profileReady && !showVerifyBanner && mfaStatusResolved && mfaStatusLine === 'Off'
   const banner = showVerifyBanner
     ? {
         title: 'Verify your identity',
@@ -472,10 +451,7 @@ function MoreContent({ navigation }: NavigationProps) {
               >
                 <View style={styles.profileAvatar}>
                   {headerAvatarUri ? (
-                    <AvatarImage
-                      avatarUrl={userProfile?.profile?.avatar_url}
-                      style={userAvatarStyles.image}
-                    />
+                    <AvatarImage avatarUrl={userProfile?.profile?.avatar_url} style={userAvatarStyles.image} />
                   ) : (
                     <Text style={userAvatarStyles.initials}>{initialsFromFullName(fullName)}</Text>
                   )}
@@ -487,10 +463,7 @@ function MoreContent({ navigation }: NavigationProps) {
                   <View style={styles.profileMetaLine}>
                     {easetagRaw ? (
                       <View style={styles.profileSubtitleRow}>
-                        <Text
-                          style={[styles.profileSubtitlePrimary, styles.profileMetaTextShrink]}
-                          numberOfLines={1}
-                        >
+                        <Text style={[styles.profileSubtitlePrimary, styles.profileMetaTextShrink]} numberOfLines={1}>
                           {`Easetag: @${easetagRaw}`}
                         </Text>
                         <Pressable
@@ -509,10 +482,7 @@ function MoreContent({ navigation }: NavigationProps) {
                         </Pressable>
                       </View>
                     ) : (
-                      <Text
-                        style={[styles.profileSubtitlePrimary, styles.profileMetaTextFull]}
-                        numberOfLines={1}
-                      >
+                      <Text style={[styles.profileSubtitlePrimary, styles.profileMetaTextFull]} numberOfLines={1}>
                         {profileEmail}
                       </Text>
                     )}
@@ -602,7 +572,7 @@ function MoreContent({ navigation }: NavigationProps) {
                   ? renderMenuItem(
                       'Payroll Connections',
                       'Companies, receiving methods, and pay stubs',
-                      () => navigateFromMoreTab('PayrollApproval'),
+                      () => navigateFromMoreTab('PayrollConnections'),
                       Banknote,
                       pendingPayrollCount > 0 ? (
                         <View style={styles.badgeYellow}>
@@ -653,9 +623,7 @@ function MoreContent({ navigation }: NavigationProps) {
                   handleMfaRowPress,
                   Shield,
                   <View style={mfaStatusLine === 'On' ? styles.badgeGreen : styles.badgeMuted}>
-                    <Text
-                      style={mfaStatusLine === 'On' ? styles.badgeTextGreen : styles.badgeTextMuted}
-                    >
+                    <Text style={mfaStatusLine === 'On' ? styles.badgeTextGreen : styles.badgeTextMuted}>
                       {mfaStatusLine === 'On' ? 'On' : 'Off'}
                     </Text>
                   </View>,
@@ -724,7 +692,6 @@ function MoreContent({ navigation }: NavigationProps) {
         onSecondary={() => setShowLogoutDialog(false)}
         primaryLoading={isLoggingOut}
       />
-
     </ScreenWrapper>
   )
 }

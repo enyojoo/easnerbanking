@@ -1,10 +1,6 @@
-import { PayrollRunEditFlow } from "@/components/payroll/payroll-run-edit-flow"
+import { redirect } from "next/navigation"
 
-export default async function EditPayrollRunPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+export default async function EditPayrollRunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  return <PayrollRunEditFlow runId={id} />
+  redirect(`/payroll/runs/new?edit=${encodeURIComponent(id)}`)
 }
