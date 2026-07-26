@@ -12,6 +12,9 @@ import { needsNoahFiatVirtualAccountProvision } from "@/lib/noah/needs-account-p
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
+export const runtime = "nodejs"
+export const maxDuration = 60
+
 async function runSyncFromNoah(request: Request) {
   const mis = requireNoahEnv()
   if (mis) return mis

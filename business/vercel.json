@@ -17,7 +17,7 @@
   "crons": [
     {
       "path": "/api/internal/wallet-provisioning/process",
-      "schedule": "0 0 * * *"
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/cron/sync-exchange-rates",

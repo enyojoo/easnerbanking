@@ -9,6 +9,7 @@ import { getNoahWebhookVerifyPublicKeys } from "@/lib/noah/webhook-verify"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+export const maxDuration = 60
 
 /**
  * Noah webhook ingress — verify `Webhook-Signature` (ECDSA SHA-384) over raw body per Noah docs.

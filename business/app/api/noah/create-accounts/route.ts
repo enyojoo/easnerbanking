@@ -8,7 +8,10 @@ import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { requireAuth, requireNoahEnv } from "../_helpers"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { provisionNoahArtifactsForCustomer } from "@/lib/noah/provisioning"
+import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
+
+export const runtime = "nodejs"
+export const maxDuration = 60
 
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
@@ -77,12 +80,12 @@ export async function POST(request: Request) {
     )
 
     const admin = createSupabaseAdmin()
-    const provisioned = await provisionNoahArtifactsForCustomer({
+    const provisioned = await provisionNoahAfterVerificationApproved({
+      admin,
+      scope,
+      noahCustomerId: resolvedCustomerId,
       subjectUserId,
       subjectBusinessId: acc.ctx.subjectBusinessId,
-      noahCustomerId: resolvedCustomerId,
-      scope,
-      admin,
     })
 
     return NextResponse.json({

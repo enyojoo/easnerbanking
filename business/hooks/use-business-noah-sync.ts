@@ -8,7 +8,7 @@ import {
   isBusinessTier1Complete,
   needsBusinessVirtualAccountProvision,
 } from "@/lib/noah/business-account-sync"
-import { syncBusinessNoahStatus } from "@/lib/noah/sync-business-noah-status"
+import { syncBusinessNoahStatus, syncBusinessNoahStatusUntilAccountsReady } from "@/lib/noah/sync-business-noah-status"
 import { useScope } from "@/lib/query/scope"
 
 /**
@@ -55,8 +55,12 @@ export function useBusinessNoahSync(): void {
     lastAutoSyncMsRef.current = now
 
     try {
-      const result = await syncBusinessNoahStatus()
-      if (result.needsFiatAccounts === false) {
+      const needsAccounts = needsBusinessVirtualAccountProvision(profileSlice, { fiatProvisionResolved })
+      const result =
+        isBusinessTier1Complete(profileSlice) || needsAccounts
+          ? await syncBusinessNoahStatusUntilAccountsReady()
+          : await syncBusinessNoahStatus()
+      if (result.needsFiatAccounts === false || result.accountsReady === true) {
         setFiatProvisionResolved(true)
         if (scope) {
           void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
@@ -73,9 +77,10 @@ export function useBusinessNoahSync(): void {
 
   useEffect(() => {
     if (!shouldSync) return
+    const pollMs = isBusinessTier1Complete(profileSlice) ? 10_000 : 5 * 60 * 1000
     const id = window.setInterval(() => {
       void runSync()
-    }, 5 * 60 * 1000)
+    }, pollMs)
     return () => window.clearInterval(id)
   }, [shouldSync, runSync])
 

@@ -230,14 +230,21 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         console.log('[SYNC-STATUS] Syncing Noah customer status...')
       }
 
-      const result = await noahService.syncStatus({ scope: 'individual' })
+      const needsAccounts = needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved })
+      const result =
+        needsAccounts || kycNorm === 'approved'
+          ? await noahService.syncStatusUntilAccountsReady({ scope: 'individual' })
+          : await noahService.syncStatus({ scope: 'individual' })
 
       if (result.success && result.synced) {
         if (!silent) {
           console.log('[SYNC-STATUS] ✅ Status synced successfully:', result.data)
         }
 
-        if (result.data?.needsFiatAccounts === false && userProfile.id) {
+        if (
+          (result.data?.needsFiatAccounts === false || result.accountsReady === true) &&
+          userProfile.id
+        ) {
           await writeFiatProvisionResolved(userProfile.id)
           setFiatProvisionResolved(true)
           if (scope) {
@@ -1041,22 +1048,23 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                           setKycCompleted(true)
                           setKycStatus(data.kyc_status || 'approved')
                           
-                          // Sync KYC from Noah → Supabase (same POST /api/noah/sync-kyc as business hosted flow)
+                          // Sync from Noah → Supabase and provision wallets + fiat accounts inline
                           if (userProfile?.id) {
                             try {
-                              console.log('[KYC-WEBVIEW] Syncing KYC data from Noah to database...')
-                              await noahService.syncKyc()
-                              console.log('[KYC-WEBVIEW] ✅ KYC data synced to database')
-                              if (refreshUserProfile) {
-                                await refreshUserProfile()
-                              }
+                              console.log('[KYC-WEBVIEW] Syncing status and provisioning accounts...')
+                              await syncNoahStatus(false, true)
+                              console.log('[KYC-WEBVIEW] ✅ Status synced and accounts provisioned')
                             } catch (syncError: any) {
                               console.error('[KYC-WEBVIEW] Error syncing KYC data:', syncError)
                               // Don't block the flow - data will be synced via webhook
                             }
                           }
                           
-                          showSuccess('Verification submitted. We will update your status shortly.', 3500)
+                          if (data.kyc_status === 'approved' || data.kyc_status === 'Approved') {
+                            showSuccess('Verification approved. Your accounts are ready.', 3500)
+                          } else {
+                            showSuccess('Verification submitted. We will update your status shortly.', 3500)
+                          }
                           handleKycModalClose()
                         }
                       } catch (error: any) {

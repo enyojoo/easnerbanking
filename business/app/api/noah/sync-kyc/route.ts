@@ -6,6 +6,9 @@ import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
+export const runtime = "nodejs"
+export const maxDuration = 60
+
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
   if (mis) return mis

@@ -512,7 +512,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         ? 'Verification in Review'
         : kycStatus === 'approved' && surface === 'stablecoin'
           ? `${stablecoinLabel} Address Setup in Progress`
-          : surface === 'cash'
+          : kycStatus === 'approved' && surface === 'cash'
+            ? 'Account Setup in Progress'
+            : surface === 'cash'
             ? 'Complete Verification to get an account'
             : `Complete Verification for ${stablecoinLabel} address`
 
@@ -529,7 +531,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               : 'Your verification was not approved. Please complete identity verification again to receive your wallet address.'
             : kycStatus === 'approved' && surface === 'stablecoin'
               ? `Your ${stablecoinLabel} address is being set up. This may take a few moments. Please check back shortly.`
-              : 'Please complete your identity verification to receive bank and stablecoin deposit information.'
+              : kycStatus === 'approved' && surface === 'cash'
+                ? 'Your bank account details are being set up. This may take a few moments. Please check back shortly.'
+                : 'Please complete your identity verification to receive bank and stablecoin deposit information.'
 
     return (
       <View style={styles.kycNoticeContainer}>

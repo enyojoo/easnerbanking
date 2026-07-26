@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
-import { syncBusinessNoahStatus } from "@/lib/noah/sync-business-noah-status"
+import { syncBusinessNoahStatusUntilAccountsReady } from "@/lib/noah/sync-business-noah-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -149,7 +149,7 @@ export function BusinessVerificationSection() {
   ])
 
   const syncBusinessTier1FromNoah = useCallback(async (): Promise<boolean> => {
-    const result = await syncBusinessNoahStatus()
+    const result = await syncBusinessNoahStatusUntilAccountsReady()
     return result.ok
   }, [])
 

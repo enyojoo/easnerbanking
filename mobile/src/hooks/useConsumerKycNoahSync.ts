@@ -58,9 +58,14 @@ export function useConsumerKycNoahSync(): void {
     lastAutoSyncMsRef.current = now
 
     try {
-      const result = await noahService.syncStatus({ scope: 'individual' })
+      const kycApproved =
+        isTier1Complete(userProfile) ||
+        String(userProfile?.noah_kyc_status ?? '').trim().toLowerCase() === 'approved'
+      const result = kycApproved
+        ? await noahService.syncStatusUntilAccountsReady({ scope: 'individual' })
+        : await noahService.syncStatus({ scope: 'individual' })
       if (result.success && result.synced) {
-        if (result.data?.needsFiatAccounts === false) {
+        if (result.data?.needsFiatAccounts === false || result.accountsReady === true) {
           await writeFiatProvisionResolved(user.id)
           setFiatProvisionResolved(true)
           if (scope) {
@@ -83,7 +88,7 @@ export function useConsumerKycNoahSync(): void {
 
     const id = setInterval(() => {
       void runSync()
-    }, 5 * 60 * 1000)
+    }, shouldSync && isTier1Complete(userProfile) ? 10_000 : 5 * 60 * 1000)
 
     return () => clearInterval(id)
   }, [shouldSync, runSync])

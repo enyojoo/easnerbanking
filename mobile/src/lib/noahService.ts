@@ -26,6 +26,17 @@ function noahSourceWalletIdFromSession(session: Session): string {
 let syncStatusQueueTail: Promise<unknown> = Promise.resolve()
 
 /** Result of POST `/api/noah/sync-status` (mobile parses JSON; see business `app/api/noah/sync-status/route.ts`). */
+export type NoahSyncStatusData = {
+  kycStatus: string
+  rejectionReasons?: unknown[]
+  needsFiatAccounts?: boolean
+  provisioned?: {
+    usdAccountCreated?: boolean
+    eurAccountCreated?: boolean
+  }
+  hint?: string
+}
+
 export type NoahSyncStatusResult = {
   success: boolean
   synced: boolean
@@ -33,7 +44,17 @@ export type NoahSyncStatusResult = {
   code?: 'NOAH_CUSTOMER_NOT_FOUND'
   /** Easner tried these CustomerID strings against Noah (debug env / ID mismatch). */
   triedCustomerIds?: string[]
-  data?: { kycStatus: string; rejectionReasons?: any[] }
+  data?: NoahSyncStatusData
+  /** True when KYC/KYB is approved and fiat virtual accounts are provisioned. */
+  accountsReady?: boolean
+}
+
+const SYNC_STATUS_REQUEST_TIMEOUT_MS = 65_000
+const ACCOUNT_SETUP_POLL_INTERVAL_MS = 4_000
+const ACCOUNT_SETUP_MAX_WAIT_MS = 60_000
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 interface NoahCustomer {
@@ -619,7 +640,7 @@ export const noahService = {
       const scope = options?.scope ?? 'individual'
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000)
+      const timeoutId = setTimeout(() => controller.abort(), SYNC_STATUS_REQUEST_TIMEOUT_MS)
 
       try {
         const response = await fetch(`${apiUrl()}/api/noah/sync-status`, {
@@ -708,6 +729,50 @@ export const noahService = {
       () => undefined,
     )
     return p
+  },
+
+  /**
+   * POST `/api/noah/sync-status` until fiat accounts are ready (or timeout).
+   * Used after KYC/KYB approval so bank details and wallet addresses appear in one flow.
+   */
+  async syncStatusUntilAccountsReady(options?: {
+    scope?: 'individual' | 'business'
+    maxWaitMs?: number
+    pollIntervalMs?: number
+  }): Promise<NoahSyncStatusResult> {
+    const scope = options?.scope ?? 'individual'
+    const maxWaitMs = options?.maxWaitMs ?? ACCOUNT_SETUP_MAX_WAIT_MS
+    const pollIntervalMs = options?.pollIntervalMs ?? ACCOUNT_SETUP_POLL_INTERVAL_MS
+    const deadline = Date.now() + maxWaitMs
+    let last: NoahSyncStatusResult = { success: false, synced: false }
+
+    while (Date.now() <= deadline) {
+      last = await this.syncStatus({ scope })
+      if (last.code === 'NOAH_CUSTOMER_NOT_FOUND') {
+        return { ...last, accountsReady: false }
+      }
+      if (!last.success || !last.synced) {
+        if (Date.now() + pollIntervalMs > deadline) break
+        await sleep(pollIntervalMs)
+        continue
+      }
+
+      const kyc = String(last.data?.kycStatus ?? '').trim().toLowerCase()
+      if (kyc !== 'approved') {
+        return { ...last, accountsReady: false }
+      }
+      if (last.data?.needsFiatAccounts === false) {
+        return { ...last, accountsReady: true }
+      }
+
+      if (Date.now() + pollIntervalMs > deadline) break
+      await sleep(pollIntervalMs)
+    }
+
+    return {
+      ...last,
+      accountsReady: last.data?.needsFiatAccounts === false,
+    }
   },
 
   /**
