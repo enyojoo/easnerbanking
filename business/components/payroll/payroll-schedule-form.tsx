@@ -39,10 +39,6 @@ export function PayrollScheduleForm({ schedule }: { schedule?: PayrollSchedule }
         <Field label="Weekend handling"><Select value={weekendPolicy} onValueChange={(v) => setWeekendPolicy(v as PayrollWeekendPolicy)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="previous_business_day">Previous business day</SelectItem><SelectItem value="next_business_day">Next business day</SelectItem></SelectContent></Select></Field>
       </div></section>
       <section><h2 className="font-semibold">Included people</h2><p className="mt-1 text-sm text-muted-foreground">People can be added or removed without changing completed runs.</p><div className="mt-4 max-h-72 divide-y overflow-y-auto rounded-xl border">{people.map((person) => <label key={person.id} className="flex cursor-pointer items-center gap-3 p-3"><input type="checkbox" checked={personIds.includes(person.id)} onChange={() => setPersonIds((current) => current.includes(person.id) ? current.filter((id) => id !== person.id) : [...current, person.id])} /><span className="flex-1 text-sm">{person.fullName}</span><span className="text-xs capitalize text-muted-foreground">{person.type}</span></label>)}</div></section>
-      <section className="rounded-xl border bg-muted/30 p-4">
-        <h2 className="text-sm font-medium">Automatic preparation and funding checks</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Easner prepares a payroll draft 5 days before each payday. If the selected account cannot cover the upcoming run, owners and administrators are notified before payday.</p>
-      </section>
       <div className="flex justify-end gap-2 border-t pt-5"><Button variant="outline" onClick={() => router.push("/payroll/schedules")}>Cancel</Button><Button variant="primary" disabled={save.isPending || !name.trim() || !nextRunAt || !sourceAccountId} onClick={() => save.mutate({
         id: schedule?.id, name, frequency, nextRunAt, active: schedule?.active ?? true, timezone,
         weekendPolicy, sourceCurrency, sourceAccountId, personIds,

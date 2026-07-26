@@ -2,8 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, MoreHorizontal, Pause, Pencil, Play, Trash2 } from "lucide-react"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
+import { MoreHorizontal, Pause, Pencil, Play, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -15,17 +15,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
-import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollSubpageShell } from "@/components/payroll/payroll-subpage-shell"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { PayrollDetailSkeleton, PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
 import { PayrollDetailLink } from "@/components/payroll/payroll-detail-link"
 import { useDeletePayrollSchedule, useUpsertPayrollSchedule } from "@/hooks/mutations/use-payroll"
 import { usePayrollCapabilities, usePayrollPeople, usePayrollSchedules } from "@/hooks/queries/use-payroll"
 import { formatDate } from "@/lib/utils"
+import { safePayrollReturnTo } from "@/lib/payroll/navigation"
 
 export default function PayrollScheduleDetailPage() {
   const { scheduleId } = useParams<{ scheduleId: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const returnTo = safePayrollReturnTo(searchParams.get("returnTo"), "/payroll/schedules")
   const schedulesQuery = usePayrollSchedules()
   const peopleQuery = usePayrollPeople()
   const capabilities = usePayrollCapabilities().data
@@ -43,11 +46,14 @@ export default function PayrollScheduleDetailPage() {
   const weekendPolicy = template.weekendPolicy === "next_business_day" ? "Next business day" : "Previous business day"
   const canPrepare = Boolean(capabilities?.canPrepare)
 
-  return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-    <Button variant="ghost" size="sm" className="mb-4" asChild><Link href="/payroll/schedules"><ArrowLeft className="mr-2 h-4 w-4" />Back to Schedules</Link></Button>
-    <PayrollPageHeader
+  return <PayrollSubpageShell
+      backHref={returnTo}
+      backLabel="Back to Schedules"
+      section="Schedules"
+      current={schedule.name}
       title={schedule.name}
       description="Recurring payday rules and the people included in this schedule."
+      status={<PayrollStatusBadge status={schedule.active ? "active" : "held"} />}
       actions={canPrepare ? (
         <div className="flex shrink-0 items-center gap-2 overflow-x-auto">
           <Button variant="outline" asChild>
@@ -82,20 +88,16 @@ export default function PayrollScheduleDetailPage() {
           </DropdownMenu>
         </div>
       ) : undefined}
-    />
+    >
     <Card className="shadow-card"><CardContent className="space-y-7 p-6">
         <section>
-          <div className="flex items-center justify-between"><h2 className="font-semibold">Schedule details</h2><PayrollStatusBadge status={schedule.active ? "active" : "held"} /></div>
+          <h2 className="font-semibold">Schedule details</h2>
           <dl className="mt-5 grid gap-5 sm:grid-cols-2">
             <Detail label="Name" value={schedule.name} />
             <Detail label="First payday" value={formatDate(schedule.nextRunAt)} />
             <Detail label="Frequency" value={frequency} />
             <Detail label="Weekend handling" value={weekendPolicy} />
           </dl>
-          <div className="mt-5 rounded-xl border bg-muted/30 p-4">
-            <p className="text-sm font-medium">Automatic preparation and funding checks</p>
-            <p className="mt-1 text-sm text-muted-foreground">Easner prepares a payroll draft 5 days before payday. Owners and administrators are notified only when the selected account cannot cover the upcoming run.</p>
-          </div>
         </section>
         <section className="border-t pt-6">
           <div className="flex flex-wrap items-end justify-between gap-2">
@@ -156,7 +158,7 @@ export default function PayrollScheduleDetailPage() {
     <PayrollInlineRefreshing
       visible={(schedulesQuery.isFetching && !schedulesQuery.isPending) || (peopleQuery.isFetching && !peopleQuery.isPending)}
     />
-  </div>
+  </PayrollSubpageShell>
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

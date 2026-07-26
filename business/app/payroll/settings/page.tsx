@@ -11,10 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
-import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
-import { PayrollFormSkeleton, PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
+import { PayrollInlineRefreshing, PayrollWorkspaceContentSkeleton } from "@/components/payroll/payroll-page-skeleton"
 import { usePayrollCapabilities, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useUpdatePayrollSettings } from "@/hooks/mutations/use-payroll"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -80,14 +78,12 @@ export default function PayrollSettingsPage() {
     })
   }
 
-  if (settingsQuery.isPending && !settingsQuery.data) return <PayrollFormSkeleton />
+  if (settingsQuery.isPending && !settingsQuery.data) return <PayrollWorkspaceContentSkeleton />
   if (settingsQuery.isError && !settingsQuery.data) {
-    return <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6"><Card><CardContent className="p-8 text-center"><p className="font-medium">Payroll settings couldn’t be loaded</p><p className="mt-2 text-sm text-muted-foreground">Your saved settings have not been changed.</p><Button className="mt-4" variant="outline" onClick={() => void settingsQuery.refetch()}>Try again</Button></CardContent></Card></div>
+    return <Card><CardContent className="p-8 text-center"><p className="font-medium">Payroll settings couldn’t be loaded</p><p className="mt-2 text-sm text-muted-foreground">Your saved settings have not been changed.</p><Button className="mt-4" variant="outline" onClick={() => void settingsQuery.refetch()}>Try again</Button></CardContent></Card>
   }
 
-  return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-    <PayrollPageHeader title="Payroll settings" description="Set the account, timing, and approval controls used across Payroll." />
-    <PayrollNavTabs />
+  return <>
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <Card className="shadow-card">
         <CardHeader>
@@ -133,7 +129,7 @@ export default function PayrollSettingsPage() {
       </CardContent></Card>
     </div>
     <PayrollInlineRefreshing visible={settingsQuery.isFetching && !settingsQuery.isPending} />
-  </div>
+  </>
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="space-y-2"><Label>{label}</Label>{children}</div> }

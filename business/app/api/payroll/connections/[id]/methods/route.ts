@@ -4,6 +4,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { encryptPayrollMethodDetails, maskPayrollMethodDetails } from "@/lib/payroll/payment-method-security"
 import { syncPayrollPersonReceivingMethod } from "@/lib/payroll/sync-person-receiving-method"
 import { resolvePayrollRecipientMethod } from "@/lib/payroll/recipient-method"
+import { replaceEmployeePayrollMethod } from "@/lib/payroll/replace-employee-payment-method"
 
 type ExternalMethodType = "bank" | "mobile_money" | "stablecoin"
 
@@ -37,7 +38,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const admin = createSupabaseAdmin()
   const { data: connection } = await admin
     .from("payroll_connections")
-    .select("business_id,person_id,status,preferred_method_id")
+    .select("business_id,person_id,status")
     .eq("id", id)
     .eq("user_id", auth.user.id)
     .maybeSingle()
@@ -72,13 +73,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { status: 503 },
     )
   }
-  const inserted = await admin
-    .from("payroll_payment_methods")
-    .insert({
-      connection_id: id,
-      person_id: connection.person_id,
-      business_id: connection.business_id,
-      owner_type: "employee",
+  let method
+  try {
+    method = await replaceEmployeePayrollMethod(admin, {
+      connectionId: id,
+      personId: String(connection.person_id),
+      businessId: String(connection.business_id),
+      selectAsPreferred: body.preferred !== false,
       type: body.type,
       label:
         resolved?.label ||
@@ -88,49 +89,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           : body.type === "mobile_money"
             ? details.provider
             : `${details.network} wallet`),
-      masked_details: maskPayrollMethodDetails(body.type, details),
-      encrypted_details: encryptedDetails,
-      provider_recipient_id: resolved?.providerRecipientId ?? null,
+      maskedDetails: maskPayrollMethodDetails(body.type, details),
+      encryptedDetails,
+      providerRecipientId: resolved?.providerRecipientId ?? null,
     })
-    .select("id,type,label,masked_details,owner_type,status")
-    .single()
-  if (inserted.error) return NextResponse.json({ error: inserted.error.message }, { status: 500 })
-  if (body.preferred !== false) {
-    const preferredUpdate = await admin
-      .from("payroll_connections")
-      .update({
-        preferred_method_id: inserted.data.id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-    if (preferredUpdate.error) {
-      await admin.from("payroll_payment_methods").delete().eq("id", inserted.data.id)
-      return NextResponse.json({ error: preferredUpdate.error.message }, { status: 500 })
-    }
-  }
-  const retired = await admin
-    .from("payroll_payment_methods")
-    .update({
-      status: "deleted",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("connection_id", id)
-    .eq("owner_type", "employee")
-    .neq("type", "easetag")
-    .neq("id", inserted.data.id)
-    .eq("status", "active")
-  if (retired.error) {
-    if (body.preferred !== false) {
-      await admin
-        .from("payroll_connections")
-        .update({
-          preferred_method_id: connection.preferred_method_id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id)
-    }
-    await admin.from("payroll_payment_methods").delete().eq("id", inserted.data.id)
-    return NextResponse.json({ error: retired.error.message }, { status: 500 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Could not save receiving method" },
+      { status: 500 },
+    )
   }
   if (body.preferred !== false) {
     await syncPayrollPersonReceivingMethod(admin, id)
@@ -140,7 +107,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     person_id: connection.person_id,
     actor_user_id: auth.user.id,
     event_type: "connection.method_changed",
-    data: { methodId: inserted.data.id, type: body.type },
+    data: { methodId: method.id, type: body.type },
   })
-  return NextResponse.json({ method: inserted.data })
+  return NextResponse.json({ method })
 }

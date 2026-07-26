@@ -3,6 +3,7 @@ import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { encryptPayrollMethodDetails, maskPayrollMethodDetails } from "@/lib/payroll/payment-method-security"
 import { resolvePayrollRecipientMethod } from "@/lib/payroll/recipient-method"
+import { replaceEmployeePayrollMethod } from "@/lib/payroll/replace-employee-payment-method"
 
 type MethodType = "bank" | "mobile_money" | "stablecoin"
 
@@ -61,13 +62,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { status: 503 },
     )
   }
-  const inserted = await admin
-    .from("payroll_payment_methods")
-    .insert({
-      connection_id: invitation.connection_id,
-      person_id: invitation.person_id,
-      business_id: invitation.business_id,
-      owner_type: "employee",
+  try {
+    const method = await replaceEmployeePayrollMethod(admin, {
+      connectionId: String(invitation.connection_id),
+      personId: String(invitation.person_id),
+      businessId: String(invitation.business_id),
+      selectAsPreferred: false,
       type: body.type,
       label:
         resolved?.label ||
@@ -77,27 +77,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           : body.type === "mobile_money"
             ? details.provider
             : `${details.network} wallet`),
-      masked_details: maskPayrollMethodDetails(body.type, details),
-      encrypted_details: encryptedDetails,
-      provider_recipient_id: resolved?.providerRecipientId ?? null,
+      maskedDetails: maskPayrollMethodDetails(body.type, details),
+      encryptedDetails,
+      providerRecipientId: resolved?.providerRecipientId ?? null,
     })
-    .select("id,type,label,masked_details,owner_type,status")
-    .single()
-  if (inserted.error) return NextResponse.json({ error: inserted.error.message }, { status: 500 })
-  const retired = await admin
-    .from("payroll_payment_methods")
-    .update({
-      status: "deleted",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("connection_id", invitation.connection_id)
-    .eq("owner_type", "employee")
-    .neq("type", "easetag")
-    .neq("id", inserted.data.id)
-    .eq("status", "active")
-  if (retired.error) {
-    await admin.from("payroll_payment_methods").delete().eq("id", inserted.data.id)
-    return NextResponse.json({ error: retired.error.message }, { status: 500 })
+    return NextResponse.json({ method })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Could not save receiving method" },
+      { status: 500 },
+    )
   }
-  return NextResponse.json({ method: inserted.data })
 }

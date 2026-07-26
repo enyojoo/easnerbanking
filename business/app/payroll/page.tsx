@@ -5,20 +5,12 @@ import {
   AlertCircle,
   ArrowRight,
   CalendarDays,
-  ChevronDown,
   CircleDollarSign,
-  Plus,
   Upload,
   Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import {
   Table,
   TableBody,
@@ -28,9 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
-import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollPermissionAction } from "@/components/payroll/payroll-permission-action"
 import { PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
 import { PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
@@ -45,49 +35,8 @@ export default function PayrollOverviewPage() {
   const overview = overviewQuery.data
   const empty = !overviewQuery.isPending && (overview?.headcount ?? 0) === 0
 
-  const actions = (
-    <>
-      <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              Add
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild><Link href="/payroll/people/new">Add person</Link></DropdownMenuItem>
-            <DropdownMenuItem asChild><Link href="/payroll/schedules/new">Create schedule</Link></DropdownMenuItem>
-            <DropdownMenuItem asChild><Link href="/payroll/people/import">Import people</Link></DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </PayrollPermissionAction>
-      <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}>
-        <Button variant="primary" asChild>
-          <Link href="/payroll/runs/new"><Plus className="mr-2 h-4 w-4" />Run payroll</Link>
-        </Button>
-      </PayrollPermissionAction>
-    </>
-  )
-
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <PayrollPageHeader
-        title="Payroll"
-        description="Pay employees and contractors, manage approvals, and keep every payment document in one place."
-        actions={actions}
-      />
-      <PayrollNavTabs />
-
-      {capabilitiesQuery.isError ? (
-        <Card className="mb-6 border-destructive/30">
-          <CardContent className="flex items-center justify-between gap-4 p-4 text-sm">
-            <span>We couldn’t check your Payroll permissions.</span>
-            <Button variant="outline" size="sm" onClick={() => void capabilitiesQuery.refetch()}>Retry</Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
+    <>
       {overviewQuery.isPending ? (
         <div className="grid gap-4 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}
@@ -168,7 +117,7 @@ export default function PayrollOverviewPage() {
               <h2 className="text-base font-semibold">Recent runs</h2>
               <Button variant="ghost" size="sm" asChild><Link href="/payroll/runs">View all <ArrowRight className="ml-1 h-4 w-4" /></Link></Button>
             </div>
-            <Card className="overflow-hidden shadow-soft">
+            <Card className="hidden overflow-hidden shadow-soft md:block">
               <Table>
                 <TableHeader><TableRow><TableHead>Run</TableHead><TableHead>Payday</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                 <TableBody>
@@ -183,12 +132,40 @@ export default function PayrollOverviewPage() {
                 </TableBody>
               </Table>
             </Card>
+            <div className="space-y-3 md:hidden">
+              {(overview?.recentRuns ?? []).map((run) => (
+                <Card key={run.id} className="shadow-soft">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <PayrollDetailLink
+                        kind="run"
+                        id={run.id}
+                        className="min-w-0 truncate font-medium"
+                        href={`/payroll/runs/${run.id}`}
+                      >
+                        {String(run.metadata?.name || "Payroll run")}
+                      </PayrollDetailLink>
+                      <PayrollRunStatusBadge status={run.status} />
+                    </div>
+                    <div className="mt-4 flex items-end justify-between gap-3 border-t pt-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Payday</p>
+                        <p className="mt-1 text-sm">{run.payday ? formatDate(run.payday) : "—"}</p>
+                      </div>
+                      <p className="font-semibold tabular-nums">
+                        {formatCurrency(run.totalSource, run.sourceCurrency)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </section>
         </>
       )}
       <PayrollLegalNote className="mt-8" />
       <PayrollInlineRefreshing visible={overviewQuery.isFetching && !overviewQuery.isPending} />
-    </div>
+    </>
   )
 }
 

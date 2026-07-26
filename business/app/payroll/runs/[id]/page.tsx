@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, CalendarX2, MoreHorizontal, Pencil, Trash2, Undo2, XCircle } from "lucide-react"
+import { CalendarX2, MoreHorizontal, Pencil, Trash2, Undo2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -17,7 +17,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
-import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollSubpageShell } from "@/components/payroll/payroll-subpage-shell"
 import { PayrollLineStatusBadge, PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
 import { PayrollRailBadge } from "@/components/payroll/payroll-rail-badge"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
@@ -29,6 +29,8 @@ import {
   useExecutePayrollRun,
   useRetryPayrollRun,
   useWithdrawPayrollRun,
+  useRejectPayrollRun,
+  useCancelPayrollRun,
   useDeletePayrollRun,
 } from "@/hooks/mutations/use-payroll"
 import { useConfirmWithPin } from "@/components/app-lock/use-confirm-with-pin"
@@ -39,11 +41,13 @@ import { toast } from "sonner"
 import type { PayrollLine } from "@/lib/payroll/types"
 import { apiFetch } from "@/lib/query/api-client"
 import { railLabel } from "@/lib/payroll/helpers"
+import { safePayrollReturnTo } from "@/lib/payroll/navigation"
 
 export default function PayrollRunDetailPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const returnTo = safePayrollReturnTo(searchParams.get("returnTo"), "/payroll/runs")
   const runId = params.id
   const runQuery = usePayrollRunDetail(runId)
   const capabilities = usePayrollCapabilities().data
@@ -54,6 +58,8 @@ export default function PayrollRunDetailPage() {
   const executeRun = useExecutePayrollRun(runId)
   const retryRun = useRetryPayrollRun(runId)
   const withdrawRun = useWithdrawPayrollRun(runId)
+  const rejectRunMutation = useRejectPayrollRun(runId)
+  const cancelRunMutation = useCancelPayrollRun(runId)
   const deleteRun = useDeletePayrollRun()
   const { user } = useAuth()
   const confirmWithPin = useConfirmWithPin()
@@ -61,7 +67,6 @@ export default function PayrollRunDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
-  const [rejecting, setRejecting] = useState(false)
 
   const run = runQuery.data
   const lines = useMemo(() => run?.lines ?? [], [run?.lines])
@@ -143,26 +148,21 @@ export default function PayrollRunDetailPage() {
 
   async function rejectRun() {
     const reason = rejectReason.trim()
-    if (!reason || rejecting) return
-    setRejecting(true)
+    if (!reason || rejectRunMutation.isPending) return
     try {
-      await apiFetch(`/api/business/payroll/runs/${runId}`, { method: "POST", body: { action: "reject", reason } })
+      await rejectRunMutation.mutateAsync(reason)
       toast.success("Payroll returned to draft")
       setRejectOpen(false)
       setRejectReason("")
-      await runQuery.refetch()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Payroll could not be rejected")
-    } finally {
-      setRejecting(false)
     }
   }
 
   async function cancelSchedule() {
     try {
-      await apiFetch(`/api/business/payroll/runs/${runId}`, { method: "POST", body: { action: "cancel" } })
+      await cancelRunMutation.mutateAsync()
       toast.success("Scheduled payroll cancelled")
-      await runQuery.refetch()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Schedule could not be cancelled")
     }
@@ -197,20 +197,18 @@ export default function PayrollRunDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <Button variant="ghost" size="sm" className="mb-4" asChild>
-        <Link href="/payroll/runs">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Runs
-        </Link>
-      </Button>
-      <PayrollPageHeader
+    <PayrollSubpageShell
+        backHref={returnTo}
+        backLabel="Back to Runs"
+        section="Runs"
+        current={String(run.metadata?.name || "Payroll run")}
         title={String(run.metadata?.name || "Payroll run")}
         description={
           run.payPeriodStart && run.payPeriodEnd
             ? `${formatDate(run.payPeriodStart)} – ${formatDate(run.payPeriodEnd)}`
             : "Payroll payment details and results."
         }
+        status={<PayrollRunStatusBadge status={run.status} />}
         actions={
           <div className="flex shrink-0 items-center gap-2 overflow-x-auto">
             {hasPayStubs ? (
@@ -325,7 +323,7 @@ export default function PayrollRunDetailPage() {
             ) : null}
           </div>
         }
-      />
+      >
 
       {selfApprovalBlocked ? (
         <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
@@ -343,7 +341,6 @@ export default function PayrollRunDetailPage() {
                   Pay period, payday, amount, and payment setup.
                 </p>
               </div>
-              <PayrollRunStatusBadge status={run.status} />
             </div>
             <dl className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               <Detail label="Run type" value={run.metadata?.offCycle ? "Off-cycle" : "Regular"} />
@@ -546,7 +543,7 @@ export default function PayrollRunDetailPage() {
       <Dialog
         open={rejectOpen}
         onOpenChange={(open) => {
-          if (rejecting) return
+          if (rejectRunMutation.isPending) return
           setRejectOpen(open)
           if (!open) setRejectReason("")
         }}
@@ -572,15 +569,15 @@ export default function PayrollRunDetailPage() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={rejecting}>
+            <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={rejectRunMutation.isPending}>
               Keep pending
             </Button>
             <Button
               variant="primary"
               onClick={() => void rejectRun()}
-              disabled={!rejectReason.trim() || rejecting}
+              disabled={!rejectReason.trim() || rejectRunMutation.isPending}
             >
-              {rejecting ? "Rejecting…" : "Reject and return to draft"}
+              {rejectRunMutation.isPending ? "Rejecting…" : "Reject and return to draft"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -595,7 +592,7 @@ export default function PayrollRunDetailPage() {
           onVerified={confirmWithPin.onVerified}
         />
       ) : null}
-    </div>
+    </PayrollSubpageShell>
   )
 }
 

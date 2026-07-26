@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
@@ -16,12 +16,108 @@ import type {
   PayrollSettings,
 } from "@/lib/payroll/types"
 
+type PayrollScope = NonNullable<ReturnType<typeof useScope>["scope"]>
+type PayrollPersonDetailEnvelope = {
+  person: PayrollPerson
+  paymentHistory?: unknown[]
+  connection?: {
+    id: string
+    status: string
+    preferredMethod: PayrollReceivingMethodSummary | null
+  } | null
+}
+
+export function payrollCapabilitiesQueryOptions(scope: PayrollScope) {
+  return queryOptions({
+    queryKey: ["payroll", "capabilities", scope] as const,
+    queryFn: () => apiFetch<{ capabilities: PayrollCapabilities }>("/api/business/payroll/capabilities"),
+    staleTime: 60_000,
+    meta: { safePersist: false, webPersist: "none" as const, freshness: "operational" },
+  })
+}
+
+export function payrollOverviewQueryOptions(scope: PayrollScope) {
+  return queryOptions({
+    queryKey: qk.payroll.overview(scope),
+    queryFn: () => apiFetch<{ overview: PayrollOverview }>("/api/business/payroll/overview"),
+    staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: true, webPersist: "reduced" as const, freshness: "operational" },
+  })
+}
+
+export function payrollPeopleQueryOptions(scope: PayrollScope) {
+  return queryOptions({
+    queryKey: qk.payroll.people.list(scope),
+    queryFn: () => apiFetch<{ people: PayrollPerson[] }>("/api/business/payroll/people"),
+    staleTime: 15 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: true, webPersist: "reduced" as const, freshness: "operational" },
+  })
+}
+
+export function payrollRunsQueryOptions(scope: PayrollScope) {
+  return queryOptions({
+    queryKey: qk.payroll.runs.list(scope),
+    queryFn: () => apiFetch<{ runs: PayrollRun[] }>("/api/business/payroll/runs"),
+    staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: false, webPersist: "none" as const, freshness: "operational" },
+  })
+}
+
+export function payrollSchedulesQueryOptions(scope: PayrollScope) {
+  return queryOptions({
+    queryKey: qk.payroll.schedules.list(scope),
+    queryFn: () => apiFetch<{ schedules: PayrollSchedule[] }>("/api/business/payroll/schedules"),
+    staleTime: 15 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: true, webPersist: "reduced" as const, freshness: "operational" },
+  })
+}
+
+export function payrollSettingsQueryOptions(scope: PayrollScope) {
+  return queryOptions({
+    queryKey: ["payroll", "settings", scope] as const,
+    queryFn: () => apiFetch<{ settings: PayrollSettings }>("/api/business/payroll/settings"),
+    staleTime: 15 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: true, webPersist: "reduced" as const, freshness: "operational" },
+  })
+}
+
+export function payrollPersonDetailQueryOptions(scope: PayrollScope, personId: string) {
+  return queryOptions({
+    queryKey: qk.payroll.people.detail(scope, personId),
+    queryFn: () => fetchPayrollPersonDetail(personId),
+    staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: false, webPersist: "none" as const, freshness: "operational" },
+  })
+}
+
+function fetchPayrollPersonDetail(personId: string) {
+  return apiFetch<PayrollPersonDetailEnvelope>(`/api/business/payroll/people/${personId}`)
+}
+
+export function payrollRunDetailQueryOptions(scope: PayrollScope, runId: string) {
+  return queryOptions({
+    queryKey: qk.payroll.runs.detail(scope, runId),
+    queryFn: () => apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}`),
+    staleTime: 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: false, webPersist: "none" as const, freshness: "operational" },
+  })
+}
+
 export function usePayrollCapabilities() {
   const { scope } = useScope()
-  return useQuery({
-    queryKey: scope ? ["payroll", "capabilities", scope] : ["payroll", "capabilities", "disabled"],
-    enabled: Boolean(scope),
+  return useQuery<{ capabilities: PayrollCapabilities }, Error, PayrollCapabilities>({
+    queryKey: scope
+      ? payrollCapabilitiesQueryOptions(scope).queryKey
+      : (["payroll", "capabilities", "disabled"] as const),
     queryFn: () => apiFetch<{ capabilities: PayrollCapabilities }>("/api/business/payroll/capabilities"),
+    enabled: Boolean(scope),
     select: (d) => d.capabilities,
     staleTime: 60_000,
     meta: { safePersist: false, webPersist: "none", freshness: "operational" },
@@ -37,19 +133,10 @@ export function usePayrollPerson(personId: string | null) {
     const person = envelope?.people?.find((item) => item.id === personId)
     return person ? { person, paymentHistory: [] } : undefined
   }, [personId, queryClient, scope])
-  return useQuery({
+  return useQuery<PayrollPersonDetailEnvelope>({
     queryKey: scope && personId ? qk.payroll.people.detail(scope, personId) : ["payroll", "person", "disabled"],
     enabled: Boolean(scope && personId),
-    queryFn: () =>
-      apiFetch<{
-        person: PayrollPerson
-        paymentHistory?: unknown[]
-        connection?: {
-          id: string
-          status: string
-          preferredMethod: PayrollReceivingMethodSummary | null
-        } | null
-      }>(`/api/business/payroll/people/${personId}`),
+    queryFn: () => fetchPayrollPersonDetail(personId as string),
     placeholderData: listPlaceholder,
     staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
@@ -76,10 +163,10 @@ export function usePayrollReceivingDestination(personId: string | null, recipien
 
 export function usePayrollOverview() {
   const { scope } = useScope()
-  return useQuery({
-    queryKey: scope ? qk.payroll.overview(scope) : ["payroll", "overview", "disabled"],
-    enabled: Boolean(scope),
+  return useQuery<{ overview: PayrollOverview }, Error, PayrollOverview>({
+    queryKey: scope ? payrollOverviewQueryOptions(scope).queryKey : (["payroll", "overview", "disabled"] as const),
     queryFn: () => apiFetch<{ overview: PayrollOverview }>("/api/business/payroll/overview"),
+    enabled: Boolean(scope),
     select: (d) => d.overview,
     staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
@@ -89,10 +176,10 @@ export function usePayrollOverview() {
 
 export function usePayrollPeople() {
   const { scope } = useScope()
-  return useQuery({
-    queryKey: scope ? qk.payroll.people.list(scope) : ["payroll", "people", "disabled"],
-    enabled: Boolean(scope),
+  return useQuery<{ people: PayrollPerson[] }, Error, PayrollPerson[]>({
+    queryKey: scope ? payrollPeopleQueryOptions(scope).queryKey : (["payroll", "people", "disabled"] as const),
     queryFn: () => apiFetch<{ people: PayrollPerson[] }>("/api/business/payroll/people"),
+    enabled: Boolean(scope),
     select: (d) => d.people ?? [],
     staleTime: 15 * 60_000,
     gcTime: 60 * 60_000,
@@ -102,10 +189,10 @@ export function usePayrollPeople() {
 
 export function usePayrollRuns() {
   const { scope } = useScope()
-  return useQuery({
-    queryKey: scope ? qk.payroll.runs.list(scope) : ["payroll", "runs", "disabled"],
-    enabled: Boolean(scope),
+  return useQuery<{ runs: PayrollRun[] }, Error, PayrollRun[]>({
+    queryKey: scope ? payrollRunsQueryOptions(scope).queryKey : (["payroll", "runs", "disabled"] as const),
     queryFn: () => apiFetch<{ runs: PayrollRun[] }>("/api/business/payroll/runs"),
+    enabled: Boolean(scope),
     select: (d) => d.runs ?? [],
     staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
@@ -122,7 +209,7 @@ export function usePayrollRunDetail(runId: string | null) {
     const run = envelope?.runs?.find((item) => item.id === runId)
     return run ? { run } : undefined
   }, [queryClient, runId, scope])
-  return useQuery({
+  return useQuery<{ run: PayrollRun }, Error, PayrollRun>({
     queryKey: scope && runId ? qk.payroll.runs.detail(scope, runId) : ["payroll", "run", "disabled"],
     enabled: Boolean(scope) && Boolean(runId),
     queryFn: () => apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}`),
@@ -137,10 +224,12 @@ export function usePayrollRunDetail(runId: string | null) {
 
 export function usePayrollSchedules() {
   const { scope } = useScope()
-  return useQuery({
-    queryKey: scope ? qk.payroll.schedules.list(scope) : ["payroll", "schedules", "disabled"],
-    enabled: Boolean(scope),
+  return useQuery<{ schedules: PayrollSchedule[] }, Error, PayrollSchedule[]>({
+    queryKey: scope
+      ? payrollSchedulesQueryOptions(scope).queryKey
+      : (["payroll", "schedules", "disabled"] as const),
     queryFn: () => apiFetch<{ schedules: PayrollSchedule[] }>("/api/business/payroll/schedules"),
+    enabled: Boolean(scope),
     select: (d) => d.schedules ?? [],
     staleTime: 15 * 60_000,
     gcTime: 60 * 60_000,
@@ -150,10 +239,10 @@ export function usePayrollSchedules() {
 
 export function usePayrollSettings() {
   const { scope } = useScope()
-  return useQuery({
-    queryKey: scope ? ["payroll", "settings", scope] : ["payroll", "settings", "disabled"],
-    enabled: Boolean(scope),
+  return useQuery<{ settings: PayrollSettings }, Error, PayrollSettings>({
+    queryKey: scope ? payrollSettingsQueryOptions(scope).queryKey : (["payroll", "settings", "disabled"] as const),
     queryFn: () => apiFetch<{ settings: PayrollSettings }>("/api/business/payroll/settings"),
+    enabled: Boolean(scope),
     select: (d) => d.settings,
     staleTime: 15 * 60_000,
     gcTime: 60 * 60_000,

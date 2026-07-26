@@ -2,12 +2,10 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { Eye, Mail, MoreHorizontal, Pause, Pencil, Plus, Search, Trash2, Upload } from "lucide-react"
+import { Eye, Mail, MoreHorizontal, Pause, Pencil, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,9 +16,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { PayrollNavTabs } from "@/components/payroll/payroll-nav-tabs"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
-import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollListToolbar } from "@/components/payroll/payroll-list-toolbar"
 import { PayrollPermissionAction } from "@/components/payroll/payroll-permission-action"
 import { PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
 import { PayrollDetailLink } from "@/components/payroll/payroll-detail-link"
@@ -29,13 +26,14 @@ import { PayrollCountry } from "@/components/payroll/payroll-country"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { usePayrollCapabilities, usePayrollPeople, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
+import { usePayrollListState } from "@/hooks/use-payroll-list-state"
 import { formatCurrency } from "@/lib/utils"
 import type { PayrollPerson } from "@/lib/payroll/types"
 
 type Filter = "all" | "ready" | "awaiting" | "attention" | "inactive"
+const PEOPLE_FILTERS = ["all", "ready", "awaiting", "attention", "inactive"] as const
 
 export default function PayrollPeoplePage() {
-  const searchParams = useSearchParams()
   const peopleQuery = usePayrollPeople()
   const capabilitiesQuery = usePayrollCapabilities()
   const payrollCurrency = usePayrollSettings().data?.defaultCurrency
@@ -43,12 +41,14 @@ export default function PayrollPeoplePage() {
   const updatePerson = useUpdatePayrollPerson()
   const invitePerson = useInvitePayrollPerson()
   const deletePerson = useDeletePayrollPerson()
-  const [search, setSearch] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<PayrollPerson | null>(null)
-  const initial = searchParams.get("status")
-  const [filter, setFilter] = useState<Filter>(
-    initial === "awaiting" || initial === "attention" || initial === "inactive" ? initial : "all",
-  )
+  const [updatingPersonIds, setUpdatingPersonIds] = useState<Set<string>>(() => new Set())
+  const { query: search, filter, setQuery: setSearch, setFilter, returnTo } = usePayrollListState<Filter>({
+    allowedFilters: PEOPLE_FILTERS,
+    defaultFilter: "all",
+    filterParam: "view",
+    legacyFilterParam: "status",
+  })
   const all = useMemo(() => peopleQuery.data ?? [], [peopleQuery.data])
 
   const counts = useMemo(() => ({
@@ -68,30 +68,48 @@ export default function PayrollPeoplePage() {
     return true
   }), [all, filter, search])
 
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <PayrollPageHeader
-        title="People"
-        description="Employees and contractors, their payroll readiness, and how they receive payment."
-        actions={<>
-          <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}><Button variant="outline" asChild><Link href="/payroll/people/import"><Upload className="mr-2 h-4 w-4" />Import people</Link></Button></PayrollPermissionAction>
-          <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}><Button variant="primary" asChild><Link href="/payroll/people/new?returnTo=/payroll/people"><Plus className="mr-2 h-4 w-4" />Add person</Link></Button></PayrollPermissionAction>
-        </>}
-      />
-      <PayrollNavTabs />
+  async function updatePersonAction(person: PayrollPerson, action: "invite" | "toggle") {
+    if (updatingPersonIds.has(person.id)) return
+    setUpdatingPersonIds((current) => new Set(current).add(person.id))
+    try {
+      if (action === "invite") {
+        await invitePerson.mutateAsync(person.id)
+        toast.success("Payroll request sent")
+      } else {
+        await updatePerson.mutateAsync({
+          id: person.id,
+          patch: { status: person.status === "active" ? "held" : "active" },
+        })
+        toast.success(person.status === "active" ? "Person put on hold" : "Person reactivated")
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Person could not be updated")
+    } finally {
+      setUpdatingPersonIds((current) => {
+        const next = new Set(current)
+        next.delete(person.id)
+        return next
+      })
+    }
+  }
 
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="relative max-w-sm flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Search people" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-        <div className="flex gap-1 overflow-x-auto" aria-label="Filter people">
-          {([
-            ["all", "All"], ["ready", "Ready"], ["awaiting", "Awaiting approval"], ["attention", "Needs attention"], ["inactive", "Inactive"],
-          ] as const).map(([value, label]) => (
-            <Button key={value} variant={filter === value ? "primary" : "ghost"} size="sm" className="shrink-0" onClick={() => setFilter(value)}>
-              {label} <span className="ml-1.5 text-xs opacity-70">{counts[value]}</span>
-            </Button>
-          ))}
-        </div>
-      </div>
+  return (
+    <>
+      <PayrollListToolbar
+        query={search}
+        onQueryChange={setSearch}
+        queryPlaceholder="Search people"
+        filter={filter}
+        onFilterChange={setFilter}
+        label="Filter people"
+        filters={[
+          { value: "all", label: "All", count: counts.all },
+          { value: "ready", label: "Ready", count: counts.ready },
+          { value: "awaiting", label: "Awaiting approval", count: counts.awaiting },
+          { value: "attention", label: "Needs attention", count: counts.attention },
+          { value: "inactive", label: "Inactive", count: counts.inactive },
+        ]}
+      />
 
       {peopleQuery.isPending ? (
         <Card className="overflow-hidden shadow-soft"><CardContent className="space-y-3 p-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-14 w-full rounded-xl" />)}</CardContent></Card>
@@ -104,7 +122,8 @@ export default function PayrollPeoplePage() {
           {!all.length ? <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}><div className="mt-5 flex justify-center gap-2"><Button variant="primary" asChild><Link href="/payroll/people/new?returnTo=/payroll/people">Add person</Link></Button><Button variant="outline" asChild><Link href="/payroll/people/import">Import people</Link></Button></div></PayrollPermissionAction> : null}
         </CardContent></Card>
       ) : (
-        <Card className="overflow-hidden shadow-soft">
+        <>
+        <Card className="hidden overflow-hidden shadow-soft md:block">
           <Table>
             <TableHeader><TableRow>
               <TableHead>Person</TableHead><TableHead>Classification</TableHead><TableHead>Receiving method</TableHead><TableHead>Amount</TableHead><TableHead>Country</TableHead><TableHead>Connection</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
@@ -112,7 +131,7 @@ export default function PayrollPeoplePage() {
             <TableBody>
               {people.map((person) => (
                 <TableRow key={person.id}>
-                  <TableCell><PayrollDetailLink kind="person" id={person.id} href={`/payroll/people/${person.id}`} className="flex items-center gap-3">
+                  <TableCell><PayrollDetailLink kind="person" id={person.id} href={`/payroll/people/${person.id}?returnTo=${encodeURIComponent(returnTo)}`} className="flex items-center gap-3">
                     <Avatar><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
                     <span className="min-w-0"><span className="block truncate font-medium">{person.fullName}</span><span className="block truncate text-xs text-muted-foreground">{person.easetag ? `@${person.easetag.replace(/^@/, "")}` : person.email || person.internalReference || "Manual setup"}</span></span>
                   </PayrollDetailLink></TableCell>
@@ -121,18 +140,34 @@ export default function PayrollPeoplePage() {
                   <TableCell className="tabular-nums">{formatCurrency(person.defaultAmount, payrollCurrency || person.payCurrency)}</TableCell>
                   <TableCell><PayrollCountry country={person.country} /></TableCell>
                   <TableCell><PayrollStatusBadge status={person.connectionStatus} /></TableCell>
-                  <TableCell><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={`Actions for ${person.fullName}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild><Link href={`/payroll/people/${person.id}`}><Eye />View details</Link></DropdownMenuItem>
-                    {canPrepare ? <DropdownMenuItem asChild><Link href={`/payroll/people/${person.id}/edit`}><Pencil />Edit person</Link></DropdownMenuItem> : null}
-                    {canPrepare && person.rail === "easetag" && person.email && person.connectionStatus !== "approved" ? <DropdownMenuItem onClick={() => invitePerson.mutate(person.id, { onSuccess: () => toast.success("Payroll request sent"), onError: (e) => toast.error(e.message) })}><Mail />{person.connectionStatus === "pending" ? "Resend request" : "Send request"}</DropdownMenuItem> : null}
-                    {canPrepare ? <DropdownMenuItem onClick={() => updatePerson.mutate({ id: person.id, patch: { status: person.status === "active" ? "held" : "active" } }, { onSuccess: () => toast.success(person.status === "active" ? "Person put on hold" : "Person reactivated") })}><Pause />{person.status === "active" ? "Put on hold" : "Reactivate"}</DropdownMenuItem> : null}
-                    {canPrepare ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(person)}><Trash2 />Delete person</DropdownMenuItem></> : null}
-                  </DropdownMenuContent></DropdownMenu></TableCell>
+                  <TableCell><PersonActions person={person} returnTo={returnTo} canPrepare={canPrepare} pending={updatingPersonIds.has(person.id)} onInvite={() => void updatePersonAction(person, "invite")} onToggle={() => void updatePersonAction(person, "toggle")} onDelete={() => setDeleteTarget(person)} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </Card>
+        <div className="space-y-3 md:hidden">
+          {people.map((person) => (
+            <Card key={person.id} className="shadow-soft">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <PayrollDetailLink kind="person" id={person.id} href={`/payroll/people/${person.id}?returnTo=${encodeURIComponent(returnTo)}`} className="flex min-w-0 flex-1 items-center gap-3">
+                    <Avatar className="h-11 w-11"><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
+                    <span className="min-w-0"><span className="block truncate font-medium">{person.fullName}</span><span className="block truncate text-xs capitalize text-muted-foreground">{person.type}</span></span>
+                  </PayrollDetailLink>
+                  <PersonActions person={person} returnTo={returnTo} canPrepare={canPrepare} pending={updatingPersonIds.has(person.id)} onInvite={() => void updatePersonAction(person, "invite")} onToggle={() => void updatePersonAction(person, "toggle")} onDelete={() => setDeleteTarget(person)} />
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 border-t pt-4 text-sm">
+                  <div><dt className="text-xs text-muted-foreground">Receiving method</dt><dd className="mt-1"><PayrollReceivingMethod person={person} typeOnly /></dd></div>
+                  <div><dt className="text-xs text-muted-foreground">Amount</dt><dd className="mt-1 font-medium tabular-nums">{formatCurrency(person.defaultAmount, payrollCurrency || person.payCurrency)}</dd></div>
+                  <div><dt className="text-xs text-muted-foreground">Country</dt><dd className="mt-1"><PayrollCountry country={person.country} /></dd></div>
+                  <div><dt className="text-xs text-muted-foreground">Connection</dt><dd className="mt-1"><PayrollStatusBadge status={person.connectionStatus} /></dd></div>
+                </dl>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        </>
       )}
       <PayrollDeleteDialog
         open={Boolean(deleteTarget)}
@@ -153,6 +188,37 @@ export default function PayrollPeoplePage() {
         }}
       />
       <PayrollInlineRefreshing visible={peopleQuery.isFetching && !peopleQuery.isPending} />
-    </div>
+    </>
+  )
+}
+
+function PersonActions({
+  person,
+  returnTo,
+  canPrepare,
+  pending,
+  onInvite,
+  onToggle,
+  onDelete,
+}: {
+  person: PayrollPerson
+  returnTo: string
+  canPrepare: boolean
+  pending: boolean
+  onInvite: () => void
+  onToggle: () => void
+  onDelete: () => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="min-h-11 min-w-11" aria-label={`Actions for ${person.fullName}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+    <DropdownMenuItem asChild><Link href={`/payroll/people/${person.id}?returnTo=${encodeURIComponent(returnTo)}`}><Eye />View details</Link></DropdownMenuItem>
+        {canPrepare ? <DropdownMenuItem asChild><Link href={`/payroll/people/${person.id}/edit`}><Pencil />Edit person</Link></DropdownMenuItem> : null}
+        {canPrepare && person.rail === "easetag" && person.email && person.connectionStatus !== "approved" ? <DropdownMenuItem disabled={pending} onClick={onInvite}><Mail />{pending ? "Sending…" : person.connectionStatus === "pending" ? "Resend request" : "Send request"}</DropdownMenuItem> : null}
+        {canPrepare ? <DropdownMenuItem disabled={pending} onClick={onToggle}><Pause />{pending ? "Updating…" : person.status === "active" ? "Put on hold" : "Reactivate"}</DropdownMenuItem> : null}
+        {canPrepare ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={onDelete}><Trash2 />Delete person</DropdownMenuItem></> : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

@@ -1,9 +1,17 @@
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollScheduleForm } from "@/components/payroll/payroll-schedule-form"
+import { PayrollSubpageShell } from "@/components/payroll/payroll-subpage-shell"
 
 export default function NewPayrollSchedulePage() {
-  return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6"><Button variant="ghost" size="sm" className="mb-4" asChild><Link href="/payroll/schedules"><ArrowLeft className="mr-2 h-4 w-4" />Back to Schedules</Link></Button><PayrollPageHeader title="Create schedule" description="Define recurring paydays and choose the people to include." /><PayrollScheduleForm /></div>
+  return (
+    <PayrollSubpageShell
+      backHref="/payroll/schedules"
+      backLabel="Back to Schedules"
+      section="Schedules"
+      current="Create"
+      title="Create schedule"
+      description="Define recurring paydays and choose the people to include."
+    >
+      <PayrollScheduleForm />
+    </PayrollSubpageShell>
+  )
 }

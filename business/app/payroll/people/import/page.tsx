@@ -1,21 +1,26 @@
 "use client"
 
 import { useRef, useState } from "react"
-import Link from "next/link"
-import { ArrowLeft, Download, Upload } from "lucide-react"
+import { Download, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollSubpageShell } from "@/components/payroll/payroll-subpage-shell"
 import { useImportPayrollPeople } from "@/hooks/mutations/use-payroll"
 
 export default function ImportPayrollPeoplePage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const mutation = useImportPayrollPeople()
   const [result, setResult] = useState<{ imported: number; invalid: unknown[] } | null>(null)
-  return <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-    <Button variant="ghost" size="sm" className="mb-4" asChild><Link href="/payroll/people"><ArrowLeft className="mr-2 h-4 w-4" />Back to People</Link></Button>
-    <PayrollPageHeader title="Import people" description="Upload a CSV to add payroll people in bulk. You can review readiness before creating a run." />
+  return <PayrollSubpageShell
+    backHref="/payroll/people"
+    backLabel="Back to People"
+    section="People"
+    current="Import"
+    title="Import people"
+    description="Upload a CSV to add payroll people in bulk. You can review readiness before creating a run."
+    maxWidth="max-w-5xl"
+  >
     <Card className="shadow-card"><CardContent className="p-6 sm:p-8">
       <div className="rounded-2xl border border-dashed p-8 text-center">
         <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
@@ -34,5 +39,5 @@ export default function ImportPayrollPeoplePage() {
       </div>
       {result ? <div className="mt-6 rounded-xl bg-muted p-4 text-sm"><p className="font-medium">{result.imported} people imported</p><p className="mt-1 text-muted-foreground">{result.invalid.length ? `${result.invalid.length} rows need correction.` : "Every row was imported successfully."}</p></div> : null}
     </CardContent></Card>
-  </div>
+  </PayrollSubpageShell>
 }

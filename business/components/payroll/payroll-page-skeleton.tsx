@@ -113,3 +113,21 @@ export function PayrollInlineRefreshing({ visible }: { visible: boolean }) {
   void visible
   return null
 }
+
+export function PayrollWorkspaceContentSkeleton() {
+  return (
+    <div className="space-y-5" aria-label="Loading Payroll" aria-busy="true">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <Skeleton className="h-10 w-full rounded-xl lg:max-w-sm" />
+        <Skeleton className="h-10 w-full rounded-xl lg:w-96" />
+      </div>
+      <Card className="overflow-hidden shadow-soft">
+        <CardContent className="space-y-3 p-5">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className="h-14 w-full rounded-xl" />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

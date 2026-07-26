@@ -2,8 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Download, Mail, MoreHorizontal, Pause, Pencil, Play, Trash2 } from "lucide-react"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
+import { Download, Mail, MoreHorizontal, Pause, Pencil, Play, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -15,9 +15,11 @@ import { PayrollCountry } from "@/components/payroll/payroll-country"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { PayrollDetailSkeleton, PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
 import { PayrollDetailLink } from "@/components/payroll/payroll-detail-link"
+import { PayrollSubpageShell } from "@/components/payroll/payroll-subpage-shell"
 import { usePayrollCapabilities, usePayrollPerson, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { safePayrollReturnTo } from "@/lib/payroll/navigation"
 
 type Payment = {
   id: string
@@ -31,6 +33,8 @@ type Payment = {
 export default function PayrollPersonDetailPage() {
   const params = useParams<{ personId: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const returnTo = safePayrollReturnTo(searchParams.get("returnTo"), "/payroll/people")
   const query = usePayrollPerson(params.personId)
   const capabilities = usePayrollCapabilities().data
   const settings = usePayrollSettings().data
@@ -46,14 +50,16 @@ export default function PayrollPersonDetailPage() {
   const canPrepare = Boolean(capabilities?.canPrepare)
   const requestAction = person.rail === "easetag" && person.connectionStatus !== "approved" && person.email
 
-  return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-    <Button variant="ghost" size="sm" className="mb-5" asChild><Link href="/payroll/people"><ArrowLeft className="mr-2 h-4 w-4" />Back to People</Link></Button>
-    <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-4">
-        <Avatar className="h-14 w-14"><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
-        <div><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold">{person.fullName}</h1><PayrollStatusBadge status={person.status !== "active" ? person.status : person.readinessStatus} /></div><p className="mt-1 text-sm text-muted-foreground">{person.easetag ? <><span>Easetag:</span> <span className="text-foreground">@{person.easetag.replace(/^@/, "")}</span></> : person.email || "Manual payroll person"}</p></div>
-      </div>
-      {canPrepare ? <div className="flex shrink-0 items-center gap-2 overflow-x-auto">
+  return <PayrollSubpageShell
+    backHref={returnTo}
+    backLabel="Back to People"
+    section="People"
+    current={person.fullName}
+    title={person.fullName}
+    description={person.easetag ? `Easetag: @${person.easetag.replace(/^@/, "")}` : person.email || "Manual payroll person"}
+    leading={<Avatar className="h-14 w-14"><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>}
+    status={<PayrollStatusBadge status={person.status !== "active" ? person.status : person.readinessStatus} />}
+    actions={canPrepare ? <>
         <Button variant="outline" asChild><Link href={`/payroll/people/${person.id}/edit`}><Pencil className="mr-2 h-4 w-4" />Edit</Link></Button>
         {requestAction ? <Button variant="primary" onClick={() => invite.mutate(person.id, { onSuccess: () => toast.success("Payroll request sent"), onError: (e) => toast.error(e.message) })}><Mail className="mr-2 h-4 w-4" />{person.connectionStatus === "pending" ? "Resend request" : "Send request"}</Button> : null}
         <DropdownMenu>
@@ -64,8 +70,8 @@ export default function PayrollPersonDetailPage() {
             <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}><Trash2 />Delete person</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div> : null}
-    </div>
+      </> : undefined}
+  >
 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-6">
@@ -111,7 +117,7 @@ export default function PayrollPersonDetailPage() {
       }}
     />
     <PayrollInlineRefreshing visible={query.isFetching && !query.isPending} />
-  </div>
+  </PayrollSubpageShell>
 }
 
 function Detail({ label, value, capitalize }: { label: string; value: string; capitalize?: boolean }) {

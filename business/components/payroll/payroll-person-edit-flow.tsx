@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, CheckCircle2 } from "lucide-react"
+import { CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollSubpageShell } from "@/components/payroll/payroll-subpage-shell"
 import { PayrollCountrySelect } from "@/components/payroll/payroll-country-select"
 import { PayrollCountry } from "@/components/payroll/payroll-country"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
@@ -167,21 +167,19 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <Button variant="ghost" size="sm" className="mb-4" asChild>
-        <Link href={`/payroll/people/${person.id}`}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to person
-        </Link>
-      </Button>
-      <PayrollPageHeader
+    <PayrollSubpageShell
+      backHref={`/payroll/people/${person.id}`}
+      backLabel="Back to person"
+      section="People"
+      sectionHref="/payroll/people"
+      current={person.fullName}
         title="Edit person"
         description={
           isEasetagPerson
             ? "Review the connected EASETAG profile and update their Payroll setup."
             : "Update this person’s details and saved receiving method."
         }
-      />
+    >
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card className="shadow-card">
           <CardContent className="space-y-6 p-6 sm:p-8">
@@ -407,7 +405,7 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PayrollSubpageShell>
   )
 }
 

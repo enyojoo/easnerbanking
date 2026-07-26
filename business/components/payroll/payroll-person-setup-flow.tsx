@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, ArrowRight, AtSign, CheckCircle2, Landmark, Search, WalletCards } from "lucide-react"
 import { toast } from "sonner"
@@ -12,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { RecipientForm } from "@/components/recipient-form"
-import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollSubpageShell } from "@/components/payroll/payroll-subpage-shell"
 import { PayrollCountrySelect } from "@/components/payroll/payroll-country-select"
 import { useCreatePayrollPerson, useInvitePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { usePayrollCapabilities, usePayrollSchedules, usePayrollSettings } from "@/hooks/queries/use-payroll"
@@ -147,21 +146,21 @@ export function PayrollPersonSetupFlow() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <Button variant="ghost" size="sm" className="mb-4" asChild>
-        <Link href={returnTo}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          {returnTo === "/payroll"
-            ? "Back to Payroll"
-            : returnTo.includes("/runs/new")
-              ? "Back to payroll run"
-              : "Back to People"}
-        </Link>
-      </Button>
-      <PayrollPageHeader
+    <PayrollSubpageShell
+      backHref={returnTo}
+      backLabel={
+        returnTo === "/payroll"
+          ? "Back to Payroll"
+          : returnTo.includes("/runs/new")
+            ? "Back to payroll run"
+            : "Back to People"
+      }
+      section="People"
+      sectionHref="/payroll/people"
+      current="Add person"
         title="Add person"
         description="Set up an employee or contractor and how they receive payroll."
-      />
+    >
       <div className="mb-8 flex items-center gap-2 overflow-x-auto" aria-label="Setup progress">
         {steps.map((label, index) => (
           <div key={label} className="flex shrink-0 items-center gap-2">
@@ -507,7 +506,7 @@ export function PayrollPersonSetupFlow() {
           </CardContent>
         </Card>
       ) : null}
-    </div>
+    </PayrollSubpageShell>
   )
 }
 

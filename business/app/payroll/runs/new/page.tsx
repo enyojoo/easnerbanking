@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollSubpageShell } from "@/components/payroll/payroll-subpage-shell"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { PayrollStatusBadge } from "@/components/payroll/payroll-status-badge"
 import { PayrollFormSkeleton } from "@/components/payroll/payroll-page-skeleton"
@@ -301,17 +301,16 @@ export default function NewPayrollRunPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <Button variant="ghost" size="sm" className="mb-4" asChild>
-        <Link href={editRunId ? `/payroll/runs/${editRunId}` : "/payroll/runs"}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          {editRunId ? "Back to run" : "Back to Runs"}
-        </Link>
-      </Button>
-      <PayrollPageHeader
+    <PayrollSubpageShell
+      backHref={editRunId ? `/payroll/runs/${editRunId}` : "/payroll/runs"}
+      backLabel={editRunId ? "Back to run" : "Back to Runs"}
+      section="Runs"
+      sectionHref="/payroll/runs"
+      current={editRunId ? String(editRun?.metadata?.name || "Edit") : "Create"}
         title={editRunId ? "Edit payroll run" : "Run payroll"}
         description="Build, check, and approve a payroll run before any money moves."
-      />
+      maxWidth="max-w-7xl"
+    >
       <div className="mb-8 flex items-center gap-2 overflow-x-auto" aria-label="Payroll run steps">
         {stepLabels.map((label, index) => (
           <button
@@ -438,7 +437,7 @@ export default function NewPayrollRunPage() {
         </Card>
         <RunSummary draft={draft} people={selectedPeople} preview={preview} />
       </div>
-    </div>
+    </PayrollSubpageShell>
   )
 }
 
