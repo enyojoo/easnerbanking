@@ -157,14 +157,8 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <Card className="shadow-card"><CardContent className="space-y-6 p-6 sm:p-8">
         {person.rail === "easetag" ? (
-          <div className="space-y-4">
-            <div>
-              <h2 className="font-semibold">EASETAG profile</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                This verified identity is connected to the person’s Easner account.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 rounded-xl border p-4">
+          <div>
+            <div className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center">
               <Avatar className="h-12 w-12"><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -173,22 +167,17 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
                     <CheckCircle2 className="h-3.5 w-3.5" />Verified
                   </span>
                 </div>
-                <p className="truncate text-xs text-muted-foreground">{person.email || "No email available"}</p>
-                <p className="truncate text-xs text-muted-foreground">@{person.easetag?.replace(/^@/, "")}</p>
+                <p className="mt-1 truncate text-xs text-muted-foreground">
+                  Easetag: @{person.easetag?.replace(/^@/, "") || "—"}
+                  <span aria-hidden="true"> · </span>
+                  Email: {person.email || "—"}
+                </p>
+              </div>
+              <div className="sm:text-right">
+                <p className="text-xs text-muted-foreground">Country of residence</p>
+                <div className="mt-1 text-sm font-medium"><PayrollCountry country={person.country} /></div>
               </div>
             </div>
-            <dl className="grid gap-4 rounded-xl border bg-muted/20 p-4 text-sm sm:grid-cols-2">
-              <IdentityField label="Email" value={person.email || "—"} />
-              <div>
-                <dt className="text-xs text-muted-foreground">Country of residence</dt>
-                <dd className="mt-1 font-medium"><PayrollCountry country={person.country} /></dd>
-              </div>
-              <IdentityField label="Easetag" value={`@${person.easetag?.replace(/^@/, "") || "—"}`} />
-              <IdentityField label="Receiving method" value="Easetag" />
-            </dl>
-            <p className="text-xs text-muted-foreground">
-              Identity and contact details come from the approved EASETAG connection and are not edited by the business.
-            </p>
           </div>
         ) : (
           <div className="space-y-5">
@@ -218,15 +207,11 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
         </div>
         {person.rail === "easetag" ? (
           <div className="rounded-xl border p-4">
-            <p className="text-sm font-medium">EASETAG connection</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              The person controls the receiving method connected to this approved Payroll relationship.
-            </p>
-            <div className="mt-4 flex items-center justify-between rounded-lg bg-muted/30 px-3 py-3">
+            <div className="flex items-center justify-between gap-4">
               <span className="text-sm text-muted-foreground">Receiving method</span>
               <PayrollReceivingMethod person={person} typeOnly />
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">The person manages their preferred receiving method through the Easner App.</p>
+            <p className="mt-2 text-xs text-muted-foreground">Preview only. The person manages this receiving method through the Easner App.</p>
           </div>
         ) : (
           <div className="space-y-5 border-t pt-6">
@@ -278,8 +263,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Summary({ label, value }: { label: string; value: string }) {
   return <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{label}</dt><dd className="text-right">{value}</dd></div>
-}
-
-function IdentityField({ label, value }: { label: string; value: string }) {
-  return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 truncate font-medium">{value}</dd></div>
 }
