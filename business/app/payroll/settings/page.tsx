@@ -121,7 +121,7 @@ export default function PayrollSettingsPage() {
               </Select>
             </Field>
           </div>
-          <section className="border-t pt-6"><div className="flex items-start justify-between gap-5"><div><h2 className="font-semibold">Require a different approver</h2><p className="mt-1 max-w-xl text-sm text-muted-foreground">The person who submits a payroll run cannot approve that same run.</p></div><Switch checked={separate} onCheckedChange={setSeparate} disabled={!editing} /></div></section>
+          <section className="border-t pt-6"><div className="flex items-start justify-between gap-5"><div><h2 className="font-semibold">Require a different approver</h2><p className="mt-1 max-w-xl text-sm text-muted-foreground">A delegated Payroll approver cannot approve a run they submitted. Business owners and admins can always approve.</p></div><Switch checked={separate} onCheckedChange={setSeparate} disabled={!editing} /></div></section>
           {!canEdit ? <p className="border-t pt-5 text-sm text-muted-foreground">Only a Payroll approver can change these settings.</p> : null}
         </CardContent>
       </Card>

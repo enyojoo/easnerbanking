@@ -159,6 +159,7 @@ export interface PayrollCapabilities {
   canView: boolean
   canPrepare: boolean
   canApprove: boolean
+  canSelfApprove: boolean
   requireSeparateApprover: boolean
 }
 

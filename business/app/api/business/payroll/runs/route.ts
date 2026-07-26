@@ -109,6 +109,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Complete the payroll details before saving." }, { status: 400 })
     }
   }
+  let scheduleName: string | null = null
+  if (completeDraft && body.scheduleId) {
+    const { data: schedule, error: scheduleError } = await admin
+      .from("payroll_schedules")
+      .select("id,name")
+      .eq("id", body.scheduleId)
+      .eq("business_id", ctx.businessId)
+      .maybeSingle()
+    if (scheduleError) return NextResponse.json({ error: scheduleError.message }, { status: 500 })
+    if (!schedule) {
+      return NextResponse.json({ error: "The selected payroll schedule is unavailable." }, { status: 400 })
+    }
+    scheduleName = String(schedule.name)
+  }
 
   const { data: runRow, error: runErr } = await admin
     .from("payroll_runs")
@@ -125,7 +139,11 @@ export async function POST(request: Request) {
       } : {}),
       source_currency: sourceCurrency,
       drafted_by: ctx.userId,
-      metadata: { offCycle: Boolean(body.offCycle), name: body.name?.trim() || "Payroll run" },
+      metadata: {
+        offCycle: Boolean(body.offCycle),
+        name: body.name?.trim() || "Payroll run",
+        ...(scheduleName ? { scheduleName } : {}),
+      },
       updated_at: new Date().toISOString(),
     })
     .select("*")

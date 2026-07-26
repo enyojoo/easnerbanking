@@ -2,11 +2,29 @@ import type { PayrollScheduleFrequency } from "@/lib/payroll/types"
 
 export type PayrollWeekendPolicy = "previous_business_day" | "next_business_day"
 
+function dateOnly(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
 function applyWeekendPolicy(date: Date, policy: PayrollWeekendPolicy) {
   const day = date.getUTCDay()
   if (day === 6) date.setUTCDate(date.getUTCDate() + (policy === "previous_business_day" ? -1 : 2))
   if (day === 0) date.setUTCDate(date.getUTCDate() + (policy === "previous_business_day" ? -2 : 1))
   return date
+}
+
+export function payrollPayPeriodForPayday(
+  frequency: PayrollScheduleFrequency,
+  payday: string,
+): { start: string; end: string } | null {
+  const end = new Date(`${payday}T12:00:00.000Z`)
+  if (Number.isNaN(end.getTime())) return null
+  const start = new Date(end)
+  if (frequency === "weekly") start.setUTCDate(end.getUTCDate() - 6)
+  else if (frequency === "biweekly") start.setUTCDate(end.getUTCDate() - 13)
+  else if (frequency === "semimonthly") start.setUTCDate(end.getUTCDate() <= 15 ? 1 : 16)
+  else start.setUTCDate(1)
+  return { start: dateOnly(start), end: dateOnly(end) }
 }
 
 export function payrollPaydayPreview(input: {

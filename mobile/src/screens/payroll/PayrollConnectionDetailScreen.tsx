@@ -56,6 +56,7 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
   const [editingMethod, setEditingMethod] = useState<PayrollMethodSummary | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PayrollMethodSummary | null>(null)
   const [revokeConfirm, setRevokeConfirm] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [revoking, setRevoking] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [documentId, setDocumentId] = useState('')
@@ -129,6 +130,16 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
     if (!detail) return
     setEditingMethod(method ?? null)
     setMethodFlowVisible(true)
+  }
+
+  async function refresh() {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await query.refetch()
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   async function receivingMethodSaved(result: PayrollReceivingMethodResult) {
@@ -267,14 +278,14 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
 
   return (
     <ScreenWrapper>
-      <InternalHeader title="Payroll connection" subtitle={detail.businessName} onBack={backToConnections} />
+      <InternalHeader title="Payroll connection" onBack={backToConnections} />
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={query.isRefetching && !query.isPlaceholderData}
-            onRefresh={() => void query.refetch()}
+            refreshing={refreshing}
+            onRefresh={() => void refresh()}
             tintColor={colors.primary.main}
           />
         }

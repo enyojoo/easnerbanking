@@ -9,6 +9,9 @@ import {
 } from "@/lib/payroll/map-payroll"
 import { buildPayrollLines } from "@/lib/payroll/build-lines"
 import type { PayrollScheduleFrequency } from "@/lib/payroll/types"
+import { payrollPayPeriodForPayday } from "@/lib/payroll/schedule-preview"
+import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
+import { recalculateRunTotals } from "@/lib/payroll/run-utils"
 
 function addUtcDays(date: Date, days: number): Date {
   const result = new Date(date)
@@ -29,19 +32,6 @@ function adjustedPayday(
   if (day === 6) adjusted.setUTCDate(adjusted.getUTCDate() + (policy === "next_business_day" ? 2 : -1))
   if (day === 0) adjusted.setUTCDate(adjusted.getUTCDate() + (policy === "next_business_day" ? 1 : -2))
   return adjusted
-}
-
-function payPeriodFor(frequency: PayrollScheduleFrequency, payday: Date) {
-  const end = new Date(payday)
-  let start = new Date(payday)
-  if (frequency === "weekly") start = addUtcDays(end, -6)
-  else if (frequency === "biweekly") start = addUtcDays(end, -13)
-  else if (frequency === "semimonthly") {
-    start.setUTCDate(end.getUTCDate() <= 15 ? 1 : 16)
-  } else {
-    start.setUTCDate(1)
-  }
-  return { start: dateOnly(start), end: dateOnly(end) }
 }
 
 export async function GET(request: Request) {
@@ -74,7 +64,9 @@ export async function GET(request: Request) {
       ? "next_business_day"
       : "previous_business_day"
     const payday = adjustedPayday(nominalPayday, weekendPolicy)
-    const period = payPeriodFor(schedule.frequency as PayrollScheduleFrequency, nominalPayday)
+    const frequency = schedule.frequency as PayrollScheduleFrequency
+    const period = payrollPayPeriodForPayday(frequency, dateOnly(nominalPayday))
+    if (!period) continue
 
     const { data: existingRun } = await admin.from("payroll_runs")
       .select("id")
@@ -92,19 +84,27 @@ export async function GET(request: Request) {
       continue
     }
 
-    const { data: peopleRows } = await admin
+    const [{ data: memberships }, { data: peopleRows }] = await Promise.all([
+      admin
+        .from("payroll_schedule_people")
+        .select("person_id")
+        .eq("schedule_id", schedule.id)
+        .eq("business_id", businessId),
+      admin
       .from("payroll_people")
       .select("*")
       .eq("business_id", businessId)
-      .eq("status", "active")
-
-    const includedPersonIds = Array.isArray(template.includedPersonIds)
-      ? new Set(template.includedPersonIds.map(String))
-      : null
-    const includedPeople = includedPersonIds
-      ? (peopleRows ?? []).filter((person) => includedPersonIds.has(String(person.id)))
-      : peopleRows
+      .eq("status", "active"),
+    ])
+    const includedPersonIds = new Set((memberships ?? []).map((membership) => String(membership.person_id)))
+    const includedPeople = (peopleRows ?? []).filter((person) => includedPersonIds.has(String(person.id)))
     if (!includedPeople?.length) continue
+    let payrollDefaults
+    try {
+      payrollDefaults = await resolvePayrollSourceDefaults(admin, businessId)
+    } catch {
+      continue
+    }
 
     const { data: runRow, error: runErr } = await admin
       .from("payroll_runs")
@@ -116,12 +116,14 @@ export async function GET(request: Request) {
         payday: dateOnly(payday),
         pay_period_start: period.start,
         pay_period_end: period.end,
-        source_currency: String(template.sourceCurrency || "USD").toUpperCase(),
+        source_account_id: payrollDefaults.sourceAccountId,
+        source_currency: payrollDefaults.currency,
         metadata: {
+          name: schedule.name,
           scheduleId: schedule.id,
           scheduleName: schedule.name,
           autoDraft: true,
-          timezone: String(template.timezone || "UTC"),
+          timezone: payrollDefaults.timezone,
           approvalLeadDays: Number(template.approvalLeadDays ?? 2),
         },
         updated_at: new Date().toISOString(),
@@ -133,10 +135,16 @@ export async function GET(request: Request) {
 
     const people = includedPeople.map((r) => mapRowToPayrollPerson(r as PayrollPersonRow))
     const lines = await buildPayrollLines(admin, String(runRow.id), people)
-    await admin.from("payroll_lines").insert(lines)
+    for (const line of lines) line.pay_currency = payrollDefaults.currency
+    const { error: linesError } = await admin.from("payroll_lines").insert(lines)
+    if (linesError) {
+      await admin.from("payroll_runs").delete().eq("id", runRow.id)
+      continue
+    }
+    await recalculateRunTotals(admin, String(runRow.id), businessId)
 
     const next = nextPayrollRunDate(
-      schedule.frequency as PayrollScheduleFrequency,
+      frequency,
       new Date(schedule.next_run_at),
     )
     await admin

@@ -150,6 +150,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         { status: 400 },
       )
     }
+    let scheduleName: string | null = null
+    if (draft.scheduleId) {
+      const { data: schedule, error: scheduleError } = await admin
+        .from("payroll_schedules")
+        .select("id,name")
+        .eq("id", draft.scheduleId)
+        .eq("business_id", ctx.businessId)
+        .maybeSingle()
+      if (scheduleError) return NextResponse.json({ error: scheduleError.message }, { status: 500 })
+      if (!schedule) {
+        return NextResponse.json({ error: "The selected payroll schedule is unavailable." }, { status: 400 })
+      }
+      scheduleName = String(schedule.name)
+    }
 
     const { data: peopleRows } = await admin
       .from("payroll_people")
@@ -208,6 +222,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           ...metadata,
           name: draft.name.trim(),
           offCycle: Boolean(draft.offCycle),
+          ...(scheduleName ? { scheduleName } : { scheduleName: null }),
         },
         revision: Number(runRow.revision ?? 1) + 1,
         updated_at: new Date().toISOString(),
@@ -374,20 +389,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   if (action === "withdraw") {
-    const { data } = await admin
+    const { data: current, error: currentError } = await admin
+      .from("payroll_runs")
+      .select("status,revision")
+      .eq("id", id)
+      .eq("business_id", ctx.businessId)
+      .maybeSingle()
+    if (currentError) return NextResponse.json({ error: currentError.message }, { status: 500 })
+    if (!current || !["pending_approval", "needs_reapproval"].includes(String(current.status))) {
+      return NextResponse.json({ error: "Only a run awaiting approval can be returned to draft." }, { status: 409 })
+    }
+    const { data, error } = await admin
       .from("payroll_runs")
       .update({
         status: "draft",
         submitted_at: null,
         submitted_by: null,
         approval_snapshot: null,
-        revision: awaitRevisionIncrement(admin, id),
+        revision: Number(current.revision ?? 1) + 1,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .eq("business_id", ctx.businessId)
-      .in("status", ["pending_approval", "needs_reapproval"])
+      .eq("status", current.status)
       .select("id")
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!data?.length) return NextResponse.json({ error: "Run cannot be withdrawn" }, { status: 409 })
     await admin
       .from("business_approvals")
@@ -411,21 +437,35 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     const reason = body.reason?.trim()
     if (!reason) return NextResponse.json({ error: "A reason is required." }, { status: 400 })
-    const { data } = await admin
+    const { data: current, error: currentError } = await admin
+      .from("payroll_runs")
+      .select("status,revision,metadata")
+      .eq("id", id)
+      .eq("business_id", ctx.businessId)
+      .maybeSingle()
+    if (currentError) return NextResponse.json({ error: currentError.message }, { status: 500 })
+    if (!current || !["pending_approval", "needs_reapproval"].includes(String(current.status))) {
+      return NextResponse.json({ error: "Only a run awaiting approval can be rejected." }, { status: 409 })
+    }
+    const { data, error } = await admin
       .from("payroll_runs")
       .update({
         status: "draft",
         submitted_at: null,
         submitted_by: null,
         approval_snapshot: null,
-        revision: awaitRevisionIncrement(admin, id),
-        metadata: { rejectionReason: reason },
+        revision: Number(current.revision ?? 1) + 1,
+        metadata: {
+          ...((current.metadata as Record<string, unknown> | null) ?? {}),
+          rejectionReason: reason,
+        },
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .eq("business_id", ctx.businessId)
-      .in("status", ["pending_approval", "needs_reapproval"])
+      .eq("status", current.status)
       .select("id")
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!data?.length) return NextResponse.json({ error: "Run cannot be rejected." }, { status: 409 })
     await admin
       .from("business_approvals")
@@ -538,9 +578,4 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "This payroll run changed and can no longer be deleted." }, { status: 409 })
   }
   return NextResponse.json({ ok: true })
-}
-
-async function awaitRevisionIncrement(admin: ReturnType<typeof createSupabaseAdmin>, runId: string): Promise<number> {
-  const { data } = await admin.from("payroll_runs").select("revision").eq("id", runId).maybeSingle()
-  return Number(data?.revision ?? 1) + 1
 }

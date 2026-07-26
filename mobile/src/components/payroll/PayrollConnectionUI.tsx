@@ -62,8 +62,13 @@ export function PayrollBusinessIdentityCard({
               <Text style={styles.muted}>@{connection.businessEasetag.replace(/^@/, '')}</Text>
             ) : null}
             <View style={styles.verifiedInline}>
-              <ShieldCheck size={14} color={connection.businessVerified ? colors.success.main : colors.text.tertiary} />
-              <Text style={styles.muted}>{connection.businessVerified ? 'Verified' : 'Verification pending'}</Text>
+              <ShieldCheck
+                size={14}
+                color={connection.businessVerified ? colors.success.main : colors.warning.main}
+              />
+              <Text style={styles.muted}>
+                {connection.businessVerified ? 'Verified business' : 'Business verification pending'}
+              </Text>
             </View>
           </View>
         </View>
@@ -120,7 +125,6 @@ export function PayrollInlineMethodsCard({
     if (b.type === 'easetag') return 1
     return 0
   })
-  const external = sorted.find((method) => method.type !== 'easetag')
 
   return (
     <View style={styles.methodSection}>
@@ -136,7 +140,7 @@ export function PayrollInlineMethodsCard({
               style={[
                 styles.inlineMethodRow,
                 selected && styles.inlineMethodSelected,
-                index < sorted.length - 1 || (!external && !readOnly) ? styles.inlineMethodDivider : null,
+                index < sorted.length - 1 || !readOnly ? styles.inlineMethodDivider : null,
               ]}
             >
               <Pressable
@@ -157,9 +161,7 @@ export function PayrollInlineMethodsCard({
                   </View>
                   <Text style={styles.muted}>{payrollMethodDescription(method)}</Text>
                 </View>
-                {selecting ? (
-                  <ActivityIndicator size="small" color={colors.primary.main} />
-                ) : selected ? (
+                {selected ? (
                   <View style={styles.selectedCircle}>
                     <Check size={14} color={colors.neutral.white} />
                   </View>
@@ -190,14 +192,14 @@ export function PayrollInlineMethodsCard({
             </View>
           )
         })}
-        {!external && !readOnly ? (
+        {!readOnly ? (
           <Pressable style={styles.addInlineRow} onPress={onAdd} accessibilityRole="button">
             <View style={styles.addIcon}>
               <Plus size={20} color={colors.primary.main} />
             </View>
             <View style={styles.grow}>
-              <Text style={styles.methodTitle}>Add a receiving method</Text>
-              <Text style={styles.muted}>Bank account, mobile money or wallet address</Text>
+              <Text style={styles.methodTitle}>Add receiving method</Text>
+              <Text style={styles.muted}>Either a bank account, mobile money or wallet address</Text>
             </View>
             <ChevronRight size={18} color={colors.text.tertiary} />
           </Pressable>

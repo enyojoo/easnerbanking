@@ -11,6 +11,7 @@ import {
 } from "@/lib/payroll/map-payroll"
 import { recalculateRunTotals } from "@/lib/payroll/run-utils"
 import { assertBusinessTransferAllowed } from "@/lib/business/high-value-policy"
+import { requiresDifferentPayrollApprover } from "@/lib/payroll/approval-policy"
 
 export async function POST(
   request: Request,
@@ -42,10 +43,12 @@ export async function POST(
     .select("require_separate_approver")
     .eq("business_id", ctx.businessId)
     .maybeSingle()
-  if (
-    payrollSettings?.require_separate_approver &&
-    String(runRow.submitted_by ?? "") === ctx.userId
-  ) {
+  if (requiresDifferentPayrollApprover({
+    requireSeparateApprover: Boolean(payrollSettings?.require_separate_approver),
+    businessRole: ctx.businessRole,
+    submittedBy: runRow.submitted_by ? String(runRow.submitted_by) : null,
+    approverUserId: ctx.userId,
+  })) {
     return NextResponse.json({
       error: "A different payroll approver must approve this run.",
     }, { status: 403 })

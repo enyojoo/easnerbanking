@@ -26,6 +26,11 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { PayrollRunDraftInput, PayrollRunPreview } from "@/lib/payroll/types"
 import { cn } from "@/lib/utils"
+import {
+  payrollPaydayPreview,
+  payrollPayPeriodForPayday,
+  type PayrollWeekendPolicy,
+} from "@/lib/payroll/schedule-preview"
 
 const stepLabels = ["Details", "People", "Amounts", "Readiness", "Review"]
 type Draft = Omit<PayrollRunDraftInput, "lines"> & { amounts: Record<string, number>; selected: string[] }
@@ -231,6 +236,51 @@ export default function NewPayrollRunPage() {
     }
   }
 
+  function selectSchedule(scheduleId?: string) {
+    if (!scheduleId) {
+      setDraft((current) => ({ ...current, scheduleId: undefined }))
+      setPreview(null)
+      return
+    }
+    const schedule = schedules.find((item) => item.id === scheduleId)
+    if (!schedule) return
+    const weekendPolicy =
+      schedule.template?.weekendPolicy === "next_business_day"
+        ? "next_business_day"
+        : "previous_business_day"
+    const payday =
+      payrollPaydayPreview({
+        frequency: schedule.frequency,
+        firstPayday: schedule.nextRunAt,
+        weekendPolicy: weekendPolicy as PayrollWeekendPolicy,
+        count: 1,
+      })[0] ?? schedule.nextRunAt.slice(0, 10)
+    const period = payrollPayPeriodForPayday(
+      schedule.frequency,
+      schedule.nextRunAt.slice(0, 10),
+    )
+    const included = ready.filter((person) => schedule.personIds?.includes(person.id))
+    setDraft((current) => ({
+      ...current,
+      scheduleId,
+      offCycle: false,
+      payday,
+      payPeriodStart: period?.start ?? current.payPeriodStart,
+      payPeriodEnd: period?.end ?? current.payPeriodEnd,
+      selected: included.map((person) => person.id),
+      amounts: {
+        ...current.amounts,
+        ...Object.fromEntries(
+          included.map((person) => [
+            person.id,
+            current.amounts[person.id] || person.defaultAmount,
+          ]),
+        ),
+      },
+    }))
+    setPreview(null)
+  }
+
   if (editRunId && editRunQuery.isPending && !editRun) {
     return <PayrollFormSkeleton />
   }
@@ -288,7 +338,13 @@ export default function NewPayrollRunPage() {
         <Card className="shadow-card">
           <CardContent className="p-6 sm:p-8">
             {step === 0 ? (
-              <DetailsStep draft={draft} setDraft={setDraft} accounts={accounts.accountRows} schedules={schedules} />
+              <DetailsStep
+                draft={draft}
+                setDraft={setDraft}
+                accounts={accounts.accountRows}
+                schedules={schedules}
+                onSelectSchedule={selectSchedule}
+              />
             ) : null}
             {step === 1 ? (
               <PeopleStep
@@ -391,11 +447,13 @@ function DetailsStep({
   setDraft,
   accounts,
   schedules,
+  onSelectSchedule,
 }: {
   draft: Draft
   setDraft: React.Dispatch<React.SetStateAction<Draft>>
   accounts: Array<{ id: string; currency: string; availableBalance?: number; balance: number }>
   schedules: ReturnType<typeof usePayrollSchedules>["data"]
+  onSelectSchedule: (scheduleId?: string) => void
 }) {
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }))
@@ -439,7 +497,7 @@ function DetailsStep({
           <Field label="Schedule (optional)">
             <Select
               value={draft.scheduleId || "none"}
-              onValueChange={(v) => update("scheduleId", v === "none" ? undefined : v)}
+              onValueChange={(value) => onSelectSchedule(value === "none" ? undefined : value)}
             >
               <SelectTrigger>
                 <SelectValue />
