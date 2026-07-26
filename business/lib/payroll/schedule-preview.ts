@@ -79,6 +79,32 @@ export function addPayrollCalendarDays(value: string, days: number): string | nu
   return dateOnly(date)
 }
 
+export function isPayrollDraftDue(input: {
+  payday: string
+  timezone: string
+  now?: Date | string | number
+  leadDays?: number
+}): boolean {
+  const localToday = payrollLocalDate(input.now ?? Date.now(), input.timezone)
+  const draftOn = addPayrollCalendarDays(input.payday, -(input.leadDays ?? 5))
+  return Boolean(localToday && draftOn && localToday >= draftOn)
+}
+
+export function payrollFundingReminderAt(input: {
+  payday: string
+  localTime: string
+  timezone: string
+  leadDays?: number
+}): string | null {
+  const reminderDate = addPayrollCalendarDays(
+    input.payday,
+    -(input.leadDays ?? 3),
+  )
+  return reminderDate
+    ? payrollDateTimeToUtc(reminderDate, input.localTime, input.timezone)
+    : null
+}
+
 function applyWeekendPolicy(date: Date, policy: PayrollWeekendPolicy) {
   const day = date.getUTCDay()
   if (day === 6) date.setUTCDate(date.getUTCDate() + (policy === "previous_business_day" ? -1 : 2))
@@ -187,15 +213,15 @@ export function formatPayrollZonedDateTime(
   const instant = new Date(value)
   if (Number.isNaN(instant.getTime())) return null
   try {
-    return new Intl.DateTimeFormat(locale, {
+    const formatted = new Intl.DateTimeFormat(locale, {
       year: "numeric",
       month: "long",
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
       timeZone,
-      timeZoneName: "short",
     }).format(instant)
+    return `${formatted} (${timeZone})`
   } catch {
     return null
   }

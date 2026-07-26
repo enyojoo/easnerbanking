@@ -382,7 +382,7 @@ export function useApprovePayrollRun(runId: string) {
   const qc = useQueryClient()
   const { scope } = useScope()
   return useMutation({
-    mutationFn: (input?: { mode?: "pay_now" | "schedule"; scheduledAt?: string }) =>
+    mutationFn: (input?: { mode?: "pay_now" | "schedule" }) =>
       apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}/approve`, {
         method: "POST",
         body: input ?? { mode: "pay_now" },
@@ -658,8 +658,29 @@ export function useUpdatePayrollSettings() {
       }
     },
     onSuccess: ({ settings }) => {
-      if (scope) qc.setQueryData(["payroll", "settings", scope], { settings })
-      invalidatePayroll(qc, scope)
+      if (!scope) return
+      qc.setQueryData(["payroll", "settings", scope], { settings })
+      const runs = qc.getQueryData<PayrollRunsEnvelope>(qk.payroll.runs.list(scope))
+      const draftRunIds = (runs?.runs ?? [])
+        .filter((run) => run.status === "draft")
+        .map((run) => run.id)
+      patchRuns(qc, qk.payroll.runs.list(scope), (current) =>
+        current.map((run) =>
+          run.status === "draft"
+            ? {
+                ...run,
+                sourceAccountId: settings.defaultSourceAccountId,
+                sourceCurrency: settings.defaultCurrency,
+              }
+            : run,
+        ),
+      )
+      for (const runId of draftRunIds) {
+        qc.invalidateQueries({ queryKey: qk.payroll.runs.detail(scope, runId) })
+      }
+      qc.invalidateQueries({ queryKey: qk.payroll.overview(scope) })
+      qc.invalidateQueries({ queryKey: qk.payroll.schedules.root(scope) })
+      qc.invalidateQueries({ queryKey: ["payroll", "timing-preview", scope] })
     },
   })
 }

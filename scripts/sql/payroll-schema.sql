@@ -443,7 +443,9 @@ CREATE TABLE IF NOT EXISTS payroll_settings (
   timezone text NOT NULL DEFAULT 'UTC',
   default_source_account_id text,
   default_currency text NOT NULL DEFAULT 'USD',
-  default_payday_time text NOT NULL DEFAULT '09:00',
+  default_payday_time text NOT NULL DEFAULT '09:00' CHECK (
+    default_payday_time ~ '^([01][0-9]|2[0-3]):(00|30)$'
+  ),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -457,6 +459,14 @@ ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS source_account_id text;
 ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS default_source_account_id text;
 ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS default_currency text NOT NULL DEFAULT 'USD';
 ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS default_payday_time text NOT NULL DEFAULT '09:00';
+UPDATE payroll_settings
+SET default_payday_time = '09:00', updated_at = now()
+WHERE default_payday_time !~ '^([01][0-9]|2[0-3]):(00|30)$';
+ALTER TABLE payroll_settings
+  DROP CONSTRAINT IF EXISTS payroll_settings_default_payday_time_check;
+ALTER TABLE payroll_settings
+  ADD CONSTRAINT payroll_settings_default_payday_time_check
+  CHECK (default_payday_time ~ '^([01][0-9]|2[0-3]):(00|30)$');
 
 CREATE TABLE IF NOT EXISTS payroll_schedule_people (
   schedule_id uuid NOT NULL REFERENCES payroll_schedules(id) ON DELETE CASCADE,

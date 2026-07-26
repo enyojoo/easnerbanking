@@ -42,6 +42,9 @@ export type PayrollPaymentHistoryItem = {
   currency: string
   status: string
   paidAt: string | null
+  paidAtDisplay?: string | null
+  payday?: string | null
+  timezone?: string
   document: {
     id?: string
     filename?: string

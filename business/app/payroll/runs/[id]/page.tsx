@@ -78,6 +78,10 @@ export default function PayrollRunDetailPage() {
     run && !run.approvalSnapshot?.executionSchedule ? run.payday : null,
   )
   const executionSchedule = run?.approvalSnapshot?.executionSchedule
+  const previewSchedulesForLater = Boolean(
+    timingPreview.data?.scheduledAt &&
+      new Date(timingPreview.data.scheduledAt).getTime() > Date.now(),
+  )
   const scheduledPaymentDisplay = executionSchedule
     ? formatPayrollZonedDateTime(
         executionSchedule.scheduledAt,
@@ -85,7 +89,14 @@ export default function PayrollRunDetailPage() {
       ) ?? `${executionSchedule.payday} ${executionSchedule.localTime} (${executionSchedule.timezone})`
     : run?.scheduledAt
       ? formatPayrollZonedDateTime(run.scheduledAt, "UTC") ?? run.scheduledAt
-      : timingPreview.data?.display ?? null
+      : previewSchedulesForLater
+        ? timingPreview.data?.display ?? null
+        : "Immediately after approval"
+  const scheduledExecutionUtc =
+    executionSchedule?.scheduledAt ??
+    run?.scheduledAt ??
+    (previewSchedulesForLater ? timingPreview.data?.scheduledAt : null) ??
+    null
   const executionJob = run?.metadata?.executionJob as
     | {
         status?: string
@@ -102,7 +113,11 @@ export default function PayrollRunDetailPage() {
   )
   const hasPayStubs = lines.some((line) => Boolean(line.payrollDocumentId))
   const awaitingApproval = run?.status === "pending_approval" || run?.status === "needs_reapproval"
-  const futurePayday = Boolean(run?.payday && new Date(`${run.payday.slice(0, 10)}T23:59:59`).getTime() > Date.now())
+  const futurePayday = Boolean(
+    timingPreview.data?.scheduledAt
+      ? new Date(timingPreview.data.scheduledAt).getTime() > Date.now()
+      : run?.payday && run.payday.slice(0, 10) > new Date().toISOString().slice(0, 10),
+  )
   const canApproveDraftDirectly = Boolean(
     run?.status === "draft" && canApprove && capabilities?.canSelfApprove,
   )
@@ -298,7 +313,11 @@ export default function PayrollRunDetailPage() {
               <Button
                 variant="primary"
                 onClick={() => void (futurePayday ? handleApproveAndSchedule() : handleApproveAndPay())}
-                disabled={approveRun.isPending || executeRun.isPending}
+                disabled={
+                  approveRun.isPending ||
+                  executeRun.isPending ||
+                  (Boolean(run.payday) && timingPreview.isPending)
+                }
               >
                 {futurePayday ? "Approve and schedule" : "Approve and pay"}
               </Button>
@@ -416,6 +435,9 @@ export default function PayrollRunDetailPage() {
                 label="Payment time"
                 value={scheduledPaymentDisplay ?? "Calculated when approved"}
               />
+              {scheduledExecutionUtc ? (
+                <Detail label="UTC execution" value={scheduledExecutionUtc} />
+              ) : null}
               <Detail label="Amount" value={formatCurrency(run.totalSource, run.sourceCurrency)} />
               <Detail label="People" value={String(lines.length)} />
               <Detail label="Source account" value={`${run.sourceCurrency} account`} />
@@ -516,6 +538,14 @@ export default function PayrollRunDetailPage() {
                         label={payrollLineStatusLabel(line.status, run.status)}
                       />
                     </div>
+                    {line.settledAt ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatPayrollZonedDateTime(
+                          line.settledAt,
+                          executionSchedule?.timezone || "UTC",
+                        ) ?? formatDate(line.settledAt)}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 md:justify-end">
                     {line.payrollDocumentId ? (
@@ -568,10 +598,16 @@ export default function PayrollRunDetailPage() {
                 <Detail label="People" value={String(run.approvalSnapshot.people.length)} />
                 <Detail label="Approved" value={run.approvedAt ? formatDate(run.approvedAt) : "—"} />
                 {run.approvalSnapshot.executionSchedule ? (
-                  <Detail
-                    label="Scheduled payment"
-                    value={scheduledPaymentDisplay ?? "—"}
-                  />
+                  <>
+                    <Detail
+                      label="Scheduled payment"
+                      value={scheduledPaymentDisplay ?? "—"}
+                    />
+                    <Detail
+                      label="UTC execution"
+                      value={run.approvalSnapshot.executionSchedule.scheduledAt}
+                    />
+                  </>
                 ) : null}
               </dl>
             </section>

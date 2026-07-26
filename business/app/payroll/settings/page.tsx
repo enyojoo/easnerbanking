@@ -132,9 +132,14 @@ export default function PayrollSettingsPage() {
             Changes apply to payroll runs scheduled after you save. Existing scheduled runs keep their current
             payment time.
             {timingPreview.data ? (
-              <span className="mt-1 block font-medium text-foreground">
-                Timing preview: {timingPreview.data.display}
-              </span>
+              <>
+                <span className="mt-1 block font-medium text-foreground">
+                  Timing preview: {timingPreview.data.display}
+                </span>
+                <span className="mt-1 block text-xs">
+                  UTC execution: {timingPreview.data.scheduledAt}
+                </span>
+              </>
             ) : null}
           </p>
           <section className="border-t pt-6"><div className="flex items-start justify-between gap-5"><div><h2 className="font-semibold">Require a different approver</h2><p className="mt-1 max-w-xl text-sm text-muted-foreground">A delegated Payroll approver cannot approve a run they submitted. Business owners and admins can always approve.</p></div><Switch checked={separate} onCheckedChange={setSeparate} disabled={!editing} /></div></section>

@@ -464,9 +464,24 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const [payStubSheetOpen, setPayStubSheetOpen] = useState(false)
   const [ycPayInSheetOpen, setYcPayInSheetOpen] = useState(false)
 
-  const formatTimestamp = (dateString: string) => {
+  const formatTimestamp = (dateString: string, timeZone?: string) => {
     if (!dateString) return ''
     const date = new Date(dateString)
+    if (timeZone) {
+      try {
+        return new Intl.DateTimeFormat('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: '2-digit',
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone,
+          timeZoneName: 'short',
+        }).format(date)
+      } catch {
+        // Fall through to the device-local legacy formatter.
+      }
+    }
     const month = date.toLocaleString('en-US', { month: 'short' })
     const day = date.getDate().toString().padStart(2, '0')
     const year = date.getFullYear()
@@ -1128,6 +1143,15 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                         value={String(transaction.metadata.payroll_payday)}
                       />
                     ) : null}
+                    {transaction.metadata?.payroll_scheduled_at ? (
+                      <TransactionDetailSummaryRow
+                        label="Scheduled payment"
+                        value={formatTimestamp(
+                          String(transaction.metadata.payroll_scheduled_at),
+                          String(transaction.metadata?.payroll_timezone || 'UTC'),
+                        )}
+                      />
+                    ) : null}
                     <TransactionDetailSummaryRow label="Receiving method" value="EASETAG" />
                     <TransactionDetailSummaryRow
                       label="Payroll reference"
@@ -1135,7 +1159,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     />
                     <TransactionDetailSummaryRow
                       label="Paid on"
-                      value={formatTimestamp(whenTs)}
+                      value={formatTimestamp(
+                        whenTs,
+                        String(transaction.metadata?.payroll_timezone || 'UTC'),
+                      )}
                     />
                   </>
                 ) : inboundReceive ? <InboundReceiveDetailRows snapshot={inboundReceive} /> : null}

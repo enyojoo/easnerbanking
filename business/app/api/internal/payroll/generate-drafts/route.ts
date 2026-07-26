@@ -10,8 +10,7 @@ import {
 import { buildPayrollLines } from "@/lib/payroll/build-lines"
 import type { PayrollScheduleFrequency } from "@/lib/payroll/types"
 import {
-  addPayrollCalendarDays,
-  payrollLocalDate,
+  isPayrollDraftDue,
   payrollPayPeriodForPayday,
 } from "@/lib/payroll/schedule-preview"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
@@ -61,14 +60,17 @@ export async function GET(request: Request) {
     } catch {
       continue
     }
-    const localToday = payrollLocalDate(now, payrollDefaults.timezone)
-    const draftOn = addPayrollCalendarDays(String(schedule.next_run_at).slice(0, 10), -5)
-    if (!localToday || !draftOn || localToday < draftOn) continue
     const nominalPayday = new Date(`${schedule.next_run_at}T12:00:00.000Z`)
     const weekendPolicy = template.weekendPolicy === "next_business_day"
       ? "next_business_day"
       : "previous_business_day"
     const payday = adjustedPayday(nominalPayday, weekendPolicy)
+    if (!isPayrollDraftDue({
+      payday: dateOnly(payday),
+      timezone: payrollDefaults.timezone,
+      now,
+      leadDays: 5,
+    })) continue
     const frequency = schedule.frequency as PayrollScheduleFrequency
     const period = payrollPayPeriodForPayday(frequency, dateOnly(nominalPayday))
     if (!period) continue

@@ -237,6 +237,11 @@ export async function executePayrollLine(input: {
     const { data: senderBusiness } = await admin.from("businesses")
       .select("name").eq("id", businessId).maybeSingle()
     const runMeta = (run.metadata as Record<string, unknown>) ?? {}
+    const executionSchedule = (
+      (run.approval_snapshot as Record<string, unknown> | null)?.executionSchedule as
+        | Record<string, unknown>
+        | undefined
+    )
 
     const reservedDebitEtid = generateTransactionId()
     const result = await executeEasetagTransfer(admin, {
@@ -263,6 +268,14 @@ export async function executePayrollLine(input: {
         payroll_method: "easetag",
         payroll_reference: run.id,
         payroll_run_name: typeof runMeta.name === "string" ? runMeta.name : null,
+        payroll_timezone:
+          typeof executionSchedule?.timezone === "string"
+            ? executionSchedule.timezone
+            : "UTC",
+        payroll_scheduled_at:
+          typeof executionSchedule?.scheduledAt === "string"
+            ? executionSchedule.scheduledAt
+            : null,
       },
     })
 

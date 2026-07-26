@@ -10,6 +10,7 @@ import { normalizeEasetag } from "@/lib/easetag-validation"
 import { normalizePayrollResidenceCountry } from "@/lib/payroll/residence-country"
 import { normalizePayrollReceivingMethodInput } from "@/lib/payroll/receiving-method-input"
 import { payrollMethodDbPayload } from "@/lib/send-destination"
+import { formatPayrollZonedDateTime } from "@/lib/payroll/schedule-preview"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -74,6 +75,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: methodsError.message }, { status: 500 })
   }
   const methods = ((methodRows ?? []) as Array<Record<string, unknown>>).filter((method) => method.status === "active")
+  const runIds = [...new Set((lines ?? []).map((line) => String(line.run_id)).filter(Boolean))]
+  const { data: historyRuns } = runIds.length
+    ? await admin
+        .from("payroll_runs")
+        .select("id,approval_snapshot")
+        .in("id", runIds)
+    : { data: [] }
+  const historyRunsById = new Map(
+    (historyRuns ?? []).map((run) => [String(run.id), run]),
+  )
   const selectedMethod =
     methods.find((method) => String(method.id) === String(connection?.preferred_method_id || "")) ??
     methods[0] ??
@@ -105,6 +116,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         }
       : null,
     paymentHistory: (lines ?? []).map((line) => ({
+      ...(() => {
+        const historyRun = historyRunsById.get(String(line.run_id))
+        const executionSchedule = (
+          (historyRun?.approval_snapshot as Record<string, unknown> | null)?.executionSchedule as
+            | { timezone?: string }
+            | undefined
+        )
+        const timezone = String(executionSchedule?.timezone || "UTC")
+        return {
+          timezone,
+          settledAtDisplay: line.settled_at
+            ? formatPayrollZonedDateTime(String(line.settled_at), timezone)
+            : null,
+        }
+      })(),
       id: line.id,
       runId: line.run_id,
       amount: Number(line.amount_cents ?? 0) / 100,

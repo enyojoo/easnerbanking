@@ -6,6 +6,8 @@ import {
   payrollDateTimeToUtc,
   payrollLocalDate,
   payrollTimingPreview,
+  isPayrollDraftDue,
+  payrollFundingReminderAt,
 } from "./schedule-preview"
 
 describe("payrollPaydayPreview", () => {
@@ -77,6 +79,11 @@ describe("payrollPaydayPreview", () => {
     )
   })
 
+  it("rejects invalid timezones and unsupported time slots", () => {
+    expect(payrollDateTimeToUtc("2026-07-24", "09:15", "UTC")).toBeNull()
+    expect(payrollDateTimeToUtc("2026-07-24", "09:00", "Not/AZone")).toBeNull()
+  })
+
   it("resolves the business-local date and timing preview", () => {
     expect(payrollLocalDate("2026-07-24T23:30:00.000Z", "Africa/Lagos")).toBe("2026-07-25")
     expect(payrollTimingPreview({
@@ -88,5 +95,26 @@ describe("payrollPaydayPreview", () => {
       localTime: "09:00",
       timezone: "Africa/Lagos",
     })
+  })
+
+  it("opens the recurring draft window using the business-local date", () => {
+    expect(isPayrollDraftDue({
+      payday: "2026-08-05",
+      timezone: "Pacific/Auckland",
+      now: "2026-07-30T12:30:00.000Z",
+    })).toBe(true)
+    expect(isPayrollDraftDue({
+      payday: "2026-08-05",
+      timezone: "America/Los_Angeles",
+      now: "2026-07-30T12:30:00.000Z",
+    })).toBe(false)
+  })
+
+  it("calculates the funding reminder in the configured timezone", () => {
+    expect(payrollFundingReminderAt({
+      payday: "2026-07-24",
+      localTime: "09:00",
+      timezone: "Africa/Lagos",
+    })).toBe("2026-07-21T08:00:00.000Z")
   })
 })

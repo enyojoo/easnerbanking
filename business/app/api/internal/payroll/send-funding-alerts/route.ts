@@ -5,9 +5,8 @@ import { recalculateRunTotals } from "@/lib/payroll/run-utils"
 import { sendPayrollFundingReminderEmail } from "@/lib/payroll/send-funding-reminder-email"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 import {
-  addPayrollCalendarDays,
   formatPayrollZonedDateTime,
-  payrollDateTimeToUtc,
+  payrollFundingReminderAt,
   payrollLocalDate,
 } from "@/lib/payroll/schedule-preview"
 
@@ -53,7 +52,6 @@ export async function GET(request: Request) {
   const { data: runs, error } = await admin
     .from("payroll_runs")
     .select("id,business_id,payday,source_currency,metadata,approval_snapshot")
-    .not("schedule_id", "is", null)
     .in("status", UPCOMING_STATUSES)
     .gte("payday", from)
     .lte("payday", through)
@@ -81,10 +79,12 @@ export async function GET(request: Request) {
       const timezone = String(frozenTiming?.timezone || defaults.timezone)
       const localTime = String(frozenTiming?.localTime || defaults.paydayTime)
       const payday = String(run.payday || "").slice(0, 10)
-      const reminderDate = addPayrollCalendarDays(payday, -FUNDING_ALERT_DAYS)
-      const reminderAt = reminderDate
-        ? payrollDateTimeToUtc(reminderDate, localTime, timezone)
-        : null
+      const reminderAt = payrollFundingReminderAt({
+        payday,
+        localTime,
+        timezone,
+        leadDays: FUNDING_ALERT_DAYS,
+      })
       const localToday = payrollLocalDate(today, timezone)
       if (
         !reminderAt ||

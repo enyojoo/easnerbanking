@@ -832,6 +832,9 @@ function ReviewStep({
   preview: PayrollRunPreview | null
   timing: PayrollTimingPreview | null
 }) {
+  const schedulesForLater = Boolean(
+    timing?.scheduledAt && new Date(timing.scheduledAt).getTime() > Date.now(),
+  )
   return (
     <div>
       <h2 className="text-lg font-semibold">Review payroll</h2>
@@ -844,7 +847,17 @@ function ReviewStep({
           value={`${formatDate(draft.payPeriodStart)} – ${formatDate(draft.payPeriodEnd)}`}
         />
         <ReviewItem label={draft.scheduleId ? "Scheduled payday" : "Payday"} value={formatDate(draft.payday)} />
-        <ReviewItem label="Scheduled payment time" value={timing?.display ?? "Calculated when approved"} />
+        <ReviewItem
+          label="Payment timing"
+          value={
+            schedulesForLater
+              ? timing?.display ?? "Calculated when approved"
+              : "Immediately after approval"
+          }
+        />
+        {schedulesForLater ? (
+          <ReviewItem label="UTC execution" value={timing?.scheduledAt ?? "Calculated when approved"} />
+        ) : null}
         <ReviewItem label="People" value={String(people.length)} />
         <ReviewItem label="Amount" value={formatCurrency(preview?.payrollTotal ?? 0, draft.sourceCurrency)} />
         <ReviewItem label="Fees" value={formatCurrency(preview?.fees ?? 0, draft.sourceCurrency)} />
@@ -879,6 +892,9 @@ function RunSummary({
   timing: PayrollTimingPreview | null
 }) {
   const total = people.reduce((sum, person) => sum + Number(draft.amounts[person.id] || 0), 0)
+  const schedulesForLater = Boolean(
+    timing?.scheduledAt && new Date(timing.scheduledAt).getTime() > Date.now(),
+  )
   return (
     <Card className="h-fit shadow-soft xl:sticky xl:top-6">
       <CardContent className="p-5">
@@ -907,7 +923,11 @@ function RunSummary({
           />
           <ReviewItem
             label="Payment time"
-            value={timing?.display ?? "Calculated at approval"}
+            value={
+              schedulesForLater
+                ? timing?.display ?? "Calculated at approval"
+                : "After approval"
+            }
             row
           />
         </dl>

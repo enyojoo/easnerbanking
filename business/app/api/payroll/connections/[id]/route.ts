@@ -9,6 +9,7 @@ import {
   PERSONAL_PAYROLL_CONNECTION_DETAIL_SELECT,
   PERSONAL_PAYROLL_METHOD_SELECT,
 } from "@/lib/payroll/personal-connection-selects"
+import { formatPayrollZonedDateTime } from "@/lib/payroll/schedule-preview"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(request)
@@ -44,7 +45,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }))
   const [{ data: lines }, { data: person }] = await Promise.all([
     admin.from("payroll_lines")
-      .select("id,amount_cents,pay_currency,status,settled_at,payroll_documents(*)")
+      .select("id,run_id,amount_cents,pay_currency,status,settled_at,payroll_documents(*)")
       .eq("person_id", row.person_id)
       .order("created_at", { ascending: false }),
     admin.from("payroll_people")
@@ -52,6 +53,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .eq("id", row.person_id)
       .maybeSingle(),
   ])
+  const runIds = [...new Set((lines ?? []).map((line) => String(line.run_id)).filter(Boolean))]
+  const { data: runRows } = runIds.length
+    ? await admin
+        .from("payroll_runs")
+        .select("id,payday,approval_snapshot")
+        .in("id", runIds)
+    : { data: [] }
+  const runsById = new Map((runRows ?? []).map((run) => [String(run.id), run]))
   return NextResponse.json({
     connection: {
       id: String(row.id),
@@ -68,6 +77,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       preferredMethod: methods.find((method) => method.preferred) ?? null,
       readinessStatus: person?.readiness_status ?? null,
       paymentHistory: (lines ?? []).map((line) => ({
+        ...(() => {
+          const run = runsById.get(String(line.run_id))
+          const executionSchedule = (
+            (run?.approval_snapshot as Record<string, unknown> | null)?.executionSchedule as
+              | { timezone?: string }
+              | undefined
+          )
+          const timezone = String(executionSchedule?.timezone || "UTC")
+          return {
+            payday: run?.payday ? String(run.payday) : null,
+            timezone,
+            paidAtDisplay: line.settled_at
+              ? formatPayrollZonedDateTime(String(line.settled_at), timezone)
+              : null,
+          }
+        })(),
         lineId: String(line.id),
         businessName: String((row.businesses as Record<string, unknown>)?.name || "Easner Business"),
         amount: Number(line.amount_cents ?? 0) / 100,

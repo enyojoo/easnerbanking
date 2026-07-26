@@ -28,6 +28,8 @@ type Payment = {
   currency: string
   status: string
   settledAt: string | null
+  settledAtDisplay?: string | null
+  timezone?: string
   documents: Array<{ id: string; filename: string; status: string }>
 }
 export default function PayrollPersonDetailPage() {
@@ -87,7 +89,7 @@ export default function PayrollPersonDetailPage() {
         <Card className="shadow-soft"><CardContent className="p-6"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Payment history</h2><p className="mt-1 text-sm text-muted-foreground">Payroll payments and available pay stubs.</p></div></div>
           <div className="mt-4 divide-y">
             {(detail?.paymentHistory ?? []).length ? (detail?.paymentHistory ?? []).map((payment) => <div key={payment.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div><PayrollDetailLink kind="run" id={payment.runId} className="font-medium" href={`/payroll/runs/${payment.runId}`}>{formatCurrency(payment.amount, payment.currency)}</PayrollDetailLink><p className="text-xs text-muted-foreground">{payment.settledAt ? formatDate(payment.settledAt) : "Not settled"} · <span className="capitalize">{payment.status}</span></p></div>
+              <div><PayrollDetailLink kind="run" id={payment.runId} className="font-medium" href={`/payroll/runs/${payment.runId}`}>{formatCurrency(payment.amount, payment.currency)}</PayrollDetailLink><p className="text-xs text-muted-foreground">{payment.settledAtDisplay || (payment.settledAt ? formatDate(payment.settledAt) : "Not settled")} · <span className="capitalize">{payment.status}</span></p></div>
               {payment.documents?.[0] ? <Button variant="outline" size="sm" asChild><a href={`/api/business/payroll/documents/${payment.documents[0].id}`}><Download className="mr-2 h-4 w-4" />Pay stub</a></Button> : null}
             </div>) : <p className="py-8 text-center text-sm text-muted-foreground">No payroll payments yet.</p>}
           </div>

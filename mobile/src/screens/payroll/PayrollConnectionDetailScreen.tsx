@@ -331,7 +331,8 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
                     <View style={styles.grow}>
                       <Text style={styles.paymentAmount}>{money(payment.amount, payment.currency)}</Text>
                       <Text style={styles.muted}>
-                        {payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : 'Payment date pending'}
+                        {payment.paidAtDisplay ||
+                          (payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : 'Payment date pending')}
                       </Text>
                     </View>
                     <StatusPill

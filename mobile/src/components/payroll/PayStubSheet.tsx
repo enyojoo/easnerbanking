@@ -20,6 +20,7 @@ type PayrollDocumentResponse = {
       payPeriodEnd?: string | null
       payday?: string | null
       paidAt?: string
+      timezone?: string
       rail?: string
       documentReference?: string
     }
@@ -105,11 +106,24 @@ export function PayStubSheet({
   }
 
   const meta = document?.metadata
+  const paidAtDisplay = (() => {
+    if (!meta?.paidAt) return null
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: meta.timezone || 'UTC',
+      }).format(new Date(meta.paidAt))
+    } catch {
+      return new Date(meta.paidAt).toLocaleString()
+    }
+  })()
   const rows = [
     ['Employer', meta?.businessName],
     ['Pay period', meta?.payPeriodStart && meta?.payPeriodEnd ? `${meta.payPeriodStart} – ${meta.payPeriodEnd}` : null],
     ['Payday', meta?.payday],
-    ['Paid on', meta?.paidAt ? new Date(meta.paidAt).toLocaleString() : null],
+    ['Paid on', paidAtDisplay],
+    ['Timezone', meta?.timezone],
     ['Method', meta?.rail],
     ['Reference', meta?.documentReference],
   ].filter((row): row is [string, string] => Boolean(row[1]))

@@ -15,6 +15,7 @@ import { requiresDifferentPayrollApprover } from "@/lib/payroll/approval-policy"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 import { payrollTimingPreview } from "@/lib/payroll/schedule-preview"
 import { enqueuePayrollExecution } from "@/lib/payroll/execution-jobs"
+import type { PayrollExecutionSchedule } from "@/lib/payroll/types"
 
 export async function POST(
   request: Request,
@@ -26,7 +27,6 @@ export async function POST(
   const { id } = await params
   const body = (await request.json().catch(() => ({}))) as {
     mode?: "pay_now" | "schedule"
-    scheduledAt?: string
   }
   const admin = createSupabaseAdmin()
 
@@ -89,17 +89,23 @@ export async function POST(
     .eq("run_id", id)
     .neq("status", "skipped")
   const scheduleMode = body.mode === "schedule"
-  let executionSchedule: ReturnType<typeof payrollTimingPreview> = null
+  let executionSchedule: PayrollExecutionSchedule | null = null
   if (scheduleMode) {
     const payday = String(runRow.payday || runRow.scheduled_for || "").slice(0, 10)
     const defaults = await resolvePayrollSourceDefaults(admin, ctx.businessId)
-    executionSchedule = payrollTimingPreview({
+    const timing = payrollTimingPreview({
       payday,
       localTime: defaults.paydayTime,
       timezone: defaults.timezone,
     })
-    if (!executionSchedule) {
+    if (!timing) {
       return NextResponse.json({ error: "This payroll does not have a valid scheduled payday." }, { status: 400 })
+    }
+    executionSchedule = {
+      payday: timing.payday,
+      localTime: timing.localTime,
+      timezone: timing.timezone,
+      scheduledAt: timing.scheduledAt,
     }
   }
 
