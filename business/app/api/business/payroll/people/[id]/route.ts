@@ -169,10 +169,20 @@ export async function PATCH(
     const { data: destination } = await admin.from("recipients")
       .select("id,bank_name,account_number,mobile_provider,wallet_network")
       .eq("id", nextRecipientId)
-      .eq("user_id", ctx.userId)
       .maybeSingle()
     if (!destination) {
       return NextResponse.json({ error: "The saved receiving method is not available." }, { status: 400 })
+    }
+    const destinationBelongsToCurrentPerson = String(nextRecipientId) === String(current.recipientId)
+    if (!destinationBelongsToCurrentPerson) {
+      const { data: ownedDestination } = await admin.from("recipients")
+        .select("id")
+        .eq("id", nextRecipientId)
+        .eq("user_id", ctx.userId)
+        .maybeSingle()
+      if (!ownedDestination) {
+        return NextResponse.json({ error: "The saved receiving method is not available." }, { status: 400 })
+      }
     }
     manualDestination = destination
   }

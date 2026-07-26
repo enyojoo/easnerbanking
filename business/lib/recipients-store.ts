@@ -5,7 +5,7 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { readEasenetPublicProfileCache } from "@/lib/easenet-public-profile-cache"
 import { countryCodeForRecipientSave, getCountryCodeForCurrency } from "@easner/shared"
 
-type RecipientRow = {
+export type RecipientRow = {
   id: string
   user_id: string
   country_code?: string | null

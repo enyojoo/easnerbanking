@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
+import { toBeneficiary, type RecipientRow } from "@/lib/recipients-store"
 import type {
   PayrollCapabilities,
   PayrollOverview,
@@ -47,6 +48,26 @@ export function usePayrollPerson(personId: string | null) {
       connection?: unknown
     }>(`/api/business/payroll/people/${personId}`),
     placeholderData: listPlaceholder,
+    staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: false, webPersist: "none", freshness: "operational" },
+  })
+}
+
+export function usePayrollReceivingDestination(
+  personId: string | null,
+  recipientId: string | null | undefined,
+) {
+  const { scope } = useScope()
+  return useQuery({
+    queryKey: scope && personId && recipientId
+      ? ["payroll", "person", scope, personId, "receiving-destination", recipientId]
+      : ["payroll", "person", "receiving-destination", "disabled"],
+    enabled: Boolean(scope && personId && recipientId),
+    queryFn: () => apiFetch<{ recipient: RecipientRow }>(
+      `/api/business/payroll/people/${personId}/receiving-destination`,
+    ),
+    select: (data) => toBeneficiary(data.recipient),
     staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
     meta: { safePersist: false, webPersist: "none", freshness: "operational" },

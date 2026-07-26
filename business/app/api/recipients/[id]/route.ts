@@ -16,6 +16,7 @@ import {
   toRecipientLegacyPayload,
   type RecipientWritePayload,
 } from "@/lib/recipients-write-payload"
+import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -35,14 +36,29 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { data: existing } = await admin
     .from("recipients")
     .select(
-      "country_code,currency,mobile_provider,wallet_network,bank_name,swift_bic,phone_number,email,full_name,account_number,checking_or_savings,metadata",
+      "user_id,country_code,currency,mobile_provider,wallet_network,bank_name,swift_bic,phone_number,email,full_name,account_number,checking_or_savings,metadata",
     )
     .eq("id", id)
-    .eq("user_id", user.id)
     .maybeSingle()
 
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+  if (String(existing.user_id) !== user.id) {
+    const payroll = await requirePayrollAccess(request, ["preparer", "approver"])
+    if (!payroll.ok) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+    const { data: payrollPerson } = await admin
+      .from("payroll_people")
+      .select("id")
+      .eq("business_id", payroll.businessId)
+      .eq("recipient_id", id)
+      .limit(1)
+      .maybeSingle()
+    if (!payrollPerson) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
   }
 
   const merged = {
@@ -155,7 +171,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     .from("recipients")
     .update(payload)
     .eq("id", id)
-    .eq("user_id", user.id)
     .select("*")
     .single()
   if (!primary.error) return NextResponse.json({ recipient: primary.data })
@@ -176,7 +191,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     .from("recipients")
     .update(toRecipientLegacyPayload(payload))
     .eq("id", id)
-    .eq("user_id", user.id)
     .select("*")
     .single()
   if (!fallback.error) return NextResponse.json({ recipient: fallback.data })

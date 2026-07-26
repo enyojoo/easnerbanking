@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
 import { PayrollCountrySelect } from "@/components/payroll/payroll-country-select"
+import { PayrollCountry } from "@/components/payroll/payroll-country"
 import { PayrollReceivingMethod } from "@/components/payroll/payroll-receiving-method"
 import { PayrollFormSkeleton } from "@/components/payroll/payroll-page-skeleton"
 import { RecipientForm, type RecipientFormRecipientKind } from "@/components/recipient-form"
@@ -22,6 +23,7 @@ import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import {
   usePayrollCapabilities,
   usePayrollPerson,
+  usePayrollReceivingDestination,
   usePayrollSchedules,
   usePayrollSettings,
 } from "@/hooks/queries/use-payroll"
@@ -53,6 +55,10 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
   const updateMethod = useUpdatePayrollPerson()
   const person = personQuery.data?.person
   const recipientsCache = useRecipientsCached(Boolean(person?.recipientId))
+  const destinationQuery = usePayrollReceivingDestination(
+    personId,
+    person?.rail === "easetag" ? null : person?.recipientId,
+  )
   const schedules = useMemo(() => schedulesQuery.data ?? [], [schedulesQuery.data])
   const currency = String(settingsQuery.data?.defaultCurrency || person?.payCurrency || "USD").toUpperCase()
   const [initializedPersonId, setInitializedPersonId] = useState("")
@@ -63,9 +69,13 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
   const [amount, setAmount] = useState("")
   const [reference, setReference] = useState("")
   const [scheduleId, setScheduleId] = useState("")
+  const [updatedDestination, setUpdatedDestination] = useState<Beneficiary | null>(null)
   const savedDestination = useMemo(
-    () => recipientsCache.data.find((destination) => destination.id === person?.recipientId) ?? null,
-    [person?.recipientId, recipientsCache.data],
+    () => updatedDestination
+      ?? destinationQuery.data
+      ?? recipientsCache.data.find((destination) => destination.id === person?.recipientId)
+      ?? null,
+    [destinationQuery.data, person?.recipientId, recipientsCache.data, updatedDestination],
   )
 
   useEffect(() => {
@@ -118,8 +128,11 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
   }
 
   function syncReceivingMethod(destination: Beneficiary) {
+    setUpdatedDestination(destination)
     recipientsCache.setData((current) =>
-      current.map((item) => (item.id === destination.id ? destination : item)),
+      current.some((item) => item.id === destination.id)
+        ? current.map((item) => (item.id === destination.id ? destination : item))
+        : [destination, ...current],
     )
     updateMethod.mutate({
       id: currentPerson.id,
@@ -135,25 +148,64 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
 
   return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
     <Button variant="ghost" size="sm" className="mb-4" asChild><Link href={`/payroll/people/${person.id}`}><ArrowLeft className="mr-2 h-4 w-4" />Back to person</Link></Button>
-    <PayrollPageHeader title="Edit person" description="Update this person’s Payroll details and saved amount." />
+    <PayrollPageHeader
+      title="Edit person"
+      description={person.rail === "easetag"
+        ? "Review the connected EASETAG profile and update their Payroll setup."
+        : "Update this person’s details and saved receiving method."}
+    />
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <Card className="shadow-card"><CardContent className="space-y-6 p-6 sm:p-8">
         {person.rail === "easetag" ? (
-          <div className="flex items-center gap-3 rounded-xl border p-4">
-            <Avatar className="h-11 w-11"><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
-            <div className="min-w-0">
-              <p className="font-medium">{person.fullName}</p>
-              <p className="truncate text-xs text-muted-foreground">{person.email || "No email available"} · @{person.easetag?.replace(/^@/, "")}</p>
+          <div className="space-y-4">
+            <div>
+              <h2 className="font-semibold">EASETAG profile</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This verified identity is connected to the person’s Easner account.
+              </p>
             </div>
+            <div className="flex items-center gap-3 rounded-xl border p-4">
+              <Avatar className="h-12 w-12"><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">{person.fullName}</p>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                    <CheckCircle2 className="h-3.5 w-3.5" />Verified
+                  </span>
+                </div>
+                <p className="truncate text-xs text-muted-foreground">{person.email || "No email available"}</p>
+                <p className="truncate text-xs text-muted-foreground">@{person.easetag?.replace(/^@/, "")}</p>
+              </div>
+            </div>
+            <dl className="grid gap-4 rounded-xl border bg-muted/20 p-4 text-sm sm:grid-cols-2">
+              <IdentityField label="Email" value={person.email || "—"} />
+              <div>
+                <dt className="text-xs text-muted-foreground">Country of residence</dt>
+                <dd className="mt-1 font-medium"><PayrollCountry country={person.country} /></dd>
+              </div>
+              <IdentityField label="Easetag" value={`@${person.easetag?.replace(/^@/, "") || "—"}`} />
+              <IdentityField label="Receiving method" value="Easetag" />
+            </dl>
+            <p className="text-xs text-muted-foreground">
+              Identity and contact details come from the approved EASETAG connection and are not edited by the business.
+            </p>
           </div>
         ) : (
-          <div className="grid gap-5 md:grid-cols-3">
-            <Field label="Full name"><Input value={fullName} onChange={(event) => setFullName(event.target.value)} /></Field>
-            <Field label="Email">
-              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />
-              {email && !EMAIL_PATTERN.test(email.trim()) ? <p className="text-xs text-destructive">Enter a valid email address.</p> : <p className="text-xs text-muted-foreground">Payroll confirmations and pay stubs will be sent here.</p>}
-            </Field>
-            <Field label="Country of residence"><PayrollCountrySelect value={country} onChange={setCountry} /></Field>
+          <div className="space-y-5">
+            <div>
+              <h2 className="font-semibold">Payroll details</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Keep the person’s identity and payroll contact information up to date.
+              </p>
+            </div>
+            <div className="grid gap-5 md:grid-cols-3">
+              <Field label="Full name"><Input value={fullName} onChange={(event) => setFullName(event.target.value)} /></Field>
+              <Field label="Email">
+                <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />
+                {email && !EMAIL_PATTERN.test(email.trim()) ? <p className="text-xs text-destructive">Enter a valid email address.</p> : <p className="text-xs text-muted-foreground">Payroll confirmations and pay stubs will be sent here.</p>}
+              </Field>
+              <Field label="Country of residence"><PayrollCountrySelect value={country} onChange={setCountry} /></Field>
+            </div>
           </div>
         )}
         <div className="grid gap-5 sm:grid-cols-2">
@@ -165,14 +217,24 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
           <Field label="Internal reference (optional)"><Input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="EMP-001" /></Field>
         </div>
         {person.rail === "easetag" ? (
-          <div className="rounded-xl border p-4"><p className="text-sm font-medium">Receiving method</p><div className="mt-2"><PayrollReceivingMethod person={person} typeOnly /></div><p className="mt-2 text-xs text-muted-foreground">The person manages their preferred receiving method through the Easner App.</p></div>
+          <div className="rounded-xl border p-4">
+            <p className="text-sm font-medium">EASETAG connection</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              The person controls the receiving method connected to this approved Payroll relationship.
+            </p>
+            <div className="mt-4 flex items-center justify-between rounded-lg bg-muted/30 px-3 py-3">
+              <span className="text-sm text-muted-foreground">Receiving method</span>
+              <PayrollReceivingMethod person={person} typeOnly />
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">The person manages their preferred receiving method through the Easner App.</p>
+          </div>
         ) : (
           <div className="space-y-5 border-t pt-6">
             <div>
-              <h2 className="font-semibold">Receiving method</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Review or edit the payment details saved for this person.</p>
+              <h2 className="font-semibold">Payment details</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Review and edit the receiving method saved for this person.</p>
             </div>
-            {recipientsCache.loading && !savedDestination ? (
+            {(destinationQuery.isPending || recipientsCache.loading) && !savedDestination ? (
               <div className="space-y-3">
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-40 w-full" />
@@ -188,14 +250,24 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
               />
             ) : (
               <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-900">
-                These saved payment details could not be loaded. Refresh the page or add a new receiving method.
+                <p>These saved payment details could not be loaded.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => void destinationQuery.refetch()}
+                  disabled={destinationQuery.isFetching}
+                >
+                  {destinationQuery.isFetching ? "Trying again…" : "Try again"}
+                </Button>
               </div>
             )}
           </div>
         )}
         <div className="flex justify-end gap-2 border-t pt-5"><Button variant="outline" asChild><Link href={`/payroll/people/${person.id}`}>Cancel</Link></Button><Button variant="primary" disabled={update.isPending || updateMethod.isPending || !fullName.trim() || (person.rail !== "easetag" && (!EMAIL_PATTERN.test(email.trim()) || !country)) || !Number(amount)} onClick={save}>{update.isPending ? "Saving…" : "Save changes"}</Button></div>
       </CardContent></Card>
-      <Card className="h-fit shadow-soft lg:sticky lg:top-6"><CardContent className="p-5"><p className="text-sm font-medium">Person summary</p><dl className="mt-4 space-y-3 text-sm"><Summary label="Person" value={person.rail === "easetag" ? person.fullName : fullName || person.fullName} /><Summary label="Classification" value={type === "employee" ? "Employee" : "Contractor"} /><Summary label="Amount" value={amount ? formatCurrency(Number(amount), currency) : "—"} /><Summary label="Schedule" value={schedules.find((schedule) => schedule.id === scheduleId)?.name || "No schedule"} /></dl></CardContent></Card>
+      <Card className="h-fit shadow-soft lg:sticky lg:top-6"><CardContent className="p-5"><p className="text-sm font-medium">Edit summary</p><dl className="mt-4 space-y-3 text-sm"><Summary label="Setup method" value={person.rail === "easetag" ? "EASETAG" : "Manual"} /><Summary label="Person" value={person.rail === "easetag" ? person.fullName : fullName || person.fullName} /><Summary label="Classification" value={type === "employee" ? "Employee" : "Contractor"} /><Summary label="Amount" value={amount ? formatCurrency(Number(amount), currency) : "—"} /><Summary label="Schedule" value={schedules.find((schedule) => schedule.id === scheduleId)?.name || "No schedule"} /><Summary label="Receiving method" value={person.rail === "easetag" ? "Easetag" : receivingMethodKind(person) === "mobile" ? "Mobile money" : receivingMethodKind(person) === "wallet" ? "Stablecoin wallet" : "Bank account"} /></dl></CardContent></Card>
     </div>
   </div>
 }
@@ -206,4 +278,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Summary({ label, value }: { label: string; value: string }) {
   return <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{label}</dt><dd className="text-right">{value}</dd></div>
+}
+
+function IdentityField({ label, value }: { label: string; value: string }) {
+  return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 truncate font-medium">{value}</dd></div>
 }
