@@ -207,7 +207,7 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
                     </p>
                   </div>
                   <div className="sm:text-right">
-                    <p className="text-xs text-muted-foreground">Country of residence</p>
+                    <p className="text-xs text-muted-foreground">Residence</p>
                     <div className="mt-1 text-sm font-medium">
                       <PayrollCountry country={person.country} />
                     </div>
@@ -312,13 +312,13 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
                     typeOnly
                   />
                 </div>
-                {employeePreferredMethod ? (
+                {employeePreferredMethod && employeePreferredMethod.type !== "easetag" ? (
                   <p className="mt-1 text-right text-xs text-muted-foreground">
                     {Object.values(employeePreferredMethod.maskedDetails).filter(Boolean).join(" · ")}
                   </p>
                 ) : null}
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Preview only. The person manages this receiving method through the Easner App.
+                  The person manages this receiving method through the Easner App.
                 </p>
               </div>
             ) : (

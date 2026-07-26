@@ -69,10 +69,11 @@ export async function POST(request: Request) {
   const sourceDebit = payrollTotal + fees
   const availableBalance = await readBusinessAvailableBalance(admin, ctx.businessId, sourceCurrency)
   if (sourceDebit > availableBalance) {
+    const shortfall = sourceDebit - availableBalance
     issues.push({
       code: "insufficient_funds",
       severity: "warning",
-      message: `Fund ${(sourceDebit - availableBalance).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sourceCurrency} before this payroll is paid.`,
+      message: `Add ${shortfall.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sourceCurrency} before payday so the payroll payments can be sent.`,
       actionLabel: "View accounts",
       actionHref: "/accounts",
     })

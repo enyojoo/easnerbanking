@@ -85,7 +85,6 @@ export async function syncPayrollPersonReceivingMethod(
 
   await admin.from("payroll_lines").update({
     rail,
-    recipient_id: recipientId,
     recipient_snapshot: recipientSnapshot,
     payment_method_id: method.id,
     payment_method_snapshot: paymentMethodSnapshot,

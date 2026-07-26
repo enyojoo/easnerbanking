@@ -32,7 +32,7 @@ function person(overrides: Partial<PayrollPerson> = {}): PayrollPerson {
 describe("buildLineFromPerson", () => {
   it("snapshots the direct provider recipient used for a manual payout", () => {
     const line = buildLineFromPerson("run-1", person())
-    expect(line.recipient_id).toBe("recipient-1")
+    expect(line).not.toHaveProperty("recipient_id")
     expect(line.recipient_snapshot.recipientId).toBe("recipient-1")
   })
 

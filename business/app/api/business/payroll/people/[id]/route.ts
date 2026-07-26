@@ -307,7 +307,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         amount_cents: draftLine.amount_cents,
         pay_currency: draftLine.pay_currency,
         rail: draftLine.rail,
-        recipient_id: draftLine.recipient_id,
         payment_method_id: draftLine.payment_method_id,
         payment_method_snapshot: draftLine.payment_method_snapshot,
         metadata: draftLine.metadata,

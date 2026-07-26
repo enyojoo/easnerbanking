@@ -67,7 +67,6 @@ export function buildLineFromPerson(
   return {
     run_id: runId,
     person_id: person.id,
-    recipient_id: person.recipientId,
     recipient_snapshot: {
       fullName: person.fullName,
       email: person.email,

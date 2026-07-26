@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import {
+  AtSign,
   Building2,
   Check,
   ChevronRight,
   MoreHorizontal,
+  Pencil,
   Plus,
   ShieldCheck,
   Smartphone,
@@ -14,16 +16,24 @@ import {
 } from 'lucide-react-native'
 import { WebAwareModal } from '../WebAwareModal'
 import { CachedImage } from '../CachedImage'
-import { StatusPill } from '../ui'
+import { SectionCard, StatusPill } from '../ui'
 import { borderRadius, colors, fontFamily, spacing, textStyles } from '../../theme'
 import type { PayrollConnectionSummary, PayrollMethodSummary } from '../../features/payroll/types'
 import { payrollMethodDescription, payrollMethodTitle } from '../../features/payroll/types'
 
 function MethodIcon({ type, size = 20 }: { type: PayrollMethodSummary['type']; size?: number }) {
   const props = { size, color: colors.primary.main }
+  if (type === 'easetag') return <AtSign {...props} />
   if (type === 'mobile_money') return <Smartphone {...props} />
   if (type === 'stablecoin') return <Wallet {...props} />
   return <Building2 {...props} />
+}
+
+function connectionStatusLabel(status: string): string {
+  if (status === 'approved') return 'Active'
+  if (status === 'revoked') return 'Revoked'
+  if (status === 'pending') return 'Pending'
+  return 'Inactive'
 }
 
 export function PayrollBusinessIdentityCard({
@@ -36,32 +46,163 @@ export function PayrollBusinessIdentityCard({
   return (
     <View style={styles.identityCard}>
       <View style={styles.identityTop}>
-        {connection.businessLogoUrl ? (
-          <CachedImage uri={connection.businessLogoUrl} style={styles.businessLogo} contentFit="cover" />
-        ) : (
-          <View style={styles.businessIcon}>
-            <Building2 size={23} color={colors.primary.main} />
-          </View>
-        )}
+        <View style={styles.logoWrap}>
+          {connection.businessLogoUrl ? (
+            <CachedImage uri={connection.businessLogoUrl} style={styles.businessLogo} contentFit="cover" />
+          ) : (
+            <View style={styles.businessIcon}>
+              <Building2 size={25} color={colors.primary.main} />
+            </View>
+          )}
+        </View>
         <View style={styles.grow}>
           <Text style={styles.businessName}>{connection.businessName}</Text>
-          {connection.businessEasetag ? (
-            <Text style={styles.muted}>@{connection.businessEasetag.replace(/^@/, '')}</Text>
-          ) : null}
+          <View style={[styles.inline, styles.identitySubtitle]}>
+            {connection.businessEasetag ? (
+              <Text style={styles.muted}>@{connection.businessEasetag.replace(/^@/, '')}</Text>
+            ) : null}
+            <View style={styles.verifiedInline}>
+              <ShieldCheck size={14} color={connection.businessVerified ? colors.success.main : colors.text.tertiary} />
+              <Text style={styles.muted}>{connection.businessVerified ? 'Verified' : 'Verification pending'}</Text>
+            </View>
+          </View>
         </View>
-        <StatusPill label={connection.status} tone={connection.status === 'approved' ? 'completed' : 'neutral'} />
+        <StatusPill
+          label={connectionStatusLabel(connection.status)}
+          tone={connection.status === 'approved' ? 'completed' : 'neutral'}
+        />
       </View>
-      <View style={styles.identityMeta}>
-        <View style={styles.inline}>
-          <ShieldCheck size={16} color={connection.businessVerified ? colors.success.main : colors.text.secondary} />
-          <Text style={styles.muted}>{connection.businessVerified ? 'Verified business' : 'Verification pending'}</Text>
+      {connection.approvedAt ? (
+        <Text style={styles.connectedDate}>
+          Connected since{' '}
+          {new Date(connection.approvedAt).toLocaleDateString(undefined, {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          })}
+        </Text>
+      ) : null}
+      <Text style={styles.identityCopy}>
+        {connection.status === 'pending'
+          ? 'This business is requesting permission to connect with you for payroll.'
+          : 'This business can include you in payroll payments using your selected receiving method.'}
+      </Text>
+      {readinessStatus && readinessStatus !== 'ready' ? (
+        <View style={styles.attention}>
+          <Text style={styles.attentionText}>Choose a usable receiving method to become ready for payroll.</Text>
         </View>
-        {readinessStatus ? (
-          <Text style={styles.muted}>
-            {readinessStatus === 'ready' ? 'Ready for payroll' : 'Receiving method needs attention'}
-          </Text>
+      ) : null}
+    </View>
+  )
+}
+
+export function PayrollInlineMethodsCard({
+  methods,
+  selectedMethodId,
+  selectingMethodId,
+  readOnly = false,
+  onSelect,
+  onAdd,
+  onReplace,
+  onDelete,
+}: {
+  methods: PayrollMethodSummary[]
+  selectedMethodId: string
+  selectingMethodId?: string
+  readOnly?: boolean
+  onSelect: (method: PayrollMethodSummary) => void
+  onAdd: () => void
+  onReplace: (method: PayrollMethodSummary) => void
+  onDelete: (method: PayrollMethodSummary) => void
+}) {
+  const sorted = [...methods].sort((a, b) => {
+    if (a.type === 'easetag') return -1
+    if (b.type === 'easetag') return 1
+    return 0
+  })
+  const external = sorted.find((method) => method.type !== 'easetag')
+
+  return (
+    <View style={styles.methodSection}>
+      <Text style={styles.sectionTitle}>Receiving method</Text>
+      <SectionCard flush style={styles.inlineMethodsCard}>
+        {sorted.map((method, index) => {
+          const selected = method.id === selectedMethodId
+          const selecting = method.id === selectingMethodId
+          const externalMethod = method.type !== 'easetag'
+          return (
+            <View
+              key={method.id}
+              style={[
+                styles.inlineMethodRow,
+                selected && styles.inlineMethodSelected,
+                index < sorted.length - 1 || (!external && !readOnly) ? styles.inlineMethodDivider : null,
+              ]}
+            >
+              <Pressable
+                style={styles.inlineMethodSelect}
+                onPress={() => onSelect(method)}
+                disabled={readOnly || selected || Boolean(selectingMethodId)}
+                accessibilityRole="radio"
+                accessibilityLabel={`${payrollMethodTitle(method)} receiving method`}
+                accessibilityState={{ checked: selected, busy: selecting, disabled: readOnly }}
+              >
+                <View style={styles.methodIcon}>
+                  <MethodIcon type={method.type} />
+                </View>
+                <View style={styles.grow}>
+                  <View style={styles.inline}>
+                    <Text style={styles.methodTitle}>{payrollMethodTitle(method)}</Text>
+                    {method.type === 'easetag' ? <Text style={styles.recommended}>Recommended</Text> : null}
+                  </View>
+                  <Text style={styles.muted}>{payrollMethodDescription(method)}</Text>
+                </View>
+                {selecting ? (
+                  <ActivityIndicator size="small" color={colors.primary.main} />
+                ) : selected ? (
+                  <View style={styles.selectedCircle}>
+                    <Check size={14} color={colors.neutral.white} />
+                  </View>
+                ) : (
+                  <View style={styles.radio} />
+                )}
+              </Pressable>
+              {externalMethod && !readOnly ? (
+                <View style={styles.inlineMethodActions}>
+                  <Pressable
+                    style={styles.iconAction}
+                    onPress={() => onReplace(method)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Replace ${payrollMethodTitle(method)} details`}
+                  >
+                    <Pencil size={18} color={colors.text.secondary} />
+                  </Pressable>
+                  <Pressable
+                    style={styles.iconAction}
+                    onPress={() => onDelete(method)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${payrollMethodTitle(method)}`}
+                  >
+                    <Trash2 size={18} color={colors.error.main} />
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          )
+        })}
+        {!external && !readOnly ? (
+          <Pressable style={styles.addInlineRow} onPress={onAdd} accessibilityRole="button">
+            <View style={styles.addIcon}>
+              <Plus size={20} color={colors.primary.main} />
+            </View>
+            <View style={styles.grow}>
+              <Text style={styles.methodTitle}>Add a receiving method</Text>
+              <Text style={styles.muted}>Bank account, mobile money or wallet address</Text>
+            </View>
+            <ChevronRight size={18} color={colors.text.tertiary} />
+          </Pressable>
         ) : null}
-      </View>
+      </SectionCard>
     </View>
   )
 }
@@ -257,7 +398,7 @@ const styles = StyleSheet.create({
   inline: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   muted: { ...textStyles.bodySmall, color: colors.text.secondary },
   identityCard: {
-    padding: spacing[4],
+    padding: spacing[5],
     gap: spacing[4],
     borderRadius: borderRadius.xl,
     borderWidth: StyleSheet.hairlineWidth,
@@ -269,26 +410,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
   },
-  identityMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: spacing[2],
-  },
-  businessLogo: { width: 48, height: 48, borderRadius: borderRadius.lg },
+  logoWrap: { position: 'relative' },
+  businessLogo: { width: 56, height: 56, borderRadius: borderRadius.lg },
   businessIcon: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary.main + '12',
   },
+  verifiedInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+  },
+  identitySubtitle: { flexWrap: 'wrap' },
   businessName: {
     ...textStyles.titleMedium,
     color: colors.text.primary,
     fontFamily: fontFamily.semibold,
+  },
+  connectedDate: {
+    ...textStyles.labelMedium,
+    color: colors.text.primary,
+    fontFamily: fontFamily.medium,
+  },
+  identityCopy: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    lineHeight: 19,
+  },
+  attention: {
+    padding: spacing[3],
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.warning.main + '10',
+  },
+  attentionText: {
+    ...textStyles.bodySmall,
+    color: colors.text.primary,
   },
   methodSection: { gap: spacing[3] },
   sectionHeader: {
@@ -344,6 +504,48 @@ const styles = StyleSheet.create({
     ...textStyles.labelSmall,
     color: colors.success.main,
     fontFamily: fontFamily.semibold,
+  },
+  inlineMethodsCard: { overflow: 'hidden' },
+  inlineMethodRow: {
+    minHeight: 82,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inlineMethodSelected: {
+    backgroundColor: colors.primary.main + '08',
+  },
+  inlineMethodDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.light,
+  },
+  inlineMethodSelect: {
+    flex: 1,
+    minHeight: 82,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingLeft: spacing[4],
+    paddingVertical: spacing[3],
+  },
+  inlineMethodActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: spacing[2],
+  },
+  iconAction: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+  },
+  addInlineRow: {
+    minHeight: 76,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
   },
   pickerPanel: { paddingBottom: spacing[6] },
   pickerHeader: {

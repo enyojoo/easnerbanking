@@ -321,7 +321,14 @@ export default function NewPayrollRunPage() {
               />
             ) : null}
             {step === 2 ? <AmountsStep people={selectedPeople} draft={draft} setDraft={setDraft} /> : null}
-            {step === 3 ? <ReadinessStep preview={preview} onRefresh={() => void loadPreview(false)} /> : null}
+            {step === 3 ? (
+              <ReadinessStep
+                preview={preview}
+                payday={draft.payday}
+                currency={draft.sourceCurrency}
+                onRefresh={() => void loadPreview(false)}
+              />
+            ) : null}
             {step === 4 ? <ReviewStep draft={draft} people={selectedPeople} preview={preview} /> : null}
 
             <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
@@ -596,29 +603,91 @@ function AmountsStep({
   )
 }
 
-function ReadinessStep({ preview, onRefresh }: { preview: PayrollRunPreview | null; onRefresh: () => void }) {
-  const blocking = preview?.issues.filter((issue) => issue.severity === "blocking") ?? []
-  const warnings = preview?.issues.filter((issue) => issue.severity === "warning") ?? []
+function ReadinessStep({
+  preview,
+  payday,
+  currency,
+  onRefresh,
+}: {
+  preview: PayrollRunPreview | null
+  payday: string
+  currency: string
+  onRefresh: () => void
+}) {
+  const shortfall = preview ? Math.max(0, preview.sourceDebit - preview.availableBalance) : 0
+  const isFunded = Boolean(preview && shortfall <= 0)
+  const paymentIssues =
+    preview?.issues.filter((issue) => issue.code !== "insufficient_funds") ?? []
+
   return (
     <div>
       <div className="flex items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Readiness</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Resolve blocking issues before approval.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Check whether the selected account can cover this payroll.
+          </p>
         </div>
         <Button variant="outline" size="sm" onClick={onRefresh}>
           Check again
         </Button>
       </div>
-      {!blocking.length && !warnings.length ? (
-        <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-          <Check className="mb-3 h-6 w-6" />
-          <p className="font-medium">This payroll is ready</p>
-          <p className="mt-1 text-sm">People, payment details, currency, and funding checks passed.</p>
+
+      {preview ? (
+        <div
+          className={cn(
+            "mt-6 rounded-2xl border p-6",
+            isFunded
+              ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"
+              : "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100",
+          )}
+        >
+          <div className="flex items-start gap-3">
+            {isFunded ? (
+              <Check className="mt-0.5 h-5 w-5 shrink-0" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">
+                {isFunded ? "Balance can cover this payroll" : "Funding needed before payday"}
+              </p>
+              <p className="mt-1 text-sm opacity-80">
+                {isFunded
+                  ? `The selected account can cover the ${formatCurrency(preview.sourceDebit, currency)} total.`
+                  : `This run can still be created or scheduled. Add ${formatCurrency(shortfall, currency)} before ${formatDate(payday)} so the payroll payments can be sent.`}
+              </p>
+              <dl className="mt-5 grid gap-4 border-t border-current/15 pt-4 sm:grid-cols-3">
+                <FundingValue
+                  label="Available balance"
+                  value={formatCurrency(preview.availableBalance, currency)}
+                />
+                <FundingValue
+                  label="Payroll total"
+                  value={formatCurrency(preview.sourceDebit, currency)}
+                />
+                <FundingValue
+                  label={isFunded ? "Balance after payroll" : "Amount to fund"}
+                  value={formatCurrency(
+                    isFunded ? Math.max(0, preview.remainingBalance) : shortfall,
+                    currency,
+                  )}
+                />
+              </dl>
+              {!isFunded ? (
+                <Button className="mt-5" variant="outline" size="sm" asChild>
+                  <Link href="/accounts">View accounts</Link>
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </div>
-      ) : (
+      ) : null}
+
+      {paymentIssues.length ? (
         <div className="mt-5 space-y-3">
-          {preview?.issues.map((issue, index) => (
+          <p className="text-sm font-medium">Payment details need attention</p>
+          {paymentIssues.map((issue, index) => (
             <div
               key={`${issue.code}-${issue.personId}-${index}`}
               className="flex items-start justify-between gap-4 rounded-xl border p-4"
@@ -631,9 +700,7 @@ function ReadinessStep({ preview, onRefresh }: { preview: PayrollRunPreview | nu
                   )}
                 />
                 <div>
-                  <p className="text-sm font-medium">
-                    {issue.severity === "blocking" ? "Action required" : "Check this detail"}
-                  </p>
+                  <p className="text-sm font-medium">Review payment details</p>
                   <p className="mt-1 text-xs text-muted-foreground">{issue.message}</p>
                 </div>
               </div>
@@ -645,7 +712,16 @@ function ReadinessStep({ preview, onRefresh }: { preview: PayrollRunPreview | nu
             </div>
           ))}
         </div>
-      )}
+      ) : null}
+    </div>
+  )
+}
+
+function FundingValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs opacity-70">{label}</dt>
+      <dd className="mt-1 text-sm font-semibold tabular-nums">{value}</dd>
     </div>
   )
 }

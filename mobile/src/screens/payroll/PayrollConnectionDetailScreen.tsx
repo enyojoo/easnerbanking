@@ -8,11 +8,12 @@ import EmptyState from '../../components/EmptyState'
 import { Button, SectionCard, StatusPill } from '../../components/ui'
 import { ListRowSkeleton } from '../../components/skeletons'
 import { PayStubSheet } from '../../components/payroll/PayStubSheet'
+import { PayrollBusinessIdentityCard, PayrollInlineMethodsCard } from '../../components/payroll/PayrollConnectionUI'
 import {
-  PayrollBusinessIdentityCard,
-  PayrollCurrentMethodCard,
-  PayrollMethodPickerSheet,
-} from '../../components/payroll/PayrollConnectionUI'
+  PayrollReceivingMethodSheet,
+  type PayrollExternalMethodType,
+  type PayrollReceivingMethodResult,
+} from '../../components/payroll/PayrollReceivingMethodSheet'
 import { EasnerAlertSheet } from '../../components/premium'
 import { useToast } from '../../components/ToastProvider'
 import { NavigationProps } from '../../types'
@@ -50,14 +51,20 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
   const query = usePayrollConnectionDetail(connectionId || null)
   const { showSuccess, showError } = useToast()
   const bottomPadding = useScrollBottomPadding(spacing[6])
-  const [pickerVisible, setPickerVisible] = useState(false)
   const [selectingMethodId, setSelectingMethodId] = useState('')
+  const [methodFlowVisible, setMethodFlowVisible] = useState(false)
+  const [editingMethod, setEditingMethod] = useState<PayrollMethodSummary | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PayrollMethodSummary | null>(null)
   const [revokeConfirm, setRevokeConfirm] = useState(false)
   const [revoking, setRevoking] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [documentId, setDocumentId] = useState('')
   const detail = query.data
+
+  function backToConnections() {
+    if (navigation.popTo) navigation.popTo('PayrollConnections')
+    else navigation.navigate('PayrollConnections')
+  }
 
   function updateCaches(next: PayrollConnectionDetail) {
     if (!scope) return
@@ -83,7 +90,6 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
 
   async function selectMethod(method: PayrollMethodSummary) {
     if (!detail || !scope || method.id === detail.preferredMethod?.id) {
-      setPickerVisible(false)
       return
     }
     const previousDetail = detail
@@ -97,7 +103,6 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
       readinessStatus: 'ready',
     }
     setSelectingMethodId(method.id)
-    setPickerVisible(false)
     updateCaches(next)
     haptics.select()
     try {
@@ -122,13 +127,32 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
 
   function openMethodFlow(method?: PayrollMethodSummary) {
     if (!detail) return
-    setPickerVisible(false)
-    navigation.navigate('PayrollReceivingMethod', {
-      context: 'connection',
-      ownerId: detail.id,
-      mode: method ? 'replace' : 'add',
-      existingMethod: method,
+    setEditingMethod(method ?? null)
+    setMethodFlowVisible(true)
+  }
+
+  async function receivingMethodSaved(result: PayrollReceivingMethodResult) {
+    if (!detail || !scope) return
+    const method: PayrollMethodSummary = { ...result, preferred: true }
+    const next: PayrollConnectionDetail = {
+      ...detail,
+      methods: [
+        ...detail.methods.filter((item) => item.type === 'easetag').map((item) => ({ ...item, preferred: false })),
+        method,
+      ],
+      preferredMethod: method,
+      readinessStatus: 'ready',
+    }
+    updateCaches(next)
+    setMethodFlowVisible(false)
+    haptics.success()
+    showSuccess(editingMethod ? 'Receiving method replaced' : 'Receiving method added')
+    setEditingMethod(null)
+    void queryClient.invalidateQueries({
+      queryKey: payrollConnectionDetailKey(scope.userId, connectionId),
+      exact: true,
     })
+    void queryClient.invalidateQueries({ queryKey: payrollConnectionsKey(scope.userId) })
   }
 
   async function deleteMethod() {
@@ -137,13 +161,14 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
     const previous = detail
     const remaining = detail.methods.filter((method) => method.id !== target.id)
     const easetag = remaining.find((method) => method.type === 'easetag') ?? null
+    const fallbackMethod = easetag ? { ...easetag, preferred: true } : null
     const next = {
       ...detail,
       methods: remaining.map((method) => ({
         ...method,
         preferred: method.id === (detail.preferredMethod?.id === target.id ? easetag?.id : detail.preferredMethod?.id),
       })),
-      preferredMethod: detail.preferredMethod?.id === target.id ? easetag : detail.preferredMethod,
+      preferredMethod: detail.preferredMethod?.id === target.id ? fallbackMethod : detail.preferredMethod,
     }
     setDeleting(true)
     setDeleteTarget(null)
@@ -204,7 +229,7 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
   if (!detail && query.isPending) {
     return (
       <ScreenWrapper>
-        <InternalHeader title="Payroll details" onBack={() => navigation.goBack()} />
+        <InternalHeader title="Payroll connection" onBack={backToConnections} />
         <View style={styles.content}>
           <SectionCard style={styles.skeletonCard}>
             <ListRowSkeleton variant="recipient" showDivider />
@@ -221,7 +246,7 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
   if (!detail) {
     return (
       <ScreenWrapper>
-        <InternalHeader title="Payroll details" onBack={() => navigation.goBack()} />
+        <InternalHeader title="Payroll connection" onBack={backToConnections} />
         <View style={styles.content}>
           <SectionCard>
             <EmptyState
@@ -242,7 +267,7 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
 
   return (
     <ScreenWrapper>
-      <InternalHeader title={detail.businessName} subtitle="Payroll connection" onBack={() => navigation.goBack()} />
+      <InternalHeader title="Payroll connection" subtitle={detail.businessName} onBack={backToConnections} />
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
@@ -262,10 +287,15 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
 
         <PayrollBusinessIdentityCard connection={detail} readinessStatus={detail.readinessStatus} />
 
-        <PayrollCurrentMethodCard
-          method={detail.preferredMethod}
-          onChange={approved ? () => setPickerVisible(true) : undefined}
-          disabled={query.isPlaceholderData || Boolean(selectingMethodId) || deleting}
+        <PayrollInlineMethodsCard
+          methods={detail.methods}
+          selectedMethodId={detail.preferredMethod?.id ?? ''}
+          selectingMethodId={selectingMethodId}
+          readOnly={!approved || query.isPlaceholderData || deleting}
+          onSelect={(method) => void selectMethod(method)}
+          onAdd={() => openMethodFlow()}
+          onReplace={(method) => openMethodFlow(method)}
+          onDelete={setDeleteTarget}
         />
 
         <View style={styles.section}>
@@ -286,16 +316,18 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
                   key={payment.lineId}
                   style={[styles.paymentRow, index < detail.paymentHistory.length - 1 ? styles.divider : null]}
                 >
-                  <View style={styles.grow}>
-                    <Text style={styles.paymentAmount}>{money(payment.amount, payment.currency)}</Text>
-                    <Text style={styles.muted}>
-                      {payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : 'Payment date pending'}
-                    </Text>
+                  <View style={styles.paymentTop}>
+                    <View style={styles.grow}>
+                      <Text style={styles.paymentAmount}>{money(payment.amount, payment.currency)}</Text>
+                      <Text style={styles.muted}>
+                        {payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : 'Payment date pending'}
+                      </Text>
+                    </View>
+                    <StatusPill
+                      label={payment.status}
+                      tone={payment.status === 'paid' || payment.status === 'completed' ? 'completed' : 'neutral'}
+                    />
                   </View>
-                  <StatusPill
-                    label={payment.status}
-                    tone={payment.status === 'paid' || payment.status === 'completed' ? 'completed' : 'neutral'}
-                  />
                   {payment.document?.id ? (
                     <Pressable
                       onPress={() => setDocumentId(String(payment.document?.id))}
@@ -305,6 +337,7 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
                     >
                       <FileText size={16} color={colors.primary.main} />
                       <Text style={styles.stubText}>Pay stub</Text>
+                      <Text style={styles.stubChevron}>›</Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -315,34 +348,49 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
 
         {approved ? (
           <View style={styles.danger}>
-            <Text style={styles.sectionTitle}>Connection controls</Text>
+            <Text style={styles.sectionTitle}>Manage connection</Text>
             <Text style={styles.muted}>
               Revoking stops this business from including you in future payroll payments. Existing payments and pay
               stubs remain available.
             </Text>
             <Button
               title="Revoke connection"
-              variant="destructive"
+              variant="outline"
+              style={styles.revokeButton}
+              textStyle={styles.revokeButtonText}
               onPress={() => setRevokeConfirm(true)}
               loading={revoking}
               fullWidth
             />
           </View>
-        ) : null}
+        ) : (
+          <SectionCard>
+            <Text style={styles.inactiveTitle}>This connection is inactive</Text>
+            <Text style={styles.muted}>
+              Receiving methods cannot be changed, but previous payments and pay stubs remain available.
+            </Text>
+          </SectionCard>
+        )}
       </ScrollView>
 
-      <PayrollMethodPickerSheet
-        visible={pickerVisible}
-        methods={detail.methods}
-        selectedMethodId={detail.preferredMethod?.id ?? ''}
-        selectingMethodId={selectingMethodId}
-        onSelect={(method) => void selectMethod(method)}
-        onAddOrReplace={openMethodFlow}
-        onDelete={(method) => {
-          setPickerVisible(false)
-          setDeleteTarget(method)
+      <PayrollReceivingMethodSheet
+        visible={methodFlowVisible}
+        connectionId={connectionId}
+        editingMethod={
+          editingMethod && editingMethod.type !== 'easetag'
+            ? {
+                id: editingMethod.id,
+                type: editingMethod.type as PayrollExternalMethodType,
+                label: editingMethod.label,
+                maskedDetails: editingMethod.maskedDetails,
+              }
+            : null
+        }
+        onClose={() => {
+          setMethodFlowVisible(false)
+          setEditingMethod(null)
         }}
-        onClose={() => setPickerVisible(false)}
+        onSaved={receivingMethodSaved}
       />
       <EasnerAlertSheet
         visible={Boolean(deleteTarget)}
@@ -408,13 +456,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[5],
   },
   paymentRow: {
-    minHeight: 76,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing[3],
+    minHeight: 84,
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
+    paddingVertical: spacing[4],
+    gap: spacing[3],
+  },
+  paymentTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[3],
   },
   divider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -430,12 +480,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[1],
-    paddingHorizontal: spacing[2],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border.light,
+    paddingTop: spacing[3],
   },
   stubText: {
     ...textStyles.labelMedium,
     color: colors.primary.main,
     fontFamily: fontFamily.semibold,
+  },
+  stubChevron: {
+    ...textStyles.titleMedium,
+    color: colors.text.tertiary,
+    marginLeft: 'auto',
   },
   danger: {
     gap: spacing[3],
@@ -443,5 +500,17 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.error.main + '45',
+    backgroundColor: colors.error.main + '05',
+  },
+  revokeButton: {
+    borderColor: colors.error.main + '80',
+    backgroundColor: colors.background.primary,
+  },
+  revokeButtonText: { color: colors.error.main },
+  inactiveTitle: {
+    ...textStyles.titleSmall,
+    color: colors.text.primary,
+    fontFamily: fontFamily.semibold,
+    marginBottom: spacing[2],
   },
 })
