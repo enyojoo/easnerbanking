@@ -108,10 +108,8 @@ export function PayrollFormSkeleton() {
 }
 
 export function PayrollInlineRefreshing({ visible }: { visible: boolean }) {
-  if (!visible) return null
-  return (
-    <div className="pointer-events-none fixed bottom-5 right-5 z-40 rounded-full border bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-soft backdrop-blur">
-      Updating payroll…
-    </div>
-  )
+  // Background refreshes deliberately keep cached Payroll content in place.
+  // They should not add a floating status element over the business UI.
+  void visible
+  return null
 }

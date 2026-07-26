@@ -387,7 +387,7 @@ export type CreatePayrollPersonCommand =
   | {
       mode: "manual"
       fullName: string
-      email?: string
+      email: string
       country: string
       type: PayrollPersonType
       defaultAmount: number

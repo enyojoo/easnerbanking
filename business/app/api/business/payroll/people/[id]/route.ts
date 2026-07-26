@@ -11,6 +11,9 @@ import { maskPayrollMethod } from "@/lib/payroll/personal-payroll"
 import { buildPayrollLines } from "@/lib/payroll/build-lines"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
 import { normalizeEasetag } from "@/lib/easetag-validation"
+import { normalizePayrollResidenceCountry } from "@/lib/payroll/residence-country"
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function GET(
   request: Request,
@@ -136,18 +139,55 @@ export async function PATCH(
   }
   const businessCurrency = payrollDefaults.currency
   const current = mapRowToPayrollPerson(existing as PayrollPersonRow)
+  const nextRail = body.rail ?? current.rail
+  const nextEmail = String(body.email !== undefined ? body.email || "" : current.email || "").trim().toLowerCase()
+  const nextCountry = normalizePayrollResidenceCountry(
+    body.country !== undefined ? body.country : current.country,
+  )
+  const nextRecipientId = body.recipientId !== undefined ? body.recipientId : current.recipientId
+  let manualDestination: {
+    id: string
+    bank_name: string | null
+    account_number: string | null
+    mobile_provider: string | null
+    wallet_network: string | null
+  } | null = null
+
+  if (nextRail !== "easetag") {
+    if (!EMAIL_PATTERN.test(nextEmail)) {
+      return NextResponse.json(
+        { error: "A valid email is required for payroll confirmations and pay stubs." },
+        { status: 400 },
+      )
+    }
+    if (!nextCountry) {
+      return NextResponse.json({ error: "Country of residence is required." }, { status: 400 })
+    }
+    if (!nextRecipientId) {
+      return NextResponse.json({ error: "A receiving method is required." }, { status: 400 })
+    }
+    const { data: destination } = await admin.from("recipients")
+      .select("id,bank_name,account_number,mobile_provider,wallet_network")
+      .eq("id", nextRecipientId)
+      .eq("user_id", ctx.userId)
+      .maybeSingle()
+    if (!destination) {
+      return NextResponse.json({ error: "The saved receiving method is not available." }, { status: 400 })
+    }
+    manualDestination = destination
+  }
   const payload = payrollPersonToDbPayload({
     businessId: ctx.businessId,
     person: {
       type: body.type ?? current.type,
       fullName: body.fullName ?? current.fullName,
-      email: body.email !== undefined ? body.email : current.email,
-      country: body.country !== undefined ? body.country : current.country,
+      email: nextRail === "easetag" ? (body.email !== undefined ? body.email : current.email) : nextEmail,
+      country: nextRail === "easetag" ? (body.country !== undefined ? body.country : current.country) : nextCountry,
       defaultAmount: body.defaultAmount ?? current.defaultAmount,
       payCurrency: businessCurrency,
       payBasis: body.payBasis ?? current.payBasis,
       hourlyRate: body.hourlyRate !== undefined ? body.hourlyRate : current.hourlyRate,
-      recipientId: body.recipientId !== undefined ? body.recipientId : current.recipientId,
+      recipientId: nextRecipientId,
       easetag: body.easetag !== undefined ? body.easetag : current.easetag,
       rail: body.rail ?? current.rail,
       status: (body as { status?: typeof current.status }).status ?? current.status,
@@ -167,7 +207,67 @@ export async function PATCH(
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  const person = mapRowToPayrollPerson(data as PayrollPersonRow)
+  let person = mapRowToPayrollPerson(data as PayrollPersonRow)
+  if (manualDestination) {
+    const methodType = nextRail === "mobile" ? "mobile_money" : nextRail === "crypto" ? "stablecoin" : "bank"
+    const account = String(manualDestination.account_number || "")
+    const label = methodType === "mobile_money"
+      ? String(manualDestination.mobile_provider || "Mobile money")
+      : methodType === "stablecoin"
+        ? `${String(manualDestination.wallet_network || "Stablecoin")} wallet`
+        : String(manualDestination.bank_name || "Bank account")
+    const maskedDetails = { ending: account ? `••••${account.slice(-4)}` : "Protected" }
+    const { data: existingMethod } = await admin.from("payroll_payment_methods")
+      .select("id")
+      .eq("person_id", id)
+      .eq("business_id", ctx.businessId)
+      .eq("owner_type", "business")
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle()
+    const methodResult = existingMethod
+      ? await admin.from("payroll_payment_methods").update({
+          type: methodType,
+          label,
+          masked_details: maskedDetails,
+          provider_recipient_id: manualDestination.id,
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingMethod.id).select("id").single()
+      : await admin.from("payroll_payment_methods").insert({
+          person_id: id,
+          business_id: ctx.businessId,
+          owner_type: "business",
+          type: methodType,
+          label,
+          masked_details: maskedDetails,
+          provider_recipient_id: manualDestination.id,
+        }).select("id").single()
+    if (methodResult.error) {
+      return NextResponse.json({ error: methodResult.error.message }, { status: 500 })
+    }
+    const metadata = {
+      ...person.metadata,
+      preferredPaymentMethod: {
+        id: methodResult.data.id,
+        type: methodType,
+        label,
+        maskedDetails,
+        preferred: true,
+        ownerType: "business",
+        status: "active",
+      },
+    }
+    const refreshed = await admin.from("payroll_people")
+      .update({ metadata, readiness_status: "ready", updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("business_id", ctx.businessId)
+      .select("*")
+      .single()
+    if (refreshed.error) {
+      return NextResponse.json({ error: refreshed.error.message }, { status: 500 })
+    }
+    person = mapRowToPayrollPerson(refreshed.data as PayrollPersonRow)
+  }
   const [draftLine] = await buildPayrollLines(admin, "draft-sync", [person])
   const { data: drafts } = await admin.from("payroll_runs")
     .select("id").eq("business_id", ctx.businessId).eq("status", "draft")

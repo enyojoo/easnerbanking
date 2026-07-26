@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { RecipientForm } from "@/components/recipient-form"
 import { PayrollPageHeader } from "@/components/payroll/payroll-page-header"
+import { PayrollCountrySelect } from "@/components/payroll/payroll-country-select"
 import { useCreatePayrollPerson, useInvitePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { usePayrollCapabilities, usePayrollSchedules, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import {
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils"
 
 type Method = "easetag" | "manual"
 type Step = "method" | "details" | "payment" | "review" | "success"
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function railFromBeneficiary(person: Beneficiary): PayrollRail {
   if (person.mobileProvider) return "mobile"
@@ -116,8 +118,8 @@ export function PayrollPersonSetupFlow() {
       const result = await createPerson.mutateAsync({
         type,
         fullName: destination.name,
-        email: email || destination.email || null,
-        country: country || destination.countryCode || null,
+        email: email.trim().toLowerCase(),
+        country,
         defaultAmount: Number(amount),
         payCurrency: businessCurrency,
         recipientId: destination.id,
@@ -204,8 +206,24 @@ export function PayrollPersonSetupFlow() {
             <div className="space-y-5">
               {method === "manual" ? (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Email (optional)"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-                  <Field label="Residence country"><Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Country or code" /></Field>
+                  <Field label="Email">
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="person@example.com"
+                      autoComplete="email"
+                      required
+                    />
+                    {email && !EMAIL_PATTERN.test(email.trim()) ? (
+                      <p className="text-xs text-destructive">Enter a valid email address.</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Payroll confirmations and pay stubs will be sent here.</p>
+                    )}
+                  </Field>
+                  <Field label="Country of residence">
+                    <PayrollCountrySelect value={country} onChange={setCountry} />
+                  </Field>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
@@ -238,7 +256,12 @@ export function PayrollPersonSetupFlow() {
               <Button
                 variant="primary"
                 onClick={() => setStep(method === "manual" ? "payment" : "review")}
-                disabled={settingsQuery.isPending || !Number(amount) || (method === "easetag" && (!profile || (sendInvitation && !profile.email)))}
+                disabled={
+                  settingsQuery.isPending
+                  || !Number(amount)
+                  || (method === "manual" && (!EMAIL_PATTERN.test(email.trim()) || !country))
+                  || (method === "easetag" && (!profile || (sendInvitation && !profile.email)))
+                }
               >
                 Continue<ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -249,17 +272,27 @@ export function PayrollPersonSetupFlow() {
       ) : null}
 
       {step === "payment" ? (
-        <Card className="shadow-card"><CardContent className="p-6">
-          <div className="mb-5"><h2 className="font-semibold">Payment details</h2><p className="text-sm text-muted-foreground">Choose and validate one receiving method. These details remain protected.</p></div>
-          <RecipientForm
-            allowedRecipientTypes={["bank", "mobile", "wallet"]}
-            submitButtonLabel="Save person"
-            terminology="payroll"
-            onSuccess={() => undefined}
-            onSuccessWithData={(destination) => void createManualPerson(destination)}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <Card className="shadow-card"><CardContent className="p-6 sm:p-8">
+            <div className="mb-5"><h2 className="font-semibold">Payment details</h2><p className="text-sm text-muted-foreground">Choose and validate one receiving method. These details remain protected.</p></div>
+            <RecipientForm
+              allowedRecipientTypes={["bank", "mobile", "wallet"]}
+              submitButtonLabel="Save person"
+              terminology="payroll"
+              onSuccess={() => undefined}
+              onSuccessWithData={(destination) => void createManualPerson(destination)}
+            />
+            <Button className="mt-3" variant="ghost" onClick={() => setStep("details")}><ArrowLeft className="mr-2 h-4 w-4" />Back to payroll details</Button>
+          </CardContent></Card>
+          <SetupSummary
+            method={method}
+            profile={profile}
+            type={type}
+            amount={amount}
+            currency={businessCurrency}
+            manualEmail={email}
           />
-          <Button className="mt-3" variant="ghost" onClick={() => setStep("details")}><ArrowLeft className="mr-2 h-4 w-4" />Back to payroll details</Button>
-        </CardContent></Card>
+        </div>
       ) : null}
 
       {step === "review" && profile ? (
@@ -314,12 +347,12 @@ function MethodCard({ icon: Icon, title, description, badge, onClick }: { icon: 
   </button>
 }
 
-function SetupSummary({ method, profile, type, amount, currency }: { method: Method | null; profile: PayrollEasetagProfile | null; type: PayrollPersonType; amount: string; currency: string }) {
+function SetupSummary({ method, profile, type, amount, currency, manualEmail }: { method: Method | null; profile: PayrollEasetagProfile | null; type: PayrollPersonType; amount: string; currency: string; manualEmail?: string }) {
   return <Card className="h-fit shadow-soft lg:sticky lg:top-6"><CardContent className="p-5">
     <p className="text-sm font-medium">Setup summary</p>
     <dl className="mt-4 space-y-3 text-sm">
       <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Method</dt><dd>{method === "easetag" ? "EASETAG" : "Manual"}</dd></div>
-      <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Person</dt><dd className="truncate">{profile?.fullName || "Payment details"}</dd></div>
+      <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Person</dt><dd className="max-w-[180px] truncate">{profile?.fullName || manualEmail || "Manual person"}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Classification</dt><dd className="capitalize">{type}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Amount</dt><dd className="tabular-nums">{amount ? `${currency} ${Number(amount).toLocaleString()}` : "—"}</dd></div>
     </dl>

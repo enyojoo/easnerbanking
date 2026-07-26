@@ -1574,7 +1574,9 @@ export function RecipientForm({
           {isSubmitting
             ? "Saving..."
             : isEdit
-              ? "Update Recipient"
+              ? terminology === "payroll"
+                ? "Update receiving method"
+                : "Update Recipient"
               : submitButtonLabel ?? "Save Recipient"}
         </Button>
       </div>

@@ -9,6 +9,9 @@ import {
 import type { CreatePayrollPersonCommand, PayrollPersonInput } from "@/lib/payroll/types"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
+import { normalizePayrollResidenceCountry } from "@/lib/payroll/residence-country"
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function GET(request: Request) {
   const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
@@ -176,14 +179,25 @@ export async function POST(request: Request) {
   if (!body.fullName?.trim()) {
     return NextResponse.json({ error: "Full name is required" }, { status: 400 })
   }
+  const manualEmail = String(body.email || "").trim().toLowerCase()
+  if (!EMAIL_PATTERN.test(manualEmail)) {
+    return NextResponse.json(
+      { error: "A valid email is required for payroll confirmations and pay stubs." },
+      { status: 400 },
+    )
+  }
+  const residenceCountry = normalizePayrollResidenceCountry(body.country)
+  if (!residenceCountry) {
+    return NextResponse.json({ error: "Country of residence is required." }, { status: 400 })
+  }
 
   const payload = payrollPersonToDbPayload({
     businessId: ctx.businessId,
     person: {
       type: body.type,
       fullName: body.fullName,
-      email: body.email ?? null,
-      country: body.country ?? null,
+      email: manualEmail,
+      country: residenceCountry,
       defaultAmount: body.defaultAmount ?? 0,
       payCurrency: businessCurrency,
       payBasis: body.payBasis ?? "fixed",
