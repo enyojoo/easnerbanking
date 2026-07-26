@@ -72,6 +72,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/internal/payroll/send-funding-alerts",
+      "schedule": "0 8 * * *"
+    },
+    {
       "path": "/api/internal/payroll/reconcile-stuck",
       "schedule": "*/15 * * * *"
     },

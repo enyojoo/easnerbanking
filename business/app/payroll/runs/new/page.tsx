@@ -201,7 +201,7 @@ export default function NewPayrollRunPage() {
     draft.name.trim() &&
     draft.payPeriodStart &&
     draft.payPeriodEnd &&
-    draft.payday &&
+    (draft.scheduleId || draft.payday) &&
     draft.sourceAccountId,
   )
   const amountsValid = draft.selected.every((id) => Number(draft.amounts[id]) > 0)
@@ -458,10 +458,13 @@ function DetailsStep({
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }))
   const sourceAccount = accounts.find((account) => account.id === draft.sourceAccountId)
+  const selectedSchedule = (schedules ?? []).find((schedule) => schedule.id === draft.scheduleId)
   return (
     <div>
       <h2 className="text-lg font-semibold">Payroll details</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Set the period, payday, and account this payroll uses.</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Choose a schedule for its next payroll occurrence, or set the dates for a one-time run.
+      </p>
       <div className="mt-6 space-y-5">
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Run name">
@@ -503,8 +506,8 @@ function DetailsStep({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No schedule</SelectItem>
-                {(schedules ?? []).map((schedule) => (
+                <SelectItem value="none">No schedule · one-time run</SelectItem>
+                {(schedules ?? []).filter((schedule) => schedule.active).map((schedule) => (
                   <SelectItem key={schedule.id} value={schedule.id}>
                     {schedule.name}
                   </SelectItem>
@@ -513,21 +516,38 @@ function DetailsStep({
             </Select>
           </Field>
         </div>
-        <div className="grid gap-5 md:grid-cols-3">
-          <Field label="Pay period start">
-            <Input
-              type="date"
-              value={draft.payPeriodStart}
-              onChange={(e) => update("payPeriodStart", e.target.value)}
-            />
-          </Field>
-          <Field label="Pay period end">
-            <Input type="date" value={draft.payPeriodEnd} onChange={(e) => update("payPeriodEnd", e.target.value)} />
-          </Field>
-          <Field label="Payday">
-            <Input type="date" value={draft.payday} onChange={(e) => update("payday", e.target.value)} />
-          </Field>
-        </div>
+        {draft.scheduleId ? (
+          <div className="rounded-xl border bg-muted/30 p-4">
+            <p className="text-sm font-medium">{selectedSchedule?.name || "Selected schedule"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This run uses the schedule’s next pay period and payday. The schedule will continue creating
+              future payroll drafts until it is paused.
+            </p>
+            <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+              <ReviewItem
+                label="Pay period"
+                value={`${formatDate(draft.payPeriodStart)} – ${formatDate(draft.payPeriodEnd)}`}
+              />
+              <ReviewItem label="Next payday" value={formatDate(draft.payday)} />
+            </dl>
+          </div>
+        ) : (
+          <div className="grid gap-5 md:grid-cols-3">
+            <Field label="Pay period start">
+              <Input
+                type="date"
+                value={draft.payPeriodStart}
+                onChange={(e) => update("payPeriodStart", e.target.value)}
+              />
+            </Field>
+            <Field label="Pay period end">
+              <Input type="date" value={draft.payPeriodEnd} onChange={(e) => update("payPeriodEnd", e.target.value)} />
+            </Field>
+            <Field label="Payday">
+              <Input type="date" value={draft.payday} onChange={(e) => update("payday", e.target.value)} />
+            </Field>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -713,7 +733,7 @@ function ReadinessStep({
               <p className="mt-1 text-sm opacity-80">
                 {isFunded
                   ? `The selected account can cover the ${formatCurrency(preview.sourceDebit, currency)} total.`
-                  : `This run can still be created or scheduled. Add ${formatCurrency(shortfall, currency)} before ${formatDate(payday)} so the payroll payments can be sent.`}
+                  : `This run can still be saved and approved. Add ${formatCurrency(shortfall, currency)} before ${formatDate(payday)}. If the funds are not available when payroll is due, the run will not be sent and the business will be notified.`}
               </p>
               <dl className="mt-5 grid gap-4 border-t border-current/15 pt-4 sm:grid-cols-3">
                 <FundingValue
@@ -804,7 +824,7 @@ function ReviewStep({
           label="Pay period"
           value={`${formatDate(draft.payPeriodStart)} – ${formatDate(draft.payPeriodEnd)}`}
         />
-        <ReviewItem label="Payday" value={formatDate(draft.payday)} />
+        <ReviewItem label={draft.scheduleId ? "Scheduled payday" : "Payday"} value={formatDate(draft.payday)} />
         <ReviewItem label="People" value={String(people.length)} />
         <ReviewItem label="Amount" value={formatCurrency(preview?.payrollTotal ?? 0, draft.sourceCurrency)} />
         <ReviewItem label="Fees" value={formatCurrency(preview?.fees ?? 0, draft.sourceCurrency)} />
@@ -858,7 +878,11 @@ function RunSummary({
             value={preview ? formatCurrency(preview.availableBalance, draft.sourceCurrency) : "Checked at readiness"}
             row
           />
-          <ReviewItem label="Payday" value={draft.payday ? formatDate(draft.payday) : "—"} row />
+          <ReviewItem
+            label={draft.scheduleId ? "Scheduled payday" : "Payday"}
+            value={draft.payday ? formatDate(draft.payday) : "—"}
+            row
+          />
         </dl>
       </CardContent>
     </Card>

@@ -66,6 +66,9 @@ export default function PayrollRunDetailPage() {
   const run = runQuery.data
   const lines = useMemo(() => run?.lines ?? [], [run?.lines])
   const failedLines = lines.filter((l) => l.status === "failed")
+  const paymentResultsVisible = Boolean(
+    run && ["executing", "completed", "partial", "failed"].includes(run.status),
+  )
   const hasPayStubs = lines.some((line) => Boolean(line.payrollDocumentId))
   const awaitingApproval = run?.status === "pending_approval" || run?.status === "needs_reapproval"
   const futurePayday = Boolean(run?.payday && new Date(`${run.payday.slice(0, 10)}T23:59:59`).getTime() > Date.now())
@@ -120,10 +123,7 @@ export default function PayrollRunDetailPage() {
       return
     }
     try {
-      await approveRun.mutateAsync({
-        mode: "schedule",
-        scheduledAt: `${date.slice(0, 10)}T09:00:00.000Z`,
-      })
+      await approveRun.mutateAsync({ mode: "schedule" })
       toast.success("Payroll approved and scheduled")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Payroll could not be scheduled")
@@ -311,7 +311,7 @@ export default function PayrollRunDetailPage() {
                   {run.status === "scheduled" && canApprove ? (
                     <DropdownMenuItem onClick={() => void cancelSchedule()}>
                       <CalendarX2 />
-                      Cancel schedule
+                      Cancel scheduled payment
                     </DropdownMenuItem>
                   ) : null}
                   {(run.status === "draft" || run.status === "failed") && canPrepare ? (
@@ -365,6 +365,12 @@ export default function PayrollRunDetailPage() {
               <Detail label="Source account" value={`${run.sourceCurrency} account`} />
               <Detail label="Receiving methods" value={railSummary || "—"} />
             </dl>
+            {run.scheduleId ? (
+              <p className="mt-5 rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+                This run is one occurrence of the linked schedule. Cancelling this occurrence does not pause
+                future payroll drafts; manage the recurring schedule from Schedules.
+              </p>
+            ) : null}
           </section>
 
           <section className="border-t p-5 sm:p-6">
@@ -418,7 +424,7 @@ export default function PayrollRunDetailPage() {
             <div className="flex flex-wrap items-end justify-between gap-3 p-5 sm:p-6">
               <div>
                 <h2 className="font-semibold">
-                  {run.status === "draft" ? "People and amounts" : "Payment results"}
+                  {paymentResultsVisible ? "Payment results" : "People and amounts"}
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {lines.length} {lines.length === 1 ? "person" : "people"} included in this payroll.
@@ -449,7 +455,10 @@ export default function PayrollRunDetailPage() {
                   <div>
                     <p className="text-xs text-muted-foreground md:hidden">Status</p>
                     <div className="mt-1 md:mt-0">
-                      <PayrollLineStatusBadge status={line.status} />
+                      <PayrollLineStatusBadge
+                        status={line.status}
+                        label={payrollLineStatusLabel(line.status, run.status)}
+                      />
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 md:justify-end">
@@ -506,30 +515,6 @@ export default function PayrollRunDetailPage() {
             </section>
           ) : null}
 
-          <section className="border-t p-5 sm:p-6">
-            <h2 className="font-semibold">Timeline</h2>
-            <dl className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              <Detail label="Created" value={formatDate(run.createdAt)} />
-              <Detail label="Submitted" value={run.submittedAt ? formatDate(run.submittedAt) : "—"} />
-              <Detail label="Approved" value={run.approvedAt ? formatDate(run.approvedAt) : "—"} />
-              <Detail label="Executed" value={run.executedAt ? formatDate(run.executedAt) : "—"} />
-            </dl>
-            <ol className="mt-6 space-y-4 border-t pt-6">
-              {(run.events ?? []).length ? (
-                run.events?.map((event) => (
-                  <li key={event.id} className="relative border-l pl-4">
-                    <span className="absolute -left-1 top-1 h-2 w-2 rounded-full bg-primary" />
-                    <p className="text-sm">
-                      {event.eventType.replaceAll(".", " ").replace(/\b\w/g, (character) => character.toUpperCase())}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(event.createdAt)}</p>
-                  </li>
-                ))
-              ) : (
-                <li className="text-sm text-muted-foreground">No additional activity recorded yet.</li>
-              )}
-            </ol>
-          </section>
         </CardContent>
       </Card>
       <div className="mt-6">
@@ -621,4 +606,18 @@ function Detail({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 text-sm">{value}</dd>
     </div>
   )
+}
+
+function payrollLineStatusLabel(
+  status: PayrollLine["status"],
+  runStatus: string,
+): string | undefined {
+  if (status === "pending") {
+    if (runStatus === "scheduled") return "Scheduled"
+    if (runStatus === "pending_approval" || runStatus === "needs_reapproval") return "Ready"
+    if (runStatus === "draft" || runStatus === "approved") return "Not sent"
+  }
+  if (status === "quoting") return "Checking payment details"
+  if (status === "locked") return "Ready to send"
+  return undefined
 }

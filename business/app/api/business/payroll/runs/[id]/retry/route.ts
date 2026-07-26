@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
 import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { executePayrollLine } from "@/lib/payroll/execute-run"
+import { executePayrollLine, lockPayrollLineQuote } from "@/lib/payroll/execute-run"
 import type { PayrollLineRow, PayrollRunRow } from "@/lib/payroll/map-payroll"
 import { sendPayrollStubForLine } from "@/lib/payroll/send-stub-email"
+import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 
 export async function POST(
   request: Request,
@@ -24,6 +25,11 @@ export async function POST(
     .maybeSingle()
 
   if (!runRow) return NextResponse.json({ error: "Run not found" }, { status: 404 })
+  const account = await resolveNoahAccountContextFromLedgerScope(admin, {
+    userId: ctx.userId,
+    businessId: ctx.businessId,
+  })
+  if (!account) return NextResponse.json({ error: "Business account not ready" }, { status: 400 })
 
   let q = admin.from("payroll_lines").select("*").eq("run_id", runId).eq("status", "failed")
   if (body.lineIds?.length) q = q.in("id", body.lineIds)
@@ -33,7 +39,51 @@ export async function POST(
   const failed: Array<{ id: string; error: string }> = []
 
   for (const line of lines ?? []) {
-    const row = line as PayrollLineRow
+    let row = line as PayrollLineRow
+    try {
+      const locked = await lockPayrollLineQuote({
+        admin,
+        userId: ctx.userId,
+        businessId: ctx.businessId,
+        line: row,
+        sourceCurrency: String(runRow.source_currency || "USD"),
+        noahCustomerId: account.noahCustomerId,
+      })
+      const metadata = {
+        ...((row.metadata as Record<string, unknown> | null) ?? {}),
+        executePayload: locked.executePayload,
+      }
+      await admin
+        .from("payroll_lines")
+        .update({
+          status: locked.lockId ? "locked" : "pending",
+          lock_id: locked.lockId,
+          source_amount_cents: Math.round(locked.sourceAmount * 100),
+          metadata,
+          error_code: null,
+          error_message: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+      row = {
+        ...row,
+        status: locked.lockId ? "locked" : "pending",
+        lock_id: locked.lockId,
+        source_amount_cents: Math.round(locked.sourceAmount * 100),
+        metadata,
+        error_code: null,
+        error_message: null,
+      }
+    } catch (cause) {
+      const error = cause instanceof Error ? cause.message : "Payment details could not be prepared."
+      await admin.from("payroll_lines").update({
+        status: "failed",
+        error_message: error,
+        updated_at: new Date().toISOString(),
+      }).eq("id", row.id)
+      failed.push({ id: row.id, error })
+      continue
+    }
     const result = await executePayrollLine({
       admin,
       userId: ctx.userId,

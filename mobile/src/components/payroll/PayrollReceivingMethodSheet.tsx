@@ -34,6 +34,7 @@ import { RecipientBankNameField } from '../recipients/RecipientBankNameField'
 import { WalletAddressField } from '../recipients/WalletAddressField'
 import { EmbeddedWalletAddressQrScanner } from '../recipients/WalletAddressQrScanner'
 import { formatAccountNumber, formatIBAN, formatRoutingNumber, formatSortCode } from '../../utils/formatters'
+import { resolvePayrollReceivingDestination } from '../../features/payroll/receivingMethodDefaults'
 
 export type PayrollExternalMethodType = 'bank' | 'mobile_money' | 'stablecoin'
 
@@ -147,28 +148,41 @@ export function PayrollReceivingMethodSheet({
     )
   }, [destinationSearch, destinations])
 
+  const residenceCountry = String(
+    userProfile?.residence_country ??
+      userProfile?.profile?.residence_country ??
+      userProfile?.profile?.country_code ??
+      '',
+  )
+  const savedDestination = useMemo(() => {
+    if (!editingMethod) return null
+    const countryCode = String(editingMethod.maskedDetails?.countryCode || '').trim().toUpperCase()
+    const currencyCode = String(
+      editingMethod.maskedDetails?.asset || editingMethod.maskedDetails?.currency || '',
+    ).trim().toUpperCase()
+    if (!currencyCode) return null
+    return destinations.find((destination) => (
+      destination.currencyCode.toUpperCase() === currencyCode &&
+      (!countryCode || destination.countryCode.toUpperCase() === countryCode)
+    )) ?? null
+  }, [destinations, editingMethod])
+  const effectiveDestination = useMemo(
+    () =>
+      selectedType
+        ? resolvePayrollReceivingDestination({
+            type: selectedType,
+            destinations,
+            residenceCountry,
+            current: selectedDestination ?? savedDestination,
+          })
+        : null,
+    [destinations, residenceCountry, savedDestination, selectedDestination, selectedType],
+  )
+
   useEffect(() => {
-    if (!visible || selectedType === 'stablecoin' || !selectedType || selectedDestination) {
-      return
-    }
-    const residenceCountry = String(
-      userProfile?.residence_country ??
-        userProfile?.profile?.residence_country ??
-        userProfile?.profile?.country_code ??
-        '',
-    ).toUpperCase()
-    if (!residenceCountry) return
-    const matches = destinations.filter((destination) => destination.countryCode.toUpperCase() === residenceCountry)
-    if (matches.length === 1) setSelectedDestination(matches[0])
-  }, [
-    destinations,
-    selectedDestination,
-    selectedType,
-    userProfile?.profile?.country_code,
-    userProfile?.profile?.residence_country,
-    userProfile?.residence_country,
-    visible,
-  ])
+    if (!visible || !selectedType || !effectiveDestination || selectedDestination) return
+    setSelectedDestination(effectiveDestination)
+  }, [effectiveDestination, selectedDestination, selectedType, visible])
 
   useEffect(() => {
     if (!visible) return
@@ -188,34 +202,41 @@ export function PayrollReceivingMethodSheet({
     setError('')
   }, [editingMethod, visible])
 
-  const formFields = selectedDestination?.fields ?? []
+  const formFields = effectiveDestination?.fields ?? []
   const providerOptions = useMemo(() => {
-    if (!selectedDestination) return []
+    if (!effectiveDestination) return []
     if (selectedType === 'mobile_money') {
       const options = getCorridorRecipientOptions({
-        countryCode: selectedDestination.countryCode,
-        currencyCode: selectedDestination.currencyCode,
+        countryCode: effectiveDestination.countryCode,
+        currencyCode: effectiveDestination.currencyCode,
         rail: 'mobile_money',
       }).momoOptions
       if (options.length) return options
     }
-    return selectedDestination.providers ?? []
-  }, [catalogRevision, selectedDestination, selectedType])
+    return effectiveDestination.providers ?? []
+  }, [catalogRevision, effectiveDestination, selectedType])
   const bankOptions = useMemo(() => {
-    if (selectedType !== 'bank' || !selectedDestination) return []
+    if (selectedType !== 'bank' || !effectiveDestination) return []
     return getCorridorRecipientOptions({
-      countryCode: selectedDestination.countryCode,
-      currencyCode: selectedDestination.currencyCode,
+      countryCode: effectiveDestination.countryCode,
+      currencyCode: effectiveDestination.currencyCode,
       rail: 'bank_transfer',
     }).bankOptions
-  }, [catalogRevision, selectedDestination, selectedType])
+  }, [catalogRevision, effectiveDestination, selectedType])
   const filteredProviderOptions = useMemo(() => {
     const query = providerSearch.trim().toLowerCase()
     return providerOptions.filter((option) => !query || option.toLowerCase().includes(query))
   }, [providerOptions, providerSearch])
   const formComplete = Boolean(
-    selectedDestination && formFields.every((field) => !field.required || String(fields[field.key] ?? '').trim()),
+    effectiveDestination && formFields.every((field) => !field.required || String(fields[field.key] ?? '').trim()),
   )
+
+  useEffect(() => {
+    if (!visible || !effectiveDestination || providerOptions.length === 0) return
+    const field = selectedType === 'mobile_money' ? 'provider' : selectedType === 'stablecoin' ? 'network' : null
+    if (!field) return
+    setFields((current) => current[field] ? current : { ...current, [field]: providerOptions[0] })
+  }, [effectiveDestination, providerOptions, selectedType, visible])
 
   function chooseType(type: PayrollExternalMethodType) {
     setSelectedType(type)
@@ -259,7 +280,7 @@ export function PayrollReceivingMethodSheet({
   }
 
   function validate(): string | null {
-    if (!selectedType || !selectedDestination) return 'Choose a receiving method and destination.'
+    if (!selectedType || !effectiveDestination) return 'Choose a receiving method and destination.'
     for (const field of formFields) {
       if (field.required && !String(fields[field.key] ?? '').trim()) {
         return `${field.label} is required.`
@@ -270,7 +291,7 @@ export function PayrollReceivingMethodSheet({
 
   async function save() {
     const validation = validate()
-    if (validation || !selectedType || !selectedDestination) {
+    if (validation || !selectedType || !effectiveDestination) {
       setError(validation ?? 'Complete the receiving method.')
       return
     }
@@ -278,18 +299,18 @@ export function PayrollReceivingMethodSheet({
     const type = selectedType
     const details: Record<string, string> = {
       ...fields,
-      countryCode: selectedDestination.countryCode,
-      currency: selectedDestination.currencyCode,
+      countryCode: effectiveDestination.countryCode,
+      currency: effectiveDestination.currencyCode,
     }
     if (type === 'stablecoin') {
-      details.asset = selectedDestination.currencyCode
+      details.asset = effectiveDestination.currencyCode
     }
     const label =
       type === 'bank'
         ? fields.bankName
         : type === 'mobile_money'
           ? fields.provider
-          : `${selectedDestination.currencyCode} on ${fields.network}`
+          : `${effectiveDestination.currencyCode} on ${fields.network}`
     setSubmitting(true)
     setError('')
     let createdRecipientId = ''
@@ -304,9 +325,9 @@ export function PayrollReceivingMethodSheet({
             ? fields.bankName
             : type === 'mobile_money'
               ? `Mobile Money (${fields.provider})`
-              : `Wallet (${selectedDestination.currencyCode}/${fields.network})`,
-        currency: selectedDestination.currencyCode,
-        countryCode: selectedDestination.countryCode,
+              : `Wallet (${effectiveDestination.currencyCode}/${fields.network})`,
+        currency: effectiveDestination.currencyCode,
+        countryCode: effectiveDestination.countryCode,
         phoneNumber: type === 'mobile_money' ? fields.phoneNumber : undefined,
         mobileProvider: type === 'mobile_money' ? fields.provider : undefined,
         walletNetwork: type === 'stablecoin' ? fields.network : undefined,
@@ -372,18 +393,16 @@ export function PayrollReceivingMethodSheet({
                 : selectedType
                   ? reviewing
                     ? 'Review receiving method'
-                    : `${editingMethod ? 'Replace' : 'Add'} ${methodTitle(selectedType).toLowerCase()}`
+                    : `${editingMethod ? 'Edit' : 'Add'} ${methodTitle(selectedType).toLowerCase()}`
                   : 'Add a receiving method'}
             </Text>
             <Text style={styles.subtitle}>
               {reviewing
                 ? 'Confirm where you want to receive payroll.'
                 : selectedType && editingMethod
-                  ? 'Re-enter the details to securely replace this receiving method.'
+                  ? 'Enter the updated receiving details. Your current method stays active until you save.'
                   : selectedType
-                    ? selectedDestination
-                      ? 'Enter the receiving details used for payroll payments.'
-                      : 'Choose a supported destination.'
+                    ? 'Enter the receiving details used for payroll payments.'
                     : 'Choose where you want to receive payroll.'}
             </Text>
           </View>
@@ -434,28 +453,15 @@ export function PayrollReceivingMethodSheet({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              {editingMethod && !reviewing ? (
-                <View style={styles.existingPreview}>
-                  <Text style={styles.reviewLabel}>Current method</Text>
-                  <Text style={styles.methodPreviewTitle}>
-                    {editingMethod.label || methodTitle(editingMethod.type)}
-                  </Text>
-                  <Text style={styles.optionSubtitle}>
-                    {Object.values(editingMethod.maskedDetails ?? {})
-                      .filter(Boolean)
-                      .join(' · ') || 'Protected details'}
-                  </Text>
-                </View>
-              ) : null}
-              {reviewing && selectedDestination ? (
+              {reviewing && effectiveDestination ? (
                 <View style={styles.reviewCard}>
                   <Text style={styles.reviewTitle}>{methodTitle(selectedType)}</Text>
                   <View style={styles.reviewRow}>
                     <Text style={styles.reviewLabel}>Destination</Text>
                     <Text style={styles.reviewValue}>
                       {selectedType === 'stablecoin'
-                        ? selectedDestination.currencyCode
-                        : `${selectedDestination.countryName} · ${selectedDestination.currencyCode}`}
+                        ? effectiveDestination.currencyCode
+                        : `${effectiveDestination.countryName} · ${effectiveDestination.currencyCode}`}
                     </Text>
                   </View>
                   {formFields.map((field) => {
@@ -474,7 +480,7 @@ export function PayrollReceivingMethodSheet({
                   })}
                   {editingMethod ? (
                     <Text style={styles.replaceNote}>
-                      Your current method remains active until this replacement is saved successfully.
+                      Your current method remains active until these changes are saved successfully.
                     </Text>
                   ) : null}
                 </View>
@@ -501,22 +507,22 @@ export function PayrollReceivingMethodSheet({
                       accessibilityRole="button"
                     >
                       <View style={styles.selectorContent}>
-                        {selectedDestination ? (
-                          selectedType === 'stablecoin' && getTokenIconUrl(selectedDestination.currencyCode) ? (
+                        {effectiveDestination ? (
+                          selectedType === 'stablecoin' && getTokenIconUrl(effectiveDestination.currencyCode) ? (
                             <CachedImage
-                              uri={getTokenIconUrl(selectedDestination.currencyCode)!}
+                              uri={getTokenIconUrl(effectiveDestination.currencyCode)!}
                               style={styles.optionIcon}
                               contentFit="cover"
                             />
                           ) : (
-                            <CountryFlag code={selectedDestination.countryCode} size={22} />
+                            <CountryFlag code={effectiveDestination.countryCode} size={22} />
                           )
                         ) : null}
                         <Text style={styles.selectorText}>
-                          {selectedDestination
+                          {effectiveDestination
                             ? selectedType === 'stablecoin'
-                              ? selectedDestination.currencyCode
-                              : `${selectedDestination.currencyCode} - ${selectedDestination.countryName}`
+                              ? effectiveDestination.currencyCode
+                              : `${effectiveDestination.currencyCode} - ${effectiveDestination.countryName}`
                             : selectedType === 'stablecoin'
                               ? 'Select asset'
                               : 'Select currency'}
@@ -549,8 +555,8 @@ export function PayrollReceivingMethodSheet({
                       <RecipientFormDropdownList>
                         {visibleDestinations.map((destination) => {
                           const selected =
-                            destination.countryCode === selectedDestination?.countryCode &&
-                            destination.currencyCode === selectedDestination?.currencyCode
+                            destination.countryCode === effectiveDestination?.countryCode &&
+                            destination.currencyCode === effectiveDestination?.currencyCode
                           return (
                             <Pressable
                               key={`${destination.countryCode}-${destination.currencyCode}`}
@@ -582,7 +588,7 @@ export function PayrollReceivingMethodSheet({
                     </RegisterRecipientDropdownSheet>
                   </View>
 
-                  {selectedDestination ? (
+                  {effectiveDestination ? (
                     formFields.map((field) => {
                       if (field.key === 'bankName') {
                         return (
@@ -726,14 +732,7 @@ export function PayrollReceivingMethodSheet({
                         />
                       )
                     })
-                  ) : (
-                    <View style={styles.destinationPrompt}>
-                      <Text style={styles.optionTitle}>Select a destination to continue</Text>
-                      <Text style={styles.optionSubtitle}>
-                        Choose the country and currency, or the asset you want to receive.
-                      </Text>
-                    </View>
-                  )}
+                  ) : null}
                 </>
               )}
 
@@ -767,7 +766,7 @@ export function PayrollReceivingMethodSheet({
                   disabled={submitting}
                 />
                 <Button
-                  title={reviewing ? (editingMethod ? 'Replace method' : 'Save receiving method') : 'Review method'}
+                  title={reviewing ? (editingMethod ? 'Save changes' : 'Save receiving method') : 'Review method'}
                   onPress={() => {
                     if (reviewing) {
                       void save()
@@ -918,24 +917,6 @@ const styles = StyleSheet.create({
     ...textStyles.bodySmall,
     color: colors.error.main,
     marginBottom: spacing[3],
-  },
-  destinationPrompt: {
-    padding: spacing[5],
-    alignItems: 'center',
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.background.secondary,
-  },
-  existingPreview: {
-    gap: spacing[1],
-    padding: spacing[4],
-    marginBottom: spacing[4],
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.background.secondary,
-  },
-  methodPreviewTitle: {
-    ...textStyles.titleSmall,
-    color: colors.text.primary,
-    fontFamily: fontFamily.semibold,
   },
   reviewCard: {
     gap: spacing[3],

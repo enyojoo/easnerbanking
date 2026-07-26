@@ -3,6 +3,7 @@ import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { approvePayrollRun, executePayrollRun } from "@/lib/payroll/execute-run"
 import { sendPayrollStubEmailsForRun } from "@/lib/payroll/send-stub-email"
+import { sendPayrollRunSummaryEmail } from "@/lib/payroll/send-run-summary-email"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import {
   mapRowToPayrollRun,
@@ -46,6 +47,7 @@ export async function POST(
         businessId: ctx.businessId,
         runId: id,
         noahCustomerId: account.noahCustomerId,
+        allowQuoteFailures: true,
       })
       const { data: requoted } = await admin
         .from("payroll_runs")
@@ -78,6 +80,13 @@ export async function POST(
     })
 
     await sendPayrollStubEmailsForRun(admin, ctx.businessId, id).catch(() => undefined)
+    await sendPayrollRunSummaryEmail({
+      admin,
+      businessId: ctx.businessId,
+      runId: id,
+      completed: result.completed,
+      failed: result.failed,
+    }).catch(() => undefined)
 
     const { data: runRow } = await admin.from("payroll_runs").select("*").eq("id", id).maybeSingle()
     const { data: lines } = await admin.from("payroll_lines").select("*").eq("run_id", id)

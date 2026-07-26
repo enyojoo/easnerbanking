@@ -88,7 +88,6 @@ export interface PayrollRun {
   createdAt: string
   updatedAt: string
   lines?: PayrollLine[]
-  events?: PayrollRunEvent[]
   /** Hydrated for list views without loading every payment line. */
   peopleCount?: number
 }
@@ -260,16 +259,6 @@ export interface PayrollApprovalSnapshot {
     currency: string
     method: Record<string, unknown>
   }>
-}
-
-export interface PayrollRunEvent {
-  id: string
-  runId: string | null
-  personId: string | null
-  eventType: string
-  data: Record<string, unknown>
-  actorUserId: string | null
-  createdAt: string
 }
 
 export interface PayrollDocument {

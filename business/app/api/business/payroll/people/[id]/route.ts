@@ -41,7 +41,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       null,
   }
 
-  const [{ data: connection }, { data: lines }, { data: events }] = await Promise.all([
+  const [{ data: connection }, { data: lines }] = await Promise.all([
     admin
       .from("payroll_connections")
       .select("id,status,approved_at,declined_at,revoked_at,preferred_method_id")
@@ -56,12 +56,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .eq("person_id", id)
       .order("created_at", { ascending: false })
       .limit(50),
-    admin
-      .from("payroll_run_events")
-      .select("id,event_type,data,created_at,actor_user_id")
-      .eq("person_id", id)
-      .order("created_at", { ascending: false })
-      .limit(100),
   ])
   const { data: methodRows, error: methodsError } = connection
     ? await admin
@@ -103,7 +97,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       settledAt: line.settled_at,
       documents: line.payroll_documents ?? [],
     })),
-    events: events ?? [],
   })
 }
 

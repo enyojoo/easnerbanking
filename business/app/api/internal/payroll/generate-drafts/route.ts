@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     const businessId = schedule.business_id
     const template = (schedule.template as Record<string, unknown> | null) ?? {}
     const nominalPayday = new Date(`${schedule.next_run_at}T12:00:00.000Z`)
-    const draftLeadDays = Math.max(0, Number(template.draftLeadDays ?? 5))
+    const draftLeadDays = 5
     if (today < dateOnly(addUtcDays(nominalPayday, -draftLeadDays))) continue
     const weekendPolicy = template.weekendPolicy === "next_business_day"
       ? "next_business_day"
@@ -124,7 +124,6 @@ export async function GET(request: Request) {
           scheduleName: schedule.name,
           autoDraft: true,
           timezone: payrollDefaults.timezone,
-          approvalLeadDays: Number(template.approvalLeadDays ?? 2),
         },
         updated_at: new Date().toISOString(),
       })

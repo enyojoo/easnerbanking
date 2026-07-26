@@ -29,7 +29,7 @@ export function PayrollDetailLink({
       void queryClient.prefetchQuery({
         queryKey: qk.payroll.people.detail(scope, id),
         queryFn: () =>
-          apiFetch<{ person: PayrollPerson; events?: unknown[]; paymentHistory?: unknown[] }>(
+          apiFetch<{ person: PayrollPerson; paymentHistory?: unknown[] }>(
             `/api/business/payroll/people/${id}`,
           ),
         staleTime: 5 * 60_000,

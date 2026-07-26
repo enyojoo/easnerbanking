@@ -86,6 +86,8 @@ export type PayrollLineRow = {
   pay_currency: string | null
   source_amount_cents: number | string
   rail: string
+  payment_method_id?: string | null
+  payment_method_snapshot?: unknown
   status: string
   lock_id: string | null
   transfer_etid: string | null

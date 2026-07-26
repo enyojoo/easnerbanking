@@ -47,7 +47,7 @@ export default function PayrollScheduleDetailPage() {
     <Button variant="ghost" size="sm" className="mb-4" asChild><Link href="/payroll/schedules"><ArrowLeft className="mr-2 h-4 w-4" />Back to Schedules</Link></Button>
     <PayrollPageHeader
       title={schedule.name}
-      description="Recurring payday, preparation, funding, and included-person details."
+      description="Recurring payday rules and the people included in this schedule."
       actions={canPrepare ? (
         <div className="flex shrink-0 items-center gap-2 overflow-x-auto">
           <Button variant="outline" asChild>
@@ -90,16 +90,12 @@ export default function PayrollScheduleDetailPage() {
             <Detail label="Name" value={schedule.name} />
             <Detail label="First payday" value={formatDate(schedule.nextRunAt)} />
             <Detail label="Frequency" value={frequency} />
-            <Detail label="Weekend & holiday handling" value={weekendPolicy} />
+            <Detail label="Weekend handling" value={weekendPolicy} />
           </dl>
-        </section>
-        <section className="border-t pt-6">
-          <h2 className="font-semibold">Preparation timeline</h2>
-          <dl className="mt-5 grid gap-5 sm:grid-cols-3">
-            <Detail label="Draft preparation" value={`${Number(template.draftLeadDays ?? 5)} days before payday`} />
-            <Detail label="Approval deadline" value={`${Number(template.approvalLeadDays ?? 2)} days before payday`} />
-            <Detail label="Funding reminder" value={`${Number(template.fundingReminderDays ?? 3)} days before payday`} />
-          </dl>
+          <div className="mt-5 rounded-xl border bg-muted/30 p-4">
+            <p className="text-sm font-medium">Automatic preparation and funding checks</p>
+            <p className="mt-1 text-sm text-muted-foreground">Easner prepares a payroll draft 5 days before payday. Owners and administrators are notified only when the selected account cannot cover the upcoming run.</p>
+          </div>
         </section>
         <section className="border-t pt-6">
           <div className="flex flex-wrap items-end justify-between gap-2">

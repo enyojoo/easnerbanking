@@ -1,4 +1,6 @@
 import type {
+  PayrollFundingNeededEmailData,
+  PayrollRunSummaryEmailData,
   SecurityAlertEmailData,
   TeamInviteEmailData,
   TransactionEmailData,
@@ -116,6 +118,25 @@ export const adminTxFixture = {
   userName: "Test User",
 }
 
+export const payrollRunSummaryFixture: PayrollRunSummaryEmailData = {
+  businessName: "Acme LLC",
+  runName: "July payroll",
+  completed: 8,
+  failed: 1,
+  total: 9,
+  runUrl: "https://business.easner.com/payroll/runs/run-123",
+}
+
+export const payrollFundingNeededFixture: PayrollFundingNeededEmailData = {
+  businessName: "Acme LLC",
+  runName: "July payroll",
+  paydayDisplay: "July 31, 2026",
+  requiredDisplay: "USD 10,000.00",
+  availableDisplay: "USD 7,500.00",
+  shortfallDisplay: "USD 2,500.00",
+  runUrl: "https://business.easner.com/payroll/runs/run-123",
+}
+
 /** Template key → fixture data for render tests */
 export const templateFixtures: Record<string, unknown> = {
   welcomeBusiness: welcomeBusinessFixture,
@@ -130,6 +151,8 @@ export const templateFixtures: Record<string, unknown> = {
   kycApproved: { ...kycRejectedFixture, status: "approved" as const, rejectionReasons: undefined },
   kycRejected: kycRejectedFixture,
   teamInvitation: teamInviteFixture,
+  payrollRunSummary: payrollRunSummaryFixture,
+  payrollFundingNeeded: payrollFundingNeededFixture,
   passwordChanged: securityPasswordChangedFixture,
   passwordResetCompleted: { ...securityPasswordChangedFixture, alertType: "password_reset_completed" as const },
   mfaEnabled: { ...securityPasswordChangedFixture, alertType: "mfa_enabled" as const },

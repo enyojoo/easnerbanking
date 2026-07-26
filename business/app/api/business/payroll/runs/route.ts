@@ -14,6 +14,7 @@ import { recalculateRunTotals } from "@/lib/payroll/run-utils"
 import { buildPayrollLines } from "@/lib/payroll/build-lines"
 import type { PayrollRunDraftInput } from "@/lib/payroll/types"
 import { resolvePayrollSourceDefaults } from "@/lib/payroll/source-account"
+import { payrollScheduleOccurrence } from "@/lib/payroll/schedule-preview"
 
 export async function GET(request: Request) {
   const ctx = await requirePayrollAccess(request, ["viewer", "preparer", "approver"])
@@ -90,6 +91,34 @@ export async function POST(request: Request) {
   if (people.length !== new Set(personIds).size) {
     return NextResponse.json({ error: "One or more selected people are not available." }, { status: 400 })
   }
+  let scheduleName: string | null = null
+  let effectivePayPeriodStart = body.payPeriodStart
+  let effectivePayPeriodEnd = body.payPeriodEnd
+  let effectivePayday = body.payday
+  if (completeDraft && body.scheduleId) {
+    const { data: schedule, error: scheduleError } = await admin
+      .from("payroll_schedules")
+      .select("id,name,frequency,next_run_at,template,active")
+      .eq("id", body.scheduleId)
+      .eq("business_id", ctx.businessId)
+      .maybeSingle()
+    if (scheduleError) return NextResponse.json({ error: scheduleError.message }, { status: 500 })
+    if (!schedule || !schedule.active) {
+      return NextResponse.json({ error: "The selected payroll schedule is unavailable." }, { status: 400 })
+    }
+    const occurrence = payrollScheduleOccurrence({
+      frequency: schedule.frequency,
+      nextRunAt: String(schedule.next_run_at),
+      weekendPolicy: (schedule.template as Record<string, unknown> | null)?.weekendPolicy,
+    })
+    if (!occurrence) {
+      return NextResponse.json({ error: "The selected schedule does not have a valid next payday." }, { status: 400 })
+    }
+    scheduleName = String(schedule.name)
+    effectivePayPeriodStart = occurrence.payPeriodStart
+    effectivePayPeriodEnd = occurrence.payPeriodEnd
+    effectivePayday = occurrence.payday
+  }
   if (completeDraft) {
     const invalidPeople = people.filter((person) =>
       person.status !== "active" ||
@@ -105,23 +134,9 @@ export async function POST(request: Request) {
         ],
       }, { status: 400 })
     }
-    if (!body.name?.trim() || !body.payPeriodStart || !body.payPeriodEnd || !body.payday) {
+    if (!body.name?.trim() || !effectivePayPeriodStart || !effectivePayPeriodEnd || !effectivePayday) {
       return NextResponse.json({ error: "Complete the payroll details before saving." }, { status: 400 })
     }
-  }
-  let scheduleName: string | null = null
-  if (completeDraft && body.scheduleId) {
-    const { data: schedule, error: scheduleError } = await admin
-      .from("payroll_schedules")
-      .select("id,name")
-      .eq("id", body.scheduleId)
-      .eq("business_id", ctx.businessId)
-      .maybeSingle()
-    if (scheduleError) return NextResponse.json({ error: scheduleError.message }, { status: 500 })
-    if (!schedule) {
-      return NextResponse.json({ error: "The selected payroll schedule is unavailable." }, { status: 400 })
-    }
-    scheduleName = String(schedule.name)
   }
 
   const { data: runRow, error: runErr } = await admin
@@ -129,12 +144,12 @@ export async function POST(request: Request) {
     .insert({
       business_id: ctx.businessId,
       status: "draft",
-      scheduled_for: body.scheduledFor ?? body.payday ?? new Date().toISOString().slice(0, 10),
+      scheduled_for: body.scheduledFor ?? effectivePayday ?? new Date().toISOString().slice(0, 10),
       ...(completeDraft ? {
         schedule_id: body.scheduleId || null,
-        pay_period_start: body.payPeriodStart,
-        pay_period_end: body.payPeriodEnd,
-        payday: body.payday,
+        pay_period_start: effectivePayPeriodStart,
+        pay_period_end: effectivePayPeriodEnd,
+        payday: effectivePayday,
         source_account_id: payrollDefaults.sourceAccountId,
       } : {}),
       source_currency: sourceCurrency,
@@ -149,7 +164,15 @@ export async function POST(request: Request) {
     .select("*")
     .single()
 
-  if (runErr) return NextResponse.json({ error: runErr.message }, { status: 500 })
+  if (runErr) {
+    if (runErr.code === "23505" && body.scheduleId) {
+      return NextResponse.json(
+        { error: "A payroll run already exists for this schedule’s next payday." },
+        { status: 409 },
+      )
+    }
+    return NextResponse.json({ error: runErr.message }, { status: 500 })
+  }
 
   const linePayloads = await buildPayrollLines(admin, String(runRow.id), people)
   for (const line of linePayloads) line.pay_currency = sourceCurrency

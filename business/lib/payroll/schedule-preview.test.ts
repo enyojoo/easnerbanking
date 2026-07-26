@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { payrollPaydayPreview, payrollPayPeriodForPayday } from "./schedule-preview"
+import {
+  payrollPaydayPreview,
+  payrollPayPeriodForPayday,
+  payrollScheduleOccurrence,
+  payrollDateTimeToUtc,
+} from "./schedule-preview"
 
 describe("payrollPaydayPreview", () => {
   it("moves weekend paydays to the previous business day", () => {
@@ -29,5 +34,23 @@ describe("payrollPaydayPreview", () => {
       start: "2026-07-01",
       end: "2026-07-31",
     })
+  })
+
+  it("derives an immutable run occurrence from schedule timing", () => {
+    expect(payrollScheduleOccurrence({
+      frequency: "weekly",
+      nextRunAt: "2026-07-25",
+      weekendPolicy: "previous_business_day",
+    })).toEqual({
+      payPeriodStart: "2026-07-19",
+      payPeriodEnd: "2026-07-25",
+      payday: "2026-07-24",
+    })
+  })
+
+  it("converts the configured local payday time to UTC", () => {
+    expect(payrollDateTimeToUtc("2026-07-24", "09:00", "Africa/Lagos")).toBe(
+      "2026-07-24T08:00:00.000Z",
+    )
   })
 })

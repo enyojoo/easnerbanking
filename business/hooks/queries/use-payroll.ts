@@ -35,7 +35,7 @@ export function usePayrollPerson(personId: string | null) {
     if (!scope || !personId) return undefined
     const envelope = queryClient.getQueryData<{ people: PayrollPerson[] }>(qk.payroll.people.list(scope))
     const person = envelope?.people?.find((item) => item.id === personId)
-    return person ? { person, events: [], paymentHistory: [] } : undefined
+    return person ? { person, paymentHistory: [] } : undefined
   }, [personId, queryClient, scope])
   return useQuery({
     queryKey: scope && personId ? qk.payroll.people.detail(scope, personId) : ["payroll", "person", "disabled"],
@@ -43,7 +43,6 @@ export function usePayrollPerson(personId: string | null) {
     queryFn: () =>
       apiFetch<{
         person: PayrollPerson
-        events?: unknown[]
         paymentHistory?: unknown[]
         connection?: {
           id: string

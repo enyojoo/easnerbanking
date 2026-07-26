@@ -19,12 +19,9 @@ export async function PATCH(
     nextRunAt?: string
     active?: boolean
     timezone?: string
-    draftLeadDays?: number
-    approvalLeadDays?: number
     weekendPolicy?: "previous_business_day" | "next_business_day"
     sourceCurrency?: string
     sourceAccountId?: string
-    fundingReminderDays?: number
     personIds?: string[]
   }
 
@@ -48,12 +45,10 @@ export async function PATCH(
   patch.template = {
     ...((existing?.template as Record<string, unknown>) ?? {}),
     ...(body.timezone != null ? { timezone: body.timezone } : {}),
-    ...(body.draftLeadDays != null ? { draftLeadDays: Math.max(0, Number(body.draftLeadDays)) } : {}),
-    ...(body.approvalLeadDays != null ? { approvalLeadDays: Math.max(0, Number(body.approvalLeadDays)) } : {}),
+    draftLeadDays: 5,
     ...(body.weekendPolicy != null ? { weekendPolicy: body.weekendPolicy } : {}),
     sourceCurrency: payrollDefaults.currency,
     sourceAccountId: payrollDefaults.sourceAccountId,
-    ...(body.fundingReminderDays != null ? { fundingReminderDays: Math.max(0, Number(body.fundingReminderDays)) } : {}),
   }
 
   const { data, error } = await admin

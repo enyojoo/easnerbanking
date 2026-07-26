@@ -22,6 +22,52 @@ export type ExecutePayrollLineResult =
   | { ok: true; transferEtid: string }
   | { ok: false; error: string; errorCode?: string }
 
+async function resolvePayrollExternalRecipient(
+  admin: SupabaseClient,
+  businessId: string,
+  line: PayrollLineRow,
+): Promise<{ recipientId: string; ownerUserId: string; recipient: RecipientSellPrepareRow }> {
+  const snapshot = (line.payment_method_snapshot as Record<string, unknown> | null) ?? {}
+  const recipientSnapshot = (line.recipient_snapshot as Record<string, unknown> | null) ?? {}
+  const methodId = String(line.payment_method_id || snapshot.id || "")
+  const recipientId = String(snapshot.providerRecipientId || recipientSnapshot.recipientId || "")
+  if (!recipientId) throw new Error("Receiving method is missing its payment destination.")
+
+  if (methodId) {
+    const { data: method } = await admin
+      .from("payroll_payment_methods")
+      .select("id,person_id,provider_recipient_id")
+      .eq("id", methodId)
+      .eq("person_id", line.person_id)
+      .maybeSingle()
+    if (!method || String(method.provider_recipient_id || "") !== recipientId) {
+      throw new Error("The approved receiving method could not be verified.")
+    }
+  } else {
+    const { data: person } = await admin
+      .from("payroll_people")
+      .select("id,recipient_id")
+      .eq("id", line.person_id)
+      .eq("business_id", businessId)
+      .maybeSingle()
+    if (!person || String(person.recipient_id || "") !== recipientId) {
+      throw new Error("The payroll payment destination could not be verified.")
+    }
+  }
+
+  const { data: recipient } = await admin
+    .from("recipients")
+    .select("*")
+    .eq("id", recipientId)
+    .maybeSingle()
+  if (!recipient?.user_id) throw new Error("Receiving method not found.")
+  return {
+    recipientId,
+    ownerUserId: String(recipient.user_id),
+    recipient: recipient as RecipientSellPrepareRow,
+  }
+}
+
 async function resolvePayeeFromEasetag(
   admin: SupabaseClient,
   tag: string,
@@ -103,8 +149,11 @@ export async function lockPayrollLineQuote(input: {
     }
   }
 
-  const recipientId = String(snap.recipientId || "")
-  if (!recipientId) throw new Error("Recipient required for this rail.")
+  const destination = await resolvePayrollExternalRecipient(
+    input.admin,
+    input.businessId,
+    input.line,
+  )
 
   const acc = await resolveNoahAccountContextFromLedgerScope(input.admin, {
     userId: input.userId,
@@ -114,10 +163,10 @@ export async function lockPayrollLineQuote(input: {
 
   const quote = await confirmPayoutOrder({
     ctx: acc,
-    userId: input.userId,
+    userId: destination.ownerUserId,
     businessId: input.businessId,
     noahCustomerId: input.noahCustomerId,
-    recipientId,
+    recipientId: destination.recipientId,
     receiveAmount: amount,
     sourceBalanceCurrency: input.sourceCurrency,
     note: "Payroll",
@@ -132,7 +181,7 @@ export async function lockPayrollLineQuote(input: {
     sourceAmount,
     executePayload: {
       rail,
-      recipientId,
+      recipientId: destination.recipientId,
       receiveAmount: amount,
       receiveCurrency: quote.receiveCurrency,
       channelId: quote.channelId,
@@ -246,19 +295,18 @@ export async function executePayrollLine(input: {
     return { ok: true, transferEtid: result.easnerTransactionId }
   }
 
-  const recipientId = String(executePayload.recipientId || "")
-  if (!recipientId) return { ok: false, error: "Missing recipient for payout line." }
-
-  const { data: rec } = await admin
-    .from("recipients")
-    .select("*")
-    .eq("id", recipientId)
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (!rec) return { ok: false, error: "Recipient not found." }
-
-  const recipientRow = rec as RecipientSellPrepareRow
+  let destination
+  try {
+    destination = await resolvePayrollExternalRecipient(admin, businessId, line)
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Receiving method not found.",
+      errorCode: "receiving_method_unavailable",
+    }
+  }
+  const recipientId = destination.recipientId
+  const recipientRow = destination.recipient
   const fiatAmount = Number(executePayload.receiveAmount ?? 0)
   const fiatCurrency = String(executePayload.receiveCurrency || recipientRow.currency || "USD").toUpperCase()
   const countryCode = String(
@@ -411,6 +459,8 @@ export async function approvePayrollRun(input: {
   businessId: string
   runId: string
   noahCustomerId: string
+  deferQuotes?: boolean
+  allowQuoteFailures?: boolean
 }): Promise<void> {
   const { data: run } = await input.admin
     .from("payroll_runs")
@@ -426,6 +476,56 @@ export async function approvePayrollRun(input: {
     .select("*")
     .eq("run_id", input.runId)
     .neq("status", "skipped")
+
+  if (input.deferQuotes) {
+    let approvedSourceCents = 0
+    const invalidLines: string[] = []
+    for (const line of lines ?? []) {
+      const row = line as PayrollLineRow
+      const amountCents = Number(row.source_amount_cents ?? row.amount_cents ?? 0)
+      const recipient = (row.recipient_snapshot as Record<string, unknown> | null) ?? {}
+      const method = (row.payment_method_snapshot as Record<string, unknown> | null) ?? {}
+      const rail = String(row.rail || "")
+      const externalRecipientId = String(method.providerRecipientId || recipient.recipientId || "")
+      const usable =
+        Number.isFinite(amountCents) &&
+        amountCents > 0 &&
+        (rail === "easetag" ? Boolean(String(recipient.easetag || "")) : Boolean(externalRecipientId))
+      if (!usable) {
+        invalidLines.push(String(row.id))
+        continue
+      }
+      approvedSourceCents += amountCents
+      await input.admin
+        .from("payroll_lines")
+        .update({
+          status: "pending",
+          lock_id: null,
+          error_code: null,
+          error_message: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+    }
+    if (invalidLines.length > 0) {
+      throw new Error("Review the receiving method for each person before approving payroll.")
+    }
+    await input.admin
+      .from("payroll_runs")
+      .update({
+        status: "approved",
+        approved_by: input.userId,
+        approved_at: new Date().toISOString(),
+        total_source_cents: approvedSourceCents,
+        fx_snapshot: {
+          deferredUntilExecution: true,
+          approvedAt: new Date().toISOString(),
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.runId)
+    return
+  }
 
   const fxSnapshot: Record<string, unknown> = { lockedAt: new Date().toISOString(), lines: {} }
   let totalSourceCents = 0
@@ -481,7 +581,7 @@ export async function approvePayrollRun(input: {
     }
   }
 
-  if (quoteFailures.length > 0) {
+  if (quoteFailures.length > 0 && !input.allowQuoteFailures) {
     await input.admin.from("payroll_runs").update({
       status: "pending_approval",
       updated_at: new Date().toISOString(),
@@ -531,10 +631,7 @@ export async function executePayrollRun(input: {
     .from("payroll_lines")
     .select("*")
     .eq("run_id", runId)
-    .in("status", ["pending", "locked", "failed"])
-
-  let completed = 0
-  let failed = 0
+    .in("status", ["pending", "locked"])
 
   for (const line of lines ?? []) {
     const row = line as PayrollLineRow
@@ -555,7 +652,6 @@ export async function executePayrollRun(input: {
     })
 
     if (result.ok) {
-      completed++
       await admin
         .from("payroll_lines")
         .update({
@@ -568,7 +664,6 @@ export async function executePayrollRun(input: {
         })
         .eq("id", row.id)
     } else {
-      failed++
       await admin
         .from("payroll_lines")
         .update({
@@ -601,5 +696,5 @@ export async function executePayrollRun(input: {
     })
     .eq("id", runId)
 
-  return { completed, failed, partial: finalStatus === "partial" }
+  return { completed: paidCount, failed: failCount, partial: finalStatus === "partial" }
 }

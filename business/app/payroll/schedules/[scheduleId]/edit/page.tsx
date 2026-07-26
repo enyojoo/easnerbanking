@@ -15,5 +15,5 @@ export default function EditPayrollSchedulePage() {
   const schedule = query.data?.find((item) => item.id === scheduleId)
   if (query.isPending && !schedule) return <PayrollFormSkeleton />
   if (!schedule) return <div className="mx-auto max-w-6xl px-4 py-12"><p className="font-medium">Schedule not found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/schedules">Back to Schedules</Link></Button></div>
-  return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6"><Button variant="ghost" size="sm" className="mb-4" asChild><Link href={`/payroll/schedules/${schedule.id}`}><ArrowLeft className="mr-2 h-4 w-4" />Back to schedule</Link></Button><PayrollPageHeader title="Edit schedule" description="Update payday rules, preparation timing, funding, and included people." /><PayrollScheduleForm schedule={schedule} /></div>
+  return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6"><Button variant="ghost" size="sm" className="mb-4" asChild><Link href={`/payroll/schedules/${schedule.id}`}><ArrowLeft className="mr-2 h-4 w-4" />Back to schedule</Link></Button><PayrollPageHeader title="Edit schedule" description="Update payday rules and the people included in this schedule." /><PayrollScheduleForm schedule={schedule} /></div>
 }

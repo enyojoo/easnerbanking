@@ -28,8 +28,6 @@ type Payment = {
   settledAt: string | null
   documents: Array<{ id: string; filename: string; status: string }>
 }
-type Event = { id: string; event_type: string; created_at: string; data: Record<string, unknown> }
-
 export default function PayrollPersonDetailPage() {
   const params = useParams<{ personId: string }>()
   const router = useRouter()
@@ -41,7 +39,7 @@ export default function PayrollPersonDetailPage() {
   const invite = useInvitePayrollPerson()
   const deletePerson = useDeletePayrollPerson()
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const detail = query.data as ({ person: NonNullable<typeof query.data>["person"]; paymentHistory?: Payment[]; events?: Event[]; connection?: { status: string; approvedAt?: string | null; preferredMethod?: { label: string } | null } | null }) | undefined
+  const detail = query.data as ({ person: NonNullable<typeof query.data>["person"]; paymentHistory?: Payment[]; connection?: { status: string; approvedAt?: string | null; preferredMethod?: { label: string } | null } | null }) | undefined
   const person = detail?.person
   if (query.isPending && !person) return <PayrollDetailSkeleton />
   if (!person) return <div className="mx-auto max-w-6xl px-4 py-12"><p className="font-medium">This payroll person could not be found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/people">Back to People</Link></Button></div>
@@ -92,9 +90,6 @@ export default function PayrollPersonDetailPage() {
 
       <div className="space-y-6">
         <Card className="shadow-soft"><CardContent className="p-5"><h2 className="font-semibold">Identity verification</h2><div className="mt-4 flex items-center justify-between"><span className="text-sm text-muted-foreground">Status</span><PayrollStatusBadge status={person.connectionStatus} /></div><p className="mt-4 text-xs text-muted-foreground">{person.connectionStatus === "approved" ? "This person’s identity is verified through EASETAG, and they approved sharing the verified fields with your business." : "No verified identity information is shared until the person approves."}</p></CardContent></Card>
-        <Card className="shadow-soft"><CardContent className="p-5"><h2 className="font-semibold">Activity</h2><ol className="mt-4 space-y-4">
-          {(detail?.events ?? []).length ? (detail?.events ?? []).map((event) => <li key={event.id} className="relative border-l pl-4"><span className="absolute -left-1 top-1 h-2 w-2 rounded-full bg-primary" /><p className="text-sm">{event.event_type.replaceAll(".", " ").replace(/\b\w/g, (c) => c.toUpperCase())}</p><p className="mt-0.5 text-xs text-muted-foreground">{formatDate(event.created_at)}</p></li>) : <li className="text-sm text-muted-foreground">No activity recorded yet.</li>}
-        </ol></CardContent></Card>
       </div>
     </div>
     <PayrollDeleteDialog

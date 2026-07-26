@@ -17,6 +17,7 @@ import { approvePayrollRun, executePayrollRun } from "@/lib/payroll/execute-run"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import { sendPayrollStubEmailsForRun } from "@/lib/payroll/send-stub-email"
 import { canDeletePayrollRun, DELETABLE_PAYROLL_RUN_STATUSES } from "@/lib/payroll/run-deletion"
+import { payrollScheduleOccurrence } from "@/lib/payroll/schedule-preview"
 
 async function loadRun(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string, id: string) {
   const { data: runRow } = await admin
@@ -62,25 +63,7 @@ async function loadRun(admin: ReturnType<typeof createSupabaseAdmin>, businessId
         : null,
     }
   })
-  const { data: events } = await admin
-    .from("payroll_run_events")
-    .select("id,run_id,person_id,event_type,data,actor_user_id,created_at")
-    .eq("run_id", id)
-    .order("created_at", { ascending: false })
-    .limit(100)
-
-  return {
-    ...mapRowToPayrollRun(runRow as PayrollRunRow, mappedLines),
-    events: (events ?? []).map((event) => ({
-      id: String(event.id),
-      runId: event.run_id ? String(event.run_id) : null,
-      personId: event.person_id ? String(event.person_id) : null,
-      eventType: String(event.event_type),
-      data: (event.data as Record<string, unknown>) ?? {},
-      actorUserId: event.actor_user_id ? String(event.actor_user_id) : null,
-      createdAt: String(event.created_at),
-    })),
-  }
+  return mapRowToPayrollRun(runRow as PayrollRunRow, mappedLines)
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -135,14 +118,42 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const draft = body.draft
     const personIds = draft.lines.map((line) => line.personId)
     const uniquePersonIds = [...new Set(personIds)]
+    let scheduleName: string | null = null
+    let effectivePayPeriodStart = draft.payPeriodStart
+    let effectivePayPeriodEnd = draft.payPeriodEnd
+    let effectivePayday = draft.payday
+    if (draft.scheduleId) {
+      const { data: schedule, error: scheduleError } = await admin
+        .from("payroll_schedules")
+        .select("id,name,frequency,next_run_at,template,active")
+        .eq("id", draft.scheduleId)
+        .eq("business_id", ctx.businessId)
+        .maybeSingle()
+      if (scheduleError) return NextResponse.json({ error: scheduleError.message }, { status: 500 })
+      if (!schedule || !schedule.active) {
+        return NextResponse.json({ error: "The selected payroll schedule is unavailable." }, { status: 400 })
+      }
+      const occurrence = payrollScheduleOccurrence({
+        frequency: schedule.frequency,
+        nextRunAt: String(schedule.next_run_at),
+        weekendPolicy: (schedule.template as Record<string, unknown> | null)?.weekendPolicy,
+      })
+      if (!occurrence) {
+        return NextResponse.json({ error: "The selected schedule does not have a valid next payday." }, { status: 400 })
+      }
+      scheduleName = String(schedule.name)
+      effectivePayPeriodStart = occurrence.payPeriodStart
+      effectivePayPeriodEnd = occurrence.payPeriodEnd
+      effectivePayday = occurrence.payday
+    }
     if (
       !draft.name?.trim() ||
-      !draft.payPeriodStart ||
-      !draft.payPeriodEnd ||
-      !draft.payday ||
+      !effectivePayPeriodStart ||
+      !effectivePayPeriodEnd ||
+      !effectivePayday ||
       uniquePersonIds.length === 0 ||
       uniquePersonIds.length !== personIds.length ||
-      draft.payPeriodStart > draft.payPeriodEnd ||
+      effectivePayPeriodStart > effectivePayPeriodEnd ||
       draft.lines.some((line) => !Number.isFinite(Number(line.amount)) || Number(line.amount) <= 0)
     ) {
       return NextResponse.json(
@@ -150,21 +161,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         { status: 400 },
       )
     }
-    let scheduleName: string | null = null
-    if (draft.scheduleId) {
-      const { data: schedule, error: scheduleError } = await admin
-        .from("payroll_schedules")
-        .select("id,name")
-        .eq("id", draft.scheduleId)
-        .eq("business_id", ctx.businessId)
-        .maybeSingle()
-      if (scheduleError) return NextResponse.json({ error: scheduleError.message }, { status: 500 })
-      if (!schedule) {
-        return NextResponse.json({ error: "The selected payroll schedule is unavailable." }, { status: 400 })
-      }
-      scheduleName = String(schedule.name)
-    }
-
     const { data: peopleRows } = await admin
       .from("payroll_people")
       .select("*")
@@ -213,10 +209,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .from("payroll_runs")
       .update({
         schedule_id: draft.scheduleId || null,
-        pay_period_start: draft.payPeriodStart,
-        pay_period_end: draft.payPeriodEnd,
-        payday: draft.payday,
-        scheduled_for: draft.payday,
+        pay_period_start: effectivePayPeriodStart,
+        pay_period_end: effectivePayPeriodEnd,
+        payday: effectivePayday,
+        scheduled_for: effectivePayday,
         source_currency: String(draft.sourceCurrency || "USD").toUpperCase(),
         metadata: {
           ...metadata,
@@ -319,9 +315,63 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (current.status !== "draft") {
       return NextResponse.json({ error: "Only a draft can be submitted" }, { status: 400 })
     }
-    const activeLines = ((current.payroll_lines as Array<Record<string, unknown>>) ?? []).filter(
+    let activeLines = ((current.payroll_lines as Array<Record<string, unknown>>) ?? []).filter(
       (line) => line.status !== "skipped",
     )
+    const linePersonIds = [
+      ...new Set(activeLines.map((line) => String(line.person_id || "")).filter(Boolean)),
+    ]
+    if (linePersonIds.length) {
+      const { data: currentPeople } = await admin
+        .from("payroll_people")
+        .select("*")
+        .eq("business_id", ctx.businessId)
+        .in("id", linePersonIds)
+      const refreshed = await buildPayrollLines(
+        admin,
+        id,
+        (currentPeople ?? []).map((person) => mapRowToPayrollPerson(person as PayrollPersonRow)),
+      )
+      const refreshedByPerson = new Map(
+        refreshed.map((line) => [String(line.person_id), line]),
+      )
+      for (const existing of activeLines) {
+        const replacement = refreshedByPerson.get(String(existing.person_id || ""))
+        if (!replacement) continue
+        await admin
+          .from("payroll_lines")
+          .update({
+            recipient_snapshot: replacement.recipient_snapshot,
+            rail: replacement.rail,
+            payment_method_id: replacement.payment_method_id,
+            payment_method_snapshot: replacement.payment_method_snapshot,
+            metadata: {
+              ...((existing.metadata as Record<string, unknown> | null) ?? {}),
+              ...replacement.metadata,
+            },
+            status: "pending",
+            lock_id: null,
+            error_code: null,
+            error_message: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id)
+          .eq("run_id", id)
+      }
+      activeLines = activeLines.map((existing) => {
+        const replacement = refreshedByPerson.get(String(existing.person_id || ""))
+        return replacement
+          ? {
+              ...existing,
+              recipient_snapshot: replacement.recipient_snapshot,
+              rail: replacement.rail,
+              payment_method_id: replacement.payment_method_id,
+              payment_method_snapshot: replacement.payment_method_snapshot,
+              status: "pending",
+            }
+          : existing
+      })
+    }
     const invalid = activeLines.filter(
       (line) =>
         Number(line.amount_cents ?? 0) <= 0 ||

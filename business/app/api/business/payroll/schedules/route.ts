@@ -48,12 +48,9 @@ export async function POST(request: Request) {
     nextRunAt?: string
     active?: boolean
     timezone?: string
-    draftLeadDays?: number
-    approvalLeadDays?: number
     weekendPolicy?: "previous_business_day" | "next_business_day"
     sourceCurrency?: string
     sourceAccountId?: string
-    fundingReminderDays?: number
     personIds?: string[]
   }
 
@@ -80,12 +77,10 @@ export async function POST(request: Request) {
       active: body.active ?? true,
       template: {
         timezone: body.timezone || payrollDefaults.timezone,
-        draftLeadDays: Math.max(0, Number(body.draftLeadDays ?? 5)),
-        approvalLeadDays: Math.max(0, Number(body.approvalLeadDays ?? 2)),
+        draftLeadDays: 5,
         weekendPolicy: body.weekendPolicy || "previous_business_day",
         sourceCurrency: payrollDefaults.currency,
         sourceAccountId: payrollDefaults.sourceAccountId,
-        fundingReminderDays: Math.max(0, Number(body.fundingReminderDays ?? 3)),
       },
       updated_at: new Date().toISOString(),
     })

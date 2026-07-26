@@ -86,6 +86,25 @@ export interface PayrollPaidEmailData {
   amountDisplay: string
 }
 
+export interface PayrollRunSummaryEmailData {
+  businessName: string
+  runName: string
+  completed: number
+  failed: number
+  total: number
+  runUrl: string
+}
+
+export interface PayrollFundingNeededEmailData {
+  businessName: string
+  runName: string
+  paydayDisplay: string
+  requiredDisplay: string
+  availableDisplay: string
+  shortfallDisplay: string
+  runUrl: string
+}
+
 export interface SecurityAlertEmailData {
   email: string
   firstName?: string

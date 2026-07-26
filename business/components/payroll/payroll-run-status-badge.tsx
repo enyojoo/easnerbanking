@@ -31,6 +31,12 @@ export function PayrollRunStatusBadge({ status }: { status: PayrollRunStatus }) 
   return <Badge variant={runVariant[status]}>{labelStatus(status)}</Badge>
 }
 
-export function PayrollLineStatusBadge({ status }: { status: PayrollLineStatus }) {
-  return <Badge variant={lineVariant[status]}>{labelStatus(status)}</Badge>
+export function PayrollLineStatusBadge({
+  status,
+  label,
+}: {
+  status: PayrollLineStatus
+  label?: string
+}) {
+  return <Badge variant={lineVariant[status]}>{label || labelStatus(status)}</Badge>
 }

@@ -29,7 +29,7 @@ export default function PayrollSchedulesPage() {
   const updateSchedule = useUpsertPayrollSchedule()
   const [deleteTarget, setDeleteTarget] = useState<PayrollSchedule | null>(null)
   return <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-    <PayrollPageHeader title="Schedules" description="Plan recurring paydays, preparation deadlines, funding reminders, and included people." actions={<PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}><Button variant="primary" asChild><Link href="/payroll/schedules/new"><Plus className="mr-2 h-4 w-4" />Create schedule</Link></Button></PayrollPermissionAction>} />
+    <PayrollPageHeader title="Schedules" description="Plan recurring paydays and choose the people included in each payroll." actions={<PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}><Button variant="primary" asChild><Link href="/payroll/schedules/new"><Plus className="mr-2 h-4 w-4" />Create schedule</Link></Button></PayrollPermissionAction>} />
     <PayrollNavTabs />
     {schedulesQuery.isPending ? <Card className="shadow-soft"><CardContent className="space-y-3 p-5">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-12 w-full rounded-xl" />)}</CardContent></Card> :
       schedulesQuery.isError ? <Card><CardContent className="p-8 text-center"><p className="font-medium">Payroll schedules couldn’t be loaded</p><Button className="mt-4" variant="outline" onClick={() => void schedulesQuery.refetch()}>Try again</Button></CardContent></Card> :

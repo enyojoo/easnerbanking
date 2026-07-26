@@ -51,3 +51,65 @@ export function payrollPaydayPreview(input: {
   }
   return output
 }
+
+export function payrollScheduleOccurrence(input: {
+  frequency: PayrollScheduleFrequency
+  nextRunAt: string
+  weekendPolicy?: unknown
+}): { payPeriodStart: string; payPeriodEnd: string; payday: string } | null {
+  const nominalPayday = input.nextRunAt.slice(0, 10)
+  const payday = payrollPaydayPreview({
+    frequency: input.frequency,
+    firstPayday: nominalPayday,
+    weekendPolicy:
+      input.weekendPolicy === "next_business_day"
+        ? "next_business_day"
+        : "previous_business_day",
+    count: 1,
+  })[0]
+  const period = payrollPayPeriodForPayday(input.frequency, nominalPayday)
+  if (!payday || !period) return null
+  return {
+    payPeriodStart: period.start,
+    payPeriodEnd: period.end,
+    payday,
+  }
+}
+
+export function payrollDateTimeToUtc(
+  date: string,
+  time: string,
+  timeZone: string,
+): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    return null
+  }
+  const [year, month, day] = date.split("-").map(Number)
+  const [hour, minute] = time.split(":").map(Number)
+  const desiredWallClock = Date.UTC(year, month - 1, day, hour, minute)
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  })
+  const offsetAt = (instant: number) => {
+    const parts = Object.fromEntries(
+      formatter
+        .formatToParts(new Date(instant))
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, Number(part.value)]),
+    )
+    return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute) - instant
+  }
+  try {
+    let instant = desiredWallClock - offsetAt(desiredWallClock)
+    instant = desiredWallClock - offsetAt(instant)
+    return new Date(instant).toISOString()
+  } catch {
+    return null
+  }
+}

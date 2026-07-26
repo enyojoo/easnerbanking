@@ -18,6 +18,8 @@ import type {
   TeamInviteEmailData,
   PayrollEasetagInviteEmailData,
   PayrollPaidEmailData,
+  PayrollFundingNeededEmailData,
+  PayrollRunSummaryEmailData,
   TransactionEmailData,
   VerificationEmailData,
   WelcomeEmailData,
@@ -386,6 +388,63 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
       data.forBusiness
         ? `${data.recipientName} revoked their payroll connection with ${data.businessName}. They can no longer be included in future payroll payments unless they approve a new request.`
         : `You revoked your payroll connection with ${data.businessName}. The business can no longer include you in future payroll payments unless you approve a new request. Your completed payment history and pay stubs remain available.`,
+  },
+
+  payrollRunSummary: {
+    subject: (data: PayrollRunSummaryEmailData) =>
+      data.failed > 0
+        ? `Payroll completed with ${data.failed} failed payment${data.failed === 1 ? "" : "s"}`
+        : `Payroll completed — ${data.runName}`,
+    html: (data: PayrollRunSummaryEmailData) => {
+      const content = `
+        <p class="confirmation-text">
+          <strong>${data.runName}</strong> has finished processing.
+        </p>
+        ${generateTransactionDetailsTable([
+          { label: "Payments sent", value: String(data.completed) },
+          { label: "Payments failed", value: String(data.failed), isStatus: data.failed > 0, statusClass: data.failed > 0 ? "failed" : "completed" },
+          { label: "People", value: String(data.total) },
+        ])}
+        ${data.failed > 0 ? `<p class="confirmation-text">Open the payroll run to review the affected receiving methods and retry eligible payments.</p>` : ""}
+      `
+      return generateBaseEmailTemplate(
+        data.failed > 0 ? "Payroll needs attention" : "Payroll completed",
+        "",
+        content,
+        { text: "View payroll run", url: data.runUrl },
+        { audience: "business", showPreferencesLink: false },
+      )
+    },
+    text: (data: PayrollRunSummaryEmailData) =>
+      `${data.runName} finished processing. Sent: ${data.completed}. Failed: ${data.failed}. Total: ${data.total}. View payroll: ${data.runUrl}`,
+  },
+
+  payrollFundingNeeded: {
+    subject: (data: PayrollFundingNeededEmailData) =>
+      `Fund ${data.shortfallDisplay} for ${data.runName}`,
+    html: (data: PayrollFundingNeededEmailData) => {
+      const content = `
+        <p class="confirmation-text">
+          The account selected for <strong>${data.runName}</strong> does not currently have enough funds for payday.
+        </p>
+        ${generateTransactionDetailsTable([
+          { label: "Payday", value: data.paydayDisplay },
+          { label: "Payroll amount", value: data.requiredDisplay },
+          { label: "Available balance", value: data.availableDisplay },
+          { label: "Amount to fund", value: data.shortfallDisplay, isStatus: true, statusClass: "failed" },
+        ])}
+        <p class="confirmation-text">Add funds before payday to prevent payroll payments from failing.</p>
+      `
+      return generateBaseEmailTemplate(
+        "Payroll funding needed",
+        "",
+        content,
+        { text: "View payroll run", url: data.runUrl },
+        { audience: "business", showPreferencesLink: false },
+      )
+    },
+    text: (data: PayrollFundingNeededEmailData) =>
+      `${data.runName} needs ${data.shortfallDisplay} before ${data.paydayDisplay}. Required: ${data.requiredDisplay}. Available: ${data.availableDisplay}. View payroll: ${data.runUrl}`,
   },
 
   payrollPaid: {

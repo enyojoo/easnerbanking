@@ -80,7 +80,16 @@ export function payrollMethodTitle(method: PayrollMethodSummary | null): string 
 
 export function payrollMethodDescription(method: PayrollMethodSummary | null): string {
   if (!method) return 'Choose where you want to receive payroll'
-  const masked = Object.values(method.maskedDetails ?? {})
+  const detailKeys =
+    method.type === 'bank'
+      ? ['account', 'ending']
+      : method.type === 'mobile_money'
+        ? ['phone', 'ending']
+        : method.type === 'stablecoin'
+          ? ['wallet', 'ending']
+          : ['easetag']
+  const masked = detailKeys
+    .map((key) => method.maskedDetails?.[key])
     .filter(Boolean)
     .join(' · ')
   return masked || payrollMethodTitle(method)
