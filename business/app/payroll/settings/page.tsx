@@ -16,7 +16,6 @@ import { PayrollInlineRefreshing, PayrollWorkspaceContentSkeleton } from "@/comp
 import {
   usePayrollCapabilities,
   usePayrollSettings,
-  usePayrollTimingPreview,
 } from "@/hooks/queries/use-payroll"
 import { useUpdatePayrollSettings } from "@/hooks/mutations/use-payroll"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -47,10 +46,6 @@ export default function PayrollSettingsPage() {
   const [accountId, setAccountId] = useState("")
   const [paydayTime, setPaydayTime] = useState("09:00")
   const [separate, setSeparate] = useState(false)
-  const timingPreview = usePayrollTimingPreview(
-    new Date().toISOString().slice(0, 10),
-    { timezone, localTime: paydayTime },
-  )
 
   function resetForm() {
     if (!settingsQuery.data) return
@@ -131,16 +126,6 @@ export default function PayrollSettingsPage() {
           <p className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
             Changes apply to payroll runs scheduled after you save. Existing scheduled runs keep their current
             payment time.
-            {timingPreview.data ? (
-              <>
-                <span className="mt-1 block font-medium text-foreground">
-                  Timing preview: {timingPreview.data.display}
-                </span>
-                <span className="mt-1 block text-xs">
-                  UTC execution: {timingPreview.data.scheduledAt}
-                </span>
-              </>
-            ) : null}
           </p>
           <section className="border-t pt-6"><div className="flex items-start justify-between gap-5"><div><h2 className="font-semibold">Require a different approver</h2><p className="mt-1 max-w-xl text-sm text-muted-foreground">A delegated Payroll approver cannot approve a run they submitted. Business owners and admins can always approve.</p></div><Switch checked={separate} onCheckedChange={setSeparate} disabled={!editing} /></div></section>
           {!canEdit ? <p className="border-t pt-5 text-sm text-muted-foreground">Only a Payroll approver can change these settings.</p> : null}

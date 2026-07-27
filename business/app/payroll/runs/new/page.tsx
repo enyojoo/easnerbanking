@@ -855,9 +855,6 @@ function ReviewStep({
               : "Immediately after approval"
           }
         />
-        {schedulesForLater ? (
-          <ReviewItem label="UTC execution" value={timing?.scheduledAt ?? "Calculated when approved"} />
-        ) : null}
         <ReviewItem label="People" value={String(people.length)} />
         <ReviewItem label="Amount" value={formatCurrency(preview?.payrollTotal ?? 0, draft.sourceCurrency)} />
         <ReviewItem label="Fees" value={formatCurrency(preview?.fees ?? 0, draft.sourceCurrency)} />

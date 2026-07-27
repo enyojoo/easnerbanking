@@ -25,6 +25,7 @@ import { PayrollDetailSkeleton, PayrollInlineRefreshing } from "@/components/pay
 import {
   usePayrollCapabilities,
   usePayrollRunDetail,
+  usePayrollSettings,
   usePayrollTimingPreview,
 } from "@/hooks/queries/use-payroll"
 import {
@@ -55,6 +56,7 @@ export default function PayrollRunDetailPage() {
   const returnTo = safePayrollReturnTo(searchParams.get("returnTo"), "/payroll/runs")
   const runId = params.id
   const runQuery = usePayrollRunDetail(runId)
+  const payrollSettings = usePayrollSettings().data
   const capabilities = usePayrollCapabilities().data
   const canPrepare = Boolean(capabilities?.canPrepare)
   const canApprove = Boolean(capabilities?.canApprove)
@@ -88,15 +90,12 @@ export default function PayrollRunDetailPage() {
         executionSchedule.timezone,
       ) ?? `${executionSchedule.payday} ${executionSchedule.localTime} (${executionSchedule.timezone})`
     : run?.scheduledAt
-      ? formatPayrollZonedDateTime(run.scheduledAt, "UTC") ?? run.scheduledAt
+      ? payrollSettings?.timezone
+        ? formatPayrollZonedDateTime(run.scheduledAt, payrollSettings.timezone)
+        : null
       : previewSchedulesForLater
         ? timingPreview.data?.display ?? null
         : "Immediately after approval"
-  const scheduledExecutionUtc =
-    executionSchedule?.scheduledAt ??
-    run?.scheduledAt ??
-    (previewSchedulesForLater ? timingPreview.data?.scheduledAt : null) ??
-    null
   const executionJob = run?.metadata?.executionJob as
     | {
         status?: string
@@ -431,13 +430,6 @@ export default function PayrollRunDetailPage() {
                 }
               />
               <Detail label="Payday" value={run.payday ? formatDate(run.payday) : "—"} />
-              <Detail
-                label="Payment time"
-                value={scheduledPaymentDisplay ?? "Calculated when approved"}
-              />
-              {scheduledExecutionUtc ? (
-                <Detail label="UTC execution" value={scheduledExecutionUtc} />
-              ) : null}
               <Detail label="Amount" value={formatCurrency(run.totalSource, run.sourceCurrency)} />
               <Detail label="People" value={String(lines.length)} />
               <Detail label="Source account" value={`${run.sourceCurrency} account`} />
@@ -479,7 +471,7 @@ export default function PayrollRunDetailPage() {
                 label={run.status === "scheduled" ? "Scheduled for" : "Payment date"}
                 value={
                   run.status === "scheduled" && run.scheduledAt
-                    ? scheduledPaymentDisplay ?? formatDate(run.scheduledAt)
+                    ? scheduledPaymentDisplay ?? "Loading payment time…"
                     : run.payday
                       ? formatDate(run.payday)
                       : "—"
@@ -540,10 +532,12 @@ export default function PayrollRunDetailPage() {
                     </div>
                     {line.settledAt ? (
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {formatPayrollZonedDateTime(
-                          line.settledAt,
-                          executionSchedule?.timezone || "UTC",
-                        ) ?? formatDate(line.settledAt)}
+                        {(executionSchedule?.timezone || payrollSettings?.timezone)
+                          ? formatPayrollZonedDateTime(
+                              line.settledAt,
+                              executionSchedule?.timezone || payrollSettings?.timezone || "",
+                            ) ?? formatDate(line.settledAt)
+                          : formatDate(line.settledAt)}
                       </p>
                     ) : null}
                   </div>
@@ -597,18 +591,6 @@ export default function PayrollRunDetailPage() {
                 />
                 <Detail label="People" value={String(run.approvalSnapshot.people.length)} />
                 <Detail label="Approved" value={run.approvedAt ? formatDate(run.approvedAt) : "—"} />
-                {run.approvalSnapshot.executionSchedule ? (
-                  <>
-                    <Detail
-                      label="Scheduled payment"
-                      value={scheduledPaymentDisplay ?? "—"}
-                    />
-                    <Detail
-                      label="UTC execution"
-                      value={run.approvalSnapshot.executionSchedule.scheduledAt}
-                    />
-                  </>
-                ) : null}
               </dl>
             </section>
           ) : null}
