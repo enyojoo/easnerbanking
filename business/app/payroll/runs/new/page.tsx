@@ -36,6 +36,7 @@ import {
   payrollPayPeriodForPayday,
   type PayrollWeekendPolicy,
 } from "@/lib/payroll/schedule-preview"
+import { safePayrollReturnTo } from "@/lib/payroll/navigation"
 
 const stepLabels = ["Details", "People", "Amounts", "Readiness", "Review"]
 type Draft = Omit<PayrollRunDraftInput, "lines"> & { amounts: Record<string, number>; selected: string[] }
@@ -61,15 +62,26 @@ export default function NewPayrollRunPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editRunId = searchParams.get("edit")
+  const copyFromRunId = editRunId ? null : searchParams.get("copyFrom")
+  const copyMode =
+    copyFromRunId && searchParams.get("copyMode") === "correction"
+      ? "correction"
+      : copyFromRunId
+        ? "duplicate"
+        : null
+  const builderReturnTo = safePayrollReturnTo(searchParams.get("returnTo"), "/payroll/runs")
   const profile = useBusinessProfile()
   const peopleQuery = usePayrollPeople()
-  const schedules = usePayrollSchedules().data ?? []
+  const schedulesQuery = usePayrollSchedules()
+  const schedules = useMemo(() => schedulesQuery.data ?? [], [schedulesQuery.data])
   const payrollSettings = usePayrollSettings().data
   const accounts = useBusinessAccountRows()
   const createRun = useCreatePayrollRun()
   const updateRun = useUpdatePayrollRun(editRunId || "new")
   const editRunQuery = usePayrollRunDetail(editRunId)
   const editRun = editRunQuery.data
+  const sourceRunQuery = usePayrollRunDetail(copyFromRunId)
+  const sourceRun = sourceRunQuery.data
   const previewRun = usePreviewPayrollRun()
   const [step, setStep] = useState(0)
   const [search, setSearch] = useState("")
@@ -79,7 +91,13 @@ export default function NewPayrollRunPage() {
   const [addedPersonApplied, setAddedPersonApplied] = useState(false)
   const [sourceSettingsApplied, setSourceSettingsApplied] = useState(false)
   const timingQuery = usePayrollTimingPreview(draft.payday)
-  const storageKey = `payroll_run_builder:${profile.businessId || "business"}${editRunId ? `:edit:${editRunId}` : ""}`
+  const storageKey = `payroll_run_builder:${profile.businessId || "business"}${
+    editRunId
+      ? `:edit:${editRunId}`
+      : copyFromRunId
+        ? `:${copyMode}:${copyFromRunId}`
+        : ""
+  }`
   const people = useMemo(() => peopleQuery.data ?? [], [peopleQuery.data])
   const ready = people.filter((person) => person.status === "active" && person.readinessStatus === "ready")
   const selectedPeople = draft.selected
@@ -95,6 +113,9 @@ export default function NewPayrollRunPage() {
     sourceAccountId: draft.sourceAccountId,
     sourceCurrency: draft.sourceCurrency,
     lines: draft.selected.map((personId) => ({ personId, amount: Number(draft.amounts[personId] || 0) })),
+    ...(copyMode && copyFromRunId
+      ? { creationMode: copyMode, sourceRunId: copyFromRunId }
+      : {}),
   }
 
   useEffect(() => {
@@ -133,6 +154,83 @@ export default function NewPayrollRunPage() {
       setHydrated(true)
       return
     }
+    if (copyFromRunId) {
+      if (sourceRunQuery.isPending || !sourceRun) return
+      if (sourceRun.scheduleId && schedulesQuery.isPending) return
+      const persistedDraft = (() => {
+        try {
+          const saved = sessionStorage.getItem(storageKey)
+          return saved ? (JSON.parse(saved) as Draft) : null
+        } catch {
+          return null
+        }
+      })()
+      if (persistedDraft) {
+        setDraft(persistedDraft)
+        setHydrated(true)
+        return
+      }
+      const sourceLines = (sourceRun.lines ?? []).filter((line) =>
+        copyMode === "correction"
+          ? line.status === "failed"
+          : line.status !== "skipped",
+      )
+      const activeSchedule =
+        copyMode === "duplicate" && sourceRun.scheduleId
+          ? schedules.find((schedule) => schedule.id === sourceRun.scheduleId && schedule.active)
+          : null
+      const weekendPolicy =
+        activeSchedule?.template?.weekendPolicy === "next_business_day"
+          ? "next_business_day"
+          : "previous_business_day"
+      const nextPayday = activeSchedule
+        ? payrollPaydayPreview({
+            frequency: activeSchedule.frequency,
+            firstPayday: activeSchedule.nextRunAt,
+            weekendPolicy,
+            count: 1,
+          })[0] ?? ""
+        : ""
+      const nextPeriod = activeSchedule
+        ? payrollPayPeriodForPayday(
+            activeSchedule.frequency,
+            activeSchedule.nextRunAt.slice(0, 10),
+          )
+        : null
+      setDraft({
+        name:
+          copyMode === "correction"
+            ? `Correction for ${String(sourceRun.metadata?.name || "Payroll run")}`
+            : `Copy of ${String(sourceRun.metadata?.name || "Payroll run")}`,
+        offCycle: copyMode === "correction" ? true : Boolean(sourceRun.metadata?.offCycle),
+        scheduleId: activeSchedule?.id,
+        payPeriodStart:
+          copyMode === "correction"
+            ? sourceRun.payPeriodStart?.slice(0, 10) || ""
+            : nextPeriod?.start ?? "",
+        payPeriodEnd:
+          copyMode === "correction"
+            ? sourceRun.payPeriodEnd?.slice(0, 10) || ""
+            : nextPeriod?.end ?? "",
+        payday:
+          copyMode === "correction"
+            ? sourceRun.payday?.slice(0, 10) || ""
+            : nextPayday,
+        sourceAccountId: payrollSettings?.defaultSourceAccountId || "",
+        sourceCurrency: payrollSettings?.defaultCurrency || profile.baseCurrency || "USD",
+        selected: sourceLines
+          .map((line) => line.personId)
+          .filter((personId): personId is string => Boolean(personId)),
+        amounts: Object.fromEntries(
+          sourceLines
+            .filter((line) => Boolean(line.personId))
+            .map((line) => [String(line.personId), line.amount]),
+        ),
+      })
+      setSourceSettingsApplied(Boolean(payrollSettings?.defaultSourceAccountId))
+      setHydrated(true)
+      return
+    }
     try {
       const saved = sessionStorage.getItem(storageKey)
       if (saved) setDraft(JSON.parse(saved) as Draft)
@@ -155,8 +253,15 @@ export default function NewPayrollRunPage() {
     editRunId,
     editRunQuery.isPending,
     hydrated,
+    copyFromRunId,
+    copyMode,
+    payrollSettings?.defaultCurrency,
     profile.baseCurrency,
     profile.businessId,
+    schedules,
+    schedulesQuery.isPending,
+    sourceRun,
+    sourceRunQuery.isPending,
     storageKey,
   ])
 
@@ -199,8 +304,14 @@ export default function NewPayrollRunPage() {
     }))
     setStep(1)
     setAddedPersonApplied(true)
-    router.replace(editRunId ? `/payroll/runs/new?edit=${encodeURIComponent(editRunId)}` : "/payroll/runs/new")
-  }, [addedPersonApplied, editRunId, people, router, searchParams])
+    router.replace(
+      editRunId
+        ? `/payroll/runs/new?edit=${encodeURIComponent(editRunId)}&returnTo=${encodeURIComponent(builderReturnTo)}`
+        : copyFromRunId && copyMode
+          ? `/payroll/runs/new?copyFrom=${encodeURIComponent(copyFromRunId)}&copyMode=${copyMode}&returnTo=${encodeURIComponent(builderReturnTo)}`
+          : "/payroll/runs/new",
+    )
+  }, [addedPersonApplied, builderReturnTo, copyFromRunId, copyMode, editRunId, people, router, searchParams])
 
   const detailsValid = Boolean(
     payrollSettings &&
@@ -236,7 +347,7 @@ export default function NewPayrollRunPage() {
           : await createRun.mutateAsync(runInput)
       sessionStorage.removeItem(storageKey)
       toast.success(editRunId ? "Payroll run updated" : "Payroll run created")
-      router.push(`/payroll/runs/${result.run.id}`)
+      router.push(`/payroll/runs/${result.run.id}?returnTo=${encodeURIComponent(builderReturnTo)}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save payroll")
     }
@@ -287,7 +398,10 @@ export default function NewPayrollRunPage() {
     setPreview(null)
   }
 
-  if (editRunId && editRunQuery.isPending && !editRun) {
+  if (
+    (editRunId && editRunQuery.isPending && !editRun) ||
+    (copyFromRunId && sourceRunQuery.isPending && !sourceRun)
+  ) {
     return <PayrollFormSkeleton />
   }
   if (editRunId && (!editRun || editRun.status !== "draft")) {
@@ -305,18 +419,63 @@ export default function NewPayrollRunPage() {
       </div>
     )
   }
+  if (
+    copyFromRunId &&
+    (!sourceRun ||
+      (copyMode === "correction" &&
+        (!["partial", "failed"].includes(sourceRun.status) ||
+          !(sourceRun.lines ?? []).some((line) => line.status === "paid") ||
+          !(sourceRun.lines ?? []).some((line) => line.status === "failed"))))
+  ) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+        <Card>
+          <CardContent className="p-8 text-center">
+            <h1 className="text-lg font-semibold">This payroll run can’t be copied</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Corrected runs require both successful and failed payments.
+            </p>
+            <Button className="mt-5" variant="outline" asChild>
+              <Link href={`/payroll/runs/${encodeURIComponent(copyFromRunId)}?returnTo=${encodeURIComponent(builderReturnTo)}`}>
+                Back to run
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <PayrollSubpageShell
-      backHref={editRunId ? `/payroll/runs/${editRunId}` : "/payroll/runs"}
-      backLabel={editRunId ? "Back to run" : "Back to Runs"}
+      backHref={
+        editRunId
+          ? `/payroll/runs/${editRunId}?returnTo=${encodeURIComponent(builderReturnTo)}`
+          : copyFromRunId
+            ? `/payroll/runs/${copyFromRunId}?returnTo=${encodeURIComponent(builderReturnTo)}`
+            : "/payroll/runs"
+      }
+      backLabel={editRunId || copyFromRunId ? "Back to run" : "Back to Runs"}
       section="Runs"
       sectionHref="/payroll/runs"
-      current={editRunId ? String(editRun?.metadata?.name || "Edit") : "Create"}
-        title={editRunId ? "Edit payroll run" : "Run payroll"}
+      current={
+        editRunId
+          ? String(editRun?.metadata?.name || "Edit")
+          : copyMode === "correction"
+            ? "Correction"
+            : copyMode === "duplicate"
+              ? "Duplicate"
+              : "Create"
+      }
+      title={editRunId ? "Edit payroll run" : "Run payroll"}
         description="Build, check, and approve a payroll run before any money moves."
       maxWidth="max-w-7xl"
-    >
+      >
+      {copyMode === "correction" ? (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+          This corrected run includes failed payments only. People who were already paid are not included.
+        </div>
+      ) : null}
       <div className="mb-8 flex items-center gap-2 overflow-x-auto" aria-label="Payroll run steps">
         {stepLabels.map((label, index) => (
           <button
@@ -353,7 +512,13 @@ export default function NewPayrollRunPage() {
             ) : null}
             {step === 1 ? (
               <PeopleStep
-                addPersonHref={`/payroll/people/new?returnTo=${encodeURIComponent(editRunId ? `/payroll/runs/new?edit=${editRunId}` : "/payroll/runs/new")}`}
+                addPersonHref={`/payroll/people/new?returnTo=${encodeURIComponent(
+                  editRunId
+                    ? `/payroll/runs/new?edit=${editRunId}&returnTo=${encodeURIComponent(builderReturnTo)}`
+                    : copyFromRunId && copyMode
+                      ? `/payroll/runs/new?copyFrom=${copyFromRunId}&copyMode=${copyMode}&returnTo=${encodeURIComponent(builderReturnTo)}`
+                      : "/payroll/runs/new",
+                )}`}
                 people={filteredPeople}
                 selected={draft.selected}
                 search={search}

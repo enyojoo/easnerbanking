@@ -336,6 +336,114 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const admin = createSupabaseAdmin()
 
+  if (action === "return_to_draft") {
+    const { data: current, error: currentError } = await admin
+      .from("payroll_runs")
+      .select("status,revision")
+      .eq("id", id)
+      .eq("business_id", ctx.businessId)
+      .maybeSingle()
+    if (currentError) return NextResponse.json({ error: currentError.message }, { status: 500 })
+    if (!current || !["pending_approval", "needs_reapproval", "cancelled", "failed"].includes(String(current.status))) {
+      return NextResponse.json(
+        { error: "This payroll run cannot be returned to draft." },
+        { status: 409 },
+      )
+    }
+
+    const [{ data: unsafeLines, error: linesError }, { data: activeJobs, error: jobsError }] =
+      await Promise.all([
+        admin
+          .from("payroll_lines")
+          .select("id,status")
+          .eq("run_id", id)
+          .in("status", ["paid", "processing"]),
+        admin
+          .from("payroll_execution_jobs")
+          .select("id,status")
+          .eq("run_id", id)
+          .in("status", ["queued", "processing", "retry"]),
+      ])
+    if (linesError) return NextResponse.json({ error: linesError.message }, { status: 500 })
+    if (jobsError) return NextResponse.json({ error: jobsError.message }, { status: 500 })
+    if ((unsafeLines ?? []).length > 0 || (activeJobs ?? []).length > 0) {
+      return NextResponse.json(
+        { error: "This payroll has payment activity and can no longer be returned to draft." },
+        { status: 409 },
+      )
+    }
+
+    const { data: resettableLines, error: resettableError } = await admin
+      .from("payroll_lines")
+      .select("id,amount_cents,metadata")
+      .eq("run_id", id)
+    if (resettableError) return NextResponse.json({ error: resettableError.message }, { status: 500 })
+    for (const line of resettableLines ?? []) {
+      const metadata = (line.metadata as Record<string, unknown> | null) ?? {}
+      const { executePayload: _discardedExecution, ...retainedMetadata } = metadata
+      const { error } = await admin
+        .from("payroll_lines")
+        .update({
+          status: "pending",
+          lock_id: null,
+          source_amount_cents: line.amount_cents,
+          transfer_etid: null,
+          settled_at: null,
+          error_code: null,
+          error_message: null,
+          metadata: retainedMetadata,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", line.id)
+        .eq("run_id", id)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    const { data: updated, error: updateError } = await admin
+      .from("payroll_runs")
+      .update({
+        status: "draft",
+        submitted_at: null,
+        submitted_by: null,
+        approved_at: null,
+        approved_by: null,
+        scheduled_at: null,
+        approval_snapshot: null,
+        fx_snapshot: {},
+        shortfall_cents: 0,
+        revision: Number(current.revision ?? 1) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("business_id", ctx.businessId)
+      .eq("status", current.status)
+      .select("id")
+    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+    if (!updated?.length) {
+      return NextResponse.json(
+        { error: "This payroll run changed and could not be returned to draft." },
+        { status: 409 },
+      )
+    }
+
+    await admin
+      .from("business_approvals")
+      .update({ status: "rejected", updated_at: new Date().toISOString() })
+      .eq("business_id", ctx.businessId)
+      .eq("subject_type", "payroll_run")
+      .eq("subject_id", id)
+      .eq("status", "open")
+    await admin.from("payroll_run_events").insert({
+      business_id: ctx.businessId,
+      run_id: id,
+      actor_user_id: ctx.userId,
+      event_type: "run.returned_to_draft",
+      data: { previousStatus: current.status },
+    })
+    await recalculateRunTotals(admin, id, ctx.businessId)
+    return NextResponse.json({ run: await loadRun(admin, ctx.businessId, id) })
+  }
+
   if (action === "submit") {
     const { data: current } = await admin
       .from("payroll_runs")
@@ -629,13 +737,13 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       .from("payroll_lines")
       .select("id", { count: "exact", head: true })
       .eq("run_id", id)
-      .eq("status", "paid")
+      .in("status", ["paid", "processing"])
     if (paidLineError) {
       return NextResponse.json({ error: paidLineError.message }, { status: 500 })
     }
     if ((count ?? 0) > 0) {
       return NextResponse.json(
-        { error: "This failed run includes completed payments and must be retained." },
+        { error: "This failed run includes completed or processing payments and must be retained." },
         { status: 409 },
       )
     }

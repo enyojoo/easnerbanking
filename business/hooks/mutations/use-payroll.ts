@@ -14,6 +14,7 @@ import type {
   PayrollSchedule,
   PayrollSettings,
 } from "@/lib/payroll/types"
+import { payrollRunLineStatusCounts } from "@/lib/payroll/run-actions"
 
 type PayrollPeopleEnvelope = { people: PayrollPerson[] }
 type PayrollRunsEnvelope = { runs: PayrollRun[] }
@@ -76,7 +77,24 @@ function cacheRun(
   run: PayrollRun,
 ) {
   patchRuns(qc, qk.payroll.runs.list(scope), (runs) =>
-    runs.some((item) => item.id === run.id) ? runs.map((item) => (item.id === run.id ? run : item)) : [run, ...runs],
+    runs.some((item) => item.id === run.id)
+      ? runs.map((item) =>
+          item.id === run.id
+            ? {
+                ...item,
+                ...run,
+                peopleCount: run.peopleCount ?? run.lines?.length ?? item.peopleCount,
+                lineStatusCounts:
+                  run.lineStatusCounts ??
+                  (run.lines ? payrollRunLineStatusCounts(run) : item.lineStatusCounts),
+                hasPayStubs:
+                  run.hasPayStubs ??
+                  run.lines?.some((line) => Boolean(line.payrollDocumentId)) ??
+                  item.hasPayStubs,
+              }
+            : item,
+        )
+      : [run, ...runs],
   )
   qc.setQueryData(qk.payroll.runs.detail(scope, run.id), { run })
 }
@@ -438,6 +456,43 @@ export function useWithdrawPayrollRun(runId: string) {
   })
 }
 
+export function useReturnPayrollRunToDraft() {
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  return useMutation({
+    mutationFn: (runId: string) =>
+      apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}`, {
+        method: "POST",
+        body: { action: "return_to_draft" },
+      }),
+    onMutate: async (runId) => {
+      if (!scope) return {}
+      await qc.cancelQueries({ queryKey: qk.payroll.runs.root(scope) })
+      return {
+        runId,
+        ...optimisticallyPatchRun(qc, scope, runId, {
+          status: "draft",
+          submittedAt: null,
+          approvedAt: null,
+          scheduledAt: null,
+          approvalSnapshot: null,
+          shortfall: 0,
+        }),
+      }
+    },
+    onError: (_error, runId, context) => {
+      if (scope) restoreOptimisticRun(qc, scope, runId, context)
+    },
+    onSuccess: ({ run }) => {
+      if (scope) {
+        cacheRun(qc, scope, run)
+        qc.invalidateQueries({ queryKey: qk.approvals.root(scope) })
+      }
+      invalidatePayroll(qc, scope)
+    },
+  })
+}
+
 export function useRejectPayrollRun(runId: string) {
   const qc = useQueryClient()
   const { scope } = useScope()
@@ -487,6 +542,33 @@ export function useCancelPayrollRun(runId: string) {
       return optimisticallyPatchRun(qc, scope, runId, { status: "cancelled" })
     },
     onError: (_error, _variables, context) => {
+      if (scope) restoreOptimisticRun(qc, scope, runId, context)
+    },
+    onSuccess: ({ run }) => {
+      if (scope) cacheRun(qc, scope, run)
+      invalidatePayroll(qc, scope)
+    },
+  })
+}
+
+export function useCancelPayrollRunById() {
+  const qc = useQueryClient()
+  const { scope } = useScope()
+  return useMutation({
+    mutationFn: (runId: string) =>
+      apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}`, {
+        method: "POST",
+        body: { action: "cancel" },
+      }),
+    onMutate: async (runId) => {
+      if (!scope) return {}
+      await qc.cancelQueries({ queryKey: qk.payroll.runs.root(scope) })
+      return {
+        runId,
+        ...optimisticallyPatchRun(qc, scope, runId, { status: "cancelled" }),
+      }
+    },
+    onError: (_error, runId, context) => {
       if (scope) restoreOptimisticRun(qc, scope, runId, context)
     },
     onSuccess: ({ run }) => {

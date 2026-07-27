@@ -97,6 +97,8 @@ export interface PayrollRun {
   lines?: PayrollLine[]
   /** Hydrated for list views without loading every payment line. */
   peopleCount?: number
+  lineStatusCounts?: Record<PayrollLineStatus, number>
+  hasPayStubs?: boolean
 }
 
 export interface PayrollLine {
@@ -424,6 +426,8 @@ export interface PayrollRunDraftInput {
   sourceAccountId: string
   sourceCurrency: string
   lines: Array<{ personId: string; amount: number }>
+  creationMode?: "new" | "duplicate" | "correction"
+  sourceRunId?: string
 }
 
 export interface PayrollRunPreview {

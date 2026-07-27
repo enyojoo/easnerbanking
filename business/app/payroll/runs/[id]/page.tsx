@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { CalendarX2, MoreHorizontal, Pencil, Trash2, Undo2, XCircle } from "lucide-react"
+import { Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -15,13 +15,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { PayrollLegalNote } from "@/components/payroll/payroll-legal-note"
 import { PayrollSubpageShell } from "@/components/payroll/payroll-subpage-shell"
 import { PayrollLineStatusBadge, PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
 import { PayrollRailBadge } from "@/components/payroll/payroll-rail-badge"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
 import { PayrollDetailSkeleton, PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
+import { PayrollRunActionsMenu } from "@/components/payroll/payroll-run-actions-menu"
+import { PayrollRunActionConfirmDialog } from "@/components/payroll/payroll-run-action-confirm-dialog"
 import {
   usePayrollCapabilities,
   usePayrollRunDetail,
@@ -33,7 +34,7 @@ import {
   useApprovePayrollRun,
   useExecutePayrollRun,
   useRetryPayrollRun,
-  useWithdrawPayrollRun,
+  useReturnPayrollRunToDraft,
   useRejectPayrollRun,
   useCancelPayrollRun,
   useDeletePayrollRun,
@@ -48,6 +49,10 @@ import { apiFetch } from "@/lib/query/api-client"
 import { railLabel } from "@/lib/payroll/helpers"
 import { safePayrollReturnTo } from "@/lib/payroll/navigation"
 import { formatPayrollZonedDateTime } from "@/lib/payroll/schedule-preview"
+import {
+  getPayrollRunActions,
+  type PayrollRunAction,
+} from "@/lib/payroll/run-actions"
 
 export default function PayrollRunDetailPage() {
   const params = useParams<{ id: string }>()
@@ -64,7 +69,7 @@ export default function PayrollRunDetailPage() {
   const approveRun = useApprovePayrollRun(runId)
   const executeRun = useExecutePayrollRun(runId)
   const retryRun = useRetryPayrollRun(runId)
-  const withdrawRun = useWithdrawPayrollRun(runId)
+  const returnToDraft = useReturnPayrollRunToDraft()
   const rejectRunMutation = useRejectPayrollRun(runId)
   const cancelRunMutation = useCancelPayrollRun(runId)
   const deleteRun = useDeletePayrollRun()
@@ -72,6 +77,9 @@ export default function PayrollRunDetailPage() {
   const confirmWithPin = useConfirmWithPin()
   const autoActionStarted = useRef(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [returnToDraftOpen, setReturnToDraftOpen] = useState(false)
+  const [editAfterReturn, setEditAfterReturn] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
 
@@ -111,6 +119,20 @@ export default function PayrollRunDetailPage() {
     run && ["executing", "completed", "partial", "failed"].includes(run.status),
   )
   const hasPayStubs = lines.some((line) => Boolean(line.payrollDocumentId))
+  const runActions = run
+    ? getPayrollRunActions({
+        run,
+        canPrepare,
+        canApprove,
+        canSelfApprove: capabilities?.canSelfApprove,
+        hasPayStubs,
+      })
+    : []
+  const secondaryRunActions = runActions.filter(
+    (action) =>
+      !["download_pay_stubs", "submit", "approve", "execute", "retry", "view_progress"].includes(action) &&
+      !(action === "edit" && run?.status === "draft"),
+  )
   const awaitingApproval = run?.status === "pending_approval" || run?.status === "needs_reapproval"
   const futurePayday = Boolean(
     timingPreview.data?.scheduledAt
@@ -203,9 +225,33 @@ export default function PayrollRunDetailPage() {
     try {
       await cancelRunMutation.mutateAsync()
       toast.success("Scheduled payroll cancelled")
+      return true
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Schedule could not be cancelled")
+      return false
     }
+  }
+
+  function handleSecondaryRunAction(action: PayrollRunAction) {
+    if (action === "edit" && run?.status === "failed") {
+      setEditAfterReturn(true)
+      setReturnToDraftOpen(true)
+      return
+    }
+    if (action === "return_to_draft") {
+      setEditAfterReturn(false)
+      setReturnToDraftOpen(true)
+      return
+    }
+    if (action === "reject") {
+      setRejectOpen(true)
+      return
+    }
+    if (action === "cancel") {
+      setCancelOpen(true)
+      return
+    }
+    if (action === "delete") setDeleteOpen(true)
   }
 
   async function downloadPayStub(documentId: string) {
@@ -258,23 +304,23 @@ export default function PayrollRunDetailPage() {
                 </a>
               </Button>
             ) : null}
-            {run.status === "draft" && canPrepare ? (
+            {runActions.includes("edit") && run.status === "draft" ? (
               <Button variant="outline" asChild>
-                <Link href={`/payroll/runs/new?edit=${encodeURIComponent(runId)}`}>
+                <Link
+                  href={`/payroll/runs/new?edit=${encodeURIComponent(runId)}&returnTo=${encodeURIComponent(returnTo)}`}
+                >
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
                 </Link>
               </Button>
             ) : null}
-            {(run.status === "approved" ||
-              run.status === "partial" ||
-              (run.status === "executing" && executionJob?.status === "dead_letter")) &&
-            canApprove ? (
+            {runActions.includes("execute") ||
+            (run.status === "executing" && executionJob?.status === "dead_letter" && canApprove) ? (
               <Button variant="primary" onClick={() => void handleExecute()} disabled={executeRun.isPending}>
                 {executionJob?.status === "dead_letter" ? "Retry sending" : "Execute with PIN"}
               </Button>
             ) : null}
-            {failedLines.length > 0 && canApprove ? (
+            {runActions.includes("retry") && failedLines.length > 0 ? (
               <Button
                 variant={run.status === "failed" ? "primary" : "outline"}
                 onClick={() =>
@@ -294,7 +340,7 @@ export default function PayrollRunDetailPage() {
                 Retry failed
               </Button>
             ) : null}
-            {run.status === "draft" && canPrepare && !canApproveDraftDirectly ? (
+            {runActions.includes("submit") && !canApproveDraftDirectly ? (
               <Button
                 variant="primary"
                 onClick={() =>
@@ -308,7 +354,7 @@ export default function PayrollRunDetailPage() {
                 Submit for approval
               </Button>
             ) : null}
-            {(awaitingApproval || canApproveDraftDirectly) && canApprove && !selfApprovalBlocked ? (
+            {runActions.includes("approve") && !selfApprovalBlocked ? (
               <Button
                 variant="primary"
                 onClick={() => void (futurePayday ? handleApproveAndSchedule() : handleApproveAndPay())}
@@ -321,55 +367,21 @@ export default function PayrollRunDetailPage() {
                 {futurePayday ? "Approve and schedule" : "Approve and pay"}
               </Button>
             ) : null}
-            {(run.status === "draft" && canPrepare) ||
-            (run.status === "failed" && canPrepare) ||
-            (awaitingApproval && (canPrepare || canApprove)) ||
-            (run.status === "scheduled" && canApprove) ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label={`More actions for ${String(run.metadata?.name || "payroll run")}`}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {awaitingApproval && canPrepare ? (
-                    <DropdownMenuItem
-                      disabled={withdrawRun.isPending}
-                      onClick={() =>
-                        withdrawRun.mutate(undefined, {
-                          onSuccess: () => toast.success("Run returned to draft"),
-                          onError: (error) => toast.error(error.message),
-                        })
-                      }
-                    >
-                      <Undo2 />
-                      Withdraw to draft
-                    </DropdownMenuItem>
-                  ) : null}
-                  {awaitingApproval && canApprove ? (
-                    <DropdownMenuItem onClick={() => setRejectOpen(true)}>
-                      <XCircle />
-                      Reject
-                    </DropdownMenuItem>
-                  ) : null}
-                  {run.status === "scheduled" && canApprove ? (
-                    <DropdownMenuItem onClick={() => void cancelSchedule()}>
-                      <CalendarX2 />
-                      Cancel scheduled payment
-                    </DropdownMenuItem>
-                  ) : null}
-                  {(run.status === "draft" || run.status === "failed") && canPrepare ? (
-                    <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-                      <Trash2 />
-                      {run.status === "failed" ? "Delete failed run" : "Delete draft"}
-                    </DropdownMenuItem>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {secondaryRunActions.length ? (
+              <PayrollRunActionsMenu
+                runId={run.id}
+                runName={String(run.metadata?.name || "Payroll run")}
+                actions={secondaryRunActions}
+                detailHref={`/payroll/runs/${run.id}`}
+                returnTo={returnTo}
+                interceptActions={run.status === "failed" ? ["edit"] : undefined}
+                disabledActions={{
+                  return_to_draft: returnToDraft.isPending,
+                  cancel: cancelRunMutation.isPending,
+                  delete: deleteRun.isPending,
+                }}
+                onAction={handleSecondaryRunAction}
+              />
             ) : null}
           </div>
         }
@@ -621,6 +633,48 @@ export default function PayrollRunDetailPage() {
             toast.error(error instanceof Error ? error.message : "Payroll run could not be deleted")
             throw error
           }
+        }}
+      />
+      <PayrollRunActionConfirmDialog
+        open={returnToDraftOpen}
+        onOpenChange={(open) => {
+          setReturnToDraftOpen(open)
+          if (!open) setEditAfterReturn(false)
+        }}
+        title={editAfterReturn ? "Reopen this failed run?" : "Return this run to draft?"}
+        description={
+          editAfterReturn
+            ? "The failed payment state will be cleared and the run will reopen in the payroll builder."
+            : "Approval, scheduling, and quote details will be cleared. The run’s audit history will remain available."
+        }
+        confirmLabel={editAfterReturn ? "Reopen and edit" : "Return to draft"}
+        pending={returnToDraft.isPending}
+        onConfirm={async () => {
+          try {
+            await returnToDraft.mutateAsync(run.id)
+            setReturnToDraftOpen(false)
+            toast.success("Payroll run returned to draft")
+            if (editAfterReturn) {
+              router.push(
+                `/payroll/runs/new?edit=${encodeURIComponent(run.id)}&returnTo=${encodeURIComponent(returnTo)}`,
+              )
+            }
+            setEditAfterReturn(false)
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Payroll run could not be returned to draft")
+          }
+        }}
+      />
+      <PayrollRunActionConfirmDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title="Cancel this scheduled payroll?"
+        description="The payment will not be sent at its scheduled time. You can return the cancelled run to draft afterward."
+        confirmLabel="Cancel schedule"
+        pending={cancelRunMutation.isPending}
+        destructive
+        onConfirm={async () => {
+          if (await cancelSchedule()) setCancelOpen(false)
         }}
       />
       <Dialog

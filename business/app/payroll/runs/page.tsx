@@ -2,11 +2,10 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { Eye, MoreHorizontal, Pencil, Send, Trash2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { PayrollDeleteDialog } from "@/components/payroll/payroll-delete-dialog"
@@ -15,19 +14,32 @@ import { PayrollPermissionAction } from "@/components/payroll/payroll-permission
 import { PayrollInlineRefreshing } from "@/components/payroll/payroll-page-skeleton"
 import { PayrollDetailLink } from "@/components/payroll/payroll-detail-link"
 import { PayrollRunStatusBadge } from "@/components/payroll/payroll-run-status-badge"
+import { PayrollRunActionsMenu } from "@/components/payroll/payroll-run-actions-menu"
+import { PayrollRunActionConfirmDialog } from "@/components/payroll/payroll-run-action-confirm-dialog"
 import { usePayrollCapabilities, usePayrollRuns } from "@/hooks/queries/use-payroll"
-import { useDeletePayrollRun, useSubmitPayrollRunById } from "@/hooks/mutations/use-payroll"
+import {
+  useCancelPayrollRunById,
+  useDeletePayrollRun,
+  useReturnPayrollRunToDraft,
+  useSubmitPayrollRunById,
+} from "@/hooks/mutations/use-payroll"
 import { usePayrollListState } from "@/hooks/use-payroll-list-state"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { PayrollRun } from "@/lib/payroll/types"
+import {
+  getPayrollRunActions,
+  type PayrollRunAction,
+} from "@/lib/payroll/run-actions"
 
 type RunFilter = "all" | "draft" | "awaiting" | "scheduled" | "completed" | "attention"
 const RUN_FILTERS = ["all", "draft", "awaiting", "scheduled", "completed", "attention"] as const
 
 export default function PayrollRunsPage() {
+  const router = useRouter()
   const runsQuery = usePayrollRuns()
   const capabilitiesQuery = usePayrollCapabilities()
   const canPrepare = Boolean(capabilitiesQuery.data?.canPrepare)
+  const canApprove = Boolean(capabilitiesQuery.data?.canApprove)
   const allRuns = useMemo(() => runsQuery.data ?? [], [runsQuery.data])
   const { query, filter, setQuery, setFilter, returnTo } = usePayrollListState<RunFilter>({
     allowedFilters: RUN_FILTERS,
@@ -59,7 +71,11 @@ export default function PayrollRunsPage() {
   }), [allRuns, filter, query])
   const deleteRun = useDeletePayrollRun()
   const submitRunMutation = useSubmitPayrollRunById()
+  const returnToDraft = useReturnPayrollRunToDraft()
+  const cancelRun = useCancelPayrollRunById()
   const [deleteTarget, setDeleteTarget] = useState<PayrollRun | null>(null)
+  const [returnTarget, setReturnTarget] = useState<{ run: PayrollRun; editAfter: boolean } | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<PayrollRun | null>(null)
   const [submittingRunIds, setSubmittingRunIds] = useState<Set<string>>(() => new Set())
 
   async function submitRun(runId: string) {
@@ -77,6 +93,26 @@ export default function PayrollRunsPage() {
         return next
       })
     }
+  }
+
+  function handleRunAction(run: PayrollRun, action: PayrollRunAction) {
+    if (action === "submit") {
+      void submitRun(run.id)
+      return
+    }
+    if (action === "return_to_draft" || (action === "edit" && run.status === "failed")) {
+      setReturnTarget({ run, editAfter: action === "edit" })
+      return
+    }
+    if (action === "cancel") {
+      setCancelTarget(run)
+      return
+    }
+    if (action === "delete") {
+      setDeleteTarget(run)
+      return
+    }
+    router.push(`/payroll/runs/${run.id}?returnTo=${encodeURIComponent(returnTo)}`)
   }
   return <>
     <PayrollListToolbar
@@ -99,10 +135,10 @@ export default function PayrollRunsPage() {
       runsQuery.isError ? <Card><CardContent className="p-8 text-center"><p className="font-medium">Payroll runs couldn’t be loaded</p><Button className="mt-4" variant="outline" onClick={() => void runsQuery.refetch()}>Try again</Button></CardContent></Card> :
       !runs.length ? <Card className="shadow-soft"><CardContent className="p-10 text-center"><h2 className="font-semibold">{allRuns.length ? "No payroll runs match this view" : "No payroll runs yet"}</h2><p className="mt-2 text-sm text-muted-foreground">{allRuns.length ? "Try another status or search." : "Choose ready people, check funding, and create your first run."}</p>{!allRuns.length ? <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}><Button className="mt-5" variant="primary" asChild><Link href="/payroll/runs/new">Run payroll</Link></Button></PayrollPermissionAction> : null}</CardContent></Card> :
       <><Card className="hidden overflow-hidden shadow-soft md:block"><Table><TableHeader><TableRow><TableHead>Run</TableHead><TableHead>Pay period</TableHead><TableHead>Payday</TableHead><TableHead>People</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead>Created</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader><TableBody>
-        {runs.map((run) => <TableRow key={run.id}><TableCell><PayrollDetailLink kind="run" id={run.id} className="font-medium hover:underline" href={`/payroll/runs/${run.id}?returnTo=${encodeURIComponent(returnTo)}`}>{String(run.metadata?.name || "Payroll run")}</PayrollDetailLink><span className="mt-0.5 block text-xs text-muted-foreground">{run.scheduleId ? "Scheduled payroll" : String(run.metadata?.offCycle ? "Off-cycle payroll" : "Regular payroll")}</span></TableCell><TableCell>{run.payPeriodStart && run.payPeriodEnd ? `${formatDate(run.payPeriodStart)} – ${formatDate(run.payPeriodEnd)}` : "—"}</TableCell><TableCell>{run.payday ? formatDate(run.payday) : "—"}</TableCell><TableCell>{run.peopleCount ?? run.lines?.length ?? run.approvalSnapshot?.people.length ?? 0}</TableCell><TableCell className="font-medium tabular-nums">{formatCurrency(run.totalSource, run.sourceCurrency)}</TableCell><TableCell><PayrollRunStatusBadge status={run.status} /></TableCell><TableCell>{formatDate(run.createdAt)}</TableCell><TableCell><RunActions run={run} returnTo={returnTo} canPrepare={canPrepare} submitting={submittingRunIds.has(run.id)} onSubmit={() => void submitRun(run.id)} onDelete={() => setDeleteTarget(run)} /></TableCell></TableRow>)}
+        {runs.map((run) => <TableRow key={run.id}><TableCell><PayrollDetailLink kind="run" id={run.id} className="font-medium hover:underline" href={`/payroll/runs/${run.id}?returnTo=${encodeURIComponent(returnTo)}`}>{String(run.metadata?.name || "Payroll run")}</PayrollDetailLink><span className="mt-0.5 block text-xs text-muted-foreground">{run.scheduleId ? "Scheduled payroll" : String(run.metadata?.offCycle ? "Off-cycle payroll" : "Regular payroll")}</span></TableCell><TableCell>{run.payPeriodStart && run.payPeriodEnd ? `${formatDate(run.payPeriodStart)} – ${formatDate(run.payPeriodEnd)}` : "—"}</TableCell><TableCell>{run.payday ? formatDate(run.payday) : "—"}</TableCell><TableCell>{run.peopleCount ?? run.lines?.length ?? run.approvalSnapshot?.people.length ?? 0}</TableCell><TableCell className="font-medium tabular-nums">{formatCurrency(run.totalSource, run.sourceCurrency)}</TableCell><TableCell><PayrollRunStatusBadge status={run.status} /></TableCell><TableCell>{formatDate(run.createdAt)}</TableCell><TableCell><PayrollRunActionsMenu runId={run.id} runName={String(run.metadata?.name || "Payroll run")} actions={getPayrollRunActions({ run, canPrepare, canApprove, canSelfApprove: capabilitiesQuery.data?.canSelfApprove, hasPayStubs: run.hasPayStubs })} detailHref={`/payroll/runs/${run.id}?returnTo=${encodeURIComponent(returnTo)}`} returnTo={returnTo} showView interceptActions={run.status === "failed" ? ["edit"] : undefined} disabledActions={{ submit: submittingRunIds.has(run.id), return_to_draft: returnToDraft.isPending, cancel: cancelRun.isPending, delete: deleteRun.isPending }} onAction={(action) => handleRunAction(run, action)} /></TableCell></TableRow>)}
       </TableBody></Table></Card>
       <div className="space-y-3 md:hidden">{runs.map((run) => <Card key={run.id} className="shadow-soft"><CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3"><div className="min-w-0"><PayrollDetailLink kind="run" id={run.id} className="block truncate font-medium" href={`/payroll/runs/${run.id}?returnTo=${encodeURIComponent(returnTo)}`}>{String(run.metadata?.name || "Payroll run")}</PayrollDetailLink><p className="mt-1 text-xs text-muted-foreground">{run.scheduleId ? "Scheduled payroll" : run.metadata?.offCycle ? "Off-cycle payroll" : "Regular payroll"}</p></div><RunActions run={run} returnTo={returnTo} canPrepare={canPrepare} submitting={submittingRunIds.has(run.id)} onSubmit={() => void submitRun(run.id)} onDelete={() => setDeleteTarget(run)} /></div>
+        <div className="flex items-start justify-between gap-3"><div className="min-w-0"><PayrollDetailLink kind="run" id={run.id} className="block truncate font-medium" href={`/payroll/runs/${run.id}?returnTo=${encodeURIComponent(returnTo)}`}>{String(run.metadata?.name || "Payroll run")}</PayrollDetailLink><p className="mt-1 text-xs text-muted-foreground">{run.scheduleId ? "Scheduled payroll" : run.metadata?.offCycle ? "Off-cycle payroll" : "Regular payroll"}</p></div><PayrollRunActionsMenu runId={run.id} runName={String(run.metadata?.name || "Payroll run")} actions={getPayrollRunActions({ run, canPrepare, canApprove, canSelfApprove: capabilitiesQuery.data?.canSelfApprove, hasPayStubs: run.hasPayStubs })} detailHref={`/payroll/runs/${run.id}?returnTo=${encodeURIComponent(returnTo)}`} returnTo={returnTo} showView interceptActions={run.status === "failed" ? ["edit"] : undefined} disabledActions={{ submit: submittingRunIds.has(run.id), return_to_draft: returnToDraft.isPending, cancel: cancelRun.isPending, delete: deleteRun.isPending }} onAction={(action) => handleRunAction(run, action)} /></div>
         <div className="mt-4 flex items-center justify-between border-y py-3"><span className="text-lg font-semibold tabular-nums">{formatCurrency(run.totalSource, run.sourceCurrency)}</span><PayrollRunStatusBadge status={run.status} /></div>
         <dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-muted-foreground">Payday</dt><dd className="mt-1">{run.payday ? formatDate(run.payday) : "—"}</dd></div><div><dt className="text-xs text-muted-foreground">People</dt><dd className="mt-1">{run.peopleCount ?? run.lines?.length ?? run.approvalSnapshot?.people.length ?? 0}</dd></div><div className="col-span-2"><dt className="text-xs text-muted-foreground">Pay period</dt><dd className="mt-1">{run.payPeriodStart && run.payPeriodEnd ? `${formatDate(run.payPeriodStart)} – ${formatDate(run.payPeriodEnd)}` : "—"}</dd></div></dl>
       </CardContent></Card>)}</div></>}
@@ -126,29 +162,53 @@ export default function PayrollRunsPage() {
         }
       }}
     />
+    <PayrollRunActionConfirmDialog
+      open={Boolean(returnTarget)}
+      onOpenChange={(open) => !open && setReturnTarget(null)}
+      title={returnTarget?.editAfter ? "Reopen this failed run?" : "Return this run to draft?"}
+      description={
+        returnTarget?.editAfter
+          ? "The failed payment state will be cleared and the run will reopen in the payroll builder."
+          : "Approval, scheduling, and quote details will be cleared. The run’s audit history will remain available."
+      }
+      confirmLabel={returnTarget?.editAfter ? "Reopen and edit" : "Return to draft"}
+      pending={returnToDraft.isPending}
+      onConfirm={async () => {
+        if (!returnTarget) return
+        const { run, editAfter } = returnTarget
+        try {
+          await returnToDraft.mutateAsync(run.id)
+          setReturnTarget(null)
+          toast.success("Payroll run returned to draft")
+          if (editAfter) {
+            router.push(
+              `/payroll/runs/new?edit=${encodeURIComponent(run.id)}&returnTo=${encodeURIComponent(returnTo)}`,
+            )
+          }
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Payroll run could not be returned to draft")
+        }
+      }}
+    />
+    <PayrollRunActionConfirmDialog
+      open={Boolean(cancelTarget)}
+      onOpenChange={(open) => !open && setCancelTarget(null)}
+      title="Cancel this scheduled payroll?"
+      description="The payment will not be sent at its scheduled time. You can return the cancelled run to draft afterward."
+      confirmLabel="Cancel schedule"
+      pending={cancelRun.isPending}
+      destructive
+      onConfirm={async () => {
+        if (!cancelTarget) return
+        try {
+          await cancelRun.mutateAsync(cancelTarget.id)
+          setCancelTarget(null)
+          toast.success("Scheduled payroll cancelled")
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Schedule could not be cancelled")
+        }
+      }}
+    />
     <PayrollInlineRefreshing visible={runsQuery.isFetching && !runsQuery.isPending} />
   </>
-}
-
-function RunActions({
-  run,
-  returnTo,
-  canPrepare,
-  submitting,
-  onSubmit,
-  onDelete,
-}: {
-  run: PayrollRun
-  returnTo: string
-  canPrepare: boolean
-  submitting: boolean
-  onSubmit: () => void
-  onDelete: () => void
-}) {
-  return <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="min-h-11 min-w-11" aria-label={`Actions for ${String(run.metadata?.name || "payroll run")}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
-    <DropdownMenuItem asChild><Link href={`/payroll/runs/${run.id}?returnTo=${encodeURIComponent(returnTo)}`}><Eye />View details</Link></DropdownMenuItem>
-    {run.status === "draft" && canPrepare ? <DropdownMenuItem asChild><Link href={`/payroll/runs/${run.id}/edit`}><Pencil />Edit run</Link></DropdownMenuItem> : null}
-    {run.status === "draft" && canPrepare ? <DropdownMenuItem disabled={submitting} onClick={onSubmit}><Send />{submitting ? "Submitting…" : "Submit for approval"}</DropdownMenuItem> : null}
-    {(run.status === "draft" || run.status === "failed") && canPrepare ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={onDelete}><Trash2 />{run.status === "failed" ? "Delete failed run" : "Delete draft"}</DropdownMenuItem></> : null}
-  </DropdownMenuContent></DropdownMenu>
 }
