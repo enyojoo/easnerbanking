@@ -20,58 +20,40 @@ afterEach(() => {
 })
 
 describe('shouldUseFlowHubInstantTransition', () => {
-  it('instant between send hub adjacent routes', () => {
+  it('never uses instant hub transitions so swipe-back stays interactive', () => {
     expect(
       shouldUseFlowHubInstantTransition({
         routeName: 'SendAmount',
         previousRouteName: 'SelectRecentRecipient',
       }),
-    ).toBe(true)
+    ).toBe(false)
     expect(
       shouldUseFlowHubInstantTransition({
         routeName: 'SelectRecipient',
         previousRouteName: 'SendAmount',
       }),
-    ).toBe(true)
-    expect(
-      shouldUseFlowHubInstantTransition({
-        routeName: 'SelectRecentRecipient',
-        previousRouteName: 'SendAmount',
-      }),
-    ).toBe(true)
-  })
-
-  it('instant into SendAmount from hub forward params', () => {
+    ).toBe(false)
     expect(
       shouldUseFlowHubInstantTransition({
         routeName: 'SendAmount',
         routeParams: { fromSelectRecentRecipient: true },
       }),
-    ).toBe(true)
-  })
-
-  it('not instant when entering send from tabs', () => {
-    expect(
-      shouldUseFlowHubInstantTransition({
-        routeName: 'SendAmount',
-        previousRouteName: 'MainTabs',
-      }),
     ).toBe(false)
-  })
-
-  it('instant between receive local hub routes', () => {
     expect(
       shouldUseFlowHubInstantTransition({
         routeName: 'ReceiveLocalAmount',
         previousRouteName: 'ReceiveLocalRail',
       }),
-    ).toBe(true)
-    expect(routesShareHubGroup('ReceiveLocalRail', 'ReceiveLocalAmount')).toBe(true)
+    ).toBe(false)
+  })
+
+  it('receive local rail no longer shares hub group with amount', () => {
+    expect(routesShareHubGroup('ReceiveLocalRail', 'ReceiveLocalAmount')).toBe(false)
   })
 })
 
 describe('resolveGestureEnabled', () => {
-  it('disables gesture on MainTabs and flow hubs', () => {
+  it('disables gesture on MainTabs and auth gates', () => {
     setPlatform('android')
     expect(
       resolveGestureEnabled({
@@ -82,19 +64,55 @@ describe('resolveGestureEnabled', () => {
     ).toBe(false)
     expect(
       resolveGestureEnabled({
-        routeName: 'SendAmount',
-        entry: { intent: 'flowHub', hubGroup: 'sendHub' },
-        platform: 'android',
+        routeName: 'PinSetupGate',
+        entry: { intent: 'authGate', blockGesture: true },
+        platform: 'ios',
       }),
     ).toBe(false)
   })
 
-  it('enables gesture on Android terminal flow steps', () => {
+  it('enables gesture on flow hubs for Android', () => {
     setPlatform('android')
+    expect(
+      resolveGestureEnabled({
+        routeName: 'SendAmount',
+        entry: { intent: 'flowHub', hubGroup: 'sendHub' },
+        platform: 'android',
+      }),
+    ).toBe(true)
+  })
+
+  it('enables gesture on all flow steps for Android', () => {
+    setPlatform('android')
+    expect(
+      resolveGestureEnabled({
+        routeName: 'SendCrossBorderMomoSetup',
+        entry: { intent: 'flowStep' },
+        platform: 'android',
+      }),
+    ).toBe(true)
     expect(
       resolveGestureEnabled({
         routeName: 'SendConfirm',
         entry: { intent: 'flowStep', flowStepTerminal: true },
+        platform: 'android',
+      }),
+    ).toBe(true)
+  })
+
+  it('enables gesture on stack entry screens for Android', () => {
+    setPlatform('android')
+    expect(
+      resolveGestureEnabled({
+        routeName: 'ReceiveMoney',
+        entry: { intent: 'stackEntry' },
+        platform: 'android',
+      }),
+    ).toBe(true)
+    expect(
+      resolveGestureEnabled({
+        routeName: 'Profile',
+        entry: { intent: 'stackEntry' },
         platform: 'android',
       }),
     ).toBe(true)
@@ -116,37 +134,27 @@ describe('resolveGestureEnabled', () => {
       }),
     ).toBe(true)
   })
-
-  it('blocks gesture on mandatory auth gates', () => {
-    expect(
-      resolveGestureEnabled({
-        routeName: 'PinSetupGate',
-        entry: { intent: 'authGate', blockGesture: true },
-        platform: 'ios',
-      }),
-    ).toBe(false)
-  })
 })
 
 describe('resolveScreenTransitionOptions', () => {
-  it('uses instant preset for send hub pairs on native', () => {
+  it('uses horizontal motion for send hub pairs on native', () => {
     setPlatform('ios')
     const options = resolveScreenTransitionOptions({
       routeName: 'SendAmount',
       previousRouteName: 'SelectRecentRecipient',
     })
-    expect(options.gestureEnabled).toBe(false)
-    expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(false)
+    expect(options.gestureEnabled).toBe(true)
+    expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(true)
   })
 
-  it('uses horizontal motion for tab entry on Android', () => {
+  it('uses horizontal motion for tab entry on Android with swipe enabled', () => {
     setPlatform('android')
     const options = resolveScreenTransitionOptions({
       routeName: 'Profile',
       previousRouteName: 'MainTabs',
     })
     expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(true)
-    expect(options.gestureEnabled).toBe(false)
+    expect(options.gestureEnabled).toBe(true)
   })
 
   it('uses modal bottom interpolator for ScanWalletAddress', () => {
@@ -172,7 +180,7 @@ describe('resolveScreenTransitionOptions', () => {
     expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(true)
   })
 
-  it('keeps hub instant on web sidebar shell', () => {
+  it('uses horizontal motion for send hub on web sidebar shell', () => {
     setPlatform('web')
     const options = resolveScreenTransitionOptions({
       routeName: 'SendAmount',
@@ -180,7 +188,7 @@ describe('resolveScreenTransitionOptions', () => {
       showSidebarShell: true,
       layoutMode: 'desktop',
     })
-    expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(false)
+    expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(true)
   })
 
   it('MainTabs disables gesture', () => {

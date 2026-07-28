@@ -10,9 +10,8 @@ import {
   AppState,
 } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
-import { ArrowLeft, ArrowUpDown, ChevronDown, Delete } from 'lucide-react-native'
+import { ArrowUpDown, ChevronDown, Delete } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   formatMoneyDisplay,
   formatSendRateLabel,
@@ -73,6 +72,7 @@ import { getPayoutCorridorCache } from '../../lib/sendDestinations'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import { ReceiveLocalAmountShellWebForm } from '../../components/receive/ReceiveLocalAmountShellWebForm'
+import { ReceiveFlowHeader } from '../../components/receive/ReceiveFlowHeader'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
 
@@ -86,7 +86,6 @@ type RouteParams = {
 }
 
 export default function ReceiveLocalAmountScreen({ navigation, route }: NavigationProps) {
-  const insets = useSafeAreaInsets()
   const { isWeb, mode } = useResponsiveLayout()
   const useWebShellLayout = isWeb && (mode === 'tablet' || mode === 'desktop')
   const { width: windowWidth } = useWindowDimensions()
@@ -464,13 +463,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   if (ngMissingType) {
     return (
       <ScreenWrapper>
-        <View style={[styles.blocked, { paddingTop: insets.top }]}>
-          <View style={styles.header}>
-            <Pressable android_ripple={ripple.neutral} onPress={handleBack} style={styles.backButton}>
-              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-            </Pressable>
-            <Text style={styles.title}>Add money</Text>
-          </View>
+        <View style={styles.blocked}>
+          <ReceiveFlowHeader title="Add money" onBack={handleBack} />
           <NgLocalVerificationNotice missingType={ngMissingType} onSaved={() => navigation.goBack()} />
         </View>
       </ScreenWrapper>
@@ -481,14 +475,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     <ScreenWrapper>
       {useWebShellLayout ? (
         <View style={styles.mainColumn}>
-          <View style={[styles.header, { paddingTop: spacing[4] }]}>
-            <Pressable android_ripple={ripple.neutral} onPress={handleBack} style={styles.backButton}>
-              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-            </Pressable>
-            <View style={styles.headerContent}>
-              <Text style={styles.title}>Add money</Text>
-            </View>
-          </View>
+          <ReceiveFlowHeader title="Add money" onBack={handleBack} />
           <CenteredWebFlowPage>
             <ReceiveLocalAmountShellWebForm
               usdBalance={usdBalance}
@@ -519,14 +506,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
         </View>
       ) : (
       <KeyboardAvoidingView style={styles.mainColumn} behavior="padding">
-        <View style={[styles.header, { paddingTop: spacing[4] + insets.top }]}>
-          <Pressable android_ripple={ripple.neutral} onPress={handleBack} style={styles.backButton}>
-            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-          </Pressable>
-          <View style={styles.headerContent}>
-            <Text style={styles.title}>Add money</Text>
-          </View>
-        </View>
+        <ReceiveFlowHeader title="Add money" onBack={handleBack} />
 
         <View style={styles.content}>
           <View style={styles.formTop}>
@@ -701,18 +681,6 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 const styles = StyleSheet.create({
   mainColumn: { flex: 1 },
   blocked: { flex: 1, paddingHorizontal: spacing[5] },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[4],
-  },
-  backButton: {
-    ...surfaceChromeCircleStyle(colors, 44),
-    marginRight: spacing[3],
-  },
-  headerContent: { flex: 1, justifyContent: 'center' },
-  title: { ...textStyles.headlineMedium, color: colors.text.primary },
   content: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[2],

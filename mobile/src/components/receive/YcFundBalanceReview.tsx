@@ -7,7 +7,6 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native'
-import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import {
   buildYcLocalPayInReviewRows,
@@ -33,6 +32,7 @@ import {
 } from '../transactions/TransactionDetailSummaryRow'
 import { YcPayInPaymentBlock } from '../yc/YcPayInPaymentBlock'
 import { YcPayInAwaitingPaymentCountdown } from '../yc/YcPayInAwaitingPaymentCountdown'
+import { ReceiveFlowHeader } from './ReceiveFlowHeader'
 import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transactionDetailNavigation'
 import { attestYcPayInPayment } from '../../lib/ycPayInAttest'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
@@ -253,12 +253,7 @@ export function YcFundBalanceReview({
   if (!displayLocked && isLoading) {
     return (
       <View style={[styles.container, { paddingBottom: footerPadding }]}>
-        <View style={styles.header}>
-          <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-          </Pressable>
-          <Text style={styles.title}>{YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE}</Text>
-        </View>
+        <ReceiveFlowHeader title={YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE} />
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={colors.primary.main} size="large" />
         </View>
@@ -268,13 +263,9 @@ export function YcFundBalanceReview({
 
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>
-      <View style={styles.header}>
-        <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
-          <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-        </Pressable>
-        <Text style={styles.title}>{YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE}</Text>
-      </View>
+      <ReceiveFlowHeader title={YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE} />
 
+      <View style={styles.body}>
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         {displayLocked && reviewRows.length > 0 ? (
           <View style={styles.card}>
@@ -368,15 +359,14 @@ export function YcFundBalanceReview({
           )}
         </LinearGradient>
       </Pressable>
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: spacing[5] },
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginBottom: spacing[4] },
-  backButton: { padding: spacing[1] },
-  title: { ...textStyles.screenTitle },
+  container: { flex: 1 },
+  body: { flex: 1, paddingHorizontal: spacing[5] },
   card: {
     backgroundColor: colors.semantic.card,
     borderRadius: borderRadius.xl,

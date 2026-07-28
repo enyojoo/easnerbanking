@@ -70,7 +70,7 @@ export type ScreenRouteName =
 
 export const HUB_GROUPS: Record<HubGroup, readonly ScreenRouteName[]> = {
   sendHub: ['SelectRecentRecipient', 'SendAmount', 'SelectRecipient'],
-  receiveLocalHub: ['ReceiveLocalRail', 'ReceiveLocalAmount'],
+  receiveLocalHub: ['ReceiveLocalRail'],
 }
 
 export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntry> = {
@@ -105,7 +105,7 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   ReceiveMoney: { intent: 'stackEntry' },
   ReceiveBankDetails: { intent: 'flowStep' },
   ReceiveLocalRail: { intent: 'flowHub', hubGroup: 'receiveLocalHub' },
-  ReceiveLocalAmount: { intent: 'flowHub', hubGroup: 'receiveLocalHub' },
+  ReceiveLocalAmount: { intent: 'flowStep' },
   ReceiveLocalMomoSetup: { intent: 'flowStep' },
   ReceiveLocalReview: { intent: 'flowStep', flowStepTerminal: true },
 
@@ -162,23 +162,12 @@ export function sendHubForwardParams(params: Record<string, unknown> | undefined
   return params.fromSelectRecipient === true || params.fromSelectRecentRecipient === true
 }
 
-export function shouldUseFlowHubInstantTransition(args: {
+export function shouldUseFlowHubInstantTransition(_args: {
   routeName: string
   previousRouteName?: string
   routeParams?: Record<string, unknown>
 }): boolean {
-  const { routeName, previousRouteName, routeParams } = args
-  const entry = getScreenTransitionEntry(routeName)
-  if (entry?.intent !== 'flowHub' || !entry.hubGroup) return false
-
-  if (routesShareHubGroup(routeName, previousRouteName)) {
-    return true
-  }
-
-  if (routeName === 'SendAmount' && sendHubForwardParams(routeParams)) {
-    return true
-  }
-
+  // Hub instant transitions disable interactive swipe-back; use animated push instead.
   return false
 }
 
@@ -187,25 +176,23 @@ export function resolveGestureEnabled(args: {
   entry: ScreenTransitionEntry
   platform: 'ios' | 'android' | 'web'
 }): boolean {
-  const { routeName, entry, platform } = args
+  const { entry, platform } = args
   if (platform === 'web') return false
   if (entry.blockGesture) return false
 
   switch (entry.intent) {
     case 'tabRoot':
-    case 'flowHub':
     case 'modalSheet':
       return false
     case 'authGate':
       return entry.allowAuthSwipe === true
     case 'detail':
     case 'settingsLeaf':
-      return true
     case 'stackEntry':
-      return platform === 'ios'
     case 'flowStep':
-      return entry.flowStepTerminal === true || platform === 'ios'
+    case 'flowHub':
+      return true
     default:
-      return platform === 'ios'
+      return true
   }
 }

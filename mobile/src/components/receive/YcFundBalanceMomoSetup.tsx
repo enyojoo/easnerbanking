@@ -7,12 +7,12 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native'
-import { ArrowLeft } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { REVIEW_ROW_LABELS, normalizeYcMomoPhone, corridorMatchesCountryCurrency } from '@easner/shared'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
+import { ReceiveFlowHeader } from './ReceiveFlowHeader'
 import { YcMomoPhoneInput } from '../YcMomoPhoneInput'
 import {
   ensureFundBalanceOrderConfirmed,
@@ -153,13 +153,9 @@ export function YcFundBalanceMomoSetup({
 
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>
-      <View style={styles.header}>
-        <Pressable android_ripple={ripple.neutral} onPress={() => navigation.goBack()} style={styles.backButton}>
-          <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-        </Pressable>
-        <Text style={styles.title}>Mobile money</Text>
-      </View>
+      <ReceiveFlowHeader title="Mobile money" />
 
+      <View style={styles.body}>
       <ScrollView contentContainerStyle={{ paddingBottom: listBottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>{REVIEW_ROW_LABELS.momoNumberPrompt}</Text>
@@ -227,15 +223,14 @@ export function YcFundBalanceMomoSetup({
           )}
         </LinearGradient>
       </Pressable>
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: spacing[5] },
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginBottom: spacing[4] },
-  backButton: { padding: spacing[1] },
-  title: { ...textStyles.screenTitle },
+  container: { flex: 1 },
+  body: { flex: 1, paddingHorizontal: spacing[5] },
   card: {
     backgroundColor: colors.semantic.card,
     borderRadius: borderRadius.xl,

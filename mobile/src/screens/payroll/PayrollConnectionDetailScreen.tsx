@@ -312,7 +312,7 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment history</Text>
-          {query.isPlaceholderData ? (
+          {query.isPlaceholderData && detail.paymentHistory.length === 0 ? (
             <SectionCard style={styles.skeletonCard}>
               <ListRowSkeleton variant="plain" showDivider />
               <ListRowSkeleton variant="plain" showDivider={false} />

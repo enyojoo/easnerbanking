@@ -82,11 +82,11 @@ export function usePayrollConnectionDetail(connectionId: string | null) {
         : ['personal', 'payroll', 'connection', 'disabled'],
     enabled: Boolean(scope && connectionId),
     queryFn: () => fetchPayrollConnectionDetail(connectionId!),
-    placeholderData: () => {
-      if (!scope || !connectionId) return undefined
+    placeholderData: (previousData) => {
+      if (!scope || !connectionId) return previousData
       const list = queryClient.getQueryData<PayrollConnectionsResponse>(payrollConnectionsKey(scope.userId))
       const summary = list?.connections.find((item) => item.id === connectionId)
-      if (!summary) return undefined
+      if (!summary) return previousData
       const methods =
         summary.methods && summary.methods.length > 0
           ? summary.methods
@@ -95,10 +95,10 @@ export function usePayrollConnectionDetail(connectionId: string | null) {
             : []
       return {
         ...summary,
-        readinessStatus: null,
-        sharedIdentity: {},
+        readinessStatus: previousData?.readinessStatus ?? null,
+        sharedIdentity: previousData?.sharedIdentity ?? {},
         methods,
-        paymentHistory: [],
+        paymentHistory: previousData?.paymentHistory ?? [],
       } satisfies PayrollConnectionDetail
     },
     staleTime: PAYROLL_CONNECTION_DETAIL_STALE_MS,

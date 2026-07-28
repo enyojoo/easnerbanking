@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useCallback } from 'react'
 import { View, StyleSheet } from 'react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -6,6 +6,8 @@ import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useSc
 import { spacing } from '../../theme'
 import { YcFundBalanceReview } from '../../components/receive/YcFundBalanceReview'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
+import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
+import { navigateStackBack } from '../../navigation/stackBackNavigation'
 
 type RouteParams = {
   localPayInCurrency: string
@@ -25,6 +27,8 @@ export default function ReceiveLocalReviewScreen({ navigation, route }: Navigati
   const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const footerPadding = useFixedFooterPadding(spacing[5])
   const params = (route.params || {}) as Partial<RouteParams>
+  const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
+  useStackHardwareBack(handleBack)
 
   return (
     <ScreenWrapper>
