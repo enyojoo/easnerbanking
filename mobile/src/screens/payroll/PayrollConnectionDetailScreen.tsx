@@ -79,6 +79,7 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
                 ? {
                     ...connection,
                     preferredMethod: next.preferredMethod,
+                    methods: next.methods,
                     status: next.status,
                     revokedAt: next.revokedAt,
                   }
@@ -302,7 +303,7 @@ export default function PayrollConnectionDetailScreen({ navigation, route }: Nav
           methods={detail.methods}
           selectedMethodId={detail.preferredMethod?.id ?? ''}
           selectingMethodId={selectingMethodId}
-          readOnly={!approved || query.isPlaceholderData || deleting}
+          readOnly={!approved || deleting}
           onSelect={(method) => void selectMethod(method)}
           onAdd={() => openMethodFlow()}
           onReplace={(method) => openMethodFlow(method)}

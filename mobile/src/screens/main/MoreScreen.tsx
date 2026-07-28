@@ -52,6 +52,9 @@ import {
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER, TIER3_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { apiFetch } from '../../query/api-client'
+import { useScope } from '../../query/scope'
+import { useQueryClient } from '@tanstack/react-query'
+import { prefetchPayrollConnections } from '../../features/payroll/queries'
 import {
   loadPayrollActivityVisible,
   markPayrollActivityVisible,
@@ -84,6 +87,8 @@ function MoreContent({ navigation }: NavigationProps) {
   const { showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
   const palette = useThemeColors()
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
 
   /** Main stack screens (Profile, Notifications, …) are siblings of `MainTabs`. Prefer parent `navigate` so taps work from the More tab. */
   const navigateFromMoreTab = useCallback(
@@ -141,16 +146,22 @@ function MoreContent({ navigation }: NavigationProps) {
 
     const visibleInMemory = peekPayrollActivityVisible(userId)
     setPayrollActivityVisible(visibleInMemory)
-    if (!visibleInMemory) {
+    if (visibleInMemory) {
+      void prefetchPayrollConnections(queryClient, userId)
+    } else {
       void loadPayrollActivityVisible(userId).then((visible) => {
-        if (active && visible) setPayrollActivityVisible(true)
+        if (!active) return
+        if (visible) {
+          setPayrollActivityVisible(true)
+          void prefetchPayrollConnections(queryClient, userId)
+        }
       })
     }
 
     return () => {
       active = false
     }
-  }, [user?.id])
+  }, [user?.id, queryClient])
 
   const refreshMfaStatus = useCallback(async () => {
     const genAtStart = getMfaRefreshGeneration()
@@ -236,6 +247,9 @@ function MoreContent({ navigation }: NavigationProps) {
           if (result.hasActivity === true) {
             setPayrollActivityVisible(true)
             void markPayrollActivityVisible(userId)
+            // Warm the full connections list so More → Payroll opens from cache
+            // instead of a long skeleton (same pattern as Recipients/Transactions).
+            void prefetchPayrollConnections(queryClient, userId)
           }
         })
         .catch(() => undefined)
@@ -243,7 +257,7 @@ function MoreContent({ navigation }: NavigationProps) {
       return () => {
         active = false
       }
-    }, [user?.id, refreshUserProfile, refreshMfaStatus]),
+    }, [user?.id, refreshUserProfile, refreshMfaStatus, queryClient]),
   )
 
   // Refresh KYC submissions when screen comes into focus
@@ -572,7 +586,10 @@ function MoreContent({ navigation }: NavigationProps) {
                   ? renderMenuItem(
                       'Payroll Connections',
                       'Companies, receiving methods, and pay stubs',
-                      () => navigateFromMoreTab('PayrollConnections'),
+                      () => {
+                        void prefetchPayrollConnections(queryClient, scope?.userId ?? user?.id)
+                        navigateFromMoreTab('PayrollConnections')
+                      },
                       Banknote,
                       pendingPayrollCount > 0 ? (
                         <View style={styles.badgeYellow}>

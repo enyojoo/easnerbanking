@@ -96,8 +96,15 @@ export async function GET(request: Request) {
 
   const connections = (data ?? []).map((row) => {
     const business = firstRelation(row.businesses)
-    const methods = methodsByConnection.get(String(row.id)) ?? []
-    const preferred = methods.find((method) => String(method.id) === String(row.preferred_method_id))
+    const methods = (methodsByConnection.get(String(row.id)) ?? []).map((method) => ({
+      id: String(method.id),
+      type: String(method.type),
+      label: String(method.label),
+      details: payrollMethodDetails(method),
+      preferred: String(row.preferred_method_id || "") === String(method.id),
+      ownerType: String(method.owner_type),
+      status: String(method.status),
+    }))
     return {
       id: String(row.id),
       businessId: String(row.business_id),
@@ -109,15 +116,8 @@ export async function GET(request: Request) {
       status: String(row.status),
       approvedAt: row.approved_at,
       revokedAt: row.revoked_at,
-      preferredMethod: preferred ? {
-        id: String(preferred.id),
-        type: String(preferred.type),
-        label: String(preferred.label),
-        details: payrollMethodDetails(preferred),
-        preferred: true,
-        ownerType: String(preferred.owner_type),
-        status: String(preferred.status),
-      } : null,
+      methods,
+      preferredMethod: methods.find((method) => method.preferred) ?? null,
     }
   })
   return NextResponse.json({

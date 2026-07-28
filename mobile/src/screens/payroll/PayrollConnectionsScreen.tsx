@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Building2, Check, ChevronRight } from 'lucide-react-native'
+import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import InternalHeader from '../../components/InternalHeader'
 import EmptyState from '../../components/EmptyState'
@@ -11,7 +12,12 @@ import { NavigationProps } from '../../types'
 import { useScope } from '../../query/scope'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
-import { PAYROLL_CONNECTIONS_STALE_MS, usePayrollConnections } from '../../features/payroll/queries'
+import {
+  PAYROLL_CONNECTIONS_STALE_MS,
+  payrollConnectionsKey,
+  prefetchPayrollConnectionDetail,
+  usePayrollConnections,
+} from '../../features/payroll/queries'
 import { payrollMethodDescription, type PayrollConnectionSummary } from '../../features/payroll/types'
 import { markPayrollActivityVisible } from '../../lib/payrollActivityVisibility'
 import { exitToMainTabs } from '../../navigation/stackBackNavigation'
@@ -19,9 +25,11 @@ import { borderRadius, colors, fontFamily, spacing, textStyles } from '../../the
 
 export default function PayrollConnectionsScreen({ navigation, route }: NavigationProps) {
   const { scope } = useScope()
+  const queryClient = useQueryClient()
   const query = usePayrollConnections()
   const bottomPadding = useScrollBottomPadding(spacing[6])
   const [message, setMessage] = useState(typeof route.params?.message === 'string' ? route.params.message : '')
+  const [refreshing, setRefreshing] = useState(false)
   const exitingRef = useRef(false)
   const connections = query.data?.connections ?? []
   const pending = query.data?.pendingInvitations ?? []
@@ -42,9 +50,24 @@ export default function PayrollConnectionsScreen({ navigation, route }: Navigati
   }, [connections.length, pending.length, scope?.userId])
 
   const refresh = useCallback(async () => {
+    if (!scope?.userId) return
+    // Skip if More (or another screen) already warmed this cache recently.
+    const updatedAt =
+      queryClient.getQueryState(payrollConnectionsKey(scope.userId))?.dataUpdatedAt ?? 0
+    if (Date.now() - updatedAt < PAYROLL_CONNECTIONS_STALE_MS) return
     await query.refetch()
-  }, [query.refetch])
+  }, [query.refetch, queryClient, scope?.userId])
   useFocusRefresh(refresh, PAYROLL_CONNECTIONS_STALE_MS)
+
+  const onRefresh = useCallback(async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await query.refetch()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [query.refetch, refreshing])
 
   const exitToMore = useCallback(() => {
     if (exitingRef.current) return
@@ -67,7 +90,12 @@ export default function PayrollConnectionsScreen({ navigation, route }: Navigati
     })
   }
 
-  const initialLoading = !query.data && query.isPending
+  function prefetchConnection(connectionId: string) {
+    void prefetchPayrollConnectionDetail(queryClient, scope?.userId, connectionId)
+  }
+
+  // Match Recipients/Transactions: skeleton only on cold miss; cached data paints immediately.
+  const initialLoading = query.isPending && !query.data
   const empty = !pending.length && !approved.length && !inactive.length
 
   return (
@@ -86,8 +114,8 @@ export default function PayrollConnectionsScreen({ navigation, route }: Navigati
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={query.isRefetching && Boolean(query.data)}
-            onRefresh={() => void query.refetch()}
+            refreshing={refreshing}
+            onRefresh={() => void onRefresh()}
             tintColor={colors.primary.main}
           />
         }
@@ -159,6 +187,7 @@ export default function PayrollConnectionsScreen({ navigation, route }: Navigati
                     subtitle={payrollMethodDescription(connection.preferredMethod)}
                     logoUrl={connection.businessLogoUrl}
                     divider={index < approved.length - 1}
+                    onPressIn={() => prefetchConnection(connection.id)}
                     onPress={() => openConnection(connection)}
                   />
                 ))}
@@ -173,6 +202,7 @@ export default function PayrollConnectionsScreen({ navigation, route }: Navigati
                     subtitle={connection.status.charAt(0).toUpperCase() + connection.status.slice(1)}
                     logoUrl={connection.businessLogoUrl}
                     divider={index < inactive.length - 1}
+                    onPressIn={() => prefetchConnection(connection.id)}
                     onPress={() => openConnection(connection)}
                   />
                 ))}
@@ -205,15 +235,18 @@ function ConnectionRow({
   logoUrl,
   divider,
   onPress,
+  onPressIn,
 }: {
   title: string
   subtitle: string
   logoUrl?: string | null
   divider: boolean
   onPress: () => void
+  onPressIn?: () => void
 }) {
   return (
     <Pressable
+      onPressIn={onPressIn}
       onPress={onPress}
       style={({ pressed }) => [styles.row, divider && styles.divider, pressed && styles.pressed]}
       accessibilityRole="button"

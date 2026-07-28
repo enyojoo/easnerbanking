@@ -33,6 +33,8 @@ export type PayrollConnectionSummary = {
   status: string
   approvedAt: string | null
   revokedAt: string | null
+  /** All active receiving methods; present on list responses for instant detail hydration. */
+  methods?: PayrollMethodSummary[]
   preferredMethod: PayrollMethodSummary | null
 }
 
@@ -52,7 +54,7 @@ export type PayrollPaymentHistoryItem = {
   } | null
 }
 
-export type PayrollConnectionDetail = PayrollConnectionSummary & {
+export type PayrollConnectionDetail = Omit<PayrollConnectionSummary, 'methods'> & {
   readinessStatus: string | null
   sharedIdentity: Record<string, string | null>
   methods: PayrollMethodSummary[]

@@ -74,7 +74,18 @@ export default function PayrollReceivingMethodScreen({ navigation, route }: Navi
           ? {
               ...current,
               connections: current.connections.map((connection) =>
-                connection.id === ownerId ? { ...connection, preferredMethod: method } : connection,
+                connection.id === ownerId
+                  ? {
+                      ...connection,
+                      preferredMethod: method,
+                      methods: [
+                        ...(connection.methods ?? [])
+                          .filter((item) => item.type === 'easetag')
+                          .map((item) => ({ ...item, preferred: false })),
+                        method,
+                      ],
+                    }
+                  : connection,
               ),
             }
           : current,

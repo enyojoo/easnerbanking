@@ -189,6 +189,7 @@ export interface PayrollConnectionSummary {
   businessName: string
   personId: string
   status: PayrollConnectionStatus
+  methods?: PayrollReceivingMethodSummary[]
   preferredMethod: PayrollReceivingMethodSummary | null
   approvedAt: string | null
   revokedAt: string | null
