@@ -1,7 +1,6 @@
 import { Connection } from "@solana/web3.js"
-import { getTurnkeyApiClient } from "@/lib/turnkey/client"
+import { resolveTurnkeySendClient } from "@/lib/turnkey/resolve-send-client"
 import {
-  getTurnkeyOrganizationId,
   getTurnkeySolanaBroadcastCaip2,
   isTurnkeySolSponsorshipEnabled,
 } from "@/lib/turnkey/config"
@@ -71,9 +70,20 @@ export async function sendStablecoinFromDepositOmnibus(
     }
   }
 
-  const orgId = getTurnkeyOrganizationId()
-  const client = getTurnkeyApiClient() as Record<string, (...args: unknown[]) => Promise<unknown>> | null
-  if (!orgId || !client || typeof client.solSendTransaction !== "function") {
+  const resolved = await resolveTurnkeySendClient({ scope: { kind: "parent" } })
+  if (!resolved.ok) {
+    return {
+      dryRun: false,
+      providerTransactionId: null,
+      sendTransactionStatusId: null,
+      status: "failed",
+      txHash: null,
+      errorMessage: resolved.error,
+    }
+  }
+  const orgId = resolved.organizationId
+  const client = resolved.client
+  if (typeof client.solSendTransaction !== "function") {
     return {
       dryRun: false,
       providerTransactionId: null,

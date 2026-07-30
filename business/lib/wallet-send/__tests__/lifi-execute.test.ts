@@ -5,8 +5,8 @@ vi.mock("@/lib/lifi/client", () => ({
   lifiGetStatus: vi.fn(),
 }))
 
-vi.mock("@/lib/turnkey/client", () => ({
-  getTurnkeyApiClientForSubOrganization: vi.fn(),
+vi.mock("@/lib/turnkey/resolve-send-client", () => ({
+  resolveTurnkeySendClient: vi.fn(),
 }))
 
 vi.mock("@/lib/turnkey/config", () => ({
@@ -24,7 +24,7 @@ vi.mock("@/lib/wallet/resolve-wallet-owner", () => ({
 }))
 
 import { lifiQuote } from "@/lib/lifi/client"
-import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
+import { resolveTurnkeySendClient } from "@/lib/turnkey/resolve-send-client"
 import { createTurnkeySend } from "@/lib/turnkey/send"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
 import { executeLifiWalletSend } from "../lifi-execute"
@@ -69,12 +69,17 @@ describe("executeLifiWalletSend", () => {
       status: "settled",
       providerTransactionId: "tk-margin",
     })
-    vi.mocked(getTurnkeyApiClientForSubOrganization).mockReturnValue({
-      solSendTransaction: vi.fn().mockResolvedValue({
-        sendTransactionStatusId: "tk-1",
-        signature: "sig-1",
-      }),
-    } as never)
+    vi.mocked(resolveTurnkeySendClient).mockResolvedValue({
+      ok: true,
+      client: {
+        solSendTransaction: vi.fn().mockResolvedValue({
+          sendTransactionStatusId: "tk-1",
+          signature: "sig-1",
+        }),
+      },
+      organizationId: "sub-org",
+      stampingMode: "root",
+    })
     vi.mocked(lifiQuote).mockResolvedValue({
       id: "q-exec",
       tool: "relay",

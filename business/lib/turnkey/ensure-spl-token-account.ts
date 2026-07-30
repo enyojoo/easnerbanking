@@ -4,7 +4,7 @@ import { createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID } from "@sola
 import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 import { verifyStablecoinTokenAccount } from "@/lib/solana/verify-token-account"
-import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
+import { resolveTurnkeySendClient } from "@/lib/turnkey/resolve-send-client"
 import {
   getTurnkeySolanaBroadcastCaip2,
   isTurnkeySolSponsorshipEnabled,
@@ -66,6 +66,8 @@ export async function ensureStablecoinTokenAccountOnChain(input: {
   asset: "USDC" | "EURC"
   /** When set, must match derived ATA for vault+asset. */
   expectedAta?: string | null
+  /** Used for per-sub-org DA auto-wiring when TURNKEY_DA_* keys are configured. */
+  admin?: SupabaseClient | null
 }): Promise<{ ok: true; ata: string; created: boolean } | { ok: false; error: string }> {
   const vault = String(input.vaultAddress || "").trim()
   const subOrgId = String(input.subOrgId || "").trim()
@@ -83,8 +85,13 @@ export async function ensureStablecoinTokenAccountOnChain(input: {
   const verified = await verifyStablecoinTokenAccount(ata, vault, input.asset, conn)
   if (verified.ok) return { ok: true, ata, created: false }
 
-  const client = getTurnkeyApiClientForSubOrganization(subOrgId) as TurnkeyClientLike | null
-  if (!client || typeof client.solSendTransaction !== "function") {
+  const resolved = await resolveTurnkeySendClient({
+    scope: { kind: "sub_org", subOrganizationId: subOrgId },
+    admin: input.admin ?? null,
+  })
+  if (!resolved.ok) return { ok: false, error: resolved.error }
+  const client = resolved.client as TurnkeyClientLike
+  if (typeof client.solSendTransaction !== "function") {
     return { ok: false, error: "turnkey_client_unavailable" }
   }
 
@@ -173,6 +180,7 @@ export async function ensureWalletAccountAtaForOwner(
     vaultAddress: vault,
     asset: asset as "USDC" | "EURC",
     expectedAta: derivedAta,
+    admin,
   })
   if (!ensured.ok) return ensured
 

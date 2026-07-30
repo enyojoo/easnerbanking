@@ -164,6 +164,7 @@ export async function processNextWalletProvisioningJob(opts?: {
         vaultAddress: address,
         asset: assetStr as "USDC" | "EURC",
         expectedAta: associatedTokenAccountAddress,
+        admin,
       })
       if (!ataInit.ok) {
         console.warn("[turnkey-provisioning] SPL ATA init failed", {

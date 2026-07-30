@@ -8,6 +8,7 @@ export type WalletOwnerRow = {
   kyc_status: string | null
   noah_customer_id: string | null
   turnkey_sub_organization_id: string | null
+  turnkey_da_user_id: string | null
 }
 
 export async function upsertWalletOwnerFromNoah(
@@ -101,14 +102,16 @@ export async function linkTurnkeySubOrganizationAndEnqueueVaults(
     ownerRef: string
     turnkeySubOrganizationId: string
     noahCustomerId: string
+    turnkeyDaUserId?: string | null
   },
 ): Promise<{ walletOwnerId: string }> {
-  const { ownerType, ownerRef, turnkeySubOrganizationId, noahCustomerId } = params
+  const { ownerType, ownerRef, turnkeySubOrganizationId, noahCustomerId, turnkeyDaUserId } = params
   const now = new Date().toISOString()
+  const daUserId = String(turnkeyDaUserId ?? "").trim() || null
 
   const { data: existing } = await admin
     .from("wallet_owners")
-    .select("kyc_status")
+    .select("kyc_status, turnkey_da_user_id")
     .eq("owner_type", ownerType)
     .eq("owner_ref", ownerRef)
     .maybeSingle()
@@ -120,6 +123,7 @@ export async function linkTurnkeySubOrganizationAndEnqueueVaults(
         owner_type: ownerType,
         owner_ref: ownerRef,
         turnkey_sub_organization_id: turnkeySubOrganizationId,
+        ...(daUserId ? { turnkey_da_user_id: daUserId } : {}),
         noah_customer_id: noahCustomerId,
         kyc_status: (existing?.kyc_status as string | null | undefined) ?? null,
         updated_at: now,

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
+import { resolveTurnkeySendClient, resolveTurnkeySendStatusClient } from "@/lib/turnkey/resolve-send-client"
 import {
   getTurnkeySolanaBroadcastCaip2,
   isTurnkeySolSponsorshipEnabled,
@@ -164,8 +164,12 @@ export async function createTurnkeySend(
   const sender = await getSubOrgAndWallet(admin, input.ctx, input.asset)
   if (!sender) throw new Error("No managed wallet found for requested asset")
 
-  const client = getTurnkeyApiClientForSubOrganization(sender.subOrgId) as TurnkeyClientLike | null
-  if (!client) throw new Error("Turnkey API client is not configured")
+  const resolved = await resolveTurnkeySendClient({
+    scope: { kind: "sub_org", subOrganizationId: sender.subOrgId },
+    admin,
+  })
+  if (!resolved.ok) throw new Error(resolved.error)
+  const client = resolved.client as TurnkeyClientLike
   if (typeof client.solSendTransaction !== "function") {
     throw new Error("Turnkey SDK does not expose solSendTransaction")
   }
@@ -504,8 +508,12 @@ export async function reconcileTurnkeySendStatus(
   admin: SupabaseClient,
   params: { subOrgId: string; providerTransactionId: string; statusResponse?: unknown },
 ): Promise<{ status: "pending" | "settled" | "failed"; txHash: string | null }> {
-  const client = getTurnkeyApiClientForSubOrganization(params.subOrgId) as TurnkeyClientLike | null
-  if (!client) throw new Error("Turnkey API client is not configured")
+  const resolved = await resolveTurnkeySendStatusClient({
+    subOrganizationId: params.subOrgId,
+    admin,
+  })
+  if (!resolved.ok) throw new Error(resolved.error)
+  const client = resolved.client as TurnkeyClientLike
   if (typeof client.getSendTransactionStatus !== "function") {
     return { status: "pending", txHash: null }
   }

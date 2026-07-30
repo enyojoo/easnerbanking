@@ -1,18 +1,35 @@
 import { DEFAULT_ETHEREUM_ACCOUNTS, DEFAULT_SOLANA_ACCOUNTS } from "@turnkey/sdk-server"
-import { getTurnkeyApiClient } from "@/lib/turnkey/client"
-import { getTurnkeyApiKeyCurveType, getTurnkeyApiPublicKey, isTurnkeyConfigured } from "@/lib/turnkey/config"
+import {
+  getTurnkeyRootApiClient,
+  getTurnkeyRootApiClientForSubOrganization,
+} from "@/lib/turnkey/client"
+import {
+  getTurnkeyApiKeyCurveType,
+  getTurnkeyApiPublicKey,
+  isTurnkeyConfigured,
+  isTurnkeyDaConfigured,
+} from "@/lib/turnkey/config"
+import { markSubOrgDaReadyInCache } from "@/lib/turnkey/da-readiness"
+import { provisionCustodialDaForOrganization } from "@/lib/turnkey/provision-custodial-da"
+
+export type CreateEasnerTurnkeySubOrganizationResult = {
+  subOrganizationId: string
+  daUserId: string | null
+}
 
 /**
  * Parent-org API: create a dedicated sub-organization for one Easner user/org (no embedded Turnkey signup).
  * Includes a second root user whose API key matches the parent org server key so `createWallet` in the
  * worker can stamp activities as the sub-org (avoids ORGANIZATION_MISMATCH).
+ *
+ * When DA keys are configured, also provisions non-root easner-da user + custodial policies in the sub-org.
  */
 export async function createEasnerTurnkeySubOrganization(input: {
   subOrganizationName: string
   userName: string
   userEmail: string
-}): Promise<string> {
-  const client = getTurnkeyApiClient()
+}): Promise<CreateEasnerTurnkeySubOrganizationResult> {
+  const client = getTurnkeyRootApiClient()
   if (!client || !isTurnkeyConfigured()) {
     throw new Error("Turnkey is not configured")
   }
@@ -59,5 +76,18 @@ export async function createEasnerTurnkeySubOrganization(input: {
   if (!subOrganizationId) {
     throw new Error("Turnkey createSubOrganization did not return subOrganizationId")
   }
-  return subOrganizationId
+
+  let daUserId: string | null = null
+  if (isTurnkeyDaConfigured()) {
+    const subOrgRoot = getTurnkeyRootApiClientForSubOrganization(subOrganizationId)
+    if (!subOrgRoot) throw new Error("Turnkey sub-org root client unavailable")
+    const provisioned = await provisionCustodialDaForOrganization({
+      organizationId: subOrganizationId,
+      rootClient: subOrgRoot as Record<string, (...args: unknown[]) => Promise<unknown>>,
+    })
+    daUserId = provisioned.daUserId
+    markSubOrgDaReadyInCache(subOrganizationId)
+  }
+
+  return { subOrganizationId, daUserId }
 }

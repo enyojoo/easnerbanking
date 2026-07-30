@@ -108,6 +108,7 @@ async function depositLineForVault(
       vaultAddress: ownerAddr,
       asset: vault.asset as "USDC" | "EURC",
       expectedAta: derivedAta,
+      admin,
     })
     if (ensured.ok) {
       ataReady = true

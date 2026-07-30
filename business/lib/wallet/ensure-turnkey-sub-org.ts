@@ -92,12 +92,15 @@ async function ensureTurnkeySubOrgForEasnerOwnerInner(input: {
   const subOrganizationName = `easner-${sanitizeSubOrgNamePart(ownerType)}-${sanitizeSubOrgNamePart(ownerRef)}`
 
   let subOrganizationId: string
+  let turnkeyDaUserId: string | null = null
   try {
-    subOrganizationId = await createEasnerTurnkeySubOrganization({
+    const created = await createEasnerTurnkeySubOrganization({
       subOrganizationName,
       userName: label.slice(0, 200),
       userEmail: email,
     })
+    subOrganizationId = created.subOrganizationId
+    turnkeyDaUserId = created.daUserId
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[ensureTurnkeySubOrgForEasnerOwner] createSubOrganization:", msg)
@@ -110,6 +113,7 @@ async function ensureTurnkeySubOrgForEasnerOwnerInner(input: {
       ownerRef,
       turnkeySubOrganizationId: subOrganizationId,
       noahCustomerId: input.noahCustomerId,
+      turnkeyDaUserId,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { getTurnkeyApiClientForSubOrganization } from "@/lib/turnkey/client"
+import { resolveTurnkeySendClient } from "@/lib/turnkey/resolve-send-client"
 import { getTurnkeySolanaBroadcastCaip2, isTurnkeySolSponsorshipEnabled } from "@/lib/turnkey/config"
 import { lifiGetStatus } from "@/lib/lifi/client"
 import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-map"
@@ -87,8 +87,13 @@ export async function executeLifiWalletSend(input: {
   const subOrgId = await resolveSubOrgId(input.admin, input.ctx)
   if (!subOrgId) return { ok: false, error: "no_turnkey_suborg" }
 
-  const client = getTurnkeyApiClientForSubOrganization(subOrgId) as TurnkeyClientLike | null
-  if (!client?.solSendTransaction) return { ok: false, error: "turnkey_not_configured" }
+  const resolved = await resolveTurnkeySendClient({
+    scope: { kind: "sub_org", subOrganizationId: subOrgId },
+    admin: input.admin,
+  })
+  if (!resolved.ok) return { ok: false, error: resolved.error }
+  const client = resolved.client
+  if (!client.solSendTransaction) return { ok: false, error: "turnkey_not_configured" }
 
   const txReq = quote.transactionRequest as Record<string, unknown> | undefined
   const unsigned = String(txReq?.data ?? "").trim()

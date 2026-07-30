@@ -15,6 +15,66 @@ export function getTurnkeyApiPrivateKey(): string {
   return (process.env.TURNKEY_API_PRIVATE_KEY || "").trim()
 }
 
+/** Non-root delegated-access (DA) API key — day-to-day signing only. */
+export function getTurnkeyDaApiPublicKey(): string {
+  return (process.env.TURNKEY_DA_API_PUBLIC_KEY || "").trim()
+}
+
+export function getTurnkeyDaApiPrivateKey(): string {
+  return (process.env.TURNKEY_DA_API_PRIVATE_KEY || "").trim()
+}
+
+export function isTurnkeyDaConfigured(): boolean {
+  return Boolean(getTurnkeyDaApiPublicKey() && getTurnkeyDaApiPrivateKey())
+}
+
+/**
+ * When DA API keys are configured, send paths auto-use DA for migrated orgs/sub-orgs.
+ * No separate enable flag — readiness is detected from DB (sub-orgs) or Turnkey (parent).
+ *
+ * Optional `TURNKEY_DA_SENDS_STRICT=true`: fail closed instead of root fallback for
+ * unmigrated orgs (use after 100% migration + smoke in prod).
+ */
+export function isTurnkeyDaSendsStrict(): boolean {
+  return (
+    process.env.TURNKEY_DA_SENDS_STRICT === "1" ||
+    process.env.TURNKEY_DA_SENDS_STRICT === "true"
+  )
+}
+
+/**
+ * @deprecated Use `isTurnkeyDaConfigured()` — DA sends auto-wire when keys + readiness exist.
+ * Kept for backward compat: explicit `false` disables auto DA even when keys are set.
+ */
+export function isTurnkeyDaSendsEnabled(): boolean {
+  const raw = (process.env.TURNKEY_DA_SENDS_ENABLED || "").trim().toLowerCase()
+  if (raw === "false" || raw === "0") return false
+  if (raw === "true" || raw === "1") return true
+  return isTurnkeyDaConfigured()
+}
+
+/**
+ * @deprecated Parent readiness is auto-detected via Turnkey listUsers or TURNKEY_PARENT_DA_USER_ID.
+ */
+export function isTurnkeyParentDaReady(): boolean {
+  if (process.env.TURNKEY_PARENT_DA_READY === "false") return false
+  if (
+    process.env.TURNKEY_PARENT_DA_READY === "1" ||
+    process.env.TURNKEY_PARENT_DA_READY === "true"
+  ) {
+    return true
+  }
+  return Boolean(getTurnkeyParentDaUserIdFromEnv())
+}
+
+/** Optional: set by migration script to skip parent listUsers on every request. */
+export function getTurnkeyParentDaUserIdFromEnv(): string {
+  return (process.env.TURNKEY_PARENT_DA_USER_ID || "").trim()
+}
+
+/** Display name for the non-root DA user in each Turnkey org. */
+export const TURNKEY_CUSTODIAL_DA_USER_NAME = "easner-da"
+
 /** Must match the curve used when the parent org API key was created (P256 vs SECP256K1). */
 export function getTurnkeyApiKeyCurveType(): string {
   return (process.env.TURNKEY_API_KEY_CURVE || "API_KEY_CURVE_P256").trim()
@@ -45,6 +105,10 @@ export function validateTurnkeyEnvForProduction(): { ok: boolean; missing: strin
   if (!getTurnkeyOrganizationId()) missing.push("TURNKEY_ORGANIZATION_ID")
   if (!getTurnkeyApiPublicKey()) missing.push("TURNKEY_API_PUBLIC_KEY")
   if (!getTurnkeyApiPrivateKey()) missing.push("TURNKEY_API_PRIVATE_KEY")
+  if (isTurnkeyDaSendsStrict() && !isTurnkeyDaConfigured()) {
+    missing.push("TURNKEY_DA_API_PUBLIC_KEY")
+    missing.push("TURNKEY_DA_API_PRIVATE_KEY")
+  }
   return { ok: missing.length === 0, missing }
 }
 
