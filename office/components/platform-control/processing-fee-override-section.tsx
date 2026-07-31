@@ -2,10 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   processingFeeOverridesApi,
   type ProcessingFeeOverrideRow,
@@ -52,41 +60,8 @@ function parseNullableBpsInput(value: string): number | null {
   return n
 }
 
-function formatBpsSummary(value: number | null | undefined): string {
-  if (value == null) return "Schedule default"
-  return `${value} bps`
-}
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex justify-between gap-4 text-sm">
-      <span className="shrink-0 text-gray-600">{label}</span>
-      <div className="min-w-0 break-all text-right text-gray-900">{children}</div>
-    </div>
-  )
-}
-
-function ReadOnlySummary({ override }: { override: ProcessingFeeOverrideRow | null }) {
-  if (!override) {
-    return (
-      <div className="mt-2 space-y-2">
-        <DetailRow label="Source">Corridor schedule</DetailRow>
-        <DetailRow label="Pay-in">Schedule default</DetailRow>
-        <DetailRow label="Pay-out">Schedule default</DetailRow>
-        <DetailRow label="Cross-border">Schedule default</DetailRow>
-      </div>
-    )
-  }
-
-  return (
-    <div className="mt-2 space-y-2">
-      <DetailRow label="Source">Custom override</DetailRow>
-      <DetailRow label="Pay-in">{formatBpsSummary(override.pay_in_bps)}</DetailRow>
-      <DetailRow label="Pay-out">{formatBpsSummary(override.pay_out_bps)}</DetailRow>
-      <DetailRow label="Cross-border">{formatBpsSummary(override.cross_border_bps)}</DetailRow>
-      {override.reason?.trim() ? <DetailRow label="Reason">{override.reason.trim()}</DetailRow> : null}
-    </div>
-  )
+function modeFromOverride(row: ProcessingFeeOverrideRow | null): FeeMode {
+  return row ? "custom" : "schedule"
 }
 
 export type ProcessingFeeOverrideSectionProps = {
@@ -111,23 +86,24 @@ export function ProcessingFeeOverrideSection({
   const [isEditing, setIsEditing] = useState(false)
   const [mode, setMode] = useState<FeeMode>("schedule")
   const [draft, setDraft] = useState<DraftState>(emptyDraft)
+  const [originalMode, setOriginalMode] = useState<FeeMode>("schedule")
+  const [originalDraft, setOriginalDraft] = useState<DraftState>(emptyDraft)
   const [saving, setSaving] = useState(false)
-  const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const syncFromOverride = useCallback((row: ProcessingFeeOverrideRow | null) => {
-    if (!row) {
-      setMode("schedule")
-      setDraft(emptyDraft())
-      return
-    }
-    setMode("custom")
-    setDraft(draftFromOverride(row))
+  const applyOverride = useCallback((row: ProcessingFeeOverrideRow | null) => {
+    const nextMode = modeFromOverride(row)
+    const nextDraft = row ? draftFromOverride(row) : emptyDraft()
+    setMode(nextMode)
+    setDraft(nextDraft)
+    setOriginalMode(nextMode)
+    setOriginalDraft(nextDraft)
   }, [])
 
   useEffect(() => {
     if (overrideQuery.isLoading || isEditing) return
-    syncFromOverride(override)
-  }, [override, overrideQuery.isLoading, isEditing, syncFromOverride])
+    applyOverride(override)
+  }, [override, overrideQuery.isLoading, isEditing, applyOverride])
 
   const invalidate = useCallback(async () => {
     await queryClient.invalidateQueries({
@@ -136,24 +112,29 @@ export function ProcessingFeeOverrideSection({
   }, [queryClient, subjectType, subjectId])
 
   const startEditing = () => {
-    syncFromOverride(override)
-    setFeedback(null)
+    setOriginalMode(mode)
+    setOriginalDraft(draft)
+    setError(null)
     setIsEditing(true)
   }
 
   const cancelEditing = () => {
-    syncFromOverride(override)
-    setFeedback(null)
+    setMode(originalMode)
+    setDraft(originalDraft)
+    setError(null)
     setIsEditing(false)
   }
 
   const handleSave = async () => {
     setSaving(true)
-    setFeedback(null)
+    setError(null)
     try {
       if (mode === "schedule") {
         await processingFeeOverridesApi.remove(subjectType, subjectId)
-        setDraft(emptyDraft())
+        const cleared = emptyDraft()
+        setDraft(cleared)
+        setOriginalMode("schedule")
+        setOriginalDraft(cleared)
         await invalidate()
         setIsEditing(false)
         return
@@ -167,149 +148,164 @@ export function ProcessingFeeOverrideSection({
         cross_border_bps: parseNullableBpsInput(draft.crossBorder),
         reason: draft.reason.trim() || null,
       })
+      setOriginalMode("custom")
+      setOriginalDraft(draft)
       await invalidate()
       setIsEditing(false)
     } catch (e) {
-      setFeedback({
-        ok: false,
-        message: e instanceof Error ? e.message : "Failed to save processing fee override",
-      })
+      setError(e instanceof Error ? e.message : "Failed to save processing fee override")
     } finally {
       setSaving(false)
     }
   }
 
   const canEdit = !setupRequired && !loadError && !overrideQuery.isLoading
+  const fieldsDisabled = !isEditing || mode === "schedule"
+  const scheduleView = mode === "schedule" && !isEditing
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
-        <label className="text-sm font-medium text-gray-900">Easner processing fees</label>
-        {canEdit && !isEditing ? (
-          <Button type="button" size="sm" variant="outline" onClick={startEditing}>
-            <Edit className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
-        ) : null}
-      </div>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Blank direction fields fall through to the corridor schedule. Enter 0 to waive that direction.
-      </p>
-
-      {overrideQuery.isLoading ? (
-        <div className="mt-3 space-y-2">
-          <Skeleton className="h-5 w-full" />
-          <Skeleton className="h-5 w-full" />
-          <Skeleton className="h-5 w-full" />
-        </div>
-      ) : setupRequired || loadError ? (
-        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          {setupRequired
-            ? "Fee overrides are not enabled yet. Apply migration 20260731130000_processing_fee_overrides.sql on Supabase, then redeploy."
-            : loadError}
-        </p>
-      ) : !isEditing ? (
-        <ReadOnlySummary override={override} />
-      ) : (
-        <div className="mt-3 space-y-3">
-          <div className="flex flex-wrap gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name={`fee-mode-${subjectType}-${subjectId}`}
-                checked={mode === "schedule"}
-                onChange={() => {
-                  setMode("schedule")
-                  setFeedback(null)
-                }}
-              />
-              Use corridor schedule
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name={`fee-mode-${subjectType}-${subjectId}`}
-                checked={mode === "custom"}
-                onChange={() => {
-                  setMode("custom")
-                  setFeedback(null)
-                }}
-              />
-              Custom
-            </label>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">Easner processing fees</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Blank direction fields fall through to the corridor schedule. Enter 0 to waive that direction.
+            </p>
           </div>
+          {canEdit && !isEditing ? (
+            <Button type="button" onClick={startEditing} className="shrink-0 bg-primary hover:bg-primary/90">
+              <Edit className="mr-2 h-4 w-4" />
+              Edit fees
+            </Button>
+          ) : null}
+        </div>
+      </CardHeader>
 
-          {mode === "custom" ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="space-y-1">
+      <CardContent className="space-y-6">
+        {overrideQuery.isLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-10 w-full" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </div>
+        ) : setupRequired || loadError ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {setupRequired
+              ? "Fee overrides are not enabled yet. Apply migration 20260731130000_processing_fee_overrides.sql on Supabase, then redeploy."
+              : loadError}
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor={`fee-source-${subjectId}`}>Fee source</Label>
+                <Select
+                  value={mode}
+                  onValueChange={(value: FeeMode) => {
+                    setMode(value)
+                    setError(null)
+                  }}
+                  disabled={!isEditing}
+                >
+                  <SelectTrigger id={`fee-source-${subjectId}`} className="max-w-md">
+                    <SelectValue placeholder="Select fee source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="schedule">Corridor schedule</SelectItem>
+                    <SelectItem value="custom">Custom override</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor={`pay-in-${subjectId}`}>Pay-in (bps)</Label>
                 <Input
                   id={`pay-in-${subjectId}`}
                   inputMode="numeric"
-                  placeholder="schedule"
-                  value={draft.payIn}
+                  placeholder="Schedule default"
+                  value={scheduleView || mode === "schedule" ? "" : draft.payIn}
                   onChange={(e) => setDraft((prev) => ({ ...prev, payIn: e.target.value }))}
+                  disabled={fieldsDisabled}
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <Label htmlFor={`pay-out-${subjectId}`}>Pay-out (bps)</Label>
                 <Input
                   id={`pay-out-${subjectId}`}
                   inputMode="numeric"
-                  placeholder="schedule"
-                  value={draft.payOut}
+                  placeholder="Schedule default"
+                  value={scheduleView || mode === "schedule" ? "" : draft.payOut}
                   onChange={(e) => setDraft((prev) => ({ ...prev, payOut: e.target.value }))}
+                  disabled={fieldsDisabled}
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <Label htmlFor={`cross-border-${subjectId}`}>Cross-border (bps)</Label>
                 <Input
                   id={`cross-border-${subjectId}`}
                   inputMode="numeric"
-                  placeholder="schedule"
-                  value={draft.crossBorder}
+                  placeholder="Schedule default"
+                  value={scheduleView || mode === "schedule" ? "" : draft.crossBorder}
                   onChange={(e) => setDraft((prev) => ({ ...prev, crossBorder: e.target.value }))}
+                  disabled={fieldsDisabled}
                 />
               </div>
-              <div className="space-y-1 sm:col-span-3">
+              <div className="space-y-2 md:col-span-2">
                 <Label htmlFor={`reason-${subjectId}`}>Reason</Label>
                 <Input
                   id={`reason-${subjectId}`}
-                  placeholder="Optional note for ops / audit"
-                  value={draft.reason}
+                  placeholder={scheduleView ? "—" : "Optional note for ops / audit"}
+                  value={scheduleView || mode === "schedule" ? "" : draft.reason}
                   onChange={(e) => setDraft((prev) => ({ ...prev, reason: e.target.value }))}
+                  disabled={fieldsDisabled}
                 />
               </div>
             </div>
-          ) : null}
 
-          {feedback ? (
-            <p className="rounded-xl border border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.08)] px-3 py-2 text-sm text-destructive">
-              {feedback.message}
-            </p>
-          ) : null}
+            {error ? (
+              <p className="rounded-xl border border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.08)] px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
 
-          <div className="flex gap-3">
-            <Button type="button" variant="outline" className="flex-1" onClick={cancelEditing} disabled={saving}>
-              <X className="mr-2 h-4 w-4" />
-              Cancel
-            </Button>
-            <Button type="button" className="flex-1" onClick={() => void handleSave()} disabled={saving}>
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving…
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
+            {isEditing ? (
+              <div className="flex gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={cancelEditing}
+                  className="flex-1 bg-transparent"
+                  disabled={saving}
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void handleSave()}
+                  disabled={saving}
+                  className="flex-1 bg-primary hover:bg-primary/90"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Save processing fees
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : null}
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }
