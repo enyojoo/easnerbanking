@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -112,9 +113,7 @@ export function ProcessingFeePricingDialog({
       <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader className="border-b pb-4">
           <DialogTitle>{title}</DialogTitle>
-          <p className="text-sm text-muted-foreground font-normal">
-            100 bps = 1% · applied at quote time
-          </p>
+          <DialogDescription>100 bps = 1% · applied at quote time</DialogDescription>
         </DialogHeader>
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}

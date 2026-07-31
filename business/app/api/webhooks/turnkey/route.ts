@@ -12,6 +12,7 @@ import {
   isTurnkeyWebhookAllowUnsignedEnabled,
   isTurnkeyWebhookStrictSignatureEnabled,
 } from "@/lib/turnkey/config"
+import { isTurnkeyBalanceConfirmedPayload } from "@/lib/turnkey/turnkey-webhook-classify"
 import { parseTurnkeyBalanceWebhookPayload } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import {
   isV2TurnkeyWebhookDelivery,

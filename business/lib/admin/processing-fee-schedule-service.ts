@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { DEFAULT_PAYOUT_PROCESSING_FEE_BPS } from "@easner/shared"
+import { annotateAdminCorridorsWithProviderHealth } from "@/lib/admin/annotate-payout-corridors"
+import { corridorHasRailCapability } from "@/lib/admin/corridor-rail-capability"
 import { isExcludedPayoutCorridorCountry } from "@/lib/payout-corridors-exclusions"
 
 export type ProcessingFeeScheduleScope = "fiat_bank" | "fiat_mobile_money" | "crypto"
@@ -45,44 +47,10 @@ function railForScope(scope: ProcessingFeeScheduleScope): "bank_transfer" | "mob
   return null
 }
 
-function corridorHasRailCapability(row: Record<string, unknown>): boolean {
-  const cc = String(row.country_code ?? "").trim().toUpperCase()
-  const cur = String(row.currency_code ?? "").trim().toUpperCase()
-  const rail = String(row.rail ?? "bank_transfer") === "mobile_money" ? "mobile_money" : "bank_transfer"
-  if (cc === "NG" && cur === "NGN" && rail === "mobile_money") return false
-
-  if (
-    row.noah_sell_available === true ||
-    row.yc_send_available === true ||
-    row.yc_receive_available === true ||
-    row.grid_send_available === true ||
-    row.grid_receive_available === true
-  ) {
-    return true
-  }
-
-  const meta = (row.metadata ?? {}) as Record<string, unknown>
-  if (
-    meta.noah_send_enabled === true ||
-    meta.yc_send_enabled === true ||
-    meta.grid_send_enabled === true ||
-    meta.noah_receive_enabled === true ||
-    meta.yc_receive_enabled === true ||
-    meta.grid_receive_enabled === true ||
-    meta.cross_border_enabled === true
-  ) {
-    return true
-  }
-
-  const routing = row.provider_routing
-  if (!Array.isArray(routing) || routing.length === 0) return false
-  return (
-    meta.yc_send === true ||
-    meta.yc_receive === true ||
-    meta.grid_send === true ||
-    meta.grid_receive === true ||
-    meta.noah_receive === true
-  )
+function isMissingTableError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  if (error.code === "42P01") return true
+  return /processing_fee_schedule/i.test(String(error.message ?? "")) && /does not exist/i.test(String(error.message ?? ""))
 }
 
 async function listFiatCatalog(
@@ -92,27 +60,39 @@ async function listFiatCatalog(
   const rail = railForScope(scope)!
   const { data, error } = await admin
     .from("payout_corridors")
-    .select("country_code,currency_code,country_name,currency_name,rail,noah_sell_available,yc_send_available,yc_receive_available,grid_send_available,grid_receive_available,metadata,provider_routing")
+    .select("id,country_code,currency_code,country_name,currency_name,rail,metadata,provider_routing")
     .eq("rail", rail)
     .order("country_name", { ascending: true })
 
   if (error) throw error
 
+  const annotated = await annotateAdminCorridorsWithProviderHealth(
+    (data ?? []) as Array<{
+      id: string
+      country_code: string
+      currency_code: string
+      country_name: string
+      currency_name: string
+      rail: string
+      metadata?: unknown
+      provider_routing?: unknown
+    }>,
+  )
+
   const map = new Map<string, { country_code: string; currency_code: string; country_name: string; currency_name: string }>()
-  for (const row of data ?? []) {
-    const r = row as Record<string, unknown>
-    if (!corridorHasRailCapability(r)) continue
-    const cc = String(r.country_code ?? "").trim().toUpperCase()
+  for (const row of annotated) {
+    if (!corridorHasRailCapability(row)) continue
+    const cc = String(row.country_code ?? "").trim().toUpperCase()
     if (!cc || isExcludedPayoutCorridorCountry(cc)) continue
-    const cur = String(r.currency_code ?? "").trim().toUpperCase()
+    const cur = String(row.currency_code ?? "").trim().toUpperCase()
     if (!cur) continue
     const key = `${cc}:${cur}`
     if (!map.has(key)) {
       map.set(key, {
         country_code: cc,
         currency_code: cur,
-        country_name: String(r.country_name ?? cc),
-        currency_name: String(r.currency_name ?? cur),
+        country_name: String(row.country_name ?? cc),
+        currency_name: String(row.currency_name ?? cur),
       })
     }
   }
@@ -152,7 +132,7 @@ export async function listProcessingFeeScheduleAdmin(
     .select("*")
     .eq("scope", scope)
 
-  if (error) throw error
+  if (error && !isMissingTableError(error)) throw error
 
   const byKey = new Map<string, Record<string, unknown>>()
   for (const row of stored ?? []) {
@@ -249,11 +229,20 @@ export async function upsertProcessingFeeScheduleAdmin(
 
   if (payload.length === 0) return
 
-  const conflict =
-    payload[0]?.scope === "crypto"
-      ? "scope,asset_code"
-      : "scope,country_code,currency_code"
+  const cryptoRows = payload.filter((row) => row.scope === "crypto")
+  const fiatRows = payload.filter((row) => row.scope !== "crypto")
 
-  const { error } = await admin.from("processing_fee_schedule").upsert(payload, { onConflict: conflict })
-  if (error) throw error
+  if (fiatRows.length > 0) {
+    const { error } = await admin
+      .from("processing_fee_schedule")
+      .upsert(fiatRows, { onConflict: "scope,country_code,currency_code" })
+    if (error) throw error
+  }
+
+  if (cryptoRows.length > 0) {
+    const { error } = await admin
+      .from("processing_fee_schedule")
+      .upsert(cryptoRows, { onConflict: "scope,asset_code" })
+    if (error) throw error
+  }
 }
