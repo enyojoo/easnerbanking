@@ -8,7 +8,9 @@ import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { cryptoDestinationsApi, type CryptoDestinationAdminRow } from "@/lib/crypto-destinations-api"
 import { officeKeys } from "@/lib/query/keys"
-import { useOfficeCryptoDestinations, useQueryInitialLoading } from "@/hooks/queries"
+import { buildCryptoProcessingFeeDraft } from "@/lib/processing-fee-pricing-draft"
+import type { ProcessingFeeScheduleRow } from "@/lib/processing-fee-schedule-api"
+import { useOfficeCryptoDestinations, useOfficeProcessingFeeSchedule, useQueryInitialLoading } from "@/hooks/queries"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 import { ProcessingFeePricingDialog } from "@/components/platform-control/processing-fee-pricing-dialog"
 import { CryptoAssetIcon } from "@/components/platform-control/crypto-asset-icon"
@@ -44,9 +46,29 @@ export function CryptoDestinationsAdminPanel() {
   const [error, setError] = useState<string | null>(null)
   const [savingCode, setSavingCode] = useState<string | null>(null)
   const [pricingOpen, setPricingOpen] = useState(false)
+  const [pricingInitialRows, setPricingInitialRows] = useState<ProcessingFeeScheduleRow[] | undefined>()
+  const cryptoFeesQuery = useOfficeProcessingFeeSchedule("crypto")
   const assetRows = useMemo(() => groupByAsset(rows), [rows])
   const showTableSkeleton = useQueryInitialLoading(destinationsQuery.isPending, destinationsQuery.data, assetRows)
   const refreshing = destinationsQuery.isFetching && !showTableSkeleton
+
+  const openPricing = () => {
+    setPricingInitialRows(
+      buildCryptoProcessingFeeDraft(
+        assetRows.map((row) => ({
+          asset_code: row.asset_code,
+          asset_name: row.asset_name,
+        })),
+        cryptoFeesQuery.data,
+      ),
+    )
+    setPricingOpen(true)
+  }
+
+  const closePricing = (open: boolean) => {
+    setPricingOpen(open)
+    if (!open) setPricingInitialRows(undefined)
+  }
 
   const toggleEnabled = async (row: CryptoDestinationAdminRow, enabled: boolean) => {
     const code = row.asset_code.toUpperCase()
@@ -72,7 +94,7 @@ export function CryptoDestinationsAdminPanel() {
       title="Crypto"
       actions={
         <>
-          <Button type="button" variant="outline" size="sm" onClick={() => setPricingOpen(true)}>
+          <Button type="button" variant="outline" size="sm" onClick={openPricing} disabled={assetRows.length === 0}>
             Edit pricing
           </Button>
           <Button
@@ -155,9 +177,10 @@ export function CryptoDestinationsAdminPanel() {
 
       <ProcessingFeePricingDialog
         open={pricingOpen}
-        onOpenChange={setPricingOpen}
+        onOpenChange={closePricing}
         scope="crypto"
         title="Crypto processing fees"
+        initialRows={pricingInitialRows}
       />
     </PlatformControlTabShell>
   )
