@@ -55,6 +55,7 @@ import {
 } from "@easner/shared"
 import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
 import { OfficePageSkeleton } from "@/components/data/office-page-skeleton"
+import { ProcessingFeeOverrideSection } from "@/components/platform-control/processing-fee-override-section"
 
 /** Mirrors `public.users` (+ `email_confirmed_at` merged from auth). */
 type UserData = OfficeUserRow
@@ -705,6 +706,11 @@ export default function AdminUsersPage() {
                                         </div>
                                       </div>
                                     ) : null}
+
+                                    <ProcessingFeeOverrideSection
+                                      subjectType="user"
+                                      subjectId={selectedUser.id}
+                                    />
 
                                     <div>
                                       <label className="text-sm font-medium text-gray-600">Recent Transactions</label>

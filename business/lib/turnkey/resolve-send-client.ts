@@ -12,6 +12,7 @@ import {
   isTurnkeyDaSendsStrict,
 } from "@/lib/turnkey/config"
 import {
+  isCustodialDaMigrationComplete,
   isParentOrgCustodialDaReady,
   isSubOrgCustodialDaReady,
 } from "@/lib/turnkey/da-readiness"
@@ -59,8 +60,10 @@ function daClientForScope(scope: TurnkeySendClientScope): ResolvedTurnkeySendCli
 
 /**
  * Auto-wires DA when keys are configured and org/sub-org is migrated.
- * Unmigrated orgs fall back to root during migration; set TURNKEY_DA_SENDS_STRICT=true
- * after cutover to fail closed instead.
+ * Before DA keys exist in env, all sends use root (legacy behavior).
+ * During partial migration, unmigrated orgs fall back to root.
+ * After full migration is detected, unmigrated orgs fail closed automatically
+ * (no TURNKEY_DA_SENDS_STRICT flag required).
  *
  * Explicit TURNKEY_DA_SENDS_ENABLED=false disables auto DA even if keys exist.
  */
@@ -89,7 +92,10 @@ export async function resolveTurnkeySendClient(input: {
     return da ?? { ok: false, error: "turnkey_da_not_configured" }
   }
 
-  if (isTurnkeyDaSendsStrict()) {
+  const migrationComplete = await isCustodialDaMigrationComplete(input.admin ?? null)
+  const failClosed = isTurnkeyDaSendsStrict() || migrationComplete
+
+  if (failClosed) {
     return {
       ok: false,
       error:

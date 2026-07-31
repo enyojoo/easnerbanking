@@ -25,6 +25,10 @@ function daConsensus(daUserId: string): string {
   return `approvers.any(user, user.id == '${daUserId}')`
 }
 
+function policyStringList(items: readonly string[]): string {
+  return `[${items.map((item) => `'${item}'`).join(", ")}]`
+}
+
 function solanaProgramAllowlistCondition(): string {
   const programs = [
     SOLANA_SYSTEM_PROGRAM_ID,
@@ -32,12 +36,12 @@ function solanaProgramAllowlistCondition(): string {
     SOLANA_TOKEN_2022_PROGRAM_ID,
     SOLANA_ASSOCIATED_TOKEN_PROGRAM_ID,
   ]
-  return `solana.tx.program_keys.all(p, p in ${JSON.stringify(programs)})`
+  return `solana.tx.program_keys.all(p, p in ${policyStringList(programs)})`
 }
 
 function splMintAllowlistCondition(): string {
   const mints = [MAINNET_USDC_MINT, MAINNET_EURC_MINT]
-  return `(solana.tx.spl_transfers.count() == 0 || solana.tx.spl_transfers.all(transfer, transfer.token_mint in ${JSON.stringify(mints)}))`
+  return `(solana.tx.spl_transfers.count() == 0 || solana.tx.spl_transfers.all(transfer, transfer.token_mint in ${policyStringList(mints)}))`
 }
 
 const DENY_ESCALATION_ACTIVITY_TYPES = [

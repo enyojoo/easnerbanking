@@ -3,6 +3,21 @@
  * @see https://docs.turnkey.com/getting-started/quickstart
  */
 
+function isProductionDeploy(): boolean {
+  const vercelEnv = (process.env.VERCEL_ENV || "").trim().toLowerCase()
+  if (vercelEnv === "production") return true
+  if (vercelEnv === "preview" || vercelEnv === "development") return false
+  return process.env.NODE_ENV === "production"
+}
+
+/** Env boolean with deploy-aware default when unset. Explicit env always wins. */
+function envBoolean(name: string, defaultWhenUnset: boolean): boolean {
+  const raw = (process.env[name] || "").trim().toLowerCase()
+  if (raw === "true" || raw === "1" || raw === "yes" || raw === "on") return true
+  if (raw === "false" || raw === "0" || raw === "off" || raw === "no") return false
+  return defaultWhenUnset
+}
+
 export function getTurnkeyOrganizationId(): string {
   return (process.env.TURNKEY_ORGANIZATION_ID || process.env.TURNKEY_ORG_ID || "").trim()
 }
@@ -11,8 +26,18 @@ export function getTurnkeyApiPublicKey(): string {
   return (process.env.TURNKEY_API_PUBLIC_KEY || "").trim()
 }
 
+/** Turnkey CLI writes `hex:p256` — SDK expects hex only. */
+function normalizeTurnkeyPrivateKey(raw: string): string {
+  const v = String(raw ?? "").trim()
+  const colon = v.indexOf(":")
+  if (colon > 0 && /^[0-9a-f]+$/i.test(v.slice(0, colon))) {
+    return v.slice(0, colon)
+  }
+  return v
+}
+
 export function getTurnkeyApiPrivateKey(): string {
-  return (process.env.TURNKEY_API_PRIVATE_KEY || "").trim()
+  return normalizeTurnkeyPrivateKey(process.env.TURNKEY_API_PRIVATE_KEY || "")
 }
 
 /** Non-root delegated-access (DA) API key — day-to-day signing only. */
@@ -21,7 +46,7 @@ export function getTurnkeyDaApiPublicKey(): string {
 }
 
 export function getTurnkeyDaApiPrivateKey(): string {
-  return (process.env.TURNKEY_DA_API_PRIVATE_KEY || "").trim()
+  return normalizeTurnkeyPrivateKey(process.env.TURNKEY_DA_API_PRIVATE_KEY || "")
 }
 
 export function isTurnkeyDaConfigured(): boolean {
@@ -32,8 +57,8 @@ export function isTurnkeyDaConfigured(): boolean {
  * When DA API keys are configured, send paths auto-use DA for migrated orgs/sub-orgs.
  * No separate enable flag — readiness is detected from DB (sub-orgs) or Turnkey (parent).
  *
- * Optional `TURNKEY_DA_SENDS_STRICT=true`: fail closed instead of root fallback for
- * unmigrated orgs (use after 100% migration + smoke in prod).
+ * Optional `TURNKEY_DA_SENDS_STRICT=true`: manual override to fail closed during partial migration.
+ * When omitted, full migration is auto-detected from DB + Turnkey and fail-closed applies automatically.
  */
 export function isTurnkeyDaSendsStrict(): boolean {
   return (
@@ -91,7 +116,7 @@ export function getTurnkeyFallbackSubOrganizationId(): string {
 }
 
 export function isTurnkeyWalletAutoprovisionEnabled(): boolean {
-  return process.env.TURNKEY_WALLET_AUTOPROVISION_ENABLED !== "false"
+  return envBoolean("TURNKEY_WALLET_AUTOPROVISION_ENABLED", true)
 }
 
 export function isTurnkeyConfigured(): boolean {
@@ -100,14 +125,26 @@ export function isTurnkeyConfigured(): boolean {
   )
 }
 
+/** Root (provision/admin) credentials present — not required on send-only runtimes. */
+export function isTurnkeyRootProvisioningConfigured(): boolean {
+  return isTurnkeyConfigured()
+}
+
+/** Production send runtime: DA keys + org id (root optional if provisioning is elsewhere). */
+export function isTurnkeySendRuntimeConfigured(): boolean {
+  return Boolean(getTurnkeyOrganizationId() && isTurnkeyDaConfigured())
+}
+
 export function validateTurnkeyEnvForProduction(): { ok: boolean; missing: string[] } {
   const missing: string[] = []
   if (!getTurnkeyOrganizationId()) missing.push("TURNKEY_ORGANIZATION_ID")
-  if (!getTurnkeyApiPublicKey()) missing.push("TURNKEY_API_PUBLIC_KEY")
-  if (!getTurnkeyApiPrivateKey()) missing.push("TURNKEY_API_PRIVATE_KEY")
-  if (isTurnkeyDaSendsStrict() && !isTurnkeyDaConfigured()) {
+  if (!isTurnkeyDaConfigured()) {
     missing.push("TURNKEY_DA_API_PUBLIC_KEY")
     missing.push("TURNKEY_DA_API_PRIVATE_KEY")
+  }
+  if (!isTurnkeyRootProvisioningConfigured()) {
+    missing.push("TURNKEY_API_PUBLIC_KEY (provisioning)")
+    missing.push("TURNKEY_API_PRIVATE_KEY (provisioning)")
   }
   return { ok: missing.length === 0, missing }
 }
@@ -118,10 +155,18 @@ export function getTurnkeyWebhookSecret(): string {
 }
 
 export function isTurnkeyBalanceWebhooksIngestEnabled(): boolean {
-  return (
-    process.env.TURNKEY_BALANCE_WEBHOOKS_ENABLED === "1" ||
-    process.env.TURNKEY_BALANCE_WEBHOOKS_ENABLED === "true"
-  )
+  return envBoolean("TURNKEY_BALANCE_WEBHOOKS_ENABLED", isProductionDeploy())
+}
+
+/** Production default: strict webhook signature verification (no compatibility bypass). */
+export function isTurnkeyWebhookStrictSignatureEnabled(): boolean {
+  return envBoolean("TURNKEY_WEBHOOK_STRICT_SIGNATURE", isProductionDeploy())
+}
+
+/** Never accept unsigned webhooks in production unless explicitly overridden (dev only). */
+export function isTurnkeyWebhookAllowUnsignedEnabled(): boolean {
+  if (isProductionDeploy()) return false
+  return envBoolean("TURNKEY_WEBHOOK_ALLOW_UNSIGNED", false)
 }
 
 export function getTurnkeyBalanceWebhookEndpointId(): string {
@@ -132,8 +177,12 @@ export function getTurnkeyBalanceWebhookEndpointId(): string {
 export function getTurnkeyWebhookFeatureUrl(): string {
   const explicit = (process.env.TURNKEY_WEBHOOK_URL || "").trim()
   if (explicit) return explicit
+  const vercel = (process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || "").trim()
   const base =
-    (process.env.BUSINESS_APP_URL || process.env.NEXT_PUBLIC_BUSINESS_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "").trim()
+    (process.env.BUSINESS_APP_URL ||
+      process.env.NEXT_PUBLIC_BUSINESS_APP_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      (vercel ? `https://${vercel.replace(/^https?:\/\//, "")}` : "")).trim()
   if (!base) return ""
   try {
     const u = new URL(base)
@@ -148,7 +197,7 @@ export function getTurnkeyWebhookFeatureUrl(): string {
 
 /** Set to `"false"` to skip `getWalletAddressBalances` (UI shows zero balances for the on-chain line). */
 export function isTurnkeyOnChainBalanceQueryEnabled(): boolean {
-  return process.env.TURNKEY_ONCHAIN_BALANCE_QUERY !== "false"
+  return envBoolean("TURNKEY_ONCHAIN_BALANCE_QUERY", true)
 }
 
 /**
@@ -169,7 +218,7 @@ export function getTurnkeyBalanceCaip2(): string {
  * - (Recommended) Sponsor Solana Rent enabled for account-creation instructions
  */
 export function isTurnkeySolSponsorshipEnabled(): boolean {
-  return process.env.TURNKEY_SOL_SPONSORSHIP_ENABLED !== "false"
+  return envBoolean("TURNKEY_SOL_SPONSORSHIP_ENABLED", isProductionDeploy())
 }
 
 /**
@@ -189,5 +238,5 @@ export function getTurnkeySolanaBroadcastCaip2(): string {
 
 /** When `false`, skip server-side `createSubOrganization` (e.g. bootstrap auto-provision). */
 export function isTurnkeyServerSubOrgCreationEnabled(): boolean {
-  return process.env.TURNKEY_SERVER_SUB_ORG_CREATION_ENABLED !== "false"
+  return envBoolean("TURNKEY_SERVER_SUB_ORG_CREATION_ENABLED", true)
 }

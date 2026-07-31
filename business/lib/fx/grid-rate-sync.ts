@@ -50,6 +50,18 @@ type ExistingGridRateRow = {
   from_currency: string
   to_currency: string
   source: string | null
+  margin_bps: number | null
+}
+
+function resolveGridMarginBps(
+  existingByKey: Map<string, ExistingGridRateRow>,
+  from: string,
+  to: string,
+  defaultMarginBps: number,
+): number {
+  const stored = Number(existingByKey.get(`${from}_${to}`)?.margin_bps)
+  if (Number.isFinite(stored) && stored >= 0) return Math.round(stored)
+  return defaultMarginBps
 }
 
 type GridRateUpsertPayload = {
@@ -110,7 +122,7 @@ export async function syncGridExchangeRates(options?: {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  const marginBps = getGridPayoutMarginBps()
+  const defaultMarginBps = getGridPayoutMarginBps()
   const live = await fetchLiveGridExchangeRates()
   if (live.length === 0) {
     return { ok: true, upserted: 0, skipped: 0 }
@@ -118,7 +130,7 @@ export async function syncGridExchangeRates(options?: {
 
   const { data: existingRows } = await admin
     .from("grid_rates")
-    .select("from_currency,to_currency,source")
+    .select("from_currency,to_currency,source,margin_bps")
   const existingByKey = new Map<string, ExistingGridRateRow>()
   for (const row of existingRows ?? []) {
     const from = String(row.from_currency ?? "").trim().toUpperCase()
@@ -128,6 +140,7 @@ export async function syncGridExchangeRates(options?: {
       from_currency: from,
       to_currency: to,
       source: row.source != null ? String(row.source) : null,
+      margin_bps: row.margin_bps != null ? Number(row.margin_bps) : null,
     })
   }
 
@@ -137,9 +150,10 @@ export async function syncGridExchangeRates(options?: {
   let skipped = 0
 
   for (const row of live) {
-    const customerRate = applyGridMargin(row.mid, marginBps)
     const from = row.from.trim().toUpperCase()
     const to = row.to.trim().toUpperCase()
+    const marginBps = resolveGridMarginBps(existingByKey, from, to, defaultMarginBps)
+    const customerRate = applyGridMargin(row.mid, marginBps)
     pushRateRow(rowsByKey, {
       from_currency: from,
       to_currency: to,
@@ -156,13 +170,14 @@ export async function syncGridExchangeRates(options?: {
     if (from === "USD" && to !== "USD" && row.mid > 0) {
       usdPerByFiat.set(to, row.mid)
       const payInMid = 1 / row.mid
+      const payInMarginBps = resolveGridMarginBps(existingByKey, to, "USD", defaultMarginBps)
       pushRateRow(rowsByKey, {
         from_currency: to,
         to_currency: "USD",
         country_code: row.country ?? null,
         grid_mid: payInMid,
-        rate: applyGridMargin(payInMid, marginBps),
-        margin_bps: marginBps,
+        rate: applyGridMargin(payInMid, payInMarginBps),
+        margin_bps: payInMarginBps,
         source: resolveGridRateSource(existingByKey, to, "USD"),
         as_of: now,
         status: "active",
@@ -193,8 +208,9 @@ export async function syncGridExchangeRates(options?: {
 
     let gridCrossMid: number
     let rate: number
+    const crossMarginBps = resolveGridMarginBps(existingByKey, from, to, defaultMarginBps)
     try {
-      ;({ gridCrossMid, rate } = applyGridCustomerCrossRate(usdPerFrom, usdPerTo, marginBps))
+      ;({ gridCrossMid, rate } = applyGridCustomerCrossRate(usdPerFrom, usdPerTo, crossMarginBps))
     } catch {
       skipped++
       continue
@@ -206,7 +222,7 @@ export async function syncGridExchangeRates(options?: {
       country_code: pair.country_code?.trim().toUpperCase() || null,
       grid_mid: gridCrossMid,
       rate,
-      margin_bps: marginBps,
+      margin_bps: crossMarginBps,
       source: resolveGridRateSource(existingByKey, from, to),
       as_of: now,
       status: "active",

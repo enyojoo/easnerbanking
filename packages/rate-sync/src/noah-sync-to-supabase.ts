@@ -28,6 +28,19 @@ type ExistingRow = {
   fee_amount: number | null
   min_amount: number | null
   max_amount: number | null
+  margin_bps: number | null
+}
+
+function resolveEffectiveMargin(
+  existing: ExistingRow | undefined,
+  defaultMargin: number,
+  defaultMarginBps: number,
+): { margin: number; marginBps: number } {
+  const storedBps = Number(existing?.margin_bps)
+  if (Number.isFinite(storedBps) && storedBps >= 0) {
+    return { margin: storedBps / 10_000, marginBps: Math.round(storedBps) }
+  }
+  return { margin: defaultMargin, marginBps: defaultMarginBps }
 }
 
 /**
@@ -48,7 +61,7 @@ export async function syncNoahRatesToSupabase(options: {
 
   const { data: existingRows, error: loadError } = await supabase
     .from("noah_rates")
-    .select("from_currency,to_currency,source,fee_type,fee_amount,min_amount,max_amount")
+    .select("from_currency,to_currency,source,fee_type,fee_amount,min_amount,max_amount,margin_bps")
 
   if (loadError) throw loadError
 
@@ -60,7 +73,7 @@ export async function syncNoahRatesToSupabase(options: {
   }
 
   const nowIso = new Date().toISOString()
-  const marginBps = easnerBridgeMarginBps(margin)
+  const defaultMarginBps = easnerBridgeMarginBps(margin)
   const updates: Array<Record<string, unknown>> = []
   const skippedPairs: Array<{ from_currency: string; to_currency: string; reason: string }> = []
 
@@ -77,10 +90,15 @@ export async function syncNoahRatesToSupabase(options: {
       continue
     }
 
-    const rate = applyNoahCustomerRate(mid, margin)
     const key = `${from}_${to}`
     const existing = existingByKey.get(key)
     const country = input.country_code?.trim().toUpperCase() || null
+    const { margin: effectiveMargin, marginBps } = resolveEffectiveMargin(
+      existing,
+      margin,
+      defaultMarginBps,
+    )
+    const rate = applyNoahCustomerRate(mid, effectiveMargin)
 
     const payload: Record<string, unknown> = {
       from_currency: from,

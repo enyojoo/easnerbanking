@@ -34,11 +34,38 @@ function dummyToAddress(asset: string, network: string): string {
 }
 
 export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): Promise<CryptoRateSyncResult> {
-  const margin = parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN)
-  const marginBps = walletSendMarginBps(margin)
+  const defaultMargin = parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN)
+  const defaultMarginBps = walletSendMarginBps(defaultMargin)
   const probeFrom = probeSolAddress()
   const skippedPairs: CryptoRateSyncResult["skippedPairs"] = []
   const upserts: Array<Record<string, unknown>> = []
+
+  const { supabaseUrl, serviceRoleKey } = getSupabaseServiceConfig()
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  const { data: existingRows } = await supabase
+    .from("crypto_rates")
+    .select("from_currency,to_currency,receive_network,margin_bps")
+  const existingByKey = new Map<string, number>()
+  for (const row of existingRows ?? []) {
+    const from = String(row.from_currency ?? "").trim().toUpperCase()
+    const to = String(row.to_currency ?? "").trim().toUpperCase()
+    const network = String(row.receive_network ?? "").trim()
+    const bps = Number(row.margin_bps)
+    if (from && to && network && Number.isFinite(bps) && bps >= 0) {
+      existingByKey.set(`${from}_${to}_${network}`, Math.round(bps))
+    }
+  }
+
+  function resolveCryptoMarginBps(from: string, to: string, network: string): number {
+    return existingByKey.get(`${from}_${to}_${network}`) ?? defaultMarginBps
+  }
+
+  function resolveCryptoMargin(from: string, to: string, network: string): number {
+    return resolveCryptoMarginBps(from, to, network) / 10_000
+  }
 
   for (const [asset, networks] of Object.entries(WALLET_ASSET_NETWORKS)) {
     for (const network of networks) {
@@ -47,12 +74,14 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
         if (fromCurrency === "USD" && asset === "EURC") continue
 
         if (isDirectTurnkeyCorridor(asset, network)) {
+          const marginBps = resolveCryptoMarginBps(fromCurrency, asset, network)
+          const effectiveMargin = marginBps / 10_000
           upserts.push({
             from_currency: fromCurrency,
             to_currency: asset,
             receive_network: network,
             lifi_mid: 1,
-            rate: applyCryptoCustomerRate(1, margin),
+            rate: applyCryptoCustomerRate(1, effectiveMargin),
             margin_bps: marginBps,
             source: "direct_turnkey",
             as_of: new Date().toISOString(),
@@ -89,12 +118,14 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
           }
 
           const lifiMid = toAmt / fromAmt
+          const marginBps = resolveCryptoMarginBps(fromCurrency, asset, network)
+          const effectiveMargin = marginBps / 10_000
           upserts.push({
             from_currency: fromCurrency,
             to_currency: asset,
             receive_network: network,
             lifi_mid: lifiMid,
-            rate: applyCryptoCustomerRate(lifiMid, margin),
+            rate: applyCryptoCustomerRate(lifiMid, effectiveMargin),
             margin_bps: marginBps,
             source: "lifi_probe_sync",
             as_of: new Date().toISOString(),
@@ -116,11 +147,6 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
   if (options?.dryRun) {
     return { updated: upserts.length, skipped: skippedPairs.length, skippedPairs }
   }
-
-  const { supabaseUrl, serviceRoleKey } = getSupabaseServiceConfig()
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
 
   let updated = 0
   for (const row of upserts) {

@@ -30,6 +30,7 @@ import {
   validateYcBalancePayoutAmount,
 } from "@easner/shared"
 import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
+import { quoteFiatProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
 
 function roundUsdc(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -173,6 +174,12 @@ export async function buildYcPayoutQuote(input: {
     throw new Error("Could not derive USDC amount for Yellowcard payout quote.")
   }
 
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    admin,
+    { countryCode, currencyCode: receiveCurrency, rail },
+    "pay_out",
+    { userId: input.userId },
+  )
   const pricing = computeYcBalancePayoutPricingBeforeSend({
     receiveAmount: quoteReceiveAmount,
     customerRate,
@@ -182,6 +189,7 @@ export async function buildYcPayoutQuote(input: {
         ? roundUsdc(quoteReceiveAmount / payoutRate.yc_sell)
         : undefined,
     ycBuyRate: payoutRate?.yc_sell != null && payoutRate.yc_sell > 0 ? payoutRate.yc_sell : undefined,
+    processingFeeBps,
   })
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
@@ -385,6 +393,13 @@ export async function lockYcBalancePayoutSend(input: {
     ycRate: Number(sendRes.rate ?? 0) || undefined,
   })
   const ycLegFeesUsd = sendLegFees.totalFeeUsd
+  const admin = createSupabaseAdmin()
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    admin,
+    { countryCode, currencyCode: receiveCurrency, rail },
+    "pay_out",
+    { userId: input.userId },
+  )
   const pricing = computeYcBalancePayoutPricing({
     receiveAmount: quoteReceiveAmount,
     customerRate,
@@ -395,6 +410,7 @@ export async function lockYcBalancePayoutSend(input: {
         : undefined,
     networkFeeAmountUsd: sendLegFees.networkFeeAmountUsd || networkFeeAmountUsd,
     serviceFeeAmountUsd: sendLegFees.serviceFeeAmountUsd || serviceFeeAmountUsd,
+    processingFeeBps,
   })
 
   assertYcBalancePayoutEconomicsSufficient({

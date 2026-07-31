@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto"
+import { isTurnkeyWebhookStrictSignatureEnabled } from "@/lib/turnkey/config"
 import type { TurnkeyWebhookHeaders } from "@/lib/turnkey/turnkey-webhook-delivery"
 import type { TurnkeyWebhookSignatureMeta } from "@/lib/turnkey/turnkey-webhook-delivery"
 import {
@@ -127,7 +128,7 @@ function verifyEd25519TurnkeyWebhook(input: TurnkeyWebhookVerifyInput): boolean 
     signatureVersion: input.meta?.version,
     algorithm: input.meta?.algorithm,
   }
-  const strictSignature = process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE === "true"
+  const strictSignature = isTurnkeyWebhookStrictSignatureEnabled()
   const publicKey32 = keyMaterial.publicKey
 
   const canonicalSignedInput = buildTurnkeyWebhookV1SignedMessage(canonicalInput)

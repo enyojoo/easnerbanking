@@ -37,13 +37,25 @@ type ExistingRow = {
   from_currency: string
   to_currency: string
   source: string | null
+  margin_bps: number | null
+}
+
+function resolveEffectiveMarginBps(
+  existingByKey: Map<string, ExistingRow>,
+  from: string,
+  to: string,
+  defaultMarginBps: number,
+): number {
+  const stored = Number(existingByKey.get(`${from}_${to}`)?.margin_bps)
+  if (Number.isFinite(stored) && stored >= 0) return Math.round(stored)
+  return defaultMarginBps
 }
 
 function pushLegRow(
   updates: Array<Record<string, unknown>>,
   existingByKey: Map<string, ExistingRow>,
   nowIso: string,
-  marginBps: number,
+  defaultMarginBps: number,
   row: {
     from_currency: string
     to_currency: string
@@ -58,6 +70,12 @@ function pushLegRow(
 ) {
   const key = `${row.from_currency}_${row.to_currency}`
   const existing = existingByKey.get(key)
+  const marginBps = resolveEffectiveMarginBps(
+    existingByKey,
+    row.from_currency,
+    row.to_currency,
+    defaultMarginBps,
+  )
   updates.push({
     from_currency: row.from_currency,
     to_currency: row.to_currency,
@@ -142,7 +160,7 @@ export async function syncYcRatesToSupabase(options: {
 
   const { data: existingRows, error: loadError } = await supabase
     .from("yellowcard_rates")
-    .select("from_currency,to_currency,source")
+    .select("from_currency,to_currency,source,margin_bps")
   if (loadError) throw loadError
 
   const existingByKey = new Map<string, ExistingRow>()
@@ -153,10 +171,10 @@ export async function syncYcRatesToSupabase(options: {
   }
 
   const nowIso = new Date().toISOString()
-  const marginBps = easnerYcMarginBps(margin)
+  const defaultMarginBps = easnerYcMarginBps(margin)
   const updates: Array<Record<string, unknown>> = []
   const skippedPairs: Array<{ from_currency: string; to_currency: string; reason: string }> = []
-  const byCcy = new Map<string, { buy: number; sell: number; easnerBuy: number; easnerSell: number }>()
+  const byCcy = new Map<string, { buy: number; sell: number }>()
 
   for (const input of currencies) {
     const ccy = input.currency.trim().toUpperCase()
@@ -168,43 +186,44 @@ export async function syncYcRatesToSupabase(options: {
       skippedPairs.push({ from_currency: ccy, to_currency: "USDC", reason: "not_in_corridor_allowlist" })
       continue
     }
-    // YC buy = pay-in (local→crypto); YC sell = payout (crypto→local).
-    const easnerBuy = applyYcCustomerBuy(input.yc_sell, margin)
-    const easnerSell = applyYcCustomerSell(input.yc_buy, margin)
     byCcy.set(ccy, {
       buy: input.yc_buy,
       sell: input.yc_sell,
-      easnerBuy,
-      easnerSell,
     })
 
     const countryCode = input.country_code?.trim().toUpperCase() || null
     const ycBuy = Number(input.yc_buy.toPrecision(14))
     const ycSell = Number(input.yc_sell.toPrecision(14))
-    const easnerBuyPrec = Number(easnerBuy.toPrecision(14))
-    const easnerSellPrec = Number(easnerSell.toPrecision(14))
 
-    // Local → USDC (pay-in / fund balance; stores both buy+sell for cross leg refs)
-    pushLegRow(updates, existingByKey, nowIso, marginBps, {
+    const payInMarginBps = resolveEffectiveMarginBps(existingByKey, ccy, "USDC", defaultMarginBps)
+    const payInMargin = payInMarginBps / 10_000
+    const easnerSellPrec = Number(applyYcCustomerSell(input.yc_buy, payInMargin).toPrecision(14))
+    const easnerBuyForPayIn = Number(applyYcCustomerBuy(input.yc_sell, payInMargin).toPrecision(14))
+
+    pushLegRow(updates, existingByKey, nowIso, defaultMarginBps, {
       from_currency: ccy,
       to_currency: "USDC",
       country_code: countryCode,
       yc_buy: ycBuy,
       yc_sell: ycSell,
-      easner_buy: easnerBuyPrec,
+      easner_buy: easnerBuyForPayIn,
       easner_sell: easnerSellPrec,
       rate: easnerSellPrec,
     })
 
-    // USD → local (balance payout — Noah-parity product label; chain settles USDC 1:1)
-    pushLegRow(updates, existingByKey, nowIso, marginBps, {
+    const payoutMarginBps = resolveEffectiveMarginBps(existingByKey, "USD", ccy, defaultMarginBps)
+    const payoutMargin = payoutMarginBps / 10_000
+    const easnerBuyPrec = Number(applyYcCustomerBuy(input.yc_sell, payoutMargin).toPrecision(14))
+    const easnerSellForPayout = Number(applyYcCustomerSell(input.yc_buy, payoutMargin).toPrecision(14))
+
+    pushLegRow(updates, existingByKey, nowIso, defaultMarginBps, {
       from_currency: "USD",
       to_currency: ccy,
       country_code: countryCode,
       yc_buy: ycBuy,
       yc_sell: ycSell,
       easner_buy: easnerBuyPrec,
-      easner_sell: easnerSellPrec,
+      easner_sell: easnerSellForPayout,
       rate: easnerBuyPrec,
     })
   }
@@ -222,13 +241,15 @@ export async function syncYcRatesToSupabase(options: {
       skippedPairs.push({ from_currency: from, to_currency: to, reason: "missing currency legs" })
       continue
     }
-    const { ycCrossMid, rate } = applyYcCustomerCrossRate(b.sell, a.buy, margin)
-    pushLegRow(updates, existingByKey, nowIso, marginBps, {
+    const crossMarginBps = resolveEffectiveMarginBps(existingByKey, from, to, defaultMarginBps)
+    const crossMargin = crossMarginBps / 10_000
+    const { ycCrossMid, rate } = applyYcCustomerCrossRate(b.sell, a.buy, crossMargin)
+    pushLegRow(updates, existingByKey, nowIso, defaultMarginBps, {
       from_currency: from,
       to_currency: to,
       country_code: pair.country_code?.trim().toUpperCase() || null,
-      easner_buy: Number(b.easnerBuy.toPrecision(14)),
-      easner_sell: Number(a.easnerSell.toPrecision(14)),
+      easner_buy: Number(applyYcCustomerBuy(b.sell, crossMargin).toPrecision(14)),
+      easner_sell: Number(applyYcCustomerSell(a.buy, crossMargin).toPrecision(14)),
       yc_cross_mid: ycCrossMid,
       rate,
     })

@@ -15,6 +15,7 @@ import { Eye, Building2, Search } from "lucide-react"
 import { useOfficeBusinesses, useQueryInitialLoading } from "@/hooks/queries"
 import { businessTypeDisplayText } from "@/lib/business-type-label"
 import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
+import { ProcessingFeeOverrideSection } from "@/components/platform-control/processing-fee-override-section"
 
 /** Mirrors `public.businesses` (+ owner fields from admin API). */
 type BusinessRow = {
@@ -438,6 +439,11 @@ function BusinessesPageInner() {
                       </DetailRow>
                     </div>
                   </div>
+
+                  <ProcessingFeeOverrideSection
+                    subjectType="business"
+                    subjectId={selectedBusiness.id}
+                  />
 
                   <div>
                     <label className="text-sm font-medium text-gray-900">Extra account currencies</label>

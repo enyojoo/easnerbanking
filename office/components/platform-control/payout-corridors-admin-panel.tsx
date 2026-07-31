@@ -12,6 +12,7 @@ import { parseCrossBorderProvider, type CrossBorderProviderId } from "@easner/sh
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficePayoutCorridors, useQueryInitialLoading } from "@/hooks/queries"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
+import { ProcessingFeePricingDialog } from "@/components/platform-control/processing-fee-pricing-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Loader2 } from "lucide-react"
 
@@ -743,6 +744,10 @@ export function PayoutCorridorsAdminPanel() {
   const [syncSummary, setSyncSummary] = useState<string | null>(null)
   const [syncingCorridors, setSyncingCorridors] = useState(false)
   const [railTab, setRailTab] = useState<"bank_transfer" | "mobile_money">("bank_transfer")
+  const [pricingOpen, setPricingOpen] = useState(false)
+  const pricingScope = railTab === "mobile_money" ? "fiat_mobile_money" : "fiat_bank"
+  const pricingTitle =
+    railTab === "mobile_money" ? "Mobile money processing fees" : "Bank processing fees"
   const filteredRows = useMemo(
     () =>
       rows.filter(
@@ -929,6 +934,9 @@ export function PayoutCorridorsAdminPanel() {
       maxWidth="max-w-none"
       actions={
         <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => setPricingOpen(true)}>
+            Edit pricing
+          </Button>
           <div className="flex rounded-md border overflow-hidden text-xs">
             <button
               type="button"
@@ -1071,6 +1079,13 @@ export function PayoutCorridorsAdminPanel() {
           )}
         </CardContent>
       </Card>
+
+      <ProcessingFeePricingDialog
+        open={pricingOpen}
+        onOpenChange={setPricingOpen}
+        scope={pricingScope}
+        title={pricingTitle}
+      />
     </PlatformControlTabShell>
   )
 }

@@ -9,6 +9,9 @@ export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
 
+  const ctx = await resolveNoahContextAsync(auth.user.id, request)
+  if (!ctx.ok) return ctx.response
+
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
   const currency = String(body?.currency ?? "").trim().toUpperCase()
   const country = String(body?.country ?? "").trim().toUpperCase()
@@ -22,6 +25,8 @@ export async function POST(request: Request) {
   try {
     const preview = await previewGridFundBalanceQuote({
       admin,
+      userId: auth.user.id,
+      businessId: ctx.businessId,
       country,
       currency,
       rail,

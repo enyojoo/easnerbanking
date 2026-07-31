@@ -32,6 +32,7 @@ import {
 import { gridFetch } from "./http"
 import { hydrateGridQuotePaymentInstructions, resolveGridQuoteFundingAddress } from "./quote-funding"
 import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
+import { quoteFiatProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
 
@@ -81,6 +82,8 @@ export type LockGridBalancePayoutQuoteResult = {
  */
 export async function buildGridBalancePayoutPreview(input: {
   admin?: ReturnType<typeof createSupabaseAdmin>
+  userId?: string
+  businessId?: string | null
   recipient: RecipientSellPrepareRow
   recipientId: string
   receiveFiatAmount: number
@@ -151,12 +154,23 @@ export async function buildGridBalancePayoutPreview(input: {
   }
 
   const provisionalCrypto = roundUsd(quoteReceiveAmount / customerRate)
+  const feeSubject =
+    input.userId != null
+      ? { userId: input.userId, businessId: input.businessId ?? null }
+      : undefined
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    admin,
+    { countryCode, currencyCode: receiveCurrency, rail },
+    "pay_out",
+    feeSubject,
+  )
   const pricing = computeYcBalancePayoutPricingBeforeSend({
     receiveAmount: quoteReceiveAmount,
     customerRate,
     provisionalCryptoUsd: provisionalCrypto,
     ycMidUsd:
       gridMidLocalPerUsd > 0 ? roundUsd(quoteReceiveAmount / gridMidLocalPerUsd) : undefined,
+    processingFeeBps,
   })
 
   const quoteKey = buildPayoutQuoteKey({
@@ -351,6 +365,12 @@ export async function lockGridBalancePayoutQuote(
   })
   const lockedCryptoUsd = gridQuoteSendingAmountMajor(hydratedQuote) ?? provisionalCrypto
   const gridFeesUsd = gridQuoteFeesUsd(hydratedQuote)
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    admin,
+    { countryCode, currencyCode: receiveCurrency, rail },
+    "pay_out",
+    { userId: input.userId, businessId: input.businessId ?? null },
+  )
   const pricing = computeYcBalancePayoutPricingBeforeSend({
     receiveAmount: quoteReceiveAmount,
     customerRate: lockedCustomerRate,
@@ -359,6 +379,7 @@ export async function lockGridBalancePayoutQuote(
       gridMidLocalPerUsd > 0
         ? roundUsd(quoteReceiveAmount / gridMidLocalPerUsd)
         : undefined,
+    processingFeeBps,
   })
   if (gridFeesUsd > 0) {
     pricing.channelCost = roundUsd(pricing.channelCost + gridFeesUsd)

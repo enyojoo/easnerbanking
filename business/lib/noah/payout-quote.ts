@@ -22,6 +22,7 @@ import { NoProviderForCorridorError, corridorHasYellowcardPayout, selectProvider
 import { mapNoahPrepareError, shouldTryAlternatePayoutProvider } from "@/lib/noah/noah-prepare-errors"
 import { NoahHttpError } from "@/lib/noah/http"
 import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
+import { quoteFiatProcessingFeeBps, recipientPayoutRail } from "@/lib/processing-fee/quote-processing-fee-bps"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import { getGlobalPayoutMarginCaptureMode } from "@/lib/noah/margin-capture-mode"
 import { noahImpliedProviderRate } from "@/lib/noah/fx-prices"
@@ -209,6 +210,7 @@ async function buildGridBalancePayoutQuoteFromRow(input: {
 
   return buildGridBalancePayoutPreview({
     admin: input.admin,
+    userId: input.userId,
     recipient: input.row,
     recipientId: input.recipientId,
     receiveFiatAmount: input.receiveFiatAmount,
@@ -366,7 +368,19 @@ export async function buildNoahBalancePayoutPreview(input: {
       ? roundUsdc(provisionalCrypto + scheduleFee)
       : roundUsdc(provisionalCrypto * 1.01)
 
-  const sameCurrencyProcessingFee = computePayoutProcessingFeeBps(quoteReceiveAmount)
+  const payoutRail = recipientPayoutRail(row)
+  const processingFeeBps =
+    countryCode && receiveCurrency
+      ? await quoteFiatProcessingFeeBps(
+          admin,
+          { countryCode, currencyCode: receiveCurrency, rail: payoutRail },
+          "pay_out",
+          { userId: input.userId },
+        )
+      : undefined
+  const sameCurrencyProcessingFee = computePayoutProcessingFeeBps(quoteReceiveAmount, {
+    bps: processingFeeBps,
+  })
   const pricing =
     sourceBalanceCurrency === receiveCurrency
       ? {
@@ -391,6 +405,7 @@ export async function buildNoahBalancePayoutPreview(input: {
           noahMid: noahMid!,
           noahFloor: paddedFloor,
           marginCaptureMode,
+          processingFeeBps,
           ...(scheduleFee != null ? { prepareChannelFee: scheduleFee } : {}),
         })
 
@@ -689,7 +704,19 @@ export async function lockNoahBalancePayoutQuote(input: {
         })
       : null
 
-  const sameCurrencyProcessingFee = computePayoutProcessingFeeBps(quoteReceiveAmount)
+  const payoutRail = recipientPayoutRail(row)
+  const processingFeeBps =
+    countryCode && receiveCurrency
+      ? await quoteFiatProcessingFeeBps(
+          admin,
+          { countryCode, currencyCode: receiveCurrency, rail: payoutRail },
+          "pay_out",
+          { userId: input.userId },
+        )
+      : undefined
+  const sameCurrencyProcessingFee = computePayoutProcessingFeeBps(quoteReceiveAmount, {
+    bps: processingFeeBps,
+  })
   const pricing =
     sourceBalanceCurrency === receiveCurrency
       ? {
@@ -717,6 +744,7 @@ export async function lockNoahBalancePayoutQuote(input: {
           noahMid: pricingMid,
           noahFloor,
           marginCaptureMode,
+          processingFeeBps,
           ...(prep.channelFee != null ? { prepareChannelFee: prep.channelFee } : {}),
           ...(prep.remaining != null ? { prepareRemaining: prep.remaining } : {}),
         })

@@ -88,6 +88,8 @@ export async function POST(request: Request) {
       receiveAmount: receiveAmountInput,
       sendAmount: sendAmountInput,
       probeFromAddress: probeFrom ?? undefined,
+      sessionUserId: auth.user.id,
+      businessId: acc.ctx.subjectBusinessId,
     })
     return NextResponse.json({ ok: true, quote })
   } catch (e) {

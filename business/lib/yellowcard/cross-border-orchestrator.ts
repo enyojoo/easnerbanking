@@ -48,6 +48,7 @@ import {
   type CrossBorderLeg2DraftPayload,
 } from "@/lib/yellowcard/cross-border-leg2-draft"
 import { isCrossBorderSplitLockEnabled } from "@/lib/yellowcard/cross-border-split-flags"
+import { quoteFiatProcessingFeeBps, recipientPayoutRail } from "@/lib/processing-fee/quote-processing-fee-bps"
 
 function buildRecipientTransactionMetadata(
   recipientId: string | null,
@@ -202,6 +203,18 @@ async function prepareCrossBorderQuote(input: CrossBorderTransferInput) {
     throw new Error("Through Local Currency requires cross-currency corridors")
   }
 
+  const destinationRail = recipientPayoutRail(input.recipient)
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    admin,
+    {
+      countryCode: receiveCountry,
+      currencyCode: receiveCurrency,
+      rail: destinationRail,
+    },
+    "cross_border",
+    { userId: input.userId, businessId: input.businessId ?? null },
+  )
+
   const payInEnabled = await isYcLocalPayInEnabledForCorridor(admin, {
     countryCode: input.payInCountry,
     currencyCode: payInCurrency,
@@ -229,6 +242,7 @@ async function prepareCrossBorderQuote(input: CrossBorderTransferInput) {
     ycBuyTo,
     receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
     sendLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    processingFeeBps,
   })
 
   const amountCheck = await validateFundBalancePayInAmountLimits({
@@ -260,7 +274,7 @@ async function prepareCrossBorderQuote(input: CrossBorderTransferInput) {
     sourceNetworkId: input.sourceNetworkId ?? null,
   })
 
-  return { cross, pricing, payInCurrency, receiveCurrency, quoteKey, rates, fromLeg, toLeg }
+  return { cross, pricing, payInCurrency, receiveCurrency, quoteKey, rates, fromLeg, toLeg, processingFeeBps }
 }
 
 /** Indicative cross-border pricing — no YC API calls, no ledger rows. */
@@ -335,6 +349,16 @@ async function formatCrossBorderFromExistingTransfer(
     ycBuyTo: Number(meta.yc_buy_to ?? 0),
     receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
     sendLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    processingFeeBps: await quoteFiatProcessingFeeBps(
+      admin,
+      {
+        countryCode: resolveRecipientPayoutCountry(input.recipient) ?? input.payInCountry,
+        currencyCode: receiveCurrency,
+        rail: recipientPayoutRail(input.recipient),
+      },
+      "cross_border",
+      { userId: input.userId, businessId: input.businessId ?? null },
+    ),
   })
 
   return {
@@ -569,7 +593,9 @@ export async function lockCrossBorderLeg2(
     customerRate: ctx.cross.rate,
     ycSellFrom: Number(ctx.fromLeg?.yc_buy ?? 0),
     ycBuyTo,
+    easnerSellFrom,
     sendLeg,
+    processingFeeBps: prepared.processingFeeBps,
   })
 
   const expiresAt = resolveYcQuoteExpiresAt(
@@ -685,6 +711,16 @@ export async function confirmCrossBorderLeg1(
   const receiveChannelId = payload.receiveChannelId
   const reportingSourceToUsdRate = payload.reportingSourceToUsdRate
   const ycBuyTo = payload.ycBuyTo
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    admin,
+    {
+      countryCode: resolveRecipientPayoutCountry(input.recipient) ?? input.payInCountry,
+      currencyCode: receiveCurrency,
+      rail: recipientPayoutRail(input.recipient),
+    },
+    "cross_border",
+    { userId: input.userId, businessId: input.businessId ?? null },
+  )
   const recipientMapped = payload.recipientMapped as Awaited<ReturnType<typeof mapRecipientToYcSend>>
   const sender = payload.sender as ReturnType<typeof buildYcKycPersonMetadata>
 
@@ -738,6 +774,7 @@ export async function confirmCrossBorderLeg1(
         fallbackLocalPayIn: localAmount,
       }),
       sendLeg,
+      processingFeeBps,
     })
 
     const receiveCrypto = Number(
@@ -1149,6 +1186,12 @@ export async function createCrossBorderDraft(input: {
   const ycBuyTo = Number(toLeg?.yc_sell ?? 0)
   if (!ycBuyTo) throw new Error("YC destination rate unavailable for cross-border send leg")
 
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    admin,
+    { countryCode: receiveCountry, currencyCode: receiveCurrency, rail: sendRail },
+    "cross_border",
+    { userId: input.userId, businessId: input.businessId ?? null },
+  )
   const pricing = computeYcCrossBorderPricing({
     receiveAmount: input.receiveAmount,
     customerRate: cross.rate,
@@ -1156,6 +1199,7 @@ export async function createCrossBorderDraft(input: {
     ycBuyTo,
     receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
     sendLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    processingFeeBps,
   })
 
   const leg1Seq = `yc_cb_l1_${randomUUID()}`
@@ -1351,6 +1395,19 @@ export async function authorizeCrossBorderDraft(input: {
     networkFeeAmountUsd: Number(sendRes.networkFeeAmountUSD ?? 0),
     serviceFeeAmountUsd: Number(sendRes.serviceFeeAmountUSD ?? 0),
   }
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    admin,
+    {
+      countryCode: receiveCountry,
+      currencyCode: receiveCurrency,
+      rail: recipientPayoutRail(recipient as RecipientSellPrepareRow),
+    },
+    "cross_border",
+    {
+      userId: input.userId,
+      businessId: transfer.business_id ? String(transfer.business_id) : null,
+    },
+  )
   const pricing = computeYcCrossBorderPricingBeforeReceive({
     receiveAmount,
     customerRate: cross.rate,
@@ -1358,6 +1415,7 @@ export async function authorizeCrossBorderDraft(input: {
     ycBuyTo,
     easnerSellFrom,
     sendLeg,
+    processingFeeBps,
   })
 
   let localAmount = pricing.localPayIn
@@ -1392,6 +1450,7 @@ export async function authorizeCrossBorderDraft(input: {
         fallbackLocalPayIn: localAmount,
       }),
       sendLeg,
+      processingFeeBps,
     })
 
     const receiveCrypto = Number(

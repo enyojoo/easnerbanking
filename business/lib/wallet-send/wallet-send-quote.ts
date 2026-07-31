@@ -26,6 +26,7 @@ import {
 } from "./validate-recipient"
 import { createWalletSendSession, WALLET_SEND_QUOTE_TTL_MS } from "./wallet-send-session"
 import { assertWalletSendFeeSolanaAddressConfigured } from "./fee-address"
+import { quoteCryptoProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
 
 export type WalletSendQuoteResult = {
   receiveAmount: number
@@ -71,6 +72,7 @@ export async function buildWalletSendQuote(input: {
   probeFromAddress?: string
   destinationRef?: string
   sessionUserId?: string
+  businessId?: string | null
 }): Promise<WalletSendQuoteResult> {
   const recipient = coerceWalletRecipientRow(input.recipient)
   const gate = validateWalletRecipientForSend(recipient)
@@ -88,7 +90,16 @@ export async function buildWalletSendQuote(input: {
   const executionModel = resolveWalletSendExecutionModel(receiveAsset, receiveNetwork)
   assertWalletSendFeeSolanaAddressConfigured(sourceBalanceCurrency as "USD" | "EUR")
 
-  const feeBps = parseWalletSendProcessingFeeBpsFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_BPS)
+  const feeSubjectUserId = input.sessionUserId ?? recipient.user_id ?? undefined
+  const scheduledFeeBps = await quoteCryptoProcessingFeeBps(
+    input.admin,
+    receiveAsset,
+    "pay_out",
+    feeSubjectUserId
+      ? { userId: feeSubjectUserId, businessId: input.businessId ?? null }
+      : undefined,
+  )
+  const feeBps = scheduledFeeBps
   const feeCap = parseWalletSendProcessingFeeCapFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_CAP)
 
   let customerRate = 1
@@ -166,7 +177,7 @@ export async function buildWalletSendQuote(input: {
   let lifiFloorStr: string
 
   if (executionModel === "direct_turnkey") {
-    pricing = pricingFromDirectTurnkey({ receiveAmount })
+    pricing = pricingFromDirectTurnkey({ receiveAmount, processingFeeBps: feeBps })
     lifiFloorStr = pricing.lifiFloor.toFixed(6)
     customerRate = 1
     lifiMid = 1
@@ -209,6 +220,7 @@ export async function buildWalletSendQuote(input: {
       lifiMid,
       quote,
       sourceDecimals: source.decimals,
+      processingFeeBps: feeBps,
     })
     customerRate = pricing.customerRate
     lifiMid = pricing.lifiMid

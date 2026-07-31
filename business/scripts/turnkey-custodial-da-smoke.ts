@@ -37,6 +37,7 @@ function loadEnvLocal() {
 loadEnvLocal()
 
 import { isTurnkeyDaConfigured } from "@/lib/turnkey/config"
+import { assessCustodialDaMigration } from "@/lib/turnkey/da-readiness"
 import { buildCustodialDaPolicyPack, CUSTODIAL_DA_POLICY_NAMES } from "@/lib/turnkey/policies/custodial-da-policies"
 import { resolveParentOrgCustodialDaUserId } from "@/lib/turnkey/turnkey-org-users"
 
@@ -60,19 +61,26 @@ async function main() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
   if (url && key) {
     const admin = createClient(url, key, { auth: { persistSession: false } })
-    const { count: total } = await admin
-      .from("wallet_owners")
-      .select("*", { count: "exact", head: true })
-      .not("turnkey_sub_organization_id", "is", null)
-    const { count: ready } = await admin
-      .from("wallet_owners")
-      .select("*", { count: "exact", head: true })
-      .not("turnkey_sub_organization_id", "is", null)
-      .not("turnkey_da_user_id", "is", null)
+    const migration = await assessCustodialDaMigration(admin)
+    checks.push({
+      name: "migration_complete",
+      ok: migration.complete,
+      detail: migration.complete
+        ? `${migration.subOrgsMigrated}/${migration.subOrgsTotal} sub-orgs + parent policies`
+        : [
+            !migration.parentDaUserReady ? "parent easner-da missing" : null,
+            !migration.parentPoliciesReady ? "parent policies missing" : null,
+            migration.unmigratedSubOrgIds.length > 0
+              ? `${migration.unmigratedSubOrgIds.length} unmigrated sub-org(s)`
+              : null,
+          ]
+            .filter(Boolean)
+            .join("; ") || "incomplete",
+    })
     checks.push({
       name: "sub_org_da_coverage",
-      ok: (total ?? 0) === 0 || (ready ?? 0) >= (total ?? 0),
-      detail: `${ready ?? 0}/${total ?? 0} linked owners have turnkey_da_user_id`,
+      ok: migration.subOrgsTotal === 0 || migration.subOrgsMigrated >= migration.subOrgsTotal,
+      detail: `${migration.subOrgsMigrated}/${migration.subOrgsTotal} linked owners have turnkey_da_user_id`,
     })
   }
 
@@ -90,7 +98,7 @@ async function main() {
     console.log(`${mark} ${c.name}${c.detail ? ` — ${c.detail}` : ""}`)
   }
 
-  console.log("\nAfter 100% coverage + live SPL/LI.FI checks, optionally set TURNKEY_DA_SENDS_STRICT=true.")
+  console.log("\nWhen migration_complete passes, DA auto-wires in prod — no TURNKEY_DA_SENDS_STRICT flag needed.")
   if (failed > 0) process.exit(1)
 }
 

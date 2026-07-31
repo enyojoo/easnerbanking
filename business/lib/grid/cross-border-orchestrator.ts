@@ -21,6 +21,7 @@ import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prep
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
 import { isGridLocalPayInEnabledForCorridor } from "./grid-receive-gate"
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
+import { quoteFiatProcessingFeeBps, recipientPayoutRail } from "@/lib/processing-fee/quote-processing-fee-bps"
 
 export type GridCrossBorderTransferInput = {
   admin: SupabaseClient
@@ -96,6 +97,16 @@ async function prepareGridCrossBorderQuote(input: GridCrossBorderTransferInput) 
   const toLeg = findGridBalancePayoutRate(rates, receiveCurrency)
   const payInSellFrom = Number(fromLeg?.rate ?? fromLeg?.grid_mid ?? 0)
   const receiveAmount = Number(input.receiveAmount)
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    input.admin,
+    {
+      countryCode: destCountry,
+      currencyCode: receiveCurrency,
+      rail: recipientPayoutRail(input.recipient),
+    },
+    "cross_border",
+    { userId: input.userId, businessId: input.businessId },
+  )
   const pricing = computeYcCrossBorderPricing({
     receiveAmount,
     customerRate,
@@ -103,6 +114,7 @@ async function prepareGridCrossBorderQuote(input: GridCrossBorderTransferInput) 
     ycBuyTo: Number(toLeg?.grid_mid ?? 0),
     receiveLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
     sendLeg: { cryptoAmountUsd: 0, networkFeeAmountUsd: 0, serviceFeeAmountUsd: 0 },
+    processingFeeBps,
   })
 
   const payInLimitCheck = await validateFundBalancePayInAmountLimits({

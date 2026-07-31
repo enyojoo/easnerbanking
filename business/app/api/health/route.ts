@@ -11,10 +11,12 @@ import {
 import { assertNoahEs384SigningPrivateKeyPem } from "@/lib/noah/normalize-signing-key"
 import { getNoahWebhookVerifyPublicKeys } from "@/lib/noah/webhook-verify"
 import {
-  isTurnkeyConfigured,
+  isTurnkeyDaConfigured,
+  isTurnkeyRootProvisioningConfigured,
+  isTurnkeySendRuntimeConfigured,
   validateTurnkeyEnvForProduction,
 } from "@/lib/turnkey/config"
-import { getTurnkeyApiClient } from "@/lib/turnkey/client"
+import { getTurnkeyApiClient, getTurnkeyDaApiClient } from "@/lib/turnkey/client"
 import { isNewPaymentIntentsPaused } from "@/lib/ops/safe-mode"
 
 /**
@@ -58,20 +60,39 @@ export async function GET() {
   checks.turnkey = tk.ok
     ? "configured"
     : `missing: ${tk.missing.join(", ")}`
-  if (tk.ok) {
+  checks.turnkey_send_runtime = isTurnkeySendRuntimeConfigured() ? "ok" : "missing_da_keys"
+  checks.turnkey_root_provisioning = isTurnkeyRootProvisioningConfigured() ? "ok" : "optional_missing"
+
+  if (isTurnkeyDaConfigured()) {
+    try {
+      const daClient = getTurnkeyDaApiClient()
+      if (daClient) {
+        await daClient.getWhoami({})
+        checks.turnkey_da_api = "ok"
+      } else {
+        checks.turnkey_da_api = "no_client"
+      }
+    } catch (e) {
+      checks.turnkey_da_api = e instanceof Error ? e.message : "error"
+    }
+  } else {
+    checks.turnkey_da_api = "skipped"
+  }
+
+  if (isTurnkeyRootProvisioningConfigured()) {
     try {
       const client = getTurnkeyApiClient()
       if (client) {
         await client.getWhoami({})
-        checks.turnkey_api = "ok"
+        checks.turnkey_root_api = "ok"
       } else {
-        checks.turnkey_api = "no_client"
+        checks.turnkey_root_api = "no_client"
       }
     } catch (e) {
-      checks.turnkey_api = e instanceof Error ? e.message : "error"
+      checks.turnkey_root_api = e instanceof Error ? e.message : "error"
     }
   } else {
-    checks.turnkey_api = "skipped"
+    checks.turnkey_root_api = "skipped"
   }
 
   checks.safe_mode_new_intents = isNewPaymentIntentsPaused() ? "paused" : "off"

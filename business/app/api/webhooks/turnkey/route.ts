@@ -8,7 +8,10 @@ import {
 } from "@/lib/turnkey/webhook-verify"
 import { applyTurnkeyBalanceWebhookSideEffects } from "@/lib/turnkey/balance-webhook-sync"
 import { applyTurnkeyWebhookSideEffects } from "@/lib/turnkey/chain-sync"
-import { isTurnkeyBalanceConfirmedPayload } from "@/lib/turnkey/turnkey-webhook-classify"
+import {
+  isTurnkeyWebhookAllowUnsignedEnabled,
+  isTurnkeyWebhookStrictSignatureEnabled,
+} from "@/lib/turnkey/config"
 import { parseTurnkeyBalanceWebhookPayload } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import {
   isV2TurnkeyWebhookDelivery,
@@ -37,7 +40,7 @@ function canCompatibilityAcceptTurnkeyV2SignatureFailure(
   meta: ReturnType<typeof turnkeySignatureMetaFromHeaders>,
   ed25519Configured: boolean,
 ): boolean {
-  if (process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE === "true") return false
+  if (isTurnkeyWebhookStrictSignatureEnabled()) return false
   return Boolean(
     ed25519Configured &&
       headers.signature &&
@@ -65,8 +68,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "webhook_verify_not_configured" }, { status: 503 })
   }
 
-  const allowUnsigned =
-    process.env.TURNKEY_WEBHOOK_ALLOW_UNSIGNED === "true" || process.env.TURNKEY_WEBHOOK_ALLOW_UNSIGNED === "1"
+  const allowUnsigned = isTurnkeyWebhookAllowUnsignedEnabled()
 
   const sig = headers.signature
   const sigMeta = turnkeySignatureMetaFromHeaders(headers)
@@ -90,7 +92,7 @@ export async function POST(request: Request) {
       const compatibilityAccepted =
         orgError === null && canCompatibilityAcceptTurnkeyV2SignatureFailure(headers, sigMeta, ed25519Configured)
       if (!compatibilityAccepted) {
-        if (process.env.TURNKEY_WEBHOOK_STRICT_SIGNATURE === "true") {
+        if (isTurnkeyWebhookStrictSignatureEnabled()) {
           console.warn("turnkey_webhook: strict signature rejected (401). Remove TURNKEY_WEBHOOK_STRICT_SIGNATURE to use compatibility mode.", {
             eventId: headers.eventId,
             contentType: request.headers.get("content-type"),

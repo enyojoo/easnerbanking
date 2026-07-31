@@ -57,12 +57,15 @@ function loadEnvLocal() {
 loadEnvLocal()
 
 import {
-  getTurnkeyOrganizationId,
   getTurnkeyRootApiClient,
   getTurnkeyRootApiClientForSubOrganization,
 } from "@/lib/turnkey/client"
-import { isTurnkeyDaConfigured, isTurnkeyConfigured } from "@/lib/turnkey/config"
-import { markParentOrgDaReadyInCache, markSubOrgDaReadyInCache } from "@/lib/turnkey/da-readiness"
+import {
+  getTurnkeyOrganizationId,
+  isTurnkeyDaConfigured,
+  isTurnkeyConfigured,
+} from "@/lib/turnkey/config"
+import { markParentOrgDaReadyInCache, markSubOrgDaReadyInCache, markCustodialDaMigrationCompleteInCache } from "@/lib/turnkey/da-readiness"
 import { provisionCustodialDaForOrganization } from "@/lib/turnkey/provision-custodial-da"
 
 type Args = {
@@ -194,6 +197,11 @@ async function main() {
   console.log({ migrated, skipped, unmigrated, pendingActivityCount: pendingActivities.length })
   if (pendingActivities.length > 0) {
     console.log("Pending activity ids (may need parent 2-of-3 approval):", pendingActivities)
+  }
+
+  if (args.apply && unmigrated === 0 && skipped > 0 && pendingActivities.length === 0) {
+    markCustodialDaMigrationCompleteInCache()
+    console.log("\nCustodial DA migration complete — auto fail-closed on stragglers (no STRICT flag needed).")
   }
 
   if (args.requireComplete && unmigrated > 0) {

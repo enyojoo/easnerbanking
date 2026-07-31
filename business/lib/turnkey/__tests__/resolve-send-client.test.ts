@@ -18,6 +18,7 @@ vi.mock("@/lib/turnkey/config", () => ({
 vi.mock("@/lib/turnkey/da-readiness", () => ({
   isSubOrgCustodialDaReady: vi.fn(),
   isParentOrgCustodialDaReady: vi.fn(),
+  isCustodialDaMigrationComplete: vi.fn(),
 }))
 
 import {
@@ -32,6 +33,7 @@ import {
   isTurnkeyDaSendsStrict,
 } from "@/lib/turnkey/config"
 import {
+  isCustodialDaMigrationComplete,
   isParentOrgCustodialDaReady,
   isSubOrgCustodialDaReady,
 } from "@/lib/turnkey/da-readiness"
@@ -51,6 +53,7 @@ describe("resolveTurnkeySendClient", () => {
     vi.mocked(isTurnkeyDaSendsStrict).mockReturnValue(false)
     vi.mocked(isSubOrgCustodialDaReady).mockResolvedValue(false)
     vi.mocked(isParentOrgCustodialDaReady).mockResolvedValue(false)
+    vi.mocked(isCustodialDaMigrationComplete).mockResolvedValue(false)
   })
 
   it("uses root when DA layer disabled (no DA keys / explicit off)", async () => {
@@ -91,6 +94,17 @@ describe("resolveTurnkeySendClient", () => {
 
   it("fail closed when strict and sub-org not migrated", async () => {
     vi.mocked(isTurnkeyDaSendsStrict).mockReturnValue(true)
+
+    const res = await resolveTurnkeySendClient({
+      scope: { kind: "sub_org", subOrganizationId: "sub-1" },
+      admin: {} as SupabaseClient,
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error).toBe("turnkey_da_not_migrated")
+  })
+
+  it("auto fail closed when migration complete and sub-org not migrated", async () => {
+    vi.mocked(isCustodialDaMigrationComplete).mockResolvedValue(true)
 
     const res = await resolveTurnkeySendClient({
       scope: { kind: "sub_org", subOrganizationId: "sub-1" },

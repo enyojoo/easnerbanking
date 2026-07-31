@@ -75,6 +75,7 @@ async function walletQuote(
     probeFromAddress: probeFromAddress ?? undefined,
     destinationRef: input.destination.destinationRef,
     sessionUserId: context.userId,
+    businessId: context.businessId,
   })
 }
 

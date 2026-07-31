@@ -33,5 +33,8 @@ export const officeKeys = {
   cryptoRates: () => [...officeKeys.root, "crypto-rates"] as const,
   payoutCorridors: () => [...officeKeys.root, "payout-corridors"] as const,
   cryptoDestinations: () => [...officeKeys.root, "crypto-destinations"] as const,
+  processingFeeSchedule: (scope: string) => [...officeKeys.root, "processing-fee-schedule", scope] as const,
+  processingFeeOverride: (subjectType: string, subjectId: string) =>
+    [...officeKeys.root, "processing-fee-override", subjectType, subjectId] as const,
   systemSettings: () => [...officeKeys.root, "system-settings"] as const,
 } as const

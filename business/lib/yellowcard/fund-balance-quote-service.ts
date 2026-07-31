@@ -38,6 +38,7 @@ import { buildFundBalanceQuoteSummary } from "@/lib/yellowcard/build-yc-quote-re
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 import { buildYcQuoteKey, findReusableYcTransfer } from "@/lib/yellowcard/quote-key"
 import { logYcTiming } from "@/lib/yellowcard/timing"
+import { quoteFiatProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
 
 export type FundBalanceRail = "bank_transfer" | "mobile_money"
 
@@ -174,12 +175,20 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
   const customerSellRate = Number(leg.easner_sell)
   const ycSellRate = Number(leg.yc_buy)
 
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    admin,
+    { countryCode: country, currencyCode: currency, rail },
+    "pay_in",
+    { userId: kycUserId, businessId: ctx.businessId },
+  )
+
   const provisional = computeYcFundBalancePricingBeforeReceive({
     usdCredit: ctx.usdCredit,
     localPayIn: ctx.localPayIn,
     customerSellRate,
     ycSellRate,
     rail,
+    processingFeeBps,
   })
 
   const amountCheck = await validateFundBalancePayInAmountLimits({
@@ -228,6 +237,7 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
     provisional,
     customerRate: customerSellRate,
     quoteKey,
+    processingFeeBps,
   }
 }
 
@@ -270,6 +280,7 @@ function computeFundBalancePricingFromReceive(input: {
         customerSellRate: input.prepared.customerRate,
         ycSellRate: Number(input.prepared.leg.yc_buy),
         receiveLeg,
+        processingFeeBps: input.prepared.processingFeeBps,
       })
     : computeYcFundBalancePricing({
         localPayIn: resolveYcLockedLocalPayInFromReceive({
@@ -280,6 +291,7 @@ function computeFundBalancePricingFromReceive(input: {
         customerSellRate: input.prepared.customerRate,
         ycSellRate: Number(input.prepared.leg.yc_buy),
         receiveLeg,
+        processingFeeBps: input.prepared.processingFeeBps,
       })
 }
 
@@ -529,12 +541,14 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
             customerSellRate: prepared.customerRate,
             ycSellRate: Number(prepared.leg.yc_buy),
             receiveLeg,
+            processingFeeBps: prepared.processingFeeBps,
           })
         : computeYcFundBalancePricing({
             localPayIn: quotedPayIn,
             customerSellRate: prepared.customerRate,
             ycSellRate: Number(prepared.leg.yc_buy),
             receiveLeg,
+            processingFeeBps: prepared.processingFeeBps,
           })
     const pricing = {
       ...pricingRaw,

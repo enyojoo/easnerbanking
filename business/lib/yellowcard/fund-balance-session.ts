@@ -22,6 +22,7 @@ import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-ga
 import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
+import { quoteFiatProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
 import { mapKycErrorToCode } from "@/lib/yellowcard/fund-balance-quote-errors"
 import { parseYcReceiveRejectedMinError } from "@easner/shared"
 
@@ -157,6 +158,12 @@ async function prepareFundBalanceSession(ctx: FundBalanceSessionContext) {
     customerSellRate: Number(leg.easner_sell),
     ycSellRate: Number(leg.yc_buy),
     rail: ctx.rail,
+    processingFeeBps: await quoteFiatProcessingFeeBps(
+      admin,
+      { countryCode: country, currencyCode: currency, rail: ctx.rail },
+      "pay_in",
+      { userId: kycUserId, businessId: ctx.businessId },
+    ),
   })
 
   const amountCheck = validateYcPayInLocalAmount({
@@ -450,18 +457,34 @@ export async function authorizeFundBalanceDraft(input: {
     networkFeeAmountUsd: Number(receiveRes.networkFeeAmountUSD ?? 0),
     serviceFeeAmountUsd: Number(receiveRes.serviceFeeAmountUSD ?? 0),
   })
+  const payInRail =
+    String(meta.pay_in_rail ?? "mobile_money").trim() === "bank_transfer"
+      ? ("bank_transfer" as const)
+      : ("mobile_money" as const)
+  const payInCountry = String(meta.pay_in_country ?? country).trim().toUpperCase()
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    admin,
+    { countryCode: payInCountry, currencyCode: currency, rail: payInRail },
+    "pay_in",
+    {
+      userId: kycUserId,
+      businessId: transfer.business_id ? String(transfer.business_id) : null,
+    },
+  )
   const pricingRaw = lockedUsdCredit > 0
     ? computeYcFundBalancePricing({
         usdCredit: lockedUsdCredit,
         customerSellRate: Number(leg.easner_sell),
         ycSellRate: Number(leg.yc_buy),
         receiveLeg,
+        processingFeeBps,
       })
     : computeYcFundBalancePricing({
         localPayIn: lockedLocalPayIn,
         customerSellRate: Number(leg.easner_sell),
         ycSellRate: Number(leg.yc_buy),
         receiveLeg,
+        processingFeeBps,
       })
   const pricing = { ...pricingRaw, localPayIn: lockedLocalPayIn }
 

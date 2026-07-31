@@ -7,38 +7,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { cryptoDestinationsApi, type CryptoDestinationAdminRow } from "@/lib/crypto-destinations-api"
-import { getTokenIconUrl } from "@/lib/crypto-icons"
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficeCryptoDestinations, useQueryInitialLoading } from "@/hooks/queries"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
+import { ProcessingFeePricingDialog } from "@/components/platform-control/processing-fee-pricing-dialog"
+import { CryptoAssetIcon } from "@/components/platform-control/crypto-asset-icon"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Loader2 } from "lucide-react"
-
-function CryptoAssetIcon({ code, size = 22 }: { code: string; size?: number }) {
-  const upper = code.toUpperCase()
-  const src = getTokenIconUrl(upper)
-  if (src) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt=""
-        width={size}
-        height={size}
-        className="rounded-full object-cover shrink-0"
-        loading="lazy"
-      />
-    )
-  }
-  return (
-    <span
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground"
-      style={{ width: size, height: size }}
-    >
-      {upper.slice(0, 2)}
-    </span>
-  )
-}
 
 function groupByAsset(rows: CryptoDestinationAdminRow[]): CryptoDestinationAdminRow[] {
   const map = new Map<string, CryptoDestinationAdminRow>()
@@ -68,6 +43,7 @@ export function CryptoDestinationsAdminPanel() {
   const rows = destinationsQuery.data ?? []
   const [error, setError] = useState<string | null>(null)
   const [savingCode, setSavingCode] = useState<string | null>(null)
+  const [pricingOpen, setPricingOpen] = useState(false)
   const assetRows = useMemo(() => groupByAsset(rows), [rows])
   const showTableSkeleton = useQueryInitialLoading(destinationsQuery.isPending, destinationsQuery.data, assetRows)
   const refreshing = destinationsQuery.isFetching && !showTableSkeleton
@@ -95,16 +71,21 @@ export function CryptoDestinationsAdminPanel() {
     <PlatformControlTabShell
       title="Crypto"
       actions={
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => void destinationsQuery.refetch()}
-          disabled={destinationsQuery.isFetching}
-        >
-          {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Refresh
-        </Button>
+        <>
+          <Button type="button" variant="outline" size="sm" onClick={() => setPricingOpen(true)}>
+            Edit pricing
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void destinationsQuery.refetch()}
+            disabled={destinationsQuery.isFetching}
+          >
+            {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Refresh
+          </Button>
+        </>
       }
     >
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -171,6 +152,13 @@ export function CryptoDestinationsAdminPanel() {
           )}
         </CardContent>
       </Card>
+
+      <ProcessingFeePricingDialog
+        open={pricingOpen}
+        onOpenChange={setPricingOpen}
+        scope="crypto"
+        title="Crypto processing fees"
+      />
     </PlatformControlTabShell>
   )
 }

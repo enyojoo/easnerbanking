@@ -27,6 +27,7 @@ export function pricingFromLifiQuote(input: {
   lifiMid: number
   quote: LifiQuoteResponse
   sourceDecimals: number
+  processingFeeBps?: number
 }): CryptoSendPricing {
   const fromRaw = Number(input.quote.estimate?.fromAmount ?? 0)
   const lifiFloor = fromRaw / 10 ** input.sourceDecimals
@@ -44,16 +45,21 @@ export function pricingFromLifiQuote(input: {
     lifiMid,
     lifiFloor,
     networkFee: parseLifiNetworkFeeUsd(input.quote),
-    processingFeeBps: parseWalletSendProcessingFeeBpsFromEnv(
-      process.env.WALLET_SEND_PROCESSING_FEE_BPS,
-    ),
+    processingFeeBps:
+      input.processingFeeBps ??
+      parseWalletSendProcessingFeeBpsFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_BPS),
   })
 }
 
-export function pricingFromDirectTurnkey(input: { receiveAmount: number }): CryptoSendPricing {
+export function pricingFromDirectTurnkey(input: {
+  receiveAmount: number
+  processingFeeBps?: number
+}): CryptoSendPricing {
   return computeDirectTurnkeyWalletSendPricing({
     receiveAmount: input.receiveAmount,
-    feeBps: parseWalletSendProcessingFeeBpsFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_BPS),
+    feeBps:
+      input.processingFeeBps ??
+      parseWalletSendProcessingFeeBpsFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_BPS),
     feeCap: parseWalletSendProcessingFeeCapFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_CAP),
   })
 }

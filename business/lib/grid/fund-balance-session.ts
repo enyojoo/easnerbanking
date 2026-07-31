@@ -17,6 +17,7 @@ import { isGridLocalPayInEnabledForCorridor } from "./grid-receive-gate"
 import { getGridQuoteTtlMs } from "./config"
 import type { GridQuote } from "./types"
 import { computeYcFundBalancePricingBeforeReceive, buildYcFundBalanceDisplayFees, computeYcFundBalancePrincipalLocalPayIn } from "@easner/shared"
+import { quoteFiatProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
 
 export type GridFundBalanceSessionResult = {
   sequenceId: string
@@ -68,6 +69,8 @@ function gridFundBalanceDisplayFees(input: {
 
 export async function previewGridFundBalanceQuote(input: {
   admin: SupabaseClient
+  userId?: string
+  businessId?: string | null
   country: string
   currency: string
   rail: "bank_transfer" | "mobile_money"
@@ -105,6 +108,14 @@ export async function previewGridFundBalanceQuote(input: {
     customerSellRate: customerRate,
     ycSellRate: payInRate?.grid_mid ?? customerRate,
     rail: input.rail,
+    processingFeeBps: await quoteFiatProcessingFeeBps(
+      input.admin,
+      { countryCode: country, currencyCode: currency, rail: input.rail },
+      "pay_in",
+      input.userId
+        ? { userId: input.userId, businessId: input.businessId ?? null }
+        : undefined,
+    ),
   })
 
   const limitCheck = await validateFundBalancePayInAmountLimits({
@@ -161,6 +172,8 @@ export async function createGridFundBalanceSession(input: {
 
   const preview = await previewGridFundBalanceQuote({
     admin: input.admin,
+    userId: input.userId,
+    businessId: input.businessId,
     country,
     currency,
     rail: input.rail,

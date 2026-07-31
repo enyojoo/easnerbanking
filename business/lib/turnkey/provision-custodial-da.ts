@@ -62,7 +62,12 @@ async function createPolicy(
     condition: spec.condition,
     notes: spec.notes ?? "",
   })
-  return String(asRecord(res).activityId ?? asRecord(res).activity_id ?? "").trim() || null
+  const r = asRecord(res)
+  const activity = asRecord(r.activity)
+  return (
+    String(r.activityId ?? r.activity_id ?? activity.id ?? activity.activityId ?? "").trim() ||
+    null
+  )
 }
 
 export type ProvisionCustodialDaResult = {
@@ -114,6 +119,7 @@ export async function provisionCustodialDaForOrganization(input: {
           ],
           authenticators: [],
           oauthProviders: [],
+          userTags: [],
         },
       ],
     })
@@ -142,10 +148,11 @@ export async function provisionCustodialDaForOrganization(input: {
     existingNames.add(spec.policyName)
   }
 
+  const namesAfter = await listPolicyNames(input.rootClient, organizationId)
   for (const name of Object.values(CUSTODIAL_DA_POLICY_NAMES)) {
-    if (!existingNames.has(name)) {
-      throw new Error(`policy ${name} missing after provision`)
-    }
+    if (namesAfter.has(name)) continue
+    if (pendingActivityIds.length > 0 || policiesCreated > 0) continue
+    throw new Error(`policy ${name} missing after provision`)
   }
 
   return { daUserId, daUserCreated, policiesCreated, pendingActivityIds }
