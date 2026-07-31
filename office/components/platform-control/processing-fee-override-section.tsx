@@ -62,22 +62,30 @@ export function ProcessingFeeOverrideSection({
 }: ProcessingFeeOverrideSectionProps) {
   const queryClient = useQueryClient()
   const overrideQuery = useOfficeProcessingFeeOverride(subjectType, subjectId)
+  const override = overrideQuery.data?.override ?? null
+  const setupRequired = overrideQuery.data?.setupRequired === true
+  const loadError =
+    overrideQuery.isError
+      ? overrideQuery.error instanceof Error
+        ? overrideQuery.error.message
+        : "Failed to load processing fee override"
+      : null
   const [mode, setMode] = useState<FeeMode>("schedule")
   const [draft, setDraft] = useState<DraftState>(emptyDraft)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null)
 
   useEffect(() => {
-    if (!overrideQuery.data && !overrideQuery.isLoading) {
+    if (!override && !overrideQuery.isLoading) {
       setMode("schedule")
       setDraft(emptyDraft())
       return
     }
-    if (overrideQuery.data) {
+    if (override) {
       setMode("custom")
-      setDraft(draftFromOverride(overrideQuery.data))
+      setDraft(draftFromOverride(override))
     }
-  }, [overrideQuery.data, overrideQuery.isLoading])
+  }, [override, overrideQuery.isLoading])
 
   const invalidate = useCallback(async () => {
     await queryClient.invalidateQueries({
@@ -129,6 +137,12 @@ export function ProcessingFeeOverrideSection({
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-full" />
         </div>
+      ) : setupRequired || loadError ? (
+        <p className="mt-3 text-sm rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+          {setupRequired
+            ? "Fee overrides are not enabled yet. Apply migration 20260731130000_processing_fee_overrides.sql on Supabase, then redeploy."
+            : loadError}
+        </p>
       ) : (
         <div className="mt-3 space-y-3">
           <div className="flex flex-wrap gap-4 text-sm">
@@ -214,7 +228,12 @@ export function ProcessingFeeOverrideSection({
             </p>
           ) : null}
 
-          <Button type="button" size="sm" disabled={saving} onClick={() => void handleSave()}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={saving || setupRequired || Boolean(loadError)}
+            onClick={() => void handleSave()}
+          >
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

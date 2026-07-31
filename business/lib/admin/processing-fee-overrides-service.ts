@@ -24,6 +24,32 @@ export type ProcessingFeeOverrideUpsertInput = {
 
 const SUBJECT_TYPES = new Set<ProcessingFeeOverrideSubjectType>(["business", "user"])
 
+export class ProcessingFeeOverridesSetupRequiredError extends Error {
+  constructor(message = "processing_fee_overrides table is not migrated") {
+    super(message)
+    this.name = "ProcessingFeeOverridesSetupRequiredError"
+  }
+}
+
+function isMissingProcessingFeeOverridesTable(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false
+  const code = String((error as { code?: string }).code ?? "")
+  const message = String((error as { message?: string }).message ?? "").toLowerCase()
+  return (
+    code === "42P01" ||
+    message.includes("processing_fee_overrides") && message.includes("does not exist") ||
+    message.includes("could not find the table") ||
+    message.includes("schema cache")
+  )
+}
+
+function rethrowProcessingFeeOverrideDbError(error: unknown): never {
+  if (isMissingProcessingFeeOverridesTable(error)) {
+    throw new ProcessingFeeOverridesSetupRequiredError()
+  }
+  throw error
+}
+
 function normalizeNullableBps(value: unknown): number | null {
   if (value == null || value === "") return null
   const n = Number(value)
@@ -56,7 +82,7 @@ export async function getProcessingFeeOverrideAdmin(
     .eq("subject_id", subjectId)
     .maybeSingle()
 
-  if (error) throw error
+  if (error) rethrowProcessingFeeOverrideDbError(error)
   if (!data) return null
 
   return {
@@ -99,7 +125,7 @@ export async function upsertProcessingFeeOverrideAdmin(
     .select("id,subject_type,subject_id,pay_in_bps,pay_out_bps,cross_border_bps,reason,updated_at")
     .single()
 
-  if (error) throw error
+  if (error) rethrowProcessingFeeOverrideDbError(error)
 
   return {
     id: data.id,
@@ -124,5 +150,5 @@ export async function deleteProcessingFeeOverrideAdmin(
     .eq("subject_type", subjectType)
     .eq("subject_id", subjectId)
 
-  if (error) throw error
+  if (error) rethrowProcessingFeeOverrideDbError(error)
 }

@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Eye, Building2, Search } from "lucide-react"
 import { useOfficeBusinesses, useQueryInitialLoading } from "@/hooks/queries"
@@ -314,6 +314,9 @@ function BusinessesPageInner() {
             <>
               <DialogHeader className="shrink-0 space-y-0 border-b px-6 py-4 pr-12 text-left">
                 <DialogTitle>Business — {selectedBusiness.name || "—"}</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Business profile, provider references, and processing fee overrides.
+                </DialogDescription>
               </DialogHeader>
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
                 <div className="space-y-6">

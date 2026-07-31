@@ -30,18 +30,28 @@ async function asJson<T>(response: Response): Promise<T> {
   return data
 }
 
+export type ProcessingFeeOverrideGetResult = {
+  override: ProcessingFeeOverrideRow | null
+  setupRequired?: boolean
+  error?: string
+}
+
 export const processingFeeOverridesApi = {
   async get(
     subjectType: ProcessingFeeOverrideSubjectType,
     subjectId: string,
-  ): Promise<ProcessingFeeOverrideRow | null> {
+  ): Promise<ProcessingFeeOverrideGetResult> {
     const params = new URLSearchParams({
       subject_type: subjectType,
       subject_id: subjectId,
     })
     const res = await officeFetch(`/api/admin/processing-fee-overrides?${params}`)
-    const data = await asJson<{ override?: ProcessingFeeOverrideRow | null }>(res)
-    return data.override ?? null
+    const data = await asJson<ProcessingFeeOverrideGetResult>(res)
+    return {
+      override: data.override ?? null,
+      setupRequired: data.setupRequired === true,
+      error: data.error,
+    }
   },
 
   async upsert(payload: ProcessingFeeOverrideUpsertPayload): Promise<ProcessingFeeOverrideRow> {

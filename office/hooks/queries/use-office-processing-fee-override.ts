@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import {
   processingFeeOverridesApi,
-  type ProcessingFeeOverrideRow,
+  type ProcessingFeeOverrideGetResult,
   type ProcessingFeeOverrideSubjectType,
 } from "@/lib/processing-fee-overrides-api"
 import { officeKeys } from "@/lib/query/keys"
@@ -19,8 +19,9 @@ export function useOfficeProcessingFeeOverride(
   return useQuery({
     queryKey: officeKeys.processingFeeOverride(subjectType ?? "none", subjectId ?? "none"),
     enabled: enabled && subjectType != null && Boolean(subjectId),
+    retry: false,
     ...officeReferenceQueryDefaults,
-    queryFn: (): Promise<ProcessingFeeOverrideRow | null> =>
+    queryFn: (): Promise<ProcessingFeeOverrideGetResult> =>
       processingFeeOverridesApi.get(subjectType!, subjectId!),
   })
 }

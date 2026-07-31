@@ -6,6 +6,7 @@ import {
   deleteProcessingFeeOverrideAdmin,
   getProcessingFeeOverrideAdmin,
   parseProcessingFeeOverrideSubjectType,
+  ProcessingFeeOverridesSetupRequiredError,
   upsertProcessingFeeOverrideAdmin,
 } from "@/lib/admin/processing-fee-overrides-service"
 import { clearProcessingFeeBpsCache } from "@/lib/processing-fee/resolve-processing-fee-bps"
@@ -32,6 +33,13 @@ export async function GET(request: Request) {
     const override = await getProcessingFeeOverrideAdmin(admin, subjectType, subjectId)
     return NextResponse.json({ override })
   } catch (e) {
+    if (e instanceof ProcessingFeeOverridesSetupRequiredError) {
+      return NextResponse.json({
+        override: null,
+        setupRequired: true,
+        error: "Apply migration 20260731130000_processing_fee_overrides.sql to enable fee overrides.",
+      })
+    }
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed to load processing fee override" },
       { status: 500 },
@@ -77,6 +85,15 @@ export async function PUT(request: Request) {
     })
     return NextResponse.json({ override })
   } catch (e) {
+    if (e instanceof ProcessingFeeOverridesSetupRequiredError) {
+      return NextResponse.json(
+        {
+          error: "Apply migration 20260731130000_processing_fee_overrides.sql to enable fee overrides.",
+          code: "SETUP_REQUIRED",
+        },
+        { status: 503 },
+      )
+    }
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Invalid processing fee override payload" },
       { status: 400 },
@@ -108,6 +125,15 @@ export async function DELETE(request: Request) {
     })
     return NextResponse.json({ ok: true })
   } catch (e) {
+    if (e instanceof ProcessingFeeOverridesSetupRequiredError) {
+      return NextResponse.json(
+        {
+          error: "Apply migration 20260731130000_processing_fee_overrides.sql to enable fee overrides.",
+          code: "SETUP_REQUIRED",
+        },
+        { status: 503 },
+      )
+    }
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed to delete processing fee override" },
       { status: 500 },
