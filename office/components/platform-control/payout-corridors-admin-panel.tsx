@@ -10,7 +10,9 @@ import { CountryFlag } from "@/components/flags"
 import { payoutCorridorsApi, type PayoutCorridorAdminRow } from "@/lib/payout-corridors-api"
 import { parseCrossBorderProvider, type CrossBorderProviderId } from "@easner/shared"
 import { officeKeys } from "@/lib/query/keys"
-import { useOfficePayoutCorridors, useQueryInitialLoading } from "@/hooks/queries"
+import { buildFiatProcessingFeeDraft } from "@/lib/processing-fee-pricing-draft"
+import type { ProcessingFeeScheduleRow } from "@/lib/processing-fee-schedule-api"
+import { useOfficePayoutCorridors, useOfficeProcessingFeeSchedule, useQueryInitialLoading } from "@/hooks/queries"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 import { ProcessingFeePricingDialog } from "@/components/platform-control/processing-fee-pricing-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -745,6 +747,9 @@ export function PayoutCorridorsAdminPanel() {
   const [syncingCorridors, setSyncingCorridors] = useState(false)
   const [railTab, setRailTab] = useState<"bank_transfer" | "mobile_money">("bank_transfer")
   const [pricingOpen, setPricingOpen] = useState(false)
+  const [pricingInitialRows, setPricingInitialRows] = useState<ProcessingFeeScheduleRow[] | undefined>()
+  const bankFeesQuery = useOfficeProcessingFeeSchedule("fiat_bank")
+  const mobileFeesQuery = useOfficeProcessingFeeSchedule("fiat_mobile_money")
   const pricingScope = railTab === "mobile_money" ? "fiat_mobile_money" : "fiat_bank"
   const pricingTitle =
     railTab === "mobile_money" ? "Mobile money processing fees" : "Bank processing fees"
@@ -757,6 +762,29 @@ export function PayoutCorridorsAdminPanel() {
   )
   const fiatRows = useMemo(() => groupFiatDestinations(filteredRows), [filteredRows])
   const showTableSkeleton = useQueryInitialLoading(corridorsQuery.isPending, corridorsQuery.data, fiatRows)
+
+  const openPricing = () => {
+    const stored =
+      pricingScope === "fiat_mobile_money" ? mobileFeesQuery.data : bankFeesQuery.data
+    setPricingInitialRows(
+      buildFiatProcessingFeeDraft(
+        fiatRows.map((row) => ({
+          country_code: row.country_code,
+          country_name: row.country_name,
+          currency_code: row.currency_code,
+          currency_name: row.currency_name,
+        })),
+        pricingScope,
+        stored,
+      ),
+    )
+    setPricingOpen(true)
+  }
+
+  const closePricing = (open: boolean) => {
+    setPricingOpen(open)
+    if (!open) setPricingInitialRows(undefined)
+  }
 
   const handleSyncCorridors = async () => {
     setSyncingCorridors(true)
@@ -934,21 +962,27 @@ export function PayoutCorridorsAdminPanel() {
       maxWidth="max-w-none"
       actions={
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => setPricingOpen(true)}>
+          <Button type="button" variant="outline" size="sm" onClick={openPricing} disabled={fiatRows.length === 0}>
             Edit pricing
           </Button>
           <div className="flex rounded-md border overflow-hidden text-xs">
             <button
               type="button"
               className={`px-3 py-1.5 ${railTab === "bank_transfer" ? "bg-muted font-medium" : ""}`}
-              onClick={() => setRailTab("bank_transfer")}
+              onClick={() => {
+                setRailTab("bank_transfer")
+                setPricingOpen(false)
+              }}
             >
               Bank
             </button>
             <button
               type="button"
               className={`px-3 py-1.5 ${railTab === "mobile_money" ? "bg-muted font-medium" : ""}`}
-              onClick={() => setRailTab("mobile_money")}
+              onClick={() => {
+                setRailTab("mobile_money")
+                setPricingOpen(false)
+              }}
             >
               Mobile money
             </button>
@@ -1082,9 +1116,10 @@ export function PayoutCorridorsAdminPanel() {
 
       <ProcessingFeePricingDialog
         open={pricingOpen}
-        onOpenChange={setPricingOpen}
+        onOpenChange={closePricing}
         scope={pricingScope}
         title={pricingTitle}
+        initialRows={pricingInitialRows}
       />
     </PlatformControlTabShell>
   )

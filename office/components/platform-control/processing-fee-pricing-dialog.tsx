@@ -40,6 +40,8 @@ export type ProcessingFeePricingDialogProps = {
   onOpenChange: (open: boolean) => void
   scope: ProcessingFeeScheduleScope
   title: string
+  /** Pre-built rows — opens instantly without fetching (fiat tab pattern). */
+  initialRows?: ProcessingFeeScheduleRow[]
 }
 
 function rowKey(row: ProcessingFeeScheduleRow): string {
@@ -58,22 +60,26 @@ export function ProcessingFeePricingDialog({
   onOpenChange,
   scope,
   title,
+  initialRows,
 }: ProcessingFeePricingDialogProps) {
   const queryClient = useQueryClient()
-  const feesQuery = useOfficeProcessingFeeSchedule(open ? scope : null)
+  const useRemoteCatalog = initialRows === undefined
+  const feesQuery = useOfficeProcessingFeeSchedule(useRemoteCatalog && open ? scope : null)
   const [draft, setDraft] = useState<EditableFeeRow[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!open || !feesQuery.data) return
+    if (!open) return
+    const source = initialRows ?? feesQuery.data
+    if (!source) return
     setDraft(
-      feesQuery.data.map((row) => ({
+      source.map((row) => ({
         ...row,
         _key: rowKey(row),
       })),
     )
-  }, [open, feesQuery.data])
+  }, [open, initialRows, feesQuery.data])
 
   const updateDraft = useCallback((key: string, patch: Partial<EditableFeeRow>) => {
     setDraft((prev) => prev.map((row) => (row._key === key ? { ...row, ...patch } : row)))
@@ -106,7 +112,7 @@ export function ProcessingFeePricingDialog({
     }
   }
 
-  const loading = feesQuery.isPending && draft.length === 0
+  const loading = useRemoteCatalog && feesQuery.isPending && draft.length === 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,7 +123,7 @@ export function ProcessingFeePricingDialog({
         </DialogHeader>
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        {feesQuery.error ? (
+        {useRemoteCatalog && feesQuery.error ? (
           <p className="text-sm text-destructive">
             {feesQuery.error instanceof Error ? feesQuery.error.message : "Failed to load fees"}
           </p>
