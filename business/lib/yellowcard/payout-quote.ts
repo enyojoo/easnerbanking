@@ -393,7 +393,6 @@ export async function lockYcBalancePayoutSend(input: {
     ycRate: Number(sendRes.rate ?? 0) || undefined,
   })
   const ycLegFeesUsd = sendLegFees.totalFeeUsd
-  const admin = createSupabaseAdmin()
   const processingFeeBps = await quoteFiatProcessingFeeBps(
     admin,
     { countryCode, currencyCode: receiveCurrency, rail },
