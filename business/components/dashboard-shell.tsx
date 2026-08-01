@@ -99,9 +99,9 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
 
   return (
     <AppLockProvider>
-      <div className="h-dvh overflow-hidden bg-background text-foreground">
+      <div className="min-h-dvh bg-background text-foreground">
         <DashboardNav />
-        <div className="ml-64 flex h-dvh flex-col overflow-hidden">
+        <div className="ml-64 flex min-h-dvh flex-col">
           <header className="z-30 flex h-16 min-h-16 shrink-0 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
           {showProfileChromeSkeleton ? (
             <div className="flex items-center gap-3">
@@ -148,8 +148,8 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
           ) : null}
           {/*
             Page chrome contract: header + optional banner sit above main (shrink-0).
-            The column is h-dvh overflow-hidden — only main scrolls, so shell chrome
-            never shifts. Do not add pt-* on main to offset headers.
+            Main scrolls internally (flex-1 min-h-0). Avoid h-dvh + overflow-hidden on
+            the shell root — that breaks browser fullscreen / PWA display transitions.
           */}
           <main
             style={
@@ -158,7 +158,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
               } as React.CSSProperties
             }
             className={cn(
-              "flex-1 min-h-0 overflow-y-auto px-8 pb-10",
+              "flex-1 min-h-0 overflow-y-auto overscroll-contain px-8 pb-10",
               constrained ? "mx-auto w-full max-w-6xl" : "mx-auto w-full max-w-[1440px]",
             )}
           >

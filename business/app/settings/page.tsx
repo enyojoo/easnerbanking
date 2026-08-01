@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState, type CSSProperties } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SettingsPersonalTab } from "@/components/settings/settings-personal-tab"
@@ -33,17 +33,6 @@ function SettingsContent() {
     }
   }, [activeTab])
 
-  useEffect(() => {
-    if (!verificationFlowOpen) return
-    const main = document.querySelector("main")
-    if (!main) return
-    const prev = main.style.overflow
-    main.style.overflow = "hidden"
-    return () => {
-      main.style.overflow = prev
-    }
-  }, [verificationFlowOpen])
-
   const handleTabChange = (value: string) => {
     if (!TABS.includes(value as TabValue)) return
     if (value === activeTab) return
@@ -62,16 +51,9 @@ function SettingsContent() {
     <div
       className={cn(
         verificationFlowOpen
-          ? "flex min-h-0 flex-col overflow-hidden"
+          ? "flex h-full min-h-0 flex-col overflow-hidden"
           : "space-y-6",
       )}
-      style={
-        verificationFlowOpen
-          ? ({
-              height: "calc(100dvh - var(--dashboard-sticky-top, 4rem) - 2.5rem)",
-            } as CSSProperties)
-          : undefined
-      }
     >
       <div className="shrink-0">
         <h1 className="text-3xl font-semibold text-foreground">Settings</h1>
