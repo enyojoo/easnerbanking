@@ -89,6 +89,7 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
     if (input.localAmount != null) body.localAmount = input.localAmount
     if (input.amount != null) body.amount = input.amount
   }
+  // YC rejects localAmount/amount when directSettlement is true.
   if (input.sender) body.sender = input.sender
   const destination = input.destination ?? input.recipient
   if (destination) body.destination = destination

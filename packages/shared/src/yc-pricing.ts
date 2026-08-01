@@ -1082,7 +1082,7 @@ export function alignYcCrossBorderLockedLocalPayIn(input: {
 }
 
 /** Max POST /send retries when YC locked destination fiat is below quoted receive. */
-export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 5
+export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 3
 
 /**
  * Never underpay: net local must be >= quoted receive.
@@ -1102,11 +1102,14 @@ export const YC_SEND_LEG_DESTINATION_EXCESS_TOLERANCE = 0.01
  */
 export const YC_SEND_LEG_SERVICE_FEE_FRACTION = 0.01
 
-/**
- * Assume YC may convert slightly worse than the customer/Easner rate when sizing
- * initial settlement crypto (production shortfall: net 1998.13 on quoted 2000).
- */
+/** Shrink customerRate before sizing crypto (FX margin already in customerRate). */
 export const YC_SEND_LEG_RATE_BUFFER_BPS = 50
+
+/**
+ * Extra slop — YC directSettlement conversion can be ~0.1% below customerRate
+ * (prod: 1364.9 vs 1366.135 on 2000 NGN lock).
+ */
+export const YC_SEND_LEG_CONVERSION_SLOP_BPS = 25
 
 function clampYcSendLegFeeFraction(feeFraction: number): number {
   if (!Number.isFinite(feeFraction) || feeFraction <= 0) return YC_SEND_LEG_SERVICE_FEE_FRACTION
@@ -1268,22 +1271,43 @@ export function assertYcSendLegDestinationAmountSufficient(input: {
 }
 
 /**
+ * Pessimistic NGN/USD (or local/USD) for directSettlement crypto sizing.
+ * YC live conversion can be below customerRate — use lower rate → more crypto.
+ */
+export function resolveYcSendLegPessimisticDestinationRate(input: {
+  customerRate: number
+  rateBufferBps?: number
+  conversionSlopBps?: number
+}): number {
+  const customerRate = input.customerRate
+  if (!(customerRate > 0)) return 0
+  const bufferBps = Number.isFinite(input.rateBufferBps)
+    ? Math.max(0, Number(input.rateBufferBps))
+    : YC_SEND_LEG_RATE_BUFFER_BPS
+  const slopBps = Number.isFinite(input.conversionSlopBps)
+    ? Math.max(0, Number(input.conversionSlopBps))
+    : YC_SEND_LEG_CONVERSION_SLOP_BPS
+  const totalBps = bufferBps + slopBps
+  return customerRate * (1 - totalBps / 10_000)
+}
+
+/**
  * Initial settlement crypto so net local (after YC ~1% send fee) can meet quoted receive.
- * Plain receive/rate under-funds because YC deducts serviceFeeAmountLocal from gross.
- * Applies a small rate buffer — live YC conversion can be worse than customerRate.
+ * directSettlement forbids localAmount — crypto must be sized pessimistically.
  */
 export function estimateYcSendLegSettlementCryptoForQuotedReceive(input: {
   quotedReceive: number
   destinationRate: number
   feeFraction?: number
-  /** Shrink destination rate by this many bps before sizing (default 50). */
   rateBufferBps?: number
+  conversionSlopBps?: number
 }): number {
   const quoted = roundLocal(input.quotedReceive)
-  const bufferBps = Number.isFinite(input.rateBufferBps)
-    ? Math.max(0, Number(input.rateBufferBps))
-    : YC_SEND_LEG_RATE_BUFFER_BPS
-  const rate = input.destinationRate * (1 - bufferBps / 10_000)
+  const rate = resolveYcSendLegPessimisticDestinationRate({
+    customerRate: input.destinationRate,
+    rateBufferBps: input.rateBufferBps,
+    conversionSlopBps: input.conversionSlopBps,
+  })
   const feeFraction = clampYcSendLegFeeFraction(
     input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
   )

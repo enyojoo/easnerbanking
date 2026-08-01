@@ -636,8 +636,8 @@ describe("yc send leg destination amount", () => {
       destinationRate: 1371.11,
     })
     expect(estimated).toBeGreaterThan(2000 / 1371.11)
-    // Default 50 bps rate buffer + 1% fee
-    expect(estimated).toBeCloseTo(2000 / (1371.11 * 0.995 * 0.99), 5)
+    // Default 50 bps buffer + 25 bps conversion slop + 1% fee
+    expect(estimated).toBeCloseTo(2000 / (1371.11 * 0.9925 * 0.99), 5)
   })
 
   it("retargets settlement crypto so net local meets quoted receive", () => {

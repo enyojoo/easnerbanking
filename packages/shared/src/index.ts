@@ -806,12 +806,14 @@ export {
   trimYcSendLegSettlementCryptoForLocalExcess,
   estimateYcSendLegSettlementCryptoForQuotedReceive,
   retargetYcSendLegSettlementCryptoForQuotedReceive,
+  resolveYcSendLegPessimisticDestinationRate,
   resolveYcSendLegDestinationExcessTolerance,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,
   YC_SEND_LEG_DESTINATION_EXCESS_TOLERANCE,
   YC_SEND_LEG_SERVICE_FEE_FRACTION,
   YC_SEND_LEG_RATE_BUFFER_BPS,
+  YC_SEND_LEG_CONVERSION_SLOP_BPS,
 } from "./yc-pricing"
 export { filterSupersededPendingGlobalPayoutRows } from "./ledger/filter-superseded-pending-payouts"
 export type { SupersededPayoutLedgerRow } from "./ledger/filter-superseded-pending-payouts"

@@ -134,17 +134,23 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       )
     }
 
-    // Prefer YC-echoed crypto for observed rate — submitted amount can differ from lock.
+    const submittedCrypto = settlementCryptoUsd
     const echoedCrypto = roundUsdc(Number(sendRes.settlementInfo?.cryptoAmount ?? 0))
-    const basisCrypto = echoedCrypto > 0 ? echoedCrypto : settlementCryptoUsd
+    // Observed YC rate from this attempt; retarget from submitted crypto (not stale echo).
+    const rateCrypto = echoedCrypto > 0 ? echoedCrypto : submittedCrypto
+    const observedRate =
+      lastLockedLocal > 0 && rateCrypto > 0 ? lastLockedLocal / rateCrypto : input.destinationRate
     settlementCryptoUsd = retargetYcSendLegSettlementCryptoForQuotedReceive({
-      settlementCryptoUsd: basisCrypto,
+      settlementCryptoUsd: submittedCrypto,
       lockedLocalAmount: lastLockedLocal,
       sendLegFeeLocal,
       quotedReceive: input.receiveAmount,
-      destinationRate: input.destinationRate,
+      destinationRate: observedRate,
       preferCeil: check.shortfall > 0,
     })
+    if (check.shortfall > 0 && settlementCryptoUsd <= submittedCrypto) {
+      settlementCryptoUsd = roundUsdc(submittedCrypto + Math.max(0.001, check.shortfall / observedRate))
+    }
   }
 
   throw new Error(
