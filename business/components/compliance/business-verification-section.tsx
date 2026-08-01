@@ -455,7 +455,7 @@ export function BusinessVerificationSection() {
       >
         <DialogContent
           showCloseButton
-          className="flex h-[min(92vh,44rem)] w-[min(calc(100vw-1.5rem),56rem)] max-w-none flex-col gap-0 overflow-hidden p-0 duration-300 data-[state=open]:duration-300 data-[state=closed]:duration-300 sm:max-w-[min(calc(100vw-1.5rem),56rem)]"
+          className="flex h-[min(94vh,52rem)] w-[min(calc(100vw-1.5rem),56rem)] max-w-none flex-col gap-0 overflow-hidden p-0 duration-300 data-[state=open]:duration-300 data-[state=closed]:duration-300 sm:max-w-[min(calc(100vw-1.5rem),56rem)]"
         >
           <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
             <div className="flex flex-wrap items-center gap-2 gap-y-1">
@@ -470,7 +470,7 @@ export function BusinessVerificationSection() {
               Complete the steps in the provider window below.
             </DialogDescription>
           </DialogHeader>
-          <div className="relative min-h-0 flex-1 overflow-hidden bg-black">
+          <div className="relative min-h-0 flex-1 overflow-hidden bg-[#1a1a1a]">
             {useSumsubSdk && hostedToken ? (
               <GridSumsubWebSdk
                 accessToken={hostedToken}

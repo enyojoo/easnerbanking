@@ -47,8 +47,9 @@ export function GridSumsubWebSdk({ accessToken, onComplete, onError }: Props) {
 
     const sdk = snsWebSdk
       .init(accessToken, () => refreshGridKycToken())
-      .withConf({ lang: "en" })
-      .withOptions({ addViewportTag: false, adaptIframeHeight: true })
+      .withConf({ lang: "en", theme: "dark" })
+      // false = fill our dialog height; true shrinks iframe to SumSub card height (leaves empty gap).
+      .withOptions({ addViewportTag: false, adaptIframeHeight: false })
       .on("idCheck.onApplicantStatusChanged", (payload) => {
         const reviewStatus = String(
           (payload as { reviewStatus?: string } | null)?.reviewStatus ?? "",
@@ -76,18 +77,18 @@ export function GridSumsubWebSdk({ accessToken, onComplete, onError }: Props) {
       disposed = true
       try {
         // SumSub SDK has no documented destroy; clear DOM on unmount.
-        if (!disposed) return
         el.replaceChildren()
       } catch {
         // ignore
       }
+      void disposed
     }
   }, [accessToken])
 
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 size-full overflow-auto bg-background"
+      className="grid-sumsub-host absolute inset-0 size-full overflow-hidden bg-[#1a1a1a]"
       data-testid="grid-sumsub-websdk"
     />
   )
