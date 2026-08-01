@@ -2,6 +2,7 @@ import { randomUUID } from "crypto"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { findYcBalancePayoutRate, listYcRates } from "@/lib/fx/yc-rates"
 import {
+  applyProviderBindingToRecipient,
   assertYcBalancePayoutEconomicsSufficient,
   computeYcBalancePayoutPricing,
   computeYcBalancePayoutPricingBeforeSend,
@@ -64,7 +65,7 @@ export async function buildYcPayoutQuote(input: {
   }
 
   const admin = createSupabaseAdmin()
-  const row = input.recipient
+  const row = applyProviderBindingToRecipient(input.recipient, "yellowcard")
 
   const receiveCurrency = String(row.currency || "").trim().toUpperCase()
   const countryCode = resolveRecipientPayoutCountry(row)

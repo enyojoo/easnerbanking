@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
+  applyProviderBindingToRecipient,
   resolveYcQuoteExpiresAt,
   resolveYcPayInDepositExpiresAt,
   TLC_LOCAL_TRANSFER_METHOD,
@@ -477,7 +478,7 @@ async function resolveCrossBorderSendContext(input: CrossBorderTransferInput, pr
     countryCode: receiveCountry,
     currencyCode: receiveCurrency,
     fieldsSchema: corridorRow?.fields_schema,
-    row: input.recipient,
+    row: applyProviderBindingToRecipient(input.recipient, "yellowcard"),
   })
   if (!ycRecipientCheck.ok) {
     throw new Error(ycRecipientCheck.message)
