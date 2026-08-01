@@ -2,8 +2,8 @@
 
 /**
  * Hosted KYB on the Verification settings tab. Prefer SumSub WebSDK via Grid `kyc_token`.
- * Fall back to iframing `kyc_link` if no token. Tier cards swap for in-tab SumSub;
- * tab intro and Settings chrome stay visible.
+ * Fall back to iframing `kyc_link` if no token. One section card holds the hub;
+ * CTA replaces the whole card with the in-tab SumSub flow (Back restores the card).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -19,7 +19,7 @@ import { isGridCompleteUrl } from "@/lib/grid/grid-complete-url"
 import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { GridSumsubWebSdk } from "@/components/compliance/grid-sumsub-websdk"
-import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
+import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
 import {
   getNoahRejectionDisplay,
@@ -383,59 +383,68 @@ export function BusinessVerificationSection() {
 
   return (
     <div className="space-y-6" id="business-verification">
-      <SettingsTabIntro
-        title={SETTINGS_TAB_COPY.verification.title}
-        description={SETTINGS_TAB_COPY.verification.intro}
-        icon={<ShieldCheck aria-hidden />}
-      />
-      {hostedOpen ? (
-        <div
-          className="flex min-h-[min(32rem,58vh)] flex-col overflow-hidden rounded-lg border bg-background"
-          data-verification-flow="open"
-        >
-          <div className="flex shrink-0 items-center border-b bg-background px-2 py-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground hover:text-foreground"
-              onClick={closeHostedAndSync}
-            >
-              <ArrowLeft className="size-4" aria-hidden />
-              Back
-            </Button>
-          </div>
-          <div className="relative min-h-0 flex-1">
-            {error ? (
-              <p className="absolute left-0 right-0 top-2 z-10 mx-auto max-w-lg rounded-md bg-destructive/90 px-3 py-2 text-center text-sm text-destructive-foreground">
-                {error}
-              </p>
-            ) : null}
-            {hostedLoading || !hasHostedCredentials ? (
-              <div className="flex min-h-[min(24rem,45vh)] flex-col items-center justify-center gap-3 text-muted-foreground">
-                <Loader2 className="size-8 animate-spin" aria-hidden />
-                <p className="text-sm">Opening verification…</p>
-              </div>
-            ) : useSumsubSdk && hostedToken ? (
-              <GridSumsubWebSdk
-                accessToken={hostedToken}
-                theme="light"
-                onComplete={closeHostedAndSync}
-                onError={(message) => setError(message)}
+      <Card
+        className={cn(hostedOpen && "overflow-hidden")}
+        data-verification-flow={hostedOpen ? "open" : undefined}
+      >
+        {hostedOpen ? (
+          <>
+            <div className="flex shrink-0 items-center border-b px-2 py-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-muted-foreground hover:text-foreground"
+                onClick={closeHostedAndSync}
+              >
+                <ArrowLeft className="size-4" aria-hidden />
+                Back
+              </Button>
+            </div>
+            <CardContent className="relative min-h-[min(32rem,58vh)] p-0">
+              {error ? (
+                <p className="absolute left-0 right-0 top-2 z-10 mx-auto max-w-lg rounded-md bg-destructive/90 px-3 py-2 text-center text-sm text-destructive-foreground">
+                  {error}
+                </p>
+              ) : null}
+              {hostedLoading || !hasHostedCredentials ? (
+                <div className="flex min-h-[min(24rem,45vh)] flex-col items-center justify-center gap-3 text-muted-foreground">
+                  <Loader2 className="size-8 animate-spin" aria-hidden />
+                  <p className="text-sm">Opening verification…</p>
+                </div>
+              ) : useSumsubSdk && hostedToken ? (
+                <GridSumsubWebSdk
+                  accessToken={hostedToken}
+                  theme="light"
+                  onComplete={closeHostedAndSync}
+                  onError={(message) => setError(message)}
+                />
+              ) : hostedIframeSrc ? (
+                <iframe
+                  title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
+                  src={hostedIframeSrc}
+                  className="absolute inset-0 size-full border-0 bg-background"
+                  allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
+                  onLoad={handleHostedIframeLoad}
+                />
+              ) : null}
+            </CardContent>
+          </>
+        ) : (
+          <>
+            <CardHeader>
+              <SettingsCardHeader
+                title={
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5" aria-hidden />
+                    {SETTINGS_TAB_COPY.verification.title}
+                  </CardTitle>
+                }
+                description={SETTINGS_TAB_COPY.verification.intro}
               />
-            ) : hostedIframeSrc ? (
-              <iframe
-                title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
-                src={hostedIframeSrc}
-                className="absolute inset-0 size-full border-0 bg-background"
-                allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
-                onLoad={handleHostedIframeLoad}
-              />
-            ) : null}
-          </div>
-        </div>
-      ) : (
-      <div className="grid gap-4 md:grid-cols-2">
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2">
         {BUSINESS_TIER_LADDER.tiers.map((t) => {
           const isT1 = t.tier === 1
           return (
@@ -511,8 +520,11 @@ export function BusinessVerificationSection() {
             </Card>
           )
         })}
-      </div>
-      )}
+              </div>
+            </CardContent>
+          </>
+        )}
+      </Card>
     </div>
   )
 }
