@@ -6,6 +6,10 @@ import {
   verifyGridWebhookSignature,
 } from "@/lib/grid/webhook-verify"
 import { buildGridIndividualCustomerPayload } from "@/lib/grid/kyc-metadata"
+import {
+  buildGridBusinessCustomerPayload,
+  gridShellBusinessTaxId,
+} from "@/lib/grid/business-kyc-metadata"
 import { buildGridIdempotencyKey } from "@/lib/grid/idempotency"
 import { resolvePrimaryPayoutProvider } from "@easner/shared"
 
@@ -49,6 +53,35 @@ describe("grid webhook verify", () => {
     expect(parseGridSignatureBytes(header)?.length).toBeGreaterThan(0)
     expect(verifyGridWebhookSignature(body, header, pubPem)).toBe(true)
     expect(verifyGridWebhookSignature(body, "bad", pubPem)).toBe(false)
+  })
+})
+
+describe("buildGridBusinessCustomerPayload", () => {
+  it("uses a 9-digit shell taxId when org has none", () => {
+    const payload = buildGridBusinessCustomerPayload({
+      platformCustomerId: "easner_business_abc",
+      profile: {
+        legalName: "Acme Ltd",
+        email: "owner@example.com",
+        createdAt: "2024-06-01T00:00:00Z",
+      },
+    })
+    const taxId = (payload.businessInfo as { taxId?: string }).taxId
+    expect(taxId).toMatch(/^\d{9}$/)
+    expect(taxId).toBe(gridShellBusinessTaxId("easner_business_abc"))
+  })
+
+  it("normalizes stored EIN-style tax ids", () => {
+    const payload = buildGridBusinessCustomerPayload({
+      platformCustomerId: "easner_business_abc",
+      profile: {
+        legalName: "Acme Ltd",
+        email: "owner@example.com",
+        taxId: "12-3456789",
+        createdAt: "2024-06-01T00:00:00Z",
+      },
+    })
+    expect((payload.businessInfo as { taxId?: string }).taxId).toBe("123456789")
   })
 })
 

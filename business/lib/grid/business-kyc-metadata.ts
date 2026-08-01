@@ -22,6 +22,31 @@ function isoDateFromTimestamp(value: string | null | undefined): string | null {
   return d.toISOString().slice(0, 10)
 }
 
+function digitsOnly(value: string): string {
+  return value.replace(/\D/g, "")
+}
+
+/** Stable 9-digit shell tax id for Grid create when org has none yet (SumSub collects verified value). */
+export function gridShellBusinessTaxId(platformCustomerId: string): string {
+  let hash = 0
+  for (let i = 0; i < platformCustomerId.length; i++) {
+    hash = (Math.imul(31, hash) + platformCustomerId.charCodeAt(i)) | 0
+  }
+  return String((Math.abs(hash) % 900_000_000) + 100_000_000)
+}
+
+function normalizeGridBusinessTaxId(input: {
+  taxId?: string | null
+  registrationNumber?: string | null
+  platformCustomerId: string
+}): string {
+  for (const raw of [input.taxId, input.registrationNumber]) {
+    const digits = digitsOnly(String(raw ?? ""))
+    if (digits.length === 9) return digits
+  }
+  return gridShellBusinessTaxId(input.platformCustomerId)
+}
+
 /**
  * Minimal Grid BUSINESS customer for hosted KYB (SumSub collects the rest).
  * Grid docs: customer must exist before createKYCLink; hosted flow ≠ API verifications.submit.
@@ -35,11 +60,11 @@ export function buildGridBusinessCustomerPayload(input: {
 
   const businessInfo: Record<string, unknown> = { legalName }
 
-  const taxId =
-    String(input.profile.taxId ?? "").trim() ||
-    String(input.profile.registrationNumber ?? "").trim()
-  // Grid requires taxId on BUSINESS create; hosted SumSub collects the verified value.
-  businessInfo.taxId = taxId || "PENDING"
+  businessInfo.taxId = normalizeGridBusinessTaxId({
+    taxId: input.profile.taxId,
+    registrationNumber: input.profile.registrationNumber,
+    platformCustomerId: input.platformCustomerId,
+  })
 
   const registrationNumber = String(input.profile.registrationNumber ?? "").trim()
   if (registrationNumber) businessInfo.registrationNumber = registrationNumber
@@ -55,8 +80,6 @@ export function buildGridBusinessCustomerPayload(input: {
     platformCustomerId: input.platformCustomerId,
     businessInfo,
   }
-
-  if (countryIso2) payload.region = countryIso2
 
   const email = String(input.profile.email ?? "").trim()
   if (!email) {
