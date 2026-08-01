@@ -1,9 +1,8 @@
 "use client"
 
 /**
- * Hosted KYB opens in a dialog iframe. Users close via the dialog’s built-in control.
- *
- * B2B parity: uses Grid `/api/grid/kyc-links`; Tier state from canonical `verification_status` via profile API.
+ * Hosted KYB opens in a dialog. Prefer SumSub WebSDK via Grid `kyc_token`
+ * (Grid’s supported embed path). Fall back to iframing `kyc_link` if no token.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -25,6 +24,7 @@ import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
 import { isGridCompleteUrl } from "@/lib/grid/grid-complete-url"
 import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
+import { GridSumsubWebSdk } from "@/components/compliance/grid-sumsub-websdk"
 import {
   getNoahRejectionDisplay,
   NOAH_VERIFICATION_IN_REVIEW_COPY,
@@ -77,14 +77,17 @@ export function BusinessVerificationSection() {
     businessId ? hostedResumeAvailableCache.get(businessId) ?? null : null,
   )
   const probedHostedUrlRef = useRef<string | null>(null)
+  const probedHostedTokenRef = useRef<string | null>(null)
   const [hostedOpen, setHostedOpen] = useState(false)
   const [hostedUrl, setHostedUrl] = useState<string | null>(null)
-  /** Which tier the hosted iframe session is for (only Tier 1 today; same header pattern for future tiers). */
+  const [hostedToken, setHostedToken] = useState<string | null>(null)
+  /** Which tier the hosted session is for (only Tier 1 today; same header pattern for future tiers). */
   const [hostedTierLevel, setHostedTierLevel] = useState<1 | 2 | 3>(1)
-  /** Clear iframe after Radix exit animation so the dialog can close smoothly (iframe unmount is heavy). */
+  /** Clear session after Radix exit animation so the dialog can close smoothly. */
   const clearUrlAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const hostedIframeSrc = hostedUrl
+  const useSumsubSdk = Boolean(hostedToken?.trim())
+  const hostedIframeSrc = !useSumsubSdk ? hostedUrl : null
 
   useEffect(() => {
     return () => {
@@ -98,6 +101,7 @@ export function BusinessVerificationSection() {
 
   useEffect(() => {
     probedHostedUrlRef.current = null
+    probedHostedTokenRef.current = null
     if (
       !canManageBusinessVerification ||
       !businessId ||
@@ -120,12 +124,18 @@ export function BusinessVerificationSection() {
           },
           body: JSON.stringify({ type: "business" }),
         })
-        const json = (await res.json().catch(() => ({}))) as { kyc_link?: string | null }
+        const json = (await res.json().catch(() => ({}))) as {
+          kyc_link?: string | null
+          kyc_token?: string | null
+        }
         if (cancelled) return
         const link = typeof json.kyc_link === "string" ? json.kyc_link.trim() : ""
+        const token = typeof json.kyc_token === "string" ? json.kyc_token.trim() : ""
         probedHostedUrlRef.current = link || null
-        hostedResumeAvailableCache.set(businessId, Boolean(link))
-        setHostedResumeAvailable(Boolean(link))
+        probedHostedTokenRef.current = token || null
+        const resumable = Boolean(link || token)
+        hostedResumeAvailableCache.set(businessId, resumable)
+        setHostedResumeAvailable(resumable)
       } catch {
         // Preserve any cached value on transient network failure rather than hiding the CTA.
         if (!cancelled) setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? false)
@@ -153,6 +163,7 @@ export function BusinessVerificationSection() {
     if (clearUrlAfterCloseRef.current) clearTimeout(clearUrlAfterCloseRef.current)
     clearUrlAfterCloseRef.current = setTimeout(() => {
       setHostedUrl(null)
+      setHostedToken(null)
       clearUrlAfterCloseRef.current = null
     }, 280)
   }, [syncBusinessTier1FromGrid])
@@ -200,12 +211,14 @@ export function BusinessVerificationSection() {
     }
 
     const probedUrl = probedHostedUrlRef.current
-    if (probedUrl) {
+    const probedToken = probedHostedTokenRef.current
+    if (probedUrl || probedToken) {
       if (clearUrlAfterCloseRef.current) {
         clearTimeout(clearUrlAfterCloseRef.current)
         clearUrlAfterCloseRef.current = null
       }
       setHostedTierLevel(1)
+      setHostedToken(probedToken)
       setHostedUrl(probedUrl)
       setHostedOpen(true)
       return
@@ -229,6 +242,7 @@ export function BusinessVerificationSection() {
       const text = await res.text()
       let json = {} as {
         kyc_link?: string | null
+        kyc_token?: string | null
         error?: string
         alreadyOnboarded?: boolean
         kyc_status?: string
@@ -236,7 +250,7 @@ export function BusinessVerificationSection() {
       }
       if (text) {
         try {
-          json = JSON.parse(text) as { kyc_link?: string; error?: string }
+          json = JSON.parse(text) as { kyc_link?: string; kyc_token?: string; error?: string }
         } catch {
           setError(res.status === 431 ? "Request headers too large. Sign out, sign in again, or clear site data for localhost." : "Invalid response from server.")
           return
@@ -258,7 +272,7 @@ export function BusinessVerificationSection() {
         setInfo("Verification could not be completed for this account. Please contact support if you have questions.")
         return
       }
-      if (json.alreadyOnboarded || !json.kyc_link) {
+      if (json.alreadyOnboarded || (!json.kyc_link && !json.kyc_token)) {
         void syncBusinessTier1FromGrid()
         if (json.kyc_status === "approved") {
           setError(null)
@@ -281,10 +295,14 @@ export function BusinessVerificationSection() {
         clearTimeout(clearUrlAfterCloseRef.current)
         clearUrlAfterCloseRef.current = null
       }
+      const link = typeof json.kyc_link === "string" ? json.kyc_link.trim() : ""
+      const token = typeof json.kyc_token === "string" ? json.kyc_token.trim() : ""
       setHostedTierLevel(1)
-      setHostedUrl(json.kyc_link)
+      setHostedToken(token || null)
+      setHostedUrl(link || null)
       setHostedOpen(true)
-      probedHostedUrlRef.current = json.kyc_link
+      probedHostedUrlRef.current = link || null
+      probedHostedTokenRef.current = token || null
       if (businessId) hostedResumeAvailableCache.set(businessId, true)
       setHostedResumeAvailable(true)
     } catch (e: unknown) {
@@ -430,6 +448,7 @@ export function BusinessVerificationSection() {
           if (clearUrlAfterCloseRef.current) clearTimeout(clearUrlAfterCloseRef.current)
           clearUrlAfterCloseRef.current = setTimeout(() => {
             setHostedUrl(null)
+            setHostedToken(null)
             clearUrlAfterCloseRef.current = null
           }, 280)
         }}
@@ -451,17 +470,23 @@ export function BusinessVerificationSection() {
               Complete the steps in the provider window below.
             </DialogDescription>
           </DialogHeader>
-          {hostedIframeSrc ? (
-            <div className="relative min-h-0 flex-1 overflow-hidden bg-black">
+          <div className="relative min-h-0 flex-1 overflow-hidden bg-black">
+            {useSumsubSdk && hostedToken ? (
+              <GridSumsubWebSdk
+                accessToken={hostedToken}
+                onComplete={closeHostedAndSync}
+                onError={(message) => setError(message)}
+              />
+            ) : hostedIframeSrc ? (
               <iframe
                 title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
                 src={hostedIframeSrc}
                 className="absolute inset-0 size-full border-0"
-                allow="payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
+                allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
                 onLoad={handleHostedIframeLoad}
               />
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

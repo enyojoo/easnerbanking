@@ -71,6 +71,7 @@ async function runGridBusinessSync(request: Request) {
         subjectUserId: ctx.userId,
         subjectBusinessId: ctx.businessId,
         partnerCustomerId: customerId,
+        provider: "grid",
       })
     }
 

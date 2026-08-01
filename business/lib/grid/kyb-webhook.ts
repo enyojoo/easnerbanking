@@ -68,6 +68,7 @@ export async function handleGridKybWebhook(
       subjectUserId: subject.userId,
       subjectBusinessId: subject.businessId,
       partnerCustomerId: customerId,
+      provider: "grid",
     })
   }
 

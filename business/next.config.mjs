@@ -9,7 +9,7 @@ const nobleHashesSubpath = (name) => resolve(nobleHashesRoot, `${name}.js`)
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   outputFileTracingRoot: resolve(__dirname, ".."),
-  transpilePackages: ["@easner/server", "@easner/shared"],
+  transpilePackages: ["@easner/server", "@easner/shared", "@sumsub/websdk"],
   webpack: (config) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
