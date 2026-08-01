@@ -57,9 +57,11 @@ describe("grid webhook verify", () => {
 })
 
 describe("buildGridBusinessCustomerPayload", () => {
+  const platformCustomerId = "eb_abc123456789012345678901234567890"
+
   it("uses a 9-digit shell taxId when org has none", () => {
     const payload = buildGridBusinessCustomerPayload({
-      platformCustomerId: "easner_business_abc",
+      platformCustomerId,
       profile: {
         legalName: "Acme Ltd",
         email: "owner@example.com",
@@ -68,12 +70,12 @@ describe("buildGridBusinessCustomerPayload", () => {
     })
     const taxId = (payload.businessInfo as { taxId?: string }).taxId
     expect(taxId).toMatch(/^\d{9}$/)
-    expect(taxId).toBe(gridShellBusinessTaxId("easner_business_abc"))
+    expect(taxId).toBe(gridShellBusinessTaxId(platformCustomerId))
   })
 
   it("normalizes stored EIN-style tax ids", () => {
     const payload = buildGridBusinessCustomerPayload({
-      platformCustomerId: "easner_business_abc",
+      platformCustomerId,
       profile: {
         legalName: "Acme Ltd",
         email: "owner@example.com",
@@ -87,8 +89,9 @@ describe("buildGridBusinessCustomerPayload", () => {
 
 describe("buildGridIndividualCustomerPayload", () => {
   it("maps Noah-style profile to Grid customer", () => {
+    const platformCustomerId = "ei_abc123456789012345678901234567890"
     const payload = buildGridIndividualCustomerPayload({
-      platformCustomerId: "easner_user_abc",
+      platformCustomerId,
       profile: {
         fullName: "Jane Doe",
         residenceCountry: "US",
@@ -96,7 +99,7 @@ describe("buildGridIndividualCustomerPayload", () => {
         dateOfBirth: "1990-01-01",
       },
     })
-    expect(payload.platformCustomerId).toBe("easner_user_abc")
+    expect(payload.platformCustomerId).toBe(platformCustomerId)
     expect(payload.customerType).toBe("INDIVIDUAL")
     expect(payload.fullName).toBe("Jane Doe")
   })

@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { syncGridBusinessKybToSupabase } from "./sync-kyb"
 import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
 import type { GridWebhookEvent } from "./types"
@@ -76,19 +75,4 @@ export async function handleGridKybWebhook(
   }
 
   return { handled: true }
-}
-
-export async function inventoryApprovedBusinessesForCutover(): Promise<
-  Array<{ businessId: string; name: string | null; complianceCutoverAt: string | null }>
-> {
-  const admin = createSupabaseAdmin()
-  const { data } = await admin
-    .from("businesses")
-    .select("id,name,compliance_cutover_at,verification_status")
-    .not("compliance_cutover_at", "is", null)
-  return (data ?? []).map((row) => ({
-    businessId: String(row.id),
-    name: (row.name as string | null) ?? null,
-    complianceCutoverAt: (row.compliance_cutover_at as string | null) ?? null,
-  }))
 }

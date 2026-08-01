@@ -1,5 +1,14 @@
 export { BRAND } from "./constants/brand"
 export {
+  EASNER_BUSINESS_EXTERNAL_PREFIX,
+  EASNER_INDIVIDUAL_EXTERNAL_PREFIX,
+  compactUuid,
+  ebFromBusinessId,
+  eiFromUserId,
+  parseGridPlatformCustomerId,
+  type ParsedGridPlatformCustomerId,
+} from "./customer-external-id"
+export {
   easnerBrand,
   hsl as easnerHsl,
   lightSemantic,

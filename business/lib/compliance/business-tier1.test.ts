@@ -6,7 +6,7 @@ import {
   isBusinessTier1Complete,
 } from "./business-tier1"
 
-describe("business-tier1 grid cutover", () => {
+describe("business-tier1 grid KYB", () => {
   it("uses verification_status only when provider is grid", () => {
     expect(
       businessTier1Status({
@@ -48,7 +48,7 @@ describe("business-tier1 grid cutover", () => {
     ).toBe("approved")
   })
 
-  it("ignores legacy Noah final rejection after grid cutover", () => {
+  it("ignores legacy Noah rejection when verification_provider is grid", () => {
     expect(
       businessTier1RejectionReasons({
         verification_provider: "grid",

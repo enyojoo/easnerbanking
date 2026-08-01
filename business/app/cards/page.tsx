@@ -115,12 +115,7 @@ export default function CardsPage() {
 
         <div className="flex flex-col min-h-0 flex-1 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4 flex-shrink-0">
-            <PageIntro
-              title="Transactions"
-              description={PAGE_COPY.cards.transactionsSection}
-              variant="section"
-              className="mb-0"
-            />
+            <h2 className="text-2xl font-semibold text-foreground">Transactions</h2>
             <DateRangeFilter
               timePeriod={timePeriod}
               customDateRange={customDateRange}

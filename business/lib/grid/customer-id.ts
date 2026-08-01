@@ -1,15 +1,12 @@
 /** Deterministic Grid platformCustomerId for Easner users/businesses. */
+import { ebFromBusinessId, eiFromUserId } from "@easner/shared"
 
 export function gridPlatformCustomerIdFromUserId(userId: string): string {
-  const id = String(userId || "").trim()
-  if (!id) throw new Error("userId is required for Grid platformCustomerId")
-  return `easner_user_${id}`
+  return eiFromUserId(userId)
 }
 
 export function gridPlatformCustomerIdFromBusinessId(businessId: string): string {
-  const id = String(businessId || "").trim()
-  if (!id) throw new Error("businessId is required for Grid platformCustomerId")
-  return `easner_business_${id}`
+  return ebFromBusinessId(businessId)
 }
 
 export function gridPlatformCustomerIdForSubject(input: {

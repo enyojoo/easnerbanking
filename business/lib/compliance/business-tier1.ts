@@ -22,7 +22,7 @@ export function businessUsesGridVerification(
   return usesGridVerification(row)
 }
 
-/** Effective Tier 1 status for product surfaces (Grid SoR ignores legacy Noah mirrors after cutover). */
+/** Effective Tier 1 status — Grid business KYB reads `verification_status` only. */
 export function businessTier1Status(row: BusinessVerificationFields | null | undefined): string | null {
   if (!row) return null
   if (usesGridVerification(row)) {

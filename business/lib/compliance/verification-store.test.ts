@@ -2,11 +2,19 @@ import { describe, expect, it } from "vitest"
 import { canonicalVerificationStatus } from "./verification-store"
 
 describe("canonicalVerificationStatus", () => {
-  it("trusts Grid SoR even when Noah mirror is approved", () => {
+  it("Grid business KYB uses verification_status only (never Noah mirrors)", () => {
     expect(
       canonicalVerificationStatus({
         verification_provider: "grid",
         verification_status: "not_started",
+        verification_rejection_reasons: null,
+        noah_kyb_status: "approved",
+      }),
+    ).toBe("not_started")
+    expect(
+      canonicalVerificationStatus({
+        verification_provider: "grid",
+        verification_status: "",
         verification_rejection_reasons: null,
         noah_kyb_status: "approved",
       }),

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { VerificationProvider, VerificationStatus, VerificationSubjectKind } from "./types"
-import { mapGridPartnerStatus, mapNoahPartnerStatus } from "./map-partner-status"
+import { mapNoahPartnerStatus } from "./map-partner-status"
 
 export type StoredVerificationRow = {
   verification_provider: VerificationProvider | null
@@ -60,9 +60,8 @@ function isProgressedVerificationStatus(status: string): status is VerificationS
 /**
  * Canonical KYC/KYB for money-movement gates.
  *
- * Grid SoR trusts `verification_status` only (cutover may leave Noah mirrors approved).
- * Noah / unset SoR: prefer progressed canonical values; treat `not_started`/empty as
- * stale and fall back to Noah mirrors so post-cutover webhook lag cannot block payouts.
+ * Business Grid KYB: `verification_status` only — Noah mirror columns are not read.
+ * Consumer Noah KYC: prefer progressed canonical values; fall back to Noah mirrors when stale.
  */
 export function canonicalVerificationStatus(row: StoredVerificationRow | null): VerificationStatus {
   if (!row) return "not_started"
@@ -70,10 +69,7 @@ export function canonicalVerificationStatus(row: StoredVerificationRow | null): 
   const direct = String(row.verification_status ?? "").toLowerCase()
 
   if (provider === "grid") {
-    if (isProgressedVerificationStatus(direct) || direct === "not_started") {
-      return direct as VerificationStatus
-    }
-    return mapGridPartnerStatus(row.noah_kyb_status ?? row.noah_kyc_status)
+    return isProgressedVerificationStatus(direct) ? direct : "not_started"
   }
 
   if (isProgressedVerificationStatus(direct)) {
