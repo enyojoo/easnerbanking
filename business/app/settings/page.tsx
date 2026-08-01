@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useState, type CSSProperties } from "react"
 import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SettingsPersonalTab } from "@/components/settings/settings-personal-tab"
@@ -11,6 +11,7 @@ import { SettingsCommunicationTab } from "@/components/settings/settings-communi
 import { SettingsRecipientsTab } from "@/components/settings/settings-recipients-tab"
 import { SettingsCustomersTab } from "@/components/settings/settings-customers-tab"
 import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
+import { cn } from "@/lib/utils"
 
 const TABS = ["personal", "business", "verification", "team", "recipients", "customers", "communication", "invoicing"] as const
 type TabValue = (typeof TABS)[number]
@@ -20,10 +21,28 @@ function SettingsContent() {
   const tab = (searchParams.get("tab") || "personal") as TabValue
   const validTab = TABS.includes(tab) ? tab : "personal"
   const [activeTab, setActiveTab] = useState<TabValue>(validTab)
+  const [verificationFlowOpen, setVerificationFlowOpen] = useState(false)
 
   useEffect(() => {
     setActiveTab(validTab)
   }, [validTab])
+
+  useEffect(() => {
+    if (activeTab !== "verification") {
+      setVerificationFlowOpen(false)
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (!verificationFlowOpen) return
+    const main = document.querySelector("main")
+    if (!main) return
+    const prev = main.style.overflow
+    main.style.overflow = "hidden"
+    return () => {
+      main.style.overflow = prev
+    }
+  }, [verificationFlowOpen])
 
   const handleTabChange = (value: string) => {
     if (!TABS.includes(value as TabValue)) return
@@ -40,14 +59,31 @@ function SettingsContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div
+      className={cn(
+        verificationFlowOpen
+          ? "flex min-h-0 flex-col overflow-hidden"
+          : "space-y-6",
+      )}
+      style={
+        verificationFlowOpen
+          ? ({
+              height: "calc(100dvh - var(--dashboard-sticky-top, 4rem) - 2.5rem)",
+            } as CSSProperties)
+          : undefined
+      }
+    >
+      <div className="shrink-0">
         <h1 className="text-3xl font-semibold text-foreground">Settings</h1>
         <p className="text-muted-foreground mt-2">Manage your account settings and preferences</p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className={cn("w-full", verificationFlowOpen && "flex min-h-0 flex-1 flex-col overflow-hidden")}
+      >
+        <TabsList className="w-full shrink-0 justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="business">Business</TabsTrigger>
           <TabsTrigger value="verification">Verification</TabsTrigger>
@@ -64,8 +100,8 @@ function SettingsContent() {
         <TabsContent value="business" className="mt-6">
           <SettingsBusinessTab />
         </TabsContent>
-        <TabsContent value="verification" className="mt-6">
-          <SettingsVerificationTab />
+        <TabsContent value="verification" className={cn("mt-6", verificationFlowOpen && "mt-4 flex min-h-0 flex-1 flex-col overflow-hidden")}>
+          <SettingsVerificationTab onFlowOpenChange={setVerificationFlowOpen} />
         </TabsContent>
         <TabsContent value="team" className="mt-6">
           <SettingsTeamTab />

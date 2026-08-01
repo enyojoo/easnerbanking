@@ -96,7 +96,11 @@ function tierLadderCopy(tier: 1 | 2 | 3) {
   return BUSINESS_TIER_LADDER.tiers.find((x) => x.tier === tier)
 }
 
-export function BusinessVerificationSection() {
+export function BusinessVerificationSection({
+  onFlowOpenChange,
+}: {
+  onFlowOpenChange?: (open: boolean) => void
+} = {}) {
   const {
     tier1Complete,
     tier1VerificationStatus,
@@ -133,6 +137,13 @@ export function BusinessVerificationSection() {
       if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    onFlowOpenChange?.(hostedOpen)
+    return () => {
+      if (hostedOpen) onFlowOpenChange?.(false)
+    }
+  }, [hostedOpen, onFlowOpenChange])
 
   const tier1RejectedForProbe = tier1VerificationStatus === "rejected"
   const tier1UnderReviewForProbe = tier1StatusIsInReview(tier1VerificationStatus)
@@ -381,55 +392,66 @@ export function BusinessVerificationSection() {
 
   const hasHostedCredentials = Boolean(hostedToken?.trim() || hostedUrl?.trim())
 
+  const hostedFlowPanel = (
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="absolute left-2 top-2 z-20 h-8 gap-1 bg-background/90 px-2 shadow-sm backdrop-blur-sm hover:bg-background"
+        onClick={closeHostedAndSync}
+      >
+        <ArrowLeft className="size-4" aria-hidden />
+        Back
+      </Button>
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        {error ? (
+          <p className="absolute left-0 right-0 top-2 z-10 mx-auto max-w-lg rounded-md bg-destructive/90 px-3 py-2 text-center text-sm text-destructive-foreground">
+            {error}
+          </p>
+        ) : null}
+        {hostedLoading || !hasHostedCredentials ? (
+          <div className="flex size-full min-h-[16rem] flex-col items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="size-8 animate-spin" aria-hidden />
+            <p className="text-sm">Opening verification…</p>
+          </div>
+        ) : useSumsubSdk && hostedToken ? (
+          <GridSumsubWebSdk
+            accessToken={hostedToken}
+            theme="light"
+            onComplete={closeHostedAndSync}
+            onError={(message) => setError(message)}
+          />
+        ) : hostedIframeSrc ? (
+          <iframe
+            title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
+            src={hostedIframeSrc}
+            className="absolute inset-0 size-full border-0 bg-background"
+            allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
+            onLoad={handleHostedIframeLoad}
+          />
+        ) : null}
+      </div>
+    </div>
+  )
+
   return (
-    <div className="space-y-6" id="business-verification">
+    <div
+      className={cn(
+        "flex min-h-0 flex-col",
+        hostedOpen ? "h-full flex-1 overflow-hidden" : "space-y-6",
+      )}
+      id="business-verification"
+    >
       <Card
-        className={cn(hostedOpen && "overflow-hidden")}
+        padding={hostedOpen ? "none" : undefined}
+        className={cn(
+          hostedOpen && "flex min-h-0 flex-1 flex-col gap-0 overflow-hidden",
+        )}
         data-verification-flow={hostedOpen ? "open" : undefined}
       >
         {hostedOpen ? (
-          <>
-            <div className="flex shrink-0 items-center border-b px-2 py-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-1.5 text-muted-foreground hover:text-foreground"
-                onClick={closeHostedAndSync}
-              >
-                <ArrowLeft className="size-4" aria-hidden />
-                Back
-              </Button>
-            </div>
-            <CardContent className="relative min-h-[min(32rem,58vh)] p-0">
-              {error ? (
-                <p className="absolute left-0 right-0 top-2 z-10 mx-auto max-w-lg rounded-md bg-destructive/90 px-3 py-2 text-center text-sm text-destructive-foreground">
-                  {error}
-                </p>
-              ) : null}
-              {hostedLoading || !hasHostedCredentials ? (
-                <div className="flex min-h-[min(24rem,45vh)] flex-col items-center justify-center gap-3 text-muted-foreground">
-                  <Loader2 className="size-8 animate-spin" aria-hidden />
-                  <p className="text-sm">Opening verification…</p>
-                </div>
-              ) : useSumsubSdk && hostedToken ? (
-                <GridSumsubWebSdk
-                  accessToken={hostedToken}
-                  theme="light"
-                  onComplete={closeHostedAndSync}
-                  onError={(message) => setError(message)}
-                />
-              ) : hostedIframeSrc ? (
-                <iframe
-                  title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
-                  src={hostedIframeSrc}
-                  className="absolute inset-0 size-full border-0 bg-background"
-                  allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
-                  onLoad={handleHostedIframeLoad}
-                />
-              ) : null}
-            </CardContent>
-          </>
+          hostedFlowPanel
         ) : (
           <>
             <CardHeader>

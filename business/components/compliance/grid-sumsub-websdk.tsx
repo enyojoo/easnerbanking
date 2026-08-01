@@ -91,8 +91,8 @@ export function GridSumsubWebSdk({ accessToken, onComplete, onError, theme = "da
     <div
       ref={containerRef}
       className={cn(
-        "grid-sumsub-host absolute inset-0 size-full overflow-hidden",
-        theme === "light" ? "bg-muted/40" : "bg-[#1a1a1a]",
+        "grid-sumsub-host absolute inset-0 size-full min-h-0 overflow-auto",
+        theme === "light" ? "bg-background" : "bg-[#1a1a1a]",
       )}
       data-testid="grid-sumsub-websdk"
     />
