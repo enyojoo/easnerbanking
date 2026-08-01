@@ -96,11 +96,7 @@ function tierLadderCopy(tier: 1 | 2 | 3) {
   return BUSINESS_TIER_LADDER.tiers.find((x) => x.tier === tier)
 }
 
-export function BusinessVerificationSection({
-  onFlowOpenChange,
-}: {
-  onFlowOpenChange?: (open: boolean) => void
-} = {}) {
+export function BusinessVerificationSection() {
   const {
     tier1Complete,
     tier1VerificationStatus,
@@ -137,13 +133,6 @@ export function BusinessVerificationSection({
       if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
     }
   }, [])
-
-  useEffect(() => {
-    onFlowOpenChange?.(hostedOpen)
-    return () => {
-      if (hostedOpen) onFlowOpenChange?.(false)
-    }
-  }, [hostedOpen, onFlowOpenChange])
 
   const tier1RejectedForProbe = tier1VerificationStatus === "rejected"
   const tier1UnderReviewForProbe = tier1StatusIsInReview(tier1VerificationStatus)
@@ -392,8 +381,12 @@ export function BusinessVerificationSection({
 
   const hasHostedCredentials = Boolean(hostedToken?.trim() || hostedUrl?.trim())
 
+  /** Explicit height so SumSub iframe/SDK is not rendered into a zero-height flex box. */
+  const verificationFlowPanelClass =
+    "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-12rem)] min-h-[28rem]"
+
   const hostedFlowPanel = (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className={cn("relative flex flex-col overflow-hidden", verificationFlowPanelClass)}>
       <Button
         type="button"
         variant="ghost"
@@ -404,7 +397,7 @@ export function BusinessVerificationSection({
         <ArrowLeft className="size-4" aria-hidden />
         Back
       </Button>
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+      <div className="relative min-h-0 flex-1 overflow-auto">
         {error ? (
           <p className="absolute left-0 right-0 top-2 z-10 mx-auto max-w-lg rounded-md bg-destructive/90 px-3 py-2 text-center text-sm text-destructive-foreground">
             {error}
@@ -436,18 +429,10 @@ export function BusinessVerificationSection({
   )
 
   return (
-    <div
-      className={cn(
-        "flex min-h-0 flex-col",
-        hostedOpen ? "h-full flex-1 overflow-hidden" : "space-y-6",
-      )}
-      id="business-verification"
-    >
+    <div className="space-y-6" id="business-verification">
       <Card
         padding={hostedOpen ? "none" : undefined}
-        className={cn(
-          hostedOpen && "flex min-h-0 flex-1 flex-col gap-0 overflow-hidden",
-        )}
+        className={cn(hostedOpen && cn("overflow-hidden", verificationFlowPanelClass))}
         data-verification-flow={hostedOpen ? "open" : undefined}
       >
         {hostedOpen ? (
