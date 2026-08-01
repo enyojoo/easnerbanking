@@ -75,15 +75,20 @@ export async function gridFetch<T>(opts: GridFetchOptions): Promise<T> {
     const message =
       typeof parsed === "object" &&
       parsed &&
-      "message" in parsed &&
-      typeof (parsed as { message?: unknown }).message === "string"
-        ? (parsed as { message: string }).message
+      "reason" in parsed &&
+      typeof (parsed as { reason?: unknown }).reason === "string"
+        ? (parsed as { reason: string }).reason
         : typeof parsed === "object" &&
             parsed &&
-            "error" in parsed &&
-            typeof (parsed as { error?: unknown }).error === "string"
-          ? (parsed as { error: string }).error
-          : `Grid HTTP ${res.status}`
+            "message" in parsed &&
+            typeof (parsed as { message?: unknown }).message === "string"
+          ? (parsed as { message: string }).message
+          : typeof parsed === "object" &&
+              parsed &&
+              "error" in parsed &&
+              typeof (parsed as { error?: unknown }).error === "string"
+            ? (parsed as { error: string }).error
+            : `Grid HTTP ${res.status}`
     throw new GridHttpError(message, res.status, parsed, opts.method, path)
   }
 

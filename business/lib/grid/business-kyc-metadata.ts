@@ -57,7 +57,12 @@ export function buildGridBusinessCustomerPayload(input: {
   }
 
   if (countryIso2) payload.region = countryIso2
-  if (input.profile.email?.trim()) payload.email = input.profile.email.trim()
+
+  const email = String(input.profile.email ?? "").trim()
+  if (!email) {
+    throw new Error("Contact email is required for Grid business verification")
+  }
+  payload.email = email
 
   const line1 = String(input.profile.addressLine1 ?? "").trim()
   const city = String(input.profile.city ?? "").trim()

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { gridFetch, GridHttpError } from "./http"
 import {
   buildGridBusinessCustomerPayload,
@@ -81,6 +82,27 @@ export async function loadGridBusinessProfile(
   })
 }
 
+async function withGridBusinessContactEmail(
+  admin: SupabaseClient,
+  businessId: string,
+  userId: string,
+  profile: GridBusinessProfile,
+): Promise<GridBusinessProfile> {
+  if (profile.email?.trim()) return profile
+
+  const ownerId = await resolveOrgOwnerUserId(admin, businessId, userId)
+  const userIds = [...new Set([ownerId, userId].filter(Boolean))]
+  const { data: users } = await admin.from("users").select("id,email").in("id", userIds)
+  const emailById = new Map(
+    (users ?? []).map((row) => [String(row.id), String(row.email ?? "").trim()]),
+  )
+  const email = emailById.get(ownerId) || emailById.get(userId) || ""
+  if (!email) {
+    throw new Error("A contact email is required to start business verification")
+  }
+  return { ...profile, email }
+}
+
 /** Ensure a Grid BUSINESS customer exists for the org. */
 export async function ensureGridBusinessCustomer(input: {
   admin: SupabaseClient
@@ -89,11 +111,17 @@ export async function ensureGridBusinessCustomer(input: {
   profile?: GridBusinessProfile
 }): Promise<{ customerId: string; platformCustomerId: string; customer: GridCustomer }> {
   const platformCustomerId = gridPlatformCustomerIdFromBusinessId(input.businessId)
-  const profile =
+  const rawProfile =
     input.profile ?? (await loadGridBusinessProfile(input.admin, input.businessId))
-  if (!profile) {
+  if (!rawProfile) {
     throw new Error("Business organization not found")
   }
+  const profile = await withGridBusinessContactEmail(
+    input.admin,
+    input.businessId,
+    input.userId,
+    rawProfile,
+  )
 
   const stored = await readStoredGridCustomerId(input.admin, input.businessId)
   if (stored) {

@@ -14,6 +14,7 @@ export function formatGridApiError(error: unknown): string {
       const record = body as Record<string, unknown>
       const direct =
         readString(record.message) ??
+        readString(record.reason) ??
         readString(record.error) ??
         readString(record.detail)
       if (direct) return direct
