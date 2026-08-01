@@ -7,6 +7,7 @@ import {
   persistVerificationStatus,
   type VerificationStatus,
 } from "@/lib/compliance"
+import { parseGridCustomerForBusiness } from "./parse-grid-customer-for-business"
 
 export async function fetchGridCustomer(customerId: string): Promise<GridCustomer & Record<string, unknown>> {
   return gridFetch<GridCustomer & Record<string, unknown>>({
@@ -26,6 +27,7 @@ export async function syncGridBusinessKybToSupabase(input: {
   userId: string
   customerId: string
   customer?: Record<string, unknown>
+  occurredAt?: string
 }): Promise<{ status: VerificationStatus; customer: Record<string, unknown> }> {
   const customer =
     input.customer ??
@@ -54,6 +56,18 @@ export async function syncGridBusinessKybToSupabase(input: {
     rejectionReasons,
     gridCustomerId: normalizeGridCustomerId(input.customerId),
   })
+
+  if (status === "approved") {
+    const kybFields = parseGridCustomerForBusiness(customer, {
+      occurredAt: input.occurredAt,
+    })
+    if (Object.keys(kybFields).length > 0) {
+      await input.admin
+        .from("businesses")
+        .update({ ...kybFields, updated_at: new Date().toISOString() })
+        .eq("id", input.businessId)
+    }
+  }
 
   return { status, customer }
 }

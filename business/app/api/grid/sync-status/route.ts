@@ -4,10 +4,23 @@ import { ensureGridBusinessCustomer, loadGridBusinessProfile } from "@/lib/grid/
 import { syncGridBusinessKybToSupabase } from "@/lib/grid/sync-kyb"
 import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
 import { needsBusinessProvisionAfterApproval } from "@/lib/compliance/needs-business-provision"
+import { formatGridApiError } from "@/lib/grid/format-grid-api-error"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
+
+async function readStoredGridCustomerId(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string) {
+  const { data } = await admin
+    .from("businesses")
+    .select("grid_customer_id,verification_status")
+    .eq("id", businessId)
+    .maybeSingle()
+  return {
+    customerId: String(data?.grid_customer_id ?? "").trim() || null,
+    verificationStatus: String(data?.verification_status ?? "not_started").toLowerCase(),
+  }
+}
 
 async function runGridBusinessSync(request: Request) {
   const mis = requireGridEnv()
@@ -19,9 +32,20 @@ async function runGridBusinessSync(request: Request) {
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
+  const stored = await readStoredGridCustomerId(admin, ctx.businessId)
+
+  // Noah parity: background poll is a no-op until a Grid customer exists.
+  if (!stored.customerId) {
+    return NextResponse.json({
+      success: true,
+      skipped: true,
+      kycStatus: stored.verificationStatus || "not_started",
+    })
+  }
+
   const profile = await loadGridBusinessProfile(admin, ctx.businessId)
   if (!profile) {
-    return NextResponse.json({ error: "Business profile incomplete for Grid KYB" }, { status: 400 })
+    return NextResponse.json({ success: false, error: "Business organization not found" }, { status: 404 })
   }
 
   try {
@@ -72,8 +96,8 @@ async function runGridBusinessSync(request: Request) {
         : {}),
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: msg }, { status: 400 })
+    const msg = formatGridApiError(e)
+    return NextResponse.json({ success: false, error: msg, code: "GRID_SYNC_FAILED" }, { status: 400 })
   }
 }
 

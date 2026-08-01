@@ -7,6 +7,7 @@ import {
 } from "@/lib/grid/ensure-grid-business-customer"
 import { createGridBusinessKycLink } from "@/lib/grid/kyc-links"
 import { syncGridBusinessKybToSupabase } from "@/lib/grid/sync-kyb"
+import { formatGridApiError } from "@/lib/grid/format-grid-api-error"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
 
 export async function POST(request: Request) {
@@ -27,10 +28,7 @@ export async function POST(request: Request) {
 
   const profile = await loadGridBusinessProfile(admin, ctx.businessId)
   if (!profile) {
-    return NextResponse.json(
-      { error: "Complete your business profile before starting verification." },
-      { status: 400 },
-    )
+    return NextResponse.json({ error: "Business organization not found" }, { status: 404 })
   }
 
   try {
@@ -74,7 +72,7 @@ export async function POST(request: Request) {
       expiresAt: link.expiresAt ?? null,
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: msg }, { status: 400 })
+    const msg = formatGridApiError(e)
+    return NextResponse.json({ error: msg, code: "GRID_KYB_START_FAILED" }, { status: 400 })
   }
 }

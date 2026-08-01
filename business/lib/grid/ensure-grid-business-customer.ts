@@ -4,6 +4,7 @@ import {
   buildGridBusinessCustomerPayload,
   type GridBusinessProfile,
 } from "./business-kyc-metadata"
+import { buildGridBusinessProfileShell } from "./business-profile-shell"
 import { gridPlatformCustomerIdFromBusinessId } from "./customer-id"
 import { normalizeGridCustomerId } from "./quote-request"
 import type { GridCustomer } from "./types"
@@ -60,15 +61,14 @@ export async function loadGridBusinessProfile(
   const { data } = await admin
     .from("businesses")
     .select(
-      "name,registration_number,tax_id,country,address_line1,city,state,postal_code,support_email",
+      "name,easetag,registration_number,tax_id,country,address_line1,city,state,postal_code,support_email,created_at",
     )
     .eq("id", businessId)
     .maybeSingle()
   if (!data) return null
-  const legalName = String(data.name ?? "").trim()
-  if (!legalName) return null
-  return {
-    legalName,
+  return buildGridBusinessProfileShell({
+    name: data.name,
+    easetag: data.easetag,
     registrationNumber: data.registration_number,
     taxId: data.tax_id,
     country: data.country,
@@ -77,7 +77,8 @@ export async function loadGridBusinessProfile(
     state: data.state,
     postalCode: data.postal_code,
     email: data.support_email,
-  }
+    createdAt: data.created_at,
+  })
 }
 
 /** Ensure a Grid BUSINESS customer exists for the org. */
@@ -91,7 +92,7 @@ export async function ensureGridBusinessCustomer(input: {
   const profile =
     input.profile ?? (await loadGridBusinessProfile(input.admin, input.businessId))
   if (!profile) {
-    throw new Error("Business profile incomplete for Grid KYB")
+    throw new Error("Business organization not found")
   }
 
   const stored = await readStoredGridCustomerId(input.admin, input.businessId)

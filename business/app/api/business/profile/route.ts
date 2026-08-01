@@ -391,7 +391,7 @@ export async function PUT(request: Request) {
   const { data: orgRow } = await admin
     .from("businesses")
     .select(
-      "name,country,registration_number,address_line1,city,state,postal_code,noah_kyb_status,kyb_verified_at",
+      "name,country,registration_number,address_line1,city,state,postal_code,verification_status,noah_kyb_status,kyb_verified_at",
     )
     .eq("id", businessId)
     .maybeSingle()
