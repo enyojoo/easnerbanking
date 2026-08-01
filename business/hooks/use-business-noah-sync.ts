@@ -24,8 +24,6 @@ export function useBusinessNoahSync(): void {
   const {
     businessId,
     tier1Complete,
-    noahUsdVirtualAccountId,
-    noahEurVirtualAccountId,
     canManageBusinessVerification,
     isLoading,
   } = useBusinessProfile()
@@ -37,11 +35,7 @@ export function useBusinessNoahSync(): void {
     setFiatProvisionResolved(false)
   }, [businessId])
 
-  const profileSlice = {
-    tier1Complete,
-    noahUsdVirtualAccountId,
-    noahEurVirtualAccountId,
-  }
+  const profileSlice = { tier1Complete }
 
   const shouldSync =
     !isLoading &&

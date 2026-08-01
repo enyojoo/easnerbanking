@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
-import { canResubmitNoahVerification } from "@easner/shared"
+import { canResubmitVerification } from "@easner/shared"
 import { isCountryAllowedForSurface } from "@/lib/jurisdiction-country-policy"
 import { isVerificationApproved } from "@/lib/compliance"
 import type { createSupabaseAdmin } from "@/lib/supabase/admin"
@@ -32,7 +32,7 @@ export async function evaluateGridBusinessKycLinksPreflight(params: {
 
   const rejectionReasons =
     (biz?.verification_rejection_reasons as unknown[] | null | undefined) ?? null
-  if (!canResubmitNoahVerification(rejectionReasons)) {
+  if (!canResubmitVerification(rejectionReasons)) {
     return {
       action: "respond",
       response: NextResponse.json({

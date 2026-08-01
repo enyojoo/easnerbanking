@@ -61,20 +61,7 @@ export async function hasProvisionedArtifacts(
   const { data: vaRows } = await va
   if (vaRows?.length) return true
 
-  if (businessId) {
-    const { data: biz } = await admin
-      .from("businesses")
-      .select("noah_usd_virtual_account_id,noah_eur_virtual_account_id,noah_gbp_virtual_account_id")
-      .eq("id", businessId)
-      .maybeSingle()
-    if (
-      biz?.noah_usd_virtual_account_id ||
-      biz?.noah_eur_virtual_account_id ||
-      biz?.noah_gbp_virtual_account_id
-    ) {
-      return true
-    }
-  } else {
+  if (!businessId) {
     const { data: user } = await admin
       .from("users")
       .select("noah_usd_virtual_account_id,noah_eur_virtual_account_id,noah_gbp_virtual_account_id")

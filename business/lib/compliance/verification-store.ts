@@ -21,12 +21,16 @@ export async function readVerificationRow(
     const { data, error } = await admin
       .from("businesses")
       .select(
-        "verification_provider,verification_status,verification_rejection_reasons,verified_at,grid_customer_id,noah_kyb_status",
+        "verification_provider,verification_status,verification_rejection_reasons,kyb_verified_at,grid_customer_id,noah_kyb_status",
       )
       .eq("id", input.businessId)
       .maybeSingle()
     if (error || !data) return null
-    return data as StoredVerificationRow
+    const row = data as Record<string, unknown>
+    return {
+      ...(row as StoredVerificationRow),
+      verified_at: (row.kyb_verified_at as string | null | undefined) ?? null,
+    }
   }
 
   const { data, error } = await admin
@@ -80,7 +84,7 @@ export async function persistVerificationStatus(
     verification_rejection_reasons: input.rejectionReasons ?? null,
     updated_at: now,
   }
-  if (input.status === "approved") {
+  if (input.status === "approved" && input.kind !== "business") {
     patch.verified_at = input.verifiedAt ?? now
   }
   if (input.gridCustomerId) {
@@ -88,8 +92,10 @@ export async function persistVerificationStatus(
   }
 
   if (input.kind === "business" && input.businessId) {
-    await admin.from("businesses").update(patch).eq("id", input.businessId)
+    const { error } = await admin.from("businesses").update(patch).eq("id", input.businessId)
+    if (error) throw new Error(`persistVerificationStatus(business): ${error.message}`)
     return
   }
-  await admin.from("users").update(patch).eq("id", input.userId)
+  const { error } = await admin.from("users").update(patch).eq("id", input.userId)
+  if (error) throw new Error(`persistVerificationStatus(user): ${error.message}`)
 }

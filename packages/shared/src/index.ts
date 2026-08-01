@@ -364,6 +364,12 @@ export {
   type NoahRejectionDisplay,
   type StoredNoahRejectionReason,
 } from "./noah-rejection"
+export {
+  extractGridCustomerRejectionReasons,
+  normalizeVerificationRejectionReasons,
+  getVerificationRejectionDisplay,
+  canResubmitVerification,
+} from "./grid-rejection"
 export { KYC_REQUIRED_DOCUMENTS_DIALOG, KYC_HOSTED_QUESTIONNAIRE_FIELDS } from "./kyc-required-documents"
 export {
   isNoahRestrictedGeography,

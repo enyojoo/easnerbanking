@@ -13,6 +13,7 @@ import {
 } from "@/lib/noah/persist-account-data"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveBankOnrampDestinationAddress } from "@/lib/deposit-omnibus/resolve-va-destination"
+import { hasActiveVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
 
 const NOAH_BANK_ONRAMP_NETWORK = "Solana"
 
@@ -65,22 +66,21 @@ function buildAccountContext(opts: {
   }
 }
 
-async function readMirroredVirtualAccountId(
+async function subjectHasFiatVirtualAccount(
   admin: SupabaseClient,
   opts: {
     subjectUserId: string
     subjectBusinessId: string | null
+    rail: FiatRail
     column: RailConfig["column"]
   },
-): Promise<string | null> {
+): Promise<boolean> {
   if (opts.subjectBusinessId) {
-    const { data } = await admin
-      .from("businesses")
-      .select(opts.column)
-      .eq("id", opts.subjectBusinessId)
-      .maybeSingle()
-    const id = (data as Record<string, string | null> | null)?.[opts.column]
-    return id?.trim() || null
+    return hasActiveVirtualAccountInDb(admin, {
+      currency: opts.rail,
+      userId: opts.subjectUserId,
+      businessId: opts.subjectBusinessId,
+    })
   }
   const { data } = await admin
     .from("users")
@@ -88,7 +88,7 @@ async function readMirroredVirtualAccountId(
     .eq("id", opts.subjectUserId)
     .maybeSingle()
   const id = (data as Record<string, string | null> | null)?.[opts.column]
-  return id?.trim() || null
+  return Boolean(id?.trim())
 }
 
 function hasPreferredPayinForRail(
@@ -115,9 +115,10 @@ async function ensureSingleFiatRailViaBankOnramp(
     return { attempted: false, created: true }
   }
 
-  const mirrored = await readMirroredVirtualAccountId(admin, {
+  const mirrored = await subjectHasFiatVirtualAccount(admin, {
     subjectUserId: opts.subjectUserId,
     subjectBusinessId: opts.subjectBusinessId,
+    rail: rail.fiat,
     column: rail.column,
   })
   if (mirrored) {

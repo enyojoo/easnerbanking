@@ -4,7 +4,7 @@ import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { resolveInvoiceReplyEmailWithSource } from "@/lib/invoices/issuer"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
-import { isBusinessProfileLockedFromKybFields, getNoahRejectionDisplay } from "@easner/shared"
+import { isBusinessProfileLockedFromKybFields, getVerificationRejectionDisplay } from "@easner/shared"
 import {
   businessHostedKybCustomerId,
   businessTier1RejectionReasons,
@@ -253,8 +253,6 @@ export async function GET(request: Request) {
   let tier1RejectionReasons: unknown[] | null = null
   /** Noah B2B customer id on the org (`businesses.noah_customer_id`). */
   let noahKybCustomerId: string | null = null
-  let noahUsdVirtualAccountId: string | null = null
-  let noahEurVirtualAccountId: string | null = null
   let canManageBusinessVerification = true
   let orgKyb: Record<string, unknown> | null = null
 
@@ -265,7 +263,7 @@ export async function GET(request: Request) {
     const { data: orgKybRow } = await admin
       .from("businesses")
       .select(
-        "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,noah_kyb_status,noah_customer_id,noah_kyb_rejection_reasons,noah_usd_virtual_account_id,noah_eur_virtual_account_id,kyb_verified_at",
+        "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,noah_kyb_status,noah_customer_id,noah_kyb_rejection_reasons,kyb_verified_at",
       )
       .eq("id", orgId)
       .maybeSingle()
@@ -277,10 +275,6 @@ export async function GET(request: Request) {
     noahKybCustomerId = businessHostedKybCustomerId(kybFields)
     tier1RejectionReasons = businessTier1RejectionReasons(kybFields)
     tier1Complete = isBusinessTier1Complete(kybFields)
-    noahUsdVirtualAccountId =
-      (orgKyb?.noah_usd_virtual_account_id as string | null | undefined) ?? null
-    noahEurVirtualAccountId =
-      (orgKyb?.noah_eur_virtual_account_id as string | null | undefined) ?? null
   }
 
   const profileLocked =
@@ -305,7 +299,7 @@ export async function GET(request: Request) {
     invoiceSettings = parseBusinessInvoiceSettings(org.invoice_settings)
   }
 
-  const tier1RejectionDisplay = getNoahRejectionDisplay(tier1RejectionReasons)
+  const tier1RejectionDisplay = getVerificationRejectionDisplay(tier1RejectionReasons)
   const tier1RejectionType = tier1RejectionDisplay.rejectType
   const tier1CanResubmit = tier1RejectionDisplay.canResubmit
   const tier1RetryGuidance = tier1RejectionDisplay.guidanceLines
@@ -343,8 +337,6 @@ export async function GET(request: Request) {
       tier1RetryGuidance,
       noahKybCustomerId,
       canManageBusinessVerification,
-      noahUsdVirtualAccountId,
-      noahEurVirtualAccountId,
       profileLocked,
       invoiceReplyEmail,
       invoiceReplyEmailSource,

@@ -16,6 +16,7 @@ import { CurrencyDepositDialog } from "@/components/currency-deposit-dialog"
 import { StatementDownloadDialog } from "@/components/statement-download-dialog"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { MoreVertical, FileText, Ban, Trash2 } from "lucide-react"
+import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import { OpenCurrencyAccountDialog } from "@/components/accounts/open-currency-account-dialog"
 
@@ -27,6 +28,8 @@ export default function AccountsPage() {
     profileLoading,
     refreshAccounts,
     noahHeaders,
+    accountsProvisioning,
+    tier1Complete,
   } = useBusinessAccountRows()
 
   const copyToClipboard = (text: string, field: string) => {
@@ -50,6 +53,14 @@ export default function AccountsPage() {
           <OpenCurrencyAccountDialog onAdded={() => void refreshAccounts()} />
         )}
       </div>
+
+      {tier1Complete && accountsProvisioning ? (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            {VERIFICATION_SECTION_COPY.accountsProvisioning}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {loading && accountRows.length === 0 ? (

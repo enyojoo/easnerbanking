@@ -36,25 +36,20 @@ export async function mirrorVirtualAccountIdOnSubject(
     pmId: string
   },
 ): Promise<void> {
+  if (opts.businessId) {
+    return
+  }
   const virtualAccountColumnByCurrency = {
     usd: "noah_usd_virtual_account_id",
     eur: "noah_eur_virtual_account_id",
     gbp: "noah_gbp_virtual_account_id",
   } as const
   const col = virtualAccountColumnByCurrency[opts.currency]
-  if (opts.businessId) {
-    const { error: bizErr } = await admin
-      .from("businesses")
-      .update({ [col]: opts.pmId, updated_at: new Date().toISOString() })
-      .eq("id", opts.businessId)
-    if (bizErr) console.error("[persistVirtualAccount] update businesses:", bizErr)
-  } else {
-    const { error: userErr } = await admin
-      .from("users")
-      .update({ [col]: opts.pmId, updated_at: new Date().toISOString() })
-      .eq("id", opts.subjectUserId)
-    if (userErr) console.error("[persistVirtualAccount] update users:", userErr)
-  }
+  const { error: userErr } = await admin
+    .from("users")
+    .update({ [col]: opts.pmId, updated_at: new Date().toISOString() })
+    .eq("id", opts.subjectUserId)
+  if (userErr) console.error("[persistVirtualAccount] update users:", userErr)
 }
 
 type VirtualAccountUpsert = {
@@ -264,7 +259,7 @@ function buildUpsertRow(input: {
 }
 
 /**
- * Upsert `virtual_accounts` and mirror VA ids on `users` or `businesses`.
+ * Upsert `virtual_accounts`. Legacy PM id mirrors on `users` only (businesses use `virtual_accounts`).
  * @see ./virtual-account-columns.ts for per-currency column contract.
  */
 export async function persistVirtualAccountFromPaymentMethod(

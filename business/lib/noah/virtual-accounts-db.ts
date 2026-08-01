@@ -45,11 +45,10 @@ function rowToDisplay(row: VirtualAccountDbRow, currency: "usd" | "eur" | "gbp")
   }
 }
 
-async function readMirroredVirtualAccountId(
+async function readUserMirroredVirtualAccountId(
   admin: SupabaseClient,
   opts: {
     subjectUserId: string
-    subjectBusinessId: string | null
     currency: "usd" | "eur" | "gbp"
   },
 ): Promise<string | null> {
@@ -59,27 +58,28 @@ async function readMirroredVirtualAccountId(
     gbp: "noah_gbp_virtual_account_id",
   } as const
   const col = columnByCurrency[opts.currency]
-  if (opts.subjectBusinessId) {
-    const { data } = await admin
-      .from("businesses")
-      .select(col)
-      .eq("id", opts.subjectBusinessId)
-      .maybeSingle()
-    const id = (data as Record<string, string | null> | null)?.[col]
-    return id?.trim() || null
-  }
-  const { data } = await admin
-    .from("users")
-    .select(col)
-    .eq("id", opts.subjectUserId)
-    .maybeSingle()
+  const { data } = await admin.from("users").select(col).eq("id", opts.subjectUserId).maybeSingle()
   const id = (data as Record<string, string | null> | null)?.[col]
   return id?.trim() || null
 }
 
+/** True when an active fiat VA row exists in `virtual_accounts` (Grid or Noah). */
+export async function hasActiveVirtualAccountInDb(
+  admin: SupabaseClient,
+  input: {
+    currency: "usd" | "eur" | "gbp"
+    userId: string
+    businessId?: string | null
+  },
+): Promise<boolean> {
+  const display = await getVirtualAccountDisplayFromDb(admin, input)
+  return Boolean(display?.hasAccount)
+}
+
 /**
  * Read cached fiat virtual account details from `public.virtual_accounts`.
- * Prefers the row matching `users` / `businesses` mirrored Noah payment method id.
+ * Individual users: may prefer row matching legacy mirror id on `users`.
+ * Businesses: rows only (Grid + Noah live in `virtual_accounts`).
  */
 export async function getVirtualAccountDisplayFromDb(
   admin: SupabaseClient,
@@ -112,11 +112,12 @@ export async function getVirtualAccountDisplayFromDb(
   const currency = normalizeCurrencyCode(String(data[0]?.currency ?? fiat))
   if (!currency) return null
 
-  const mirroredPmId = await readMirroredVirtualAccountId(admin, {
-    subjectUserId: input.userId,
-    subjectBusinessId: input.businessId ?? null,
-    currency,
-  })
+  const mirroredPmId = input.businessId
+    ? null
+    : await readUserMirroredVirtualAccountId(admin, {
+        subjectUserId: input.userId,
+        currency,
+      })
   const rows = data as VirtualAccountDbRow[]
   const row =
     (mirroredPmId

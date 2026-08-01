@@ -266,6 +266,12 @@ export function useBusinessAccountRows() {
     virtualAccountsQuery.isFetched,
   ])
 
+  const accountsProvisioning =
+    tier1Complete &&
+    !hasAnyProvisionedData &&
+    !loadError &&
+    (walletQuery.isFetched || virtualAccountsQuery.isFetched)
+
   const loading =
     profileLoading ||
     (accountRows.length === 0 &&
@@ -281,6 +287,7 @@ export function useBusinessAccountRows() {
     loading,
     loadError,
     tier1Complete,
+    accountsProvisioning,
     canDisplayFinancialData,
     canMoveMoney,
     hasProvisionedVirtualAccounts,

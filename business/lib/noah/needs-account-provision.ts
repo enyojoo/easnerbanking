@@ -10,7 +10,7 @@ import {
   selectPreferredEurPayinPaymentMethod,
   selectPreferredUsdPayinPaymentMethod,
 } from "./payment-method-map"
-import { getVirtualAccountDisplayFromDb } from "./virtual-accounts-db"
+import { getVirtualAccountDisplayFromDb, hasActiveVirtualAccountInDb } from "./virtual-accounts-db"
 
 type FiatRail = "usd" | "eur"
 
@@ -28,16 +28,15 @@ async function readMirroredVirtualAccountId(
     rail: FiatRail
   },
 ): Promise<string | null> {
-  const column = RAIL_MIRROR_COLUMN[opts.rail]
   if (opts.scope === "business" && opts.subjectBusinessId) {
-    const { data } = await admin
-      .from("businesses")
-      .select(column)
-      .eq("id", opts.subjectBusinessId)
-      .maybeSingle()
-    const id = (data as Record<string, string | null> | null)?.[column]
-    return id?.trim() || null
+    const hasVa = await hasActiveVirtualAccountInDb(admin, {
+      currency: opts.rail,
+      userId: opts.subjectUserId,
+      businessId: opts.subjectBusinessId,
+    })
+    return hasVa ? "virtual_accounts" : null
   }
+  const column = RAIL_MIRROR_COLUMN[opts.rail]
   const { data } = await admin
     .from("users")
     .select(column)

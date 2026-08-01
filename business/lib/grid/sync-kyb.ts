@@ -7,7 +7,18 @@ import {
   persistVerificationStatus,
   type VerificationStatus,
 } from "@/lib/compliance"
+import { notifyBusinessKybStatusChange } from "@/lib/notifications/verification-notify"
+import { extractGridCustomerRejectionReasons } from "@easner/shared"
 import { parseGridCustomerForBusiness } from "./parse-grid-customer-for-business"
+
+type KybEmailStatus = "not_started" | "under_review" | "approved" | "rejected"
+
+function verificationStatusForKybEmail(status: VerificationStatus): KybEmailStatus {
+  if (status === "approved") return "approved"
+  if (status === "rejected") return "rejected"
+  if (status === "pending" || status === "hold") return "under_review"
+  return "not_started"
+}
 
 export async function fetchGridCustomer(customerId: string): Promise<GridCustomer & Record<string, unknown>> {
   return gridFetch<GridCustomer & Record<string, unknown>>({
@@ -39,13 +50,20 @@ export async function syncGridBusinessKybToSupabase(input: {
     }))
 
   const status = gridBusinessKybStatus(customer)
+  const gridStatusRaw = String(customer.kybStatus ?? customer.kycStatus ?? "").trim() || null
   const rejectionReasons =
     status === "rejected" || status === "hold"
-      ? {
-          gridStatus: customer.kybStatus ?? customer.kycStatus ?? null,
-          raw: customer,
-        }
+      ? extractGridCustomerRejectionReasons(customer, gridStatusRaw)
       : null
+
+  const { data: priorBiz } = await input.admin
+    .from("businesses")
+    .select("verification_status")
+    .eq("id", input.businessId)
+    .maybeSingle()
+  const previousStatus = verificationStatusForKybEmail(
+    String(priorBiz?.verification_status ?? "not_started").toLowerCase() as VerificationStatus,
+  )
 
   await persistVerificationStatus(input.admin, {
     kind: "business",
@@ -57,6 +75,7 @@ export async function syncGridBusinessKybToSupabase(input: {
     gridCustomerId: normalizeGridCustomerId(input.customerId),
   })
 
+  const now = new Date().toISOString()
   if (status === "approved") {
     const kybFields = parseGridCustomerForBusiness(customer, {
       occurredAt: input.occurredAt,
@@ -64,10 +83,28 @@ export async function syncGridBusinessKybToSupabase(input: {
     if (Object.keys(kybFields).length > 0) {
       await input.admin
         .from("businesses")
-        .update({ ...kybFields, updated_at: new Date().toISOString() })
+        .update({ ...kybFields, updated_at: now })
         .eq("id", input.businessId)
     }
+  } else {
+    await input.admin
+      .from("businesses")
+      .update({ kyb_verified_at: null, updated_at: now })
+      .eq("id", input.businessId)
+      .not("kyb_verified_at", "is", null)
   }
+
+  await notifyBusinessKybStatusChange(
+    input.admin,
+    input.businessId,
+    previousStatus,
+    verificationStatusForKybEmail(status),
+    Array.isArray(rejectionReasons)
+      ? rejectionReasons
+          .map((r) => r.message ?? r.reason ?? r.publicComment)
+          .filter((x): x is string => Boolean(x?.trim()))
+      : null,
+  ).catch((e) => console.warn("grid kyb verification email (non-fatal):", e))
 
   return { status, customer }
 }

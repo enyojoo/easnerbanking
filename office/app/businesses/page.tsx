@@ -40,9 +40,6 @@ type BusinessRow = {
   enabled_extra_account_currencies?: string[]
   noah_customer_id?: string | null
   noah_kyb_status?: string | null
-  noah_usd_virtual_account_id?: string | null
-  noah_eur_virtual_account_id?: string | null
-  noah_gbp_virtual_account_id?: string | null
   created_at: string
   updated_at?: string | null
   owner_user_id?: string | null
@@ -431,15 +428,9 @@ function BusinessesPageInner() {
                       <DetailRow label="Noah customer ID" mono>
                         {displayText(selectedBusiness.noah_customer_id)}
                       </DetailRow>
-                      <DetailRow label="USD virtual account" mono>
-                        {displayText(selectedBusiness.noah_usd_virtual_account_id)}
-                      </DetailRow>
-                      <DetailRow label="EUR virtual account" mono>
-                        {displayText(selectedBusiness.noah_eur_virtual_account_id)}
-                      </DetailRow>
-                      <DetailRow label="GBP virtual account" mono>
-                        {displayText(selectedBusiness.noah_gbp_virtual_account_id)}
-                      </DetailRow>
+                      <p className="text-xs text-gray-600">
+                        Fiat bank details are in <span className="font-mono">virtual_accounts</span> (Grid or Noah).
+                      </p>
                     </div>
                   </div>
 

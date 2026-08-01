@@ -29,12 +29,12 @@ import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { GridSumsubWebSdk } from "@/components/compliance/grid-sumsub-websdk"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
-import { SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
+import { SETTINGS_TAB_COPY, VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import {
-  getNoahRejectionDisplay,
+  getVerificationRejectionDisplay,
   NOAH_FINAL_REJECTION_USER_MESSAGE,
   NOAH_VERIFICATION_IN_REVIEW_COPY,
-} from "@/lib/noah/rejection-reasons"
+} from "@easner/shared"
 
 function formatTier1Status(status: string | null): string {
   if (!status) return "Not started"
@@ -369,7 +369,10 @@ export function BusinessVerificationSection() {
   const hostedTierMeta = tierLadderCopy(hostedTierLevel)
   const hostedTierTitle = hostedTierMeta?.title ?? `Tier ${hostedTierLevel}`
   const tier1Rejected = tier1VerificationStatus === "rejected"
-  const rejectionDisplay = tier1Rejected ? getNoahRejectionDisplay(tier1RejectionReasons) : null
+  const tier1OnHold = tier1VerificationStatus === "hold"
+  const tier1ActionRequired = tier1Rejected || tier1OnHold
+  const rejectionDisplay =
+    tier1ActionRequired ? getVerificationRejectionDisplay(tier1RejectionReasons) : null
   const tier1FinalReject = tier1RejectionType === "Final" || rejectionDisplay?.isFinal === true
   const tier1UnderReview = tier1StatusIsInReview(tier1VerificationStatus)
   const tier1AwaitingReview = tier1UnderReview && !tier1Rejected
@@ -379,8 +382,9 @@ export function BusinessVerificationSection() {
     canManageBusinessVerification &&
     !tier1Complete &&
     tier1CanResubmit &&
-    (!tier1AwaitingReview || hostedResumeAvailable !== false)
-  const tier1HostedCtaLabel = tier1Rejected
+    (!tier1AwaitingReview || hostedResumeAvailable !== false) &&
+    (!tier1OnHold || tier1CanResubmit)
+  const tier1HostedCtaLabel = tier1Rejected || tier1OnHold
     ? "Retry verification"
     : tier1StartedNotSubmitted || hostedResumeAvailable === true
       ? "Continue verification"
@@ -491,6 +495,11 @@ export function BusinessVerificationSection() {
                   )}
                 </div>
                 <CardDescription className="text-sm">{t.description}</CardDescription>
+                {isT1 && tier1Complete ? (
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {VERIFICATION_SECTION_COPY.approvedProvisioning}
+                  </p>
+                ) : null}
                 {t.footnote ? (
                   <p className="text-xs text-muted-foreground pt-1">{t.footnote}</p>
                 ) : null}
@@ -499,12 +508,17 @@ export function BusinessVerificationSection() {
                 <CardContent className="space-y-4 pt-0">
                   {error ? <p className="text-sm text-destructive">{error}</p> : null}
                   {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
-                  {tier1UnderReview && !tier1Rejected ? (
+                  {tier1OnHold ? (
+                    <p className="text-sm text-muted-foreground">
+                      {VERIFICATION_SECTION_COPY.verificationOnHold}
+                    </p>
+                  ) : null}
+                  {tier1UnderReview && !tier1ActionRequired ? (
                     <p className="text-sm text-muted-foreground">{NOAH_VERIFICATION_IN_REVIEW_COPY}</p>
                   ) : null}
                   {tier1Rejected && tier1FinalReject ? (
                     <p className="text-sm text-muted-foreground">{NOAH_FINAL_REJECTION_USER_MESSAGE}</p>
-                  ) : tier1Rejected && (tier1RetryGuidance?.length || rejectionDisplay?.guidanceLines.length) ? (
+                  ) : tier1ActionRequired && (tier1RetryGuidance?.length || rejectionDisplay?.guidanceLines.length) ? (
                     <p className="text-sm text-destructive">
                       {(tier1RetryGuidance ?? rejectionDisplay?.guidanceLines ?? []).join(" ")}
                     </p>
@@ -521,7 +535,7 @@ export function BusinessVerificationSection() {
                       Only the organization owner can start verification.
                     </p>
                   ) : null}
-                  {canManageBusinessVerification && !tier1Complete && !tier1FinalReject && !tier1AwaitingReview ? (
+                  {canManageBusinessVerification && !tier1Complete && !tier1FinalReject && !tier1AwaitingReview && !tier1OnHold ? (
                     <KybRequiredDocumentsNotice />
                   ) : null}
                   <div className="flex flex-wrap gap-2">

@@ -3,6 +3,7 @@ import { resolveIsOrgOwnerForUser } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import {
   buildVerifiedIdentityFromKycFields,
+  isBusinessProfileLockedFromKybFields,
   isProfileLockedFromKycFields,
   type VerifiedIdentityPayload,
 } from "@easner/shared"
@@ -61,14 +62,10 @@ async function resolveOrgKybApproved(
   if (!businessId) return false
   const { data } = await admin
     .from("businesses")
-    .select("noah_kyb_status,kyb_verified_at")
+    .select("verification_provider,verification_status,noah_kyb_status,kyb_verified_at")
     .eq("id", businessId)
     .maybeSingle()
-  if (!data) return false
-  return (
-    String(data.noah_kyb_status ?? "").toLowerCase() === "approved" &&
-    data.kyb_verified_at != null
-  )
+  return isBusinessProfileLockedFromKybFields((data ?? null) as Record<string, unknown> | null)
 }
 
 async function fetchUserRow(admin: ReturnType<typeof createSupabaseAdmin>, userId: string) {

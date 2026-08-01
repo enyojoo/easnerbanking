@@ -47,9 +47,6 @@ export type BusinessProfile = {
   noahKybCustomerId: string | null
   /** Whether the signed-in user may start or refresh hosted business verification. */
   canManageBusinessVerification: boolean
-  /** Mirrored from `businesses` after Noah provisioning. */
-  noahUsdVirtualAccountId: string | null
-  noahEurVirtualAccountId: string | null
   /** Resolved Reply-To for invoice emails (support → owner → sender). */
   invoiceReplyEmail: string | null
   invoiceReplyEmailSource: InvoiceReplyEmailSource | null
@@ -87,8 +84,6 @@ const DEFAULT_PROFILE: BusinessProfile = {
   tier1RetryGuidance: [],
   noahKybCustomerId: null,
   canManageBusinessVerification: true,
-  noahUsdVirtualAccountId: null,
-  noahEurVirtualAccountId: null,
   invoiceReplyEmail: null,
   invoiceReplyEmailSource: null,
   invoiceSettings: undefined,
