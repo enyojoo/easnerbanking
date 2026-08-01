@@ -11,6 +11,11 @@ import {
 import type { YcSendSubmitResult } from "@/lib/yellowcard/send-submit"
 import { hydrateYcSendSubmitResult } from "@/lib/yellowcard/send-submit"
 
+function roundUsdc(n: number): number {
+  if (!Number.isFinite(n)) return 0
+  return Math.round(n * 1_000_000) / 1_000_000
+}
+
 export type YcSendLegLockResult = {
   sendRes: YcSendSubmitResult
   finalSettlementCryptoUsd: number
@@ -129,9 +134,11 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       )
     }
 
-    // Retarget from observed YC rate + fee; ceil only when short so we do not re-overshoot.
+    // Prefer YC-echoed crypto for observed rate — submitted amount can differ from lock.
+    const echoedCrypto = roundUsdc(Number(sendRes.settlementInfo?.cryptoAmount ?? 0))
+    const basisCrypto = echoedCrypto > 0 ? echoedCrypto : settlementCryptoUsd
     settlementCryptoUsd = retargetYcSendLegSettlementCryptoForQuotedReceive({
-      settlementCryptoUsd,
+      settlementCryptoUsd: basisCrypto,
       lockedLocalAmount: lastLockedLocal,
       sendLegFeeLocal,
       quotedReceive: input.receiveAmount,

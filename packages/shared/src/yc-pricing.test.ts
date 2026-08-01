@@ -630,27 +630,33 @@ describe("yc send leg destination amount", () => {
     ).toBe(20.27)
   })
 
-  it("grosses up initial settlement crypto for ~1% YC send fee", () => {
+  it("grosses up initial settlement crypto for ~1% YC send fee + rate buffer", () => {
     const estimated = estimateYcSendLegSettlementCryptoForQuotedReceive({
       quotedReceive: 2000,
       destinationRate: 1371.11,
     })
     expect(estimated).toBeGreaterThan(2000 / 1371.11)
-    expect(estimated).toBeCloseTo(2000 / (1371.11 * 0.99), 5)
+    // Default 50 bps rate buffer + 1% fee
+    expect(estimated).toBeCloseTo(2000 / (1371.11 * 0.995 * 0.99), 5)
   })
 
   it("retargets settlement crypto so net local meets quoted receive", () => {
     const retargeted = retargetYcSendLegSettlementCryptoForQuotedReceive({
-      settlementCryptoUsd: 1.458672,
-      lockedLocalAmount: 2011.88,
-      sendLegFeeLocal: 20.12,
+      settlementCryptoUsd: 1.478772,
+      lockedLocalAmount: 2018.31,
+      sendLegFeeLocal: 20.18,
       quotedReceive: 2000,
-      destinationRate: 1371.11,
+      destinationRate: 1366.135,
       preferCeil: true,
     })
-    expect(retargeted).toBeGreaterThan(1.458672)
-    // Proportional: crypto * quoted / net (1991.76)
-    expect(retargeted).toBeCloseTo(1.458672 * (2000 / 1991.76), 5)
+    // Production miss: net 1998.13 — retarget must clear in one step.
+    expect(retargeted).toBeGreaterThan(1.478772)
+    const rate = 2018.31 / 1.478772
+    const locked2 = Math.round(retargeted * rate * 100) / 100
+    const fee2 = Math.round(locked2 * 0.01 * 100) / 100
+    const net2 = Math.round((locked2 - fee2) * 100) / 100
+    expect(net2).toBeGreaterThanOrEqual(2000)
+    expect(net2).toBeLessThanOrEqual(2000.01)
   })
 
   it("requires net >= quoted and allows only 0.01 dust over", () => {

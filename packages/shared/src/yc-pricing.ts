@@ -1082,7 +1082,7 @@ export function alignYcCrossBorderLockedLocalPayIn(input: {
 }
 
 /** Max POST /send retries when YC locked destination fiat is below quoted receive. */
-export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 3
+export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 5
 
 /**
  * Never underpay: net local must be >= quoted receive.
@@ -1101,6 +1101,12 @@ export const YC_SEND_LEG_DESTINATION_EXCESS_TOLERANCE = 0.01
  * Deducted before recipient credit — settlement crypto must target net receive.
  */
 export const YC_SEND_LEG_SERVICE_FEE_FRACTION = 0.01
+
+/**
+ * Assume YC may convert slightly worse than the customer/Easner rate when sizing
+ * initial settlement crypto (production shortfall: net 1998.13 on quoted 2000).
+ */
+export const YC_SEND_LEG_RATE_BUFFER_BPS = 50
 
 function clampYcSendLegFeeFraction(feeFraction: number): number {
   if (!Number.isFinite(feeFraction) || feeFraction <= 0) return YC_SEND_LEG_SERVICE_FEE_FRACTION
@@ -1264,14 +1270,20 @@ export function assertYcSendLegDestinationAmountSufficient(input: {
 /**
  * Initial settlement crypto so net local (after YC ~1% send fee) can meet quoted receive.
  * Plain receive/rate under-funds because YC deducts serviceFeeAmountLocal from gross.
+ * Applies a small rate buffer — live YC conversion can be worse than customerRate.
  */
 export function estimateYcSendLegSettlementCryptoForQuotedReceive(input: {
   quotedReceive: number
   destinationRate: number
   feeFraction?: number
+  /** Shrink destination rate by this many bps before sizing (default 50). */
+  rateBufferBps?: number
 }): number {
   const quoted = roundLocal(input.quotedReceive)
-  const rate = input.destinationRate
+  const bufferBps = Number.isFinite(input.rateBufferBps)
+    ? Math.max(0, Number(input.rateBufferBps))
+    : YC_SEND_LEG_RATE_BUFFER_BPS
+  const rate = input.destinationRate * (1 - bufferBps / 10_000)
   const feeFraction = clampYcSendLegFeeFraction(
     input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
   )
@@ -1282,8 +1294,8 @@ export function estimateYcSendLegSettlementCryptoForQuotedReceive(input: {
 
 /**
  * Retarget settlement crypto from an observed YC lock toward quoted net receive.
- * Scales crypto by quoted/net so % fees and rate stay aligned; avoids oscillating
- * shortfall ↔ excess from ceil/floor gross-up.
+ * Uses observed local/crypto rate and fee fraction; shortfall pads gross so one retry
+ * clears production misses like net 1998.13 → 2000.
  */
 export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
   settlementCryptoUsd: number
@@ -1291,7 +1303,7 @@ export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
   sendLegFeeLocal: number
   quotedReceive: number
   destinationRate: number
-  /** When true, nudge up after scale if still at the same crypto dust. */
+  /** When true, size above quoted (clear shortfall). */
   preferCeil?: boolean
 }): number {
   const crypto = roundUsdc(input.settlementCryptoUsd)
@@ -1301,29 +1313,40 @@ export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
   if (!(crypto > 0) || !(locked > 0) || !(quoted > 0)) return crypto
 
   const netLocal = roundLocal(Math.max(0, locked - feeLocal))
-  if (!(netLocal > 0)) {
-    // No usable net — fall back to fee-aware gross target from destination rate.
-    const rate = input.destinationRate > 0 ? input.destinationRate : locked / crypto
-    if (!(rate > 0)) return crypto
-    const feeFraction = clampYcSendLegFeeFraction(YC_SEND_LEG_SERVICE_FEE_FRACTION)
-    return roundUsdc(quoted / (rate * (1 - feeFraction)))
+  const observedRate = locked / crypto
+  const rate =
+    Number.isFinite(observedRate) && observedRate > 0 ? observedRate : input.destinationRate
+  if (!(rate > 0)) return crypto
+
+  const feeFraction = clampYcSendLegFeeFraction(
+    feeLocal > 0 && locked > 0 ? feeLocal / locked : YC_SEND_LEG_SERVICE_FEE_FRACTION,
+  )
+  const netFraction = 1 - feeFraction
+  const preferCeil = input.preferCeil ?? (netLocal > 0 ? netLocal < quoted : true)
+
+  if (preferCeil) {
+    // Ceil gross so net after ~% fee is >= quoted (e.g. 2000/0.99 → 2020.21).
+    const targetGross = roundLocalUp(quoted / netFraction)
+    let targetCrypto = roundUsdc(targetGross / rate)
+    // Also cover observed shortfall explicitly (handles non-% fee components).
+    if (netLocal > 0 && netLocal < quoted) {
+      const shortfall = roundLocal(quoted - netLocal)
+      const fromShortfall = roundUsdc(crypto + shortfall / (rate * netFraction))
+      targetCrypto = roundUsdc(Math.max(targetCrypto, fromShortfall))
+    }
+    // Must move up by a meaningful USDC step — micro bumps can leave YC net unchanged.
+    const minStep = roundUsdc(Math.max(0.001, 1 / rate))
+    if (targetCrypto <= crypto) {
+      targetCrypto = roundUsdc(crypto + minStep)
+    }
+    return targetCrypto
   }
 
-  const preferCeil = input.preferCeil ?? netLocal < quoted
-  // Proportional scale: net tracks settlement crypto when YC fee is ~% of gross.
-  let targetCrypto = roundUsdc(crypto * (quoted / netLocal))
-  if (Math.abs(targetCrypto - crypto) < 0.000001) {
-    targetCrypto = preferCeil
-      ? roundUsdc(crypto * (1 + YC_SEND_LEG_SERVICE_FEE_FRACTION * 0.1))
-      : roundUsdc(crypto * (1 - YC_SEND_LEG_SERVICE_FEE_FRACTION * 0.1))
-  }
-  // Shortfall: always move up — never leave recipient below quoted.
-  if (preferCeil && targetCrypto <= crypto) {
-    targetCrypto = roundUsdc(crypto + 0.000001)
-  }
-  // Excess: move down, but do not bias under quoted (0.01 over is acceptable).
-  if (!preferCeil && targetCrypto >= crypto) {
-    targetCrypto = roundUsdc(Math.max(crypto * 0.5, crypto - 0.000001))
+  // Excess: aim at exact quoted net (0.01 dust is accepted by the checker).
+  const targetGross = roundLocal(quoted / netFraction)
+  let targetCrypto = roundUsdc(targetGross / rate)
+  if (targetCrypto >= crypto) {
+    targetCrypto = roundUsdc(Math.max(crypto * 0.5, crypto - Math.max(0.001, 1 / rate)))
   }
   return targetCrypto
 }
