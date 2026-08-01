@@ -15,6 +15,7 @@ import {
   isBankNameAllowedForCorridor,
   isMomoProviderAllowedForCorridor,
   resolveCorridorRecipientOptions,
+  resolvePrimaryPayoutProvider,
   resolveYcCorridorSchema,
   sortByEasnerCountryPickerOrder,
   unwrapNoahFieldsSchema,
@@ -436,8 +437,10 @@ export function RecipientForm({
       rail: payoutRail,
       fieldsSchema: selectedCorridorRow?.fields_schema,
       providers: selectedCorridorRow?.providers,
+      payoutProvider: resolvePrimaryPayoutProvider(selectedCorridorRow?.provider_routing),
     })
   }, [selectedCountry, currency, payoutRail, selectedCorridorRow])
+  const payoutProvider = resolvePrimaryPayoutProvider(selectedCorridorRow?.provider_routing)
   const payoutFormHints = unwrapNoahFieldsSchema(selectedCorridorRow?.fields_schema)
   const ycCorridorSchema = useMemo(() => {
     if (!selectedCountry) return null

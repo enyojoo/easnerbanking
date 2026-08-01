@@ -7,7 +7,7 @@ import {
 } from "./yc-recipient-schema"
 
 describe("resolveCorridorRecipientOptions", () => {
-  it("unions bank enums from Noah, YC, and Grid schemas", () => {
+  it("unions bank enums from Noah, YC, and Grid schemas when no primary is set", () => {
     const options = resolveCorridorRecipientOptions({
       countryCode: "NG",
       currencyCode: "NGN",
@@ -19,6 +19,21 @@ describe("resolveCorridorRecipientOptions", () => {
       },
     })
     expect(options.bankOptions).toEqual(["GTBank", "Access Bank", "Zenith Bank"])
+  })
+
+  it("scopes bank enums to Office primary payout provider", () => {
+    const options = resolveCorridorRecipientOptions({
+      countryCode: "NG",
+      currencyCode: "NGN",
+      rail: "bank_transfer",
+      payoutProvider: "yellowcard",
+      fieldsSchema: {
+        noah: { amount_field_mode: "note_optional_only", bank_enum: ["GTBank"] },
+        yellowcard: { status: "ready", channel_type: "bank", bank_enum: ["Access Bank"] },
+        grid: { status: "ready", channel_type: "bank", bank_enum: ["Zenith Bank"] },
+      },
+    })
+    expect(options.bankOptions).toEqual(["Access Bank"])
   })
 
   it("unions mobile provider labels from providers column and grid schema", () => {

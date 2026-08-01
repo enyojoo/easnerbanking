@@ -35,6 +35,15 @@ vi.mock("@/lib/notifications/verification-notify", () => ({
   notifyIndividualKycStatusChange: vi.fn().mockResolvedValue(undefined),
 }))
 
+const mockPersistVerificationStatus = vi.fn().mockResolvedValue(undefined)
+vi.mock("@/lib/compliance", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/compliance")>()
+  return {
+    ...actual,
+    persistVerificationStatus: (...args: unknown[]) => mockPersistVerificationStatus(...args),
+  }
+})
+
 const mockUsersUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
 const mockBusinessUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
 

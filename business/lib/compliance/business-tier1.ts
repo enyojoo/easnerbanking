@@ -29,8 +29,20 @@ export function businessTier1Status(row: BusinessVerificationFields | null | und
     const status = String(row.verification_status ?? "not_started").trim()
     return status || "not_started"
   }
-  const status = String(row.verification_status ?? row.noah_kyb_status ?? "").trim()
-  return status || null
+  const direct = String(row.verification_status ?? "")
+    .trim()
+    .toLowerCase()
+  if (
+    direct === "approved" ||
+    direct === "pending" ||
+    direct === "rejected" ||
+    direct === "hold"
+  ) {
+    return direct
+  }
+  // Treat not_started/empty as stale vs live Noah KYB mirrors.
+  const noah = String(row.noah_kyb_status ?? "").trim()
+  return noah || direct || null
 }
 
 /** Product Tier 1 complete for a business row (canonical verification_status). */

@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server"
-import {
-  requireAuth,
-  requireNoahEnv,
-  resolveNoahContextAsync,
-} from "@/app/api/noah/_helpers"
+import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
@@ -17,6 +13,7 @@ import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { normalizePayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
 import { selectProviderForCorridor } from "@/lib/payout-providers"
+import { requirePayoutProviderEnv } from "@/lib/payout-providers/require-provider-env"
 import { sendDestinationFromRow } from "@/lib/send-destination"
 import { executeSendDestination } from "@/lib/send-destination-operations"
 
@@ -59,9 +56,6 @@ type TransferRequest = {
 
 /** Execute a locked normalized Send destination after review and PIN. */
 export async function POST(request: Request) {
-  const environmentError = requireNoahEnv()
-  if (environmentError) return environmentError
-
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
@@ -156,10 +150,22 @@ export async function POST(request: Request) {
         rail: recipient.mobile_provider ? "mobile_money" : "bank_transfer",
       })
       provider = route.id
-    } catch {
-      provider = "noah"
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : "Payouts to this country and currency are not available on the configured provider."
+      return NextResponse.json(
+        { error: msg, code: "PAYOUT_PROVIDER_UNAVAILABLE" },
+        { status: 400 },
+      )
     }
   }
+
+  const envGate = requirePayoutProviderEnv(
+    provider === "yellowcard" || provider === "grid" ? provider : "noah",
+  )
+  if (envGate) return envGate
 
   const businessId =
     noahContext.scope === "business" ? noahContext.businessId : null

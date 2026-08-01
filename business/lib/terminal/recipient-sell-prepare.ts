@@ -1,5 +1,5 @@
 import { mobileProviderPrepareSubstrings, bankEnumFromFormSchema, mobileProviderLabelsFromSellItems } from "@/lib/noah/form-schema-hints"
-import { resolveCorridorBankName, resolveCorridorMomoProvider } from "@easner/shared"
+import { applyProviderBindingToRecipient, resolveCorridorBankName, resolveCorridorMomoProvider } from "@easner/shared"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-payout-country"
 import { normalizeBankAccountNumber } from "@/lib/noah/sell-form-builders"
 import {
@@ -114,7 +114,8 @@ export async function prepareSellFromRecipientRow(input: {
   noahCustomerId: string
   overrides?: SellPrepareOverrides
 }): Promise<{ channelId: string; prep: Awaited<ReturnType<typeof prepareSellTransaction>> }> {
-  const { row, fiatAmount, cryptoCurrency, noahCustomerId, overrides } = input
+  const { fiatAmount, cryptoCurrency, noahCustomerId, overrides } = input
+  const row = applyProviderBindingToRecipient(input.row, "noah")
   const country = resolveRecipientPayoutCountry(row)
   const fiatCurrency = String(row.currency || "").toUpperCase()
   const fiat = formatPayoutFiatAmountForPrepare(fiatCurrency, fiatAmount)

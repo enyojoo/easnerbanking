@@ -31,7 +31,7 @@ describe("business-tier1 grid cutover", () => {
         verification_status: "not_started",
         noah_kyb_status: "under_review",
       }),
-    ).toBe("not_started")
+    ).toBe("under_review")
     expect(
       businessTier1Status({
         verification_provider: "noah",
@@ -39,6 +39,13 @@ describe("business-tier1 grid cutover", () => {
         noah_kyb_status: "under_review",
       }),
     ).toBe("under_review")
+    expect(
+      businessTier1Status({
+        verification_provider: "noah",
+        verification_status: "approved",
+        noah_kyb_status: "under_review",
+      }),
+    ).toBe("approved")
   })
 
   it("ignores legacy Noah final rejection after grid cutover", () => {

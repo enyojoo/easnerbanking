@@ -13,6 +13,8 @@ import { CardDetailsDialog } from "@/components/card-details-dialog"
 import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter"
 import { formatCurrency } from "@/lib/utils"
 import type { Card } from "@/lib/finance-types"
+import { PageIntro } from "@/components/copy/page-intro"
+import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 export default function CardsPage() {
   const { data: rows, loading: listLoading } = useTransactionsCached()
@@ -59,9 +61,7 @@ export default function CardsPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-9rem)] min-h-[500px] overflow-hidden">
       <div className="flex items-center justify-between mb-6 flex-shrink-0">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Cards</h1>
-        </div>
+        <PageIntro title={PAGE_COPY.cards.title} description={PAGE_COPY.cards.intro} variant="page" />
         <Button className="gap-2" disabled={!hasCards}>
           <Plus className="h-4 w-4" />
           Add Card
@@ -115,7 +115,12 @@ export default function CardsPage() {
 
         <div className="flex flex-col min-h-0 flex-1 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4 flex-shrink-0">
-            <h2 className="text-2xl font-semibold text-foreground">Transactions</h2>
+            <PageIntro
+              title="Transactions"
+              description={PAGE_COPY.cards.transactionsSection}
+              variant="section"
+              className="mb-0"
+            />
             <DateRangeFilter
               timePeriod={timePeriod}
               customDateRange={customDateRange}

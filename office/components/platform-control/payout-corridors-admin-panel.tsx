@@ -170,6 +170,10 @@ function selectedPayoutProvider(
 
 function selectedPayInProvider(row: PayoutCorridorAdminRow, caps: CountryCurrencyCaps): ProviderId | null {
   const meta = rowMetadata(row)
+  const explicit = String(meta.pay_in_provider ?? "").trim().toLowerCase()
+  if (explicit === "noah" && caps.supportNoahPayIn && meta.noah_receive_enabled === true) return "noah"
+  if (explicit === "yellowcard" && caps.supportYcPayIn && meta.yc_receive_enabled === true) return "yellowcard"
+  if (explicit === "grid" && caps.supportGridPayIn && meta.grid_receive_enabled === true) return "grid"
   if (caps.supportNoahPayIn && meta.noah_receive_enabled === true) return "noah"
   if (caps.supportYcPayIn && meta.yc_receive_enabled === true) return "yellowcard"
   if (caps.supportGridPayIn && meta.grid_receive_enabled === true) return "grid"
@@ -243,8 +247,6 @@ function applyPayoutChoiceToCorridor(
   choice: FeatureSelection<ProviderId>,
 ): PayoutCorridorAdminRow {
   const metadata = { ...rowMetadata(corridor) }
-  const payInDisabled = row.payInSelection === "disabled"
-  const payInProvider = payInDisabled ? null : row.payInProvider
 
   if (choice === "disabled") {
     disableAllPayoutSendFlags(metadata, corridor)
@@ -256,7 +258,7 @@ function applyPayoutChoiceToCorridor(
   if (row.supportYcPayout && choice !== "yellowcard") metadata.yc_send_enabled = false
   if (row.supportGridPayout && choice !== "grid") metadata.grid_send_enabled = false
 
-  const routing = buildProviderRouting(choice, payInDisabled ? null : payInProvider)
+  const routing = buildProviderRouting(choice)
   return { ...corridor, metadata, provider_routing: routing }
 }
 
@@ -271,7 +273,7 @@ function applyPayInChoiceToCorridors(
   const routing =
     row.payoutSelection === "disabled" || row.payoutProvider === null
       ? []
-      : buildProviderRouting(row.payoutProvider, payInDisabled ? null : provider)
+      : buildProviderRouting(row.payoutProvider)
   const payInCorridorIds =
     provider !== null
       ? payInCorridorIdsForProvider(
@@ -295,8 +297,10 @@ function applyPayInChoiceToCorridors(
       const metadata = { ...rowMetadata(next) }
       if (payInDisabled) {
         disableAllPayInReceiveFlags(metadata, corridor)
+        delete metadata.pay_in_provider
       } else {
         applyPayInReceiveFlags(metadata, corridor, provider!, true)
+        metadata.pay_in_provider = provider
         if (row.supportNoahPayIn && provider !== "noah") metadata.noah_receive_enabled = false
         if (row.supportYcPayIn && provider !== "yellowcard") metadata.yc_receive_enabled = false
         if (row.supportGridPayIn && provider !== "grid") metadata.grid_receive_enabled = false
@@ -442,17 +446,10 @@ function crossBorderProviderLabel(provider: CrossBorderProviderId): string {
   return provider === "grid" ? "Grid" : "Yellowcard"
 }
 
-function buildProviderRouting(
-  payoutProvider: ProviderId,
-  payInProvider: ProviderId | null,
-): RoutingEntry[] {
-  const routing: RoutingEntry[] = [
-    { provider: payoutProvider, priority: 1, settlement_asset: "USDC" },
-  ]
-  if (payInProvider && payInProvider !== payoutProvider) {
-    routing.push({ provider: payInProvider, priority: 2, settlement_asset: "USDC" })
-  }
-  return routing
+function buildProviderRouting(payoutProvider: ProviderId): RoutingEntry[] {
+  // Payout-only. Pay-in is stored on metadata.pay_in_provider — never as a
+  // secondary provider_routing entry (that caused silent payout failover).
+  return [{ provider: payoutProvider, priority: 1, settlement_asset: "USDC" }]
 }
 
 function payInProviderOptions(caps: {
@@ -852,8 +849,6 @@ export function PayoutCorridorsAdminPanel() {
     )
 
     try {
-      const payInDisabled = row.payInSelection === "disabled"
-      const payInProvider = payInDisabled ? null : row.payInProvider
       const updates = await Promise.all(
         row.corridorIds.map((id) => {
           const existing = rows.find((r) => r.id === id) ?? row.sample
@@ -866,7 +861,7 @@ export function PayoutCorridorsAdminPanel() {
           if (row.supportNoahPayout && choice !== "noah") metadata.noah_send_enabled = false
           if (row.supportYcPayout && choice !== "yellowcard") metadata.yc_send_enabled = false
           if (row.supportGridPayout && choice !== "grid") metadata.grid_send_enabled = false
-          const routing = buildProviderRouting(choice, payInDisabled ? null : payInProvider)
+          const routing = buildProviderRouting(choice)
           return payoutCorridorsApi.patch(id, { provider_routing: routing, metadata })
         }),
       )
@@ -889,7 +884,7 @@ export function PayoutCorridorsAdminPanel() {
       const routing =
         row.payoutSelection === "disabled" || row.payoutProvider === null
           ? []
-          : buildProviderRouting(row.payoutProvider, payInDisabled ? null : provider)
+          : buildProviderRouting(row.payoutProvider)
       const routingUpdates = await Promise.all(
         row.corridorIds.map((id) => payoutCorridorsApi.patch(id, { provider_routing: routing })),
       )
@@ -909,9 +904,11 @@ export function PayoutCorridorsAdminPanel() {
           const metadata = { ...rowMetadata(existing) }
           if (payInDisabled) {
             disableAllPayInReceiveFlags(metadata, existing)
+            delete metadata.pay_in_provider
             return payoutCorridorsApi.patch(id, { metadata })
           }
           applyPayInReceiveFlags(metadata, existing, provider!, true)
+          metadata.pay_in_provider = provider
           if (row.supportNoahPayIn && provider !== "noah") metadata.noah_receive_enabled = false
           if (row.supportYcPayIn && provider !== "yellowcard") metadata.yc_receive_enabled = false
           if (row.supportGridPayIn && provider !== "grid") metadata.grid_receive_enabled = false

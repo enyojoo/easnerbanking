@@ -240,6 +240,18 @@ export {
   type YcRecipientRowLike,
   type YcSendMapping,
 } from "./yc-recipient-schema"
+export {
+  applyProviderBindingToRecipient,
+  mergeProviderBindings,
+  mergeProviderBindingsIntoMetadata,
+  readAllProviderBindings,
+  readProviderBinding,
+  RECIPIENT_PROVIDER_BINDINGS_KEY,
+  resolveRecipientProviderBindings,
+  type PayoutBindingProviderId,
+  type RecipientProviderBinding,
+  type RecipientProviderBindings,
+} from "./recipient-provider-bindings"
 export { pickYcSendNetworkId, type YcNetworkLike } from "./yc-network-resolve"
 export {
   DEFAULT_YC_PAYMENT_REASON,

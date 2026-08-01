@@ -1,7 +1,10 @@
 import {
   corridorMatchesCountryCurrency,
+  mergeProviderBindingsIntoMetadata,
+  resolveRecipientProviderBindings,
   findPayoutFieldsSchema,
   resolveCorridorRecipientOptions,
+  resolvePrimaryPayoutProvider,
   sortByEasnerCountryPickerOrder,
   type CryptoDestinationPublic,
   type PayoutCorridorPublic,
@@ -349,6 +352,51 @@ export function getCatalogByRecipientType(recipientType: RecipientType): Recipie
   return sortRecipientCatalogEntries(recipientCatalog.filter((entry) => entry.recipientType === recipientType))
 }
 
+export function getPayoutCorridorRowForBindings(input: {
+  countryCode: string
+  currencyCode: string
+  rail: 'bank_transfer' | 'mobile_money'
+}): Pick<PayoutCorridorPublic, 'fields_schema' | 'providers'> | null {
+  if (!payoutCorridorCache) return null
+  const corridors =
+    input.rail === 'mobile_money' ? payoutCorridorCache.mobile : payoutCorridorCache.bank
+  const row = corridors.find((c) =>
+    corridorMatchesCountryCurrency(c, {
+      countryCode: input.countryCode,
+      currencyCode: input.currencyCode,
+      rail: input.rail,
+    }),
+  )
+  if (!row) return null
+  return { fields_schema: row.fields_schema, providers: row.providers }
+}
+
+export function mergeRecipientProviderBindings(input: {
+  countryCode: string
+  currencyCode: string
+  rail: 'bank_transfer' | 'mobile_money'
+  bankName?: string | null
+  mobileProvider?: string | null
+  metadata?: Record<string, unknown> | null
+}): Record<string, unknown> {
+  const corridor = getPayoutCorridorRowForBindings({
+    countryCode: input.countryCode,
+    currencyCode: input.currencyCode,
+    rail: input.rail,
+  })
+  if (!corridor) return input.metadata ?? {}
+  const bindings = resolveRecipientProviderBindings({
+    countryCode: input.countryCode,
+    currencyCode: input.currencyCode,
+    rail: input.rail,
+    bankName: input.bankName,
+    mobileProvider: input.mobileProvider,
+    fieldsSchema: corridor.fields_schema,
+    providers: corridor.providers,
+  })
+  return mergeProviderBindingsIntoMetadata(input.metadata ?? null, bindings)
+}
+
 export function getPayoutFieldsSchemaForCorridor(input: {
   countryCode: string
   currencyCode: string
@@ -407,6 +455,7 @@ export function getCorridorRecipientOptions(input: {
     rail: input.rail,
     fieldsSchema: row.fields_schema,
     providers: row.providers,
+    payoutProvider: resolvePrimaryPayoutProvider(row.provider_routing),
   })
 }
 

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import { validateRecipientYcExtrasForSave } from "@/lib/recipients-yc-validation"
-import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone, isBankNameAllowedForCorridor, resolveCorridorRecipientOptions, unwrapNoahFieldsSchema } from "@easner/shared"
+import { attachProviderBindingsToPayload } from "@/lib/recipients-provider-bindings"
+import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone, isBankNameAllowedForCorridor, resolveCorridorRecipientOptions, resolvePrimaryPayoutProvider, unwrapNoahFieldsSchema } from "@easner/shared"
 import {
   looksLikeMissingStructuredColumn,
   toRecipientLegacyPayload,
@@ -57,17 +58,21 @@ export async function POST(request: Request) {
     const rail = isMobile ? "mobile_money" : "bank_transfer"
     const { data: corridor } = await admin
       .from("payout_corridors")
-      .select("fields_schema,providers")
+      .select("fields_schema,providers,provider_routing")
       .eq("country_code", cc)
       .eq("currency_code", cur)
       .eq("rail", rail)
       .maybeSingle()
+    const payoutProvider = resolvePrimaryPayoutProvider(
+      corridor?.provider_routing as import("@easner/shared").ProviderRoutingEntry[] | null | undefined,
+    )
     const recipientOptions = resolveCorridorRecipientOptions({
       countryCode: cc,
       currencyCode: cur,
       rail,
       fieldsSchema: corridor?.fields_schema,
       providers: corridor?.providers,
+      payoutProvider,
     })
     if (
       !isMobile &&
@@ -118,6 +123,12 @@ export async function POST(request: Request) {
     if (ycErr) {
       return NextResponse.json({ error: ycErr }, { status: 400 })
     }
+
+    attachProviderBindingsToPayload({
+      payload,
+      corridor,
+      rail,
+    })
   }
 
   const primary = await admin

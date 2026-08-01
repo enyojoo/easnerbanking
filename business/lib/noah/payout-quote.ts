@@ -18,9 +18,8 @@ import {
   type RecipientSellPrepareRow,
   type SellPrepareOverrides,
 } from "@/lib/terminal/recipient-sell-prepare"
-import { NoProviderForCorridorError, corridorHasYellowcardPayout, selectProviderForCorridor } from "@/lib/payout-providers"
-import { mapNoahPrepareError, shouldTryAlternatePayoutProvider } from "@/lib/noah/noah-prepare-errors"
-import { NoahHttpError } from "@/lib/noah/http"
+import { NoProviderForCorridorError, selectProviderForCorridor } from "@/lib/payout-providers"
+import { mapNoahPrepareError } from "@/lib/noah/noah-prepare-errors"
 import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
 import { quoteFiatProcessingFeeBps, recipientPayoutRail } from "@/lib/processing-fee/quote-processing-fee-bps"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
@@ -485,7 +484,6 @@ export async function buildNoahBalancePayoutPreview(input: {
 
 /**
  * Lock Noah balance payout: one prepare call (used from `/confirm` only).
- * May fall back to Yellowcard preview when Noah prepare fails on a dual-rail corridor.
  */
 export async function lockNoahBalancePayoutQuote(input: {
   userId: string
@@ -601,9 +599,6 @@ export async function lockNoahBalancePayoutQuote(input: {
         accountSuffix: String(row.account_number ?? "").slice(-4) || null,
         bankName: row.bank_name ?? null,
       })
-      if (shouldTryAlternatePayoutProvider(e)) {
-        throw e
-      }
       const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase()
       const expired =
         msg.includes("formsession") || (msg.includes("session") && msg.includes("expired"))
@@ -623,35 +618,6 @@ export async function lockNoahBalancePayoutQuote(input: {
     prep = prepared.prep
     channelId = prepared.channelId
   } catch (e) {
-    if (
-      countryCode &&
-      sourceBalanceCurrency === "USD" &&
-      shouldTryAlternatePayoutProvider(e) &&
-      (await corridorHasYellowcardPayout(admin, {
-        countryCode,
-        currencyCode: receiveCurrency,
-        rail: payoutRailForRecipient(row),
-      }))
-    ) {
-      console.info("[noah_payout_quote] fallback_to_yellowcard", {
-        recipientId: input.recipientId ?? null,
-        countryCode,
-        receiveCurrency,
-        reason: e instanceof NoahHttpError ? e.detail || e.message : String(e),
-      })
-      return buildYellowcardBalancePayoutQuoteFromRow({
-        admin,
-        userId: input.userId,
-        noahCustomerId: input.noahCustomerId,
-        recipientId: input.recipientId,
-        row,
-        receiveFiatAmount: input.receiveFiatAmount,
-        sourceBalanceCurrency: input.sourceBalanceCurrency,
-        amountEntryMode: input.amountEntryMode,
-        sendBudget: input.sendBudget,
-        paymentPurpose: input.prepareOverrides?.paymentPurpose,
-      })
-    }
     throw e instanceof Error ? e : new Error(mapNoahPrepareError(e))
   }
 

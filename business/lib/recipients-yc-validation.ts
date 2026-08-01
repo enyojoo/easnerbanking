@@ -4,8 +4,10 @@ import {
   isMomoProviderAllowedForCorridor,
   normalizeRecipientYcMetadata,
   resolveCorridorRecipientOptions,
+  resolvePrimaryPayoutProvider,
   resolveYcCorridorSchema,
   validateYcRecipientForCorridor,
+  type ProviderRoutingEntry,
 } from "@easner/shared"
 import type { RecipientWritePayload } from "@/lib/recipients-write-payload"
 
@@ -24,11 +26,15 @@ export async function validateRecipientYcExtrasForSave(
   const rail = isMobile ? "mobile_money" : "bank_transfer"
   const { data: corridor } = await admin
     .from("payout_corridors")
-    .select("fields_schema,providers")
+    .select("fields_schema,providers,provider_routing")
     .eq("country_code", cc)
     .eq("currency_code", cur)
     .eq("rail", rail)
     .maybeSingle()
+
+  const payoutProvider = resolvePrimaryPayoutProvider(
+    corridor?.provider_routing as ProviderRoutingEntry[] | null | undefined,
+  )
 
   const recipientOptions = resolveCorridorRecipientOptions({
     countryCode: cc,
@@ -36,6 +42,7 @@ export async function validateRecipientYcExtrasForSave(
     rail,
     fieldsSchema: corridor?.fields_schema,
     providers: corridor?.providers,
+    payoutProvider,
   })
 
   if (
@@ -54,12 +61,16 @@ export async function validateRecipientYcExtrasForSave(
     return "Mobile money provider must be selected from the corridor list."
   }
 
+  // YC LatAm extras when corridor has YC capability (schema ready + required extras).
   const ycSchema = resolveYcCorridorSchema({
     countryCode: cc,
     currencyCode: cur,
     fieldsSchema: corridor?.fields_schema,
   })
   if (!ycSchema || ycSchema.status !== "ready") return null
+
+  const hasRequiredExtras = (ycSchema.extra_fields ?? []).some((field) => field.required)
+  if (!hasRequiredExtras) return null
 
   const check = validateYcRecipientForCorridor({
     countryCode: cc,

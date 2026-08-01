@@ -89,7 +89,17 @@ export async function resolveCrossBorderProviderForDestination(
       rail,
       providerRouting: routing,
     })
-    return ok ? "grid" : supportYellowcard ? "yellowcard" : null
+    if (ok) return "grid"
+    // Manual Office choice: never silently swap to Yellowcard.
+    if (officeChoice === "grid") return null
+    return supportYellowcard ? "yellowcard" : null
+  }
+
+  if (preferred === "yellowcard") {
+    if (supportYellowcard) return "yellowcard"
+    // Manual Office choice: never silently swap to Grid.
+    if (officeChoice === "yellowcard") return null
+    return supportGrid ? "grid" : null
   }
 
   return supportYellowcard ? "yellowcard" : supportGrid ? "grid" : null

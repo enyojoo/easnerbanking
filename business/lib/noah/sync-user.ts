@@ -9,6 +9,7 @@ import {
   notifyBusinessKybStatusChange,
   notifyIndividualKycStatusChange,
 } from "@/lib/notifications/verification-notify"
+import { mapNoahPartnerStatus, persistVerificationStatus } from "@/lib/compliance"
 
 type VerificationStatus = "not_started" | "under_review" | "approved" | "rejected"
 
@@ -144,6 +145,16 @@ export async function syncNoahCustomerToSupabase(
   }
 
   await admin.from("users").update(update).eq("id", target.userId)
+
+  // Keep canonical SoR in lockstep with Noah mirrors (money-movement gates read verification_status).
+  await persistVerificationStatus(admin, {
+    kind: "individual",
+    userId: target.userId,
+    provider: "noah",
+    status: mapNoahPartnerStatus(kyc),
+    rejectionReasons,
+    verifiedAt: kyc === "approved" ? options?.occurredAt ?? now : null,
+  })
 
   await notifyIndividualKycStatusChange(
     admin,

@@ -9,6 +9,11 @@ export function getYellowcardApiSecret(): string {
   return (process.env.YELLOWCARD_API_SECRET || "").trim()
 }
 
+/** True when Yellowcard API key + secret are configured. */
+export function isYellowcardConfigured(): boolean {
+  return Boolean(getYellowcardApiKey() && getYellowcardApiSecret())
+}
+
 export function getYellowcardEnvironment(): "sandbox" | "production" {
   const env = (process.env.YELLOWCARD_ENVIRONMENT || "sandbox").trim().toLowerCase()
   return env === "production" ? "production" : "sandbox"

@@ -628,24 +628,31 @@ function appendMomoOptions(
   }
 }
 
-/** Union Noah / YC / Grid bank_enum and MoMo provider names from a corridor row. */
+/** Union or primary-scoped Noah / YC / Grid bank_enum and MoMo provider names. */
 export function extractCorridorRecipientCandidates(input: {
   countryCode?: string
   currencyCode?: string
   rail?: "bank_transfer" | "mobile_money"
   fieldsSchema?: unknown
   providers?: unknown
+  /** When set, only that provider's schema is used (manual Office routing). */
+  payoutProvider?: "noah" | "yellowcard" | "grid" | null
 }): CorridorRecipientCandidates {
-  const noah = unwrapNoahFieldsSchema(input.fieldsSchema)
+  const primary = input.payoutProvider ?? null
+  const noah =
+    !primary || primary === "noah" ? unwrapNoahFieldsSchema(input.fieldsSchema) : null
   const yc =
-    input.countryCode && input.currencyCode
-      ? resolveYcCorridorSchema({
-          countryCode: input.countryCode,
-          currencyCode: input.currencyCode,
-          fieldsSchema: input.fieldsSchema,
-        })
-      : unwrapYcFieldsSchema(input.fieldsSchema)
-  const grid = unwrapGridFieldsSchema(input.fieldsSchema)
+    !primary || primary === "yellowcard"
+      ? input.countryCode && input.currencyCode
+        ? resolveYcCorridorSchema({
+            countryCode: input.countryCode,
+            currencyCode: input.currencyCode,
+            fieldsSchema: input.fieldsSchema,
+          })
+        : unwrapYcFieldsSchema(input.fieldsSchema)
+      : null
+  const grid =
+    !primary || primary === "grid" ? unwrapGridFieldsSchema(input.fieldsSchema) : null
 
   const bankNames = uniqueStrings([
     ...(noah?.bank_enum ?? []),
@@ -654,23 +661,33 @@ export function extractCorridorRecipientCandidates(input: {
   ])
 
   const momoMap = new Map<string, GridMomoProviderOption>()
-  appendMomoOptions(
-    momoMap,
-    (Array.isArray(input.providers) ? input.providers : []).map((p) =>
-      momoOption(String(p)),
-    ),
-  )
-  appendMomoOptions(
-    momoMap,
-    (noah?.mobile_provider_labels ?? []).map((label) => momoOption(label)),
-  )
-  appendMomoOptions(momoMap, yc?.momo_provider_enum ?? [])
-  appendMomoOptions(momoMap, grid?.momo_provider_enum ?? [])
+  if (!primary || primary === "noah" || primary === "yellowcard" || primary === "grid") {
+    appendMomoOptions(
+      momoMap,
+      (Array.isArray(input.providers) ? input.providers : []).map((p) =>
+        momoOption(String(p)),
+      ),
+    )
+  }
+  if (!primary || primary === "noah") {
+    appendMomoOptions(
+      momoMap,
+      (noah?.mobile_provider_labels ?? []).map((label) => momoOption(label)),
+    )
+  }
+  if (!primary || primary === "yellowcard") {
+    appendMomoOptions(momoMap, yc?.momo_provider_enum ?? [])
+  }
+  if (!primary || primary === "grid") {
+    appendMomoOptions(momoMap, grid?.momo_provider_enum ?? [])
+  }
 
   const momoCandidates = [...momoMap.values()].sort((a, b) => a.label.localeCompare(b.label))
   const momoLabels = uniqueStrings([
-    ...(Array.isArray(input.providers)
-      ? (input.providers as unknown[]).map((p) => String(p))
+    ...(!primary || primary === "noah" || primary === "yellowcard" || primary === "grid"
+      ? Array.isArray(input.providers)
+        ? (input.providers as unknown[]).map((p) => String(p))
+        : []
       : []),
     ...(noah?.mobile_provider_labels ?? []),
     ...(yc?.momo_provider_enum ?? []).map((entry) => entry.label || entry.value),
@@ -694,28 +711,37 @@ function uniqueStrings(values: Array<string | undefined | null>): string[] {
   return [...new Set(values.map((v) => String(v ?? "").trim()).filter(Boolean))]
 }
 
-/** Provider-agnostic recipient UI options — union of Noah, YC, and Grid corridor schemas. */
+/** Provider-scoped recipient UI options — primary Office provider when set, else union. */
 export function resolveCorridorRecipientOptions(input: {
   countryCode: string
   currencyCode: string
   rail: "bank_transfer" | "mobile_money"
   fieldsSchema?: unknown
   providers?: unknown
+  /** Office primary payout provider — scopes banks/extras to that rail. */
+  payoutProvider?: "noah" | "yellowcard" | "grid" | null
 }): CorridorRecipientOptions {
+  const primary = input.payoutProvider ?? null
   const candidates = extractCorridorRecipientCandidates({
     countryCode: input.countryCode,
     currencyCode: input.currencyCode,
     rail: input.rail,
     fieldsSchema: input.fieldsSchema,
     providers: input.providers,
+    payoutProvider: primary,
   })
-  const yc = resolveYcCorridorSchema({
-    countryCode: input.countryCode,
-    currencyCode: input.currencyCode,
-    fieldsSchema: input.fieldsSchema,
-  })
-  const grid = unwrapGridFieldsSchema(input.fieldsSchema)
-  const schemaForExtras = yc ?? grid
+  const yc =
+    !primary || primary === "yellowcard"
+      ? resolveYcCorridorSchema({
+          countryCode: input.countryCode,
+          currencyCode: input.currencyCode,
+          fieldsSchema: input.fieldsSchema,
+        })
+      : null
+  const grid =
+    !primary || primary === "grid" ? unwrapGridFieldsSchema(input.fieldsSchema) : null
+  const schemaForExtras =
+    primary === "grid" ? grid : primary === "yellowcard" ? yc : primary === "noah" ? null : yc ?? grid
 
   return {
     bankOptions: candidates.bankNames,

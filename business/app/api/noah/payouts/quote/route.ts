@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireNoahEnv } from "../../_helpers"
+import { requireAuth } from "../../_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { mapNoahPayoutUserError } from "@/lib/noah/noah-prepare-errors"
@@ -14,13 +14,14 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { sendDestinationFromRow } from "@/lib/send-destination"
 import { quoteSendDestination } from "@/lib/send-destination-operations"
+import { selectProviderForCorridor, NoProviderForCorridorError } from "@/lib/payout-providers"
+import { requirePayoutProviderEnv } from "@/lib/payout-providers/require-provider-env"
+import type { PayoutEnvProviderId } from "@/lib/payout-providers/require-provider-env"
 
 /**
- * Executable payout quote: Noah sell/prepare + Easner pricing in one call.
+ * Executable payout quote: provider-selected sell/prepare + Easner pricing in one call.
  */
 export async function POST(request: Request) {
-  const mis = requireNoahEnv()
-  if (mis) return mis
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
@@ -110,6 +111,35 @@ export async function POST(request: Request) {
     })
     if (!limitCheck.ok) {
       return NextResponse.json({ error: limitCheck.message }, { status: 400 })
+    }
+
+    try {
+      const provider = await selectProviderForCorridor(admin, {
+        countryCode: String(gateRow.country_code || "").toUpperCase(),
+        currencyCode: String(gateRow.currency || "").toUpperCase(),
+        rail:
+          gateRow.mobile_provider ||
+          String(gateRow.bank_name || "").toLowerCase().includes("mobile money")
+            ? "mobile_money"
+            : "bank_transfer",
+        mobileProvider: gateRow.mobile_provider,
+        bankName: gateRow.bank_name,
+      })
+      const envProvider: PayoutEnvProviderId =
+        provider.id === "yellowcard" || provider.id === "grid" ? provider.id : "noah"
+      const envGate = requirePayoutProviderEnv(envProvider)
+      if (envGate) return envGate
+    } catch (e) {
+      if (e instanceof NoProviderForCorridorError) {
+        return NextResponse.json(
+          {
+            error: e.message,
+            code: "PAYOUT_PROVIDER_UNAVAILABLE",
+          },
+          { status: 400 },
+        )
+      }
+      throw e
     }
   }
 

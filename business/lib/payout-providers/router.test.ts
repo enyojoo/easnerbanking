@@ -16,8 +16,15 @@ vi.mock("./yellowcard-provider", () => ({
   },
 }))
 
+vi.mock("./grid-provider", () => ({
+  gridPayoutProvider: {
+    id: "grid",
+    supports: vi.fn(async () => true),
+  },
+}))
+
 describe("selectProvider", () => {
-  it("picks first routing entry that supports the corridor", async () => {
+  it("honors Office primary only — does not fall through to secondary", async () => {
     const ctx: CorridorContext = {
       countryCode: "KE",
       currencyCode: "KES",
@@ -27,11 +34,31 @@ describe("selectProvider", () => {
         { provider: "noah", priority: 2 },
       ],
     }
-    const provider = await selectProvider(ctx)
-    expect(provider.id).toBe("noah")
+    await expect(selectProvider(ctx)).rejects.toMatchObject({ code: "NO_PROVIDER_FOR_CORRIDOR" })
   })
 
-  it("throws when no provider supports", async () => {
+  it("returns primary when it supports the corridor", async () => {
+    const ctx: CorridorContext = {
+      countryCode: "KE",
+      currencyCode: "KES",
+      rail: "bank_transfer",
+      providerRouting: [{ provider: "grid", priority: 1 }],
+    }
+    const provider = await selectProvider(ctx)
+    expect(provider.id).toBe("grid")
+  })
+
+  it("throws when routing is empty", async () => {
+    const ctx: CorridorContext = {
+      countryCode: "KE",
+      currencyCode: "KES",
+      rail: "bank_transfer",
+      providerRouting: [],
+    }
+    await expect(selectProvider(ctx)).rejects.toMatchObject({ code: "NO_PROVIDER_FOR_CORRIDOR" })
+  })
+
+  it("throws when primary does not support", async () => {
     const ctx: CorridorContext = {
       countryCode: "KE",
       currencyCode: "KES",

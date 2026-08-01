@@ -1,4 +1,5 @@
 import type { RecipientData } from './recipientService'
+import { mergeRecipientProviderBindings } from './recipientCatalog'
 
 export function buildRecipientInsertPayload(
   userId: string,
@@ -7,6 +8,19 @@ export function buildRecipientInsertPayload(
   derivedSwiftBic: string | undefined,
   countryCode: string,
 ) {
+  const rail = recipientData.mobileProvider ? ('mobile_money' as const) : ('bank_transfer' as const)
+  const metadata =
+    countryCode && recipientData.currency
+      ? mergeRecipientProviderBindings({
+          countryCode,
+          currencyCode: recipientData.currency,
+          rail,
+          bankName: bankNameForPersist,
+          mobileProvider: recipientData.mobileProvider,
+          metadata: recipientData.metadata ?? {},
+        })
+      : (recipientData.metadata ?? {})
+
   return {
     user_id: userId,
     full_name: recipientData.fullName,
@@ -28,6 +42,6 @@ export function buildRecipientInsertPayload(
     postal_code: recipientData.postalCode || null,
     mobile_provider: recipientData.mobileProvider || null,
     wallet_network: recipientData.walletNetwork || null,
-    metadata: recipientData.metadata ?? {},
+    metadata,
   }
 }

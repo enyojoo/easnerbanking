@@ -30,20 +30,35 @@ function parseRouting(raw: unknown): ProviderRoutingEntry[] {
   return out.sort((a, b) => a.priority - b.priority)
 }
 
-function defaultRouting(): ProviderRoutingEntry[] {
-  return [{ provider: "noah", priority: 1, settlement_asset: "USDC" }]
-}
-
+/**
+ * Manual Office routing: use the priority-1 provider only.
+ * Do not walk secondaries (that would be auto-failover).
+ */
 export async function selectProvider(ctx: CorridorContext): Promise<PayoutProvider> {
-  const routing = ctx.providerRouting.length ? ctx.providerRouting : defaultRouting()
-  for (const entry of routing) {
-    const provider = registry[entry.provider]
-    if (!provider) continue
-    if (await provider.supports(ctx)) return provider
+  const routing = parseRouting(ctx.providerRouting)
+  if (!routing.length) {
+    throw new NoProviderForCorridorError(
+      "Payout provider is not configured for this corridor. Enable a provider in Office Platform Control.",
+    )
   }
-  throw new NoProviderForCorridorError()
+
+  const primary = routing[0]!
+  const provider = registry[primary.provider]
+  if (!provider) {
+    throw new NoProviderForCorridorError(`Unknown payout provider: ${primary.provider}`)
+  }
+  if (!(await provider.supports(ctx))) {
+    throw new NoProviderForCorridorError(
+      `Office-selected provider (${primary.provider}) cannot execute payouts on this corridor yet. Sync corridors or choose another provider.`,
+    )
+  }
+  return provider
 }
 
+/**
+ * Load Office payout routing for a corridor.
+ * Empty when disabled or unset — callers must fail closed (no silent Noah default).
+ */
 export async function loadCorridorRouting(
   admin: SupabaseClient,
   input: { countryCode: string; currencyCode: string; rail: PayoutRailKind },
@@ -58,9 +73,8 @@ export async function loadCorridorRouting(
     .eq("currency_code", cur)
     .maybeSingle()
 
-  if (!data?.enabled) return defaultRouting()
-  const routing = parseRouting(data.provider_routing)
-  return routing.length ? routing : defaultRouting()
+  if (!data?.enabled) return []
+  return parseRouting(data.provider_routing)
 }
 
 export async function selectProviderForCorridor(
@@ -92,7 +106,7 @@ export async function selectProviderForCorridor(
   })
 }
 
-/** True when Yellowcard is routed and has an active send channel for this corridor. */
+/** True when Yellowcard is the Office primary and has an active send channel. */
 export async function corridorHasYellowcardPayout(
   admin: SupabaseClient,
   input: {
@@ -108,7 +122,8 @@ export async function corridorHasYellowcardPayout(
     currencyCode: cur,
     rail: input.rail,
   })
-  if (!routing.some((entry) => entry.provider === "yellowcard")) return false
+  const primary = routing[0]?.provider
+  if (primary !== "yellowcard") return false
   return yellowcardPayoutProvider.supports({
     countryCode: cc,
     currencyCode: cur,

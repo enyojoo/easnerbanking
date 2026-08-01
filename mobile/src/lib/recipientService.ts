@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import { enrichEasenetRecipientFromCache, primeAndAttachEasenetSnapshot } from './enrichEasenetRecipient'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from './easenetRecipientUi'
 import { buildRecipientInsertPayload } from './recipientPersistPayload'
+import { mergeRecipientProviderBindings } from './recipientCatalog'
 import type { Recipient } from '../types'
 
 export type { Recipient }
@@ -288,7 +289,45 @@ export const recipientService = {
     if (updates.city !== undefined) updateData.city = updates.city || null
     if (updates.state !== undefined) updateData.state = updates.state || null
     if (updates.postalCode !== undefined) updateData.postal_code = updates.postalCode || null
+    if (updates.metadata !== undefined) updateData.metadata = updates.metadata
     updateData.updated_at = now()
+
+    const mergedCountry =
+      updates.countryCode !== undefined
+        ? String(updates.countryCode || '').trim().toUpperCase()
+        : undefined
+    const mergedBank =
+      derivedBankName !== undefined ? derivedBankName : undefined
+    const mergedMobile =
+      updates.mobileProvider !== undefined ? updates.mobileProvider : undefined
+
+    try {
+      const { data: existingRow } = await supabase
+        .from('recipients')
+        .select('country_code,currency,bank_name,mobile_provider,metadata')
+        .eq('id', recipientId)
+        .maybeSingle()
+
+      const cc = mergedCountry ?? String(existingRow?.country_code ?? '').trim().toUpperCase()
+      const cur = String(existingRow?.currency ?? '').trim().toUpperCase()
+      const bankName = mergedBank ?? String(existingRow?.bank_name ?? '')
+      const mobileProvider = mergedMobile ?? String(existingRow?.mobile_provider ?? '')
+      const rail = mobileProvider ? ('mobile_money' as const) : ('bank_transfer' as const)
+      if (cc && cur && (bankName || mobileProvider)) {
+        updateData.metadata = mergeRecipientProviderBindings({
+          countryCode: cc,
+          currencyCode: cur,
+          rail,
+          bankName,
+          mobileProvider: mobileProvider || null,
+          metadata: (updateData.metadata as Record<string, unknown> | undefined) ??
+            (existingRow?.metadata as Record<string, unknown> | undefined) ??
+            {},
+        })
+      }
+    } catch {
+      // best-effort binding refresh on update
+    }
 
     try {
       const { data, error } = await supabase

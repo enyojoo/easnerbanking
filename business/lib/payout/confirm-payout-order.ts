@@ -42,7 +42,7 @@ export async function confirmPayoutOrder(
       : null
   const kycUserId = orgOwner ?? input.userId
 
-  let providerId = "noah"
+  let providerId: string
   try {
     const provider = await selectProviderForCorridor(admin, {
       countryCode,
@@ -55,8 +55,10 @@ export async function confirmPayoutOrder(
       bankName: recipient.bank_name,
     })
     providerId = provider.id
-  } catch {
-    providerId = "noah"
+  } catch (e) {
+    throw e instanceof Error
+      ? e
+      : new Error("Payout provider is not available for this corridor.")
   }
 
   const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"

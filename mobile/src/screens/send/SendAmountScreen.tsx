@@ -1142,6 +1142,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const needsBackgroundPayoutQuote =
     selectedPaymentMethod === 'balance' &&
+    tier1Ok &&
     !isEasetagRecipient &&
     !isWalletRecipient &&
     receiveAmount > 0 &&

@@ -1,4 +1,5 @@
 import {
+  applyProviderBindingToRecipient,
   buildYcSendMappingFromRecipient,
   pickYcSendNetworkId,
   resolveCorridorBankName,
@@ -22,12 +23,13 @@ export async function mapRecipientToYcSend(
   row: RecipientSellPrepareRow & { metadata?: Record<string, unknown> | null },
   opts?: { channelId?: string | null },
 ): Promise<YcSendRecipientMapping> {
-  const country = resolveYcRecipientCountry(row)
-  const currency = String(row.currency ?? "").trim().toUpperCase()
-  const mobileProvider = String(row.mobile_provider ?? "").trim()
-  const bankName = String(row.bank_name ?? "").trim()
-  const accountNumber = String(row.account_number ?? "").trim()
-  const phone = String(row.phone_number ?? "").trim()
+  const boundRow = applyProviderBindingToRecipient(row, "yellowcard")
+  const country = resolveYcRecipientCountry(boundRow)
+  const currency = String(boundRow.currency ?? "").trim().toUpperCase()
+  const mobileProvider = String(boundRow.mobile_provider ?? "").trim()
+  const bankName = String(boundRow.bank_name ?? "").trim()
+  const accountNumber = String(boundRow.account_number ?? "").trim()
+  const phone = String(boundRow.phone_number ?? "").trim()
 
   const isMomo =
     Boolean(mobileProvider) ||
@@ -65,7 +67,7 @@ export async function mapRecipientToYcSend(
   }
 
   const mappedRow = {
-    ...row,
+    ...boundRow,
     ...(resolvedBankName ? { bank_name: resolvedBankName } : {}),
     ...(resolvedMobileProvider ? { mobile_provider: resolvedMobileProvider } : {}),
   }

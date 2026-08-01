@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import { validateRecipientYcExtrasForSave } from "@/lib/recipients-yc-validation"
+import { attachProviderBindingsToPayload } from "@/lib/recipients-provider-bindings"
 import {
   isBankNameAllowedForCorridor,
   isMomoProviderAllowedForCorridor,
@@ -9,6 +10,7 @@ import {
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
   resolveCorridorRecipientOptions,
+  resolvePrimaryPayoutProvider,
   unwrapNoahFieldsSchema,
 } from "@easner/shared"
 import {
@@ -80,17 +82,21 @@ export async function PATCH(request: Request, context: RouteContext) {
     const rail = isMobile ? "mobile_money" : "bank_transfer"
     const { data: corridor } = await admin
       .from("payout_corridors")
-      .select("fields_schema,providers")
+      .select("fields_schema,providers,provider_routing")
       .eq("country_code", cc)
       .eq("currency_code", cur)
       .eq("rail", rail)
       .maybeSingle()
+    const payoutProvider = resolvePrimaryPayoutProvider(
+      corridor?.provider_routing as import("@easner/shared").ProviderRoutingEntry[] | null | undefined,
+    )
     const recipientOptions = resolveCorridorRecipientOptions({
       countryCode: cc,
       currencyCode: cur,
       rail,
       fieldsSchema: corridor?.fields_schema,
       providers: corridor?.providers,
+      payoutProvider,
     })
     const bankName = String(payload.bank_name ?? existing.bank_name ?? "").trim()
     if (
@@ -165,6 +171,20 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (ycErr) {
       return NextResponse.json({ error: ycErr }, { status: 400 })
     }
+
+    const bindingPayload = {
+      country_code: merged.country_code,
+      currency: merged.currency,
+      bank_name: payload.bank_name ?? existing.bank_name,
+      mobile_provider: merged.mobile_provider,
+      metadata: (payload.metadata ?? existing.metadata ?? {}) as Record<string, unknown>,
+    }
+    attachProviderBindingsToPayload({
+      payload: bindingPayload,
+      corridor,
+      rail,
+    })
+    payload.metadata = bindingPayload.metadata
   }
 
   const primary = await admin

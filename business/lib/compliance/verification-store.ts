@@ -36,30 +36,48 @@ export async function readVerificationRow(
   const { data, error } = await admin
     .from("users")
     .select(
-      "verification_provider,verification_status,verification_rejection_reasons,verified_at,grid_customer_id,noah_kyc_status",
+      "verification_provider,verification_status,verification_rejection_reasons,kyc_verified_at,grid_customer_id,noah_kyc_status",
     )
     .eq("id", input.userId)
     .maybeSingle()
   if (error || !data) return null
-  return data as StoredVerificationRow
+  const row = data as Record<string, unknown>
+  return {
+    ...(row as StoredVerificationRow),
+    verified_at: (row.kyc_verified_at as string | null | undefined) ?? null,
+  }
 }
 
+function isProgressedVerificationStatus(status: string): status is VerificationStatus {
+  return (
+    status === "approved" ||
+    status === "pending" ||
+    status === "rejected" ||
+    status === "hold"
+  )
+}
+
+/**
+ * Canonical KYC/KYB for money-movement gates.
+ *
+ * Grid SoR trusts `verification_status` only (cutover may leave Noah mirrors approved).
+ * Noah / unset SoR: prefer progressed canonical values; treat `not_started`/empty as
+ * stale and fall back to Noah mirrors so post-cutover webhook lag cannot block payouts.
+ */
 export function canonicalVerificationStatus(row: StoredVerificationRow | null): VerificationStatus {
   if (!row) return "not_started"
+  const provider = String(row.verification_provider ?? "").toLowerCase()
   const direct = String(row.verification_status ?? "").toLowerCase()
-  if (
-    direct === "approved" ||
-    direct === "pending" ||
-    direct === "rejected" ||
-    direct === "hold" ||
-    direct === "not_started"
-  ) {
-    return direct as VerificationStatus
+
+  if (provider === "grid") {
+    if (isProgressedVerificationStatus(direct) || direct === "not_started") {
+      return direct as VerificationStatus
+    }
+    return mapGridPartnerStatus(row.noah_kyb_status ?? row.noah_kyc_status)
   }
 
-  const provider = String(row.verification_provider ?? "").toLowerCase()
-  if (provider === "grid") {
-    return mapGridPartnerStatus(row.noah_kyb_status ?? row.noah_kyc_status)
+  if (isProgressedVerificationStatus(direct)) {
+    return direct
   }
   return mapNoahPartnerStatus(row.noah_kyb_status ?? row.noah_kyc_status)
 }
@@ -88,7 +106,7 @@ export async function persistVerificationStatus(
     if (input.kind === "business") {
       patch.kyb_verified_at = input.verifiedAt ?? now
     } else {
-      patch.verified_at = input.verifiedAt ?? now
+      patch.kyc_verified_at = input.verifiedAt ?? now
     }
   } else if (input.kind === "business") {
     patch.kyb_verified_at = null

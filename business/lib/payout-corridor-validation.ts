@@ -84,9 +84,10 @@ export async function payoutCorridorGate(
 
   const { data, error } = await admin
     .from("payout_corridors")
-    .select("enabled,currency_code")
+    .select("enabled,currency_code,provider_routing")
     .eq("rail", rail)
     .eq("country_code", cc)
+    .eq("currency_code", currency)
     .maybeSingle()
 
   if (error) return null
@@ -95,12 +96,6 @@ export async function payoutCorridorGate(
   if (!data.enabled) {
     return NextResponse.json(
       { error: "This payout corridor is temporarily unavailable. Choose another country or try again later." },
-      { status: 400 },
-    )
-  }
-  if (String(data.currency_code).toUpperCase() !== currency) {
-    return NextResponse.json(
-      { error: "Country and currency do not match an active payout corridor." },
       { status: 400 },
     )
   }

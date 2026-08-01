@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
+import {
+  loadCorridorForPreflight,
+  preflightCorridorRoutingPatch,
+} from "@/lib/payout-providers/corridor-routing-preflight"
 
 type PatchBody = {
   enabled?: boolean
@@ -43,6 +47,31 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   const admin = createSupabaseAdmin()
+
+  if (
+    body.provider_routing !== undefined ||
+    body.metadata !== undefined ||
+    body.fields_schema !== undefined
+  ) {
+    const existing = await loadCorridorForPreflight(admin, id)
+    const issues = preflightCorridorRoutingPatch({
+      providerRouting: body.provider_routing,
+      metadata: body.metadata,
+      fieldsSchema: body.fields_schema,
+      existing,
+    })
+    if (issues.length > 0) {
+      return NextResponse.json(
+        {
+          error: issues.map((i) => i.message).join(" "),
+          code: "CORRIDOR_ROUTING_PREFLIGHT_FAILED",
+          issues,
+        },
+        { status: 400 },
+      )
+    }
+  }
+
   const { data, error } = await admin.from("payout_corridors").update(updates).eq("id", id).select("*").maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
