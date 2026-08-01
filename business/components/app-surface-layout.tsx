@@ -20,8 +20,8 @@ const DASHBOARD_SHELL_ROOTS = [
 
 /**
  * Every authenticated business workspace route must match one of DASHBOARD_SHELL_ROOTS
- * so page chrome (header, verification banner, scroll) stays consistent. Do not add
- * compensating pt-* on <main> or page roots — header/banner are in-flow above main.
+ * so page chrome (header, verification banner, scroll) stays consistent. Top spacing
+ * below the header lives on DashboardShell `<main>` (pt-6); avoid duplicate pt-* on page roots.
  */
 
 function matchesShellRoot(pathname: string, root: string) {

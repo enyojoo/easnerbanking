@@ -495,11 +495,6 @@ export function BusinessVerificationSection() {
                   )}
                 </div>
                 <CardDescription className="text-sm">{t.description}</CardDescription>
-                {isT1 && tier1Complete ? (
-                  <p className="text-xs text-muted-foreground pt-1">
-                    {VERIFICATION_SECTION_COPY.tier1Approved}
-                  </p>
-                ) : null}
                 {t.footnote ? (
                   <p className="text-xs text-muted-foreground pt-1">{t.footnote}</p>
                 ) : null}
