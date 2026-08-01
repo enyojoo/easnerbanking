@@ -14,7 +14,6 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useBusinessNoahSync } from "@/hooks/use-business-noah-sync"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { openBusinessSupport } from "@/lib/intercom-messenger"
-import { ComplianceCutoverBanner } from "@/components/compliance/compliance-cutover-banner"
 import { BANNER_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 
@@ -34,22 +33,11 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
     isLoading: profileLoading,
     hasData: profileHasData,
     tier1Complete,
-    tier1VerificationStatus,
-    canManageBusinessVerification,
   } = useBusinessProfile()
   const { avatarUrl: profileImageUrl } = usePersonalProfileAvatar()
   /** Keep header avatar/menu mounted while revalidating if we already showed org + profile once */
   const showProfileChromeSkeleton = profileLoading && !profileHasData
-  const tier1Status = (tier1VerificationStatus ?? "not_started").toLowerCase()
-  const showCutoverBanner =
-    profileHasData &&
-    !profileLoading &&
-    !tier1Complete &&
-    tier1Status === "not_started" &&
-    canManageBusinessVerification
-  const showTier1Banner =
-    profileHasData && !profileLoading && !tier1Complete && !showCutoverBanner
-  const showStatusBanner = showCutoverBanner || showTier1Banner
+  const showTier1Banner = profileHasData && !profileLoading && !tier1Complete
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -144,9 +132,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
             </>
           )}
           </header>
-          {showCutoverBanner ? (
-            <ComplianceCutoverBanner className="shrink-0" />
-          ) : showTier1Banner ? (
+          {showTier1Banner ? (
             <div
               className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] px-8 py-2.5 text-sm text-[hsl(var(--warning))] backdrop-blur-sm"
               role="status"
@@ -168,7 +154,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
           <main
             style={
               {
-                "--dashboard-sticky-top": showStatusBanner ? "6.5rem" : "4rem",
+                "--dashboard-sticky-top": showTier1Banner ? "6.5rem" : "4rem",
               } as React.CSSProperties
             }
             className={cn(

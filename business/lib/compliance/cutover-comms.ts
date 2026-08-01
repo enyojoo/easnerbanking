@@ -34,6 +34,6 @@ export function buildBusinessKybCutoverEmail(input: {
 export const KYB_CUTOVER_OPS_CHECKLIST = [
   "Inventory approved businesses and open Noah receivables",
   "Communicate receive wind-down window for retired Noah VAs",
-  "Enable in-app cutover banner and send re-verification email",
+  "Send re-verification email to affected businesses",
   "Monitor Grid CUSTOMER.KYB_* webhooks and sync-status poll backup",
 ] as const

@@ -102,8 +102,6 @@ export const ONBOARDING_STEP_COPY = {
 export const BANNER_COPY = {
   verification:
     "Complete verification to unlock payments and accounts.",
-  cutover:
-    "We upgraded business verification. Please complete verification again to restore send, receive, and invoice features.",
   invoiceProfileTitle: "Finish your business profile to create invoices.",
 } as const
 
