@@ -12,33 +12,6 @@ import { submitYcSendWithDestinationAmountLock } from "./yc-send-leg-lock"
 import type { YcSendSubmitResult } from "./send-submit"
 
 describe("submitYcSendWithDestinationAmountLock", () => {
-  it("locks on first attempt when localAmount gross targets quoted net", async () => {
-    let call = 0
-    const submitted: Array<{ crypto: number; localGross: number }> = []
-
-    const result = await submitYcSendWithDestinationAmountLock({
-      receiveAmount: 2000,
-      initialSettlementCryptoUsd: 1.478772,
-      destinationRate: 1366.135,
-      receiveCurrency: "NGN",
-      buildSubmit: async ({ settlementCryptoUsd, settlementLocalGross }) => {
-        submitted.push({ crypto: settlementCryptoUsd, localGross: settlementLocalGross })
-        call += 1
-        // With localAmount gross ~2021, YC locks net 2000 on first POST.
-        return {
-          id: "send-1",
-          convertedAmount: 2020.2,
-          serviceFeeAmountLocal: 20.2,
-          settlementInfo: { cryptoAmount: settlementCryptoUsd, walletAddress: "w" },
-        }
-      },
-    })
-
-    expect(call).toBe(1)
-    expect(submitted[0]?.localGross).toBeGreaterThanOrEqual(2020.2)
-    expect(result.lockedLocalAmount - 20.2).toBeGreaterThanOrEqual(2000)
-  })
-
   it("retries when localAmount matches quote but gross convertedAmount net is short", async () => {
     const responses: YcSendSubmitResult[] = [
       {

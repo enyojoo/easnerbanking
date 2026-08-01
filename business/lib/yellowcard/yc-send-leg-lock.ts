@@ -1,11 +1,10 @@
 import { randomUUID } from "crypto"
 import {
   checkYcSendLegDestinationAmountSufficient,
-  estimateYcSendLegGrossLocalForQuotedReceive,
   readYcSendLockedLocalAmount,
   resolveYcSendLegDestinationExcessTolerance,
   resolveYcSendLegFeeLocalForLock,
-  retargetYcSendLegLockAmountsForQuotedReceive,
+  retargetYcSendLegSettlementCryptoForQuotedReceive,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,
 } from "@easner/shared"
@@ -38,7 +37,6 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   sequenceIdPrefix?: string
   buildSubmit: (args: {
     settlementCryptoUsd: number
-    settlementLocalGross: number
     sequenceId: string
     attempt: number
   }) => Promise<YcSendSubmitResult>
@@ -49,9 +47,6 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     resolveYcSendLegDestinationExcessTolerance(input.receiveAmount)
   const prefix = String(input.sequenceIdPrefix ?? "yc_send").trim() || "yc_send"
   let settlementCryptoUsd = input.initialSettlementCryptoUsd
-  let settlementLocalGross = estimateYcSendLegGrossLocalForQuotedReceive({
-    quotedReceive: input.receiveAmount,
-  })
   let sequenceId = `${prefix}_${randomUUID()}`
   let lastLockedLocal = 0
 
@@ -62,7 +57,6 @@ export async function submitYcSendWithDestinationAmountLock(input: {
 
     const sendResRaw = await input.buildSubmit({
       settlementCryptoUsd,
-      settlementLocalGross,
       sequenceId,
       attempt,
     })
@@ -143,17 +137,14 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     // Prefer YC-echoed crypto for observed rate — submitted amount can differ from lock.
     const echoedCrypto = roundUsdc(Number(sendRes.settlementInfo?.cryptoAmount ?? 0))
     const basisCrypto = echoedCrypto > 0 ? echoedCrypto : settlementCryptoUsd
-    const retargeted = retargetYcSendLegLockAmountsForQuotedReceive({
+    settlementCryptoUsd = retargetYcSendLegSettlementCryptoForQuotedReceive({
       settlementCryptoUsd: basisCrypto,
-      settlementLocalGross,
       lockedLocalAmount: lastLockedLocal,
       sendLegFeeLocal,
       quotedReceive: input.receiveAmount,
       destinationRate: input.destinationRate,
       preferCeil: check.shortfall > 0,
     })
-    settlementCryptoUsd = retargeted.settlementCryptoUsd
-    settlementLocalGross = retargeted.settlementLocalGross
   }
 
   throw new Error(

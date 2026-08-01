@@ -23,10 +23,8 @@ export type YcSendSubmitInput = {
   refundMode: YcSendRefundMode
   userTurnkeyAddress?: string | null
   reason?: string
-  /** USDC notional for directSettlement disbursement. */
+  /** USDC notional for directSettlement disbursement (omit localAmount/amount). */
   settlementCryptoAmount?: number
-  /** Gross destination fiat for POST /send (net + YC fee). Required with directSettlement to lock receive. */
-  settlementLocalGross?: number
 }
 
 export type YcSendSubmitResult = {
@@ -87,17 +85,8 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
     directSettlement,
     settlementInfo,
   }
-  // YC accepts localAmount with directSettlement — locks destination fiat (gross before fee).
-  const localGross =
-    input.settlementLocalGross != null
-      ? input.settlementLocalGross
-      : input.localAmount != null
-        ? input.localAmount
-        : undefined
-  if (localGross != null && Number.isFinite(localGross) && localGross > 0) {
-    body.localAmount = Math.ceil(localGross)
-  }
   if (!directSettlement) {
+    if (input.localAmount != null) body.localAmount = input.localAmount
     if (input.amount != null) body.amount = input.amount
   }
   if (input.sender) body.sender = input.sender

@@ -31,7 +31,6 @@ import {
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
   bumpYcSendLegSettlementCryptoForLocalShortfall,
   trimYcSendLegSettlementCryptoForLocalExcess,
-  estimateYcSendLegGrossLocalForQuotedReceive,
   estimateYcSendLegSettlementCryptoForQuotedReceive,
   retargetYcSendLegSettlementCryptoForQuotedReceive,
   resolveYcSendLegDestinationExcessTolerance,
@@ -629,14 +628,6 @@ describe("yc send leg destination amount", () => {
         quotedReceive: 2000,
       }),
     ).toBe(20.27)
-  })
-
-  it("grosses up local amount for ~1% YC send fee", () => {
-    expect(
-      estimateYcSendLegGrossLocalForQuotedReceive({
-        quotedReceive: 2000,
-      }),
-    ).toBe(2020.21)
   })
 
   it("grosses up initial settlement crypto for ~1% YC send fee + rate buffer", () => {

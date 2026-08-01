@@ -365,7 +365,7 @@ export async function lockYcBalancePayoutSend(input: {
     destinationRate: customerRate,
     receiveCurrency,
     sequenceIdPrefix: "yc_quote",
-    buildSubmit: async ({ settlementCryptoUsd, settlementLocalGross, sequenceId: lockSequenceId }) =>
+    buildSubmit: async ({ settlementCryptoUsd, sequenceId: lockSequenceId }) =>
       submitYcSend({
         sequenceId: lockSequenceId,
         customerUID: input.customerUID,
@@ -374,7 +374,6 @@ export async function lockYcBalancePayoutSend(input: {
         currency: receiveCurrency,
         country: countryCode,
         settlementCryptoAmount: settlementCryptoUsd,
-        settlementLocalGross,
         refundMode: "balance_payout",
         userTurnkeyAddress: input.userTurnkeyAddress,
         sender,

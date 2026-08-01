@@ -568,7 +568,7 @@ export async function lockCrossBorderLeg2(
     destinationRate: ycBuyTo,
     receiveCurrency: ctx.receiveCurrency,
     sequenceIdPrefix: "yc_cb_l2",
-    buildSubmit: async ({ settlementCryptoUsd, settlementLocalGross, sequenceId }) =>
+    buildSubmit: async ({ settlementCryptoUsd, sequenceId }) =>
       submitYcSend({
         sequenceId,
         customerUID: input.customerUID,
@@ -576,7 +576,6 @@ export async function lockCrossBorderLeg2(
         currency: ctx.receiveCurrency,
         country: ctx.receiveCountry,
         settlementCryptoAmount: settlementCryptoUsd,
-        settlementLocalGross,
         refundMode: "cross_border_send",
         sender: ctx.sender,
         destination: ctx.recipientMapped.destination,
@@ -1378,7 +1377,7 @@ export async function authorizeCrossBorderDraft(input: {
     destinationRate: ycBuyTo,
     receiveCurrency,
     sequenceIdPrefix: "yc_cb_l2",
-    buildSubmit: async ({ settlementCryptoUsd, settlementLocalGross, sequenceId }) =>
+    buildSubmit: async ({ settlementCryptoUsd, sequenceId }) =>
       submitYcSend({
         sequenceId,
         customerUID: input.customerUID,
@@ -1386,7 +1385,6 @@ export async function authorizeCrossBorderDraft(input: {
         currency: receiveCurrency,
         country: receiveCountry,
         settlementCryptoAmount: settlementCryptoUsd,
-        settlementLocalGross,
         refundMode: "cross_border_send",
         sender,
         destination: recipientMapped.destination,
