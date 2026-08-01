@@ -4,43 +4,45 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Code, Terminal, Key, ExternalLink, FileText, History } from "lucide-react"
 import Link from "next/link"
+import { PageIntro } from "@/components/copy/page-intro"
+import { DEVELOPER_TOOL_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 const developerTools = [
   {
     title: "API Reference",
-    description: "Complete API documentation with examples and code snippets",
+    description: DEVELOPER_TOOL_COPY.apiReference,
     icon: Code,
     href: "/developers/api-reference",
     external: true
   },
   {
     title: "SDKs",
-    description: "Official SDKs for popular programming languages",
+    description: DEVELOPER_TOOL_COPY.sdks,
     icon: Terminal,
     href: "/developers/sdks",
     external: true
   },
   {
     title: "Webhooks",
-    description: "Set up webhooks to receive real-time notifications",
+    description: DEVELOPER_TOOL_COPY.webhooks,
     icon: Code,
     href: "/developers/webhooks"
   },
   {
     title: "Events",
-    description: "Monitor and track API events and activities",
+    description: DEVELOPER_TOOL_COPY.events,
     icon: History,
     href: "/developers/events"
   },
   {
     title: "Logs",
-    description: "View detailed logs and debugging information",
+    description: DEVELOPER_TOOL_COPY.logs,
     icon: FileText,
     href: "/developers/logs"
   },
   {
     title: "API Keys",
-    description: "Manage your API keys and authentication",
+    description: DEVELOPER_TOOL_COPY.apiKeys,
     icon: Key,
     href: "/developers/api-keys"
   }
@@ -49,11 +51,11 @@ const developerTools = [
 export default function DevelopersOverviewPage() {
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-semibold text-foreground">Developer Tools</h1>
-        <p className="text-muted-foreground mt-2">Build and integrate with Easner Business Banking's APIs and services</p>
-      </div>
+      <PageIntro
+        title={PAGE_COPY.developers.title}
+        description={PAGE_COPY.developers.intro}
+        variant="hero"
+      />
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

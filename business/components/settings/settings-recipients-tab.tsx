@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Plus, Search, MoreVertical, Edit, Trash2, User, Send, Users } from "lucide-react"
@@ -29,6 +29,9 @@ import { useAuth } from "@/lib/auth-context"
 import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import { createSendFlowSeedForRecipient, persistSendFlowState } from "@/lib/send-flow-session"
 import { cn } from "@/lib/utils"
+import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
+import { SettingsCardHeader } from "@/components/settings/settings-card-header"
+import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
 
 export function SettingsRecipientsTab() {
   const router = useRouter()
@@ -126,16 +129,19 @@ export function SettingsRecipientsTab() {
 
   return (
     <div className="space-y-6">
+      <SettingsTabIntro title={SETTINGS_TAB_COPY.recipients.title} description={SETTINGS_TAB_COPY.recipients.intro} />
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1.5">
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 shrink-0" aria-hidden />
-                Recipients
-              </CardTitle>
-              <CardDescription>Manage your saved recipients for quick transfers</CardDescription>
-            </div>
+            <SettingsCardHeader
+              title={
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 shrink-0" aria-hidden />
+                  Recipients
+                </CardTitle>
+              }
+              description={SETTINGS_CARD_COPY.recipients}
+            />
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="shrink-0 self-start sm:self-auto">

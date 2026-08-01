@@ -26,6 +26,7 @@ import { filterCountriesByPolicy } from "@easner/shared"
 import { CountryFlag } from "@/components/flags"
 import { OtpCodeInput } from "@/components/otp-code-input"
 import { useTeamInviteContext } from "@/lib/use-team-invite-context"
+import { AUTH_COPY } from "@/lib/copy/business-ui-copy"
 
 const TERMS_URL = "https://www.easner.com/terms?from=register"
 
@@ -151,8 +152,10 @@ export default function SignupPage() {
               Create an account to join {invitePreview.businessName} as {invitePreview.role}
             </CardDescription>
           ) : isTeamInvite ? (
-            <CardDescription>Create an account to accept your team invitation</CardDescription>
-          ) : null}
+            <CardDescription>{AUTH_COPY.join}</CardDescription>
+          ) : (
+            <CardDescription>{AUTH_COPY.signup}</CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           <form onSubmit={step === "signup" ? handleSubmit : handleVerifyOtp} className="space-y-4">

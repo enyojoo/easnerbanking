@@ -30,9 +30,11 @@ import {
   type BusinessProfile,
 } from "@/lib/use-business-profile"
 import { CountryFlag } from "@/components/flags"
-import { BusinessVerificationSection } from "@/components/compliance/business-verification-section"
 import { BaseCurrencyOptionLabel } from "@/components/base-currency-option-label"
 import { BusinessIndustryCombobox } from "@/components/settings/business-industry-combobox"
+import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
+import { SettingsCardHeader } from "@/components/settings/settings-card-header"
+import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
 import { useBusinessEasetagAvailability } from "@/hooks/use-business-easetag-availability"
 import { useAllowedBaseCurrencies } from "@/hooks/use-allowed-base-currencies"
 import { useAllowedCountryCodes } from "@/hooks/use-allowed-country-codes"
@@ -282,38 +284,43 @@ export function SettingsBusinessTab() {
 
   return (
     <div className="space-y-6">
-      <BusinessVerificationSection />
+      <SettingsTabIntro title={SETTINGS_TAB_COPY.business.title} description={SETTINGS_TAB_COPY.business.intro} />
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              Business Information
-            </CardTitle>
-            {loading ? (
-              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
-            ) : editingSection === "business" ? (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleCancel} disabled={Boolean(savingSection)}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancel
+          <SettingsCardHeader
+            title={
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Business Information
+              </CardTitle>
+            }
+            description={SETTINGS_CARD_COPY.businessInfo}
+            actions={
+              loading ? (
+                <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+              ) : editingSection === "business" ? (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancel} disabled={Boolean(savingSection)}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={() => void handleSave("business")} disabled={Boolean(savingSection)}>
+                    {savingSection === "business" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Check className="h-4 w-4" aria-hidden />
+                    )}
+                    Save
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => handleEdit("business")}>
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
                 </Button>
-                <Button size="sm" onClick={() => void handleSave("business")} disabled={Boolean(savingSection)}>
-                  {savingSection === "business" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Check className="h-4 w-4" aria-hidden />
-                  )}
-                  Save
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => handleEdit("business")}>
-                <Edit className="h-4 w-4 mr-1" />
-                Edit
-              </Button>
-            )}
-          </div>
+              )
+            }
+          />
         </CardHeader>
         <CardContent className="space-y-4">
           {loading ? (
@@ -476,35 +483,40 @@ export function SettingsBusinessTab() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Legal Entity
-            </CardTitle>
-            {loading ? (
-              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
-            ) : editingSection === "legal" ? (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleCancel} disabled={Boolean(savingSection)}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancel
+          <SettingsCardHeader
+            title={
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Legal Entity
+              </CardTitle>
+            }
+            description={SETTINGS_CARD_COPY.legalEntity}
+            actions={
+              loading ? (
+                <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+              ) : editingSection === "legal" ? (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancel} disabled={Boolean(savingSection)}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={() => void handleSave("legal")} disabled={Boolean(savingSection)}>
+                    {savingSection === "legal" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Check className="h-4 w-4" aria-hidden />
+                    )}
+                    Save
+                  </Button>
+                </div>
+              ) : profileLocked ? null : (
+                <Button variant="outline" size="sm" onClick={() => handleEdit("legal")}>
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
                 </Button>
-                <Button size="sm" onClick={() => void handleSave("legal")} disabled={Boolean(savingSection)}>
-                  {savingSection === "legal" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Check className="h-4 w-4" aria-hidden />
-                  )}
-                  Save
-                </Button>
-              </div>
-            ) : profileLocked ? null : (
-              <Button variant="outline" size="sm" onClick={() => handleEdit("legal")}>
-                <Edit className="h-4 w-4 mr-1" />
-                Edit
-              </Button>
-            )}
-          </div>
+              )
+            }
+          />
         </CardHeader>
         <CardContent className="space-y-4">
           {loading ? (
@@ -618,35 +630,40 @@ export function SettingsBusinessTab() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
-              Registered Address
-            </CardTitle>
-            {loading ? (
-              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
-            ) : editingSection === "address" ? (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleCancel} disabled={Boolean(savingSection)}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancel
+          <SettingsCardHeader
+            title={
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Registered Address
+              </CardTitle>
+            }
+            description={SETTINGS_CARD_COPY.registeredAddress}
+            actions={
+              loading ? (
+                <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+              ) : editingSection === "address" ? (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancel} disabled={Boolean(savingSection)}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={() => void handleSave("address")} disabled={Boolean(savingSection)}>
+                    {savingSection === "address" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Check className="h-4 w-4" aria-hidden />
+                    )}
+                    Save
+                  </Button>
+                </div>
+              ) : profileLocked ? null : (
+                <Button variant="outline" size="sm" onClick={() => handleEdit("address")}>
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
                 </Button>
-                <Button size="sm" onClick={() => void handleSave("address")} disabled={Boolean(savingSection)}>
-                  {savingSection === "address" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Check className="h-4 w-4" aria-hidden />
-                  )}
-                  Save
-                </Button>
-              </div>
-            ) : profileLocked ? null : (
-              <Button variant="outline" size="sm" onClick={() => handleEdit("address")}>
-                <Edit className="h-4 w-4 mr-1" />
-                Edit
-              </Button>
-            )}
-          </div>
+              )
+            }
+          />
         </CardHeader>
         <CardContent className="space-y-4">
           {loading ? (
@@ -709,35 +726,40 @@ export function SettingsBusinessTab() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5" />
-              Public Information
-            </CardTitle>
-            {loading ? (
-              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
-            ) : editingSection === "public" ? (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleCancel} disabled={Boolean(savingSection)}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancel
+          <SettingsCardHeader
+            title={
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="h-5 w-5" />
+                Public Information
+              </CardTitle>
+            }
+            description={SETTINGS_CARD_COPY.publicInfo}
+            actions={
+              loading ? (
+                <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+              ) : editingSection === "public" ? (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancel} disabled={Boolean(savingSection)}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={() => void handleSave("public")} disabled={Boolean(savingSection)}>
+                    {savingSection === "public" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Check className="h-4 w-4" aria-hidden />
+                    )}
+                    Save
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => handleEdit("public")}>
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
                 </Button>
-                <Button size="sm" onClick={() => void handleSave("public")} disabled={Boolean(savingSection)}>
-                  {savingSection === "public" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Check className="h-4 w-4" aria-hidden />
-                  )}
-                  Save
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => handleEdit("public")}>
-                <Edit className="h-4 w-4 mr-1" />
-                Edit
-              </Button>
-            )}
-          </div>
+              )
+            }
+          />
         </CardHeader>
         <CardContent className="space-y-4">
           {loading ? (

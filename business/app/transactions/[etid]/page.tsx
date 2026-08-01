@@ -10,6 +10,8 @@ import {
   resolveTransactionDetailReturnPath,
 } from "@/lib/easner-transaction-id"
 import { ArrowLeft, Loader2 } from "lucide-react"
+import { PageIntro } from "@/components/copy/page-intro"
+import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 export default function TransactionDetailByEtidPage() {
   const params = useParams()
@@ -52,8 +54,8 @@ export default function TransactionDetailByEtidPage() {
         <Button variant="ghost" size="icon" type="button" onClick={handleBack} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Transaction</h1>
+        <div className="min-w-0">
+          <PageIntro title="Transaction" description={PAGE_COPY.transactions.detailIntro} variant="page" />
         </div>
       </div>
 

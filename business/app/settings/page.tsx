@@ -5,13 +5,16 @@ import { Suspense, useEffect, useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SettingsPersonalTab } from "@/components/settings/settings-personal-tab"
 import { SettingsBusinessTab } from "@/components/settings/settings-business-tab"
+import { SettingsVerificationTab } from "@/components/settings/settings-verification-tab"
 import { SettingsTeamTab } from "@/components/settings/settings-team-tab"
 import { SettingsCommunicationTab } from "@/components/settings/settings-communication-tab"
 import { SettingsRecipientsTab } from "@/components/settings/settings-recipients-tab"
 import { SettingsCustomersTab } from "@/components/settings/settings-customers-tab"
 import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
+import { PageIntro } from "@/components/copy/page-intro"
+import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
-const TABS = ["personal", "business", "team", "recipients", "customers", "communication", "invoicing"] as const
+const TABS = ["personal", "business", "verification", "team", "recipients", "customers", "communication", "invoicing"] as const
 type TabValue = (typeof TABS)[number]
 
 function SettingsContent() {
@@ -40,15 +43,13 @@ function SettingsContent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-2">Manage your account settings and preferences</p>
-      </div>
+      <PageIntro title="Settings" description={PAGE_COPY.settings.hero} variant="hero" />
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="business">Business</TabsTrigger>
+          <TabsTrigger value="verification">Verification</TabsTrigger>
           <TabsTrigger value="team">Team</TabsTrigger>
           <TabsTrigger value="recipients">Recipients</TabsTrigger>
           <TabsTrigger value="customers">Customers</TabsTrigger>
@@ -61,6 +62,9 @@ function SettingsContent() {
         </TabsContent>
         <TabsContent value="business" className="mt-6">
           <SettingsBusinessTab />
+        </TabsContent>
+        <TabsContent value="verification" className="mt-6">
+          <SettingsVerificationTab />
         </TabsContent>
         <TabsContent value="team" className="mt-6">
           <SettingsTeamTab />

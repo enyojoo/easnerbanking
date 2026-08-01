@@ -6,7 +6,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -59,6 +58,9 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import type { Customer, Invoice } from "@/lib/b2b/types"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { currentLocationPath, withReturnTo } from "@/lib/invoice-navigation"
+import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
+import { SettingsCardHeader } from "@/components/settings/settings-card-header"
+import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
 
 export function SettingsCustomersTab() {
   const router = useRouter()
@@ -154,16 +156,19 @@ export function SettingsCustomersTab() {
 
   return (
     <div className="space-y-6">
+      <SettingsTabIntro title={SETTINGS_TAB_COPY.customers.title} description={SETTINGS_TAB_COPY.customers.intro} />
       <Card aria-busy={loading}>
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1.5">
-              <CardTitle className="flex items-center gap-2">
-                <Contact className="h-5 w-5 shrink-0" aria-hidden />
-                Customers
-              </CardTitle>
-              <CardDescription>Manage customer information for invoicing</CardDescription>
-            </div>
+            <SettingsCardHeader
+              title={
+                <CardTitle className="flex items-center gap-2">
+                  <Contact className="h-5 w-5 shrink-0" aria-hidden />
+                  Customers
+                </CardTitle>
+              }
+              description={SETTINGS_CARD_COPY.customers}
+            />
             <Button className="shrink-0 self-start sm:self-auto" onClick={() => setAddDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Add Customer
@@ -515,10 +520,15 @@ function CustomerDetailInSettings({
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ReceiptText className="h-5 w-5" />
-                Invoices
-              </CardTitle>
+              <SettingsCardHeader
+                title={
+                  <CardTitle className="flex items-center gap-2">
+                    <ReceiptText className="h-5 w-5" />
+                    Invoices
+                  </CardTitle>
+                }
+                description={SETTINGS_CARD_COPY.customerInvoices}
+              />
             </CardHeader>
             <CardContent>
               {customerInvoices.length === 0 ? (
@@ -555,7 +565,7 @@ function CustomerDetailInSettings({
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Summary</CardTitle>
+              <SettingsCardHeader title="Summary" description={SETTINGS_CARD_COPY.customerSummary} />
             </CardHeader>
             <CardContent className="space-y-4">
               <div>

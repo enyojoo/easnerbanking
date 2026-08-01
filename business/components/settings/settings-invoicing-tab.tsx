@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,9 @@ import {
   type BusinessInvoiceSettings,
 } from "@/lib/invoices/invoice-settings"
 import { toast } from "sonner"
+import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
+import { SettingsCardHeader } from "@/components/settings/settings-card-header"
+import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
 
 type BrandingForm = {
   brandColor: string
@@ -119,13 +122,13 @@ export function SettingsInvoicingTab() {
 
   return (
     <div className="space-y-6">
+      <SettingsTabIntro title={SETTINGS_TAB_COPY.invoicing.title} description={SETTINGS_TAB_COPY.invoicing.intro} />
       <Card>
         <CardHeader>
-          <CardTitle>Customer email delivery</CardTitle>
-          <CardDescription>
-            Invoice emails are sent from Easner Business (<strong>invoices@easner.com</strong>).
-            Customer replies go to your business support email below.
-          </CardDescription>
+          <SettingsCardHeader
+            title="Customer email delivery"
+            description={SETTINGS_CARD_COPY.invoiceEmailDelivery}
+          />
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <div className="flex justify-between gap-4">
@@ -150,14 +153,15 @@ export function SettingsInvoicingTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Default payment methods
-          </CardTitle>
-          <CardDescription>
-            Control which payment options appear on new invoices. You can override per invoice when
-            creating or editing.
-          </CardDescription>
+          <SettingsCardHeader
+            title={
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Default payment methods
+              </CardTitle>
+            }
+            description={SETTINGS_CARD_COPY.invoicePaymentDefaults}
+          />
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center justify-between gap-4">
@@ -227,7 +231,10 @@ export function SettingsInvoicingTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Notifications</CardTitle>
+          <SettingsCardHeader
+            title="Notifications"
+            description={SETTINGS_CARD_COPY.invoiceNotifications}
+          />
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center justify-between gap-4">
@@ -256,45 +263,47 @@ export function SettingsInvoicingTab() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1">
+          <SettingsCardHeader
+            title={
               <CardTitle className="flex items-center gap-2">
                 <Palette className="h-5 w-5" />
                 Branding
               </CardTitle>
-              <CardDescription>Optional styling for PDF and public invoice view</CardDescription>
-            </div>
-            {editingBranding ? (
-              <div className="flex shrink-0 items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCancelBranding}
-                  disabled={savingBranding}
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Cancel
+            }
+            description={SETTINGS_CARD_COPY.invoiceBranding}
+            actions={
+              editingBranding ? (
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelBranding}
+                    disabled={savingBranding}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => void handleSaveBranding()}
+                    disabled={savingBranding}
+                  >
+                    {savingBranding ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Check className="h-4 w-4" aria-hidden />
+                    )}
+                    Save
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" onClick={handleEditBranding} className="shrink-0">
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={() => void handleSaveBranding()}
-                  disabled={savingBranding}
-                >
-                  {savingBranding ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Check className="h-4 w-4" aria-hidden />
-                  )}
-                  Save
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" size="sm" onClick={handleEditBranding} className="shrink-0">
-                <Edit className="h-4 w-4 mr-1" />
-                Edit
-              </Button>
-            )}
-          </div>
+              )
+            }
+          />
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">

@@ -51,7 +51,7 @@ const nextConfig = {
   },
   async redirects() {
     return [
-      { source: "/verification", destination: "/settings?tab=business", permanent: false },
+      { source: "/verification", destination: "/settings?tab=verification", permanent: false },
       { source: "/autopayout", destination: "/qr-pay", permanent: true },
       { source: "/autopayout/:path*", destination: "/qr-pay/:path*", permanent: true },
     ]

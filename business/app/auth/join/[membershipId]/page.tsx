@@ -6,6 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { setPendingTeamInvite } from "@/lib/team-invite-storage"
+import { AUTH_COPY } from "@/lib/copy/business-ui-copy"
 
 type InvitePreview = {
   businessName: string
@@ -23,7 +24,7 @@ export default function JoinTeamByIdPage() {
 
   useEffect(() => {
     if (!membershipId) {
-      setPreviewError("This invitation link is invalid or incomplete.")
+      setPreviewError(AUTH_COPY.joinInvalid)
       setLoading(false)
       return
     }
@@ -65,7 +66,7 @@ export default function JoinTeamByIdPage() {
             ? "Loading invitation…"
             : preview
               ? `Join ${preview.businessName} on Easner Business`
-              : "Accept your invitation to continue"}
+              : AUTH_COPY.join}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -12,6 +12,9 @@ import { useCachedData } from "@/lib/use-cached-data"
 import type { CommunicationPreferences } from "@easner/shared"
 import { DEFAULT_COMMUNICATION_PREFERENCES, COMMUNICATION_PREFERENCES_DISCLAIMER } from "@easner/shared"
 import { toast } from "sonner"
+import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
+import { SettingsCardHeader } from "@/components/settings/settings-card-header"
+import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
 
 const COMMUNICATION_SETTINGS_TTL_MS = 60 * 60 * 1000
 const COMMUNICATION_SETTINGS_PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
@@ -83,12 +86,18 @@ export function SettingsCommunicationTab() {
 
   return (
     <div className="space-y-6">
+      <SettingsTabIntro title={SETTINGS_TAB_COPY.communication.title} description={SETTINGS_TAB_COPY.communication.intro} />
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5" />
-            Communication Preferences
-          </CardTitle>
+          <SettingsCardHeader
+            title={
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                Preferences
+              </CardTitle>
+            }
+            description={SETTINGS_CARD_COPY.communicationPrefs}
+          />
         </CardHeader>
         <CardContent className="space-y-6">
           {shouldShowSkeleton ? (

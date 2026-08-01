@@ -7,6 +7,7 @@ import { BRAND } from "@/components/brand/brand-constants"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import { BANNER_COPY } from "@/lib/copy/business-ui-copy"
 
 export function PayShell({ children }: { children: React.ReactNode }) {
   const { user, isLoading, logout } = useAuth()
@@ -21,9 +22,9 @@ export function PayShell({ children }: { children: React.ReactNode }) {
             className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/80 bg-amber-50/90 px-4 py-2.5 text-sm text-amber-950 sm:px-6"
             role="status"
           >
-            <span>Complete business verification to accept stablecoin payments.</span>
+            <span>{BANNER_COPY.verification}</span>
             <Link
-              href="/settings?tab=business"
+              href="/settings?tab=verification"
               className="font-semibold text-amber-950 underline underline-offset-2"
             >
               Verify

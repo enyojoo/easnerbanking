@@ -1,11 +1,12 @@
 "use client"
 
 /**
- * Hosted KYB opens in a dialog. Prefer SumSub WebSDK via Grid `kyc_token`
- * (Grid’s supported embed path). Fall back to iframing `kyc_link` if no token.
+ * Hosted KYB on the Verification settings tab. Prefer SumSub WebSDK via Grid `kyc_token`.
+ * Fall back to iframing `kyc_link` if no token. Full-bleed in-tab — no dialog.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { X } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
@@ -13,20 +14,17 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
 import { isGridCompleteUrl } from "@/lib/grid/grid-complete-url"
 import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { GridSumsubWebSdk } from "@/components/compliance/grid-sumsub-websdk"
+import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
+import { SettingsCardHeader } from "@/components/settings/settings-card-header"
+import { SETTINGS_TAB_COPY, VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import {
   getNoahRejectionDisplay,
+  NOAH_FINAL_REJECTION_USER_MESSAGE,
   NOAH_VERIFICATION_IN_REVIEW_COPY,
 } from "@/lib/noah/rejection-reasons"
 
@@ -41,12 +39,6 @@ function tier1StatusIsInReview(status: string | null | undefined): boolean {
   return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
 }
 
-/**
- * Last-known "can resume hosted session" result per business, kept at module scope so it survives
- * remounts (e.g. leaving Settings and returning, or switching tabs). This lets the in-review CTA
- * render immediately from the cached value instead of flashing while the probe re-runs in the
- * background — the visibility/label is resolved before the user sees the page.
- */
 const hostedResumeAvailableCache = new Map<string, boolean>()
 
 function tierLadderCopy(tier: 1 | 2 | 3) {
@@ -69,10 +61,7 @@ export function BusinessVerificationSection() {
 
   const [busy, setBusy] = useState<null | "link">(null)
   const [error, setError] = useState<string | null>(null)
-  /** Neutral (non-error) notice, e.g. when KYB is already submitted and under review. */
   const [info, setInfo] = useState<string | null>(null)
-  /** When in review, probe whether Noah still exposes a resumable hosted URL. Seed from the module
-   *  cache so the CTA does not flash on remount while the probe revalidates in the background. */
   const [hostedResumeAvailable, setHostedResumeAvailable] = useState<boolean | null>(() =>
     businessId ? hostedResumeAvailableCache.get(businessId) ?? null : null,
   )
@@ -81,17 +70,15 @@ export function BusinessVerificationSection() {
   const [hostedOpen, setHostedOpen] = useState(false)
   const [hostedUrl, setHostedUrl] = useState<string | null>(null)
   const [hostedToken, setHostedToken] = useState<string | null>(null)
-  /** Which tier the hosted session is for (only Tier 1 today; same header pattern for future tiers). */
   const [hostedTierLevel, setHostedTierLevel] = useState<1 | 2 | 3>(1)
-  /** Clear session after Radix exit animation so the dialog can close smoothly. */
-  const clearUrlAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearSessionAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const useSumsubSdk = Boolean(hostedToken?.trim())
   const hostedIframeSrc = !useSumsubSdk ? hostedUrl : null
 
   useEffect(() => {
     return () => {
-      if (clearUrlAfterCloseRef.current) clearTimeout(clearUrlAfterCloseRef.current)
+      if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
     }
   }, [])
 
@@ -113,15 +100,12 @@ export function BusinessVerificationSection() {
     }
 
     let cancelled = false
-    // Keep the last-known value (from a prior probe) while revalidating so the CTA stays stable.
     setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? null)
     void (async () => {
       try {
         const res = await fetchWithSession("/api/grid/kyc-links", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ type: "business" }),
         })
         const json = (await res.json().catch(() => ({}))) as {
@@ -137,7 +121,6 @@ export function BusinessVerificationSection() {
         hostedResumeAvailableCache.set(businessId, resumable)
         setHostedResumeAvailable(resumable)
       } catch {
-        // Preserve any cached value on transient network failure rather than hiding the CTA.
         if (!cancelled) setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? false)
       }
     })()
@@ -160,11 +143,11 @@ export function BusinessVerificationSection() {
   const closeHostedAndSync = useCallback(() => {
     setHostedOpen(false)
     void syncBusinessTier1FromGrid()
-    if (clearUrlAfterCloseRef.current) clearTimeout(clearUrlAfterCloseRef.current)
-    clearUrlAfterCloseRef.current = setTimeout(() => {
+    if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
+    clearSessionAfterCloseRef.current = setTimeout(() => {
       setHostedUrl(null)
       setHostedToken(null)
-      clearUrlAfterCloseRef.current = null
+      clearSessionAfterCloseRef.current = null
     }, 280)
   }, [syncBusinessTier1FromGrid])
 
@@ -213,9 +196,9 @@ export function BusinessVerificationSection() {
     const probedUrl = probedHostedUrlRef.current
     const probedToken = probedHostedTokenRef.current
     if (probedUrl || probedToken) {
-      if (clearUrlAfterCloseRef.current) {
-        clearTimeout(clearUrlAfterCloseRef.current)
-        clearUrlAfterCloseRef.current = null
+      if (clearSessionAfterCloseRef.current) {
+        clearTimeout(clearSessionAfterCloseRef.current)
+        clearSessionAfterCloseRef.current = null
       }
       setHostedTierLevel(1)
       setHostedToken(probedToken)
@@ -234,9 +217,7 @@ export function BusinessVerificationSection() {
       }
       const res = await fetchWithSession("/api/grid/kyc-links", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "business" }),
       })
       const text = await res.text()
@@ -252,7 +233,11 @@ export function BusinessVerificationSection() {
         try {
           json = JSON.parse(text) as { kyc_link?: string; kyc_token?: string; error?: string }
         } catch {
-          setError(res.status === 431 ? "Request headers too large. Sign out, sign in again, or clear site data for localhost." : "Invalid response from server.")
+          setError(
+            res.status === 431
+              ? "Request headers too large. Sign out, sign in again, or clear site data for localhost."
+              : "Invalid response from server.",
+          )
           return
         }
       }
@@ -283,17 +268,18 @@ export function BusinessVerificationSection() {
           setError("Verification was declined. Review the message above or contact support.")
           return
         }
-        // Submitted with no resumable hosted session — show in-review once (card may already show it).
         if (tier1StatusIsInReview(json.kyc_status)) {
-          setInfo(tier1StatusIsInReview(tier1VerificationStatus) ? null : NOAH_VERIFICATION_IN_REVIEW_COPY)
+          setInfo(
+            tier1StatusIsInReview(tier1VerificationStatus) ? null : NOAH_VERIFICATION_IN_REVIEW_COPY,
+          )
           return
         }
         setInfo("No additional verification steps are available right now. We'll update your status shortly.")
         return
       }
-      if (clearUrlAfterCloseRef.current) {
-        clearTimeout(clearUrlAfterCloseRef.current)
-        clearUrlAfterCloseRef.current = null
+      if (clearSessionAfterCloseRef.current) {
+        clearTimeout(clearSessionAfterCloseRef.current)
+        clearSessionAfterCloseRef.current = null
       }
       const link = typeof json.kyc_link === "string" ? json.kyc_link.trim() : ""
       const token = typeof json.kyc_token === "string" ? json.kyc_token.trim() : ""
@@ -312,8 +298,6 @@ export function BusinessVerificationSection() {
     }
   }, [businessId, syncBusinessTier1FromGrid, tier1VerificationStatus])
 
-  // Only show the loading placeholder on a genuine cold load. When cached profile data exists
-  // (e.g. returning to Settings), render the real section immediately so the CTA does not flash.
   if (isLoading && !hasData) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
   }
@@ -324,7 +308,6 @@ export function BusinessVerificationSection() {
   const rejectionDisplay = tier1Rejected ? getNoahRejectionDisplay(tier1RejectionReasons) : null
   const tier1FinalReject = tier1RejectionType === "Final" || rejectionDisplay?.isFinal === true
   const tier1UnderReview = tier1StatusIsInReview(tier1VerificationStatus)
-  /** Submitted to Noah — nothing for the business to do until review completes. */
   const tier1AwaitingReview = tier1UnderReview && !tier1Rejected
   const tier1StartedNotSubmitted =
     !tier1Rejected && !tier1AwaitingReview && Boolean(noahKybCustomerId?.trim())
@@ -340,16 +323,68 @@ export function BusinessVerificationSection() {
       : "Begin verification"
   const tier1HostedCtaBusy = busy === "link" || (tier1AwaitingReview && hostedResumeAvailable === null)
 
+  if (hostedOpen && (hostedToken || hostedUrl)) {
+    return (
+      <div className="flex min-h-[min(70vh,40rem)] flex-col overflow-hidden rounded-lg border bg-[#1a1a1a]" id="business-verification">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 bg-[#1a1a1a] px-4 py-3 sm:px-6">
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold leading-snug text-white sm:text-lg">
+                Business verification for {hostedTierTitle}
+              </h2>
+              <Badge variant="outline" className="shrink-0 border-white/20 text-xs text-white/90">
+                Tier {hostedTierLevel}
+              </Badge>
+            </div>
+            <p className="text-sm text-white/70">Close when finished.</p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="shrink-0 text-white hover:bg-white/10 hover:text-white"
+            onClick={closeHostedAndSync}
+            aria-label="Close verification"
+          >
+            <X className="size-5" />
+          </Button>
+        </div>
+        <div className="relative min-h-0 flex-1">
+          {error ? (
+            <p className="absolute left-4 right-4 top-2 z-10 rounded-md bg-destructive/90 px-3 py-2 text-sm text-destructive-foreground">
+              {error}
+            </p>
+          ) : null}
+          {useSumsubSdk && hostedToken ? (
+            <GridSumsubWebSdk
+              accessToken={hostedToken}
+              onComplete={closeHostedAndSync}
+              onError={(message) => setError(message)}
+            />
+          ) : hostedIframeSrc ? (
+            <iframe
+              title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
+              src={hostedIframeSrc}
+              className="absolute inset-0 size-full border-0"
+              allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
+              onLoad={handleHostedIframeLoad}
+            />
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6" id="business-verification">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">Compliance & verification</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Tier 1 unlocks global banking for your organization once business verification is approved.
-        </p>
-      </div>
+      <SettingsTabIntro
+        title={SETTINGS_TAB_COPY.verification.title}
+        description={SETTINGS_TAB_COPY.verification.intro}
+      />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="space-y-3">
+        <SettingsCardHeader title="Compliance tiers" description={VERIFICATION_SECTION_COPY.complianceTiers} />
+        <div className="grid gap-4 md:grid-cols-2">
         {BUSINESS_TIER_LADDER.tiers.map((t) => {
           const isT1 = t.tier === 1
           return (
@@ -373,7 +408,7 @@ export function BusinessVerificationSection() {
                     <Badge variant="secondary">Coming later</Badge>
                   )}
                 </div>
-                <CardDescription className="text-sm text-foreground/85">{t.description}</CardDescription>
+                <CardDescription className="text-sm">{t.description}</CardDescription>
                 {t.footnote ? (
                   <p className="text-xs text-muted-foreground pt-1">{t.footnote}</p>
                 ) : null}
@@ -386,29 +421,22 @@ export function BusinessVerificationSection() {
                     <p className="text-sm text-muted-foreground">{NOAH_VERIFICATION_IN_REVIEW_COPY}</p>
                   ) : null}
                   {tier1Rejected && tier1FinalReject ? (
-                    <p className="text-sm text-muted-foreground">
-                      Verification could not be completed for this account. Please contact support if you have
-                      questions.
-                    </p>
+                    <p className="text-sm text-muted-foreground">{NOAH_FINAL_REJECTION_USER_MESSAGE}</p>
                   ) : tier1Rejected && (tier1RetryGuidance?.length || rejectionDisplay?.guidanceLines.length) ? (
                     <p className="text-sm text-destructive">
-                      Verification needs attention: {(tier1RetryGuidance ?? rejectionDisplay?.guidanceLines ?? []).join(" ")}
+                      {(tier1RetryGuidance ?? rejectionDisplay?.guidanceLines ?? []).join(" ")}
                     </p>
                   ) : tier1Rejected ? (
                     <p className="text-sm text-destructive">
-                      Verification was declined. Review your documents and try again, or contact support if you need
-                      help.
+                      Verification was declined. Review your documents and try again.
                     </p>
                   ) : null}
                   {!businessId ? (
-                    <p className="text-xs text-muted-foreground">
-                      Finishing organization setup… refresh in a moment if this persists.
-                    </p>
+                    <p className="text-xs text-muted-foreground">Setting up your organization…</p>
                   ) : null}
                   {!canManageBusinessVerification ? (
                     <p className="text-sm text-muted-foreground">
-                      Only an organization owner can start hosted business verification. Ask an owner to complete
-                      verification.
+                      Only the organization owner can start verification.
                     </p>
                   ) : null}
                   {canManageBusinessVerification && !tier1Complete && !tier1FinalReject && !tier1AwaitingReview ? (
@@ -430,65 +458,8 @@ export function BusinessVerificationSection() {
             </Card>
           )
         })}
+        </div>
       </div>
-
-      <Dialog
-        open={hostedOpen}
-        onOpenChange={(open) => {
-          if (open) {
-            if (clearUrlAfterCloseRef.current) {
-              clearTimeout(clearUrlAfterCloseRef.current)
-              clearUrlAfterCloseRef.current = null
-            }
-            setHostedOpen(true)
-            return
-          }
-          setHostedOpen(false)
-          void syncBusinessTier1FromGrid()
-          if (clearUrlAfterCloseRef.current) clearTimeout(clearUrlAfterCloseRef.current)
-          clearUrlAfterCloseRef.current = setTimeout(() => {
-            setHostedUrl(null)
-            setHostedToken(null)
-            clearUrlAfterCloseRef.current = null
-          }, 280)
-        }}
-      >
-        <DialogContent
-          showCloseButton
-          className="flex h-[min(94vh,52rem)] w-[min(calc(100vw-1.5rem),56rem)] max-w-none flex-col gap-0 overflow-hidden p-0 duration-300 data-[state=open]:duration-300 data-[state=closed]:duration-300 sm:max-w-[min(calc(100vw-1.5rem),56rem)]"
-        >
-          <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
-            <div className="flex flex-wrap items-center gap-2 gap-y-1">
-              <DialogTitle className="text-left text-base leading-snug sm:text-lg">
-                Business verification for {hostedTierTitle}
-              </DialogTitle>
-              <Badge variant="outline" className="shrink-0 text-xs">
-                Tier {hostedTierLevel}
-              </Badge>
-            </div>
-            <DialogDescription className="pt-1">
-              Complete the steps in the provider window below.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="relative min-h-0 flex-1 overflow-hidden bg-[#1a1a1a]">
-            {useSumsubSdk && hostedToken ? (
-              <GridSumsubWebSdk
-                accessToken={hostedToken}
-                onComplete={closeHostedAndSync}
-                onError={(message) => setError(message)}
-              />
-            ) : hostedIframeSrc ? (
-              <iframe
-                title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
-                src={hostedIframeSrc}
-                className="absolute inset-0 size-full border-0"
-                allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
-                onLoad={handleHostedIframeLoad}
-              />
-            ) : null}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

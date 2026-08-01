@@ -31,6 +31,8 @@ import {
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
 import { resolveReportingAmountForFeed } from "@easner/shared"
+import { PageIntro } from "@/components/copy/page-intro"
+import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 function exportToCsv(
   transactions: {
@@ -184,12 +186,7 @@ export default function TransactionsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Transactions</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Incoming and outgoing account activity for your business.
-          </p>
-        </div>
+        <PageIntro title={PAGE_COPY.transactions.title} description={PAGE_COPY.transactions.intro} variant="page" />
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 sm:flex-initial sm:min-w-[200px] sm:w-[200px] shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

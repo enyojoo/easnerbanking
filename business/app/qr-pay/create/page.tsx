@@ -4,7 +4,7 @@ import { useCallback, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { TerminalPayoutSetupPanel } from "@/components/terminal/terminal-payout-setup-panel"
 import { AutopayoutPayerWalletPanel } from "@/components/autopayout/autopayout-payer-wallet-panel"
@@ -12,6 +12,9 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { dataCache, CACHE_KEYS } from "@/lib/cache"
+import { PageIntro } from "@/components/copy/page-intro"
+import { SectionHeader } from "@/components/copy/section-header"
+import { PAGE_COPY, QR_PAY_CREATE_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 
 const BUSINESS_NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
 
@@ -89,19 +92,20 @@ export default function QrPayCreatePlacardPage() {
               <ArrowLeft className="h-5 w-5" aria-hidden />
             </Link>
           </Button>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Create Placard</h1>
+          <PageIntro
+            title={PAGE_COPY.qrPay.createTitle}
+            description={PAGE_COPY.qrPay.createIntro}
+            variant="page"
+          />
         </div>
-        <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-          Choose the payer wallet and asset customers see, where fiat settles, then create placard files.
-        </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Placard details</CardTitle>
-          <CardDescription>
-            What customers see on the asset side, plus an optional label for your own records.
-          </CardDescription>
+          <SectionHeader
+            title="Placard details"
+            description={QR_PAY_CREATE_SECTION_COPY.placard}
+          />
         </CardHeader>
         <CardContent>
           <AutopayoutPayerWalletPanel
@@ -114,10 +118,10 @@ export default function QrPayCreatePlacardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Payout setup</CardTitle>
-          <CardDescription>
-            Choose the bank or mobile money account that receives automated settlement.
-          </CardDescription>
+          <SectionHeader
+            title="Payout setup"
+            description={QR_PAY_CREATE_SECTION_COPY.payout}
+          />
         </CardHeader>
         <CardContent>
           <TerminalPayoutSetupPanel

@@ -11,6 +11,7 @@ import { parseBalanceString } from "@/hooks/use-business-account-rows"
 import { EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT } from "@/lib/cache"
 import { useTerminalPayoutSetupCached } from "@/hooks/use-terminal-payout-setup-cached"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
+import { ONBOARDING_STEP_COPY } from "@/lib/copy/business-ui-copy"
 
 type SnapshotBalances = { USD: string; EUR: string }
 
@@ -175,11 +176,9 @@ export function BusinessOnboardingChecklist() {
       {
         id: "business",
         title: "Finish business info",
-        subtitle: !profile.onboardingComplete
-          ? "Complete onboarding details"
-          : !step1Done
-            ? "Fill in all Business settings"
-            : "Business profile complete",
+        subtitle: step1Done
+          ? ONBOARDING_STEP_COPY.businessComplete
+          : ONBOARDING_STEP_COPY.businessPending,
         href: "/settings?tab=business",
         visual: step1Done ? ("complete" as const) : ("pending" as const),
       },
@@ -187,13 +186,13 @@ export function BusinessOnboardingChecklist() {
         id: "verify",
         title: "Verify your account",
         subtitle: step2Done
-          ? "Verified"
+          ? ONBOARDING_STEP_COPY.verifyComplete
           : verifyKind === "rejected"
-            ? "Rejected"
+            ? ONBOARDING_STEP_COPY.verifyRejected
             : verifyKind === "review"
-              ? "In review"
-              : "Unverified",
-        href: "/settings?tab=business",
+              ? ONBOARDING_STEP_COPY.verifyReview
+              : ONBOARDING_STEP_COPY.verifyPending,
+        href: "/settings?tab=verification",
         visual: step2Visual,
       },
       {
@@ -211,10 +210,10 @@ export function BusinessOnboardingChecklist() {
         id: "fund",
         title: "Fund your account",
         subtitle: !profile.tier1Complete
-          ? "Available after verification"
+          ? ONBOARDING_STEP_COPY.fundAfterVerification
           : step4Done
-            ? "Balance received"
-            : "Deposit USD, EUR or stablecoins",
+            ? ONBOARDING_STEP_COPY.fundComplete
+            : ONBOARDING_STEP_COPY.fundPending,
         href: "/accounts",
         visual: !profile.tier1Complete ? ("pending" as const) : step4Done ? ("complete" as const) : ("pending" as const),
       },

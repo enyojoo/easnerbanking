@@ -19,6 +19,8 @@ import { Plus, ImageIcon, FileText, Pencil, Archive, RefreshCw } from "lucide-re
 import { useAuth } from "@/lib/auth-context"
 import { dataCache, CACHE_KEYS } from "@/lib/cache"
 import { useAutopayoutCached, type AutopayoutListRow } from "@/hooks/use-autopayout-cached"
+import { PageIntro } from "@/components/copy/page-intro"
+import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 export default function QrPayPage() {
   const { user } = useAuth()
@@ -99,13 +101,7 @@ export default function QrPayPage() {
     <div className="flex flex-col gap-6">
       <div className="sticky top-0 z-20 flex shrink-0 flex-col gap-4 border-b bg-background pb-4">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">QR Pay</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Accept in-person stablecoin payments using QR code counter placards. Customer deposits settle through
-              automated payout to the bank account you select in Setup payout.
-            </p>
-          </div>
+          <PageIntro title={PAGE_COPY.qrPay.title} description={PAGE_COPY.qrPay.intro} variant="page" />
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" className="gap-2" asChild>
               <Link href="/qr-pay/create">

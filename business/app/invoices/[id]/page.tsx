@@ -47,6 +47,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 import { useInvoiceDetail } from "@/hooks/queries/use-invoices"
 import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutations/use-invoices"
@@ -948,12 +949,9 @@ export default function InvoiceDetailPage() {
                   <CardTitle className="text-base">Customer payment instructions</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-2">
+                  <p>{PAGE_COPY.invoices.payInBlocked}</p>
                   <p>
-                    Bank and stablecoin deposit details for this invoice are not provisioned yet. Complete the
-                    verification steps required for your organization so pay-in instructions can appear here and on PDFs.
-                  </p>
-                  <p>
-                    <Link href="/settings?tab=business" className="font-semibold text-primary underline underline-offset-2">
+                    <Link href="/settings?tab=verification" className="font-semibold text-primary underline underline-offset-2">
                       Business verification
                     </Link>
                   </p>

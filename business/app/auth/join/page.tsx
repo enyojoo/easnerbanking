@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { AUTH_COPY } from "@/lib/copy/business-ui-copy"
 
 type InvitePreview = {
   businessName: string
@@ -34,7 +35,7 @@ export default function JoinLegacyRedirectPage() {
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle className="text-2xl font-bold">Team invitation</CardTitle>
-        <CardDescription>This invitation link is invalid or incomplete.</CardDescription>
+        <CardDescription>{AUTH_COPY.joinInvalid}</CardDescription>
       </CardHeader>
       <CardContent>
         <Button asChild variant="outline" className="w-full">

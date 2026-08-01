@@ -5,6 +5,7 @@ import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import type { InvoiceBusinessReadiness } from "@/lib/invoices/invoice-business-readiness"
+import { BANNER_COPY } from "@/lib/copy/business-ui-copy"
 
 type Props = {
   readiness: InvoiceBusinessReadiness
@@ -16,7 +17,7 @@ export function InvoiceBusinessSetupBanner({ readiness }: Props) {
   return (
     <Alert>
       <AlertCircle className="h-4 w-4" />
-      <AlertTitle>Complete business profile to invoice</AlertTitle>
+      <AlertTitle>{BANNER_COPY.invoiceProfileTitle}</AlertTitle>
       <AlertDescription className="space-y-3">
         <p>{readiness.message}</p>
         <Button variant="outline" size="sm" asChild>

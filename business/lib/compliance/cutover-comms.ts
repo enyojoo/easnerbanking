@@ -1,3 +1,6 @@
+/** Settings deep link for hosted business KYB (Verification tab). */
+export const SETTINGS_VERIFICATION_HREF = "/settings?tab=verification"
+
 /** Email template for business KYB cutover — re-verification required. */
 export function buildBusinessKybCutoverEmail(input: {
   businessName: string

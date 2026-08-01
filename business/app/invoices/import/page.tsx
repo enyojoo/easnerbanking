@@ -3,13 +3,16 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useAddInvoice } from "@/hooks/mutations/use-invoices"
 import { generateInvoiceId, formatInvoiceNumberFromClientId } from "@/lib/invoice-id"
 import type { Invoice } from "@/lib/b2b/types"
 import { toast } from "sonner"
 import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
+import { PageIntro } from "@/components/copy/page-intro"
+import { SectionHeader } from "@/components/copy/section-header"
+import { INVOICE_IMPORT_SECTION_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 function parseCsv(text: string): Record<string, string>[] {
   const lines = text.trim().split(/\r?\n/)
@@ -79,18 +82,21 @@ export default function ImportInvoicesPage() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Import invoices</h1>
+      <div className="flex items-center justify-between gap-4">
+        <PageIntro title="Import invoices" description={PAGE_COPY.invoices.importIntro} variant="page" />
         <Link href="/invoices">
           <Button variant="outline">Back</Button>
         </Link>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Upload CSV</CardTitle>
+          <SectionHeader
+            title="Upload CSV"
+            description={INVOICE_IMPORT_SECTION_COPY.upload}
+          />
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Columns: customer_name, customer_email, amount, currency, due_date (optional description)
           </p>
           <Input

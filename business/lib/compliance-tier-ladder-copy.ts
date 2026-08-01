@@ -15,14 +15,12 @@ export const BUSINESS_TIER_LADDER: { tiers: TierLadderTier[] } = {
     {
       tier: 1,
       title: "Global banking",
-      description:
-        "USD and EUR business accounts, pay-in and pay-out, stablecoin flows, and local currency deposits where available.",
+      description: "USD/EUR accounts, payments, and stablecoin flows.",
     },
     {
       tier: 2,
       title: "Cards",
-      description:
-        "Business debit/credit cards for online and physical payments.",
+      description: "Business cards for online and in-store payments.",
     },
   ],
 }

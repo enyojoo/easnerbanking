@@ -437,7 +437,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             <p className="mt-2 max-w-sm text-sm text-muted-foreground">{blockedBody}</p>
             {showVerifyCta || blockedByAfricanTier ? (
               <Button asChild className="mt-6 gap-2">
-                <Link href="/settings?tab=business">
+                <Link href="/settings?tab=verification">
                   Complete Verification
                   <ArrowRight className="h-4 w-4" />
                 </Link>

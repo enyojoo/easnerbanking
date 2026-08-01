@@ -23,6 +23,7 @@ import { useDeletePayrollSchedule, useUpsertPayrollSchedule } from "@/hooks/muta
 import { usePayrollCapabilities, usePayrollPeople, usePayrollSchedules } from "@/hooks/queries/use-payroll"
 import { formatDate } from "@/lib/utils"
 import { safePayrollReturnTo } from "@/lib/payroll/navigation"
+import { PAYROLL_SUBPAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 export default function PayrollScheduleDetailPage() {
   const { scheduleId } = useParams<{ scheduleId: string }>()
@@ -52,7 +53,7 @@ export default function PayrollScheduleDetailPage() {
       section="Schedules"
       current={schedule.name}
       title={schedule.name}
-      description="Recurring payday rules and the people included in this schedule."
+      description={PAYROLL_SUBPAGE_COPY.scheduleDetail}
       status={<PayrollStatusBadge status={schedule.active ? "active" : "held"} />}
       actions={canPrepare ? (
         <div className="flex shrink-0 items-center gap-2 overflow-x-auto">

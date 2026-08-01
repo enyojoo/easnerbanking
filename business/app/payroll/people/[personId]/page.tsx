@@ -20,6 +20,7 @@ import { usePayrollCapabilities, usePayrollPerson, usePayrollSettings } from "@/
 import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { safePayrollReturnTo } from "@/lib/payroll/navigation"
+import { PAYROLL_SUBPAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 type Payment = {
   id: string
@@ -58,7 +59,7 @@ export default function PayrollPersonDetailPage() {
     section="People"
     current={person.fullName}
     title={person.fullName}
-    description={person.easetag ? `Easetag: @${person.easetag.replace(/^@/, "")}` : person.email || "Manual payroll person"}
+    description={PAYROLL_SUBPAGE_COPY.personDetail}
     leading={<Avatar className="h-14 w-14"><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>}
     status={<PayrollStatusBadge status={person.status !== "active" ? person.status : person.readinessStatus} />}
     actions={canPrepare ? <>
@@ -82,6 +83,9 @@ export default function PayrollPersonDetailPage() {
           <Detail label="Amount" value={formatCurrency(person.defaultAmount, businessCurrency)} />
           <div><dt className="text-xs text-muted-foreground">Residence country</dt><dd className="mt-1 text-sm"><PayrollCountry country={person.country} /></dd></div>
           <Detail label="Internal reference" value={person.internalReference || "—"} />
+          {person.easetag ? (
+            <Detail label="Easetag" value={`@${person.easetag.replace(/^@/, "")}`} />
+          ) : null}
           <Detail label="Email" value={person.email || "—"} />
           <div><dt className="text-xs text-muted-foreground">Receiving method</dt><dd className="mt-1"><PayrollReceivingMethod person={person} typeOnly /></dd></div>
         </dl></CardContent></Card>

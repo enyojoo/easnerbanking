@@ -56,6 +56,9 @@ import {
   type VerifiedIdentityPayload,
 } from "@easner/shared"
 import { CountryFlag } from "@/components/flags"
+import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
+import { SettingsCardHeader } from "@/components/settings/settings-card-header"
+import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
 
 /** Aligns with personal settings store / dataCache freshness window. */
 const MFA_STATUS_CACHE_TTL_MS = 5 * 60 * 1000
@@ -395,37 +398,43 @@ export function SettingsPersonalTab() {
 
   return (
     <div className="space-y-6">
+      <SettingsTabIntro title={SETTINGS_TAB_COPY.personal.title} description={SETTINGS_TAB_COPY.personal.intro} />
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <IdCard className="h-5 w-5" aria-hidden />
-              Personal Information
-            </CardTitle>
-            {showPersonalSkeleton ? (
-              <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
-            ) : editingSection === "personal" ? (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleCancel} disabled={savingPersonal}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancel
+          <SettingsCardHeader
+            title={
+              <CardTitle className="flex items-center gap-2">
+                <IdCard className="h-5 w-5" aria-hidden />
+                Personal Information
+              </CardTitle>
+            }
+            description={SETTINGS_CARD_COPY.personalInfo}
+            actions={
+              showPersonalSkeleton ? (
+                <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+              ) : editingSection === "personal" ? (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancel} disabled={savingPersonal}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={() => void handleSave("personal")} disabled={savingPersonal}>
+                    {savingPersonal ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Check className="h-4 w-4" aria-hidden />
+                    )}
+                    Save
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => handleEdit("personal")}>
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
                 </Button>
-                <Button size="sm" onClick={() => void handleSave("personal")} disabled={savingPersonal}>
-                  {savingPersonal ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Check className="h-4 w-4" aria-hidden />
-                  )}
-                  Save
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => handleEdit("personal")}>
-                <Edit className="h-4 w-4 mr-1" />
-                Edit
-              </Button>
-            )}
-          </div>
+              )
+            }
+          />
         </CardHeader>
         <CardContent className="space-y-4">
           {showPersonalSkeleton ? (
@@ -548,10 +557,15 @@ export function SettingsPersonalTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" aria-hidden />
-            Security Settings
-          </CardTitle>
+          <SettingsCardHeader
+            title={
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" aria-hidden />
+                Security Settings
+              </CardTitle>
+            }
+            description={SETTINGS_CARD_COPY.security}
+          />
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-4 border rounded-lg">
