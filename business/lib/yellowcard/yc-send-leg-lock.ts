@@ -2,6 +2,7 @@ import { randomUUID } from "crypto"
 import {
   checkYcSendLegDestinationAmountSufficient,
   readYcSendLockedLocalAmount,
+  resolveYcSendLegDestinationExcessTolerance,
   resolveYcSendLegFeeLocalForLock,
   retargetYcSendLegSettlementCryptoForQuotedReceive,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
@@ -37,6 +38,8 @@ export async function submitYcSendWithDestinationAmountLock(input: {
 }): Promise<YcSendLegLockResult> {
   const maxAttempts = input.maxAttempts ?? YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS
   const tolerance = input.tolerance ?? YC_SEND_LEG_DESTINATION_TOLERANCE
+  const excessTolerance =
+    resolveYcSendLegDestinationExcessTolerance(input.receiveAmount)
   const prefix = String(input.sequenceIdPrefix ?? "yc_send").trim() || "yc_send"
   let settlementCryptoUsd = input.initialSettlementCryptoUsd
   let sequenceId = `${prefix}_${randomUUID()}`
@@ -65,6 +68,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       lockedLocalAmount: lastLockedLocal,
       sendLegFeeLocal,
       tolerance,
+      excessTolerance,
     })
 
     const needsHydrateForFees =
@@ -86,6 +90,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
         lockedLocalAmount: lastLockedLocal,
         sendLegFeeLocal,
         tolerance,
+        excessTolerance,
       })
     } else if (!check.ok && lastLockedLocal <= 0 && Boolean(String(sendRes.id ?? "").trim())) {
       // Missing locked local on POST — one short hydrate before deciding retry.
@@ -101,6 +106,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
         lockedLocalAmount: lastLockedLocal,
         sendLegFeeLocal,
         tolerance,
+        excessTolerance,
       })
     }
 
@@ -123,13 +129,14 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       )
     }
 
-    // Retarget from observed YC rate + fee so retries converge on quoted net receive.
+    // Retarget from observed YC rate + fee; ceil only when short so we do not re-overshoot.
     settlementCryptoUsd = retargetYcSendLegSettlementCryptoForQuotedReceive({
       settlementCryptoUsd,
       lockedLocalAmount: lastLockedLocal,
       sendLegFeeLocal,
       quotedReceive: input.receiveAmount,
       destinationRate: input.destinationRate,
+      preferCeil: check.shortfall > 0,
     })
   }
 

@@ -33,6 +33,7 @@ import {
   trimYcSendLegSettlementCryptoForLocalExcess,
   estimateYcSendLegSettlementCryptoForQuotedReceive,
   retargetYcSendLegSettlementCryptoForQuotedReceive,
+  resolveYcSendLegDestinationExcessTolerance,
   checkYcSendLegDestinationAmountSufficient,
   resolveYcSendLegFeesFromResponse,
   readYcSendLockedLocalAmount,
@@ -645,11 +646,51 @@ describe("yc send leg destination amount", () => {
       sendLegFeeLocal: 20.12,
       quotedReceive: 2000,
       destinationRate: 1371.11,
+      preferCeil: true,
     })
     expect(retargeted).toBeGreaterThan(1.458672)
-    const observedRate = 2011.88 / 1.458672
-    const targetGross = Math.ceil((2000 / 0.99) * 100) / 100
-    expect(retargeted).toBeCloseTo(targetGross / observedRate, 5)
+    // Proportional: crypto * quoted / net (1991.76)
+    expect(retargeted).toBeCloseTo(1.458672 * (2000 / 1991.76), 5)
+  })
+
+  it("requires net >= quoted and allows only 0.01 dust over", () => {
+    expect(resolveYcSendLegDestinationExcessTolerance(12550)).toBe(0.01)
+    // Underpay never OK
+    expect(
+      checkYcSendLegDestinationAmountSufficient({
+        quotedReceive: 12550,
+        lockedLocalAmount: 12676.26,
+        sendLegFeeLocal: 126.76,
+        // net 12549.5
+      }).ok,
+    ).toBe(false)
+    // Exact OK
+    expect(
+      checkYcSendLegDestinationAmountSufficient({
+        quotedReceive: 12550,
+        lockedLocalAmount: 12676.77,
+        sendLegFeeLocal: 126.77,
+        // net 12550
+      }).ok,
+    ).toBe(true)
+    // 12550.01 OK
+    expect(
+      checkYcSendLegDestinationAmountSufficient({
+        quotedReceive: 12550,
+        lockedLocalAmount: 12676.78,
+        sendLegFeeLocal: 126.77,
+        // net 12550.01
+      }).ok,
+    ).toBe(true)
+    // Larger over must trim
+    expect(
+      checkYcSendLegDestinationAmountSufficient({
+        quotedReceive: 12550,
+        lockedLocalAmount: 12680,
+        sendLegFeeLocal: 126.8,
+        // net 12553.2
+      }).ok,
+    ).toBe(false)
   })
 
   it("bumps settlement crypto for local shortfall", () => {
@@ -663,14 +704,13 @@ describe("yc send leg destination amount", () => {
     expect(bumped).toBeGreaterThan(1.458672 + 8.24 / 1371.11)
   })
 
-  it("accepts locked local within tolerance when no send fee", () => {
+  it("rejects any net below quoted receive", () => {
     expect(
       checkYcSendLegDestinationAmountSufficient({
         quotedReceive: 2000,
         lockedLocalAmount: 1999.5,
-        tolerance: 1,
       }).ok,
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it("rejects gross local above quote when serviceFeeAmountLocal reduces net", () => {
@@ -678,7 +718,6 @@ describe("yc send leg destination amount", () => {
       quotedReceive: 2000,
       lockedLocalAmount: 2011.88,
       sendLegFeeLocal: 20.12,
-      tolerance: 1,
     })
     expect(check.ok).toBe(false)
     expect(check.netLocalAmount).toBe(1991.76)
@@ -690,19 +729,29 @@ describe("yc send leg destination amount", () => {
       quotedReceive: 2000,
       lockedLocalAmount: 2020.12,
       sendLegFeeLocal: 20.12,
-      tolerance: 1,
     })
     expect(check.ok).toBe(true)
     expect(check.netLocalAmount).toBe(2000)
     expect(check.excess).toBe(0)
   })
 
-  it("rejects when net local exceeds quoted receive (over-delivery)", () => {
+  it("accepts 0.01 dust over quoted receive", () => {
+    const check = checkYcSendLegDestinationAmountSufficient({
+      quotedReceive: 2000,
+      lockedLocalAmount: 2020.21,
+      sendLegFeeLocal: 20.2,
+      // net 2000.01
+    })
+    expect(check.ok).toBe(true)
+    expect(check.netLocalAmount).toBe(2000.01)
+  })
+
+  it("rejects when net local exceeds dust over-delivery", () => {
     const check = checkYcSendLegDestinationAmountSufficient({
       quotedReceive: 2000,
       lockedLocalAmount: 2027.13,
       sendLegFeeLocal: 20.27,
-      tolerance: 1,
+      // net 2006.86
     })
     expect(check.ok).toBe(false)
     expect(check.netLocalAmount).toBe(2006.86)
