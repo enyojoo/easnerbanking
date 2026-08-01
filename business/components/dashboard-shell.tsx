@@ -101,7 +101,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
     <AppLockProvider>
       <div className="min-h-dvh bg-background text-foreground">
         <DashboardNav />
-        <div className="ml-64 flex min-h-dvh flex-col">
+        <div className="ml-64 flex h-dvh flex-col overflow-hidden">
           <header className="z-30 flex h-16 min-h-16 shrink-0 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
           {showProfileChromeSkeleton ? (
             <div className="flex items-center gap-3">
@@ -148,8 +148,9 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
           ) : null}
           {/*
             Page chrome contract: header + optional banner sit above main (shrink-0).
-            Main scrolls internally (flex-1 min-h-0). Avoid h-dvh + overflow-hidden on
-            the shell root — that breaks browser fullscreen / PWA display transitions.
+            Inner column is h-dvh overflow-hidden so only main scrolls on long pages
+            (payroll, invoices, etc.). Outer shell stays min-h-dvh without overflow
+            clip so browser fullscreen / PWA resize is not blocked.
           */}
           <main
             style={
