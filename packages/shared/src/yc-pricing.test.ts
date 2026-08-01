@@ -636,8 +636,18 @@ describe("yc send leg destination amount", () => {
       destinationRate: 1371.11,
     })
     expect(estimated).toBeGreaterThan(2000 / 1371.11)
-    // Default 50 bps buffer + 25 bps conversion slop + 1% fee
-    expect(estimated).toBeCloseTo(2000 / (1371.11 * 0.9925 * 0.99), 5)
+    const rate = 1371.11 * (1 - (50 + 25) / 10_000)
+    expect(estimated).toBeCloseTo(2020.21 / rate, 5)
+  })
+
+  it("sizes 2000 NGN lock above production shortfall crypto (1.478772)", () => {
+    const estimated = estimateYcSendLegSettlementCryptoForQuotedReceive({
+      quotedReceive: 2000,
+      destinationRate: 1366.135,
+      ycSellRate: 1373,
+    })
+    expect(estimated).toBeGreaterThan(1.478772)
+    expect(estimated).toBeLessThan(1.481)
   })
 
   it("retargets settlement crypto so net local meets quoted receive", () => {

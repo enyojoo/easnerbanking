@@ -174,6 +174,7 @@ export async function buildYcPayoutQuote(input: {
       : estimateYcSendLegSettlementCryptoForQuotedReceive({
           quotedReceive: quoteReceiveAmount,
           destinationRate: customerRate,
+          ycSellRate: payoutRate?.yc_sell,
         })
   if (!(provisionalCryptoUsd > 0)) {
     throw new Error("Could not derive USDC amount for Yellowcard payout quote.")
@@ -351,6 +352,7 @@ export async function lockYcBalancePayoutSend(input: {
       : estimateYcSendLegSettlementCryptoForQuotedReceive({
           quotedReceive: quoteReceiveAmount,
           destinationRate: customerRate,
+          ycSellRate: payoutRate?.yc_sell,
         })
 
   const recipientMapped = await mapRecipientToYcSend(input.recipient, { channelId })
@@ -363,6 +365,7 @@ export async function lockYcBalancePayoutSend(input: {
     receiveAmount: quoteReceiveAmount,
     initialSettlementCryptoUsd: provisionalCryptoUsd,
     destinationRate: customerRate,
+    ycSellRate: payoutRate?.yc_sell,
     receiveCurrency,
     sequenceIdPrefix: "yc_quote",
     buildSubmit: async ({ settlementCryptoUsd, sequenceId: lockSequenceId }) =>

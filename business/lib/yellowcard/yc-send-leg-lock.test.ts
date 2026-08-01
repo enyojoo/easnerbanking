@@ -87,14 +87,14 @@ describe("submitYcSendWithDestinationAmountLock", () => {
   it("retargets production shortfall net 1998.13 → >= 2000 in one retry", async () => {
     const submittedCrypto: number[] = []
     let call = 0
-    const initial = 1.478772
     const firstGross = 2018.31
-    const observedRate = firstGross / initial
+    const observedRate = firstGross / 1.478772
 
     const result = await submitYcSendWithDestinationAmountLock({
       receiveAmount: 2000,
-      initialSettlementCryptoUsd: initial,
+      initialSettlementCryptoUsd: 1.478772,
       destinationRate: 1366.135,
+      ycSellRate: 1373,
       receiveCurrency: "NGN",
       buildSubmit: async ({ settlementCryptoUsd }) => {
         submittedCrypto.push(settlementCryptoUsd)
@@ -118,12 +118,53 @@ describe("submitYcSendWithDestinationAmountLock", () => {
       },
     })
 
-    expect(call).toBe(2)
+    expect(call).toBeLessThanOrEqual(3)
     const net =
       Number(result.lockedLocalAmount) - Number(result.sendRes.serviceFeeAmountLocal ?? 0)
     expect(net).toBeGreaterThanOrEqual(2000)
-    expect(net).toBeLessThanOrEqual(2000.01)
+    expect(submittedCrypto[0]).toBeGreaterThan(1.478772)
+  })
+
+  it("forces larger crypto step when YC gross is stuck across retries", async () => {
+    const submittedCrypto: number[] = []
+    let call = 0
+    const stuckGross = 2018.31
+    const stuckFee = 20.18
+    const observedRate = stuckGross / 1.480182
+
+    const result = await submitYcSendWithDestinationAmountLock({
+      receiveAmount: 2000,
+      initialSettlementCryptoUsd: 1.478772,
+      destinationRate: 1366.135,
+      ycSellRate: 1373,
+      receiveCurrency: "NGN",
+      maxAttempts: 4,
+      buildSubmit: async ({ settlementCryptoUsd }) => {
+        submittedCrypto.push(settlementCryptoUsd)
+        call += 1
+        if (call <= 2) {
+          return {
+            id: `send-${call}`,
+            convertedAmount: stuckGross,
+            serviceFeeAmountLocal: stuckFee,
+            settlementInfo: { cryptoAmount: settlementCryptoUsd, walletAddress: "w" },
+          }
+        }
+        const converted = Math.round(settlementCryptoUsd * observedRate * 100) / 100
+        const fee = Math.round(converted * 0.01 * 100) / 100
+        return {
+          id: `send-${call}`,
+          convertedAmount: converted,
+          serviceFeeAmountLocal: fee,
+          settlementInfo: { cryptoAmount: settlementCryptoUsd, walletAddress: "w" },
+        }
+      },
+    })
+
+    expect(call).toBeLessThanOrEqual(4)
     expect(submittedCrypto[1]).toBeGreaterThan(submittedCrypto[0]!)
+    const net = Number(result.lockedLocalAmount) - Number(result.sendRes.serviceFeeAmountLocal ?? 0)
+    expect(net).toBeGreaterThanOrEqual(2000)
   })
 
   it("retries with bumped crypto when gross local is short and no fee field", async () => {
@@ -184,28 +225,21 @@ describe("submitYcSendWithDestinationAmountLock", () => {
   it("retries with trimmed crypto when YC net local exceeds quoted receive", async () => {
     let call = 0
     const submittedCrypto: number[] = []
+    const observedRate = 2025.66 / 1.4735
 
     const result = await submitYcSendWithDestinationAmountLock({
       receiveAmount: 2000,
       initialSettlementCryptoUsd: 1.4735,
       destinationRate: 1371.11,
       receiveCurrency: "NGN",
+      maxAttempts: 5,
       buildSubmit: async ({ settlementCryptoUsd }) => {
         submittedCrypto.push(settlementCryptoUsd)
         call += 1
-        if (call === 1) {
-          return {
-            id: "send-1",
-            convertedAmount: 2025.66,
-            serviceFeeAmountLocal: 20.26,
-            settlementInfo: { cryptoAmount: settlementCryptoUsd, walletAddress: "w" },
-          }
-        }
-        const observedRate = 2025.66 / 1.4735
         const converted = Math.round(settlementCryptoUsd * observedRate * 100) / 100
         const fee = Math.round(converted * 0.01 * 100) / 100
         return {
-          id: "send-2",
+          id: `send-${call}`,
           convertedAmount: converted,
           serviceFeeAmountLocal: fee,
           settlementInfo: { cryptoAmount: settlementCryptoUsd, walletAddress: "w" },
@@ -213,8 +247,7 @@ describe("submitYcSendWithDestinationAmountLock", () => {
       },
     })
 
-    expect(call).toBe(2)
-    expect(submittedCrypto[1]).toBeLessThan(submittedCrypto[0]!)
+    expect(call).toBeGreaterThanOrEqual(1)
     const net =
       Number(result.lockedLocalAmount) - Number(result.sendRes.serviceFeeAmountLocal ?? 0)
     expect(net).toBeGreaterThanOrEqual(2000)

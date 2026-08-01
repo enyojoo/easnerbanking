@@ -561,11 +561,13 @@ export async function lockCrossBorderLeg2(
   const provisionalSendCrypto = estimateYcSendLegSettlementCryptoForQuotedReceive({
     quotedReceive: input.receiveAmount,
     destinationRate: ycBuyTo,
+    ycSellRate: ycBuyTo,
   })
   const sendLock = await submitYcSendWithDestinationAmountLock({
     receiveAmount: input.receiveAmount,
     initialSettlementCryptoUsd: provisionalSendCrypto,
     destinationRate: ycBuyTo,
+    ycSellRate: ycBuyTo,
     receiveCurrency: ctx.receiveCurrency,
     sequenceIdPrefix: "yc_cb_l2",
     buildSubmit: async ({ settlementCryptoUsd, sequenceId }) =>
@@ -1370,11 +1372,13 @@ export async function authorizeCrossBorderDraft(input: {
   const provisionalSendCrypto = estimateYcSendLegSettlementCryptoForQuotedReceive({
     quotedReceive: receiveAmount,
     destinationRate: ycBuyTo,
+    ycSellRate: ycBuyTo,
   })
   const sendLock = await submitYcSendWithDestinationAmountLock({
     receiveAmount,
     initialSettlementCryptoUsd: provisionalSendCrypto,
     destinationRate: ycBuyTo,
+    ycSellRate: ycBuyTo,
     receiveCurrency,
     sequenceIdPrefix: "yc_cb_l2",
     buildSubmit: async ({ settlementCryptoUsd, sequenceId }) =>

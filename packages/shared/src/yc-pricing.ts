@@ -19,6 +19,12 @@ function roundUsdc(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000
 }
 
+/** Ceil USDC for YC directSettlement — avoids under-lock from round-down. */
+export function roundYcSettlementCryptoUp(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.ceil(n * 1_000_000) / 1_000_000
+}
+
 function roundLocal(n: number): number {
   if (!Number.isFinite(n)) return 0
   return Math.round(n * 100) / 100
@@ -1082,7 +1088,7 @@ export function alignYcCrossBorderLockedLocalPayIn(input: {
 }
 
 /** Max POST /send retries when YC locked destination fiat is below quoted receive. */
-export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 3
+export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 5
 
 /**
  * Never underpay: net local must be >= quoted receive.
@@ -1271,24 +1277,62 @@ export function assertYcSendLegDestinationAmountSufficient(input: {
 }
 
 /**
- * Pessimistic NGN/USD (or local/USD) for directSettlement crypto sizing.
- * YC live conversion can be below customerRate — use lower rate → more crypto.
+ * Pessimistic local/USD for directSettlement crypto sizing.
+ * When yc_sell is available, YC conversion tracks it (~50–60 bps below sell on NGN payout).
  */
 export function resolveYcSendLegPessimisticDestinationRate(input: {
   customerRate: number
+  /** Provider yc_sell from rate row — preferred for payout lock sizing. */
+  ycSellRate?: number
   rateBufferBps?: number
   conversionSlopBps?: number
 }): number {
   const customerRate = input.customerRate
   if (!(customerRate > 0)) return 0
-  const bufferBps = Number.isFinite(input.rateBufferBps)
-    ? Math.max(0, Number(input.rateBufferBps))
-    : YC_SEND_LEG_RATE_BUFFER_BPS
   const slopBps = Number.isFinite(input.conversionSlopBps)
     ? Math.max(0, Number(input.conversionSlopBps))
     : YC_SEND_LEG_CONVERSION_SLOP_BPS
+  const ycSell = Number(input.ycSellRate ?? 0)
+  if (ycSell > 0) {
+    // Prod: yc_sell 1373 → observed ~1364.9 (~59 bps below sell).
+    const ycSellSlopBps = Math.max(slopBps + 34, 59)
+    return ycSell * (1 - ycSellSlopBps / 10_000)
+  }
+  const bufferBps = Number.isFinite(input.rateBufferBps)
+    ? Math.max(0, Number(input.rateBufferBps))
+    : YC_SEND_LEG_RATE_BUFFER_BPS
   const totalBps = bufferBps + slopBps
   return customerRate * (1 - totalBps / 10_000)
+}
+
+/**
+ * Required settlement crypto so YC net local (gross − ~1% fee) meets quoted receive.
+ * Uses round-nearest for initial sizing (avoid overshoot); retries ceil separately.
+ */
+export function resolveYcSendLegRequiredSettlementCrypto(input: {
+  quotedReceive: number
+  destinationRate: number
+  ycSellRate?: number
+  feeFraction?: number
+  rateBufferBps?: number
+  conversionSlopBps?: number
+  /** When true, ceil USDC (retry / safety floor). */
+  preferCeil?: boolean
+}): number {
+  const quoted = roundLocal(input.quotedReceive)
+  const rate = resolveYcSendLegPessimisticDestinationRate({
+    customerRate: input.destinationRate,
+    ycSellRate: input.ycSellRate,
+    rateBufferBps: input.rateBufferBps,
+    conversionSlopBps: input.conversionSlopBps,
+  })
+  const feeFraction = clampYcSendLegFeeFraction(
+    input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
+  )
+  if (!(quoted > 0) || !(rate > 0)) return 0
+  const targetGross = roundLocalUp(quoted / (1 - feeFraction))
+  const raw = targetGross / rate
+  return input.preferCeil ? roundYcSettlementCryptoUp(raw) : roundUsdc(raw)
 }
 
 /**
@@ -1298,22 +1342,12 @@ export function resolveYcSendLegPessimisticDestinationRate(input: {
 export function estimateYcSendLegSettlementCryptoForQuotedReceive(input: {
   quotedReceive: number
   destinationRate: number
+  ycSellRate?: number
   feeFraction?: number
   rateBufferBps?: number
   conversionSlopBps?: number
 }): number {
-  const quoted = roundLocal(input.quotedReceive)
-  const rate = resolveYcSendLegPessimisticDestinationRate({
-    customerRate: input.destinationRate,
-    rateBufferBps: input.rateBufferBps,
-    conversionSlopBps: input.conversionSlopBps,
-  })
-  const feeFraction = clampYcSendLegFeeFraction(
-    input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
-  )
-  if (!(quoted > 0) || !(rate > 0)) return 0
-  const netFraction = 1 - feeFraction
-  return roundUsdc(quoted / (rate * netFraction))
+  return resolveYcSendLegRequiredSettlementCrypto(input)
 }
 
 /**
@@ -1351,17 +1385,19 @@ export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
   if (preferCeil) {
     // Ceil gross so net after ~% fee is >= quoted (e.g. 2000/0.99 → 2020.21).
     const targetGross = roundLocalUp(quoted / netFraction)
-    let targetCrypto = roundUsdc(targetGross / rate)
+    let targetCrypto = roundYcSettlementCryptoUp(targetGross / rate)
     // Also cover observed shortfall explicitly (handles non-% fee components).
     if (netLocal > 0 && netLocal < quoted) {
       const shortfall = roundLocal(quoted - netLocal)
-      const fromShortfall = roundUsdc(crypto + shortfall / (rate * netFraction))
-      targetCrypto = roundUsdc(Math.max(targetCrypto, fromShortfall))
+      const fromShortfall = roundYcSettlementCryptoUp(
+        crypto + shortfall / (rate * netFraction),
+      )
+      targetCrypto = roundYcSettlementCryptoUp(Math.max(targetCrypto, fromShortfall))
     }
-    // Must move up by a meaningful USDC step — micro bumps can leave YC net unchanged.
-    const minStep = roundUsdc(Math.max(0.001, 1 / rate))
+    // Meaningful USDC step — micro bumps can leave YC gross/net unchanged across retries.
+    const minStep = roundYcSettlementCryptoUp(Math.max(0.002, 2 / rate))
     if (targetCrypto <= crypto) {
-      targetCrypto = roundUsdc(crypto + minStep)
+      targetCrypto = roundYcSettlementCryptoUp(crypto + minStep)
     }
     return targetCrypto
   }
@@ -1370,7 +1406,7 @@ export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
   const targetGross = roundLocal(quoted / netFraction)
   let targetCrypto = roundUsdc(targetGross / rate)
   if (targetCrypto >= crypto) {
-    targetCrypto = roundUsdc(Math.max(crypto * 0.5, crypto - Math.max(0.001, 1 / rate)))
+    targetCrypto = roundUsdc(Math.max(crypto * 0.5, crypto - Math.max(0.002, 2 / rate)))
   }
   return targetCrypto
 }

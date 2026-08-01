@@ -807,6 +807,8 @@ export {
   estimateYcSendLegSettlementCryptoForQuotedReceive,
   retargetYcSendLegSettlementCryptoForQuotedReceive,
   resolveYcSendLegPessimisticDestinationRate,
+  resolveYcSendLegRequiredSettlementCrypto,
+  roundYcSettlementCryptoUp,
   resolveYcSendLegDestinationExcessTolerance,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,

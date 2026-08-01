@@ -4,9 +4,12 @@ import {
   readYcSendLockedLocalAmount,
   resolveYcSendLegDestinationExcessTolerance,
   resolveYcSendLegFeeLocalForLock,
+  resolveYcSendLegRequiredSettlementCrypto,
   retargetYcSendLegSettlementCryptoForQuotedReceive,
+  roundYcSettlementCryptoUp,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,
+  YC_SEND_LEG_SERVICE_FEE_FRACTION,
 } from "@easner/shared"
 import type { YcSendSubmitResult } from "@/lib/yellowcard/send-submit"
 import { hydrateYcSendSubmitResult } from "@/lib/yellowcard/send-submit"
@@ -31,6 +34,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   receiveAmount: number
   initialSettlementCryptoUsd: number
   destinationRate: number
+  ycSellRate?: number
   receiveCurrency: string
   maxAttempts?: number
   tolerance?: number
@@ -46,17 +50,30 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   const excessTolerance =
     resolveYcSendLegDestinationExcessTolerance(input.receiveAmount)
   const prefix = String(input.sequenceIdPrefix ?? "yc_send").trim() || "yc_send"
-  let settlementCryptoUsd = input.initialSettlementCryptoUsd
+  let settlementCryptoUsd = roundYcSettlementCryptoUp(
+    Math.max(
+      input.initialSettlementCryptoUsd,
+      resolveYcSendLegRequiredSettlementCrypto({
+        quotedReceive: input.receiveAmount,
+        destinationRate: input.destinationRate,
+        ycSellRate: input.ycSellRate,
+        preferCeil: true,
+      }),
+    ),
+  )
   let sequenceId = `${prefix}_${randomUUID()}`
   let lastLockedLocal = 0
+  let prevLockedLocal = 0
+  let prevSubmittedCrypto = 0
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
       sequenceId = `${prefix}_${randomUUID()}`
     }
 
+    const submittedCrypto = settlementCryptoUsd
     const sendResRaw = await input.buildSubmit({
-      settlementCryptoUsd,
+      settlementCryptoUsd: submittedCrypto,
       sequenceId,
       attempt,
     })
@@ -118,7 +135,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     if (check.ok) {
       return {
         sendRes,
-        finalSettlementCryptoUsd: settlementCryptoUsd,
+        finalSettlementCryptoUsd: submittedCrypto,
         lockedLocalAmount: lastLockedLocal,
         sequenceId,
       }
@@ -128,19 +145,22 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       const detail =
         check.excess > 0
           ? `exceeds quoted by ${check.excess}`
-          : `net ${check.netLocalAmount} (gross ${lastLockedLocal}, fee ${sendLegFeeLocal})`
+          : `net ${check.netLocalAmount} (gross ${lastLockedLocal}, fee ${sendLegFeeLocal}, crypto ${submittedCrypto})`
       throw new Error(
         `Yellowcard could not lock ${input.receiveAmount} ${input.receiveCurrency}: ${detail} after ${maxAttempts} attempts.`,
       )
     }
 
-    const submittedCrypto = settlementCryptoUsd
     const echoedCrypto = roundUsdc(Number(sendRes.settlementInfo?.cryptoAmount ?? 0))
-    // Observed YC rate from this attempt; retarget from submitted crypto (not stale echo).
     const rateCrypto = echoedCrypto > 0 ? echoedCrypto : submittedCrypto
     const observedRate =
       lastLockedLocal > 0 && rateCrypto > 0 ? lastLockedLocal / rateCrypto : input.destinationRate
-    settlementCryptoUsd = retargetYcSendLegSettlementCryptoForQuotedReceive({
+    const feeFraction =
+      sendLegFeeLocal > 0 && lastLockedLocal > 0
+        ? sendLegFeeLocal / lastLockedLocal
+        : YC_SEND_LEG_SERVICE_FEE_FRACTION
+
+    let nextCrypto = retargetYcSendLegSettlementCryptoForQuotedReceive({
       settlementCryptoUsd: submittedCrypto,
       lockedLocalAmount: lastLockedLocal,
       sendLegFeeLocal,
@@ -148,9 +168,31 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       destinationRate: observedRate,
       preferCeil: check.shortfall > 0,
     })
-    if (check.shortfall > 0 && settlementCryptoUsd <= submittedCrypto) {
-      settlementCryptoUsd = roundUsdc(submittedCrypto + Math.max(0.001, check.shortfall / observedRate))
+
+    if (check.shortfall > 0) {
+      const requiredCrypto = resolveYcSendLegRequiredSettlementCrypto({
+        quotedReceive: input.receiveAmount,
+        destinationRate: observedRate,
+        ycSellRate: input.ycSellRate,
+        feeFraction,
+        preferCeil: true,
+      })
+      nextCrypto = roundYcSettlementCryptoUp(Math.max(nextCrypto, requiredCrypto))
+      const grossStuck =
+        lastLockedLocal > 0 &&
+        prevLockedLocal > 0 &&
+        lastLockedLocal <= prevLockedLocal &&
+        submittedCrypto > prevSubmittedCrypto
+      if (grossStuck) {
+        nextCrypto = roundYcSettlementCryptoUp(
+          Math.max(nextCrypto, submittedCrypto + 0.003),
+        )
+      }
     }
+
+    prevLockedLocal = lastLockedLocal
+    prevSubmittedCrypto = submittedCrypto
+    settlementCryptoUsd = nextCrypto
   }
 
   throw new Error(
