@@ -6,6 +6,7 @@ const mockParseGridCustomerForBusiness = vi.fn().mockReturnValue({
   kyb_verified_at: "2025-01-01T00:00:00Z",
 })
 const mockNotifyBusinessKybStatusChange = vi.fn().mockResolvedValue(undefined)
+const mockGridFetch = vi.fn()
 
 vi.mock("@/lib/compliance", () => ({
   mapGridPartnerStatus: (raw: string) => {
@@ -25,9 +26,19 @@ vi.mock("@/lib/notifications/verification-notify", () => ({
   notifyBusinessKybStatusChange: (...args: unknown[]) => mockNotifyBusinessKybStatusChange(...args),
 }))
 
+vi.mock("./http", () => ({
+  gridFetch: (...args: unknown[]) => mockGridFetch(...args),
+  GridHttpError: class GridHttpError extends Error {
+    status: number
+    constructor(status: number, message?: string) {
+      super(message ?? `HTTP ${status}`)
+      this.status = status
+    }
+  },
+}))
+
 const mockBusinessUpdate = vi.fn()
-const mockNot = vi.fn().mockResolvedValue({ error: null })
-const mockEq = vi.fn().mockReturnValue({ not: mockNot })
+const mockEq = vi.fn().mockResolvedValue({ error: null })
 mockBusinessUpdate.mockReturnValue({ eq: mockEq })
 
 const mockFrom = vi.fn(() => ({
@@ -49,53 +60,63 @@ describe("syncGridBusinessKybToSupabase", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockBusinessUpdate.mockReturnValue({ eq: mockEq })
-    mockEq.mockReturnValue({ not: mockNot })
+    mockGridFetch.mockResolvedValue({ kybStatus: "PENDING" })
   })
 
-  it("clears stale kyb_verified_at when Grid KYB is not approved", async () => {
-    await syncGridBusinessKybToSupabase({
-      admin: mockAdmin as never,
-      businessId: "biz-1",
-      userId: "user-1",
-      customerId: "Customer:abc",
-      customer: { kybStatus: "PENDING" },
-    })
+  it("always fetches customer from Grid API (webhook + poll parity)", async () => {
+    mockGridFetch.mockResolvedValue({ kybStatus: "PENDING" })
 
-    expect(mockPersistVerificationStatus).toHaveBeenCalledWith(
-      mockAdmin,
-      expect.objectContaining({ status: "pending" }),
-    )
-    expect(mockBusinessUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ kyb_verified_at: null }),
-    )
-    expect(mockEq).toHaveBeenCalledWith("id", "biz-1")
-    expect(mockNot).toHaveBeenCalledWith("kyb_verified_at", "is", null)
-    expect(mockParseGridCustomerForBusiness).not.toHaveBeenCalled()
-  })
-
-  it("backfills business fields when Grid KYB is approved", async () => {
-    await syncGridBusinessKybToSupabase({
-      admin: mockAdmin as never,
-      businessId: "biz-1",
-      userId: "user-1",
-      customerId: "Customer:abc",
-      customer: { kybStatus: "APPROVED", businessInfo: { legalName: "Acme Ltd" } },
-    })
-
-    expect(mockParseGridCustomerForBusiness).toHaveBeenCalled()
-    expect(mockBusinessUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Acme Ltd", kyb_verified_at: "2025-01-01T00:00:00Z" }),
-    )
-    expect(mockNot).not.toHaveBeenCalled()
-  })
-
-  it("sends KYB status emails on transitions", async () => {
     await syncGridBusinessKybToSupabase({
       admin: mockAdmin as never,
       businessId: "biz-1",
       userId: "user-1",
       customerId: "Customer:abc",
       customer: { kybStatus: "APPROVED" },
+    })
+
+    expect(mockGridFetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/customers/Customer%3Aabc",
+      }),
+    )
+    expect(mockPersistVerificationStatus).toHaveBeenCalledWith(
+      mockAdmin,
+      expect.objectContaining({ status: "pending", verifiedAt: null }),
+    )
+    expect(mockParseGridCustomerForBusiness).not.toHaveBeenCalled()
+    expect(mockBusinessUpdate).not.toHaveBeenCalled()
+  })
+
+  it("backfills business profile fields when Grid KYB is approved", async () => {
+    mockGridFetch.mockResolvedValue({
+      kybStatus: "APPROVED",
+      businessInfo: { legalName: "Acme Ltd" },
+    })
+
+    await syncGridBusinessKybToSupabase({
+      admin: mockAdmin as never,
+      businessId: "biz-1",
+      userId: "user-1",
+      customerId: "Customer:abc",
+      occurredAt: "2025-01-01T00:00:00Z",
+    })
+
+    expect(mockParseGridCustomerForBusiness).toHaveBeenCalled()
+    expect(mockBusinessUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Acme Ltd", kyb_verified_at: "2025-01-01T00:00:00Z" }),
+    )
+    expect(mockEq).toHaveBeenCalledWith("id", "biz-1")
+  })
+
+  it("sends KYB status emails on transitions", async () => {
+    mockGridFetch.mockResolvedValue({ kybStatus: "APPROVED" })
+
+    await syncGridBusinessKybToSupabase({
+      admin: mockAdmin as never,
+      businessId: "biz-1",
+      userId: "user-1",
+      customerId: "Customer:abc",
     })
 
     expect(mockNotifyBusinessKybStatusChange).toHaveBeenCalledWith(

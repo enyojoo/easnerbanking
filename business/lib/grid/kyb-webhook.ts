@@ -53,12 +53,15 @@ export async function handleGridKybWebhook(
   const subject = await resolveBusinessByGridCustomerId(admin, customerId)
   if (!subject) return { handled: false }
 
+  const occurredAt =
+    String(event.createdAt ?? (event as Record<string, unknown>).created_at ?? "").trim() || undefined
+
   const { status } = await syncGridBusinessKybToSupabase({
     admin,
     businessId: subject.businessId,
     userId: subject.userId,
     customerId,
-    customer: webhookData(event),
+    occurredAt,
   })
 
   if (status === "approved") {

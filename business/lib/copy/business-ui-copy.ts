@@ -153,8 +153,7 @@ export const SETTINGS_CARD_COPY = {
 
 export const VERIFICATION_SECTION_COPY = {
   complianceTiers: "Start Tier 1 verification to unlock banking.",
-  approvedProvisioning:
-    "Verification approved. Your deposit details are being set up and usually appear on Accounts within a few minutes.",
+  tier1Approved: "Your business verification is complete.",
   accountsProvisioning:
     "Setting up your accounts and deposit details. This usually completes within a few minutes.",
   verificationOnHold:

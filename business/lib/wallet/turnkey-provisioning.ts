@@ -10,9 +10,23 @@ import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
 import { ensureStablecoinTokenAccountOnChain } from "@/lib/turnkey/ensure-spl-token-account"
 import { DEFAULT_INDIVIDUAL_VAULTS } from "@/lib/wallet/vault-spec"
 import { ensureFiatVirtualAccountForLedgerCurrency } from "@/lib/noah/bank-onramp-virtual-accounts"
+import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 import { enqueueVaultProvisioningJobs, upsertWalletOwnerFromNoah } from "@/lib/wallet/turnkey-wallet-db"
 const MAX_ATTEMPTS = 5
 const BACKOFF_MS = 5000
+
+async function ownerUsesGridBusinessVerification(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  owner: { owner_type: string; owner_ref: string },
+): Promise<boolean> {
+  if (owner.owner_type !== "business") return false
+  const { data } = await admin
+    .from("businesses")
+    .select("verification_provider")
+    .eq("id", owner.owner_ref)
+    .maybeSingle()
+  return businessUsesGridVerification(data as { verification_provider?: string | null } | null)
+}
 
 /**
  * Called after Noah KYC/KYB approved + Noah artifacts provisioned.
@@ -182,7 +196,8 @@ export async function processNextWalletProvisioningJob(opts?: {
 
     const noahCustomerId = owner.noah_customer_id?.trim() || ""
     const ledger = String(job.ledger_currency || "").toUpperCase()
-    if (noahCustomerId && (ledger === "USD" || ledger === "EUR")) {
+    const skipNoahOnramp = await ownerUsesGridBusinessVerification(admin, owner)
+    if (noahCustomerId && !skipNoahOnramp && (ledger === "USD" || ledger === "EUR")) {
       try {
         await ensureFiatVirtualAccountForLedgerCurrency(admin, {
           ownerType: owner.owner_type === "business" ? "business" : "individual",

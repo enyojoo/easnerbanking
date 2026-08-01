@@ -37,17 +37,17 @@ export async function syncGridBusinessKybToSupabase(input: {
   businessId: string
   userId: string
   customerId: string
+  /** @deprecated Ignored — always fetches canonical customer from Grid API (webhook + poll parity). */
   customer?: Record<string, unknown>
   occurredAt?: string
 }): Promise<{ status: VerificationStatus; customer: Record<string, unknown> }> {
-  const customer =
-    input.customer ??
-    (await fetchGridCustomer(input.customerId).catch((e) => {
-      if (e instanceof GridHttpError && e.status === 404) {
-        throw new Error("Grid customer not found")
-      }
-      throw e
-    }))
+  const customerId = normalizeGridCustomerId(input.customerId)
+  const customer = await fetchGridCustomer(customerId).catch((e) => {
+    if (e instanceof GridHttpError && e.status === 404) {
+      throw new Error("Grid customer not found")
+    }
+    throw e
+  })
 
   const status = gridBusinessKybStatus(customer)
   const gridStatusRaw = String(customer.kybStatus ?? customer.kycStatus ?? "").trim() || null
@@ -55,6 +55,8 @@ export async function syncGridBusinessKybToSupabase(input: {
     status === "rejected" || status === "hold"
       ? extractGridCustomerRejectionReasons(customer, gridStatusRaw)
       : null
+
+  const verifiedAt = input.occurredAt ?? new Date().toISOString()
 
   const { data: priorBiz } = await input.admin
     .from("businesses")
@@ -72,13 +74,14 @@ export async function syncGridBusinessKybToSupabase(input: {
     provider: "grid",
     status,
     rejectionReasons,
-    gridCustomerId: normalizeGridCustomerId(input.customerId),
+    verifiedAt: status === "approved" ? verifiedAt : null,
+    gridCustomerId: customerId,
   })
 
   const now = new Date().toISOString()
   if (status === "approved") {
     const kybFields = parseGridCustomerForBusiness(customer, {
-      occurredAt: input.occurredAt,
+      occurredAt: verifiedAt,
     })
     if (Object.keys(kybFields).length > 0) {
       await input.admin
@@ -86,12 +89,6 @@ export async function syncGridBusinessKybToSupabase(input: {
         .update({ ...kybFields, updated_at: now })
         .eq("id", input.businessId)
     }
-  } else {
-    await input.admin
-      .from("businesses")
-      .update({ kyb_verified_at: null, updated_at: now })
-      .eq("id", input.businessId)
-      .not("kyb_verified_at", "is", null)
   }
 
   await notifyBusinessKybStatusChange(

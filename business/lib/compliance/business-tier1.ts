@@ -15,6 +15,13 @@ function usesGridVerification(row: BusinessVerificationFields | null | undefined
   return String(row?.verification_provider ?? "").toLowerCase() === "grid"
 }
 
+/** True when org KYB/compliance SoR is Grid (skip Noah KYB/VA fallback paths). */
+export function businessUsesGridVerification(
+  row: BusinessVerificationFields | null | undefined,
+): boolean {
+  return usesGridVerification(row)
+}
+
 /** Effective Tier 1 status for product surfaces (Grid SoR ignores legacy Noah mirrors after cutover). */
 export function businessTier1Status(row: BusinessVerificationFields | null | undefined): string | null {
   if (!row) return null

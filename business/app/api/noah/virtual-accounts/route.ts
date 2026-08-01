@@ -14,6 +14,9 @@ import { isNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
 import { resolveNoahAccountContext, type NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { ensureCurrencyUsable } from "@/lib/accounts/currency-controls"
+import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
+import { provisionGridAfterBusinessKybApproved } from "@/lib/grid/provision-after-approval"
+import { isGridConfigured } from "@/lib/grid/config"
 
 type VaCurrency = "usd" | "eur" | "gbp"
 
@@ -29,7 +32,7 @@ type VaAccountJson = {
   bankAddress?: string
   accountHolderName?: string
   status?: string
-  source?: "db" | "noah"
+  source?: "db" | "noah" | "grid"
 }
 
 const VA_CURRENCIES = new Set<VaCurrency>(["usd", "eur", "gbp"])
@@ -90,8 +93,9 @@ async function resolveAccountsForCurrencies(input: {
   admin: SupabaseClient
   ctx: NoahAccountContext
   currencies: VaCurrency[]
+  gridBusinessSoR?: boolean
 }): Promise<Record<string, VaAccountJson>> {
-  const { admin, ctx, currencies } = input
+  const { admin, ctx, currencies, gridBusinessSoR = false } = input
   const { noahCustomerId, subjectUserId, subjectBusinessId } = ctx
 
   const dbHits = await Promise.all(
@@ -125,6 +129,37 @@ async function resolveAccountsForCurrencies(input: {
   if (!approved) {
     for (const currency of missing) {
       accounts[currency.toUpperCase()] = { hasAccount: false, currency }
+    }
+    return accounts
+  }
+
+  if (gridBusinessSoR && subjectBusinessId && isGridConfigured()) {
+    const { data: biz } = await admin
+      .from("businesses")
+      .select("grid_customer_id")
+      .eq("id", subjectBusinessId)
+      .maybeSingle()
+    const gridCustomerId = String(biz?.grid_customer_id ?? "").trim()
+    if (gridCustomerId) {
+      await provisionGridAfterBusinessKybApproved({
+        admin,
+        businessId: subjectBusinessId,
+        subjectUserId,
+        gridCustomerId,
+      }).catch(() => undefined)
+    }
+
+    for (const currency of missing) {
+      const cached = await getVirtualAccountDisplayFromDb(admin, {
+        currency,
+        userId: subjectUserId,
+        businessId: subjectBusinessId,
+      })
+      if (cached?.hasAccount) {
+        accounts[currency.toUpperCase()] = { ...accountJsonFromDb(currency, cached), source: "grid" }
+      } else {
+        accounts[currency.toUpperCase()] = { hasAccount: false, currency }
+      }
     }
     return accounts
   }
@@ -172,14 +207,30 @@ async function resolveAccountsForCurrencies(input: {
 }
 
 export async function GET(request: Request) {
-  const mis = requireNoahEnv()
-  if (mis) return mis
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
 
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
+
+  const admin = createSupabaseAdmin()
+  let gridBusinessSoR = false
+  if (acc.ctx.scope === "business" && acc.ctx.subjectBusinessId) {
+    const { data: bizRow } = await admin
+      .from("businesses")
+      .select("verification_provider")
+      .eq("id", acc.ctx.subjectBusinessId)
+      .maybeSingle()
+    gridBusinessSoR = businessUsesGridVerification(
+      bizRow as { verification_provider?: string | null } | null,
+    )
+  }
+
+  if (!gridBusinessSoR) {
+    const mis = requireNoahEnv()
+    if (mis) return mis
+  }
 
   const url = new URL(request.url)
   const parsed = parseCurrencyList(url)
@@ -195,12 +246,12 @@ export async function GET(request: Request) {
     }
   }
 
-  const admin = createSupabaseAdmin()
   try {
     const accounts = await resolveAccountsForCurrencies({
       admin,
       ctx: acc.ctx,
       currencies,
+      gridBusinessSoR,
     })
 
     // Legacy single-currency response shape.

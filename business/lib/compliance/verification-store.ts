@@ -84,8 +84,14 @@ export async function persistVerificationStatus(
     verification_rejection_reasons: input.rejectionReasons ?? null,
     updated_at: now,
   }
-  if (input.status === "approved" && input.kind !== "business") {
-    patch.verified_at = input.verifiedAt ?? now
+  if (input.status === "approved") {
+    if (input.kind === "business") {
+      patch.kyb_verified_at = input.verifiedAt ?? now
+    } else {
+      patch.verified_at = input.verifiedAt ?? now
+    }
+  } else if (input.kind === "business") {
+    patch.kyb_verified_at = null
   }
   if (input.gridCustomerId) {
     patch.grid_customer_id = input.gridCustomerId
