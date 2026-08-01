@@ -1,10 +1,9 @@
 import { randomUUID } from "crypto"
 import {
-  bumpYcSendLegSettlementCryptoForLocalShortfall,
   checkYcSendLegDestinationAmountSufficient,
   readYcSendLockedLocalAmount,
   resolveYcSendLegFeeLocalForLock,
-  trimYcSendLegSettlementCryptoForLocalExcess,
+  retargetYcSendLegSettlementCryptoForQuotedReceive,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,
 } from "@easner/shared"
@@ -124,19 +123,12 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       )
     }
 
-    // Retry with adjusted settlement — do not hydrate failed attempts further.
-    if (check.excess > 0) {
-      settlementCryptoUsd = trimYcSendLegSettlementCryptoForLocalExcess({
-        settlementCryptoUsd,
-        excessLocal: check.excess,
-        destinationRate: input.destinationRate,
-      })
-      continue
-    }
-
-    settlementCryptoUsd = bumpYcSendLegSettlementCryptoForLocalShortfall({
+    // Retarget from observed YC rate + fee so retries converge on quoted net receive.
+    settlementCryptoUsd = retargetYcSendLegSettlementCryptoForQuotedReceive({
       settlementCryptoUsd,
-      shortfallLocal: check.shortfall,
+      lockedLocalAmount: lastLockedLocal,
+      sendLegFeeLocal,
+      quotedReceive: input.receiveAmount,
       destinationRate: input.destinationRate,
     })
   }

@@ -1087,6 +1087,17 @@ export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 3
 /** Allow 1 unit of destination fiat below quoted receive (rounding). */
 export const YC_SEND_LEG_DESTINATION_TOLERANCE = 1
 
+/**
+ * Typical YC send service fee as a fraction of gross local amount.
+ * Deducted before recipient credit — settlement crypto must target net receive.
+ */
+export const YC_SEND_LEG_SERVICE_FEE_FRACTION = 0.01
+
+function clampYcSendLegFeeFraction(feeFraction: number): number {
+  if (!Number.isFinite(feeFraction) || feeFraction <= 0) return YC_SEND_LEG_SERVICE_FEE_FRACTION
+  return Math.min(0.5, feeFraction)
+}
+
 /** Read locked destination fiat from YC POST /send response (gross before fee deduction). */
 export function readYcSendLockedLocalAmount(
   sendRes: Record<string, unknown> | null | undefined,
@@ -1230,17 +1241,79 @@ export function assertYcSendLegDestinationAmountSufficient(input: {
   )
 }
 
+/**
+ * Initial settlement crypto so net local (after YC ~1% send fee) can meet quoted receive.
+ * Plain receive/rate under-funds because YC deducts serviceFeeAmountLocal from gross.
+ */
+export function estimateYcSendLegSettlementCryptoForQuotedReceive(input: {
+  quotedReceive: number
+  destinationRate: number
+  feeFraction?: number
+}): number {
+  const quoted = roundLocal(input.quotedReceive)
+  const rate = input.destinationRate
+  const feeFraction = clampYcSendLegFeeFraction(
+    input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
+  )
+  if (!(quoted > 0) || !(rate > 0)) return 0
+  const netFraction = 1 - feeFraction
+  return roundUsdc(quoted / (rate * netFraction))
+}
+
+/**
+ * Retarget settlement crypto from an observed YC lock toward quoted net receive.
+ * Uses observed local/crypto rate and fee fraction so retries converge instead of
+ * under-bumping (fee grows with gross) or oscillating shortfall ↔ excess.
+ */
+export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
+  settlementCryptoUsd: number
+  lockedLocalAmount: number
+  sendLegFeeLocal: number
+  quotedReceive: number
+  destinationRate: number
+}): number {
+  const crypto = roundUsdc(input.settlementCryptoUsd)
+  const locked = roundLocal(input.lockedLocalAmount)
+  const feeLocal = roundLocal(input.sendLegFeeLocal)
+  const quoted = roundLocal(input.quotedReceive)
+  if (!(crypto > 0) || !(locked > 0) || !(quoted > 0)) return crypto
+
+  const observedRate = locked / crypto
+  const rate =
+    Number.isFinite(observedRate) && observedRate > 0 ? observedRate : input.destinationRate
+  if (!(rate > 0)) return crypto
+
+  const feeFraction = clampYcSendLegFeeFraction(
+    feeLocal > 0 ? feeLocal / locked : YC_SEND_LEG_SERVICE_FEE_FRACTION,
+  )
+  const netFraction = 1 - feeFraction
+  const targetGross = roundLocalUp(quoted / netFraction)
+  const targetCrypto = roundUsdc(targetGross / rate)
+  // Avoid no-op retries when already at the computed target within dust.
+  if (Math.abs(targetCrypto - crypto) < 0.000001) {
+    return roundUsdc(crypto * (1 + YC_SEND_LEG_SERVICE_FEE_FRACTION * 0.1))
+  }
+  return targetCrypto
+}
+
 /** Increase settlement crypto so YC destination fiat can meet quoted receive. */
 export function bumpYcSendLegSettlementCryptoForLocalShortfall(input: {
   settlementCryptoUsd: number
   shortfallLocal: number
   destinationRate: number
+  /** Observed/estimated fee as fraction of gross lock (default ~1%). */
+  feeFraction?: number
 }): number {
   const crypto = roundUsdc(input.settlementCryptoUsd)
   const rate = input.destinationRate
   const shortfall = roundLocal(input.shortfallLocal)
   if (crypto <= 0 || rate <= 0 || shortfall <= 0) return crypto
-  const bumpFromShortfall = roundUsdc(shortfall / rate)
+  const feeFraction = clampYcSendLegFeeFraction(
+    input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
+  )
+  const netFraction = 1 - feeFraction
+  // Fee scales with gross — fund shortfall on the net side, not gross/rate alone.
+  const bumpFromShortfall = roundUsdc(shortfall / (rate * netFraction))
   const bumpFromPct = roundUsdc(crypto * 0.005)
   return roundUsdc(crypto + Math.max(bumpFromShortfall, bumpFromPct))
 }
@@ -1250,12 +1323,17 @@ export function trimYcSendLegSettlementCryptoForLocalExcess(input: {
   settlementCryptoUsd: number
   excessLocal: number
   destinationRate: number
+  feeFraction?: number
 }): number {
   const crypto = roundUsdc(input.settlementCryptoUsd)
   const rate = input.destinationRate
   const excess = roundLocal(input.excessLocal)
   if (crypto <= 0 || rate <= 0 || excess <= 0) return crypto
-  const trimFromExcess = roundUsdc(excess / rate)
+  const feeFraction = clampYcSendLegFeeFraction(
+    input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
+  )
+  const netFraction = 1 - feeFraction
+  const trimFromExcess = roundUsdc(excess / (rate * netFraction))
   const trimFromPct = roundUsdc(crypto * 0.005)
   const trimmed = roundUsdc(crypto - Math.max(trimFromExcess, trimFromPct))
   return roundUsdc(Math.max(trimmed, crypto * 0.5))

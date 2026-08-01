@@ -6,6 +6,7 @@ import {
   assertYcBalancePayoutEconomicsSufficient,
   computeYcBalancePayoutPricing,
   computeYcBalancePayoutPricingBeforeSend,
+  estimateYcSendLegSettlementCryptoForQuotedReceive,
   normalizeGlobalPayoutQuoteReceiveAmount,
   normalizePayoutReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
@@ -170,7 +171,10 @@ export async function buildYcPayoutQuote(input: {
   const provisionalCryptoUsd =
     amountEntryMode === "send" && sendBudget != null && sendBudget > 0
       ? roundUsdc(sendBudget)
-      : roundUsdc(quoteReceiveAmount / customerRate)
+      : estimateYcSendLegSettlementCryptoForQuotedReceive({
+          quotedReceive: quoteReceiveAmount,
+          destinationRate: customerRate,
+        })
   if (!(provisionalCryptoUsd > 0)) {
     throw new Error("Could not derive USDC amount for Yellowcard payout quote.")
   }
@@ -344,7 +348,10 @@ export async function lockYcBalancePayoutSend(input: {
   const provisionalCryptoUsd =
     amountEntryMode === "send" && sendBudget != null && sendBudget > 0
       ? roundUsdc(sendBudget)
-      : roundUsdc(quoteReceiveAmount / customerRate)
+      : estimateYcSendLegSettlementCryptoForQuotedReceive({
+          quotedReceive: quoteReceiveAmount,
+          destinationRate: customerRate,
+        })
 
   const recipientMapped = await mapRecipientToYcSend(input.recipient, { channelId })
   const sender = buildYcKycPersonMetadata({

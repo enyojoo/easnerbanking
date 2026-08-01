@@ -31,6 +31,8 @@ import {
   YC_FUND_BALANCE_OMNIBUS_TOLERANCE_USDC,
   bumpYcSendLegSettlementCryptoForLocalShortfall,
   trimYcSendLegSettlementCryptoForLocalExcess,
+  estimateYcSendLegSettlementCryptoForQuotedReceive,
+  retargetYcSendLegSettlementCryptoForQuotedReceive,
   checkYcSendLegDestinationAmountSufficient,
   resolveYcSendLegFeesFromResponse,
   readYcSendLockedLocalAmount,
@@ -627,6 +629,29 @@ describe("yc send leg destination amount", () => {
     ).toBe(20.27)
   })
 
+  it("grosses up initial settlement crypto for ~1% YC send fee", () => {
+    const estimated = estimateYcSendLegSettlementCryptoForQuotedReceive({
+      quotedReceive: 2000,
+      destinationRate: 1371.11,
+    })
+    expect(estimated).toBeGreaterThan(2000 / 1371.11)
+    expect(estimated).toBeCloseTo(2000 / (1371.11 * 0.99), 5)
+  })
+
+  it("retargets settlement crypto so net local meets quoted receive", () => {
+    const retargeted = retargetYcSendLegSettlementCryptoForQuotedReceive({
+      settlementCryptoUsd: 1.458672,
+      lockedLocalAmount: 2011.88,
+      sendLegFeeLocal: 20.12,
+      quotedReceive: 2000,
+      destinationRate: 1371.11,
+    })
+    expect(retargeted).toBeGreaterThan(1.458672)
+    const observedRate = 2011.88 / 1.458672
+    const targetGross = Math.ceil((2000 / 0.99) * 100) / 100
+    expect(retargeted).toBeCloseTo(targetGross / observedRate, 5)
+  })
+
   it("bumps settlement crypto for local shortfall", () => {
     const bumped = bumpYcSendLegSettlementCryptoForLocalShortfall({
       settlementCryptoUsd: 1.458672,
@@ -634,6 +659,8 @@ describe("yc send leg destination amount", () => {
       destinationRate: 1371.11,
     })
     expect(bumped).toBeGreaterThan(1.458672)
+    // Fee-aware bump must exceed plain shortfall/rate.
+    expect(bumped).toBeGreaterThan(1.458672 + 8.24 / 1371.11)
   })
 
   it("accepts locked local within tolerance when no send fee", () => {

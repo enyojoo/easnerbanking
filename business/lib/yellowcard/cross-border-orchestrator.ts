@@ -13,6 +13,7 @@ import {
   computeYcCrossBorderPricingBeforeReceive,
   computeYcCrossBorderPrincipalLocalPayIn,
   buildYcReceiveLegFromResponse,
+  estimateYcSendLegSettlementCryptoForQuotedReceive,
   EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
   getGlobalPayoutProcessingTime,
   validateYcRecipientForCorridor,
@@ -557,7 +558,10 @@ export async function lockCrossBorderLeg2(
   const ycBuyTo = Number(ctx.toLeg?.yc_sell ?? 0)
   if (!ycBuyTo) throw new Error("YC destination rate unavailable for cross-border send leg")
 
-  const provisionalSendCrypto = Math.round((input.receiveAmount / ycBuyTo) * 1_000_000) / 1_000_000
+  const provisionalSendCrypto = estimateYcSendLegSettlementCryptoForQuotedReceive({
+    quotedReceive: input.receiveAmount,
+    destinationRate: ycBuyTo,
+  })
   const sendLock = await submitYcSendWithDestinationAmountLock({
     receiveAmount: input.receiveAmount,
     initialSettlementCryptoUsd: provisionalSendCrypto,
@@ -1363,7 +1367,10 @@ export async function authorizeCrossBorderDraft(input: {
   const ycBuyTo = Number(toLeg?.yc_sell ?? 0)
   if (!ycBuyTo) throw new Error("YC destination rate unavailable for cross-border send leg")
 
-  const provisionalSendCrypto = Math.round((receiveAmount / ycBuyTo) * 1_000_000) / 1_000_000
+  const provisionalSendCrypto = estimateYcSendLegSettlementCryptoForQuotedReceive({
+    quotedReceive: receiveAmount,
+    destinationRate: ycBuyTo,
+  })
   const sendLock = await submitYcSendWithDestinationAmountLock({
     receiveAmount,
     initialSettlementCryptoUsd: provisionalSendCrypto,

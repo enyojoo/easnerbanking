@@ -62,13 +62,15 @@ describe("submitYcSendWithDestinationAmountLock", () => {
       },
     ]
     let call = 0
+    const submittedCrypto: number[] = []
 
     const result = await submitYcSendWithDestinationAmountLock({
       receiveAmount: 2000,
       initialSettlementCryptoUsd: 1.458672,
       destinationRate: 1371.11,
       receiveCurrency: "NGN",
-      buildSubmit: async () => {
+      buildSubmit: async ({ settlementCryptoUsd }) => {
+        submittedCrypto.push(settlementCryptoUsd)
         call += 1
         return responses[call - 1]
       },
@@ -78,6 +80,48 @@ describe("submitYcSendWithDestinationAmountLock", () => {
     expect(result.lockedLocalAmount).toBe(2020.12)
     expect(result.sendRes.id).toBe("send-2")
     expect(result.finalSettlementCryptoUsd).toBeGreaterThan(1.458672)
+    // Retarget must clear the production shortfall (net 1991.76) in one step.
+    expect(submittedCrypto[1]).toBeGreaterThan(1.458672 + 8.24 / 1371.11)
+  })
+
+  it("retargets when first lock matches production net 1991.76 shortfall", async () => {
+    const submittedCrypto: number[] = []
+    let call = 0
+
+    const result = await submitYcSendWithDestinationAmountLock({
+      receiveAmount: 2000,
+      initialSettlementCryptoUsd: 1.458672,
+      destinationRate: 1371.11,
+      receiveCurrency: "NGN",
+      buildSubmit: async ({ settlementCryptoUsd }) => {
+        submittedCrypto.push(settlementCryptoUsd)
+        call += 1
+        if (call === 1) {
+          return {
+            id: "send-1",
+            convertedAmount: 2011.88,
+            serviceFeeAmountLocal: 20.12,
+            settlementInfo: { cryptoAmount: settlementCryptoUsd, walletAddress: "w" },
+          }
+        }
+        // Scale convertedAmount with submitted crypto at the observed YC rate.
+        const observedRate = 2011.88 / 1.458672
+        const converted = Math.round(settlementCryptoUsd * observedRate * 100) / 100
+        const fee = Math.round(converted * 0.01 * 100) / 100
+        return {
+          id: "send-2",
+          convertedAmount: converted,
+          serviceFeeAmountLocal: fee,
+          settlementInfo: { cryptoAmount: settlementCryptoUsd, walletAddress: "w" },
+        }
+      },
+    })
+
+    expect(call).toBe(2)
+    expect(result.lockedLocalAmount - (result.sendRes.serviceFeeAmountLocal ?? 0)).toBeGreaterThanOrEqual(
+      1999,
+    )
+    expect(submittedCrypto[1]).toBeGreaterThan(submittedCrypto[0]!)
   })
 
   it("retries with bumped crypto when gross local is short and no fee field", async () => {
