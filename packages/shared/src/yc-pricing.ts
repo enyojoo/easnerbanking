@@ -1082,7 +1082,7 @@ export function alignYcCrossBorderLockedLocalPayIn(input: {
 }
 
 /** Max POST /send retries when YC locked destination fiat is below quoted receive. */
-export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 5
+export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 3
 
 /**
  * Never underpay: net local must be >= quoted receive.
@@ -1268,6 +1268,21 @@ export function assertYcSendLegDestinationAmountSufficient(input: {
 }
 
 /**
+ * Gross local POST /send should request so net after YC ~1% fee is >= quoted receive.
+ */
+export function estimateYcSendLegGrossLocalForQuotedReceive(input: {
+  quotedReceive: number
+  feeFraction?: number
+}): number {
+  const quoted = roundLocal(input.quotedReceive)
+  const feeFraction = clampYcSendLegFeeFraction(
+    input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
+  )
+  if (!(quoted > 0)) return 0
+  return roundLocalUp(quoted / (1 - feeFraction))
+}
+
+/**
  * Initial settlement crypto so net local (after YC ~1% send fee) can meet quoted receive.
  * Plain receive/rate under-funds because YC deducts serviceFeeAmountLocal from gross.
  * Applies a small rate buffer — live YC conversion can be worse than customerRate.
@@ -1349,6 +1364,42 @@ export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
     targetCrypto = roundUsdc(Math.max(crypto * 0.5, crypto - Math.max(0.001, 1 / rate)))
   }
   return targetCrypto
+}
+
+/** Retarget both crypto and gross localAmount for POST /send destination lock. */
+export function retargetYcSendLegLockAmountsForQuotedReceive(input: {
+  settlementCryptoUsd: number
+  settlementLocalGross: number
+  lockedLocalAmount: number
+  sendLegFeeLocal: number
+  quotedReceive: number
+  destinationRate: number
+  preferCeil?: boolean
+}): { settlementCryptoUsd: number; settlementLocalGross: number } {
+  const crypto = retargetYcSendLegSettlementCryptoForQuotedReceive({
+    settlementCryptoUsd: input.settlementCryptoUsd,
+    lockedLocalAmount: input.lockedLocalAmount,
+    sendLegFeeLocal: input.sendLegFeeLocal,
+    quotedReceive: input.quotedReceive,
+    destinationRate: input.destinationRate,
+    preferCeil: input.preferCeil,
+  })
+  const feeFraction = clampYcSendLegFeeFraction(
+    input.sendLegFeeLocal > 0 && input.lockedLocalAmount > 0
+      ? input.sendLegFeeLocal / input.lockedLocalAmount
+      : YC_SEND_LEG_SERVICE_FEE_FRACTION,
+  )
+  const netFraction = 1 - feeFraction
+  const preferCeil = input.preferCeil ?? true
+  const targetGross = preferCeil
+    ? roundLocalUp(input.quotedReceive / netFraction)
+    : roundLocal(input.quotedReceive / netFraction)
+  return {
+    settlementCryptoUsd: crypto,
+    settlementLocalGross: preferCeil
+      ? Math.max(targetGross, input.settlementLocalGross)
+      : Math.min(targetGross, input.settlementLocalGross),
+  }
 }
 
 /** Increase settlement crypto so YC destination fiat can meet quoted receive. */

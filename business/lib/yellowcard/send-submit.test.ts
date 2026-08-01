@@ -5,7 +5,27 @@ vi.mock("./http", () => ({
 }))
 
 import { yellowcardFetch } from "./http"
-import { hydrateYcSendSubmitResult } from "./send-submit"
+import { buildYcSendSubmitBody, hydrateYcSendSubmitResult } from "./send-submit"
+
+describe("buildYcSendSubmitBody", () => {
+  it("includes localAmount with directSettlement to lock destination gross", () => {
+    const body = buildYcSendSubmitBody({
+      sequenceId: "seq-1",
+      customerUID: "user-1",
+      channelId: "ch-1",
+      currency: "NGN",
+      country: "NG",
+      refundMode: "balance_payout",
+      userTurnkeyAddress: "wallet-1",
+      settlementCryptoAmount: 1.48,
+      settlementLocalGross: 2020.21,
+      destination: { accountNumber: "1", accountType: "bank", networkId: "n", accountName: "A" },
+    })
+    expect(body.directSettlement).toBe(true)
+    expect(body.localAmount).toBe(2021)
+    expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.48)
+  })
+})
 
 describe("hydrateYcSendSubmitResult", () => {
   beforeEach(() => {
