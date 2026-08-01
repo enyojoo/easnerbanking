@@ -39,8 +39,8 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
     tier1CanResubmit,
   } = useBusinessProfile()
   const { avatarUrl: profileImageUrl } = usePersonalProfileAvatar()
-  /** Keep header avatar/menu mounted while revalidating if we already showed org + profile once */
-  const showProfileChromeSkeleton = profileLoading && !profileHasData
+  /** Keep header avatar visible when personal settings are hydrated even if business profile is still loading. */
+  const showProfileChromeSkeleton = profileLoading && !profileHasData && !profileImageUrl
   const showTier1Banner = profileHasData && !profileLoading && !tier1Complete
 
   const primeVerificationFlow = () => {

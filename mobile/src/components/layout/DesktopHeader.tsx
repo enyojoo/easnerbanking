@@ -6,7 +6,7 @@ import { navigateFromRoot } from '../../navigation/rootNavigationRef'
 import { useAuth } from '../../contexts/AuthContext'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { HEADER_HEIGHT, spacing, userAvatarStyles } from '../../theme'
-import { AvatarImage } from '../AvatarImage'
+import { ProfileAvatarCircle } from '../ProfileAvatarCircle'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { haptics } from '../../lib/haptics'
@@ -57,16 +57,14 @@ export function DesktopHeader() {
           accessibilityRole="button"
           accessibilityLabel="Profile"
         >
-          {headerAvatarUri ? (
-            <AvatarImage
-              avatarUrl={userProfile?.profile?.avatar_url}
-              style={userAvatarStyles.image}
-            />
-          ) : (
-            <Text style={userAvatarStyles.initials}>
-              {initialsFromFullName(avatarFullName)}
-            </Text>
-          )}
+          <ProfileAvatarCircle
+            avatarUrl={userProfile?.profile?.avatar_url}
+            style={userAvatarStyles.image}
+            imageStyle={userAvatarStyles.image}
+            fallback={
+              <Text style={userAvatarStyles.initials}>{initialsFromFullName(avatarFullName)}</Text>
+            }
+          />
         </Pressable>
       </View>
     </View>

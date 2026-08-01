@@ -22,6 +22,7 @@ import {
   clearAllBusinessBrowserState,
 } from "@/lib/query/web-persist"
 import { BusinessIntercom } from "@/components/intercom-business"
+import { ImageWarmBootstrap } from "@/components/image-warm-bootstrap"
 
 /**
  * Root client provider tree for Easner Business.
@@ -62,6 +63,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }}
       >
         <BusinessIntercom />
+        <ImageWarmBootstrap />
         <BusinessScopeProvider>
           <ScopeRealtimeBridge>
             <PersistedBusinessLifecycleBridge />

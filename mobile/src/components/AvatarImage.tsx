@@ -9,6 +9,8 @@ type Props = {
   avatarUrl: unknown
   style?: StyleProp<ImageStyle>
   contentFit?: ImageContentFit
+  prefetch?: boolean
+  onLoad?: () => void
   onError?: () => void
 }
 
@@ -16,7 +18,14 @@ type Props = {
  * Profile-style avatar with stable URL normalization, disk cache, and prefetch on mount.
  * Returns `null` when URL is missing or load fails — parent should show initials fallback.
  */
-export function AvatarImage({ avatarUrl, style, contentFit = 'cover', onError }: Props) {
+export function AvatarImage({
+  avatarUrl,
+  style,
+  contentFit = 'cover',
+  prefetch = true,
+  onLoad,
+  onError,
+}: Props) {
   const uri = avatarImageUri(avatarUrl)
   const [failed, setFailed] = useState(false)
 
@@ -25,8 +34,8 @@ export function AvatarImage({ avatarUrl, style, contentFit = 'cover', onError }:
   }, [uri])
 
   useEffect(() => {
-    warmAvatarCache(uri)
-  }, [uri])
+    if (prefetch) warmAvatarCache(uri)
+  }, [prefetch, uri])
 
   if (!uri || failed) return null
 
@@ -36,6 +45,7 @@ export function AvatarImage({ avatarUrl, style, contentFit = 'cover', onError }:
       style={style}
       contentFit={contentFit}
       prefetch={false}
+      onLoad={onLoad}
       onError={() => {
         setFailed(true)
         onError?.()

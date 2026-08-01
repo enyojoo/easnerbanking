@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   ChevronUp,
   ChevronDown,
@@ -21,6 +20,7 @@ import {
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { normalizeBusinessLogoUrl, normalizeProfileImageUrl } from "@/lib/image-cache"
+import { StableAvatar } from "@/components/stable-avatar"
 
 interface BusinessDropdownProps {
   businessName: string
@@ -47,7 +47,6 @@ export function BusinessDropdown({
   const [isOpen, setIsOpen] = useState(false)
   const normalizedProfileImageUrl = normalizeProfileImageUrl(profileImageUrl)
   const normalizedBusinessLogoUrl = normalizeBusinessLogoUrl(businessLogoUrl)
-  const hasProfileImage = Boolean(normalizedProfileImageUrl)
   const hasBusinessLogo = Boolean(normalizedBusinessLogoUrl)
 
   return (
@@ -58,15 +57,15 @@ export function BusinessDropdown({
             variant="ghost"
             className="max-w-full gap-2 px-2 py-1.5 h-auto hover:bg-muted/50"
           >
-            <Avatar
-              key={hasProfileImage ? "profile-img" : "profile-placeholder"}
-              className="h-9 w-9 shrink-0 border-2 border-border"
-            >
-              {hasProfileImage ? <AvatarImage src={normalizedProfileImageUrl!} alt="" /> : null}
-              <AvatarFallback className="bg-primary/10 text-primary">
-                <User className="h-[1.125rem] w-[1.125rem]" />
-              </AvatarFallback>
-            </Avatar>
+            <StableAvatar
+              src={normalizedProfileImageUrl}
+              className="h-9 w-9 shrink-0 rounded-full border-2 border-border"
+              fallback={
+                <span className="flex size-full items-center justify-center bg-primary/10 text-primary">
+                  <User className="h-[1.125rem] w-[1.125rem]" />
+                </span>
+              }
+            />
             <ChevronDown
               className={cn(
                 "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
@@ -80,12 +79,15 @@ export function BusinessDropdown({
             className="w-full justify-between p-3 h-auto hover:bg-muted/50"
           >
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              <Avatar key={hasBusinessLogo ? "biz-logo" : "biz-placeholder"} className="h-8 w-8">
-                {hasBusinessLogo ? <AvatarImage src={normalizedBusinessLogoUrl!} alt="" /> : null}
-                <AvatarFallback className="bg-primary/10 text-primary">
-                  <Building2 className="h-4 w-4" />
-                </AvatarFallback>
-              </Avatar>
+              <StableAvatar
+                src={normalizedBusinessLogoUrl}
+                className="h-8 w-8 rounded-full"
+                fallback={
+                  <span className="flex size-full items-center justify-center bg-primary/10 text-primary">
+                    <Building2 className="h-4 w-4" />
+                  </span>
+                }
+              />
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-sm font-medium truncate">{businessName}</p>
               </div>
@@ -122,12 +124,15 @@ export function BusinessDropdown({
           <>
             <div className="px-3 py-2">
               <div className="flex items-center gap-3">
-                <Avatar key={hasBusinessLogo ? "menu-biz-logo" : "menu-biz-placeholder"} className="h-8 w-8">
-                  {hasBusinessLogo ? <AvatarImage src={normalizedBusinessLogoUrl!} alt="" /> : null}
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    <Building2 className="h-4 w-4" />
-                  </AvatarFallback>
-                </Avatar>
+                <StableAvatar
+                  src={normalizedBusinessLogoUrl}
+                  className="h-8 w-8 rounded-full"
+                  fallback={
+                    <span className="flex size-full items-center justify-center bg-primary/10 text-primary">
+                      <Building2 className="h-4 w-4" />
+                    </span>
+                  }
+                />
                 <div>
                   <p className="text-sm font-medium">{businessName}</p>
                   <p className="text-xs text-muted-foreground">Business account</p>

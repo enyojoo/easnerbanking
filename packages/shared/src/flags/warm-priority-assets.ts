@@ -1,0 +1,36 @@
+/** Shared priority assets for web + native image warmers. */
+export const WARM_PRIORITY_ISOS = [
+  "US",
+  "EU",
+  "GB",
+  "NG",
+  "KE",
+  "GH",
+  "ZA",
+  "CA",
+  "AU",
+  "UG",
+  "TZ",
+  "RW",
+  "SN",
+  "CM",
+] as const
+
+export const WARM_PRIORITY_CURRENCIES = [
+  "USD",
+  "EUR",
+  "GBP",
+  "NGN",
+  "KES",
+  "GHS",
+  "ZAR",
+  "CAD",
+  "AUD",
+  "UGX",
+  "TZS",
+  "RWF",
+  "XOF",
+  "XAF",
+  "USDC",
+  "USDT",
+] as const

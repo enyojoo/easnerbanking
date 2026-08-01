@@ -1,3 +1,5 @@
+import { warmImageUrl } from "@easner/shared"
+
 const IMAGE_CACHE_TTL_DAYS = 30
 const IMAGE_CACHE_TTL_MS = IMAGE_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
 
@@ -47,4 +49,14 @@ export function bustProfileImageUrl(value: unknown, version?: string): string | 
 
 export function bustBusinessLogoUrl(value: unknown, version?: string): string | null {
   return bustImageUrl(value, "blv", version)
+}
+
+export function warmProfileImageUrl(value: unknown): void {
+  const url = normalizeProfileImageUrl(value)
+  if (url) warmImageUrl(url)
+}
+
+export function warmBusinessLogoUrl(value: unknown): void {
+  const url = normalizeBusinessLogoUrl(value)
+  if (url) warmImageUrl(url)
 }

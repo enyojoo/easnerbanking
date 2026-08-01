@@ -22,7 +22,7 @@ import { displayFirstNameFromFullName, initialsFromFullName } from '../../lib/us
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { PinKeypad, PinLockedHintText } from '../../components/pin'
 import { EasnerAlertSheet } from '../../components/premium'
-import { AvatarImage } from '../../components/AvatarImage'
+import { ProfileAvatarCircle } from '../../components/ProfileAvatarCircle'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { haptics } from '../../lib/haptics'
 import EaseEnter from '../../components/EaseEnter'
@@ -38,7 +38,6 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   const [error, setError] = useState('')
   const [locked, setLocked] = useState(false)
   const [lockedUntil, setLockedUntil] = useState<number | null>(null)
-  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false)
   const [forgotSheetVisible, setForgotSheetVisible] = useState(false)
   const [logoutSheetVisible, setLogoutSheetVisible] = useState(false)
   const shakeAnim = useRef(new Animated.Value(0)).current
@@ -53,10 +52,6 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
     ''
 
   const headerAvatarUri = avatarImageUri(userProfile?.profile?.avatar_url)
-
-  useEffect(() => {
-    setAvatarLoadFailed(false)
-  }, [headerAvatarUri])
 
   useEffect(() => {
     warmAvatarCache(headerAvatarUri)
@@ -199,17 +194,14 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
           </View>
 
           <View style={styles.topBlock}>
-            <View style={userAvatarStyles.pinEntryCircle}>
-              {headerAvatarUri && !avatarLoadFailed ? (
-                <AvatarImage
-                  avatarUrl={userProfile?.profile?.avatar_url}
-                  style={userAvatarStyles.image}
-                  onError={() => setAvatarLoadFailed(true)}
-                />
-              ) : (
+            <ProfileAvatarCircle
+              avatarUrl={userProfile?.profile?.avatar_url}
+              style={userAvatarStyles.pinEntryCircle}
+              imageStyle={userAvatarStyles.image}
+              fallback={
                 <Text style={userAvatarStyles.pinEntryInitials}>{initialsFromFullName(displayFull)}</Text>
-              )}
-            </View>
+              }
+            />
             <View style={styles.greetingContainer}>
               <Text style={styles.greeting}>{appPinStrings.lockWelcome(getUserName())}</Text>
             </View>

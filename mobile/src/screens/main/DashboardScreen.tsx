@@ -73,7 +73,7 @@ import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list-focus-refresh'
 import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
 import { getTransactionListName } from '../../lib/transactionListLabel'
-import { AvatarImage } from '../../components/AvatarImage'
+import { ProfileAvatarCircle } from '../../components/ProfileAvatarCircle'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
@@ -613,16 +613,16 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   haptics.tap()
                   navigation.navigate('Profile' as any)
                 }} >
-                {headerAvatarUri ? (
-                  <AvatarImage
-                    avatarUrl={userProfile?.profile?.avatar_url}
-                    style={userAvatarStyles.image}
-                  />
-                ) : (
-                  <Text style={userAvatarStyles.initials}>
-                    {initialsFromFullName(dashboardAvatarFullName)}
-                  </Text>
-                )}
+                <ProfileAvatarCircle
+                  avatarUrl={userProfile?.profile?.avatar_url}
+                  style={userAvatarStyles.image}
+                  imageStyle={userAvatarStyles.image}
+                  fallback={
+                    <Text style={userAvatarStyles.initials}>
+                      {initialsFromFullName(dashboardAvatarFullName)}
+                    </Text>
+                  }
+                />
               </Pressable>
             </View>
             ) : (

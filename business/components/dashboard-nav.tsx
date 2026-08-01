@@ -25,7 +25,8 @@ import { useAuth } from "@/lib/auth-context"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
 import { BusinessOnboardingChecklist } from "@/components/business-onboarding-checklist"
-import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
+import { StableImage } from "@easner/shared"
+import { normalizeBusinessLogoUrl, warmBusinessLogoUrl } from "@/lib/image-cache"
 import { isNavPathActive } from "@/lib/navigation/is-nav-path-active"
 
 /** Hide Collections (Terminal, QR Pay) in sidebar — routes and pages stay available via direct URL. */
@@ -60,6 +61,10 @@ export function DashboardNav() {
 
   const hasBusinessLogo = Boolean(businessLogoUrl?.trim())
   const normalizedBusinessLogoUrl = normalizeBusinessLogoUrl(businessLogoUrl)
+
+  useEffect(() => {
+    warmBusinessLogoUrl(normalizedBusinessLogoUrl)
+  }, [normalizedBusinessLogoUrl])
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => deriveOpenGroups(pathname))
 
@@ -123,12 +128,14 @@ export function DashboardNav() {
   return (
     <div className="fixed left-0 top-0 h-screen w-64 border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex flex-col">
       <div className="flex h-16 min-h-16 items-center gap-3 border-b border-sidebar-border px-5">
-        <div
-          key={hasBusinessLogo ? "nav-logo" : "nav-placeholder"}
-          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-card shadow-soft border border-border/60"
-        >
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-card shadow-soft border border-border/60">
           {hasBusinessLogo && normalizedBusinessLogoUrl ? (
-            <img src={normalizedBusinessLogoUrl} alt="" className="h-full w-full object-cover" />
+            <StableImage
+              src={normalizedBusinessLogoUrl}
+              alt=""
+              retainPrevious
+              className="h-full w-full object-cover"
+            />
           ) : (
             <Building2 className="h-[18px] w-[18px] text-primary stroke-[1.5]" />
           )}

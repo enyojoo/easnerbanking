@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { Image } from 'expo-image'
+import { ProfileAvatarCircle } from './ProfileAvatarCircle'
 import { EasenetSubtitleRow } from '../lib/easenetRecipientUi'
 import { colors, spacing, borderRadius, textStyles, fontFamily, surfaceFrameStyle } from '../theme'
 
@@ -30,30 +29,20 @@ export function EasenetLookupPreview({
   titleEndAccessory,
 }: Props) {
   const row = variant === 'row'
-  const uri = String(profile.avatarUrl || '').trim()
-  const [imageFailed, setImageFailed] = useState(false)
-  useEffect(() => {
-    setImageFailed(false)
-  }, [uri])
 
   return (
     <View style={[styles.wrap, row && styles.wrapRow]}>
       <View style={styles.avatarWrap}>
-        {uri && !imageFailed ? (
-          <Image
-            source={{ uri }}
-            style={styles.avatarImg}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            recyclingKey={uri}
-            transition={0}
-            onError={() => setImageFailed(true)}
-          />
-        ) : (
-          <View style={styles.avatarFallback}>
-            <Text style={styles.avatarInitials}>{getInitials(profile.fullName)}</Text>
-          </View>
-        )}
+        <ProfileAvatarCircle
+          avatarUrl={profile.avatarUrl}
+          style={styles.avatarImg}
+          imageStyle={styles.avatarImg}
+          fallback={
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarInitials}>{getInitials(profile.fullName)}</Text>
+            </View>
+          }
+        />
       </View>
       <View style={styles.textCol}>
         <View style={styles.nameRow}>

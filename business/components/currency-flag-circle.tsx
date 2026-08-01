@@ -1,6 +1,8 @@
 "use client"
 
+import { useEffect } from "react"
 import { CurrencyFlag } from "@/components/flags"
+import { warmWebCurrencyFlag } from "@easner/shared"
 import { cn } from "@/lib/utils"
 
 type CurrencyFlagCircleProps = {
@@ -15,6 +17,10 @@ type CurrencyFlagCircleProps = {
  * (`surfaceChromeCircle` + cover crop), not the default 3:2 web flag frame.
  */
 export function CurrencyFlagCircle({ currency, size = 35, className }: CurrencyFlagCircleProps) {
+  useEffect(() => {
+    warmWebCurrencyFlag(currency)
+  }, [currency])
+
   return (
     <span
       className={cn(

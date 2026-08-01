@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { AvatarImage } from '../AvatarImage'
+import { ProfileAvatarCircle } from '../ProfileAvatarCircle'
 import { PayoutRecipientAvatar } from '../PayoutRecipientAvatar'
 import { colors, textStyles, spacing, fontFamily } from '../../theme'
 import type { Recipient } from '../../types'
@@ -34,21 +34,14 @@ function EasenetRecipientAvatar({
     String(easenetPreview?.fullName ?? '').trim() ||
     (displayName && !isEasetagHandleValue(displayName, tag) ? displayName : tag)
   const uri = String(easenetPreview?.avatarUrl || recipient.payee_avatar_url || '').trim()
-  const [imgFailed, setImgFailed] = useState(false)
-  useEffect(() => {
-    setImgFailed(false)
-  }, [uri])
   return (
     <View style={styles.avatarCircle}>
-      {uri && !imgFailed ? (
-        <AvatarImage
-          avatarUrl={uri}
-          style={styles.avatarFill}
-          onError={() => setImgFailed(true)}
-        />
-      ) : (
-        <Text style={styles.avatarInitials}>{recipientInitials(avatarName)}</Text>
-      )}
+      <ProfileAvatarCircle
+        avatarUrl={uri || null}
+        style={styles.avatarFill}
+        imageStyle={styles.avatarFill}
+        fallback={<Text style={styles.avatarInitials}>{recipientInitials(avatarName)}</Text>}
+      />
     </View>
   )
 }

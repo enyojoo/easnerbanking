@@ -1,21 +1,20 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { isImageWarm, StableImage, warmImageUrl } from "@easner/shared"
 import { normalizeProfileImageUrl } from "@/lib/image-cache"
 
-export function PinUserAvatar({
-  initials,
-  avatarUrl,
-  className,
-}: {
-  initials: string
-  avatarUrl?: string | null
+type StableAvatarProps = {
+  src?: string | null
+  fallback: ReactNode
   className?: string
-}) {
-  const safe = initials.slice(0, 2).toUpperCase() || "?"
-  const normalized = normalizeProfileImageUrl(avatarUrl)
+  imageClassName?: string
+}
+
+/** Avatar shell that avoids Radix load flicker — reuses warmed/cached profile images. */
+export function StableAvatar({ src, fallback, className, imageClassName }: StableAvatarProps) {
+  const normalized = normalizeProfileImageUrl(src)
   const [ready, setReady] = useState(() => Boolean(normalized && isImageWarm(normalized)))
 
   useEffect(() => {
@@ -37,19 +36,14 @@ export function PinUserAvatar({
   }, [normalized])
 
   return (
-    <div
-      className={cn(
-        "relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-lg font-semibold text-foreground",
-        className,
-      )}
-    >
-      {!ready ? safe : null}
+    <div className={cn("relative flex shrink-0 items-center justify-center overflow-hidden", className)}>
+      {!ready ? fallback : null}
       {normalized ? (
         <StableImage
           src={normalized}
           alt=""
           retainPrevious
-          className={cn("size-full object-cover", !ready && "absolute inset-0")}
+          className={cn("size-full object-cover", imageClassName, !ready && "absolute inset-0")}
           onLoad={() => setReady(true)}
         />
       ) : null}

@@ -1,3 +1,5 @@
+"use client"
+
 import type { CSSProperties } from "react"
 import { getTokenIconUrl } from "../crypto-icons"
 import { cn } from "../utils/cn"
@@ -11,6 +13,7 @@ import {
   flagFillsParentClass,
   resolveFlagBoxSizeFromStyle,
 } from "../flags/flag-styles"
+import { StableImage } from "./StableImage"
 
 const flagRadiusClass = "rounded-[2px]"
 
@@ -69,7 +72,7 @@ export function CountryFlag({ code, size = 24, className, style, title }: Countr
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <StableImage
         src={src}
         alt=""
         draggable={false}
@@ -126,12 +129,11 @@ export function CurrencyFlag({
         style={fillParent ? style : { ...tokenBox, borderRadius: 0, ...style }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <StableImage
           src={tokenIconUrl}
           alt=""
           draggable={false}
           className="block h-full w-full object-cover object-center"
-          loading="lazy"
           onDragStart={(e) => e.preventDefault()}
         />
       </span>

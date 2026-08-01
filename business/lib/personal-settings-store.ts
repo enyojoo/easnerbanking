@@ -3,6 +3,7 @@
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS } from "@/lib/cache"
+import { warmProfileImageUrl } from "@/lib/image-cache"
 
 export type PersonalSettings = {
   fullName: string
@@ -114,6 +115,7 @@ class PersonalSettingsStore {
 
     this.data = next
     this.saveToLocalStorage(userId, next)
+    warmProfileImageUrl(next.personal.avatarUrl)
     this.notify()
     return next
   }
@@ -175,6 +177,7 @@ class PersonalSettingsStore {
     if (ls) {
       this.data = ls
       dataCache.set(CACHE_KEYS.PERSONAL_SETTINGS(userId), ls, CACHE_TTL_MS)
+      warmProfileImageUrl(ls.personal.avatarUrl)
       this.notify()
     }
   }

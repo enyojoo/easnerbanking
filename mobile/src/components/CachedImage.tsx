@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { ImageStyle, StyleProp } from 'react-native'
 import { Image, type ImageProps, type ImageSource } from 'expo-image'
-import { IMAGE_CACHE_POLICY, warmImageCache, type ImageCachePolicy } from '../lib/imageCache'
+import { IMAGE_CACHE_POLICY, markImageWarm, warmImageCache, type ImageCachePolicy } from '../lib/imageCache'
 import { BundledImage } from './BundledImage'
 
 export type CachedImageProps = Omit<ImageProps, 'source' | 'cachePolicy'> & {
@@ -29,6 +29,7 @@ export function CachedImage({
   transition = 0,
   prefetch,
   style,
+  onLoad,
   ...rest
 }: CachedImageProps) {
   const trimmedUri = typeof uri === 'string' ? uri.trim() : ''
@@ -64,6 +65,10 @@ export function CachedImage({
       recyclingKey={trimmedUri || undefined}
       transition={transition}
       style={style}
+      onLoad={(event) => {
+        if (trimmedUri) markImageWarm(trimmedUri)
+        onLoad?.(event)
+      }}
       {...rest}
     />
   )
