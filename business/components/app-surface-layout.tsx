@@ -18,6 +18,12 @@ const DASHBOARD_SHELL_ROOTS = [
   "/transactions",
 ] as const
 
+/**
+ * Every authenticated business workspace route must match one of DASHBOARD_SHELL_ROOTS
+ * so page chrome (header, verification banner, scroll) stays consistent. Do not add
+ * compensating pt-* on <main> or page roots — header/banner are in-flow above main.
+ */
+
 function matchesShellRoot(pathname: string, root: string) {
   return pathname === root || pathname.startsWith(`${root}/`)
 }
@@ -28,13 +34,7 @@ function isDashboardShellPath(pathname: string) {
 
 function resolveShellProps(pathname: string) {
   const constrained = matchesShellRoot(pathname, "/dashboard")
-  const mainClassName = ["/qr-pay", "/settings", "/terminal"].some((root) =>
-    matchesShellRoot(pathname, root),
-  )
-    ? "overflow-y-auto"
-    : ""
-
-  return { constrained, mainClassName }
+  return { constrained }
 }
 
 export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
@@ -44,9 +44,9 @@ export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
-  const { constrained, mainClassName } = resolveShellProps(pathname)
+  const { constrained } = resolveShellProps(pathname)
   return (
-    <DashboardShell constrained={constrained} mainClassName={mainClassName}>
+    <DashboardShell constrained={constrained}>
       {children}
     </DashboardShell>
   )

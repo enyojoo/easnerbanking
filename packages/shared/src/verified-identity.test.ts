@@ -21,6 +21,17 @@ describe("verified-identity lock helpers", () => {
     ).toBe(false)
   })
 
+  it("ignores legacy Noah approved mirror after Grid cutover reset", () => {
+    expect(
+      isBusinessProfileLockedFromKybFields({
+        verification_provider: "grid",
+        verification_status: "not_started",
+        noah_kyb_status: "approved",
+        kyb_verified_at: "2025-01-01T00:00:00Z",
+      }),
+    ).toBe(false)
+  })
+
   it("isProfileLockedFromKycFields for individual approval", () => {
     expect(
       isProfileLockedFromKycFields({

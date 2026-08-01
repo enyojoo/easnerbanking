@@ -29,7 +29,8 @@ export function PayrollSubpageShell({
   maxWidth?: "max-w-5xl" | "max-w-6xl" | "max-w-7xl"
 }) {
   return (
-    <div className={cn("mx-auto w-full px-4 py-7 sm:px-6 sm:py-8", maxWidth)}>
+    // Bottom padding only — top spacing comes from DashboardShell (header/banner in-flow).
+    <div className={cn("mx-auto w-full px-4 pb-7 sm:px-6 sm:pb-8", maxWidth)}>
       <Button variant="ghost" size="sm" className="-ml-2 mb-3" asChild>
         <Link href={backHref}>
           <ArrowLeft className="mr-2 h-4 w-4" />

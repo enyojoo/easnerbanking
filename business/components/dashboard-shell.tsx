@@ -20,13 +20,11 @@ import { cn } from "@/lib/utils"
 
 interface DashboardShellProps {
   children: React.ReactNode
-  /** Extra class for main content (e.g. overflow-y-auto) */
-  mainClassName?: string
   /** Use max-width constraint like dashboard (max-w-6xl) */
   constrained?: boolean
 }
 
-export function DashboardShell({ children, mainClassName = "", constrained = false }: DashboardShellProps) {
+export function DashboardShell({ children, constrained = false }: DashboardShellProps) {
   useBusinessNoahSync()
   const { user, isLoading, logout } = useAuth()
   const router = useRouter()
@@ -36,11 +34,22 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
     isLoading: profileLoading,
     hasData: profileHasData,
     tier1Complete,
+    tier1VerificationStatus,
+    canManageBusinessVerification,
   } = useBusinessProfile()
   const { avatarUrl: profileImageUrl } = usePersonalProfileAvatar()
   /** Keep header avatar/menu mounted while revalidating if we already showed org + profile once */
   const showProfileChromeSkeleton = profileLoading && !profileHasData
-  const showTier1Banner = profileHasData && !profileLoading && !tier1Complete
+  const tier1Status = (tier1VerificationStatus ?? "not_started").toLowerCase()
+  const showCutoverBanner =
+    profileHasData &&
+    !profileLoading &&
+    !tier1Complete &&
+    tier1Status === "not_started" &&
+    canManageBusinessVerification
+  const showTier1Banner =
+    profileHasData && !profileLoading && !tier1Complete && !showCutoverBanner
+  const showStatusBanner = showCutoverBanner || showTier1Banner
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -102,11 +111,10 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
 
   return (
     <AppLockProvider>
-      <div className="min-h-screen bg-background text-foreground">
+      <div className="h-dvh overflow-hidden bg-background text-foreground">
         <DashboardNav />
-        <ComplianceCutoverBanner />
-        <div className="ml-64 flex min-h-screen flex-col">
-          <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+        <div className="ml-64 flex h-dvh flex-col overflow-hidden">
+          <header className="z-30 flex h-16 min-h-16 shrink-0 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
           {showProfileChromeSkeleton ? (
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 animate-pulse rounded-full border-2 border-border bg-muted" />
@@ -136,28 +144,36 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
             </>
           )}
           </header>
-          {showTier1Banner ? (
-          <div
-            className="fixed top-16 left-64 right-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] px-8 py-2.5 text-sm text-[hsl(var(--warning))] backdrop-blur-sm"
-            role="status"
-          >
-            <span>{BANNER_COPY.verification}</span>
-            <Link href="/settings?tab=verification" className="font-semibold text-[hsl(var(--warning))] underline underline-offset-2">
-              Verify
-            </Link>
-          </div>
+          {showCutoverBanner ? (
+            <ComplianceCutoverBanner className="shrink-0" />
+          ) : showTier1Banner ? (
+            <div
+              className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] px-8 py-2.5 text-sm text-[hsl(var(--warning))] backdrop-blur-sm"
+              role="status"
+            >
+              <span>{BANNER_COPY.verification}</span>
+              <Link
+                href="/settings?tab=verification"
+                className="font-semibold text-[hsl(var(--warning))] underline underline-offset-2"
+              >
+                Verify
+              </Link>
+            </div>
           ) : null}
+          {/*
+            Page chrome contract: header + optional banner sit above main (shrink-0).
+            The column is h-dvh overflow-hidden — only main scrolls, so shell chrome
+            never shifts. Do not add pt-* on main to offset headers.
+          */}
           <main
             style={
               {
-                "--dashboard-sticky-top": showTier1Banner ? "6.5rem" : "4rem",
+                "--dashboard-sticky-top": showStatusBanner ? "6.5rem" : "4rem",
               } as React.CSSProperties
             }
             className={cn(
-              "flex-1 px-8 pb-10",
-              showTier1Banner ? "pt-[6.5rem]" : "pt-20",
+              "flex-1 min-h-0 overflow-y-auto px-8 pb-10",
               constrained ? "mx-auto w-full max-w-6xl" : "mx-auto w-full max-w-[1440px]",
-              mainClassName,
             )}
           >
             {children}

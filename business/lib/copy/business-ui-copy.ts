@@ -95,6 +95,8 @@ export const ONBOARDING_STEP_COPY = {
   fundAfterVerification: "Available after verification",
   fundPending: "Add money to start sending.",
   fundComplete: "Balance received",
+  payrollPending: "Add who you pay and how they get paid.",
+  payrollReceivingPending: "Confirm receiving methods for your people.",
 } as const
 
 export const BANNER_COPY = {

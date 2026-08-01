@@ -125,7 +125,7 @@ export function requestBusinessAccountsRefresh(): void {
   window.dispatchEvent(new CustomEvent("easner-business-accounts-refresh"))
 }
 
-/** Fired after terminal payout / settings mutations so sidebar onboarding can sync without waiting for navigation. */
+/** Fired after terminal payout / settings mutations so dependent UI can sync without waiting for navigation. */
 export const EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT = "easner-terminal-payout-setup-updated" as const
 
 export function notifyTerminalPayoutSetupUpdated(): void {

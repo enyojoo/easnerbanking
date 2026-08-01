@@ -149,8 +149,7 @@ export default function TerminalPage() {
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Terminal</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Accept in-person stablecoin payments using a virtual terminal. Before taking payments, use Setup payout to
-              add a payout method and set it as the default for this terminal.
+              Accept in-person stablecoin payments using a virtual terminal.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:shrink-0">

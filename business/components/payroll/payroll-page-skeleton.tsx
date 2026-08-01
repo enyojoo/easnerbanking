@@ -10,7 +10,7 @@ export function PayrollDetailSkeleton({
 }) {
   return (
     <div
-      className="mx-auto max-w-6xl px-4 py-8 sm:px-6"
+      className="mx-auto max-w-6xl px-4 pb-8 sm:px-6"
       aria-label="Loading payroll details"
       aria-busy="true"
     >
@@ -68,7 +68,7 @@ export function PayrollDetailSkeleton({
 export function PayrollFormSkeleton() {
   return (
     <div
-      className="mx-auto max-w-6xl px-4 py-8 sm:px-6"
+      className="mx-auto max-w-6xl px-4 pb-8 sm:px-6"
       aria-label="Loading payroll form"
       aria-busy="true"
     >

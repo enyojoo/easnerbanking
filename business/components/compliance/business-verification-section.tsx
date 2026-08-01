@@ -2,12 +2,12 @@
 
 /**
  * Hosted KYB on the Verification settings tab. Prefer SumSub WebSDK via Grid `kyc_token`.
- * Fall back to iframing `kyc_link` if no token. Tier cards are replaced by a full-bleed
- * in-tab SumSub view (Back restores cards; Settings tab bar hidden while open).
+ * Fall back to iframing `kyc_link` if no token. Tier cards swap for in-tab SumSub;
+ * tab intro and Settings chrome stay visible.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -19,6 +19,8 @@ import { isGridCompleteUrl } from "@/lib/grid/grid-complete-url"
 import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { GridSumsubWebSdk } from "@/components/compliance/grid-sumsub-websdk"
+import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
+import { SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
 import {
   getNoahRejectionDisplay,
   NOAH_FINAL_REJECTION_USER_MESSAGE,
@@ -94,19 +96,13 @@ function tierLadderCopy(tier: 1 | 2 | 3) {
   return BUSINESS_TIER_LADDER.tiers.find((x) => x.tier === tier)
 }
 
-type BusinessVerificationSectionProps = {
-  /** Notifies Settings shell to hide tab bar during in-tab SumSub takeover. */
-  onFlowOpenChange?: (open: boolean) => void
-}
-
-export function BusinessVerificationSection({
-  onFlowOpenChange,
-}: BusinessVerificationSectionProps = {}) {
+export function BusinessVerificationSection() {
   const {
     tier1Complete,
     tier1VerificationStatus,
     tier1RejectionReasons,
     tier1RejectionType,
+    tier1CanResubmit,
     tier1RetryGuidance,
     canManageBusinessVerification,
     isLoading,
@@ -138,20 +134,10 @@ export function BusinessVerificationSection({
     }
   }, [])
 
-  useEffect(() => {
-    onFlowOpenChange?.(hostedOpen)
-    return () => {
-      if (hostedOpen) onFlowOpenChange?.(false)
-    }
-  }, [hostedOpen, onFlowOpenChange])
-
   const tier1RejectedForProbe = tier1VerificationStatus === "rejected"
   const tier1UnderReviewForProbe = tier1StatusIsInReview(tier1VerificationStatus)
   const tier1AwaitingReviewForProbe = tier1UnderReviewForProbe && !tier1RejectedForProbe
-  const tier1FinalRejectForPrefetch =
-    tier1RejectedForProbe &&
-    (tier1RejectionType === "Final" ||
-      getNoahRejectionDisplay(tier1RejectionReasons)?.isFinal === true)
+  const tier1FinalRejectForPrefetch = tier1RejectedForProbe && !tier1CanResubmit
 
   const prefetchHostedCredentials = useCallback(async () => {
     if (!businessId || !canManageBusinessVerification || tier1Complete || tier1FinalRejectForPrefetch) {
@@ -385,7 +371,7 @@ export function BusinessVerificationSection({
   const showTier1HostedCta =
     canManageBusinessVerification &&
     !tier1Complete &&
-    !tier1FinalReject &&
+    tier1CanResubmit &&
     (!tier1AwaitingReview || hostedResumeAvailable !== false)
   const tier1HostedCtaLabel = tier1Rejected
     ? "Retry verification"
@@ -393,60 +379,62 @@ export function BusinessVerificationSection({
       ? "Continue verification"
       : "Begin verification"
 
-  if (hostedOpen) {
-    const hasCredentials = Boolean(hostedToken?.trim() || hostedUrl?.trim())
-    return (
-      <div
-        className="flex min-h-[calc(100dvh-11rem)] flex-col"
-        id="business-verification"
-        data-verification-flow="open"
-      >
-        <div className="flex shrink-0 items-center border-b bg-background py-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 text-muted-foreground hover:text-foreground"
-            onClick={closeHostedAndSync}
-          >
-            <ArrowLeft className="size-4" aria-hidden />
-            Back
-          </Button>
-        </div>
-        <div className="relative min-h-0 flex-1">
-          {error ? (
-            <p className="absolute left-0 right-0 top-2 z-10 mx-auto max-w-lg rounded-md bg-destructive/90 px-3 py-2 text-center text-sm text-destructive-foreground">
-              {error}
-            </p>
-          ) : null}
-          {hostedLoading || !hasCredentials ? (
-            <div className="flex min-h-[min(24rem,50vh)] flex-col items-center justify-center gap-3 text-muted-foreground">
-              <Loader2 className="size-8 animate-spin" aria-hidden />
-              <p className="text-sm">Opening verification…</p>
-            </div>
-          ) : useSumsubSdk && hostedToken ? (
-            <GridSumsubWebSdk
-              accessToken={hostedToken}
-              theme="light"
-              onComplete={closeHostedAndSync}
-              onError={(message) => setError(message)}
-            />
-          ) : hostedIframeSrc ? (
-            <iframe
-              title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
-              src={hostedIframeSrc}
-              className="absolute inset-0 size-full border-0 bg-background"
-              allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
-              onLoad={handleHostedIframeLoad}
-            />
-          ) : null}
-        </div>
-      </div>
-    )
-  }
+  const hasHostedCredentials = Boolean(hostedToken?.trim() || hostedUrl?.trim())
 
   return (
     <div className="space-y-6" id="business-verification">
+      <SettingsTabIntro
+        title={SETTINGS_TAB_COPY.verification.title}
+        description={SETTINGS_TAB_COPY.verification.intro}
+        icon={<ShieldCheck aria-hidden />}
+      />
+      {hostedOpen ? (
+        <div
+          className="flex min-h-[min(32rem,58vh)] flex-col overflow-hidden rounded-lg border bg-background"
+          data-verification-flow="open"
+        >
+          <div className="flex shrink-0 items-center border-b bg-background px-2 py-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              onClick={closeHostedAndSync}
+            >
+              <ArrowLeft className="size-4" aria-hidden />
+              Back
+            </Button>
+          </div>
+          <div className="relative min-h-0 flex-1">
+            {error ? (
+              <p className="absolute left-0 right-0 top-2 z-10 mx-auto max-w-lg rounded-md bg-destructive/90 px-3 py-2 text-center text-sm text-destructive-foreground">
+                {error}
+              </p>
+            ) : null}
+            {hostedLoading || !hasHostedCredentials ? (
+              <div className="flex min-h-[min(24rem,45vh)] flex-col items-center justify-center gap-3 text-muted-foreground">
+                <Loader2 className="size-8 animate-spin" aria-hidden />
+                <p className="text-sm">Opening verification…</p>
+              </div>
+            ) : useSumsubSdk && hostedToken ? (
+              <GridSumsubWebSdk
+                accessToken={hostedToken}
+                theme="light"
+                onComplete={closeHostedAndSync}
+                onError={(message) => setError(message)}
+              />
+            ) : hostedIframeSrc ? (
+              <iframe
+                title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
+                src={hostedIframeSrc}
+                className="absolute inset-0 size-full border-0 bg-background"
+                allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
+                onLoad={handleHostedIframeLoad}
+              />
+            ) : null}
+          </div>
+        </div>
+      ) : (
       <div className="grid gap-4 md:grid-cols-2">
         {BUSINESS_TIER_LADDER.tiers.map((t) => {
           const isT1 = t.tier === 1
@@ -524,6 +512,7 @@ export function BusinessVerificationSection({
           )
         })}
       </div>
+      )}
     </div>
   )
 }

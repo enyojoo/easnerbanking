@@ -8,9 +8,8 @@ import { useAuth } from "@/lib/auth-context"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { isBusinessInfoStepComplete } from "@/lib/business-tab-completion"
 import { parseBalanceString } from "@/hooks/use-business-account-rows"
-import { EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT } from "@/lib/cache"
-import { useTerminalPayoutSetupCached } from "@/hooks/use-terminal-payout-setup-cached"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
+import { usePayrollOverview } from "@/hooks/queries/use-payroll"
 import { ONBOARDING_STEP_COPY } from "@/lib/copy/business-ui-copy"
 
 type SnapshotBalances = { USD: string; EUR: string }
@@ -58,7 +57,7 @@ type StepVisual = "complete" | "error" | "pending"
 
 /**
  * Sidebar onboarding progress — driven only by the signed-in account's live
- * profile / terminal / wallet data (same isolation model as balances).
+ * profile / payroll / wallet data (same isolation model as balances).
  * No sticky localStorage: that leaked completed steps across account switches.
  */
 export function BusinessOnboardingChecklist() {
@@ -66,7 +65,7 @@ export function BusinessOnboardingChecklist() {
   const userId = user?.id ?? null
   const profile = useBusinessProfile()
   const walletQuery = useWalletBalances()
-  const { data: terminalSetup, refetch: refetchTerminalSetup } = useTerminalPayoutSetupCached()
+  const payrollOverviewQuery = usePayrollOverview()
   const [expanded, setExpanded] = useState(false)
   const walletReady = Boolean(walletQuery.isSuccess || walletQuery.isFetched)
   const funded =
@@ -98,14 +97,12 @@ export function BusinessOnboardingChecklist() {
   const step1Done = isBusinessInfoStepComplete(profile)
   const step2Done = profile.tier1Complete
   const verifyKind = tier1VerificationKind(profile.tier1Complete, profile.tier1VerificationStatus)
-  /** Done when external default payout is set, or Easner balance settlement with USD/EUR chosen. */
-  const step3Done = Boolean(
-    userId &&
-      (terminalSetup.defaultTerminalPayoutId ||
-        (terminalSetup.settlementDestination === "easner_balance" &&
-          (terminalSetup.defaultBalanceCurrency === "USD" ||
-            terminalSetup.defaultBalanceCurrency === "EUR"))),
-  )
+  const payrollActiveCount = payrollOverviewQuery.data?.activeCount ?? 0
+  const payrollNeedsReceiving = (payrollOverviewQuery.data?.needsDestinationCount ?? 0) > 0
+  const payrollNeedsAttention = (payrollOverviewQuery.data?.attentionCount ?? 0) > 0
+  /** Payroll settings default from base currency; step completes once someone is added and pay-ready. */
+  const step3Done =
+    payrollActiveCount >= 1 && !payrollNeedsReceiving && !payrollNeedsAttention
   const step4Done = profile.tier1Complete && funded
 
   const refreshBalances = useCallback(async () => {
@@ -113,10 +110,10 @@ export function BusinessOnboardingChecklist() {
     await walletQuery.refetch()
   }, [userId, walletQuery])
 
-  const refreshTerminal = useCallback(async () => {
+  const refreshPayroll = useCallback(async () => {
     if (!userId) return
-    await refetchTerminalSetup()
-  }, [refetchTerminalSetup, userId])
+    await payrollOverviewQuery.refetch()
+  }, [payrollOverviewQuery, userId])
 
   useEffect(() => {
     if (!userId) return
@@ -126,13 +123,13 @@ export function BusinessOnboardingChecklist() {
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "visible") {
-        void refreshTerminal()
+        void refreshPayroll()
         void refreshBalances()
       }
     }
     document.addEventListener("visibilitychange", onVis)
     return () => document.removeEventListener("visibilitychange", onVis)
-  }, [refreshBalances, refreshTerminal])
+  }, [refreshBalances, refreshPayroll])
 
   useEffect(() => {
     const onAccounts = () => {
@@ -143,27 +140,11 @@ export function BusinessOnboardingChecklist() {
   }, [refreshBalances])
 
   useEffect(() => {
-    const onProfile = () => {
-      void refreshTerminal()
-    }
-    window.addEventListener("business-profile-updated", onProfile)
-    return () => window.removeEventListener("business-profile-updated", onProfile)
-  }, [refreshTerminal])
-
-  useEffect(() => {
-    const onTerminalUpdated = () => {
-      void refreshTerminal()
-    }
-    window.addEventListener(EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT, onTerminalUpdated)
-    return () => window.removeEventListener(EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT, onTerminalUpdated)
-  }, [refreshTerminal])
-
-  useEffect(() => {
     if (expanded) {
-      void refreshTerminal()
+      void refreshPayroll()
       void refreshBalances()
     }
-  }, [expanded, refreshBalances, refreshTerminal])
+  }, [expanded, refreshBalances, refreshPayroll])
 
   const completedCount = [step1Done, step2Done, step3Done, step4Done].filter(Boolean).length
   const allDone = completedCount === 4
@@ -196,14 +177,16 @@ export function BusinessOnboardingChecklist() {
         visual: step2Visual,
       },
       {
-        id: "terminal",
-        title: "Set up Terminal",
+        id: "payroll",
+        title: "Set up Payroll",
         subtitle: step3Done
-          ? terminalSetup.settlementDestination === "easner_balance"
-            ? `${terminalSetup.defaultBalanceCurrency ?? "USD"} balance settlement`
-            : "External payout destination saved"
-          : "Choose Easner balance or an external payout",
-        href: "/terminal",
+          ? payrollActiveCount === 1
+            ? "1 person ready for payroll"
+            : `${payrollActiveCount} people ready for payroll`
+          : payrollActiveCount >= 1
+            ? ONBOARDING_STEP_COPY.payrollReceivingPending
+            : ONBOARDING_STEP_COPY.payrollPending,
+        href: "/payroll",
         visual: step3Done ? ("complete" as const) : ("pending" as const),
       },
       {
@@ -219,6 +202,7 @@ export function BusinessOnboardingChecklist() {
       },
     ],
     [
+      payrollActiveCount,
       profile.onboardingComplete,
       profile.tier1Complete,
       step1Done,
@@ -227,8 +211,6 @@ export function BusinessOnboardingChecklist() {
       step4Done,
       verifyKind,
       step2Visual,
-      terminalSetup.settlementDestination,
-      terminalSetup.defaultBalanceCurrency,
     ],
   )
 

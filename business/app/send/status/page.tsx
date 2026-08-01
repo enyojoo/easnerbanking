@@ -19,7 +19,7 @@ function SendStatusRedirect() {
   }, [searchParams, router])
 
   return (
-    <div className="mx-auto max-w-2xl py-12 text-center text-sm text-muted-foreground">
+    <div className="mx-auto max-w-2xl text-center text-sm text-muted-foreground">
       Opening transaction…
     </div>
   )

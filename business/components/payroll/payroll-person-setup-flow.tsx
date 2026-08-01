@@ -112,7 +112,7 @@ export function PayrollPersonSetupFlow() {
 
   if (!capabilitiesQuery.isPending && !capabilitiesQuery.data?.canPrepare) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+      <div className="mx-auto max-w-3xl px-4 pb-12 sm:px-6">
         <Card>
           <CardContent className="p-8 text-center">
             <h1 className="text-lg font-semibold">You can’t add Payroll people</h1>

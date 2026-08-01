@@ -5,6 +5,12 @@ import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { resolveInvoiceReplyEmailWithSource } from "@/lib/invoices/issuer"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { isBusinessProfileLockedFromKybFields, getNoahRejectionDisplay } from "@easner/shared"
+import {
+  businessHostedKybCustomerId,
+  businessTier1RejectionReasons,
+  businessTier1Status,
+  isBusinessTier1Complete,
+} from "@/lib/compliance/business-tier1"
 import { validateEasetag, normalizeEasetag } from "@/lib/easetag-validation"
 import { isEasetagGloballyAvailable } from "@/lib/easetag-global"
 import { isValidIndustryId } from "@/lib/business-industries"
@@ -266,19 +272,11 @@ export async function GET(request: Request) {
 
     orgKyb = (orgKybRow as Record<string, unknown> | null) ?? null
 
-    tier1VerificationStatus =
-      (orgKyb?.verification_status as string | null | undefined) ??
-      (orgKyb?.noah_kyb_status as string | null | undefined) ??
-      null
-    noahKybCustomerId =
-      (orgKyb?.grid_customer_id as string | null | undefined) ??
-      (orgKyb?.noah_customer_id as string | null | undefined) ??
-      null
-    tier1RejectionReasons =
-      (orgKyb?.verification_rejection_reasons as unknown[] | null | undefined) ??
-      (orgKyb?.noah_kyb_rejection_reasons as unknown[] | null | undefined) ??
-      null
-    tier1Complete = tier1VerificationStatus === "approved"
+    const kybFields = orgKyb as Parameters<typeof businessTier1Status>[0]
+    tier1VerificationStatus = businessTier1Status(kybFields)
+    noahKybCustomerId = businessHostedKybCustomerId(kybFields)
+    tier1RejectionReasons = businessTier1RejectionReasons(kybFields)
+    tier1Complete = isBusinessTier1Complete(kybFields)
     noahUsdVirtualAccountId =
       (orgKyb?.noah_usd_virtual_account_id as string | null | undefined) ?? null
     noahEurVirtualAccountId =
