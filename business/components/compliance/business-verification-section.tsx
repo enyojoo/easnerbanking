@@ -8,9 +8,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react"
-import { fetchWithSession } from "@/lib/fetch-with-session"
 import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import {
+  fetchHostedVerificationCredentials,
+  hostedCredentialsAreReady,
+  primeHostedVerificationCredentials,
+  preloadSumsubWebSdk,
+  readHostedCredentialsCache,
+  readHostedResumeAvailable,
+  writeHostedCredentialsCache,
+} from "@/lib/compliance/hosted-verification-credentials"
+import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -38,60 +47,6 @@ function tier1StatusIsInReview(status: string | null | undefined): boolean {
   return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
 }
 
-const hostedCredentialsCache = new Map<string, { link: string | null; token: string | null }>()
-const hostedResumeAvailableCache = new Map<string, boolean>()
-
-function readCachedCredentials(businessId: string | null | undefined) {
-  if (!businessId) return { link: null, token: null }
-  return hostedCredentialsCache.get(businessId) ?? { link: null, token: null }
-}
-
-async function fetchHostedCredentials(): Promise<{
-  link: string | null
-  token: string | null
-  json: {
-    kyc_link?: string | null
-    kyc_token?: string | null
-    error?: string
-    alreadyOnboarded?: boolean
-    kyc_status?: string
-    canResubmit?: boolean
-  }
-  res: Response
-  text: string
-}> {
-  const res = await fetchWithSession("/api/grid/kyc-links", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "business" }),
-  })
-  const text = await res.text()
-  let json = {} as {
-    kyc_link?: string | null
-    kyc_token?: string | null
-    error?: string
-    alreadyOnboarded?: boolean
-    kyc_status?: string
-    canResubmit?: boolean
-  }
-  if (text) {
-    try {
-      json = JSON.parse(text) as typeof json
-    } catch {
-      json = {}
-    }
-  }
-  const link = typeof json.kyc_link === "string" ? json.kyc_link.trim() : ""
-  const token = typeof json.kyc_token === "string" ? json.kyc_token.trim() : ""
-  return {
-    link: link || null,
-    token: token || null,
-    json,
-    res,
-    text,
-  }
-}
-
 function tierLadderCopy(tier: 1 | 2 | 3) {
   return BUSINESS_TIER_LADDER.tiers.find((x) => x.tier === tier)
 }
@@ -114,7 +69,7 @@ export function BusinessVerificationSection() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [hostedResumeAvailable, setHostedResumeAvailable] = useState<boolean | null>(() =>
-    businessId ? hostedResumeAvailableCache.get(businessId) ?? null : null,
+    readHostedResumeAvailable(businessId),
   )
   const probedHostedUrlRef = useRef<string | null>(null)
   const probedHostedTokenRef = useRef<string | null>(null)
@@ -134,30 +89,59 @@ export function BusinessVerificationSection() {
     }
   }, [])
 
+  useEffect(() => {
+    if (hostedOpen) {
+      document.documentElement.dataset.verificationFlowOpen = "true"
+      document.querySelector("main")?.scrollTo({ top: 0 })
+    } else {
+      delete document.documentElement.dataset.verificationFlowOpen
+    }
+    return () => {
+      delete document.documentElement.dataset.verificationFlowOpen
+    }
+  }, [hostedOpen])
+
   const tier1RejectedForProbe = tier1VerificationStatus === "rejected"
   const tier1UnderReviewForProbe = tier1StatusIsInReview(tier1VerificationStatus)
   const tier1AwaitingReviewForProbe = tier1UnderReviewForProbe && !tier1RejectedForProbe
   const tier1FinalRejectForPrefetch = tier1RejectedForProbe && !tier1CanResubmit
 
-  const prefetchHostedCredentials = useCallback(async () => {
+  const syncCredentialsFromCache = useCallback(
+    (id: string) => {
+      const cached = readHostedCredentialsCache(id)
+      probedHostedUrlRef.current = cached.link
+      probedHostedTokenRef.current = cached.token
+      setHostedUrl(cached.link)
+      setHostedToken(cached.token)
+      if (hostedCredentialsAreReady(cached)) {
+        setHostedResumeAvailable(true)
+      }
+      return cached
+    },
+    [],
+  )
+
+  const primeHostedCredentials = useCallback(async () => {
     if (!businessId || !canManageBusinessVerification || tier1Complete || tier1FinalRejectForPrefetch) {
-      return
+      return readHostedCredentialsCache(businessId)
     }
     try {
-      const { link, token, res } = await fetchHostedCredentials()
-      if (!res.ok) return
-      probedHostedUrlRef.current = link
-      probedHostedTokenRef.current = token
-      hostedCredentialsCache.set(businessId, { link, token })
-      const resumable = Boolean(link || token)
-      hostedResumeAvailableCache.set(businessId, resumable)
-      setHostedResumeAvailable(resumable)
+      preloadSumsubWebSdk()
+      const credentials = await primeHostedVerificationCredentials({ businessId })
+      probedHostedUrlRef.current = credentials.link
+      probedHostedTokenRef.current = credentials.token
+      const ready = hostedCredentialsAreReady(credentials)
+      setHostedResumeAvailable(ready || readHostedResumeAvailable(businessId) === true)
       if (!hostedOpen) {
-        setHostedUrl(link)
-        setHostedToken(token)
+        setHostedUrl(credentials.link)
+        setHostedToken(credentials.token)
       }
+      return credentials
     } catch {
-      if (businessId) setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? false)
+      if (businessId) {
+        setHostedResumeAvailable(readHostedResumeAvailable(businessId) ?? false)
+      }
+      return readHostedCredentialsCache(businessId)
     }
   }, [
     businessId,
@@ -174,22 +158,25 @@ export function BusinessVerificationSection() {
       setHostedResumeAvailable(null)
       return
     }
-    const cached = readCachedCredentials(businessId)
-    probedHostedUrlRef.current = cached.link
-    probedHostedTokenRef.current = cached.token
-    if (cached.link || cached.token) {
-      setHostedUrl(cached.link)
-      setHostedToken(cached.token)
-      hostedResumeAvailableCache.set(businessId, true)
-      setHostedResumeAvailable(true)
+    const cached = syncCredentialsFromCache(businessId)
+    if (hostedCredentialsAreReady(cached)) {
+      preloadSumsubWebSdk()
       return
     }
-    setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? null)
-    void prefetchHostedCredentials()
+    setHostedResumeAvailable(readHostedResumeAvailable(businessId))
+    primeBusinessVerificationFlow({
+      businessId,
+      canManageBusinessVerification,
+      tier1Complete,
+      tier1CanResubmit,
+    })
+    void primeHostedCredentials()
   }, [
     businessId,
     canManageBusinessVerification,
-    prefetchHostedCredentials,
+    primeHostedCredentials,
+    syncCredentialsFromCache,
+    tier1CanResubmit,
     tier1Complete,
     tier1FinalRejectForPrefetch,
   ])
@@ -204,11 +191,11 @@ export function BusinessVerificationSection() {
       return
     }
     if (probedHostedUrlRef.current || probedHostedTokenRef.current) return
-    void prefetchHostedCredentials()
+    void primeHostedCredentials()
   }, [
     businessId,
     canManageBusinessVerification,
-    prefetchHostedCredentials,
+    primeHostedCredentials,
     tier1AwaitingReviewForProbe,
     tier1Complete,
   ])
@@ -225,9 +212,8 @@ export function BusinessVerificationSection() {
       probedHostedUrlRef.current = link
       probedHostedTokenRef.current = token
       if (businessId) {
-        hostedCredentialsCache.set(businessId, { link, token })
-        hostedResumeAvailableCache.set(businessId, Boolean(link || token))
-        setHostedResumeAvailable(Boolean(link || token))
+        writeHostedCredentialsCache(businessId, { link, token })
+        setHostedResumeAvailable(hostedCredentialsAreReady({ link, token }))
       }
     },
     [businessId],
@@ -292,13 +278,26 @@ export function BusinessVerificationSection() {
       return
     }
 
+    preloadSumsubWebSdk()
+
+    const resolveCredentials = () => {
+      const link = probedHostedUrlRef.current ?? hostedUrl
+      const token = probedHostedTokenRef.current ?? hostedToken
+      return { link, token }
+    }
+
+    let { link, token } = resolveCredentials()
+    if (!link && !token) {
+      const primed = await primeHostedCredentials()
+      link = primed.link
+      token = primed.token
+    }
+
     setHostedOpen(true)
     setHostedTierLevel(1)
 
-    const probedUrl = probedHostedUrlRef.current
-    const probedToken = probedHostedTokenRef.current
-    if (probedUrl || probedToken) {
-      applyHostedCredentials(probedUrl, probedToken)
+    if (link || token) {
+      applyHostedCredentials(link, token)
       return
     }
 
@@ -306,7 +305,7 @@ export function BusinessVerificationSection() {
     setHostedToken(null)
     setHostedUrl(null)
     try {
-      const { link, token, json, res } = await fetchHostedCredentials()
+      const { link: fetchedLink, token: fetchedToken, json, res } = await fetchHostedVerificationCredentials()
       if (res.status === 431) {
         setHostedOpen(false)
         setError(
@@ -325,7 +324,7 @@ export function BusinessVerificationSection() {
         setInfo("Verification could not be completed for this account. Please contact support if you have questions.")
         return
       }
-      if (json.alreadyOnboarded || (!link && !token)) {
+      if (json.alreadyOnboarded || (!fetchedLink && !fetchedToken)) {
         void syncBusinessTier1FromGrid()
         setHostedOpen(false)
         if (json.kyc_status === "approved") {
@@ -346,14 +345,22 @@ export function BusinessVerificationSection() {
         setInfo("No additional verification steps are available right now. We'll update your status shortly.")
         return
       }
-      applyHostedCredentials(link, token)
+      applyHostedCredentials(fetchedLink, fetchedToken)
     } catch (e: unknown) {
       setHostedOpen(false)
       setError(e instanceof Error ? e.message : "Something went wrong.")
     } finally {
       setHostedLoading(false)
     }
-  }, [applyHostedCredentials, businessId, syncBusinessTier1FromGrid, tier1VerificationStatus])
+  }, [
+    applyHostedCredentials,
+    businessId,
+    hostedToken,
+    hostedUrl,
+    primeHostedCredentials,
+    syncBusinessTier1FromGrid,
+    tier1VerificationStatus,
+  ])
 
   if (isLoading && !hasData) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
@@ -381,12 +388,15 @@ export function BusinessVerificationSection() {
 
   const hasHostedCredentials = Boolean(hostedToken?.trim() || hostedUrl?.trim())
 
-  /** Explicit height so SumSub iframe/SDK is not rendered into a zero-height flex box. */
+  /** Fits remaining viewport below shell header + Settings title/tabs (no page scroll). */
   const verificationFlowPanelClass =
-    "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-12rem)] min-h-[28rem]"
+    "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
 
   const hostedFlowPanel = (
-    <div className={cn("relative flex flex-col overflow-hidden", verificationFlowPanelClass)}>
+    <div
+      className={cn("relative flex flex-col overflow-hidden", verificationFlowPanelClass)}
+      style={{ "--verification-settings-chrome": "14rem" } as React.CSSProperties}
+    >
       <Button
         type="button"
         variant="ghost"
@@ -397,7 +407,7 @@ export function BusinessVerificationSection() {
         <ArrowLeft className="size-4" aria-hidden />
         Back
       </Button>
-      <div className="relative min-h-0 flex-1 overflow-auto">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         {error ? (
           <p className="absolute left-0 right-0 top-2 z-10 mx-auto max-w-lg rounded-md bg-destructive/90 px-3 py-2 text-center text-sm text-destructive-foreground">
             {error}
@@ -433,6 +443,11 @@ export function BusinessVerificationSection() {
       <Card
         padding={hostedOpen ? "none" : undefined}
         className={cn(hostedOpen && cn("overflow-hidden", verificationFlowPanelClass))}
+        style={
+          hostedOpen
+            ? ({ "--verification-settings-chrome": "14rem" } as React.CSSProperties)
+            : undefined
+        }
         data-verification-flow={hostedOpen ? "open" : undefined}
       >
         {hostedOpen ? (
@@ -514,8 +529,8 @@ export function BusinessVerificationSection() {
                       <Button
                         size="sm"
                         onClick={() => void openHostedVerification()}
-                        onMouseEnter={() => void prefetchHostedCredentials()}
-                        onFocus={() => void prefetchHostedCredentials()}
+                        onMouseEnter={() => void primeHostedCredentials()}
+                        onFocus={() => void primeHostedCredentials()}
                         disabled={!businessId}
                       >
                         {tier1HostedCtaLabel}

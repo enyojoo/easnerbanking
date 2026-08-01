@@ -63,6 +63,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
 import { INVOICE_CREATE_SECTION_COPY } from "@/lib/copy/business-ui-copy"
+import { SectionHeader } from "@/components/copy/section-header"
 
 /** Digits only for quantity (empty allowed while typing). */
 function filterQuantityInput(s: string): string {
