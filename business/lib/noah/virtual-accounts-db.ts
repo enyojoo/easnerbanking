@@ -93,8 +93,9 @@ export async function getVirtualAccountDisplayFromDb(
   let q = admin
     .from("virtual_accounts")
     .select(
-      "noah_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name,updated_at",
+      "noah_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name,updated_at,provider,status",
     )
+    .neq("status", "retired")
     .eq("currency", fiat)
     .order("updated_at", { ascending: false })
     .limit(8)

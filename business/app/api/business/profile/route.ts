@@ -259,16 +259,25 @@ export async function GET(request: Request) {
     const { data: orgKybRow } = await admin
       .from("businesses")
       .select(
-        "noah_kyb_status,noah_customer_id,noah_kyb_rejection_reasons,noah_usd_virtual_account_id,noah_eur_virtual_account_id,kyb_verified_at",
+        "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,noah_kyb_status,noah_customer_id,noah_kyb_rejection_reasons,noah_usd_virtual_account_id,noah_eur_virtual_account_id,kyb_verified_at",
       )
       .eq("id", orgId)
       .maybeSingle()
 
     orgKyb = (orgKybRow as Record<string, unknown> | null) ?? null
 
-    tier1VerificationStatus = (orgKyb?.noah_kyb_status as string | null | undefined) ?? null
-    noahKybCustomerId = (orgKyb?.noah_customer_id as string | null | undefined) ?? null
-    tier1RejectionReasons = (orgKyb?.noah_kyb_rejection_reasons as unknown[] | null | undefined) ?? null
+    tier1VerificationStatus =
+      (orgKyb?.verification_status as string | null | undefined) ??
+      (orgKyb?.noah_kyb_status as string | null | undefined) ??
+      null
+    noahKybCustomerId =
+      (orgKyb?.grid_customer_id as string | null | undefined) ??
+      (orgKyb?.noah_customer_id as string | null | undefined) ??
+      null
+    tier1RejectionReasons =
+      (orgKyb?.verification_rejection_reasons as unknown[] | null | undefined) ??
+      (orgKyb?.noah_kyb_rejection_reasons as unknown[] | null | undefined) ??
+      null
     tier1Complete = tier1VerificationStatus === "approved"
     noahUsdVirtualAccountId =
       (orgKyb?.noah_usd_virtual_account_id as string | null | undefined) ?? null

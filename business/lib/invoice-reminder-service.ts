@@ -11,6 +11,7 @@ import {
   canProvisionInvoiceDepositInstructions,
   TIER2_COMPLETE_PLACEHOLDER,
 } from "@/lib/compliance-placeholders"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { Invoice } from "@/lib/b2b/types"
 
@@ -33,11 +34,11 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
   const businessId = row.business_id
   const { data: biz } = await admin
     .from("businesses")
-    .select("noah_kyb_status, invoice_settings, easetag")
+    .select("verification_status, noah_kyb_status, invoice_settings, easetag")
     .eq("id", businessId)
     .maybeSingle()
 
-  const tier1Complete = (biz?.noah_kyb_status as string | null) === "approved"
+  const tier1Complete = isBusinessTier1Complete(biz)
   const canProvision = canProvisionInvoiceDepositInstructions(
     invoice.currency,
     tier1Complete,

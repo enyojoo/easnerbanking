@@ -5,18 +5,13 @@ import {
   canProvisionInvoiceDepositInstructions,
   TIER2_COMPLETE_PLACEHOLDER,
 } from "@/lib/compliance-placeholders"
-import { noahCustomerIdFromBusinessId } from "@/lib/noah/customer-id"
-import { fetchAllPaymentMethodsForCustomer } from "@/lib/noah/list-payment-methods"
-import {
-  mapPaymentMethodToVirtualAccountDisplay,
-  matchesCurrency,
-} from "@/lib/noah/payment-method-map"
-import { persistVirtualAccountFromPaymentMethod } from "@/lib/noah/persist-account-data"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import type { Account, StablecoinAccount } from "@/lib/finance-types"
 import {
   buildPayInAccountsFromSources,
   type VirtualAccountJson,
 } from "@/lib/invoices/map-pay-in-accounts"
+import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
 import { getTurnkeyDepositAddressesForBusiness } from "@/lib/wallet/turnkey-deposit-addresses"
 
 export type InvoicePayInPayload = {
@@ -25,8 +20,29 @@ export type InvoicePayInPayload = {
 }
 
 type ResolvePayInOpts = {
-  /** When true, persist VA metadata like `GET /api/noah/virtual-accounts` (avoid on anonymous public views). */
+  /** Reserved for future persistence hooks (Grid VA sync). */
   persistVirtualAccount?: boolean
+}
+
+function vaJsonFromDisplay(
+  currency: "usd" | "eur" | "gbp",
+  display: Awaited<ReturnType<typeof getVirtualAccountDisplayFromDb>>,
+): VirtualAccountJson | null {
+  if (!display?.hasAccount) {
+    return { hasAccount: false, currency }
+  }
+  return {
+    hasAccount: true,
+    currency,
+    accountNumber: display.accountNumber,
+    routingNumber: display.routingNumber,
+    sortCode: display.sortCode,
+    iban: display.iban,
+    bic: display.bic,
+    bankName: display.bankName,
+    bankAddress: display.bankAddress,
+    accountHolderName: display.accountHolderName,
+  }
 }
 
 export async function resolvePayInForBusiness(
@@ -34,16 +50,16 @@ export async function resolvePayInForBusiness(
   invoiceCurrency: string,
   opts: ResolvePayInOpts = {},
 ): Promise<InvoicePayInPayload> {
-  const { persistVirtualAccount = false } = opts
+  void opts
   const admin = createSupabaseAdmin()
 
   const { data: biz } = await admin
     .from("businesses")
-    .select("name, noah_kyb_status")
+    .select("name, verification_status, noah_kyb_status")
     .eq("id", businessId)
     .maybeSingle()
 
-  const tier1Complete = (biz?.noah_kyb_status as string | null | undefined) === "approved"
+  const tier1Complete = isBusinessTier1Complete(biz)
   const displayName = (biz?.name as string | null | undefined)?.trim() || "Business"
 
   const canProvision = canProvisionInvoiceDepositInstructions(
@@ -66,38 +82,16 @@ export async function resolvePayInForBusiness(
     }
 
     try {
-      const noahCustomerId = noahCustomerIdFromBusinessId(businessId)
       const ownerUserId = await resolveOrgOwnerUserId(admin, businessId, "")
-      const all = await fetchAllPaymentMethodsForCustomer(noahCustomerId)
-      const candidates = all.filter((pm) => {
-        const caps = pm.Capabilities as Record<string, unknown> | undefined
-        if (caps && caps.PayinTo === false) return false
-        return matchesCurrency(pm, vaLower)
-      })
-      const pm = candidates[0]
-      if (pm) {
-        const display = mapPaymentMethodToVirtualAccountDisplay(pm, vaLower)
-        if (persistVirtualAccount && ownerUserId) {
-          await persistVirtualAccountFromPaymentMethod(
-            ownerUserId,
-            vaLower,
-            pm,
-            businessId,
-          )
-        }
-        va = {
-          hasAccount: true,
+      if (ownerUserId) {
+        const cached = await getVirtualAccountDisplayFromDb(admin, {
           currency: vaLower,
-          accountNumber: display.accountNumber,
-          routingNumber: display.routingNumber,
-          sortCode: display.sortCode,
-          iban: display.iban,
-          bic: display.bic,
-          bankName: display.bankName,
-          bankAddress: display.bankAddress,
-          accountHolderName: display.accountHolderName,
-        }
-      } else {
+          userId: ownerUserId,
+          businessId,
+        })
+        va = vaJsonFromDisplay(vaLower, cached)
+      }
+      if (!va?.hasAccount) {
         va = { hasAccount: false, currency: vaLower }
       }
     } catch {
@@ -108,7 +102,7 @@ export async function resolvePayInForBusiness(
   const turnkey = await getTurnkeyDepositAddressesForBusiness(admin, businessId)
   const walletForInvoice =
     code === "EUR" ? turnkey.EUR : code === "USD" || code === "GBP" ? turnkey.USD : turnkey.USD
-  const walletAddress = walletForInvoice.ownerAddress
+  const walletAddress = walletForInvoice.address || walletForInvoice.ownerAddress
   const walletMemo = walletForInvoice.memo
 
   return buildPayInAccountsFromSources({

@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import { hashPayrollInvitationToken } from "./invitations"
 import { maskPayrollMethodDetails } from "./payment-method-security"
 import { payrollDetailsForReceivingMethodForm } from "./payment-method-destination"
@@ -45,7 +46,7 @@ export async function resolvePayrollInvitation(
   const tokenHash = hashPayrollInvitationToken(token)
   const { data: invitation } = await admin
     .from("payroll_connection_invitations")
-    .select("*, payroll_connections(*), payroll_people(*), businesses(name,easetag,logo_url,noah_kyb_status)")
+    .select("*, payroll_connections(*), payroll_people(*), businesses(name,easetag,logo_url,verification_status,noah_kyb_status)")
     .eq("token_hash", tokenHash)
     .maybeSingle()
 
@@ -78,7 +79,7 @@ export async function resolvePayrollInvitation(
       businessName: String(business?.name || "Easner Business"),
       businessEasetag: business?.easetag ? String(business.easetag) : null,
       businessLogoUrl: business?.logo_url ? String(business.logo_url) : null,
-      businessVerified: String(business?.noah_kyb_status || "").toLowerCase() === "approved",
+      businessVerified: isBusinessTier1Complete(business as Record<string, unknown>),
       personName: String(person?.full_name || "Payroll recipient"),
       status: String(connection?.status || "pending"),
       expiresAt: String(invitation.expires_at),

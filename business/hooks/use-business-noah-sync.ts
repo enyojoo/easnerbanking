@@ -8,12 +8,15 @@ import {
   isBusinessTier1Complete,
   needsBusinessVirtualAccountProvision,
 } from "@/lib/noah/business-account-sync"
-import { syncBusinessNoahStatus, syncBusinessNoahStatusUntilAccountsReady } from "@/lib/noah/sync-business-noah-status"
+import {
+  syncBusinessGridStatus,
+  syncBusinessGridStatusUntilAccountsReady,
+} from "@/lib/grid/sync-business-grid-status"
 import { useScope } from "@/lib/query/scope"
 
 /**
- * Business KYB: POST `/api/noah/sync-status` with `business` scope while KYB is incomplete or
- * approved but fiat virtual account ids are still missing (parity with mobile `useConsumerKycNoahSync`).
+ * Business KYB: POST `/api/grid/sync-status` while KYB is incomplete or approved but receive rails
+ * are still provisioning (parity with mobile consumer sync).
  */
 export function useBusinessNoahSync(): void {
   const queryClient = useQueryClient()
@@ -58,8 +61,8 @@ export function useBusinessNoahSync(): void {
       const needsAccounts = needsBusinessVirtualAccountProvision(profileSlice, { fiatProvisionResolved })
       const result =
         isBusinessTier1Complete(profileSlice) || needsAccounts
-          ? await syncBusinessNoahStatusUntilAccountsReady()
-          : await syncBusinessNoahStatus()
+          ? await syncBusinessGridStatusUntilAccountsReady()
+          : await syncBusinessGridStatus()
       if (result.needsFiatAccounts === false || result.accountsReady === true) {
         setFiatProvisionResolved(true)
         if (scope) {
@@ -69,7 +72,7 @@ export function useBusinessNoahSync(): void {
     } catch {
       /* non-blocking; hosted return + webhooks can still update */
     }
-  }, [shouldSync, queryClient, scope])
+  }, [shouldSync, queryClient, scope, fiatProvisionResolved, profileSlice])
 
   useEffect(() => {
     void runSync()
@@ -82,9 +85,8 @@ export function useBusinessNoahSync(): void {
       void runSync()
     }, pollMs)
     return () => window.clearInterval(id)
-  }, [shouldSync, runSync])
+  }, [shouldSync, runSync, profileSlice])
 
-  /** Pull Noah when the user returns to the tab (approvals often complete in hosted flow). */
   useEffect(() => {
     if (!shouldSync) return
     const onVisibility = () => {

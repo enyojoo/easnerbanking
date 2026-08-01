@@ -49,3 +49,21 @@ export function getGridQuoteTtlMs(): number {
   if (!Number.isFinite(parsed) || parsed <= 0) return 15 * 60 * 1000
   return parsed
 }
+
+/** Return URL after hosted Grid KYB (SumSub) completes. */
+export function getGridBusinessKybReturnUrl(): string {
+  const explicit = String(process.env.GRID_BUSINESS_KYB_RETURN_URL || "").trim()
+  if (explicit) return explicit
+  const app = String(process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "").trim()
+  if (app) return `${app.replace(/\/+$/, "")}/auth/grid-complete?context=business`
+  return "http://localhost:3000/auth/grid-complete?context=business"
+}
+
+/** Return URL after hosted Grid KYC (individual / mobile) completes. */
+export function getGridIndividualKycReturnUrl(): string {
+  const explicit = String(process.env.GRID_KYC_RETURN_URL || "").trim()
+  if (explicit) return explicit
+  const app = String(process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "").trim()
+  if (app) return `${app.replace(/\/+$/, "")}/auth/grid-complete?context=kyc`
+  return "http://localhost:3000/auth/grid-complete?context=kyc"
+}

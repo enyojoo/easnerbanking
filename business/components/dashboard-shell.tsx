@@ -14,6 +14,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useBusinessNoahSync } from "@/hooks/use-business-noah-sync"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { openBusinessSupport } from "@/lib/intercom-messenger"
+import { ComplianceCutoverBanner } from "@/components/compliance/compliance-cutover-banner"
 import { cn } from "@/lib/utils"
 
 interface DashboardShellProps {
@@ -102,6 +103,7 @@ export function DashboardShell({ children, mainClassName = "", constrained = fal
     <AppLockProvider>
       <div className="min-h-screen bg-background text-foreground">
         <DashboardNav />
+        <ComplianceCutoverBanner />
         <div className="ml-64 flex min-h-screen flex-col">
           <header className="fixed top-0 left-64 right-0 z-30 flex h-16 min-h-16 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
           {showProfileChromeSkeleton ? (

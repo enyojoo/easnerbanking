@@ -3,14 +3,13 @@
 /**
  * Hosted KYB opens in a dialog iframe. Users close via the dialog’s built-in control.
  *
- * B2B parity: uses the same `/api/noah/kyc-links` + Easner context headers as consumer flows;
- * Tier state is driven by org `noah_kyb_status` via `useBusinessProfile` (see `/api/business/profile`).
+ * B2B parity: uses Grid `/api/grid/kyc-links`; Tier state from canonical `verification_status` via profile API.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
-import { syncBusinessNoahStatusUntilAccountsReady } from "@/lib/noah/sync-business-noah-status"
+import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,8 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
-import { buildNoahHostedIframeUrl } from "@/lib/noah/hosted-iframe-url"
-import { isNoahCompleteUrl } from "@/lib/noah/noah-complete-url"
+import { isGridCompleteUrl } from "@/lib/grid/grid-complete-url"
 import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import {
@@ -86,10 +84,7 @@ export function BusinessVerificationSection() {
   /** Clear iframe after Radix exit animation so the dialog can close smoothly (iframe unmount is heavy). */
   const clearUrlAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const hostedIframeSrc =
-    hostedUrl && typeof window !== "undefined"
-      ? buildNoahHostedIframeUrl(hostedUrl, window.location.origin)
-      : hostedUrl
+  const hostedIframeSrc = hostedUrl
 
   useEffect(() => {
     return () => {
@@ -118,11 +113,10 @@ export function BusinessVerificationSection() {
     setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? null)
     void (async () => {
       try {
-        const res = await fetchWithSession("/api/noah/kyc-links", {
+        const res = await fetchWithSession("/api/grid/kyc-links", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Easner-Noah-Scope": "business",
           },
           body: JSON.stringify({ type: "business" }),
         })
@@ -148,31 +142,32 @@ export function BusinessVerificationSection() {
     tier1AwaitingReviewForProbe,
   ])
 
-  const syncBusinessTier1FromNoah = useCallback(async (): Promise<boolean> => {
-    const result = await syncBusinessNoahStatusUntilAccountsReady()
+  const syncBusinessTier1FromGrid = useCallback(async (): Promise<boolean> => {
+    const result = await syncBusinessGridStatusUntilAccountsReady()
     return result.ok
   }, [])
 
   const closeHostedAndSync = useCallback(() => {
     setHostedOpen(false)
-    void syncBusinessTier1FromNoah()
+    void syncBusinessTier1FromGrid()
     if (clearUrlAfterCloseRef.current) clearTimeout(clearUrlAfterCloseRef.current)
     clearUrlAfterCloseRef.current = setTimeout(() => {
       setHostedUrl(null)
       clearUrlAfterCloseRef.current = null
     }, 280)
-  }, [syncBusinessTier1FromNoah])
+  }, [syncBusinessTier1FromGrid])
 
   useEffect(() => {
     if (!hostedOpen) return
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return
       const data = event.data as
-        | { type?: string; kycCompleted?: boolean; noahHostedComplete?: boolean }
+        | { type?: string; kycCompleted?: boolean; gridHostedComplete?: boolean; noahHostedComplete?: boolean }
         | null
       if (
         data?.type === "kycCompleted" ||
         data?.kycCompleted ||
+        data?.gridHostedComplete ||
         data?.noahHostedComplete
       ) {
         closeHostedAndSync()
@@ -186,11 +181,11 @@ export function BusinessVerificationSection() {
     (event: React.SyntheticEvent<HTMLIFrameElement>) => {
       try {
         const href = event.currentTarget.contentWindow?.location?.href
-        if (href && isNoahCompleteUrl(href)) {
+        if (href && isGridCompleteUrl(href)) {
           closeHostedAndSync()
         }
       } catch {
-        // Cross-origin until Noah redirects to our ReturnURL.
+        // Cross-origin until Grid redirects to our ReturnURL.
       }
     },
     [closeHostedAndSync],
@@ -224,11 +219,10 @@ export function BusinessVerificationSection() {
         setError("You need to be signed in.")
         return
       }
-      const res = await fetchWithSession("/api/noah/kyc-links", {
+      const res = await fetchWithSession("/api/grid/kyc-links", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Easner-Noah-Scope": "business",
         },
         body: JSON.stringify({ type: "business" }),
       })
@@ -265,7 +259,7 @@ export function BusinessVerificationSection() {
         return
       }
       if (json.alreadyOnboarded || !json.kyc_link) {
-        void syncBusinessTier1FromNoah()
+        void syncBusinessTier1FromGrid()
         if (json.kyc_status === "approved") {
           setError(null)
           setInfo(null)
@@ -298,7 +292,7 @@ export function BusinessVerificationSection() {
     } finally {
       setBusy(null)
     }
-  }, [businessId, syncBusinessTier1FromNoah, tier1VerificationStatus])
+  }, [businessId, syncBusinessTier1FromGrid, tier1VerificationStatus])
 
   // Only show the loading placeholder on a genuine cold load. When cached profile data exists
   // (e.g. returning to Settings), render the real section immediately so the CTA does not flash.
@@ -432,7 +426,7 @@ export function BusinessVerificationSection() {
             return
           }
           setHostedOpen(false)
-          void syncBusinessTier1FromNoah()
+          void syncBusinessTier1FromGrid()
           if (clearUrlAfterCloseRef.current) clearTimeout(clearUrlAfterCloseRef.current)
           clearUrlAfterCloseRef.current = setTimeout(() => {
             setHostedUrl(null)

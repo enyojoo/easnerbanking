@@ -7,21 +7,26 @@ export const TIER2_COMPLETE_PLACEHOLDER = false
 export const TIER3_COMPLETE_PLACEHOLDER = false
 
 /**
- * Consumer mobile Tier 1: personal KYC approved (`users.noah_kyc_status === 'approved'`).
- * Business users sign in on business web only.
+ * Consumer mobile Tier 1: personal KYC approved (canonical `users.verification_status` with Noah fallback).
  */
 export function isTier1Complete(
   profile:
     | {
+        verification_status?: string | null
         noah_kyc_status?: string | null
         profile?: {
+          verification_status?: string | null
           noah_kyc_status?: string | null
         }
       }
     | null
     | undefined,
 ): boolean {
-  const status = profile?.noah_kyc_status ?? profile?.profile?.noah_kyc_status
+  const status =
+    profile?.verification_status ??
+    profile?.profile?.verification_status ??
+    profile?.noah_kyc_status ??
+    profile?.profile?.noah_kyc_status
   return String(status ?? "")
     .trim()
     .toLowerCase() === "approved"

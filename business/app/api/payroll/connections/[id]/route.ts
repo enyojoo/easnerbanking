@@ -9,6 +9,7 @@ import {
   PERSONAL_PAYROLL_CONNECTION_DETAIL_SELECT,
   PERSONAL_PAYROLL_METHOD_SELECT,
 } from "@/lib/payroll/personal-connection-selects"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import { formatPayrollZonedDateTime } from "@/lib/payroll/schedule-preview"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -67,7 +68,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       businessId: String(row.business_id),
       businessName: String((row.businesses as Record<string, unknown>)?.name || "Easner Business"),
       businessLogoUrl: (row.businesses as Record<string, unknown>)?.logo_url ?? null,
-      businessVerified: String((row.businesses as Record<string, unknown>)?.noah_kyb_status || "").toLowerCase() === "approved",
+      businessVerified: isBusinessTier1Complete((row.businesses as Record<string, unknown>) ?? null),
       personId: String(row.person_id),
       status: String(row.status),
       approvedAt: row.approved_at,

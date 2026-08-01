@@ -15,6 +15,7 @@ import { findGridPayInRate, listGridRates } from "@/lib/fx/grid-rates"
 import { validateFundBalancePayInAmountLimits } from "@/lib/pay-in-limit-check"
 import { isGridLocalPayInEnabledForCorridor } from "./grid-receive-gate"
 import { getGridQuoteTtlMs } from "./config"
+import { assertGridFundBalanceAllowed } from "./fund-balance-guard"
 import type { GridQuote } from "./types"
 import { computeYcFundBalancePricingBeforeReceive, buildYcFundBalanceDisplayFees, computeYcFundBalancePrincipalLocalPayIn } from "@easner/shared"
 import { quoteFiatProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
@@ -77,6 +78,7 @@ export async function previewGridFundBalanceQuote(input: {
   usdCredit?: number
   localPayIn?: number
 }): Promise<GridFundBalancePreviewResult> {
+  assertGridFundBalanceAllowed()
   const country = input.country.trim().toUpperCase()
   const currency = input.currency.trim().toUpperCase()
 
@@ -185,6 +187,7 @@ export async function createGridFundBalanceSession(input: {
     admin: input.admin,
     userId: input.userId,
     businessId: input.businessId,
+    scope: input.businessId ? "business" : "individual",
     profile: input.profile,
   })
 

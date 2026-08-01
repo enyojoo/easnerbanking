@@ -3,6 +3,7 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
 import { enforcePayrollRateLimit } from "@/lib/payroll/rate-limit"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 
 /**
  * Authenticated lookup of another party's public Easetag profile (user or business).
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
 
   const { data: bizRow, error: berr } = await admin
     .from("businesses")
-    .select("id,easetag,name,logo_url,noah_kyb_status")
+    .select("id,easetag,name,logo_url,verification_status,noah_kyb_status")
     .eq("easetag", clean)
     .maybeSingle()
 
@@ -89,7 +90,7 @@ export async function GET(request: Request) {
       fullName: String(bizRow.name || "").trim() || clean,
       avatarUrl: (bizRow.logo_url as string | null) || null,
       accountKind: "business" as const,
-      verified: bizRow.noah_kyb_status === "approved",
+      verified: isBusinessTier1Complete(bizRow),
     })
   }
 

@@ -4,6 +4,7 @@ import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import { generateInvoicePdfBuffer } from "@/lib/generate-invoice-pdf"
 import { fetchInvoiceIssuerForBusiness, resolveInvoiceReplyEmail } from "@/lib/invoices/issuer"
 import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-business"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
@@ -64,12 +65,11 @@ export async function POST(request: NextRequest) {
 
     const { data: biz } = await admin
       .from("businesses")
-      .select("noah_kyb_status, invoice_settings")
+      .select("verification_status, noah_kyb_status, invoice_settings")
       .eq("id", ctx.businessId)
       .maybeSingle()
 
-    const tier1Complete =
-      (biz?.noah_kyb_status as string | null | undefined) === "approved"
+    const tier1Complete = isBusinessTier1Complete(biz)
 
     const canProvision = canProvisionInvoiceDepositInstructions(
       invoice.currency,

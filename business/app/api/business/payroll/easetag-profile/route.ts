@@ -3,6 +3,7 @@ import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { enforcePayrollRateLimit } from "@/lib/payroll/rate-limit"
+import { isBusinessTier1Complete as isBusinessTier1CompleteFromRow } from "@/lib/compliance/business-tier1"
 
 /**
  * Payroll-only EASETAG lookup.
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
 
   const { data: business, error: businessError } = await admin
     .from("businesses")
-    .select("easetag,name,logo_url,noah_kyb_status")
+    .select("easetag,name,logo_url,verification_status,noah_kyb_status")
     .eq("easetag", easetag)
     .maybeSingle()
   if (businessError) {
@@ -68,6 +69,6 @@ export async function GET(request: Request) {
     email: null,
     avatarUrl: business.logo_url ?? null,
     accountKind: "business",
-    verified: business.noah_kyb_status === "approved",
+    verified: isBusinessTier1CompleteFromRow(business),
   })
 }

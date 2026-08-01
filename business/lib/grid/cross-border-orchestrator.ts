@@ -214,6 +214,7 @@ export async function createGridCrossBorderQuote(
     admin: input.admin,
     userId: input.userId,
     businessId: input.businessId,
+    scope: input.businessId ? "business" : "individual",
     profile: input.profile,
   })
 

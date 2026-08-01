@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { payrollMethodDetails } from "@/lib/payroll/personal-payroll"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import {
   PERSONAL_PAYROLL_CONNECTION_LIST_SELECT,
   PERSONAL_PAYROLL_METHOD_SELECT,
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
       .eq("user_id", auth.user.id)
       .order("created_at", { ascending: false }),
     admin.from("payroll_connection_invitations")
-      .select("id,connection_id,business_id,person_id,status,expires_at,businesses(name,easetag,logo_url,noah_kyb_status),payroll_people(full_name),payroll_connections(preferred_method_id)", { count: "exact" })
+      .select("id,connection_id,business_id,person_id,status,expires_at,businesses(name,easetag,logo_url,verification_status,noah_kyb_status),payroll_people(full_name),payroll_connections(preferred_method_id)", { count: "exact" })
       .eq("email", email)
       .eq("status", "pending")
       .gt("expires_at", now),
@@ -111,7 +112,7 @@ export async function GET(request: Request) {
       businessName: String(business?.name || "Easner Business"),
       businessEasetag: business?.easetag ? String(business.easetag) : null,
       businessLogoUrl: business?.logo_url ? String(business.logo_url) : null,
-      businessVerified: String(business?.noah_kyb_status || "").toLowerCase() === "approved",
+      businessVerified: isBusinessTier1Complete(business as Record<string, unknown>),
       personId: String(row.person_id),
       status: String(row.status),
       approvedAt: row.approved_at,
@@ -135,7 +136,7 @@ export async function GET(request: Request) {
         businessName: String(business.name || "Easner Business"),
         businessEasetag: business.easetag ?? null,
         businessLogoUrl: business.logo_url ?? null,
-        businessVerified: String(business.noah_kyb_status || "").toLowerCase() === "approved",
+        businessVerified: isBusinessTier1Complete(business as Record<string, unknown>),
         personName: String(person.full_name || "Payroll recipient"),
         status: String(row.status),
         expiresAt: String(row.expires_at),

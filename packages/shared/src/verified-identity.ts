@@ -105,7 +105,7 @@ export function isBusinessProfileLockedFromKybFields(
   row: Record<string, unknown> | null | undefined,
 ): boolean {
   if (!row) return false
-  const status = String(row.noah_kyb_status ?? "").toLowerCase()
+  const status = String(row.verification_status ?? row.noah_kyb_status ?? "").toLowerCase()
   return status === "approved" && row.kyb_verified_at != null
 }
 

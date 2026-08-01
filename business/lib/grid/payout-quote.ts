@@ -274,6 +274,7 @@ export async function lockGridBalancePayoutQuote(
     admin,
     userId: input.userId,
     businessId: input.businessId,
+    scope: input.businessId ? "business" : "individual",
     profile: input.senderProfile,
   })
 
