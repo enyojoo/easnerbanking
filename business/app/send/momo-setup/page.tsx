@@ -27,8 +27,6 @@ import {
 } from "@/lib/yc-cross-border-quote-cache"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { normalizeYcMomoPhone, REVIEW_ROW_LABELS, useDebouncedValue } from "@easner/shared"
-import { PageIntro } from "@/components/copy/page-intro"
-import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 function isYcCrossBorderMomo(state: SendFlowState | null): boolean {
   return (
     state?.paymentMethod === "otherCurrency" &&
@@ -223,7 +221,12 @@ export default function SendMomoSetupPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <PageIntro title="Mobile money" description={PAGE_COPY.send.momoIntro} variant="page" />
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground">Mobile money</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Enter the number and network you&apos;ll pay from
+        </p>
+      </div>
 
       <div className="rounded-xl border border-border p-4 space-y-3 text-sm">
         <div>

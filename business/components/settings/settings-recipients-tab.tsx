@@ -29,9 +29,8 @@ import { useAuth } from "@/lib/auth-context"
 import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import { createSendFlowSeedForRecipient, persistSendFlowState } from "@/lib/send-flow-session"
 import { cn } from "@/lib/utils"
-import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
-import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
+import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 
 export function SettingsRecipientsTab() {
   const router = useRouter()
@@ -129,7 +128,6 @@ export function SettingsRecipientsTab() {
 
   return (
     <div className="space-y-6">
-      <SettingsTabIntro title={SETTINGS_TAB_COPY.recipients.title} description={SETTINGS_TAB_COPY.recipients.intro} />
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

@@ -3,11 +3,13 @@
 import { useEffect, useRef } from "react"
 import snsWebSdk from "@sumsub/websdk"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { cn } from "@/lib/utils"
 
 type Props = {
   accessToken: string
   onComplete: () => void
   onError?: (message: string) => void
+  theme?: "light" | "dark"
 }
 
 async function refreshGridKycToken(): Promise<string> {
@@ -31,7 +33,7 @@ async function refreshGridKycToken(): Promise<string> {
  * Embed SumSub via Grid `createKYCLink.token` (preferred over iframing `kycUrl`).
  * Grid docs: token and hosted URL both update the same customer kyc/kyb status.
  */
-export function GridSumsubWebSdk({ accessToken, onComplete, onError }: Props) {
+export function GridSumsubWebSdk({ accessToken, onComplete, onError, theme = "dark" }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const onCompleteRef = useRef(onComplete)
   const onErrorRef = useRef(onError)
@@ -47,7 +49,7 @@ export function GridSumsubWebSdk({ accessToken, onComplete, onError }: Props) {
 
     const sdk = snsWebSdk
       .init(accessToken, () => refreshGridKycToken())
-      .withConf({ lang: "en", theme: "dark" })
+      .withConf({ lang: "en", theme })
       // false = fill our dialog height; true shrinks iframe to SumSub card height (leaves empty gap).
       .withOptions({ addViewportTag: false, adaptIframeHeight: false })
       .on("idCheck.onApplicantStatusChanged", (payload) => {
@@ -88,7 +90,10 @@ export function GridSumsubWebSdk({ accessToken, onComplete, onError }: Props) {
   return (
     <div
       ref={containerRef}
-      className="grid-sumsub-host absolute inset-0 size-full overflow-hidden bg-[#1a1a1a]"
+      className={cn(
+        "grid-sumsub-host absolute inset-0 size-full overflow-hidden",
+        theme === "light" ? "bg-muted/40" : "bg-[#1a1a1a]",
+      )}
       data-testid="grid-sumsub-websdk"
     />
   )

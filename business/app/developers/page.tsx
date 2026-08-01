@@ -4,8 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Code, Terminal, Key, ExternalLink, FileText, History } from "lucide-react"
 import Link from "next/link"
-import { PageIntro } from "@/components/copy/page-intro"
-import { DEVELOPER_TOOL_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
+import { DEVELOPER_TOOL_COPY } from "@/lib/copy/business-ui-copy"
 
 const developerTools = [
   {
@@ -51,11 +50,10 @@ const developerTools = [
 export default function DevelopersOverviewPage() {
   return (
     <div className="space-y-8">
-      <PageIntro
-        title={PAGE_COPY.developers.title}
-        description={PAGE_COPY.developers.intro}
-        variant="hero"
-      />
+      <div>
+        <h1 className="text-3xl font-semibold text-foreground">Developer Tools</h1>
+        <p className="text-muted-foreground mt-2">Build and integrate with Easner Business Banking&apos;s APIs and services</p>
+      </div>
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

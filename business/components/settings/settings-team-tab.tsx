@@ -12,9 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { CACHE_KEYS } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
-import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
-import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
+import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 
 type TeamMember = {
   id: string
@@ -201,7 +200,6 @@ export function SettingsTeamTab() {
 
   return (
     <div className="space-y-6">
-      <SettingsTabIntro title={SETTINGS_TAB_COPY.team.title} description={SETTINGS_TAB_COPY.team.intro} />
       <Card>
         <CardHeader>
           <SettingsCardHeader

@@ -62,9 +62,7 @@ import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-clas
 import { Checkbox } from "@/components/ui/checkbox"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
-import { PageIntro } from "@/components/copy/page-intro"
-import { SectionHeader } from "@/components/copy/section-header"
-import { INVOICE_CREATE_SECTION_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
+import { INVOICE_CREATE_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 
 /** Digits only for quantity (empty allowed while typing). */
 function filterQuantityInput(s: string): string {
@@ -616,11 +614,7 @@ export default function CreateInvoicePage() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <PageIntro
-            title="Create invoice"
-            description={PAGE_COPY.invoices.blockedIntro}
-            variant="page"
-          />
+          <h1 className="text-2xl font-semibold text-foreground">Create invoice</h1>
         </div>
         <InvoiceBusinessSetupBanner readiness={invoiceReadiness} />
       </div>
@@ -636,11 +630,9 @@ export default function CreateInvoicePage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <PageIntro
-          title={isEditMode ? "Edit invoice" : "Create invoice"}
-          description={isEditMode ? PAGE_COPY.invoices.editIntro : PAGE_COPY.invoices.createIntro}
-          variant="page"
-        />
+        <h1 className="text-2xl font-semibold text-foreground">
+          {isEditMode ? "Edit invoice" : "Create invoice"}
+        </h1>
       </div>
 
       {editLockBanner ? (

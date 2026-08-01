@@ -23,9 +23,8 @@ import {
   type BusinessInvoiceSettings,
 } from "@/lib/invoices/invoice-settings"
 import { toast } from "sonner"
-import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
-import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
+import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 
 type BrandingForm = {
   brandColor: string
@@ -122,7 +121,6 @@ export function SettingsInvoicingTab() {
 
   return (
     <div className="space-y-6">
-      <SettingsTabIntro title={SETTINGS_TAB_COPY.invoicing.title} description={SETTINGS_TAB_COPY.invoicing.intro} />
       <Card>
         <CardHeader>
           <SettingsCardHeader

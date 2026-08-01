@@ -58,9 +58,8 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import type { Customer, Invoice } from "@/lib/b2b/types"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { currentLocationPath, withReturnTo } from "@/lib/invoice-navigation"
-import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
-import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
+import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 
 export function SettingsCustomersTab() {
   const router = useRouter()
@@ -156,7 +155,6 @@ export function SettingsCustomersTab() {
 
   return (
     <div className="space-y-6">
-      <SettingsTabIntro title={SETTINGS_TAB_COPY.customers.title} description={SETTINGS_TAB_COPY.customers.intro} />
       <Card aria-busy={loading}>
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

@@ -56,9 +56,8 @@ import {
   type VerifiedIdentityPayload,
 } from "@easner/shared"
 import { CountryFlag } from "@/components/flags"
-import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
-import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
+import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 
 /** Aligns with personal settings store / dataCache freshness window. */
 const MFA_STATUS_CACHE_TTL_MS = 5 * 60 * 1000
@@ -398,7 +397,6 @@ export function SettingsPersonalTab() {
 
   return (
     <div className="space-y-6">
-      <SettingsTabIntro title={SETTINGS_TAB_COPY.personal.title} description={SETTINGS_TAB_COPY.personal.intro} />
       <Card>
         <CardHeader>
           <SettingsCardHeader

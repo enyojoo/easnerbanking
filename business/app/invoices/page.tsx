@@ -63,8 +63,6 @@ import {
   canProvisionInvoiceDepositInstructions,
 } from "@/lib/compliance-placeholders"
 import { currentLocationPath, withReturnTo } from "@/lib/invoice-navigation"
-import { PageIntro } from "@/components/copy/page-intro"
-import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 export default function InvoicesPage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -324,7 +322,10 @@ export default function InvoicesPage() {
       ) : null}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <PageIntro title={PAGE_COPY.invoices.title} description={PAGE_COPY.invoices.intro} variant="page" />
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">Invoices</h1>
+            <p className="text-sm text-muted-foreground mt-1">Manage your billing and invoicing</p>
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"

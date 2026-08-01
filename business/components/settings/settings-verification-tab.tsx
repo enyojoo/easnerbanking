@@ -2,6 +2,10 @@
 
 import { BusinessVerificationSection } from "@/components/compliance/business-verification-section"
 
-export function SettingsVerificationTab() {
-  return <BusinessVerificationSection />
+type SettingsVerificationTabProps = {
+  onFlowOpenChange?: (open: boolean) => void
+}
+
+export function SettingsVerificationTab({ onFlowOpenChange }: SettingsVerificationTabProps) {
+  return <BusinessVerificationSection onFlowOpenChange={onFlowOpenChange} />
 }

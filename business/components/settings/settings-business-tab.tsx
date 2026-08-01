@@ -32,9 +32,8 @@ import {
 import { CountryFlag } from "@/components/flags"
 import { BaseCurrencyOptionLabel } from "@/components/base-currency-option-label"
 import { BusinessIndustryCombobox } from "@/components/settings/business-industry-combobox"
-import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
-import { SETTINGS_CARD_COPY, SETTINGS_TAB_COPY } from "@/lib/copy/business-ui-copy"
+import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 import { useBusinessEasetagAvailability } from "@/hooks/use-business-easetag-availability"
 import { useAllowedBaseCurrencies } from "@/hooks/use-allowed-base-currencies"
 import { useAllowedCountryCodes } from "@/hooks/use-allowed-country-codes"
@@ -284,7 +283,6 @@ export function SettingsBusinessTab() {
 
   return (
     <div className="space-y-6">
-      <SettingsTabIntro title={SETTINGS_TAB_COPY.business.title} description={SETTINGS_TAB_COPY.business.intro} />
       <Card>
         <CardHeader>
           <SettingsCardHeader

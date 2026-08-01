@@ -11,8 +11,7 @@ import { SettingsCommunicationTab } from "@/components/settings/settings-communi
 import { SettingsRecipientsTab } from "@/components/settings/settings-recipients-tab"
 import { SettingsCustomersTab } from "@/components/settings/settings-customers-tab"
 import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
-import { PageIntro } from "@/components/copy/page-intro"
-import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
+import { cn } from "@/lib/utils"
 
 const TABS = ["personal", "business", "verification", "team", "recipients", "customers", "communication", "invoicing"] as const
 type TabValue = (typeof TABS)[number]
@@ -22,6 +21,7 @@ function SettingsContent() {
   const tab = (searchParams.get("tab") || "personal") as TabValue
   const validTab = TABS.includes(tab) ? tab : "personal"
   const [activeTab, setActiveTab] = useState<TabValue>(validTab)
+  const [verificationFlowOpen, setVerificationFlowOpen] = useState(false)
 
   useEffect(() => {
     setActiveTab(validTab)
@@ -30,6 +30,7 @@ function SettingsContent() {
   const handleTabChange = (value: string) => {
     if (!TABS.includes(value as TabValue)) return
     if (value === activeTab) return
+    if (verificationFlowOpen) return
     setActiveTab(value as TabValue)
     const next = new URLSearchParams(searchParams.toString())
     next.set("tab", value)
@@ -42,20 +43,27 @@ function SettingsContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageIntro title="Settings" description={PAGE_COPY.settings.hero} variant="hero" />
+    <div className={cn("space-y-6", verificationFlowOpen && "space-y-4")}>
+      <div>
+        <h1 className="text-3xl font-semibold text-foreground">Settings</h1>
+        {!verificationFlowOpen ? (
+          <p className="text-muted-foreground mt-2">Manage your account settings and preferences</p>
+        ) : null}
+      </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="personal">Personal</TabsTrigger>
-          <TabsTrigger value="business">Business</TabsTrigger>
-          <TabsTrigger value="verification">Verification</TabsTrigger>
-          <TabsTrigger value="team">Team</TabsTrigger>
-          <TabsTrigger value="recipients">Recipients</TabsTrigger>
-          <TabsTrigger value="customers">Customers</TabsTrigger>
-          <TabsTrigger value="communication">Communication</TabsTrigger>
-          <TabsTrigger value="invoicing">Invoicing</TabsTrigger>
-        </TabsList>
+        {!verificationFlowOpen ? (
+          <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
+            <TabsTrigger value="personal">Personal</TabsTrigger>
+            <TabsTrigger value="business">Business</TabsTrigger>
+            <TabsTrigger value="verification">Verification</TabsTrigger>
+            <TabsTrigger value="team">Team</TabsTrigger>
+            <TabsTrigger value="recipients">Recipients</TabsTrigger>
+            <TabsTrigger value="customers">Customers</TabsTrigger>
+            <TabsTrigger value="communication">Communication</TabsTrigger>
+            <TabsTrigger value="invoicing">Invoicing</TabsTrigger>
+          </TabsList>
+        ) : null}
 
         <TabsContent value="personal" className="mt-6">
           <SettingsPersonalTab />
@@ -63,8 +71,8 @@ function SettingsContent() {
         <TabsContent value="business" className="mt-6">
           <SettingsBusinessTab />
         </TabsContent>
-        <TabsContent value="verification" className="mt-6">
-          <SettingsVerificationTab />
+        <TabsContent value="verification" className={verificationFlowOpen ? "mt-0" : "mt-6"}>
+          <SettingsVerificationTab onFlowOpenChange={setVerificationFlowOpen} />
         </TabsContent>
         <TabsContent value="team" className="mt-6">
           <SettingsTeamTab />

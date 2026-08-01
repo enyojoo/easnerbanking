@@ -35,8 +35,6 @@ import {
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
 import { resolveReportingAmountForFeed } from "@easner/shared"
-import { PageIntro } from "@/components/copy/page-intro"
-import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 export function DashboardPageClient() {
   const { data: rows } = useTransactionsCached()
@@ -130,11 +128,6 @@ export function DashboardPageClient() {
 
   return (
     <div className="space-y-8">
-      <PageIntro
-        title={PAGE_COPY.dashboard.title}
-        description={PAGE_COPY.dashboard.intro}
-        variant="page"
-      />
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-start justify-between gap-6">
@@ -167,9 +160,6 @@ export function DashboardPageClient() {
                   </span>
                 </h2>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {PAGE_COPY.dashboard.balanceHelper}
-              </p>
             </div>
             <div className="flex flex-wrap gap-2 justify-end shrink-0">
               <Button asChild size="sm" className="shadow-sm">
@@ -261,12 +251,7 @@ export function DashboardPageClient() {
 
       <div>
         <div className="flex items-center justify-between mb-4">
-          <PageIntro
-            title="Recent activity"
-            description={PAGE_COPY.dashboard.recentActivity}
-            variant="section"
-            className="mb-0"
-          />
+          <h3 className="text-lg font-semibold">Recent activity</h3>
           <Button variant="ghost" size="sm" asChild>
             <Link href="/transactions">View all</Link>
           </Button>

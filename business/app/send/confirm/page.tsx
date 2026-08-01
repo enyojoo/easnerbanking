@@ -71,8 +71,6 @@ import {
   type WalletQuoteStashMeta,
 } from "@/lib/wallet-send-quote-cache"
 import { ArrowLeft, Loader2 } from "lucide-react"
-import { PageIntro } from "@/components/copy/page-intro"
-import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 const SEND_FLOW_STATE_KEY_LOCAL = SEND_FLOW_STATE_KEY
 
@@ -881,11 +879,9 @@ export default function SendConfirmPage() {
         <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <PageIntro
-          title={isYcCrossBorder ? YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE : "Review transfer"}
-          description={PAGE_COPY.send.confirmIntro}
-          variant="page"
-        />
+        <h1 className="text-2xl font-semibold text-foreground">
+          {isYcCrossBorder ? YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE : "Review transfer"}
+        </h1>
       </div>
 
       {isYcCrossBorder && crossBorderMeta && ycCrossBorderReviewReady ? (

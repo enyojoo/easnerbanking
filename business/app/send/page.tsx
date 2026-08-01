@@ -8,8 +8,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SendRecipientPicker } from "@/components/send-recipient-picker"
-import { PageIntro } from "@/components/copy/page-intro"
-import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 import {
   formatSendRateLabel,
   formatMoneyDisplay,
@@ -1601,7 +1599,12 @@ export default function SendPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <PageIntro title={PAGE_COPY.send.title} description={PAGE_COPY.send.intro} variant="page" />
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground">Send money</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Select recipient, amount, and how you&apos;d like to send
+        </p>
+      </div>
 
       <SendRecipientPicker
         selected={recipient}

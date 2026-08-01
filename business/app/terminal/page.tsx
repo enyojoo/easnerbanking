@@ -16,8 +16,6 @@ import {
   type TerminalSessionListItem,
 } from "@/hooks/use-terminal-sessions-cached"
 import { cn } from "@/lib/utils"
-import { PageIntro } from "@/components/copy/page-intro"
-import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 function shortSessionRef(id: string): string {
   return id.replace(/-/g, "").slice(0, 8).toUpperCase()
@@ -148,7 +146,13 @@ export default function TerminalPage() {
     <div className="flex flex-col gap-6">
       <div className="sticky top-0 z-20 flex shrink-0 flex-col gap-4 border-b bg-background pb-4">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-          <PageIntro title={PAGE_COPY.terminal.title} description={PAGE_COPY.terminal.intro} variant="page" />
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">Terminal</h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Accept in-person stablecoin payments using a virtual terminal. Before taking payments, use Setup payout to
+              add a payout method and set it as the default for this terminal.
+            </p>
+          </div>
           <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
             <Button type="button" variant="outline" size="sm" asChild>
               <Link href="/pay" target="_blank" rel="noopener noreferrer" className="gap-2">

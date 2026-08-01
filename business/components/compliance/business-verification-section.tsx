@@ -2,13 +2,13 @@
 
 /**
  * Hosted KYB on the Verification settings tab. Prefer SumSub WebSDK via Grid `kyc_token`.
- * Fall back to iframing `kyc_link` if no token. Full-bleed in-tab — no dialog.
+ * Fall back to iframing `kyc_link` if no token. Tier cards are replaced by a full-bleed
+ * in-tab SumSub view (Back restores cards; Settings tab bar hidden while open).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { X } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Button } from "@/components/ui/button"
@@ -19,9 +19,6 @@ import { isGridCompleteUrl } from "@/lib/grid/grid-complete-url"
 import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { GridSumsubWebSdk } from "@/components/compliance/grid-sumsub-websdk"
-import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
-import { SettingsCardHeader } from "@/components/settings/settings-card-header"
-import { SETTINGS_TAB_COPY, VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import {
   getNoahRejectionDisplay,
   NOAH_FINAL_REJECTION_USER_MESSAGE,
@@ -39,13 +36,72 @@ function tier1StatusIsInReview(status: string | null | undefined): boolean {
   return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
 }
 
+const hostedCredentialsCache = new Map<string, { link: string | null; token: string | null }>()
 const hostedResumeAvailableCache = new Map<string, boolean>()
+
+function readCachedCredentials(businessId: string | null | undefined) {
+  if (!businessId) return { link: null, token: null }
+  return hostedCredentialsCache.get(businessId) ?? { link: null, token: null }
+}
+
+async function fetchHostedCredentials(): Promise<{
+  link: string | null
+  token: string | null
+  json: {
+    kyc_link?: string | null
+    kyc_token?: string | null
+    error?: string
+    alreadyOnboarded?: boolean
+    kyc_status?: string
+    canResubmit?: boolean
+  }
+  res: Response
+  text: string
+}> {
+  const res = await fetchWithSession("/api/grid/kyc-links", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "business" }),
+  })
+  const text = await res.text()
+  let json = {} as {
+    kyc_link?: string | null
+    kyc_token?: string | null
+    error?: string
+    alreadyOnboarded?: boolean
+    kyc_status?: string
+    canResubmit?: boolean
+  }
+  if (text) {
+    try {
+      json = JSON.parse(text) as typeof json
+    } catch {
+      json = {}
+    }
+  }
+  const link = typeof json.kyc_link === "string" ? json.kyc_link.trim() : ""
+  const token = typeof json.kyc_token === "string" ? json.kyc_token.trim() : ""
+  return {
+    link: link || null,
+    token: token || null,
+    json,
+    res,
+    text,
+  }
+}
 
 function tierLadderCopy(tier: 1 | 2 | 3) {
   return BUSINESS_TIER_LADDER.tiers.find((x) => x.tier === tier)
 }
 
-export function BusinessVerificationSection() {
+type BusinessVerificationSectionProps = {
+  /** Notifies Settings shell to hide tab bar during in-tab SumSub takeover. */
+  onFlowOpenChange?: (open: boolean) => void
+}
+
+export function BusinessVerificationSection({
+  onFlowOpenChange,
+}: BusinessVerificationSectionProps = {}) {
   const {
     tier1Complete,
     tier1VerificationStatus,
@@ -59,7 +115,6 @@ export function BusinessVerificationSection() {
     noahKybCustomerId,
   } = useBusinessProfile()
 
-  const [busy, setBusy] = useState<null | "link">(null)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [hostedResumeAvailable, setHostedResumeAvailable] = useState<boolean | null>(() =>
@@ -68,6 +123,7 @@ export function BusinessVerificationSection() {
   const probedHostedUrlRef = useRef<string | null>(null)
   const probedHostedTokenRef = useRef<string | null>(null)
   const [hostedOpen, setHostedOpen] = useState(false)
+  const [hostedLoading, setHostedLoading] = useState(false)
   const [hostedUrl, setHostedUrl] = useState<string | null>(null)
   const [hostedToken, setHostedToken] = useState<string | null>(null)
   const [hostedTierLevel, setHostedTierLevel] = useState<1 | 2 | 3>(1)
@@ -82,58 +138,114 @@ export function BusinessVerificationSection() {
     }
   }, [])
 
+  useEffect(() => {
+    onFlowOpenChange?.(hostedOpen)
+    return () => {
+      if (hostedOpen) onFlowOpenChange?.(false)
+    }
+  }, [hostedOpen, onFlowOpenChange])
+
   const tier1RejectedForProbe = tier1VerificationStatus === "rejected"
   const tier1UnderReviewForProbe = tier1StatusIsInReview(tier1VerificationStatus)
   const tier1AwaitingReviewForProbe = tier1UnderReviewForProbe && !tier1RejectedForProbe
+  const tier1FinalRejectForPrefetch =
+    tier1RejectedForProbe &&
+    (tier1RejectionType === "Final" ||
+      getNoahRejectionDisplay(tier1RejectionReasons)?.isFinal === true)
+
+  const prefetchHostedCredentials = useCallback(async () => {
+    if (!businessId || !canManageBusinessVerification || tier1Complete || tier1FinalRejectForPrefetch) {
+      return
+    }
+    try {
+      const { link, token, res } = await fetchHostedCredentials()
+      if (!res.ok) return
+      probedHostedUrlRef.current = link
+      probedHostedTokenRef.current = token
+      hostedCredentialsCache.set(businessId, { link, token })
+      const resumable = Boolean(link || token)
+      hostedResumeAvailableCache.set(businessId, resumable)
+      setHostedResumeAvailable(resumable)
+      if (!hostedOpen) {
+        setHostedUrl(link)
+        setHostedToken(token)
+      }
+    } catch {
+      if (businessId) setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? false)
+    }
+  }, [
+    businessId,
+    canManageBusinessVerification,
+    hostedOpen,
+    tier1Complete,
+    tier1FinalRejectForPrefetch,
+  ])
 
   useEffect(() => {
-    probedHostedUrlRef.current = null
-    probedHostedTokenRef.current = null
+    if (!businessId || !canManageBusinessVerification || tier1Complete || tier1FinalRejectForPrefetch) {
+      probedHostedUrlRef.current = null
+      probedHostedTokenRef.current = null
+      setHostedResumeAvailable(null)
+      return
+    }
+    const cached = readCachedCredentials(businessId)
+    probedHostedUrlRef.current = cached.link
+    probedHostedTokenRef.current = cached.token
+    if (cached.link || cached.token) {
+      setHostedUrl(cached.link)
+      setHostedToken(cached.token)
+      hostedResumeAvailableCache.set(businessId, true)
+      setHostedResumeAvailable(true)
+      return
+    }
+    setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? null)
+    void prefetchHostedCredentials()
+  }, [
+    businessId,
+    canManageBusinessVerification,
+    prefetchHostedCredentials,
+    tier1Complete,
+    tier1FinalRejectForPrefetch,
+  ])
+
+  useEffect(() => {
     if (
       !canManageBusinessVerification ||
       !businessId ||
       tier1Complete ||
       !tier1AwaitingReviewForProbe
     ) {
-      setHostedResumeAvailable(null)
       return
     }
-
-    let cancelled = false
-    setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? null)
-    void (async () => {
-      try {
-        const res = await fetchWithSession("/api/grid/kyc-links", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "business" }),
-        })
-        const json = (await res.json().catch(() => ({}))) as {
-          kyc_link?: string | null
-          kyc_token?: string | null
-        }
-        if (cancelled) return
-        const link = typeof json.kyc_link === "string" ? json.kyc_link.trim() : ""
-        const token = typeof json.kyc_token === "string" ? json.kyc_token.trim() : ""
-        probedHostedUrlRef.current = link || null
-        probedHostedTokenRef.current = token || null
-        const resumable = Boolean(link || token)
-        hostedResumeAvailableCache.set(businessId, resumable)
-        setHostedResumeAvailable(resumable)
-      } catch {
-        if (!cancelled) setHostedResumeAvailable(hostedResumeAvailableCache.get(businessId) ?? false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
+    if (probedHostedUrlRef.current || probedHostedTokenRef.current) return
+    void prefetchHostedCredentials()
   }, [
     businessId,
     canManageBusinessVerification,
-    tier1Complete,
+    prefetchHostedCredentials,
     tier1AwaitingReviewForProbe,
+    tier1Complete,
   ])
+
+  const applyHostedCredentials = useCallback(
+    (link: string | null, token: string | null) => {
+      if (clearSessionAfterCloseRef.current) {
+        clearTimeout(clearSessionAfterCloseRef.current)
+        clearSessionAfterCloseRef.current = null
+      }
+      setHostedTierLevel(1)
+      setHostedToken(token)
+      setHostedUrl(link)
+      probedHostedUrlRef.current = link
+      probedHostedTokenRef.current = token
+      if (businessId) {
+        hostedCredentialsCache.set(businessId, { link, token })
+        hostedResumeAvailableCache.set(businessId, Boolean(link || token))
+        setHostedResumeAvailable(Boolean(link || token))
+      }
+    },
+    [businessId],
+  )
 
   const syncBusinessTier1FromGrid = useCallback(async (): Promise<boolean> => {
     const result = await syncBusinessGridStatusUntilAccountsReady()
@@ -142,6 +254,7 @@ export function BusinessVerificationSection() {
 
   const closeHostedAndSync = useCallback(() => {
     setHostedOpen(false)
+    setHostedLoading(false)
     void syncBusinessTier1FromGrid()
     if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
     clearSessionAfterCloseRef.current = setTimeout(() => {
@@ -193,55 +306,23 @@ export function BusinessVerificationSection() {
       return
     }
 
+    setHostedOpen(true)
+    setHostedTierLevel(1)
+
     const probedUrl = probedHostedUrlRef.current
     const probedToken = probedHostedTokenRef.current
     if (probedUrl || probedToken) {
-      if (clearSessionAfterCloseRef.current) {
-        clearTimeout(clearSessionAfterCloseRef.current)
-        clearSessionAfterCloseRef.current = null
-      }
-      setHostedTierLevel(1)
-      setHostedToken(probedToken)
-      setHostedUrl(probedUrl)
-      setHostedOpen(true)
+      applyHostedCredentials(probedUrl, probedToken)
       return
     }
 
-    setBusy("link")
+    setHostedLoading(true)
+    setHostedToken(null)
+    setHostedUrl(null)
     try {
-      const supabase = createSupabaseBrowser()
-      const { data } = await supabase.auth.getSession()
-      if (!data.session) {
-        setError("You need to be signed in.")
-        return
-      }
-      const res = await fetchWithSession("/api/grid/kyc-links", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "business" }),
-      })
-      const text = await res.text()
-      let json = {} as {
-        kyc_link?: string | null
-        kyc_token?: string | null
-        error?: string
-        alreadyOnboarded?: boolean
-        kyc_status?: string
-        canResubmit?: boolean
-      }
-      if (text) {
-        try {
-          json = JSON.parse(text) as { kyc_link?: string; kyc_token?: string; error?: string }
-        } catch {
-          setError(
-            res.status === 431
-              ? "Request headers too large. Sign out, sign in again, or clear site data for localhost."
-              : "Invalid response from server.",
-          )
-          return
-        }
-      }
+      const { link, token, json, res } = await fetchHostedCredentials()
       if (res.status === 431) {
+        setHostedOpen(false)
         setError(
           json.error ??
             "Session data is too large (often from a profile image stored in your account). Sign out and sign in again, or visit Personal settings after we refresh your session.",
@@ -249,16 +330,18 @@ export function BusinessVerificationSection() {
         return
       }
       if (!res.ok) {
+        setHostedOpen(false)
         setError(json.error ?? "Could not start verification.")
         return
       }
       if (json.canResubmit === false) {
-        setError(null)
+        setHostedOpen(false)
         setInfo("Verification could not be completed for this account. Please contact support if you have questions.")
         return
       }
-      if (json.alreadyOnboarded || (!json.kyc_link && !json.kyc_token)) {
+      if (json.alreadyOnboarded || (!link && !token)) {
         void syncBusinessTier1FromGrid()
+        setHostedOpen(false)
         if (json.kyc_status === "approved") {
           setError(null)
           setInfo(null)
@@ -277,26 +360,14 @@ export function BusinessVerificationSection() {
         setInfo("No additional verification steps are available right now. We'll update your status shortly.")
         return
       }
-      if (clearSessionAfterCloseRef.current) {
-        clearTimeout(clearSessionAfterCloseRef.current)
-        clearSessionAfterCloseRef.current = null
-      }
-      const link = typeof json.kyc_link === "string" ? json.kyc_link.trim() : ""
-      const token = typeof json.kyc_token === "string" ? json.kyc_token.trim() : ""
-      setHostedTierLevel(1)
-      setHostedToken(token || null)
-      setHostedUrl(link || null)
-      setHostedOpen(true)
-      probedHostedUrlRef.current = link || null
-      probedHostedTokenRef.current = token || null
-      if (businessId) hostedResumeAvailableCache.set(businessId, true)
-      setHostedResumeAvailable(true)
+      applyHostedCredentials(link, token)
     } catch (e: unknown) {
+      setHostedOpen(false)
       setError(e instanceof Error ? e.message : "Something went wrong.")
     } finally {
-      setBusy(null)
+      setHostedLoading(false)
     }
-  }, [businessId, syncBusinessTier1FromGrid, tier1VerificationStatus])
+  }, [applyHostedCredentials, businessId, syncBusinessTier1FromGrid, tier1VerificationStatus])
 
   if (isLoading && !hasData) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
@@ -315,49 +386,48 @@ export function BusinessVerificationSection() {
     canManageBusinessVerification &&
     !tier1Complete &&
     !tier1FinalReject &&
-    (!tier1AwaitingReview || hostedResumeAvailable === true)
+    (!tier1AwaitingReview || hostedResumeAvailable !== false)
   const tier1HostedCtaLabel = tier1Rejected
     ? "Retry verification"
     : tier1StartedNotSubmitted || hostedResumeAvailable === true
       ? "Continue verification"
       : "Begin verification"
-  const tier1HostedCtaBusy = busy === "link" || (tier1AwaitingReview && hostedResumeAvailable === null)
 
-  if (hostedOpen && (hostedToken || hostedUrl)) {
+  if (hostedOpen) {
+    const hasCredentials = Boolean(hostedToken?.trim() || hostedUrl?.trim())
     return (
-      <div className="flex min-h-[min(70vh,40rem)] flex-col overflow-hidden rounded-lg border bg-[#1a1a1a]" id="business-verification">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 bg-[#1a1a1a] px-4 py-3 sm:px-6">
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-semibold leading-snug text-white sm:text-lg">
-                Business verification for {hostedTierTitle}
-              </h2>
-              <Badge variant="outline" className="shrink-0 border-white/20 text-xs text-white/90">
-                Tier {hostedTierLevel}
-              </Badge>
-            </div>
-            <p className="text-sm text-white/70">Close when finished.</p>
-          </div>
+      <div
+        className="flex min-h-[calc(100dvh-11rem)] flex-col"
+        id="business-verification"
+        data-verification-flow="open"
+      >
+        <div className="flex shrink-0 items-center border-b bg-background py-2">
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="shrink-0 text-white hover:bg-white/10 hover:text-white"
+            size="sm"
+            className="gap-1.5 text-muted-foreground hover:text-foreground"
             onClick={closeHostedAndSync}
-            aria-label="Close verification"
           >
-            <X className="size-5" />
+            <ArrowLeft className="size-4" aria-hidden />
+            Back
           </Button>
         </div>
         <div className="relative min-h-0 flex-1">
           {error ? (
-            <p className="absolute left-4 right-4 top-2 z-10 rounded-md bg-destructive/90 px-3 py-2 text-sm text-destructive-foreground">
+            <p className="absolute left-0 right-0 top-2 z-10 mx-auto max-w-lg rounded-md bg-destructive/90 px-3 py-2 text-center text-sm text-destructive-foreground">
               {error}
             </p>
           ) : null}
-          {useSumsubSdk && hostedToken ? (
+          {hostedLoading || !hasCredentials ? (
+            <div className="flex min-h-[min(24rem,50vh)] flex-col items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="size-8 animate-spin" aria-hidden />
+              <p className="text-sm">Opening verification…</p>
+            </div>
+          ) : useSumsubSdk && hostedToken ? (
             <GridSumsubWebSdk
               accessToken={hostedToken}
+              theme="light"
               onComplete={closeHostedAndSync}
               onError={(message) => setError(message)}
             />
@@ -365,7 +435,7 @@ export function BusinessVerificationSection() {
             <iframe
               title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
               src={hostedIframeSrc}
-              className="absolute inset-0 size-full border-0"
+              className="absolute inset-0 size-full border-0 bg-background"
               allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
               onLoad={handleHostedIframeLoad}
             />
@@ -377,14 +447,7 @@ export function BusinessVerificationSection() {
 
   return (
     <div className="space-y-6" id="business-verification">
-      <SettingsTabIntro
-        title={SETTINGS_TAB_COPY.verification.title}
-        description={SETTINGS_TAB_COPY.verification.intro}
-      />
-
-      <div className="space-y-3">
-        <SettingsCardHeader title="Compliance tiers" description={VERIFICATION_SECTION_COPY.complianceTiers} />
-        <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {BUSINESS_TIER_LADDER.tiers.map((t) => {
           const isT1 = t.tier === 1
           return (
@@ -447,9 +510,11 @@ export function BusinessVerificationSection() {
                       <Button
                         size="sm"
                         onClick={() => void openHostedVerification()}
-                        disabled={tier1HostedCtaBusy || !businessId}
+                        onMouseEnter={() => void prefetchHostedCredentials()}
+                        onFocus={() => void prefetchHostedCredentials()}
+                        disabled={!businessId}
                       >
-                        {tier1HostedCtaBusy ? "Opening…" : tier1HostedCtaLabel}
+                        {tier1HostedCtaLabel}
                       </Button>
                     ) : null}
                   </div>
@@ -458,7 +523,6 @@ export function BusinessVerificationSection() {
             </Card>
           )
         })}
-        </div>
       </div>
     </div>
   )

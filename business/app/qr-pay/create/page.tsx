@@ -12,9 +12,8 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { dataCache, CACHE_KEYS } from "@/lib/cache"
-import { PageIntro } from "@/components/copy/page-intro"
 import { SectionHeader } from "@/components/copy/section-header"
-import { PAGE_COPY, QR_PAY_CREATE_SECTION_COPY } from "@/lib/copy/business-ui-copy"
+import { QR_PAY_CREATE_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 
 const BUSINESS_NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
 
@@ -92,12 +91,11 @@ export default function QrPayCreatePlacardPage() {
               <ArrowLeft className="h-5 w-5" aria-hidden />
             </Link>
           </Button>
-          <PageIntro
-            title={PAGE_COPY.qrPay.createTitle}
-            description={PAGE_COPY.qrPay.createIntro}
-            variant="page"
-          />
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Create Placard</h1>
         </div>
+        <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+          Choose the payer wallet and asset customers see, where fiat settles, then create placard files.
+        </p>
       </div>
 
       <Card>
