@@ -27,21 +27,6 @@ describe("buildYcSendSubmitBody", () => {
     expect(body.amount).toBeUndefined()
     expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.48)
   })
-
-  it("ceils settlement crypto up on directSettlement submit", () => {
-    const body = buildYcSendSubmitBody({
-      sequenceId: "seq-1",
-      customerUID: "user-1",
-      channelId: "ch-1",
-      currency: "NGN",
-      country: "NG",
-      refundMode: "balance_payout",
-      userTurnkeyAddress: "wallet-1",
-      settlementCryptoAmount: 1.4801816,
-      destination: { accountNumber: "1", accountType: "bank", networkId: "n", accountName: "A" },
-    })
-    expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.480182)
-  })
 })
 
 describe("hydrateYcSendSubmitResult", () => {

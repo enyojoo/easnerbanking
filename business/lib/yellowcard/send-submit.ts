@@ -1,7 +1,7 @@
 import { yellowcardFetch } from "./http"
 import { resolveYcSendRefundAddress, type YcSendRefundMode } from "./refund-address"
 import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
-import { readYcSendLegFeeLocal, resolveYcPaymentReason, roundYcSettlementCryptoUp } from "@easner/shared"
+import { readYcSendLegFeeLocal, resolveYcPaymentReason } from "@easner/shared"
 
 export type YcSendSubmitInput = {
   sequenceId: string
@@ -71,7 +71,7 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
     ...(senderAddress ? { senderAddress } : {}),
   }
   if (directSettlement && input.settlementCryptoAmount != null) {
-    settlementInfo.cryptoAmount = roundYcSettlementCryptoUp(input.settlementCryptoAmount)
+    settlementInfo.cryptoAmount = input.settlementCryptoAmount
   }
 
   const body: Record<string, unknown> = {

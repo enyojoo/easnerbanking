@@ -2,6 +2,7 @@ import { randomUUID } from "crypto"
 import {
   checkYcSendLegDestinationAmountSufficient,
   readYcSendLockedLocalAmount,
+  readYcSendSettlementLocalRate,
   resolveYcSendLegDestinationExcessTolerance,
   resolveYcSendLegFeeLocalForLock,
   resolveYcSendLegRequiredSettlementCrypto,
@@ -27,8 +28,7 @@ export type YcSendLegLockResult = {
 }
 
 /**
- * POST /send with directSettlement locks crypto; validate YC echo localAmount meets quoted destination fiat.
- * Bump settlement crypto and retry when YC would pay out less than quoted receive.
+ * POST /send with directSettlement locks crypto; validate YC gross−fee meets quoted receive.
  */
 export async function submitYcSendWithDestinationAmountLock(input: {
   receiveAmount: number
@@ -50,21 +50,20 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   const excessTolerance =
     resolveYcSendLegDestinationExcessTolerance(input.receiveAmount)
   const prefix = String(input.sequenceIdPrefix ?? "yc_send").trim() || "yc_send"
-  let settlementCryptoUsd = roundYcSettlementCryptoUp(
-    Math.max(
-      input.initialSettlementCryptoUsd,
-      resolveYcSendLegRequiredSettlementCrypto({
-        quotedReceive: input.receiveAmount,
-        destinationRate: input.destinationRate,
-        ycSellRate: input.ycSellRate,
-        preferCeil: true,
-      }),
-    ),
-  )
+
+  const sizedInitial = resolveYcSendLegRequiredSettlementCrypto({
+    quotedReceive: input.receiveAmount,
+    destinationRate: input.destinationRate,
+    ycSellRate: input.ycSellRate,
+    preferCeil: true,
+  })
+  let settlementCryptoUsd =
+    sizedInitial > 0
+      ? sizedInitial
+      : roundYcSettlementCryptoUp(input.initialSettlementCryptoUsd)
+
   let sequenceId = `${prefix}_${randomUUID()}`
   let lastLockedLocal = 0
-  let prevLockedLocal = 0
-  let prevSubmittedCrypto = 0
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
@@ -77,7 +76,6 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       sequenceId,
       attempt,
     })
-    // Prefer POST body; hydrate only when fee/local fields are incomplete for the check.
     let sendRes = sendResRaw
     lastLockedLocal = readYcSendLockedLocalAmount(sendRes as Record<string, unknown>) ?? 0
     let sendLegFeeLocal = resolveYcSendLegFeeLocalForLock({
@@ -115,7 +113,6 @@ export async function submitYcSendWithDestinationAmountLock(input: {
         excessTolerance,
       })
     } else if (!check.ok && lastLockedLocal <= 0 && Boolean(String(sendRes.id ?? "").trim())) {
-      // Missing locked local on POST — one short hydrate before deciding retry.
       sendRes = await hydrateYcSendSubmitResult(sendResRaw, { maxAttempts: 1, delayMs: 0 })
       lastLockedLocal = readYcSendLockedLocalAmount(sendRes as Record<string, unknown>) ?? 0
       sendLegFeeLocal = resolveYcSendLegFeeLocalForLock({
@@ -151,16 +148,20 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       )
     }
 
+    const settlementLocalRate = readYcSendSettlementLocalRate(sendRes as Record<string, unknown>)
     const echoedCrypto = roundUsdc(Number(sendRes.settlementInfo?.cryptoAmount ?? 0))
     const rateCrypto = echoedCrypto > 0 ? echoedCrypto : submittedCrypto
     const observedRate =
-      lastLockedLocal > 0 && rateCrypto > 0 ? lastLockedLocal / rateCrypto : input.destinationRate
+      settlementLocalRate ??
+      (lastLockedLocal > 0 && rateCrypto > 0
+        ? lastLockedLocal / rateCrypto
+        : input.ycSellRate ?? input.destinationRate)
     const feeFraction =
       sendLegFeeLocal > 0 && lastLockedLocal > 0
         ? sendLegFeeLocal / lastLockedLocal
         : YC_SEND_LEG_SERVICE_FEE_FRACTION
 
-    let nextCrypto = retargetYcSendLegSettlementCryptoForQuotedReceive({
+    settlementCryptoUsd = retargetYcSendLegSettlementCryptoForQuotedReceive({
       settlementCryptoUsd: submittedCrypto,
       lockedLocalAmount: lastLockedLocal,
       sendLegFeeLocal,
@@ -172,27 +173,16 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     if (check.shortfall > 0) {
       const requiredCrypto = resolveYcSendLegRequiredSettlementCrypto({
         quotedReceive: input.receiveAmount,
-        destinationRate: observedRate,
+        destinationRate: input.destinationRate,
         ycSellRate: input.ycSellRate,
+        observedLocalRate: observedRate,
         feeFraction,
         preferCeil: true,
       })
-      nextCrypto = roundYcSettlementCryptoUp(Math.max(nextCrypto, requiredCrypto))
-      const grossStuck =
-        lastLockedLocal > 0 &&
-        prevLockedLocal > 0 &&
-        lastLockedLocal <= prevLockedLocal &&
-        submittedCrypto > prevSubmittedCrypto
-      if (grossStuck) {
-        nextCrypto = roundYcSettlementCryptoUp(
-          Math.max(nextCrypto, submittedCrypto + 0.003),
-        )
-      }
+      settlementCryptoUsd = roundYcSettlementCryptoUp(
+        Math.max(settlementCryptoUsd, requiredCrypto),
+      )
     }
-
-    prevLockedLocal = lastLockedLocal
-    prevSubmittedCrypto = submittedCrypto
-    settlementCryptoUsd = nextCrypto
   }
 
   throw new Error(

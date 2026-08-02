@@ -1277,32 +1277,47 @@ export function assertYcSendLegDestinationAmountSufficient(input: {
 }
 
 /**
- * Pessimistic local/USD for directSettlement crypto sizing.
- * When yc_sell is available, YC conversion tracks it (~50–60 bps below sell on NGN payout).
+ * YC directSettlement conversion rate for crypto sizing.
+ * Webhook/POST settlementInfo.cryptoLocalRate is yc_sell (e.g. 1373), not customerRate.
  */
+export function resolveYcSendLegSettlementConversionRate(input: {
+  customerRate: number
+  ycSellRate?: number
+  /** Observed settlementInfo.cryptoLocalRate or POST rate from YC. */
+  observedLocalRate?: number
+}): number {
+  const observed = Number(input.observedLocalRate ?? 0)
+  if (observed > 0) return observed
+  const ycSell = Number(input.ycSellRate ?? 0)
+  if (ycSell > 0) return ycSell
+  const customerRate = input.customerRate
+  return customerRate > 0 ? customerRate : 0
+}
+
+/** @deprecated Use resolveYcSendLegSettlementConversionRate */
 export function resolveYcSendLegPessimisticDestinationRate(input: {
   customerRate: number
-  /** Provider yc_sell from rate row — preferred for payout lock sizing. */
   ycSellRate?: number
   rateBufferBps?: number
   conversionSlopBps?: number
 }): number {
-  const customerRate = input.customerRate
-  if (!(customerRate > 0)) return 0
-  const slopBps = Number.isFinite(input.conversionSlopBps)
-    ? Math.max(0, Number(input.conversionSlopBps))
-    : YC_SEND_LEG_CONVERSION_SLOP_BPS
-  const ycSell = Number(input.ycSellRate ?? 0)
-  if (ycSell > 0) {
-    // Prod: yc_sell 1373 → observed ~1364.9 (~59 bps below sell).
-    const ycSellSlopBps = Math.max(slopBps + 34, 59)
-    return ycSell * (1 - ycSellSlopBps / 10_000)
-  }
-  const bufferBps = Number.isFinite(input.rateBufferBps)
-    ? Math.max(0, Number(input.rateBufferBps))
-    : YC_SEND_LEG_RATE_BUFFER_BPS
-  const totalBps = bufferBps + slopBps
-  return customerRate * (1 - totalBps / 10_000)
+  return resolveYcSendLegSettlementConversionRate({
+    customerRate: input.customerRate,
+    ycSellRate: input.ycSellRate,
+  })
+}
+
+/** Read YC local/USD rate from POST /send (settlementInfo.cryptoLocalRate or rate). */
+export function readYcSendSettlementLocalRate(
+  sendRes: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!sendRes) return null
+  const info = sendRes.settlementInfo as Record<string, unknown> | undefined
+  const fromInfo = Number(info?.cryptoLocalRate ?? info?.crypto_local_rate ?? 0)
+  if (Number.isFinite(fromInfo) && fromInfo > 0) return fromInfo
+  const fromRate = Number(sendRes.rate ?? 0)
+  if (Number.isFinite(fromRate) && fromRate > 0) return fromRate
+  return null
 }
 
 /**
@@ -1313,18 +1328,16 @@ export function resolveYcSendLegRequiredSettlementCrypto(input: {
   quotedReceive: number
   destinationRate: number
   ycSellRate?: number
+  observedLocalRate?: number
   feeFraction?: number
-  rateBufferBps?: number
-  conversionSlopBps?: number
-  /** When true, ceil USDC (retry / safety floor). */
+  /** When true, ceil USDC (retry after shortfall). */
   preferCeil?: boolean
 }): number {
   const quoted = roundLocal(input.quotedReceive)
-  const rate = resolveYcSendLegPessimisticDestinationRate({
+  const rate = resolveYcSendLegSettlementConversionRate({
     customerRate: input.destinationRate,
     ycSellRate: input.ycSellRate,
-    rateBufferBps: input.rateBufferBps,
-    conversionSlopBps: input.conversionSlopBps,
+    observedLocalRate: input.observedLocalRate,
   })
   const feeFraction = clampYcSendLegFeeFraction(
     input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
@@ -1343,9 +1356,9 @@ export function estimateYcSendLegSettlementCryptoForQuotedReceive(input: {
   quotedReceive: number
   destinationRate: number
   ycSellRate?: number
+  observedLocalRate?: number
   feeFraction?: number
-  rateBufferBps?: number
-  conversionSlopBps?: number
+  preferCeil?: boolean
 }): number {
   return resolveYcSendLegRequiredSettlementCrypto(input)
 }
