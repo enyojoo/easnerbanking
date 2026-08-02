@@ -7,7 +7,9 @@ import {
   resolveYcSendLegFeeLocalForLock,
   resolveYcSendLegRequiredSettlementCrypto,
   retargetYcSendLegSettlementCryptoForQuotedReceive,
-  roundYcSettlementCryptoUp,
+  roundYcSettlementCryptoCentUp,
+  roundYcSettlementCryptoToCent,
+  YC_SEND_LEG_CRYPTO_CENT,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,
   YC_SEND_LEG_SERVICE_FEE_FRACTION,
@@ -28,9 +30,8 @@ export type YcSendLegLockResult = {
 }
 
 /**
- * POST /send with directSettlement locks crypto; validate YC gross−fee ≈ quoted receive.
- * Target exact net (dust ≤ 0.01). Overshoot (e.g. 2011.72 for 2000) is rejected and trimmed
- * so excess USDC stays as fee-wallet surplus instead of paying the recipient.
+ * POST /send with directSettlement locks crypto; validate YC gross−fee meets quoted receive.
+ * Crypto is sized in USDC cents — YC rounds settlement crypto to 2dp before converting.
  */
 export async function submitYcSendWithDestinationAmountLock(input: {
   receiveAmount: number
@@ -60,15 +61,15 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     quotedReceive: input.receiveAmount,
     destinationRate: input.destinationRate,
     ycSellRate: input.ycSellRate,
-    preferCeil: true,
   })
   let settlementCryptoUsd =
     sizedInitial > 0
       ? sizedInitial
-      : roundYcSettlementCryptoUp(input.initialSettlementCryptoUsd)
+      : roundYcSettlementCryptoCentUp(input.initialSettlementCryptoUsd)
 
   let sequenceId = `${prefix}_${randomUUID()}`
   let lastLockedLocal = 0
+  let prevLockedLocal = 0
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
@@ -158,18 +159,16 @@ export async function submitYcSendWithDestinationAmountLock(input: {
 
     const settlementLocalRate = readYcSendSettlementLocalRate(sendRes as Record<string, unknown>)
     const echoedCrypto = roundUsdc(Number(sendRes.settlementInfo?.cryptoAmount ?? 0))
-    const rateCrypto = echoedCrypto > 0 ? echoedCrypto : submittedCrypto
-    // Prefer effective conversion from this lock when it disagrees with cryptoLocalRate.
+    const rateCryptoCent = roundYcSettlementCryptoToCent(
+      echoedCrypto > 0 ? echoedCrypto : submittedCrypto,
+    )
+    // Effective rate from this lock (converted/cent). Prefer over cryptoLocalRate when they disagree.
     const effectiveRate =
-      lastLockedLocal > 0 && rateCrypto > 0 ? lastLockedLocal / rateCrypto : 0
-    const rateDelta =
-      settlementLocalRate && effectiveRate > 0
-        ? Math.abs(effectiveRate - settlementLocalRate) / settlementLocalRate
-        : 0
+      lastLockedLocal > 0 && rateCryptoCent > 0 ? lastLockedLocal / rateCryptoCent : 0
     const observedRate =
-      effectiveRate > 0 && (rateDelta > 0.001 || !settlementLocalRate)
+      effectiveRate > 0
         ? effectiveRate
-        : (settlementLocalRate ?? effectiveRate ?? input.ycSellRate ?? input.destinationRate)
+        : (settlementLocalRate ?? input.ycSellRate ?? input.destinationRate)
     const feeFraction =
       sendLegFeeLocal > 0 && lastLockedLocal > 0
         ? sendLegFeeLocal / lastLockedLocal
@@ -190,15 +189,21 @@ export async function submitYcSendWithDestinationAmountLock(input: {
         destinationRate: observedRate,
         observedLocalRate: observedRate,
         feeFraction,
-        preferCeil: true,
       })
-      nextCrypto = roundYcSettlementCryptoUp(Math.max(nextCrypto, requiredCrypto))
-      if (nextCrypto <= submittedCrypto) {
-        nextCrypto = roundYcSettlementCryptoUp(submittedCrypto + 0.000001)
+      nextCrypto = Math.max(nextCrypto, requiredCrypto)
+      // Gross stuck across retries — leave the current USDC cent bucket.
+      const grossStuck =
+        lastLockedLocal > 0 && prevLockedLocal > 0 && lastLockedLocal <= prevLockedLocal
+      const minBump = roundUsdc(
+        roundYcSettlementCryptoToCent(submittedCrypto) + YC_SEND_LEG_CRYPTO_CENT,
+      )
+      if (grossStuck || nextCrypto <= submittedCrypto) {
+        nextCrypto = Math.max(nextCrypto, minBump)
       }
     }
 
-    settlementCryptoUsd = nextCrypto
+    prevLockedLocal = lastLockedLocal
+    settlementCryptoUsd = roundYcSettlementCryptoToCent(nextCrypto) || nextCrypto
   }
 
   throw new Error(
