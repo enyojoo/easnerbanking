@@ -11,10 +11,9 @@ vi.mock("./send-submit", async (importOriginal) => {
 import { submitYcSendWithDestinationAmountLock } from "./yc-send-leg-lock"
 import type { YcSendSubmitResult } from "./send-submit"
 
-/** Simulate YC: round crypto to 2dp, then convert at rate, then 1% fee. */
+/** Simulate YC full-precision conversion at rate, then 1% fee. */
 function ycLockResponse(crypto: number, rate: number, id: string): YcSendSubmitResult {
-  const cryptoCent = Math.round(crypto * 100) / 100
-  const converted = Math.round(cryptoCent * rate * 100) / 100
+  const converted = Math.round(crypto * rate * 100) / 100
   const fee = Math.round(converted * 0.01 * 100) / 100
   return {
     id,
@@ -22,7 +21,7 @@ function ycLockResponse(crypto: number, rate: number, id: string): YcSendSubmitR
     serviceFeeAmountLocal: fee,
     rate,
     settlementInfo: {
-      cryptoAmount: cryptoCent,
+      cryptoAmount: crypto,
       cryptoLocalRate: rate,
       walletAddress: "w",
     },
@@ -30,61 +29,42 @@ function ycLockResponse(crypto: number, rate: number, id: string): YcSendSubmitR
 }
 
 describe("submitYcSendWithDestinationAmountLock", () => {
-  it("locks 2000 NGN on first attempt at yc_sell 1373 (USDC cent sizing)", async () => {
+  it("locks ~2000 NGN with 1.471384 USDC at yc_sell 1373 (not 1.48 overshoot)", async () => {
     const submittedCrypto: number[] = []
     let call = 0
     const ycSell = 1373
 
-    const result = await submitYcSendWithDestinationAmountLock({
-      receiveAmount: 2000,
-      initialSettlementCryptoUsd: 1.466926,
-      destinationRate: 1366.135,
-      ycSellRate: ycSell,
-      receiveCurrency: "NGN",
-      buildSubmit: async ({ settlementCryptoUsd }) => {
-        submittedCrypto.push(settlementCryptoUsd)
-        call += 1
-        return ycLockResponse(settlementCryptoUsd, ycSell, `send-${call}`)
-      },
-    })
-
-    expect(call).toBe(1)
-    // 1.47 rounds to shortfall; minimum clearing cent is 1.48
-    expect(submittedCrypto[0]).toBe(1.48)
-    const net =
-      Number(result.lockedLocalAmount) - Number(result.sendRes.serviceFeeAmountLocal ?? 0)
-    expect(net).toBeGreaterThanOrEqual(2000)
-    // One USDC cent of NGN (~13.59) — 2011.72 is OK
-    expect(net).toBeLessThanOrEqual(2000 + 13.59)
-  })
-
-  it("accepts production 1.48 path (net 2011.72) that used to fail excess check", async () => {
     const result = await submitYcSendWithDestinationAmountLock({
       receiveAmount: 2000,
       initialSettlementCryptoUsd: 1.48,
       destinationRate: 1366.135,
-      ycSellRate: 1373,
+      ycSellRate: ycSell,
       receiveCurrency: "NGN",
-      buildSubmit: async ({ settlementCryptoUsd }) =>
-        ycLockResponse(settlementCryptoUsd, 1373, "send-1"),
+      buildSubmit: async ({ settlementCryptoUsd }) => {
+        submittedCrypto.push(settlementCryptoUsd)
+        call += 1
+        return ycLockResponse(settlementCryptoUsd, ycSell, `send-${call}`)
+      },
     })
 
+    expect(call).toBe(1)
+    expect(submittedCrypto[0]).toBeCloseTo(1.471384, 6)
+    expect(submittedCrypto[0]).toBeLessThan(1.48)
     const net =
       Number(result.lockedLocalAmount) - Number(result.sendRes.serviceFeeAmountLocal ?? 0)
-    expect(net).toBe(2011.72)
-    expect(result.sendRes.id).toBe("send-1")
+    expect(net).toBeGreaterThanOrEqual(2000)
+    expect(net).toBeLessThanOrEqual(2000.01)
   })
 
-  it("retargets up by a USDC cent when YC net is short (prod 1998.13)", async () => {
+  it("rejects production 1.48 overshoot (net 2011.72) and trims toward 2000", async () => {
     const submittedCrypto: number[] = []
     let call = 0
     const ycSell = 1373
 
     const result = await submitYcSendWithDestinationAmountLock({
       receiveAmount: 2000,
-      // Force a bad first crypto via mock — lock will size to 1.48 normally;
-      // override by returning shortfall for first call if somehow 1.47.
-      initialSettlementCryptoUsd: 1.47,
+      // sizedInitial overrides this to ~1.471384
+      initialSettlementCryptoUsd: 1.48,
       destinationRate: 1366.135,
       ycSellRate: ycSell,
       receiveCurrency: "NGN",
@@ -95,41 +75,49 @@ describe("submitYcSendWithDestinationAmountLock", () => {
       },
     })
 
-    expect(submittedCrypto[0]).toBe(1.48)
-    expect(call).toBe(1)
     const net =
       Number(result.lockedLocalAmount) - Number(result.sendRes.serviceFeeAmountLocal ?? 0)
+    expect(net).toBeLessThanOrEqual(2000.01)
     expect(net).toBeGreaterThanOrEqual(2000)
+    expect(submittedCrypto[0]).toBeLessThan(1.48)
   })
 
-  it("retries with bumped crypto when gross local is short and no fee field", async () => {
-    const responses: YcSendSubmitResult[] = [
-      {
-        id: "send-1",
-        convertedAmount: 1998,
-        settlementInfo: { cryptoAmount: 1.45, walletAddress: "w" },
-      },
-      {
-        id: "send-2",
-        convertedAmount: 2000,
-        settlementInfo: { cryptoAmount: 1.46, walletAddress: "w" },
-      },
-    ]
+  it("retargets up from shortfall without jumping to 1.48 overshoot", async () => {
+    const submittedCrypto: number[] = []
     let call = 0
-
+    const ycSell = 1373
+    // First lock converts worse than yc_sell (short); retry uses submitted crypto @ yc_sell.
     const result = await submitYcSendWithDestinationAmountLock({
       receiveAmount: 2000,
-      initialSettlementCryptoUsd: 1.45,
-      destinationRate: 1371.11,
+      initialSettlementCryptoUsd: 1.471384,
+      destinationRate: 1366.135,
+      ycSellRate: ycSell,
       receiveCurrency: "NGN",
-      buildSubmit: async () => {
+      buildSubmit: async ({ settlementCryptoUsd }) => {
+        submittedCrypto.push(settlementCryptoUsd)
         call += 1
-        return responses[Math.min(call, responses.length) - 1]!
+        if (call === 1) {
+          return {
+            id: "send-1",
+            convertedAmount: 2018.31,
+            serviceFeeAmountLocal: 20.18,
+            settlementInfo: {
+              cryptoAmount: settlementCryptoUsd,
+              walletAddress: "w",
+            },
+          }
+        }
+        return ycLockResponse(settlementCryptoUsd, ycSell, `send-${call}`)
       },
     })
 
-    expect(call).toBeGreaterThanOrEqual(1)
-    expect(result.lockedLocalAmount).toBeGreaterThanOrEqual(2000)
+    expect(call).toBeLessThanOrEqual(3)
+    expect(submittedCrypto[1]!).toBeGreaterThan(submittedCrypto[0]!)
+    expect(Math.max(...submittedCrypto)).toBeLessThan(1.48)
+    const net =
+      Number(result.lockedLocalAmount) - Number(result.sendRes.serviceFeeAmountLocal ?? 0)
+    expect(net).toBeGreaterThanOrEqual(2000)
+    expect(net).toBeLessThanOrEqual(2000.01)
   })
 
   it("accepts exact net receive without retry", async () => {
@@ -151,5 +139,6 @@ describe("submitYcSendWithDestinationAmountLock", () => {
     const net =
       Number(result.lockedLocalAmount) - Number(result.sendRes.serviceFeeAmountLocal ?? 0)
     expect(net).toBeGreaterThanOrEqual(12550)
+    expect(net).toBeLessThanOrEqual(12550.01)
   })
 })
