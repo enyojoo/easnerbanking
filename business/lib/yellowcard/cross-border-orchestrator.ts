@@ -26,6 +26,7 @@ import { findYcCrossRate, findYcPayInLeg, findYcRate, listYcRates } from "@/lib/
 import { submitYcReceive, type YcReceiveSubmitResult } from "@/lib/yellowcard/receive-submit"
 import { submitYcSend } from "@/lib/yellowcard/send-submit"
 import { submitYcSendWithDestinationAmountLock } from "@/lib/yellowcard/yc-send-leg-lock"
+import { fetchYcSendServiceFeeConfig } from "@/lib/yellowcard/send-fee-config"
 import { executeYcCryptoDeposit } from "@/lib/yellowcard/execute-yc-crypto-deposit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import { resolveYcSendChannelId } from "@/lib/payout-providers/yellowcard-provider"
@@ -558,10 +559,17 @@ export async function lockCrossBorderLeg2(
   const ycBuyTo = Number(ctx.toLeg?.yc_sell ?? 0)
   if (!ycBuyTo) throw new Error("YC destination rate unavailable for cross-border send leg")
 
+  const sendFeeConfig = await fetchYcSendServiceFeeConfig({
+    country: ctx.receiveCountry,
+    currency: ctx.receiveCurrency,
+    channelType: ctx.sendRail === "mobile_money" ? "momo" : "bank",
+    directSettlement: true,
+  })
   const provisionalSendCrypto = estimateYcSendLegSettlementCryptoForQuotedReceive({
     quotedReceive: input.receiveAmount,
     destinationRate: ycBuyTo,
     ycSellRate: ycBuyTo,
+    feeConfig: sendFeeConfig,
   })
   const sendLock = await submitYcSendWithDestinationAmountLock({
     receiveAmount: input.receiveAmount,
@@ -570,6 +578,7 @@ export async function lockCrossBorderLeg2(
     ycSellRate: ycBuyTo,
     receiveCurrency: ctx.receiveCurrency,
     sequenceIdPrefix: "yc_cb_l2",
+    feeConfig: sendFeeConfig,
     buildSubmit: async ({ settlementCryptoUsd, sequenceId }) =>
       submitYcSend({
         sequenceId,
@@ -1369,10 +1378,20 @@ export async function authorizeCrossBorderDraft(input: {
   const ycBuyTo = Number(toLeg?.yc_sell ?? 0)
   if (!ycBuyTo) throw new Error("YC destination rate unavailable for cross-border send leg")
 
+  const sendFeeConfig = await fetchYcSendServiceFeeConfig({
+    country: receiveCountry,
+    currency: receiveCurrency,
+    channelType:
+      recipientPayoutRail(recipient as RecipientSellPrepareRow) === "mobile_money"
+        ? "momo"
+        : "bank",
+    directSettlement: true,
+  })
   const provisionalSendCrypto = estimateYcSendLegSettlementCryptoForQuotedReceive({
     quotedReceive: receiveAmount,
     destinationRate: ycBuyTo,
     ycSellRate: ycBuyTo,
+    feeConfig: sendFeeConfig,
   })
   const sendLock = await submitYcSendWithDestinationAmountLock({
     receiveAmount,
@@ -1381,6 +1400,7 @@ export async function authorizeCrossBorderDraft(input: {
     ycSellRate: ycBuyTo,
     receiveCurrency,
     sequenceIdPrefix: "yc_cb_l2",
+    feeConfig: sendFeeConfig,
     buildSubmit: async ({ settlementCryptoUsd, sequenceId }) =>
       submitYcSend({
         sequenceId,

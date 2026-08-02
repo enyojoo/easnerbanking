@@ -170,9 +170,14 @@ export async function handleYcBalancePayoutSendWebhook(
 
   if (input.classified.isTerminalFailure) {
     const refundAmt = Number(prior.crypto_authorized_amount ?? prior.noah_send_amount ?? row.amount ?? 0)
+    // balance_exact: YC has no on-chain refund; handleYcBalancePayoutSendFailed recredits via omnibus.
+    // Still mark yc_refund_expected so the omnibus inbound is suppressed like a direct refund.
     let meta = buildYcRefundExpectedPatch(prior, {
       refundAmount: Number.isFinite(refundAmt) && refundAmt > 0 ? refundAmt : null,
     })
+    if (String(prior.yc_settlement_mode ?? "") === "balance_exact") {
+      meta = { ...meta, yc_balance_refund_expected: true }
+    }
     meta = mergeYcPayoutLifecycle(meta, { failed_at: occurredAt, processing_at: occurredAt })
 
     await upsertLedgerTransaction(admin, {

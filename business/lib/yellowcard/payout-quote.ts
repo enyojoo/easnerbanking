@@ -4,6 +4,7 @@ import { findYcBalancePayoutRate, listYcRates } from "@/lib/fx/yc-rates"
 import {
   applyProviderBindingToRecipient,
   assertYcBalancePayoutEconomicsSufficient,
+  checkYcBalancePayoutEconomicsSufficient,
   computeYcBalancePayoutPricing,
   computeYcBalancePayoutPricingBeforeSend,
   estimateYcSendLegSettlementCryptoForQuotedReceive,
@@ -23,8 +24,18 @@ import {
 } from "@/lib/terminal/recipient-sell-prepare"
 import { resolveYcSendChannelId, findYcSendChannel } from "@/lib/payout-providers/yellowcard-provider"
 import { mapRecipientToYcSend } from "@/lib/yellowcard/map-recipient-to-yc-send"
-import { submitYcSend, type YcSendSubmitResult } from "@/lib/yellowcard/send-submit"
+import {
+  denyYcSend,
+  hydrateYcSendSubmitResult,
+  submitYcSend,
+  type YcSendSubmitResult,
+} from "@/lib/yellowcard/send-submit"
 import { submitYcSendWithDestinationAmountLock } from "@/lib/yellowcard/yc-send-leg-lock"
+import { fetchYcSendServiceFeeConfig } from "@/lib/yellowcard/send-fee-config"
+import {
+  assertYcExactLocalCredit,
+  planYcExactLocalPayout,
+} from "@/lib/yellowcard/exact-local-payout"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import {
@@ -168,6 +179,12 @@ export async function buildYcPayoutQuote(input: {
   })
 
   const sequenceId = `yc_preview_${randomUUID()}`
+  const ycFeeConfig = await fetchYcSendServiceFeeConfig({
+    country: countryCode,
+    currency: receiveCurrency,
+    channelType: rail === "mobile_money" ? "momo" : "bank",
+    directSettlement: true,
+  })
   const provisionalCryptoUsd =
     amountEntryMode === "send" && sendBudget != null && sendBudget > 0
       ? roundUsdc(sendBudget)
@@ -175,6 +192,7 @@ export async function buildYcPayoutQuote(input: {
           quotedReceive: quoteReceiveAmount,
           destinationRate: customerRate,
           ycSellRate: payoutRate?.yc_sell,
+          feeConfig: ycFeeConfig,
         })
   if (!(provisionalCryptoUsd > 0)) {
     throw new Error("Could not derive USDC amount for Yellowcard payout quote.")
@@ -186,17 +204,39 @@ export async function buildYcPayoutQuote(input: {
     "pay_out",
     { userId: input.userId },
   )
-  const pricing = computeYcBalancePayoutPricingBeforeSend({
+  // Preview must price the path /confirm will actually take, or the review screen shows a fee the
+  // customer is not charged. Exact-local costs the balance-settlement fee, not the 1% crypto fee.
+  const previewExactPlan = await planYcExactLocalPayout({
     receiveAmount: quoteReceiveAmount,
-    customerRate,
-    provisionalCryptoUsd,
-    ycMidUsd:
-      payoutRate?.yc_sell != null && payoutRate.yc_sell > 0
-        ? roundUsdc(quoteReceiveAmount / payoutRate.yc_sell)
-        : undefined,
-    ycBuyRate: payoutRate?.yc_sell != null && payoutRate.yc_sell > 0 ? payoutRate.yc_sell : undefined,
-    processingFeeBps,
+    ycSellRate: payoutRate?.yc_sell,
+    country: countryCode,
+    currency: receiveCurrency,
+    channelType: rail === "mobile_money" ? "momo" : "bank",
   })
+  const ycMidUsd =
+    payoutRate?.yc_sell != null && payoutRate.yc_sell > 0
+      ? roundUsdc(quoteReceiveAmount / payoutRate.yc_sell)
+      : undefined
+  const pricing = previewExactPlan.eligible
+    ? computeYcBalancePayoutPricing({
+        receiveAmount: quoteReceiveAmount,
+        customerRate,
+        ycFloorUsd: previewExactPlan.costUsd,
+        ycMidUsd,
+        processingFeeBps,
+      })
+    : computeYcBalancePayoutPricingBeforeSend({
+        receiveAmount: quoteReceiveAmount,
+        customerRate,
+        provisionalCryptoUsd,
+        ycMidUsd,
+        ycBuyRate:
+          payoutRate?.yc_sell != null && payoutRate.yc_sell > 0 ? payoutRate.yc_sell : undefined,
+        processingFeeBps,
+      })
+  const previewCryptoUsd = previewExactPlan.eligible
+    ? previewExactPlan.costUsd
+    : provisionalCryptoUsd
 
   const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
   const quoteId = sequenceId
@@ -211,7 +251,7 @@ export async function buildYcPayoutQuote(input: {
     feeCurrency: "USD",
     cryptoAuthorizedAmount: String(pricing.ycFloorUsd),
     cryptoFloor: String(pricing.ycFloorUsd),
-    cryptoSendAmount: String(provisionalCryptoUsd),
+    cryptoSendAmount: String(previewCryptoUsd),
     cryptoCurrency: "USDC",
     sessionId: quoteId,
     customerRate,
@@ -282,6 +322,133 @@ export async function buildYcPayoutQuote(input: {
   }
 }
 
+export type YcPayoutSettlementMode = "direct_crypto" | "balance_exact"
+
+type YcBalancePayoutLockResult = {
+  sequenceId: string
+  sendId?: string | null
+  channelId: string
+  cryptoAmount: number
+  walletAddress: string
+  pricing: ReturnType<typeof computeYcBalancePayoutPricing>
+  ycLegFeesUsd: number
+  lockedLocalAmount: number
+  /**
+   * `direct_crypto` funds this send with a per-send USDC deposit and quantises the recipient's
+   * credit to USD cents. `balance_exact` credits the exact local amount from the YC balance and
+   * needs POST /send/{id}/accept after the USDC sweep replenishes the float.
+   */
+  settlementMode: YcPayoutSettlementMode
+}
+
+/**
+ * Lock a balance-settled send that credits the recipient exactly the quoted amount.
+ *
+ * The YC balance funds the payout immediately, so `walletAddress` is the Treasury Portal
+ * top-up address: the user's USDC sweep replenishes the float instead of funding this send.
+ */
+async function tryLockYcExactLocalPayoutSend(args: {
+  admin: ReturnType<typeof createSupabaseAdmin>
+  input: {
+    userId: string
+    customerUID: string
+    paymentPurpose?: string
+  }
+  plan: Awaited<ReturnType<typeof planYcExactLocalPayout>>
+  quoteReceiveAmount: number
+  receiveCurrency: string
+  countryCode: string
+  rail: "bank_transfer" | "mobile_money"
+  channelId: string
+  customerRate: number
+  ycSellRate: number
+  sender: Record<string, unknown>
+  recipientMapped: Awaited<ReturnType<typeof mapRecipientToYcSend>>
+}): Promise<YcBalancePayoutLockResult | null> {
+  // Priced before the send exists, so invalid economics cannot leave an orphan lock at YC.
+  const processingFeeBps = await quoteFiatProcessingFeeBps(
+    args.admin,
+    { countryCode: args.countryCode, currencyCode: args.receiveCurrency, rail: args.rail },
+    "pay_out",
+    { userId: args.input.userId },
+  )
+  const pricing = computeYcBalancePayoutPricing({
+    receiveAmount: args.quoteReceiveAmount,
+    customerRate: args.customerRate,
+    ycFloorUsd: args.plan.costUsd,
+    ycMidUsd: args.ycSellRate > 0 ? roundUsdc(args.quoteReceiveAmount / args.ycSellRate) : undefined,
+    processingFeeBps,
+  })
+  const economics = checkYcBalancePayoutEconomicsSufficient({
+    totalDebited: pricing.totalDebited,
+    cryptoAmount: args.plan.costUsd,
+    marginAmount: pricing.marginAmount,
+    processingFee: pricing.processingFee,
+  })
+  if (!economics.ok) {
+    console.warn("[yc-exact-local] economics insufficient, using direct settlement", economics)
+    return null
+  }
+
+  const sequenceId = `yc_quote_${randomUUID()}`
+  let sendId = ""
+  let lockedLocalAmount = 0
+  try {
+    const sendRes = await submitYcSend({
+      sequenceId,
+      customerUID: args.input.customerUID,
+      customerType: "retail",
+      channelId: args.channelId,
+      currency: args.receiveCurrency,
+      country: args.countryCode,
+      directSettlement: false,
+      localAmount: args.quoteReceiveAmount,
+      // Locks the rate without paying the recipient — accepted after the USDC sweep lands.
+      forceAccept: false,
+      refundMode: "balance_payout",
+      sender: args.sender,
+      destination: args.recipientMapped.destination,
+      sendExtras: args.recipientMapped.root,
+      reason: args.input.paymentPurpose,
+    })
+    sendId = String(sendRes.id ?? "").trim()
+    // POST occasionally omits the credited amount; read it back rather than assume a mismatch.
+    const credited =
+      sendRes.convertedAmount == null && sendRes.localAmount == null
+        ? await hydrateYcSendSubmitResult(sendRes)
+        : sendRes
+    lockedLocalAmount = assertYcExactLocalCredit({
+      quotedReceive: args.quoteReceiveAmount,
+      sendRes: credited as Record<string, unknown>,
+      receiveCurrency: args.receiveCurrency,
+    })
+    if (!sendId) throw new Error("yellowcard_send_id_missing")
+  } catch (e) {
+    // Never fail the payout over this: the send is unaccepted, so nothing has been paid and the
+    // caller falls back to direct settlement.
+    console.warn("[yc-exact-local] falling back to direct settlement", {
+      sequenceId,
+      sendId: sendId || null,
+      error: e instanceof Error ? e.message : String(e),
+    })
+    if (sendId) await denyYcSend(sendId).catch(() => {})
+    return null
+  }
+
+  return {
+    sequenceId,
+    sendId,
+    channelId: args.channelId,
+    // The sweep tops up the YC balance rather than funding this send directly.
+    cryptoAmount: args.plan.costUsd,
+    walletAddress: args.plan.topupAddress,
+    pricing,
+    ycLegFeesUsd: roundUsdc(args.plan.feeLocal / args.ycSellRate),
+    lockedLocalAmount,
+    settlementMode: "balance_exact",
+  }
+}
+
 /** Lock POST /send when user authorizes payout (not at quote). */
 export async function lockYcBalancePayoutSend(input: {
   userId: string
@@ -295,16 +462,7 @@ export async function lockYcBalancePayoutSend(input: {
   senderProfile: Parameters<typeof buildYcKycPersonMetadata>[0]["profile"]
   paymentPurpose?: string
   channelId?: string
-}): Promise<{
-  sequenceId: string
-  sendId?: string | null
-  channelId: string
-  cryptoAmount: number
-  walletAddress: string
-  pricing: ReturnType<typeof computeYcBalancePayoutPricing>
-  ycLegFeesUsd: number
-  lockedLocalAmount: number
-}> {
+}): Promise<YcBalancePayoutLockResult> {
   const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
   const countryCode = resolveRecipientPayoutCountry(input.recipient)
   if (!countryCode) throw new Error("Recipient country is required for Yellowcard payout.")
@@ -346,6 +504,12 @@ export async function lockYcBalancePayoutSend(input: {
     receiveCurrency,
     normalizeReceive: normalizePayoutReceiveAmountForCurrency,
   })
+  const ycFeeConfig = await fetchYcSendServiceFeeConfig({
+    country: countryCode,
+    currency: receiveCurrency,
+    channelType: rail === "mobile_money" ? "momo" : "bank",
+    directSettlement: true,
+  })
   const provisionalCryptoUsd =
     amountEntryMode === "send" && sendBudget != null && sendBudget > 0
       ? roundUsdc(sendBudget)
@@ -353,6 +517,7 @@ export async function lockYcBalancePayoutSend(input: {
           quotedReceive: quoteReceiveAmount,
           destinationRate: customerRate,
           ycSellRate: payoutRate?.yc_sell,
+          feeConfig: ycFeeConfig,
         })
 
   const recipientMapped = await mapRecipientToYcSend(input.recipient, { channelId })
@@ -361,6 +526,32 @@ export async function lockYcBalancePayoutSend(input: {
     requireNgIds: true,
   })
   const sequenceId = `yc_quote_${randomUUID()}`
+
+  const exactPlan = await planYcExactLocalPayout({
+    receiveAmount: quoteReceiveAmount,
+    ycSellRate: payoutRate?.yc_sell,
+    country: countryCode,
+    currency: receiveCurrency,
+    channelType: rail === "mobile_money" ? "momo" : "bank",
+  })
+  if (exactPlan.eligible) {
+    const exactLock = await tryLockYcExactLocalPayoutSend({
+      admin,
+      input,
+      plan: exactPlan,
+      quoteReceiveAmount,
+      receiveCurrency,
+      countryCode,
+      rail,
+      channelId,
+      customerRate,
+      ycSellRate: Number(payoutRate?.yc_sell ?? 0),
+      sender,
+      recipientMapped,
+    })
+    if (exactLock) return exactLock
+  }
+
   const sendLock = await submitYcSendWithDestinationAmountLock({
     receiveAmount: quoteReceiveAmount,
     initialSettlementCryptoUsd: provisionalCryptoUsd,
@@ -368,6 +559,7 @@ export async function lockYcBalancePayoutSend(input: {
     ycSellRate: payoutRate?.yc_sell,
     receiveCurrency,
     sequenceIdPrefix: "yc_quote",
+    feeConfig: ycFeeConfig,
     buildSubmit: async ({ settlementCryptoUsd, sequenceId: lockSequenceId }) =>
       submitYcSend({
         sequenceId: lockSequenceId,
@@ -439,5 +631,6 @@ export async function lockYcBalancePayoutSend(input: {
     pricing,
     ycLegFeesUsd,
     lockedLocalAmount,
+    settlementMode: "direct_crypto",
   }
 }

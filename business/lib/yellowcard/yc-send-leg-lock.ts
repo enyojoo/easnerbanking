@@ -14,6 +14,7 @@ import {
   YC_SEND_LEG_DESTINATION_TOLERANCE,
   YC_SEND_LEG_SERVICE_FEE_FRACTION,
 } from "@easner/shared"
+import type { YcServiceFeeConfig } from "@easner/shared"
 import type { YcSendSubmitResult } from "@/lib/yellowcard/send-submit"
 import { hydrateYcSendSubmitResult } from "@/lib/yellowcard/send-submit"
 
@@ -42,6 +43,8 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   maxAttempts?: number
   tolerance?: number
   sequenceIdPrefix?: string
+  /** YC POST /fees/get-config for this corridor; omit to fall back to the default fraction. */
+  feeConfig?: YcServiceFeeConfig | null
   buildSubmit: (args: {
     settlementCryptoUsd: number
     sequenceId: string
@@ -51,9 +54,11 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   const maxAttempts = input.maxAttempts ?? YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS
   const tolerance = input.tolerance ?? YC_SEND_LEG_DESTINATION_TOLERANCE
   const sizingRate = Number(input.ycSellRate ?? 0) > 0 ? Number(input.ycSellRate) : input.destinationRate
+  const feeConfig = input.feeConfig ?? null
   const excessTolerance = resolveYcSendLegDestinationExcessTolerance(
     input.receiveAmount,
     sizingRate,
+    feeConfig,
   )
   const prefix = String(input.sequenceIdPrefix ?? "yc_send").trim() || "yc_send"
 
@@ -61,6 +66,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     quotedReceive: input.receiveAmount,
     destinationRate: input.destinationRate,
     ycSellRate: input.ycSellRate,
+    feeConfig,
   })
   let settlementCryptoUsd =
     sizedInitial > 0
@@ -88,6 +94,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       sendRes: sendRes as Record<string, unknown>,
       lockedLocalAmount: lastLockedLocal,
       quotedReceive: input.receiveAmount,
+      feeConfig,
     })
     let check = checkYcSendLegDestinationAmountSufficient({
       quotedReceive: input.receiveAmount,
@@ -111,6 +118,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
         sendRes: sendRes as Record<string, unknown>,
         lockedLocalAmount: lastLockedLocal,
         quotedReceive: input.receiveAmount,
+        feeConfig,
       })
       check = checkYcSendLegDestinationAmountSufficient({
         quotedReceive: input.receiveAmount,
@@ -127,6 +135,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
         sendRes: sendRes as Record<string, unknown>,
         lockedLocalAmount: lastLockedLocal,
         quotedReceive: input.receiveAmount,
+        feeConfig,
       })
       check = checkYcSendLegDestinationAmountSufficient({
         quotedReceive: input.receiveAmount,
@@ -180,6 +189,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       sendLegFeeLocal,
       quotedReceive: input.receiveAmount,
       destinationRate: observedRate,
+      feeConfig,
       preferCeil: check.shortfall > 0,
     })
 
@@ -189,6 +199,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
         destinationRate: observedRate,
         observedLocalRate: observedRate,
         feeFraction,
+        feeConfig,
       })
       nextCrypto = Math.max(nextCrypto, requiredCrypto)
       // Gross stuck across retries — leave the current USDC cent bucket.

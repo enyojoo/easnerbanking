@@ -822,7 +822,10 @@ export {
   YC_SEND_LEG_SERVICE_FEE_FRACTION,
   YC_SEND_LEG_RATE_BUFFER_BPS,
   YC_SEND_LEG_CONVERSION_SLOP_BPS,
+  resolveYcSendLegServiceFeeLocal,
+  computeYcExactLocalPayoutCost,
 } from "./yc-pricing"
+export type { YcServiceFeeConfig, YcExactLocalPayoutCost } from "./yc-pricing"
 export { filterSupersededPendingGlobalPayoutRows } from "./ledger/filter-superseded-pending-payouts"
 export type { SupersededPayoutLedgerRow } from "./ledger/filter-superseded-pending-payouts"
 export {

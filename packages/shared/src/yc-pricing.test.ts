@@ -38,6 +38,8 @@ import {
   resolveYcSendLegFeesFromResponse,
   readYcSendLockedLocalAmount,
   resolveYcSendLegFeeLocalForLock,
+  resolveYcSendLegServiceFeeLocal,
+  computeYcExactLocalPayoutCost,
 } from "./yc-pricing"
 
 describe("computeYcFundBalancePricing", () => {
@@ -791,5 +793,90 @@ describe("yc send leg destination amount", () => {
     })
     expect(fees.serviceFeeAmountLocal).toBe(20.12)
     expect(fees.totalFeeUsd).toBeGreaterThanOrEqual(0.01)
+  })
+})
+
+// POST /fees/get-config, production values per corridor.
+describe("resolveYcSendLegServiceFeeLocal", () => {
+  it("reproduces the NGN bank direct-settlement charge", () => {
+    const fee = resolveYcSendLegServiceFeeLocal({
+      grossLocal: 2016.84,
+      feeConfig: { minFeeLocal: 0, feePercentage: 1, flatFeeLocal: 0 },
+    })
+    expect(fee).toBe(20.17)
+  })
+
+  it("applies a flat fee with no percentage component", () => {
+    const fee = resolveYcSendLegServiceFeeLocal({
+      grossLocal: 100000,
+      feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 100 },
+    })
+    expect(fee).toBe(100)
+  })
+
+  it("floors the percentage at minFeeLocal", () => {
+    const config = { minFeeLocal: 200, feePercentage: 0.5, flatFeeLocal: 0 }
+    // 0.5% of 5000 is 25, below the 200 minimum.
+    expect(resolveYcSendLegServiceFeeLocal({ grossLocal: 5000, feeConfig: config })).toBe(200)
+    expect(resolveYcSendLegServiceFeeLocal({ grossLocal: 60000, feeConfig: config })).toBe(300)
+  })
+
+  it("falls back to the default fraction without a config", () => {
+    expect(resolveYcSendLegServiceFeeLocal({ grossLocal: 2000 })).toBe(20)
+    expect(resolveYcSendLegServiceFeeLocal({ grossLocal: 2000, feeFraction: 0.02 })).toBe(40)
+  })
+})
+
+describe("computeYcExactLocalPayoutCost", () => {
+  it("charges the NGN flat fee on top of an exact recipient credit", () => {
+    const cost = computeYcExactLocalPayoutCost({
+      receiveAmount: 2000,
+      ycSellRate: 1373,
+      feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 100 },
+    })
+    expect(cost.feeLocal).toBe(100)
+    expect(cost.grossLocal).toBe(2100)
+    expect(cost.costUsd).toBe(1.529498)
+  })
+
+  it("uses the KES momo flat fee", () => {
+    const cost = computeYcExactLocalPayoutCost({
+      receiveAmount: 5000,
+      ycSellRate: 129.2,
+      feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 126 },
+    })
+    expect(cost.grossLocal).toBe(5126)
+  })
+
+  it("uses the ZAR minimum when the percentage is smaller", () => {
+    const cost = computeYcExactLocalPayoutCost({
+      receiveAmount: 500,
+      ycSellRate: 18.1,
+      feeConfig: { minFeeLocal: 20, feePercentage: 0.5, flatFeeLocal: 0 },
+    })
+    expect(cost.feeLocal).toBe(20)
+    expect(cost.grossLocal).toBe(520)
+  })
+
+  it("is cheaper than direct settlement above the flat-fee crossover", () => {
+    const exact = computeYcExactLocalPayoutCost({
+      receiveAmount: 100000,
+      ycSellRate: 1373,
+      feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 100 },
+    })
+    const direct = computeYcExactLocalPayoutCost({
+      receiveAmount: 100000,
+      ycSellRate: 1373,
+      feeConfig: { minFeeLocal: 0, feePercentage: 1, flatFeeLocal: 0 },
+    })
+    expect(exact.feeLocal).toBe(100)
+    expect(direct.feeLocal).toBe(1000)
+    expect(exact.costUsd).toBeLessThan(direct.costUsd)
+  })
+
+  it("rejects a missing rate rather than under-funding the float", () => {
+    expect(() =>
+      computeYcExactLocalPayoutCost({ receiveAmount: 2000, ycSellRate: 0 }),
+    ).toThrow(/ycSellRate must be positive/)
   })
 })

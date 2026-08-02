@@ -56,29 +56,7 @@ export type YcSendSubmitResult = {
 }
 
 export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, unknown> {
-  const refundAddress = resolveYcSendRefundAddress({
-    mode: input.refundMode,
-    userTurnkeyAddress: input.userTurnkeyAddress,
-    ledgerCurrency: "USD",
-  })
-  const userTurnkeyAddress = String(input.userTurnkeyAddress ?? "").trim()
-  const senderAddress =
-    input.refundMode === "balance_payout"
-      ? userTurnkeyAddress || undefined
-      : depositOmnibusSolanaAddressUsd() || undefined
   const directSettlement = input.directSettlement ?? true
-
-  const settlementInfo: Record<string, unknown> = {
-    cryptoCurrency: "USDC",
-    cryptoNetwork: "SOL",
-    refundAddress,
-    ...(senderAddress ? { senderAddress } : {}),
-  }
-  if (directSettlement && input.settlementCryptoAmount != null) {
-    // YC rounds settlement crypto to USDC cents before converting — submit exact cents.
-    settlementInfo.cryptoAmount = roundYcSettlementCryptoToCent(input.settlementCryptoAmount)
-  }
-
   const body: Record<string, unknown> = {
     sequenceId: input.sequenceId,
     customerUID: input.customerUID,
@@ -88,13 +66,36 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
     country: input.country.toUpperCase(),
     forceAccept: input.forceAccept ?? true,
     directSettlement,
-    settlementInfo,
   }
-  if (!directSettlement) {
+  if (directSettlement) {
+    // Crypto deposit path: YC rejects localAmount/amount and needs settlementInfo.
+    const refundAddress = resolveYcSendRefundAddress({
+      mode: input.refundMode,
+      userTurnkeyAddress: input.userTurnkeyAddress,
+      ledgerCurrency: "USD",
+    })
+    const userTurnkeyAddress = String(input.userTurnkeyAddress ?? "").trim()
+    const senderAddress =
+      input.refundMode === "balance_payout"
+        ? userTurnkeyAddress || undefined
+        : depositOmnibusSolanaAddressUsd() || undefined
+    const settlementInfo: Record<string, unknown> = {
+      cryptoCurrency: "USDC",
+      cryptoNetwork: "SOL",
+      refundAddress,
+      ...(senderAddress ? { senderAddress } : {}),
+    }
+    if (input.settlementCryptoAmount != null) {
+      // YC rounds settlement crypto to USDC cents before converting — submit exact cents.
+      settlementInfo.cryptoAmount = roundYcSettlementCryptoToCent(input.settlementCryptoAmount)
+    }
+    body.settlementInfo = settlementInfo
+  } else {
+    // Balance settlement: localAmount fixes the recipient's credit exactly. No crypto leg, so
+    // settlementInfo (and refund/sender addresses) do not apply.
     if (input.localAmount != null) body.localAmount = input.localAmount
     if (input.amount != null) body.amount = input.amount
   }
-  // YC rejects localAmount/amount when directSettlement is true.
   if (input.sender) body.sender = input.sender
   const destination = input.destination ?? input.recipient
   if (destination) body.destination = destination
@@ -113,6 +114,37 @@ export async function submitYcSend(input: YcSendSubmitInput): Promise<YcSendSubm
     method: "POST",
     path: "/send",
     json: body,
+  })
+}
+
+/**
+ * Release a `pending_approval` send for execution (POST /send/{id}/accept).
+ *
+ * Balance-settled sends are created with `forceAccept: false` so the rate is locked without
+ * paying anyone; accepting only after the user's USDC lands means a failed sweep cannot leave
+ * us having paid the recipient. YC expires an unaccepted send after ~5 minutes.
+ */
+export async function acceptYcSend(sendId: string): Promise<YcSendSubmitResult> {
+  const id = String(sendId ?? "").trim()
+  if (!id) throw new Error("Yellowcard send id is required to accept a send.")
+  return yellowcardFetch<YcSendSubmitResult>({
+    method: "POST",
+    path: `/send/${encodeURIComponent(id)}/accept`,
+    json: {},
+  })
+}
+
+/**
+ * Reject a `pending_approval` send (POST /send/{id}/deny) so an abandoned lock releases now
+ * instead of waiting out its expiry. Nothing has been paid at this point.
+ */
+export async function denyYcSend(sendId: string): Promise<void> {
+  const id = String(sendId ?? "").trim()
+  if (!id) return
+  await yellowcardFetch({
+    method: "POST",
+    path: `/send/${encodeURIComponent(id)}/deny`,
+    json: {},
   })
 }
 

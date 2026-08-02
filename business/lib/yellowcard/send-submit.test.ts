@@ -28,6 +28,40 @@ describe("buildYcSendSubmitBody", () => {
     expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.48)
   })
 
+  it("sends localAmount without settlementInfo for balance settlement", () => {
+    const body = buildYcSendSubmitBody({
+      sequenceId: "seq-1",
+      customerUID: "user-1",
+      channelId: "ch-1",
+      currency: "NGN",
+      country: "NG",
+      refundMode: "balance_payout",
+      // No turnkey address: balance settlement has no crypto refund leg.
+      directSettlement: false,
+      localAmount: 2000,
+      destination: { accountNumber: "1", accountType: "bank", networkId: "n", accountName: "A" },
+    })
+    expect(body.directSettlement).toBe(false)
+    // localAmount is what YC "fixes for the user" — the recipient's exact credit.
+    expect(body.localAmount).toBe(2000)
+    expect(body.settlementInfo).toBeUndefined()
+  })
+
+  it("does not require a refund address when directSettlement is false", () => {
+    expect(() =>
+      buildYcSendSubmitBody({
+        sequenceId: "seq-1",
+        customerUID: "user-1",
+        channelId: "ch-1",
+        currency: "NGN",
+        country: "NG",
+        refundMode: "balance_payout",
+        directSettlement: false,
+        localAmount: 2000,
+      }),
+    ).not.toThrow()
+  })
+
   it("rounds settlement crypto to USDC cents for YC conversion", () => {
     const body = buildYcSendSubmitBody({
       sequenceId: "seq-1",

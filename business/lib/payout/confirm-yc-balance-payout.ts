@@ -184,6 +184,7 @@ export async function confirmYcBalancePayoutOrder(
       cryptoAmount: locked.cryptoAmount,
       walletAddress: locked.walletAddress,
       lockedLocalAmount: locked.lockedLocalAmount,
+      settlementMode: locked.settlementMode,
     },
     expiresAt,
   })

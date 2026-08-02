@@ -24,14 +24,21 @@ import {
   mergeYcPayoutLifecycle,
   ycPendingPayoutProviderTransactionId,
 } from "@/lib/yellowcard/yc-ledger"
-import { executeYcBalancePayoutTurnkeyLeg } from "@/lib/yellowcard/payout-execute"
+import {
+  executeYcBalancePayoutTurnkeyLeg,
+  recreditYcExactLocalPayoutOnChain,
+} from "@/lib/yellowcard/payout-execute"
 import {
   getPayoutLockSession,
   markPayoutLockSessionExecuted,
 } from "@/lib/payout/payout-lock-session"
 import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
-import { lockYcBalancePayoutSend } from "@/lib/yellowcard/payout-quote"
+import {
+  lockYcBalancePayoutSend,
+  type YcPayoutSettlementMode,
+} from "@/lib/yellowcard/payout-quote"
+import { acceptYcSend } from "@/lib/yellowcard/send-submit"
 
 async function readAvailableBalance(
   admin: SupabaseClient,
@@ -182,6 +189,7 @@ export async function executeYcBalancePayout(
         pricing: ExecuteYcBalancePayoutInput["pricing"] & { customerRate?: number }
         ycLegFeesUsd: number
         lockedLocalAmount?: number
+        settlementMode?: YcPayoutSettlementMode
       }
 
   const useLockOnReview = isPayoutLockOnReviewEnabled("yellowcard")
@@ -223,6 +231,10 @@ export async function executeYcBalancePayout(
       },
         ycLegFeesUsd: pricing.ycLegFeesUsd ?? 0,
         lockedLocalAmount: Number(payload.lockedLocalAmount ?? 0),
+        settlementMode:
+          String(payload.settlementMode ?? "") === "balance_exact"
+            ? "balance_exact"
+            : "direct_crypto",
       }
     if (!(locked.cryptoAmount > 0) || !locked.walletAddress) {
       return { ok: false, error: "Locked Yellowcard payout is incomplete." }
@@ -277,6 +289,8 @@ export async function executeYcBalancePayout(
   const recipientSnapshot = buildRecipientSnapshotFromRow(recipientRow)
   const channelId = String(locked.channelId || input.yc.channelId || input.channelId || "").trim()
 
+  const settlementMode: YcPayoutSettlementMode = locked.settlementMode ?? "direct_crypto"
+
   const metadata = buildYcBalancePayoutOutMetadata({
     easnerPayoutId,
     easnerTransactionId,
@@ -300,6 +314,7 @@ export async function executeYcBalancePayout(
       return amount > 0 ? amount : null
     })(),
   })
+  metadata.yc_settlement_mode = settlementMode
   if (idempotencyKey) metadata.idempotency_key = idempotencyKey
   if (sendNote?.trim()) {
     metadata.send_note = sendNote.trim()
@@ -446,6 +461,53 @@ export async function executeYcBalancePayout(
     })
     await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId }).catch(() => {})
     return { ok: false, error: chainSend.error || "yc_turnkey_send_failed" }
+  }
+
+  // Balance-settled sends sit in pending_approval until accepted. Accept only now that the
+  // USDC sweep has replenished the float, so a failed sweep can never pay the recipient.
+  if (settlementMode === "balance_exact") {
+    const sendId = String(locked.sendId ?? "").trim()
+    try {
+      if (!sendId) throw new Error("missing_yc_send_id_for_accept")
+      await acceptYcSend(sendId)
+    } catch (e) {
+      const acceptError = e instanceof Error ? e.message : "yc_send_accept_failed"
+      // Sweep already left the user's Turnkey wallet for YC float — omnibus must recredit
+      // on-chain before the ledger reverse, same as SEND.FAILED for balance_exact.
+      const recredit = await recreditYcExactLocalPayoutOnChain(admin, { easnerPayoutId })
+      const refundMeta = recredit.ok
+        ? buildYcRefundExpectedPatch(
+            { ...priorMeta, failure_reason: acceptError, yc_send_accept_failed: true },
+            { refundAmount: recredit.amount, refundTxHash: recredit.txHash },
+          )
+        : {
+            ...priorMeta,
+            failure_reason: acceptError,
+            yc_send_accept_failed: true,
+            yc_omnibus_refund_failed: true,
+            yc_omnibus_refund_error: recredit.error,
+            ops_alert: "yc_exact_local_omnibus_refund_failed",
+          }
+      await upsertLedgerTransaction(admin, {
+        userId,
+        businessId,
+        provider: "yellowcard",
+        providerTransactionId: pendingPtid,
+        status: "failed",
+        amount: totalDebited,
+        currency: "USD",
+        direction: "out",
+        metadata: mergeYcPayoutLifecycle(refundMeta, { failed_at: new Date().toISOString() }),
+        occurredAt: now,
+        txHash: chainSend.txHash ?? undefined,
+        baseCurrency: "USD",
+        asset: "USDC",
+      })
+      if (recredit.ok) {
+        await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId }).catch(() => {})
+      }
+      return { ok: false, error: acceptError }
+    }
   }
 
   const processingMeta = buildYcParentPayoutCryptoDepositTracking({
