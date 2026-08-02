@@ -27,6 +27,21 @@ describe("buildYcSendSubmitBody", () => {
     expect(body.amount).toBeUndefined()
     expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.48)
   })
+
+  it("rounds settlement crypto to USDC cents for YC conversion", () => {
+    const body = buildYcSendSubmitBody({
+      sequenceId: "seq-1",
+      customerUID: "user-1",
+      channelId: "ch-1",
+      currency: "NGN",
+      country: "NG",
+      refundMode: "balance_payout",
+      userTurnkeyAddress: "wallet-1",
+      settlementCryptoAmount: 1.466926,
+      destination: { accountNumber: "1", accountType: "bank", networkId: "n", accountName: "A" },
+    })
+    expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.47)
+  })
 })
 
 describe("hydrateYcSendSubmitResult", () => {

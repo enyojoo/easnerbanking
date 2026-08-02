@@ -25,6 +25,21 @@ export function roundYcSettlementCryptoUp(n: number): number {
   return Math.ceil(n * 1_000_000) / 1_000_000
 }
 
+/**
+ * YC converts directSettlement crypto after rounding to USDC cents (2dp).
+ * Prod: 1.466926 → 1.47 → gross 2018.31; 1.48011 → 1.48 → gross 2032.04.
+ */
+export function roundYcSettlementCryptoToCent(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.round(n * 100) / 100
+}
+
+/** Ceil to the next USDC cent (minimum bump unit that changes YC local lock). */
+export function roundYcSettlementCryptoCentUp(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.ceil(n * 100 - 1e-9) / 100
+}
+
 function roundLocal(n: number): number {
   if (!Number.isFinite(n)) return 0
   return Math.round(n * 100) / 100
@@ -1097,8 +1112,8 @@ export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 5
 export const YC_SEND_LEG_DESTINATION_TOLERANCE = 0
 
 /**
- * Tiny over-delivery only from YC/fee rounding (e.g. 12550.01 for quoted 12550).
- * Larger excess is trimmed via retarget; we still target the exact quoted amount.
+ * Fallback excess dust when destination rate is unknown.
+ * Prefer resolveYcSendLegDestinationExcessTolerance with yc_sell — one USDC cent of local.
  */
 export const YC_SEND_LEG_DESTINATION_EXCESS_TOLERANCE = 0.01
 
@@ -1117,13 +1132,28 @@ export const YC_SEND_LEG_RATE_BUFFER_BPS = 50
  */
 export const YC_SEND_LEG_CONVERSION_SLOP_BPS = 25
 
+/** Minimum crypto bump that changes YC's 2dp-rounded conversion (one USDC cent). */
+export const YC_SEND_LEG_CRYPTO_CENT = 0.01
+
 function clampYcSendLegFeeFraction(feeFraction: number): number {
   if (!Number.isFinite(feeFraction) || feeFraction <= 0) return YC_SEND_LEG_SERVICE_FEE_FRACTION
   return Math.min(0.5, feeFraction)
 }
 
-/** Excess band for destination net lock (dust over quoted only). */
-export function resolveYcSendLegDestinationExcessTolerance(_quotedReceive?: number): number {
+/**
+ * Excess band for destination net lock.
+ * Crypto-only settlement is quantized to USDC cents → local steps of ~rate×0.01×0.99.
+ * For NGN @ 1373: ~13.59 — so 1.48 USDC → net 2011.72 is acceptable for quoted 2000.
+ */
+export function resolveYcSendLegDestinationExcessTolerance(
+  _quotedReceive?: number,
+  destinationRate?: number,
+): number {
+  const rate = Number(destinationRate ?? 0)
+  if (rate > 0) {
+    const centNetLocal = roundLocal(rate * YC_SEND_LEG_CRYPTO_CENT * (1 - YC_SEND_LEG_SERVICE_FEE_FRACTION))
+    return Math.max(YC_SEND_LEG_DESTINATION_EXCESS_TOLERANCE, centNetLocal)
+  }
   return YC_SEND_LEG_DESTINATION_EXCESS_TOLERANCE
 }
 
@@ -1231,12 +1261,15 @@ export function checkYcSendLegDestinationAmountSufficient(input: {
   sendLegFeeLocal?: number
   /** Shortfall tolerance (default 0 — never underpay). */
   tolerance?: number
-  /** Excess tolerance (default 0.01 dust). */
+  /** Excess tolerance (default: one USDC cent of local at destinationRate). */
   excessTolerance?: number
+  /** yc_sell / observed rate — widens excess band to YC crypto-cent granularity. */
+  destinationRate?: number
 }): { ok: boolean; shortfall: number; excess: number; netLocalAmount: number } {
   const shortfallTolerance = input.tolerance ?? YC_SEND_LEG_DESTINATION_TOLERANCE
   const excessTolerance =
-    input.excessTolerance ?? resolveYcSendLegDestinationExcessTolerance(input.quotedReceive)
+    input.excessTolerance ??
+    resolveYcSendLegDestinationExcessTolerance(input.quotedReceive, input.destinationRate)
   const quoted = roundLocal(input.quotedReceive)
   const locked = roundLocal(input.lockedLocalAmount)
   const feeLocal = roundLocal(input.sendLegFeeLocal ?? 0)
@@ -1321,8 +1354,27 @@ export function readYcSendSettlementLocalRate(
 }
 
 /**
+ * Predict YC net local for a settlement crypto at conversion rate (after 2dp crypto round).
+ */
+export function estimateYcSendLegNetLocalForSettlementCrypto(input: {
+  settlementCryptoUsd: number
+  destinationRate: number
+  feeFraction?: number
+}): number {
+  const rate = input.destinationRate
+  const cryptoCent = roundYcSettlementCryptoToCent(input.settlementCryptoUsd)
+  const feeFraction = clampYcSendLegFeeFraction(
+    input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
+  )
+  if (!(cryptoCent > 0) || !(rate > 0)) return 0
+  const gross = roundLocal(cryptoCent * rate)
+  const fee = roundLocal(gross * feeFraction)
+  return roundLocal(Math.max(0, gross - fee))
+}
+
+/**
  * Required settlement crypto so YC net local (gross − ~1% fee) meets quoted receive.
- * Uses round-nearest for initial sizing (avoid overshoot); retries ceil separately.
+ * Sized in USDC cents — YC rounds crypto to 2dp before converting to local.
  */
 export function resolveYcSendLegRequiredSettlementCrypto(input: {
   quotedReceive: number
@@ -1330,7 +1382,7 @@ export function resolveYcSendLegRequiredSettlementCrypto(input: {
   ycSellRate?: number
   observedLocalRate?: number
   feeFraction?: number
-  /** When true, ceil USDC (retry after shortfall). */
+  /** @deprecated Cent sizing always ceils to the first cent that clears quoted net. */
   preferCeil?: boolean
 }): number {
   const quoted = roundLocal(input.quotedReceive)
@@ -1344,13 +1396,23 @@ export function resolveYcSendLegRequiredSettlementCrypto(input: {
   )
   if (!(quoted > 0) || !(rate > 0)) return 0
   const targetGross = roundLocalUp(quoted / (1 - feeFraction))
-  const raw = targetGross / rate
-  return input.preferCeil ? roundYcSettlementCryptoUp(raw) : roundUsdc(raw)
+  let cryptoCent = roundYcSettlementCryptoCentUp(targetGross / rate)
+  // Walk up cents until predicted net clears quoted (handles YC 2dp round + fee).
+  for (let i = 0; i < 25; i++) {
+    const net = estimateYcSendLegNetLocalForSettlementCrypto({
+      settlementCryptoUsd: cryptoCent,
+      destinationRate: rate,
+      feeFraction,
+    })
+    if (net >= quoted) return cryptoCent
+    cryptoCent = roundUsdc(cryptoCent + YC_SEND_LEG_CRYPTO_CENT)
+  }
+  return cryptoCent
 }
 
 /**
  * Initial settlement crypto so net local (after YC ~1% send fee) can meet quoted receive.
- * directSettlement forbids localAmount — crypto must be sized pessimistically.
+ * directSettlement forbids localAmount — crypto must be sized in USDC cents at yc_sell.
  */
 export function estimateYcSendLegSettlementCryptoForQuotedReceive(input: {
   quotedReceive: number
@@ -1365,8 +1427,7 @@ export function estimateYcSendLegSettlementCryptoForQuotedReceive(input: {
 
 /**
  * Retarget settlement crypto from an observed YC lock toward quoted net receive.
- * Uses observed local/crypto rate and fee fraction; shortfall pads gross so one retry
- * clears production misses like net 1998.13 → 2000.
+ * Always moves by at least one USDC cent — YC rounds crypto to 2dp before converting.
  */
 export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
   settlementCryptoUsd: number
@@ -1384,7 +1445,10 @@ export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
   if (!(crypto > 0) || !(locked > 0) || !(quoted > 0)) return crypto
 
   const netLocal = roundLocal(Math.max(0, locked - feeLocal))
-  const observedRate = locked / crypto
+  // Prefer effective conversion from this lock; fall back to quoted destination rate.
+  const cryptoCent = roundYcSettlementCryptoToCent(crypto)
+  const observedRate =
+    cryptoCent > 0 && locked > 0 ? locked / cryptoCent : locked / crypto
   const rate =
     Number.isFinite(observedRate) && observedRate > 0 ? observedRate : input.destinationRate
   if (!(rate > 0)) return crypto
@@ -1392,34 +1456,34 @@ export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
   const feeFraction = clampYcSendLegFeeFraction(
     feeLocal > 0 && locked > 0 ? feeLocal / locked : YC_SEND_LEG_SERVICE_FEE_FRACTION,
   )
-  const netFraction = 1 - feeFraction
   const preferCeil = input.preferCeil ?? (netLocal > 0 ? netLocal < quoted : true)
 
   if (preferCeil) {
-    // Ceil gross so net after ~% fee is >= quoted (e.g. 2000/0.99 → 2020.21).
-    const targetGross = roundLocalUp(quoted / netFraction)
-    let targetCrypto = roundYcSettlementCryptoUp(targetGross / rate)
-    // Also cover observed shortfall explicitly (handles non-% fee components).
-    if (netLocal > 0 && netLocal < quoted) {
-      const shortfall = roundLocal(quoted - netLocal)
-      const fromShortfall = roundYcSettlementCryptoUp(
-        crypto + shortfall / (rate * netFraction),
-      )
-      targetCrypto = roundYcSettlementCryptoUp(Math.max(targetCrypto, fromShortfall))
-    }
-    // Meaningful USDC step — micro bumps can leave YC gross/net unchanged across retries.
-    const minStep = roundYcSettlementCryptoUp(Math.max(0.002, 2 / rate))
-    if (targetCrypto <= crypto) {
-      targetCrypto = roundYcSettlementCryptoUp(crypto + minStep)
+    let targetCrypto = resolveYcSendLegRequiredSettlementCrypto({
+      quotedReceive: quoted,
+      destinationRate: rate,
+      observedLocalRate: rate,
+      feeFraction,
+    })
+    // Must leave the current YC cent bucket or gross/net stay stuck (prod: 2018.31 ×5).
+    const minNextCent = roundUsdc(roundYcSettlementCryptoToCent(crypto) + YC_SEND_LEG_CRYPTO_CENT)
+    if (targetCrypto <= crypto || roundYcSettlementCryptoToCent(targetCrypto) <= cryptoCent) {
+      targetCrypto = minNextCent
     }
     return targetCrypto
   }
 
-  // Excess: aim at exact quoted net (0.01 dust is accepted by the checker).
-  const targetGross = roundLocal(quoted / netFraction)
-  let targetCrypto = roundUsdc(targetGross / rate)
+  // Excess: step down one USDC cent at a time toward the minimum that still clears quoted.
+  const minClearing = resolveYcSendLegRequiredSettlementCrypto({
+    quotedReceive: quoted,
+    destinationRate: rate,
+    observedLocalRate: rate,
+    feeFraction,
+  })
+  let targetCrypto = roundUsdc(roundYcSettlementCryptoToCent(crypto) - YC_SEND_LEG_CRYPTO_CENT)
+  if (targetCrypto < minClearing) targetCrypto = minClearing
   if (targetCrypto >= crypto) {
-    targetCrypto = roundUsdc(Math.max(crypto * 0.5, crypto - Math.max(0.002, 2 / rate)))
+    targetCrypto = Math.max(minClearing, roundUsdc(crypto - YC_SEND_LEG_CRYPTO_CENT))
   }
   return targetCrypto
 }
