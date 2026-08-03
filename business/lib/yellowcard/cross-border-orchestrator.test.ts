@@ -38,6 +38,9 @@ vi.mock("@/lib/yellowcard/map-recipient-to-yc-send", () => ({
 
 vi.mock("@/lib/yellowcard/channels", () => ({
   listYellowcardChannels: vi.fn(),
+  toYcChannelType: (rail: string) => rail === "mobile_money" ? "momo" : "bank",
+  readYcResponseChannelId: (response: Record<string, unknown>) =>
+    String(response?.channelId ?? response?.channel_id ?? "").trim() || null,
 }))
 
 vi.mock("@/lib/yellowcard/yc-receive-gate", () => ({

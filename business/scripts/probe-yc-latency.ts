@@ -147,8 +147,9 @@ async function main() {
         c.rampType === "withdraw" &&
         String(c.channelType || "").toLowerCase() === "bank",
     )
-    const recvId = String(recv?.id ?? recv?.channelId ?? "")
-    const sendId = String(send?.id ?? send?.channelId ?? "")
+    if (!recv || !send) {
+      console.warn("Expected NG receive or KE send preflight channel was not found.")
+    }
 
     const postResults: TimedResult[] = []
     postResults.push(
@@ -159,7 +160,7 @@ async function main() {
           json: {
             sequenceId: `yc_probe_${randomUUID()}`,
             customerUID: "00000000-0000-0000-0000-000000000000",
-            channelId: recvId || "missing",
+            channelType: "bank",
             currency: "NGN",
             country: "NG",
             localAmount: 5000,
@@ -194,7 +195,7 @@ async function main() {
           json: {
             sequenceId: `yc_probe_${randomUUID()}`,
             customerUID: "00000000-0000-0000-0000-000000000000",
-            channelId: sendId || "missing",
+            channelType: "bank",
             currency: "KES",
             country: "KE",
             localAmount: 1000,
@@ -268,7 +269,7 @@ async function main() {
           sequenceId: `yc_probe_${randomUUID()}`,
           customerUID: CUSTOMER_UID,
           customerType: "retail",
-          channelId: receiveChannelId,
+          channelType: "bank",
           currency: "NGN",
           country: "NG",
           localAmount: 5000,
@@ -305,7 +306,7 @@ async function main() {
           sequenceId: `yc_probe_${randomUUID()}`,
           customerUID: CUSTOMER_UID,
           customerType: "retail",
-          channelId: sendChannelId,
+          channelType: "bank",
           currency: "KES",
           country: "KE",
           localAmount: 1000,

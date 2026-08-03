@@ -27,7 +27,11 @@ import {
   type YcReceiveSubmitResult,
 } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
-import { listYellowcardChannels } from "@/lib/yellowcard/channels"
+import {
+  listYellowcardChannels,
+  readYcResponseChannelId,
+  toYcChannelType,
+} from "@/lib/yellowcard/channels"
 import { buildYcFundBalanceReceiveMetadata } from "@/lib/yellowcard/yc-ledger"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
 import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
@@ -329,7 +333,7 @@ async function submitFundBalanceYcReceive(input: {
       receiveRes = await submitYcReceive({
         sequenceId,
         customerUID: input.ctx.kycUserId,
-        channelId: input.prepared.channelId,
+        channelType: toYcChannelType(input.ctx.rail),
         currency: input.ctx.currency,
         country: input.ctx.country,
         localAmount,
@@ -714,7 +718,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
       customer_rate: prepared.customerRate,
       leg1_sequence_id: finalSequenceId,
       leg1_yc_id: receiveRes.id ?? null,
-      leg1_channel_id: prepared.channelId,
+      leg1_channel_id: readYcResponseChannelId(receiveRes) ?? prepared.channelId,
       bank_info: receiveRes.bankInfo ?? null,
       settlement_info: receiveRes.settlementInfo ?? null,
       metadata: {

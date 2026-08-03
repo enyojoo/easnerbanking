@@ -11,11 +11,34 @@ vi.mock("./http", () => ({
 import { getYellowcardEnvironment } from "./config"
 import { yellowcardFetch } from "./http"
 import {
+  buildYcReceiveSubmitBody,
   buildYcReceiveSource,
   hydrateYcReceiveBankInfo,
   normalizeYcBankInfo,
   resolveYcBankInfoName,
 } from "./receive-submit"
+
+describe("buildYcReceiveSubmitBody", () => {
+  it.each([
+    ["bank", "bank_transfer"],
+    ["momo", "mobile_money"],
+  ] as const)("submits %s channel type without channelId", (channelType, payInRail) => {
+    const body = buildYcReceiveSubmitBody({
+      sequenceId: `seq-${channelType}`,
+      customerUID: "user-1",
+      channelType,
+      currency: "NGN",
+      country: "NG",
+      localAmount: 1000,
+      payInRail,
+      settlementWalletAddress: "wallet-1",
+    })
+
+    expect(body.channelType).toBe(channelType)
+    expect(body.channelId).toBeUndefined()
+    expect((body.source as { accountType?: string }).accountType).toBe(channelType)
+  })
+})
 
 describe("buildYcReceiveSource", () => {
   it("sets networkId for production mobile money", () => {

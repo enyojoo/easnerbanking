@@ -2,6 +2,7 @@ import { yellowcardFetch } from "./http"
 import { requireDepositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
 import { getYellowcardEnvironment } from "./config"
 import { normalizeYcMomoPhone, resolveYcPaymentReason } from "@easner/shared"
+import type { YcChannelType } from "./channels"
 
 export type YcReceiveRail = "bank_transfer" | "mobile_money"
 
@@ -16,7 +17,7 @@ export type YcReceiveSubmitInput = {
   customerUID: string
   /** Always retail for NG business (owner person). */
   customerType?: "retail" | "institution"
-  channelId: string
+  channelType: YcChannelType
   currency: string
   country: string
   localAmount?: number
@@ -41,6 +42,8 @@ export type YcReceiveSubmitInput = {
 
 export type YcReceiveSubmitResult = {
   id?: string
+  channelId?: string
+  channel_id?: string
   sequenceId?: string
   status?: string
   rate?: number
@@ -96,7 +99,7 @@ export function buildYcReceiveSubmitBody(input: YcReceiveSubmitInput): Record<st
     sequenceId: input.sequenceId,
     customerUID: input.customerUID,
     customerType: input.customerType ?? "retail",
-    channelId: input.channelId,
+    channelType: input.channelType,
     currency: input.currency.toUpperCase(),
     country: input.country.toUpperCase(),
     forceAccept: input.forceAccept ?? true,

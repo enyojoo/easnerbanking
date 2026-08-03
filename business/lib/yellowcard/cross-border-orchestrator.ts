@@ -31,7 +31,11 @@ import { executeYcCryptoDeposit } from "@/lib/yellowcard/execute-yc-crypto-depos
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
 import { resolveYcSendChannelId } from "@/lib/payout-providers/yellowcard-provider"
 import { mapRecipientToYcSend } from "@/lib/yellowcard/map-recipient-to-yc-send"
-import { listYellowcardChannels } from "@/lib/yellowcard/channels"
+import {
+  listYellowcardChannels,
+  readYcResponseChannelId,
+  toYcChannelType,
+} from "@/lib/yellowcard/channels"
 import { logYcTiming } from "@/lib/yellowcard/timing"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
@@ -632,7 +636,7 @@ export async function lockCrossBorderLeg2(
       submitYcSend({
         sequenceId,
         customerUID: input.customerUID,
-        channelId: ctx.sendChannelId,
+        channelType: toYcChannelType(ctx.sendRail),
         currency: ctx.receiveCurrency,
         country: ctx.receiveCountry,
         settlementCryptoAmount: settlementCryptoUsd,
@@ -719,7 +723,7 @@ export async function lockCrossBorderLeg2(
     customerRate: ctx.cross.rate,
     leg2SequenceId: leg2Seq,
     leg2YcId: sendRes.id ?? null,
-    leg2ChannelId: ctx.sendChannelId,
+    leg2ChannelId: readYcResponseChannelId(sendRes) ?? ctx.sendChannelId,
     sendLeg,
     settlementInfo: { send: sendRes.settlementInfo ?? null },
     expiresAt,
@@ -787,7 +791,6 @@ export async function confirmCrossBorderLeg1(
   const crossRate = payload.customerRate
   const sendLeg = payload.sendLeg
   const leg2Seq = String(draftRow.leg2_sequence_id ?? "")
-  const sendChannelId = String(draftRow.leg2_channel_id ?? payload.sendChannelId)
   const receiveChannelId = payload.receiveChannelId
   const reportingSourceToUsdRate = payload.reportingSourceToUsdRate
   const ycBuyTo = payload.ycBuyTo
@@ -830,7 +833,7 @@ export async function confirmCrossBorderLeg1(
     receiveRes = await submitYcReceive({
       sequenceId: leg1Seq,
       customerUID: input.customerUID,
-      channelId: receiveChannelId,
+      channelType: toYcChannelType(input.payInRail),
       currency: payInCurrency,
       country: input.payInCountry.toUpperCase(),
       localAmount,
@@ -984,7 +987,7 @@ export async function confirmCrossBorderLeg1(
       quoted_pay_in: lockedQuote.lockedLocalPayIn,
       leg1_sequence_id: leg1Seq,
       leg1_yc_id: receiveRes.id ?? null,
-      leg1_channel_id: receiveChannelId,
+      leg1_channel_id: readYcResponseChannelId(receiveRes) ?? receiveChannelId,
       leg1_status: receiveRes.status ?? "pending",
       bank_info: receiveRes.bankInfo ?? null,
       settlement_info: {
@@ -1489,7 +1492,9 @@ export async function authorizeCrossBorderDraft(input: {
       submitYcSend({
         sequenceId,
         customerUID: input.customerUID,
-        channelId: sendChannelId,
+        channelType: toYcChannelType(
+          recipientPayoutRail(recipient as RecipientSellPrepareRow),
+        ),
         currency: receiveCurrency,
         country: receiveCountry,
         settlementCryptoAmount: settlementCryptoUsd,
@@ -1545,7 +1550,7 @@ export async function authorizeCrossBorderDraft(input: {
     receiveRes = await submitYcReceive({
       sequenceId: leg1Seq,
       customerUID: input.customerUID,
-      channelId: receiveChannelId,
+      channelType: "momo",
       currency: payInCurrency,
       country: payInCountry,
       localAmount,
@@ -1637,9 +1642,11 @@ export async function authorizeCrossBorderDraft(input: {
       status: "awaiting_pay_in",
       quoted_pay_in: lockedQuote.lockedLocalPayIn,
       leg1_yc_id: receiveRes.id ?? null,
+      leg1_channel_id: readYcResponseChannelId(receiveRes) ?? receiveChannelId,
       leg1_status: receiveRes.status ?? "pending",
       leg2_sequence_id: leg2Seq,
       leg2_yc_id: sendRes.id ?? null,
+      leg2_channel_id: readYcResponseChannelId(sendRes) ?? sendChannelId,
       leg2_status: "quoted",
       bank_info: receiveRes.bankInfo ?? null,
       settlement_info: {
@@ -1802,7 +1809,7 @@ export async function maybeExecuteCrossBorderLeg2(
   }
 
   if (sendUnfundable) {
-    if (!draft?.recipientMapped || !draft.sender || !draft.sendChannelId) {
+    if (!draft?.recipientMapped || !draft.sender || !draft.sendRail) {
       await admin
         .from("yc_transfers")
         .update({
@@ -1842,7 +1849,7 @@ export async function maybeExecuteCrossBorderLeg2(
           submitYcSend({
             sequenceId,
             customerUID: String(transfer.user_id),
-            channelId: draft.sendChannelId,
+            channelType: toYcChannelType(draft.sendRail),
             currency: draft.receiveCurrency,
             country: draft.receiveCountry,
             settlementCryptoAmount: settlementCryptoUsd,
@@ -1913,6 +1920,8 @@ export async function maybeExecuteCrossBorderLeg2(
         quoted_receive: relock.recipientLocalAmount,
         leg2_sequence_id: relock.sequenceId,
         leg2_yc_id: relock.sendRes.id ?? null,
+        leg2_channel_id:
+          readYcResponseChannelId(relock.sendRes) ?? draft.sendChannelId ?? null,
         settlement_info: settlement,
         metadata: {
           ...meta,

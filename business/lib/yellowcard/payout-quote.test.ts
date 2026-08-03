@@ -75,6 +75,7 @@ describe("lockYcBalancePayoutSend", () => {
       const serviceFeeAmountLocal = Math.round(convertedAmount * 0.01 * 100) / 100
       return {
         id: `send-${call}`,
+        channelId: `routed-${call}`,
         convertedAmount,
         serviceFeeAmountLocal,
         settlementInfo: { cryptoAmount, walletAddress: "yc-wallet" },
@@ -94,9 +95,17 @@ describe("lockYcBalancePayoutSend", () => {
     })
 
     expect(locked.cryptoAmount).toBeGreaterThan(0)
+    expect(locked.channelId).toBe("routed-1")
     expect(locked.lockedLocalAmount).toBeGreaterThanOrEqual(5000)
     expect(locked.recipientSurplusLocal).toBeLessThanOrEqual(locked.payoutQuantumLocal)
     expect(locked.pricing.totalDebited).toBeGreaterThan(locked.cryptoAmount)
+    expect(submitYcSend).toHaveBeenCalledWith(
+      expect.objectContaining({ channelType: "bank" }),
+    )
+    expect(mapRecipientToYcSend).toHaveBeenCalledWith(
+      recipient,
+      { channelId: "ch-1" },
+    )
     expect(locked.pricing.totalDebited - locked.cryptoAmount).toBeCloseTo(
       locked.pricing.marginAmount + locked.pricing.processingFee,
       4,

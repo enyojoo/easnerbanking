@@ -16,7 +16,7 @@ import {
 import { findYcPayInLeg, listYcRates } from "@/lib/fx/yc-rates"
 import { submitYcReceive } from "@/lib/yellowcard/receive-submit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
-import { listYellowcardChannels } from "@/lib/yellowcard/channels"
+import { listYellowcardChannels, readYcResponseChannelId } from "@/lib/yellowcard/channels"
 import { buildYcFundBalanceReceiveMetadata } from "@/lib/yellowcard/yc-ledger"
 import { isYcLocalPayInEnabledForCorridor } from "@/lib/yellowcard/yc-receive-gate"
 import { depositOmnibusSolanaAddressUsd } from "@/lib/deposit-omnibus/config"
@@ -392,7 +392,7 @@ export async function authorizeFundBalanceDraft(input: {
   const channelId = String(transfer.leg1_channel_id ?? "").trim()
   const meta = (transfer.metadata || {}) as Record<string, unknown>
   const sender = meta.sender as Record<string, unknown> | undefined
-  if (!sequenceId || !channelId || !sender) {
+  if (!sequenceId || !sender) {
     throw new FundBalanceSessionError("draft_incomplete", "Draft session is incomplete", 400)
   }
 
@@ -414,7 +414,7 @@ export async function authorizeFundBalanceDraft(input: {
     receiveRes = await submitYcReceive({
       sequenceId,
       customerUID: kycUserId,
-      channelId,
+      channelType: "momo",
       currency,
       country,
       localAmount: Number(transfer.quoted_pay_in),
@@ -498,6 +498,7 @@ export async function authorizeFundBalanceDraft(input: {
       quoted_pay_in: pricing.localPayIn,
       quoted_receive: pricing.usdCredit,
       leg1_yc_id: receiveRes.id ?? null,
+      leg1_channel_id: (readYcResponseChannelId(receiveRes) ?? channelId) || null,
       bank_info: receiveRes.bankInfo ?? null,
       settlement_info: receiveRes.settlementInfo ?? null,
       expires_at: expiresAt,

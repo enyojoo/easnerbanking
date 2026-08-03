@@ -35,7 +35,7 @@ import { getYellowcardEnvironment } from "../lib/yellowcard/config"
 import { buildYcKycPersonMetadata } from "../lib/yellowcard/kyc-metadata"
 import { submitYcReceive } from "../lib/yellowcard/receive-submit"
 import { submitYcSend } from "../lib/yellowcard/send-submit"
-import { listYellowcardChannels } from "../lib/yellowcard/channels"
+import { listYellowcardChannels, toYcChannelType } from "../lib/yellowcard/channels"
 import { findYcReceiveChannel } from "../lib/yellowcard/receive-rails"
 import { resolveYcSendChannelId } from "../lib/payout-providers/yellowcard-provider"
 import { mapRecipientToYcSend } from "../lib/yellowcard/map-recipient-to-yc-send"
@@ -233,7 +233,7 @@ async function probeBalancePayout(input: {
       sequenceId,
       customerUID: USER_ID,
       customerType: "retail",
-      channelId,
+      channelType: toYcChannelType(rail),
       currency: receiveCurrency,
       country: countryCode,
       settlementCryptoAmount: provisionalCrypto,
@@ -428,7 +428,7 @@ async function probeCrossBorder(input: {
     sendRes = await submitYcSend({
       sequenceId: `yc_probe_cb_l2_${randomUUID()}`,
       customerUID: USER_ID,
-      channelId: sendChannelId,
+      channelType: toYcChannelType(sendRail),
       currency: receiveCurrency,
       country: receiveCountry,
       settlementCryptoAmount: provisionalSendCrypto,
@@ -464,7 +464,7 @@ async function probeCrossBorder(input: {
     receiveRes = await submitYcReceive({
       sequenceId: `yc_probe_cb_l1_${randomUUID()}`,
       customerUID: USER_ID,
-      channelId: receiveChannelId,
+      channelType: toYcChannelType(payInRail),
       currency: payInCurrency,
       country: payInCountry,
       localAmount,

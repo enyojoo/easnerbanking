@@ -25,6 +25,7 @@ import { getActiveWalletAddress } from "../lib/wallet/turnkey-wallet-db"
 import { findYcBalancePayoutRate, listYcRates } from "../lib/fx/yc-rates"
 import { fetchYcSendServiceFeeConfig } from "../lib/yellowcard/send-fee-config"
 import { submitYcSendWithDestinationAmountLock } from "../lib/yellowcard/yc-send-leg-lock"
+import { toYcChannelType } from "../lib/yellowcard/channels"
 import {
   estimateYcSendLegSettlementCryptoForQuotedReceive,
   readYcSendLegFeeLocal,
@@ -167,7 +168,7 @@ async function main() {
         submitYcSend({
           sequenceId,
           customerUID: userId,
-          channelId,
+          channelType: toYcChannelType(rail),
           currency,
           country,
           forceAccept: false,
@@ -202,7 +203,7 @@ async function main() {
     const result = await submitYcSend({
       sequenceId: `yc_precision_probe_${randomUUID()}`,
       customerUID: userId,
-      channelId,
+      channelType: toYcChannelType(rail),
       currency,
       country,
       forceAccept: false,

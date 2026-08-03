@@ -175,7 +175,7 @@ async function main() {
     await submitYcReceive({
       sequenceId: `yc_probe_flow_fb_${randomUUID()}`,
       customerUID: USER_ID,
-      channelId,
+      channelType: "bank",
       currency: "NGN",
       country: "NG",
       localAmount: 15_000,
@@ -201,7 +201,7 @@ async function main() {
         submitYcSend({
           sequenceId: `yc_probe_flow_payout_${randomUUID()}`,
           customerUID: USER_ID,
-          channelId,
+          channelType: "bank",
           currency: "NGN",
           country: receiveCountry,
           settlementCryptoAmount: 50_000 / 1400,
@@ -233,7 +233,7 @@ async function main() {
         submitYcSend({
           sequenceId: `yc_probe_flow_cb_l2_${randomUUID()}`,
           customerUID: USER_ID,
-          channelId: sendChannelId,
+          channelType: "bank",
           currency: "KES",
           country: receiveCountry,
           settlementCryptoAmount: Math.round((10_000 / ycBuyTo) * 1_000_000) / 1_000_000,
@@ -263,7 +263,7 @@ async function main() {
     await submitYcReceive({
       sequenceId: `yc_probe_flow_cb_l1_${randomUUID()}`,
       customerUID: USER_ID,
-      channelId,
+      channelType: "bank",
       currency: "NGN",
       country: "NG",
       localAmount: 150_000,

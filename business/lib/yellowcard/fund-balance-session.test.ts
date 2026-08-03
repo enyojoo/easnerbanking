@@ -8,6 +8,8 @@ vi.mock("@/lib/fx/yc-rates", () => ({
 
 vi.mock("@/lib/yellowcard/channels", () => ({
   listYellowcardChannels: vi.fn(),
+  readYcResponseChannelId: (response: Record<string, unknown>) =>
+    String(response?.channelId ?? response?.channel_id ?? "").trim() || null,
 }))
 
 vi.mock("@/lib/yellowcard/receive-rails", () => ({
@@ -181,7 +183,6 @@ describe("authorizeFundBalanceDraft", () => {
       quoted_pay_in: 2590.01,
       quoted_receive: 1.77,
       leg1_sequence_id: "seq-1",
-      leg1_channel_id: "ch-1",
       transaction_id: "tx-1",
       metadata: { sender: { name: "Test" } },
     })
@@ -196,7 +197,6 @@ describe("authorizeFundBalanceDraft", () => {
           quoted_pay_in: 2590.01,
           quoted_receive: 1.77,
           leg1_sequence_id: "seq-1",
-          leg1_channel_id: "ch-1",
           transaction_id: "tx-1",
           metadata: { sender: { name: "Test" } },
         },
@@ -216,5 +216,8 @@ describe("authorizeFundBalanceDraft", () => {
       (call) => call[0]?.metadata?.yc_channel_fee_usd != null,
     )?.[0]
     expect(transferUpdate?.metadata?.yc_channel_fee_usd).toBe(0.02)
+    expect(submitYcReceive).toHaveBeenCalledWith(
+      expect.objectContaining({ channelType: "momo" }),
+    )
   })
 })

@@ -6,12 +6,13 @@ import {
   resolveYcPaymentReason,
   roundYcSettlementCryptoUp,
 } from "@easner/shared"
+import type { YcChannelType } from "./channels"
 
 export type YcSendSubmitInput = {
   sequenceId: string
   customerUID: string
   customerType?: "retail" | "institution"
-  channelId: string
+  channelType: YcChannelType
   currency: string
   country: string
   localAmount?: number
@@ -33,6 +34,8 @@ export type YcSendSubmitInput = {
 
 export type YcSendSubmitResult = {
   id?: string
+  channelId?: string
+  channel_id?: string
   sequenceId?: string
   status?: string
   rate?: number
@@ -84,7 +87,7 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
     sequenceId: input.sequenceId,
     customerUID: input.customerUID,
     customerType: input.customerType ?? "retail",
-    channelId: input.channelId,
+    channelType: input.channelType,
     currency: input.currency.toUpperCase(),
     country: input.country.toUpperCase(),
     forceAccept: input.forceAccept ?? true,

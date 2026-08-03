@@ -166,7 +166,7 @@ async function main() {
       receiveRes = await submitYcReceive({
         sequenceId: `yc_math_probe_${randomUUID()}`,
         customerUID: USER_ID,
-        channelId,
+        channelType: "bank",
         currency,
         country,
         localAmount,

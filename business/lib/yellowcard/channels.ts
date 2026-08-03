@@ -1,5 +1,20 @@
 import { yellowcardFetch } from "./http"
 
+export type YcChannelType = "bank" | "momo"
+export type YcChannelRail = "bank_transfer" | "mobile_money"
+
+export function toYcChannelType(rail: YcChannelRail): YcChannelType {
+  return rail === "mobile_money" ? "momo" : "bank"
+}
+
+export function readYcResponseChannelId(
+  response: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!response) return null
+  const channelId = String(response.channelId ?? response.channel_id ?? "").trim()
+  return channelId || null
+}
+
 export type YcChannel = {
   id?: string
   channelId?: string

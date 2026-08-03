@@ -8,6 +8,9 @@ vi.mock("@/lib/fx/yc-rates", () => ({
 
 vi.mock("@/lib/yellowcard/channels", () => ({
   listYellowcardChannels: vi.fn(),
+  toYcChannelType: (rail: string) => rail === "mobile_money" ? "momo" : "bank",
+  readYcResponseChannelId: (response: Record<string, unknown>) =>
+    String(response?.channelId ?? response?.channel_id ?? "").trim() || null,
 }))
 
 vi.mock("@/lib/yellowcard/receive-rails", () => ({
@@ -161,6 +164,13 @@ describe("confirmFundBalanceOrder", () => {
 
     expect(result.quotePhase).toBe("locked")
     expect(submitYcReceive).toHaveBeenCalledTimes(1)
+    expect(submitYcReceive).toHaveBeenCalledWith(
+      expect.objectContaining({ channelType: "bank" }),
+    )
+    const transferInsert = admin.chain.insert.mock.calls.find(
+      (call) => call[0]?.mode === "fund_balance",
+    )?.[0]
+    expect(transferInsert?.leg1_channel_id).toBe("ch-1")
   })
 
   it("rejects confirm when YC cryptoAmount cannot fund credit + processing fee", async () => {
@@ -277,6 +287,7 @@ describe("confirmFundBalanceOrder", () => {
       })
       return {
         id: "yc-2",
+        channel_id: "routed-bank",
         localAmount: pricing.localPayIn,
         settlementInfo: { cryptoAmount: 2050 },
         networkFeeAmountUSD: 0,
@@ -301,6 +312,7 @@ describe("confirmFundBalanceOrder", () => {
       (call) => call[0]?.mode === "fund_balance",
     )?.[0]
     expect(transferInsert?.metadata?.omnibus_in_expected).toBe(2050)
+    expect(transferInsert?.leg1_channel_id).toBe("routed-bank")
     expect(transferInsert?.quoted_pay_in).toBeGreaterThan(0)
   })
 

@@ -138,7 +138,7 @@ async function main() {
     sequenceId,
     customerUID: userId || randomUUID(),
     customerType: "retail",
-    channelId,
+    channelType,
     currency,
     country,
     directSettlement: false,

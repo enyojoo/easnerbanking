@@ -36,6 +36,7 @@ import {
 } from "@easner/shared"
 import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
 import { quoteFiatProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
+import { readYcResponseChannelId, toYcChannelType } from "@/lib/yellowcard/channels"
 
 function roundUsdc(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -420,7 +421,7 @@ export async function lockYcBalancePayoutSend(input: {
         sequenceId: lockSequenceId,
         customerUID: input.customerUID,
         customerType: "retail",
-        channelId,
+        channelType: toYcChannelType(rail),
         currency: receiveCurrency,
         country: countryCode,
         settlementCryptoAmount: settlementCryptoUsd,
@@ -475,7 +476,7 @@ export async function lockYcBalancePayoutSend(input: {
   return {
     sequenceId: lockedSequenceId,
     sendId: sendRes.id,
-    channelId,
+    channelId: readYcResponseChannelId(sendRes) ?? channelId,
     cryptoAmount,
     walletAddress,
     pricing,

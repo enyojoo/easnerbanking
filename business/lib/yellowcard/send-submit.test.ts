@@ -12,7 +12,7 @@ describe("buildYcSendSubmitBody", () => {
     const body = buildYcSendSubmitBody({
       sequenceId: "seq-1",
       customerUID: "user-1",
-      channelId: "ch-1",
+      channelType: "bank",
       currency: "NGN",
       country: "NG",
       refundMode: "balance_payout",
@@ -23,6 +23,8 @@ describe("buildYcSendSubmitBody", () => {
       destination: { accountNumber: "1", accountType: "bank", networkId: "n", accountName: "A" },
     })
     expect(body.directSettlement).toBe(true)
+    expect(body.channelType).toBe("bank")
+    expect(body.channelId).toBeUndefined()
     expect(body.localAmount).toBeUndefined()
     expect(body.amount).toBeUndefined()
     expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.48)
@@ -32,7 +34,7 @@ describe("buildYcSendSubmitBody", () => {
     const body = buildYcSendSubmitBody({
       sequenceId: "seq-1",
       customerUID: "user-1",
-      channelId: "ch-1",
+      channelType: "bank",
       currency: "NGN",
       country: "NG",
       refundMode: "balance_payout",
@@ -47,7 +49,7 @@ describe("buildYcSendSubmitBody", () => {
     const body = buildYcSendSubmitBody({
       sequenceId: "yc_precision_probe_1",
       customerUID: "user-1",
-      channelId: "ch-1",
+      channelType: "momo",
       currency: "NGN",
       country: "NG",
       forceAccept: false,
@@ -56,6 +58,8 @@ describe("buildYcSendSubmitBody", () => {
       settlementCryptoAmount: 1.468537,
     })
     expect(body.forceAccept).toBe(false)
+    expect(body.channelType).toBe("momo")
+    expect(body.channelId).toBeUndefined()
     expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.468537)
   })
 })
