@@ -258,6 +258,8 @@ describe("submitYcSendWithDestinationAmountLock", () => {
 
   it("detects cent payout buckets when YC echoes six-decimal funding amounts", async () => {
     const submitted: number[] = []
+    let active = 0
+    let maxActive = 0
     const rate = 1373
     const result = await submitYcSendWithDestinationAmountLock({
       receiveAmount: 2000,
@@ -266,8 +268,13 @@ describe("submitYcSendWithDestinationAmountLock", () => {
       ycSellRate: rate,
       receiveCurrency: "NGN",
       feeConfig: { minFeeLocal: 0, feePercentage: 1, flatFeeLocal: 0 },
+      parallelBoundaryProbe: true,
       buildSubmit: async ({ settlementCryptoUsd, attempt }) => {
+        active += 1
+        maxActive = Math.max(maxActive, active)
         submitted.push(settlementCryptoUsd)
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        active -= 1
         const conversionCrypto = Math.round(settlementCryptoUsd * 100) / 100
         const converted = Math.round(conversionCrypto * rate * 100) / 100
         const fee = Math.round(converted * 0.01 * 100) / 100
@@ -282,9 +289,11 @@ describe("submitYcSendWithDestinationAmountLock", () => {
 
     expect(result.precisionMode).toBe("cent")
     expect(result.settlementQuantumUsd).toBe(0.01)
-    expect(result.finalSettlementCryptoUsd).toBe(1.48)
+    expect(result.finalSettlementCryptoUsd).toBe(1.475)
     expect(result.recipientLocalAmount).toBe(2011.72)
     expect(result.recipientSurplusLocal).toBeLessThanOrEqual(result.payoutQuantumLocal)
+    expect(submitted).toHaveLength(2)
+    expect(maxActive).toBe(2)
     expect(submitted.some((amount) => !isNaN(amount) && amount * 100 % 1 !== 0)).toBe(true)
   })
 

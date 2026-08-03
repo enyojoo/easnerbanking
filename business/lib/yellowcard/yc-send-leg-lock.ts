@@ -105,6 +105,8 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   maxAttempts?: number
   sequenceIdPrefix?: string
   feeConfig?: YcServiceFeeConfig | null
+  /** Try the nearest cent-bucket boundary and its adjacent micro-unit concurrently. */
+  parallelBoundaryProbe?: boolean
   buildSubmit: (args: {
     settlementCryptoUsd: number
     sequenceId: string
@@ -140,10 +142,11 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   let lower: Observation | undefined
   let upper: Observation | undefined
   const observations: Observation[] = []
+  const discardedProbeSendIds: string[] = []
   const seenAccepted = new Set<string>()
   let payoutPrecisionProbePending = false
 
-  const observe = async (submittedCryptoUsd: number, attempt: number): Promise<Observation> => {
+  const observeRaw = async (submittedCryptoUsd: number, attempt: number): Promise<Observation> => {
     const sequenceId = `${prefix}_${randomUUID()}`
     let sendRes = await input.buildSubmit({
       settlementCryptoUsd: roundYcSettlementCryptoUp(submittedCryptoUsd),
@@ -188,6 +191,31 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       )
     }
 
+    if (!sameMicroAmount(accepted, submitted) && !isCentAligned(accepted)) {
+      throw new YcPayoutError(
+        "YC_SEND_PRECISION_UNDETERMINED",
+        `Yellowcard changed ${submitted} USDC to unsupported amount ${accepted}.`,
+        422,
+      )
+    }
+
+    const observation: Observation = {
+      sendRes,
+      sequenceId,
+      submittedCryptoUsd: submitted,
+      acceptedCryptoUsd: accepted,
+      grossLocal: roundLocal(grossLocal),
+      feeLocal: roundLocal(feeLocal),
+      netLocal: roundLocal(Math.max(0, grossLocal - feeLocal)),
+      sendId: String(sendRes.id ?? "").trim() || undefined,
+    }
+    observations.push(observation)
+    return observation
+  }
+
+  const observe = async (submittedCryptoUsd: number, attempt: number): Promise<Observation> => {
+    const observation = await observeRaw(submittedCryptoUsd, attempt)
+    const { acceptedCryptoUsd: accepted, submittedCryptoUsd: submitted } = observation
     if (!precisionMode) {
       if (sameMicroAmount(accepted, submitted)) {
         precisionMode = "micro"
@@ -213,18 +241,63 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       )
     }
 
-    const observation: Observation = {
-      sendRes,
-      sequenceId,
-      submittedCryptoUsd: submitted,
-      acceptedCryptoUsd: accepted,
-      grossLocal: roundLocal(grossLocal),
-      feeLocal: roundLocal(feeLocal),
-      netLocal: roundLocal(Math.max(0, grossLocal - feeLocal)),
-      sendId: String(sendRes.id ?? "").trim() || undefined,
-    }
-    observations.push(observation)
     return observation
+  }
+
+  if (input.parallelBoundaryProbe) {
+    const initialForFallback = nextCrypto
+    const conversionCent = Math.ceil((nextCrypto - 0.0000001) * 100) / 100
+    const candidateCrypto = roundUsdc(conversionCent - YC_SEND_LEG_CRYPTO_CENT / 2)
+    const adjacentLowerCrypto = roundUsdc(candidateCrypto - YC_SEND_LEG_CRYPTO_MICRO)
+    if (adjacentLowerCrypto > 0) {
+      const [adjacentLower, candidate] = await Promise.all([
+        observeRaw(adjacentLowerCrypto, 0),
+        observeRaw(candidateCrypto, 1),
+      ])
+      const payoutQuantumLocal = roundLocal(candidate.netLocal - adjacentLower.netLocal)
+      const surplus = roundLocal(candidate.netLocal - requestedLocal)
+      if (
+        candidate.netLocal >= requestedLocal &&
+        adjacentLower.netLocal < requestedLocal &&
+        payoutQuantumLocal > 0.01 &&
+        surplus >= 0 &&
+        surplus <= payoutQuantumLocal
+      ) {
+        const discardedSendIds = adjacentLower.sendId ? [adjacentLower.sendId] : []
+        console.info("[yc-send-lock] selected parallel cent-boundary settlement", {
+          requestedLocalAmount: requestedLocal,
+          recipientLocalAmount: candidate.netLocal,
+          receiveCurrency: input.receiveCurrency,
+          precisionMode: "cent",
+          settlementQuantumUsd: YC_SEND_LEG_CRYPTO_CENT,
+          payoutQuantumLocal,
+          recipientSurplusLocal: surplus,
+          selectedSendId: candidate.sendId,
+          discardedSendIds,
+          attempts: 2,
+        })
+        return {
+          sendRes: candidate.sendRes,
+          requestedLocalAmount: requestedLocal,
+          finalSettlementCryptoUsd: candidate.acceptedCryptoUsd,
+          lockedLocalAmount: candidate.grossLocal,
+          recipientLocalAmount: candidate.netLocal,
+          sendLegFeeLocal: candidate.feeLocal,
+          recipientSurplusLocal: surplus,
+          payoutQuantumLocal,
+          settlementQuantumUsd: YC_SEND_LEG_CRYPTO_CENT,
+          precisionMode: "cent",
+          sequenceId: candidate.sequenceId,
+          expiresAt: responseExpiry(candidate.sendRes),
+          discardedSendIds,
+        }
+      }
+      discardedProbeSendIds.push(
+        ...observations.flatMap((item) => (item.sendId ? [item.sendId] : [])),
+      )
+      observations.length = 0
+      nextCrypto = initialForFallback
+    }
   }
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -284,9 +357,12 @@ export async function submitYcSendWithDestinationAmountLock(input: {
             422,
           )
         }
-        const discardedSendIds = observations
+        const discardedSendIds = [
+          ...discardedProbeSendIds,
+          ...observations
           .filter((item) => item !== selected && item.sendId && item.sendId !== selected.sendId)
-          .map((item) => item.sendId!)
+          .map((item) => item.sendId!),
+        ]
         console.info("[yc-send-lock] selected smallest sufficient settlement", {
           requestedLocalAmount: requestedLocal,
           recipientLocalAmount: selected.netLocal,
@@ -297,7 +373,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
           recipientSurplusLocal: surplus,
           selectedSendId: selected.sendId,
           discardedSendIds,
-          attempts: observations.length,
+          attempts: discardedProbeSendIds.length + observations.length,
         })
         return {
           sendRes: selected.sendRes,

@@ -11,7 +11,9 @@ export function mapPayoutQuoteToFlowState(
   const channelFee = q.channelCost
   return {
     ...state,
-    amount: q.receiveAmount,
+    // Keep the amount entered by the customer stable across review. YC's rounded-up
+    // provider amount lives in payoutQuote.receiveAmount for execution/audit only.
+    amount: q.requestedReceiveAmount ?? q.receiveAmount,
     sendAmount: q.customerPrincipal,
     totalAmount: q.totalDebited,
     payoutQuote: {
@@ -70,7 +72,7 @@ export function isPayoutQuotePreviewFresh(
 ): boolean {
   if (!pq?.formSessionId || !pq.expiresAt) return false
   if (!pq.recipientId?.trim() || pq.recipientId.trim() !== recipientId.trim()) return false
-  if (!payoutReceiveAmountsMatch(pq.receiveAmount, receiveAmount)) return false
+  if (!payoutReceiveAmountsMatch(pq.requestedReceiveAmount ?? pq.receiveAmount, receiveAmount)) return false
   if (new Date(pq.expiresAt).getTime() <= Date.now()) return false
   if (pq.quotePhase === "locked") return false
   if (pq.lockId || pq.ycSendId) return false
@@ -84,7 +86,7 @@ export function isPayoutQuoteFresh(
 ): boolean {
   if (!pq?.formSessionId || !pq.expiresAt) return false
   if (!pq.recipientId?.trim() || pq.recipientId.trim() !== recipientId.trim()) return false
-  if (!payoutReceiveAmountsMatch(pq.receiveAmount, receiveAmount)) return false
+  if (!payoutReceiveAmountsMatch(pq.requestedReceiveAmount ?? pq.receiveAmount, receiveAmount)) return false
   if (new Date(pq.expiresAt).getTime() <= Date.now()) return false
   if (pq.quotePhase === "preview") return false
   if (pq.quotePhase === "locked") {

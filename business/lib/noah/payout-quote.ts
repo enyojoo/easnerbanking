@@ -56,7 +56,7 @@ export type EasnerPayoutQuoteSlice = {
 export type PayoutQuoteResult = {
   /** Amount entered before provider precision/quantization. */
   requestedReceiveAmount?: number
-  /** Actual provider-locked recipient amount shown as "Recipient gets". */
+  /** Actual provider-locked recipient amount for execution/audit; customer display uses requestedReceiveAmount. */
   receiveAmount: number
   receiveCurrency: string
   /** Customer FX principal at margined rate (you-send box). */

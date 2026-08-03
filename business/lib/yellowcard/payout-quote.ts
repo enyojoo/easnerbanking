@@ -340,18 +340,32 @@ export async function lockYcBalancePayoutSend(input: {
       ? ("mobile_money" as const)
       : ("bank_transfer" as const)
 
-  const channelId =
-    String(input.channelId || "").trim() ||
-    (await resolveYcSendChannelId({
+  const admin = createSupabaseAdmin()
+  const channelPromise = String(input.channelId || "").trim()
+    ? Promise.resolve(String(input.channelId).trim())
+    : resolveYcSendChannelId({
       countryCode,
       currencyCode: receiveCurrency,
       rail,
-    })) ||
-    ""
+    }).then((value) => value ?? "")
+  const ratesPromise = listYcRates(admin, { destinations: [receiveCurrency], status: "active" })
+  const feeConfigPromise = fetchYcSendServiceFeeConfig({
+    country: countryCode,
+    currency: receiveCurrency,
+    channelType: rail === "mobile_money" ? "momo" : "bank",
+    directSettlement: true,
+    fresh: true,
+  })
+
+  const channelId = await channelPromise
   if (!channelId) throw new Error("No Yellowcard send channel for this corridor.")
 
-  const admin = createSupabaseAdmin()
-  const rates = await listYcRates(admin, { destinations: [receiveCurrency], status: "active" })
+  const recipientMappedPromise = mapRecipientToYcSend(input.recipient, { channelId })
+  const [rates, ycFeeConfig, recipientMapped] = await Promise.all([
+    ratesPromise,
+    feeConfigPromise,
+    recipientMappedPromise,
+  ])
   const payoutRate = findYcBalancePayoutRate(rates, receiveCurrency)
   const customerRate = payoutRate?.rate ?? 0
   if (!customerRate || customerRate <= 0) {
@@ -371,13 +385,6 @@ export async function lockYcBalancePayoutSend(input: {
     receiveCurrency,
     normalizeReceive: normalizePayoutReceiveAmountForCurrency,
   })
-  const ycFeeConfig = await fetchYcSendServiceFeeConfig({
-    country: countryCode,
-    currency: receiveCurrency,
-    channelType: rail === "mobile_money" ? "momo" : "bank",
-    directSettlement: true,
-    fresh: true,
-  })
   const provisionalCryptoUsd =
     amountEntryMode === "send" && sendBudget != null && sendBudget > 0
       ? roundUsdc(sendBudget)
@@ -388,12 +395,17 @@ export async function lockYcBalancePayoutSend(input: {
           feeConfig: ycFeeConfig,
         })
 
-  const recipientMapped = await mapRecipientToYcSend(input.recipient, { channelId })
   const sender = buildYcKycPersonMetadata({
     profile: input.senderProfile,
     requireNgIds: true,
   })
   const sequenceId = `yc_quote_${randomUUID()}`
+  const processingFeeBpsPromise = quoteFiatProcessingFeeBps(
+    admin,
+    { countryCode, currencyCode: receiveCurrency, rail },
+    "pay_out",
+    { userId: input.userId },
+  )
   const sendLock = await submitYcSendWithDestinationAmountLock({
     receiveAmount: quoteReceiveAmount,
     initialSettlementCryptoUsd: provisionalCryptoUsd,
@@ -402,6 +414,7 @@ export async function lockYcBalancePayoutSend(input: {
     receiveCurrency,
     sequenceIdPrefix: "yc_quote",
     feeConfig: ycFeeConfig,
+    parallelBoundaryProbe: true,
     buildSubmit: async ({ settlementCryptoUsd, sequenceId: lockSequenceId }) =>
       submitYcSend({
         sequenceId: lockSequenceId,
@@ -438,12 +451,7 @@ export async function lockYcBalancePayoutSend(input: {
     ycRate: Number(sendRes.rate ?? 0) || undefined,
   })
   const ycLegFeesUsd = sendLegFees.totalFeeUsd
-  const processingFeeBps = await quoteFiatProcessingFeeBps(
-    admin,
-    { countryCode, currencyCode: receiveCurrency, rail },
-    "pay_out",
-    { userId: input.userId },
-  )
+  const processingFeeBps = await processingFeeBpsPromise
   const pricing = computeYcBalancePayoutPricing({
     receiveAmount: lockedLocalAmount,
     customerRate,

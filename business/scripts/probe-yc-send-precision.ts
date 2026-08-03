@@ -162,6 +162,7 @@ async function main() {
       receiveCurrency: currency,
       sequenceIdPrefix: "yc_precision_probe_lock",
       feeConfig,
+      parallelBoundaryProbe: true,
       buildSubmit: ({ settlementCryptoUsd, sequenceId }) =>
         submitYcSend({
           sequenceId,
