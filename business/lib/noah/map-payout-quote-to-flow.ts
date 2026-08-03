@@ -9,11 +9,14 @@ export function mapPayoutQuoteToFlowState(
   const leg = resolvePayoutQuoteSettlement(q) ?? q.settlement
   const easnerFee = q.processingFee
   const channelFee = q.channelCost
+  const requestedReceiveAmount =
+    state.requestedReceiveAmount ?? q.requestedReceiveAmount ?? q.receiveAmount
   return {
     ...state,
     // Keep the amount entered by the customer stable across review. YC's rounded-up
     // provider amount lives in payoutQuote.receiveAmount for execution/audit only.
-    amount: q.requestedReceiveAmount ?? q.receiveAmount,
+    requestedReceiveAmount,
+    amount: requestedReceiveAmount,
     sendAmount: q.customerPrincipal,
     totalAmount: q.totalDebited,
     payoutQuote: {

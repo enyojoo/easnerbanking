@@ -78,7 +78,8 @@ describe("YC payout quote flow mapping", () => {
   it("keeps the requested receive amount on Review transfer", () => {
     const state = {
       recipient: { id: "recipient-1" },
-      amount: 2000,
+      // Simulate a persisted session contaminated by the former surplus-inclusive mapping.
+      amount: 2010.25,
       receiveCurrency: "NGN",
       sendAmount: 0,
       sendCurrency: "USD",

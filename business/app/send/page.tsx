@@ -1466,6 +1466,7 @@ export default function SendPage() {
 
     const state: SendFlowState = {
       recipient: coerceBeneficiaryEasenetDisplay(recipient),
+      requestedReceiveAmount: receiveAmount,
       amount: receiveAmount,
       receiveCurrency,
       sendAmount,

@@ -209,8 +209,14 @@ export default function SendConfirmPage() {
       try {
         const parsed = JSON.parse(raw) as SendFlowState
         if (parsed.paymentMethod === "otherCurrency" && parsed.otherCurrency) {
+          const requestedReceiveAmount =
+            parsed.requestedReceiveAmount ??
+            parsed.ycCrossBorder?.requestedReceiveAmount ??
+            parsed.amount
           setState({
             ...parsed,
+            requestedReceiveAmount,
+            amount: requestedReceiveAmount,
             recipient: coerceBeneficiaryEasenetDisplay(parsed.recipient),
           })
           return
@@ -226,6 +232,22 @@ export default function SendConfirmPage() {
         let hydrated = {
           ...parsed,
           recipient: coerceBeneficiaryEasenetDisplay(parsed.recipient),
+        }
+        const persistedRequestedReceiveAmount =
+          parsed.requestedReceiveAmount ??
+          parsed.payoutQuote?.requestedReceiveAmount ??
+          parsed.ycCrossBorder?.requestedReceiveAmount
+        if (
+          persistedRequestedReceiveAmount != null &&
+          Number.isFinite(persistedRequestedReceiveAmount) &&
+          persistedRequestedReceiveAmount > 0
+        ) {
+          hydrated = {
+            ...hydrated,
+            requestedReceiveAmount: persistedRequestedReceiveAmount,
+            amount: persistedRequestedReceiveAmount,
+          }
+          sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(hydrated))
         }
         if (
           !isEasenetRecipient(hydrated.recipient) &&
@@ -301,7 +323,10 @@ export default function SendConfirmPage() {
       payInCurrency,
       payInCountry,
       payInRail,
-      receiveAmount: state.amount,
+      receiveAmount:
+        state.requestedReceiveAmount ??
+        state.ycCrossBorder?.requestedReceiveAmount ??
+        state.amount,
       crossBorderProvider:
         state.crossBorderProvider ??
         (peekCrossBorderQuote()?.provider === "grid" ? "grid" : undefined) ??
@@ -353,7 +378,9 @@ export default function SendConfirmPage() {
   useEffect(() => {
     if (!state || isYcCrossBorderFlow(state) || isEasenetRecipient(state.recipient) || isWalletRecipient(state.recipient) || !(state.amount > 0))
       return
-    if (isPayoutQuoteFresh(state.payoutQuote, state.amount, state.recipient.id)) return
+    const requestedReceiveAmount =
+      state.requestedReceiveAmount ?? state.payoutQuote?.requestedReceiveAmount ?? state.amount
+    if (isPayoutQuoteFresh(state.payoutQuote, requestedReceiveAmount, state.recipient.id)) return
 
     const meta: PayoutQuoteStashMeta = {
       recipientId: state.recipient.id,
@@ -361,7 +388,7 @@ export default function SendConfirmPage() {
       entryAmount:
         state.amountEntryMode === "send" && state.sendAmount > 0
           ? state.sendAmount
-          : state.amount,
+          : requestedReceiveAmount,
       receiveCurrency: state.receiveCurrency,
       sourceBalanceCurrency: state.sendCurrency,
       ...(state.note ? { note: state.note } : {}),
@@ -372,7 +399,7 @@ export default function SendConfirmPage() {
       const stashed = peekPayoutQuote()
       if (stashed) {
         const next = payoutQuoteToFlowState(state, stashed)
-        if (isPayoutQuoteFresh(next.payoutQuote, state.amount, state.recipient.id)) {
+        if (isPayoutQuoteFresh(next.payoutQuote, requestedReceiveAmount, state.recipient.id)) {
           setState(next)
           sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
           return
@@ -404,6 +431,7 @@ export default function SendConfirmPage() {
   }, [
     state?.recipient.id,
     state?.amount,
+    state?.requestedReceiveAmount,
     state?.sendAmount,
     state?.amountEntryMode,
     state?.sendCurrency,
@@ -786,6 +814,11 @@ export default function SendConfirmPage() {
   const pq = state.payoutQuote
   const wq = state.walletQuote
   const yc = state.ycCrossBorder
+  const requestedReceiveAmount =
+    state.requestedReceiveAmount ??
+    pq?.requestedReceiveAmount ??
+    yc?.requestedReceiveAmount ??
+    state.amount
   const ycQuoteFullyLocked = Boolean(
     yc?.transferId && yc.localPayIn > 0 && yc.customerRate > 0,
   )
@@ -1055,8 +1088,8 @@ export default function SendConfirmPage() {
             network_fee: networkFee,
             exchange_rate: exchangeRate,
             send_currency: state.sendCurrency,
-            receive_amount: pq?.receiveAmount ?? state.amount,
-            requested_receive_amount: pq?.requestedReceiveAmount ?? state.amount,
+            receive_amount: pq?.receiveAmount ?? requestedReceiveAmount,
+            requested_receive_amount: requestedReceiveAmount,
             receive_currency: state.receiveCurrency,
             transfer_method: walletTransferMethod,
             processing_time: arrivalHint ?? "",

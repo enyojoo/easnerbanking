@@ -8,6 +8,8 @@ export const SEND_FLOW_STATE_KEY = "send_flow_state"
 /** Shape stored in sessionStorage for the send money flow (amount step through confirm / authorize). */
 export interface SendFlowState {
   recipient: Beneficiary
+  /** Immutable local amount entered/calculated before provider payout quantization. */
+  requestedReceiveAmount?: number
   amount: number
   receiveCurrency: string
   sendAmount: number
