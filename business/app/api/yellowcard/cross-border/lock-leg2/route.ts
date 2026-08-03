@@ -12,6 +12,7 @@ import {
   mapKycErrorToCode,
   ycFundBalanceQuoteError,
 } from "@/lib/yellowcard/fund-balance-quote-errors"
+import { asYcPayoutError } from "@/lib/yellowcard/payout-errors"
 
 export const runtime = "nodejs"
 
@@ -159,6 +160,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, ...result })
   } catch (e) {
+    const ycError = asYcPayoutError(e)
+    if (ycError) return crossBorderLockError(ycError.code, ycError.message, ycError.status)
     const message = e instanceof Error ? e.message : "Cross-border leg2 lock failed"
     if (
       message === "ng_local_verification_incomplete" ||

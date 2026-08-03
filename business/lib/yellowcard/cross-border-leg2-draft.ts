@@ -7,7 +7,15 @@ export type CrossBorderLeg2DraftPayload = {
   receiveCountry: string
   customerRate: number
   receiveAmount: number
+  requestedReceiveAmount: number
   lockedReceiveAmount?: number
+  recipientSurplusLocal?: number
+  payoutQuantumLocal?: number
+  settlementQuantumUsd?: number
+  precisionMode?: "micro" | "cent"
+  sendLegFeeLocal?: number
+  discardedSendIds?: string[]
+  sendExpiresAt?: string
   payInRail: "bank_transfer" | "mobile_money"
   receiveChannelId: string
   sendChannelId: string
@@ -68,6 +76,7 @@ export async function persistCrossBorderLeg2Draft(input: {
   payInCurrency: string
   receiveCurrency: string
   receiveAmount: number
+  requestedReceiveAmount: number
   customerRate: number
   leg2SequenceId: string
   leg2YcId: string | null
@@ -97,6 +106,7 @@ export async function persistCrossBorderLeg2Draft(input: {
       settlement_info: input.settlementInfo,
       metadata: {
         quote_key: input.quoteKey,
+        requested_receive_amount: input.requestedReceiveAmount,
         leg2_draft: input.payload,
         provisional_pay_in: input.payload.pricingBeforeReceive.provisionalPayIn,
         processing_fee: input.payload.pricingBeforeReceive.processingFee,

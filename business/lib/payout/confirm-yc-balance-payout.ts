@@ -11,6 +11,12 @@ import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
 import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+function resolveLockedExpiry(locked: Awaited<ReturnType<typeof lockYcBalancePayoutSend>>): string {
+  const fallback = Date.now() + YC_QUOTE_TTL_MS
+  const ycExpiry = locked.expiresAt ? new Date(locked.expiresAt).getTime() : NaN
+  return new Date(Number.isFinite(ycExpiry) ? Math.min(fallback, ycExpiry) : fallback).toISOString()
+}
+
 export type ConfirmYcBalancePayoutInput = {
   admin: SupabaseClient
   userId: string
@@ -30,19 +36,20 @@ export type ConfirmYcBalancePayoutInput = {
 
 function buildLockedYcPayoutQuote(input: {
   locked: Awaited<ReturnType<typeof lockYcBalancePayoutSend>>
-  receiveAmount: number
   receiveCurrency: string
   sourceBalanceCurrency: string
   quoteKey: string
   lockId: string
 }): PayoutQuoteResult {
-  const { locked, receiveAmount, receiveCurrency, sourceBalanceCurrency, quoteKey, lockId } = input
+  const { locked, receiveCurrency, sourceBalanceCurrency, quoteKey, lockId } = input
+  const requestedReceiveAmount = locked.requestedLocalAmount
+  const receiveAmount = locked.lockedLocalAmount
   const displayProcessingFee = computePayoutQuoteDisplayProcessingFee({
     processingFee: locked.pricing.processingFee,
     displayChannelCost: locked.pricing.displayChannelCost,
     channelCost: locked.pricing.channelCost,
   })
-  const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
+  const expiresAt = resolveLockedExpiry(locked)
 
   const settlement: PayoutSettlementLeg = {
     totalFee: locked.pricing.channelCost,
@@ -61,6 +68,7 @@ function buildLockedYcPayoutQuote(input: {
   }
 
   return {
+    requestedReceiveAmount,
     receiveAmount,
     receiveCurrency,
     customerPrincipal: locked.pricing.customerPrincipal,
@@ -109,6 +117,14 @@ function buildLockedYcPayoutQuote(input: {
       channelId: locked.channelId,
       cryptoAmount: locked.cryptoAmount,
       walletAddress: locked.walletAddress,
+      grossLocalAmount: locked.lockedLocalAmount + locked.sendLegFeeLocal,
+      recipientLocalAmount: locked.lockedLocalAmount,
+      recipientSurplusLocal: locked.recipientSurplusLocal,
+      payoutQuantumLocal: locked.payoutQuantumLocal,
+      settlementQuantumUsd: locked.settlementQuantumUsd,
+      precisionMode: locked.precisionMode,
+      sendLegFeeLocal: locked.sendLegFeeLocal,
+      discardedSendIds: locked.discardedSendIds,
     },
   }
 }
@@ -158,10 +174,9 @@ export async function confirmYcBalancePayoutOrder(
   }
 
   const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
-  const expiresAt = new Date(Date.now() + YC_QUOTE_TTL_MS).toISOString()
+  const expiresAt = resolveLockedExpiry(locked)
   const pricing = buildLockedYcPayoutQuote({
     locked,
-    receiveAmount: input.receiveFiatAmount,
     receiveCurrency,
     sourceBalanceCurrency: input.sourceBalanceCurrency,
     quoteKey,
@@ -184,14 +199,20 @@ export async function confirmYcBalancePayoutOrder(
       cryptoAmount: locked.cryptoAmount,
       walletAddress: locked.walletAddress,
       lockedLocalAmount: locked.lockedLocalAmount,
-      settlementMode: locked.settlementMode,
+      requestedLocalAmount: locked.requestedLocalAmount,
+      recipientSurplusLocal: locked.recipientSurplusLocal,
+      payoutQuantumLocal: locked.payoutQuantumLocal,
+      settlementQuantumUsd: locked.settlementQuantumUsd,
+      precisionMode: locked.precisionMode,
+      sendLegFeeLocal: locked.sendLegFeeLocal,
+      discardedSendIds: locked.discardedSendIds,
+      expiresAt: locked.expiresAt,
     },
     expiresAt,
   })
 
   return buildLockedYcPayoutQuote({
     locked,
-    receiveAmount: input.receiveFiatAmount,
     receiveCurrency,
     sourceBalanceCurrency: input.sourceBalanceCurrency,
     quoteKey,

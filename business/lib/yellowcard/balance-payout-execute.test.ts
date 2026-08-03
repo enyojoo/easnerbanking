@@ -20,6 +20,7 @@ vi.mock("@/lib/payout/payout-lock-flags", () => ({
 
 vi.mock("@/lib/payout/payout-lock-session", () => ({
   getPayoutLockSession: vi.fn(),
+  claimPayoutLockSession: vi.fn(async () => true),
   markPayoutLockSessionExecuted: vi.fn(async () => undefined),
 }))
 
@@ -37,26 +38,14 @@ vi.mock("@/lib/wallet/resolve-active-usdc-solana-address", () => ({
 
 vi.mock("@/lib/yellowcard/payout-execute", () => ({
   executeYcBalancePayoutTurnkeyLeg: vi.fn(),
-  recreditYcExactLocalPayoutOnChain: vi.fn(),
-}))
-
-vi.mock("@/lib/yellowcard/send-submit", () => ({
-  acceptYcSend: vi.fn(),
 }))
 
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import {
-  applyGlobalPayoutWalletDebitForEasnerPayoutId,
-  reverseGlobalPayoutWalletDebitForEasnerPayoutId,
-} from "@/lib/noah/global-payout-ledger"
+import { applyGlobalPayoutWalletDebitForEasnerPayoutId } from "@/lib/noah/global-payout-ledger"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import { getPayoutLockSession } from "@/lib/payout/payout-lock-session"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
-import {
-  executeYcBalancePayoutTurnkeyLeg,
-  recreditYcExactLocalPayoutOnChain,
-} from "@/lib/yellowcard/payout-execute"
-import { acceptYcSend } from "@/lib/yellowcard/send-submit"
+import { executeYcBalancePayoutTurnkeyLeg } from "@/lib/yellowcard/payout-execute"
 import { executeYcBalancePayout } from "./balance-payout-execute"
 
 const recipient = {
@@ -84,57 +73,6 @@ function mockAdmin() {
   }
 }
 
-function baseInput(admin: ReturnType<typeof mockAdmin>) {
-  return {
-    admin: admin as never,
-    userId: "user-1",
-    businessId: null,
-    recipientRow: recipient,
-    recipientId: "rec-1",
-    fiatAmount: 2000,
-    fiatCurrency: "NGN",
-    countryCode: "NG",
-    lockId: "lock-1",
-    yc: { channelId: "ch-1" },
-    pricing: {
-      totalDebited: 1.55,
-      customerPrincipal: 1.46,
-      marginAmount: 0.007,
-      processingFee: 0.014,
-      channelCost: 0.069,
-    },
-  }
-}
-
-/** Lock session for an exact-local payout: sweep funds the float, then accept releases it. */
-function mockBalanceExactLock() {
-  vi.mocked(getPayoutLockSession).mockResolvedValue({
-    id: "lock-1",
-    provider: "yellowcard",
-    recipient_id: "rec-1",
-    destination_ref: "recipient:rec-1",
-    recipient_snapshot_hash: "hash",
-    provider_payload_json: {
-      sequenceId: "yc_quote_abc",
-      sendId: "yc-send-123",
-      channelId: "ch-1",
-      cryptoAmount: 1.529498,
-      walletAddress: "yc-topup-address",
-      lockedLocalAmount: 2000,
-      settlementMode: "balance_exact",
-    },
-    pricing_json: {
-      totalDebited: 1.55,
-      customerPrincipal: 1.46,
-      marginAmount: 0.007,
-      processingFee: 0.014,
-      channelCost: 0.069,
-      ycLegFeesUsd: 0.073,
-      settlement: { customerRate: 1366 },
-    },
-  } as never)
-}
-
 describe("executeYcBalancePayout ledger upserts", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -148,7 +86,6 @@ describe("executeYcBalancePayout ledger upserts", () => {
       becameFailed: false,
     })
     vi.mocked(applyGlobalPayoutWalletDebitForEasnerPayoutId).mockResolvedValue(undefined)
-    vi.mocked(reverseGlobalPayoutWalletDebitForEasnerPayoutId).mockResolvedValue(true)
     vi.mocked(resolveNoahAccountContextFromLedgerScope).mockResolvedValue({
       scope: "individual",
       customerType: "Individual",
@@ -169,6 +106,9 @@ describe("executeYcBalancePayout ledger upserts", () => {
         cryptoAmount: 1.45,
         walletAddress: "yc-wallet",
         lockedLocalAmount: 2000,
+        requestedLocalAmount: 1995,
+        recipientSurplusLocal: 5,
+        payoutQuantumLocal: 13.64,
       },
       pricing_json: {
         totalDebited: 1.48,
@@ -184,11 +124,6 @@ describe("executeYcBalancePayout ledger upserts", () => {
       ok: true,
       txHash: "sol-hash",
       turnkeySendId: "tk-1",
-    })
-    vi.mocked(recreditYcExactLocalPayoutOnChain).mockResolvedValue({
-      ok: true,
-      txHash: "omnibus-refund-hash",
-      amount: 1.529498,
     })
   })
 
@@ -235,107 +170,6 @@ describe("executeYcBalancePayout ledger upserts", () => {
       expect(ptid.startsWith("global_payout_pending:")).toBe(true)
       expect(ptid).not.toBe("yc-send-123")
     }
-  })
-
-  it("does not accept the send for direct crypto settlement", async () => {
-    const admin = mockAdmin()
-    admin.chain.maybeSingle
-      .mockResolvedValueOnce({ data: { available_balance: 100 } })
-      .mockResolvedValueOnce({ data: { residence_country: "NG", full_name: "Test" } })
-      .mockResolvedValueOnce({ data: { address: "user-wallet" } })
-      .mockResolvedValueOnce({ data: { metadata: {} } })
-    admin.chain.insert.mockResolvedValue({ error: null })
-
-    const result = await executeYcBalancePayout(baseInput(admin))
-
-    expect(result.ok).toBe(true)
-    expect(acceptYcSend).not.toHaveBeenCalled()
-  })
-
-  it("accepts a balance-settled send only after the USDC sweep succeeds", async () => {
-    mockBalanceExactLock()
-    vi.mocked(acceptYcSend).mockResolvedValue({ id: "yc-send-123", status: "process" })
-    const admin = mockAdmin()
-    admin.chain.maybeSingle
-      .mockResolvedValueOnce({ data: { available_balance: 100 } })
-      .mockResolvedValueOnce({ data: { residence_country: "NG", full_name: "Test" } })
-      .mockResolvedValueOnce({ data: { address: "user-wallet" } })
-      .mockResolvedValueOnce({ data: { metadata: {} } })
-    admin.chain.insert.mockResolvedValue({ error: null })
-
-    const result = await executeYcBalancePayout(baseInput(admin))
-
-    expect(result.ok).toBe(true)
-    expect(executeYcBalancePayoutTurnkeyLeg).toHaveBeenCalledTimes(1)
-    expect(acceptYcSend).toHaveBeenCalledWith("yc-send-123")
-    // Sweep target is the YC top-up address, which replenishes the float.
-    expect(vi.mocked(executeYcBalancePayoutTurnkeyLeg).mock.calls[0]![0].ycWalletAddress).toBe(
-      "yc-topup-address",
-    )
-  })
-
-  it("never accepts a balance-settled send when the sweep fails", async () => {
-    mockBalanceExactLock()
-    vi.mocked(executeYcBalancePayoutTurnkeyLeg).mockResolvedValue({
-      ok: false,
-      error: "turnkey_send_failed",
-      txHash: null,
-    } as never)
-    const admin = mockAdmin()
-    admin.chain.maybeSingle
-      .mockResolvedValueOnce({ data: { available_balance: 100 } })
-      .mockResolvedValueOnce({ data: { residence_country: "NG", full_name: "Test" } })
-      .mockResolvedValueOnce({ data: { address: "user-wallet" } })
-      .mockResolvedValueOnce({ data: { metadata: {} } })
-    admin.chain.insert.mockResolvedValue({ error: null })
-
-    const result = await executeYcBalancePayout(baseInput(admin))
-
-    expect(result.ok).toBe(false)
-    expect(acceptYcSend).not.toHaveBeenCalled()
-  })
-
-  it("recredits on-chain via omnibus then reverses ledger when accept fails", async () => {
-    mockBalanceExactLock()
-    vi.mocked(acceptYcSend).mockRejectedValue(new Error("send expired"))
-    const admin = mockAdmin()
-    admin.chain.maybeSingle
-      .mockResolvedValueOnce({ data: { available_balance: 100 } })
-      .mockResolvedValueOnce({ data: { residence_country: "NG", full_name: "Test" } })
-      .mockResolvedValueOnce({ data: { address: "user-wallet" } })
-      .mockResolvedValueOnce({ data: { metadata: {} } })
-    admin.chain.insert.mockResolvedValue({ error: null })
-
-    const result = await executeYcBalancePayout(baseInput(admin))
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toBe("send expired")
-    expect(recreditYcExactLocalPayoutOnChain).toHaveBeenCalledTimes(1)
-    expect(reverseGlobalPayoutWalletDebitForEasnerPayoutId).toHaveBeenCalledTimes(1)
-  })
-
-  it("does not reverse the ledger when omnibus recredit fails after accept failure", async () => {
-    mockBalanceExactLock()
-    vi.mocked(acceptYcSend).mockRejectedValue(new Error("send expired"))
-    vi.mocked(recreditYcExactLocalPayoutOnChain).mockResolvedValue({
-      ok: false,
-      txHash: null,
-      amount: 1.53,
-      error: "omnibus_refund_failed",
-    })
-    const admin = mockAdmin()
-    admin.chain.maybeSingle
-      .mockResolvedValueOnce({ data: { available_balance: 100 } })
-      .mockResolvedValueOnce({ data: { residence_country: "NG", full_name: "Test" } })
-      .mockResolvedValueOnce({ data: { address: "user-wallet" } })
-      .mockResolvedValueOnce({ data: { metadata: {} } })
-    admin.chain.insert.mockResolvedValue({ error: null })
-
-    const result = await executeYcBalancePayout(baseInput(admin))
-
-    expect(result.ok).toBe(false)
-    expect(recreditYcExactLocalPayoutOnChain).toHaveBeenCalled()
-    expect(reverseGlobalPayoutWalletDebitForEasnerPayoutId).not.toHaveBeenCalled()
   })
 
   it("rejects PIN execute when lock-on-review is on but lockId is missing", async () => {

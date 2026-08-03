@@ -21,6 +21,12 @@ export type CrossBorderQuoteResult = {
   displayProcessingFeeCurrency?: string
   provisionalPayIn?: number
   receiveAmount?: number
+  requestedReceiveAmount?: number
+  recipientSurplusLocal?: number
+  payoutQuantumLocal?: number
+  settlementQuantumUsd?: number
+  precisionMode?: "micro" | "cent"
+  ycCryptoAmount?: number
   receiveCurrency?: string
   bankInfo?: Record<string, unknown> | null
   expiresAt: string
@@ -465,6 +471,8 @@ export function crossBorderQuoteToFlowState(
     localPayIn: quote.localPayIn,
     customerRate: quote.customerRate,
     provisionalPayIn: quote.provisionalPayIn,
+    receiveAmount: quote.receiveAmount,
+    requestedReceiveAmount: quote.requestedReceiveAmount ?? meta.receiveAmount,
     processingFee: quote.processingFee,
     ycLegFeesUsd: quote.ycLegFeesUsd,
     displayProcessingFeeLocal: quote.displayProcessingFeeLocal,

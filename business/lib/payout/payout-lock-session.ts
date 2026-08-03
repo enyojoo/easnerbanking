@@ -137,6 +137,23 @@ export async function markPayoutLockSessionExecuted(
     .eq("id", lockId)
 }
 
+/** Atomically consume a lock before any wallet debit or provider funding side effect. */
+export async function claimPayoutLockSession(
+  admin: SupabaseClient,
+  input: { lockId: string; userId: string },
+): Promise<boolean> {
+  const { data } = await admin
+    .from("payout_lock_sessions")
+    .update({ status: "executed", updated_at: new Date().toISOString() })
+    .eq("id", input.lockId)
+    .eq("user_id", input.userId)
+    .eq("status", "locked")
+    .gt("expires_at", new Date().toISOString())
+    .select("id")
+    .maybeSingle()
+  return Boolean(data?.id)
+}
+
 export function lockedQuoteFromSession(row: PayoutLockSessionRow): PayoutQuoteResult {
   const payload = row.provider_payload_json ?? {}
   const quote: PayoutQuoteResult = {

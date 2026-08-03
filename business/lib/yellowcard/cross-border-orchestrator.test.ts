@@ -158,6 +158,8 @@ describe("completeCrossBorderOnSendSuccess", () => {
     vi.clearAllMocks()
     vi.mocked(sweepEasnerRevenueFromDepositOmnibus).mockResolvedValue({
       feeWalletSweepTxHash: "sweep-hash",
+      captured: true,
+      turnkeySendId: null,
     })
   })
 

@@ -30,6 +30,7 @@ export interface SendFlowState {
   payoutQuote?: {
     /** Saved recipient this quote was priced for (must match `recipient.id` at authorize). */
     recipientId?: string
+    requestedReceiveAmount?: number
     receiveAmount: number
     sendAmount: number
     sendCurrency: string
@@ -55,7 +56,7 @@ export interface SendFlowState {
     /** Channel component shown in the combined Processing fee row (foots with total). */
     displayChannelCost?: number
     customerPrincipal?: number
-    marginCaptureMode?: "surplus_send" | "split_debit"
+    marginCaptureMode?: "surplus_send" | "split_debit" | "fee_wallet_deferred" | "fee_wallet_omnibus"
     noahMid?: number
     /** Merchant schedule fee at quote time (validation only). */
     scheduleFee?: number
@@ -92,6 +93,8 @@ export interface SendFlowState {
     easnerTransactionId?: string
     localPayIn: number
     customerRate: number
+    receiveAmount?: number
+    requestedReceiveAmount?: number
     provisionalPayIn?: number
     processingFee?: number
     ycLegFeesUsd?: number

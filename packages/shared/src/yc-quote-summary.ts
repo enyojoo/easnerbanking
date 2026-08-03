@@ -11,6 +11,8 @@ export type YcQuoteSummary = {
   provisionalPayIn?: number
   localPayIn: number
   creditOrReceiveAmount: number
+  /** User-entered destination amount before the YC lock adjusts to an attainable quantum. */
+  requestedReceiveAmount?: number
   /** Easner 1% leg (USD). */
   processingFee: number
   /** All YC leg fees (USD). */

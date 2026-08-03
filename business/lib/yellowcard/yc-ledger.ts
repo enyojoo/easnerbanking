@@ -245,6 +245,7 @@ export function buildYcBalancePayoutOutMetadata(input: {
   marginAmount?: number
   processingFee?: number
   receiveAmount?: number
+  requestedReceiveAmount?: number
   receiveCurrency?: string
   customerRate?: number
   destinationRef: string
@@ -276,6 +277,9 @@ export function buildYcBalancePayoutOutMetadata(input: {
     margin_capture_mode: "fee_wallet_deferred",
     ...(input.channelId ? { channel_id: input.channelId } : {}),
     ...(input.receiveAmount != null ? { receive_amount: input.receiveAmount } : {}),
+    ...(input.requestedReceiveAmount != null
+      ? { requested_receive_amount: input.requestedReceiveAmount }
+      : {}),
     ...(input.receiveCurrency ? { receive_currency: input.receiveCurrency, fiat_currency: input.receiveCurrency } : {}),
     ...(input.customerRate != null ? { customer_rate: input.customerRate } : {}),
     destination_ref: input.destinationRef,

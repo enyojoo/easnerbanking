@@ -47,6 +47,10 @@ export function normalizePayoutReviewSnapshot(
     exchange_rate: Number.isFinite(Number(o.exchange_rate)) ? Number(o.exchange_rate) : 1,
     send_currency: String(o.send_currency || "USD").toUpperCase(),
     receive_amount: receiveAmount,
+    ...(Number.isFinite(Number(o.requested_receive_amount)) &&
+    Number(o.requested_receive_amount) > 0
+      ? { requested_receive_amount: Number(o.requested_receive_amount) }
+      : {}),
     receive_currency: String(o.receive_currency || "USD").toUpperCase(),
     transfer_method: transferMethod,
     processing_time: String(

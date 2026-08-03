@@ -121,7 +121,7 @@ export async function confirmPayoutOrder(
     })
   }
 
-  if (providerId === "yellowcard" && isPayoutLockOnReviewEnabled("yellowcard")) {
+  if (providerId === "yellowcard") {
     const walletOwnerId = await getWalletOwnerId(
       admin,
       input.businessId ? "business" : "individual",

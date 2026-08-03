@@ -24,21 +24,13 @@ import {
   mergeYcPayoutLifecycle,
   ycPendingPayoutProviderTransactionId,
 } from "@/lib/yellowcard/yc-ledger"
+import { executeYcBalancePayoutTurnkeyLeg } from "@/lib/yellowcard/payout-execute"
 import {
-  executeYcBalancePayoutTurnkeyLeg,
-  recreditYcExactLocalPayoutOnChain,
-} from "@/lib/yellowcard/payout-execute"
-import {
+  claimPayoutLockSession,
   getPayoutLockSession,
-  markPayoutLockSessionExecuted,
 } from "@/lib/payout/payout-lock-session"
 import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
-import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
-import {
-  lockYcBalancePayoutSend,
-  type YcPayoutSettlementMode,
-} from "@/lib/yellowcard/payout-quote"
-import { acceptYcSend } from "@/lib/yellowcard/send-submit"
+import { lockYcBalancePayoutSend } from "@/lib/yellowcard/payout-quote"
 
 async function readAvailableBalance(
   admin: SupabaseClient,
@@ -189,10 +181,17 @@ export async function executeYcBalancePayout(
         pricing: ExecuteYcBalancePayoutInput["pricing"] & { customerRate?: number }
         ycLegFeesUsd: number
         lockedLocalAmount?: number
-        settlementMode?: YcPayoutSettlementMode
+        requestedLocalAmount?: number
+        recipientSurplusLocal?: number
+        payoutQuantumLocal?: number
+        settlementQuantumUsd?: number
+        precisionMode?: "micro" | "cent"
+        sendLegFeeLocal?: number
       }
 
-  const useLockOnReview = isPayoutLockOnReviewEnabled("yellowcard")
+  // YC execution is always based on the server-side review lock. Lock-at-PIN can silently
+  // change recipient and debit amounts and is therefore intentionally unsupported.
+  const useLockOnReview = true
   const lockId = String(input.lockId || "").trim()
 
   if (useLockOnReview) {
@@ -231,13 +230,27 @@ export async function executeYcBalancePayout(
       },
         ycLegFeesUsd: pricing.ycLegFeesUsd ?? 0,
         lockedLocalAmount: Number(payload.lockedLocalAmount ?? 0),
-        settlementMode:
-          String(payload.settlementMode ?? "") === "balance_exact"
-            ? "balance_exact"
-            : "direct_crypto",
+        requestedLocalAmount: Number(payload.requestedLocalAmount ?? fiatAmount),
+        recipientSurplusLocal: Number(payload.recipientSurplusLocal ?? 0),
+        payoutQuantumLocal: Number(payload.payoutQuantumLocal ?? 0),
+        settlementQuantumUsd: Number(payload.settlementQuantumUsd ?? 0),
+        precisionMode:
+          payload.precisionMode === "micro" ? "micro" : payload.precisionMode === "cent" ? "cent" : undefined,
+        sendLegFeeLocal: Number(payload.sendLegFeeLocal ?? 0),
       }
     if (!(locked.cryptoAmount > 0) || !locked.walletAddress) {
       return { ok: false, error: "Locked Yellowcard payout is incomplete." }
+    }
+    const lockedRecipient = Number(locked.lockedLocalAmount ?? 0)
+    const lockedRequested = Number(locked.requestedLocalAmount ?? fiatAmount)
+    const lockedQuantum = Number(locked.payoutQuantumLocal ?? 0)
+    const lockedSurplus = lockedRecipient - lockedRequested
+    if (
+      !(lockedRecipient >= lockedRequested) ||
+      lockedSurplus < -0.000001 ||
+      (lockedQuantum > 0 && lockedSurplus > lockedQuantum + 0.000001)
+    ) {
+      return { ok: false, error: "YC_SEND_NO_COMPLIANT_QUANTUM" }
     }
     totalDebited = locked.pricing.totalDebited
   } else {
@@ -273,6 +286,10 @@ export async function executeYcBalancePayout(
 
   if (available < totalDebited) return { ok: false, error: "insufficient_balance" }
 
+  if (!lockId || !(await claimPayoutLockSession(admin, { lockId, userId }))) {
+    return { ok: false, error: "YC_QUOTE_EXPIRED" }
+  }
+
   const ctx = await resolveNoahAccountContextFromLedgerScope(admin, { userId, businessId })
   if (!ctx) {
     return { ok: false, error: "Could not resolve wallet context for Yellowcard payout." }
@@ -281,6 +298,14 @@ export async function executeYcBalancePayout(
   const walletAddress = locked.walletAddress
   const cryptoAmount = locked.cryptoAmount
   const sequenceId = locked.sequenceId
+  const actualReceiveAmount =
+    "lockedLocalAmount" in locked && Number(locked.lockedLocalAmount ?? 0) > 0
+      ? Number(locked.lockedLocalAmount)
+      : fiatAmount
+  const requestedReceiveAmount =
+    "requestedLocalAmount" in locked && Number(locked.requestedLocalAmount ?? 0) > 0
+      ? Number(locked.requestedLocalAmount)
+      : fiatAmount
 
   const easnerPayoutId = randomUUID()
   const easnerTransactionId = generateTransactionId()
@@ -288,8 +313,6 @@ export async function executeYcBalancePayout(
   const payoutReview = normalizePayoutReviewSnapshot(reviewSnapshotRaw)
   const recipientSnapshot = buildRecipientSnapshotFromRow(recipientRow)
   const channelId = String(locked.channelId || input.yc.channelId || input.channelId || "").trim()
-
-  const settlementMode: YcPayoutSettlementMode = locked.settlementMode ?? "direct_crypto"
 
   const metadata = buildYcBalancePayoutOutMetadata({
     easnerPayoutId,
@@ -301,7 +324,8 @@ export async function executeYcBalancePayout(
     cryptoAuthorizedAmount: cryptoAmount,
     marginAmount: locked.pricing.marginAmount,
     processingFee: locked.pricing.processingFee,
-    receiveAmount: fiatAmount,
+    receiveAmount: actualReceiveAmount,
+    requestedReceiveAmount,
     receiveCurrency: fiatCurrency,
     customerRate: locked.pricing.customerRate,
     destinationRef: input.destinationRef || `recipient:${recipientId}`,
@@ -314,7 +338,6 @@ export async function executeYcBalancePayout(
       return amount > 0 ? amount : null
     })(),
   })
-  metadata.yc_settlement_mode = settlementMode
   if (idempotencyKey) metadata.idempotency_key = idempotencyKey
   if (sendNote?.trim()) {
     metadata.send_note = sendNote.trim()
@@ -371,7 +394,7 @@ export async function executeYcBalancePayout(
     pay_in_currency: "USD",
     receive_currency: fiatCurrency,
     quoted_pay_in: totalDebited,
-    quoted_receive: fiatAmount,
+    quoted_receive: actualReceiveAmount,
     customer_rate: locked.pricing.customerRate ?? null,
     leg2_sequence_id: sequenceId,
     leg2_yc_id: locked.sendId ?? input.yc.sendId ?? null,
@@ -387,6 +410,15 @@ export async function executeYcBalancePayout(
       margin_amount: locked.pricing.marginAmount,
       channel_cost: locked.pricing.channelCost,
       margin_capture_mode: "fee_wallet_deferred",
+      requested_receive_amount: requestedReceiveAmount,
+      recipient_receive_amount: actualReceiveAmount,
+      recipient_surplus_local:
+        "recipientSurplusLocal" in locked ? Number(locked.recipientSurplusLocal ?? 0) : 0,
+      payout_quantum_local:
+        "payoutQuantumLocal" in locked ? Number(locked.payoutQuantumLocal ?? 0) : 0,
+      settlement_quantum_usd:
+        "settlementQuantumUsd" in locked ? Number(locked.settlementQuantumUsd ?? 0) : 0,
+      precision_mode: "precisionMode" in locked ? locked.precisionMode ?? null : null,
     },
   })
 
@@ -463,53 +495,6 @@ export async function executeYcBalancePayout(
     return { ok: false, error: chainSend.error || "yc_turnkey_send_failed" }
   }
 
-  // Balance-settled sends sit in pending_approval until accepted. Accept only now that the
-  // USDC sweep has replenished the float, so a failed sweep can never pay the recipient.
-  if (settlementMode === "balance_exact") {
-    const sendId = String(locked.sendId ?? "").trim()
-    try {
-      if (!sendId) throw new Error("missing_yc_send_id_for_accept")
-      await acceptYcSend(sendId)
-    } catch (e) {
-      const acceptError = e instanceof Error ? e.message : "yc_send_accept_failed"
-      // Sweep already left the user's Turnkey wallet for YC float — omnibus must recredit
-      // on-chain before the ledger reverse, same as SEND.FAILED for balance_exact.
-      const recredit = await recreditYcExactLocalPayoutOnChain(admin, { easnerPayoutId })
-      const refundMeta = recredit.ok
-        ? buildYcRefundExpectedPatch(
-            { ...priorMeta, failure_reason: acceptError, yc_send_accept_failed: true },
-            { refundAmount: recredit.amount, refundTxHash: recredit.txHash },
-          )
-        : {
-            ...priorMeta,
-            failure_reason: acceptError,
-            yc_send_accept_failed: true,
-            yc_omnibus_refund_failed: true,
-            yc_omnibus_refund_error: recredit.error,
-            ops_alert: "yc_exact_local_omnibus_refund_failed",
-          }
-      await upsertLedgerTransaction(admin, {
-        userId,
-        businessId,
-        provider: "yellowcard",
-        providerTransactionId: pendingPtid,
-        status: "failed",
-        amount: totalDebited,
-        currency: "USD",
-        direction: "out",
-        metadata: mergeYcPayoutLifecycle(refundMeta, { failed_at: new Date().toISOString() }),
-        occurredAt: now,
-        txHash: chainSend.txHash ?? undefined,
-        baseCurrency: "USD",
-        asset: "USDC",
-      })
-      if (recredit.ok) {
-        await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId }).catch(() => {})
-      }
-      return { ok: false, error: acceptError }
-    }
-  }
-
   const processingMeta = buildYcParentPayoutCryptoDepositTracking({
     prior: {
       ...priorMeta,
@@ -552,10 +537,6 @@ export async function executeYcBalancePayout(
       updated_at: new Date().toISOString(),
     })
     .eq("transaction_id", transactionId)
-
-  if (lockId) {
-    await markPayoutLockSessionExecuted(admin, lockId).catch(() => {})
-  }
 
   return {
     ok: true,

@@ -18,6 +18,7 @@ import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { selectProviderForCorridor, NoProviderForCorridorError } from "@/lib/payout-providers"
 import { requirePayoutProviderEnv } from "@/lib/payout-providers/require-provider-env"
 import type { PayoutEnvProviderId } from "@/lib/payout-providers/require-provider-env"
+import { asYcPayoutError } from "@/lib/yellowcard/payout-errors"
 
 /** Lock balance payout order after user reaches review (Noah + YC + Grid). */
 export async function POST(request: Request) {
@@ -156,6 +157,13 @@ export async function POST(request: Request) {
     )
     return NextResponse.json({ ok: true, quote: locked.rawQuote })
   } catch (e) {
+    const ycError = asYcPayoutError(e)
+    if (ycError) {
+      return NextResponse.json(
+        { ok: false, error: ycError.message, code: ycError.code },
+        { status: ycError.status },
+      )
+    }
     logNoahPayoutFailure("payout_confirm", e, { recipientId, receiveAmount })
     const msg = e instanceof Error ? e.message : "Payout confirm failed"
     return NextResponse.json({ ok: false, error: mapNoahPayoutUserError(msg) }, { status: 400 })

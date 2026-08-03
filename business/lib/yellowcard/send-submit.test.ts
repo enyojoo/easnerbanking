@@ -28,41 +28,7 @@ describe("buildYcSendSubmitBody", () => {
     expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.48)
   })
 
-  it("sends localAmount without settlementInfo for balance settlement", () => {
-    const body = buildYcSendSubmitBody({
-      sequenceId: "seq-1",
-      customerUID: "user-1",
-      channelId: "ch-1",
-      currency: "NGN",
-      country: "NG",
-      refundMode: "balance_payout",
-      // No turnkey address: balance settlement has no crypto refund leg.
-      directSettlement: false,
-      localAmount: 2000,
-      destination: { accountNumber: "1", accountType: "bank", networkId: "n", accountName: "A" },
-    })
-    expect(body.directSettlement).toBe(false)
-    // localAmount is what YC "fixes for the user" — the recipient's exact credit.
-    expect(body.localAmount).toBe(2000)
-    expect(body.settlementInfo).toBeUndefined()
-  })
-
-  it("does not require a refund address when directSettlement is false", () => {
-    expect(() =>
-      buildYcSendSubmitBody({
-        sequenceId: "seq-1",
-        customerUID: "user-1",
-        channelId: "ch-1",
-        currency: "NGN",
-        country: "NG",
-        refundMode: "balance_payout",
-        directSettlement: false,
-        localAmount: 2000,
-      }),
-    ).not.toThrow()
-  })
-
-  it("rounds settlement crypto to USDC cents for YC conversion", () => {
+  it("preserves six-decimal settlement crypto for YC precision discovery", () => {
     const body = buildYcSendSubmitBody({
       sequenceId: "seq-1",
       customerUID: "user-1",
@@ -74,7 +40,23 @@ describe("buildYcSendSubmitBody", () => {
       settlementCryptoAmount: 1.466926,
       destination: { accountNumber: "1", accountType: "bank", networkId: "n", accountName: "A" },
     })
-    expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.47)
+    expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.466926)
+  })
+
+  it("keeps an unfunded probe in pending approval mode", () => {
+    const body = buildYcSendSubmitBody({
+      sequenceId: "yc_precision_probe_1",
+      customerUID: "user-1",
+      channelId: "ch-1",
+      currency: "NGN",
+      country: "NG",
+      forceAccept: false,
+      refundMode: "balance_payout",
+      userTurnkeyAddress: "wallet-1",
+      settlementCryptoAmount: 1.468537,
+    })
+    expect(body.forceAccept).toBe(false)
+    expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.468537)
   })
 })
 

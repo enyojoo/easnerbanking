@@ -38,8 +38,8 @@ import {
   resolveYcSendLegFeesFromResponse,
   readYcSendLockedLocalAmount,
   resolveYcSendLegFeeLocalForLock,
-  resolveYcSendLegServiceFeeLocal,
-  computeYcExactLocalPayoutCost,
+  resolveYcSendLegRequiredSettlementCrypto,
+  estimateYcSendLegNetLocalForSettlementCrypto,
 } from "./yc-pricing"
 
 describe("computeYcFundBalancePricing", () => {
@@ -125,6 +125,43 @@ describe("computeYcFundBalancePricing", () => {
       ycSellRate: 127,
     })
     expect(estimate).toBeGreaterThanOrEqual(1.96)
+  })
+})
+
+describe("YC direct-settlement fee gross-up and adaptive precision sizing", () => {
+  it.each([2000, 100_000, 1_000_000])(
+    "keeps the six-decimal NGN sizing boundary within local rounding at %s NGN",
+    (target) => {
+      const feeConfig = { minFeeLocal: 0, feePercentage: 1, flatFeeLocal: 0 }
+      const clearingCrypto = resolveYcSendLegRequiredSettlementCrypto({
+        quotedReceive: target,
+        destinationRate: 1378,
+        feeConfig,
+      })
+      const clearingNet = estimateYcSendLegNetLocalForSettlementCrypto({
+        settlementCryptoUsd: clearingCrypto,
+        destinationRate: 1378,
+        feeConfig,
+      })
+
+      expect(clearingNet).toBeGreaterThanOrEqual(target)
+      expect(clearingNet - target).toBeLessThanOrEqual(0.02)
+    },
+  )
+
+  it("grosses up KES mobile money using its 2% production fee", () => {
+    const feeConfig = { minFeeLocal: 0, feePercentage: 2, flatFeeLocal: 0 }
+    const crypto = resolveYcSendLegRequiredSettlementCrypto({
+      quotedReceive: 5000,
+      destinationRate: 128.59,
+      feeConfig,
+    })
+    const net = estimateYcSendLegNetLocalForSettlementCrypto({
+      settlementCryptoUsd: crypto,
+      destinationRate: 128.59,
+      feeConfig,
+    })
+    expect(net).toBeGreaterThanOrEqual(5000)
   })
 })
 
@@ -632,19 +669,18 @@ describe("yc send leg destination amount", () => {
     ).toBe(20.27)
   })
 
-  it("sizes 2000 NGN to USDC cent 1.48 at yc_sell 1373 (1.47 underpays)", () => {
+  it("sizes 2000 NGN to six-decimal USDC before YC precision discovery", () => {
     const estimated = estimateYcSendLegSettlementCryptoForQuotedReceive({
       quotedReceive: 2000,
       destinationRate: 1366.135,
       ycSellRate: 1373,
     })
-    // YC rounds crypto to 2dp: 1.47 → net 1998.13; 1.48 → net 2011.72
-    expect(estimated).toBe(1.48)
+    expect(estimated).toBe(1.471384)
     const gross = Math.round(estimated * 1373 * 100) / 100
     const fee = Math.round(gross * 0.01 * 100) / 100
     const net = Math.round((gross - fee) * 100) / 100
     expect(net).toBeGreaterThanOrEqual(2000)
-    expect(net).toBe(2011.72)
+    expect(net).toBeLessThanOrEqual(2000.01)
   })
 
   it("retargets shortfall 1998.13 by leaving the 1.47 USDC cent bucket", () => {
@@ -793,90 +829,5 @@ describe("yc send leg destination amount", () => {
     })
     expect(fees.serviceFeeAmountLocal).toBe(20.12)
     expect(fees.totalFeeUsd).toBeGreaterThanOrEqual(0.01)
-  })
-})
-
-// POST /fees/get-config, production values per corridor.
-describe("resolveYcSendLegServiceFeeLocal", () => {
-  it("reproduces the NGN bank direct-settlement charge", () => {
-    const fee = resolveYcSendLegServiceFeeLocal({
-      grossLocal: 2016.84,
-      feeConfig: { minFeeLocal: 0, feePercentage: 1, flatFeeLocal: 0 },
-    })
-    expect(fee).toBe(20.17)
-  })
-
-  it("applies a flat fee with no percentage component", () => {
-    const fee = resolveYcSendLegServiceFeeLocal({
-      grossLocal: 100000,
-      feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 100 },
-    })
-    expect(fee).toBe(100)
-  })
-
-  it("floors the percentage at minFeeLocal", () => {
-    const config = { minFeeLocal: 200, feePercentage: 0.5, flatFeeLocal: 0 }
-    // 0.5% of 5000 is 25, below the 200 minimum.
-    expect(resolveYcSendLegServiceFeeLocal({ grossLocal: 5000, feeConfig: config })).toBe(200)
-    expect(resolveYcSendLegServiceFeeLocal({ grossLocal: 60000, feeConfig: config })).toBe(300)
-  })
-
-  it("falls back to the default fraction without a config", () => {
-    expect(resolveYcSendLegServiceFeeLocal({ grossLocal: 2000 })).toBe(20)
-    expect(resolveYcSendLegServiceFeeLocal({ grossLocal: 2000, feeFraction: 0.02 })).toBe(40)
-  })
-})
-
-describe("computeYcExactLocalPayoutCost", () => {
-  it("charges the NGN flat fee on top of an exact recipient credit", () => {
-    const cost = computeYcExactLocalPayoutCost({
-      receiveAmount: 2000,
-      ycSellRate: 1373,
-      feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 100 },
-    })
-    expect(cost.feeLocal).toBe(100)
-    expect(cost.grossLocal).toBe(2100)
-    expect(cost.costUsd).toBe(1.529498)
-  })
-
-  it("uses the KES momo flat fee", () => {
-    const cost = computeYcExactLocalPayoutCost({
-      receiveAmount: 5000,
-      ycSellRate: 129.2,
-      feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 126 },
-    })
-    expect(cost.grossLocal).toBe(5126)
-  })
-
-  it("uses the ZAR minimum when the percentage is smaller", () => {
-    const cost = computeYcExactLocalPayoutCost({
-      receiveAmount: 500,
-      ycSellRate: 18.1,
-      feeConfig: { minFeeLocal: 20, feePercentage: 0.5, flatFeeLocal: 0 },
-    })
-    expect(cost.feeLocal).toBe(20)
-    expect(cost.grossLocal).toBe(520)
-  })
-
-  it("is cheaper than direct settlement above the flat-fee crossover", () => {
-    const exact = computeYcExactLocalPayoutCost({
-      receiveAmount: 100000,
-      ycSellRate: 1373,
-      feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 100 },
-    })
-    const direct = computeYcExactLocalPayoutCost({
-      receiveAmount: 100000,
-      ycSellRate: 1373,
-      feeConfig: { minFeeLocal: 0, feePercentage: 1, flatFeeLocal: 0 },
-    })
-    expect(exact.feeLocal).toBe(100)
-    expect(direct.feeLocal).toBe(1000)
-    expect(exact.costUsd).toBeLessThan(direct.costUsd)
-  })
-
-  it("rejects a missing rate rather than under-funding the float", () => {
-    expect(() =>
-      computeYcExactLocalPayoutCost({ receiveAmount: 2000, ycSellRate: 0 }),
-    ).toThrow(/ycSellRate must be positive/)
   })
 })

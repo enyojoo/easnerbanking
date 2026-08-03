@@ -54,6 +54,9 @@ export type EasnerPayoutQuoteSlice = {
 }
 
 export type PayoutQuoteResult = {
+  /** Amount entered before provider precision/quantization. */
+  requestedReceiveAmount?: number
+  /** Actual provider-locked recipient amount shown as "Recipient gets". */
   receiveAmount: number
   receiveCurrency: string
   /** Customer FX principal at margined rate (you-send box). */
@@ -82,7 +85,7 @@ export type PayoutQuoteResult = {
     rate?: number
     noahMid?: number
     effectiveRate?: number
-    marginCaptureMode: "surplus_send" | "split_debit"
+    marginCaptureMode: import("@easner/shared").PayoutMarginCaptureMode
     channelCost: number
     marginAmount: number
     customerPrincipal: number
@@ -104,6 +107,14 @@ export type PayoutQuoteResult = {
     channelId: string
     cryptoAmount: number
     walletAddress?: string
+    grossLocalAmount?: number
+    recipientLocalAmount?: number
+    recipientSurplusLocal?: number
+    payoutQuantumLocal?: number
+    settlementQuantumUsd?: number
+    precisionMode?: "micro" | "cent"
+    sendLegFeeLocal?: number
+    discardedSendIds?: string[]
   }
   /** Grid-specific locked quote fields (balance_payout). */
   grid?: {

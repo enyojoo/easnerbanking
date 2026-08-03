@@ -815,17 +815,16 @@ export {
   roundYcSettlementCryptoToCent,
   roundYcSettlementCryptoCentUp,
   YC_SEND_LEG_CRYPTO_CENT,
+  YC_SEND_LEG_CRYPTO_MICRO,
   resolveYcSendLegDestinationExcessTolerance,
   YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS,
   YC_SEND_LEG_DESTINATION_TOLERANCE,
   YC_SEND_LEG_DESTINATION_EXCESS_TOLERANCE,
   YC_SEND_LEG_SERVICE_FEE_FRACTION,
+  resolveYcSendLegServiceFeeLocal,
   YC_SEND_LEG_RATE_BUFFER_BPS,
   YC_SEND_LEG_CONVERSION_SLOP_BPS,
-  resolveYcSendLegServiceFeeLocal,
-  computeYcExactLocalPayoutCost,
 } from "./yc-pricing"
-export type { YcServiceFeeConfig, YcExactLocalPayoutCost } from "./yc-pricing"
 export { filterSupersededPendingGlobalPayoutRows } from "./ledger/filter-superseded-pending-payouts"
 export type { SupersededPayoutLedgerRow } from "./ledger/filter-superseded-pending-payouts"
 export {
@@ -848,6 +847,7 @@ export type {
   YcFundBalancePricing,
   YcLegFeeInputs,
   YcOmnibusSufficiencyCheck,
+  YcServiceFeeConfig,
 } from "./yc-pricing"
 export type { YcQuoteSummary } from "./yc-quote-summary"
 export {

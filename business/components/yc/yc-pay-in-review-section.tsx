@@ -42,6 +42,8 @@ export type YcPayInLockedQuote = {
   ycLegFeesUsd?: number
   displayProcessingFeeLocal?: number
   provisionalPayIn?: number
+  receiveAmount?: number
+  requestedReceiveAmount?: number
   bankInfo?: Record<string, unknown> | null
   expiresAt: string
   sourcePhone?: string
@@ -246,7 +248,7 @@ export function YcPayInReviewSection(props: Props) {
     )
   }
 
-  const receiveAmount = props.receiveAmount
+  const requestedReceiveAmount = props.receiveAmount
   const stashedQuote =
     props.crossBorderMeta && isStashedCrossBorderQuoteFresh(props.crossBorderMeta)
       ? peekCrossBorderQuote()
@@ -257,6 +259,7 @@ export function YcPayInReviewSection(props: Props) {
   const displayLocked = isLocked || Boolean(stashedLocked)
   const crossBorderReviewPhase: YcLocalPayInReviewPhase = displayLocked ? "locked" : "preview"
   const displayQuote = activeLockedQuote ?? stashedQuote
+  const receiveAmount = displayQuote?.receiveAmount ?? requestedReceiveAmount
   const crossBorderTransactionId =
     activeLockedQuote?.easnerTransactionId ?? activeLockedQuote?.transactionId ?? ""
   const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
@@ -296,6 +299,9 @@ export function YcPayInReviewSection(props: Props) {
         customerRate={customerRate}
         localPayIn={localPayIn}
         receiveAmount={receiveAmount}
+        requestedReceiveAmount={
+          displayQuote?.requestedReceiveAmount ?? requestedReceiveAmount
+        }
         processingFeeLocal={breakdown.feeLocal}
         processingFeeUsd={
           displayQuote?.processingFee ?? props.clientProcessingFee

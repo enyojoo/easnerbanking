@@ -200,11 +200,23 @@ export function PayoutReviewDetailsRows({
         ) : null}
 
         {showRecipientGets ? (
-          <TransactionDetailSummaryRow
-            label={REVIEW_ROW_LABELS.recipientGets}
-            value={formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency)}
-            valueClassName="text-xl font-semibold"
-          />
+          <>
+            {payoutReview.requested_receive_amount != null &&
+            Math.abs(payoutReview.requested_receive_amount - payoutReview.receive_amount) >= 0.005 ? (
+              <TransactionDetailSummaryRow
+                label="Requested amount"
+                value={formatMoneyDisplay(
+                  payoutReview.requested_receive_amount,
+                  payoutReview.receive_currency,
+                )}
+              />
+            ) : null}
+            <TransactionDetailSummaryRow
+              label={REVIEW_ROW_LABELS.recipientGets}
+              value={formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency)}
+              valueClassName="text-xl font-semibold"
+            />
+          </>
         ) : null}
 
         <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.recipient}>

@@ -1,139 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import {
-  findGlobalPayoutNoahRowByEasnerPayoutId,
-  reverseGlobalPayoutWalletDebitForEasnerPayoutId,
-  linkPendingGlobalPayoutProviderTransactionId,
-  pendingGlobalPayoutProviderTransactionId,
-} from "@/lib/noah/global-payout-ledger"
+import { reverseGlobalPayoutWalletDebitForEasnerPayoutId, linkPendingGlobalPayoutProviderTransactionId, pendingGlobalPayoutProviderTransactionId } from "@/lib/noah/global-payout-ledger"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import {
   captureYcBalancePayoutProcessingFeeIfPending,
 } from "@/lib/processing-fee/capture-pending-processing-fee"
 import { isEasnerRevenueAlreadySwept } from "@/lib/processing-fee/fee-wallet-sweep"
 import { createTurnkeySend } from "@/lib/turnkey/send"
-import { sendStablecoinFromDepositOmnibus } from "@/lib/turnkey/send-from-omnibus"
-import { resolveActiveUsdcSolanaAddress } from "@/lib/wallet/resolve-active-usdc-solana-address"
 import {
   buildYcParentPayoutCryptoDepositTracking,
-  buildYcRefundExpectedPatch,
   mergeYcPayoutLifecycle,
 } from "@/lib/yellowcard/yc-ledger"
 
 function asMeta(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
-}
-
-function pickExactLocalOnChainRefundAmount(meta: Record<string, unknown>, rowAmount: number): number | null {
-  for (const key of ["crypto_authorized_amount", "noah_send_amount", "yc_refund_amount"] as const) {
-    const n = Number(meta[key] ?? 0)
-    if (Number.isFinite(n) && n > 0) return n
-  }
-  if (Number.isFinite(rowAmount) && rowAmount > 0) return rowAmount
-  return null
-}
-
-export type RecreditYcExactLocalResult = {
-  ok: boolean
-  skipped?: boolean
-  txHash: string | null
-  amount: number | null
-  error?: string
-}
-
-/**
- * Exact-local (`balance_exact`) failures leave USDC in the YC float — YC has no refundAddress.
- * Recredit the user's Turnkey ATA from deposit omnibus so ledger and chain stay aligned, then
- * stamp `yc_refund_*` so the inbound Turnkey credit is suppressed (same as direct-settlement).
- */
-export async function recreditYcExactLocalPayoutOnChain(
-  admin: SupabaseClient,
-  input: { easnerPayoutId: string },
-): Promise<RecreditYcExactLocalResult> {
-  const easnerPayoutId = String(input.easnerPayoutId ?? "").trim()
-  if (!easnerPayoutId) {
-    return { ok: false, txHash: null, amount: null, error: "missing_easner_payout_id" }
-  }
-
-  const row = await findGlobalPayoutNoahRowByEasnerPayoutId(admin, easnerPayoutId)
-  if (!row?.id) {
-    return { ok: false, txHash: null, amount: null, error: "payout_row_not_found" }
-  }
-
-  const meta = asMeta(row.metadata)
-  if (String(meta.yc_settlement_mode ?? "") !== "balance_exact") {
-    return { ok: true, skipped: true, txHash: null, amount: null }
-  }
-
-  const existingHash = String(meta.yc_refund_tx_hash ?? meta.noah_refund_tx_hash ?? "").trim()
-  if (existingHash || meta.yc_omnibus_refund_completed === true) {
-    return {
-      ok: true,
-      skipped: true,
-      txHash: existingHash || null,
-      amount: Number(meta.yc_refund_amount ?? 0) || null,
-    }
-  }
-
-  const amount = pickExactLocalOnChainRefundAmount(meta, row.amount)
-  if (amount == null) {
-    return { ok: false, txHash: null, amount: null, error: "missing_refund_amount" }
-  }
-
-  const destinationAddress = await resolveActiveUsdcSolanaAddress(admin, {
-    userId: row.user_id,
-    businessId: row.business_id,
-  })
-  if (!destinationAddress) {
-    return { ok: false, txHash: null, amount, error: "user_turnkey_address_missing" }
-  }
-
-  const send = await sendStablecoinFromDepositOmnibus({
-    ledgerCurrency: "USD",
-    asset: "USDC",
-    destinationAddress,
-    amount,
-    pollForSettlement: true,
-    settlementPollTimeoutMs: 60_000,
-  })
-
-  if (send.status === "failed" || (send.status !== "settled" && send.status !== "skipped" && !send.txHash)) {
-    const error = send.errorMessage || "omnibus_refund_failed"
-    await admin
-      .from("transactions")
-      .update({
-        metadata: {
-          ...meta,
-          yc_omnibus_refund_failed: true,
-          yc_omnibus_refund_error: error,
-          ops_alert: "yc_exact_local_omnibus_refund_failed",
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", row.id)
-    return { ok: false, txHash: send.txHash, amount, error }
-  }
-
-  const txHash = String(send.txHash ?? "").trim() || null
-  const patched = buildYcRefundExpectedPatch(meta, {
-    refundAmount: amount,
-    refundTxHash: txHash,
-  })
-  await admin
-    .from("transactions")
-    .update({
-      metadata: {
-        ...patched,
-        yc_omnibus_refund_completed: true,
-        yc_omnibus_refund_provider_id: send.providerTransactionId,
-        ...(send.dryRun ? { yc_omnibus_refund_dry_run: true } : {}),
-      },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", row.id)
-
-  return { ok: true, txHash, amount }
 }
 
 /**
@@ -337,26 +218,12 @@ export async function handleYcBalancePayoutSendComplete(input: {
 }
 
 /**
- * On SEND.FAILED for balance_payout:
- * - direct_crypto: YC refunds USDC on-chain to the user Turnkey address; we reverse the ledger.
- * - balance_exact: YC has no refundAddress — omnibus recredits the user Turnkey ATA first, then
- *   we reverse the ledger so available_balance matches on-chain again.
+ * On SEND.FAILED for balance_payout: USDC refunds to user wallet; reverse ledger debit.
  */
 export async function handleYcBalancePayoutSendFailed(input: {
   easnerPayoutId: string
 }): Promise<void> {
   const admin = createSupabaseAdmin()
-  const recredit = await recreditYcExactLocalPayoutOnChain(admin, {
-    easnerPayoutId: input.easnerPayoutId,
-  })
-  if (!recredit.ok && !recredit.skipped) {
-    console.error("[yc-balance-payout] exact-local on-chain recredit failed", {
-      easnerPayoutId: input.easnerPayoutId,
-      error: recredit.error,
-    })
-    // Do not reverse the ledger without on-chain funds — that would invent spendable balance.
-    return
-  }
   await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
     easnerPayoutId: input.easnerPayoutId,
   })

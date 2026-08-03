@@ -7,6 +7,7 @@ export type GlobalPayoutReviewSnapshot = {
   exchange_rate: number
   send_currency: string
   receive_amount: number
+  requested_receive_amount?: number
   receive_currency: string
   transfer_method: string
   processing_time: string

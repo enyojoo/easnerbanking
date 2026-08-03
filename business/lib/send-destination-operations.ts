@@ -153,7 +153,8 @@ export async function lockSendDestination(
     payload: {
       kind: "fiat_payout",
       destinationRef: input.destination.destinationRef,
-      receiveAmount: input.amount,
+      receiveAmount: quote.receiveAmount,
+      requestedReceiveAmount: quote.requestedReceiveAmount ?? input.amount,
       receiveCurrency: quote.receiveCurrency,
       channelId: quote.channelId,
       payoutProvider: quote.provider ?? "noah",

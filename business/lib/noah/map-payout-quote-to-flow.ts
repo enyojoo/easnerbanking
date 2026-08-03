@@ -16,6 +16,7 @@ export function mapPayoutQuoteToFlowState(
     totalAmount: q.totalDebited,
     payoutQuote: {
       recipientId: state.recipient.id,
+      requestedReceiveAmount: q.requestedReceiveAmount,
       receiveAmount: q.receiveAmount,
       sendAmount: q.customerPrincipal,
       sendCurrency: q.sendCurrency,

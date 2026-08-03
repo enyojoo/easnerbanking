@@ -16,6 +16,7 @@ import {
   mapKycErrorToCode,
   ycFundBalanceQuoteError,
 } from "@/lib/yellowcard/fund-balance-quote-errors"
+import { asYcPayoutError } from "@/lib/yellowcard/payout-errors"
 
 export const runtime = "nodejs"
 
@@ -171,6 +172,8 @@ export async function POST(request: Request) {
       payInNotice: ycPayInInstructionNotice(payInRail),
     })
   } catch (e) {
+    const ycError = asYcPayoutError(e)
+    if (ycError) return crossBorderQuoteError(ycError.code, ycError.message, ycError.status)
     const message = e instanceof Error ? e.message : "Cross-border confirm failed"
     if (message === "deposit_omnibus_solana_address_usd_required") {
       return ycFundBalanceQuoteError(

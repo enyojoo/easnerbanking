@@ -52,6 +52,13 @@ import {
 } from "@/lib/yellowcard/cross-border-leg2-draft"
 import { isCrossBorderSplitLockEnabled } from "@/lib/yellowcard/cross-border-split-flags"
 import { quoteFiatProcessingFeeBps, recipientPayoutRail } from "@/lib/processing-fee/quote-processing-fee-bps"
+import { yellowcardFetch } from "@/lib/yellowcard/http"
+import { isYcAdaptiveLockEnabled } from "@/lib/yellowcard/adaptive-lock-flags"
+import { YcPayoutError } from "@/lib/yellowcard/payout-errors"
+import {
+  assessYcCrossBorderRelockFunding,
+  isYcSendStillFundable,
+} from "@/lib/yellowcard/cross-border-leg2-relock"
 
 function buildRecipientTransactionMetadata(
   recipientId: string | null,
@@ -316,6 +323,7 @@ export async function previewCrossBorderQuote(input: CrossBorderTransferInput) {
     displayProcessingFeeCurrency: prepared.payInCurrency,
     provisionalPayIn: prepared.pricing.provisionalPayIn,
     receiveAmount: input.receiveAmount,
+    requestedReceiveAmount: input.receiveAmount,
     receiveCurrency: prepared.receiveCurrency,
     expiresAt,
     payInRail: input.payInRail,
@@ -378,6 +386,7 @@ async function formatCrossBorderFromExistingTransfer(
     displayProcessingFeeCurrency: payInCurrency,
     provisionalPayIn: Number(meta.provisional_pay_in ?? pricing.provisionalPayIn),
     receiveAmount: Number(transfer.quoted_receive ?? input.receiveAmount),
+    requestedReceiveAmount: Number(meta.requested_receive_amount ?? input.receiveAmount),
     receiveCurrency,
     bankInfo: (transfer.bank_info as Record<string, unknown> | null) ?? null,
     expiresAt: resolveYcPayInDepositExpiresAt({
@@ -406,6 +415,12 @@ type CrossBorderLockedTransferResult = {
   displayProcessingFeeCurrency: string
   provisionalPayIn: number
   receiveAmount: number
+  requestedReceiveAmount: number
+  recipientSurplusLocal?: number
+  payoutQuantumLocal?: number
+  settlementQuantumUsd?: number
+  precisionMode?: "micro" | "cent"
+  ycCryptoAmount?: number
   receiveCurrency: string
   bankInfo: Record<string, unknown> | null
   expiresAt: string
@@ -430,6 +445,12 @@ type CrossBorderLeg2LockResult = {
   displayProcessingFeeCurrency: string
   provisionalPayIn: number
   receiveAmount: number
+  requestedReceiveAmount: number
+  recipientSurplusLocal?: number
+  payoutQuantumLocal?: number
+  settlementQuantumUsd?: number
+  precisionMode?: "micro" | "cent"
+  ycCryptoAmount?: number
   receiveCurrency: string
   expiresAt: string
   payInRail: "bank_transfer" | "mobile_money"
@@ -513,6 +534,13 @@ async function resolveCrossBorderSendContext(input: CrossBorderTransferInput, pr
 export async function lockCrossBorderLeg2(
   input: CrossBorderTransferInput,
 ): Promise<CrossBorderLeg2LockResult> {
+  if (!isYcAdaptiveLockEnabled("cross_border")) {
+    throw new YcPayoutError(
+      "YC_SEND_UNAVAILABLE",
+      "Yellowcard adaptive cross-border locking is temporarily disabled.",
+      503,
+    )
+  }
   const prepared = await prepareCrossBorderQuote(input)
   const existing = await findReusableYcTransfer(input.admin, {
     userId: input.userId,
@@ -546,6 +574,25 @@ export async function lockCrossBorderLeg2(
       displayProcessingFeeCurrency: payInCurrency,
       provisionalPayIn: Number(meta.provisional_pay_in ?? prepared.pricing.provisionalPayIn),
       receiveAmount: Number(existingDraft.quoted_receive ?? input.receiveAmount),
+      requestedReceiveAmount: Number(
+        meta.requested_receive_amount ??
+          (meta.leg2_draft as { requestedReceiveAmount?: number } | undefined)?.requestedReceiveAmount ??
+          input.receiveAmount,
+      ),
+      recipientSurplusLocal: Number(
+        (meta.leg2_draft as CrossBorderLeg2DraftPayload | undefined)?.recipientSurplusLocal ?? 0,
+      ),
+      payoutQuantumLocal: Number(
+        (meta.leg2_draft as CrossBorderLeg2DraftPayload | undefined)?.payoutQuantumLocal ?? 0,
+      ),
+      settlementQuantumUsd: Number(
+        (meta.leg2_draft as CrossBorderLeg2DraftPayload | undefined)?.settlementQuantumUsd ?? 0,
+      ),
+      precisionMode:
+        (meta.leg2_draft as CrossBorderLeg2DraftPayload | undefined)?.precisionMode,
+      ycCryptoAmount: Number(
+        (meta.leg2_draft as CrossBorderLeg2DraftPayload | undefined)?.sendLeg.cryptoAmountUsd ?? 0,
+      ),
       receiveCurrency,
       expiresAt: String(existingDraft.expires_at ?? resolveYcQuoteExpiresAt()),
       payInRail: input.payInRail,
@@ -564,6 +611,7 @@ export async function lockCrossBorderLeg2(
     currency: ctx.receiveCurrency,
     channelType: ctx.sendRail === "mobile_money" ? "momo" : "bank",
     directSettlement: true,
+    fresh: true,
   })
   const provisionalSendCrypto = estimateYcSendLegSettlementCryptoForQuotedReceive({
     quotedReceive: input.receiveAmount,
@@ -596,7 +644,7 @@ export async function lockCrossBorderLeg2(
   })
   const sendRes = sendLock.sendRes
   const leg2Seq = sendLock.sequenceId
-  const lockedReceiveAmount = sendLock.lockedLocalAmount
+  const lockedReceiveAmount = sendLock.recipientLocalAmount
 
   const easnerSellFrom = Number(ctx.fromLeg?.easner_sell ?? ctx.fromLeg?.yc_buy ?? 0)
   const sendLeg = {
@@ -605,7 +653,7 @@ export async function lockCrossBorderLeg2(
     serviceFeeAmountUsd: Number(sendRes.serviceFeeAmountUSD ?? 0),
   }
   const pricingBeforeReceive = computeYcCrossBorderPricingBeforeReceive({
-    receiveAmount: input.receiveAmount,
+    receiveAmount: lockedReceiveAmount,
     customerRate: ctx.cross.rate,
     ycSellFrom: Number(ctx.fromLeg?.yc_buy ?? 0),
     ycBuyTo,
@@ -623,8 +671,16 @@ export async function lockCrossBorderLeg2(
     receiveCurrency: ctx.receiveCurrency,
     receiveCountry: ctx.receiveCountry,
     customerRate: ctx.cross.rate,
-    receiveAmount: input.receiveAmount,
+    receiveAmount: lockedReceiveAmount,
+    requestedReceiveAmount: input.receiveAmount,
     lockedReceiveAmount,
+    recipientSurplusLocal: sendLock.recipientSurplusLocal,
+    payoutQuantumLocal: sendLock.payoutQuantumLocal,
+    settlementQuantumUsd: sendLock.settlementQuantumUsd,
+    precisionMode: sendLock.precisionMode,
+    sendLegFeeLocal: sendLock.sendLegFeeLocal,
+    discardedSendIds: sendLock.discardedSendIds,
+    sendExpiresAt: sendLock.expiresAt,
     payInRail: input.payInRail,
     receiveChannelId: ctx.receiveChannelId,
     sendChannelId: ctx.sendChannelId,
@@ -657,7 +713,8 @@ export async function lockCrossBorderLeg2(
     quoteKey: prepared.quoteKey,
     payInCurrency: ctx.payInCurrency,
     receiveCurrency: ctx.receiveCurrency,
-    receiveAmount: input.receiveAmount,
+    receiveAmount: lockedReceiveAmount,
+    requestedReceiveAmount: input.receiveAmount,
     customerRate: ctx.cross.rate,
     leg2SequenceId: leg2Seq,
     leg2YcId: sendRes.id ?? null,
@@ -697,7 +754,13 @@ export async function lockCrossBorderLeg2(
     displayProcessingFeeLocal: quoteSummary.displayProcessingFeeLocal ?? 0,
     displayProcessingFeeCurrency: ctx.payInCurrency,
     provisionalPayIn: pricingBeforeReceive.provisionalPayIn,
-    receiveAmount: input.receiveAmount,
+    receiveAmount: lockedReceiveAmount,
+    requestedReceiveAmount: input.receiveAmount,
+    recipientSurplusLocal: sendLock.recipientSurplusLocal,
+    payoutQuantumLocal: sendLock.payoutQuantumLocal,
+    settlementQuantumUsd: sendLock.settlementQuantumUsd,
+    precisionMode: sendLock.precisionMode,
+    ycCryptoAmount: sendLock.finalSettlementCryptoUsd,
     receiveCurrency: ctx.receiveCurrency,
     expiresAt,
     payInRail: input.payInRail,
@@ -727,6 +790,10 @@ export async function confirmCrossBorderLeg1(
   const receiveChannelId = payload.receiveChannelId
   const reportingSourceToUsdRate = payload.reportingSourceToUsdRate
   const ycBuyTo = payload.ycBuyTo
+  const receiveAmount = Number(
+    payload.receiveAmount ?? draftRow.quoted_receive ?? input.receiveAmount,
+  )
+  const requestedReceiveAmount = Number(payload.requestedReceiveAmount ?? input.receiveAmount)
   const processingFeeBps = await quoteFiatProcessingFeeBps(
     admin,
     {
@@ -780,7 +847,7 @@ export async function confirmCrossBorderLeg1(
     })
 
     pricingFinal = computeYcCrossBorderPricing({
-      receiveAmount: input.receiveAmount,
+      receiveAmount,
       customerRate: crossRate,
       ycSellFrom: Number(payload.ycSellFrom ?? receiveRes.rate ?? 0),
       ycBuyTo: Number(ycBuyTo ?? payload.sendRes.rate ?? 0),
@@ -872,11 +939,16 @@ export async function confirmCrossBorderLeg1(
       metadata: buildYcCrossBorderOutMetadata({
         prior: {
           ...reportingSnapshot,
+          requested_receive_amount: requestedReceiveAmount,
+          recipient_surplus_local: payload.recipientSurplusLocal ?? 0,
+          payout_quantum_local: payload.payoutQuantumLocal ?? 0,
+          settlement_quantum_usd: payload.settlementQuantumUsd ?? 0,
+          precision_mode: payload.precisionMode ?? null,
           ...buildRecipientTransactionMetadata(recipientId, recipientSnapshot),
         },
         sequenceId: leg1Seq,
         localPayIn: lockedQuote.lockedLocalPayIn,
-        receiveAmount: input.receiveAmount,
+        receiveAmount,
         payInCurrency,
         receiveCurrency,
         customerRate: crossRate,
@@ -920,6 +992,7 @@ export async function confirmCrossBorderLeg1(
       },
       metadata: {
         quote_key: payload.quoteKey,
+        leg2_draft: payload,
         ...crossBorderLeg1EconomicsMetadata({ pricingFinal, locked: lockedQuote }),
         yc_sell_from: payload.ycSellFrom,
         yc_buy_to: ycBuyTo,
@@ -954,13 +1027,14 @@ export async function confirmCrossBorderLeg1(
     processing_fee: pricingFinal.processingFee,
     exchange_rate: crossRate,
     send_currency: payInCurrency,
-    receive_amount: input.receiveAmount,
+    receive_amount: receiveAmount,
+    requested_receive_amount: requestedReceiveAmount,
     receive_currency: receiveCurrency,
     transfer_method: TLC_LOCAL_TRANSFER_METHOD,
     processing_time: processingTime,
     display_processing_fee_local: quoteSummary.displayProcessingFeeLocal ?? 0,
     principal_local_pay_in: computeYcCrossBorderPrincipalLocalPayIn({
-      receiveAmount: input.receiveAmount,
+      receiveAmount,
       customerRate: crossRate,
       provisionalPayIn: pricingFinal.provisionalPayIn,
     }),
@@ -968,7 +1042,7 @@ export async function confirmCrossBorderLeg1(
   const payInReview = {
     local_pay_in: lockedQuote.lockedLocalPayIn,
     principal_local_pay_in: computeYcCrossBorderPrincipalLocalPayIn({
-      receiveAmount: input.receiveAmount,
+      receiveAmount,
       customerRate: crossRate,
       provisionalPayIn: pricingFinal.provisionalPayIn,
     }),
@@ -993,7 +1067,8 @@ export async function confirmCrossBorderLeg1(
           prior: {
             yc_mode: "cross_border_send",
             yc_sequence_id: leg1Seq,
-            receive_amount: input.receiveAmount,
+            receive_amount: receiveAmount,
+            requested_receive_amount: requestedReceiveAmount,
             receive_currency: receiveCurrency,
             customer_rate: crossRate,
             quote_locked_at: startedAt,
@@ -1002,7 +1077,7 @@ export async function confirmCrossBorderLeg1(
           sequenceId: leg1Seq,
           transferId: leg2DraftId,
           localPayIn: lockedQuote.lockedLocalPayIn,
-          receiveAmount: input.receiveAmount,
+          receiveAmount,
           payInCurrency,
           receiveCurrency,
           customerRate: crossRate,
@@ -1056,7 +1131,13 @@ export async function confirmCrossBorderLeg1(
     displayProcessingFeeLocal: quoteSummary.displayProcessingFeeLocal ?? 0,
     displayProcessingFeeCurrency: payInCurrency,
     provisionalPayIn: pricingFinal.provisionalPayIn,
-    receiveAmount: input.receiveAmount,
+    receiveAmount,
+    requestedReceiveAmount,
+    recipientSurplusLocal: payload.recipientSurplusLocal,
+    payoutQuantumLocal: payload.payoutQuantumLocal,
+    settlementQuantumUsd: payload.settlementQuantumUsd,
+    precisionMode: payload.precisionMode,
+    ycCryptoAmount: payload.sendLeg.cryptoAmountUsd,
     receiveCurrency,
     bankInfo: (receiveRes.bankInfo as Record<string, unknown>) ?? null,
     expiresAt,
@@ -1352,7 +1433,7 @@ export async function authorizeCrossBorderDraft(input: {
   )
 
   const payInCurrency = String(transfer.pay_in_currency ?? "").toUpperCase()
-  const receiveAmount = Number(transfer.quoted_receive)
+  let receiveAmount = Number(transfer.quoted_receive)
   const receiveCurrency = String(transfer.receive_currency ?? "").toUpperCase()
   const receiveCountry = resolveRecipientPayoutCountry(recipient as RecipientSellPrepareRow)
   if (!receiveCountry) throw new Error("Recipient country required")
@@ -1386,6 +1467,7 @@ export async function authorizeCrossBorderDraft(input: {
         ? "momo"
         : "bank",
     directSettlement: true,
+    fresh: true,
   })
   const provisionalSendCrypto = estimateYcSendLegSettlementCryptoForQuotedReceive({
     quotedReceive: receiveAmount,
@@ -1418,7 +1500,8 @@ export async function authorizeCrossBorderDraft(input: {
   })
   const sendRes = sendLock.sendRes
   const leg2Seq = sendLock.sequenceId
-  const lockedReceiveAmount = sendLock.lockedLocalAmount
+  const lockedReceiveAmount = sendLock.recipientLocalAmount
+  receiveAmount = lockedReceiveAmount
 
   const easnerSellFrom = Number(fromLeg?.easner_sell ?? fromLeg?.yc_buy ?? 0)
   const reportingSourceToUsdRate = Number(fromLeg?.easner_sell ?? 0)
@@ -1441,7 +1524,7 @@ export async function authorizeCrossBorderDraft(input: {
     },
   )
   const pricing = computeYcCrossBorderPricingBeforeReceive({
-    receiveAmount,
+    receiveAmount: lockedReceiveAmount,
     customerRate: cross.rate,
     ycSellFrom: Number(fromLeg?.yc_buy ?? 0),
     ycBuyTo,
@@ -1629,15 +1712,245 @@ export async function maybeExecuteCrossBorderLeg2(
   if (!transfer || transfer.mode !== "cross_border_send") return
   if (String(transfer.leg2_status) === "complete" || String(transfer.status) === "completed") return
   if (String(transfer.leg2_status) === "depositing") return
+  if (String(transfer.leg2_status) === "revalidating") return
   if (!canTransitionYcCrossBorderStatus(String(transfer.status), "leg2_in_progress")) return
 
-  const settlement = transfer.settlement_info as {
+  const currentLeg2Status = transfer.leg2_status == null ? null : String(transfer.leg2_status)
+  let claim = admin
+    .from("yc_transfers")
+    .update({
+      leg2_status: "revalidating",
+      status: "leg2_in_progress",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", transferId)
+  claim = currentLeg2Status == null
+    ? claim.is("leg2_status", null)
+    : claim.eq("leg2_status", currentLeg2Status)
+  const { data: claimed } = await claim.select("id").maybeSingle()
+  if (!claimed?.id) return
+
+  let settlement = transfer.settlement_info as {
     send?: { walletAddress?: string; cryptoAmount?: number }
   } | null
-  const walletAddress = String(settlement?.send?.walletAddress ?? "").trim()
-  const cryptoAmount = Number(settlement?.send?.cryptoAmount ?? 0)
+  let walletAddress = String(settlement?.send?.walletAddress ?? "").trim()
+  let cryptoAmount = Number(settlement?.send?.cryptoAmount ?? 0)
   if (!walletAddress || !(cryptoAmount > 0)) {
-    throw new Error("cross_border_leg2_missing_settlement")
+    await admin
+      .from("yc_transfers")
+      .update({
+        status: "failed",
+        leg2_status: "recovery_required",
+        metadata: {
+          ...((transfer.metadata || {}) as Record<string, unknown>),
+          ops_alert: "cross_border_leg2_failed_refund_to_fee_wallet",
+          recovery_reason: "cross_border_leg2_missing_settlement",
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", transferId)
+    return
+  }
+
+  const meta = (transfer.metadata || {}) as Record<string, unknown>
+  const draft = meta.leg2_draft as CrossBorderLeg2DraftPayload | undefined
+  const sendId = String(transfer.leg2_yc_id ?? draft?.sendRes.id ?? "").trim()
+  let existingSend: Record<string, unknown> | null = null
+  try {
+    if (sendId) {
+      existingSend = await yellowcardFetch<Record<string, unknown>>({
+        method: "GET",
+        path: `/send/${encodeURIComponent(sendId)}`,
+      })
+    }
+  } catch (error) {
+    await admin
+      .from("yc_transfers")
+      .update({
+        status: "failed",
+        leg2_status: "recovery_required",
+        metadata: {
+          ...meta,
+          ops_alert: "cross_border_leg2_failed_refund_to_fee_wallet",
+          recovery_reason: "cross_border_leg2_revalidation_failed",
+          leg2_revalidation_error: error instanceof Error ? error.message : "yc_send_lookup_failed",
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", transferId)
+    return
+  }
+
+  const sendStatus = String(existingSend?.status ?? draft?.sendRes.status ?? "").toLowerCase()
+  const sendExpiry = String(
+    existingSend?.expiresAt ?? existingSend?.expires_at ?? draft?.sendExpiresAt ?? "",
+  ).trim()
+  const sendUnfundable = !isYcSendStillFundable({ status: sendStatus, expiresAt: sendExpiry })
+
+  if (sendStatus.includes("complete") || sendStatus.includes("success")) {
+    await completeCrossBorderOnSendSuccess(admin, transferId)
+    return
+  }
+  if (sendStatus.includes("processing") || sendStatus.includes("deposit")) {
+    await admin
+      .from("yc_transfers")
+      .update({ leg2_status: "pending_yc", updated_at: new Date().toISOString() })
+      .eq("id", transferId)
+    return
+  }
+
+  if (sendUnfundable) {
+    if (!draft?.recipientMapped || !draft.sender || !draft.sendChannelId) {
+      await admin
+        .from("yc_transfers")
+        .update({
+          status: "failed",
+          leg2_status: "recovery_required",
+          metadata: {
+            ...meta,
+            ops_alert: "cross_border_leg2_failed_refund_to_fee_wallet",
+            recovery_reason: "cross_border_leg2_expired_missing_relock_context",
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transferId)
+      return
+    }
+
+    const feeConfig = await fetchYcSendServiceFeeConfig({
+      country: draft.receiveCountry,
+      currency: draft.receiveCurrency,
+      channelType: draft.sendRail === "mobile_money" ? "momo" : "bank",
+      directSettlement: true,
+      fresh: true,
+    })
+    const promisedReceive = Number(transfer.quoted_receive ?? draft.receiveAmount)
+    let relock
+    try {
+      relock = await submitYcSendWithDestinationAmountLock({
+        receiveAmount: promisedReceive,
+        initialSettlementCryptoUsd: cryptoAmount,
+        destinationRate: draft.ycBuyTo,
+        ycSellRate: draft.ycBuyTo,
+        receiveCurrency: draft.receiveCurrency,
+        sequenceIdPrefix: "yc_cb_l2_relock",
+        feeConfig,
+        buildSubmit: ({ settlementCryptoUsd, sequenceId }) =>
+          submitYcSend({
+            sequenceId,
+            customerUID: String(transfer.user_id),
+            channelId: draft.sendChannelId,
+            currency: draft.receiveCurrency,
+            country: draft.receiveCountry,
+            settlementCryptoAmount: settlementCryptoUsd,
+            refundMode: "cross_border_send",
+            sender: draft.sender,
+            destination: (draft.recipientMapped as { destination?: Record<string, unknown> }).destination,
+            sendExtras: (draft.recipientMapped as { root?: Record<string, unknown> }).root,
+            reason: "cross_border_leg2_relock",
+          }),
+      })
+    } catch (error) {
+      await admin
+        .from("yc_transfers")
+        .update({
+          status: "failed",
+          leg2_status: "recovery_required",
+          metadata: {
+            ...meta,
+            ops_alert: "cross_border_leg2_failed_refund_to_fee_wallet",
+            recovery_reason: "cross_border_leg2_relock_failed",
+            leg2_relock_error: error instanceof Error ? error.message : "yc_send_relock_failed",
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transferId)
+      return
+    }
+    const newCryptoAmount = relock.finalSettlementCryptoUsd
+    const newWalletAddress = String(relock.sendRes.settlementInfo?.walletAddress ?? "").trim()
+    const omnibusAvailable = Number(
+      transfer.omnibus_in_actual ?? meta.omnibus_in_actual ?? meta.omnibus_in_expected ?? 0,
+    )
+    const funding = assessYcCrossBorderRelockFunding({
+      oldCryptoAmount: cryptoAmount,
+      newCryptoAmount,
+      processingFee: Number(meta.processing_fee ?? 0),
+      marginAmount: Number(meta.margin_amount ?? 0),
+      omnibusAvailable,
+    })
+    const { relockGap, revenueAvailable } = funding
+    if (!newWalletAddress || !funding.ok) {
+      await admin
+        .from("yc_transfers")
+        .update({
+          status: "failed",
+          leg2_status: "recovery_required",
+          metadata: {
+            ...meta,
+            ops_alert: "cross_border_leg2_failed_refund_to_fee_wallet",
+            recovery_reason: "cross_border_leg2_relock_insufficient",
+            leg2_relock_gap_usd: relockGap,
+            leg2_relock_revenue_available_usd: revenueAvailable,
+            leg2_relock_required_usd: newCryptoAmount,
+            omnibus_available_usd: omnibusAvailable,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transferId)
+      return
+    }
+
+    cryptoAmount = newCryptoAmount
+    walletAddress = newWalletAddress
+    settlement = { ...settlement, send: relock.sendRes.settlementInfo }
+    await admin
+      .from("yc_transfers")
+      .update({
+        quoted_receive: relock.recipientLocalAmount,
+        leg2_sequence_id: relock.sequenceId,
+        leg2_yc_id: relock.sendRes.id ?? null,
+        settlement_info: settlement,
+        metadata: {
+          ...meta,
+          leg2_relocked: true,
+          leg2_relock_gap_usd: relockGap,
+          revenue_sacrificed_usd: relockGap,
+          promised_receive_amount: promisedReceive,
+          recipient_receive_amount: relock.recipientLocalAmount,
+          recipient_surplus_local: relock.recipientSurplusLocal,
+          payout_quantum_local: relock.payoutQuantumLocal,
+          settlement_quantum_usd: relock.settlementQuantumUsd,
+          precision_mode: relock.precisionMode,
+          discarded_send_ids: relock.discardedSendIds,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", transferId)
+    if (transfer.transaction_id) {
+      const { data: txRow } = await admin
+        .from("transactions")
+        .select("metadata")
+        .eq("id", transfer.transaction_id)
+        .maybeSingle()
+      await admin
+        .from("transactions")
+        .update({
+          metadata: {
+            ...((txRow?.metadata as Record<string, unknown> | null) ?? {}),
+            promised_receive_amount: promisedReceive,
+            receive_amount: relock.recipientLocalAmount,
+            recipient_surplus_local: relock.recipientSurplusLocal,
+            payout_quantum_local: relock.payoutQuantumLocal,
+            settlement_quantum_usd: relock.settlementQuantumUsd,
+            precision_mode: relock.precisionMode,
+            leg2_relocked: true,
+            revenue_sacrificed_usd: relockGap,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transfer.transaction_id)
+    }
   }
 
   await admin

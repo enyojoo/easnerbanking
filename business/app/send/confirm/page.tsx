@@ -901,6 +901,8 @@ export default function SendConfirmPage() {
                 ycLegFeesUsd: yc.ycLegFeesUsd,
                 displayProcessingFeeLocal: yc.displayProcessingFeeLocal,
                 provisionalPayIn: yc.provisionalPayIn,
+                receiveAmount: yc.receiveAmount,
+                requestedReceiveAmount: yc.requestedReceiveAmount,
                 bankInfo: yc.bankInfo,
                 expiresAt: yc.expiresAt,
                 sourcePhone: yc.sourcePhone,
@@ -924,6 +926,8 @@ export default function SendConfirmPage() {
                   ycLegFeesUsd: cached.ycLegFeesUsd,
                   displayProcessingFeeLocal: cached.displayProcessingFeeLocal,
                   provisionalPayIn: cached.provisionalPayIn,
+                  receiveAmount: cached.receiveAmount,
+                  requestedReceiveAmount: cached.requestedReceiveAmount,
                   bankInfo: cached.bankInfo,
                   expiresAt: cached.expiresAt,
                   sourcePhone: cached.sourcePhone,
@@ -943,6 +947,8 @@ export default function SendConfirmPage() {
               ycLegFeesUsd: yc.ycLegFeesUsd,
               displayProcessingFeeLocal: yc.displayProcessingFeeLocal,
               provisionalPayIn: yc.provisionalPayIn,
+              receiveAmount: yc.receiveAmount,
+              requestedReceiveAmount: yc.requestedReceiveAmount,
               bankInfo: yc.bankInfo,
               expiresAt: yc.expiresAt,
               sourcePhone: yc.sourcePhone,
@@ -974,6 +980,8 @@ export default function SendConfirmPage() {
               ycLegFeesUsd: quote.ycLegFeesUsd,
               displayProcessingFeeLocal: quote.displayProcessingFeeLocal,
               provisionalPayIn: quote.provisionalPayIn,
+              receiveAmount: quote.receiveAmount,
+              requestedReceiveAmount: quote.requestedReceiveAmount,
               bankInfo: quote.bankInfo,
               expiresAt: quote.expiresAt,
               sourcePhone: quote.sourcePhone,
@@ -993,7 +1001,7 @@ export default function SendConfirmPage() {
           clientYcLegFeesUsd={yc?.ycLegFeesUsd ?? stashedCrossBorder?.ycLegFeesUsd}
           payInCurrency={state.sendCurrency}
           receiveCurrency={state.receiveCurrency}
-          receiveAmount={state.amount}
+          receiveAmount={yc?.requestedReceiveAmount ?? state.amount}
           payInRail={
             state.otherPaymentMethod === "mobile_money" ? "mobile_money" : "bank_transfer"
           }
@@ -1047,7 +1055,8 @@ export default function SendConfirmPage() {
             network_fee: networkFee,
             exchange_rate: exchangeRate,
             send_currency: state.sendCurrency,
-            receive_amount: state.amount,
+            receive_amount: pq?.receiveAmount ?? state.amount,
+            requested_receive_amount: pq?.requestedReceiveAmount ?? state.amount,
             receive_currency: state.receiveCurrency,
             transfer_method: walletTransferMethod,
             processing_time: arrivalHint ?? "",

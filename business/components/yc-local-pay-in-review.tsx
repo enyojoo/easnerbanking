@@ -20,6 +20,7 @@ export type YcLocalPayInReviewProps = {
   customerRate: number
   localPayIn: number
   receiveAmount: number
+  requestedReceiveAmount?: number
   processingFeeLocal?: number
   processingFeeUsd?: number
   exchangeFeeUsd?: number
@@ -45,6 +46,7 @@ export function YcLocalPayInReview({
   customerRate,
   localPayIn,
   receiveAmount,
+  requestedReceiveAmount,
   processingFeeLocal,
   processingFeeUsd,
   exchangeFeeUsd,
@@ -68,6 +70,7 @@ export function YcLocalPayInReview({
     customerRate,
     localPayIn,
     receiveAmount,
+    requestedReceiveAmount,
     processingFeeLocal,
     processingFeeUsd,
     exchangeFeeUsd,

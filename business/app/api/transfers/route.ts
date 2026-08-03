@@ -35,7 +35,7 @@ type TransferRequest = {
   noahSendAmount?: string
   totalDebited?: string
   marginAmount?: string
-  marginCaptureMode?: "surplus_send" | "split_debit"
+  marginCaptureMode?: "surplus_send" | "split_debit" | "fee_wallet_deferred" | "fee_wallet_omnibus"
   customerRate?: number
   noahMid?: number
   payoutProvider?: "noah" | "yellowcard" | "grid"
@@ -245,6 +245,12 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { error: "Insufficient balance for this payout." },
           { status: 400 },
+        )
+      }
+      if (result.message === "YC_QUOTE_EXPIRED") {
+        return NextResponse.json(
+          { error: "Payout quote expired. Go back and review again.", code: "YC_QUOTE_EXPIRED" },
+          { status: 409 },
         )
       }
       throw new Error(result.message)
