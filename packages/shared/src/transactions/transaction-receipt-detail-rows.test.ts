@@ -31,7 +31,13 @@ describe("buildTransactionReceiptDetailRows", () => {
       },
     })
     const recipient = rows.find((row) => row.label === REVIEW_ROW_LABELS.recipient)
+    const exchangeRate = rows.find((row) => row.label === REVIEW_ROW_LABELS.exchangeRate)
     expect(rows.some((row) => row.label === REVIEW_ROW_LABELS.recipientGets)).toBe(false)
+    expect(exchangeRate).toEqual({
+      kind: "text",
+      label: REVIEW_ROW_LABELS.exchangeRate,
+      value: "$1 = ₦1,500.00",
+    })
     expect(recipient?.kind).toBe("recipient")
     if (recipient?.kind === "recipient") {
       expect(recipient.display.fullName).toBe("Jane Doe")

@@ -59,7 +59,7 @@
     "react-native-quick-base64": "3.0.0",
     "expo": "56.0.12",
     "@expo/metro-runtime": "56.0.18",
-    "expo-background-task": "56.0.23",
+    "expo-background-task": "56.0.24",
     "expo-blur": "56.0.4",
     "expo-dev-client": "56.0.24",
     "react-native-reanimated": "4.3.1",
@@ -72,7 +72,7 @@
     "expo-notifications": "56.0.18",
     "expo-sharing": "56.0.23",
     "expo-splash-screen": "56.0.14",
-    "expo-task-manager": "56.0.23",
+    "expo-task-manager": "56.0.24",
     "expo-web-browser": "56.0.6",
     "expo-constants": "56.0.18",
     "expo-auth-session": {
