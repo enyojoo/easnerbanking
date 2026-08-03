@@ -351,8 +351,10 @@ export function resolveYcPayInPaymentDetails(
     localCurrency,
     receiveAmount: Number(
       meta.usd_credit ??
+        meta.requested_receive_amount ??
         meta.receive_amount ??
         depositReview?.usd_credit ??
+        payoutReview?.requested_receive_amount ??
         payoutReview?.receive_amount ??
         0,
     ) || undefined,

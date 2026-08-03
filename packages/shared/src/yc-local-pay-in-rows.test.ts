@@ -45,7 +45,7 @@ describe("buildCrossBorderSendDetailRows", () => {
 })
 
 describe("buildYcLocalPayInReviewRows", () => {
-  it("shows requested and actual recipient amounts when YC locks a higher quantum", () => {
+  it("keeps Recipient gets anchored to the requested amount when YC locks a higher quantum", () => {
     const rows = buildYcLocalPayInReviewRows({
       mode: "cross_border_send",
       phase: "locked",
@@ -57,10 +57,8 @@ describe("buildYcLocalPayInReviewRows", () => {
       requestedReceiveAmount: 2005,
       receiveAmount: 2012.2,
     })
-    expect(rows.find((row) => row.id === "requested-recipient-amount")?.value).toContain(
-      "2,005",
-    )
-    expect(rows.find((row) => row.id === "recipient-gets")?.value).toContain("2,012.20")
+    expect(rows.find((row) => row.id === "requested-recipient-amount")).toBeUndefined()
+    expect(rows.find((row) => row.id === "recipient-gets")?.value).toContain("2,005")
   })
 
   it("locks TLC bank review with transfer amount and Total to pay", () => {

@@ -31,6 +31,12 @@ export type GlobalPayoutReviewSnapshot = {
   principal_local_pay_in?: number
 }
 
+/** Customer-facing payout amount; provider round-up remains in receive_amount for settlement/audit. */
+export function displayPayoutReceiveAmount(review: GlobalPayoutReviewSnapshot): number {
+  const requested = Number(review.requested_receive_amount)
+  return Number.isFinite(requested) && requested > 0 ? requested : review.receive_amount
+}
+
 export type GlobalPayoutRecipientSnapshot = {
   full_name: string
   bank_name?: string

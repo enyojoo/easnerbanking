@@ -9,7 +9,11 @@ import {
   TLC_LOCAL_TRANSFER_METHOD,
 } from "./review-row-labels"
 import { computeYcCrossBorderPrincipalLocalPayIn } from "./transactions/yc-deposit-display"
-import type { GlobalPayoutRecipientSnapshot, GlobalPayoutReviewSnapshot } from "./transactions/global-payout-types"
+import {
+  displayPayoutReceiveAmount,
+  type GlobalPayoutRecipientSnapshot,
+  type GlobalPayoutReviewSnapshot,
+} from "./transactions/global-payout-types"
 
 export type YcLocalPayInDetailRow = {
   id: string
@@ -28,7 +32,7 @@ function resolveCrossBorderPrincipalLocalPayIn(
     return payoutReview.principal_local_pay_in
   }
   return computeYcCrossBorderPrincipalLocalPayIn({
-    receiveAmount: payoutReview.receive_amount,
+    receiveAmount: displayPayoutReceiveAmount(payoutReview),
     customerRate: payoutReview.exchange_rate,
   })
 }

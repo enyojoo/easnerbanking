@@ -17,6 +17,7 @@ describe("buildTransactionEmailDetailRows", () => {
       exchange_rate: 1342.75,
       send_currency: "USD",
       receive_amount: 134275,
+      requested_receive_amount: 134270,
       receive_currency: "NGN",
       transfer_method: "Bank transfer",
       processing_time: "Within minutes",
@@ -37,6 +38,7 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(map["Total debited"]).toBe("-$103.32")
     expect(map["Exchange rate"]).toBeDefined()
     expect(map["Transfer method"]).toBe("Local transfer")
+    expect(map["Recipient gets"]).toBe("₦134,270")
     expect(map["Recipient"]).toContain("Samuel Odiba")
     // No standalone Exchange fee row.
     expect(map["Exchange fee"]).toBeUndefined()

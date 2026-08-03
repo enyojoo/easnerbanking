@@ -2,6 +2,27 @@ import { describe, expect, it } from "vitest"
 import { buildGlobalPayoutLifecycle } from "./global-payout-lifecycle"
 
 describe("buildGlobalPayoutLifecycle cross-border", () => {
+  it("uses the requested recipient amount in completed customer copy", () => {
+    const steps = buildGlobalPayoutLifecycle({
+      status: "settled",
+      payoutReview: {
+        you_send_amount: 1.5,
+        total_debited: 1.5,
+        exchange_fee: 0,
+        processing_fee: 0,
+        exchange_rate: 1365,
+        send_currency: "USD",
+        receive_amount: 2010.25,
+        requested_receive_amount: 2000,
+        receive_currency: "NGN",
+        transfer_method: "Local transfer",
+        processing_time: "Within minutes",
+      },
+    })
+    expect(steps.at(-1)?.description).toContain("₦2,000")
+    expect(steps.at(-1)?.description).not.toContain("2,010.25")
+  })
+
   it("shows confirming payment before user attestation", () => {
     const steps = buildGlobalPayoutLifecycle({
       status: "pending",

@@ -21,7 +21,7 @@ import {
   isPayoutReviewFeeVisible,
 } from "../payout-review-display"
 import { normalizeTransferMethodLabel } from "./payout-transfer-method"
-import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
+import { displayPayoutReceiveAmount, type GlobalPayoutReviewSnapshot } from "./global-payout-types"
 import type { YcFundBalanceDepositReviewSnapshot } from "./global-deposit-types"
 import { computeYcCrossBorderPrincipalLocalPayIn } from "./yc-deposit-display"
 import type { InboundReceiveDetailSnapshot } from "./inbound-receive-detail"
@@ -96,7 +96,7 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
       review.principal_local_pay_in != null && review.principal_local_pay_in > 0
         ? review.principal_local_pay_in
         : computeYcCrossBorderPrincipalLocalPayIn({
-            receiveAmount: review.receive_amount,
+            receiveAmount: displayPayoutReceiveAmount(review),
             customerRate: review.exchange_rate,
           })
     pushIf(
@@ -171,7 +171,7 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
     pushIf(
       rows,
       REVIEW_ROW_LABELS.recipientGets,
-      formatMoneyDisplay(review.receive_amount, review.receive_currency),
+      formatMoneyDisplay(displayPayoutReceiveAmount(review), review.receive_currency),
     )
   }
 

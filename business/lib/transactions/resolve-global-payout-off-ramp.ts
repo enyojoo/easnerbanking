@@ -142,6 +142,11 @@ function derivePayoutReview(
   const receiveAmount = roundFiat(
     typeof meta.receive_amount === "number" ? meta.receive_amount : Number(meta.receive_amount),
   )
+  const requestedReceiveAmount = roundFiat(
+    typeof meta.requested_receive_amount === "number"
+      ? meta.requested_receive_amount
+      : Number(meta.requested_receive_amount),
+  )
   const receiveCurrency = String(meta.receive_currency || meta.fiat_currency || "").toUpperCase()
 
   if (
@@ -184,6 +189,9 @@ function derivePayoutReview(
         exchange_rate: exchangeRate ?? 1,
         send_currency: sendCurrency,
         receive_amount: receiveAmount,
+        ...(requestedReceiveAmount != null && requestedReceiveAmount > 0
+          ? { requested_receive_amount: requestedReceiveAmount }
+          : {}),
         receive_currency: receiveCurrency,
         transfer_method: transferMethod,
         processing_time: getGlobalPayoutProcessingTime(transferMethod),
@@ -390,7 +398,12 @@ export function resolveGlobalPayoutOffRampDetail(
   const recipientName = deriveRecipientName(meta, recipientSnapshot, payload)
   const payoutReview = derivePayoutReview(meta, payload, ledgerAmount, ledgerCurrency)
 
-  const displayAmount = payoutReview?.receive_amount ?? roundFiat(meta.receive_amount as number) ?? ledgerAmount
+  const displayAmount =
+    payoutReview?.requested_receive_amount ??
+    payoutReview?.receive_amount ??
+    roundFiat(meta.requested_receive_amount as number) ??
+    roundFiat(meta.receive_amount as number) ??
+    ledgerAmount
   const displayCurrency =
     payoutReview?.receive_currency ??
     String(meta.receive_currency || meta.fiat_currency || ledgerCurrency).toUpperCase()

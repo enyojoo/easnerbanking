@@ -127,13 +127,14 @@ describe("resolveGlobalPayoutListDisplay", () => {
       metadata: {
         payout_type: "global_fiat",
         receive_amount: 5000,
+        requested_receive_amount: 4995,
         receive_currency: "NGN",
         beneficiary_name: "Jane Doe",
       },
     })
     const display = resolveGlobalPayoutListDisplay(row)
     expect(display).not.toBeNull()
-    expect(display?.displayAmount).toBe(5000)
+    expect(display?.displayAmount).toBe(4995)
     expect(display?.displayCurrency).toBe("NGN")
     expect(display?.displayDescription).toBe("Transfer to Jane Doe")
   })

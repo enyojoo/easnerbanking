@@ -2,7 +2,7 @@ import { formatDisplayPersonName } from "../format-display-name"
 import { formatMoneyDisplay } from "../format-money-display"
 import { truncateMiddle } from "../payout-recipient-subtitle"
 import { isGlobalPayoutOffRampFlow } from "./global-payout-flow"
-import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
+import { displayPayoutReceiveAmount, type GlobalPayoutReviewSnapshot } from "./global-payout-types"
 import {
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
@@ -135,6 +135,9 @@ function normalizePayoutReviewSnapshot(raw: unknown): GlobalPayoutReviewSnapshot
     exchange_rate: Number.isFinite(Number(o.exchange_rate)) ? Number(o.exchange_rate) : 1,
     send_currency: String(o.send_currency || "USD").toUpperCase(),
     receive_amount: receiveAmount,
+    ...(Number.isFinite(Number(o.requested_receive_amount)) && Number(o.requested_receive_amount) > 0
+      ? { requested_receive_amount: Number(o.requested_receive_amount) }
+      : {}),
     receive_currency: String(o.receive_currency || "USD").toUpperCase(),
     transfer_method: transferMethod,
     processing_time: String(
@@ -190,7 +193,7 @@ function buildWalletSendBody(input: {
   const meta = input.metadata ?? null
   const payoutReview = normalizePayoutReviewSnapshot(meta?.payout_review)
   const receiveAmount =
-    payoutReview?.receive_amount ??
+    (payoutReview ? displayPayoutReceiveAmount(payoutReview) : undefined) ??
     (typeof meta?.receive_amount === "number" ? meta.receive_amount : input.amount)
   const receiveCurrency = String(
     payoutReview?.receive_currency ?? meta?.receive_currency ?? meta?.receive_asset ?? input.currency,
@@ -231,8 +234,12 @@ function buildGlobalPayoutOutContext(input: {
   const payoutReview = normalizePayoutReviewSnapshot(meta?.payout_review)
   const recipientSnapshot = meta?.recipient_snapshot as Record<string, unknown> | undefined
   const receiveAmount =
-    payoutReview?.receive_amount ??
-    (typeof meta?.receive_amount === "number" ? meta.receive_amount : null)
+    (payoutReview ? displayPayoutReceiveAmount(payoutReview) : undefined) ??
+    (typeof meta?.requested_receive_amount === "number"
+      ? meta.requested_receive_amount
+      : typeof meta?.receive_amount === "number"
+        ? meta.receive_amount
+        : null)
   const receiveCurrency = String(
     payoutReview?.receive_currency ?? meta?.receive_currency ?? meta?.fiat_currency ?? "",
   ).toUpperCase()

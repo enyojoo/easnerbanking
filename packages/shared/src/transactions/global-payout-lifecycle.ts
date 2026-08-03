@@ -1,5 +1,5 @@
 import { formatMoneyDisplay } from "../format-money-display"
-import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
+import { displayPayoutReceiveAmount, type GlobalPayoutReviewSnapshot } from "./global-payout-types"
 import { buildYcPayInLifecycle, isYcPayInFlowMetadata } from "./yc-pay-in-display"
 
 export type GlobalPayoutLifecycleStepId = "processing" | "completed" | "failed"
@@ -18,7 +18,7 @@ export function formatGlobalPayoutCompletedDescription(
   recipientName?: string | null,
 ): string {
   if (payoutReview?.receive_amount != null && payoutReview.receive_currency) {
-    const amount = formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency)
+    const amount = formatMoneyDisplay(displayPayoutReceiveAmount(payoutReview), payoutReview.receive_currency)
     const name = recipientName?.trim()
     if (name) return `Sent ${amount} to ${name}`
     return `Sent ${amount}`

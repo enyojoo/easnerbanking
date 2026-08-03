@@ -136,20 +136,13 @@ export function buildYcLocalPayInReviewRows(input: {
       value: formatMoneyDisplay(input.usdCredit!, "USD"),
     })
   } else {
-    if (
-      input.requestedReceiveAmount != null &&
-      Math.abs(input.requestedReceiveAmount - input.receiveAmount) >= 0.005
-    ) {
-      rows.push({
-        id: "requested-recipient-amount",
-        label: "Requested amount",
-        value: formatMoneyDisplay(input.requestedReceiveAmount, input.receiveCurrency),
-      })
-    }
     rows.push({
       id: "recipient-gets",
       label: REVIEW_ROW_LABELS.recipientGets,
-      value: formatMoneyDisplay(input.receiveAmount, input.receiveCurrency),
+      value: formatMoneyDisplay(
+        input.requestedReceiveAmount ?? input.receiveAmount,
+        input.receiveCurrency,
+      ),
       valueBold: true,
     })
   }

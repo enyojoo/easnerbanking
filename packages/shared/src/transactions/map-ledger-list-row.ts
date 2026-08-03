@@ -168,8 +168,10 @@ export function resolveGlobalPayoutListDisplay(
   const ledgerCurrency = String(row.currency ?? row.base_currency ?? "USD").toUpperCase()
 
   const displayAmount =
-    (typeof meta.receive_amount === "number"
-      ? meta.receive_amount
+    (typeof meta.requested_receive_amount === "number"
+      ? meta.requested_receive_amount
+      : typeof meta.receive_amount === "number"
+        ? meta.receive_amount
       : meta.display_amount != null
         ? Number(meta.display_amount)
         : null) ?? ledgerAmount
@@ -266,7 +268,7 @@ export function resolveYcCrossBorderListDisplay(
   const ledgerCurrency = String(
     row.currency ?? row.base_currency ?? "USD",
   ).toUpperCase()
-  const receiveAmount = Number(meta.receive_amount)
+  const receiveAmount = Number(meta.requested_receive_amount ?? meta.receive_amount)
   const receiveCurrency = String(meta.receive_currency ?? "").toUpperCase()
   const title = transferToTitle(meta, "Recipient")
 
