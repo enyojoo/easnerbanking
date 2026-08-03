@@ -203,6 +203,12 @@ export const YC_STATIC_CORRIDOR_SCHEMAS: Record<string, YcCorridorSchemaHint> = 
       },
     ],
   },
+  "PH:PHP": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [],
+  },
   "CO:COP": {
     status: "ready",
     channel_type: "bank",

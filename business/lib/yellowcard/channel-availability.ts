@@ -16,11 +16,15 @@ function corridorKey(country: string, currency: string, rail: PayoutRail): strin
 }
 
 function mapChannelTypeToRail(channelType: string | undefined): PayoutRail {
-  return String(channelType ?? "").toLowerCase() === "momo" ? "mobile_money" : "bank_transfer"
+  const t = String(channelType ?? "").toLowerCase()
+  return t.includes("momo") || t.includes("mobile") ? "mobile_money" : "bank_transfer"
 }
 
 function isActiveChannel(channel: Record<string, unknown>): boolean {
-  return channel.apiStatus === "active" && channel.status === "active"
+  const status = String(channel.status ?? channel.apiStatus ?? "")
+    .trim()
+    .toLowerCase()
+  return !status || status === "active" || status === "enabled"
 }
 
 function buildCapsFromChannels(channels: Array<Record<string, unknown>>): Map<string, YcCorridorCaps> {
@@ -38,8 +42,8 @@ function buildCapsFromChannels(channels: Array<Record<string, unknown>>): Map<st
     const existing = byKey.get(key) ?? { yc_send: false, yc_receive: false }
 
     const ramp = String(channel.rampType ?? "").toLowerCase()
-    if (ramp === "withdraw") existing.yc_send = true
-    if (ramp === "deposit") existing.yc_receive = true
+    if (ramp.includes("withdraw") || ramp.includes("send")) existing.yc_send = true
+    if (ramp.includes("deposit") || ramp.includes("receive")) existing.yc_receive = true
 
     byKey.set(key, existing)
   }
