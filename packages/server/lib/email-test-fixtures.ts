@@ -20,6 +20,7 @@ export const txSettledFixture: TransactionEmailData = {
   category: "Bank Deposit",
   paymentRail: "ACH",
   status: "settled",
+  createdAt: "2026-01-15T12:00:00.000Z",
   outcome: "success",
   detailRows: [
     { label: "Scheme", value: "ACH" },

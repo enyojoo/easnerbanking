@@ -136,7 +136,7 @@ describe("resolveGlobalPayoutListDisplay", () => {
     expect(display).not.toBeNull()
     expect(display?.displayAmount).toBe(4995)
     expect(display?.displayCurrency).toBe("NGN")
-    expect(display?.displayDescription).toBe("Transfer to Jane Doe")
+    expect(display?.displayDescription).toBe("Jane Doe")
   })
 
   it("falls back to ledger amount when receive_amount absent", () => {
@@ -223,8 +223,8 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.ledger_currency).toBe("USD")
     expect(item.account_impact_amount).toBe(25)
     expect(item.account_impact_currency).toBe("USD")
-    expect(item.display_description).toBe("Transfer to Jane Doe")
-    expect(item.display_hero_title).toBe("Transfer to Jane Doe")
+    expect(item.display_description).toBe("Jane Doe")
+    expect(item.display_hero_title).toBe("Jane Doe")
   })
 
   it("maps wallet send display fields from metadata", () => {
@@ -250,13 +250,13 @@ describe("mapLedgerRowToMobileListItem", () => {
     )
     expect(item.amount).toBe(1)
     expect(item.currency).toBe("USD")
-    expect(item.display_description).toBe("Transfer to External Wallet")
+    expect(item.display_description).toBe("External Wallet")
     expect(item.transaction_product).toBe("Stablecoin Transfer")
     expect(item.ledger_amount).toBe(1.01)
     expect(item.ledger_currency).toBe("USD")
     expect(item.account_impact_amount).toBe(1.01)
     expect(item.account_impact_currency).toBe("USD")
-    expect(item.display_hero_title).toBe("Transfer to External Wallet")
+    expect(item.display_hero_title).toBe("External Wallet")
   })
 
   it("maps YC fund_balance list name from deposit_display_title", () => {
@@ -310,7 +310,7 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.display_currency).toBe("GHS")
     expect(item.account_impact_amount).toBe(65)
     expect(item.account_impact_currency).toBe("USD")
-    expect(item.display_description).toBe("Transfer to Ama Mensah")
-    expect(item.display_hero_title).toBe("Transfer to Ama Mensah")
+    expect(item.display_description).toBe("Ama Mensah")
+    expect(item.display_hero_title).toBe("Ama Mensah")
   })
 })

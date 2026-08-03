@@ -283,7 +283,9 @@ export function DashboardPageClient() {
                           : <ArrowUpRight className="h-4 w-4" />}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">{txn.description}</p>
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {txn.description.replace(/^Transfer to\s+/i, "")}
+                          </p>
                           <p className="mt-1 truncate text-xs text-muted-foreground">
                             {formatTransactionRowDateTime(txn.displayWhenAt ?? txn.date)}
                           </p>

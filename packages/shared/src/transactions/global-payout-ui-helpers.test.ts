@@ -14,7 +14,7 @@ describe("formatTransactionDetailHeroTitle", () => {
         direction: "out",
         counterpartyName: "SAMUEL ODIBA ENYOJO",
       }),
-    ).toBe("Transfer to Samuel Odiba Enyojo")
+    ).toBe("Samuel Odiba Enyojo")
   })
 
   it("formats inbound deposit hero", () => {

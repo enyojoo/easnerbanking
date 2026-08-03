@@ -1,19 +1,12 @@
+import { formatTransactionWhen } from "@easner/shared"
+
 /**
  * Presentation helpers for transaction list rows (aligned with mobile Transactions list).
  */
 
 /** "Apr 21, 2026 • 3:45 PM" */
 export function formatTransactionRowDateTime(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ""
-  const month = date.toLocaleString("en-US", { month: "short" })
-  const day = date.getDate().toString().padStart(2, "0")
-  const year = date.getFullYear()
-  let hours = date.getHours()
-  const minutes = date.getMinutes().toString().padStart(2, "0")
-  const ampm = hours >= 12 ? "PM" : "AM"
-  hours = hours % 12 || 12
-  return `${month} ${day}, ${year} • ${hours}:${minutes} ${ampm}`
+  return formatTransactionWhen(iso)
 }
 
 /** Second line under amount on the right. */

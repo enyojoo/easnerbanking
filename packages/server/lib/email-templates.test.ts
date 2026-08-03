@@ -94,6 +94,8 @@ describe("emailTemplates", () => {
     expect(html).toContain(">Scheme<")
     expect(html).toContain(">Sender<")
     expect(html).toContain("Amount credited")
+    expect(html).toContain(">When<")
+    expect(html.indexOf(">When<")).toBeLessThan(html.indexOf(">Status<"))
   })
 
   it("personal welcome uses Hey greeting and mobile dashboard deep link", () => {

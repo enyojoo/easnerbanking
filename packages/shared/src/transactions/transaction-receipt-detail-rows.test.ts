@@ -31,6 +31,7 @@ describe("buildTransactionReceiptDetailRows", () => {
       },
     })
     const recipient = rows.find((row) => row.label === REVIEW_ROW_LABELS.recipient)
+    expect(rows.some((row) => row.label === REVIEW_ROW_LABELS.recipientGets)).toBe(false)
     expect(recipient?.kind).toBe("recipient")
     if (recipient?.kind === "recipient") {
       expect(recipient.display.fullName).toBe("Jane Doe")

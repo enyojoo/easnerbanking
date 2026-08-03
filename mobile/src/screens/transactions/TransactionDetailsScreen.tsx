@@ -74,6 +74,7 @@ import {
   scopeKey,
   buildTransactionReceiptDetailRows,
   formatTransactionDetailHeroTitle,
+  formatTransactionWhen,
   computeDisplayProcessingFee,
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
@@ -465,31 +466,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const [ycPayInSheetOpen, setYcPayInSheetOpen] = useState(false)
 
   const formatTimestamp = (dateString: string, timeZone?: string) => {
-    if (!dateString) return ''
-    const date = new Date(dateString)
-    if (timeZone) {
-      try {
-        return new Intl.DateTimeFormat('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: '2-digit',
-          hour: 'numeric',
-          minute: '2-digit',
-          timeZone,
-          timeZoneName: 'short',
-        }).format(date)
-      } catch {
-        // Fall through to the device-local legacy formatter.
-      }
-    }
-    const month = date.toLocaleString('en-US', { month: 'short' })
-    const day = date.getDate().toString().padStart(2, '0')
-    const year = date.getFullYear()
-    const hours = date.getHours()
-    const minutes = date.getMinutes().toString().padStart(2, '0')
-    const ampm = hours >= 12 ? 'PM' : 'AM'
-    const displayHours = hours % 12 || 12
-    return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
+    return formatTransactionWhen(dateString, timeZone ? { timeZone } : undefined)
   }
 
   const formatScheme = (transaction: LedgerTransaction, paymentRail: string) => {
@@ -563,7 +540,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     if (heroTitle.startsWith('Deposit from ') && isEasetagReceiveTitle(heroTitle.replace(/^Deposit from /i, ''))) {
       heroTitle = heroTitle.replace(/^Deposit from /i, '')
     }
-    if (heroTitle) return heroTitle
+    if (heroTitle) return heroTitle.replace(/^Transfer to\s+/i, '')
     if (transaction.transaction_type === 'receive') {
       if (transaction.source_type === 'liquidation_address') {
         return 'Stablecoin Deposit'
@@ -579,7 +556,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       return 'Bank Deposit'
     }
     if (transaction.transaction_type === 'send' && isEasnerProductSendTitle(transaction.name)) {
-      return String(transaction.name).trim()
+      return String(transaction.name).trim().replace(/^Transfer to\s+/i, '')
     }
     return getTransactionName()
   }
@@ -940,9 +917,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       processingFee: ycDepositReview.processing_fee,
       exchangeFee: ycDepositReview.exchange_fee,
     })
-  // Downloadable receipt (image) — completed, non-Easetag. Same canonical rows as business PDF.
+  // Downloadable receipt (image) — completed payouts and supported deposits only.
+  // Stablecoin and Easetag deposits intentionally do not offer transaction receipts.
   const receiptRows =
-    transaction.status === 'completed' && !isEasetagP2p
+    transaction.status === 'completed' && !isEasetagP2p && !isStablecoinReceive
       ? buildTransactionReceiptDetailRows(
           isGlobalPayoutSend && transaction.payout_review
             ? {
@@ -1277,6 +1255,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     hasFx={!!payoutReviewHasFx}
                     walletSendReceiveNetwork={walletSendReceiveNetwork}
                     isWalletSendReview={isWalletSendReview}
+                    showRecipientGets={false}
                     displayDescription={transaction.display_description}
                     name={transaction.name}
                     counterpartyName={

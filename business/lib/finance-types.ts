@@ -105,7 +105,7 @@ export interface Transaction {
   depositAmount?: number
   postedAmount?: number
   postedCurrency?: string
-  /** Global payout detail hero title — e.g. Transfer to {name}. */
+  /** Global payout detail hero title — the recipient name. */
   displayHeroTitle?: string
   ledgerAmount?: number
   ledgerCurrency?: string

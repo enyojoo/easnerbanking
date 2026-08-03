@@ -206,7 +206,7 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(buildTransactionEmailDetailRows({ direction: "in" })).toEqual([])
   })
 
-  it("filterTransactionReceiptDetailRows omits Exchange rate and Transfer method", () => {
+  it("filterTransactionReceiptDetailRows omits hero amounts, Exchange rate, and Transfer method", () => {
     const review: GlobalPayoutReviewSnapshot = {
       you_send_amount: 100,
       total_debited: 101,
@@ -227,6 +227,7 @@ describe("buildTransactionEmailDetailRows", () => {
     const filtered = filterTransactionReceiptDetailRows(rows)
     const labels = filtered.map((r) => r.label)
     expect(labels).not.toContain("Exchange rate")
+    expect(labels).not.toContain("Recipient amount")
     expect(labels).not.toContain("Transfer method")
     expect(labels).toContain("Sent amount")
     expect(labels).toContain("Recipient")

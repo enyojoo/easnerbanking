@@ -10,7 +10,7 @@ vi.mock("@easner/shared", () => ({
   formatOutboundTransferTitle: (
     recipientName?: string | null,
     fallbackRecipient = "Recipient",
-  ) => `Transfer to ${recipientName || fallbackRecipient}`,
+  ) => recipientName || fallbackRecipient,
   formatTransactionDetailHeroTitle: ({
     direction,
     counterpartyName,
@@ -21,7 +21,7 @@ vi.mock("@easner/shared", () => ({
     productFallback?: string | null
   }) =>
     direction === "out" && counterpartyName
-      ? `Transfer to ${counterpartyName}`
+      ? counterpartyName
       : productFallback,
   isBankOnrampDepositFlow: () => false,
   isVerificationDepositMetadata: () => false,
@@ -66,8 +66,8 @@ vi.mock("@easner/shared", () => ({
       displayCurrency: String(meta.receive_currency ?? row.currency ?? "USD"),
       ledgerAmount: Number(row.amount ?? 0),
       ledgerCurrency: String(row.currency ?? "USD"),
-      displayDescription: `Transfer to ${meta.beneficiary_name ?? "Recipient"}`,
-      displayHeroTitle: `Transfer to ${meta.beneficiary_name ?? "Recipient"}`,
+      displayDescription: String(meta.beneficiary_name ?? "Recipient"),
+      displayHeroTitle: String(meta.beneficiary_name ?? "Recipient"),
     }
   },
   resolveWalletSendListDisplay: (row: Record<string, unknown>) => {
@@ -78,8 +78,8 @@ vi.mock("@easner/shared", () => ({
       displayCurrency: String(meta.receive_asset ?? row.currency ?? "USD"),
       ledgerAmount: Number(row.amount ?? 0),
       ledgerCurrency: String(row.currency ?? "USD"),
-      displayDescription: `Transfer to ${meta.counterparty_name ?? "External Wallet"}`,
-      displayHeroTitle: `Transfer to ${meta.counterparty_name ?? "Wallet transfer"}`,
+      displayDescription: String(meta.counterparty_name ?? "External Wallet"),
+      displayHeroTitle: String(meta.counterparty_name ?? "Wallet transfer"),
     }
   },
   resolveYcCrossBorderListDisplay: (row: Record<string, unknown>) => {
@@ -90,7 +90,7 @@ vi.mock("@easner/shared", () => ({
     const recipientName = String(
       snapshot.full_name ?? meta.recipient_name ?? "Recipient",
     )
-    const title = `Transfer to ${recipientName}`
+    const title = recipientName
     return {
       displayAmount: Number(meta.receive_amount ?? row.amount ?? 0),
       displayCurrency: String(meta.receive_currency ?? row.currency ?? "USD"),
@@ -179,7 +179,7 @@ describe("mapRowToBusinessTransaction", () => {
 
     expect(item.amount).toBe(5000)
     expect(item.displayCurrency).toBe("NGN")
-    expect(item.description).toBe("Transfer to Jane Doe")
+    expect(item.description).toBe("Jane Doe")
     expect(item.baseAmount).toBe(25)
     expect(item.baseCurrency).toBe("USD")
   })
@@ -216,7 +216,7 @@ describe("mapRowToBusinessTransaction", () => {
 
     expect(item.amount).toBe(1)
     expect(item.displayCurrency).toBe("USDC")
-    expect(item.description).toBe("Transfer to External Wallet")
+    expect(item.description).toBe("External Wallet")
     expect(item.payoutReview?.transfer_method).toBe("USDC on SOL")
   })
 
@@ -264,8 +264,8 @@ describe("mapRowToBusinessTransaction", () => {
 
     expect(item.amount).toBe(900)
     expect(item.displayCurrency).toBe("GHS")
-    expect(item.description).toBe("Transfer to Ama Mensah")
-    expect(item.displayHeroTitle).toBe("Transfer to Ama Mensah")
+    expect(item.description).toBe("Ama Mensah")
+    expect(item.displayHeroTitle).toBe("Ama Mensah")
     expect(item.status).toBe("processing_payment")
     expect(item.statusLabel).toBe("Processing")
   })

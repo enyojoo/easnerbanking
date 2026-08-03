@@ -12,26 +12,36 @@ export function formatOutboundTransferTitle(
   recipientName?: string | null,
   fallbackRecipient = "Recipient",
 ): string {
+  const normalizedRecipient = String(recipientName ?? "")
+    .trim()
+    .replace(/^Transfer to\s+/i, "")
   const explicitRecipient =
-    recipientName && !isEasnerProductSendTitle(recipientName)
-      ? recipientName
+    normalizedRecipient && !isEasnerProductSendTitle(normalizedRecipient)
+      ? normalizedRecipient
       : null
   const name =
     formatDisplayPersonName(explicitRecipient) ||
     formatDisplayPersonName(fallbackRecipient) ||
     "Recipient"
-  return `Transfer to ${name}`
+  return name
 }
 
 /** Detail hero copy — web + mobile (not list rows or push body). */
 export function formatTransactionDetailHeroTitle(input: TransactionDetailHeroTitleInput): string {
   const raw = String(input.counterpartyName ?? "").trim()
-  if (input.direction === "out" && isEasnerProductSendTitle(raw)) return raw
+  const normalizedOutboundName = raw.replace(/^Transfer to\s+/i, "")
+  if (
+    input.direction === "out" &&
+    !/^Transfer to\s+/i.test(raw) &&
+    isEasnerProductSendTitle(raw)
+  ) return raw
   if (input.direction === "in" && isEasetagReceiveTitle(raw)) return raw
 
-  const name = formatDisplayPersonName(input.counterpartyName)
+  const name = formatDisplayPersonName(
+    input.direction === "out" ? normalizedOutboundName : input.counterpartyName,
+  )
   if (input.direction === "out") {
-    return name ? `Transfer to ${name}` : String(input.productFallback || "Transfer").trim() || "Transfer"
+    return name || String(input.productFallback || "Transfer").trim() || "Transfer"
   }
   const productFallback = String(input.productFallback || "Bank Deposit").trim() || "Bank Deposit"
   if (name && !isEasnerProductReceiveTitle(input.counterpartyName)) {

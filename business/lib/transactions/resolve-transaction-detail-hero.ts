@@ -8,14 +8,14 @@ import {
 
 export function resolveTransactionDetailHeroTitle(transaction: Transaction): string {
   const preset = transaction.displayHeroTitle?.trim()
-  if (preset) return preset
+  if (preset) return preset.replace(/^Transfer to\s+/i, "")
 
   const description = transaction.description?.trim() || ""
   const isCredit = transaction.direction === "credit"
   const isEasetag = transaction.paymentScheme?.toLowerCase() === "easetag"
 
   if (isEasetag || isEasnerProductSendTitle(description) || isEasetagReceiveTitle(description)) {
-    return description || (isCredit ? "Easetag Received" : "Easetag Transfer")
+    return description.replace(/^Transfer to\s+/i, "") || (isCredit ? "Easetag Received" : "Easetag Transfer")
   }
 
   if (

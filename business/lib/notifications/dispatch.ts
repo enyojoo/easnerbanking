@@ -27,6 +27,7 @@ import { resolveWalletSendPayoutReview } from "@/lib/wallet-send/build-wallet-se
 export type DispatchTransactionNotificationInput = DeriveTransactionNotificationInput & {
   userId: string
   transactionId: string
+  createdAt?: string | null
   userEmail?: string | null
   outcome?: NotificationOutcome
   sendEmail?: boolean
@@ -61,6 +62,28 @@ function firstString(values: readonly unknown[]): string | undefined {
     if (typeof v === "number" && Number.isFinite(v)) return String(v)
   }
   return undefined
+}
+
+async function resolveTransactionWhenAt(
+  admin: SupabaseClient,
+  input: DispatchTransactionNotificationInput,
+): Promise<string | undefined> {
+  const meta = (input.metadata ?? {}) as Record<string, unknown>
+  const embedded = firstString([
+    input.createdAt,
+    meta.occurred_at,
+    meta.ledger_created_at,
+    meta.created_at,
+    meta.transaction_started_at,
+  ])
+  if (embedded) return embedded
+
+  const { data } = await admin
+    .from("transactions")
+    .select("occurred_at,created_at")
+    .eq("id", input.transactionId)
+    .maybeSingle()
+  return firstString([data?.occurred_at, data?.created_at])
 }
 
 /** Canonical email detail rows from ledger metadata (payout snapshot or deposit enrichment). */
@@ -212,6 +235,14 @@ function descriptorToEmailData(
         ? `${businessBase}/transactions/${encodeURIComponent(id)}`
         : personalMobileTransactionUrl(id, process.env.NEXT_PUBLIC_MOBILE_APP_URL),
     detailRows: buildEmailDetailRows(descriptor, input),
+    createdAt:
+      input.createdAt ??
+      firstString([
+        (input.metadata as Record<string, unknown> | null | undefined)?.occurred_at,
+        (input.metadata as Record<string, unknown> | null | undefined)?.ledger_created_at,
+        (input.metadata as Record<string, unknown> | null | undefined)?.created_at,
+        (input.metadata as Record<string, unknown> | null | undefined)?.transaction_started_at,
+      ]),
     firstName,
     audience,
   }
@@ -277,7 +308,13 @@ export async function dispatchTransactionNotification(
     const contact = await fetchUserEmailContact(admin, input.userId)
     const email = input.userEmail?.trim() || contact.email
     if (email) {
-      const emailData = descriptorToEmailData(descriptor, input, audience, contact.firstName)
+      const createdAt = await resolveTransactionWhenAt(admin, input)
+      const emailData = descriptorToEmailData(
+        descriptor,
+        { ...input, createdAt },
+        audience,
+        contact.firstName,
+      )
       const { emailService } = await import("@easner/server")
       await emailService
         .sendTransactionSettledEmail(email, emailData, prefs)

@@ -52,8 +52,8 @@ describe("resolveWalletSendListDisplay", () => {
     expect(display).toMatchObject({
       displayAmount: 1,
       displayCurrency: "USD",
-      displayDescription: walletSendListProductLabel(),
-      displayHeroTitle: "Transfer to External Wallet",
+      displayDescription: "External Wallet",
+      displayHeroTitle: "External Wallet",
       transactionProduct: walletSendListProductLabel(),
     })
   })

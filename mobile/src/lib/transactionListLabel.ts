@@ -54,7 +54,7 @@ export function getTransactionListName(row: TransactionListRow): string {
 
   if (transactionType === 'send') {
     const displayDescription = String(row.display_description ?? '').trim()
-    if (displayDescription) return displayDescription
+    if (displayDescription) return displayDescription.replace(/^Transfer to\s+/i, '')
   }
 
   return resolveTransactionListLabel(transactionType, {
@@ -64,5 +64,5 @@ export function getTransactionListName(row: TransactionListRow): string {
     metadata: row.metadata,
     payload: row.payload,
     recipient_full_name: row.recipient?.full_name,
-  })
+  }).replace(/^Transfer to\s+/i, '')
 }

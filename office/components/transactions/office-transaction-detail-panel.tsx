@@ -5,8 +5,8 @@ import {
   buildInboundReceiveDetailRows,
   computeDisplayProcessingFee,
   computeFootedDisplayProcessingFee,
-  displayPayoutReceiveAmount,
   formatReviewRowMoneyDisplay,
+  formatTransactionWhen,
   isYcFundBalanceDepositMetadata,
   resolveInboundReceiveDetail,
   resolvePayoutReviewFlow,
@@ -63,7 +63,7 @@ export function OfficeTransactionDetailPanel({ transaction }: Props) {
     for (const row of buildCrossBorderSendDetailRows({
       payoutReview,
       recipientSnapshot,
-      whenLabel: whenAt,
+      whenLabel: formatTransactionWhen(whenAt),
       displayProcessingFee,
     })) {
       detailRows.push({ label: row.label, value: row.value, bold: row.valueBold })
@@ -74,15 +74,15 @@ export function OfficeTransactionDetailPanel({ transaction }: Props) {
   ) {
     const resolved = resolveInboundReceiveDetail({
       metadata: meta,
-      transactionId: transaction.easner_transaction_id || transaction.id,
-      whenAt,
+      easner_transaction_id: transaction.easner_transaction_id || transaction.id,
+      occurred_at: whenAt,
       amount: transaction.amount,
       currency: transaction.currency,
       direction: transaction.direction,
       provider: transaction.provider,
     })
     if (resolved) {
-      for (const row of buildInboundReceiveDetailRows(resolved, "detail")) {
+      for (const row of buildInboundReceiveDetailRows(resolved, { surface: "detail" })) {
         detailRows.push({ label: row.label, value: row.value })
       }
     }
@@ -127,16 +127,6 @@ export function OfficeTransactionDetailPanel({ transaction }: Props) {
         bold: true,
       })
     }
-    if (payoutReview.receive_currency && payoutReview.receive_amount != null) {
-      detailRows.push({
-        label: REVIEW_ROW_LABELS.recipientGets,
-        value: formatReviewRowMoneyDisplay(
-          REVIEW_ROW_LABELS.recipientGets,
-          displayPayoutReceiveAmount(payoutReview),
-          String(payoutReview.receive_currency),
-        ),
-      })
-    }
   }
 
   return (
@@ -147,7 +137,11 @@ export function OfficeTransactionDetailPanel({ transaction }: Props) {
           <Badge variant="secondary">{formatProviderLabel(transaction.provider)}</Badge>
           {transaction.payInRail ? <Badge variant="outline">{transaction.payInRail}</Badge> : null}
         </div>
-        {transaction.label ? <p className="text-lg font-semibold">{transaction.label}</p> : null}
+        {transaction.label ? (
+          <p className="text-lg font-semibold">
+            {transaction.label.replace(/^Transfer to\s+/i, "")}
+          </p>
+        ) : null}
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
             <p className="text-gray-500">Display amount</p>

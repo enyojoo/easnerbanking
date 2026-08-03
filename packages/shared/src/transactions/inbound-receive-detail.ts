@@ -6,6 +6,7 @@
 import { formatMoneyDisplay } from "../format-money-display"
 import { formatReviewRowMoneyDisplay } from "../format-review-row-money"
 import { formatSendRateLabel } from "../format-exchange-rate"
+import { formatTransactionWhen } from "../format-transaction-when"
 import { computeDisplayProcessingFee } from "../payout-processing-fee"
 import { REVIEW_ROW_LABELS } from "../review-row-labels"
 import { isPayoutReviewFeeVisible } from "../payout-review-display"
@@ -445,21 +446,6 @@ function pushCreditDestination(
   rows.push({ label, value: dest.balanceLabel, creditCurrency: dest.currency })
 }
 
-function formatWhen(iso: string): string {
-  if (!iso) return ""
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  } catch {
-    return iso
-  }
-}
-
 export function buildInboundReceiveDetailRows(
   snapshot: InboundReceiveDetailSnapshot,
   options?: { surface?: InboundReceiveRowSurface },
@@ -526,11 +512,9 @@ export function buildInboundReceiveDetailRows(
       )
       pushCreditDestination(rows, snapshot.creditDestination)
       pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
-      if (includeWhen) pushIf(rows, REVIEW_ROW_LABELS.when, formatWhen(snapshot.whenAt))
       break
     }
     case "noah_va_funding": {
-      if (includeWhen) pushIf(rows, REVIEW_ROW_LABELS.when, formatWhen(snapshot.whenAt))
       pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
       pushIf(rows, REVIEW_ROW_LABELS.sender, snapshot.sender)
       if (snapshot.processingFee) {
@@ -558,7 +542,6 @@ export function buildInboundReceiveDetailRows(
       break
     }
     case "noah_verification": {
-      if (includeWhen) pushIf(rows, REVIEW_ROW_LABELS.when, formatWhen(snapshot.whenAt))
       pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
       pushIf(rows, REVIEW_ROW_LABELS.sender, snapshot.sender)
       pushIf(
@@ -581,7 +564,6 @@ export function buildInboundReceiveDetailRows(
       break
     }
     case "stablecoin": {
-      if (includeWhen) pushIf(rows, REVIEW_ROW_LABELS.when, formatWhen(snapshot.whenAt))
       pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
       pushIf(rows, REVIEW_ROW_LABELS.sender, snapshot.sender)
       if (snapshot.processingFee) {
@@ -602,11 +584,13 @@ export function buildInboundReceiveDetailRows(
     case "easetag_receive": {
       pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme ?? "Easetag")
       pushCreditDestination(rows, snapshot.creditDestination)
-      if (includeWhen) pushIf(rows, REVIEW_ROW_LABELS.when, formatWhen(snapshot.whenAt))
       pushIf(rows, REVIEW_ROW_LABELS.note, snapshot.note)
       break
     }
   }
+
+  // Keep the timestamp as the final transaction-detail row for every deposit type.
+  if (includeWhen) pushIf(rows, REVIEW_ROW_LABELS.when, formatTransactionWhen(snapshot.whenAt))
 
   return rows
 }

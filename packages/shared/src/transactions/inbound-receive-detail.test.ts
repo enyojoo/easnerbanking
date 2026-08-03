@@ -124,6 +124,9 @@ describe("buildInboundReceiveDetailRows", () => {
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$50")
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
     expect(map[REVIEW_ROW_LABELS.narration]).toBe("Invoice 42")
+    expect(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }).at(-1)?.label).toBe(
+      REVIEW_ROW_LABELS.when,
+    )
   })
 
   it("verification uses credit for and detail hint", () => {
@@ -142,6 +145,7 @@ describe("buildInboundReceiveDetailRows", () => {
     const rows = buildInboundReceiveDetailRows(snapshot!, { surface: "detail" })
     expect(rows.some((r) => r.label === REVIEW_ROW_LABELS.creditFor)).toBe(true)
     expect(rows.some((r) => r.isVerificationHint)).toBe(true)
+    expect(rows.at(-1)?.label).toBe(REVIEW_ROW_LABELS.when)
     expect(
       buildInboundReceiveEmailDetailRows(snapshot!).some((r) =>
         r.value.includes("not added to your spendable balance"),
@@ -157,6 +161,7 @@ describe("buildInboundReceiveDetailRows", () => {
       chain: "solana",
       posted_amount: 25,
       posted_currency: "USD",
+      created_at: "2026-01-15T12:00:00.000Z",
     })
     expect(stablecoin?.kind).toBe("stablecoin")
     const stablecoinEmail = rowMap(buildInboundReceiveDetailRows(stablecoin!, { surface: "email" }))
@@ -168,12 +173,23 @@ describe("buildInboundReceiveDetailRows", () => {
       metadata: { source: "easetag_p2p", sender_easetag: "jane", amount: 10, currency: "USD" },
       amount: 10,
       currency: "USD",
+      created_at: "2026-01-15T12:00:00.000Z",
     })
     expect(easetag?.kind).toBe("easetag_receive")
     const easetagRows = rowMap(buildInboundReceiveEmailDetailRows(easetag!))
     expect(easetagRows[REVIEW_ROW_LABELS.scheme]).toBe("Easetag")
     expect(easetagRows[REVIEW_ROW_LABELS.amountCredited]).toBeUndefined()
     expect(easetagRows[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
+
+    expect(buildInboundReceiveDetailRows(stablecoin!, { surface: "detail" }).at(-1)?.label).toBe(
+      REVIEW_ROW_LABELS.when,
+    )
+    expect(buildInboundReceiveDetailRows(easetag!, { surface: "detail" }).at(-1)?.label).toBe(
+      REVIEW_ROW_LABELS.when,
+    )
+    expect(buildInboundReceiveDetailRows(stablecoin!, { surface: "email" })).not.toContainEqual(
+      expect.objectContaining({ label: REVIEW_ROW_LABELS.when }),
+    )
   })
 })
 

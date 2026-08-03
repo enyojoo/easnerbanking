@@ -25,6 +25,7 @@ import { getTransactionDetailPrefetchOptions } from "@/hooks/queries/use-transac
 import {
   REVIEW_ROW_LABELS,
   computeDisplayProcessingFee,
+  formatTransactionWhen,
   isVerificationDepositMetadata,
   resolveLedgerWhenAt,
   resolvePayoutReviewFlow,
@@ -73,10 +74,18 @@ function TransactionDetailActions({
     !showLifecycleTracker &&
     (Boolean(transaction.transferId) || transaction.id.startsWith("ETID")) &&
     (transaction.status === "pending" || transaction.status === "processing")
+  const description = transaction.description.toLowerCase()
+  const isStablecoinDeposit =
+    transaction.direction === "credit" &&
+    (transaction.type === "stablecoin" ||
+      description.startsWith("stablecoin") ||
+      String(transaction.collectionChannel ?? "").toLowerCase() === "autopayout")
   // Easetag transfers/deposits are free, 1:1 wallet-to-wallet with no fee/FX detail,
-  // so they don't get a downloadable receipt.
+  // and stablecoin deposits do not get downloadable transaction receipts.
   const showDownloadReceipt =
-    transaction.status === "completed" && transaction.paymentScheme !== "Easetag"
+    transaction.status === "completed" &&
+    transaction.paymentScheme !== "Easetag" &&
+    !isStablecoinDeposit
 
   // Nothing to offer (e.g. a completed Easetag transfer) — don't render an empty card.
   if (!showInvoice && !showTrackStatus && !showDownloadReceipt) return null
@@ -171,21 +180,6 @@ function TransactionSummaryDetails({
           </div>
         </TransactionDetailSummaryRow>
 
-        <TransactionDetailSummaryRow
-          label={REVIEW_ROW_LABELS.when}
-          value={
-            whenAt
-              ? new Date(whenAt).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "—"
-          }
-        />
-
         {transaction.paymentScheme ? (
           <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.scheme} value={transaction.paymentScheme} />
         ) : null}
@@ -250,6 +244,15 @@ function TransactionSummaryDetails({
         {transaction.sendNote ? (
           <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.note} value={transaction.sendNote} />
         ) : null}
+
+        <TransactionDetailSummaryRow
+          label={REVIEW_ROW_LABELS.when}
+          value={
+            whenAt
+              ? formatTransactionWhen(whenAt)
+              : "—"
+          }
+        />
       </CardContent>
     </Card>
   )
@@ -386,7 +389,7 @@ export function TransactionDetailsPanel({
           timingRows={transaction.transactionTiming}
           copiedKey={copiedKey}
           onCopy={handleCopy}
-          showRecipientGets
+          showRecipientGets={false}
           globalFiatPayout={isGlobalPayout && !isWalletSendPayout}
           receiveNetwork={walletReceiveNetwork}
           walletSendExecutionModel={walletSendExecutionModel}

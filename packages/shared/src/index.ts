@@ -55,6 +55,7 @@ export {
   scaleSendAmountPrefixLineHeight,
 } from "./currency-symbol"
 export { formatMoneyDisplay } from "./format-money-display"
+export { formatTransactionWhen } from "./format-transaction-when"
 export {
   formatReviewRowMoneyDisplay,
   formatSignedMoneyDisplay,

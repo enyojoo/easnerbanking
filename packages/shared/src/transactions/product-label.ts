@@ -250,7 +250,7 @@ export function toEasnerTransactionPrimaryLabel(input: {
       meta?.beneficiary_name,
       (meta?.recipient_snapshot as Record<string, unknown> | undefined)?.full_name,
     ])
-    return recipientName ? `Transfer to ${recipientName}` : "Wallet transfer"
+    return recipientName || "Wallet transfer"
   }
   if (direction === "in" && isVerificationDepositMetadata(meta)) {
     return VERIFICATION_DEPOSIT_LIST_LABEL

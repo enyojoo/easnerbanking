@@ -1,6 +1,7 @@
 // Email templates – design-system aligned, Business vs Personal variants
 
 import { personalMobileTransactionUrl } from "@easner/shared/mobile-personal-links"
+import { formatTransactionWhen } from "@easner/shared"
 import {
   easnerUserGreetingParagraphHtml,
   formatEasnerUserGreetingPlain,
@@ -63,6 +64,12 @@ function buildTransactionDetailRows(data: TransactionEmailData): TransactionDeta
     if (data.paymentRail) rows.push({ label: "Payment method", value: data.paymentRail })
   }
 
+  if (data.createdAt) {
+    rows.push({
+      label: "When",
+      value: formatTransactionWhen(data.createdAt),
+    })
+  }
   const displayStatus = data.status === "settled" ? "completed" : data.status
   rows.push({
     label: "Status",
@@ -70,9 +77,6 @@ function buildTransactionDetailRows(data: TransactionEmailData): TransactionDeta
     isStatus: true,
     statusClass: data.status === "settled" ? "completed" : displayStatus,
   })
-  if (data.createdAt) {
-    rows.push({ label: "Date", value: new Date(data.createdAt).toLocaleDateString() })
-  }
   return rows
 }
 

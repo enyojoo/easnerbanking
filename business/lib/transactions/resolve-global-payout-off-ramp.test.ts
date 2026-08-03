@@ -16,11 +16,9 @@ vi.mock("@easner/shared", () => ({
   formatDisplayPersonName: (n: string) =>
     n === "SAMUEL ODIBA ENYOJO" ? "Samuel Odiba Enyojo" : n,
   formatOutboundTransferTitle: (recipientName?: string | null) =>
-    `Transfer to ${
-      recipientName === "SAMUEL ODIBA ENYOJO"
-        ? "Samuel Odiba Enyojo"
-        : recipientName || "Recipient"
-    }`,
+    recipientName === "SAMUEL ODIBA ENYOJO"
+      ? "Samuel Odiba Enyojo"
+      : recipientName || "Recipient",
   formatTransactionDetailHeroTitle: ({
     direction,
     counterpartyName,
@@ -29,7 +27,7 @@ vi.mock("@easner/shared", () => ({
     counterpartyName?: string | null
   }) =>
     direction === "out" && counterpartyName
-      ? `Transfer to ${counterpartyName === "SAMUEL ODIBA ENYOJO" ? "Samuel Odiba Enyojo" : counterpartyName}`
+      ? counterpartyName === "SAMUEL ODIBA ENYOJO" ? "Samuel Odiba Enyojo" : counterpartyName
       : "Transfer",
   getGlobalPayoutTransferMethod: () => "Bank transfer",
   getGlobalPayoutProcessingTime: () => "Within minutes",
@@ -81,7 +79,7 @@ describe("resolveGlobalPayoutOffRampDetail", () => {
     expect(resolved).not.toBeNull()
     expect(resolved?.displayAmount).toBe(5000)
     expect(resolved?.displayCurrency).toBe("NGN")
-    expect(resolved?.displayHeroTitle).toBe("Transfer to Samuel Odiba Enyojo")
+    expect(resolved?.displayHeroTitle).toBe("Samuel Odiba Enyojo")
     expect(resolved?.payoutReview?.you_send_amount).toBeLessThanOrEqual(4.52)
     expect(resolved?.payoutReview?.exchange_rate).toBeGreaterThan(1)
     expect(resolved?.lifecycle).toHaveLength(2)
@@ -120,8 +118,8 @@ describe("resolveGlobalPayoutOffRampDetail", () => {
     })
 
     expect(resolved).not.toBeNull()
-    expect(resolved?.displayHeroTitle).toBe("Transfer to Jane Doe")
-    expect(resolved?.displayDescription).toBe("Transfer to Jane Doe")
+    expect(resolved?.displayHeroTitle).toBe("Jane Doe")
+    expect(resolved?.displayDescription).toBe("Jane Doe")
     expect(resolved?.displayAmount).toBe(100)
     expect(resolved?.displayCurrency).toBe("USD")
     expect(resolved?.payoutReview?.transfer_method).toBe("Local Transfer")
