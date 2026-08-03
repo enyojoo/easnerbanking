@@ -627,7 +627,7 @@ export async function lockCrossBorderLeg2(
     receiveCurrency: ctx.receiveCurrency,
     sequenceIdPrefix: "yc_cb_l2",
     feeConfig: sendFeeConfig,
-    parallelBoundaryProbe: true,
+    singleSafeSurplusLock: true,
     buildSubmit: async ({ settlementCryptoUsd, sequenceId }) =>
       submitYcSend({
         sequenceId,
@@ -1484,7 +1484,7 @@ export async function authorizeCrossBorderDraft(input: {
     receiveCurrency,
     sequenceIdPrefix: "yc_cb_l2",
     feeConfig: sendFeeConfig,
-    parallelBoundaryProbe: true,
+    singleSafeSurplusLock: true,
     buildSubmit: async ({ settlementCryptoUsd, sequenceId }) =>
       submitYcSend({
         sequenceId,
@@ -1837,7 +1837,7 @@ export async function maybeExecuteCrossBorderLeg2(
         receiveCurrency: draft.receiveCurrency,
         sequenceIdPrefix: "yc_cb_l2_relock",
         feeConfig,
-        parallelBoundaryProbe: true,
+        singleSafeSurplusLock: true,
         buildSubmit: ({ settlementCryptoUsd, sequenceId }) =>
           submitYcSend({
             sequenceId,

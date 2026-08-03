@@ -107,6 +107,12 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   feeConfig?: YcServiceFeeConfig | null
   /** Try the nearest cent-bucket boundary and its adjacent micro-unit concurrently. */
   parallelBoundaryProbe?: boolean
+  /**
+   * Submit one request at the upper half-cent boundary and validate YC's response.
+   * This is the production confirmation mode: it permits the unavoidable cent-bucket
+   * surplus without creating discarded YC send records.
+   */
+  singleSafeSurplusLock?: boolean
   buildSubmit: (args: {
     settlementCryptoUsd: number
     sequenceId: string
@@ -242,6 +248,69 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     }
 
     return observation
+  }
+
+  if (input.singleSafeSurplusLock) {
+    // YC converts direct-settlement sends in nearest-cent settlement buckets while it may
+    // echo the submitted funding amount to more decimals. Submitting at the upper half-cent
+    // boundary selects the same safe bucket as the former adjacent-probe path with one send.
+    const conversionCent = Math.ceil((nextCrypto - 0.0000001) * 100) / 100
+    const candidateCrypto = roundUsdc(conversionCent - YC_SEND_LEG_CRYPTO_CENT / 2)
+    const selected = await observeRaw(candidateCrypto, 0)
+    const surplus = roundLocal(selected.netLocal - requestedLocal)
+    // With only one YC send there is no adjacent response to observe. Derive a conservative
+    // local cent-bucket ceiling from the selected response's gross conversion. The actual
+    // recipient amount remains authoritative and must independently satisfy never-underpay.
+    const conversionBucketCrypto = Math.max(
+      YC_SEND_LEG_CRYPTO_CENT,
+      Math.round(candidateCrypto * 100) / 100,
+    )
+    const payoutQuantumLocal = roundLocal(
+      Math.max(0.01, (selected.grossLocal / conversionBucketCrypto) * YC_SEND_LEG_CRYPTO_CENT),
+    )
+
+    if (surplus < 0) {
+      throw new YcPayoutError(
+        "YC_SEND_NO_COMPLIANT_QUANTUM",
+        `Yellowcard's single locked send would underpay the recipient by ${Math.abs(surplus).toFixed(2)} ${input.receiveCurrency}.`,
+        422,
+      )
+    }
+    if (surplus > payoutQuantumLocal) {
+      throw new YcPayoutError(
+        "YC_SEND_NO_COMPLIANT_QUANTUM",
+        `Yellowcard recipient surplus ${surplus.toFixed(2)} ${input.receiveCurrency} exceeds one payout quantum ${payoutQuantumLocal.toFixed(2)}.`,
+        422,
+      )
+    }
+
+    console.info("[yc-send-lock] selected single safe-surplus settlement", {
+      requestedLocalAmount: requestedLocal,
+      recipientLocalAmount: selected.netLocal,
+      receiveCurrency: input.receiveCurrency,
+      precisionMode: "cent",
+      settlementQuantumUsd: YC_SEND_LEG_CRYPTO_CENT,
+      payoutQuantumLocal,
+      recipientSurplusLocal: surplus,
+      selectedSendId: selected.sendId,
+      discardedSendIds: [],
+      attempts: 1,
+    })
+    return {
+      sendRes: selected.sendRes,
+      requestedLocalAmount: requestedLocal,
+      finalSettlementCryptoUsd: selected.acceptedCryptoUsd,
+      lockedLocalAmount: selected.grossLocal,
+      recipientLocalAmount: selected.netLocal,
+      sendLegFeeLocal: selected.feeLocal,
+      recipientSurplusLocal: surplus,
+      payoutQuantumLocal,
+      settlementQuantumUsd: YC_SEND_LEG_CRYPTO_CENT,
+      precisionMode: "cent",
+      sequenceId: selected.sequenceId,
+      expiresAt: responseExpiry(selected.sendRes),
+      discardedSendIds: [],
+    }
   }
 
   if (input.parallelBoundaryProbe) {

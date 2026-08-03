@@ -297,6 +297,54 @@ describe("submitYcSendWithDestinationAmountLock", () => {
     expect(submitted.some((amount) => !isNaN(amount) && amount * 100 % 1 !== 0)).toBe(true)
   })
 
+  it("creates one YC send for the production safe-surplus lock", async () => {
+    const submitted: number[] = []
+    const rate = 1373
+    const result = await submitYcSendWithDestinationAmountLock({
+      receiveAmount: 2000,
+      initialSettlementCryptoUsd: 1.468537,
+      destinationRate: rate,
+      ycSellRate: rate,
+      receiveCurrency: "NGN",
+      feeConfig: { minFeeLocal: 0, feePercentage: 1, flatFeeLocal: 0 },
+      singleSafeSurplusLock: true,
+      buildSubmit: async ({ settlementCryptoUsd }) => {
+        submitted.push(settlementCryptoUsd)
+        return ycLockResponse(settlementCryptoUsd, rate, "selected-send")
+      },
+    })
+
+    expect(submitted).toEqual([1.475])
+    expect(result.sendRes.id).toBe("selected-send")
+    expect(result.finalSettlementCryptoUsd).toBe(1.48)
+    expect(result.recipientLocalAmount).toBe(2011.72)
+    expect(result.recipientLocalAmount).toBeGreaterThanOrEqual(2000)
+    expect(result.recipientSurplusLocal).toBeLessThanOrEqual(result.payoutQuantumLocal)
+    expect(result.discardedSendIds).toEqual([])
+  })
+
+  it("fails closed without creating another send when the one-shot lock underpays", async () => {
+    const buildSubmit = vi.fn(async (): Promise<YcSendSubmitResult> => ({
+      id: "unsafe-send",
+      convertedAmount: 1999.99,
+      settlementInfo: { cryptoAmount: 1.48, walletAddress: "w" },
+    }))
+
+    await expect(
+      submitYcSendWithDestinationAmountLock({
+        receiveAmount: 2000,
+        initialSettlementCryptoUsd: 1.468537,
+        destinationRate: 1373,
+        ycSellRate: 1373,
+        receiveCurrency: "NGN",
+        feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 0 },
+        singleSafeSurplusLock: true,
+        buildSubmit,
+      }),
+    ).rejects.toMatchObject({ code: "YC_SEND_NO_COMPLIANT_QUANTUM", status: 422 })
+    expect(buildSubmit).toHaveBeenCalledTimes(1)
+  })
+
   it("fails closed when YC returns unsupported settlement precision", async () => {
     await expect(
       submitYcSendWithDestinationAmountLock({

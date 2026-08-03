@@ -414,7 +414,7 @@ export async function lockYcBalancePayoutSend(input: {
     receiveCurrency,
     sequenceIdPrefix: "yc_quote",
     feeConfig: ycFeeConfig,
-    parallelBoundaryProbe: true,
+    singleSafeSurplusLock: true,
     buildSubmit: async ({ settlementCryptoUsd, sequenceId: lockSequenceId }) =>
       submitYcSend({
         sequenceId: lockSequenceId,
