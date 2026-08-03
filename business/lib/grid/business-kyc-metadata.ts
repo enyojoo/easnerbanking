@@ -87,19 +87,8 @@ export function buildGridBusinessCustomerPayload(input: {
   }
   payload.email = email
 
-  const line1 = String(input.profile.addressLine1 ?? "").trim()
-  const city = String(input.profile.city ?? "").trim()
-  if (line1 || city || countryIso2) {
-    payload.address = {
-      ...(line1 ? { line1 } : {}),
-      ...(city ? { city } : {}),
-      ...(input.profile.state?.trim() ? { state: input.profile.state.trim() } : {}),
-      ...(input.profile.postalCode?.trim()
-        ? { postalCode: input.profile.postalCode.trim() }
-        : {}),
-      ...(countryIso2 ? { country: countryIso2 } : {}),
-    }
-  }
+  // Omit address on initial create: Grid treats address.state as an ISO country code
+  // (e.g. CA → Canada) even when address.country is US. SumSub collects address in hosted KYB.
 
   return payload
 }

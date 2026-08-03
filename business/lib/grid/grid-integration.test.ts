@@ -85,6 +85,24 @@ describe("buildGridBusinessCustomerPayload", () => {
     })
     expect((payload.businessInfo as { taxId?: string }).taxId).toBe("123456789")
   })
+
+  it("omits address for US businesses so Grid does not treat state CA as Canada", () => {
+    const payload = buildGridBusinessCustomerPayload({
+      platformCustomerId,
+      profile: {
+        legalName: "Easner Group, Inc",
+        email: "support@example.com",
+        country: "United States",
+        addressLine1: "28 Geary St Ste 650",
+        city: "San Francisco",
+        state: "CA",
+        postalCode: "94108",
+        createdAt: "2024-06-01T00:00:00Z",
+      },
+    })
+    expect(payload.address).toBeUndefined()
+    expect((payload.businessInfo as { country?: string }).country).toBe("US")
+  })
 })
 
 describe("buildGridIndividualCustomerPayload", () => {
