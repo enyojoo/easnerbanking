@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { computeFootedDisplayProcessingFee } from "@easner/shared"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 
 export type PayoutLockProvider = "noah" | "yellowcard" | "grid"
@@ -168,6 +169,11 @@ export function lockedQuoteFromSession(row: PayoutLockSessionRow): PayoutQuoteRe
       requestedReceiveAmount > 0
         ? requestedReceiveAmount
         : row.pricing_json.receiveAmount),
+    displayProcessingFee: computeFootedDisplayProcessingFee({
+      sendingAmount: row.pricing_json.customerPrincipal,
+      totalDebited: row.pricing_json.totalDebited,
+      fallbackFee: row.pricing_json.displayProcessingFee,
+    }),
     lockId: row.id,
     quoteKey: row.quote_key,
     quotePhase: "locked",

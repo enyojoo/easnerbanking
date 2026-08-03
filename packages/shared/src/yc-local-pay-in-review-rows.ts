@@ -2,6 +2,7 @@ import { formatMoneyDisplay } from "./format-money-display"
 import { formatReviewRowMoneyDisplay } from "./format-review-row-money"
 import { formatSendRateLabel } from "./format-exchange-rate"
 import { shouldShowPayoutReviewFeeRow } from "./payout-review-display"
+import { computeFootedDisplayProcessingFee } from "./payout-processing-fee"
 import {
   REVIEW_ROW_LABELS,
   TLC_LOCAL_TRANSFER_METHOD,
@@ -49,6 +50,16 @@ export function buildYcLocalPayInReviewRows(input: {
     isCrossBorder && !isMomo && (input.principalLocal ?? 0) > 0
   /** Fund-balance review uses locked /confirm order data for bank and MoMo. */
   const isFundBalanceLockedBreakdown = isFundBalance && isLocked
+  const hasPrincipalBreakdown =
+    (isFundBalanceLockedBreakdown || isCrossBorderBankLocked || isCrossBorderBankBreakdown) &&
+    (input.principalLocal ?? 0) > 0
+  const processingFeeLocal = hasPrincipalBreakdown
+    ? computeFootedDisplayProcessingFee({
+        sendingAmount: input.principalLocal!,
+        totalDebited: input.localPayIn,
+        fallbackFee: input.processingFeeLocal,
+      })
+    : input.processingFeeLocal ?? 0
   const transferMethod = isFundBalance
     ? resolveYcFundBalanceTransferMethod(input.rail)
     : TLC_LOCAL_TRANSFER_METHOD
@@ -74,15 +85,14 @@ export function buildYcLocalPayInReviewRows(input: {
   }
 
   const showFee =
-    (input.processingFeeLocal ?? 0) > 0 ||
+    processingFeeLocal > 0 ||
     shouldShowPayoutReviewFeeRow({
       processingFee: input.processingFeeUsd ?? 0,
       exchangeFee: input.exchangeFeeUsd ?? 0,
     })
 
   if (
-    (isFundBalanceLockedBreakdown || isCrossBorderBankLocked || isCrossBorderBankBreakdown) &&
-    (input.principalLocal ?? 0) > 0
+    hasPrincipalBreakdown
   ) {
     const principalLabel = isCrossBorder
       ? REVIEW_ROW_LABELS.transferAmount
@@ -98,13 +108,13 @@ export function buildYcLocalPayInReviewRows(input: {
     })
   }
 
-  if (showFee && (input.processingFeeLocal ?? 0) > 0) {
+  if (showFee && processingFeeLocal > 0) {
     rows.push({
       id: "processing-fee",
       label: REVIEW_ROW_LABELS.processingFee,
       value: formatReviewRowMoneyDisplay(
         REVIEW_ROW_LABELS.processingFee,
-        input.processingFeeLocal!,
+        processingFeeLocal,
         input.payInCurrency,
       ),
     })

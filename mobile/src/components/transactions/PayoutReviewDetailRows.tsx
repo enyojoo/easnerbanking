@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native'
 import {
   REVIEW_ROW_LABELS,
   displayPayoutReceiveAmount,
+  computeFootedDisplayProcessingFee,
   formatAccountBalanceLabel,
   formatMoneyDisplay,
   formatPayoutRecipientSubtitle,
@@ -63,6 +64,20 @@ export function PayoutReviewDetailRows({
   recipientNode,
 }: Props) {
   const sendCurrency = payoutReview.send_currency
+  const feeDisplayAmount =
+    payoutReviewFlow === 'balance_payout'
+      ? computeFootedDisplayProcessingFee({
+          sendingAmount: payoutReview.you_send_amount,
+          totalDebited: payoutReview.total_debited,
+          fallbackFee: displayProcessingFee,
+        })
+      : payoutReview.principal_local_pay_in != null
+        ? computeFootedDisplayProcessingFee({
+            sendingAmount: payoutReview.principal_local_pay_in,
+            totalDebited: payoutReview.total_debited,
+            fallbackFee: displayProcessingFee,
+          })
+      : displayProcessingFee
 
   return (
     <>
@@ -75,7 +90,7 @@ export function PayoutReviewDetailRows({
           label={REVIEW_ROW_LABELS.processingFee}
           value={formatReviewRowMoneyDisplay(
             REVIEW_ROW_LABELS.processingFee,
-            displayProcessingFee,
+            feeDisplayAmount,
             sendCurrency,
           )}
         />

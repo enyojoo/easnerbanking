@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { REVIEW_ROW_LABELS } from "../review-row-labels"
 import { buildTransactionEmailDetailRows, filterTransactionReceiptDetailRows } from "./transaction-email-detail-rows"
 import { resolveInboundReceiveDetail } from "./inbound-receive-detail"
 import type { GlobalPayoutReviewSnapshot } from "./global-payout-types"
@@ -8,6 +9,30 @@ function rowMap(rows: { label: string; value: string }[]): Record<string, string
 }
 
 describe("buildTransactionEmailDetailRows", () => {
+  it("foots rounded YC balance payout rows using the displayed fee residual", () => {
+    const rows = buildTransactionEmailDetailRows({
+      direction: "out",
+      payoutReview: {
+        you_send_amount: 1.472563,
+        total_debited: 1.497089,
+        exchange_fee: 0.0098,
+        processing_fee: 0.014726,
+        exchange_rate: 1366.135,
+        send_currency: "USD",
+        receive_amount: 2011.72,
+        requested_receive_amount: 2000,
+        receive_currency: "NGN",
+        transfer_method: "Local transfer",
+        processing_time: "Within minutes",
+      },
+    })
+    const map = Object.fromEntries(rows.map((row) => [row.label, row.value]))
+
+    expect(map[REVIEW_ROW_LABELS.sent]).toBe("$1.47")
+    expect(map[REVIEW_ROW_LABELS.processingFee]).toBe("$0.03")
+    expect(map[REVIEW_ROW_LABELS.totalDebited]).toBe("-$1.50")
+  })
+
   it("global payout: combined Processing fee, Local transfer, footing holds", () => {
     const review: GlobalPayoutReviewSnapshot = {
       you_send_amount: 100,

@@ -4,6 +4,8 @@ import {
   buildCrossBorderSendDetailRows,
   buildInboundReceiveDetailRows,
   computeDisplayProcessingFee,
+  computeFootedDisplayProcessingFee,
+  displayPayoutReceiveAmount,
   formatReviewRowMoneyDisplay,
   isYcFundBalanceDepositMetadata,
   resolveInboundReceiveDetail,
@@ -56,7 +58,7 @@ export function OfficeTransactionDetailPanel({ transaction }: Props) {
   if (payoutReviewFlow === "local_pay_in" && payoutReview) {
     const displayProcessingFee = computeDisplayProcessingFee({
       processingFee: Number(meta.processing_fee ?? payoutReview.processing_fee ?? 0),
-      ycLegFeesUsd: Number(meta.yc_leg_fees_usd ?? meta.exchange_fee ?? 0),
+      exchangeFee: Number(meta.yc_leg_fees_usd ?? meta.exchange_fee ?? 0),
     })
     for (const row of buildCrossBorderSendDetailRows({
       payoutReview,
@@ -85,6 +87,35 @@ export function OfficeTransactionDetailPanel({ transaction }: Props) {
       }
     }
   } else if (payoutReview && payoutReviewFlow === "balance_payout") {
+    const preciseFee = computeDisplayProcessingFee({
+      processingFee: Number(payoutReview.processing_fee ?? meta.processing_fee ?? 0),
+      exchangeFee: Number(payoutReview.exchange_fee ?? meta.yc_leg_fees_usd ?? 0),
+    })
+    const fee = computeFootedDisplayProcessingFee({
+      sendingAmount: Number(payoutReview.you_send_amount),
+      totalDebited: Number(payoutReview.total_debited),
+      fallbackFee: preciseFee,
+    })
+    if (payoutReview.send_currency && payoutReview.you_send_amount != null) {
+      detailRows.push({
+        label: REVIEW_ROW_LABELS.sent,
+        value: formatReviewRowMoneyDisplay(
+          REVIEW_ROW_LABELS.sent,
+          Number(payoutReview.you_send_amount),
+          String(payoutReview.send_currency),
+        ),
+      })
+    }
+    if (fee > 0 && payoutReview.send_currency) {
+      detailRows.push({
+        label: REVIEW_ROW_LABELS.processingFee,
+        value: formatReviewRowMoneyDisplay(
+          REVIEW_ROW_LABELS.processingFee,
+          fee,
+          String(payoutReview.send_currency),
+        ),
+      })
+    }
     if (payoutReview.send_currency && payoutReview.total_debited != null) {
       detailRows.push({
         label: REVIEW_ROW_LABELS.totalDebited,
@@ -101,22 +132,8 @@ export function OfficeTransactionDetailPanel({ transaction }: Props) {
         label: REVIEW_ROW_LABELS.recipientGets,
         value: formatReviewRowMoneyDisplay(
           REVIEW_ROW_LABELS.recipientGets,
-          Number(payoutReview.receive_amount),
+          displayPayoutReceiveAmount(payoutReview),
           String(payoutReview.receive_currency),
-        ),
-      })
-    }
-    const fee = computeDisplayProcessingFee({
-      processingFee: Number(payoutReview.processing_fee ?? meta.processing_fee ?? 0),
-      ycLegFeesUsd: Number(meta.yc_leg_fees_usd ?? 0),
-    })
-    if (fee > 0 && payoutReview.send_currency) {
-      detailRows.push({
-        label: REVIEW_ROW_LABELS.processingFee,
-        value: formatReviewRowMoneyDisplay(
-          REVIEW_ROW_LABELS.processingFee,
-          fee,
-          String(payoutReview.send_currency),
         ),
       })
     }

@@ -37,7 +37,7 @@ describe("buildCrossBorderSendDetailRows", () => {
     ])
     expect(labels).not.toContain("Recipient amount")
     expect(rows.find((r) => r.id === "transfer-amount")?.value).toContain("92,250.80")
-    expect(rows.find((r) => r.id === "processing-fee")?.value).toContain("2,830.91")
+    expect(rows.find((r) => r.id === "processing-fee")?.value).toContain("2,355.50")
     expect(rows.find((r) => r.id === "amount-paid")?.value).toContain("94,606.30")
     expect(rows.find((r) => r.id === "amount-paid")?.valueBold).toBe(true)
     expect(rows.find((r) => r.id === "transfer-method")?.value).toBe(TLC_LOCAL_TRANSFER_METHOD)

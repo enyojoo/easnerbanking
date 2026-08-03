@@ -1,4 +1,10 @@
-import { YC_QUOTE_TTL_MS, buildLegacyNoahSettlementFromLeg, computePayoutQuoteDisplayProcessingFee, type PayoutSettlementLeg } from "@easner/shared"
+import {
+  YC_QUOTE_TTL_MS,
+  buildLegacyNoahSettlementFromLeg,
+  computeFootedDisplayProcessingFee,
+  computePayoutQuoteDisplayProcessingFee,
+  type PayoutSettlementLeg,
+} from "@easner/shared"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import { lockYcBalancePayoutSend } from "@/lib/yellowcard/payout-quote"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
@@ -44,10 +50,15 @@ function buildLockedYcPayoutQuote(input: {
   const { locked, receiveCurrency, sourceBalanceCurrency, quoteKey, lockId } = input
   const requestedReceiveAmount = locked.requestedLocalAmount
   const receiveAmount = locked.lockedLocalAmount
-  const displayProcessingFee = computePayoutQuoteDisplayProcessingFee({
+  const preciseDisplayProcessingFee = computePayoutQuoteDisplayProcessingFee({
     processingFee: locked.pricing.processingFee,
     displayChannelCost: locked.pricing.displayChannelCost,
     channelCost: locked.pricing.channelCost,
+  })
+  const displayProcessingFee = computeFootedDisplayProcessingFee({
+    sendingAmount: locked.pricing.customerPrincipal,
+    totalDebited: locked.pricing.totalDebited,
+    fallbackFee: preciseDisplayProcessingFee,
   })
   const expiresAt = resolveLockedExpiry(locked)
 

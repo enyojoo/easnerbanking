@@ -99,6 +99,9 @@ describe('sendFlowPayoutQuote stash', () => {
       requestedReceiveAmount: 2000,
       displayReceiveAmount: 2000,
       receiveAmount: 2011.72,
+      customerPrincipal: 1.472563,
+      totalDebited: 1.497089,
+      displayProcessingFee: 0.024526,
     })
 
     expect(payoutCustomerFacingReceiveAmount(quote)).toBe(2000)
@@ -106,6 +109,7 @@ describe('sendFlowPayoutQuote stash', () => {
     expect(payoutDisplayAmountsFromQuote(quote)).toMatchObject({
       actualReceiveAmount: 2011.72,
       recipientGetsAmount: 2000,
+      displayProcessingFee: 0.03,
     })
   })
 

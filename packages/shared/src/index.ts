@@ -64,10 +64,12 @@ export {
 export { computeBalancePayoutExchangeFee } from "./payout-review-fees"
 export {
   computeDisplayProcessingFee,
+  computeFootedDisplayProcessingFee,
   computePayoutProcessingFeeBps,
   parsePayoutProcessingFeeBpsFromEnv,
   DEFAULT_PAYOUT_PROCESSING_FEE_BPS,
   type DisplayProcessingFeeInput,
+  type FootedDisplayProcessingFeeInput,
   type PayoutProcessingFeeOpts,
 } from "./payout-processing-fee"
 export {
@@ -574,6 +576,7 @@ export type {
   GlobalPayoutRecipientSnapshot,
   GlobalPayoutReviewSnapshot,
 } from "./transactions/global-payout-types"
+export { displayPayoutReceiveAmount } from "./transactions/global-payout-types"
 export {
   resolveTransactionRecipientDisplay,
   isEasetagHandleValue,

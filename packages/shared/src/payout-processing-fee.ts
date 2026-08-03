@@ -62,3 +62,33 @@ export function computeDisplayProcessingFee(input: DisplayProcessingFeeInput): n
     (Number.isFinite(bpsLeg) ? bpsLeg : 0) + (Number.isFinite(channel) ? channel : 0)
   return roundMoney(Math.max(0, total))
 }
+
+export type FootedDisplayProcessingFeeInput = {
+  /** Precise principal shown in the Sending amount / Sent amount row. */
+  sendingAmount: number
+  /** Precise all-in debit shown in the Total debited row. */
+  totalDebited: number
+  /** Precise combined fee, used when the two amount inputs are unavailable. */
+  fallbackFee?: number | null
+}
+
+/**
+ * Fee amount whose two-decimal display exactly foots the other displayed rows.
+ *
+ * Example: 1.472563 + 0.024526 = 1.497089 precisely, but the independent displays
+ * $1.47 + $0.02 do not equal $1.50. The customer-facing fee must therefore be $0.03.
+ * Authoritative ledger/quote values remain unchanged.
+ */
+export function computeFootedDisplayProcessingFee(
+  input: FootedDisplayProcessingFeeInput,
+): number {
+  if (Number.isFinite(input.sendingAmount) && Number.isFinite(input.totalDebited)) {
+    const sendingMinor = Math.round(input.sendingAmount * 100)
+    const totalMinor = Math.round(input.totalDebited * 100)
+    if (sendingMinor >= 0 && totalMinor >= sendingMinor) {
+      return (totalMinor - sendingMinor) / 100
+    }
+  }
+  const fallback = Number(input.fallbackFee)
+  return Number.isFinite(fallback) && fallback > 0 ? Math.round(fallback * 100) / 100 : 0
+}

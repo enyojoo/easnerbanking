@@ -12,7 +12,10 @@ import { formatMoneyDisplay } from "../format-money-display"
 import { formatReviewRowMoneyDisplay } from "../format-review-row-money"
 import { formatSendRateLabel } from "../format-exchange-rate"
 import { formatPayoutRecipientSubtitle } from "../payout-recipient-subtitle"
-import { computeDisplayProcessingFee } from "../payout-processing-fee"
+import {
+  computeDisplayProcessingFee,
+  computeFootedDisplayProcessingFee,
+} from "../payout-processing-fee"
 import type { ReviewFlowKind } from "../review-row-labels"
 import { REVIEW_ROW_LABELS, formatAccountBalanceLabel, shouldShowReviewTotalDebited } from "../review-row-labels"
 import {
@@ -84,7 +87,20 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
     review.display_processing_fee_local > 0
       ? review.display_processing_fee_local
       : null
-  const feeAmount = localPayInFee ?? displayProcessingFee
+  const feeAmount =
+    reviewFlow === "local_pay_in"
+      ? review.principal_local_pay_in != null
+        ? computeFootedDisplayProcessingFee({
+            sendingAmount: review.principal_local_pay_in,
+            totalDebited: review.total_debited,
+            fallbackFee: localPayInFee ?? displayProcessingFee,
+          })
+        : localPayInFee ?? displayProcessingFee
+      : computeFootedDisplayProcessingFee({
+          sendingAmount: review.you_send_amount,
+          totalDebited: review.total_debited,
+          fallbackFee: displayProcessingFee,
+        })
   const feeCurrency = sendCurrency
   const receiveNetwork = String(input.receiveNetwork || "").trim()
   const hasFx = receiveNetwork

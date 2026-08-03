@@ -14,6 +14,7 @@ import {
   resolveSendConfirmArrivalHint,
   hasWalletSendFxDisplay,
   computeDisplayProcessingFee,
+  computeFootedDisplayProcessingFee,
   normalizeTransferMethodLabel,
   shouldShowPayoutReviewFeeRow,
   qk,
@@ -457,9 +458,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const networkFee = isWalletRecipient ? (quoteDisplay as { networkFee?: number } | null)?.networkFee ?? 0 : 0
   const displayProcessingFee =
     quoteDisplay?.displayProcessingFee ??
-    computeDisplayProcessingFee({
-      processingFee,
-      exchangeFee,
+    computeFootedDisplayProcessingFee({
+      sendingAmount: youSendAmount,
+      totalDebited: calculatedTotalAmount,
+      fallbackFee: computeDisplayProcessingFee({ processingFee, exchangeFee }),
     })
   const walletExecutionModel =
     (quoteDisplay as { executionModel?: string } | null)?.executionModel ??

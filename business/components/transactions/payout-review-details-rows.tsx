@@ -3,6 +3,7 @@
 import type { ReactNode } from "react"
 import {
   computeDisplayProcessingFee,
+  computeFootedDisplayProcessingFee,
   formatMoneyDisplay,
   formatReviewRowMoneyDisplay,
   formatPayoutRecipientSubtitle,
@@ -112,7 +113,20 @@ export function PayoutReviewDetailsRows({
     payoutReview.display_processing_fee_local > 0
       ? payoutReview.display_processing_fee_local
       : null
-  const feeDisplayAmount = localPayInFee ?? displayProcessingFee
+  const feeDisplayAmount =
+    reviewFlow === "local_pay_in"
+      ? payoutReview.principal_local_pay_in != null
+        ? computeFootedDisplayProcessingFee({
+            sendingAmount: payoutReview.principal_local_pay_in,
+            totalDebited: payoutReview.total_debited,
+            fallbackFee: localPayInFee ?? displayProcessingFee,
+          })
+        : localPayInFee ?? displayProcessingFee
+      : computeFootedDisplayProcessingFee({
+          sendingAmount: payoutReview.you_send_amount,
+          totalDebited: payoutReview.total_debited,
+          fallbackFee: displayProcessingFee,
+        })
   const feeDisplayCurrency = localPayInFee != null ? payoutReview.send_currency : payoutReview.send_currency
   const showProcessingFee = shouldShowPayoutReviewFeeRow({
     processingFee: payoutReview.processing_fee,

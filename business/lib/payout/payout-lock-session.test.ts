@@ -91,6 +91,7 @@ describe("lockedQuoteFromSession", () => {
     expect(quote.displayReceiveAmount).toBe(2000)
     expect(quote.requestedReceiveAmount).toBe(2000)
     expect(quote.receiveAmount).toBe(2011.72)
+    expect(quote.displayProcessingFee).toBe(0.03)
     expect(quote.easner.destinationAmount).toBe(2011.72)
     expect(quote.easner.pricingTotals?.total_recipient_amount).toBe(2011.72)
   })

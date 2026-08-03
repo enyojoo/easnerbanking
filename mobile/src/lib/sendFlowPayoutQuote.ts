@@ -1,5 +1,6 @@
 import type { PayoutQuote } from './noahService'
 import type { PayoutPrepareSession } from './payoutPrepareSession'
+import { computeFootedDisplayProcessingFee } from '../../../packages/shared/src/payout-processing-fee'
 
 /** Inline — avoid `@easner/shared` barrel (pulls flag assets into Metro on EAS). */
 function normalizeReceiveForCurrency(currency: string, amount: number): number {
@@ -385,7 +386,11 @@ export function payoutDisplayAmountsFromQuote(quote: PayoutQuote): {
     marginAmount: fees.easnerProcessingFee,
     processingFee: fees.easnerProcessingFee,
     displayChannelCost: fees.channelFee,
-    displayProcessingFee: fees.displayProcessingFee,
+    displayProcessingFee: computeFootedDisplayProcessingFee({
+      sendingAmount: quote.customerPrincipal,
+      totalDebited: quote.totalDebited,
+      fallbackFee: fees.displayProcessingFee,
+    }),
     totalDebited: quote.totalDebited,
     customerRate: leg?.customerRate ?? quote.easner?.providerRate ?? 0,
     actualReceiveAmount: quote.receiveAmount,
