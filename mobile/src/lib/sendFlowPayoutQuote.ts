@@ -15,6 +15,29 @@ function entryAmountsMatch(a: number, b: number, currency: string): boolean {
   return normalizeReceiveForCurrency(currency, a) === normalizeReceiveForCurrency(currency, b)
 }
 
+/** Customer-facing target. `receiveAmount` remains YC's authoritative locked payout amount. */
+export function payoutRequestedReceiveAmount(quote: PayoutQuote): number {
+  const requested = quote.requestedReceiveAmount
+  return requested != null && Number.isFinite(requested) && requested > 0
+    ? requested
+    : quote.receiveAmount
+}
+
+/**
+ * Customer-facing "Recipient amount".
+ *
+ * YC can lock a larger provider payout quantum to guarantee the entered target.
+ * Keep that amount on `receiveAmount` for execution and audit, while showing
+ * the requested target. Legacy YC and non-YC quotes retain their quoted amount.
+ */
+export function payoutCustomerFacingReceiveAmount(quote: PayoutQuote): number {
+  const display = quote.displayReceiveAmount
+  if (display != null && Number.isFinite(display) && display > 0) return display
+  const isYellowcard =
+    String(quote.provider ?? '').trim().toLowerCase() === 'yellowcard' || Boolean(quote.yc)
+  return isYellowcard ? payoutRequestedReceiveAmount(quote) : quote.receiveAmount
+}
+
 function sendEntryAmountsMatch(a: number, b: number): boolean {
   const norm = (n: number) => Math.round(n * 100) / 100
   return norm(a) === norm(b)
@@ -163,7 +186,11 @@ export function isStashedPayoutQuotePreviewFresh(input: SendPayoutQuoteStashMeta
   if (input.amountEntryMode === 'send') {
     return sendEntryAmountsMatch(previewStashedMeta.entryAmount, input.entryAmount)
   }
-  return entryAmountsMatch(previewStashed.receiveAmount, input.entryAmount, input.receiveCurrency)
+  return entryAmountsMatch(
+    payoutRequestedReceiveAmount(previewStashed),
+    input.entryAmount,
+    input.receiveCurrency,
+  )
 }
 
 export function peekSendPayoutQuote(): PayoutQuote | null {
@@ -193,7 +220,11 @@ export function isStashedPayoutQuoteFresh(input: SendPayoutQuoteStashMeta): bool
   if (input.amountEntryMode === 'send') {
     return sendEntryAmountsMatch(stashedMeta.entryAmount, input.entryAmount)
   }
-  return entryAmountsMatch(stashed.receiveAmount, input.entryAmount, input.receiveCurrency)
+  return entryAmountsMatch(
+    payoutRequestedReceiveAmount(stashed),
+    input.entryAmount,
+    input.receiveCurrency,
+  )
 }
 
 let inflightQuote: Promise<PayoutQuote | null> | null = null
@@ -343,6 +374,8 @@ export function payoutDisplayAmountsFromQuote(quote: PayoutQuote): {
   displayProcessingFee: number
   totalDebited: number
   customerRate: number
+  actualReceiveAmount: number
+  recipientGetsAmount: number
 } {
   const fees = reviewFeesFromQuote(quote)
   const leg = resolveSettlementLeg(quote)
@@ -355,5 +388,7 @@ export function payoutDisplayAmountsFromQuote(quote: PayoutQuote): {
     displayProcessingFee: fees.displayProcessingFee,
     totalDebited: quote.totalDebited,
     customerRate: leg?.customerRate ?? quote.easner?.providerRate ?? 0,
+    actualReceiveAmount: quote.receiveAmount,
+    recipientGetsAmount: payoutCustomerFacingReceiveAmount(quote),
   }
 }

@@ -28,7 +28,7 @@ describe("buildTransactionEmailDetailRows", () => {
       recipient: { fullName: "Samuel Odiba", bankName: "Kuda", accountNumber: "1234567890" },
     })
     const map = rowMap(rows)
-    expect(map["Sent"]).toBe("$100")
+    expect(map["Sent amount"]).toBe("$100")
     expect(map["Debited from"]).toBe("USD Balance")
     const debitedFromIdx = rows.findIndex((r) => r.label === "Debited from")
     const totalDebitedIdx = rows.findIndex((r) => r.label === "Total debited")
@@ -38,7 +38,7 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(map["Total debited"]).toBe("-$103.32")
     expect(map["Exchange rate"]).toBeDefined()
     expect(map["Transfer method"]).toBe("Local transfer")
-    expect(map["Recipient gets"]).toBe("₦134,270")
+    expect(map["Recipient amount"]).toBe("₦134,270")
     expect(map["Recipient"]).toContain("Samuel Odiba")
     // No standalone Exchange fee row.
     expect(map["Exchange fee"]).toBeUndefined()
@@ -203,7 +203,7 @@ describe("buildTransactionEmailDetailRows", () => {
     const labels = filtered.map((r) => r.label)
     expect(labels).not.toContain("Exchange rate")
     expect(labels).not.toContain("Transfer method")
-    expect(labels).toContain("Sent")
+    expect(labels).toContain("Sent amount")
     expect(labels).toContain("Recipient")
   })
 })

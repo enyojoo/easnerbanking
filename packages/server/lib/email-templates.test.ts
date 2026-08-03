@@ -64,7 +64,7 @@ describe("emailTemplates", () => {
 
   it("failed transfer email omits duplicate Amount row and uses contact page CTA", () => {
     const html = emailTemplates.transactionFailed.html(templateFixtures.transactionFailed, "personal")
-    expect(html).toContain("Recipient gets")
+    expect(html).toContain("Recipient amount")
     expect(html).not.toContain(">Amount<")
     expect(html).toContain("https://www.easner.com/contact")
   })
@@ -80,7 +80,7 @@ describe("emailTemplates", () => {
 
   it("renders canonical detailRows (Sending / Processing fee / Transfer method) for payouts", () => {
     const html = emailTemplates.transactionFailed.html(templateFixtures.transactionFailed, "personal")
-    expect(html).toContain("Sent")
+    expect(html).toContain("Sent amount")
     expect(html).toContain("Processing fee")
     expect(html).toContain("Total debited")
     expect(html).toContain("Transfer method")

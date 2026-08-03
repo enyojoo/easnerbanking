@@ -8,6 +8,9 @@ import {
   isStashedPayoutQuotePreviewFresh,
   stashSendPayoutQuote,
   stashSendPayoutQuotePreview,
+  payoutCustomerFacingReceiveAmount,
+  payoutDisplayAmountsFromQuote,
+  payoutRequestedReceiveAmount,
   payoutPrepareSessionFromQuote,
 } from './sendFlowPayoutQuote'
 
@@ -69,6 +72,60 @@ function sampleQuote(overrides?: Partial<PayoutQuote>): PayoutQuote {
 describe('sendFlowPayoutQuote stash', () => {
   beforeEach(() => {
     clearSendPayoutQuote()
+  })
+
+  it('keeps Recipient amount anchored to the requested amount when YC locks a surplus', () => {
+    const quote = sampleQuote({
+      provider: 'yellowcard',
+      requestedReceiveAmount: 2000,
+      receiveAmount: 2011.72,
+      yc: {
+        sequenceId: 'yc_quote_dfcd3d26',
+        sendId: 'yc-send-1',
+        channelId: 'yc-channel-1',
+        cryptoAmount: 1.475,
+        recipientLocalAmount: 2011.72,
+        recipientSurplusLocal: 11.72,
+        payoutQuantumLocal: 13.59,
+      },
+    })
+
+    expect(payoutRequestedReceiveAmount(quote)).toBe(2000)
+  })
+
+  it('uses the server-provided customer display amount without changing actual receiveAmount', () => {
+    const quote = sampleQuote({
+      provider: 'yellowcard',
+      requestedReceiveAmount: 2000,
+      displayReceiveAmount: 2000,
+      receiveAmount: 2011.72,
+    })
+
+    expect(payoutCustomerFacingReceiveAmount(quote)).toBe(2000)
+    expect(quote.receiveAmount).toBe(2011.72)
+    expect(payoutDisplayAmountsFromQuote(quote)).toMatchObject({
+      actualReceiveAmount: 2011.72,
+      recipientGetsAmount: 2000,
+    })
+  })
+
+  it('falls back to the actual receive amount for legacy quotes without a requested amount', () => {
+    const quote = sampleQuote({
+      provider: 'yellowcard',
+      requestedReceiveAmount: undefined,
+      receiveAmount: 2011.72,
+    })
+    expect(payoutRequestedReceiveAmount(quote)).toBe(2011.72)
+    expect(payoutCustomerFacingReceiveAmount(quote)).toBe(2011.72)
+  })
+
+  it('keeps non-YC display semantics on the provider quoted amount', () => {
+    const quote = sampleQuote({
+      provider: 'noah',
+      requestedReceiveAmount: 2000,
+      receiveAmount: 2011.72,
+    })
+    expect(payoutCustomerFacingReceiveAmount(quote)).toBe(2011.72)
   })
 
   it('reuses stash only for the same recipient and amount', () => {

@@ -111,6 +111,10 @@ export interface PricingQuoteTotals {
 }
 
 export interface PayoutQuote {
+  /** Amount the customer entered. YC may lock a slightly larger actual payout to avoid underpaying. */
+  requestedReceiveAmount?: number
+  /** Customer-facing "Recipient amount"; execution still uses receiveAmount. */
+  displayReceiveAmount?: number
   receiveAmount: number
   receiveCurrency: string
   customerPrincipal: number
@@ -1606,4 +1610,3 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   }
   return btoa(binary)
 }
-

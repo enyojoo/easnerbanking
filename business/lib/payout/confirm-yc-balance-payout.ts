@@ -69,6 +69,7 @@ function buildLockedYcPayoutQuote(input: {
 
   return {
     requestedReceiveAmount,
+    displayReceiveAmount: requestedReceiveAmount,
     receiveAmount,
     receiveCurrency,
     customerPrincipal: locked.pricing.customerPrincipal,

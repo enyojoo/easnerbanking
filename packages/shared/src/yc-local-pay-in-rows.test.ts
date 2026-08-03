@@ -35,7 +35,7 @@ describe("buildCrossBorderSendDetailRows", () => {
       "Transfer method",
       "When",
     ])
-    expect(labels).not.toContain("Recipient gets")
+    expect(labels).not.toContain("Recipient amount")
     expect(rows.find((r) => r.id === "transfer-amount")?.value).toContain("92,250.80")
     expect(rows.find((r) => r.id === "processing-fee")?.value).toContain("2,830.91")
     expect(rows.find((r) => r.id === "amount-paid")?.value).toContain("94,606.30")
@@ -45,7 +45,7 @@ describe("buildCrossBorderSendDetailRows", () => {
 })
 
 describe("buildYcLocalPayInReviewRows", () => {
-  it("keeps Recipient gets anchored to the requested amount when YC locks a higher quantum", () => {
+  it("keeps Recipient amount anchored to the requested amount when YC locks a higher quantum", () => {
     const rows = buildYcLocalPayInReviewRows({
       mode: "cross_border_send",
       phase: "locked",

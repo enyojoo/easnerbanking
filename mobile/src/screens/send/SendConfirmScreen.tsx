@@ -73,6 +73,7 @@ import {
   peekSendPayoutQuote,
   peekSendPayoutQuotePreview,
   clearSendPayoutQuote,
+  payoutCustomerFacingReceiveAmount,
   payoutDisplayAmountsFromQuote,
   payoutPrepareSessionFromQuote,
 } from '../../lib/sendFlowPayoutQuote'
@@ -251,7 +252,9 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           : (params.receiveAmountValue ?? 0),
       receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
     }
-    if (stashed && isStashedPayoutQuoteFresh(meta)) return stashed.receiveAmount
+    if (stashed && isStashedPayoutQuoteFresh(meta)) {
+      return payoutCustomerFacingReceiveAmount(stashed)
+    }
     return params.receiveAmountValue ?? 0
   })
 
@@ -432,6 +435,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       ? hasWalletSendFxDisplay(selectedBalanceCurrency, receiveCurrency, walletNetwork)
       : selectedBalanceCurrency.toUpperCase() !== receiveCurrency.toUpperCase())
   const youSendAmount = quoteDisplay?.youSendAmount ?? calculatedSendingAmount
+  const recipientGetsAmount = quoteDisplay?.recipientGetsAmount ?? quotedReceiveAmount
   const customerRate = useMemo(() => {
     if (quoteDisplay?.customerRate && quoteDisplay.customerRate > 0) {
       return quoteDisplay.customerRate
@@ -566,7 +570,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
       const stashed = peekSendPayoutQuote()
       if (stashed && isCompletePayoutQuote(stashed)) {
-        setQuotedReceiveAmount(stashed.receiveAmount)
+        setQuotedReceiveAmount(payoutCustomerFacingReceiveAmount(stashed))
         const display = payoutDisplayAmountsFromQuote(stashed)
         const payoutSessionFromQuote = payoutPrepareSessionFromQuote(stashed, recipient.id)
         setPricing((prev) => ({
@@ -616,7 +620,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           }))
           return
         }
-        setQuotedReceiveAmount(q.receiveAmount)
+        setQuotedReceiveAmount(payoutCustomerFacingReceiveAmount(q))
         const display = payoutDisplayAmountsFromQuote(q)
         const payoutSessionFromQuote = payoutPrepareSessionFromQuote(q, recipient.id)
         setPricing((prev) => ({
@@ -665,7 +669,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                   ...(isWalletRecipient && networkFee > 0 ? { network_fee: networkFee } : {}),
                   exchange_rate: hasFx && customerRate > 0 ? customerRate : 1,
                   send_currency: selectedBalanceCurrency,
-                  receive_amount: quotedReceiveAmount,
+                  receive_amount: quoteDisplay?.actualReceiveAmount ?? quotedReceiveAmount,
+                  ...(quoteDisplay?.actualReceiveAmount != null &&
+                  quoteDisplay.actualReceiveAmount !== recipientGetsAmount
+                    ? { requested_receive_amount: recipientGetsAmount }
+                    : {}),
                   receive_currency: receiveCurrency,
                   transfer_method: transferMethod,
                   ...(processingTime ? { processing_time: processingTime } : {}),
@@ -754,6 +762,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       payoutSession,
       qc,
       quotedReceiveAmount,
+      recipientGetsAmount,
+      quoteDisplay?.actualReceiveAmount,
       youSendAmount,
       exchangeFee,
       processingFee,
@@ -977,7 +987,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               ) : null}
               <TransactionDetailSummaryRow
                 label={REVIEW_ROW_LABELS.recipientGets}
-                value={formatMoneyDisplay(quotedReceiveAmount, receiveCurrency)}
+                value={formatMoneyDisplay(recipientGetsAmount, receiveCurrency)}
                 valueBold
               />
               {recipient ? (

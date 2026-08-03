@@ -156,8 +156,18 @@ export async function claimPayoutLockSession(
 
 export function lockedQuoteFromSession(row: PayoutLockSessionRow): PayoutQuoteResult {
   const payload = row.provider_payload_json ?? {}
+  const requestedReceiveAmount = row.pricing_json.requestedReceiveAmount
   const quote: PayoutQuoteResult = {
     ...row.pricing_json,
+    // Backfill persisted locks created before displayReceiveAmount was introduced.
+    displayReceiveAmount:
+      row.pricing_json.displayReceiveAmount ??
+      (row.provider === "yellowcard" &&
+      requestedReceiveAmount != null &&
+      Number.isFinite(requestedReceiveAmount) &&
+      requestedReceiveAmount > 0
+        ? requestedReceiveAmount
+        : row.pricing_json.receiveAmount),
     lockId: row.id,
     quoteKey: row.quote_key,
     quotePhase: "locked",

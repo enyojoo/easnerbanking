@@ -107,6 +107,7 @@ import {
   peekLastPayoutQuoteError,
   peekSendPayoutQuote,
   clearSendPayoutQuote,
+  payoutRequestedReceiveAmount,
   payoutDisplayAmountsFromQuote,
 } from '../../lib/sendFlowPayoutQuote'
 import {
@@ -1570,7 +1571,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           calculatedSendingAmount = stashedWalletQuote.sendAmount
           calculatedTotalAmount = stashedWalletQuote.totalDebited
         } else if (stashedQuote) {
-          receiveAmountValue = stashedQuote.receiveAmount
+          receiveAmountValue = payoutRequestedReceiveAmount(stashedQuote)
           calculatedSendingAmount =
             stashedQuote.customerPrincipal > 0
               ? stashedQuote.customerPrincipal

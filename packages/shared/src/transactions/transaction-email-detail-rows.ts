@@ -1,11 +1,11 @@
 /**
  * Canonical transaction detail rows for settled/failed/reversed emails — the same
- * Sending / Processing fee / Total debited / Recipient / Transfer method (payout) and
+ * Sent amount / Processing fee / Total debited / Recipient / Transfer method (payout) and
  * Scheme / Sender / Processing fee / Amount credited (deposit) rows shown in-app.
  *
  * Hidden ops fields (margin_amount, channel_cost) are never emitted. The displayed
  * "Processing fee" is the combined `computeDisplayProcessingFee` value so the email
- * foots the same way as the in-app views: Total debited = Sending + Processing fee.
+ * foots the same way as the in-app views: Total debited = Sent amount + Processing fee.
  */
 
 import { formatMoneyDisplay } from "../format-money-display"
@@ -136,7 +136,7 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
       ),
     )
   } else {
-    // Emails describe settled balance payout detail — Sent, fee, rate, total debited.
+    // Emails describe settled balance payout detail — Sent amount, fee, rate, total debited.
     pushIf(rows, REVIEW_ROW_LABELS.sent, formatMoneyDisplay(review.you_send_amount, sendCurrency))
     if (isPayoutReviewFeeVisible(feeAmount)) {
       pushIf(

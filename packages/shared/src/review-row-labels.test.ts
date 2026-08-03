@@ -20,7 +20,7 @@ describe("review-row-labels", () => {
     )
   })
 
-  it("uses Sending / Sent for balance payouts", () => {
+  it("uses Sending amount / Sent amount for balance payouts", () => {
     expect(reviewPrimaryAmountLabel("balance_payout", "confirm")).toBe(
       REVIEW_ROW_LABELS.sending,
     )

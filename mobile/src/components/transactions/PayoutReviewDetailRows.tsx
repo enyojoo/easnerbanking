@@ -2,6 +2,7 @@ import React, { type ReactNode } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import {
   REVIEW_ROW_LABELS,
+  displayPayoutReceiveAmount,
   formatAccountBalanceLabel,
   formatMoneyDisplay,
   formatPayoutRecipientSubtitle,
@@ -108,7 +109,10 @@ export function PayoutReviewDetailRows({
       {showRecipientGets ? (
         <TransactionDetailSummaryRow
           label={REVIEW_ROW_LABELS.recipientGets}
-          value={formatMoneyDisplay(payoutReview.receive_amount, payoutReview.receive_currency)}
+          value={formatMoneyDisplay(
+            displayPayoutReceiveAmount(payoutReview),
+            payoutReview.receive_currency,
+          )}
           valueBold
         />
       ) : null}

@@ -9,11 +9,11 @@ export const TLC_LOCAL_TRANSFER_METHOD = "Local Transfer"
 export const REVIEW_ROW_LABELS = {
   transactionId: "Transaction ID",
   /** Balance outbound (confirm). */
-  sending: "Sending",
+  sending: "Sending amount",
   /** Balance outbound (settled detail / email). */
-  sent: "Sent",
+  sent: "Sent amount",
   totalDebited: "Total debited",
-  recipientGets: "Recipient gets",
+  recipientGets: "Recipient amount",
   recipient: "Recipient",
   /** External rail pay-in (local deposit + YC cross-border send). */
   amountToPay: "Amount to pay",
@@ -60,7 +60,7 @@ export type ReviewRowLabel = (typeof REVIEW_ROW_LABELS)[keyof typeof REVIEW_ROW_
 export type ReviewFlowKind = "balance_payout" | "local_pay_in"
 export type ReviewPhase = "confirm" | "detail"
 
-/** Primary outbound / pay-in amount row (Sending vs Amount to pay). */
+/** Primary outbound / pay-in amount row (Sending amount vs Amount to pay). */
 export function reviewPrimaryAmountLabel(
   flow: ReviewFlowKind,
   phase: ReviewPhase,
