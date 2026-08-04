@@ -139,6 +139,8 @@ export async function createInvoiceCheckoutSession(
         ui_mode: "elements",
         mode: "payment",
         customer_email: invoice.customerEmail?.trim() || undefined,
+        // Helps dynamic PMs use billing country (after IP) for geo eligibility.
+        billing_address_collection: "auto",
         line_items: [
           {
             quantity: 1,

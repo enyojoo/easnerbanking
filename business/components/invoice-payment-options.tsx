@@ -257,7 +257,6 @@ export function InvoicePaymentOptions({
               <InvoiceStripeCheckout
                 invoice={invoice}
                 easetag={publicInvoiceEasetag?.trim() || "preview"}
-                businessDisplayName={brandName}
                 previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
               />
             </TabsContent>

@@ -1,25 +1,94 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
-import { loadStripe } from "@stripe/stripe-js"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { loadStripe, type StripeExpressCheckoutElementAvailablePaymentMethodsChangeEvent, type StripeExpressCheckoutElementConfirmEvent, type AvailablePaymentMethods } from "@stripe/stripe-js"
 import {
   CheckoutElementsProvider,
+  ExpressCheckoutElement,
   PaymentElement,
   useCheckoutElements,
 } from "@stripe/react-stripe-js/checkout"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Check, Loader2 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import {
+  browserStripeLocale,
+  easnerStripeElementsAppearance,
+} from "@/lib/stripe/elements-appearance"
 import type { Invoice } from "@/lib/b2b/types"
 
 type Props = {
   invoice: Invoice
   easetag: string
-  businessDisplayName?: string
   /** Merchant preview — do not collect payment. */
   previewOnly?: boolean
 }
 
-function CheckoutForm({
+function hasReadyExpressMethods(methods: AvailablePaymentMethods | undefined): boolean {
+  if (!methods) return false
+  return Object.values(methods).some(Boolean)
+}
+
+function hasChangedExpressMethods(
+  methods: StripeExpressCheckoutElementAvailablePaymentMethodsChangeEvent["paymentMethods"],
+): boolean {
+  if (!methods) return false
+  return Object.values(methods).some((m) => m?.available === true)
+}
+
+function PaymentFormSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading payment methods">
+      <Skeleton className="h-11 w-full rounded-lg" />
+      <Skeleton className="h-11 w-full rounded-lg" />
+      <div className="space-y-2 pt-1">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-10 w-full rounded-lg" />
+      </div>
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-10 w-full rounded-lg" />
+      </div>
+      <Skeleton className="h-11 w-full rounded-lg" />
+    </div>
+  )
+}
+
+function OrPayWithDivider() {
+  return (
+    <div className="relative py-1">
+      <div className="absolute inset-0 flex items-center" aria-hidden>
+        <span className="w-full border-t border-border" />
+      </div>
+      <div className="relative flex justify-center text-xs uppercase tracking-wide">
+        <span className="bg-background px-3 text-muted-foreground">Or pay with</span>
+      </div>
+    </div>
+  )
+}
+
+function PaymentSuccess({ invoice, compact }: { invoice: Invoice; compact?: boolean }) {
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <Check className="h-5 w-5 text-primary" aria-hidden />
+        </div>
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold text-foreground">Payment received</p>
+          <p className="text-sm text-muted-foreground">
+            {compact
+              ? "Thank you. This invoice is marked paid."
+              : `A receipt will be emailed to ${invoice.customerEmail || "the bill-to address"} shortly.`}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CheckoutSurface({
   invoice,
   onPaid,
 }: {
@@ -30,39 +99,49 @@ function CheckoutForm({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [hasWallets, setHasWallets] = useState(false)
 
-  const handlePay = useCallback(async () => {
-    if (checkoutState.type !== "success") return
+  const confirmPayment = useCallback(async (): Promise<{ ok: true } | { ok: false; message: string }> => {
+    if (checkoutState.type !== "success") {
+      return { ok: false, message: "Payment form is not ready" }
+    }
     setSubmitting(true)
     setError(null)
     try {
       const result = await checkoutState.checkout.confirm({ redirect: "if_required" })
       if (result.type === "error") {
-        setError(result.error.message || "Payment failed")
-        return
+        const message = result.error.message || "Payment failed"
+        setError(message)
+        return { ok: false, message }
       }
       setSuccess(true)
       onPaid()
+      return { ok: true }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Payment failed")
+      const message = e instanceof Error ? e.message : "Payment failed"
+      setError(message)
+      return { ok: false, message }
     } finally {
       setSubmitting(false)
     }
   }, [checkoutState, onPaid])
 
+  const handleExpressConfirm = useCallback(
+    async (event: StripeExpressCheckoutElementConfirmEvent) => {
+      const result = await confirmPayment()
+      if (!result.ok) {
+        event.paymentFailed({ reason: "fail", message: result.message })
+      }
+    },
+    [confirmPayment],
+  )
+
   if (success) {
-    return (
-      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
-        <p className="font-medium text-foreground">Payment received</p>
-        <p className="mt-1 text-muted-foreground">
-          A receipt will be emailed to {invoice.customerEmail || "the bill-to address"} shortly.
-        </p>
-      </div>
-    )
+    return <PaymentSuccess invoice={invoice} />
   }
 
   if (checkoutState.type === "loading") {
-    return <p className="text-sm text-muted-foreground">Loading secure payment form…</p>
+    return <PaymentFormSkeleton />
   }
 
   if (checkoutState.type === "error") {
@@ -75,12 +154,49 @@ function CheckoutForm({
 
   return (
     <div className="space-y-4">
-      <PaymentElement />
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="button" className="w-full" disabled={submitting} onClick={() => void handlePay()}>
-        {submitting
-          ? "Processing…"
-          : `Pay ${formatCurrency(invoice.total, invoice.currency)}`}
+      <ExpressCheckoutElement
+        onReady={(event) => {
+          setHasWallets(hasReadyExpressMethods(event.availablePaymentMethods))
+        }}
+        onAvailablePaymentMethodsChange={(event) => {
+          setHasWallets(hasChangedExpressMethods(event.paymentMethods))
+        }}
+        onConfirm={(event) => void handleExpressConfirm(event)}
+      />
+
+      {hasWallets ? <OrPayWithDivider /> : null}
+
+      <PaymentElement
+        options={{
+          layout: {
+            type: "accordion",
+            defaultCollapsed: false,
+            radios: "always",
+            spacedAccordionItems: true,
+          },
+        }}
+      />
+
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <Button
+        type="button"
+        className="w-full h-11 text-base font-medium"
+        disabled={submitting}
+        onClick={() => void confirmPayment()}
+      >
+        {submitting ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+            Processing…
+          </>
+        ) : (
+          `Pay ${formatCurrency(invoice.total, invoice.currency)}`
+        )}
       </Button>
     </div>
   )
@@ -89,45 +205,62 @@ function CheckoutForm({
 export function InvoiceStripeCheckout({
   invoice,
   easetag,
-  businessDisplayName,
   previewOnly = false,
 }: Props) {
   const [paid, setPaid] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [publishableKey, setPublishableKey] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(!previewOnly)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  const elementsLocale = useMemo(() => browserStripeLocale(), [])
+  const elementsAppearance = useMemo(() => easnerStripeElementsAppearance(), [])
 
   const stripePromise = useMemo(() => {
     if (!publishableKey) return null
-    return loadStripe(publishableKey)
-  }, [publishableKey])
+    return loadStripe(publishableKey, { locale: elementsLocale })
+  }, [publishableKey, elementsLocale])
 
-  const startCheckout = useCallback(async () => {
-    if (previewOnly) return
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const res = await fetch(
-        `/api/invoices/public/${encodeURIComponent(easetag)}/${encodeURIComponent(invoice.invoiceNumber)}/checkout-session`,
-        { method: "POST" },
-      )
-      const json = (await res.json()) as {
-        clientSecret?: string
-        publishableKey?: string
-        error?: string
+  useEffect(() => {
+    if (previewOnly || paid) return
+    let cancelled = false
+
+    async function load() {
+      setLoading(true)
+      setLoadError(null)
+      setClientSecret(null)
+      setPublishableKey(null)
+      try {
+        const res = await fetch(
+          `/api/invoices/public/${encodeURIComponent(easetag)}/${encodeURIComponent(invoice.invoiceNumber)}/checkout-session`,
+          { method: "POST" },
+        )
+        const json = (await res.json()) as {
+          clientSecret?: string
+          publishableKey?: string
+          error?: string
+        }
+        if (cancelled) return
+        if (!res.ok || !json.clientSecret || !json.publishableKey) {
+          throw new Error(json.error || "Failed to start checkout")
+        }
+        setClientSecret(json.clientSecret)
+        setPublishableKey(json.publishableKey)
+      } catch (e) {
+        if (!cancelled) {
+          setLoadError(e instanceof Error ? e.message : "Failed to start checkout")
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      if (!res.ok || !json.clientSecret || !json.publishableKey) {
-        throw new Error(json.error || "Failed to start checkout")
-      }
-      setClientSecret(json.clientSecret)
-      setPublishableKey(json.publishableKey)
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Failed to start checkout")
-    } finally {
-      setLoading(false)
     }
-  }, [easetag, invoice.invoiceNumber, previewOnly])
+
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [previewOnly, paid, easetag, invoice.invoiceNumber, reloadKey])
 
   if (previewOnly) {
     return (
@@ -140,47 +273,50 @@ export function InvoiceStripeCheckout({
         <Button type="button" className="w-full" disabled>
           Pay {formatCurrency(invoice.total, invoice.currency)}
         </Button>
-        {businessDisplayName ? (
-          <p className="text-center text-xs">Powered by {businessDisplayName}</p>
-        ) : null}
       </div>
     )
   }
 
   if (paid) {
-    return (
-      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
-        <p className="font-medium text-foreground">Payment received</p>
-        <p className="mt-1 text-muted-foreground">Thank you. This invoice is marked paid.</p>
-      </div>
-    )
+    return <PaymentSuccess invoice={invoice} compact />
   }
 
-  if (!clientSecret || !stripePromise) {
+  if (loading || (!clientSecret && !loadError)) {
+    return <PaymentFormSkeleton />
+  }
+
+  if (loadError || !clientSecret || !stripePromise) {
     return (
       <div className="space-y-3">
-        {loadError ? <p className="text-sm text-destructive">{loadError}</p> : null}
-        <Button type="button" className="w-full" disabled={loading} onClick={() => void startCheckout()}>
-          {loading ? "Preparing…" : `Pay ${formatCurrency(invoice.total, invoice.currency)}`}
+        <p className="text-sm text-destructive" role="alert">
+          {loadError || "Unable to load payment form"}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => setReloadKey((k) => k + 1)}
+        >
+          Try again
         </Button>
-        {businessDisplayName ? (
-          <p className="text-center text-xs text-muted-foreground">Powered by {businessDisplayName}</p>
-        ) : null}
       </div>
     )
   }
 
   return (
-    <div className="space-y-3">
-      <CheckoutElementsProvider
-        stripe={stripePromise}
-        options={{ clientSecret, elementsOptions: {} }}
-      >
-        <CheckoutForm invoice={invoice} onPaid={() => setPaid(true)} />
-      </CheckoutElementsProvider>
-      {businessDisplayName ? (
-        <p className="text-center text-xs text-muted-foreground">Powered by {businessDisplayName}</p>
-      ) : null}
-    </div>
+    <CheckoutElementsProvider
+      stripe={stripePromise}
+      options={{
+        clientSecret,
+        defaultValues: {
+          email: invoice.customerEmail || undefined,
+        },
+        elementsOptions: {
+          appearance: elementsAppearance,
+        },
+      }}
+    >
+      <CheckoutSurface invoice={invoice} onPaid={() => setPaid(true)} />
+    </CheckoutElementsProvider>
   )
 }
