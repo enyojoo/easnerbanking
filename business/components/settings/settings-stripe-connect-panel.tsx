@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { loadConnectAndInitialize } from "@stripe/connect-js"
 import {
   ConnectAccountOnboarding,
@@ -9,12 +9,20 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, CreditCard, Loader2 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { CreditCard, Loader2 } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { toast } from "sonner"
 import { isStripePublishableConfigured } from "@/lib/stripe/public-enabled"
-import { cn } from "@/lib/utils"
+import { easnerStripeConnectAppearance } from "@/lib/stripe/connect-appearance"
+import { browserStripeLocale } from "@/lib/stripe/elements-appearance"
 
 type ConnectStatusResponse = {
   enabled: boolean
@@ -87,14 +95,15 @@ function StripeConnectStatusBadge({
   )
 }
 
-const flowPanelClass =
-  "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
+const connectDialogContentClass =
+  "flex h-[min(94vh,52rem)] w-[min(calc(100vw-1.5rem),56rem)] max-w-none flex-col gap-0 overflow-hidden p-0 duration-300 data-[state=open]:duration-300 data-[state=closed]:duration-300 sm:max-w-[min(calc(100vw-1.5rem),56rem)]"
 
 export function SettingsStripeConnectPanel() {
   const [status, setStatus] = useState<ConnectStatusResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [linking, setLinking] = useState(false)
   const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [onboardingLoading, setOnboardingLoading] = useState(false)
   const [connectInstance, setConnectInstance] = useState<ReturnType<
     typeof loadConnectAndInitialize
   > | null>(null)
@@ -129,18 +138,6 @@ export function SettingsStripeConnectPanel() {
     }
   }, [])
 
-  useEffect(() => {
-    if (onboardingOpen) {
-      document.documentElement.dataset.verificationFlowOpen = "true"
-      document.querySelector("main")?.scrollTo({ top: 0 })
-    } else {
-      delete document.documentElement.dataset.verificationFlowOpen
-    }
-    return () => {
-      delete document.documentElement.dataset.verificationFlowOpen
-    }
-  }, [onboardingOpen])
-
   const fetchClientSecret = useCallback(async () => {
     const res = await fetchWithSession("/api/business/stripe/connect/onboarding-session", {
       method: "POST",
@@ -155,6 +152,15 @@ export function SettingsStripeConnectPanel() {
     return json.clientSecret
   }, [])
 
+  const clearConnectInstance = useCallback(() => {
+    if (clearInstanceAfterCloseRef.current) clearTimeout(clearInstanceAfterCloseRef.current)
+    clearInstanceAfterCloseRef.current = setTimeout(() => {
+      setConnectInstance(null)
+      setOnboardingLoading(false)
+      clearInstanceAfterCloseRef.current = null
+    }, 280)
+  }, [])
+
   const closeOnboardingAndSync = useCallback(async () => {
     setOnboardingOpen(false)
     await fetchWithSession("/api/business/stripe/connect/sync", { method: "POST" }).catch(() => null)
@@ -164,12 +170,27 @@ export function SettingsStripeConnectPanel() {
     } else {
       toast.success("Onboarding updated")
     }
-    if (clearInstanceAfterCloseRef.current) clearTimeout(clearInstanceAfterCloseRef.current)
-    clearInstanceAfterCloseRef.current = setTimeout(() => {
-      setConnectInstance(null)
-      clearInstanceAfterCloseRef.current = null
-    }, 280)
-  }, [refreshStatus])
+    clearConnectInstance()
+  }, [clearConnectInstance, refreshStatus])
+
+  const handleDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        if (clearInstanceAfterCloseRef.current) {
+          clearTimeout(clearInstanceAfterCloseRef.current)
+          clearInstanceAfterCloseRef.current = null
+        }
+        setOnboardingOpen(true)
+        return
+      }
+      setOnboardingOpen(false)
+      void fetchWithSession("/api/business/stripe/connect/sync", { method: "POST" })
+        .catch(() => null)
+        .then(() => refreshStatus())
+      clearConnectInstance()
+    },
+    [clearConnectInstance, refreshStatus],
+  )
 
   const startOnboarding = useCallback(async () => {
     if (!publishableKey || !isStripePublishableConfigured()) {
@@ -181,19 +202,19 @@ export function SettingsStripeConnectPanel() {
         clearTimeout(clearInstanceAfterCloseRef.current)
         clearInstanceAfterCloseRef.current = null
       }
+      setOnboardingLoading(true)
+      setOnboardingOpen(true)
       const instance = loadConnectAndInitialize({
         publishableKey,
         fetchClientSecret,
-        appearance: {
-          overlays: "none",
-          variables: {
-            colorPrimary: "#0f172a",
-          },
-        },
+        locale: browserStripeLocale(),
+        appearance: easnerStripeConnectAppearance(),
       })
       setConnectInstance(instance)
-      setOnboardingOpen(true)
+      setOnboardingLoading(false)
     } catch (e) {
+      setOnboardingOpen(false)
+      setOnboardingLoading(false)
       toast.error(e instanceof Error ? e.message : "Could not start onboarding")
     }
   }, [fetchClientSecret, publishableKey])
@@ -253,143 +274,125 @@ export function SettingsStripeConnectPanel() {
     return null
   }
 
-  const flowPanel = (
-    <div
-      className={cn("relative flex flex-col overflow-hidden", flowPanelClass)}
-      style={{ "--verification-settings-chrome": "14rem" } as CSSProperties}
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="absolute left-2 top-2 z-20 h-8 gap-1 bg-background/90 px-2 shadow-sm backdrop-blur-sm hover:bg-background"
-        onClick={() => void closeOnboardingAndSync()}
-      >
-        <ArrowLeft className="size-4" aria-hidden />
-        Back
-      </Button>
-      <div className="relative min-h-0 flex-1 overflow-y-auto px-2 pb-4 pt-12">
-        {connectInstance ? (
-          <ConnectComponentsProvider connectInstance={connectInstance}>
-            <ConnectAccountOnboarding
-              onExit={() => void closeOnboardingAndSync()}
-              collectionOptions={{
-                fields: "eventually_due",
-                futureRequirements: "include",
-              }}
-            />
-          </ConnectComponentsProvider>
-        ) : (
-          <div className="flex size-full min-h-[16rem] flex-col items-center justify-center gap-3 text-muted-foreground">
-            <Loader2 className="size-8 animate-spin" aria-hidden />
-            <p className="text-sm">Opening verification…</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-
   return (
-    <Card
-      padding={onboardingOpen ? "none" : undefined}
-      className={cn(onboardingOpen && cn("overflow-hidden", flowPanelClass))}
-      style={
-        onboardingOpen
-          ? ({ "--verification-settings-chrome": "14rem" } as CSSProperties)
-          : undefined
-      }
-      data-verification-flow={onboardingOpen ? "open" : undefined}
-    >
-      {onboardingOpen ? (
-        flowPanel
-      ) : (
-        <>
-          <CardHeader>
-            <SettingsCardHeader
-              title={
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Online payments
-                  <StripeConnectStatusBadge label={meta.label} kind={meta.kind} />
-                </CardTitle>
-              }
-              description="Complete Stripe verification so invoice payments can settle to your Easner balance via your virtual account."
-            />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-lg border p-4 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  {!status.ready && status.reason ? (
-                    <p className="text-muted-foreground">{status.reason}</p>
-                  ) : null}
-                  {status.ready ? (
-                    <p className="text-muted-foreground">
-                      Pay online is ready. Customer payments settle to your Grid VA, then appear in
-                      your Easner balance.
-                    </p>
-                  ) : null}
-                  {!status.ready && !status.reason && !status.stripeAccountId ? (
-                    <p className="text-muted-foreground">
-                      Start setup to verify your business with Stripe and enable card payments on
-                      invoices.
-                    </p>
-                  ) : null}
-                </div>
+    <>
+      <Card>
+        <CardHeader>
+          <SettingsCardHeader
+            title={
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Online payments
+                <StripeConnectStatusBadge label={meta.label} kind={meta.kind} />
+              </CardTitle>
+            }
+            description="Complete Stripe verification so invoice payments can settle to your Easner balance via your virtual account."
+          />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border p-4 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                {!status.ready && status.reason ? (
+                  <p className="text-muted-foreground">{status.reason}</p>
+                ) : null}
+                {status.ready ? (
+                  <p className="text-muted-foreground">
+                    Pay online is ready. Customer payments settle to your Grid VA, then appear in
+                    your Easner balance.
+                  </p>
+                ) : null}
+                {!status.ready && !status.reason && !status.stripeAccountId ? (
+                  <p className="text-muted-foreground">
+                    Start setup to verify your business with Stripe and enable card payments on
+                    invoices.
+                  </p>
+                ) : null}
               </div>
-              <ul className="mt-3 space-y-1 text-muted-foreground">
-                <li>Transfers: {status.transfersEnabled ? "active" : "pending"}</li>
-                <li>Payouts: {status.payoutsEnabled ? "enabled" : "pending"}</li>
-                <li>Virtual account: {status.hasGridVa ? "available" : "required"}</li>
-                <li>
-                  Payout destination:{" "}
-                  {status.externalAccountLinked
-                    ? status.payoutDestination?.stripeExternalAccountId || "linked"
-                    : "not linked"}
-                </li>
-              </ul>
             </div>
+            <ul className="mt-3 space-y-1 text-muted-foreground">
+              <li>Transfers: {status.transfersEnabled ? "active" : "pending"}</li>
+              <li>Payouts: {status.payoutsEnabled ? "enabled" : "pending"}</li>
+              <li>Virtual account: {status.hasGridVa ? "available" : "required"}</li>
+              <li>
+                Payout destination:{" "}
+                {status.externalAccountLinked
+                  ? status.payoutDestination?.stripeExternalAccountId || "linked"
+                  : "not linked"}
+              </li>
+            </ul>
+          </div>
 
-            <div className="flex flex-wrap gap-2">
-              {showPrimaryOnboardingCta ? (
-                <Button type="button" onClick={() => void startOnboarding()}>
-                  {primaryCtaLabel}
-                </Button>
-              ) : null}
-              {status.detailsSubmitted && !status.externalAccountLinked ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={linking || !status.hasGridVa}
-                  onClick={() => void linkPayoutDestination()}
-                >
-                  {linking ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Linking…
-                    </>
-                  ) : (
-                    "Link Grid VA payout destination"
-                  )}
-                </Button>
-              ) : null}
-              {status.stripeAccountId ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    void fetchWithSession("/api/business/stripe/connect/sync", {
-                      method: "POST",
-                    }).then(() => refreshStatus())
-                  }
-                >
-                  Refresh status
-                </Button>
-              ) : null}
-            </div>
-          </CardContent>
-        </>
-      )}
-    </Card>
+          <div className="flex flex-wrap gap-2">
+            {showPrimaryOnboardingCta ? (
+              <Button type="button" onClick={() => void startOnboarding()}>
+                {primaryCtaLabel}
+              </Button>
+            ) : null}
+            {status.detailsSubmitted && !status.externalAccountLinked ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={linking || !status.hasGridVa}
+                onClick={() => void linkPayoutDestination()}
+              >
+                {linking ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Linking…
+                  </>
+                ) : (
+                  "Link Grid VA payout destination"
+                )}
+              </Button>
+            ) : null}
+            {status.stripeAccountId ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  void fetchWithSession("/api/business/stripe/connect/sync", {
+                    method: "POST",
+                  }).then(() => refreshStatus())
+                }
+              >
+                Refresh status
+              </Button>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={onboardingOpen} onOpenChange={handleDialogOpenChange}>
+        <DialogContent showCloseButton className={connectDialogContentClass}>
+          <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
+            <DialogTitle className="text-left text-base leading-snug sm:text-lg">
+              Online payment verification
+            </DialogTitle>
+            <DialogDescription className="pt-1">
+              Complete the steps below to verify your business with Stripe.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative min-h-0 flex-1 overflow-y-auto bg-[#faf9f6] px-4 pb-6 pt-2">
+            {onboardingLoading || !connectInstance ? (
+              <div className="flex size-full min-h-[16rem] flex-col items-center justify-center gap-3 text-muted-foreground">
+                <Loader2 className="size-8 animate-spin" aria-hidden />
+                <p className="text-sm">Opening verification…</p>
+              </div>
+            ) : (
+              <ConnectComponentsProvider connectInstance={connectInstance}>
+                <ConnectAccountOnboarding
+                  onExit={() => void closeOnboardingAndSync()}
+                  collectionOptions={{
+                    fields: "eventually_due",
+                    futureRequirements: "include",
+                  }}
+                />
+              </ConnectComponentsProvider>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
