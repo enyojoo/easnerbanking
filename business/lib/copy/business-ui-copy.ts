@@ -162,9 +162,9 @@ export const INVOICE_SHARE_COPY = {
   customerLinkHintPaid: "Your customer can view this invoice and download the receipt.",
   customerLinkHintVoid: "Link shows this invoice as void to your customer.",
   customerLinkHintDefault: "Share this link so your customer can view this invoice.",
-  previewHint: "Signed-in preview of the customer page. Does not count as a customer view.",
+  previewHint: "See how your customer sees this invoice.",
   draftPreviewHint:
-    "Issue this invoice to get a customer link. Use preview to see the customer page while drafting.",
+    "Issue this invoice to get a customer link. Use preview to see how your customer will see it.",
   customerLinkDisabledDraft: "Issue this invoice to share a customer link.",
   lastViewed: "Last viewed",
   lastEmailed: "Last emailed",

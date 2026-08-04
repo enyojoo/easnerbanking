@@ -13,14 +13,40 @@ import { PwaStandaloneRoot } from "@/components/pwa/pwa-standalone-root"
 import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider"
 import { BusinessViewportGate } from "@/components/layout/business-viewport-gate"
 import { AppSurfaceLayout } from "@/components/app-surface-layout"
+import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
 import "./globals.css"
 import { BRAND } from "@easner/shared"
 
+const ROOT_DESCRIPTION =
+  "Stablecoin-powered business banking with multi-currency accounts, cards, invoicing, and global payouts – built for modern finance teams and operators."
+
 export const metadata: Metadata = {
-  title: "Easner Business Banking",
-  description:
-    "Stablecoin-powered banking infrastructure with multi-currency accounts, cards, invoicing, and payments collections.",
+  metadataBase: new URL(getBusinessAppPublicOrigin()),
+  title: {
+    default: "Easner Business Banking",
+  },
+  description: ROOT_DESCRIPTION,
+  applicationName: "Easner Business Banking",
   generator: "Easner",
+  robots: {
+    index: false,
+    follow: false,
+  },
+  openGraph: {
+    title: "Easner Business Banking",
+    description: ROOT_DESCRIPTION,
+    url: "/",
+    siteName: "Easner Business Banking",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@easnerbanking",
+    creator: "@easnerbanking",
+    title: "Easner Business Banking",
+    description: ROOT_DESCRIPTION,
+  },
   icons: {
     icon: BRAND.favicon,
     apple: [{ url: BRAND.favicon }],

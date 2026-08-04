@@ -485,9 +485,6 @@ export function BusinessVerificationSection() {
                       <CardHeader className="pb-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <CardTitle className="text-base">{t.title}</CardTitle>
-                          <Badge variant="outline" className="text-xs">
-                            Tier {t.tier}
-                          </Badge>
                           {isT1 ? (
                             <Tier1VerificationBadge
                               tier1Complete={tier1Complete}

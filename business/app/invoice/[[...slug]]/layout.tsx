@@ -3,17 +3,13 @@ import type { Metadata } from "next"
 import { businessInfo } from "@/lib/business-info"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { fetchInvoiceIssuerForBusiness } from "@/lib/invoices/issuer"
+import { invoicePublicMetadata } from "@/lib/seo/content/invoice"
+import { businessMetadata } from "@/lib/seo/metadata"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug?: string[] }>
-}): Promise<Metadata> {
-  const { slug } = await params
+async function resolveInvoiceBusinessName(slug?: string[]): Promise<string> {
   const parts = slug ?? []
   const fallbackName = businessInfo.name
-  const titleFallback = `Invoice from ${fallbackName}`
 
   try {
     const admin = createSupabaseAdmin()
@@ -30,19 +26,33 @@ export async function generateMetadata({
       }
     }
 
-    if (!businessId) {
-      return { title: titleFallback, description: `View your invoice from ${fallbackName}` }
-    }
+    if (!businessId) return fallbackName
 
     const issuer = await fetchInvoiceIssuerForBusiness(admin, businessId)
-    const name = issuer.name?.trim() || fallbackName
-    return {
-      title: `Invoice from ${name}`,
-      description: `View your invoice from ${name}`,
-    }
+    return issuer.name?.trim() || fallbackName
   } catch {
-    return { title: titleFallback, description: `View your invoice from ${fallbackName}` }
+    return fallbackName
   }
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug?: string[] }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const parts = slug ?? []
+  const name = await resolveInvoiceBusinessName(parts)
+  const content = invoicePublicMetadata(name)
+  const path =
+    parts.length === 0
+      ? "/invoice"
+      : `/invoice/${parts.map((part) => encodeURIComponent(part)).join("/")}`
+
+  return businessMetadata({
+    metadata: content.metadata,
+    path,
+  })
 }
 
 export default function InvoiceSlugLayout({ children }: { children: ReactNode }) {

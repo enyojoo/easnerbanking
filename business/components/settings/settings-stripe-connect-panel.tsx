@@ -411,9 +411,6 @@ export function SettingsStripeConnectPanel({
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-base">{tier3?.title ?? "Online payments"}</CardTitle>
-            <Badge variant="outline" className="text-xs">
-              Tier 3
-            </Badge>
             <ConnectStatusChecklistTooltip
               label={panelUx.badgeLabel}
               kind={panelUx.badgeKind}

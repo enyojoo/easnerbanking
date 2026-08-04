@@ -1,14 +1,18 @@
 import type { Metadata } from "next"
+import type { ReactNode } from "react"
+import { invoiceSeo } from "@/lib/seo/content/invoice"
+import { businessMetadata } from "@/lib/seo/metadata"
 
 /** Per-invoice title uses the real business name in slug layout `generateMetadata`. */
-export const metadata: Metadata = {
-  description: "View your invoice",
-}
+export const metadata: Metadata = businessMetadata({
+  metadata: invoiceSeo.publicDefault.metadata,
+  path: "/invoice",
+})
 
 export default function InvoiceLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-y-auto">

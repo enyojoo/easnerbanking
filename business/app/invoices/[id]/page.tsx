@@ -1240,11 +1240,6 @@ export default function InvoiceDetailPage() {
                       )}
                     </Button>
                   </div>
-                  {customerViewUrl ? (
-                    <p className="text-xs font-mono text-muted-foreground truncate" title={customerViewUrl}>
-                      {customerViewUrl.replace(/^https?:\/\//, "")}
-                    </p>
-                  ) : null}
                   <p className="text-xs text-muted-foreground">{customerLinkHint(invoice.status)}</p>
                   <div className="flex justify-between gap-2 text-xs text-muted-foreground pt-1">
                     <span>
