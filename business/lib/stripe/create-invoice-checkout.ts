@@ -9,7 +9,7 @@ import { getStripePublishableKey, isStripeInvoicePaymentsEnabled } from "./confi
 import { stripeCheckoutIdempotencyKey } from "./idempotency"
 import { buildEasnerStatementSuffix } from "./statement-descriptor"
 
-const PAYABLE = new Set(["open", "sent", "past_due"])
+const PAYABLE = new Set(["unpaid", "sent", "past_due"])
 
 export type CreateInvoiceCheckoutResult =
   | {
@@ -209,7 +209,7 @@ export async function createInvoiceCheckoutSession(
           easner_business_id: input.businessId,
           easner_stripe_connected_account_id: connectedAccountId,
         },
-        return_url: `${(process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com").replace(/\/$/, "")}/invoice-view/${encodeURIComponent(input.easetag?.trim() || "pay")}/${encodeURIComponent(invoice.invoiceNumber)}?stripe_session={CHECKOUT_SESSION_ID}`,
+        return_url: `${(process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com").replace(/\/$/, "")}/invoice/${encodeURIComponent(input.easetag?.trim() || "pay")}/${encodeURIComponent(invoice.invoiceNumber)}?stripe_session={CHECKOUT_SESSION_ID}`,
       },
       { idempotencyKey },
     )

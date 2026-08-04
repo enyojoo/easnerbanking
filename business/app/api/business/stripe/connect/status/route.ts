@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import {
-  autoLinkGridVaPayoutIfEligible,
+  ensureConnectAccountLinked,
   getConnectAccountRow,
   resolveConnectReadyForCheckout,
-  syncConnectAccountRow,
+  runConnectAccountSyncPipeline,
 } from "@/lib/stripe/connect"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
@@ -30,22 +30,20 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const currency = url.searchParams.get("currency") || "USD"
 
+  try {
+    await ensureConnectAccountLinked(admin, ctx.businessId)
+  } catch (e) {
+    console.warn("[stripe-connect] discover/link failed:", e)
+  }
+
   const row = await getConnectAccountRow(admin, ctx.businessId)
 
-  // Keep DB in sync even when account.updated Connect webhooks are missing.
   if (row?.stripe_account_id) {
     try {
-      await syncConnectAccountRow(admin, {
+      await runConnectAccountSyncPipeline(admin, {
         businessId: ctx.businessId,
         stripeAccountId: row.stripe_account_id,
       })
-      const autoLink = await autoLinkGridVaPayoutIfEligible(admin, {
-        businessId: ctx.businessId,
-        currency,
-      })
-      if (!autoLink.skipped && !autoLink.ok) {
-        console.warn("[stripe-connect] status auto-link failed:", autoLink.error)
-      }
     } catch (e) {
       console.warn("[stripe-connect] status sync failed:", e)
     }
@@ -53,6 +51,16 @@ export async function GET(request: Request) {
 
   const freshReady = await resolveConnectReadyForCheckout(admin, ctx.businessId, { currency })
   const freshRow = await getConnectAccountRow(admin, ctx.businessId)
+  const payoutSnapshot = freshRow?.payout_destination_snapshot as
+    | {
+        stripeExternalAccountId?: string
+        last4?: string | null
+        bankName?: string | null
+        currency?: string
+        status?: string | null
+      }
+    | null
+    | undefined
 
   return NextResponse.json({
     enabled: true,
@@ -67,12 +75,20 @@ export async function GET(request: Request) {
     externalAccountLinked: freshReady.externalAccountLinked,
     hasGridVa: freshReady.hasGridVa,
     requirementsCurrentlyDue: freshReady.requirementsCurrentlyDue,
+    requirementsSnapshot: freshRow?.requirements_snapshot ?? null,
+    businessProfileSnapshot: freshRow?.business_profile_snapshot ?? null,
+    capabilities: freshRow?.capabilities ?? null,
     payoutDestination: freshRow?.stripe_external_account_id
       ? {
           stripeExternalAccountId: freshRow.stripe_external_account_id,
           settlementRail: freshRow.default_settlement_rail,
           schedule: freshRow.stripe_payout_schedule,
+          last4: payoutSnapshot?.last4 ?? null,
+          bankName: payoutSnapshot?.bankName ?? null,
+          currency: payoutSnapshot?.currency ?? null,
+          status: payoutSnapshot?.status ?? null,
         }
       : null,
+    lastSyncedAt: freshRow?.last_synced_at ?? null,
   })
 }

@@ -1,5 +1,6 @@
 import type { Invoice, InvoiceLineItem } from "@/lib/b2b/types"
 import { parseInvoiceMetadata, type InvoiceMetadata } from "@/lib/b2b/invoice-metadata"
+import { normalizeInvoiceStatus } from "@/lib/invoices/invoice-status"
 
 export type B2bInvoiceRow = {
   id: string
@@ -35,22 +36,7 @@ function parseLineItems(raw: unknown): InvoiceLineItem[] {
 }
 
 function normalizeStatus(s: string | null | undefined): Invoice["status"] {
-  const v = (s ?? "draft").toLowerCase()
-  const allowed: Invoice["status"][] = [
-    "draft",
-    "quote",
-    "open",
-    "sent",
-    "past_due",
-    "paid",
-    "void",
-    "uncollectible",
-    "failed",
-    "credit_note",
-  ]
-  if (allowed.includes(v as Invoice["status"])) return v as Invoice["status"]
-  if (v === "pastdue" || v === "past-due") return "past_due"
-  return "draft"
+  return normalizeInvoiceStatus(s)
 }
 
 function finiteNum(n: unknown, fallback = 0): number {
@@ -85,9 +71,8 @@ const INVOICE_PATCH_KEYS = new Set([
   "memo",
   "poNumber",
   "paymentDisplay",
-  "documentType",
-  "creditForInvoiceId",
   "remindersSent",
+  "emailsSent",
   "paymentInfo",
   "invoiceNumber",
 ] as const satisfies readonly (keyof Invoice)[])
@@ -198,9 +183,8 @@ export function mapRowToInvoice(row: B2bInvoiceRow): Invoice {
     memo: meta.memo,
     poNumber: meta.poNumber,
     paymentDisplay: meta.paymentDisplay,
-    documentType: meta.documentType,
-    creditForInvoiceId: meta.creditForInvoiceId,
     remindersSent: meta.remindersSent,
+    emailsSent: meta.emailsSent,
     paymentInfo: meta.paymentInfo,
   }
   return inv
@@ -229,24 +213,9 @@ function normalizeDueDate(raw: unknown): string | null {
   return new Date(t).toISOString().slice(0, 10)
 }
 
-const ALLOWED_INVOICE_STATUS = new Set([
-  "draft",
-  "quote",
-  "open",
-  "sent",
-  "past_due",
-  "paid",
-  "void",
-  "uncollectible",
-  "failed",
-  "credit_note",
-])
-
-function normalizeInvoiceStatus(raw: unknown): string {
+function normalizeInvoiceStatusForDb(raw: unknown): string {
   const s = typeof raw === "string" ? raw.trim().toLowerCase() : "draft"
-  if (ALLOWED_INVOICE_STATUS.has(s)) return s
-  if (s === "pastdue" || s === "past-due") return "past_due"
-  return "draft"
+  return normalizeInvoiceStatus(s)
 }
 
 function sanitizeLineItems(items: Invoice["lineItems"] | undefined): InvoiceLineItem[] {
@@ -289,9 +258,8 @@ export function invoiceToDbPayload(input: {
     memo: invoice.memo?.trim() || undefined,
     poNumber: invoice.poNumber?.trim() || undefined,
     paymentDisplay: invoice.paymentDisplay,
-    documentType: invoice.documentType,
-    creditForInvoiceId: invoice.creditForInvoiceId,
     remindersSent: invoice.remindersSent,
+    emailsSent: invoice.emailsSent,
     notes: invoice.notes,
     statusHistory: invoice.statusHistory,
     paymentInfo: invoice.paymentInfo,
@@ -329,7 +297,7 @@ export function invoiceToDbPayload(input: {
     customer_id: customerId,
     amount_cents: amountCents,
     currency: safeTrimText(invoice.currency, "USD").toUpperCase() || "USD",
-    status: normalizeInvoiceStatus(invoice.status),
+    status: normalizeInvoiceStatusForDb(invoice.status),
     due_date: normalizeDueDate(invoice.dueDate),
     line_items: lineItems,
     tax_rate: taxRate,

@@ -4,6 +4,7 @@ import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-busin
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
+import { isInvoicePayableStatus, isInvoicePubliclyViewable } from "@/lib/invoices/invoice-status"
 import { resolveConnectReadyForCheckout } from "@/lib/stripe/connect"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { createInvoiceCheckoutSession } from "@/lib/stripe/create-invoice-checkout"
@@ -14,20 +15,30 @@ export type PublicInvoiceStripeCheckout = {
   publishableKey: string
 }
 
+export type PublicInvoicePayload = {
+  invoice: ReturnType<typeof mapRowToInvoice>
+  issuer: Awaited<ReturnType<typeof fetchInvoiceIssuerForBusiness>> & { logoUrl?: string }
+  payIn: Awaited<ReturnType<typeof resolvePayInForBusiness>>
+  paymentDisplay: ReturnType<typeof resolvePaymentDisplay>
+  invoiceSettings: ReturnType<typeof parseBusinessInvoiceSettings>
+  businessEasetag: string | null
+  stripeOnlineEnabled: boolean
+  stripeCheckout: PublicInvoiceStripeCheckout | null
+}
+
 export async function jsonPublicInvoiceFromRow(
   admin: ReturnType<typeof createSupabaseAdmin>,
   row: B2bInvoiceRow,
-) {
+  options?: { allowDraft?: boolean },
+): Promise<PublicInvoicePayload | null> {
   const invoice = mapRowToInvoice(row)
+  if (!options?.allowDraft && !isInvoicePubliclyViewable(invoice.status)) {
+    return null
+  }
+
   const businessId = row.business_id
   const issuer = await fetchInvoiceIssuerForBusiness(admin, businessId)
-
-  const payableStatuses = ["open", "sent", "past_due"] as const
-  const isQuote =
-    invoice.status === "quote" || invoice.documentType === "quote"
-  const payable =
-    !isQuote &&
-    payableStatuses.includes(invoice.status as (typeof payableStatuses)[number])
+  const payable = isInvoicePayableStatus(invoice.status)
 
   let payIn: Awaited<ReturnType<typeof resolvePayInForBusiness>> = {}
   if (payable) {

@@ -10,7 +10,7 @@ import {
   paymentFlagsFromDisplay,
 } from "@/lib/invoices/invoice-payment-copy"
 import { generateInvoicePdfBuffer } from "@/lib/generate-invoice-pdf"
-import { invoicePublicViewPath } from "@/lib/invoice-public-url"
+import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
 import {
   canProvisionInvoiceDepositInstructions,
   TIER2_COMPLETE_PLACEHOLDER,
@@ -54,6 +54,9 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
     : {}
 
   const settings = parseBusinessInvoiceSettings(biz?.invoice_settings)
+  if (type === "due_today" && settings.sendDueDateReminder === false) return false
+  if (type === "overdue_7d" && settings.sendOverdueReminder === false) return false
+
   const display = resolvePaymentDisplay({
     invoice,
     businessDefaults: settings,
@@ -70,9 +73,7 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
   const easetag =
     typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com"
-  const invoiceViewUrl = easetag
-    ? `${baseUrl}${invoicePublicViewPath(easetag, invoice.invoiceNumber)}`
-    : `${baseUrl}/invoice-view/${invoice.id}`
+  const invoiceViewUrl = buildInvoiceCustomerViewUrl(baseUrl, easetag, invoice)
 
   const pdfBuffer = await generateInvoicePdfBuffer(
     invoice,
@@ -92,6 +93,7 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
     issuer: { ...issuer, email: replyEmail },
     includePaymentContext: display.includePaymentInEmail,
     paymentMethods: paymentFlags,
+    reminderType: type,
   })
 
   if (!result.success) return false
@@ -114,7 +116,13 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
 export function invoicesDueForReminder(
   rows: B2bInvoiceRow[],
   today: string,
+  opts?: {
+    sendDueDateReminder?: boolean
+    sendOverdueReminder?: boolean
+  },
 ): { row: B2bInvoiceRow; type: ReminderType }[] {
+  const allowDue = opts?.sendDueDateReminder !== false
+  const allowOverdue = opts?.sendOverdueReminder !== false
   const out: { row: B2bInvoiceRow; type: ReminderType }[] = []
   const overdueCutoff = new Date(today)
   overdueCutoff.setDate(overdueCutoff.getDate() - 7)
@@ -122,13 +130,13 @@ export function invoicesDueForReminder(
 
   for (const row of rows) {
     const inv = mapRowToInvoice(row)
-    if (!["open", "sent", "past_due"].includes(inv.status)) continue
+    if (!["unpaid", "sent", "past_due"].includes(inv.status)) continue
     const due = inv.dueDate?.slice(0, 10)
     if (!due) continue
 
-    if (due === today && !reminderAlreadySent(inv, "due_today")) {
+    if (allowDue && due === today && !reminderAlreadySent(inv, "due_today")) {
       out.push({ row, type: "due_today" })
-    } else if (due <= overdueStr && !reminderAlreadySent(inv, "overdue_7d")) {
+    } else if (allowOverdue && due <= overdueStr && !reminderAlreadySent(inv, "overdue_7d")) {
       out.push({ row, type: "overdue_7d" })
     }
   }

@@ -22,6 +22,7 @@ import type {
   PayrollFundingNeededEmailData,
   PayrollRunSummaryEmailData,
   TransactionEmailData,
+  OnlinePaymentsEmailData,
   VerificationEmailData,
   WelcomeEmailData,
 } from "./email-types"
@@ -286,6 +287,10 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
   kycApproved: verificationTemplate("KYC", "personal", "approved"),
   kycRejected: verificationTemplate("KYC", "personal", "rejected"),
 
+  onlinePaymentsSetupStarted: onlinePaymentsTemplate("setup_started"),
+  onlinePaymentsActionRequired: onlinePaymentsTemplate("action_required"),
+  onlinePaymentsReady: onlinePaymentsTemplate("ready"),
+
   teamInvitation: {
     subject: (data: TeamInviteEmailData) =>
       `You're invited to ${data.businessName} on Easner Business`,
@@ -499,6 +504,78 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
       return `Transaction ${data.transactionId} – ${data.status}\n${adminUrl}/transactions`
     },
   },
+}
+
+function onlinePaymentsSubject(status: OnlinePaymentsEmailData["status"]): string {
+  switch (status) {
+    case "setup_started":
+      return "Continue setting up online payments"
+    case "action_required":
+      return "Action needed for online payments"
+    case "ready":
+      return "Online payments are ready"
+    default:
+      return "Online payments update"
+  }
+}
+
+function onlinePaymentsBody(status: OnlinePaymentsEmailData["status"]): string {
+  switch (status) {
+    case "setup_started":
+      return "You've started online payments setup. Finish verification so customers can pay your invoices by card or bank."
+    case "action_required":
+      return "We need a bit more information before online payments can be enabled on your invoices."
+    case "ready":
+      return "Online payments are ready. Customers can pay your invoices online, and payouts are linked to your Easner USD account."
+    default:
+      return "There's an update on your online payments setup."
+  }
+}
+
+function onlinePaymentsTemplate(status: OnlinePaymentsEmailData["status"]): EmailTemplate {
+  const subjectLine = onlinePaymentsSubject(status)
+  const bodyLine = onlinePaymentsBody(status)
+  return {
+    subject: () => subjectLine,
+    preheader: () => bodyLine,
+    html: (data: OnlinePaymentsEmailData) => {
+      const profile = getEmailAudienceProfile("business")
+      const verificationUrl =
+        data.verificationUrl ||
+        `${(data.dashboardUrl || profile.dashboardUrl).replace(/\/$/, "")}/settings?tab=verification`
+      const summary =
+        status === "action_required" && data.summary?.trim()
+          ? `<p class="confirmation-text">${data.summary.trim()}</p>`
+          : ""
+      const cta =
+        status === "ready"
+          ? { text: "View invoices", url: `${(data.dashboardUrl || profile.dashboardUrl).replace(/\/$/, "")}/invoices` }
+          : { text: "Continue in Verification", url: verificationUrl }
+      const content = `
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
+        <p class="confirmation-text">${bodyLine}</p>
+        ${summary}
+      `
+      return generateBaseEmailTemplate(subjectLine, "", content, cta, {
+        audience: "business",
+        showPreferencesLink: false,
+        preheader: bodyLine,
+      })
+    },
+    text: (data: OnlinePaymentsEmailData) => {
+      const profile = getEmailAudienceProfile("business")
+      const verificationUrl =
+        data.verificationUrl ||
+        `${(data.dashboardUrl || profile.dashboardUrl).replace(/\/$/, "")}/settings?tab=verification`
+      const invoicesUrl = `${(data.dashboardUrl || profile.dashboardUrl).replace(/\/$/, "")}/invoices`
+      let t = `${subjectLine}\n\n${formatEasnerUserGreetingPlain(data.firstName)}\n\n${bodyLine}`
+      if (status === "action_required" && data.summary?.trim()) {
+        t += `\n\n${data.summary.trim()}`
+      }
+      t += `\n\n${status === "ready" ? invoicesUrl : verificationUrl}`
+      return t
+    },
+  }
 }
 
 function verificationSubject(kind: "KYB" | "KYC", status: VerificationEmailData["status"]): string {

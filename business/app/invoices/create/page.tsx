@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -62,8 +62,16 @@ import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-clas
 import { Checkbox } from "@/components/ui/checkbox"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
-import { INVOICE_CREATE_SECTION_COPY } from "@/lib/copy/business-ui-copy"
+import {
+  INVOICE_ACTION_COPY,
+  INVOICE_CREATE_SECTION_COPY,
+  INVOICE_SETTINGS_COPY,
+  INVOICE_TOAST_COPY,
+} from "@/lib/copy/business-ui-copy"
 import { SectionHeader } from "@/components/copy/section-header"
+import { invoicePreviewPath } from "@/lib/invoice-public-url"
+import { readCachedConnectStatus } from "@/lib/stripe/connect-status-cache"
+import { resolveConnectPanelPhase } from "@/lib/stripe/connect-panel-ux"
 
 /** Digits only for quantity (empty allowed while typing). */
 function filterQuantityInput(s: string): string {
@@ -192,6 +200,12 @@ export default function CreateInvoicePage() {
   const orgEasetag =
     typeof profile.easetag === "string" && profile.easetag.trim() ? profile.easetag.trim() : null
   const invoiceReadiness = assessInvoiceBusinessReadinessFromProfile(profile)
+  const onlinePaymentsIncomplete = useMemo(() => {
+    if (invoiceSettings?.showOnlinePayment === false) return false
+    const cached = readCachedConnectStatus(profile.businessId)
+    if (!cached) return false
+    return resolveConnectPanelPhase(cached) !== "ready"
+  }, [profile.businessId, invoiceSettings?.showOnlinePayment])
 
   const [formData, setFormData] = useState<InvoiceForm>({
     customerId: "",
@@ -229,12 +243,16 @@ export default function CreateInvoicePage() {
   const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false)
   const [customerSearchTerm, setCustomerSearchTerm] = useState("")
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const [customizePaymentMethods, setCustomizePaymentMethods] = useState(false)
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle")
   /** Which primary action is running (shows loading on action buttons). */
   const [invoiceAction, setInvoiceAction] = useState<null | "draft" | "create" | "email">(null)
   /** When true, next transition to `profileLoading === false` seeds currency from base (no customer). */
   const awaitingProfileForDefaultCurrency = useRef(true)
   /** Avoid re-hydrating the edit form when query cache or customers list updates mid-edit. */
   const hydratedEditIdRef = useRef<string | null>(null)
+  /** Skip the first autosave after edit form hydration. */
+  const autosaveSkipRef = useRef(true)
 
   const backHref = invoiceBackHref(searchParams)
 
@@ -300,7 +318,7 @@ export default function CreateInvoicePage() {
     setCustomerSearchTerm("")
   }
 
-  const validateForm = (forFinalize: boolean): string | null => {
+  const validateForm = (forIssue: boolean): string | null => {
     if (!formData.customerName.trim() || !formData.customerEmail.trim()) {
       return "Select or add a customer with name and email"
     }
@@ -310,8 +328,8 @@ export default function CreateInvoicePage() {
     if (validItems.length === 0) {
       return "Add at least one line item with amount greater than zero"
     }
-    if (forFinalize && total <= 0) {
-      return "Invoice total must be greater than zero to finalize"
+    if (forIssue && total <= 0) {
+      return "Invoice total must be greater than zero to issue"
     }
     return null
   }
@@ -324,7 +342,7 @@ export default function CreateInvoicePage() {
       (c.company ?? "").toLowerCase().includes(customerSearchTerm.toLowerCase())
   )
 
-  const createInvoiceFromForm = (status: Invoice["status"], documentType?: Invoice["documentType"]): Invoice => {
+  const createInvoiceFromForm = (status: Invoice["status"]): Invoice => {
     const dateOnly = new Date().toISOString().slice(0, 10)
     const nowIso = new Date().toISOString()
     const lineItems = formData.lineItems
@@ -375,7 +393,6 @@ export default function CreateInvoicePage() {
         showOnlinePayment: formData.showOnlinePayment,
         defaultTab: formData.paymentDefaultTab,
       }),
-      documentType,
     }
     if (isEditMode && invoiceToEdit) {
       return {
@@ -425,7 +442,7 @@ export default function CreateInvoicePage() {
     typeof process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY === "string" &&
       process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.trim(),
   )
-  const draftPreviewInvoice = createInvoiceFromForm("open")
+  const draftPreviewInvoice = createInvoiceFromForm("unpaid")
   const previewDisplay = resolvePaymentDisplay({
     invoice: draftPreviewInvoice,
     businessDefaults: invoiceSettings,
@@ -438,10 +455,10 @@ export default function CreateInvoicePage() {
     previewDisplay,
   )
 
-  const runFinalizeAndEmail = async () => {
+  const runIssueAndEmail = async () => {
     setInvoiceAction("email")
     try {
-      const invoice = createInvoiceFromForm("open")
+      const invoice = createInvoiceFromForm("unpaid")
       const saved = isEditMode ? await updateInvoice(invoice.id, invoice) : await addInvoice(invoice)
       if (!saved) return
 
@@ -451,7 +468,7 @@ export default function CreateInvoicePage() {
         body: JSON.stringify({ invoiceId: saved.id }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) throw new Error(data.error || "Failed to send email")
+      if (!res.ok) throw new Error(data.error || INVOICE_TOAST_COPY.emailFailed)
 
       await updateInvoice(saved.id, {
         status: "sent",
@@ -460,32 +477,10 @@ export default function CreateInvoicePage() {
           { status: "sent", timestamp: new Date().toISOString() },
         ],
       })
-      toast.success(`Invoice sent to ${saved.customerEmail}`)
+      toast.success(INVOICE_TOAST_COPY.sentTo(saved.customerEmail))
       router.push(withReturnTo(`/invoices/${saved.id}`, backHref))
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to send invoice")
-    } finally {
-      setInvoiceAction(null)
-    }
-  }
-
-  const handleSaveQuote = async () => {
-    if (invoiceAction) return
-    const err = validateForm(false)
-    if (err) {
-      toast.error(err)
-      return
-    }
-    setInvoiceAction("draft")
-    try {
-      const invoice = { ...createInvoiceFromForm("quote", "quote"), status: "quote" as const }
-      if (isEditMode) {
-        await updateInvoice(invoice.id, invoice)
-        router.push(withReturnTo(`/invoices/${invoice.id}`, backHref))
-      } else {
-        const created = await addInvoice(invoice)
-        if (created) router.push(withReturnTo(`/invoices/${created.id}`, backHref))
-      }
+      toast.error(e instanceof Error ? e.message : INVOICE_TOAST_COPY.issueFailed)
     } finally {
       setInvoiceAction(null)
     }
@@ -511,22 +506,33 @@ export default function CreateInvoicePage() {
     }
     setInvoiceAction("create")
     try {
-      const invoice = createInvoiceFromForm("open")
+      const invoice = createInvoiceFromForm("unpaid")
       const created = await addInvoice(invoice)
-      if (created) router.push(withReturnTo(`/invoices/${created.id}`, backHref))
+      if (created) {
+        toast.success(INVOICE_TOAST_COPY.issued)
+        router.push(withReturnTo(`/invoices/${created.id}`, backHref))
+      }
     } finally {
       setInvoiceAction(null)
     }
   }
 
-  const handleFinalizeAndEmail = async () => {
+  const handleIssueAndEmail = async () => {
     if (invoiceAction) return
     const err = validateForm(true)
     if (err) {
       toast.error(err)
       return
     }
-    await runFinalizeAndEmail()
+    await runIssueAndEmail()
+  }
+
+  const handlePreview = () => {
+    if (editId) {
+      window.open(invoicePreviewPath(editId), "_blank", "noopener,noreferrer")
+      return
+    }
+    toast.message("Save a draft first to preview")
   }
 
   // Load invoice once when entering edit mode (wait for detail fetch; do not reset on cache updates).
@@ -541,6 +547,8 @@ export default function CreateInvoicePage() {
     if (hydratedEditIdRef.current === editId) return
 
     hydratedEditIdRef.current = editId
+    autosaveSkipRef.current = true
+    setSaveState("idle")
     setFormData(invoiceFormFromInvoice(invoice, customers, invoiceSettings))
   }, [
     editId,
@@ -550,6 +558,34 @@ export default function CreateInvoicePage() {
     customers,
     invoiceSettings,
   ])
+
+  // Debounced autosave while editing (preserves status; does not navigate).
+  useEffect(() => {
+    if (!isEditMode || !editId || !invoiceToEdit || isLockedEdit) return
+    if (hydratedEditIdRef.current !== editId) return
+    if (autosaveSkipRef.current) {
+      autosaveSkipRef.current = false
+      return
+    }
+    if (invoiceAction) return
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        setSaveState("saving")
+        try {
+          const invoice = createInvoiceFromForm(invoiceToEdit.status)
+          await updateInvoice(invoice.id, invoice)
+          setSaveState("saved")
+        } catch {
+          setSaveState("idle")
+        }
+      })()
+    }, 800)
+
+    return () => window.clearTimeout(timer)
+    // formData drives autosave; helpers close over latest render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional form snapshot debounce
+  }, [formData, isEditMode, editId, isLockedEdit, invoiceToEdit?.status, invoiceAction])
 
   // Set default due date (Net 30) - only when creating
   useEffect(() => {
@@ -630,9 +666,19 @@ export default function CreateInvoicePage() {
           </Link>
           <h1 className="text-2xl font-semibold text-foreground">Create invoice</h1>
         </div>
-        <InvoiceBusinessSetupBanner readiness={invoiceReadiness} />
+        <InvoiceBusinessSetupBanner
+          readiness={invoiceReadiness}
+          onlinePaymentsIncomplete={onlinePaymentsIncomplete}
+        />
       </div>
     )
+  }
+
+  const paymentMethodChips: string[] = []
+  if (formData.showBank) paymentMethodChips.push(INVOICE_SETTINGS_COPY.bankTransfer)
+  if (formData.showStablecoin) paymentMethodChips.push(INVOICE_SETTINGS_COPY.stablecoin)
+  if (stripeOnlineEnabled && formData.showOnlinePayment) {
+    paymentMethodChips.push(INVOICE_SETTINGS_COPY.onlinePayments)
   }
 
   return (
@@ -648,6 +694,11 @@ export default function CreateInvoicePage() {
           {isEditMode ? "Edit invoice" : "Create invoice"}
         </h1>
       </div>
+
+      <InvoiceBusinessSetupBanner
+        readiness={invoiceReadiness}
+        onlinePaymentsIncomplete={onlinePaymentsIncomplete}
+      />
 
       {editLockBanner ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm">
@@ -699,6 +750,16 @@ export default function CreateInvoicePage() {
                   </Button>
                 </div>
               )}
+              {!profile.easetag?.trim() ? (
+                <p className="text-xs text-muted-foreground">
+                  <Link
+                    href="/settings?tab=business"
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    {INVOICE_CREATE_SECTION_COPY.easetagHint}
+                  </Link>
+                </p>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -853,22 +914,54 @@ export default function CreateInvoicePage() {
         <div className="space-y-6">
           {/* Action buttons - above Invoice Summary */}
           <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className={invoiceActionBtnClass.flex}
-                disabled={!!invoiceAction}
-                onClick={handleSaveDraft}
-              >
-                {invoiceAction === "draft" ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving…
-                  </>
-                ) : (
-                  "Save draft"
-                )}
-              </Button>
+            <Button
+              variant="outline"
+              className={invoiceActionBtnClass.flex}
+              disabled={!!invoiceAction}
+              onClick={handleSaveDraft}
+            >
+              {invoiceAction === "draft" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {INVOICE_CREATE_SECTION_COPY.saving}
+                </>
+              ) : (
+                INVOICE_CREATE_SECTION_COPY.saveDraft
+              )}
+            </Button>
+            {!isEditMode ? (
+              <>
+                <Button
+                  className={invoiceActionBtnClass.flex}
+                  disabled={!!invoiceAction}
+                  onClick={() => void handleIssueAndEmail()}
+                >
+                  {invoiceAction === "email" ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {INVOICE_ACTION_COPY.sending}
+                    </>
+                  ) : (
+                    INVOICE_CREATE_SECTION_COPY.issueAndEmail
+                  )}
+                </Button>
+                <Button
+                  variant="secondary"
+                  className={invoiceActionBtnClass.flex}
+                  disabled={!!invoiceAction}
+                  onClick={handleSendInvoice}
+                >
+                  {invoiceAction === "create" ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {INVOICE_ACTION_COPY.issuing}
+                    </>
+                  ) : (
+                    INVOICE_CREATE_SECTION_COPY.issue
+                  )}
+                </Button>
+              </>
+            ) : (
               <Button
                 className={invoiceActionBtnClass.flex}
                 disabled={!!invoiceAction}
@@ -877,36 +970,27 @@ export default function CreateInvoicePage() {
                 {invoiceAction === "create" ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {isEditMode ? "Saving…" : "Finalizing…"}
+                    {INVOICE_CREATE_SECTION_COPY.saving}
                   </>
-                ) : isEditMode ? (
-                  "Save changes"
                 ) : (
-                  "Finalize invoice"
+                  INVOICE_CREATE_SECTION_COPY.saveChanges
                 )}
               </Button>
-            </div>
-            {!isEditMode ? (
-              <div className="flex gap-2">
-                <Button variant="secondary" className={invoiceActionBtnClass.flex} disabled={!!invoiceAction} onClick={handleSaveQuote}>
-                  Save as quote
-                </Button>
-                <Button
-                  variant="secondary"
-                  className={invoiceActionBtnClass.flex}
-                  disabled={!!invoiceAction}
-                  onClick={() => void handleFinalizeAndEmail()}
-                >
-                  {invoiceAction === "email" ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sending…
-                    </>
-                  ) : (
-                    "Finalize and email"
-                  )}
-                </Button>
-              </div>
+            )}
+            <Button
+              variant="outline"
+              className={invoiceActionBtnClass.flex}
+              disabled={!!invoiceAction}
+              onClick={handlePreview}
+            >
+              {INVOICE_CREATE_SECTION_COPY.preview}
+            </Button>
+            {isEditMode && saveState !== "idle" ? (
+              <p className="text-xs text-muted-foreground text-center">
+                {saveState === "saving"
+                  ? INVOICE_CREATE_SECTION_COPY.saving
+                  : INVOICE_CREATE_SECTION_COPY.saved}
+              </p>
             ) : null}
           </div>
 
@@ -918,83 +1002,112 @@ export default function CreateInvoicePage() {
               />
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="show-bank"
-                  checked={formData.showBank}
-                  disabled={!hasBankProvision}
-                  onCheckedChange={(v) => setFormData((p) => ({ ...p, showBank: v === true }))}
-                />
-                <Label htmlFor="show-bank" className="font-normal">
-                  Bank transfer {!hasBankProvision ? "(not available)" : ""}
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="show-stable"
-                  checked={formData.showStablecoin}
-                  disabled={!hasStableProvision}
-                  onCheckedChange={(v) => setFormData((p) => ({ ...p, showStablecoin: v === true }))}
-                />
-                <Label htmlFor="show-stable" className="font-normal">
-                  Stablecoin {!hasStableProvision ? "(not available)" : ""}
-                </Label>
-              </div>
-              {stripeOnlineEnabled ? (
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="show-online"
-                    checked={formData.showOnlinePayment}
-                    onCheckedChange={(v) =>
-                      setFormData((p) => ({ ...p, showOnlinePayment: v === true }))
-                    }
-                  />
-                  <Label htmlFor="show-online" className="font-normal">
-                    Pay online (card / bank)
-                  </Label>
-                </div>
-              ) : null}
-              {(formData.showBank && hasBankProvision) ||
-              (formData.showStablecoin && hasStableProvision) ||
-              (stripeOnlineEnabled && formData.showOnlinePayment) ? (
-                <div className="space-y-2">
-                  <Label>Default tab</Label>
-                  <select
-                    className="w-full border rounded-md h-9 px-2 text-sm bg-background"
-                    value={formData.paymentDefaultTab}
-                    onChange={(e) =>
-                      setFormData((p) => ({
-                        ...p,
-                        paymentDefaultTab: e.target.value as "bank" | "stablecoin" | "online",
-                      }))
-                    }
+              {!customizePaymentMethods ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {INVOICE_CREATE_SECTION_COPY.paymentMethodsSummary}
+                  </p>
+                  {paymentMethodChips.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {paymentMethodChips.map((label) => (
+                        <Badge key={label} variant="secondary" className="font-normal">
+                          {label}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCustomizePaymentMethods(true)}
                   >
-                    {stripeOnlineEnabled && formData.showOnlinePayment ? (
-                      <option value="online">Pay online</option>
-                    ) : null}
-                    {formData.showBank && hasBankProvision ? (
-                      <option value="bank">Bank transfer</option>
-                    ) : null}
-                    {formData.showStablecoin && hasStableProvision ? (
-                      <option value="stablecoin">Stablecoin</option>
-                    ) : null}
-                  </select>
-                </div>
-              ) : null}
-              {payInLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    {INVOICE_CREATE_SECTION_COPY.customizePaymentMethods}
+                  </Button>
+                </>
               ) : (
-                <InvoicePaymentOptions
-                  invoice={draftPreviewInvoice}
-                  bankAccount={previewPayIn.bankAccount}
-                  stablecoinAccount={previewPayIn.stablecoinAccount}
-                  embedded
-                  audience="business"
-                  businessDisplayName={issuer.name}
-                  defaultTab={formData.paymentDefaultTab}
-                  showOnlinePayment={previewDisplay.showOnlinePayment}
-                  publicInvoiceEasetag={orgEasetag}
-                />
+                <>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="show-bank"
+                      checked={formData.showBank}
+                      disabled={!hasBankProvision}
+                      onCheckedChange={(v) => setFormData((p) => ({ ...p, showBank: v === true }))}
+                    />
+                    <Label htmlFor="show-bank" className="font-normal">
+                      Bank transfer {!hasBankProvision ? "(not available)" : ""}
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="show-stable"
+                      checked={formData.showStablecoin}
+                      disabled={!hasStableProvision}
+                      onCheckedChange={(v) =>
+                        setFormData((p) => ({ ...p, showStablecoin: v === true }))
+                      }
+                    />
+                    <Label htmlFor="show-stable" className="font-normal">
+                      Stablecoin {!hasStableProvision ? "(not available)" : ""}
+                    </Label>
+                  </div>
+                  {stripeOnlineEnabled ? (
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="show-online"
+                        checked={formData.showOnlinePayment}
+                        onCheckedChange={(v) =>
+                          setFormData((p) => ({ ...p, showOnlinePayment: v === true }))
+                        }
+                      />
+                      <Label htmlFor="show-online" className="font-normal">
+                        Pay online (card / bank)
+                      </Label>
+                    </div>
+                  ) : null}
+                  {(formData.showBank && hasBankProvision) ||
+                  (formData.showStablecoin && hasStableProvision) ||
+                  (stripeOnlineEnabled && formData.showOnlinePayment) ? (
+                    <div className="space-y-2">
+                      <Label>Default tab</Label>
+                      <select
+                        className="w-full border rounded-md h-9 px-2 text-sm bg-background"
+                        value={formData.paymentDefaultTab}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            paymentDefaultTab: e.target.value as "bank" | "stablecoin" | "online",
+                          }))
+                        }
+                      >
+                        {stripeOnlineEnabled && formData.showOnlinePayment ? (
+                          <option value="online">Pay online</option>
+                        ) : null}
+                        {formData.showBank && hasBankProvision ? (
+                          <option value="bank">Bank transfer</option>
+                        ) : null}
+                        {formData.showStablecoin && hasStableProvision ? (
+                          <option value="stablecoin">Stablecoin</option>
+                        ) : null}
+                      </select>
+                    </div>
+                  ) : null}
+                  {payInLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    <InvoicePaymentOptions
+                      invoice={draftPreviewInvoice}
+                      bankAccount={previewPayIn.bankAccount}
+                      stablecoinAccount={previewPayIn.stablecoinAccount}
+                      embedded
+                      audience="business"
+                      businessDisplayName={issuer.name}
+                      defaultTab={formData.paymentDefaultTab}
+                      showOnlinePayment={previewDisplay.showOnlinePayment}
+                      publicInvoiceEasetag={orgEasetag}
+                    />
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

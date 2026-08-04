@@ -99,6 +99,7 @@ export function useUpdateInvoice() {
       const updated = data.invoice
       if (!updated) return
       updateInvoiceInStore(id, updated)
+      // Patch list in place — avoid invalidating the full invoices query.
       patchList(qc, qk.invoices.list(scope, {}), (rows) =>
         rows.map((i) => (i.id === id ? updated : i)),
       )

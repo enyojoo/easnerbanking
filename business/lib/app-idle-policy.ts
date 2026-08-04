@@ -1,12 +1,14 @@
 import { emitAppLocked } from "@/lib/app-lock-bus"
 import { APP_IDLE_TIMEOUT_MINUTES } from "@/lib/app-lock-config"
 import { hasPin, isLoginPinModuleAvailable, setAppLocked } from "@/lib/login-pin"
-import { getLastActivityTimestamp } from "@/lib/session-activity"
+import { getLastActivityTimestamp, isIdleLockSuspended } from "@/lib/session-activity"
 
 export type IdlePolicyAction = "ok" | "lock" | "logout"
 
 /** Read-only idle evaluation (safe during render). */
 export function evaluateIdlePolicy(userId: string, now = Date.now()): IdlePolicyAction {
+  if (isIdleLockSuspended()) return "ok"
+
   const last = getLastActivityTimestamp()
   const idleMs = now - last
   const limit = APP_IDLE_TIMEOUT_MINUTES * 60 * 1000

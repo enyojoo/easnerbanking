@@ -64,6 +64,18 @@ export interface VerificationEmailData {
   audience?: EmailAudience
 }
 
+/** Business online payments (invoice card payments) lifecycle emails. */
+export interface OnlinePaymentsEmailData {
+  firstName?: string
+  email: string
+  status: "setup_started" | "action_required" | "ready"
+  /** Optional one-line summary (e.g. action-required reason). */
+  summary?: string
+  dashboardUrl?: string
+  verificationUrl?: string
+  audience?: EmailAudience
+}
+
 export interface TeamInviteEmailData {
   inviteeEmail: string
   inviterName: string

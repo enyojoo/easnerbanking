@@ -30,7 +30,7 @@ describe("resolvePaymentDisplay", () => {
     const d = resolvePaymentDisplay({
       invoice: {
         paymentDisplay: { showBank: false, showStablecoin: true },
-        status: "open",
+        status: "unpaid",
       },
       payIn: both,
     })
@@ -42,7 +42,7 @@ describe("resolvePaymentDisplay", () => {
     const d = resolvePaymentDisplay({
       invoice: {
         paymentDisplay: { showBank: false, showStablecoin: false },
-        status: "open",
+        status: "unpaid",
       },
       businessDefaults: { showBankTransfer: false, showStablecoin: false },
       payIn: bankOnly,
@@ -63,7 +63,7 @@ describe("resolvePaymentDisplay", () => {
 
   it("shows online when Stripe enabled", () => {
     const d = resolvePaymentDisplay({
-      invoice: { status: "open" },
+      invoice: { status: "unpaid" },
       payIn: both,
       stripeOnlineEnabled: true,
     })
@@ -73,7 +73,7 @@ describe("resolvePaymentDisplay", () => {
 
   it("uses stablecoin default tab when preferred", () => {
     const d = resolvePaymentDisplay({
-      invoice: { status: "open" },
+      invoice: { status: "unpaid" },
       businessDefaults: { preferredMethod: "stablecoin" },
       payIn: both,
     })

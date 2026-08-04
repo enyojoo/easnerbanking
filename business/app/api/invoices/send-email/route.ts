@@ -14,7 +14,7 @@ import {
 } from "@/lib/invoices/invoice-payment-copy"
 import { sendInvoiceEmail } from "@/lib/invoice-email-service"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { invoicePublicViewPath } from "@/lib/invoice-public-url"
+import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
 import { assessInvoiceBusinessReadinessFromIssuer } from "@/lib/invoices/invoice-business-readiness"
 import {
   canProvisionInvoiceDepositInstructions,
@@ -59,6 +59,13 @@ export async function POST(request: NextRequest) {
     }
 
     const invoice = mapRowToInvoice(b2b)
+
+    if (invoice.status === "draft") {
+      return NextResponse.json(
+        { error: "Issue this invoice before emailing" },
+        { status: 400 },
+      )
+    }
 
     if (!invoice.customerEmail?.trim()) {
       return NextResponse.json(
@@ -131,9 +138,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
     const easetag =
       typeof bizRow?.easetag === "string" && bizRow.easetag.trim() ? bizRow.easetag.trim() : null
-    const invoiceViewUrl = easetag
-      ? `${baseUrl}${invoicePublicViewPath(easetag, invoice.invoiceNumber)}`
-      : `${baseUrl}/invoice-view/${invoice.id}`
+    const invoiceViewUrl = buildInvoiceCustomerViewUrl(baseUrl, easetag, invoice)
 
     const pdfBuffer = await generateInvoicePdfBuffer(
       invoice,
@@ -162,9 +167,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const now = new Date().toISOString()
+    const emailsSent = [
+      ...(invoice.emailsSent ?? []),
+      { sentAt: now, to: invoice.customerEmail },
+    ]
+    const prevMeta =
+      typeof b2b.metadata === "object" && b2b.metadata && !Array.isArray(b2b.metadata)
+        ? (b2b.metadata as Record<string, unknown>)
+        : {}
+    const markSent = invoice.status === "unpaid"
+    const nextHistory = markSent
+      ? [...(invoice.statusHistory ?? []), { status: "sent", timestamp: now }]
+      : invoice.statusHistory
+    await admin
+      .from("invoices")
+      .update({
+        ...(markSent ? { status: "sent" } : {}),
+        metadata: {
+          ...prevMeta,
+          emailsSent,
+          ...(nextHistory ? { statusHistory: nextHistory } : {}),
+        },
+        updated_at: now,
+      })
+      .eq("id", invoiceId)
+
     return NextResponse.json({
       success: true,
       message: `Invoice sent to ${invoice.customerEmail}`,
+      emailsSent,
+      status: markSent ? "sent" : invoice.status,
     })
   } catch (err) {
     console.error("Send invoice email error:", err)

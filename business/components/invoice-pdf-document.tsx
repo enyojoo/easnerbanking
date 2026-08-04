@@ -18,16 +18,7 @@ import {
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 
-const statusLabels: Record<string, string> = {
-  draft: "Draft",
-  open: "Unpaid",
-  sent: "Sent",
-  past_due: "Past due",
-  paid: "Paid",
-  void: "Void",
-  uncollectible: "Uncollectible",
-  failed: "Failed",
-}
+import { invoiceStatusLabel } from "@/lib/invoices/invoice-status"
 
 const styles = StyleSheet.create({
   page: {
@@ -269,7 +260,7 @@ export function InvoicePDFDocument({
     phone: defaultBusinessInfo.phone,
   }
   const isPayable =
-    invoice.status === "open" ||
+    invoice.status === "unpaid" ||
     invoice.status === "sent" ||
     invoice.status === "past_due"
   const showPayCard = isPayable && Boolean(paymentSection?.url)
@@ -304,7 +295,7 @@ export function InvoicePDFDocument({
             <Text style={styles.invoiceNumber}>{invoice.invoiceNumber}</Text>
             <View style={styles.statusBadge}>
               <Text style={styles.statusText}>
-                {statusLabels[invoice.status] ?? invoice.status}
+                {invoiceStatusLabel(invoice.status)}
               </Text>
             </View>
           </View>

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 import { DesktopMinViewportGate } from "@/components/layout/desktop-min-viewport-gate"
 
 function bypassesDesktopViewportGate(pathname: string) {
-  if (pathname === "/invoice-view" || pathname.startsWith("/invoice-view/")) {
+  if (pathname === "/invoice" || pathname.startsWith("/invoice/")) {
     return true
   }
   if (pathname === "/pay" || pathname.startsWith("/pay/")) {

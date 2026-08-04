@@ -9,7 +9,7 @@ const baseInvoice: Invoice = {
   customerEmail: "billing@acme.test",
   total: 150,
   currency: "USD",
-  status: "open",
+  status: "unpaid",
   dueDate: "2026-07-01",
   createdDate: "2026-06-01T12:00:00.000Z",
   finalizedDate: "2026-06-01T12:00:00.000Z",
@@ -28,7 +28,7 @@ describe("generateInvoicePdfBuffer", () => {
 
   it("renders with payment link section", async () => {
     const buf = await generateInvoicePdfBuffer(baseInvoice, undefined, {
-      url: "https://business.easner.com/invoice-view/acme/einv-testpdf001",
+      url: "https://business.easner.com/invoice/acme/einv-testpdf001",
       hasOnline: true,
       hasBank: true,
       hasStablecoin: false,

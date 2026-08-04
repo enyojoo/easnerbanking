@@ -12,7 +12,8 @@ import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { sendInvoiceReceiptEmail } from "@/lib/invoice-email-service"
 import { generateReceiptPdfBuffer } from "@/lib/generate-receipt-pdf"
 import { fetchInvoiceIssuerForBusiness, resolveInvoiceReplyEmail } from "@/lib/invoices/issuer"
-import { invoicePublicViewPath } from "@/lib/invoice-public-url"
+import { notifyMerchantInvoicePaid } from "@/lib/invoices/notify-invoice-paid"
+import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 
 export type StripePaymentInfoInput = {
@@ -146,6 +147,13 @@ export async function markInvoicePaidStripe(
       .eq("id", input.businessId)
       .maybeSingle()
     const settings = parseBusinessInvoiceSettings(biz?.invoice_settings)
+
+    void notifyMerchantInvoicePaid(admin, {
+      businessId: input.businessId,
+      invoice: mapped,
+      invoiceSettingsRaw: biz?.invoice_settings,
+    }).catch((e) => console.error("[stripe] paid merchant email:", e))
+
     if (settings.sendReceiptOnPaid !== false && mapped.customerEmail?.trim()) {
       void (async () => {
         try {
@@ -157,9 +165,7 @@ export async function markInvoicePaidStripe(
           const easetag =
             typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
           const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com"
-          const viewUrl = easetag
-            ? `${baseUrl}${invoicePublicViewPath(easetag, mapped.invoiceNumber)}`
-            : `${baseUrl}/invoice-view/${mapped.id}`
+          const viewUrl = buildInvoiceCustomerViewUrl(baseUrl, easetag, mapped)
           await sendInvoiceReceiptEmail({
             invoice: mapped,
             pdfBuffer: pdf,

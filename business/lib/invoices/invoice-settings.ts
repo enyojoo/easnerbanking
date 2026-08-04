@@ -8,12 +8,17 @@ export const DEFAULT_INVOICE_PAYMENT_DEFAULTS: InvoicePaymentDefaults = {
   includePaymentOnPdf: true,
   includePaymentInEmail: true,
   notifyOnInvoiceView: true,
+  notifyOnInvoicePaid: true,
   sendReceiptOnPaid: true,
 }
 
 export type BusinessInvoiceSettings = InvoicePaymentDefaults & {
   brandColor?: string
   footerText?: string
+  /** Email reminder on the due date (default true). */
+  sendDueDateReminder?: boolean
+  /** Email reminder ~7 days after due date (default true). */
+  sendOverdueReminder?: boolean
 }
 
 export function parseBusinessInvoiceSettings(raw: unknown): BusinessInvoiceSettings {
@@ -36,9 +41,12 @@ export function parseBusinessInvoiceSettings(raw: unknown): BusinessInvoiceSetti
     includePaymentOnPdf: o.includePaymentOnPdf !== false,
     includePaymentInEmail: o.includePaymentInEmail !== false,
     notifyOnInvoiceView: o.notifyOnInvoiceView !== false,
+    notifyOnInvoicePaid: o.notifyOnInvoicePaid !== false,
     sendReceiptOnPaid: o.sendReceiptOnPaid !== false,
     brandColor: typeof o.brandColor === "string" ? o.brandColor : undefined,
     footerText: typeof o.footerText === "string" ? o.footerText : undefined,
+    sendDueDateReminder: o.sendDueDateReminder !== false,
+    sendOverdueReminder: o.sendOverdueReminder !== false,
   }
 }
 

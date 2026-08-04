@@ -67,7 +67,7 @@ export async function resolveConnectReadyForCheckout(
   if (!row) {
     return {
       ready: false,
-      reason: "Complete online payment setup in Settings",
+      reason: "Complete online payment setup",
       stripeAccountId: null,
       onboardingStatus: null,
       transfersEnabled: false,
@@ -89,13 +89,13 @@ export async function resolveConnectReadyForCheckout(
   if (!hasGridVa) {
     reason = "An active virtual account is required for payout settlement"
   } else if (!detailsSubmitted || due.length > 0) {
-    reason = "Complete Stripe verification in Settings → Invoicing"
+    reason = "Complete online payment verification"
   } else if (!transfersEnabled) {
-    reason = "Transfers capability is not active yet"
+    reason = "Online payment transfers are not active yet"
   } else if (!payoutsEnabled) {
-    reason = "Payouts are not enabled yet"
+    reason = "Online payment payouts are not enabled yet"
   } else if (!externalAccountLinked) {
-    reason = "Link your Grid virtual account as the payout destination"
+    reason = "Link your virtual account as the payout destination"
   }
 
   const ready =

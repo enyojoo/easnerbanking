@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
-import { autoLinkGridVaPayoutIfEligible, getConnectAccountRow, syncConnectAccountRow } from "@/lib/stripe/connect"
+import {
+  getConnectAccountRow,
+  resolveConnectReadyForCheckout,
+  runConnectAccountSyncPipeline,
+} from "@/lib/stripe/connect"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
@@ -23,31 +27,26 @@ export async function POST(request: Request) {
   }
 
   try {
-    const synced = await syncConnectAccountRow(admin, {
+    await runConnectAccountSyncPipeline(admin, {
       businessId: ctx.businessId,
       stripeAccountId: row.stripe_account_id,
     })
-    const autoLink = await autoLinkGridVaPayoutIfEligible(admin, {
-      businessId: ctx.businessId,
-    })
-    if (!autoLink.skipped && !autoLink.ok) {
-      console.warn("[stripe-connect] sync auto-link failed:", autoLink.error)
+    const synced = await getConnectAccountRow(admin, ctx.businessId)
+    const ready = await resolveConnectReadyForCheckout(admin, ctx.businessId)
+    if (!synced) {
+      return NextResponse.json({ error: "Sync failed" }, { status: 500 })
     }
-    const externalAccountLinked =
-      autoLink.skipped && autoLink.reason === "already_linked"
-        ? true
-        : !autoLink.skipped && autoLink.ok
-          ? true
-          : Boolean(synced.stripe_external_account_id)
     return NextResponse.json({
       ok: true,
+      ready: ready.ready,
       onboardingStatus: synced.onboarding_status,
       transfersEnabled: synced.transfers_enabled,
       payoutsEnabled: synced.payouts_enabled,
       detailsSubmitted: synced.details_submitted,
       requirementsCurrentlyDue: synced.requirements_currently_due,
-      externalAccountLinked,
-      autoLink,
+      externalAccountLinked: ready.externalAccountLinked,
+      requirementsSnapshot: synced.requirements_snapshot,
+      payoutDestinationSnapshot: synced.payout_destination_snapshot,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Sync failed"

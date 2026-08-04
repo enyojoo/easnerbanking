@@ -24,7 +24,7 @@ export function resolvePaymentDisplay(input: {
   invoice: Pick<Invoice, "paymentDisplay" | "status">
   businessDefaults?: Partial<InvoicePaymentDefaults> | null
   payIn: InvoicePayInPayload
-  /** When false, hide all payment methods (e.g. quotes, drafts). */
+  /** When false, hide all payment methods (e.g. drafts, paid, void). */
   payable?: boolean
   /** Platform Stripe Pay online is configured and enabled. */
   stripeOnlineEnabled?: boolean

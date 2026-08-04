@@ -75,10 +75,10 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
 
   const checklist = [
     { label: "Business verified", done: Boolean(status.detailsSubmitted) },
-    { label: "Transfers", done: Boolean(status.transfersEnabled) },
-    { label: "Payouts", done: Boolean(status.payoutsEnabled) },
-    { label: "Virtual account", done: Boolean(status.hasGridVa) },
-    { label: "Payout linked", done: Boolean(status.externalAccountLinked) },
+    { label: "Transfers enabled", done: Boolean(status.transfersEnabled) },
+    { label: "Payouts enabled", done: Boolean(status.payoutsEnabled) },
+    { label: "Easner USD account ready", done: Boolean(status.hasGridVa) },
+    { label: "Payouts linked to Easner", done: Boolean(status.externalAccountLinked) },
   ]
 
   switch (phase) {
@@ -87,7 +87,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         badgeLabel: "Not started",
         badgeKind: "not_started",
-        summary: "Verify with Stripe to accept card payments on invoices.",
+        summary: "Verify your business to accept card payments on invoices.",
         checklist,
         primary: onboardingAction("Get started", "Set up online payments"),
       }
@@ -106,7 +106,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         badgeLabel: "Action required",
         badgeKind: "blocked",
-        summary: status.reason ?? "Stripe needs updated information.",
+        summary: status.reason ?? "Additional information is required.",
         checklist,
         primary: onboardingAction("Complete requirements", "Complete requirements"),
         secondary: onboardingAction(
@@ -121,7 +121,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         badgeLabel: "Verification pending",
         badgeKind: "pending",
-        summary: "Stripe is reviewing your details. This updates automatically.",
+        summary: "We're reviewing your details. This updates automatically.",
         checklist,
         secondary: onboardingAction(
           "Review details",
@@ -135,7 +135,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         badgeLabel: "Setup incomplete",
         badgeKind: "blocked",
-        summary: "Provision a virtual account to link payouts.",
+        summary: "Your Easner USD account is needed before payouts can be linked.",
         checklist,
         secondary: status.stripeAccountId
           ? onboardingAction("Review profile", "Review business profile", "outline")
@@ -147,13 +147,13 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         badgeLabel: "Almost ready",
         badgeKind: "almost_ready",
-        summary: "Link your virtual account to finish payout setup.",
+        summary: "Link payouts to your Easner USD account to finish setup.",
         checklist,
         primary: {
           kind: "link_payout",
-          label: "Link payout",
+          label: "Link payouts",
           variant: "default",
-          dialogTitle: "Link payout",
+          dialogTitle: "Link payouts to Easner",
         },
         secondary: onboardingAction("Edit profile", "Edit business profile", "outline"),
       }
@@ -163,7 +163,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         badgeLabel: "Activating",
         badgeKind: "pending",
-        summary: "Stripe is enabling transfers and payouts.",
+        summary: "We're enabling transfers and payouts.",
         checklist,
         secondary: onboardingAction("Review profile", "Review business profile", "outline"),
       }

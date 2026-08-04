@@ -1,22 +1,24 @@
 import { Badge } from "@/components/ui/badge"
+import { invoiceStatusLabel, type InvoiceStatus } from "@/lib/invoices/invoice-status"
 
-const statusConfig: Record<
-  string,
-  { label: string; variant: "default" | "secondary" | "destructive" }
+const statusVariants: Record<
+  InvoiceStatus,
+  "default" | "secondary" | "destructive"
 > = {
-  draft: { label: "Draft", variant: "secondary" },
-  quote: { label: "Quote", variant: "secondary" },
-  open: { label: "Unpaid", variant: "default" },
-  sent: { label: "Sent", variant: "secondary" },
-  past_due: { label: "Past due", variant: "destructive" },
-  paid: { label: "Paid", variant: "default" },
-  void: { label: "Void", variant: "secondary" },
-  failed: { label: "Failed", variant: "destructive" },
-  credit_note: { label: "Credit note", variant: "secondary" },
-  archived: { label: "Archived", variant: "secondary" },
+  draft: "secondary",
+  unpaid: "default",
+  sent: "secondary",
+  past_due: "destructive",
+  paid: "default",
+  void: "secondary",
 }
 
 export function InvoiceStatusBadge({ status }: { status: string }) {
-  const config = statusConfig[status] ?? { label: status, variant: "secondary" as const }
-  return <Badge variant={config.variant}>{config.label}</Badge>
+  if (status === "archived") {
+    return <Badge variant="secondary">Archived</Badge>
+  }
+  const normalized = status as InvoiceStatus
+  const label = invoiceStatusLabel(normalized)
+  const variant = statusVariants[normalized] ?? "secondary"
+  return <Badge variant={variant}>{label}</Badge>
 }

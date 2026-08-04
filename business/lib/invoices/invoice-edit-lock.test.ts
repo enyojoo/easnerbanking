@@ -10,7 +10,7 @@ describe("invoice-edit-lock", () => {
     expect(isInvoiceFieldsLocked("sent")).toBe(true)
     expect(isInvoiceFieldsLocked("past_due")).toBe(true)
     expect(isInvoiceFieldsLocked("void")).toBe(false)
-    expect(isInvoiceFieldsLocked("open")).toBe(false)
+    expect(isInvoiceFieldsLocked("unpaid")).toBe(false)
     expect(isInvoiceFieldsLocked("draft")).toBe(false)
     expect(isInvoiceFieldsLocked("paid")).toBe(false)
   })
@@ -20,10 +20,9 @@ describe("invoice-edit-lock", () => {
     expect(invoiceFieldsLockBanner("void")).toBeNull()
   })
 
-  it("shows payment preview for draft and open", () => {
+  it("shows payment preview for draft and unpaid", () => {
     expect(showInvoicePaymentPreview("draft")).toBe(true)
-    expect(showInvoicePaymentPreview("open")).toBe(true)
-    expect(showInvoicePaymentPreview("quote")).toBe(false)
-    expect(showInvoicePaymentPreview("draft", "quote")).toBe(false)
+    expect(showInvoicePaymentPreview("unpaid")).toBe(true)
+    expect(showInvoicePaymentPreview("paid")).toBe(false)
   })
 })

@@ -45,6 +45,6 @@ export async function generateMetadata({
   }
 }
 
-export default function InvoiceViewSlugLayout({ children }: { children: ReactNode }) {
+export default function InvoiceSlugLayout({ children }: { children: ReactNode }) {
   return children
 }

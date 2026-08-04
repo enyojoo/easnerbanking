@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const { data: rows, error } = await admin
     .from("invoices")
     .select("*")
-    .in("status", ["open", "sent"])
+    .in("status", ["unpaid", "sent"])
     .lt("due_date", today)
     .limit(BATCH_LIMIT)
 

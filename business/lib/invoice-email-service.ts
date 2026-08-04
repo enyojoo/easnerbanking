@@ -2,11 +2,14 @@ import sgMail from "@sendgrid/mail"
 import {
   generateInvoiceEmailHtml,
   generateInvoiceEmailText,
+  generateInvoicePaidNotificationHtml,
+  generateInvoicePaidNotificationText,
   generateInvoiceReceiptEmailHtml,
   generateInvoiceReceiptEmailText,
   generateInvoiceViewedNotificationHtml,
   generateInvoiceViewedNotificationText,
   getInvoiceEmailSubject,
+  getInvoicePaidNotificationSubject,
   getInvoiceReceiptEmailSubject,
   getInvoiceViewedNotificationSubject,
   type InvoiceEmailData,
@@ -44,6 +47,7 @@ export async function sendInvoiceEmail(
     issuer?: InvoicePdfIssuer
     includePaymentContext?: boolean
     paymentMethods?: InvoiceEmailData["paymentMethods"]
+    reminderType?: InvoiceEmailData["reminderType"]
   },
 ): Promise<SendInvoiceEmailResult> {
   if (!invoice.customerEmail?.trim()) {
@@ -82,6 +86,7 @@ export async function sendInvoiceEmail(
       issuer: { ...issuer, name: issuer.name?.trim() || businessName, email: replyEmail },
       includePaymentContext: options?.includePaymentContext,
       paymentMethods: options?.paymentMethods,
+      reminderType: options?.reminderType,
     }
 
     const html = generateInvoiceEmailHtml(data)
@@ -145,6 +150,42 @@ export async function sendInvoiceViewNotificationEmail(input: {
     return { success: true }
   } catch (err) {
     console.error("Failed to send invoice view notification:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    }
+  }
+}
+
+export async function sendInvoicePaidNotificationEmail(input: {
+  to: string
+  businessName: string
+  invoice: Invoice
+  manageInvoiceUrl: string
+  recipientFirstName?: string
+  paymentMethodLabel?: string
+}): Promise<SendInvoiceEmailResult> {
+  try {
+    ensureSendGridInitialized()
+    const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
+    const templateData = {
+      invoice: input.invoice,
+      businessName: input.businessName,
+      manageInvoiceUrl: input.manageInvoiceUrl,
+      recipientFirstName: input.recipientFirstName,
+      paymentMethodLabel: input.paymentMethodLabel,
+    }
+
+    await sgMail.send({
+      to: input.to,
+      from: { email: fromEmail, name: fromName },
+      subject: getInvoicePaidNotificationSubject(input.invoice.invoiceNumber),
+      text: generateInvoicePaidNotificationText(templateData),
+      html: generateInvoicePaidNotificationHtml(templateData),
+    })
+    return { success: true }
+  } catch (err) {
+    console.error("Failed to send invoice paid notification:", err)
     return {
       success: false,
       error: err instanceof Error ? err.message : "Unknown error",

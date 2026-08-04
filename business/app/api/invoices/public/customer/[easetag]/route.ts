@@ -56,7 +56,7 @@ export async function GET(
     .select("*")
     .eq("business_id", biz.id)
     .ilike("customer_email", email)
-    .in("status", ["open", "sent", "past_due"])
+    .in("status", ["unpaid", "sent", "past_due"])
     .order("due_date", { ascending: true })
 
   if (error) {

@@ -1,6 +1,6 @@
 import type { Invoice } from "@/lib/b2b/types"
 
-const PAYABLE = new Set(["open", "sent", "past_due"])
+const PAYABLE = new Set(["unpaid", "sent", "past_due"])
 
 export function isInvoicePastDue(invoice: Pick<Invoice, "status" | "dueDate">): boolean {
   if (invoice.status === "past_due") return true

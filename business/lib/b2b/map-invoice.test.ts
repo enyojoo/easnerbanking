@@ -10,7 +10,7 @@ function sampleRow(): B2bInvoiceRow {
     invoice_number: "EINV-100",
     amount_cents: 15000,
     currency: "USD",
-    status: "open",
+    status: "unpaid",
     due_date: "2026-07-01",
     line_items: [
       { description: "Consulting", quantity: 1, unitPrice: 150, amount: 150 },
@@ -25,7 +25,7 @@ function sampleRow(): B2bInvoiceRow {
     metadata: {
       memo: "Thanks for your business",
       notes: [{ id: "n1", text: "Internal note", createdAt: "2026-06-01T00:00:00.000Z" }],
-      statusHistory: [{ status: "open", timestamp: "2026-06-01T00:00:00.000Z" }],
+      statusHistory: [{ status: "unpaid", timestamp: "2026-06-01T00:00:00.000Z" }],
     },
     created_at: "2026-06-01T12:00:00.000Z",
   }
@@ -82,7 +82,7 @@ describe("mergeInvoicePatch", () => {
     expect(merged.archived).toBe(true)
     expect(merged.customerName).toBe("Jane Doe")
     expect(merged.lineItems).toHaveLength(1)
-    expect(merged.status).toBe("open")
+    expect(merged.status).toBe("unpaid")
   })
 
   it("memo and poNumber patch persist in metadata payload", () => {

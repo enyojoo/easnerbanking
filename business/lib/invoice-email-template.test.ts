@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
   generateInvoiceEmailHtml,
+  generateInvoicePaidNotificationHtml,
   generateInvoiceReceiptEmailHtml,
   generateInvoiceViewedNotificationHtml,
+  getInvoiceEmailSubject,
+  getInvoicePaidNotificationSubject,
 } from "@/lib/invoice-email-template"
 import type { Invoice } from "@/lib/b2b/types"
 
@@ -41,7 +44,7 @@ describe("invoice email templates", () => {
   it("uses standard Easner logo, Dear-first body, and invoice footer disclaimer", () => {
     const html = generateInvoiceEmailHtml({
       invoice: sampleInvoice,
-      invoiceViewUrl: "https://example.com/invoice-view/inv_1",
+      invoiceViewUrl: "https://example.com/invoice/inv_1",
       businessName: "Acme Ltd",
       businessReplyEmail: "billing@acme.com",
       issuer: sampleIssuer,
@@ -74,6 +77,22 @@ describe("invoice email templates", () => {
     expect(html).not.toContain("United Kingdom")
   })
 
+  it("renders merchant paid notification for business Reply-To", () => {
+    expect(getInvoicePaidNotificationSubject("INV-001")).toBe("Invoice INV-001 was paid")
+    const html = generateInvoicePaidNotificationHtml({
+      invoice: { ...sampleInvoice, status: "paid" },
+      businessName: "Acme Ltd",
+      manageInvoiceUrl: "https://business.easner.com/invoices/inv_1",
+      recipientFirstName: "Alex",
+      paymentMethodLabel: "Online",
+    })
+    expect(html).toContain("Hey Alex,")
+    expect(html).toContain("Jane Doe paid invoice")
+    expect(html).toContain("Online")
+    expect(html).toContain("View invoice</a>")
+    expect(html).toContain("invoice payment notifications")
+  })
+
   it("renders customer viewed notification with shared template shell", () => {
     const html = generateInvoiceViewedNotificationHtml({
       invoice: sampleInvoice,
@@ -88,10 +107,41 @@ describe("invoice email templates", () => {
     expect(html).toContain("Easner Group, Inc.")
   })
 
+  it("overrides copy for due-today reminders even when status is sent", () => {
+    const data = {
+      invoice: sampleInvoice,
+      invoiceViewUrl: "https://example.com/invoice/inv_1",
+      businessName: "Acme Ltd",
+      businessReplyEmail: "billing@acme.com",
+      issuer: sampleIssuer,
+      reminderType: "due_today" as const,
+    }
+    expect(getInvoiceEmailSubject(data)).toBe(
+      "Reminder: Invoice due today from Acme Ltd – INV-001",
+    )
+    const html = generateInvoiceEmailHtml(data)
+    expect(html).toContain("This is a reminder that your invoice is due today.")
+    expect(html).not.toContain("has sent you an invoice")
+  })
+
+  it("overrides copy for overdue reminders when status is still unpaid", () => {
+    const data = {
+      invoice: { ...sampleInvoice, status: "unpaid" as const },
+      invoiceViewUrl: "https://example.com/invoice/inv_1",
+      businessName: "Acme Ltd",
+      businessReplyEmail: "billing@acme.com",
+      issuer: sampleIssuer,
+      reminderType: "overdue_7d" as const,
+    }
+    expect(getInvoiceEmailSubject(data)).toBe("Reminder: Your invoice from Acme Ltd – INV-001")
+    const html = generateInvoiceEmailHtml(data)
+    expect(html).toContain("This is a reminder that your invoice is past due.")
+  })
+
   it("uses invoice customer footer on receipt email", () => {
     const html = generateInvoiceReceiptEmailHtml({
       invoice: { ...sampleInvoice, status: "paid" },
-      invoiceViewUrl: "https://example.com/invoice-view/inv_1",
+      invoiceViewUrl: "https://example.com/invoice/inv_1",
       businessName: "Acme Ltd",
       businessReplyEmail: "billing@acme.com",
       issuer: sampleIssuer,

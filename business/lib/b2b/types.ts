@@ -32,7 +32,11 @@ export type InvoicePaymentDefaults = {
   includePaymentOnPdf: boolean
   includePaymentInEmail: boolean
   notifyOnInvoiceView?: boolean
+  /** Email org reply-to when an invoice is paid (default true). */
+  notifyOnInvoicePaid?: boolean
   sendReceiptOnPaid?: boolean
+  sendDueDateReminder?: boolean
+  sendOverdueReminder?: boolean
   brandColor?: string
   footerText?: string
 }
@@ -61,7 +65,7 @@ export interface Invoice {
   tax?: number
   total: number
   currency: string
-  status: "draft" | "quote" | "open" | "sent" | "past_due" | "paid" | "void" | "uncollectible" | "failed" | "credit_note"
+  status: "draft" | "unpaid" | "sent" | "past_due" | "paid" | "void"
   dueDate: string
   /** Creation instant: full ISO from `invoices.created_at` after load; date-only possible briefly from client-only state. */
   createdDate: string
@@ -80,12 +84,10 @@ export interface Invoice {
   poNumber?: string
   /** Per-invoice payment method visibility (stored in metadata). */
   paymentDisplay?: InvoicePaymentDisplay
-  /** Quote vs invoice document type (stored in metadata). */
-  documentType?: "quote" | "invoice"
-  /** Parent invoice id for credit notes (stored in metadata). */
-  creditForInvoiceId?: string
   /** Reminder emails sent (stored in metadata). */
   remindersSent?: { type: string; sentAt: string }[]
+  /** Manual / issue emails sent (stored in metadata). */
+  emailsSent?: { sentAt: string; to?: string }[]
   paymentInfo?: InvoicePaymentInfo
 }
 

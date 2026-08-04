@@ -47,13 +47,19 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
+import {
+  INVOICE_ACTION_COPY,
+  INVOICE_ACTIVITY_COPY,
+  INVOICE_SHARE_COPY,
+  INVOICE_TOAST_COPY,
+  PAGE_COPY,
+} from "@/lib/copy/business-ui-copy"
+import { InvoiceShareMenu } from "@/components/invoice/invoice-share-menu"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 import { useInvoiceDetail } from "@/hooks/queries/use-invoices"
 import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutations/use-invoices"
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
-import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
 import { MarkAsPaidDialog } from "@/components/mark-as-paid-dialog"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
 import {
@@ -63,6 +69,7 @@ import {
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import type { Invoice } from "@/lib/b2b/types"
+import type { InvoiceManualStatusAction } from "@/lib/invoices/invoice-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useInvoicePayIn } from "@/hooks/use-invoice-pay-in"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
@@ -73,52 +80,53 @@ import {
   canProvisionInvoiceDepositInstructions,
 } from "@/lib/compliance-placeholders"
 import { currentLocationPath, invoiceBackHref, withReturnTo } from "@/lib/invoice-navigation"
-import { invoicePublicViewPath } from "@/lib/invoice-public-url"
-import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
-import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import {
+  buildInvoiceCustomerViewPath,
+  buildInvoiceCustomerViewUrl,
+  buildInvoicePreviewUrl,
+  invoicePreviewPath,
+} from "@/lib/invoice-public-url"
+import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
+import {
+  invoiceFieldsLockBanner,
   showInvoicePaymentPreview,
 } from "@/lib/invoices/invoice-edit-lock"
+import {
+  customerLinkHint,
+  draftPreviewHint,
+  getInvoiceManualStatusActions,
+  invoiceStatusHelper,
+  invoiceStatusNextAction,
+  isInvoiceCustomerLinkShareable,
+  isInvoiceDraft,
+  manualStatusChangeToast,
+  previewLinkHint,
+} from "@/lib/invoices/invoice-status"
 import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
 const STATUS_ACTIVITY_DESCRIPTIONS: Record<string, string> = {
-  sent: "Invoice was sent to customer",
-  paid: "Invoice was marked as paid",
-  open: "Invoice was marked as unpaid",
-  void: "Invoice was voided",
-  past_due: "Invoice was marked past due",
-  uncollectible: "Invoice was marked uncollectible",
-  draft: "Invoice was reverted to draft",
-  failed: "Invoice was marked as failed",
-}
-
-function customerLinkHint(status: Invoice["status"]): string {
-  switch (status) {
-    case "draft":
-      return "Preview how your customer will see this invoice after you finalize or send it."
-    case "open":
-      return "Share this link so your customer can view and pay this invoice."
-    case "sent":
-    case "past_due":
-      return "Your customer can view and pay using this link."
-    case "paid":
-      return "Your customer can view this invoice and download the receipt."
-    case "void":
-      return "Link shows this invoice as void to your customer."
-    default:
-      return "Share this link so your customer can view this invoice."
-  }
+  sent: INVOICE_ACTIVITY_COPY.sent,
+  paid: INVOICE_ACTIVITY_COPY.paid,
+  unpaid: INVOICE_ACTIVITY_COPY.issued,
+  void: INVOICE_ACTIVITY_COPY.void,
+  past_due: INVOICE_ACTIVITY_COPY.past_due,
+  draft: INVOICE_ACTIVITY_COPY.draft,
 }
 
 function getInvoiceActivities(invoice: Invoice): { id: string; type: string; description: string; timestamp: string }[] {
   const activities: { id: string; type: string; description: string; timestamp: string }[] = []
   const createdTs = invoice.createdDate.includes("T") ? invoice.createdDate : `${invoice.createdDate}T00:00:00`
-  activities.push({ id: "1", type: "created", description: "Invoice was created", timestamp: createdTs })
-  // Use statusHistory for status-change activities (each change = new activity)
+  activities.push({
+    id: "1",
+    type: "created",
+    description: INVOICE_ACTIVITY_COPY.created,
+    timestamp: createdTs,
+  })
   const history = invoice.statusHistory ?? []
   if (history.length > 0) {
     history.forEach((entry, i) => {
-      const description = STATUS_ACTIVITY_DESCRIPTIONS[entry.status] ?? `Invoice status changed to ${entry.status}`
-      const type = entry.status === "void" ? "voided" : entry.status === "open" ? "unpaid" : entry.status
+      const description =
+        STATUS_ACTIVITY_DESCRIPTIONS[entry.status] ?? `Invoice status changed to ${entry.status}`
+      const type = entry.status === "void" ? "voided" : entry.status
       activities.push({
         id: `status-${i}-${entry.timestamp}`,
         type,
@@ -127,12 +135,11 @@ function getInvoiceActivities(invoice: Invoice): { id: string; type: string; des
       })
     })
   } else {
-    // Fallback for invoices without statusHistory (legacy)
     if (invoice.status === "sent") {
       activities.push({
         id: "3",
         type: "sent",
-        description: "Invoice was sent to customer",
+        description: INVOICE_ACTIVITY_COPY.sent,
         timestamp: createdTs,
       })
     }
@@ -140,7 +147,7 @@ function getInvoiceActivities(invoice: Invoice): { id: string; type: string; des
       activities.push({
         id: "4",
         type: "voided",
-        description: "Invoice was voided",
+        description: INVOICE_ACTIVITY_COPY.void,
         timestamp: createdTs,
       })
     }
@@ -148,12 +155,33 @@ function getInvoiceActivities(invoice: Invoice): { id: string; type: string; des
       activities.push({
         id: "5",
         type: "paid",
-        description: "Invoice was paid",
+        description: INVOICE_ACTIVITY_COPY.paid,
         timestamp: createdTs,
       })
     }
   }
-  // Add notes as activities
+  ;(invoice.emailsSent ?? []).forEach((entry, i) => {
+    activities.push({
+      id: `email-${i}-${entry.sentAt}`,
+      type: "sent",
+      description: INVOICE_ACTIVITY_COPY.sent,
+      timestamp: entry.sentAt,
+    })
+  })
+  ;(invoice.remindersSent ?? []).forEach((entry, i) => {
+    const description =
+      entry.type === "due_today"
+        ? INVOICE_ACTIVITY_COPY.reminderDueToday
+        : entry.type === "overdue_7d"
+          ? INVOICE_ACTIVITY_COPY.reminderOverdue
+          : INVOICE_ACTIVITY_COPY.reminderSent
+    activities.push({
+      id: `reminder-${i}-${entry.sentAt}`,
+      type: "sent",
+      description,
+      timestamp: entry.sentAt,
+    })
+  })
   ;(invoice.notes ?? []).forEach((note) => {
     activities.push({
       id: `note-${note.id}`,
@@ -218,7 +246,7 @@ export default function InvoiceDetailPage() {
   const [showMoreActivities, setShowMoreActivities] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [isSendingEmail, setIsSendingEmail] = useState(false)
-  const [isFinalizing, setIsFinalizing] = useState(false)
+  const [isIssuing, setIsIssuing] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [customerViews, setCustomerViews] = useState<{ viewedAt: string }[]>([])
   const [addNoteOpen, setAddNoteOpen] = useState(false)
@@ -226,6 +254,7 @@ export default function InvoiceDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [markAsPaidOpen, setMarkAsPaidOpen] = useState(false)
   const [customerViewUrl, setCustomerViewUrl] = useState("")
+  const [previewViewUrl, setPreviewViewUrl] = useState("")
   const [stripeSettlement, setStripeSettlement] = useState<{
     phase: string
     settlement_rail: string | null
@@ -243,7 +272,7 @@ export default function InvoiceDetailPage() {
   const payInQueryEnabled = Boolean(
     invoice &&
       !invoice.archived &&
-      showInvoicePaymentPreview(invoice.status, invoice.documentType) &&
+      showInvoicePaymentPreview(invoice.status) &&
       invoice.status !== "paid" &&
       invoice.status !== "void" &&
       canProvisionDepositInstructions,
@@ -252,7 +281,6 @@ export default function InvoiceDetailPage() {
   const {
     bankAccount,
     stablecoinAccount,
-    loading: payInLoading,
   } = useInvoicePayIn({
     currency: invoice?.currency ?? "USD",
     tier1Complete,
@@ -282,21 +310,23 @@ export default function InvoiceDetailPage() {
     })
   }, [invoice, invoiceSettings, bankAccount, stablecoinAccount, payInQueryEnabled, stripeOnlineEnabled])
 
-  const filteredPayIn = useMemo(() => {
-    if (!invoice) return {}
-    return filterPayInByDisplay({ bankAccount, stablecoinAccount }, paymentDisplay)
-  }, [invoice, bankAccount, stablecoinAccount, paymentDisplay])
-
-  const paymentDefaultTab = paymentDisplay.defaultTab
-
-  const hasAnyPayIn = Boolean(
-    filteredPayIn.bankAccount ||
-      filteredPayIn.stablecoinAccount ||
-      paymentDisplay.showOnlinePayment,
+  const manualStatusActions = useMemo(
+    () =>
+      invoice
+        ? getInvoiceManualStatusActions({
+            status: invoice.status,
+            paidViaStripe: invoice.paymentInfo?.method === "stripe",
+          })
+        : [],
+    [invoice?.status, invoice?.paymentInfo?.method],
   )
 
   const sendInvoiceEmailConfirmed = async () => {
     if (!invoice) return
+    if (isInvoiceDraft(invoice.status)) {
+      toast.error(INVOICE_TOAST_COPY.issueBeforeEmail)
+      return
+    }
     setIsSendingEmail(true)
     try {
       const res = await fetchWithSession("/api/invoices/send-email", {
@@ -304,98 +334,97 @@ export default function InvoiceDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ invoiceId: invoice.id }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to send email")
-      handleStatusChange("sent")
-      toast.success(`Invoice sent to ${invoice.customerEmail}`)
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        emailsSent?: Invoice["emailsSent"]
+        status?: Invoice["status"]
+      }
+      if (!res.ok) throw new Error(data.error || INVOICE_TOAST_COPY.emailFailed)
+      const now = new Date().toISOString()
+      void updateInvoice(invoice.id, {
+        status: data.status ?? "sent",
+        emailsSent: data.emailsSent ?? [
+          ...(invoice.emailsSent ?? []),
+          { sentAt: now, to: invoice.customerEmail },
+        ],
+        statusHistory:
+          invoice.status === "unpaid"
+            ? [...(invoice.statusHistory ?? []), { status: "sent", timestamp: now }]
+            : invoice.statusHistory,
+      })
+      toast.success(INVOICE_TOAST_COPY.sentTo(invoice.customerEmail ?? ""))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to send email")
+      toast.error(err instanceof Error ? err.message : INVOICE_TOAST_COPY.emailFailed)
     } finally {
       setIsSendingEmail(false)
     }
   }
 
-  const finalizeDraft = async (andEmail: boolean) => {
+  const issueDraft = async (andEmail: boolean) => {
     if (!invoice) return
     if (andEmail) setIsSendingEmail(true)
-    else setIsFinalizing(true)
+    else setIsIssuing(true)
     const now = new Date().toISOString()
     try {
       await updateInvoiceMut.mutateAsync({
         id: invoice.id,
         updates: {
-          status: "open",
+          status: "unpaid",
           finalizedDate: invoice.finalizedDate ?? now,
           statusHistory: [
             ...(invoice.statusHistory ?? []),
-            { status: "open", timestamp: now },
+            { status: "unpaid", timestamp: now },
           ],
         },
       })
 
       if (andEmail) {
         if (!invoice.customerEmail?.trim()) {
-          throw new Error("Invoice has no customer email")
+          throw new Error(INVOICE_TOAST_COPY.noCustomerEmail)
         }
         const res = await fetchWithSession("/api/invoices/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ invoiceId: invoice.id }),
         })
-        const data = (await res.json().catch(() => ({}))) as { error?: string }
-        if (!res.ok) throw new Error(data.error || "Failed to send email")
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string
+          emailsSent?: Invoice["emailsSent"]
+        }
+        if (!res.ok) throw new Error(data.error || INVOICE_TOAST_COPY.emailFailed)
+        const sentAt = new Date().toISOString()
         await updateInvoiceMut.mutateAsync({
           id: invoice.id,
           updates: {
             status: "sent",
+            emailsSent: data.emailsSent ?? [
+              ...(invoice.emailsSent ?? []),
+              { sentAt, to: invoice.customerEmail },
+            ],
             statusHistory: [
               ...(invoice.statusHistory ?? []),
-              { status: "open", timestamp: now },
-              { status: "sent", timestamp: new Date().toISOString() },
+              { status: "unpaid", timestamp: now },
+              { status: "sent", timestamp: sentAt },
             ],
           },
         })
-        toast.success(`Invoice sent to ${invoice.customerEmail}`)
+        toast.success(INVOICE_TOAST_COPY.sentTo(invoice.customerEmail))
       } else {
-        toast.success("Invoice finalized")
+        toast.success(INVOICE_TOAST_COPY.issued)
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to finalize invoice")
+      toast.error(err instanceof Error ? err.message : INVOICE_TOAST_COPY.issueFailed)
     } finally {
       setIsSendingEmail(false)
-      setIsFinalizing(false)
+      setIsIssuing(false)
     }
   }
 
-  const markAsSent = () => {
-    if (!invoice) return
-    handleStatusChange("sent")
-    toast.success("Invoice marked as sent")
-  }
+  const publicViewHref = invoice
+    ? buildInvoiceCustomerViewPath(orgEasetag, invoice)
+    : ""
 
-  const publicViewHref =
-    orgEasetag?.trim()
-      ? invoicePublicViewPath(orgEasetag.trim(), invoice?.invoiceNumber ?? "")
-      : invoice
-        ? `/invoice-view/${invoice.id}`
-        : ""
-
-  const convertQuoteToInvoice = async () => {
-    if (!invoice) return
-    try {
-      const res = await fetchWithSession(`/api/business/b2b/invoices/${invoice.id}/convert-to-invoice`, {
-        method: "POST",
-      })
-      const data = (await res.json()) as { invoice?: Invoice; error?: string }
-      if (!res.ok) throw new Error(data.error || "Convert failed")
-      if (data.invoice) {
-        toast.success("Quote converted to invoice")
-        router.push(withReturnTo(`/invoices/${data.invoice.id}`, here))
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not convert quote")
-    }
-  }
+  const previewViewHref = invoice ? invoicePreviewPath(invoice.id) : ""
 
   useEffect(() => {
     if (!invoice?.id) return
@@ -411,7 +440,7 @@ export default function InvoiceDetailPage() {
     const viewActivities = customerViews.map((v, i) => ({
       id: `view-${i}`,
       type: "viewed",
-      description: "Invoice viewed by customer",
+      description: INVOICE_ACTIVITY_COPY.viewed,
       timestamp: v.viewedAt,
     }))
     return [...base, ...viewActivities].sort(
@@ -422,11 +451,8 @@ export default function InvoiceDetailPage() {
   useEffect(() => {
     if (!invoice?.id || typeof window === "undefined") return
     const origin = window.location.origin
-    if (orgEasetag?.trim()) {
-      setCustomerViewUrl(`${origin}${invoicePublicViewPath(orgEasetag.trim(), invoice.invoiceNumber)}`)
-    } else {
-      setCustomerViewUrl(`${origin}/invoice-view/${invoice.id}`)
-    }
+    setCustomerViewUrl(buildInvoiceCustomerViewUrl(origin, orgEasetag, invoice))
+    setPreviewViewUrl(buildInvoicePreviewUrl(origin, invoice.id))
   }, [invoice?.id, invoice?.invoiceNumber, orgEasetag])
 
   useEffect(() => {
@@ -464,6 +490,24 @@ export default function InvoiceDetailPage() {
       status: newStatus,
       statusHistory: [...(invoice.statusHistory ?? []), entry],
     })
+  }
+
+  const handleManualStatusAction = (action: InvoiceManualStatusAction) => {
+    if (!invoice) return
+    if (action.id === "mark_paid") {
+      setMarkAsPaidOpen(true)
+      return
+    }
+    const entry = { status: action.targetStatus, timestamp: new Date().toISOString() }
+    const updates: Partial<Invoice> = {
+      status: action.targetStatus,
+      statusHistory: [...(invoice.statusHistory ?? []), entry],
+    }
+    if (action.id === "mark_unpaid" && invoice.status === "paid") {
+      updates.paymentInfo = undefined
+    }
+    void updateInvoice(invoice.id, updates)
+    toast.success(manualStatusChangeToast(action))
   }
 
   const handleEdit = () => {
@@ -598,49 +642,28 @@ export default function InvoiceDetailPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold text-foreground">{invoice.invoiceNumber}</h1>
             <InvoiceStatusBadge status={invoice.archived ? "archived" : invoice.status} />
-            {!invoice.archived && (
+            {!invoice.archived && manualStatusActions.length > 0 ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground">
-                    Change status
+                    {INVOICE_ACTION_COPY.changeStatus}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  {invoice.paymentInfo?.method !== "stripe" ? (
+                  {manualStatusActions.map((action) => (
                     <DropdownMenuItem
-                      onClick={() => setMarkAsPaidOpen(true)}
-                      disabled={invoice.status === "paid"}
+                      key={action.id}
+                      className={
+                        action.destructive ? "text-destructive focus:text-destructive" : undefined
+                      }
+                      onClick={() => handleManualStatusAction(action)}
                     >
-                      Mark as Paid
+                      {action.label}
                     </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuItem
-                    onClick={() => handleStatusChange("open")}
-                    disabled={invoice.status === "open"}
-                  >
-                    Mark as Unpaid
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => handleStatusChange("sent")}
-                    disabled={invoice.status === "sent"}
-                  >
-                    Mark as Sent
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => handleStatusChange("past_due")}
-                    disabled={invoice.status === "past_due"}
-                  >
-                    Mark Past Due
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => handleStatusChange("void")}
-                    disabled={invoice.status === "void"}
-                  >
-                    Mark as Void
-                  </DropdownMenuItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
+            ) : null}
           </div>
           <p className="text-muted-foreground mt-1">
             Billed to {invoice.customerName} - {formatCurrency(invoice.total, invoice.currency)}
@@ -648,42 +671,53 @@ export default function InvoiceDetailPage() {
               <span className="block text-sm mt-0.5">PO / Ref: {invoice.poNumber}</span>
             ) : null}
           </p>
+          {!invoice.archived && invoiceStatusHelper(invoice.status) ? (
+            <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+              {invoiceStatusNextAction(invoice.status) ?? invoiceStatusHelper(invoice.status)}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {!invoice.archived && invoice.status === "draft" && (
             <>
+              <Link href={previewViewHref} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm">
+                  <Eye className="h-4 w-4 mr-2" />
+                  {INVOICE_ACTION_COPY.preview}
+                </Button>
+              </Link>
               <Button
                 variant="outline"
                 size="sm"
                 className={invoiceActionBtnClass.finalize}
-                disabled={isFinalizing || isSendingEmail}
-                onClick={() => void finalizeDraft(false)}
+                disabled={isIssuing || isSendingEmail}
+                onClick={() => void issueDraft(false)}
               >
-                {isFinalizing ? (
+                {isIssuing ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Finalizing…
+                    {INVOICE_ACTION_COPY.issuing}
                   </>
                 ) : (
-                  "Finalize invoice"
+                  INVOICE_ACTION_COPY.issue
                 )}
               </Button>
               {invoice.customerEmail?.trim() ? (
                 <Button
                   size="sm"
                   className={invoiceActionBtnClass.email}
-                  disabled={isFinalizing || isSendingEmail}
-                  onClick={() => void finalizeDraft(true)}
+                  disabled={isIssuing || isSendingEmail}
+                  onClick={() => void issueDraft(true)}
                 >
                   {isSendingEmail ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Sending…
+                      {INVOICE_ACTION_COPY.sending}
                     </>
                   ) : (
                     <>
                       <Mail className="h-4 w-4 mr-2" />
-                      Finalize and email
+                      {INVOICE_ACTION_COPY.issueAndEmail}
                     </>
                   )}
                 </Button>
@@ -691,40 +725,29 @@ export default function InvoiceDetailPage() {
             </>
           )}
           {!invoice.archived &&
-            invoice.status === "open" &&
+            (invoice.status === "unpaid" || invoice.status === "past_due") &&
             invoice.customerEmail?.trim() && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={invoiceActionBtnClass.markSent}
-                  onClick={markAsSent}
-                  disabled={isSendingEmail}
-                >
-                  Mark as sent
-                </Button>
-                <Button
-                  size="sm"
-                  className={invoiceActionBtnClass.email}
-                  onClick={() => void sendInvoiceEmailConfirmed()}
-                  disabled={isSendingEmail}
-                >
-                  {isSendingEmail ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Sending…
-                    </>
-                  ) : (
-                    <>
-                      <Mail className="h-4 w-4 mr-2" />
-                      Email invoice
-                    </>
-                  )}
-                </Button>
-              </>
+              <Button
+                size="sm"
+                className={invoiceActionBtnClass.email}
+                onClick={() => void sendInvoiceEmailConfirmed()}
+                disabled={isSendingEmail}
+              >
+                {isSendingEmail ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {INVOICE_ACTION_COPY.sending}
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4 mr-2" />
+                    {INVOICE_ACTION_COPY.emailCustomer}
+                  </>
+                )}
+              </Button>
             )}
           {!invoice.archived &&
-            (invoice.status === "sent" || invoice.status === "past_due") &&
+            invoice.status === "sent" &&
             invoice.customerEmail?.trim() && (
               <Button
                 variant="outline"
@@ -736,16 +759,19 @@ export default function InvoiceDetailPage() {
                 {isSendingEmail ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Sending…
+                    {INVOICE_ACTION_COPY.sending}
                   </>
                 ) : (
                   <>
                     <Mail className="h-4 w-4 mr-2" />
-                    Resend email
+                    {INVOICE_ACTION_COPY.emailAgain}
                   </>
                 )}
               </Button>
             )}
+          {!invoice.archived ? (
+            <InvoiceShareMenu invoice={invoice} easetag={orgEasetag} />
+          ) : null}
           {!invoice.archived && invoice.status !== "draft" && (
             <Button
               variant="outline"
@@ -789,11 +815,6 @@ export default function InvoiceDetailPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {(invoice.status === "quote" || invoice.documentType === "quote") && (
-                <DropdownMenuItem onClick={() => void convertQuoteToInvoice()}>
-                  Convert to invoice
-                </DropdownMenuItem>
-              )}
               <DropdownMenuItem onClick={handleEdit}>
                 Edit invoice
               </DropdownMenuItem>
@@ -813,6 +834,18 @@ export default function InvoiceDetailPage() {
           </DropdownMenu>
         </div>
       </div>
+
+      {invoiceFieldsLockBanner(invoice.status) ? (
+        <div className="rounded-lg border border-amber-200/80 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          {invoiceFieldsLockBanner(invoice.status)}
+        </div>
+      ) : null}
+
+      {isInvoiceDraft(invoice.status) && !invoice.archived ? (
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          {draftPreviewHint()}
+        </div>
+      ) : null}
 
       {invoice.paymentInfo?.method === "stripe" && stripeSettlement ? (
         <Card className="border-primary/20 bg-primary/5">
@@ -1065,58 +1098,6 @@ export default function InvoiceDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Invoice payment options — only when deposit instructions are provisioned for this currency/tier */}
-          {!invoice.archived &&
-            showInvoicePaymentPreview(invoice.status, invoice.documentType) &&
-            invoice.status !== "paid" &&
-            (payInQueryEnabled || paymentDisplay.showOnlinePayment) &&
-            (payInLoading && payInQueryEnabled ? (
-              <Card className="border-dashed bg-muted/20">
-                <CardContent className="py-8 flex justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </CardContent>
-              </Card>
-            ) : hasAnyPayIn ? (
-              <InvoicePaymentOptions
-                invoice={invoice}
-                bankAccount={filteredPayIn.bankAccount}
-                stablecoinAccount={filteredPayIn.stablecoinAccount}
-                businessDisplayName={issuer.name}
-                audience="business"
-                publicInvoiceEasetag={orgEasetag}
-                defaultTab={paymentDefaultTab}
-                showOnlinePayment={paymentDisplay.showOnlinePayment}
-              />
-            ) : canProvisionDepositInstructions ? (
-              <Card className="border-dashed bg-muted/20">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Customer payment instructions</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  <p>No virtual account or wallet is available for this currency yet. Open an account or complete setup in Accounts.</p>
-                </CardContent>
-              </Card>
-            ) : null)}
-          {!invoice.archived &&
-            showInvoicePaymentPreview(invoice.status, invoice.documentType) &&
-            invoice.status !== "paid" &&
-            !payInQueryEnabled &&
-            (canProvisionDepositInstructions ? null : (
-              <Card className="border-dashed bg-muted/20">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Customer payment instructions</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground space-y-2">
-                  <p>{PAGE_COPY.invoices.payInBlocked}</p>
-                  <p>
-                    <Link href="/settings?tab=verification" className="font-semibold text-primary underline underline-offset-2">
-                      Business verification
-                    </Link>
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-
           {/* Invoice receipt - when paid */}
           {!invoice.archived && invoice.status === "paid" && (() => {
             const paymentRecord = getPaymentRecordDisplay(invoice, ledgerRows)
@@ -1236,30 +1217,86 @@ export default function InvoiceDetailPage() {
                 <span className="text-sm text-muted-foreground">Created</span>
                 <span className="text-sm">{formatDate(invoice.createdDate)}</span>
               </div>
-              {!invoice.archived && publicViewHref && (
+              {!invoice.archived &&
+                publicViewHref &&
+                isInvoiceCustomerLinkShareable(invoice.status) && (
+                <div className="space-y-1.5 pt-2 border-t">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {INVOICE_SHARE_COPY.customerLink}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        void copyToClipboard(customerViewUrl, "invoice-link")
+                        toast.success(INVOICE_TOAST_COPY.customerLinkCopied)
+                      }}
+                    >
+                      {copiedField === "invoice-link" ? (
+                        <Check className="h-3 w-3 text-primary" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+                  {customerViewUrl ? (
+                    <p className="text-xs font-mono text-muted-foreground truncate" title={customerViewUrl}>
+                      {customerViewUrl.replace(/^https?:\/\//, "")}
+                    </p>
+                  ) : null}
+                  <p className="text-xs text-muted-foreground">{customerLinkHint(invoice.status)}</p>
+                  <div className="flex justify-between gap-2 text-xs text-muted-foreground pt-1">
+                    <span>
+                      {INVOICE_SHARE_COPY.lastViewed}:{" "}
+                      {customerViews[0]?.viewedAt
+                        ? formatDateWithTime(customerViews[0].viewedAt)
+                        : INVOICE_SHARE_COPY.neverViewed}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2 text-xs text-muted-foreground">
+                    <span>
+                      {INVOICE_SHARE_COPY.lastEmailed}:{" "}
+                      {invoice.emailsSent?.[invoice.emailsSent.length - 1]?.sentAt
+                        ? formatDateWithTime(
+                            invoice.emailsSent[invoice.emailsSent.length - 1]!.sentAt,
+                          )
+                        : INVOICE_SHARE_COPY.neverEmailed}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {!invoice.archived && previewViewHref && (
                 <div className="space-y-1 pt-2 border-t">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-muted-foreground">Customer link</span>
+                    <span className="text-sm text-muted-foreground">
+                      {INVOICE_SHARE_COPY.previewLink}
+                    </span>
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => copyToClipboard(customerViewUrl, "invoice-link")}
+                        onClick={() => {
+                          void copyToClipboard(previewViewUrl, "preview-link")
+                          toast.success(INVOICE_TOAST_COPY.previewLinkCopied)
+                        }}
                       >
-                        {copiedField === "invoice-link" ? (
+                        {copiedField === "preview-link" ? (
                           <Check className="h-3 w-3 text-primary" />
                         ) : (
                           <Copy className="h-3 w-3" />
                         )}
                       </Button>
-                      <Link href={publicViewHref} target="_blank" rel="noopener noreferrer">
+                      <Link href={previewViewHref} target="_blank" rel="noopener noreferrer">
                         <Button variant="ghost" size="sm">
                           <ExternalLink className="h-3 w-3" />
                         </Button>
                       </Link>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">{customerLinkHint(invoice.status)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isInvoiceDraft(invoice.status) ? draftPreviewHint() : previewLinkHint()}
+                  </p>
                 </div>
               )}
             </CardContent>

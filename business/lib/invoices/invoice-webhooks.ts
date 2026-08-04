@@ -8,7 +8,6 @@ export type InvoiceWebhookEvent =
   | "invoice.paid"
   | "invoice.past_due"
   | "invoice.voided"
-  | "invoice.quote_accepted"
 
 export async function dispatchInvoiceWebhooks(input: {
   businessId: string

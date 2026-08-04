@@ -1,5 +1,5 @@
 import { formatCurrency } from "@/lib/utils"
-import { invoicePublicViewPath } from "@/lib/invoice-public-url"
+import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
 import type { Invoice } from "@/lib/b2b/types"
 
 export type PaymentMethodsFlags = {
@@ -12,7 +12,7 @@ export type InvoicePdfPaymentSection = PaymentMethodsFlags & {
   url: string
 }
 
-const PAYABLE = new Set(["open", "sent", "past_due"])
+const PAYABLE = new Set(["unpaid", "sent", "past_due"])
 
 export function isInvoicePayable(status: string): boolean {
   return PAYABLE.has(status)
@@ -27,11 +27,7 @@ export function buildInvoiceViewUrl(
   easetag: string | null | undefined,
   invoice: Pick<Invoice, "id" | "invoiceNumber">,
 ): string {
-  const origin = baseUrl.replace(/\/$/, "")
-  if (easetag?.trim()) {
-    return `${origin}${invoicePublicViewPath(easetag.trim(), invoice.invoiceNumber)}`
-  }
-  return `${origin}/invoice-view/${invoice.id}`
+  return buildInvoiceCustomerViewUrl(baseUrl, easetag, invoice)
 }
 
 export function customerPaymentOptionsTitle(): string {

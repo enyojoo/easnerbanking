@@ -71,7 +71,7 @@ describe("resolveConnectPanelUx", () => {
       }),
     )
     expect(ux.primary?.kind).toBe("link_payout")
-    expect(ux.primary?.label).toBe("Link payout")
+    expect(ux.primary?.label).toBe("Link payouts")
     expect(ux.secondary?.label).toBe("Edit profile")
     expect(ux.secondary?.dialogTitle).toBe("Edit business profile")
   })

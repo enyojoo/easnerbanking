@@ -1,11 +1,11 @@
 import type { Metadata } from "next"
 
-/** Per-invoice title uses the real business name in [id]/layout.tsx `generateMetadata`. */
+/** Per-invoice title uses the real business name in slug layout `generateMetadata`. */
 export const metadata: Metadata = {
   description: "View your invoice",
 }
 
-export default function InvoiceViewLayout({
+export default function InvoiceLayout({
   children,
 }: {
   children: React.ReactNode

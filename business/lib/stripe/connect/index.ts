@@ -1,10 +1,19 @@
 export { ensureConnectedAccount } from "./create-connected-account"
+export {
+  discoverStripeConnectAccountId,
+  ensureConnectAccountLinked,
+  linkExistingConnectAccount,
+} from "./discover-connect-account"
 export { createConnectAccountSession } from "./create-account-session"
 export {
   syncConnectAccountRow,
-  syncConnectAccountFromWebhook,
   mapStripeAccountToRowPatch,
 } from "./sync-account-from-stripe"
+export {
+  syncConnectAccountFromWebhook,
+  runConnectAccountSyncPipeline,
+  syncConnectAccountIfLinked,
+} from "./sync-connect-side-effects"
 export {
   getConnectAccountRow,
   resolveConnectReadyForCheckout,
@@ -14,6 +23,11 @@ export {
   autoLinkGridVaPayoutIfEligible,
   type AutoLinkGridVaResult,
 } from "./auto-link-grid-va-payout"
+export {
+  reconcileGridVaPayoutDestination,
+  type ReconcileGridVaResult,
+} from "./reconcile-grid-va-payout"
+export { createGridVaExternalAccountOnStripe } from "./create-grid-va-external-account"
 export { configureConnectedAccountPayoutSchedule } from "./configure-payout-schedule"
 export {
   acceptStripeConnectTermsOfService,

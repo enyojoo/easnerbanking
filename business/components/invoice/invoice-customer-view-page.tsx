@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { useParams } from "next/navigation"
+import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Check, Copy, Download, Loader2 } from "lucide-react"
@@ -9,22 +9,20 @@ import { businessInfo } from "@/lib/business-info"
 import type { Invoice } from "@/lib/b2b/types"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
-import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
 import type { PublicInvoiceStripeCheckout } from "@/lib/invoices/json-public-invoice-from-row"
 import { getStripeJs } from "@/lib/stripe/load-stripe-js"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
-import {
-  buildInvoicePdfPaymentSection,
-} from "@/lib/invoices/invoice-payment-copy"
+import { buildInvoicePdfPaymentSection } from "@/lib/invoices/invoice-payment-copy"
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import { BRAND } from "@/components/brand/brand-constants"
-import { LoadingSpinner } from "@/components/loading-spinner"
 import { useFxRates } from "@/hooks/queries"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
+import { fetchWithSession } from "@/lib/fetch-with-session"
+import { INVOICE_CUSTOMER_VIEW_COPY } from "@/lib/copy/business-ui-copy"
 
 const FALLBACK_ISSUER: InvoicePdfIssuer = {
   name: businessInfo.name,
@@ -37,26 +35,117 @@ const FALLBACK_ISSUER: InvoicePdfIssuer = {
   phone: businessInfo.phone,
 }
 
-export default function InvoiceViewPage() {
-  const params = useParams()
-  const parts = useMemo(() => {
-    const raw = params.slug
-    if (raw == null) return [] as string[]
-    return Array.isArray(raw) ? raw : [String(raw)]
-  }, [params.slug])
+type InvoiceViewMode = "public" | "preview"
 
+type InvoiceCustomerViewPageProps =
+  | {
+      mode: "public"
+      slugParts: string[]
+    }
+  | {
+      mode: "preview"
+      invoiceId: string
+    }
+
+type PublicInvoicePayload = {
+  invoice?: Invoice
+  issuer?: InvoicePdfIssuer
+  payIn?: InvoicePayInPayload
+  businessEasetag?: string | null
+  paymentDisplay?: {
+    defaultTab?: "online" | "bank" | "stablecoin"
+    showOnlinePayment?: boolean
+  }
+  stripeOnlineEnabled?: boolean
+  stripeCheckout?: PublicInvoiceStripeCheckout | null
+}
+
+function InvoiceViewSkeleton() {
+  return (
+    <div className="w-full max-w-2xl">
+      <Card>
+        <CardContent className="p-4 pt-1 pb-0.5 sm:p-6 sm:pt-2 sm:pb-1 lg:p-8 lg:pt-3 lg:pb-2 space-y-6">
+          <div className="flex justify-end">
+            <div className="h-8 w-28 rounded-md bg-muted animate-pulse" />
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:gap-6">
+            <div className="space-y-2">
+              <div className="h-5 w-36 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-44 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-40 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-28 rounded bg-muted animate-pulse" />
+            </div>
+            <div className="space-y-2 flex flex-col items-end">
+              <div className="h-6 w-24 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-20 rounded bg-muted animate-pulse" />
+              <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <div className="h-3 w-16 rounded bg-muted animate-pulse" />
+              <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-40 rounded bg-muted animate-pulse" />
+            </div>
+            <div />
+            <div className="space-y-2">
+              <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-36 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-32 rounded bg-muted animate-pulse" />
+            </div>
+          </div>
+          <div className="border rounded-lg overflow-hidden">
+            <div className="h-9 bg-muted animate-pulse" />
+            <div className="space-y-0">
+              <div className="h-12 border-t bg-muted/30 animate-pulse" />
+              <div className="h-12 border-t bg-muted/20 animate-pulse" />
+              <div className="h-12 border-t bg-muted/30 animate-pulse" />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <div className="space-y-2 w-40">
+              <div className="h-3 w-full rounded bg-muted animate-pulse" />
+              <div className="h-6 w-full rounded bg-muted animate-pulse" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
+  const mode: InvoiceViewMode = props.mode
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [publicEasetag, setPublicEasetag] = useState<string | null>(null)
   const [issuer, setIssuer] = useState<InvoicePdfIssuer | null>(null)
   const [payIn, setPayIn] = useState<InvoicePayInPayload>({})
-  const [loadState, setLoadState] = useState<"loading" | "error" | "ok">("loading")
+  const [loadState, setLoadState] = useState<"loading" | "error" | "unauthorized" | "ok">("loading")
   const [paymentTab, setPaymentTab] = useState<"online" | "bank" | "stablecoin">("bank")
   const [showOnlinePayment, setShowOnlinePayment] = useState(false)
   const [stripeCheckout, setStripeCheckout] = useState<PublicInvoiceStripeCheckout | null>(null)
   const { data: fxRates = [] } = useFxRates()
   const [isDownloading, setIsDownloading] = useState(false)
-  const [copiedLink, setCopiedLink] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  const fetchConfig = useMemo(() => {
+    if (props.mode === "preview") {
+      return {
+        url: `/api/invoices/preview/${encodeURIComponent(props.invoiceId)}`,
+        authenticated: true,
+        valid: Boolean(props.invoiceId),
+      }
+    }
+    const parts = props.slugParts
+    if (parts.length !== 1 && parts.length !== 2) {
+      return { url: "", authenticated: false, valid: false }
+    }
+    const url =
+      parts.length === 1
+        ? `/api/invoices/public/by-id/${encodeURIComponent(parts[0])}`
+        : `/api/invoices/public/${encodeURIComponent(parts[0])}/${encodeURIComponent(parts[1])}`
+    return { url, authenticated: false, valid: true }
+  }, [props])
 
   useEffect(() => {
     let cancelled = false
@@ -67,32 +156,23 @@ export default function InvoiceViewPage() {
     setPayIn({})
     setStripeCheckout(null)
 
-    if (parts.length !== 1 && parts.length !== 2) {
+    if (!fetchConfig.valid || !fetchConfig.url) {
       setLoadState("error")
       return
     }
 
-    const url =
-      parts.length === 1
-        ? `/api/invoices/public/by-id/${encodeURIComponent(parts[0])}`
-        : `/api/invoices/public/${encodeURIComponent(parts[0])}/${encodeURIComponent(parts[1])}`
-
-    fetch(url)
-      .then(async (r) => {
-        const data = (await r.json().catch(() => ({}))) as {
-          invoice?: Invoice
-          issuer?: InvoicePdfIssuer
-          payIn?: InvoicePayInPayload
-          businessEasetag?: string | null
-          paymentDisplay?: {
-            defaultTab?: "online" | "bank" | "stablecoin"
-            showOnlinePayment?: boolean
-          }
-          stripeOnlineEnabled?: boolean
-          stripeCheckout?: PublicInvoiceStripeCheckout | null
-        }
+    const load = async () => {
+      try {
+        const res = fetchConfig.authenticated
+          ? await fetchWithSession(fetchConfig.url)
+          : await fetch(fetchConfig.url)
+        const data = (await res.json().catch(() => ({}))) as PublicInvoicePayload
         if (cancelled) return
-        if (!r.ok || !data.invoice) {
+        if (res.status === 401) {
+          setLoadState("unauthorized")
+          return
+        }
+        if (!res.ok || !data.invoice) {
           setLoadState("error")
           return
         }
@@ -114,14 +194,16 @@ export default function InvoiceViewPage() {
           (online ? "online" : pi.bankAccount ? "bank" : "stablecoin")
         setPaymentTab(tab)
         setLoadState("ok")
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setLoadState("error")
-      })
+      }
+    }
+
+    void load()
     return () => {
       cancelled = true
     }
-  }, [parts])
+  }, [fetchConfig])
 
   useEffect(() => {
     getStripeJs()
@@ -148,30 +230,9 @@ export default function InvoiceViewPage() {
   }, [invoice, fxRates])
 
   useEffect(() => {
-    if (invoice?.id) {
-      fetch(`/api/invoices/${invoice.id}/record-view`, { method: "POST" }).catch(() => {})
-    }
-  }, [invoice?.id])
-
-  const publicViewUrl = useMemo(() => {
-    if (typeof window === "undefined" || !invoice) return ""
-    const origin = window.location.origin
-    if (publicEasetag) {
-      return `${origin}${invoicePublicViewPath(publicEasetag, invoice.invoiceNumber)}`
-    }
-    return `${origin}/invoice-view/${invoice.id}`
-  }, [invoice, publicEasetag])
-
-  const handleCopyLink = async () => {
-    if (typeof window === "undefined" || !invoice || !publicViewUrl) return
-    try {
-      await navigator.clipboard.writeText(publicViewUrl)
-      setCopiedLink(true)
-      setTimeout(() => setCopiedLink(false), 2000)
-    } catch (err) {
-      console.error("Failed to copy link:", err)
-    }
-  }
+    if (mode !== "public" || !invoice?.id) return
+    fetch(`/api/invoices/${invoice.id}/record-view`, { method: "POST" }).catch(() => {})
+  }, [mode, invoice?.id])
 
   const copyToClipboard = async (text: string, field?: string) => {
     try {
@@ -197,7 +258,25 @@ export default function InvoiceViewPage() {
   }
 
   if (loadState === "loading") {
-    return <LoadingSpinner />
+    return <InvoiceViewSkeleton />
+  }
+
+  if (loadState === "unauthorized") {
+    return (
+      <div className="w-full max-w-2xl text-center">
+        <Card>
+          <CardContent className="py-12 space-y-4">
+            <h2 className="text-lg font-semibold">{INVOICE_CUSTOMER_VIEW_COPY.signInPreviewTitle}</h2>
+            <p className="text-sm text-muted-foreground">
+              {INVOICE_CUSTOMER_VIEW_COPY.signInPreviewBody}
+            </p>
+            <Button asChild>
+              <Link href="/auth">Sign in</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   if (loadState === "error" || !invoice) {
@@ -207,7 +286,7 @@ export default function InvoiceViewPage() {
           <CardContent className="py-12">
             <h2 className="text-lg font-semibold">Invoice not found</h2>
             <p className="text-sm text-muted-foreground mt-2">
-              This invoice may have been removed or the link is incorrect.
+              {INVOICE_CUSTOMER_VIEW_COPY.notAvailableYet}
             </p>
           </CardContent>
         </Card>
@@ -219,7 +298,7 @@ export default function InvoiceViewPage() {
   const stablecoinAccount = payIn.stablecoinAccount
   const hasPayInRail = Boolean(bankAccount || stablecoinAccount || showOnlinePayment)
   const showPayCard =
-    (invoice.status === "open" || invoice.status === "sent" || invoice.status === "past_due") &&
+    (invoice.status === "unpaid" || invoice.status === "sent" || invoice.status === "past_due") &&
     hasPayInRail
   const showReceiptCard = invoice.status === "paid"
 
@@ -248,22 +327,17 @@ export default function InvoiceViewPage() {
 
   return (
     <div className="w-full max-w-2xl">
+      {mode === "preview" && (
+        <div className="mb-4 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-foreground">
+          <p className="font-medium">{INVOICE_CUSTOMER_VIEW_COPY.previewBannerTitle}</p>
+          <p className="text-muted-foreground mt-0.5">
+            {INVOICE_CUSTOMER_VIEW_COPY.previewBannerBody}
+          </p>
+        </div>
+      )}
       <Card className="print:shadow-none print:border">
         <CardContent className="p-4 pt-1 pb-0.5 sm:p-6 sm:pt-2 sm:pb-1 lg:p-8 lg:pt-3 lg:pb-2">
-          <div className="flex justify-between items-center mb-6 print:hidden">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopyLink}
-              className="text-xs sm:text-sm h-8 sm:h-9 px-2.5 sm:px-3"
-            >
-              {copiedLink ? (
-                <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2 text-primary" />
-              ) : (
-                <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-              )}
-              {copiedLink ? "Copied" : "Copy Link"}
-            </Button>
+          <div className="flex justify-end items-center mb-6 print:hidden">
             <Button
               variant="outline"
               size="sm"

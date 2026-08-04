@@ -29,8 +29,7 @@ import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { GridSumsubWebSdk } from "@/components/compliance/grid-sumsub-websdk"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
-import { SettingsCardHeader } from "@/components/settings/settings-card-header"
-import { SETTINGS_TAB_COPY, VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
+import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import {
   getVerificationRejectionDisplay,
   NOAH_FINAL_REJECTION_USER_MESSAGE,
@@ -437,8 +436,11 @@ export function BusinessVerificationSection() {
     </div>
   )
 
+  const tier1Meta = tierLadderCopy(1)
+  const tier1Title = tier1Meta?.title ?? "Global banking"
+
   return (
-    <div className="space-y-6" id="business-verification">
+    <div id="business-verification">
       <Card
         padding={hostedOpen ? "none" : undefined}
         className={cn(hostedOpen && cn("overflow-hidden", verificationFlowPanelClass))}
@@ -454,97 +456,66 @@ export function BusinessVerificationSection() {
         ) : (
           <>
             <CardHeader>
-              <SettingsCardHeader
-                title={
-                  <CardTitle className="flex items-center gap-2">
-                    <ShieldCheck className="h-5 w-5" aria-hidden />
-                    {SETTINGS_TAB_COPY.verification.title}
-                  </CardTitle>
-                }
-                description={SETTINGS_TAB_COPY.verification.intro}
-              />
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-        {BUSINESS_TIER_LADDER.tiers.map((t) => {
-          const isT1 = t.tier === 1
-          return (
-            <Card
-              key={t.tier}
-              className={cn(isT1 && "border-primary/25 md:border-primary/40")}
-            >
-              <CardHeader className="pb-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle className="text-base">{t.title}</CardTitle>
-                  <Badge variant="outline" className="text-xs">
-                    Tier {t.tier}
-                  </Badge>
-                  {isT1 ? (
-                    <Tier1VerificationBadge
-                      tier1Complete={tier1Complete}
-                      tier1VerificationStatus={tier1VerificationStatus}
-                    />
-                  ) : (
-                    <Badge variant="secondary">Coming later</Badge>
-                  )}
-                </div>
-                <CardDescription className="text-sm">{t.description}</CardDescription>
-                {t.footnote ? (
-                  <p className="text-xs text-muted-foreground pt-1">{t.footnote}</p>
-                ) : null}
-              </CardHeader>
-              {isT1 ? (
-                <CardContent className="space-y-4 pt-0">
-                  {error ? <p className="text-sm text-destructive">{error}</p> : null}
-                  {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
-                  {tier1OnHold ? (
-                    <p className="text-sm text-muted-foreground">
-                      {VERIFICATION_SECTION_COPY.verificationOnHold}
-                    </p>
-                  ) : null}
-                  {tier1UnderReview && !tier1ActionRequired ? (
-                    <p className="text-sm text-muted-foreground">{NOAH_VERIFICATION_IN_REVIEW_COPY}</p>
-                  ) : null}
-                  {tier1Rejected && tier1FinalReject ? (
-                    <p className="text-sm text-muted-foreground">{NOAH_FINAL_REJECTION_USER_MESSAGE}</p>
-                  ) : tier1ActionRequired && (tier1RetryGuidance?.length || rejectionDisplay?.guidanceLines.length) ? (
-                    <p className="text-sm text-destructive">
-                      {(tier1RetryGuidance ?? rejectionDisplay?.guidanceLines ?? []).join(" ")}
-                    </p>
-                  ) : tier1Rejected ? (
-                    <p className="text-sm text-destructive">
-                      Verification was declined. Review your documents and try again.
-                    </p>
-                  ) : null}
-                  {!businessId ? (
-                    <p className="text-xs text-muted-foreground">Setting up your organization…</p>
-                  ) : null}
-                  {!canManageBusinessVerification ? (
-                    <p className="text-sm text-muted-foreground">
-                      Only the organization owner can start verification.
-                    </p>
-                  ) : null}
-                  {canManageBusinessVerification && !tier1Complete && !tier1FinalReject && !tier1AwaitingReview && !tier1OnHold ? (
-                    <KybRequiredDocumentsNotice />
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    {showTier1HostedCta ? (
-                      <Button
-                        size="sm"
-                        onClick={() => void openHostedVerification()}
-                        onMouseEnter={() => void primeHostedCredentials()}
-                        onFocus={() => void primeHostedCredentials()}
-                        disabled={!businessId}
-                      >
-                        {tier1HostedCtaLabel}
-                      </Button>
-                    ) : null}
-                  </div>
-                </CardContent>
+              <div className="flex flex-wrap items-center gap-2">
+                <ShieldCheck className="h-5 w-5" aria-hidden />
+                <CardTitle className="text-base">{tier1Title}</CardTitle>
+                <Badge variant="outline" className="text-xs">
+                  Tier 1
+                </Badge>
+                <Tier1VerificationBadge
+                  tier1Complete={tier1Complete}
+                  tier1VerificationStatus={tier1VerificationStatus}
+                />
+              </div>
+              {tier1Meta?.description ? (
+                <CardDescription className="text-sm">{tier1Meta.description}</CardDescription>
               ) : null}
-            </Card>
-          )
-        })}
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+              {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
+              {tier1OnHold ? (
+                <p className="text-sm text-muted-foreground">
+                  {VERIFICATION_SECTION_COPY.verificationOnHold}
+                </p>
+              ) : null}
+              {tier1UnderReview && !tier1ActionRequired ? (
+                <p className="text-sm text-muted-foreground">{NOAH_VERIFICATION_IN_REVIEW_COPY}</p>
+              ) : null}
+              {tier1Rejected && tier1FinalReject ? (
+                <p className="text-sm text-muted-foreground">{NOAH_FINAL_REJECTION_USER_MESSAGE}</p>
+              ) : tier1ActionRequired && (tier1RetryGuidance?.length || rejectionDisplay?.guidanceLines.length) ? (
+                <p className="text-sm text-destructive">
+                  {(tier1RetryGuidance ?? rejectionDisplay?.guidanceLines ?? []).join(" ")}
+                </p>
+              ) : tier1Rejected ? (
+                <p className="text-sm text-destructive">
+                  Verification was declined. Review your documents and try again.
+                </p>
+              ) : null}
+              {!businessId ? (
+                <p className="text-xs text-muted-foreground">Setting up your organization…</p>
+              ) : null}
+              {!canManageBusinessVerification ? (
+                <p className="text-sm text-muted-foreground">
+                  Only the organization owner can start verification.
+                </p>
+              ) : null}
+              {canManageBusinessVerification && !tier1Complete && !tier1FinalReject && !tier1AwaitingReview && !tier1OnHold ? (
+                <KybRequiredDocumentsNotice />
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {showTier1HostedCta ? (
+                  <Button
+                    size="sm"
+                    onClick={() => void openHostedVerification()}
+                    onMouseEnter={() => void primeHostedCredentials()}
+                    onFocus={() => void primeHostedCredentials()}
+                    disabled={!businessId}
+                  >
+                    {tier1HostedCtaLabel}
+                  </Button>
+                ) : null}
               </div>
             </CardContent>
           </>

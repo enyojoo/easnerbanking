@@ -180,6 +180,79 @@ Manage this in Settings → Invoicing.
   `.trim()
 }
 
+export interface InvoicePaidNotificationEmailData {
+  invoice: Invoice
+  businessName: string
+  manageInvoiceUrl: string
+  recipientFirstName?: string
+  /** How the invoice was paid, e.g. "Online", "Marked paid". */
+  paymentMethodLabel?: string
+}
+
+export function getInvoicePaidNotificationSubject(invoiceNumber: string): string {
+  return `Invoice ${invoiceNumber} was paid`
+}
+
+export function generateInvoicePaidNotificationHtml(
+  data: InvoicePaidNotificationEmailData,
+): string {
+  const { invoice, manageInvoiceUrl } = data
+  const customer = invoice.customerName?.trim() || "A customer"
+  const subject = getInvoicePaidNotificationSubject(invoice.invoiceNumber)
+  const method = data.paymentMethodLabel?.trim()
+
+  const content = `
+    ${easnerUserGreetingParagraphHtml(data.recipientFirstName)}
+    <p class="confirmation-text">${customer} paid invoice <strong>${invoice.invoiceNumber}</strong>.</p>
+    ${invoiceDetailsTable([
+      ...invoiceSummaryRows(invoice),
+      { label: "Customer", value: customer },
+      ...(method ? [{ label: "Payment", value: method }] : []),
+    ])}
+    <p class="confirmation-text">
+      You're receiving this because invoice payment notifications are enabled in Easner Business.
+      Manage this in Settings → Invoicing.
+    </p>
+  `.trim()
+
+  return generateBaseEmailTemplate(
+    subject,
+    "",
+    content,
+    { text: "View invoice", url: manageInvoiceUrl },
+    {
+      audience: "business",
+      showPreferencesLink: false,
+      hideHeaderTitle: true,
+      preheader: `${customer} paid invoice ${invoice.invoiceNumber}`,
+    },
+  )
+}
+
+export function generateInvoicePaidNotificationText(
+  data: InvoicePaidNotificationEmailData,
+): string {
+  const { invoice, manageInvoiceUrl } = data
+  const customer = invoice.customerName?.trim() || "A customer"
+  const method = data.paymentMethodLabel?.trim()
+
+  return `
+${formatEasnerUserGreetingPlain(data.recipientFirstName)}
+
+${customer} paid invoice ${invoice.invoiceNumber}.
+
+Invoice: ${invoiceAmountLine(invoice)}
+Customer: ${customer}${method ? `\nPayment: ${method}` : ""}
+
+View invoice: ${manageInvoiceUrl}
+
+---
+
+You're receiving this because invoice payment notifications are enabled in Easner Business.
+Manage this in Settings → Invoicing.
+  `.trim()
+}
+
 export function getInvoiceReceiptEmailSubject(invoiceNumber: string): string {
   return `Payment received for invoice ${invoiceNumber}`
 }
@@ -229,6 +302,8 @@ ${invoiceCustomerTextFooter(businessName, businessReplyEmail)}
   `.trim()
 }
 
+export type InvoiceReminderEmailType = "due_today" | "overdue_7d"
+
 export interface InvoiceEmailData {
   invoice: Invoice
   invoiceViewUrl: string
@@ -240,6 +315,8 @@ export interface InvoiceEmailData {
   /** When true, add pay-via-link context and use "View & pay invoice" CTA when applicable. */
   includePaymentContext?: boolean
   paymentMethods?: PaymentMethodsFlags
+  /** When set, overrides status-based subject/intro for automated reminders. */
+  reminderType?: InvoiceReminderEmailType
 }
 
 /** Status-specific email copy */
@@ -252,7 +329,7 @@ const EMAIL_BY_STATUS: Record<
     bodyIntro: "has sent you an invoice.",
     bodyIntroPlain: "has sent you an invoice.",
   },
-  open: {
+  unpaid: {
     subject: "Invoice from",
     bodyIntro: "has sent you an invoice.",
     bodyIntroPlain: "has sent you an invoice.",
@@ -277,32 +354,52 @@ const EMAIL_BY_STATUS: Record<
     bodyIntro: "Your invoice has been voided.",
     bodyIntroPlain: "Your invoice has been voided.",
   },
-  failed: {
-    subject: "Invoice from",
-    bodyIntro: "has sent you an invoice.",
-    bodyIntroPlain: "has sent you an invoice.",
-  },
 }
 
 const defaultEmail = EMAIL_BY_STATUS.sent
 
+const REMINDER_EMAIL_COPY: Record<
+  InvoiceReminderEmailType,
+  { subject: string; bodyIntro: string; bodyIntroPlain: string }
+> = {
+  due_today: {
+    subject: "Reminder: Invoice due today from",
+    bodyIntro: "This is a reminder that your invoice is due today.",
+    bodyIntroPlain: "This is a reminder that your invoice is due today.",
+  },
+  overdue_7d: {
+    subject: "Reminder: Your invoice from",
+    bodyIntro: "This is a reminder that your invoice is past due.",
+    bodyIntroPlain: "This is a reminder that your invoice is past due.",
+  },
+}
+
+function resolveEmailCopy(data: InvoiceEmailData): {
+  subject: string
+  bodyIntro: string
+  bodyIntroPlain: string
+} {
+  if (data.reminderType) return REMINDER_EMAIL_COPY[data.reminderType]
+  return EMAIL_BY_STATUS[data.invoice.status] ?? defaultEmail
+}
+
 export function getInvoiceEmailSubject(data: InvoiceEmailData): string {
   const { invoice, businessName } = data
-  const config = EMAIL_BY_STATUS[invoice.status] ?? defaultEmail
+  const config = resolveEmailCopy(data)
   return `${config.subject} ${businessName} – ${invoice.invoiceNumber}`
 }
 
 function getBodyIntro(data: InvoiceEmailData): string {
-  const { invoice, businessName } = data
-  const config = EMAIL_BY_STATUS[invoice.status] ?? defaultEmail
+  const { businessName } = data
+  const config = resolveEmailCopy(data)
   return config.bodyIntro.includes("has sent")
     ? `${businessName} ${config.bodyIntro}`
     : config.bodyIntro
 }
 
 function getBodyIntroPlain(data: InvoiceEmailData): string {
-  const { invoice, businessName } = data
-  const config = EMAIL_BY_STATUS[invoice.status] ?? defaultEmail
+  const { businessName } = data
+  const config = resolveEmailCopy(data)
   return config.bodyIntroPlain.includes("has sent")
     ? `${businessName} ${config.bodyIntroPlain}`
     : config.bodyIntroPlain

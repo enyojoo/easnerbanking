@@ -1,5 +1,12 @@
 export type ConnectOnboardingStatus = "pending" | "active" | "restricted" | "disabled"
 
+export type ConnectEmailNotifications = {
+  setupStartedAt?: string
+  actionRequiredAt?: string
+  actionRequiredFingerprint?: string
+  readyAt?: string
+}
+
 export type BusinessStripeConnectAccountRow = {
   business_id: string
   stripe_account_id: string
@@ -12,7 +19,11 @@ export type BusinessStripeConnectAccountRow = {
   stripe_external_account_id: string | null
   stripe_payout_schedule: Record<string, unknown> | null
   requirements_currently_due: unknown
+  requirements_snapshot: Record<string, unknown> | null
+  business_profile_snapshot: Record<string, unknown> | null
+  payout_destination_snapshot: Record<string, unknown> | null
   capabilities: Record<string, unknown> | null
+  email_notifications?: ConnectEmailNotifications | null
   last_synced_at: string | null
   created_at: string
   updated_at: string

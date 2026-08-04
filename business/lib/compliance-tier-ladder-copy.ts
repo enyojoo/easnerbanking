@@ -4,7 +4,7 @@
  */
 
 export type TierLadderTier = {
-  tier: 1 | 2
+  tier: 1 | 2 | 3
   title: string
   description: string
   footnote?: string
@@ -21,6 +21,11 @@ export const BUSINESS_TIER_LADDER: { tiers: TierLadderTier[] } = {
       tier: 2,
       title: "Cards",
       description: "Business cards for online and in-store payments.",
+    },
+    {
+      tier: 3,
+      title: "Online payments",
+      description: "Accept card payments on invoices. Settled to your Easner balance.",
     },
   ],
 }

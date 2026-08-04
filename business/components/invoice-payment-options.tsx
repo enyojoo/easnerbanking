@@ -10,7 +10,7 @@ import type { Account } from "@/lib/finance-types"
 import type { Invoice } from "@/lib/b2b/types"
 import { cn, formatCurrency } from "@/lib/utils"
 import { businessInfo } from "@/lib/business-info"
-import { invoicePublicViewPath } from "@/lib/invoice-public-url"
+import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
 import { getPaymentInstructions } from "@/lib/payment-instructions"
 import {
   bankPaymentExtraInstruction,
@@ -21,6 +21,7 @@ import {
 } from "@/lib/invoices/invoice-payment-copy"
 import { InvoiceStripeCheckout } from "@/components/invoice-stripe-checkout"
 import type { PublicInvoiceStripeCheckout } from "@/lib/invoices/json-public-invoice-from-row"
+import { INVOICE_CUSTOMER_VIEW_COPY } from "@/lib/copy/business-ui-copy"
 
 interface StablecoinAccount {
   currency: string
@@ -99,7 +100,7 @@ interface InvoicePaymentOptionsProps {
   /** Controlled tab value - when provided, parent tracks selection */
   value?: PaymentTab
   onValueChange?: (value: PaymentTab) => void
-  /** When set, public “view invoice” links use `/invoice-view/{easetag}/{invoiceNumber}` instead of row id. */
+  /** When set, public “view invoice” links use `/invoice/{easetag}/{invoiceNumber}` instead of row id. */
   publicInvoiceEasetag?: string | null
   /** Initial tab when methods shown */
   defaultTab?: PaymentTab
@@ -204,9 +205,7 @@ export function InvoicePaymentOptions({
           : ""
     const url =
       typeof window !== "undefined"
-        ? publicInvoiceEasetag?.trim()
-          ? `${window.location.origin}${invoicePublicViewPath(publicInvoiceEasetag.trim(), invoice.invoiceNumber)}`
-          : `${window.location.origin}/invoice-view/${invoice.id}`
+        ? buildInvoiceCustomerViewUrl(window.location.origin, publicInvoiceEasetag, invoice)
         : ""
     return { details, url }
   }
@@ -278,17 +277,25 @@ export function InvoicePaymentOptions({
 
           {hasOnline ? (
             <TabsContent value="online" forceMount className="space-y-4 mt-4">
-              {audience === "customer" && Boolean(publicInvoiceEasetag?.trim()) ? (
+              {audience === "customer" && !stripeCheckout ? (
                 <p className="text-sm text-muted-foreground">
-                  {onlinePaymentTabHint(invoice.customerEmail)}
+                  {INVOICE_CUSTOMER_VIEW_COPY.payOnlineUnavailable}
                 </p>
-              ) : null}
-              <InvoiceStripeCheckout
-                invoice={invoice}
-                easetag={publicInvoiceEasetag?.trim() || "preview"}
-                initialCheckout={stripeCheckout}
-                previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
-              />
+              ) : (
+                <>
+                  {audience === "customer" && Boolean(publicInvoiceEasetag?.trim()) ? (
+                    <p className="text-sm text-muted-foreground">
+                      {onlinePaymentTabHint(invoice.customerEmail)}
+                    </p>
+                  ) : null}
+                  <InvoiceStripeCheckout
+                    invoice={invoice}
+                    easetag={publicInvoiceEasetag?.trim() || "preview"}
+                    initialCheckout={stripeCheckout}
+                    previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
+                  />
+                </>
+              )}
             </TabsContent>
           ) : null}
 

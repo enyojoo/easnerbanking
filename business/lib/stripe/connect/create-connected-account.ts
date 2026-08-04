@@ -1,6 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveBusinessCountryIso2 } from "@/lib/grid/business-profile-shell"
+import {
+  connectReadyToStatusSnapshot,
+  notifyOnlinePaymentsStatusChange,
+} from "@/lib/notifications/online-payments-notify"
 import { getStripe } from "../client"
+import { ensureConnectAccountLinked } from "./discover-connect-account"
+import { resolveConnectReadyForCheckout } from "./resolve-connect-account"
 import { syncConnectAccountRow } from "./sync-account-from-stripe"
 import type { BusinessStripeConnectAccountRow } from "./types"
 
@@ -24,6 +30,9 @@ export async function ensureConnectedAccount(
       stripeAccountId: String(existing.stripe_account_id),
     })
   }
+
+  const linked = await ensureConnectAccountLinked(admin, input.businessId)
+  if (linked) return linked
 
   const { data: biz, error: bizErr } = await admin
     .from("businesses")
@@ -108,9 +117,21 @@ export async function ensureConnectedAccount(
     throw new Error(insertErr.message)
   }
 
-  return syncConnectAccountRow(admin, {
+  const row = await syncConnectAccountRow(admin, {
     businessId: input.businessId,
     stripeAccountId: account.id,
     account,
   })
+
+  const nextReady = await resolveConnectReadyForCheckout(admin, input.businessId).catch(() => null)
+  if (nextReady) {
+    await notifyOnlinePaymentsStatusChange({
+      admin,
+      businessId: input.businessId,
+      previous: null,
+      next: connectReadyToStatusSnapshot(nextReady),
+    }).catch((e) => console.warn("[stripe-connect] setup email (non-fatal):", e))
+  }
+
+  return row
 }

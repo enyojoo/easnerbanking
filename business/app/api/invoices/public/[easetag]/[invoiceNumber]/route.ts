@@ -54,5 +54,8 @@ export async function GET(
   }
 
   const payload = await jsonPublicInvoiceFromRow(admin, data as B2bInvoiceRow)
+  if (!payload) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
   return NextResponse.json(payload)
 }

@@ -15,7 +15,8 @@ import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { sendInvoiceReceiptEmail } from "@/lib/invoice-email-service"
 import { generateReceiptPdfBuffer } from "@/lib/generate-receipt-pdf"
 import { fetchInvoiceIssuerForBusiness, resolveInvoiceReplyEmail } from "@/lib/invoices/issuer"
-import { invoicePublicViewPath } from "@/lib/invoice-public-url"
+import { notifyMerchantInvoicePaid } from "@/lib/invoices/notify-invoice-paid"
+import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 /** Single-invoice fetch for the invoice detail page (`useInvoiceDetail`). */
@@ -43,7 +44,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 function webhookEventForStatus(status: string): Parameters<typeof dispatchInvoiceWebhooks>[0]["event"] | null {
-  if (status === "open") return "invoice.finalized"
+  if (status === "unpaid") return "invoice.finalized"
   if (status === "sent") return "invoice.sent"
   if (status === "paid") return "invoice.paid"
   if (status === "past_due") return "invoice.past_due"
@@ -154,6 +155,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .eq("id", ctx.businessId)
       .maybeSingle()
     const settings = parseBusinessInvoiceSettings(biz?.invoice_settings)
+
+    void notifyMerchantInvoicePaid(admin, {
+      businessId: ctx.businessId,
+      invoice: updated,
+      invoiceSettingsRaw: biz?.invoice_settings,
+    }).catch((e) => console.error("paid merchant email:", e))
+
     if (settings.sendReceiptOnPaid !== false && updated.customerEmail?.trim()) {
       void (async () => {
         try {
@@ -164,9 +172,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           const easetag =
             typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
           const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com"
-          const viewUrl = easetag
-            ? `${baseUrl}${invoicePublicViewPath(easetag, updated.invoiceNumber)}`
-            : `${baseUrl}/invoice-view/${updated.id}`
+          const viewUrl = buildInvoiceCustomerViewUrl(baseUrl, easetag, updated)
           await sendInvoiceReceiptEmail({
             invoice: updated,
             pdfBuffer: pdf,

@@ -1,4 +1,5 @@
 import type {
+  OnlinePaymentsEmailData,
   PayrollFundingNeededEmailData,
   PayrollRunSummaryEmailData,
   SecurityAlertEmailData,
@@ -89,6 +90,15 @@ export const kybApprovedFixture: VerificationEmailData = {
   audience: "business",
 }
 
+export const onlinePaymentsReadyFixture: OnlinePaymentsEmailData = {
+  firstName: "Alex",
+  email: "alex@example.com",
+  status: "ready",
+  dashboardUrl: "https://business.easner.com",
+  verificationUrl: "https://business.easner.com/settings?tab=verification",
+  audience: "business",
+}
+
 export const kycRejectedFixture: VerificationEmailData = {
   firstName: "Sam",
   email: "sam@example.com",
@@ -151,6 +161,16 @@ export const templateFixtures: Record<string, unknown> = {
   kycSubmitted: { ...kycRejectedFixture, status: "submitted" as const, rejectionReasons: undefined },
   kycApproved: { ...kycRejectedFixture, status: "approved" as const, rejectionReasons: undefined },
   kycRejected: kycRejectedFixture,
+  onlinePaymentsSetupStarted: {
+    ...onlinePaymentsReadyFixture,
+    status: "setup_started" as const,
+  },
+  onlinePaymentsActionRequired: {
+    ...onlinePaymentsReadyFixture,
+    status: "action_required" as const,
+    summary: "Additional business details are required.",
+  },
+  onlinePaymentsReady: onlinePaymentsReadyFixture,
   teamInvitation: teamInviteFixture,
   payrollRunSummary: payrollRunSummaryFixture,
   payrollFundingNeeded: payrollFundingNeededFixture,
@@ -172,5 +192,8 @@ export const templateDefaultAudience: Record<string, "business" | "personal"> = 
   kycSubmitted: "personal",
   kycApproved: "personal",
   kycRejected: "personal",
+  onlinePaymentsSetupStarted: "business",
+  onlinePaymentsActionRequired: "business",
+  onlinePaymentsReady: "business",
   teamInvitation: "business",
 }

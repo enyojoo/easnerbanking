@@ -27,7 +27,9 @@ function allRenderedCopy(templateKey: string): string {
   const template = emailTemplates[templateKey]
   const defaultAudience = templateDefaultAudience[templateKey] ?? "personal"
   const audiences: EmailAudience[] =
-    templateKey.startsWith("kyb") || templateKey === "teamInvitation"
+    templateKey.startsWith("kyb") ||
+    templateKey.startsWith("onlinePayments") ||
+    templateKey === "teamInvitation"
       ? ["business"]
       : templateKey.startsWith("kyc")
         ? ["personal"]

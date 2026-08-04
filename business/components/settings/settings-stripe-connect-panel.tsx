@@ -37,7 +37,9 @@ import {
   type ConnectPanelAction,
   type ConnectStatusSnapshot,
 } from "@/lib/stripe/connect-panel-ux"
+import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 
 type ConnectStatusResponse = Omit<CachedConnectStatus, "cachedAt">
 
@@ -105,6 +107,10 @@ export function SettingsStripeConnectPanel() {
     typeof loadConnectAndInitialize
   > | null>(null)
   const clearInstanceAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Stripe Connect onboarding is a cross-origin iframe — parent activity listeners
+  // never see typing/clicks. Suspend idle PIN lock for the duration of the dialog.
+  useSuspendIdleLock(onboardingOpen)
 
   const publishableKey =
     typeof process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY === "string"
@@ -225,7 +231,7 @@ export function SettingsStripeConnectPanel() {
   const startOnboarding = useCallback(
     async (copy: { title: string; description: string }) => {
       if (!publishableKey || !isStripePublishableConfigured()) {
-        toast.error("Stripe publishable key is not configured")
+        toast.error("Online payments are not available yet")
         return
       }
       try {
@@ -324,6 +330,7 @@ export function SettingsStripeConnectPanel() {
     return null
   }
 
+  const tier3 = BUSINESS_TIER_LADDER.tiers.find((t) => t.tier === 3)
   const showReason = !status.ready && status.reason && panelUx.phase !== "requirements_due"
 
   return (
@@ -334,7 +341,10 @@ export function SettingsStripeConnectPanel() {
             title={
               <CardTitle className="flex items-center gap-2">
                 <CreditCard className="h-5 w-5" />
-                Online payments
+                {tier3?.title ?? "Online payments"}
+                <Badge variant="outline" className="shrink-0 font-medium text-xs">
+                  Tier 3
+                </Badge>
                 <StripeConnectStatusBadge
                   label={panelUx.badgeLabel}
                   kind={panelUx.badgeKind}
@@ -347,7 +357,10 @@ export function SettingsStripeConnectPanel() {
                 ) : null}
               </CardTitle>
             }
-            description="Stripe verification for invoice card payments."
+            description={
+              tier3?.description ??
+              "Verify your business to accept online payments on invoices."
+            }
           />
         </CardHeader>
         <CardContent className="space-y-4">

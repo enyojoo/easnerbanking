@@ -62,7 +62,200 @@ export const INVOICE_CREATE_SECTION_COPY = {
   details: "Set currency, due date, and reference.",
   items: "Add line items and amounts.",
   paymentMethods: "Choose how this customer can pay.",
+  paymentMethodsSummary: "Payment options use your invoicing defaults.",
+  customizePaymentMethods: "Customize for this invoice",
   summary: "Review total before you send.",
+  easetagHint: "Add a business handle for shorter invoice links.",
+  saving: "Saving…",
+  saved: "Saved",
+  issue: "Issue invoice",
+  issueAndEmail: "Issue and email",
+  saveDraft: "Save draft",
+  saveChanges: "Save changes",
+  preview: "Preview",
+} as const
+
+export const INVOICE_ACTION_COPY = {
+  issue: "Issue invoice",
+  issueAndEmail: "Issue and email",
+  issuing: "Issuing…",
+  emailCustomer: "Email customer",
+  emailAgain: "Email again",
+  emailInvoice: "Email invoice",
+  sending: "Sending…",
+  preview: "Preview",
+  share: "Share",
+  copyCustomerLink: "Copy customer link",
+  copyPreviewLink: "Copy preview link",
+  openPreview: "Open preview",
+  downloadPdf: "Download PDF",
+  changeStatus: "Change status",
+  markSent: "Mark as sent",
+  markPastDue: "Mark past due",
+  markPaid: "Mark as paid",
+  markUnpaid: "Revert to unpaid",
+  reopenUnpaid: "Reopen as unpaid",
+  voidInvoice: "Void invoice",
+} as const
+
+export const INVOICE_TOAST_COPY = {
+  issued: "Invoice issued",
+  sentTo: (email: string) => `Invoice sent to ${email}`,
+  issueFailed: "Could not issue invoice",
+  emailFailed: "Could not send email",
+  customerLinkCopied: "Link copied",
+  previewLinkCopied: "Preview link copied",
+  issueBeforeEmail: "Issue this invoice before emailing",
+  noCustomerEmail: "Invoice has no customer email",
+  markedSent: "Invoice marked as sent",
+  markedPastDue: "Invoice marked past due",
+  markedPaid: "Invoice marked as paid",
+  revertedUnpaid: "Invoice reverted to unpaid",
+  reopenedUnpaid: "Invoice reopened as unpaid",
+  voided: "Invoice voided",
+  statusUpdated: "Invoice status updated",
+  archived: "Invoice archived",
+  restored: "Invoice restored",
+  deleted: "Invoice deleted",
+  duplicated: "Invoice duplicated",
+  duplicateFailed: "Could not duplicate invoice",
+} as const
+
+export const INVOICE_STATUS_COPY = {
+  draft: {
+    label: "Draft",
+    helper: "Not shared with your customer yet. Issue when ready.",
+    nextAction: "Issue this invoice or email it when ready.",
+  },
+  unpaid: {
+    label: "Unpaid",
+    helper: "Issued and awaiting payment. Email your customer when ready.",
+    nextAction: "Email your customer so they can view and pay.",
+  },
+  sent: {
+    label: "Sent",
+    helper: "Your customer has been emailed this invoice.",
+    nextAction: "Track views and payment, or send a reminder.",
+  },
+  past_due: {
+    label: "Past due",
+    helper: "Payment is overdue. Follow up with your customer.",
+    nextAction: "Email again or mark as paid if you were paid elsewhere.",
+  },
+  paid: {
+    label: "Paid",
+    helper: "This invoice is paid in full.",
+    nextAction: null,
+  },
+  void: {
+    label: "Void",
+    helper: "This invoice is canceled and no longer payable.",
+    nextAction: null,
+  },
+} as const
+
+export const INVOICE_SHARE_COPY = {
+  customerLink: "Customer link",
+  previewLink: "Preview link",
+  customerLinkHintUnpaid: "Share this link so your customer can view and pay this invoice.",
+  customerLinkHintSent: "Your customer can view and pay using this link.",
+  customerLinkHintPaid: "Your customer can view this invoice and download the receipt.",
+  customerLinkHintVoid: "Link shows this invoice as void to your customer.",
+  customerLinkHintDefault: "Share this link so your customer can view this invoice.",
+  previewHint: "Signed-in preview of the customer page. Does not count as a customer view.",
+  draftPreviewHint:
+    "Issue this invoice to get a customer link. Use preview to see the customer page while drafting.",
+  customerLinkDisabledDraft: "Issue this invoice to share a customer link.",
+  lastViewed: "Last viewed",
+  lastEmailed: "Last emailed",
+  neverViewed: "Not viewed yet",
+  neverEmailed: "Not emailed yet",
+} as const
+
+export const INVOICE_BANNER_COPY = {
+  fieldsLocked:
+    "This invoice has been shared with your customer. Customer, currency, and line amounts are locked. Void and reissue to change amounts.",
+  onlinePaymentsIncomplete:
+    "Online payments are enabled but not fully set up. Finish setup in Verification to let customers pay online.",
+  onlinePaymentsCta: "Go to Verification",
+  bankTransferIncomplete:
+    "Bank transfer details need Tier 2 verification before they appear on invoices.",
+  stablecoinIncomplete: "Add a stablecoin wallet in Accounts to show deposit addresses on invoices.",
+} as const
+
+export const INVOICE_LIST_COPY = {
+  outstanding: "Outstanding",
+  overdue: "Overdue",
+  paidThisMonth: "Paid this month",
+  mixedCurrencies: "Mixed currencies — totals shown in your base currency where possible.",
+  emptyAll: "No invoices yet — create one to get started.",
+  emptyDraft: "No drafts — create an invoice to get started.",
+  emptyUnpaid: "No unpaid invoices.",
+  emptySent: "No sent invoices.",
+  emptyPastDue: "No past-due invoices.",
+  emptyPaid: "No paid invoices yet.",
+  emptyArchived: "No archived invoices.",
+  emptySearch: "Try adjusting your search terms.",
+  createCta: "Create invoice",
+  pastDueEmphasis: "Needs follow-up",
+} as const
+
+export const INVOICE_SETTINGS_COPY = {
+  bankTransfer: "Bank transfer",
+  bankTransferHelp: "Show bank transfer details when available",
+  stablecoin: "Stablecoin",
+  stablecoinHelp: "Show wallet deposit address when available",
+  onlinePayments: "Online payments",
+  onlinePaymentsHelp: "Let customers pay invoices online by card or bank",
+  defaultPaymentOption: "Default payment option",
+  includePaymentOnPdf: "Include payment link on PDF",
+  includePaymentOnPdfHelp:
+    "Adds a link to the live invoice page where customers choose how to pay",
+  includePaymentInEmail: "Include payment instructions in invoice emails",
+  includePaymentInEmailHelp:
+    "Tells customers they can pay via the invoice link (online, bank, or stablecoin)",
+  replyTo: "Reply-To",
+  replyToHelp: "Replies to invoice emails go to this address.",
+  replyToMissing: "Add a support email in Business settings",
+  notifyOnView: "Email when customer views invoice",
+  notifyOnViewHelp: "Sent once on first customer view",
+  notifyOnPaid: "Email when an invoice is paid",
+  notifyOnPaidHelp: "Sent to your Reply-To address when a customer pays or you mark an invoice paid",
+  sendReceipt: "Email receipt to customer when marked paid",
+  remindersTitle: "Payment reminders",
+  remindersIntro: "Automatically email customers about upcoming and overdue invoices.",
+  dueDateReminder: "Remind on due date",
+  dueDateReminderHelp: "Send a reminder the day the invoice is due.",
+  overdueReminder: "Remind when overdue",
+  overdueReminderHelp: "Send a reminder about 7 days after the due date.",
+  finishOnlinePayments: "Finish online payments setup in Verification",
+  finishBankTransfer: "Complete Tier 2 verification for bank transfer details",
+  finishStablecoin: "Set up a wallet in Accounts",
+} as const
+
+export const INVOICE_CUSTOMER_VIEW_COPY = {
+  previewBannerTitle: "Preview",
+  previewBannerBody: "This is how your customer sees this invoice.",
+  notAvailableYet: "This invoice isn't available yet.",
+  notFound: "This invoice may have been removed or the link is incorrect.",
+  payOnlineUnavailable: "Online payment isn't available right now. Try bank transfer or contact the business.",
+  signInPreviewTitle: "Sign in to preview",
+  signInPreviewBody: "This preview link is only available to signed-in members of your business.",
+} as const
+
+export const INVOICE_ACTIVITY_COPY = {
+  created: "Invoice was created",
+  issued: "Invoice was issued",
+  sent: "Invoice was emailed to customer",
+  viewed: "Invoice viewed by customer",
+  paid: "Invoice was marked as paid",
+  unpaid: "Invoice was issued",
+  void: "Invoice was voided",
+  past_due: "Invoice was marked past due",
+  draft: "Invoice was reverted to draft",
+  reminderDueToday: "Due-date reminder sent",
+  reminderOverdue: "Overdue reminder sent",
+  reminderSent: "Payment reminder sent",
 } as const
 
 export const INVOICE_IMPORT_SECTION_COPY = {
