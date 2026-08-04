@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { verificationStatusLabel } from "@easner/shared"
 
 /**
  * Compact Tier 1 (business KYB) status for headers — pairs with org name; matches tier-card semantics.
@@ -37,6 +38,10 @@ export function Tier1VerificationBadge({
     )
   }
 
+  const label = verificationStatusLabel(tier1VerificationStatus, {
+    complete: tier1Complete,
+  })
+
   if (tier1Complete) {
     return (
       <Badge
@@ -46,7 +51,7 @@ export function Tier1VerificationBadge({
           className,
         )}
       >
-        Verified
+        {label}
       </Badge>
     )
   }
@@ -55,21 +60,21 @@ export function Tier1VerificationBadge({
   if (s.includes("review") || s === "pending" || s === "in_review" || s === "under_review") {
     return (
       <Badge variant="secondary" className={cn("shrink-0 font-medium", sizeClass, className)}>
-        In review
+        {label}
       </Badge>
     )
   }
-  if (s === "rejected") {
+  if (s === "rejected" || s === "hold") {
     return (
       <Badge variant="destructive" className={cn("shrink-0 font-medium", sizeClass, className)}>
-        Action required
+        {label}
       </Badge>
     )
   }
 
   return (
     <Badge variant="outline" className={cn("shrink-0 font-medium text-muted-foreground", sizeClass, className)}>
-      Unverified
+      {label}
     </Badge>
   )
 }

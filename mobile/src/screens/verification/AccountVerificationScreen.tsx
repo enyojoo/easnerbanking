@@ -25,7 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY } from '@easner/shared'
+import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import {
@@ -543,7 +543,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           if (refreshUserProfile) await refreshUserProfile()
           const st = String(response.kyc_status || '').toLowerCase()
           if (st === 'approved') {
-            showSuccess('Verification is already approved.', 4000)
+            showSuccess('Verification is already complete.', 4000)
           } else if (st === 'under_review' || st === 'in_review') {
             showSuccess('Verification is in review. We will notify you when it completes.', 4500)
           } else {
@@ -653,7 +653,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       })
       
       showSuccess(
-        'Account setup in progress. You will receive USD and EUR account details once your verification is approved.',
+        'Account setup in progress. You will receive USD and EUR account details once your verification is complete.',
         4500,
       )
       
@@ -669,58 +669,35 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
   }
 
-  const getStatusBadge = (status: string | undefined, noahStatus?: string | undefined) => {
-    // Always use noah_kyc_status from Supabase (updated via webhooks)
-    // The status parameter should be userProfile?.noah_kyc_status
-    const displayStatus = status
-    
-    if (!displayStatus) {
+  const getStatusBadge = (status: string | undefined) => {
+    const label = verificationStatusLabel(status, { detail: true })
+
+    if (label === VERIFICATION_STATUS_COPY.verified) {
       return (
-        <View style={styles.badgeGray}>
-          <Text style={styles.badgeTextGray}>Not started</Text>
+        <View style={styles.badgeGreen}>
+          <Text style={styles.badgeTextGreen}>{label}</Text>
         </View>
       )
     }
-
-    switch (displayStatus) {
-      case "approved":
-        return (
-          <View style={styles.badgeGreen}>
-            <Text style={styles.badgeTextGreen}>Approved</Text>
-          </View>
-        )
-      case "in_review":
-      case "under_review":
-        return (
-          <View style={styles.badgeYellow}>
-            <Text style={styles.badgeTextYellow}>In review</Text>
-          </View>
-        )
-      case "rejected":
-        return (
-          <View style={styles.badgeRed}>
-            <Text style={styles.badgeTextRed}>Rejected</Text>
-          </View>
-        )
-      case "incomplete":
-        return (
-          <View style={styles.badgeGray}>
-            <Text style={styles.badgeTextGray}>Incomplete</Text>
-          </View>
-        )
-      case "not_started":
-        return (
-          <View style={styles.badgeGray}>
-            <Text style={styles.badgeTextGray}>Not started</Text>
-          </View>
-        )
-      default:
-        return (
-          <View style={styles.badgeGray}>
-            <Text style={styles.badgeTextGray}>Pending</Text>
-          </View>
-        )
+    if (label === VERIFICATION_STATUS_COPY.inReview) {
+      return (
+        <View style={styles.badgeYellow}>
+          <Text style={styles.badgeTextYellow}>{label}</Text>
+        </View>
+      )
     }
+    if (label === VERIFICATION_STATUS_COPY.actionNeeded) {
+      return (
+        <View style={styles.badgeRed}>
+          <Text style={styles.badgeTextRed}>{label}</Text>
+        </View>
+      )
+    }
+    return (
+      <View style={styles.badgeGray}>
+        <Text style={styles.badgeTextGray}>{label}</Text>
+      </View>
+    )
   }
 
   const scrollBottomPad = useScrollBottomPadding(spacing[5])
@@ -847,9 +824,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                         userProfile?.noah_kyc_status ||
                           userProfile?.profile?.noah_kyc_status ||
                           'approved',
-                        userProfile?.noah_kyc_status ||
-                          userProfile?.profile?.noah_kyc_status ||
-                          'approved',
                       )}
                     </View>
                   </View>
@@ -873,9 +847,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                         <Text style={styles.tierPillText}>Tier 1</Text>
                       </View>
                       {getStatusBadge(
-                        userProfile?.noah_kyc_status ||
-                          userProfile?.profile?.noah_kyc_status ||
-                          'rejected',
                         userProfile?.noah_kyc_status ||
                           userProfile?.profile?.noah_kyc_status ||
                           'rejected',
@@ -919,9 +890,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                               <Text style={styles.tierPillText}>Tier 1</Text>
                             </View>
                             {getStatusBadge(
-                              userProfile?.noah_kyc_status ||
-                                userProfile?.profile?.noah_kyc_status ||
-                                'not_started',
                               userProfile?.noah_kyc_status ||
                                 userProfile?.profile?.noah_kyc_status ||
                                 'not_started',
@@ -1061,7 +1029,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                           }
                           
                           if (data.kyc_status === 'approved' || data.kyc_status === 'Approved') {
-                            showSuccess('Verification approved. Your accounts are ready.', 3500)
+                            showSuccess('Verification complete. Your accounts are ready.', 3500)
                           } else {
                             showSuccess('Verification submitted. We will update your status shortly.', 3500)
                           }

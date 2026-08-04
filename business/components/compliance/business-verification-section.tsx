@@ -28,6 +28,7 @@ import { isGridCompleteUrl } from "@/lib/grid/grid-complete-url"
 import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { GridSumsubWebSdk } from "@/components/compliance/grid-sumsub-websdk"
+import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SETTINGS_TAB_COPY, VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import {
@@ -35,12 +36,6 @@ import {
   NOAH_FINAL_REJECTION_USER_MESSAGE,
   NOAH_VERIFICATION_IN_REVIEW_COPY,
 } from "@easner/shared"
-
-function formatTier1Status(status: string | null): string {
-  if (!status) return "Not started"
-  const s = status.replace(/_/g, " ")
-  return s.charAt(0).toUpperCase() + s.slice(1)
-}
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -484,12 +479,11 @@ export function BusinessVerificationSection() {
                   <Badge variant="outline" className="text-xs">
                     Tier {t.tier}
                   </Badge>
-                  {isT1 && tier1Complete ? (
-                    <Badge className="border-transparent bg-success text-success-foreground hover:bg-success">
-                      Approved
-                    </Badge>
-                  ) : isT1 ? (
-                    <Badge variant="secondary">{formatTier1Status(tier1VerificationStatus)}</Badge>
+                  {isT1 ? (
+                    <Tier1VerificationBadge
+                      tier1Complete={tier1Complete}
+                      tier1VerificationStatus={tier1VerificationStatus}
+                    />
                   ) : (
                     <Badge variant="secondary">Coming later</Badge>
                   )}

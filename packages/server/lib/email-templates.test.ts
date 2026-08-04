@@ -132,7 +132,7 @@ describe("emailTemplates", () => {
     ).toBe("Your Easner KYC verification submitted")
     expect(
       emailTemplates.kycApproved.subject(templateFixtures.kycApproved, "personal"),
-    ).toBe("Your Easner KYC verification approved")
+    ).toBe("Your Easner KYC verification is complete")
     expect(
       emailTemplates.kycRejected.subject(templateFixtures.kycRejected, "personal"),
     ).toBe("Your Easner KYC verification update")
@@ -146,7 +146,7 @@ describe("emailTemplates", () => {
     expect(welcomeHtml).toContain("Verify your identity and start using Easner Mobile.")
 
     const kycHtml = emailTemplates.kycApproved.html(templateFixtures.kycApproved, "personal")
-    expect(kycHtml).toContain("Your KYC verification is approved.")
+    expect(kycHtml).toContain("Your KYC verification is complete.")
 
     const mfaHtml = emailTemplates.mfaEnabled.html(
       templateFixtures.mfaEnabled as SecurityAlertEmailData,
@@ -215,7 +215,7 @@ describe("emailTemplates", () => {
     ).toBe("Your Easner KYB verification submitted")
     expect(
       emailTemplates.kybApproved.subject(templateFixtures.kybApproved, "business"),
-    ).toBe("Your Easner KYB verification approved")
+    ).toBe("Your Easner KYB verification is complete")
     expect(
       emailTemplates.kybRejected.subject(templateFixtures.kybRejected, "business"),
     ).toBe("Your Easner KYB verification update")

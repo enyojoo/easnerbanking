@@ -1,5 +1,7 @@
 /** Central customer-facing copy for business app pages and sections. */
 
+import { VERIFICATION_STATUS_COPY } from "@easner/shared"
+
 export const PAGE_COPY = {
   settings: {
     hero: "Manage your account, team, and billing.",
@@ -89,9 +91,9 @@ export const ONBOARDING_STEP_COPY = {
   businessPending: "Add company details in Settings.",
   businessComplete: "Business profile complete",
   verifyPending: "Complete business verification.",
-  verifyComplete: "Verified",
-  verifyRejected: "Rejected",
-  verifyReview: "In review",
+  verifyComplete: VERIFICATION_STATUS_COPY.verified,
+  verifyRejected: VERIFICATION_STATUS_COPY.actionNeeded,
+  verifyReview: VERIFICATION_STATUS_COPY.inReview,
   fundAfterVerification: "Available after verification",
   fundPending: "Add money to start sending.",
   fundComplete: "Balance received",

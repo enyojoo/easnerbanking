@@ -355,7 +355,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     : kybInReview
       ? "Your business verification is currently being reviewed."
       : kybRejected
-        ? "Your verification was not approved. Please complete business verification again to receive your account details."
+        ? "Your verification could not be completed. Please complete business verification again to receive your account details."
         : "Please complete your business verification to receive bank and stablecoin deposit information."
 
   const handleShare = async (type: "bank" | "stablecoin" | "local") => {

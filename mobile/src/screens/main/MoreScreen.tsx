@@ -50,6 +50,7 @@ import {
   shouldListFactorsForMfaRow,
 } from '../../lib/mfaStatusCache'
 import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER, TIER3_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
+import { VERIFICATION_STATUS_COPY } from '@easner/shared'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
@@ -71,12 +72,15 @@ function tierBadgeForProfile(
   const tier2 = TIER2_COMPLETE_PLACEHOLDER
   const tier3 = TIER3_COMPLETE_PLACEHOLDER
   if (tier1 || tier2 || tier3) {
-    return { label: 'Verified', tone: 'green' }
+    return { label: VERIFICATION_STATUS_COPY.verified, tone: 'green' }
   }
   if (verificationStatus === 'in_review') {
-    return { label: 'In review', tone: 'yellow' }
+    return { label: VERIFICATION_STATUS_COPY.inReview, tone: 'yellow' }
   }
-  return { label: 'Unverified', tone: 'yellow' }
+  if (verificationStatus === 'take_action') {
+    return { label: VERIFICATION_STATUS_COPY.actionNeeded, tone: 'yellow' }
+  }
+  return { label: VERIFICATION_STATUS_COPY.unverified, tone: 'yellow' }
 }
 
 function MoreContent({ navigation }: NavigationProps) {

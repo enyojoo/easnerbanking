@@ -52,6 +52,8 @@ import type { OfficeTransaction } from "@/lib/types/office-transaction"
 import {
   ledgerTransactionStatusDisplay,
   type LedgerTransactionStatusTone,
+  VERIFICATION_STATUS_COPY,
+  verificationStatusLabel,
 } from "@easner/shared"
 import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
 import { OfficePageSkeleton } from "@/components/data/office-page-skeleton"
@@ -77,27 +79,17 @@ function resolveOverviewVerificationStatus(user: UserData): string {
   return String(user.noah_kyc_status || user.noahKycStatus || "not_started")
 }
 
+function verificationBadgeVariant(rawStatus: string): "emerald" | "amber" | "oxblood" | "slate" {
+  const label = verificationStatusLabel(rawStatus || null)
+  if (label === VERIFICATION_STATUS_COPY.verified) return "emerald"
+  if (label === VERIFICATION_STATUS_COPY.inReview) return "slate"
+  if (label === VERIFICATION_STATUS_COPY.actionNeeded) return "oxblood"
+  return "amber"
+}
+
 function NoahVerificationBadge({ rawStatus }: { rawStatus: string }) {
-  const raw = rawStatus || "not_started"
-  const key =
-    raw === "approved"
-      ? "verified"
-      : raw === "rejected"
-        ? "rejected"
-        : raw === "under_review" || raw === "in_review"
-          ? "in_review"
-          : "pending"
-
-  const statusConfig: Record<string, { variant: "emerald" | "amber" | "oxblood" | "slate"; text: string }> = {
-    verified: { variant: "emerald", text: "Verified" },
-    pending: { variant: "amber", text: "Pending" },
-    rejected: { variant: "oxblood", text: "Rejected" },
-    in_review: { variant: "slate", text: "In Review" },
-  }
-
-  const config = statusConfig[key] || statusConfig.pending
-
-  return <Badge variant={config.variant}>{config.text}</Badge>
+  const label = verificationStatusLabel(rawStatus || null)
+  return <Badge variant={verificationBadgeVariant(rawStatus)}>{label}</Badge>
 }
 
 interface TransactionData extends OfficeTransaction {}

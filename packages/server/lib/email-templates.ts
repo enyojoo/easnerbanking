@@ -505,14 +505,14 @@ function verificationSubject(kind: "KYB" | "KYC", status: VerificationEmailData[
   if (kind === "KYC") {
     const kycSubjects = {
       submitted: "Your Easner KYC verification submitted",
-      approved: "Your Easner KYC verification approved",
+      approved: "Your Easner KYC verification is complete",
       rejected: "Your Easner KYC verification update",
     } as const
     return kycSubjects[status]
   }
   const kybSubjects = {
     submitted: "Your Easner KYB verification submitted",
-    approved: "Your Easner KYB verification approved",
+    approved: "Your Easner KYB verification is complete",
     rejected: "Your Easner KYB verification update",
   } as const
   return kybSubjects[status]
@@ -526,8 +526,8 @@ function verificationTemplate(
   const subjectLine = verificationSubject(kind, status)
   const bodies = {
     submitted: `We've received your ${kind} verification. We'll email you when there is an update.`,
-    approved: `Your ${kind} verification is approved. You can now access features where enabled for your profile.`,
-    rejected: `Your ${kind} verification could not be approved at this time.`,
+    approved: `Your ${kind} verification is complete. You can now access features where enabled for your profile.`,
+    rejected: `Your ${kind} verification could not be completed at this time.`,
   }
   const bodyLine = bodies[status]
   return {

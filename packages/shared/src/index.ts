@@ -393,6 +393,11 @@ export {
   type StoredNoahRejectionReason,
 } from "./noah-rejection"
 export {
+  VERIFICATION_STATUS_COPY,
+  verificationStatusLabel,
+  type VerificationStatusLabelOpts,
+} from "./verification-status-copy"
+export {
   extractGridCustomerRejectionReasons,
   normalizeVerificationRejectionReasons,
   getVerificationRejectionDisplay,

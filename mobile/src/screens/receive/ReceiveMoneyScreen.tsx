@@ -527,8 +527,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             : 'Please complete your identity verification to receive bank and stablecoin deposit information.'
           : kycStatus === 'rejected'
             ? surface === 'cash'
-              ? 'Your verification was not approved. Please complete identity verification again to receive your account details.'
-              : 'Your verification was not approved. Please complete identity verification again to receive your wallet address.'
+              ? 'Your verification could not be completed. Please complete identity verification again to receive your account details.'
+              : 'Your verification could not be completed. Please complete identity verification again to receive your wallet address.'
             : kycStatus === 'approved' && surface === 'stablecoin'
               ? `Your ${stablecoinLabel} address is being set up. This may take a few moments. Please check back shortly.`
               : kycStatus === 'approved' && surface === 'cash'
