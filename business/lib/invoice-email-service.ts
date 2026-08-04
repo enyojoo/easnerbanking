@@ -38,7 +38,13 @@ export async function sendInvoiceEmail(
   invoice: Invoice,
   invoiceViewUrl: string,
   pdfBuffer: Buffer,
-  options?: { businessName?: string; businessReplyEmail: string; issuer?: InvoicePdfIssuer },
+  options?: {
+    businessName?: string
+    businessReplyEmail: string
+    issuer?: InvoicePdfIssuer
+    includePaymentContext?: boolean
+    paymentMethods?: InvoiceEmailData["paymentMethods"]
+  },
 ): Promise<SendInvoiceEmailResult> {
   if (!invoice.customerEmail?.trim()) {
     return { success: false, error: "Invoice has no customer email" }
@@ -74,6 +80,8 @@ export async function sendInvoiceEmail(
       businessName,
       businessReplyEmail: replyEmail,
       issuer: { ...issuer, name: issuer.name?.trim() || businessName, email: replyEmail },
+      includePaymentContext: options?.includePaymentContext,
+      paymentMethods: options?.paymentMethods,
     }
 
     const html = generateInvoiceEmailHtml(data)

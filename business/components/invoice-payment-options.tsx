@@ -12,7 +12,15 @@ import { cn, formatCurrency } from "@/lib/utils"
 import { businessInfo } from "@/lib/business-info"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 import { getPaymentInstructions } from "@/lib/payment-instructions"
+import {
+  bankPaymentExtraInstruction,
+  customerPaymentOptionsSubtitle,
+  customerPaymentOptionsTitle,
+  onlinePaymentTabHint,
+  stablecoinPaymentExtraInstruction,
+} from "@/lib/invoices/invoice-payment-copy"
 import { InvoiceStripeCheckout } from "@/components/invoice-stripe-checkout"
+import type { PublicInvoiceStripeCheckout } from "@/lib/invoices/json-public-invoice-from-row"
 
 interface StablecoinAccount {
   currency: string
@@ -58,11 +66,13 @@ function CopyableField({
 function PaymentInstructions({
   currency,
   type,
+  extraLines = [],
 }: {
   currency: string
   type: "bank" | "stablecoin"
+  extraLines?: string[]
 }) {
-  const lines = getPaymentInstructions(currency, type)
+  const lines = [...getPaymentInstructions(currency, type), ...extraLines]
   if (!lines.length) return null
 
   return (
@@ -95,11 +105,11 @@ interface InvoicePaymentOptionsProps {
   defaultTab?: PaymentTab
   /** Show Stripe Pay online tab */
   showOnlinePayment?: boolean
+  /** Preloaded checkout session from the public invoice payload. */
+  stripeCheckout?: PublicInvoiceStripeCheckout | null
 }
 
 const audienceDescriptions = {
-  customer:
-    "Kindly pay the invoice via any of the payment options. Reference must be the invoice number for reconciliation.",
   business: "Share these details with your customer.",
 } as const
 
@@ -115,6 +125,7 @@ export function InvoicePaymentOptions({
   publicInvoiceEasetag,
   defaultTab,
   showOnlinePayment = false,
+  stripeCheckout = null,
 }: InvoicePaymentOptionsProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const hasBank = bankAccount !== undefined
@@ -122,6 +133,15 @@ export function InvoicePaymentOptions({
   const hasOnline = showOnlinePayment === true && Boolean(publicInvoiceEasetag?.trim() || audience === "business")
   const brandName = businessDisplayName?.trim() || businessInfo.name
   const tabCount = [hasOnline, hasBank, hasStablecoin].filter(Boolean).length
+  const paymentFlags = {
+    hasOnline: hasOnline && audience === "customer",
+    hasBank: hasBank,
+    hasStablecoin: hasStablecoin,
+  }
+  const customerSubtitle =
+    audience === "customer"
+      ? customerPaymentOptionsSubtitle(invoice.invoiceNumber, paymentFlags)
+      : null
 
   if (!hasBank && !hasStablecoin && !hasOnline) {
     return null
@@ -214,9 +234,13 @@ export function InvoicePaymentOptions({
 
   const header = (
     <div className={embedded ? "mb-4" : ""}>
-      <h3 className="text-lg font-semibold">Invoice payment options</h3>
+      <h3 className="text-lg font-semibold">
+        {audience === "customer" ? customerPaymentOptionsTitle() : "Invoice payment options"}
+      </h3>
       <p className="text-sm text-muted-foreground mt-1">
-        {audienceDescriptions[audience]}
+        {audience === "customer"
+          ? customerSubtitle
+          : audienceDescriptions.business}
       </p>
     </div>
   )
@@ -253,10 +277,16 @@ export function InvoicePaymentOptions({
           </TabsList>
 
           {hasOnline ? (
-            <TabsContent value="online" className="space-y-4 mt-4">
+            <TabsContent value="online" forceMount className="space-y-4 mt-4">
+              {audience === "customer" && Boolean(publicInvoiceEasetag?.trim()) ? (
+                <p className="text-sm text-muted-foreground">
+                  {onlinePaymentTabHint(invoice.customerEmail)}
+                </p>
+              ) : null}
               <InvoiceStripeCheckout
                 invoice={invoice}
                 easetag={publicInvoiceEasetag?.trim() || "preview"}
+                initialCheckout={stripeCheckout}
                 previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
               />
             </TabsContent>
@@ -352,7 +382,11 @@ export function InvoicePaymentOptions({
             </Button>
             <div className="pt-4 border-t">
               <p className="text-sm font-medium mb-2">Payment Instructions</p>
-              <PaymentInstructions currency={invoice.currency} type="bank" />
+              <PaymentInstructions
+                currency={invoice.currency}
+                type="bank"
+                extraLines={[bankPaymentExtraInstruction(invoice.invoiceNumber)]}
+              />
             </div>
           </TabsContent>
           ) : null}
@@ -413,6 +447,9 @@ export function InvoicePaymentOptions({
                   <PaymentInstructions
                     currency={invoice.currency}
                     type="stablecoin"
+                    extraLines={[
+                      stablecoinPaymentExtraInstruction(invoice.total, invoice.currency),
+                    ]}
                   />
                 </div>
               </>
@@ -439,9 +476,13 @@ export function InvoicePaymentOptions({
   return (
     <Card className="border-primary/20">
       <CardHeader>
-        <CardTitle className="text-lg">Invoice payment options</CardTitle>
+        <CardTitle className="text-lg">
+          {audience === "customer" ? customerPaymentOptionsTitle() : "Invoice payment options"}
+        </CardTitle>
         <p className="text-sm text-muted-foreground">
-          {audienceDescriptions[audience]}
+          {audience === "customer"
+            ? customerSubtitle
+            : audienceDescriptions.business}
         </p>
       </CardHeader>
       <CardContent>{tabsContent}</CardContent>

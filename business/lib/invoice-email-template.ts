@@ -13,6 +13,11 @@ import { formatDate, formatCurrency } from "@/lib/utils"
 import type { Invoice } from "@/lib/b2b/types"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import { invoiceCustomerContactLine } from "@/lib/invoices/invoice-reply-email"
+import {
+  emailPaymentContextParagraph,
+  emailPrimaryCtaText,
+  type PaymentMethodsFlags,
+} from "@/lib/invoices/invoice-payment-copy"
 
 const INVOICE_EMAIL_OPTIONS = {
   audience: "business" as const,
@@ -232,6 +237,9 @@ export interface InvoiceEmailData {
   businessReplyEmail?: string
   /** Merchant profile — used for Reply-To resolution upstream; not shown in email body. */
   issuer: InvoicePdfIssuer
+  /** When true, add pay-via-link context and use "View & pay invoice" CTA when applicable. */
+  includePaymentContext?: boolean
+  paymentMethods?: PaymentMethodsFlags
 }
 
 /** Status-specific email copy */
@@ -309,10 +317,25 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
   })
   const bodyIntro = getBodyIntro(data)
   const emailSubject = getInvoiceEmailSubject(data)
+  const paymentFlags = data.paymentMethods ?? {
+    hasOnline: false,
+    hasBank: false,
+    hasStablecoin: false,
+  }
+  const paymentParagraph =
+    data.includePaymentContext === true
+      ? emailPaymentContextParagraph(paymentFlags)
+      : null
+  const ctaText = emailPrimaryCtaText(
+    invoice.status,
+    paymentFlags,
+    data.includePaymentContext === true,
+  )
 
   const content = `
     ${customerGreetingParagraphHtml(invoice.customerName)}
     <p class="confirmation-text">${bodyIntro}</p>
+    ${paymentParagraph ? `<p class="confirmation-text">${paymentParagraph}</p>` : ""}
     ${invoiceDetailsTable([
       ...invoiceSummaryRows(invoice),
       { label: "Due", value: dueDate },
@@ -323,7 +346,7 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
     emailSubject,
     "",
     content,
-    { text: "View invoice", url: invoiceViewUrl },
+    { text: ctaText, url: invoiceViewUrl },
     invoiceCustomerEmailShellOptions(businessName, businessReplyEmail, bodyIntro),
   )
 }
@@ -336,16 +359,31 @@ export function generateInvoiceEmailText(data: InvoiceEmailData): string {
     year: "numeric",
   })
   const bodyIntro = getBodyIntroPlain(data)
+  const paymentFlags = data.paymentMethods ?? {
+    hasOnline: false,
+    hasBank: false,
+    hasStablecoin: false,
+  }
+  const paymentParagraph =
+    data.includePaymentContext === true
+      ? emailPaymentContextParagraph(paymentFlags)
+      : null
+  const ctaText = emailPrimaryCtaText(
+    invoice.status,
+    paymentFlags,
+    data.includePaymentContext === true,
+  )
 
   return `
 ${formatCustomerGreetingPlain(invoice.customerName)}
 
 ${bodyIntro}
+${paymentParagraph ? `\n${paymentParagraph}` : ""}
 
 Invoice: ${invoiceAmountLine(invoice)}
 Due: ${dueDate}
 
-View invoice: ${invoiceViewUrl}
+${ctaText}: ${invoiceViewUrl}
 
 ---
 

@@ -4,8 +4,15 @@ import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-busin
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
+import { resolveConnectReadyForCheckout } from "@/lib/stripe/connect"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
+import { createInvoiceCheckoutSession } from "@/lib/stripe/create-invoice-checkout"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+
+export type PublicInvoiceStripeCheckout = {
+  clientSecret: string
+  publishableKey: string
+}
 
 export async function jsonPublicInvoiceFromRow(
   admin: ReturnType<typeof createSupabaseAdmin>,
@@ -38,15 +45,40 @@ export async function jsonPublicInvoiceFromRow(
     typeof bizRow?.easetag === "string" && bizRow.easetag.trim() ? bizRow.easetag.trim() : null
 
   const invoiceSettings = parseBusinessInvoiceSettings(bizRow?.invoice_settings)
-  const stripeOnlineEnabled = isStripeInvoicePaymentsEnabled()
+  const stripePlatformEnabled = isStripeInvoicePaymentsEnabled()
+  let stripeConnectReady = false
+  if (stripePlatformEnabled) {
+    const connect = await resolveConnectReadyForCheckout(admin, businessId, {
+      currency: invoice.currency,
+    })
+    stripeConnectReady = connect.ready
+  }
+  const stripeOnlineEnabled = stripePlatformEnabled && stripeConnectReady
   const paymentDisplay = resolvePaymentDisplay({
     invoice,
     businessDefaults: invoiceSettings,
     payIn,
     payable,
-    stripeOnlineEnabled,
+    stripeOnlineEnabled: stripePlatformEnabled,
+    stripeConnectReady,
   })
   const filteredPayIn = filterPayInByDisplay(payIn, paymentDisplay)
+
+  let stripeCheckout: PublicInvoiceStripeCheckout | null = null
+  if (paymentDisplay.showOnlinePayment && stripeOnlineEnabled && payable) {
+    const checkout = await createInvoiceCheckoutSession(admin, {
+      businessId,
+      invoiceRow: row,
+      businessName: issuer.name,
+      easetag: businessEasetag,
+    })
+    if (checkout.ok) {
+      stripeCheckout = {
+        clientSecret: checkout.clientSecret,
+        publishableKey: checkout.publishableKey,
+      }
+    }
+  }
 
   return {
     invoice,
@@ -59,5 +91,6 @@ export async function jsonPublicInvoiceFromRow(
     invoiceSettings,
     businessEasetag,
     stripeOnlineEnabled,
+    stripeCheckout,
   }
 }

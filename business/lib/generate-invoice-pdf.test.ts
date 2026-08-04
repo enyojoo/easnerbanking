@@ -26,30 +26,13 @@ describe("generateInvoicePdfBuffer", () => {
     expect(buf.subarray(0, 4).toString()).toBe("%PDF")
   })
 
-  it("renders with bank account only", async () => {
-    const buf = await generateInvoicePdfBuffer(baseInvoice, {
-      id: "acc-1",
-      currency: "USD",
-      accountName: "Test Biz",
-      fullAccountNumber: "123456789",
-      routingNumber: "021000021",
-      bankName: "Test Bank",
-      balance: 0,
+  it("renders with payment link section", async () => {
+    const buf = await generateInvoicePdfBuffer(baseInvoice, undefined, {
+      url: "https://business.easner.com/invoice-view/acme/einv-testpdf001",
+      hasOnline: true,
+      hasBank: true,
+      hasStablecoin: false,
     })
-    expect(buf.length).toBeGreaterThan(500)
-  })
-
-  it("renders with stablecoin only (no bank column)", async () => {
-    const buf = await generateInvoicePdfBuffer(
-      baseInvoice,
-      undefined,
-      {
-        currency: "USD",
-        stablecoin: "USDC",
-        chain: "Ethereum",
-        address: "0x1234567890abcdef1234567890abcdef12345678",
-      },
-    )
     expect(buf.length).toBeGreaterThan(500)
   })
 

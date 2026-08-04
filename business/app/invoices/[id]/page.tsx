@@ -56,6 +56,10 @@ import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
 import { MarkAsPaidDialog } from "@/components/mark-as-paid-dialog"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
+import {
+  buildInvoicePdfPaymentSection,
+  paymentFlagsFromDisplay,
+} from "@/lib/invoices/invoice-payment-copy"
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import type { Invoice } from "@/lib/b2b/types"
@@ -754,9 +758,14 @@ export default function InvoiceDetailPage() {
                 try {
                   await downloadInvoicePdf(
                     invoice,
-                    canProvisionDepositInstructions ? bankAccount : undefined,
-                    canProvisionDepositInstructions ? stablecoinAccount : undefined,
                     issuer,
+                    buildInvoicePdfPaymentSection({
+                      baseUrl: window.location.origin,
+                      easetag: orgEasetag,
+                      invoice,
+                      flags: paymentFlagsFromDisplay(paymentDisplay),
+                      includeOnPdf: invoiceSettings?.includePaymentOnPdf !== false,
+                    }),
                   )
                 } catch (err) {
                   console.error("Failed to download PDF:", err)

@@ -49,6 +49,12 @@ import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutat
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
+import {
+  buildInvoicePdfPaymentSection,
+  paymentFlagsFromDisplay,
+} from "@/lib/invoices/invoice-payment-copy"
+import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
+import { isStripePublishableConfigured } from "@/lib/stripe/public-enabled"
 import { toast } from "sonner"
 import type { Invoice } from "@/lib/b2b/types"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -267,11 +273,23 @@ export default function InvoicesPage() {
     }
     setDownloadingId(invoice.id)
     try {
+      const paymentDisplay = resolvePaymentDisplay({
+        invoice,
+        businessDefaults: profile.invoiceSettings,
+        payIn: { bankAccount, stablecoinAccount },
+        payable: true,
+        stripeOnlineEnabled: isStripePublishableConfigured(),
+      })
       await downloadInvoicePdf(
         invoice,
-        canProvision ? bankAccount : undefined,
-        canProvision ? stablecoinAccount : undefined,
         issuer,
+        buildInvoicePdfPaymentSection({
+          baseUrl: window.location.origin,
+          easetag: profile.easetag,
+          invoice,
+          flags: paymentFlagsFromDisplay(paymentDisplay),
+          includeOnPdf: profile.invoiceSettings?.includePaymentOnPdf !== false,
+        }),
       )
     } catch (err) {
       console.error("Failed to download PDF:", err)

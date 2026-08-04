@@ -10,13 +10,19 @@ function asCents(n: unknown): number {
   return Number.isFinite(v) ? Math.round(v) : 0
 }
 
-async function resolveFeeCents(
+async function resolveFeeAndTransfer(
   stripe: Stripe,
   paymentIntentId: string,
-): Promise<{ feeCents: number; chargeId: string | null; paymentMethodType: string | null }> {
+): Promise<{
+  feeCents: number
+  chargeId: string | null
+  paymentMethodType: string | null
+  transferId: string | null
+  connectedAccountId: string | null
+}> {
   try {
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
-      expand: ["latest_charge.balance_transaction"],
+      expand: ["latest_charge.balance_transaction", "latest_charge.transfer"],
     })
     const charge =
       typeof pi.latest_charge === "object" && pi.latest_charge
@@ -32,10 +38,39 @@ async function resolveFeeCents(
       charge && typeof charge.payment_method_details?.type === "string"
         ? charge.payment_method_details.type
         : null
-    return { feeCents, chargeId, paymentMethodType }
+
+    let transferId: string | null = null
+    if (charge && typeof charge.transfer === "string") {
+      transferId = charge.transfer
+    } else if (charge && typeof charge.transfer === "object" && charge.transfer) {
+      transferId = charge.transfer.id
+    }
+
+    const connectedFromPi =
+      typeof pi.transfer_data?.destination === "string"
+        ? pi.transfer_data.destination
+        : pi.transfer_data?.destination && typeof pi.transfer_data.destination === "object"
+          ? pi.transfer_data.destination.id
+          : null
+
+    const connectedFromMeta = String(pi.metadata?.easner_stripe_connected_account_id ?? "").trim() || null
+
+    return {
+      feeCents,
+      chargeId,
+      paymentMethodType,
+      transferId,
+      connectedAccountId: connectedFromPi || connectedFromMeta,
+    }
   } catch (e) {
     console.warn("[stripe] fee resolve failed:", e)
-    return { feeCents: 0, chargeId: null, paymentMethodType: null }
+    return {
+      feeCents: 0,
+      chargeId: null,
+      paymentMethodType: null,
+      transferId: null,
+      connectedAccountId: null,
+    }
   }
 }
 
@@ -98,7 +133,23 @@ export async function handleStripeCheckoutCompleted(
     return { handled: true }
   }
 
-  const { feeCents, chargeId, paymentMethodType } = await resolveFeeCents(stripe, paymentIntentId)
+  const { feeCents, chargeId, paymentMethodType, transferId, connectedAccountId } =
+    await resolveFeeAndTransfer(stripe, paymentIntentId)
+
+  const connectedFromMeta = String(metadata.easner_stripe_connected_account_id ?? "").trim() || null
+  let stripeConnectedAccountId = connectedAccountId || connectedFromMeta
+
+  if (!stripeConnectedAccountId) {
+    const { data: sessionRow } = await admin
+      .from("invoice_checkout_sessions")
+      .select("stripe_connected_account_id")
+      .eq("easner_settlement_id", settlementId)
+      .maybeSingle()
+    if (typeof sessionRow?.stripe_connected_account_id === "string") {
+      stripeConnectedAccountId = sessionRow.stripe_connected_account_id
+    }
+  }
+
   const grossCents = amountTotal
   const netCents = Math.max(0, grossCents - feeCents)
   const paidAt = new Date().toISOString()
@@ -116,6 +167,9 @@ export async function handleStripeCheckoutCompleted(
         payment_method_type: paymentMethodType,
         customer_email: customerEmail,
         completed_at: paidAt,
+        ...(stripeConnectedAccountId
+          ? { stripe_connected_account_id: stripeConnectedAccountId }
+          : {}),
       })
       .eq("stripe_checkout_session_id", sessionId)
   } else {
@@ -129,6 +183,9 @@ export async function handleStripeCheckoutCompleted(
         net_cents: netCents,
         payment_method_type: paymentMethodType,
         completed_at: paidAt,
+        ...(stripeConnectedAccountId
+          ? { stripe_connected_account_id: stripeConnectedAccountId }
+          : {}),
       })
       .eq("easner_settlement_id", settlementId)
   }
@@ -176,6 +233,8 @@ export async function handleStripeCheckoutCompleted(
       fee_cents: feeCents,
       net_cents: netCents,
       payment_method_type: paymentMethodType,
+      stripe_connected_account_id: stripeConnectedAccountId,
+      stripe_transfer_id: transferId,
       headline: `Invoice #${invoiceNumber || invoice.invoiceNumber} payment`,
     },
     baseCurrency: currency === "EUR" ? "EUR" : "USD",
@@ -189,6 +248,8 @@ export async function handleStripeCheckoutCompleted(
       business_id: businessId,
       stripe_payment_intent_id: paymentIntentId,
       stripe_charge_id: chargeId,
+      stripe_connected_account_id: stripeConnectedAccountId,
+      stripe_transfer_id: transferId,
       gross_cents: grossCents,
       fee_cents: feeCents,
       net_cents: netCents,

@@ -21,7 +21,9 @@ export async function refundInvoiceStripePayment(input: {
   const admin = createSupabaseAdmin()
   const { data: settlement, error } = await admin
     .from("invoice_stripe_settlements")
-    .select("id,stripe_payment_intent_id,phase,currency,net_cents,ledger_transaction_id")
+    .select(
+      "id,stripe_payment_intent_id,phase,currency,net_cents,ledger_transaction_id,stripe_transfer_id,stripe_connected_account_id",
+    )
     .eq("invoice_id", input.invoiceId)
     .eq("business_id", input.businessId)
     .order("created_at", { ascending: false })
@@ -46,12 +48,17 @@ export async function refundInvoiceStripePayment(input: {
   }
 
   const stripe = getStripe()
+  const hasDestinationTransfer = Boolean(
+    settlement.stripe_transfer_id || settlement.stripe_connected_account_id,
+  )
   let refund
   try {
     refund = await stripe.refunds.create(
       {
         payment_intent: settlement.stripe_payment_intent_id,
         reason: "requested_by_customer",
+        // Destination charges: pull funds back from the connected account.
+        ...(hasDestinationTransfer ? { reverse_transfer: true } : {}),
         metadata: {
           invoice_id: input.invoiceId,
           business_id: input.businessId,

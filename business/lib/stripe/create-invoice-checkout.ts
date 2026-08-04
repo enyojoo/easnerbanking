@@ -3,10 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { B2bInvoiceRow } from "@/lib/b2b/map-invoice"
 import { mapRowToInvoice } from "@/lib/b2b/map-invoice"
 import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
+import { resolveConnectReadyForCheckout } from "./connect"
 import { getStripe } from "./client"
 import { getStripePublishableKey, isStripeInvoicePaymentsEnabled } from "./config"
 import { stripeCheckoutIdempotencyKey } from "./idempotency"
-import { buildStatementDescriptorSuffix } from "./statement-descriptor"
+import { buildEasnerStatementSuffix } from "./statement-descriptor"
 
 const PAYABLE = new Set(["open", "sent", "past_due"])
 
@@ -22,6 +23,7 @@ export type CreateInvoiceCheckoutResult =
 
 /**
  * Create (or reuse open) Stripe Checkout Session for a public invoice Pay online flow.
+ * When Connect is enabled: platform MoR destination charge to the business connected account.
  */
 export async function createInvoiceCheckoutSession(
   admin: SupabaseClient,
@@ -59,8 +61,24 @@ export async function createInvoiceCheckoutSession(
     .maybeSingle()
 
   if (!isBusinessTier1Complete(biz)) {
-    return { ok: false, status: 403, error: "Business verification is required before accepting online payments" }
+    return {
+      ok: false,
+      status: 403,
+      error: "Business verification is required before accepting online payments",
+    }
   }
+
+  const connect = await resolveConnectReadyForCheckout(admin, input.businessId, {
+    currency: currency.toUpperCase(),
+  })
+  if (!connect.ready || !connect.stripeAccountId) {
+    return {
+      ok: false,
+      status: 403,
+      error: connect.reason || "Complete online payment setup in Settings",
+    }
+  }
+  const connectedAccountId = connect.stripeAccountId
 
   // Reuse an open session for this invoice if still usable.
   const { data: existingOpen } = await admin
@@ -75,27 +93,43 @@ export async function createInvoiceCheckoutSession(
   const stripe = getStripe()
 
   if (existingOpen?.stripe_checkout_session_id) {
-    try {
-      const session = await stripe.checkout.sessions.retrieve(
-        String(existingOpen.stripe_checkout_session_id),
-      )
-      if (session.status === "open" && session.client_secret) {
-        return {
-          ok: true,
-          clientSecret: session.client_secret,
-          publishableKey: getStripePublishableKey(),
-          checkoutSessionId: session.id,
-          settlementId: String(existingOpen.easner_settlement_id),
+    const existingConnected =
+      typeof existingOpen.stripe_connected_account_id === "string"
+        ? existingOpen.stripe_connected_account_id
+        : null
+    const destinationMismatch =
+      Boolean(connectedAccountId) &&
+      Boolean(existingConnected) &&
+      existingConnected !== connectedAccountId
+
+    if (!destinationMismatch) {
+      try {
+        const session = await stripe.checkout.sessions.retrieve(
+          String(existingOpen.stripe_checkout_session_id),
+        )
+        if (session.status === "open" && session.client_secret) {
+          return {
+            ok: true,
+            clientSecret: session.client_secret,
+            publishableKey: getStripePublishableKey(),
+            checkoutSessionId: session.id,
+            settlementId: String(existingOpen.easner_settlement_id),
+          }
         }
+        await admin
+          .from("invoice_checkout_sessions")
+          .update({
+            status: session.status === "complete" ? "complete" : "expired",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", existingOpen.id)
+      } catch {
+        await admin
+          .from("invoice_checkout_sessions")
+          .update({ status: "expired", completed_at: new Date().toISOString() })
+          .eq("id", existingOpen.id)
       }
-      await admin
-        .from("invoice_checkout_sessions")
-        .update({
-          status: session.status === "complete" ? "complete" : "expired",
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", existingOpen.id)
-    } catch {
+    } else {
       await admin
         .from("invoice_checkout_sessions")
         .update({ status: "expired", completed_at: new Date().toISOString() })
@@ -121,6 +155,7 @@ export async function createInvoiceCheckoutSession(
       currency: currency.toUpperCase(),
       customer_email: invoice.customerEmail || null,
       idempotency_key: idempotencyKey,
+      stripe_connected_account_id: connectedAccountId,
     })
     .select("id")
     .single()
@@ -134,12 +169,12 @@ export async function createInvoiceCheckoutSession(
   }
 
   try {
+    // Destination charge: no on_behalf_of → Easner stays MoR on the statement.
     const session = await stripe.checkout.sessions.create(
       {
         ui_mode: "elements",
         mode: "payment",
         customer_email: invoice.customerEmail?.trim() || undefined,
-        // Helps dynamic PMs use billing country (after IP) for geo eligibility.
         billing_address_collection: "auto",
         line_items: [
           {
@@ -160,19 +195,20 @@ export async function createInvoiceCheckoutSession(
             easner_invoice_id: invoice.id,
             easner_invoice_number: invoice.invoiceNumber,
             easner_business_id: input.businessId,
+            easner_stripe_connected_account_id: connectedAccountId,
           },
-          statement_descriptor_suffix: buildStatementDescriptorSuffix({
-            businessName,
+          statement_descriptor_suffix: buildEasnerStatementSuffix({
             invoiceNumber: invoice.invoiceNumber,
           }),
+          transfer_data: { destination: connectedAccountId },
         },
         metadata: {
           easner_settlement_id: settlementId,
           easner_invoice_id: invoice.id,
           easner_invoice_number: invoice.invoiceNumber,
           easner_business_id: input.businessId,
+          easner_stripe_connected_account_id: connectedAccountId,
         },
-        // Elements ui_mode requires return_url for redirect-based PMs; customer stays in Easner UI when possible.
         return_url: `${(process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com").replace(/\/$/, "")}/invoice-view/${encodeURIComponent(input.easetag?.trim() || "pay")}/${encodeURIComponent(invoice.invoiceNumber)}?stripe_session={CHECKOUT_SESSION_ID}`,
       },
       { idempotencyKey },
@@ -194,6 +230,7 @@ export async function createInvoiceCheckoutSession(
           typeof session.payment_intent === "string"
             ? session.payment_intent
             : session.payment_intent?.id ?? null,
+        stripe_connected_account_id: connectedAccountId,
       })
       .eq("id", sessionRow.id)
 

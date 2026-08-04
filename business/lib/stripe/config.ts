@@ -1,4 +1,4 @@
-/** Stripe invoice Pay online (platform MoR, no Connect). */
+/** Stripe invoice Pay online (platform MoR + Connect destination charges). */
 
 /**
  * Enabled automatically when secret + publishable keys are set.
@@ -10,6 +10,26 @@ export function isStripeInvoicePaymentsEnabled(): boolean {
     return false
   }
   return Boolean(getStripeSecretKey() && getStripePublishableKey())
+}
+
+/**
+ * Connect destination charges are built-in whenever invoice Pay online is enabled.
+ * Merchants must complete Connect onboarding + Grid VA payout link before checkout.
+ */
+export function isStripeConnectEnabled(): boolean {
+  return isStripeInvoicePaymentsEnabled()
+}
+
+/** Platform application fee in basis points (built-in: 0 for v1). */
+export function getStripePlatformFeeBps(): number {
+  return 0
+}
+
+export type StripePayoutMode = "scheduled" | "manual"
+
+/** Connected-account payout schedule (built-in: daily / scheduled). */
+export function getStripePayoutMode(): StripePayoutMode {
+  return "scheduled"
 }
 
 export function getStripeSecretKey(): string {

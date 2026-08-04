@@ -8,13 +8,15 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer"
 import type { Invoice } from "@/lib/b2b/types"
-import type { Account } from "@/lib/finance-types"
-import type { StablecoinAccount } from "@/lib/finance-types"
 import { businessInfo as defaultBusinessInfo } from "@/lib/business-info"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
+import {
+  customerPaymentOptionsTitle,
+  pdfPaymentSectionLines,
+  type InvoicePdfPaymentSection,
+} from "@/lib/invoices/invoice-payment-copy"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
-import { getPaymentInstructions } from "@/lib/payment-instructions"
 
 const statusLabels: Record<string, string> = {
   draft: "Draft",
@@ -198,75 +200,26 @@ const styles = StyleSheet.create({
   paymentSectionTitle: {
     fontSize: 12,
     fontWeight: "bold",
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  paymentTwoCol: {
-    flexDirection: "row",
-    gap: 16,
-  },
-  paymentCol: {
-    flex: 1,
-    flexDirection: "column",
+  paymentLinkBox: {
     borderWidth: 1,
     borderColor: "#E9E4D8",
     borderRadius: 6,
     backgroundColor: "#F8F6F0",
     padding: 14,
-    minHeight: 220,
   },
-  paymentColContent: {
-    flexGrow: 1,
-  },
-  paymentColTitle: {
-    fontSize: 10,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  paymentField: {
-    marginBottom: 10,
-  },
-  paymentFieldLabel: {
-    fontSize: 8,
-    color: "#6F756F",
-    marginBottom: 4,
-  },
-  paymentFieldValue: {
-    fontSize: 10,
-    fontFamily: "Helvetica-Oblique",
-  },
-  paymentInstructions: {
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#E9E4D8",
-  },
-  paymentInstructionsTitle: {
-    fontSize: 8,
-    fontWeight: "bold",
-    color: "#6F756F",
+  paymentLinkLine: {
+    fontSize: 9,
+    color: "#1A1A1A",
     marginBottom: 6,
+    lineHeight: 1.45,
   },
-  paymentInstructionItem: {
-    fontSize: 8,
-    color: "#6F756F",
-    marginBottom: 4,
-  },
-  stablecoinRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 12,
-  },
-  qrBox: {
-    alignItems: "center",
-    flexShrink: 0,
-  },
-  qrImage: {
-    width: 80,
-    height: 80,
-    marginBottom: 4,
-  },
-  stablecoinDetails: {
-    flex: 1,
+  paymentLinkUrl: {
+    fontSize: 9,
+    color: "#007ACC",
+    marginBottom: 6,
+    lineHeight: 1.45,
   },
   footer: {
     position: "absolute",
@@ -292,21 +245,18 @@ const styles = StyleSheet.create({
 
 interface InvoicePDFDocumentProps {
   invoice: Invoice
-  bankAccount?: Account
-  stablecoinAccount?: StablecoinAccount
+  /** Link-first payment block — bank/stablecoin details live on the web invoice view. */
+  paymentSection?: InvoicePdfPaymentSection
   /** When omitted, uses static `business-info` defaults. */
   issuer?: InvoicePdfIssuer
   logoUrl: string
-  qrDataUrl?: string
 }
 
 export function InvoicePDFDocument({
   invoice,
-  bankAccount,
-  stablecoinAccount,
+  paymentSection,
   issuer,
   logoUrl,
-  qrDataUrl,
 }: InvoicePDFDocumentProps) {
   const biz = issuer ?? {
     name: defaultBusinessInfo.name,
@@ -322,7 +272,10 @@ export function InvoicePDFDocument({
     invoice.status === "open" ||
     invoice.status === "sent" ||
     invoice.status === "past_due"
-  const showPayCard = isPayable && (bankAccount || stablecoinAccount)
+  const showPayCard = isPayable && Boolean(paymentSection?.url)
+  const paymentLines = paymentSection
+    ? pdfPaymentSectionLines(invoice, paymentSection)
+    : []
 
   const formatDatePdf = (dateString: string) =>
     formatDate(dateString, {
@@ -330,12 +283,6 @@ export function InvoicePDFDocument({
       day: "numeric",
       year: "numeric",
     })
-
-  const bankInstructions = getPaymentInstructions(invoice.currency, "bank")
-  const stablecoinInstructions = getPaymentInstructions(
-    invoice.currency,
-    "stablecoin"
-  )
 
   return (
     <Document>
@@ -491,158 +438,25 @@ export function InvoicePDFDocument({
           </View>
         </View>
 
-        {/* Payment options - two columns: bank and stablecoin */}
-        {showPayCard ? (
+        {showPayCard && paymentSection ? (
           <View style={styles.paymentSection} wrap={false}>
             <Text style={styles.paymentSectionTitle}>
-              Invoice payment options
+              {customerPaymentOptionsTitle()}
             </Text>
-            <View style={styles.paymentTwoCol}>
-              {/* Bank column */}
-              {bankAccount ? (
-              <View style={styles.paymentCol}>
-                <View style={styles.paymentColContent}>
-                  <Text style={styles.paymentColTitle}>
-                    {bankAccount.currency === "USD"
-                      ? "US Bank Account"
-                      : bankAccount.currency === "EUR"
-                        ? "EU Bank Account"
-                        : "Bank transfer"}
-                  </Text>
-                  <View style={styles.paymentField}>
-                    <Text style={styles.paymentFieldLabel}>Account Name</Text>
-                    <Text style={styles.paymentFieldValue}>
-                      {bankAccount.accountName}
-                    </Text>
-                  </View>
-                  {bankAccount.currency === "EUR" && bankAccount.iban ? (
-                    <View>
-                      <View style={styles.paymentField}>
-                        <Text style={styles.paymentFieldLabel}>IBAN</Text>
-                        <Text style={styles.paymentFieldValue}>
-                          {bankAccount.iban}
-                        </Text>
-                      </View>
-                      {bankAccount.bic ? (
-                        <View style={styles.paymentField}>
-                          <Text style={styles.paymentFieldLabel}>BIC/SWIFT</Text>
-                          <Text style={styles.paymentFieldValue}>
-                            {bankAccount.bic}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  ) : (
-                    <View>
-                      <View style={styles.paymentField}>
-                        <Text style={styles.paymentFieldLabel}>
-                          Account Number
-                        </Text>
-                        <Text style={styles.paymentFieldValue}>
-                          {bankAccount.fullAccountNumber}
-                        </Text>
-                      </View>
-                      {bankAccount.routingNumber ? (
-                        <View style={styles.paymentField}>
-                          <Text style={styles.paymentFieldLabel}>
-                            Routing Number
-                          </Text>
-                          <Text style={styles.paymentFieldValue}>
-                            {bankAccount.routingNumber}
-                          </Text>
-                        </View>
-                      ) : null}
-                      {bankAccount.sortCode ? (
-                        <View style={styles.paymentField}>
-                          <Text style={styles.paymentFieldLabel}>Sort Code</Text>
-                          <Text style={styles.paymentFieldValue}>
-                            {bankAccount.sortCode}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  )}
-                  <View style={styles.paymentField}>
-                    <Text style={styles.paymentFieldLabel}>Bank Name</Text>
-                    <Text style={styles.paymentFieldValue}>
-                      {bankAccount.bankName}
-                    </Text>
-                  </View>
-                  {bankAccount.bankAddress ? (
-                    <View style={styles.paymentField}>
-                      <Text style={styles.paymentFieldLabel}>Address</Text>
-                      <Text style={styles.paymentFieldValue}>
-                        {bankAccount.bankAddress}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                {bankInstructions.length > 0 ? (
-                  <View style={styles.paymentInstructions}>
-                    <Text style={styles.paymentInstructionsTitle}>
-                      Payment Instructions
-                    </Text>
-                    {bankInstructions.map((line, i) => (
-                      <Text
-                        key={i}
-                        style={styles.paymentInstructionItem}
-                      >{`• ${line}`}</Text>
-                    ))}
-                  </View>
-                ) : null}
-              </View>
-              ) : null}
-
-              {stablecoinAccount ? (
-              <View style={styles.paymentCol}>
-                {qrDataUrl ? (
-                  <View>
-                    <View style={styles.paymentColContent}>
-                      <Text style={styles.paymentColTitle}>Stablecoin</Text>
-                      <View style={styles.stablecoinRow}>
-                        <View style={styles.qrBox}>
-                          <Image style={styles.qrImage} src={qrDataUrl} />
-                          <Text style={styles.sectionTextMuted}>
-                            Scan to send {stablecoinAccount.stablecoin}
-                          </Text>
-                        </View>
-                        <View style={styles.stablecoinDetails}>
-                          <View style={styles.paymentField}>
-                            <Text style={styles.paymentFieldLabel}>Network</Text>
-                            <Text style={styles.paymentFieldValue}>
-                              {stablecoinAccount.chain}
-                            </Text>
-                          </View>
-                          <View style={styles.paymentField}>
-                            <Text style={styles.paymentFieldLabel}>Address</Text>
-                            <Text style={styles.paymentFieldValue}>
-                              {stablecoinAccount.address}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-                    {stablecoinInstructions.length > 0 ? (
-                      <View style={styles.paymentInstructions}>
-                        <Text style={styles.paymentInstructionsTitle}>
-                          Payment Instructions
-                        </Text>
-                        {stablecoinInstructions.map((line, i) => (
-                          <Text
-                            key={i}
-                            style={styles.paymentInstructionItem}
-                          >{`• ${line}`}</Text>
-                        ))}
-                      </View>
-                    ) : null}
-                  </View>
+            <View style={styles.paymentLinkBox}>
+              {paymentLines.map((line, i) =>
+                line === "" ? (
+                  <View key={`sp-${i}`} style={{ height: 4 }} />
+                ) : line === paymentSection.url ? (
+                  <Link key={`url-${i}`} src={paymentSection.url}>
+                    <Text style={styles.paymentLinkUrl}>{line}</Text>
+                  </Link>
                 ) : (
-                  <Text style={styles.sectionTextMuted}>
-                    QR code unavailable
+                  <Text key={`line-${i}`} style={styles.paymentLinkLine}>
+                    {line}
                   </Text>
-                )}
-              </View>
-              ) : null}
+                ),
+              )}
             </View>
           </View>
         ) : null}

@@ -4,8 +4,11 @@ import { fetchInvoiceIssuerForBusiness, resolveInvoiceReplyEmail } from "@/lib/i
 import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-business"
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
-import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
+import {
+  buildInvoicePdfPaymentSection,
+  paymentFlagsFromDisplay,
+} from "@/lib/invoices/invoice-payment-copy"
 import { generateInvoicePdfBuffer } from "@/lib/generate-invoice-pdf"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 import {
@@ -58,7 +61,7 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
     payable: true,
     stripeOnlineEnabled: isStripeInvoicePaymentsEnabled(),
   })
-  const payIn = display.includePaymentInEmail ? filterPayInByDisplay(rawPayIn, display) : {}
+  const paymentFlags = paymentFlagsFromDisplay(display)
 
   const issuer = await fetchInvoiceIssuerForBusiness(admin, businessId)
   const replyEmail = await resolveInvoiceReplyEmail(admin, businessId, "")
@@ -73,15 +76,22 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
 
   const pdfBuffer = await generateInvoicePdfBuffer(
     invoice,
-    display.includePaymentOnPdf ? payIn.bankAccount : undefined,
-    display.includePaymentOnPdf ? payIn.stablecoinAccount : undefined,
     { ...issuer, email: replyEmail },
+    buildInvoicePdfPaymentSection({
+      baseUrl,
+      easetag,
+      invoice,
+      flags: paymentFlags,
+      includeOnPdf: display.includePaymentOnPdf,
+    }),
   )
 
   const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {
     businessName: issuer.name,
     businessReplyEmail: replyEmail,
     issuer: { ...issuer, email: replyEmail },
+    includePaymentContext: display.includePaymentInEmail,
+    paymentMethods: paymentFlags,
   })
 
   if (!result.success) return false

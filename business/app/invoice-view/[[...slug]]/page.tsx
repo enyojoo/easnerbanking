@@ -12,7 +12,12 @@ import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
+import type { PublicInvoiceStripeCheckout } from "@/lib/invoices/json-public-invoice-from-row"
+import { getStripeJs } from "@/lib/stripe/load-stripe-js"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
+import {
+  buildInvoicePdfPaymentSection,
+} from "@/lib/invoices/invoice-payment-copy"
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import { BRAND } from "@/components/brand/brand-constants"
@@ -47,6 +52,7 @@ export default function InvoiceViewPage() {
   const [loadState, setLoadState] = useState<"loading" | "error" | "ok">("loading")
   const [paymentTab, setPaymentTab] = useState<"online" | "bank" | "stablecoin">("bank")
   const [showOnlinePayment, setShowOnlinePayment] = useState(false)
+  const [stripeCheckout, setStripeCheckout] = useState<PublicInvoiceStripeCheckout | null>(null)
   const { data: fxRates = [] } = useFxRates()
   const [isDownloading, setIsDownloading] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
@@ -59,6 +65,7 @@ export default function InvoiceViewPage() {
     setPublicEasetag(null)
     setIssuer(null)
     setPayIn({})
+    setStripeCheckout(null)
 
     if (parts.length !== 1 && parts.length !== 2) {
       setLoadState("error")
@@ -82,6 +89,7 @@ export default function InvoiceViewPage() {
             showOnlinePayment?: boolean
           }
           stripeOnlineEnabled?: boolean
+          stripeCheckout?: PublicInvoiceStripeCheckout | null
         }
         if (cancelled) return
         if (!r.ok || !data.invoice) {
@@ -100,6 +108,7 @@ export default function InvoiceViewPage() {
         const online =
           data.paymentDisplay?.showOnlinePayment === true || data.stripeOnlineEnabled === true
         setShowOnlinePayment(online)
+        setStripeCheckout(data.stripeCheckout ?? null)
         const tab =
           data.paymentDisplay?.defaultTab ??
           (online ? "online" : pi.bankAccount ? "bank" : "stablecoin")
@@ -113,6 +122,10 @@ export default function InvoiceViewPage() {
       cancelled = true
     }
   }, [parts])
+
+  useEffect(() => {
+    getStripeJs()
+  }, [])
 
   const displayIssuer = issuer ?? FALLBACK_ISSUER
 
@@ -214,7 +227,18 @@ export default function InvoiceViewPage() {
     if (!invoice) return
     setIsDownloading(true)
     try {
-      await downloadInvoicePdf(invoice, bankAccount, stablecoinAccount, displayIssuer)
+      const paymentSection = buildInvoicePdfPaymentSection({
+        baseUrl: window.location.origin,
+        easetag: publicEasetag,
+        invoice,
+        flags: {
+          hasOnline: showOnlinePayment,
+          hasBank: Boolean(bankAccount),
+          hasStablecoin: Boolean(stablecoinAccount),
+        },
+        includeOnPdf: true,
+      })
+      await downloadInvoicePdf(invoice, displayIssuer, paymentSection)
     } catch (err) {
       console.error("Failed to download PDF:", err)
     } finally {
@@ -434,6 +458,7 @@ export default function InvoiceViewPage() {
               onValueChange={setPaymentTab}
               publicInvoiceEasetag={publicEasetag}
               showOnlinePayment={showOnlinePayment}
+              stripeCheckout={stripeCheckout}
               defaultTab={paymentTab}
             />
           )}

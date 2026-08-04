@@ -28,6 +28,11 @@ export function resolvePaymentDisplay(input: {
   payable?: boolean
   /** Platform Stripe Pay online is configured and enabled. */
   stripeOnlineEnabled?: boolean
+  /**
+   * When Stripe Connect is required, pass whether this business is Connect-ready.
+   * When omitted / undefined, treated as true (legacy platform-only path).
+   */
+  stripeConnectReady?: boolean
 }): EffectivePaymentDisplay {
   const defaults = {
     ...DEFAULT_INVOICE_PAYMENT_DEFAULTS,
@@ -38,7 +43,8 @@ export function resolvePaymentDisplay(input: {
   const hasBank = bankProvisioned(input.payIn)
   const hasStable = stablecoinProvisioned(input.payIn)
   const payable = input.payable ?? true
-  const stripeOnlineEnabled = input.stripeOnlineEnabled === true
+  const stripeOnlineEnabled =
+    input.stripeOnlineEnabled === true && input.stripeConnectReady !== false
 
   if (!payable) {
     return {

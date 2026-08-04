@@ -24,6 +24,7 @@ import {
 } from "@/lib/invoices/invoice-settings"
 import { toast } from "sonner"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
+import { SettingsStripeConnectPanel } from "@/components/settings/settings-stripe-connect-panel"
 import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 
 type BrandingForm = {
@@ -149,6 +150,8 @@ export function SettingsInvoicingTab() {
         </CardContent>
       </Card>
 
+      <SettingsStripeConnectPanel />
+
       <Card>
         <CardHeader>
           <SettingsCardHeader
@@ -220,7 +223,10 @@ export function SettingsInvoicingTab() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="pdf-pay">Include payment details on PDF</Label>
+              <Label htmlFor="pdf-pay">Include payment link on PDF</Label>
+              <p className="text-sm text-muted-foreground">
+                Adds a link to the live invoice page where customers choose how to pay
+              </p>
             </div>
             <Switch
               id="pdf-pay"
@@ -230,7 +236,10 @@ export function SettingsInvoicingTab() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="email-pay">Include payment details in invoice emails</Label>
+              <Label htmlFor="email-pay">Include payment instructions in invoice emails</Label>
+              <p className="text-sm text-muted-foreground">
+                Tells customers they can pay via the invoice link (online, bank, or stablecoin)
+              </p>
             </div>
             <Switch
               id="email-pay"

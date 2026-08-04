@@ -5,7 +5,8 @@ import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { inferSettlementRail, matchPayoutToSettlements } from "./match-payout-to-settlements"
 
 /**
- * Hop 2: payout.paid (manual Dashboard or automatic) → link settlements + create stripe_settlement expectations.
+ * Hop 2: payout.paid (Connect connected-account or legacy platform) →
+ * link settlements + create stripe_settlement expectations.
  */
 export async function handleStripePayoutPaid(
   admin: SupabaseClient,
@@ -16,10 +17,12 @@ export async function handleStripePayoutPaid(
   }
 
   const payout = event.data.object as Stripe.Payout
+  const stripeAccountId =
+    typeof event.account === "string" && event.account.trim() ? event.account.trim() : null
   const now = new Date().toISOString()
 
   if (event.type === "payout.failed") {
-    const { settlements } = await matchPayoutToSettlements(admin, payout)
+    const { settlements } = await matchPayoutToSettlements(admin, payout, { stripeAccountId })
     for (const s of settlements) {
       const { data: row } = await admin
         .from("invoice_stripe_settlements")
@@ -40,7 +43,9 @@ export async function handleStripePayoutPaid(
     return { handled: settlements.length > 0 }
   }
 
-  const { settlements, byBusiness } = await matchPayoutToSettlements(admin, payout)
+  const { settlements, byBusiness } = await matchPayoutToSettlements(admin, payout, {
+    stripeAccountId,
+  })
   if (settlements.length === 0) {
     return { handled: false }
   }
@@ -97,6 +102,7 @@ export async function handleStripePayoutPaid(
           metadata: {
             source: "invoice_stripe",
             stripe_event_id: event.id,
+            stripe_connected_account_id: stripeAccountId,
           },
         })
         .select("id")

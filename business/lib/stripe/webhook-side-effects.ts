@@ -1,7 +1,49 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Stripe from "stripe"
+import { syncConnectAccountFromWebhook } from "./connect"
 import { handleStripeCheckoutCompleted } from "./handle-checkout-completed"
 import { handleStripePayoutPaid } from "./handle-payout-paid"
+
+async function appendSettlementEvent(
+  admin: SupabaseClient,
+  settlementId: string,
+  eventId: string,
+  patch?: Record<string, unknown>,
+): Promise<void> {
+  const { data: settlement } = await admin
+    .from("invoice_stripe_settlements")
+    .select("id,stripe_event_ids")
+    .eq("id", settlementId)
+    .maybeSingle()
+  if (!settlement?.id) return
+  const prior = Array.isArray(settlement.stripe_event_ids) ? settlement.stripe_event_ids : []
+  await admin
+    .from("invoice_stripe_settlements")
+    .update({
+      ...patch,
+      stripe_event_ids: [...prior, eventId],
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", settlement.id)
+}
+
+async function findSettlementByCharge(
+  admin: SupabaseClient,
+  chargeId: string,
+): Promise<{ id: string; phase: string; stripe_transfer_id: string | null } | null> {
+  const { data } = await admin
+    .from("invoice_stripe_settlements")
+    .select("id,phase,stripe_transfer_id")
+    .eq("stripe_charge_id", chargeId)
+    .maybeSingle()
+  return data
+    ? {
+        id: String(data.id),
+        phase: String(data.phase),
+        stripe_transfer_id: data.stripe_transfer_id ? String(data.stripe_transfer_id) : null,
+      }
+    : null
+}
 
 /**
  * Route Stripe webhook events to hop handlers.
@@ -11,6 +53,10 @@ export async function applyStripeWebhookSideEffects(
   event: Stripe.Event,
 ): Promise<void> {
   switch (event.type) {
+    case "account.updated": {
+      await syncConnectAccountFromWebhook(admin, event)
+      return
+    }
     case "checkout.session.completed":
     case "payment_intent.succeeded": {
       await handleStripeCheckoutCompleted(admin, event)
@@ -18,6 +64,11 @@ export async function applyStripeWebhookSideEffects(
     }
     case "payout.paid":
     case "payout.failed": {
+      // Settlement payouts are on connected accounts; ignore platform-level payouts.
+      if (!event.account) {
+        console.info("[stripe] ignoring platform payout event", event.id)
+        return
+      }
       await handleStripePayoutPaid(admin, event)
       return
     }
@@ -26,23 +77,74 @@ export async function applyStripeWebhookSideEffects(
       const chargeId =
         typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id
       if (!chargeId) return
-      const { data: settlement } = await admin
+      const settlement = await findSettlementByCharge(admin, chargeId)
+      if (!settlement) return
+      await appendSettlementEvent(admin, settlement.id, event.id, {
+        // Keep phase unless already credited — ops handles clawback.
+        ...(settlement.phase === "payment_received" ? {} : {}),
+      })
+      // Tag invoice metadata for ops visibility
+      const { data: row } = await admin
         .from("invoice_stripe_settlements")
-        .select("id,stripe_event_ids")
-        .eq("stripe_charge_id", chargeId)
-        .maybeSingle()
-      if (!settlement?.id) return
-      const prior = Array.isArray(settlement.stripe_event_ids)
-        ? settlement.stripe_event_ids
-        : []
-      await admin
-        .from("invoice_stripe_settlements")
-        .update({
-          stripe_event_ids: [...prior, event.id],
-          updated_at: new Date().toISOString(),
-        })
+        .select("invoice_id")
         .eq("id", settlement.id)
-      console.warn("[stripe] dispute created for settlement", settlement.id, dispute.id)
+        .maybeSingle()
+      if (row?.invoice_id) {
+        const { data: inv } = await admin
+          .from("invoices")
+          .select("metadata")
+          .eq("id", row.invoice_id)
+          .maybeSingle()
+        if (inv?.metadata && typeof inv.metadata === "object") {
+          const meta = { ...(inv.metadata as Record<string, unknown>) }
+          const paymentInfo = (meta.paymentInfo ?? {}) as Record<string, unknown>
+          const stripeInfo = (paymentInfo.stripe ?? {}) as Record<string, unknown>
+          meta.paymentInfo = {
+            ...paymentInfo,
+            stripe: {
+              ...stripeInfo,
+              disputeId: dispute.id,
+              disputeStatus: dispute.status,
+            },
+          }
+          await admin.from("invoices").update({ metadata: meta }).eq("id", row.invoice_id)
+        }
+      }
+      console.warn("[stripe] dispute created for settlement", settlement.id, dispute.id, {
+        phase: settlement.phase,
+        transferId: settlement.stripe_transfer_id,
+      })
+      return
+    }
+    case "charge.refunded": {
+      const charge = event.data.object as Stripe.Charge
+      const settlement = await findSettlementByCharge(admin, charge.id)
+      if (!settlement) return
+      if (settlement.phase === "credited") {
+        console.warn(
+          "[stripe] refund after credited — manual clawback required",
+          settlement.id,
+          charge.id,
+        )
+        await appendSettlementEvent(admin, settlement.id, event.id)
+        return
+      }
+      await appendSettlementEvent(admin, settlement.id, event.id, {
+        phase: "failed",
+      })
+      return
+    }
+    case "transfer.created": {
+      const transfer = event.data.object as Stripe.Transfer
+      const pi =
+        typeof transfer.source_transaction === "string"
+          ? null
+          : null
+      // Best-effort: match by destination + amount via payment intent metadata is harder here;
+      // Hop 1 already stores transfer id when available.
+      if (typeof transfer.destination === "string") {
+        console.info("[stripe] transfer.created", transfer.id, "→", transfer.destination, pi)
+      }
       return
     }
     default:

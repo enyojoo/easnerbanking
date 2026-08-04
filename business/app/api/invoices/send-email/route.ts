@@ -7,8 +7,11 @@ import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-busin
 import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
-import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
+import {
+  buildInvoicePdfPaymentSection,
+  paymentFlagsFromDisplay,
+} from "@/lib/invoices/invoice-payment-copy"
 import { sendInvoiceEmail } from "@/lib/invoice-email-service"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
@@ -92,9 +95,7 @@ export async function POST(request: NextRequest) {
       payable: true,
       stripeOnlineEnabled: isStripeInvoicePaymentsEnabled(),
     })
-    const payIn = paymentDisplay.includePaymentInEmail
-      ? filterPayInByDisplay(rawPayIn, paymentDisplay)
-      : {}
+    const paymentFlags = paymentFlagsFromDisplay(paymentDisplay)
 
     const issuer = await fetchInvoiceIssuerForBusiness(admin, ctx.businessId)
     const businessReplyEmail = await resolveInvoiceReplyEmail(
@@ -136,15 +137,22 @@ export async function POST(request: NextRequest) {
 
     const pdfBuffer = await generateInvoicePdfBuffer(
       invoice,
-      paymentDisplay.includePaymentOnPdf ? payIn.bankAccount : undefined,
-      paymentDisplay.includePaymentOnPdf ? payIn.stablecoinAccount : undefined,
       issuerForCustomer,
+      buildInvoicePdfPaymentSection({
+        baseUrl,
+        easetag,
+        invoice,
+        flags: paymentFlags,
+        includeOnPdf: paymentDisplay.includePaymentOnPdf,
+      }),
     )
 
     const result = await sendInvoiceEmail(invoice, invoiceViewUrl, pdfBuffer, {
       businessName: issuer.name,
       businessReplyEmail,
       issuer: { ...issuer, email: businessReplyEmail },
+      includePaymentContext: paymentDisplay.includePaymentInEmail,
+      paymentMethods: paymentFlags,
     })
 
     if (!result.success) {

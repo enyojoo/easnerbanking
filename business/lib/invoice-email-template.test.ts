@@ -45,11 +45,15 @@ describe("invoice email templates", () => {
       businessName: "Acme Ltd",
       businessReplyEmail: "billing@acme.com",
       issuer: sampleIssuer,
+      includePaymentContext: true,
+      paymentMethods: { hasOnline: true, hasBank: true, hasStablecoin: false },
     })
     expect(html).toContain("Easner%20Logo.png")
     expect(html).toContain("logo-light")
     expect(html).toContain("Dear Jane Doe")
     expect(html).toContain("Acme Ltd has sent you an invoice")
+    expect(html).toContain("pay online")
+    expect(html).toContain("View &amp; pay invoice")
     expect(html).toContain("Invoice number")
     expect(html).toContain("INV-001")
     expect(html).toContain("$100.00 USD")
