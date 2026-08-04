@@ -107,7 +107,8 @@ interface InvoiceForm {
   poNumber: string
   showBank: boolean
   showStablecoin: boolean
-  paymentDefaultTab: "bank" | "stablecoin"
+  showOnlinePayment: boolean
+  paymentDefaultTab: "bank" | "stablecoin" | "online"
   lineItems: LineItem[]
 }
 
@@ -136,6 +137,8 @@ function invoiceFormFromInvoice(
     showBank: invoice.paymentDisplay?.showBank ?? invoiceSettings?.showBankTransfer !== false,
     showStablecoin:
       invoice.paymentDisplay?.showStablecoin ?? invoiceSettings?.showStablecoin !== false,
+    showOnlinePayment:
+      invoice.paymentDisplay?.showOnlinePayment ?? invoiceSettings?.showOnlinePayment !== false,
     paymentDefaultTab: invoice.paymentDisplay?.defaultTab ?? "bank",
     lineItems: invoice.lineItems.map((item, i) => ({
       id: (i + 1).toString(),
@@ -186,6 +189,8 @@ export default function CreateInvoicePage() {
   const profile = useBusinessProfile()
   const { baseCurrency, isLoading: profileLoading, tier1Complete, invoiceSettings } = profile
   const issuer = issuerFromBusinessProfile(profile)
+  const orgEasetag =
+    typeof profile.easetag === "string" && profile.easetag.trim() ? profile.easetag.trim() : null
   const invoiceReadiness = assessInvoiceBusinessReadinessFromProfile(profile)
 
   const [formData, setFormData] = useState<InvoiceForm>({
@@ -204,6 +209,7 @@ export default function CreateInvoicePage() {
     poNumber: "",
     showBank: true,
     showStablecoin: true,
+    showOnlinePayment: true,
     paymentDefaultTab: "bank",
     lineItems: [{ id: "1", description: "", quantity: "", unitPrice: "" }]
   })
@@ -366,6 +372,7 @@ export default function CreateInvoicePage() {
       paymentDisplay: defaultPaymentDisplayFromForm({
         showBank: formData.showBank,
         showStablecoin: formData.showStablecoin,
+        showOnlinePayment: formData.showOnlinePayment,
         defaultTab: formData.paymentDefaultTab,
       }),
       documentType,
@@ -414,15 +421,21 @@ export default function CreateInvoicePage() {
     }
   }
 
+  const stripeOnlineEnabled = Boolean(
+    typeof process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY === "string" &&
+      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.trim(),
+  )
   const draftPreviewInvoice = createInvoiceFromForm("open")
+  const previewDisplay = resolvePaymentDisplay({
+    invoice: draftPreviewInvoice,
+    businessDefaults: invoiceSettings,
+    payIn: { bankAccount: rawBank, stablecoinAccount: rawStable },
+    payable: true,
+    stripeOnlineEnabled: stripeOnlineEnabled && formData.showOnlinePayment,
+  })
   const previewPayIn = filterPayInByDisplay(
     { bankAccount: rawBank, stablecoinAccount: rawStable },
-    resolvePaymentDisplay({
-      invoice: draftPreviewInvoice,
-      businessDefaults: invoiceSettings,
-      payIn: { bankAccount: rawBank, stablecoinAccount: rawStable },
-      payable: true,
-    }),
+    previewDisplay,
   )
 
   const runFinalizeAndEmail = async () => {
@@ -927,7 +940,23 @@ export default function CreateInvoicePage() {
                   Stablecoin {!hasStableProvision ? "(not available)" : ""}
                 </Label>
               </div>
-              {formData.showBank && formData.showStablecoin && hasBankProvision && hasStableProvision ? (
+              {stripeOnlineEnabled ? (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="show-online"
+                    checked={formData.showOnlinePayment}
+                    onCheckedChange={(v) =>
+                      setFormData((p) => ({ ...p, showOnlinePayment: v === true }))
+                    }
+                  />
+                  <Label htmlFor="show-online" className="font-normal">
+                    Pay online (card / bank)
+                  </Label>
+                </div>
+              ) : null}
+              {(formData.showBank && hasBankProvision) ||
+              (formData.showStablecoin && hasStableProvision) ||
+              (stripeOnlineEnabled && formData.showOnlinePayment) ? (
                 <div className="space-y-2">
                   <Label>Default tab</Label>
                   <select
@@ -936,12 +965,19 @@ export default function CreateInvoicePage() {
                     onChange={(e) =>
                       setFormData((p) => ({
                         ...p,
-                        paymentDefaultTab: e.target.value as "bank" | "stablecoin",
+                        paymentDefaultTab: e.target.value as "bank" | "stablecoin" | "online",
                       }))
                     }
                   >
-                    <option value="bank">Bank transfer</option>
-                    <option value="stablecoin">Stablecoin</option>
+                    {stripeOnlineEnabled && formData.showOnlinePayment ? (
+                      <option value="online">Pay online</option>
+                    ) : null}
+                    {formData.showBank && hasBankProvision ? (
+                      <option value="bank">Bank transfer</option>
+                    ) : null}
+                    {formData.showStablecoin && hasStableProvision ? (
+                      <option value="stablecoin">Stablecoin</option>
+                    ) : null}
                   </select>
                 </div>
               ) : null}
@@ -956,6 +992,8 @@ export default function CreateInvoicePage() {
                   audience="business"
                   businessDisplayName={issuer.name}
                   defaultTab={formData.paymentDefaultTab}
+                  showOnlinePayment={previewDisplay.showOnlinePayment}
+                  publicInvoiceEasetag={orgEasetag}
                 />
               )}
             </CardContent>

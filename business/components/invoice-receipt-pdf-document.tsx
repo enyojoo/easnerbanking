@@ -237,6 +237,40 @@ export function InvoiceReceiptPDFDocument({
         },
       ]
     }
+  } else if (invoice.paymentInfo?.method === "stripe") {
+    const stripe = invoice.paymentInfo.stripe
+    const pm =
+      stripe?.paymentMethodType === "us_bank_account"
+        ? "Bank account"
+        : stripe?.paymentMethodType
+          ? stripe.paymentMethodType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+          : "Card"
+    paymentSection = [
+      { label: "Payment Method", value: `Online (${pm})` },
+      ...(stripe
+        ? [
+            {
+              label: "Amount paid",
+              value: formatCurrency((stripe.grossCents ?? 0) / 100, invoice.currency),
+            },
+            ...(stripe.feeCents > 0
+              ? [
+                  {
+                    label: "Processing fee",
+                    value: formatCurrency(stripe.feeCents / 100, invoice.currency),
+                  },
+                ]
+              : []),
+            {
+              label: "Net to merchant",
+              value: formatCurrency((stripe.netCents ?? 0) / 100, invoice.currency),
+            },
+          ]
+        : []),
+      ...(invoice.paymentInfo.transactionId
+        ? [{ label: "Transaction ID", value: invoice.paymentInfo.transactionId }]
+        : []),
+    ]
   }
 
   const allRows = [...rows, ...paymentSection]

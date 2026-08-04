@@ -5,6 +5,7 @@ import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-busin
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
+import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { generateInvoicePdfBuffer } from "@/lib/generate-invoice-pdf"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 import {
@@ -55,6 +56,7 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
     businessDefaults: settings,
     payIn: rawPayIn,
     payable: true,
+    stripeOnlineEnabled: isStripeInvoicePaymentsEnabled(),
   })
   const payIn = display.includePaymentInEmail ? filterPayInByDisplay(rawPayIn, display) : {}
 

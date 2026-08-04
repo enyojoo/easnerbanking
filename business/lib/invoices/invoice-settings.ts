@@ -3,6 +3,7 @@ import type { InvoicePaymentDefaults } from "@/lib/b2b/types"
 export const DEFAULT_INVOICE_PAYMENT_DEFAULTS: InvoicePaymentDefaults = {
   showBankTransfer: true,
   showStablecoin: true,
+  showOnlinePayment: true,
   preferredMethod: "customer_choice",
   includePaymentOnPdf: true,
   includePaymentInEmail: true,
@@ -24,9 +25,11 @@ export function parseBusinessInvoiceSettings(raw: unknown): BusinessInvoiceSetti
     ...DEFAULT_INVOICE_PAYMENT_DEFAULTS,
     showBankTransfer: o.showBankTransfer !== false,
     showStablecoin: o.showStablecoin !== false,
+    showOnlinePayment: o.showOnlinePayment !== false,
     preferredMethod:
       o.preferredMethod === "bank" ||
       o.preferredMethod === "stablecoin" ||
+      o.preferredMethod === "online" ||
       o.preferredMethod === "customer_choice"
         ? o.preferredMethod
         : DEFAULT_INVOICE_PAYMENT_DEFAULTS.preferredMethod,

@@ -7,16 +7,28 @@ export interface InvoiceLineItem {
 
 export interface InvoicePaymentInfo {
   paidAt: string
-  method: "easner" | "cash"
+  method: "easner" | "cash" | "stripe"
   transactionId?: string
   cashNote?: string
+  stripe?: {
+    paymentIntentId: string
+    chargeId?: string
+    paymentMethodType: string
+    grossCents: number
+    feeCents: number
+    netCents: number
+    settlementPhase: "payment_received" | "payout_sent" | "credited" | "failed"
+    settlementRail?: "grid_va" | "turnkey_stablecoin"
+  }
 }
 
 /** Business-level defaults stored in `businesses.invoice_settings`. */
 export type InvoicePaymentDefaults = {
   showBankTransfer: boolean
   showStablecoin: boolean
-  preferredMethod: "bank" | "stablecoin" | "customer_choice"
+  /** When false, hide Pay online even if Stripe is enabled. Default true when Stripe is on. */
+  showOnlinePayment?: boolean
+  preferredMethod: "bank" | "stablecoin" | "online" | "customer_choice"
   includePaymentOnPdf: boolean
   includePaymentInEmail: boolean
   notifyOnInvoiceView?: boolean
@@ -29,7 +41,8 @@ export type InvoicePaymentDefaults = {
 export type InvoicePaymentDisplay = {
   showBank: boolean
   showStablecoin: boolean
-  defaultTab?: "bank" | "stablecoin"
+  showOnlinePayment?: boolean
+  defaultTab?: "bank" | "stablecoin" | "online"
 }
 
 export interface Invoice {

@@ -17,7 +17,7 @@ function StepIcon({ id, active }: { id: string; active: boolean }) {
   if (id === "failed") {
     return <CircleX className={`h-4 w-4 ${active ? "text-destructive" : "text-muted-foreground"}`} />
   }
-  if (id === "completed") {
+  if (id === "completed" || id === "available" || id === "payment_received") {
     return <Check className={`h-4 w-4 ${active ? "text-primary" : "text-muted-foreground"}`} />
   }
   return <Loader2 className={`h-4 w-4 ${active ? "text-primary" : "text-muted-foreground"}`} />

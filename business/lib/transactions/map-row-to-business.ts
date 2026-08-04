@@ -33,6 +33,7 @@ import {
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
 import { resolveStablecoinDepositPayInDetail } from "@/lib/transactions/resolve-stablecoin-deposit-pay-in"
+import { resolveStripeInvoiceSettlementDetail } from "@/lib/transactions/resolve-stripe-invoice-settlement"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
 import {
   isWalletSendOutRow,
@@ -150,8 +151,16 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       (payload && isNoahBankOnrampFiatPayIn(payload)))
       ? resolveBankDepositPayInDetail(row)
       : null
+  const stripeInvoiceSettlementDetail =
+    !globalPayoutDetail && !walletSendPayoutReview && !bankDepositDetail
+      ? resolveStripeInvoiceSettlementDetail(row)
+      : null
   const stablecoinDepositDetail =
-    !globalPayoutDetail && !walletSendPayoutReview && !bankDepositDetail && !isVerification
+    !globalPayoutDetail &&
+    !walletSendPayoutReview &&
+    !bankDepositDetail &&
+    !stripeInvoiceSettlementDetail &&
+    !isVerification
       ? resolveStablecoinDepositPayInDetail(row)
       : null
   const globalPayoutList = globalPayoutDetail ? null : resolveGlobalPayoutListDisplay(row)
@@ -421,6 +430,11 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
                 }),
             fee: bankDepositDetail.feeAmount || undefined,
             ledgerCreatedAt: bankDepositDetail.ledgerCreatedAt ?? ledgerCreatedAt,
+          }
+        : stripeInvoiceSettlementDetail
+        ? {
+            lifecycle: stripeInvoiceSettlementDetail.lifecycle,
+            ledgerCreatedAt,
           }
         : stablecoinDepositDetail
         ? {

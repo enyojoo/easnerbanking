@@ -45,7 +45,8 @@ export default function InvoiceViewPage() {
   const [issuer, setIssuer] = useState<InvoicePdfIssuer | null>(null)
   const [payIn, setPayIn] = useState<InvoicePayInPayload>({})
   const [loadState, setLoadState] = useState<"loading" | "error" | "ok">("loading")
-  const [paymentTab, setPaymentTab] = useState<"bank" | "stablecoin">("bank")
+  const [paymentTab, setPaymentTab] = useState<"online" | "bank" | "stablecoin">("bank")
+  const [showOnlinePayment, setShowOnlinePayment] = useState(false)
   const { data: fxRates = [] } = useFxRates()
   const [isDownloading, setIsDownloading] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
@@ -76,7 +77,11 @@ export default function InvoiceViewPage() {
           issuer?: InvoicePdfIssuer
           payIn?: InvoicePayInPayload
           businessEasetag?: string | null
-          paymentDisplay?: { defaultTab?: "bank" | "stablecoin" }
+          paymentDisplay?: {
+            defaultTab?: "online" | "bank" | "stablecoin"
+            showOnlinePayment?: boolean
+          }
+          stripeOnlineEnabled?: boolean
         }
         if (cancelled) return
         if (!r.ok || !data.invoice) {
@@ -92,7 +97,12 @@ export default function InvoiceViewPage() {
         setIssuer(data.issuer ?? null)
         const pi = data.payIn ?? {}
         setPayIn(pi)
-        const tab = data.paymentDisplay?.defaultTab ?? (pi.bankAccount ? "bank" : "stablecoin")
+        const online =
+          data.paymentDisplay?.showOnlinePayment === true || data.stripeOnlineEnabled === true
+        setShowOnlinePayment(online)
+        const tab =
+          data.paymentDisplay?.defaultTab ??
+          (online ? "online" : pi.bankAccount ? "bank" : "stablecoin")
         setPaymentTab(tab)
         setLoadState("ok")
       })
@@ -194,7 +204,7 @@ export default function InvoiceViewPage() {
 
   const bankAccount = payIn.bankAccount
   const stablecoinAccount = payIn.stablecoinAccount
-  const hasPayInRail = Boolean(bankAccount || stablecoinAccount)
+  const hasPayInRail = Boolean(bankAccount || stablecoinAccount || showOnlinePayment)
   const showPayCard =
     (invoice.status === "open" || invoice.status === "sent" || invoice.status === "past_due") &&
     hasPayInRail
@@ -412,7 +422,7 @@ export default function InvoiceViewPage() {
             </div>
           </div>
 
-          {showPayCard && (bankAccount || stablecoinAccount) && (
+          {showPayCard && (bankAccount || stablecoinAccount || showOnlinePayment) && (
             <InvoicePaymentOptions
               invoice={invoice}
               bankAccount={bankAccount}
@@ -423,6 +433,8 @@ export default function InvoiceViewPage() {
               value={paymentTab}
               onValueChange={setPaymentTab}
               publicInvoiceEasetag={publicEasetag}
+              showOnlinePayment={showOnlinePayment}
+              defaultTab={paymentTab}
             />
           )}
 

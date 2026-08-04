@@ -312,7 +312,14 @@ export function TransactionDetailsPanel({
     transaction.inboundReceive?.kind === "easetag_receive"
   const showLifecycleTracker =
     Boolean(transaction.lifecycle?.length) && !isStablecoinDeposit && !isEasetagReceive
-  const lifecycleTitle = isGlobalPayout ? "Transfer status" : "Deposit status"
+  const isStripeInvoiceSettlement = transaction.lifecycle?.some(
+    (step) => step.id === "payment_received" || step.id === "clearing" || step.id === "available",
+  )
+  const lifecycleTitle = isGlobalPayout
+    ? "Transfer status"
+    : isStripeInvoiceSettlement
+      ? "Settlement status"
+      : "Deposit status"
 
   const handleCopy = async (text: string, key: string) => {
     try {

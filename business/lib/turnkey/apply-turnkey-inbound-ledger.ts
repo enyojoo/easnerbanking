@@ -200,6 +200,21 @@ export async function applyTurnkeyInboundLedgerEvent(
     }
   }
 
+  // Stripe invoice settlement payout to Turnkey address — settle Stripe ledger, suppress duplicate inbound row.
+  if (direction === "in" && status === "settled" && businessId) {
+    const { tryMatchTurnkeyStripeSettlement } = await import("./stripe-settlement-match")
+    const stripeMatch = await tryMatchTurnkeyStripeSettlement(admin, {
+      businessId,
+      userId,
+      amount: input.amount,
+      currency: input.currency,
+      walletAddress: input.walletAddress,
+    }).catch(() => ({ matched: false as const }))
+    if (stripeMatch.matched) {
+      return { kind: "suppressed_noah" }
+    }
+  }
+
   const upsert = await upsertLedgerTransaction(admin, {
     userId,
     businessId,

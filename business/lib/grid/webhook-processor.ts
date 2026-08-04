@@ -244,7 +244,11 @@ export async function applyGridWebhookSideEffects(
   if (type.includes("INCOMING")) {
     const xb = await handleGridCrossBorderSendWebhook(admin, { event, quoteId, transactionId, status })
     if (xb.handled) return
-    await handleGridFundBalanceWebhook(admin, { event, quoteId, status })
+    const fund = await handleGridFundBalanceWebhook(admin, { event, quoteId, status })
+    if (fund.handled) return
+    // Quote-less INCOMING: Stripe invoice settlement payout to Grid VA
+    const { handleGridStripeSettlementWebhook } = await import("./stripe-settlement-webhook")
+    await handleGridStripeSettlementWebhook(admin, { event })
     return
   }
 

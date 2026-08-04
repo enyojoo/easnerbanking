@@ -222,6 +222,15 @@ export default function InvoiceDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [markAsPaidOpen, setMarkAsPaidOpen] = useState(false)
   const [customerViewUrl, setCustomerViewUrl] = useState("")
+  const [stripeSettlement, setStripeSettlement] = useState<{
+    phase: string
+    settlement_rail: string | null
+    net_cents: number
+    fee_cents: number
+    currency: string
+    ledger_transaction_id: string | null
+  } | null>(null)
+  const [stripeRefunding, setStripeRefunding] = useState(false)
 
   const canProvisionDepositInstructions = invoice
     ? canProvisionInvoiceDepositInstructions(invoice.currency, tier1Complete, TIER2_COMPLETE_PLACEHOLDER)
@@ -246,28 +255,41 @@ export default function InvoiceDetailPage() {
     enabled: payInQueryEnabled,
   })
 
-  const filteredPayIn = useMemo(() => {
-    if (!invoice) return {}
-    const display = resolvePaymentDisplay({
-      invoice,
-      businessDefaults: invoiceSettings,
-      payIn: { bankAccount, stablecoinAccount },
-      payable: payInQueryEnabled,
-    })
-    return filterPayInByDisplay({ bankAccount, stablecoinAccount }, display)
-  }, [invoice, invoiceSettings, bankAccount, stablecoinAccount, payInQueryEnabled])
+  const stripeOnlineEnabled = Boolean(
+    typeof process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY === "string" &&
+      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.trim(),
+  )
 
-  const paymentDefaultTab = useMemo(() => {
-    if (!invoice) return "bank" as const
+  const paymentDisplay = useMemo(() => {
+    if (!invoice) {
+      return {
+        showBank: false,
+        showStablecoin: false,
+        showOnlinePayment: false,
+        defaultTab: "bank" as const,
+      }
+    }
     return resolvePaymentDisplay({
       invoice,
       businessDefaults: invoiceSettings,
       payIn: { bankAccount, stablecoinAccount },
-      payable: true,
-    }).defaultTab
-  }, [invoice, invoiceSettings, bankAccount, stablecoinAccount])
+      payable: payInQueryEnabled || stripeOnlineEnabled,
+      stripeOnlineEnabled,
+    })
+  }, [invoice, invoiceSettings, bankAccount, stablecoinAccount, payInQueryEnabled, stripeOnlineEnabled])
 
-  const hasAnyPayIn = Boolean(filteredPayIn.bankAccount || filteredPayIn.stablecoinAccount)
+  const filteredPayIn = useMemo(() => {
+    if (!invoice) return {}
+    return filterPayInByDisplay({ bankAccount, stablecoinAccount }, paymentDisplay)
+  }, [invoice, bankAccount, stablecoinAccount, paymentDisplay])
+
+  const paymentDefaultTab = paymentDisplay.defaultTab
+
+  const hasAnyPayIn = Boolean(
+    filteredPayIn.bankAccount ||
+      filteredPayIn.stablecoinAccount ||
+      paymentDisplay.showOnlinePayment,
+  )
 
   const sendInvoiceEmailConfirmed = async () => {
     if (!invoice) return
@@ -402,6 +424,34 @@ export default function InvoiceDetailPage() {
       setCustomerViewUrl(`${origin}/invoice-view/${invoice.id}`)
     }
   }, [invoice?.id, invoice?.invoiceNumber, orgEasetag])
+
+  useEffect(() => {
+    if (!invoice?.id || invoice.paymentInfo?.method !== "stripe") {
+      setStripeSettlement(null)
+      return
+    }
+    let cancelled = false
+    fetchWithSession(`/api/business/b2b/invoices/${encodeURIComponent(invoice.id)}/stripe-settlement`)
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as {
+          settlement?: {
+            phase: string
+            settlement_rail: string | null
+            net_cents: number
+            fee_cents: number
+            currency: string
+            ledger_transaction_id: string | null
+          } | null
+        }
+        if (!cancelled) setStripeSettlement(data.settlement ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setStripeSettlement(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [invoice?.id, invoice?.paymentInfo?.method])
 
   const handleStatusChange = (newStatus: Invoice["status"]) => {
     if (!invoice) return
@@ -552,12 +602,14 @@ export default function InvoiceDetailPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem
-                    onClick={() => setMarkAsPaidOpen(true)}
-                    disabled={invoice.status === "paid"}
-                  >
-                    Mark as Paid
-                  </DropdownMenuItem>
+                  {invoice.paymentInfo?.method !== "stripe" ? (
+                    <DropdownMenuItem
+                      onClick={() => setMarkAsPaidOpen(true)}
+                      disabled={invoice.status === "paid"}
+                    >
+                      Mark as Paid
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem
                     onClick={() => handleStatusChange("open")}
                     disabled={invoice.status === "open"}
@@ -753,6 +805,102 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
+      {invoice.paymentInfo?.method === "stripe" && stripeSettlement ? (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                Online payment settlement:{" "}
+                {stripeSettlement.phase === "payment_received"
+                  ? "Payment received"
+                  : stripeSettlement.phase === "payout_sent"
+                    ? "Clearing"
+                    : stripeSettlement.phase === "credited"
+                      ? "Available"
+                      : stripeSettlement.phase === "failed"
+                        ? "Failed"
+                        : stripeSettlement.phase}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Net{" "}
+                {formatCurrency(
+                  (stripeSettlement.net_cents ?? 0) / 100,
+                  stripeSettlement.currency || invoice.currency,
+                )}
+                {stripeSettlement.fee_cents > 0
+                  ? ` · Fee ${formatCurrency(
+                      stripeSettlement.fee_cents / 100,
+                      stripeSettlement.currency || invoice.currency,
+                    )}`
+                  : ""}
+                {stripeSettlement.settlement_rail === "turnkey_stablecoin"
+                  ? " · Stablecoin rail"
+                  : stripeSettlement.settlement_rail === "grid_va"
+                    ? " · Bank rail"
+                    : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {stripeSettlement.ledger_transaction_id ? (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/transactions/${stripeSettlement.ledger_transaction_id}`}>
+                    View transaction
+                  </Link>
+                </Button>
+              ) : null}
+              {stripeSettlement.phase === "payment_received" ||
+              stripeSettlement.phase === "payout_sent" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={stripeRefunding}
+                  onClick={() => {
+                    void (async () => {
+                      if (
+                        !window.confirm(
+                          "Refund this online payment to the customer? This cannot be undone.",
+                        )
+                      ) {
+                        return
+                      }
+                      setStripeRefunding(true)
+                      try {
+                        const res = await fetchWithSession(
+                          `/api/business/b2b/invoices/${encodeURIComponent(invoice.id)}/stripe-refund`,
+                          { method: "POST" },
+                        )
+                        const data = (await res.json().catch(() => ({}))) as {
+                          error?: string
+                          refundId?: string
+                        }
+                        if (!res.ok) {
+                          toast.error(data.error || "Refund failed")
+                          return
+                        }
+                        toast.success("Refund submitted")
+                        setStripeSettlement((prev) =>
+                          prev ? { ...prev, phase: "failed" } : prev,
+                        )
+                      } finally {
+                        setStripeRefunding(false)
+                      }
+                    })()
+                  }}
+                >
+                  {stripeRefunding ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Refunding…
+                    </>
+                  ) : (
+                    "Refund"
+                  )}
+                </Button>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
@@ -912,8 +1060,8 @@ export default function InvoiceDetailPage() {
           {!invoice.archived &&
             showInvoicePaymentPreview(invoice.status, invoice.documentType) &&
             invoice.status !== "paid" &&
-            payInQueryEnabled &&
-            (payInLoading ? (
+            (payInQueryEnabled || paymentDisplay.showOnlinePayment) &&
+            (payInLoading && payInQueryEnabled ? (
               <Card className="border-dashed bg-muted/20">
                 <CardContent className="py-8 flex justify-center">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -928,6 +1076,7 @@ export default function InvoiceDetailPage() {
                 audience="business"
                 publicInvoiceEasetag={orgEasetag}
                 defaultTab={paymentDefaultTab}
+                showOnlinePayment={paymentDisplay.showOnlinePayment}
               />
             ) : canProvisionDepositInstructions ? (
               <Card className="border-dashed bg-muted/20">
@@ -1180,8 +1329,8 @@ export default function InvoiceDetailPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Mark as Paid dialog */}
-      {invoice && (
+      {/* Mark as Paid dialog — hidden for Stripe-collected invoices */}
+      {invoice && invoice.paymentInfo?.method !== "stripe" ? (
         <MarkAsPaidDialog
           invoice={invoice}
           open={markAsPaidOpen}
@@ -1199,7 +1348,7 @@ export default function InvoiceDetailPage() {
             toast.success("Invoice marked as paid")
           }}
         />
-      )}
+      ) : null}
 
       {/* Add note dialog */}
       <Dialog open={addNoteOpen} onOpenChange={setAddNoteOpen}>

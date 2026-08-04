@@ -12,6 +12,7 @@ import { cn, formatCurrency } from "@/lib/utils"
 import { businessInfo } from "@/lib/business-info"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
 import { getPaymentInstructions } from "@/lib/payment-instructions"
+import { InvoiceStripeCheckout } from "@/components/invoice-stripe-checkout"
 
 interface StablecoinAccount {
   currency: string
@@ -73,6 +74,8 @@ function PaymentInstructions({
   )
 }
 
+type PaymentTab = "online" | "bank" | "stablecoin"
+
 interface InvoicePaymentOptionsProps {
   invoice: Invoice
   bankAccount?: Account
@@ -84,12 +87,14 @@ interface InvoicePaymentOptionsProps {
   /** "customer" = invoice view; "business" = invoice detail page */
   audience?: "customer" | "business"
   /** Controlled tab value - when provided, parent tracks selection */
-  value?: "bank" | "stablecoin"
-  onValueChange?: (value: "bank" | "stablecoin") => void
+  value?: PaymentTab
+  onValueChange?: (value: PaymentTab) => void
   /** When set, public “view invoice” links use `/invoice-view/{easetag}/{invoiceNumber}` instead of row id. */
   publicInvoiceEasetag?: string | null
-  /** Initial tab when both methods shown */
-  defaultTab?: "bank" | "stablecoin"
+  /** Initial tab when methods shown */
+  defaultTab?: PaymentTab
+  /** Show Stripe Pay online tab */
+  showOnlinePayment?: boolean
 }
 
 const audienceDescriptions = {
@@ -109,15 +114,22 @@ export function InvoicePaymentOptions({
   onValueChange,
   publicInvoiceEasetag,
   defaultTab,
+  showOnlinePayment = false,
 }: InvoicePaymentOptionsProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const hasBank = bankAccount !== undefined
   const hasStablecoin = stablecoinAccount !== undefined
+  const hasOnline = showOnlinePayment === true && Boolean(publicInvoiceEasetag?.trim() || audience === "business")
   const brandName = businessDisplayName?.trim() || businessInfo.name
+  const tabCount = [hasOnline, hasBank, hasStablecoin].filter(Boolean).length
 
-  if (!hasBank && !hasStablecoin) {
+  if (!hasBank && !hasStablecoin && !hasOnline) {
     return null
   }
+
+  const resolvedDefaultTab: PaymentTab =
+    defaultTab ??
+    (hasOnline ? "online" : hasBank ? "bank" : "stablecoin")
 
   const copyToClipboard = async (text: string, field?: string) => {
     try {
@@ -214,18 +226,18 @@ export function InvoicePaymentOptions({
       {...(value !== undefined && onValueChange
         ? {
             value,
-            onValueChange: (v: string) =>
-              onValueChange(v as "bank" | "stablecoin"),
+            onValueChange: (v: string) => onValueChange(v as PaymentTab),
           }
-        : { defaultValue: defaultTab ?? (hasBank ? "bank" : "stablecoin") })}
+        : { defaultValue: resolvedDefaultTab })}
       className="w-full"
     >
           <TabsList
             className={cn(
               "grid w-full",
-              hasBank && hasStablecoin ? "grid-cols-2" : "grid-cols-1",
+              tabCount === 3 ? "grid-cols-3" : tabCount === 2 ? "grid-cols-2" : "grid-cols-1",
             )}
           >
+            {hasOnline ? <TabsTrigger value="online">Pay online</TabsTrigger> : null}
             {hasBank ? (
               <TabsTrigger value="bank">
                 {bankAccount!.currency === "USD"
@@ -235,10 +247,21 @@ export function InvoicePaymentOptions({
                     : "Bank transfer"}
               </TabsTrigger>
             ) : null}
-            <TabsTrigger value="stablecoin" disabled={!hasStablecoin}>
-              Stablecoin
-            </TabsTrigger>
+            {hasStablecoin ? (
+              <TabsTrigger value="stablecoin">Stablecoin</TabsTrigger>
+            ) : null}
           </TabsList>
+
+          {hasOnline ? (
+            <TabsContent value="online" className="space-y-4 mt-4">
+              <InvoiceStripeCheckout
+                invoice={invoice}
+                easetag={publicInvoiceEasetag?.trim() || "preview"}
+                businessDisplayName={brandName}
+                previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
+              />
+            </TabsContent>
+          ) : null}
 
           {hasBank ? (
           <TabsContent value="bank" className="space-y-4 mt-4">

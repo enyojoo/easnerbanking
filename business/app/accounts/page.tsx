@@ -18,6 +18,7 @@ import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { MoreVertical, FileText, Ban, Trash2 } from "lucide-react"
 import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
+import { useIncomingBalances } from "@/hooks/queries/use-incoming-balance"
 import { OpenCurrencyAccountDialog } from "@/components/accounts/open-currency-account-dialog"
 
 export default function AccountsPage() {
@@ -31,6 +32,7 @@ export default function AccountsPage() {
     accountsProvisioning,
     tier1Complete,
   } = useBusinessAccountRows()
+  const incomingQuery = useIncomingBalances()
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text)
@@ -122,6 +124,24 @@ export default function AccountsPage() {
                           maximumFractionDigits: 2,
                         })}
                       </p>
+                      {(() => {
+                        const incoming = Number(
+                          incomingQuery.data?.[account.currency.toUpperCase()] ?? 0,
+                        )
+                        if (!Number.isFinite(incoming) || incoming <= 0) return null
+                        return (
+                          <div className="mt-3">
+                            <p className="mb-0.5 text-xs text-muted-foreground">Incoming</p>
+                            <p className="text-sm font-medium tabular-nums text-foreground">
+                              {getCurrencySymbol(account.currency)}
+                              {incoming.toLocaleString("en-US", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </p>
+                          </div>
+                        )
+                      })()}
                     </div>
                   </div>
 

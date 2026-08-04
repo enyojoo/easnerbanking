@@ -58,6 +58,17 @@ describe("resolvePaymentDisplay", () => {
     })
     expect(d.showBank).toBe(false)
     expect(d.showStablecoin).toBe(false)
+    expect(d.showOnlinePayment).toBe(false)
+  })
+
+  it("shows online when Stripe enabled", () => {
+    const d = resolvePaymentDisplay({
+      invoice: { status: "open" },
+      payIn: both,
+      stripeOnlineEnabled: true,
+    })
+    expect(d.showOnlinePayment).toBe(true)
+    expect(d.defaultTab).toBe("online")
   })
 
   it("uses stablecoin default tab when preferred", () => {

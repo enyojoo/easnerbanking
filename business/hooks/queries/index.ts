@@ -36,3 +36,6 @@ export {
 export { useCustomersList } from "./use-customers"
 export { useFxRates, persistFxRates } from "./use-fx"
 export type { FxRate } from "./use-fx"
+
+export { useIncomingBalances, useIncomingBalance } from "./use-incoming-balance"
+export type { IncomingBalances } from "./use-incoming-balance"

@@ -8,6 +8,7 @@ import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
+import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { sendInvoiceEmail } from "@/lib/invoice-email-service"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { invoicePublicViewPath } from "@/lib/invoice-public-url"
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
       businessDefaults: invoiceSettings,
       payIn: rawPayIn,
       payable: true,
+      stripeOnlineEnabled: isStripeInvoicePaymentsEnabled(),
     })
     const payIn = paymentDisplay.includePaymentInEmail
       ? filterPayInByDisplay(rawPayIn, paymentDisplay)

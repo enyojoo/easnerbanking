@@ -541,6 +541,17 @@ export type {
   StablecoinDepositLifecycleStepState,
 } from "./transactions/stablecoin-deposit-lifecycle"
 export {
+  buildStripeInvoiceSettlementLifecycle,
+  isStripeInvoiceSettlementMetadata,
+} from "./transactions/stripe-invoice-settlement-lifecycle"
+export type {
+  BuildStripeInvoiceSettlementLifecycleInput,
+  StripeInvoiceSettlementLifecycleStep,
+  StripeInvoiceSettlementLifecycleStepId,
+  StripeInvoiceSettlementLifecycleStepState,
+  StripeSettlementRail,
+} from "./transactions/stripe-invoice-settlement-lifecycle"
+export {
   buildTransactionEmailDetailRows,
   filterTransactionReceiptDetailRows,
   type TransactionEmailDetailInput,

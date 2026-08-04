@@ -4,6 +4,7 @@ import { resolvePayInForBusiness } from "@/lib/invoices/resolve-pay-in-for-busin
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
+import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 export async function jsonPublicInvoiceFromRow(
@@ -37,11 +38,13 @@ export async function jsonPublicInvoiceFromRow(
     typeof bizRow?.easetag === "string" && bizRow.easetag.trim() ? bizRow.easetag.trim() : null
 
   const invoiceSettings = parseBusinessInvoiceSettings(bizRow?.invoice_settings)
+  const stripeOnlineEnabled = isStripeInvoicePaymentsEnabled()
   const paymentDisplay = resolvePaymentDisplay({
     invoice,
     businessDefaults: invoiceSettings,
     payIn,
     payable,
+    stripeOnlineEnabled,
   })
   const filteredPayIn = filterPayInByDisplay(payIn, paymentDisplay)
 
@@ -55,5 +58,6 @@ export async function jsonPublicInvoiceFromRow(
     paymentDisplay,
     invoiceSettings,
     businessEasetag,
+    stripeOnlineEnabled,
   }
 }

@@ -184,8 +184,21 @@ export function SettingsInvoicingTab() {
               onCheckedChange={(v) => patch({ showStablecoin: v })}
             />
           </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="show-online">Pay online</Label>
+              <p className="text-sm text-muted-foreground">
+                Card and bank pay-in via Stripe when enabled for your platform
+              </p>
+            </div>
+            <Switch
+              id="show-online"
+              checked={settings.showOnlinePayment !== false}
+              onCheckedChange={(v) => patch({ showOnlinePayment: v })}
+            />
+          </div>
           <div className="space-y-2">
-            <Label>Preferred tab when both are shown</Label>
+            <Label>Preferred tab when multiple methods are shown</Label>
             <Select
               value={settings.preferredMethod}
               onValueChange={(v) =>
@@ -198,7 +211,8 @@ export function SettingsInvoicingTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="customer_choice">Customer choice (bank first)</SelectItem>
+                <SelectItem value="customer_choice">Customer choice</SelectItem>
+                <SelectItem value="online">Pay online</SelectItem>
                 <SelectItem value="bank">Bank transfer</SelectItem>
                 <SelectItem value="stablecoin">Stablecoin</SelectItem>
               </SelectContent>
