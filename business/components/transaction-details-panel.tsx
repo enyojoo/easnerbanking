@@ -137,11 +137,22 @@ function TransactionSummaryDetails({
 }) {
   const cardLast4 = transaction.cardLast4
   const descLower = transaction.description.toLowerCase()
+  const isStripeInvoiceSettlement =
+    Boolean(transaction.invoiceId) ||
+    descLower === "invoice payment" ||
+    Boolean(
+      transaction.lifecycle?.some(
+        (step) =>
+          step.id === "payment_received" || step.id === "clearing" || step.id === "available",
+      ),
+    )
   const isStablecoin =
-    transaction.type === "stablecoin" ||
-    descLower.startsWith("stablecoin") ||
-    String(transaction.collectionChannel ?? "").toLowerCase() === "autopayout"
+    !isStripeInvoiceSettlement &&
+    (transaction.type === "stablecoin" ||
+      descLower.startsWith("stablecoin") ||
+      String(transaction.collectionChannel ?? "").toLowerCase() === "autopayout")
   const isBank =
+    !isStripeInvoiceSettlement &&
     !isStablecoin &&
     (transaction.type === "book" || transaction.type === "ach" || transaction.type === "wire") &&
     Boolean(transaction.paymentRail)
@@ -152,10 +163,25 @@ function TransactionSummaryDetails({
   const showLifecycleTracker = Boolean(transaction.lifecycle?.length)
   const displayCurrency = transaction.postedCurrency || transaction.displayCurrency || "USD"
   const showParty =
+    !isStripeInvoiceSettlement &&
     (isBank || isStablecoin || isCard || isEasetag) &&
     Boolean(transaction.counterpartyName) &&
     (isDeposit || !showLifecycleTracker)
-
+  const invoiceReference =
+    transaction.reference &&
+    transaction.reference !== transaction.id &&
+    !transaction.reference.startsWith("ETID")
+      ? transaction.reference
+      : null
+  const netAmount =
+    transaction.postedAmount != null && transaction.postedAmount > 0
+      ? transaction.postedAmount
+      : Math.abs(transaction.amount)
+  const grossAmount =
+    transaction.depositAmount != null && transaction.depositAmount > 0
+      ? transaction.depositAmount
+      : null
+  const settled = transaction.status === "completed"
   const whenAt = resolveTransactionDetailWhenAt(transaction)
 
   return (
@@ -180,13 +206,41 @@ function TransactionSummaryDetails({
           </div>
         </TransactionDetailSummaryRow>
 
-        {transaction.paymentScheme ? (
+        {isStripeInvoiceSettlement && invoiceReference ? (
+          <TransactionDetailSummaryRow label="Invoice" value={invoiceReference} />
+        ) : null}
+
+        {isStripeInvoiceSettlement ? (
+          <TransactionDetailSummaryRow
+            label="Amount"
+            value={formatReviewRowMoneyDisplay("Amount", netAmount, displayCurrency)}
+          />
+        ) : null}
+
+        {isStripeInvoiceSettlement &&
+        grossAmount != null &&
+        Math.abs(grossAmount - netAmount) > 0.0001 ? (
+          <TransactionDetailSummaryRow
+            label="Payment amount"
+            value={formatReviewRowMoneyDisplay("Payment amount", grossAmount, displayCurrency)}
+          />
+        ) : null}
+
+        {isStripeInvoiceSettlement && transaction.paymentScheme ? (
+          <TransactionDetailSummaryRow label="Payment method" value={transaction.paymentScheme} />
+        ) : null}
+
+        {isStripeInvoiceSettlement && transaction.paymentRail ? (
+          <TransactionDetailSummaryRow label="Settling to" value={transaction.paymentRail} />
+        ) : null}
+
+        {!isStripeInvoiceSettlement && transaction.paymentScheme ? (
           <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.scheme} value={transaction.paymentScheme} />
         ) : null}
 
-        {isCard && cardLast4 ? (
+        {!isStripeInvoiceSettlement && isCard && cardLast4 ? (
           <TransactionDetailSummaryRow label="Card" value={`•••• ${cardLast4}`} />
-        ) : transaction.category ? (
+        ) : !isStripeInvoiceSettlement && transaction.category ? (
           <TransactionDetailSummaryRow label="Category" value={transaction.category} />
         ) : null}
 
@@ -201,7 +255,7 @@ function TransactionSummaryDetails({
           <TransactionDetailSummaryRow label={partyLabel} value={transaction.counterpartyName} />
         ) : null}
 
-        {transaction.narration ? (
+        {!isStripeInvoiceSettlement && transaction.narration ? (
           <TransactionDetailSummaryRow label="Narration" value={transaction.narration} />
         ) : null}
 
@@ -216,7 +270,9 @@ function TransactionSummaryDetails({
           />
         ) : null}
 
-        {transaction.postedAmount != null && transaction.postedAmount > 0 ? (
+        {!isStripeInvoiceSettlement &&
+        transaction.postedAmount != null &&
+        transaction.postedAmount > 0 ? (
           <TransactionDetailSummaryRow
             label={REVIEW_ROW_LABELS.amountCredited}
             value={formatReviewRowMoneyDisplay(
@@ -227,7 +283,10 @@ function TransactionSummaryDetails({
           />
         ) : null}
 
-        {isDeposit && transaction.postedAmount != null && transaction.postedAmount > 0 ? (
+        {!isStripeInvoiceSettlement &&
+        isDeposit &&
+        transaction.postedAmount != null &&
+        transaction.postedAmount > 0 ? (
           <CreditDestinationRow
             label={
               isVerificationDepositMetadata(
@@ -236,6 +295,14 @@ function TransactionSummaryDetails({
                 ? REVIEW_ROW_LABELS.creditFor
                 : REVIEW_ROW_LABELS.creditTo
             }
+            currency={displayCurrency}
+            balanceLabel={`${displayCurrency} Balance`}
+          />
+        ) : null}
+
+        {isStripeInvoiceSettlement && settled ? (
+          <CreditDestinationRow
+            label={REVIEW_ROW_LABELS.creditTo}
             currency={displayCurrency}
             balanceLabel={`${displayCurrency} Balance`}
           />

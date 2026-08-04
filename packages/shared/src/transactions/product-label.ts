@@ -18,6 +18,7 @@ import {
   isVerificationDeposit,
   isVerificationDepositMetadata,
 } from "./verification-deposit"
+import { isStripeInvoiceSettlementMetadata } from "./stripe-invoice-settlement-lifecycle"
 
 export type EasnerLedgerDirection = "in" | "out"
 
@@ -204,6 +205,9 @@ export function toEasnerTransactionProductCategory(input: {
   ) {
     return resolveNoahVaFundingDepositTitleFromMeta(meta)
   }
+  if (direction === "in" && isStripeInvoiceSettlementMetadata(meta)) {
+    return "Invoice payment"
+  }
   if (direction === "in") return "Bank Deposit"
   return "Bank Transfer"
 }
@@ -267,6 +271,9 @@ export function toEasnerTransactionPrimaryLabel(input: {
     })
   ) {
     return resolveNoahVaFundingDepositTitleFromMeta(meta)
+  }
+  if (direction === "in" && isStripeInvoiceSettlementMetadata(meta)) {
+    return "Invoice payment"
   }
   if (direction === "in") {
     return deriveEasnerInboundRemitterDisplayName({

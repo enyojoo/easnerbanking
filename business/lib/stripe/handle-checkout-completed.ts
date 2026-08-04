@@ -229,6 +229,7 @@ export async function handleStripeCheckoutCompleted(
       stripe_payment_intent_id: paymentIntentId,
       stripe_charge_id: chargeId,
       settlement_phase: "payment_received",
+      payment_received_at: paidAt,
       gross_cents: grossCents,
       fee_cents: feeCents,
       net_cents: netCents,

@@ -100,7 +100,37 @@ vi.mock("@easner/shared", () => ({
       displayHeroTitle: title,
     }
   },
-  toEasnerTransactionPrimaryLabel: () => "Bank Deposit",
+  toEasnerTransactionPrimaryLabel: (input: {
+    metadata?: Record<string, unknown> | null
+  }) =>
+    String(input.metadata?.source ?? "").toLowerCase() === "invoice_stripe"
+      ? "Invoice payment"
+      : "Bank Deposit",
+  isStripeInvoiceSettlementMetadata: (meta?: Record<string, unknown> | null) =>
+    String(meta?.source ?? "").toLowerCase() === "invoice_stripe",
+  buildStripeInvoiceSettlementLifecycle: () => [
+    {
+      id: "payment_received",
+      title: "Payment received",
+      description: "Customer paid the invoice.",
+      state: "complete",
+      occurredAt: "2026-08-04T15:18:03.588Z",
+    },
+    {
+      id: "clearing",
+      title: "Clearing",
+      description: "Payout is clearing to your Easner account.",
+      state: "upcoming",
+      occurredAt: null,
+    },
+    {
+      id: "available",
+      title: "Available",
+      description: "Funds credited to your balance.",
+      state: "upcoming",
+      occurredAt: null,
+    },
+  ],
   resolveTransactionTimingAnchors: () => ({
     startedAt: "2025-01-15T12:00:00.000Z",
     completedAt: null,
@@ -268,5 +298,40 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.displayHeroTitle).toBe("Ama Mensah")
     expect(item.status).toBe("processing_payment")
     expect(item.statusLabel).toBe("Processing")
+  })
+
+  it("maps Stripe invoice settlement as Invoice payment (not Bank Deposit)", () => {
+    const item = mapRowToBusinessTransaction({
+      id: "27505420-c56c-4c1c-b47e-1f8b4a1f7440",
+      easner_transaction_id: "ETID50120581",
+      provider: "stripe",
+      provider_transaction_id: "pi_3U0jXrFtxW9Zk3ZB1DzQTsZa",
+      status: "processing",
+      amount: 56888,
+      currency: "USD",
+      direction: "in",
+      metadata: {
+        source: "invoice_stripe",
+        headline: "Invoice #EINV-C792A19D610A payment",
+        fee_cents: 0,
+        net_cents: 5688800,
+        invoice_id: "775370a7-d508-4812-8488-ea59d938a9b2",
+        gross_cents: 5688800,
+        invoice_number: "EINV-C792A19D610A",
+        settlement_phase: "payment_received",
+        payment_method_type: "card",
+      },
+      occurred_at: "2026-08-04T15:18:03.588Z",
+      created_at: "2026-08-04T15:18:03.973Z",
+    })
+
+    expect(item.description).toBe("Invoice payment")
+    expect(item.displayHeroTitle).toBe("Invoice payment")
+    expect(item.invoiceId).toBe("775370a7-d508-4812-8488-ea59d938a9b2")
+    expect(item.reference).toBe("Invoice #EINV-C792A19D610A")
+    expect(item.paymentScheme).toBe("Card")
+    expect(item.postedAmount).toBe(56888)
+    expect(item.depositAmount).toBe(56888)
+    expect(item.lifecycle?.some((s) => s.id === "payment_received")).toBe(true)
   })
 })

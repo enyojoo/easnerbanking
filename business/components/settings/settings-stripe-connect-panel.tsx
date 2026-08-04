@@ -13,7 +13,13 @@ import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
 } from "@stripe/react-connect-js"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,9 +29,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Check, CreditCard, Circle, Loader2 } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { Check, Circle, Loader2 } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { toast } from "sonner"
 import { isStripePublishableConfigured } from "@/lib/stripe/public-enabled"
 import { easnerStripeConnectAppearance } from "@/lib/stripe/connect-appearance"
@@ -87,6 +98,53 @@ function StripeConnectStatusBadge({
   )
 }
 
+function ConnectStatusChecklistTooltip({
+  label,
+  kind,
+  summary,
+  checklist,
+}: {
+  label: string
+  kind: StatusKind
+  summary?: string | null
+  checklist: Array<{ label: string; done: boolean }>
+}) {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex cursor-default rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`${label}. Show setup checklist.`}
+          >
+            <StripeConnectStatusBadge label={label} kind={kind} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="start" className="max-w-[17.5rem] space-y-2 p-3">
+          {summary ? <p className="text-xs leading-snug text-popover-foreground">{summary}</p> : null}
+          {checklist.length > 0 ? (
+            <ul className="space-y-1.5">
+              {checklist.map((item) => (
+                <li key={item.label} className="flex items-start gap-2 text-xs">
+                  {item.done ? (
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" aria-hidden />
+                  ) : (
+                    <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />
+                  )}
+                  <span className={item.done ? "text-popover-foreground" : "text-muted-foreground"}>
+                    {item.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
 const connectDialogContentClass =
   "flex h-[min(94vh,52rem)] w-[min(calc(100vw-1.5rem),56rem)] max-w-none flex-col gap-0 overflow-hidden p-0 duration-300 data-[state=open]:duration-300 data-[state=closed]:duration-300 sm:max-w-[min(calc(100vw-1.5rem),56rem)]"
 
@@ -110,7 +168,6 @@ export function SettingsStripeConnectPanel({
     return cached ? { ...cached } : null
   })
   const [loading, setLoading] = useState(() => !readCachedConnectStatus(businessId))
-  const [refreshing, setRefreshing] = useState(false)
   const [linking, setLinking] = useState(false)
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   const [onboardingLoading, setOnboardingLoading] = useState(false)
@@ -143,7 +200,6 @@ export function SettingsStripeConnectPanel({
     async (opts?: { background?: boolean }) => {
       const background = opts?.background === true
       if (!background) setLoading(true)
-      else setRefreshing(true)
       try {
         const res = await fetchWithSession("/api/business/stripe/connect/status")
         const json = (await res.json()) as ConnectStatusResponse
@@ -154,7 +210,6 @@ export function SettingsStripeConnectPanel({
         return null
       } finally {
         setLoading(false)
-        setRefreshing(false)
       }
     },
     [applyStatus],
@@ -329,10 +384,10 @@ export function SettingsStripeConnectPanel({
 
   if (loading && !status) {
     return (
-      <Card>
-        <CardContent className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+      <Card className="flex h-full flex-col">
+        <CardContent className="flex flex-1 items-center gap-2 py-6 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading online payment setup…
+          Loading…
         </CardContent>
       </Card>
     )
@@ -343,67 +398,41 @@ export function SettingsStripeConnectPanel({
   }
 
   const tier3 = BUSINESS_TIER_LADDER.tiers.find((t) => t.tier === 3)
-  const showReason = !status.ready && status.reason && panelUx.phase !== "requirements_due"
+  const tooltipSummary =
+    (!status.ready && status.reason && panelUx.phase !== "requirements_due"
+      ? status.reason
+      : null) ||
+    panelUx.summary ||
+    null
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <SettingsCardHeader
-            title={
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                {tier3?.title ?? "Online payments"}
-                <Badge variant="outline" className="shrink-0 font-medium text-xs">
-                  Tier 3
-                </Badge>
-                <StripeConnectStatusBadge
-                  label={panelUx.badgeLabel}
-                  kind={panelUx.badgeKind}
-                />
-                {refreshing ? (
-                  <Loader2
-                    className="h-3.5 w-3.5 animate-spin text-muted-foreground"
-                    aria-label="Updating status"
-                  />
-                ) : null}
-              </CardTitle>
-            }
-            description={
-              tier3?.description ??
-              "Verify your business to accept online payments on invoices."
-            }
-          />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border p-4 text-sm">
-            {showReason ? (
-              <p className="text-muted-foreground">{status.reason}</p>
-            ) : panelUx.summary ? (
-              <p className="text-muted-foreground">{panelUx.summary}</p>
-            ) : null}
-
-            {panelUx.checklist.length > 0 ? (
-              <ul className={panelUx.summary || showReason ? "mt-3 space-y-2" : "space-y-2"}>
-                {panelUx.checklist.map((item) => (
-                  <li key={item.label} className="flex items-start gap-2 text-muted-foreground">
-                    {item.done ? (
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-                    ) : (
-                      <Circle className="mt-0.5 h-4 w-4 shrink-0 opacity-40" aria-hidden />
-                    )}
-                    <span className={item.done ? "text-foreground" : undefined}>{item.label}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+      <Card className="flex h-full flex-col">
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="text-base">{tier3?.title ?? "Online payments"}</CardTitle>
+            <Badge variant="outline" className="text-xs">
+              Tier 3
+            </Badge>
+            <ConnectStatusChecklistTooltip
+              label={panelUx.badgeLabel}
+              kind={panelUx.badgeKind}
+              summary={tooltipSummary}
+              checklist={panelUx.checklist}
+            />
           </div>
-
+          <CardDescription className="text-sm">
+            {tier3?.description ??
+              "Accept card payments on invoices. Settled to your Easner balance."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="mt-auto space-y-3 pt-0">
           {panelUx.primary || panelUx.secondary ? (
             <div className="flex flex-wrap gap-2">
               {panelUx.primary ? (
                 <Button
                   type="button"
+                  size="sm"
                   variant={panelUx.primary.variant}
                   disabled={panelUx.primary.kind === "link_payout" && (linking || !status.hasGridVa)}
                   onClick={() => runAction(panelUx.primary!)}
@@ -421,6 +450,7 @@ export function SettingsStripeConnectPanel({
               {panelUx.secondary ? (
                 <Button
                   type="button"
+                  size="sm"
                   variant={panelUx.secondary.variant}
                   onClick={() => runAction(panelUx.secondary!)}
                 >

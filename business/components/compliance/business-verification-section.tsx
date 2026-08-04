@@ -469,7 +469,7 @@ export function BusinessVerificationSection() {
               />
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 {BUSINESS_TIER_LADDER.tiers.map((t) => {
                   const isT1 = t.tier === 1
                   const isT3 = t.tier === 3
@@ -477,7 +477,10 @@ export function BusinessVerificationSection() {
                   const comingLaterCard = (
                     <Card
                       key={t.tier}
-                      className={cn(isT1 && "border-primary/25 md:border-primary/40")}
+                      className={cn(
+                        "flex h-full flex-col",
+                        isT1 && "border-primary/25 md:border-primary/40",
+                      )}
                     >
                       <CardHeader className="pb-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -500,7 +503,7 @@ export function BusinessVerificationSection() {
                         ) : null}
                       </CardHeader>
                       {isT1 ? (
-                        <CardContent className="space-y-4 pt-0">
+                        <CardContent className="mt-auto space-y-4 pt-0">
                           {error ? <p className="text-sm text-destructive">{error}</p> : null}
                           {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
                           {tier1OnHold ? (
@@ -566,7 +569,7 @@ export function BusinessVerificationSection() {
 
                   if (isT3 && showOnlinePayments) {
                     return (
-                      <div key={t.tier} className="min-w-0">
+                      <div key={t.tier} className="min-w-0 h-full">
                         <SettingsStripeConnectPanel
                           unavailableFallback={comingLaterCard}
                         />

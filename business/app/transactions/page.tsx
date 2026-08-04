@@ -321,7 +321,11 @@ export default function TransactionsPage() {
                           {txn.description.replace(/^Transfer to\s+/i, "")}
                         </p>
                         <p className="mt-1 truncate text-xs text-muted-foreground">
-                          {formatTransactionRowDateTime(txn.displayWhenAt ?? txn.date)}
+                          {txn.reference &&
+                          txn.reference !== txn.id &&
+                          !txn.reference.startsWith("ETID")
+                            ? txn.reference
+                            : formatTransactionRowDateTime(txn.displayWhenAt ?? txn.date)}
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">

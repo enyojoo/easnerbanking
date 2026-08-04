@@ -29,7 +29,8 @@ describe("buildStripeInvoiceSettlementLifecycle", () => {
       createdAt: "2026-08-01T00:00:00.000Z",
     })
     expect(steps[1].state).toBe("current")
-    expect(steps[1].description).toMatch(/virtual account/i)
+    expect(steps[1].description).toMatch(/bank account/i)
+    expect(steps[1].description.toLowerCase()).not.toContain("virtual")
   })
 
   it("completes when credited", () => {

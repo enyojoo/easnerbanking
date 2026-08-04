@@ -249,13 +249,15 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       ? String(row.base_currency)
       : undefined
   const paymentRail =
-    String(
+    stripeInvoiceSettlementDetail?.settlementRailLabel ??
+    (String(
       meta?.payment_rail ??
         meta?.source_payment_rail ??
         meta?.destination_payment_rail ??
         row.chain ??
         "",
-    ).trim() || undefined
+    ).trim() ||
+      undefined)
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const easetagHandle =
     isEasetagP2p
@@ -282,19 +284,21 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
 
   const displayHeroTitle =
     displaySource?.displayHeroTitle ??
-    (bankDepositDetail?.displayHeroTitle
-      ? bankDepositDetail.displayHeroTitle
-      : ycDepositTitle
-        ? ycDepositTitle
-        : noahVaDepositTitle
-          ? noahVaDepositTitle
-          : bankLabel && dirRaw === "in"
-            ? formatTransactionDetailHeroTitle({
-                direction: "in",
-                counterpartyName: bankLabel,
-                productFallback: noahVaDepositTitle ?? "Bank Deposit",
-              })
-            : undefined)
+    (stripeInvoiceSettlementDetail
+      ? "Invoice payment"
+      : bankDepositDetail?.displayHeroTitle
+        ? bankDepositDetail.displayHeroTitle
+        : ycDepositTitle
+          ? ycDepositTitle
+          : noahVaDepositTitle
+            ? noahVaDepositTitle
+            : bankLabel && dirRaw === "in"
+              ? formatTransactionDetailHeroTitle({
+                  direction: "in",
+                  counterpartyName: bankLabel,
+                  productFallback: noahVaDepositTitle ?? "Bank Deposit",
+                })
+              : undefined)
   const sendNote =
     typeof meta?.send_note === "string"
       ? meta.send_note.trim()
@@ -372,10 +376,15 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     ...(ycPayInPaymentDetails ? { ycPayInPaymentDetails } : {}),
     direction,
     source: "account" as const,
-    reference: easnerId,
+    reference: stripeInvoiceSettlementDetail?.invoiceReference ?? easnerId,
+    ...(stripeInvoiceSettlementDetail?.invoiceId
+      ? { invoiceId: stripeInvoiceSettlementDetail.invoiceId }
+      : {}),
     paymentScheme: isEasetagP2p
       ? "Easetag"
-      : stablecoinDepositDetail?.schemeLabel ?? undefined,
+      : stripeInvoiceSettlementDetail?.paymentMethodLabel
+        ? stripeInvoiceSettlementDetail.paymentMethodLabel
+        : stablecoinDepositDetail?.schemeLabel ?? undefined,
     transferId: providerTxId || undefined,
     baseCurrency: listBaseCurrency,
     baseAmount: listBaseAmount,
@@ -433,7 +442,22 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           }
         : stripeInvoiceSettlementDetail
         ? {
+            displayHeroTitle: "Invoice payment",
             lifecycle: stripeInvoiceSettlementDetail.lifecycle,
+            depositAmount:
+              stripeInvoiceSettlementDetail.grossAmount > 0
+                ? stripeInvoiceSettlementDetail.grossAmount
+                : undefined,
+            postedAmount:
+              stripeInvoiceSettlementDetail.netAmount > 0
+                ? stripeInvoiceSettlementDetail.netAmount
+                : undefined,
+            postedCurrency: currencyCode,
+            fee:
+              stripeInvoiceSettlementDetail.feeAmount > 0
+                ? stripeInvoiceSettlementDetail.feeAmount
+                : undefined,
+            paymentScheme: stripeInvoiceSettlementDetail.paymentMethodLabel ?? undefined,
             ledgerCreatedAt,
           }
         : stablecoinDepositDetail

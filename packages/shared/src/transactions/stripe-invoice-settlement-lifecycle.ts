@@ -54,7 +54,7 @@ function clearingDescription(rail: StripeSettlementRail | null): string {
     return "Payout is on the way to your stablecoin deposit address."
   }
   if (rail === "grid_va") {
-    return "Payout is on the way to your bank virtual account."
+    return "Payout is on the way to your bank account."
   }
   return "Payout is clearing to your Easner account."
 }

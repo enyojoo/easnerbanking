@@ -51,4 +51,27 @@ describe("product labels for deposits", () => {
     ).toBe("Bank verification deposit")
     expect(isNoahVaFundingDeposit({ provider: "noah", direction: "in", metadata: meta })).toBe(false)
   })
+
+  it("Stripe invoice settlement → Invoice payment (not Bank Deposit)", () => {
+    const meta = {
+      source: "invoice_stripe",
+      invoice_id: "775370a7-d508-4812-8488-ea59d938a9b2",
+      invoice_number: "EINV-C792A19D610A",
+      settlement_phase: "payment_received",
+    }
+    expect(
+      toEasnerTransactionPrimaryLabel({
+        provider: "stripe",
+        direction: "in",
+        metadata: meta,
+      }),
+    ).toBe("Invoice payment")
+    expect(
+      toEasnerTransactionProductCategory({
+        provider: "stripe",
+        direction: "in",
+        metadata: meta,
+      }),
+    ).toBe("Invoice payment")
+  })
 })

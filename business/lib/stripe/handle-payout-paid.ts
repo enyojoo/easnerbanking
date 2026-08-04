@@ -158,6 +158,7 @@ export async function handleStripePayoutPaid(
               settlement_phase: "payout_sent",
               settlement_rail: rail,
               stripe_payout_id: payout.id,
+              payout_sent_at: now,
             },
           })
         }
