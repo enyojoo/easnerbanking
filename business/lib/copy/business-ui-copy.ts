@@ -147,10 +147,8 @@ export const SETTINGS_CARD_COPY = {
   customerInvoices: "Open or create invoices for this contact.",
   customerSummary: "Review billing history with this customer.",
   communicationPrefs: "Choose which emails you receive.",
-  invoiceEmailDelivery: "Confirm where customer invoice replies go.",
   invoicePaymentDefaults: "Choose payment options on new invoices.",
   invoiceNotifications: "Get notified when customers view or pay.",
-  invoiceBranding: "Customize how invoices look to customers.",
 } as const
 
 export const VERIFICATION_SECTION_COPY = {

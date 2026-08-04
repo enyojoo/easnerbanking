@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -13,10 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Check, Edit, FileText, Loader2, Palette, X } from "lucide-react"
+import { FileText } from "lucide-react"
 import { useBusinessProfile, type BusinessProfile } from "@/lib/use-business-profile"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
 import type { InvoicePaymentDefaults } from "@/lib/b2b/types"
 import {
   DEFAULT_INVOICE_PAYMENT_DEFAULTS,
@@ -27,30 +24,12 @@ import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SettingsStripeConnectPanel } from "@/components/settings/settings-stripe-connect-panel"
 import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 
-type BrandingForm = {
-  brandColor: string
-  footerText: string
-}
-
-function brandingFromSettings(settings: BusinessInvoiceSettings): BrandingForm {
-  return {
-    brandColor: settings.brandColor ?? "",
-    footerText: settings.footerText ?? "",
-  }
-}
-
 export function SettingsInvoicingTab() {
   const profile = useBusinessProfile()
   const [settings, setSettings] = useState<BusinessInvoiceSettings>({
     ...DEFAULT_INVOICE_PAYMENT_DEFAULTS,
   })
   const settingsRef = useRef(settings)
-  const [editingBranding, setEditingBranding] = useState(false)
-  const [brandingForm, setBrandingForm] = useState<BrandingForm>({
-    brandColor: "",
-    footerText: "",
-  })
-  const [savingBranding, setSavingBranding] = useState(false)
 
   useEffect(() => {
     settingsRef.current = settings
@@ -95,70 +74,15 @@ export function SettingsInvoicingTab() {
     [persistSettings],
   )
 
-  const handleEditBranding = () => {
-    setBrandingForm(brandingFromSettings(settingsRef.current))
-    setEditingBranding(true)
-  }
-
-  const handleCancelBranding = () => {
-    setEditingBranding(false)
-  }
-
-  const handleSaveBranding = async () => {
-    setSavingBranding(true)
-    try {
-      const optimistic: BusinessInvoiceSettings = {
-        ...settingsRef.current,
-        brandColor: brandingForm.brandColor.trim() || undefined,
-        footerText: brandingForm.footerText.trim() || undefined,
-      }
-      setSettings(optimistic)
-      const ok = await persistSettings(optimistic)
-      if (ok) setEditingBranding(false)
-    } finally {
-      setSavingBranding(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <SettingsCardHeader
-            title="Customer email delivery"
-            description={SETTINGS_CARD_COPY.invoiceEmailDelivery}
-          />
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Reply-To for customers</span>
-            <span className="font-medium text-right">
-              {profile.invoiceReplyEmail?.trim() || "Add support email in Business settings"}
-            </span>
-          </div>
-          {profile.invoiceReplyEmailSource ? (
-            <p className="text-xs text-muted-foreground">
-              Resolved from{" "}
-              {profile.invoiceReplyEmailSource === "support"
-                ? "Settings → Business → Support Email"
-                : profile.invoiceReplyEmailSource === "owner"
-                  ? "organization owner account email"
-                  : "your account email"}
-              .
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <SettingsStripeConnectPanel />
-
       <Card>
         <CardHeader>
           <SettingsCardHeader
             title={
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
-                Default payment methods
+                Invoice payment methods
               </CardTitle>
             }
             description={SETTINGS_CARD_COPY.invoicePaymentDefaults}
@@ -250,6 +174,8 @@ export function SettingsInvoicingTab() {
         </CardContent>
       </Card>
 
+      {settings.showOnlinePayment !== false ? <SettingsStripeConnectPanel /> : null}
+
       <Card>
         <CardHeader>
           <SettingsCardHeader
@@ -258,100 +184,48 @@ export function SettingsInvoicingTab() {
           />
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <Label htmlFor="view-notify">Email when customer views invoice</Label>
-              <p className="text-sm text-muted-foreground">Sent once on first customer view</p>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Reply-To for customers</span>
+              <span className="font-medium text-right">
+                {profile.invoiceReplyEmail?.trim() || "Add support email in Business settings"}
+              </span>
             </div>
-            <Switch
-              id="view-notify"
-              checked={settings.notifyOnInvoiceView !== false}
-              onCheckedChange={(v) => patch({ notifyOnInvoiceView: v })}
-            />
+            {profile.invoiceReplyEmailSource ? (
+              <p className="text-xs text-muted-foreground">
+                Resolved from{" "}
+                {profile.invoiceReplyEmailSource === "support"
+                  ? "Settings → Business → Support Email"
+                  : profile.invoiceReplyEmailSource === "owner"
+                    ? "organization owner account email"
+                    : "your account email"}
+                .
+              </p>
+            ) : null}
           </div>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <Label htmlFor="receipt-notify">Email receipt to customer when marked paid</Label>
-            </div>
-            <Switch
-              id="receipt-notify"
-              checked={settings.sendReceiptOnPaid !== false}
-              onCheckedChange={(v) => patch({ sendReceiptOnPaid: v })}
-            />
-          </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <SettingsCardHeader
-            title={
-              <CardTitle className="flex items-center gap-2">
-                <Palette className="h-5 w-5" />
-                Branding
-              </CardTitle>
-            }
-            description={SETTINGS_CARD_COPY.invoiceBranding}
-            actions={
-              editingBranding ? (
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCancelBranding}
-                    disabled={savingBranding}
-                  >
-                    <X className="h-4 w-4 mr-1" />
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => void handleSaveBranding()}
-                    disabled={savingBranding}
-                  >
-                    {savingBranding ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    ) : (
-                      <Check className="h-4 w-4" aria-hidden />
-                    )}
-                    Save
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="outline" size="sm" onClick={handleEditBranding} className="shrink-0">
-                  <Edit className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
-              )
-            }
-          />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="brand-color">Accent color (hex)</Label>
-            <Input
-              id="brand-color"
-              className={SETTINGS_CONTROL_SURFACE}
-              placeholder="#0066cc"
-              value={editingBranding ? brandingForm.brandColor : settings.brandColor ?? ""}
-              onChange={(e) =>
-                setBrandingForm((prev) => ({ ...prev, brandColor: e.target.value }))
-              }
-              disabled={!editingBranding}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="footer-text">Footer text</Label>
-            <Input
-              id="footer-text"
-              className={SETTINGS_CONTROL_SURFACE}
-              placeholder="Thank you for your business"
-              value={editingBranding ? brandingForm.footerText : settings.footerText ?? ""}
-              onChange={(e) =>
-                setBrandingForm((prev) => ({ ...prev, footerText: e.target.value }))
-              }
-              disabled={!editingBranding}
-            />
+          <div className="space-y-6 border-t pt-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="view-notify">Email when customer views invoice</Label>
+                <p className="text-sm text-muted-foreground">Sent once on first customer view</p>
+              </div>
+              <Switch
+                id="view-notify"
+                checked={settings.notifyOnInvoiceView !== false}
+                onCheckedChange={(v) => patch({ notifyOnInvoiceView: v })}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="receipt-notify">Email receipt to customer when marked paid</Label>
+              </div>
+              <Switch
+                id="receipt-notify"
+                checked={settings.sendReceiptOnPaid !== false}
+                onCheckedChange={(v) => patch({ sendReceiptOnPaid: v })}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
