@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
-import { getConnectAccountRow, syncConnectAccountRow } from "@/lib/stripe/connect"
+import { autoLinkGridVaPayoutIfEligible, getConnectAccountRow, syncConnectAccountRow } from "@/lib/stripe/connect"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
@@ -27,6 +27,18 @@ export async function POST(request: Request) {
       businessId: ctx.businessId,
       stripeAccountId: row.stripe_account_id,
     })
+    const autoLink = await autoLinkGridVaPayoutIfEligible(admin, {
+      businessId: ctx.businessId,
+    })
+    if (!autoLink.skipped && !autoLink.ok) {
+      console.warn("[stripe-connect] sync auto-link failed:", autoLink.error)
+    }
+    const externalAccountLinked =
+      autoLink.skipped && autoLink.reason === "already_linked"
+        ? true
+        : !autoLink.skipped && autoLink.ok
+          ? true
+          : Boolean(synced.stripe_external_account_id)
     return NextResponse.json({
       ok: true,
       onboardingStatus: synced.onboarding_status,
@@ -34,7 +46,8 @@ export async function POST(request: Request) {
       payoutsEnabled: synced.payouts_enabled,
       detailsSubmitted: synced.details_submitted,
       requirementsCurrentlyDue: synced.requirements_currently_due,
-      externalAccountLinked: Boolean(synced.stripe_external_account_id),
+      externalAccountLinked,
+      autoLink,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Sync failed"

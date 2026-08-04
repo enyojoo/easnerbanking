@@ -41,10 +41,12 @@ STRIPE_WEBHOOK_SECRET=
 
 ## Merchant setup (Settings → Invoicing)
 
-1. Tier-1 verification complete + Grid VA provisioned.
-2. Start / continue Stripe embedded onboarding.
-3. Link Grid VA as payout destination.
-4. Status shows **Ready** → Pay online appears on invoices.
+1. Tier-1 verification complete + Grid VA provisioned (`/accounts`).
+2. Start / continue Stripe embedded onboarding (business profile only — no bank form).
+3. On submit, Easner **automatically links** the Grid VA as the Stripe payout destination when eligible.
+4. Status shows **Ready** once Stripe enables transfers + payouts → Pay online on invoices.
+
+Manual **Link payout** appears only if auto-link fails (missing VA details, Stripe error, etc.).
 
 ## E2E test (test mode)
 
@@ -55,6 +57,10 @@ STRIPE_WEBHOOK_SECRET=
 5. Grid inbound → Hop 3: balance credited, ledger settled.
 
 ## Monitoring
+
+- Confirm `event_inbox` receives **`account.updated`** for Connect onboarding (not just checkout events).
+  Enable **Listen to events on Connected accounts** on the platform webhook.
+- Status syncs from Stripe on Settings load; Grid VA payout linking runs automatically after verification.
 
 ```bash
 npx tsx scripts/stripe-connect-reconcile-settlements.ts

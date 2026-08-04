@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Stripe from "stripe"
 import { getStripe } from "../client"
+import { autoLinkGridVaPayoutIfEligible } from "./auto-link-grid-va-payout"
 import type { BusinessStripeConnectAccountRow, ConnectOnboardingStatus } from "./types"
 
 function capabilityActive(
@@ -108,5 +109,13 @@ export async function syncConnectAccountFromWebhook(
     stripeAccountId: accountId,
     account,
   })
+
+  const autoLink = await autoLinkGridVaPayoutIfEligible(admin, {
+    businessId: String(row.business_id),
+  })
+  if (!autoLink.skipped && !autoLink.ok) {
+    console.warn("[stripe-connect] auto-link after account.updated failed:", autoLink.error)
+  }
+
   return { handled: true }
 }

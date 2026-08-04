@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
-import { createConnectAccountSession } from "@/lib/stripe/connect"
+import {
+  createConnectAccountSession,
+  stripeConnectClientIp,
+} from "@/lib/stripe/connect"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
@@ -26,6 +29,7 @@ export async function POST(request: Request) {
   const result = await createConnectAccountSession(admin, {
     businessId: ctx.businessId,
     email: typeof userRow?.email === "string" ? userRow.email : null,
+    clientIp: stripeConnectClientIp(request),
   })
 
   if (!result.ok) {

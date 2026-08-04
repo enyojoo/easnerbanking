@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getStripe } from "../client"
+import { acceptStripeConnectTermsOfService } from "./accept-platform-tos"
 import { ensureConnectedAccount } from "./create-connected-account"
 
 export type CreateAccountSessionResult =
@@ -12,10 +13,17 @@ export type CreateAccountSessionResult =
  */
 export async function createConnectAccountSession(
   admin: SupabaseClient,
-  input: { businessId: string; email?: string | null },
+  input: { businessId: string; email?: string | null; clientIp?: string | null },
 ): Promise<CreateAccountSessionResult> {
   try {
     const row = await ensureConnectedAccount(admin, input)
+    if (input.clientIp?.trim()) {
+      try {
+        await acceptStripeConnectTermsOfService(row.stripe_account_id, input.clientIp.trim())
+      } catch (e) {
+        console.warn("[stripe-connect] tos acceptance update failed:", e)
+      }
+    }
     const stripe = getStripe()
     const session = await stripe.accountSessions.create({
       account: row.stripe_account_id,
