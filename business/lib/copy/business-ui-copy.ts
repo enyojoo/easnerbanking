@@ -228,9 +228,6 @@ export const INVOICE_SETTINGS_COPY = {
   dueDateReminderHelp: "Send a reminder the day the invoice is due.",
   overdueReminder: "Remind when overdue",
   overdueReminderHelp: "Send a reminder about 7 days after the due date.",
-  finishOnlinePayments: "Finish online payments setup in Verification",
-  finishBankTransfer: "Complete Tier 2 verification for bank transfer details",
-  finishStablecoin: "Set up a wallet in Accounts",
 } as const
 
 export const INVOICE_CUSTOMER_VIEW_COPY = {

@@ -1,6 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import { loadConnectAndInitialize } from "@stripe/connect-js"
 import {
   ConnectAccountOnboarding,
@@ -91,7 +98,12 @@ const connectOnboardingCollectionOptions = {
   },
 }
 
-export function SettingsStripeConnectPanel() {
+export function SettingsStripeConnectPanel({
+  unavailableFallback = null,
+}: {
+  /** Rendered when Connect is not enabled for this business/environment. */
+  unavailableFallback?: ReactNode
+} = {}) {
   const { businessId } = useBusinessProfile()
   const [status, setStatus] = useState<ConnectStatusResponse | null>(() => {
     const cached = readCachedConnectStatus(businessId)
@@ -327,7 +339,7 @@ export function SettingsStripeConnectPanel() {
   }
 
   if (!status?.enabled || !panelUx) {
-    return null
+    return unavailableFallback ?? null
   }
 
   const tier3 = BUSINESS_TIER_LADDER.tiers.find((t) => t.tier === 3)

@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -12,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { FileText } from "lucide-react"
 import { useBusinessProfile, type BusinessProfile } from "@/lib/use-business-profile"
 import { fetchWithSession } from "@/lib/fetch-with-session"
@@ -27,13 +25,6 @@ import {
   INVOICE_SETTINGS_COPY,
   SETTINGS_CARD_COPY,
 } from "@/lib/copy/business-ui-copy"
-import {
-  readCachedConnectStatus,
-  writeCachedConnectStatus,
-  type CachedConnectStatus,
-} from "@/lib/stripe/connect-status-cache"
-import { resolveConnectPanelPhase } from "@/lib/stripe/connect-panel-ux"
-import { TIER2_COMPLETE_PLACEHOLDER } from "@/lib/compliance-placeholders"
 
 export function SettingsInvoicingTab() {
   const profile = useBusinessProfile()
@@ -41,11 +32,6 @@ export function SettingsInvoicingTab() {
     ...DEFAULT_INVOICE_PAYMENT_DEFAULTS,
   })
   const settingsRef = useRef(settings)
-  const [connectReady, setConnectReady] = useState<boolean | null>(() => {
-    const cached = readCachedConnectStatus(profile.businessId)
-    if (!cached) return null
-    return resolveConnectPanelPhase(cached) === "ready"
-  })
 
   useEffect(() => {
     settingsRef.current = settings
@@ -56,29 +42,6 @@ export function SettingsInvoicingTab() {
       setSettings({ ...DEFAULT_INVOICE_PAYMENT_DEFAULTS, ...profile.invoiceSettings })
     }
   }, [profile.invoiceSettings])
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      const cached = readCachedConnectStatus(profile.businessId)
-      if (cached && !cancelled) {
-        setConnectReady(resolveConnectPanelPhase(cached) === "ready")
-      }
-      try {
-        const res = await fetchWithSession("/api/business/stripe/connect/status")
-        const data = (await res.json().catch(() => ({}))) as Omit<CachedConnectStatus, "cachedAt">
-        if (!res.ok || cancelled) return
-        writeCachedConnectStatus(profile.businessId, data)
-        setConnectReady(resolveConnectPanelPhase(data) === "ready")
-      } catch {
-        // keep cache / null
-      }
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [profile.businessId])
 
   const persistSettings = useCallback(async (next: BusinessInvoiceSettings) => {
     try {
@@ -113,10 +76,6 @@ export function SettingsInvoicingTab() {
     [persistSettings],
   )
 
-  const onlineIncomplete =
-    settings.showOnlinePayment !== false && connectReady === false
-  const bankIncomplete = settings.showBankTransfer && !TIER2_COMPLETE_PLACEHOLDER
-
   return (
     <div className="space-y-6">
       <Card>
@@ -138,13 +97,6 @@ export function SettingsInvoicingTab() {
               <p className="text-sm text-muted-foreground">
                 {INVOICE_SETTINGS_COPY.bankTransferHelp}
               </p>
-              {bankIncomplete ? (
-                <p className="text-xs text-muted-foreground mt-1">
-                  <Link href="/settings?tab=verification" className="underline underline-offset-2">
-                    {INVOICE_SETTINGS_COPY.finishBankTransfer}
-                  </Link>
-                </p>
-              ) : null}
             </div>
             <Switch
               id="show-bank"
@@ -158,11 +110,6 @@ export function SettingsInvoicingTab() {
               <p className="text-sm text-muted-foreground">
                 {INVOICE_SETTINGS_COPY.stablecoinHelp}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                <Link href="/accounts" className="underline underline-offset-2">
-                  {INVOICE_SETTINGS_COPY.finishStablecoin}
-                </Link>
-              </p>
             </div>
             <Switch
               id="show-stable"
@@ -170,34 +117,20 @@ export function SettingsInvoicingTab() {
               onCheckedChange={(v) => patch({ showStablecoin: v })}
             />
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <Label htmlFor="show-online">{INVOICE_SETTINGS_COPY.onlinePayments}</Label>
-                <p className="text-sm text-muted-foreground">
-                  {INVOICE_SETTINGS_COPY.onlinePaymentsHelp}
-                </p>
-              </div>
-              <Switch
-                id="show-online"
-                checked={settings.showOnlinePayment !== false}
-                onCheckedChange={(v) => patch({ showOnlinePayment: v })}
-              />
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="show-online">{INVOICE_SETTINGS_COPY.onlinePayments}</Label>
+              <p className="text-sm text-muted-foreground">
+                {INVOICE_SETTINGS_COPY.onlinePaymentsHelp}
+              </p>
             </div>
-            {onlineIncomplete ? (
-              <Alert>
-                <AlertDescription className="text-sm">
-                  <Link
-                    href="/settings?tab=verification"
-                    className="underline underline-offset-2 font-medium"
-                  >
-                    {INVOICE_SETTINGS_COPY.finishOnlinePayments}
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            ) : null}
+            <Switch
+              id="show-online"
+              checked={settings.showOnlinePayment !== false}
+              onCheckedChange={(v) => patch({ showOnlinePayment: v })}
+            />
           </div>
-          <div className="space-y-2">
+          <div className="flex items-center justify-between gap-4">
             <Label>{INVOICE_SETTINGS_COPY.defaultPaymentOption}</Label>
             <Select
               value={settings.preferredMethod}
@@ -207,10 +140,10 @@ export function SettingsInvoicingTab() {
                 })
               }
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-[13.5rem]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent align="end">
                 <SelectItem value="customer_choice">Customer choice</SelectItem>
                 <SelectItem value="online">{INVOICE_SETTINGS_COPY.onlinePayments}</SelectItem>
                 <SelectItem value="bank">{INVOICE_SETTINGS_COPY.bankTransfer}</SelectItem>

@@ -34,6 +34,14 @@ export default function AccountsPage() {
   } = useBusinessAccountRows()
   const incomingQuery = useIncomingBalances()
 
+  // Keep cards hidden until balances + incoming settle so nothing pops in after paint.
+  const waitingForIncoming =
+    accountRows.length > 0 &&
+    incomingQuery.isPending &&
+    !incomingQuery.isFetched
+  const showCardSkeleton =
+    (loading && accountRows.length === 0) || waitingForIncoming
+
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text)
     setCopiedField(field)
@@ -65,7 +73,7 @@ export default function AccountsPage() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {loading && accountRows.length === 0 ? (
+        {showCardSkeleton ? (
           <>
             <Card>
               <CardContent className="space-y-6 p-6">
@@ -101,7 +109,13 @@ export default function AccountsPage() {
             </Card>
           </>
         ) : (
-          accountRows.map((account) => (
+          accountRows.map((account) => {
+            const incoming = Number(
+              incomingQuery.data?.[account.currency.toUpperCase()] ?? 0,
+            )
+            const showIncoming = Number.isFinite(incoming) && incoming > 0
+
+            return (
             <Card key={account.id} className="transition-shadow hover:shadow-md">
               <CardContent className="p-6">
                 <div className="flex h-full flex-col">
@@ -116,7 +130,21 @@ export default function AccountsPage() {
                     </div>
 
                     <div className="mb-10">
-                      <p className="mb-1 text-xs text-muted-foreground">Available Balance</p>
+                      <div className="mb-1 flex items-baseline justify-between gap-3">
+                        <p className="text-xs text-muted-foreground">Available Balance</p>
+                        {showIncoming ? (
+                          <p className="text-xs text-muted-foreground">
+                            Incoming{" "}
+                            <span className="font-medium tabular-nums text-foreground">
+                              {getCurrencySymbol(account.currency)}
+                              {incoming.toLocaleString("en-US", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          </p>
+                        ) : null}
+                      </div>
                       <p className="text-[2rem] font-semibold leading-tight tracking-tight">
                         {getCurrencySymbol(account.currency)}
                         {account.balance.toLocaleString("en-US", {
@@ -124,24 +152,6 @@ export default function AccountsPage() {
                           maximumFractionDigits: 2,
                         })}
                       </p>
-                      {(() => {
-                        const incoming = Number(
-                          incomingQuery.data?.[account.currency.toUpperCase()] ?? 0,
-                        )
-                        if (!Number.isFinite(incoming) || incoming <= 0) return null
-                        return (
-                          <div className="mt-3">
-                            <p className="mb-0.5 text-xs text-muted-foreground">Incoming</p>
-                            <p className="text-sm font-medium tabular-nums text-foreground">
-                              {getCurrencySymbol(account.currency)}
-                              {incoming.toLocaleString("en-US", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </p>
-                          </div>
-                        )
-                      })()}
                     </div>
                   </div>
 
@@ -189,7 +199,8 @@ export default function AccountsPage() {
                 </div>
               </CardContent>
             </Card>
-          ))
+            )
+          })
         )}
       </div>
     </div>
