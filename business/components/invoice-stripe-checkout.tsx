@@ -308,9 +308,8 @@ export function InvoiceStripeCheckout({
       stripe={stripePromise}
       options={{
         clientSecret,
-        defaultValues: {
-          email: invoice.customerEmail || undefined,
-        },
+        // Email is set server-side via customer_email on the Checkout Session.
+        // Do not pass defaultValues.email here — Stripe rejects updating email twice.
         elementsOptions: {
           appearance: elementsAppearance,
         },
