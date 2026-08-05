@@ -177,7 +177,7 @@ function CheckoutSurface({
         options={{
           layout: {
             type: "accordion",
-            defaultCollapsed: false,
+            // Omit defaultCollapsed — Checkout Elements' payment.update() rejects it.
             radios: "always",
             spacedAccordionItems: true,
           },

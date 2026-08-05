@@ -23,10 +23,22 @@ export function PwaStandaloneRoot() {
       return () => mq.removeEventListener("change", onChange)
     }
 
+    // Public customer invoice views should not be controlled by a SW — avoids
+    // console noise and unnecessary interception on unauthenticated pay pages.
+    const path = window.location.pathname
+    const isPublicInvoice = path === "/invoice" || path.startsWith("/invoice/")
     if ("serviceWorker" in navigator) {
-      void navigator.serviceWorker.register("/sw.js").catch(() => {
-        // ignore
-      })
+      if (isPublicInvoice) {
+        void navigator.serviceWorker.getRegistrations().then((regs) => {
+          for (const reg of regs) {
+            void reg.unregister()
+          }
+        })
+      } else {
+        void navigator.serviceWorker.register("/sw.js").catch(() => {
+          // ignore
+        })
+      }
     }
 
     return () => mq.removeEventListener("change", onChange)
