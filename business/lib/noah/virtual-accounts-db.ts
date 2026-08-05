@@ -90,13 +90,15 @@ export async function getVirtualAccountDisplayFromDb(
   },
 ): Promise<VirtualAccountDisplay | null> {
   const fiat = input.currency.toUpperCase()
+  // Grid persists lowercase (`usd`); Noah/legacy may use `USD`. Match both.
+  const currencyKeys = Array.from(new Set([fiat, fiat.toLowerCase()]))
   let q = admin
     .from("virtual_accounts")
     .select(
       "noah_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name,updated_at,provider,status",
     )
     .neq("status", "retired")
-    .eq("currency", fiat)
+    .in("currency", currencyKeys)
     .order("updated_at", { ascending: false })
     .limit(8)
 

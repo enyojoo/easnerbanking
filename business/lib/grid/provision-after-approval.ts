@@ -28,7 +28,7 @@ function mapBankFields(info: Record<string, unknown>, currency: string) {
     bank_name: String(info.bankName ?? "").trim() || null,
     bank_address: null as string | null,
     account_holder_name: String(info.accountHolderName ?? "").trim() || null,
-    currency: currency.toLowerCase(),
+    currency: currency.toUpperCase(),
   }
 }
 

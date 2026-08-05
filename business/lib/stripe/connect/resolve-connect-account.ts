@@ -87,7 +87,7 @@ export async function resolveConnectReadyForCheckout(
 
   let reason: string | undefined
   if (!hasGridVa) {
-    reason = "An active virtual account is required for payout settlement"
+    reason = `Your Easner ${currency} account is needed before payouts can be linked`
   } else if (!detailsSubmitted || due.length > 0) {
     reason = "Complete online payment verification"
   } else if (!transfersEnabled) {

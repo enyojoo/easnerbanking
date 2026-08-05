@@ -121,7 +121,12 @@ function ConnectStatusChecklistTooltip({
             <StripeConnectStatusBadge label={label} kind={kind} />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" align="start" className="max-w-[17.5rem] space-y-2 p-3">
+        <TooltipContent
+          side="bottom"
+          align="end"
+          collisionPadding={16}
+          className="max-w-[min(17.5rem,calc(100vw-2rem))] space-y-2 p-3"
+        >
           {summary ? <p className="text-xs leading-snug text-popover-foreground">{summary}</p> : null}
           {checklist.length > 0 ? (
             <ul className="space-y-1.5">
