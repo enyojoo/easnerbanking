@@ -72,11 +72,23 @@ describe("resolveConnectPanelUx", () => {
     )
     expect(ux.primary?.kind).toBe("link_payout")
     expect(ux.primary?.label).toBe("Link payouts")
-    expect(ux.secondary?.label).toBe("Edit profile")
-    expect(ux.secondary?.dialogTitle).toBe("Edit business profile")
+    expect(ux.secondary).toBeUndefined()
   })
 
-  it("shows edit profile only when ready", () => {
+  it("shows one onboarding CTA when requirements are due", () => {
+    const ux = resolveConnectPanelUx(
+      base({
+        stripeAccountId: "acct_1",
+        requirementsCurrentlyDue: ["company.tax_id"],
+      }),
+    )
+    expect(ux.phase).toBe("requirements_due")
+    expect(ux.primary?.label).toBe("Complete")
+    expect(ux.primary?.dialogTitle).toBe("Complete requirements")
+    expect(ux.secondary).toBeUndefined()
+  })
+
+  it("shows no CTAs when ready", () => {
     const ux = resolveConnectPanelUx(
       base({
         ready: true,
@@ -87,9 +99,22 @@ describe("resolveConnectPanelUx", () => {
         externalAccountLinked: true,
       }),
     )
+    expect(ux.badgeLabel).toBe("Ready")
     expect(ux.primary).toBeUndefined()
-    expect(ux.secondary?.label).toBe("Edit profile")
-    expect(ux.secondary?.dialogTitle).toBe("Edit business profile")
+    expect(ux.secondary).toBeUndefined()
     expect(ux.summary).toBeUndefined()
+  })
+
+  it("shows no CTAs while verification is pending", () => {
+    const ux = resolveConnectPanelUx(
+      base({
+        stripeAccountId: "acct_1",
+        detailsSubmitted: true,
+        hasGridVa: false,
+      }),
+    )
+    expect(ux.phase).toBe("missing_virtual_account")
+    expect(ux.primary).toBeUndefined()
+    expect(ux.secondary).toBeUndefined()
   })
 })

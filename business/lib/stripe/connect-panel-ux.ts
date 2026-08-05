@@ -108,12 +108,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         badgeKind: "blocked",
         summary: status.reason ?? "Additional information is required.",
         checklist,
-        primary: onboardingAction("Complete requirements", "Complete requirements"),
-        secondary: onboardingAction(
-          "Review profile",
-          "Review business profile",
-          "outline",
-        ),
+        primary: onboardingAction("Complete", "Complete requirements"),
       }
 
     case "pending_review":
@@ -123,11 +118,6 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         badgeKind: "pending",
         summary: "We're reviewing your details. This updates automatically.",
         checklist,
-        secondary: onboardingAction(
-          "Review details",
-          "Review submitted details",
-          "outline",
-        ),
       }
 
     case "missing_virtual_account":
@@ -137,9 +127,6 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         badgeKind: "blocked",
         summary: "Your Easner USD account is needed before payouts can be linked.",
         checklist,
-        secondary: status.stripeAccountId
-          ? onboardingAction("Review profile", "Review business profile", "outline")
-          : undefined,
       }
 
     case "link_payout":
@@ -155,7 +142,6 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
           variant: "default",
           dialogTitle: "Link payouts to Easner",
         },
-        secondary: onboardingAction("Edit profile", "Edit business profile", "outline"),
       }
 
     case "activating":
@@ -163,9 +149,8 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         badgeLabel: "Activating",
         badgeKind: "pending",
-        summary: "We're enabling transfers and payouts.",
+        summary: "We're enabling transfers and payouts. This updates automatically.",
         checklist,
-        secondary: onboardingAction("Review profile", "Review business profile", "outline"),
       }
 
     case "ready":
@@ -175,7 +160,6 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         badgeLabel: "Ready",
         badgeKind: "ready",
         checklist,
-        secondary: onboardingAction("Edit profile", "Edit business profile", "outline"),
       }
   }
 }
