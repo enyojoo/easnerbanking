@@ -17,6 +17,7 @@ import {
   customerPaymentOptionsSubtitle,
   customerPaymentOptionsTitle,
   onlinePaymentTabHint,
+  invoicePaymentTabLabel,
   stablecoinPaymentExtraInstruction,
 } from "@/lib/invoices/invoice-payment-copy"
 import { InvoiceStripeCheckout } from "@/components/invoice-stripe-checkout"
@@ -255,22 +256,33 @@ export function InvoicePaymentOptions({
     >
           <TabsList
             className={cn(
-              "grid w-full",
+              "grid w-full h-auto gap-1 p-1",
               tabCount === 3 ? "grid-cols-3" : tabCount === 2 ? "grid-cols-2" : "grid-cols-1",
             )}
           >
-            {hasOnline ? <TabsTrigger value="online">Pay online</TabsTrigger> : null}
+            {hasOnline ? (
+              <TabsTrigger
+                value="online"
+                className="min-w-0 px-1.5 py-2 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
+              >
+                {invoicePaymentTabLabel("online")}
+              </TabsTrigger>
+            ) : null}
             {hasBank ? (
-              <TabsTrigger value="bank">
-                {bankAccount!.currency === "USD"
-                  ? "US Bank Account"
-                  : bankAccount!.currency === "EUR"
-                    ? "EU Bank Account"
-                    : "Bank transfer"}
+              <TabsTrigger
+                value="bank"
+                className="min-w-0 px-1.5 py-2 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
+              >
+                {invoicePaymentTabLabel("bank")}
               </TabsTrigger>
             ) : null}
             {hasStablecoin ? (
-              <TabsTrigger value="stablecoin">Stablecoin</TabsTrigger>
+              <TabsTrigger
+                value="stablecoin"
+                className="min-w-0 px-1.5 py-2 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
+              >
+                {invoicePaymentTabLabel("stablecoin")}
+              </TabsTrigger>
             ) : null}
           </TabsList>
 

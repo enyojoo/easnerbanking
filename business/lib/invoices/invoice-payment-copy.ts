@@ -70,6 +70,18 @@ export function onlinePaymentTabHint(): string {
   return "Pay with card, bank debit, or other methods available in your region."
 }
 
+/** Short tab labels — fit 3-up on mobile; details live inside each tab. */
+export function invoicePaymentTabLabel(tab: "online" | "bank" | "stablecoin"): string {
+  switch (tab) {
+    case "online":
+      return "Pay online"
+    case "bank":
+      return "Bank"
+    case "stablecoin":
+      return "Stablecoin"
+  }
+}
+
 export function bankPaymentExtraInstruction(invoiceNumber: string): string {
   return `Include ${invoiceNumber.trim()} in the payment reference or narration.`
 }
