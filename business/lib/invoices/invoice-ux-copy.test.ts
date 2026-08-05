@@ -20,9 +20,9 @@ import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import type { B2bInvoiceRow } from "@/lib/b2b/map-invoice"
 
 describe("invoice UX copy", () => {
-  it("uses Issue terminology (not Finalize)", () => {
-    expect(INVOICE_ACTION_COPY.issue).toBe("Issue invoice")
-    expect(INVOICE_ACTION_COPY.issueAndEmail).toBe("Issue and email")
+  it("uses short familiar send/create labels (not Finalize)", () => {
+    expect(INVOICE_ACTION_COPY.issue).toBe("Create")
+    expect(INVOICE_ACTION_COPY.issueAndEmail).toBe("Send")
     expect(INVOICE_TOAST_COPY.issued).toBe("Invoice issued")
     expect(JSON.stringify(INVOICE_ACTION_COPY).toLowerCase()).not.toContain("finalize")
     expect(JSON.stringify(INVOICE_TOAST_COPY).toLowerCase()).not.toContain("finalize")

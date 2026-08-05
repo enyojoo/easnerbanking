@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
 import {
   ArrowLeft,
   Plus,
@@ -19,16 +18,7 @@ import {
   MapPin,
   FileText,
   Loader2,
-  Eye,
 } from "lucide-react"
-import { Switch } from "@/components/ui/switch"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -58,10 +48,7 @@ import { BaseCurrencySelect } from "@/components/base-currency-select"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { invoiceBackHref, withReturnTo } from "@/lib/invoice-navigation"
 import { dueDateFromPaymentTerms } from "@/lib/invoices/due-date"
-import { useInvoicePayIn } from "@/hooks/use-invoice-pay-in"
-import { defaultPaymentDisplayFromForm, resolveDefaultTabFromPreferredMethod } from "@/lib/invoices/resolve-payment-display"
 import { isInvoiceFieldsLocked, invoiceFieldsLockBanner } from "@/lib/invoices/invoice-edit-lock"
-import type { BusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoice-business-readiness"
 import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
 import { fetchWithSession } from "@/lib/fetch-with-session"
@@ -69,11 +56,9 @@ import { toast } from "sonner"
 import {
   INVOICE_ACTION_COPY,
   INVOICE_CREATE_SECTION_COPY,
-  INVOICE_SETTINGS_COPY,
   INVOICE_TOAST_COPY,
 } from "@/lib/copy/business-ui-copy"
 import { SectionHeader } from "@/components/copy/section-header"
-import { invoicePreviewPath } from "@/lib/invoice-public-url"
 import { readCachedConnectStatus } from "@/lib/stripe/connect-status-cache"
 import { resolveConnectPanelPhase } from "@/lib/stripe/connect-panel-ux"
 
@@ -117,18 +102,10 @@ interface InvoiceForm {
   discountRate: number
   memo: string
   poNumber: string
-  showBank: boolean
-  showStablecoin: boolean
-  showOnlinePayment: boolean
-  paymentDefaultTab: "bank" | "stablecoin" | "online"
   lineItems: LineItem[]
 }
 
-function invoiceFormFromInvoice(
-  invoice: Invoice,
-  customers: Customer[],
-  invoiceSettings?: BusinessInvoiceSettings,
-): InvoiceForm {
+function invoiceFormFromInvoice(invoice: Invoice, customers: Customer[]): InvoiceForm {
   return {
     customerId:
       invoice.customerId ??
@@ -146,20 +123,6 @@ function invoiceFormFromInvoice(
     discountRate: invoice.discountRate ?? 0,
     memo: invoice.memo ?? "",
     poNumber: invoice.poNumber ?? "",
-    showBank: invoice.paymentDisplay?.showBank ?? invoiceSettings?.showBankTransfer !== false,
-    showStablecoin:
-      invoice.paymentDisplay?.showStablecoin ?? invoiceSettings?.showStablecoin !== false,
-    showOnlinePayment:
-      invoice.paymentDisplay?.showOnlinePayment ?? invoiceSettings?.showOnlinePayment !== false,
-    paymentDefaultTab:
-      invoice.paymentDisplay?.defaultTab ??
-      resolveDefaultTabFromPreferredMethod(invoiceSettings?.preferredMethod ?? "customer_choice", {
-        showBank: invoice.paymentDisplay?.showBank ?? invoiceSettings?.showBankTransfer !== false,
-        showStablecoin:
-          invoice.paymentDisplay?.showStablecoin ?? invoiceSettings?.showStablecoin !== false,
-        showOnlinePayment:
-          invoice.paymentDisplay?.showOnlinePayment ?? invoiceSettings?.showOnlinePayment !== false,
-      }),
     lineItems: invoice.lineItems.map((item, i) => ({
       id: (i + 1).toString(),
       description: item.description,
@@ -207,7 +170,7 @@ export default function CreateInvoicePage() {
     }
   }
   const profile = useBusinessProfile()
-  const { baseCurrency, isLoading: profileLoading, tier1Complete, invoiceSettings } = profile
+  const { baseCurrency, isLoading: profileLoading, invoiceSettings } = profile
   const orgEasetag =
     typeof profile.easetag === "string" && profile.easetag.trim() ? profile.easetag.trim() : null
   const invoiceReadiness = assessInvoiceBusinessReadinessFromProfile(profile)
@@ -232,20 +195,9 @@ export default function CreateInvoicePage() {
     discountRate: 0,
     memo: "",
     poNumber: "",
-    showBank: true,
-    showStablecoin: true,
-    showOnlinePayment: true,
-    paymentDefaultTab: "bank",
     lineItems: [{ id: "1", description: "", quantity: "", unitPrice: "" }]
   })
 
-  const { bankAccount: rawBank, stablecoinAccount: rawStable } = useInvoicePayIn({
-    currency: formData.currency,
-    tier1Complete,
-    enabled: Boolean(formData.currency),
-  })
-  const hasBankProvision = rawBank !== undefined
-  const hasStableProvision = rawStable !== undefined
   const isLockedEdit =
     isEditMode && invoiceToEdit != null && isInvoiceFieldsLocked(invoiceToEdit.status)
   const editLockBanner = invoiceToEdit ? invoiceFieldsLockBanner(invoiceToEdit.status) : null
@@ -254,7 +206,6 @@ export default function CreateInvoicePage() {
   const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false)
   const [customerSearchTerm, setCustomerSearchTerm] = useState("")
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
-  const [customizePaymentMethods, setCustomizePaymentMethods] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle")
   /** Which primary action is running (shows loading on action buttons). */
   const [invoiceAction, setInvoiceAction] = useState<null | "draft" | "create" | "email">(null)
@@ -398,16 +349,6 @@ export default function CreateInvoicePage() {
       customerCompany: formData.billToType === "company" ? (formData.customerCompany || undefined) : undefined,
       memo: formData.memo.trim(),
       poNumber: formData.poNumber.trim(),
-      ...(customizePaymentMethods
-        ? {
-            paymentDisplay: defaultPaymentDisplayFromForm({
-              showBank: formData.showBank,
-              showStablecoin: formData.showStablecoin,
-              showOnlinePayment: formData.showOnlinePayment,
-              defaultTab: formData.paymentDefaultTab,
-            }),
-          }
-        : {}),
     }
     if (isEditMode && invoiceToEdit) {
       return {
@@ -452,11 +393,6 @@ export default function CreateInvoicePage() {
       setInvoiceAction(null)
     }
   }
-
-  const stripeOnlineEnabled = Boolean(
-    typeof process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY === "string" &&
-      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.trim(),
-  )
 
   const runIssueAndEmail = async () => {
     setInvoiceAction("email")
@@ -530,14 +466,6 @@ export default function CreateInvoicePage() {
     await runIssueAndEmail()
   }
 
-  const handlePreview = () => {
-    if (editId) {
-      window.open(invoicePreviewPath(editId), "_blank", "noopener,noreferrer")
-      return
-    }
-    toast.message("Save a draft first to preview")
-  }
-
   // Load invoice once when entering edit mode (wait for detail fetch; do not reset on cache updates).
   useEffect(() => {
     if (!editId) {
@@ -552,7 +480,7 @@ export default function CreateInvoicePage() {
     hydratedEditIdRef.current = editId
     autosaveSkipRef.current = true
     setSaveState("idle")
-    setFormData(invoiceFormFromInvoice(invoice, customers, invoiceSettings))
+    setFormData(invoiceFormFromInvoice(invoice, customers))
   }, [
     editId,
     invoiceDetailQuery.data,
@@ -675,13 +603,6 @@ export default function CreateInvoicePage() {
         />
       </div>
     )
-  }
-
-  const paymentMethodChips: string[] = []
-  if (formData.showBank) paymentMethodChips.push(INVOICE_SETTINGS_COPY.bankTransfer)
-  if (formData.showStablecoin) paymentMethodChips.push(INVOICE_SETTINGS_COPY.stablecoin)
-  if (stripeOnlineEnabled && formData.showOnlinePayment) {
-    paymentMethodChips.push(INVOICE_SETTINGS_COPY.onlinePayments)
   }
 
   return (
@@ -969,32 +890,21 @@ export default function CreateInvoicePage() {
                 </Button>
               )}
 
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  className="flex-1"
-                  disabled={!!invoiceAction}
-                  onClick={handleSaveDraft}
-                >
-                  {invoiceAction === "draft" ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {INVOICE_CREATE_SECTION_COPY.saving}
-                    </>
-                  ) : (
-                    INVOICE_CREATE_SECTION_COPY.saveDraft
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="flex-1"
-                  disabled={!!invoiceAction}
-                  onClick={handlePreview}
-                >
-                  <Eye className="mr-2 h-4 w-4" />
-                  {INVOICE_CREATE_SECTION_COPY.preview}
-                </Button>
-              </div>
+              <Button
+                variant="ghost"
+                className="w-full"
+                disabled={!!invoiceAction}
+                onClick={handleSaveDraft}
+              >
+                {invoiceAction === "draft" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {INVOICE_CREATE_SECTION_COPY.saving}
+                  </>
+                ) : (
+                  INVOICE_CREATE_SECTION_COPY.saveDraft
+                )}
+              </Button>
               {isEditMode && saveState !== "idle" ? (
                 <p className="text-xs text-muted-foreground text-center">
                   {saveState === "saving"
@@ -1002,147 +912,6 @@ export default function CreateInvoicePage() {
                     : INVOICE_CREATE_SECTION_COPY.saved}
                 </p>
               ) : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between gap-3">
-                <SectionHeader
-                  title={INVOICE_CREATE_SECTION_COPY.paymentMethods}
-                  description={
-                    customizePaymentMethods
-                      ? INVOICE_CREATE_SECTION_COPY.paymentMethodsCustomized
-                      : INVOICE_CREATE_SECTION_COPY.paymentMethodsHelp
-                  }
-                />
-                {!customizePaymentMethods ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 -mt-1"
-                    onClick={() => setCustomizePaymentMethods(true)}
-                  >
-                    {INVOICE_CREATE_SECTION_COPY.customizePaymentMethods}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 -mt-1"
-                    onClick={() => setCustomizePaymentMethods(false)}
-                  >
-                    {INVOICE_CREATE_SECTION_COPY.usePaymentDefaults}
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              {!customizePaymentMethods ? (
-                paymentMethodChips.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {paymentMethodChips.map((label) => (
-                      <Badge key={label} variant="secondary" className="font-normal">
-                        {label}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {INVOICE_CREATE_SECTION_COPY.notAvailable}
-                  </p>
-                )
-              ) : (
-                <>
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <Label htmlFor="show-bank">{INVOICE_SETTINGS_COPY.bankTransfer}</Label>
-                      {!hasBankProvision ? (
-                        <p className="text-xs text-muted-foreground">
-                          {INVOICE_CREATE_SECTION_COPY.notAvailable}
-                        </p>
-                      ) : null}
-                    </div>
-                    <Switch
-                      id="show-bank"
-                      checked={formData.showBank && hasBankProvision}
-                      disabled={!hasBankProvision}
-                      onCheckedChange={(v) => setFormData((p) => ({ ...p, showBank: v }))}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <Label htmlFor="show-stable">{INVOICE_SETTINGS_COPY.stablecoin}</Label>
-                      {!hasStableProvision ? (
-                        <p className="text-xs text-muted-foreground">
-                          {INVOICE_CREATE_SECTION_COPY.notAvailable}
-                        </p>
-                      ) : null}
-                    </div>
-                    <Switch
-                      id="show-stable"
-                      checked={formData.showStablecoin && hasStableProvision}
-                      disabled={!hasStableProvision}
-                      onCheckedChange={(v) =>
-                        setFormData((p) => ({ ...p, showStablecoin: v }))
-                      }
-                    />
-                  </div>
-                  {stripeOnlineEnabled ? (
-                    <div className="flex items-center justify-between gap-4">
-                      <Label htmlFor="show-online">{INVOICE_SETTINGS_COPY.onlinePayments}</Label>
-                      <Switch
-                        id="show-online"
-                        checked={formData.showOnlinePayment}
-                        onCheckedChange={(v) =>
-                          setFormData((p) => ({ ...p, showOnlinePayment: v }))
-                        }
-                      />
-                    </div>
-                  ) : null}
-                  {(formData.showBank && hasBankProvision) ||
-                  (formData.showStablecoin && hasStableProvision) ||
-                  (stripeOnlineEnabled && formData.showOnlinePayment) ? (
-                    <div className="flex items-center justify-between gap-4">
-                      <Label htmlFor="payment-default-tab">
-                        {INVOICE_CREATE_SECTION_COPY.defaultPaymentTab}
-                      </Label>
-                      <Select
-                        value={formData.paymentDefaultTab}
-                        onValueChange={(v) =>
-                          setFormData((p) => ({
-                            ...p,
-                            paymentDefaultTab: v as "bank" | "stablecoin" | "online",
-                          }))
-                        }
-                      >
-                        <SelectTrigger id="payment-default-tab" className="w-[10.5rem]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent align="end">
-                          {stripeOnlineEnabled && formData.showOnlinePayment ? (
-                            <SelectItem value="online">
-                              {INVOICE_SETTINGS_COPY.onlinePayments}
-                            </SelectItem>
-                          ) : null}
-                          {formData.showBank && hasBankProvision ? (
-                            <SelectItem value="bank">
-                              {INVOICE_SETTINGS_COPY.bankTransfer}
-                            </SelectItem>
-                          ) : null}
-                          {formData.showStablecoin && hasStableProvision ? (
-                            <SelectItem value="stablecoin">
-                              {INVOICE_SETTINGS_COPY.stablecoin}
-                            </SelectItem>
-                          ) : null}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : null}
-                </>
-              )}
             </CardContent>
           </Card>
 
