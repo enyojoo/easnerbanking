@@ -22,6 +22,89 @@ export function hasAnyPaymentMethod(flags: PaymentMethodsFlags): boolean {
   return flags.hasOnline || flags.hasBank || flags.hasStablecoin
 }
 
+export type InvoicePaymentTab = "online" | "bank" | "stablecoin"
+
+export function countPaymentMethods(flags: PaymentMethodsFlags): number {
+  return [flags.hasOnline, flags.hasBank, flags.hasStablecoin].filter(Boolean).length
+}
+
+/** Section heading when the customer chooses between rails; null for a single method. */
+export function customerPaymentSectionTitle(flags: PaymentMethodsFlags): string | null {
+  if (countPaymentMethods(flags) <= 1) return null
+  return "Payment options"
+}
+
+export function customerPaymentMethodTitle(tab: InvoicePaymentTab): string {
+  switch (tab) {
+    case "online":
+      return "Pay online"
+    case "bank":
+      return "Bank transfer"
+    case "stablecoin":
+      return "Pay with stablecoin"
+  }
+}
+
+/** Short intro when two or more payment methods are available. */
+export function customerPaymentChooserSubtitle(_flags?: PaymentMethodsFlags): string {
+  return "Choose how to pay this invoice."
+}
+
+/** Customer-facing intro when only one payment method is available. */
+export function customerSingleMethodSubtitle(
+  tab: InvoicePaymentTab,
+  invoiceNumber: string,
+): string {
+  const ref = invoiceNumber.trim()
+  if (tab === "online") return onlinePaymentTabHint()
+  if (tab === "bank") {
+    return `Transfer the total using the account details below. Include ${ref} as the payment reference.`
+  }
+  return "Send the exact invoice amount using the address and network below."
+}
+
+/** Per-tab hint when multiple methods are shown (rail-specific details). */
+export function customerPaymentTabHint(
+  tab: InvoicePaymentTab,
+  invoiceNumber: string,
+): string {
+  const ref = invoiceNumber.trim()
+  switch (tab) {
+    case "online":
+      return onlinePaymentTabHint()
+    case "bank":
+      return `Include ${ref} as the payment reference.`
+    case "stablecoin":
+      return "Send only the token and network shown below."
+  }
+}
+
+/** Resolved customer section title for any method count. */
+export function customerPaymentDisplayTitle(flags: PaymentMethodsFlags): string {
+  const sectionTitle = customerPaymentSectionTitle(flags)
+  if (sectionTitle) return sectionTitle
+  if (flags.hasOnline) return customerPaymentMethodTitle("online")
+  if (flags.hasBank) return customerPaymentMethodTitle("bank")
+  return customerPaymentMethodTitle("stablecoin")
+}
+
+/** Resolved customer subtitle for the payment section header. */
+export function customerPaymentDisplaySubtitle(
+  invoiceNumber: string,
+  flags: PaymentMethodsFlags,
+): string {
+  const count = countPaymentMethods(flags)
+  if (count <= 1) {
+    const tab: InvoicePaymentTab = flags.hasOnline
+      ? "online"
+      : flags.hasBank
+        ? "bank"
+        : "stablecoin"
+    return customerSingleMethodSubtitle(tab, invoiceNumber)
+  }
+  return customerPaymentChooserSubtitle(flags)
+}
+
 export function buildInvoiceViewUrl(
   baseUrl: string,
   easetag: string | null | undefined,
@@ -30,40 +113,17 @@ export function buildInvoiceViewUrl(
   return buildInvoiceCustomerViewUrl(baseUrl, easetag, invoice)
 }
 
+/** @deprecated Use customerPaymentDisplayTitle */
 export function customerPaymentOptionsTitle(): string {
   return "Payment options"
 }
 
-/** Customer-facing subtitle on the live invoice view (dynamic by available rails). */
+/** @deprecated Use customerPaymentDisplaySubtitle */
 export function customerPaymentOptionsSubtitle(
   invoiceNumber: string,
   flags: PaymentMethodsFlags,
 ): string {
-  const ref = invoiceNumber.trim()
-  const { hasOnline, hasBank, hasStablecoin } = flags
-
-  if (hasOnline && hasBank && hasStablecoin) {
-    return `Pay online for instant confirmation and an email receipt. For bank transfers, include ${ref} as the payment reference. For stablecoin, send only the token and network shown below.`
-  }
-  if (hasOnline && hasBank) {
-    return `Pay online for instant confirmation, or pay by bank transfer. For bank payments, include ${ref} as the reference.`
-  }
-  if (hasOnline && hasStablecoin) {
-    return `Pay online for instant confirmation, or send stablecoin using the details below.`
-  }
-  if (hasBank && hasStablecoin) {
-    return `Pay by bank or stablecoin using the details below. For bank transfers, include ${ref} as the payment reference.`
-  }
-  if (hasOnline) {
-    return "Pay securely below. You'll receive a receipt by email when payment is complete."
-  }
-  if (hasBank) {
-    return `Transfer the total using the account details below. Include ${ref} as the payment reference.`
-  }
-  if (hasStablecoin) {
-    return "Send the exact invoice amount using the address and network below."
-  }
-  return "Choose how you'd like to pay this invoice."
+  return customerPaymentDisplaySubtitle(invoiceNumber, flags)
 }
 
 export function onlinePaymentTabHint(): string {
@@ -90,25 +150,41 @@ export function stablecoinPaymentExtraInstruction(total: number, currency: strin
   return `Send the exact amount: ${formatCurrency(total, currency)}.`
 }
 
+function pdfPaymentIntroLine(flags: PaymentMethodsFlags): string {
+  const count = countPaymentMethods(flags)
+  if (count === 1) {
+    if (flags.hasOnline) {
+      return "View and pay this invoice online by card, bank debit, or other methods available in your region."
+    }
+    if (flags.hasBank) {
+      return "View this invoice and pay by bank transfer using the account details on the payment page."
+    }
+    return "View this invoice and pay with stablecoin using the address and network on the payment page."
+  }
+  return "View and pay this invoice online. Choose your preferred payment method on the payment page."
+}
+
 /** Lines for the PDF payment section (link-first; rails live on the web view). */
 export function pdfPaymentSectionLines(
   invoice: Pick<Invoice, "invoiceNumber" | "total" | "currency">,
   section: InvoicePdfPaymentSection,
 ): string[] {
   const amount = formatCurrency(invoice.total, invoice.currency)
+  const ref = invoice.invoiceNumber.trim()
   const lines: string[] = [
-    "View and pay this invoice online. Choose card, bank transfer, or stablecoin on the payment page.",
+    pdfPaymentIntroLine(section),
     "",
     `Amount due: ${amount}`,
-    `Invoice: ${invoice.invoiceNumber.trim()}`,
+    `Invoice: ${ref}`,
     "",
     section.url,
   ]
 
-  if (section.hasBank) {
-    lines.push("", `For bank transfers, include ${invoice.invoiceNumber.trim()} as the payment reference.`)
+  const count = countPaymentMethods(section)
+  if (count > 1 && section.hasBank) {
+    lines.push("", `For bank transfers, include ${ref} as the payment reference.`)
   }
-  if (section.hasStablecoin) {
+  if (count > 1 && section.hasStablecoin) {
     lines.push("", `For stablecoin, send exactly ${amount} using the token and network shown on the payment page.`)
   }
 

@@ -11,7 +11,7 @@ import type { Invoice } from "@/lib/b2b/types"
 import { businessInfo as defaultBusinessInfo } from "@/lib/business-info"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import {
-  customerPaymentOptionsTitle,
+  customerPaymentDisplayTitle,
   pdfPaymentSectionLines,
   type InvoicePdfPaymentSection,
 } from "@/lib/invoices/invoice-payment-copy"
@@ -432,7 +432,7 @@ export function InvoicePDFDocument({
         {showPayCard && paymentSection ? (
           <View style={styles.paymentSection} wrap={false}>
             <Text style={styles.paymentSectionTitle}>
-              {customerPaymentOptionsTitle()}
+              {customerPaymentDisplayTitle(paymentSection)}
             </Text>
             <View style={styles.paymentLinkBox}>
               {paymentLines.map((line, i) =>

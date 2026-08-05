@@ -55,9 +55,15 @@ export function readCachedInvoiceView(cacheKey: string): CachedInvoiceView | nul
   if (!cacheKey || typeof window === "undefined") return null
   try {
     const fromSession = readFromStore(sessionStorage, sessionStorageKey(cacheKey))
-    if (fromSession) return fromSession
+    if (fromSession) {
+      return { ...fromSession, stripeCheckout: null }
+    }
 
-    return readFromStore(localStorage, localStorageKey(cacheKey), LOCAL_TTL_MS)
+    const fromLocal = readFromStore(localStorage, localStorageKey(cacheKey), LOCAL_TTL_MS)
+    if (fromLocal) {
+      return { ...fromLocal, stripeCheckout: null }
+    }
+    return null
   } catch {
     return null
   }
@@ -68,7 +74,12 @@ export function writeCachedInvoiceView(
   payload: PublicInvoicePayload,
 ): void {
   if (!cacheKey || typeof window === "undefined") return
-  const entry: CachedInvoiceView = { ...payload, cachedAt: Date.now() }
+  // Stripe checkout sessions expire — never cache clientSecret; always fetch fresh on Pay online.
+  const entry: CachedInvoiceView = {
+    ...payload,
+    stripeCheckout: null,
+    cachedAt: Date.now(),
+  }
   const serialized = JSON.stringify(entry)
   try {
     sessionStorage.setItem(sessionStorageKey(cacheKey), serialized)

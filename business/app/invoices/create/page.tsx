@@ -52,7 +52,7 @@ import { dueDateFromPaymentTerms } from "@/lib/invoices/due-date"
 import { useInvoicePayIn } from "@/hooks/use-invoice-pay-in"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
 import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
-import { resolvePaymentDisplay, defaultPaymentDisplayFromForm } from "@/lib/invoices/resolve-payment-display"
+import { resolvePaymentDisplay, defaultPaymentDisplayFromForm, resolveDefaultTabFromPreferredMethod } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import { isInvoiceFieldsLocked, invoiceFieldsLockBanner } from "@/lib/invoices/invoice-edit-lock"
 import type { BusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
@@ -147,7 +147,15 @@ function invoiceFormFromInvoice(
       invoice.paymentDisplay?.showStablecoin ?? invoiceSettings?.showStablecoin !== false,
     showOnlinePayment:
       invoice.paymentDisplay?.showOnlinePayment ?? invoiceSettings?.showOnlinePayment !== false,
-    paymentDefaultTab: invoice.paymentDisplay?.defaultTab ?? "bank",
+    paymentDefaultTab:
+      invoice.paymentDisplay?.defaultTab ??
+      resolveDefaultTabFromPreferredMethod(invoiceSettings?.preferredMethod ?? "customer_choice", {
+        showBank: invoice.paymentDisplay?.showBank ?? invoiceSettings?.showBankTransfer !== false,
+        showStablecoin:
+          invoice.paymentDisplay?.showStablecoin ?? invoiceSettings?.showStablecoin !== false,
+        showOnlinePayment:
+          invoice.paymentDisplay?.showOnlinePayment ?? invoiceSettings?.showOnlinePayment !== false,
+      }),
     lineItems: invoice.lineItems.map((item, i) => ({
       id: (i + 1).toString(),
       description: item.description,
@@ -387,12 +395,16 @@ export default function CreateInvoicePage() {
       customerCompany: formData.billToType === "company" ? (formData.customerCompany || undefined) : undefined,
       memo: formData.memo.trim(),
       poNumber: formData.poNumber.trim(),
-      paymentDisplay: defaultPaymentDisplayFromForm({
-        showBank: formData.showBank,
-        showStablecoin: formData.showStablecoin,
-        showOnlinePayment: formData.showOnlinePayment,
-        defaultTab: formData.paymentDefaultTab,
-      }),
+      ...(customizePaymentMethods
+        ? {
+            paymentDisplay: defaultPaymentDisplayFromForm({
+              showBank: formData.showBank,
+              showStablecoin: formData.showStablecoin,
+              showOnlinePayment: formData.showOnlinePayment,
+              defaultTab: formData.paymentDefaultTab,
+            }),
+          }
+        : {}),
     }
     if (isEditMode && invoiceToEdit) {
       return {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -14,11 +14,14 @@ import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
 import { getPaymentInstructions } from "@/lib/payment-instructions"
 import {
   bankPaymentExtraInstruction,
-  customerPaymentOptionsSubtitle,
-  customerPaymentOptionsTitle,
-  onlinePaymentTabHint,
+  countPaymentMethods,
+  customerPaymentDisplaySubtitle,
+  customerPaymentDisplayTitle,
+  customerPaymentTabHint,
   invoicePaymentTabLabel,
   stablecoinPaymentExtraInstruction,
+  type InvoicePaymentTab,
+  type PaymentMethodsFlags,
 } from "@/lib/invoices/invoice-payment-copy"
 import { InvoiceStripeCheckout } from "@/components/invoice-stripe-checkout"
 import type { PublicInvoiceStripeCheckout } from "@/lib/invoices/json-public-invoice-from-row"
@@ -30,6 +33,35 @@ interface StablecoinAccount {
   address: string
   memo?: string
 }
+
+type PaymentTab = InvoicePaymentTab
+
+interface InvoicePaymentOptionsProps {
+  invoice: Invoice
+  bankAccount?: Account
+  stablecoinAccount?: StablecoinAccount
+  /** Overrides “from” name in share text; defaults to static `businessInfo`. */
+  businessDisplayName?: string
+  /** When true, render without Card wrapper (e.g. inside invoice frame) */
+  embedded?: boolean
+  /** "customer" = invoice view; "business" = invoice detail page */
+  audience?: "customer" | "business"
+  /** Controlled tab value - when provided, parent tracks selection */
+  value?: PaymentTab
+  onValueChange?: (value: PaymentTab) => void
+  /** When set, public “view invoice” links use `/invoice/{easetag}/{invoiceNumber}` instead of row id. */
+  publicInvoiceEasetag?: string | null
+  /** Initial tab when methods shown */
+  defaultTab?: PaymentTab
+  /** Show Stripe Pay online tab */
+  showOnlinePayment?: boolean
+  /** Preloaded checkout session from the public invoice payload. */
+  stripeCheckout?: PublicInvoiceStripeCheckout | null
+}
+
+const audienceDescriptions = {
+  business: "Share these details with your customer.",
+} as const
 
 function CopyableField({
   label,
@@ -85,34 +117,238 @@ function PaymentInstructions({
   )
 }
 
-type PaymentTab = "online" | "bank" | "stablecoin"
-
-interface InvoicePaymentOptionsProps {
-  invoice: Invoice
-  bankAccount?: Account
-  stablecoinAccount?: StablecoinAccount
-  /** Overrides “from” name in share text; defaults to static `businessInfo`. */
-  businessDisplayName?: string
-  /** When true, render without Card wrapper (e.g. inside invoice frame) */
-  embedded?: boolean
-  /** "customer" = invoice view; "business" = invoice detail page */
-  audience?: "customer" | "business"
-  /** Controlled tab value - when provided, parent tracks selection */
-  value?: PaymentTab
-  onValueChange?: (value: PaymentTab) => void
-  /** When set, public “view invoice” links use `/invoice/{easetag}/{invoiceNumber}` instead of row id. */
-  publicInvoiceEasetag?: string | null
-  /** Initial tab when methods shown */
-  defaultTab?: PaymentTab
-  /** Show Stripe Pay online tab */
-  showOnlinePayment?: boolean
-  /** Preloaded checkout session from the public invoice payload. */
-  stripeCheckout?: PublicInvoiceStripeCheckout | null
+function TabHint({ children }: { children: ReactNode }) {
+  return <p className="text-sm text-muted-foreground">{children}</p>
 }
 
-const audienceDescriptions = {
-  business: "Share these details with your customer.",
-} as const
+function OnlinePanel({
+  invoice,
+  audience,
+  publicInvoiceEasetag,
+  stripeCheckout,
+  mountCheckout,
+  showTabHint,
+}: {
+  invoice: Invoice
+  audience: "customer" | "business"
+  publicInvoiceEasetag?: string | null
+  stripeCheckout: PublicInvoiceStripeCheckout | null
+  mountCheckout: boolean
+  showTabHint: boolean
+}) {
+  return (
+    <div className="space-y-4">
+      {showTabHint ? (
+        <TabHint>{customerPaymentTabHint("online", invoice.invoiceNumber)}</TabHint>
+      ) : null}
+      {mountCheckout ? (
+        <InvoiceStripeCheckout
+          invoice={invoice}
+          easetag={publicInvoiceEasetag?.trim() || "preview"}
+          initialCheckout={stripeCheckout}
+          previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function BankPanel({
+  invoice,
+  bankAccount,
+  copiedField,
+  onCopy,
+  onShare,
+  showTabHint,
+}: {
+  invoice: Invoice
+  bankAccount: Account
+  copiedField: string | null
+  onCopy: (t: string, f: string) => void
+  onShare: () => void
+  showTabHint: boolean
+}) {
+  return (
+    <div className="space-y-4">
+      {showTabHint ? (
+        <TabHint>{customerPaymentTabHint("bank", invoice.invoiceNumber)}</TabHint>
+      ) : null}
+      <div className="space-y-4">
+        <CopyableField
+          label="Account Name"
+          value={bankAccount.accountName}
+          copiedField={copiedField}
+          fieldId="inv-bank-name"
+          onCopy={onCopy}
+        />
+        {bankAccount.currency === "EUR" && bankAccount.iban ? (
+          <>
+            <CopyableField
+              label="IBAN"
+              value={bankAccount.iban}
+              copiedField={copiedField}
+              fieldId="inv-iban"
+              onCopy={onCopy}
+            />
+            {bankAccount.bic ? (
+              <CopyableField
+                label="BIC/SWIFT"
+                value={bankAccount.bic}
+                copiedField={copiedField}
+                fieldId="inv-bic"
+                onCopy={onCopy}
+              />
+            ) : null}
+          </>
+        ) : (
+          <>
+            <CopyableField
+              label="Account Number"
+              value={bankAccount.fullAccountNumber}
+              copiedField={copiedField}
+              fieldId="inv-acc"
+              onCopy={onCopy}
+            />
+            {bankAccount.routingNumber ? (
+              <CopyableField
+                label="Routing Number"
+                value={bankAccount.routingNumber}
+                copiedField={copiedField}
+                fieldId="inv-routing"
+                onCopy={onCopy}
+              />
+            ) : null}
+            {bankAccount.sortCode ? (
+              <CopyableField
+                label="Sort Code"
+                value={bankAccount.sortCode}
+                copiedField={copiedField}
+                fieldId="inv-sort"
+                onCopy={onCopy}
+              />
+            ) : null}
+          </>
+        )}
+        <CopyableField
+          label="Bank Name"
+          value={bankAccount.bankName}
+          copiedField={copiedField}
+          fieldId="inv-bank"
+          onCopy={onCopy}
+        />
+        {bankAccount.bankAddress ? (
+          <CopyableField
+            label="Address"
+            value={bankAccount.bankAddress}
+            copiedField={copiedField}
+            fieldId="inv-bank-addr"
+            onCopy={onCopy}
+          />
+        ) : null}
+      </div>
+      <Button variant="outline" size="sm" className="w-full gap-2" onClick={onShare}>
+        {copiedField === "share-bank" ? (
+          <Check className="h-4 w-4 text-primary" />
+        ) : (
+          <Share2 className="h-4 w-4" />
+        )}
+        {copiedField === "share-bank" ? "Copied" : "Share Account Details"}
+      </Button>
+      <div className="pt-4 border-t">
+        <p className="text-sm font-medium mb-2">Payment Instructions</p>
+        <PaymentInstructions
+          currency={invoice.currency}
+          type="bank"
+          extraLines={[bankPaymentExtraInstruction(invoice.invoiceNumber)]}
+        />
+      </div>
+    </div>
+  )
+}
+
+function StablecoinPanel({
+  invoice,
+  stablecoinAccount,
+  copiedField,
+  onCopy,
+  onShare,
+  showTabHint,
+}: {
+  invoice: Invoice
+  stablecoinAccount: StablecoinAccount
+  copiedField: string | null
+  onCopy: (t: string, f: string) => void
+  onShare: () => void
+  showTabHint: boolean
+}) {
+  return (
+    <div className="space-y-4">
+      {showTabHint ? (
+        <TabHint>{customerPaymentTabHint("stablecoin", invoice.invoiceNumber)}</TabHint>
+      ) : null}
+      <div className="flex flex-col items-center">
+        <div className="p-4 bg-white rounded-xl border">
+          <QRCodeSVG value={stablecoinAccount.address} size={200} level="M" />
+        </div>
+        <p className="text-sm text-muted-foreground mt-1">
+          Scan to send {stablecoinAccount.stablecoin}
+        </p>
+      </div>
+      <div>
+        <p className="text-sm text-muted-foreground mb-1">Network</p>
+        <div className="p-3 bg-muted rounded-lg">
+          <span className="text-sm font-medium">
+            {stablecoinAccount.chain === "Solana"
+              ? "SOL"
+              : stablecoinAccount.chain === "Ethereum"
+                ? "ETH"
+                : stablecoinAccount.chain}
+          </span>
+          <span className="text-sm text-muted-foreground"> • </span>
+          <span className="text-sm text-muted-foreground">{stablecoinAccount.chain}</span>
+        </div>
+      </div>
+      <CopyableField
+        label="Address"
+        value={stablecoinAccount.address}
+        copiedField={copiedField}
+        fieldId="inv-addr"
+        onCopy={onCopy}
+      />
+      <Button variant="outline" size="sm" className="w-full gap-2" onClick={onShare}>
+        {copiedField === "share-stablecoin" ? (
+          <Check className="h-4 w-4 text-primary" />
+        ) : (
+          <Share2 className="h-4 w-4" />
+        )}
+        {copiedField === "share-stablecoin"
+          ? "Copied"
+          : `Share ${stablecoinAccount.stablecoin} Details`}
+      </Button>
+      <div className="pt-4 border-t">
+        <p className="text-sm font-medium mb-2">Payment Instructions</p>
+        <PaymentInstructions
+          currency={invoice.currency}
+          type="stablecoin"
+          extraLines={[stablecoinPaymentExtraInstruction(invoice.total, invoice.currency)]}
+        />
+      </div>
+    </div>
+  )
+}
+
+function resolveSingleMethod(flags: PaymentMethodsFlags): PaymentTab {
+  if (flags.hasOnline) return "online"
+  if (flags.hasBank) return "bank"
+  return "stablecoin"
+}
+
+function businessPaymentTitle(flags: PaymentMethodsFlags): string {
+  if (countPaymentMethods(flags) <= 1) {
+    return customerPaymentDisplayTitle(flags)
+  }
+  return "Invoice payment options"
+}
 
 export function InvoicePaymentOptions({
   invoice,
@@ -131,26 +367,35 @@ export function InvoicePaymentOptions({
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const hasBank = bankAccount !== undefined
   const hasStablecoin = stablecoinAccount !== undefined
-  const hasOnline = showOnlinePayment === true && Boolean(publicInvoiceEasetag?.trim() || audience === "business")
-  const brandName = businessDisplayName?.trim() || businessInfo.name
-  const tabCount = [hasOnline, hasBank, hasStablecoin].filter(Boolean).length
-  const paymentFlags = {
-    hasOnline: hasOnline && audience === "customer",
-    hasBank: hasBank,
-    hasStablecoin: hasStablecoin,
+  const hasOnline =
+    showOnlinePayment === true && Boolean(publicInvoiceEasetag?.trim() || audience === "business")
+
+  const displayFlags: PaymentMethodsFlags = {
+    hasOnline,
+    hasBank,
+    hasStablecoin,
   }
+  const methodCount = countPaymentMethods(displayFlags)
+  const showChooser = methodCount > 1
+  const singleMethod = methodCount === 1 ? resolveSingleMethod(displayFlags) : null
+
+  const customerTitle =
+    audience === "customer" ? customerPaymentDisplayTitle(displayFlags) : null
   const customerSubtitle =
     audience === "customer"
-      ? customerPaymentOptionsSubtitle(invoice.invoiceNumber, paymentFlags)
+      ? customerPaymentDisplaySubtitle(invoice.invoiceNumber, displayFlags)
       : null
+  const businessTitle = audience === "business" ? businessPaymentTitle(displayFlags) : null
 
-  if (!hasBank && !hasStablecoin && !hasOnline) {
+  if (methodCount === 0) {
     return null
   }
 
   const resolvedDefaultTab: PaymentTab =
-    defaultTab ??
-    (hasOnline ? "online" : hasBank ? "bank" : "stablecoin")
+    defaultTab ?? (hasOnline ? "online" : hasBank ? "bank" : "stablecoin")
+
+  const activeTab = value ?? resolvedDefaultTab
+  const brandName = businessDisplayName?.trim() || businessInfo.name
 
   const copyToClipboard = async (text: string, field?: string) => {
     try {
@@ -230,249 +475,128 @@ export function InvoicePaymentOptions({
     }
   }
 
+  const renderPanel = (method: PaymentTab, showTabHint: boolean, mountCheckout: boolean) => {
+    if (method === "online" && hasOnline) {
+      return (
+        <OnlinePanel
+          invoice={invoice}
+          audience={audience}
+          publicInvoiceEasetag={publicInvoiceEasetag}
+          stripeCheckout={stripeCheckout}
+          mountCheckout={mountCheckout}
+          showTabHint={showTabHint}
+        />
+      )
+    }
+    if (method === "bank" && bankAccount) {
+      return (
+        <BankPanel
+          invoice={invoice}
+          bankAccount={bankAccount}
+          copiedField={copiedField}
+          onCopy={copyToClipboard}
+          onShare={() => handleShare("bank")}
+          showTabHint={showTabHint}
+        />
+      )
+    }
+    if (method === "stablecoin" && stablecoinAccount) {
+      return (
+        <StablecoinPanel
+          invoice={invoice}
+          stablecoinAccount={stablecoinAccount}
+          copiedField={copiedField}
+          onCopy={copyToClipboard}
+          onShare={() => handleShare("stablecoin")}
+          showTabHint={showTabHint}
+        />
+      )
+    }
+    return null
+  }
+
+  const sectionTitle =
+    audience === "customer" ? customerTitle : businessTitle
+  const sectionSubtitle =
+    audience === "customer" ? customerSubtitle : audienceDescriptions.business
 
   const header = (
     <div className={embedded ? "mb-4" : ""}>
-      <h3 className="text-lg font-semibold">
-        {audience === "customer" ? customerPaymentOptionsTitle() : "Invoice payment options"}
-      </h3>
-      <p className="text-sm text-muted-foreground mt-1">
-        {audience === "customer"
-          ? customerSubtitle
-          : audienceDescriptions.business}
-      </p>
+      <h3 className="text-lg font-semibold">{sectionTitle}</h3>
+      <p className="text-sm text-muted-foreground mt-1">{sectionSubtitle}</p>
     </div>
   )
 
-  const tabsContent = (
-    <Tabs
-      {...(value !== undefined && onValueChange
-        ? {
-            value,
-            onValueChange: (v: string) => onValueChange(v as PaymentTab),
-          }
-        : { defaultValue: resolvedDefaultTab })}
-      className="w-full"
-    >
-          <TabsList
-            className={cn(
-              "grid w-full h-auto gap-1 p-1",
-              tabCount === 3 ? "grid-cols-3" : tabCount === 2 ? "grid-cols-2" : "grid-cols-1",
-            )}
-          >
-            {hasOnline ? (
-              <TabsTrigger
-                value="online"
-                className="min-w-0 px-1.5 py-2 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
-              >
-                {invoicePaymentTabLabel("online")}
-              </TabsTrigger>
-            ) : null}
-            {hasBank ? (
-              <TabsTrigger
-                value="bank"
-                className="min-w-0 px-1.5 py-2 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
-              >
-                {invoicePaymentTabLabel("bank")}
-              </TabsTrigger>
-            ) : null}
-            {hasStablecoin ? (
-              <TabsTrigger
-                value="stablecoin"
-                className="min-w-0 px-1.5 py-2 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
-              >
-                {invoicePaymentTabLabel("stablecoin")}
-              </TabsTrigger>
-            ) : null}
-          </TabsList>
-
+  const bodyContent =
+    showChooser && singleMethod === null ? (
+      <Tabs
+        {...(value !== undefined && onValueChange
+          ? {
+              value,
+              onValueChange: (v: string) => onValueChange(v as PaymentTab),
+            }
+          : { defaultValue: resolvedDefaultTab })}
+        className="w-full"
+      >
+        <TabsList
+          className={cn(
+            "grid w-full h-auto gap-1 p-1",
+            methodCount === 3 ? "grid-cols-3" : "grid-cols-2",
+          )}
+        >
           {hasOnline ? (
-            <TabsContent value="online" className="space-y-4 mt-4">
-              {audience === "customer" && Boolean(publicInvoiceEasetag?.trim()) ? (
-                <p className="text-sm text-muted-foreground">
-                  {onlinePaymentTabHint()}
-                </p>
-              ) : null}
-              <InvoiceStripeCheckout
-                invoice={invoice}
-                easetag={publicInvoiceEasetag?.trim() || "preview"}
-                initialCheckout={stripeCheckout}
-                previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
-              />
-            </TabsContent>
-          ) : null}
-
-          {hasBank ? (
-          <TabsContent value="bank" className="space-y-4 mt-4">
-            <div className="space-y-4">
-              <CopyableField
-                label="Account Name"
-                value={bankAccount!.accountName}
-                copiedField={copiedField}
-                fieldId="inv-bank-name"
-                onCopy={copyToClipboard}
-              />
-              {bankAccount!.currency === "EUR" && bankAccount.iban ? (
-                <>
-                  <CopyableField
-                    label="IBAN"
-                    value={bankAccount!.iban}
-                    copiedField={copiedField}
-                    fieldId="inv-iban"
-                    onCopy={copyToClipboard}
-                  />
-                  {bankAccount!.bic && (
-                    <CopyableField
-                      label="BIC/SWIFT"
-                      value={bankAccount!.bic}
-                      copiedField={copiedField}
-                      fieldId="inv-bic"
-                      onCopy={copyToClipboard}
-                    />
-                  )}
-                </>
-              ) : (
-                <>
-                  <CopyableField
-                    label="Account Number"
-                    value={bankAccount!.fullAccountNumber}
-                    copiedField={copiedField}
-                    fieldId="inv-acc"
-                    onCopy={copyToClipboard}
-                  />
-                  {bankAccount!.routingNumber && (
-                    <CopyableField
-                      label="Routing Number"
-                      value={bankAccount!.routingNumber}
-                      copiedField={copiedField}
-                      fieldId="inv-routing"
-                      onCopy={copyToClipboard}
-                    />
-                  )}
-                  {bankAccount!.sortCode && (
-                    <CopyableField
-                      label="Sort Code"
-                      value={bankAccount!.sortCode}
-                      copiedField={copiedField}
-                      fieldId="inv-sort"
-                      onCopy={copyToClipboard}
-                    />
-                  )}
-                </>
-              )}
-              <CopyableField
-                label="Bank Name"
-                value={bankAccount!.bankName}
-                copiedField={copiedField}
-                fieldId="inv-bank"
-                onCopy={copyToClipboard}
-              />
-              {bankAccount!.bankAddress && (
-                <CopyableField
-                  label="Address"
-                  value={bankAccount!.bankAddress}
-                  copiedField={copiedField}
-                  fieldId="inv-bank-addr"
-                  onCopy={copyToClipboard}
-                />
-              )}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full gap-2"
-              onClick={() => handleShare("bank")}
+            <TabsTrigger
+              value="online"
+              className="min-w-0 px-1.5 py-2 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
             >
-              {copiedField === "share-bank" ? (
-                <Check className="h-4 w-4 text-primary" />
-              ) : (
-                <Share2 className="h-4 w-4" />
-              )}
-              {copiedField === "share-bank" ? "Copied" : "Share Account Details"}
-            </Button>
-            <div className="pt-4 border-t">
-              <p className="text-sm font-medium mb-2">Payment Instructions</p>
-              <PaymentInstructions
-                currency={invoice.currency}
-                type="bank"
-                extraLines={[bankPaymentExtraInstruction(invoice.invoiceNumber)]}
-              />
-            </div>
-          </TabsContent>
+              {invoicePaymentTabLabel("online")}
+            </TabsTrigger>
           ) : null}
+          {hasBank ? (
+            <TabsTrigger
+              value="bank"
+              className="min-w-0 px-1.5 py-2 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
+            >
+              {invoicePaymentTabLabel("bank")}
+            </TabsTrigger>
+          ) : null}
+          {hasStablecoin ? (
+            <TabsTrigger
+              value="stablecoin"
+              className="min-w-0 px-1.5 py-2 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
+            >
+              {invoicePaymentTabLabel("stablecoin")}
+            </TabsTrigger>
+          ) : null}
+        </TabsList>
 
-          {hasStablecoin && stablecoinAccount ? (
-            <TabsContent value="stablecoin" className="space-y-4 mt-4">
-              <div className="flex flex-col items-center">
-                <div className="p-4 bg-white rounded-xl border">
-                  <QRCodeSVG
-                    value={stablecoinAccount.address}
-                    size={200}
-                    level="M"
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Scan to send {stablecoinAccount.stablecoin}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Network</p>
-                <div className="p-3 bg-muted rounded-lg">
-                  <span className="text-sm font-medium">
-                    {stablecoinAccount.chain === "Solana"
-                      ? "SOL"
-                      : stablecoinAccount.chain === "Ethereum"
-                        ? "ETH"
-                        : stablecoinAccount.chain}
-                  </span>
-                  <span className="text-sm text-muted-foreground"> • </span>
-                  <span className="text-sm text-muted-foreground">
-                    {stablecoinAccount.chain}
-                  </span>
-                </div>
-              </div>
-              <CopyableField
-                label="Address"
-                value={stablecoinAccount.address}
-                copiedField={copiedField}
-                fieldId="inv-addr"
-                onCopy={copyToClipboard}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full gap-2"
-                onClick={() => handleShare("stablecoin")}
-              >
-                {copiedField === "share-stablecoin" ? (
-                  <Check className="h-4 w-4 text-primary" />
-                ) : (
-                  <Share2 className="h-4 w-4" />
-                )}
-                {copiedField === "share-stablecoin"
-                  ? "Copied"
-                  : `Share ${stablecoinAccount.stablecoin} Details`}
-              </Button>
-              <div className="pt-4 border-t">
-                <p className="text-sm font-medium mb-2">Payment Instructions</p>
-                <PaymentInstructions
-                  currency={invoice.currency}
-                  type="stablecoin"
-                  extraLines={[
-                    stablecoinPaymentExtraInstruction(invoice.total, invoice.currency),
-                  ]}
-                />
-              </div>
-            </TabsContent>
-          ) : null}
-        </Tabs>
-  )
+        {hasOnline ? (
+          <TabsContent value="online" className="mt-4">
+            {renderPanel("online", audience === "customer", activeTab === "online")}
+          </TabsContent>
+        ) : null}
+
+        {hasBank ? (
+          <TabsContent value="bank" className="mt-4">
+            {renderPanel("bank", audience === "customer", false)}
+          </TabsContent>
+        ) : null}
+
+        {hasStablecoin ? (
+          <TabsContent value="stablecoin" className="mt-4">
+            {renderPanel("stablecoin", audience === "customer", false)}
+          </TabsContent>
+        ) : null}
+      </Tabs>
+    ) : (
+      <div className="mt-4">{singleMethod ? renderPanel(singleMethod, false, true) : null}</div>
+    )
 
   if (embedded) {
     return (
       <div className="pt-6 border-t">
         {header}
-        {tabsContent}
+        {bodyContent}
       </div>
     )
   }
@@ -480,16 +604,10 @@ export function InvoicePaymentOptions({
   return (
     <Card className="border-primary/20">
       <CardHeader>
-        <CardTitle className="text-lg">
-          {audience === "customer" ? customerPaymentOptionsTitle() : "Invoice payment options"}
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          {audience === "customer"
-            ? customerSubtitle
-            : audienceDescriptions.business}
-        </p>
+        <CardTitle className="text-lg">{sectionTitle}</CardTitle>
+        <p className="text-sm text-muted-foreground">{sectionSubtitle}</p>
       </CardHeader>
-      <CardContent>{tabsContent}</CardContent>
+      <CardContent>{bodyContent}</CardContent>
     </Card>
   )
 }

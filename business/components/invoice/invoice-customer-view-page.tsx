@@ -59,8 +59,7 @@ function publicSlugKey(slugParts: string[]): string {
 
 function stateFromPayload(payload: PublicInvoicePayload) {
   const pi = payload.payIn ?? {}
-  const online =
-    payload.paymentDisplay?.showOnlinePayment === true || payload.stripeOnlineEnabled === true
+  const online = payload.paymentDisplay?.showOnlinePayment === true
   return {
     loadState: "ok" as const,
     invoice: payload.invoice,
@@ -165,8 +164,7 @@ function applyPayloadToState(
 
 function paymentTabFromPayload(payload: PublicInvoicePayload): "online" | "bank" | "stablecoin" {
   const pi = payload.payIn ?? {}
-  const online =
-    payload.paymentDisplay?.showOnlinePayment === true || payload.stripeOnlineEnabled === true
+  const online = payload.paymentDisplay?.showOnlinePayment === true
   return (
     payload.paymentDisplay?.defaultTab ??
     (online ? "online" : pi.bankAccount ? "bank" : "stablecoin")

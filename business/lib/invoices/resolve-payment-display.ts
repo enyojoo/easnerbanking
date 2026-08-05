@@ -19,6 +19,49 @@ function stablecoinProvisioned(payIn: InvoicePayInPayload): boolean {
   return Boolean(payIn.stablecoinAccount)
 }
 
+/** Map Settings → Default payment option to the customer invoice tab. */
+export function resolveDefaultTabFromPreferredMethod(
+  preferredMethod: InvoicePaymentDefaults["preferredMethod"],
+  shows: { showBank: boolean; showStablecoin: boolean; showOnlinePayment: boolean },
+): "bank" | "stablecoin" | "online" {
+  if (preferredMethod === "online" && shows.showOnlinePayment) return "online"
+  if (preferredMethod === "stablecoin" && shows.showStablecoin) return "stablecoin"
+  if (preferredMethod === "bank" && shows.showBank) return "bank"
+  if (shows.showOnlinePayment) return "online"
+  if (shows.showBank) return "bank"
+  if (shows.showStablecoin) return "stablecoin"
+  return "bank"
+}
+
+function invoicePaymentShowsMatchBusinessDefaults(
+  perInvoice: InvoicePaymentDisplay,
+  defaults: InvoicePaymentDefaults,
+  stripePlatformEnabled: boolean,
+): boolean {
+  const bizShowBank = defaults.showBankTransfer !== false
+  const bizShowStable = defaults.showStablecoin !== false
+  const bizShowOnline = defaults.showOnlinePayment !== false && stripePlatformEnabled
+
+  if (perInvoice.showBank !== undefined && perInvoice.showBank !== bizShowBank) return false
+  if (perInvoice.showStablecoin !== undefined && perInvoice.showStablecoin !== bizShowStable) {
+    return false
+  }
+  if (perInvoice.showOnlinePayment !== undefined && perInvoice.showOnlinePayment !== bizShowOnline) {
+    return false
+  }
+  return true
+}
+
+function resolvePerInvoiceDefaultTab(
+  perInvoice: InvoicePaymentDisplay,
+  shows: { showBank: boolean; showStablecoin: boolean; showOnlinePayment: boolean },
+): "bank" | "stablecoin" | "online" | null {
+  if (perInvoice.defaultTab === "online" && shows.showOnlinePayment) return "online"
+  if (perInvoice.defaultTab === "stablecoin" && shows.showStablecoin) return "stablecoin"
+  if (perInvoice.defaultTab === "bank" && shows.showBank) return "bank"
+  return null
+}
+
 /** Resolve effective payment method visibility for an invoice surface. */
 export function resolvePaymentDisplay(input: {
   invoice: Pick<Invoice, "paymentDisplay" | "status">
@@ -75,23 +118,26 @@ export function resolvePaymentDisplay(input: {
     else if (hasStable) showStablecoin = true
   }
 
-  let defaultTab: "bank" | "stablecoin" | "online" = "bank"
-  if (perInvoice?.defaultTab === "online" && showOnlinePayment) {
-    defaultTab = "online"
-  } else if (perInvoice?.defaultTab === "stablecoin" && showStablecoin) {
-    defaultTab = "stablecoin"
-  } else if (perInvoice?.defaultTab === "bank" && showBank) {
-    defaultTab = "bank"
-  } else if (defaults.preferredMethod === "online" && showOnlinePayment) {
-    defaultTab = "online"
-  } else if (defaults.preferredMethod === "stablecoin" && showStablecoin) {
-    defaultTab = "stablecoin"
-  } else if (defaults.preferredMethod === "bank" && showBank) {
-    defaultTab = "bank"
-  } else if (showOnlinePayment) {
-    defaultTab = "online"
-  } else if (showStablecoin && !showBank) {
-    defaultTab = "stablecoin"
+  let defaultTab = resolveDefaultTabFromPreferredMethod(defaults.preferredMethod, {
+    showBank,
+    showStablecoin,
+    showOnlinePayment,
+  })
+
+  if (
+    perInvoice?.defaultTab != null &&
+    !invoicePaymentShowsMatchBusinessDefaults(
+      perInvoice,
+      defaults,
+      input.stripeOnlineEnabled === true,
+    )
+  ) {
+    const perInvoiceTab = resolvePerInvoiceDefaultTab(perInvoice, {
+      showBank,
+      showStablecoin,
+      showOnlinePayment,
+    })
+    if (perInvoiceTab) defaultTab = perInvoiceTab
   }
 
   return {

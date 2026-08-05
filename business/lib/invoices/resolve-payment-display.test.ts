@@ -79,4 +79,40 @@ describe("resolvePaymentDisplay", () => {
     })
     expect(d.defaultTab).toBe("stablecoin")
   })
+
+  it("uses business preferredMethod over legacy per-invoice defaultTab when shows match settings", () => {
+    const d = resolvePaymentDisplay({
+      invoice: {
+        status: "unpaid",
+        paymentDisplay: {
+          showBank: true,
+          showStablecoin: true,
+          showOnlinePayment: true,
+          defaultTab: "bank",
+        },
+      },
+      businessDefaults: { preferredMethod: "online" },
+      payIn: both,
+      stripeOnlineEnabled: true,
+    })
+    expect(d.defaultTab).toBe("online")
+  })
+
+  it("honors per-invoice defaultTab when payment methods were customized", () => {
+    const d = resolvePaymentDisplay({
+      invoice: {
+        status: "unpaid",
+        paymentDisplay: {
+          showBank: false,
+          showStablecoin: true,
+          showOnlinePayment: true,
+          defaultTab: "stablecoin",
+        },
+      },
+      businessDefaults: { preferredMethod: "online", showBankTransfer: true },
+      payIn: both,
+      stripeOnlineEnabled: true,
+    })
+    expect(d.defaultTab).toBe("stablecoin")
+  })
 })
