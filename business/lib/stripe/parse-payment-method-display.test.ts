@@ -6,6 +6,7 @@ import {
 } from "./parse-payment-method-display"
 import {
   formatPaymentMethodText,
+  formatPaymentMethodTextBesideIcon,
   paymentMethodIconKey,
 } from "./payment-method-display"
 
@@ -127,5 +128,22 @@ describe("formatPaymentMethodText / icon key", () => {
         wallet: "apple_pay",
       }),
     ).toBe("Apple Pay · Visa •••• 4242")
+  })
+
+  it("omits brand name beside icon when brand chip is present", () => {
+    expect(
+      formatPaymentMethodTextBesideIcon({ type: "card", brand: "visa", last4: "4242" }),
+    ).toBe("•••• 4242")
+    expect(
+      formatPaymentMethodTextBesideIcon({
+        type: "card",
+        brand: "visa",
+        last4: "4242",
+        wallet: "apple_pay",
+      }),
+    ).toBe("Apple Pay •••• 4242")
+    expect(
+      formatPaymentMethodTextBesideIcon({ type: "card", last4: "4242" }),
+    ).toBe("Card •••• 4242")
   })
 })

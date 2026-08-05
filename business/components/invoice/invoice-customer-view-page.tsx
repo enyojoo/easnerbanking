@@ -653,13 +653,17 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Payment record
                       </p>
-                      <p className="text-sm text-muted-foreground">Paid online</p>
+                      <div className="flex justify-between items-center gap-3 text-sm">
+                        <span className="text-muted-foreground">Paid online</span>
+                        {showStripePm && stripePm ? (
+                          <StripePaymentMethodRow pm={stripePm} />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </div>
                     </div>
                   ) : null}
                   <div className="flex flex-wrap items-center gap-3">
-                    {showStripePm && stripePm ? (
-                      <StripePaymentMethodRow pm={stripePm} />
-                    ) : null}
                     <Button
                       variant="outline"
                       size="sm"

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="32" viewBox="0 0 48 32" role="img" aria-label="link">
-  <rect width="48" height="32" rx="5" fill="rgb(0,214,163)"/>
-  <text x="24" y="21" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="700" fill="rgb(11,26,22)">LINK</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80" fill="none" role="img" aria-label="Link">
+  <rect width="120" height="80" rx="4" fill="#00D66F"/>
+  <path fill="#0B1A16" d="M38 40c0-7.7 6.3-14 14-14h5v7.5h-5c-3.6 0-6.5 2.9-6.5 6.5s2.9 6.5 6.5 6.5h5V53h-5c-7.7 0-14-6.3-14-14zm17.5-3.7h11.5v7.4H55.5v-7.4zM68 26h5v7.5h9c3.6 0 6.5 2.9 6.5 6.5S85.6 46.5 82 46.5h-9V53h-5V26zm5 13h9c1.4 0 2.5-1.1 2.5-2.5S83.4 34 82 34h-9v5z"/>
 </svg>

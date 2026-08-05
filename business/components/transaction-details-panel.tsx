@@ -211,13 +211,6 @@ function TransactionSummaryDetails({
           <TransactionDetailSummaryRow label="Invoice" value={invoiceReference} />
         ) : null}
 
-        {isStripeInvoiceSettlement ? (
-          <TransactionDetailSummaryRow
-            label="Amount"
-            value={formatReviewRowMoneyDisplay("Amount", netAmount, displayCurrency)}
-          />
-        ) : null}
-
         {isStripeInvoiceSettlement &&
         grossAmount != null &&
         Math.abs(grossAmount - netAmount) > 0.0001 ? (
@@ -228,11 +221,11 @@ function TransactionSummaryDetails({
         ) : null}
 
         {isStripeInvoiceSettlement && transaction.stripePaymentMethod ? (
-          <TransactionDetailSummaryRow label="Payment method">
+          <TransactionDetailSummaryRow label="Paid online">
             <StripePaymentMethodRow pm={transaction.stripePaymentMethod} />
           </TransactionDetailSummaryRow>
         ) : isStripeInvoiceSettlement && transaction.paymentScheme ? (
-          <TransactionDetailSummaryRow label="Payment method" value={transaction.paymentScheme} />
+          <TransactionDetailSummaryRow label="Paid online" value={transaction.paymentScheme} />
         ) : null}
 
         {isStripeInvoiceSettlement && transaction.customerName ? (

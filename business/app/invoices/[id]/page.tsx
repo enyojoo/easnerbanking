@@ -68,7 +68,6 @@ import {
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import { StripePaymentMethodRow } from "@/components/stripe-payment-method-row"
-import { formatPaymentMethodText } from "@/lib/stripe/payment-method-display"
 import type { Invoice } from "@/lib/b2b/types"
 import type { InvoiceManualStatusAction } from "@/lib/invoices/invoice-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -1215,32 +1214,14 @@ export default function InvoiceDetailPage() {
                         )}
                       </div>
                     ) : paymentRecord.method === "stripe" ? (
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between items-center gap-3">
-                          <span className="text-muted-foreground">Method</span>
-                          {paymentRecord.stripePaymentMethod?.brand ||
-                          paymentRecord.stripePaymentMethod?.last4 ? (
-                            <StripePaymentMethodRow pm={paymentRecord.stripePaymentMethod} />
-                          ) : (
-                            <span>
-                              {paymentRecord.stripePaymentMethod
-                                ? formatPaymentMethodText(paymentRecord.stripePaymentMethod)
-                                : "Online"}
-                            </span>
-                          )}
-                        </div>
-                        {paymentRecord.customerEmail ? (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Email</span>
-                            <span>{paymentRecord.customerEmail}</span>
-                          </div>
-                        ) : null}
-                        {paymentRecord.amount != null && paymentRecord.currency ? (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Amount</span>
-                            <span>{formatCurrency(paymentRecord.amount, paymentRecord.currency)}</span>
-                          </div>
-                        ) : null}
+                      <div className="flex justify-between items-center gap-3 text-sm">
+                        <span className="text-muted-foreground">Paid online</span>
+                        {paymentRecord.stripePaymentMethod?.brand ||
+                        paymentRecord.stripePaymentMethod?.last4 ? (
+                          <StripePaymentMethodRow pm={paymentRecord.stripePaymentMethod} />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </div>
                     ) : (
                       <div className="text-sm">

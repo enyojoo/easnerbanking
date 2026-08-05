@@ -29,7 +29,10 @@ export function PaymentMethodBrandIcon({
       alt={alt ?? key}
       width={48}
       height={32}
-      className={cn("inline-block h-5 w-auto shrink-0 rounded-[3px]", className)}
+      className={cn(
+        "inline-block h-6 w-auto max-w-[2.75rem] shrink-0 rounded-[3px] object-contain",
+        className,
+      )}
       onError={(e) => {
         const el = e.currentTarget
         el.style.display = "none"

@@ -67,14 +67,35 @@ export function paymentMethodIconKey(
   return "card"
 }
 
-/** Human label for lists / PDF text, e.g. "Visa •••• 4242". */
+function paymentMethodLast4Mask(
+  pm: StripePaymentMethodDisplay | null | undefined,
+): string | null {
+  const last4 = pm?.last4?.replace(/\D/g, "").slice(-4)
+  return last4 ? `•••• ${last4}` : null
+}
+
+function paymentMethodWalletLabel(
+  pm: StripePaymentMethodDisplay | null | undefined,
+): string | null {
+  if (pm?.wallet === "apple_pay") return "Apple Pay"
+  if (pm?.wallet === "google_pay") return "Google Pay"
+  return null
+}
+
+/** True when we have a brand-specific chip (not the generic card fallback). */
+export function hasPaymentBrandIcon(
+  pm: StripePaymentMethodDisplay | null | undefined,
+): boolean {
+  return paymentMethodIconKey(pm) !== "card"
+}
+
+/** Human label for lists / plain text, e.g. "Visa •••• 4242". */
 export function formatPaymentMethodText(
   pm: StripePaymentMethodDisplay | null | undefined,
 ): string {
   if (!pm?.type) return "Card"
   const type = pm.type.toLowerCase()
-  const last4 = pm.last4?.replace(/\D/g, "").slice(-4)
-  const mask = last4 ? `•••• ${last4}` : null
+  const mask = paymentMethodLast4Mask(pm)
 
   if (type === "card") {
     const brand = (pm.brand ?? "card").toLowerCase()
@@ -88,12 +109,7 @@ export function formatPaymentMethodText(
             : brand === "discover"
               ? "Discover"
               : titleCaseType(brand === "card" ? "card" : brand)
-    const wallet =
-      pm.wallet === "apple_pay"
-        ? "Apple Pay"
-        : pm.wallet === "google_pay"
-          ? "Google Pay"
-          : null
+    const wallet = paymentMethodWalletLabel(pm)
     const base = wallet ? `${wallet} · ${brandLabel}` : brandLabel
     return mask ? `${base} ${mask}` : base
   }
@@ -113,6 +129,41 @@ export function formatPaymentMethodText(
 
   const label = titleCaseType(type)
   return mask ? `${label} ${mask}` : label
+}
+
+/**
+ * Text beside a brand SVG/PNG chip: omit redundant brand name when the icon already shows it.
+ * e.g. Visa icon → "•••• 4242"; no brand icon → "Visa •••• 4242".
+ */
+export function formatPaymentMethodTextBesideIcon(
+  pm: StripePaymentMethodDisplay | null | undefined,
+): string {
+  if (!pm?.type) return "Card"
+  if (!hasPaymentBrandIcon(pm)) {
+    return formatPaymentMethodText(pm)
+  }
+
+  const type = pm.type.toLowerCase()
+  const mask = paymentMethodLast4Mask(pm)
+  const wallet = paymentMethodWalletLabel(pm)
+
+  if (type === "card") {
+    if (wallet && mask) return `${wallet} ${mask}`
+    if (wallet) return wallet
+    return mask ?? ""
+  }
+
+  if (type === "us_bank_account" || type === "ach_debit" || type === "ach") {
+    // Bank chip is generic; keep institution name when present.
+    const bank = pm.bankName?.trim()
+    if (bank && mask) return `${bank} ${mask}`
+    if (bank) return bank
+    return mask ?? ""
+  }
+
+  if (type === "sepa_debit") return mask ?? ""
+  if (type === "link") return mask ?? ""
+  return mask ?? ""
 }
 
 /** Short list label (e.g. "Visa" / "Card") when full mask is not needed. */
