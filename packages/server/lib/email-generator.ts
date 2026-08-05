@@ -516,7 +516,29 @@ export function generateSupabaseAuthEmailHtml(variant: SupabaseAuthEmailVariant)
   })
 }
 
-export type TransactionDetailRow = { label: string; value: string; isStatus?: boolean; statusClass?: string }
+export type TransactionDetailRow = {
+  label: string
+  value: string
+  isStatus?: boolean
+  statusClass?: string
+  /** PNG data URL — renders brand chip beside `value` (email-safe; SVG is avoided). */
+  brandIconSrc?: string | null
+}
+
+function paymentBrandIconEmailHtml(src: string): string | null {
+  const trimmed = src.trim()
+  if (!trimmed.startsWith("data:image/png;base64,")) return null
+  return `<img src="${trimmed}" alt="" width="28" height="18" style="display:block;border-radius:3px;" />`
+}
+
+function detailValueHtml(row: TransactionDetailRow): string {
+  if (row.isStatus) {
+    return `<span class="status-badge status-${row.statusClass ?? "completed"}">${escapeHtml(row.value)}</span>`
+  }
+  const iconHtml = row.brandIconSrc ? paymentBrandIconEmailHtml(row.brandIconSrc) : null
+  if (!iconHtml) return escapeHtml(row.value)
+  return `<table role="presentation" cellpadding="0" cellspacing="0" align="right" style="margin-left:auto;"><tr><td style="padding-right:8px;vertical-align:middle;line-height:0;">${iconHtml}</td><td style="vertical-align:middle;font-weight:500;">${escapeHtml(row.value)}</td></tr></table>`
+}
 
 export function generateTransactionDetailsTable(
   rows: TransactionDetailRow[],
@@ -524,9 +546,7 @@ export function generateTransactionDetailsTable(
 ): string {
   const detailRows = rows
     .map((row) => {
-      const valueHtml = row.isStatus
-        ? `<span class="status-badge status-${row.statusClass ?? "completed"}">${escapeHtml(row.value)}</span>`
-        : escapeHtml(row.value)
+      const valueHtml = detailValueHtml(row)
       return `<tr class="detail-row"><td class="detail-label" style="width:38%;max-width:38%;vertical-align:top;">${escapeHtml(row.label)}</td><td class="detail-value" align="right" style="width:62%;max-width:62%;word-break:break-word;overflow-wrap:anywhere;white-space:normal;vertical-align:top;">${valueHtml}</td></tr>`
     })
     .join("")

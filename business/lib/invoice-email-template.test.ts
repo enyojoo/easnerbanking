@@ -156,4 +156,61 @@ describe("invoice email templates", () => {
     expect(html).toContain("Easner Group, Inc.")
     expect(html).not.toContain("10 Market St")
   })
+
+  it("includes payment method and When on receipt email for Stripe payments", () => {
+    const paidAt = "2026-08-03T04:54:00.000Z"
+    const html = generateInvoiceReceiptEmailHtml({
+      invoice: {
+        ...sampleInvoice,
+        status: "paid",
+        paymentInfo: {
+          paidAt,
+          method: "stripe",
+          stripe: {
+            paymentIntentId: "pi_1",
+            paymentMethodType: "card",
+            brand: "visa",
+            last4: "4242",
+            grossCents: 10000,
+            feeCents: 300,
+            netCents: 9700,
+            settlementPhase: "payment_received",
+          },
+        },
+      },
+      invoiceViewUrl: "https://example.com/invoice/inv_1",
+      businessName: "Acme Ltd",
+      businessReplyEmail: "billing@acme.com",
+      issuer: sampleIssuer,
+    })
+    expect(html).toContain(">Payment method<")
+    expect(html).toContain("4242")
+    expect(html).toContain("data:image/png;base64,")
+    expect(html).toContain(">When<")
+    expect(html.indexOf(">When<")).toBeLessThan(html.indexOf(">Status<"))
+    expect(html).toContain("Aug 03, 2026")
+  })
+
+  it("includes payment method and When when emailing a paid invoice", () => {
+    const paidAt = "2026-08-03T04:54:00.000Z"
+    const html = generateInvoiceEmailHtml({
+      invoice: {
+        ...sampleInvoice,
+        status: "paid",
+        paymentInfo: {
+          paidAt,
+          method: "cash",
+          cashNote: "Paid in person",
+        },
+      },
+      invoiceViewUrl: "https://example.com/invoice/inv_1",
+      businessName: "Acme Ltd",
+      businessReplyEmail: "billing@acme.com",
+      issuer: sampleIssuer,
+    })
+    expect(html).toContain(">Payment method<")
+    expect(html).toContain("Cash or other method")
+    expect(html).toContain(">When<")
+    expect(html).not.toContain(">Due<")
+  })
 })

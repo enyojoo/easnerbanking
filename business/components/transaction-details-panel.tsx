@@ -221,11 +221,11 @@ function TransactionSummaryDetails({
         ) : null}
 
         {isStripeInvoiceSettlement && transaction.stripePaymentMethod ? (
-          <TransactionDetailSummaryRow label="Paid online">
+          <TransactionDetailSummaryRow label="Payment method">
             <StripePaymentMethodRow pm={transaction.stripePaymentMethod} />
           </TransactionDetailSummaryRow>
         ) : isStripeInvoiceSettlement && transaction.paymentScheme ? (
-          <TransactionDetailSummaryRow label="Paid online" value={transaction.paymentScheme} />
+          <TransactionDetailSummaryRow label="Payment method" value={transaction.paymentScheme} />
         ) : null}
 
         {isStripeInvoiceSettlement && transaction.customerName ? (

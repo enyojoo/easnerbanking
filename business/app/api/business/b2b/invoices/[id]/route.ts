@@ -15,6 +15,7 @@ import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { deliverInvoiceReceiptEmail } from "@/lib/invoices/deliver-invoice-receipt-email"
 import { notifyMerchantInvoicePaid } from "@/lib/invoices/notify-invoice-paid"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { resolveStripeSettlementLedgerTransactionId } from "@/lib/invoices/resolve-stripe-settlement-ledger-id"
 
 /** Single-invoice fetch for the invoice detail page (`useInvoiceDetail`). */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -37,7 +38,29 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!data) {
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
   }
-  return NextResponse.json(mapRowToInvoice(data as B2bInvoiceRow))
+
+  let invoice = mapRowToInvoice(data as B2bInvoiceRow)
+  if (
+    invoice.paymentInfo?.method === "stripe" &&
+    !invoice.paymentInfo.transactionId?.trim()
+  ) {
+    const ledgerTransactionId = await resolveStripeSettlementLedgerTransactionId(
+      admin,
+      id,
+      ctx.businessId,
+    )
+    if (ledgerTransactionId) {
+      invoice = {
+        ...invoice,
+        paymentInfo: {
+          ...invoice.paymentInfo,
+          transactionId: ledgerTransactionId,
+        },
+      }
+    }
+  }
+
+  return NextResponse.json(invoice)
 }
 
 function webhookEventForStatus(status: string): Parameters<typeof dispatchInvoiceWebhooks>[0]["event"] | null {

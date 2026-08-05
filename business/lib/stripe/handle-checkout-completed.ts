@@ -6,6 +6,7 @@ import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { getStripe } from "./client"
 import { parsePaymentMethodDisplayFromCharge } from "@/lib/stripe/parse-payment-method-display"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
+import { patchInvoiceStripeLedgerTransactionId } from "@/lib/invoices/patch-invoice-stripe-ledger-transaction-id"
 
 function asCents(n: unknown): number {
   const v = typeof n === "number" ? n : Number(n)
@@ -308,6 +309,14 @@ export async function handleStripeCheckoutCompleted(
     },
     { onConflict: "id" },
   )
+
+  if (invoice.paymentInfo?.method === "stripe" && !invoice.paymentInfo.transactionId) {
+    await patchInvoiceStripeLedgerTransactionId(admin, {
+      invoiceId,
+      businessId,
+      ledgerTransactionId: ledger.transactionId,
+    })
+  }
 
   return { handled: true }
 }

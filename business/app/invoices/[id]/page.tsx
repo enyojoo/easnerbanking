@@ -268,6 +268,14 @@ export default function InvoiceDetailPage() {
   } | null>(null)
   const [stripeRefunding, setStripeRefunding] = useState(false)
 
+  const stripeLedgerTransactionId = useMemo(() => {
+    if (!invoice) return null
+    const fromPaymentInfo = invoice.paymentInfo?.transactionId?.trim()
+    if (fromPaymentInfo) return fromPaymentInfo
+    const fromLedgerCache = ledgerRows?.find((row) => row.invoiceId === invoice.id)?.id
+    return fromLedgerCache?.trim() || null
+  }, [invoice, ledgerRows])
+
   const stripeSettlementFromInvoice = useMemo(() => {
     const stripe = invoice?.paymentInfo?.method === "stripe" ? invoice.paymentInfo.stripe : undefined
     if (!invoice || !stripe) return null
@@ -277,11 +285,21 @@ export default function InvoiceDetailPage() {
       net_cents: stripe.netCents,
       fee_cents: stripe.feeCents,
       currency: invoice.currency,
-      ledger_transaction_id: null as string | null,
+      ledger_transaction_id: stripeLedgerTransactionId,
     }
-  }, [invoice])
+  }, [invoice, stripeLedgerTransactionId])
 
-  const stripeSettlement = stripeSettlementLive ?? stripeSettlementFromInvoice
+  const stripeSettlement = useMemo(() => {
+    const base = stripeSettlementFromInvoice
+    if (!base) return null
+    if (!stripeSettlementLive) return base
+    return {
+      ...base,
+      ...stripeSettlementLive,
+      ledger_transaction_id:
+        stripeSettlementLive.ledger_transaction_id ?? base.ledger_transaction_id,
+    }
+  }, [stripeSettlementFromInvoice, stripeSettlementLive])
 
   const canProvisionDepositInstructions = invoice
     ? canProvisionInvoiceDepositInstructions(invoice.currency, tier1Complete, TIER2_COMPLETE_PLACEHOLDER)

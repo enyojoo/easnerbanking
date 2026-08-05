@@ -9,10 +9,12 @@ import {
   EASNER_COMPANY_LEGAL_NAME,
   type TransactionDetailRow,
 } from "@easner/server"
+import { formatTransactionWhen } from "@easner/shared"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import type { Invoice } from "@/lib/b2b/types"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import { invoiceCustomerContactLine } from "@/lib/invoices/invoice-reply-email"
+import { resolveInvoiceEmailPaymentMethod } from "@/lib/invoices/invoice-email-payment-method"
 import {
   emailPaymentContextParagraph,
   emailPrimaryCtaText,
@@ -37,6 +39,39 @@ function invoiceSummaryRows(invoice: Invoice): TransactionDetailRow[] {
     { label: "Invoice number", value: invoice.invoiceNumber },
     { label: "Amount", value: `${amount} ${invoice.currency}` },
   ]
+}
+
+/** Paid-invoice detail rows aligned with transaction email layout (Payment method, When, Status). */
+function invoicePaidDetailRows(invoice: Invoice): TransactionDetailRow[] {
+  const rows: TransactionDetailRow[] = [...invoiceSummaryRows(invoice)]
+  const paymentMethod = resolveInvoiceEmailPaymentMethod(invoice)
+  if (paymentMethod) {
+    rows.push({
+      label: "Payment method",
+      value: paymentMethod.htmlText,
+      brandIconSrc: paymentMethod.brandIconSrc,
+    })
+  }
+  const paidAt = invoice.paymentInfo?.paidAt
+  if (paidAt) {
+    const when = formatTransactionWhen(paidAt)
+    if (when) rows.push({ label: "When", value: when })
+  }
+  rows.push({ label: "Status", value: "Paid", isStatus: true, statusClass: "completed" })
+  return rows
+}
+
+function invoicePaidDetailPlainLines(invoice: Invoice): string[] {
+  const lines: string[] = [`Invoice: ${invoiceAmountLine(invoice)}`]
+  const paymentMethod = resolveInvoiceEmailPaymentMethod(invoice)
+  if (paymentMethod) lines.push(`Payment method: ${paymentMethod.plainText}`)
+  const paidAt = invoice.paymentInfo?.paidAt
+  if (paidAt) {
+    const when = formatTransactionWhen(paidAt)
+    if (when) lines.push(`When: ${when}`)
+  }
+  lines.push("Status: Paid")
+  return lines
 }
 
 function invoiceDetailsTable(rows: TransactionDetailRow[]): string {
@@ -264,10 +299,7 @@ export function generateInvoiceReceiptEmailHtml(data: InvoiceReceiptEmailData): 
   const content = `
     ${customerGreetingParagraphHtml(invoice.customerName)}
     <p class="confirmation-text">Thank you — we received your payment for this invoice from ${businessName}.</p>
-    ${invoiceDetailsTable([
-      ...invoiceSummaryRows(invoice),
-      { label: "Status", value: "Paid", isStatus: true, statusClass: "completed" },
-    ])}
+    ${invoiceDetailsTable(invoicePaidDetailRows(invoice))}
   `.trim()
 
   return generateBaseEmailTemplate(
@@ -291,8 +323,7 @@ ${formatCustomerGreetingPlain(invoice.customerName)}
 
 Thank you — we received your payment for this invoice from ${businessName}.
 
-Invoice: ${invoiceAmountLine(invoice)}
-Status: Paid
+${invoicePaidDetailPlainLines(invoice).join("\n")}
 
 View invoice: ${invoiceViewUrl}
 
@@ -429,14 +460,16 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
     data.includePaymentContext === true,
   )
 
+  const detailRows =
+    invoice.status === "paid" && invoice.paymentInfo
+      ? invoicePaidDetailRows(invoice)
+      : [...invoiceSummaryRows(invoice), { label: "Due", value: dueDate }]
+
   const content = `
     ${customerGreetingParagraphHtml(invoice.customerName)}
     <p class="confirmation-text">${bodyIntro}</p>
     ${paymentParagraph ? `<p class="confirmation-text">${paymentParagraph}</p>` : ""}
-    ${invoiceDetailsTable([
-      ...invoiceSummaryRows(invoice),
-      { label: "Due", value: dueDate },
-    ])}
+    ${invoiceDetailsTable(detailRows)}
   `.trim()
 
   return generateBaseEmailTemplate(
@@ -477,8 +510,11 @@ ${formatCustomerGreetingPlain(invoice.customerName)}
 ${bodyIntro}
 ${paymentParagraph ? `\n${paymentParagraph}` : ""}
 
-Invoice: ${invoiceAmountLine(invoice)}
-Due: ${dueDate}
+${
+    invoice.status === "paid" && invoice.paymentInfo
+      ? invoicePaidDetailPlainLines(invoice).join("\n")
+      : `Invoice: ${invoiceAmountLine(invoice)}\nDue: ${dueDate}`
+  }
 
 ${ctaText}: ${invoiceViewUrl}
 
