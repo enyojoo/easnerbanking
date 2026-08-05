@@ -3,6 +3,7 @@ import type Stripe from "stripe"
 import { syncConnectAccountFromWebhook } from "./connect"
 import { handleStripeCheckoutCompleted } from "./handle-checkout-completed"
 import { handleStripePayoutPaid } from "./handle-payout-paid"
+import { applyInvoiceStripeRefundSideEffects } from "./apply-invoice-stripe-refund"
 
 async function appendSettlementEvent(
   admin: SupabaseClient,
@@ -126,20 +127,47 @@ export async function applyStripeWebhookSideEffects(
     }
     case "charge.refunded": {
       const charge = event.data.object as Stripe.Charge
-      const settlement = await findSettlementByCharge(admin, charge.id)
-      if (!settlement) return
-      if (settlement.phase === "credited") {
+      const refundFromList =
+        charge.refunds &&
+        typeof charge.refunds === "object" &&
+        Array.isArray(charge.refunds.data) &&
+        charge.refunds.data[0]?.id
+          ? String(charge.refunds.data[0].id)
+          : null
+      const refundId = refundFromList || `charge_refunded:${charge.id}`
+      const result = await applyInvoiceStripeRefundSideEffects(admin, {
+        chargeId: charge.id,
+        refundId,
+        refundedAt: new Date((event.created || 0) * 1000).toISOString(),
+        source: "webhook",
+        stripeEventId: event.id,
+      })
+      if (result.ok && result.skipped === "credited") {
         console.warn(
           "[stripe] refund after credited — manual clawback required",
-          settlement.id,
+          result.invoiceId,
           charge.id,
         )
-        await appendSettlementEvent(admin, settlement.id, event.id)
-        return
+      } else if (!result.ok) {
+        console.error("[stripe] charge.refunded side effects failed:", result.error)
       }
-      await appendSettlementEvent(admin, settlement.id, event.id, {
-        phase: "failed",
+      return
+    }
+    case "refund.created": {
+      const refund = event.data.object as Stripe.Refund
+      const chargeId =
+        typeof refund.charge === "string" ? refund.charge : refund.charge?.id
+      if (!chargeId || !refund.id) return
+      const result = await applyInvoiceStripeRefundSideEffects(admin, {
+        chargeId,
+        refundId: refund.id,
+        refundedAt: new Date((event.created || 0) * 1000).toISOString(),
+        source: "webhook",
+        stripeEventId: event.id,
       })
+      if (!result.ok) {
+        console.error("[stripe] refund.created side effects failed:", result.error)
+      }
       return
     }
     case "transfer.created": {

@@ -18,6 +18,7 @@ export async function POST(
   const result = await refundInvoiceStripePayment({
     businessId: ctx.businessId,
     invoiceId: id,
+    actorUserId: ctx.userId,
   })
 
   if (!result.ok) {
@@ -27,5 +28,7 @@ export async function POST(
   return NextResponse.json({
     refundId: result.refundId,
     status: result.status,
+    invoiceStatus: result.invoiceStatus,
+    ledgerTransactionId: result.ledgerTransactionId,
   })
 }

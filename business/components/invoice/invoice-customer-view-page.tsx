@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Check, Copy, Download, Loader2 } from "lucide-react"
 import { businessInfo } from "@/lib/business-info"
 import type { Invoice } from "@/lib/b2b/types"
+import { formatTransactionWhen } from "@easner/shared"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
@@ -335,6 +336,15 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     (invoice.status === "unpaid" || invoice.status === "sent" || invoice.status === "past_due") &&
     hasPayInRail
   const showReceiptCard = invoice.status === "paid"
+  const refundedAt =
+    invoice.paymentInfo?.method === "stripe"
+      ? invoice.paymentInfo.stripe?.refundedAt?.trim() ||
+        (invoice.paymentInfo.stripe?.refundId ? invoice.paymentInfo.paidAt : undefined)
+      : undefined
+  const showRefundedNotice =
+    Boolean(refundedAt) &&
+    (invoice.status === "unpaid" || invoice.status === "sent" || invoice.status === "past_due")
+  const refundedWhen = refundedAt ? formatTransactionWhen(refundedAt) : ""
 
   const handleDownloadPdf = async () => {
     if (!invoice) return
@@ -369,6 +379,11 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
           </p>
         </div>
       )}
+      {showRefundedNotice && refundedWhen ? (
+        <div className="mb-4 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          {INVOICE_CUSTOMER_VIEW_COPY.paymentRefundedPrefix} {refundedWhen}.
+        </div>
+      ) : null}
       <Card className="print:shadow-none print:border">
         <CardContent className="p-4 pt-1 pb-0.5 sm:p-6 sm:pt-2 sm:pb-1 lg:p-8 lg:pt-3 lg:pb-2">
           <div className="flex justify-end items-center mb-6 print:hidden">

@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest"
 import {
+  generateInvoiceCustomerRefundEmailHtml,
   generateInvoiceEmailHtml,
   generateInvoicePaidNotificationHtml,
   generateInvoiceReceiptEmailHtml,
+  generateInvoiceRefundedNotificationHtml,
   generateInvoiceViewedNotificationHtml,
+  getInvoiceCustomerRefundEmailSubject,
   getInvoiceEmailSubject,
   getInvoicePaidNotificationSubject,
+  getInvoiceRefundedNotificationSubject,
 } from "@/lib/invoice-email-template"
 import type { Invoice } from "@/lib/b2b/types"
 
@@ -91,6 +95,61 @@ describe("invoice email templates", () => {
     expect(html).toContain("Online")
     expect(html).toContain("View invoice</a>")
     expect(html).toContain("invoice payment notifications")
+  })
+
+  it("renders merchant refunded notification", () => {
+    expect(getInvoiceRefundedNotificationSubject("INV-001")).toBe(
+      "Invoice INV-001 payment was refunded",
+    )
+    const html = generateInvoiceRefundedNotificationHtml({
+      invoice: { ...sampleInvoice, status: "sent" },
+      businessName: "Acme Ltd",
+      manageInvoiceUrl: "https://business.easner.com/invoices/inv_1",
+      recipientFirstName: "Alex",
+    })
+    expect(html).toContain("Hey Alex,")
+    expect(html).toContain("was refunded")
+    expect(html).toContain("Refunded")
+    expect(html).toContain("View invoice</a>")
+  })
+
+  it("renders customer refund email with payment method and When", () => {
+    expect(getInvoiceCustomerRefundEmailSubject("INV-001")).toBe(
+      "Payment refunded for invoice INV-001",
+    )
+    const html = generateInvoiceCustomerRefundEmailHtml({
+      invoice: {
+        ...sampleInvoice,
+        status: "sent",
+        paymentInfo: {
+          paidAt: "2026-08-03T04:54:00.000Z",
+          method: "stripe",
+          stripe: {
+            paymentIntentId: "pi_1",
+            paymentMethodType: "card",
+            brand: "visa",
+            last4: "4242",
+            grossCents: 10000,
+            feeCents: 300,
+            netCents: 9700,
+            settlementPhase: "failed",
+            refundId: "re_1",
+            refundedAt: "2026-08-05T13:15:00.000Z",
+          },
+        },
+      },
+      invoiceViewUrl: "https://example.com/invoice/inv_1",
+      businessName: "Acme Ltd",
+      businessReplyEmail: "billing@acme.com",
+      issuer: sampleIssuer,
+    })
+    expect(html).toContain("Dear Jane Doe")
+    expect(html).toContain("has been refunded")
+    expect(html).toContain(">Payment method<")
+    expect(html).toContain("4242")
+    expect(html).toContain(">When<")
+    expect(html).toContain("Refunded")
+    expect(html).toContain("from Acme Ltd")
   })
 
   it("renders customer viewed notification with shared template shell", () => {

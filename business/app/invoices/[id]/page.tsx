@@ -51,12 +51,16 @@ import {
   INVOICE_ACTION_COPY,
   INVOICE_ACTIVITY_COPY,
   INVOICE_SHARE_COPY,
+  INVOICE_STRIPE_SETTLEMENT_COPY,
   INVOICE_TOAST_COPY,
   PAGE_COPY,
 } from "@/lib/copy/business-ui-copy"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
+import { useQueryClient } from "@tanstack/react-query"
+import { qk } from "@easner/shared"
 import { useInvoiceDetail } from "@/hooks/queries/use-invoices"
 import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutations/use-invoices"
+import { useScope } from "@/lib/query/scope"
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { MarkAsPaidDialog } from "@/components/mark-as-paid-dialog"
@@ -121,6 +125,18 @@ function getInvoiceActivities(invoice: Invoice): { id: string; type: string; des
     description: INVOICE_ACTIVITY_COPY.created,
     timestamp: createdTs,
   })
+  const refundedAt =
+    invoice.paymentInfo?.method === "stripe"
+      ? invoice.paymentInfo.stripe?.refundedAt?.trim()
+      : undefined
+  if (refundedAt) {
+    activities.push({
+      id: `refunded-${refundedAt}`,
+      type: "refunded",
+      description: INVOICE_ACTIVITY_COPY.refunded,
+      timestamp: refundedAt,
+    })
+  }
   const history = invoice.statusHistory ?? []
   if (history.length > 0) {
     history.forEach((entry, i) => {
@@ -205,6 +221,7 @@ const getActivityIcon = (type: string) => {
     collection_off: AlertCircle,
     created: Clock,
     paid: CheckCircle,
+    refunded: XCircle,
   }
   return iconConfig[type as keyof typeof iconConfig] || Clock
 }
@@ -214,6 +231,8 @@ export default function InvoiceDetailPage() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
   const backHref = invoiceBackHref(searchParams)
   const here = currentLocationPath(pathname, searchParams)
   const profile = useBusinessProfile()
@@ -351,7 +370,9 @@ export default function InvoiceDetailPage() {
       invoice
         ? getInvoiceManualStatusActions({
             status: invoice.status,
-            paidViaStripe: invoice.paymentInfo?.method === "stripe",
+            // Only lock while currently paid via Stripe (refunded invoices keep paymentInfo for audit).
+            paidViaStripe:
+              invoice.status === "paid" && invoice.paymentInfo?.method === "stripe",
           })
         : [],
     [invoice?.status, invoice?.paymentInfo?.method],
@@ -637,16 +658,31 @@ export default function InvoiceDetailPage() {
       const data = (await res.json().catch(() => ({}))) as {
         error?: string
         refundId?: string
+        invoiceStatus?: Invoice["status"]
       }
       if (!res.ok) {
         toast.error(data.error || "Refund failed")
         return
       }
-      toast.success("Refund submitted")
       setStripeSettlementLive((prev) => {
         const base = prev ?? stripeSettlementFromInvoice
         return base ? { ...base, phase: "failed" } : prev
       })
+      if (scope) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: qk.invoices.detail(scope, invoice.id) }),
+          queryClient.invalidateQueries({ queryKey: qk.invoices.list(scope, {}) }),
+          queryClient.invalidateQueries({ queryKey: qk.transactions.root(scope) }),
+        ])
+      } else {
+        await invoiceDetailQuery.refetch()
+      }
+      const restored = data.invoiceStatus?.trim()
+      toast.success(
+        restored
+          ? `Payment refunded — invoice marked ${restored.replace("_", " ")}`
+          : "Payment refunded — invoice marked unpaid",
+      )
     } finally {
       setStripeRefunding(false)
     }
@@ -954,19 +990,27 @@ export default function InvoiceDetailPage() {
       ) : null}
 
       {invoice.paymentInfo?.method === "stripe" && stripeSettlement ? (
-        <Card className="border-primary/20 bg-primary/5">
+        <Card
+          className={
+            stripeSettlement.phase === "failed"
+              ? "border-destructive/20 bg-destructive/5"
+              : "border-primary/20 bg-primary/5"
+          }
+        >
           <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="space-y-1">
               <p className="text-sm font-medium">
                 Online payment settlement:{" "}
                 {stripeSettlement.phase === "payment_received"
-                  ? "Payment received"
+                  ? INVOICE_STRIPE_SETTLEMENT_COPY.paymentReceived
                   : stripeSettlement.phase === "payout_sent"
-                    ? "Clearing"
+                    ? INVOICE_STRIPE_SETTLEMENT_COPY.clearing
                     : stripeSettlement.phase === "credited"
-                      ? "Available"
+                      ? INVOICE_STRIPE_SETTLEMENT_COPY.available
                       : stripeSettlement.phase === "failed"
-                        ? "Failed"
+                        ? invoice.paymentInfo.stripe?.refundId
+                          ? INVOICE_STRIPE_SETTLEMENT_COPY.refunded
+                          : INVOICE_STRIPE_SETTLEMENT_COPY.failed
                         : stripeSettlement.phase}
               </p>
               <p className="text-xs text-muted-foreground">

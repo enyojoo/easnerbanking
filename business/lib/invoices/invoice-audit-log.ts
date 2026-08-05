@@ -6,6 +6,7 @@ export type InvoiceAuditAction =
   | "status_changed"
   | "emailed"
   | "marked_paid"
+  | "payment_refunded"
   | "viewed"
   | "voided"
   | "converted"

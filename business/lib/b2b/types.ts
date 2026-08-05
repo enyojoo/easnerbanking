@@ -25,6 +25,9 @@ export interface InvoicePaymentInfo {
     netCents: number
     settlementPhase: "payment_received" | "payout_sent" | "credited" | "failed"
     settlementRail?: "grid_va" | "turnkey_stablecoin"
+    /** Set when the Stripe payment was fully refunded. */
+    refundId?: string
+    refundedAt?: string
   }
 }
 

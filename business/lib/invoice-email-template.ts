@@ -292,6 +292,180 @@ export function getInvoiceReceiptEmailSubject(invoiceNumber: string): string {
   return `Payment received for invoice ${invoiceNumber}`
 }
 
+export interface InvoiceRefundedNotificationEmailData {
+  invoice: Invoice
+  businessName: string
+  manageInvoiceUrl: string
+  recipientFirstName?: string
+}
+
+export interface InvoiceCustomerRefundEmailData {
+  invoice: Invoice
+  invoiceViewUrl: string
+  businessName: string
+  businessReplyEmail: string
+  issuer: InvoicePdfIssuer
+}
+
+function invoiceRefundDetailRows(invoice: Invoice): TransactionDetailRow[] {
+  const rows: TransactionDetailRow[] = [...invoiceSummaryRows(invoice)]
+  // Invoice status is no longer paid after refund — resolve PM from paymentInfo directly.
+  const stripe = invoice.paymentInfo?.method === "stripe" ? invoice.paymentInfo.stripe : undefined
+  if (stripe) {
+    const pm = resolveInvoiceEmailPaymentMethod({
+      ...invoice,
+      status: "paid",
+      paymentInfo: invoice.paymentInfo,
+    })
+    if (pm) {
+      rows.push({
+        label: "Payment method",
+        value: pm.htmlText,
+        brandIconSrc: pm.brandIconSrc,
+      })
+    }
+  }
+  const refundedAt = stripe?.refundedAt || invoice.paymentInfo?.paidAt
+  if (refundedAt) {
+    const when = formatTransactionWhen(refundedAt)
+    if (when) rows.push({ label: "When", value: when })
+  }
+  rows.push({ label: "Status", value: "Refunded", isStatus: true, statusClass: "failed" })
+  return rows
+}
+
+function invoiceRefundDetailPlainLines(invoice: Invoice): string[] {
+  const lines: string[] = [`Invoice: ${invoiceAmountLine(invoice)}`]
+  const stripe = invoice.paymentInfo?.method === "stripe" ? invoice.paymentInfo.stripe : undefined
+  if (stripe) {
+    const pm = resolveInvoiceEmailPaymentMethod({
+      ...invoice,
+      status: "paid",
+      paymentInfo: invoice.paymentInfo,
+    })
+    if (pm) lines.push(`Payment method: ${pm.plainText}`)
+  }
+  const refundedAt = stripe?.refundedAt || invoice.paymentInfo?.paidAt
+  if (refundedAt) {
+    const when = formatTransactionWhen(refundedAt)
+    if (when) lines.push(`When: ${when}`)
+  }
+  lines.push("Status: Refunded")
+  return lines
+}
+
+export function getInvoiceRefundedNotificationSubject(invoiceNumber: string): string {
+  return `Invoice ${invoiceNumber} payment was refunded`
+}
+
+export function generateInvoiceRefundedNotificationHtml(
+  data: InvoiceRefundedNotificationEmailData,
+): string {
+  const { invoice, manageInvoiceUrl } = data
+  const customer = invoice.customerName?.trim() || "A customer"
+  const subject = getInvoiceRefundedNotificationSubject(invoice.invoiceNumber)
+
+  const content = `
+    ${easnerUserGreetingParagraphHtml(data.recipientFirstName)}
+    <p class="confirmation-text">The online payment for invoice <strong>${invoice.invoiceNumber}</strong> was refunded. The invoice is open again for payment.</p>
+    ${invoiceDetailsTable([
+      ...invoiceSummaryRows(invoice),
+      { label: "Customer", value: customer },
+      { label: "Status", value: "Refunded", isStatus: true, statusClass: "failed" },
+    ])}
+    <p class="confirmation-text">
+      You're receiving this because invoice payment notifications are enabled in Easner Business.
+      Manage this in Settings → Invoicing.
+    </p>
+  `.trim()
+
+  return generateBaseEmailTemplate(
+    subject,
+    "",
+    content,
+    { text: "View invoice", url: manageInvoiceUrl },
+    {
+      audience: "business",
+      showPreferencesLink: false,
+      hideHeaderTitle: true,
+      preheader: `Payment refunded for invoice ${invoice.invoiceNumber}`,
+    },
+  )
+}
+
+export function generateInvoiceRefundedNotificationText(
+  data: InvoiceRefundedNotificationEmailData,
+): string {
+  const { invoice, manageInvoiceUrl } = data
+  const customer = invoice.customerName?.trim() || "A customer"
+
+  return `
+${formatEasnerUserGreetingPlain(data.recipientFirstName)}
+
+The online payment for invoice ${invoice.invoiceNumber} was refunded. The invoice is open again for payment.
+
+Invoice: ${invoiceAmountLine(invoice)}
+Customer: ${customer}
+Status: Refunded
+
+View invoice: ${manageInvoiceUrl}
+
+---
+
+You're receiving this because invoice payment notifications are enabled in Easner Business.
+Manage this in Settings → Invoicing.
+  `.trim()
+}
+
+export function getInvoiceCustomerRefundEmailSubject(invoiceNumber: string): string {
+  return `Payment refunded for invoice ${invoiceNumber}`
+}
+
+export function generateInvoiceCustomerRefundEmailHtml(
+  data: InvoiceCustomerRefundEmailData,
+): string {
+  const { invoice, invoiceViewUrl, businessName, businessReplyEmail } = data
+  const subject = getInvoiceCustomerRefundEmailSubject(invoice.invoiceNumber)
+
+  const content = `
+    ${customerGreetingParagraphHtml(invoice.customerName)}
+    <p class="confirmation-text">Your payment for this invoice from ${businessName} has been refunded. The invoice is open again if you still need to pay.</p>
+    ${invoiceDetailsTable(invoiceRefundDetailRows(invoice))}
+  `.trim()
+
+  return generateBaseEmailTemplate(
+    subject,
+    "",
+    content,
+    { text: "View invoice", url: invoiceViewUrl },
+    invoiceCustomerEmailShellOptions(
+      businessName,
+      businessReplyEmail,
+      `Payment refunded for invoice ${invoice.invoiceNumber}`,
+    ),
+  )
+}
+
+export function generateInvoiceCustomerRefundEmailText(
+  data: InvoiceCustomerRefundEmailData,
+): string {
+  const { invoice, invoiceViewUrl, businessName, businessReplyEmail } = data
+
+  return `
+${formatCustomerGreetingPlain(invoice.customerName)}
+
+Your payment for this invoice from ${businessName} has been refunded. The invoice is open again if you still need to pay.
+
+${invoiceRefundDetailPlainLines(invoice).join("\n")}
+
+View invoice: ${invoiceViewUrl}
+
+---
+
+${invoiceCustomerTextFooter(businessName, businessReplyEmail)}
+  `.trim()
+}
+
 export function generateInvoiceReceiptEmailHtml(data: InvoiceReceiptEmailData): string {
   const { invoice, invoiceViewUrl, businessName, businessReplyEmail } = data
   const subject = getInvoiceReceiptEmailSubject(invoice.invoiceNumber)

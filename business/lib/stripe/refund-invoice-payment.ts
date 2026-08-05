@@ -1,18 +1,27 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getStripe } from "@/lib/stripe/client"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
+import { applyInvoiceStripeRefundSideEffects } from "@/lib/stripe/apply-invoice-stripe-refund"
+import type { Invoice } from "@/lib/b2b/types"
 
 export type RefundInvoicePaymentResult =
-  | { ok: true; refundId: string; status: string }
+  | {
+      ok: true
+      refundId: string
+      status: string
+      invoiceStatus: Invoice["status"]
+      ledgerTransactionId: string | null
+    }
   | { ok: false; error: string; status: number }
 
 /**
  * Full refund of a Stripe invoice payment on the platform account.
- * Marks settlement phase failed and updates invoice paymentInfo note.
+ * Applies shared side effects: settlement failed, ledger failed, invoice payable again.
  */
 export async function refundInvoiceStripePayment(input: {
   businessId: string
   invoiceId: string
+  actorUserId?: string | null
 }): Promise<RefundInvoicePaymentResult> {
   if (!isStripeInvoicePaymentsEnabled()) {
     return { ok: false, error: "Stripe invoice payments are not enabled", status: 503 }
@@ -72,61 +81,23 @@ export async function refundInvoiceStripePayment(input: {
     return { ok: false, error: message, status: 502 }
   }
 
-  const now = new Date().toISOString()
-  await admin
-    .from("invoice_stripe_settlements")
-    .update({ phase: "failed", updated_at: now })
-    .eq("id", settlement.id)
+  const sideEffects = await applyInvoiceStripeRefundSideEffects(admin, {
+    settlementId: String(settlement.id),
+    refundId: refund.id,
+    refundedAt: new Date().toISOString(),
+    source: "api",
+    actorUserId: input.actorUserId ?? null,
+  })
 
-  if (settlement.ledger_transaction_id) {
-    const { data: ledgerRow } = await admin
-      .from("ledger_transactions")
-      .select("metadata")
-      .eq("id", settlement.ledger_transaction_id)
-      .maybeSingle()
-    const priorMeta =
-      ledgerRow?.metadata && typeof ledgerRow.metadata === "object"
-        ? (ledgerRow.metadata as Record<string, unknown>)
-        : {}
-    await admin
-      .from("ledger_transactions")
-      .update({
-        status: "failed",
-        metadata: {
-          ...priorMeta,
-          settlement_phase: "failed",
-          stripe_refund_id: refund.id,
-          failed_at: now,
-        },
-      })
-      .eq("id", settlement.ledger_transaction_id)
+  if (!sideEffects.ok) {
+    return { ok: false, error: sideEffects.error, status: 500 }
   }
 
-  const { data: invoiceRow } = await admin
-    .from("invoices")
-    .select("metadata")
-    .eq("id", input.invoiceId)
-    .eq("business_id", input.businessId)
-    .maybeSingle()
-
-  if (invoiceRow?.metadata && typeof invoiceRow.metadata === "object") {
-    const meta = { ...(invoiceRow.metadata as Record<string, unknown>) }
-    const paymentInfo = (meta.paymentInfo ?? {}) as Record<string, unknown>
-    const stripeInfo = (paymentInfo.stripe ?? {}) as Record<string, unknown>
-    meta.paymentInfo = {
-      ...paymentInfo,
-      stripe: {
-        ...stripeInfo,
-        settlementPhase: "failed",
-        refundId: refund.id,
-      },
-    }
-    await admin
-      .from("invoices")
-      .update({ metadata: meta, updated_at: now })
-      .eq("id", input.invoiceId)
-      .eq("business_id", input.businessId)
+  return {
+    ok: true,
+    refundId: refund.id,
+    status: refund.status ?? "succeeded",
+    invoiceStatus: sideEffects.restoredStatus ?? "unpaid",
+    ledgerTransactionId: sideEffects.ledgerTransactionId ?? null,
   }
-
-  return { ok: true, refundId: refund.id, status: refund.status ?? "succeeded" }
 }

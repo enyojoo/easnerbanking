@@ -241,6 +241,7 @@ export const INVOICE_CUSTOMER_VIEW_COPY = {
   payOnlineUnavailable: "Online payment isn't available right now. Try bank transfer or contact the business.",
   signInPreviewTitle: "Sign in to preview",
   signInPreviewBody: "This preview link is only available to signed-in members of your business.",
+  paymentRefundedPrefix: "Your payment was refunded on",
 } as const
 
 export const INVOICE_ACTIVITY_COPY = {
@@ -256,6 +257,15 @@ export const INVOICE_ACTIVITY_COPY = {
   reminderDueToday: "Due-date reminder sent",
   reminderOverdue: "Overdue reminder sent",
   reminderSent: "Payment reminder sent",
+  refunded: "Online payment was refunded",
+} as const
+
+export const INVOICE_STRIPE_SETTLEMENT_COPY = {
+  paymentReceived: "Payment received",
+  clearing: "Clearing",
+  available: "Available",
+  refunded: "Refunded",
+  failed: "Failed",
 } as const
 
 export const INVOICE_IMPORT_SECTION_COPY = {
