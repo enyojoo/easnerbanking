@@ -10,7 +10,13 @@ import type { Invoice } from "@/lib/b2b/types"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
-import { formatPaymentMethodText } from "@/lib/stripe/payment-method-display"
+import {
+  formatPaymentMethodText,
+  formatPaymentMethodTextBesideIcon,
+  hasPaymentBrandIcon,
+  paymentMethodIconKey,
+} from "@/lib/stripe/payment-method-display"
+import { paymentBrandPngDataUrl } from "@/lib/stripe/payment-brand-png-data"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 
 const styles = StyleSheet.create({
@@ -130,7 +136,32 @@ const styles = StyleSheet.create({
     color: "#007ACC",
     textAlign: "center",
   },
+  pmValueRow: {
+    flex: 1.5,
+    padding: 12,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  pmBrandIcon: {
+    width: 36,
+    height: 24,
+    objectFit: "contain",
+    marginRight: 6,
+  },
+  pmValueText: {
+    fontSize: 10,
+    color: "#0F1110",
+    textAlign: "right",
+  },
 })
+
+type ReceiptRow = {
+  label: string
+  value: string
+  /** When set, render brand PNG chip + value (mask) instead of plain text. */
+  brandIconSrc?: string | null
+}
 
 function TableRow({
   label,
@@ -138,14 +169,20 @@ function TableRow({
   isFirst,
   isLast,
   rowStyle,
+  brandIconSrc,
 }: {
   label: string
   value: string
   isFirst?: boolean
   isLast?: boolean
   rowStyle?: object
+  brandIconSrc?: string | null
 }) {
   const base = isLast ? styles.tableRowLast : styles.tableRow
+  const iconSrc =
+    typeof brandIconSrc === "string" && brandIconSrc.startsWith("data:image/")
+      ? brandIconSrc
+      : null
   return (
     <View
       style={{
@@ -156,7 +193,14 @@ function TableRow({
       }}
     >
       <Text style={styles.tableCell}>{label}</Text>
-      <Text style={styles.tableCellValue}>{value}</Text>
+      {iconSrc ? (
+        <View style={styles.pmValueRow}>
+          <Image style={styles.pmBrandIcon} src={iconSrc} />
+          {value ? <Text style={styles.pmValueText}>{value}</Text> : null}
+        </View>
+      ) : (
+        <Text style={styles.tableCellValue}>{value}</Text>
+      )}
     </View>
   )
 }
@@ -201,12 +245,12 @@ export function InvoiceReceiptPDFDocument({
       })
     : "-"
 
-  const rows: { label: string; value: string }[] = [
+  const rows: ReceiptRow[] = [
     { label: "Invoice Number", value: invoice.invoiceNumber },
     { label: "Customer", value: invoice.customerName },
   ]
 
-  let paymentSection: { label: string; value: string }[] = []
+  let paymentSection: ReceiptRow[] = []
 
   if (invoice.paymentInfo?.method === "cash") {
     paymentSection = [
@@ -248,10 +292,20 @@ export function InvoiceReceiptPDFDocument({
           bankName: stripe.bankName,
         }
       : null
-    // PDF: brand text only (SVG/PNG chips are unreliable in react-pdf).
-    const pmText = pmDisplay ? formatPaymentMethodText(pmDisplay) : "Card"
+    const iconKey = pmDisplay ? paymentMethodIconKey(pmDisplay) : "card"
+    const brandIconSrc =
+      pmDisplay && hasPaymentBrandIcon(pmDisplay) ? paymentBrandPngDataUrl(iconKey) : null
+    const pmText = !pmDisplay
+      ? "Card"
+      : brandIconSrc
+        ? formatPaymentMethodTextBesideIcon(pmDisplay) || formatPaymentMethodText(pmDisplay)
+        : formatPaymentMethodText(pmDisplay)
     paymentSection = [
-      { label: "Payment Method", value: pmText },
+      {
+        label: "Payment Method",
+        value: pmText,
+        brandIconSrc,
+      },
       ...(stripe?.customerEmail
         ? [{ label: "Email", value: stripe.customerEmail }]
         : []),
@@ -310,6 +364,7 @@ export function InvoiceReceiptPDFDocument({
               isFirst={i === 0}
               isLast={i === allRows.length - 1}
               rowStyle={i % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}
+              brandIconSrc={row.brandIconSrc}
             />
           ))}
         </View>
