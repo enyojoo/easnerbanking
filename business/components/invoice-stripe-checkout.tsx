@@ -157,10 +157,8 @@ function CheckoutSurface({
     )
   }
 
-  if (checkoutState.type === "loading") {
-    return <PaymentFormSkeleton />
-  }
-
+  // Always mount PaymentElement while the provider loads — Stripe Checkout
+  // Elements need these children mounted to finish initializing.
   return (
     <div className="space-y-4">
       <ExpressCheckoutElement
@@ -198,10 +196,10 @@ function CheckoutSurface({
         disabled={!ready || submitting}
         onClick={() => void confirmPayment()}
       >
-        {submitting ? (
+        {!ready || submitting ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            Processing…
+            {submitting ? "Processing…" : "Loading payment methods…"}
           </>
         ) : (
           `Pay ${formatCurrency(invoice.total, invoice.currency)}`
@@ -331,7 +329,6 @@ export function InvoiceStripeCheckout({
 
   return (
     <CheckoutElementsProvider
-      key={clientSecret}
       stripe={stripePromise}
       options={{
         clientSecret,

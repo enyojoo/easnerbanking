@@ -565,10 +565,8 @@ export function InvoicePaymentOptions({
         </TabsList>
 
         {hasOnline ? (
-          <TabsContent value="online" className="mt-4">
-            {(value ?? resolvedDefaultTab) === "online"
-              ? renderPanel("online", audience === "customer")
-              : null}
+          <TabsContent value="online" forceMount className="mt-4 data-[state=inactive]:hidden">
+            {renderPanel("online", audience === "customer")}
           </TabsContent>
         ) : null}
 
