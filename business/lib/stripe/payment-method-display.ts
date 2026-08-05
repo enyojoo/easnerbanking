@@ -1,4 +1,3 @@
-import path from "node:path"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 
 export type PaymentBrandIconKey =
@@ -142,13 +141,4 @@ export function formatPaymentMethodListLabel(
 
 export function paymentBrandSvgSrc(key: PaymentBrandIconKey): string {
   return `/payment-brands/${key}.svg`
-}
-
-/** Absolute filesystem path for Node PDF generation. */
-export function paymentBrandPngPath(key: PaymentBrandIconKey): string {
-  return path.join(process.cwd(), "public", "payment-brands", `${key}.png`)
-}
-
-export function paymentBrandSvgPath(key: PaymentBrandIconKey): string {
-  return path.join(process.cwd(), "public", "payment-brands", `${key}.svg`)
 }
