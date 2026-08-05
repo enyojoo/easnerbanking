@@ -157,6 +157,10 @@ function CheckoutSurface({
     )
   }
 
+  if (checkoutState.type === "loading") {
+    return <PaymentFormSkeleton />
+  }
+
   return (
     <div className="space-y-4">
       <ExpressCheckoutElement
@@ -194,10 +198,10 @@ function CheckoutSurface({
         disabled={!ready || submitting}
         onClick={() => void confirmPayment()}
       >
-        {!ready || submitting ? (
+        {submitting ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            {submitting ? "Processing…" : "Loading payment methods…"}
+            Processing…
           </>
         ) : (
           `Pay ${formatCurrency(invoice.total, invoice.currency)}`
@@ -327,6 +331,7 @@ export function InvoiceStripeCheckout({
 
   return (
     <CheckoutElementsProvider
+      key={clientSecret}
       stripe={stripePromise}
       options={{
         clientSecret,
