@@ -66,11 +66,7 @@ export function customerPaymentOptionsSubtitle(
   return "Choose how you'd like to pay this invoice."
 }
 
-export function onlinePaymentTabHint(customerEmail?: string | null): string {
-  const email = customerEmail?.trim()
-  if (email) {
-    return `Pay with card, bank debit, or other methods available in your region. Receipt sent to ${email}.`
-  }
+export function onlinePaymentTabHint(): string {
   return "Pay with card, bank debit, or other methods available in your region."
 }
 

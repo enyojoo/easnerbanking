@@ -234,18 +234,10 @@ export function InvoiceStripeCheckout({
   useEffect(() => {
     if (previewOnly || paid) return
 
-    if (initialCheckout?.clientSecret) {
-      if (initialCheckout.clientSecret !== clientSecret) {
-        setClientSecret(initialCheckout.clientSecret)
-        setLoadError(null)
-      }
+    if (initialCheckout?.clientSecret && reloadKey === 0) {
+      setClientSecret(initialCheckout.clientSecret)
       setLoading(false)
-      return
-    }
-
-    if (reloadKey > 0) {
-      // fall through to fetch below
-    } else if (clientSecret) {
+      setLoadError(null)
       return
     }
 
@@ -288,7 +280,6 @@ export function InvoiceStripeCheckout({
     invoice.invoiceNumber,
     reloadKey,
     initialCheckout?.clientSecret,
-    clientSecret,
   ])
 
   if (previewOnly) {

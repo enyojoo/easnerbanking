@@ -21,7 +21,6 @@ import {
 } from "@/lib/invoices/invoice-payment-copy"
 import { InvoiceStripeCheckout } from "@/components/invoice-stripe-checkout"
 import type { PublicInvoiceStripeCheckout } from "@/lib/invoices/json-public-invoice-from-row"
-import { INVOICE_CUSTOMER_VIEW_COPY } from "@/lib/copy/business-ui-copy"
 
 interface StablecoinAccount {
   currency: string
@@ -277,25 +276,17 @@ export function InvoicePaymentOptions({
 
           {hasOnline ? (
             <TabsContent value="online" className="space-y-4 mt-4">
-              {audience === "customer" && !stripeCheckout ? (
+              {audience === "customer" && Boolean(publicInvoiceEasetag?.trim()) ? (
                 <p className="text-sm text-muted-foreground">
-                  {INVOICE_CUSTOMER_VIEW_COPY.payOnlineUnavailable}
+                  {onlinePaymentTabHint()}
                 </p>
-              ) : (
-                <>
-                  {audience === "customer" && Boolean(publicInvoiceEasetag?.trim()) ? (
-                    <p className="text-sm text-muted-foreground">
-                      {onlinePaymentTabHint(invoice.customerEmail)}
-                    </p>
-                  ) : null}
-                  <InvoiceStripeCheckout
-                    invoice={invoice}
-                    easetag={publicInvoiceEasetag?.trim() || "preview"}
-                    initialCheckout={stripeCheckout}
-                    previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
-                  />
-                </>
-              )}
+              ) : null}
+              <InvoiceStripeCheckout
+                invoice={invoice}
+                easetag={publicInvoiceEasetag?.trim() || "preview"}
+                initialCheckout={stripeCheckout}
+                previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
+              />
             </TabsContent>
           ) : null}
 

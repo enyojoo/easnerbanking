@@ -23,6 +23,7 @@ import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { INVOICE_CUSTOMER_VIEW_COPY } from "@/lib/copy/business-ui-copy"
+import { LoadingSpinner } from "@/components/loading-spinner"
 import {
   invoiceViewCacheKey,
   readCachedInvoiceView,
@@ -169,14 +170,6 @@ function paymentTabFromPayload(payload: PublicInvoicePayload): "online" | "bank"
   return (
     payload.paymentDisplay?.defaultTab ??
     (online ? "online" : pi.bankAccount ? "bank" : "stablecoin")
-  )
-}
-
-function InvoicePageSpinner() {
-  return (
-    <div className="w-full max-w-2xl flex items-center justify-center py-24">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-label="Loading invoice" />
-    </div>
   )
 }
 
@@ -358,7 +351,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
   }
 
   if (loadState === "loading") {
-    return <InvoicePageSpinner />
+    return <LoadingSpinner />
   }
 
   if (loadState === "unauthorized") {
