@@ -9,11 +9,8 @@ import { parseInvoiceMetadata } from "@/lib/b2b/invoice-metadata"
 import { writeInvoiceAuditLog } from "@/lib/invoices/invoice-audit-log"
 import { dispatchInvoiceWebhooks } from "@/lib/invoices/invoice-webhooks"
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
-import { sendInvoiceReceiptEmail } from "@/lib/invoice-email-service"
-import { generateReceiptPdfBuffer } from "@/lib/generate-receipt-pdf"
-import { fetchInvoiceIssuerForBusiness, resolveInvoiceReplyEmail } from "@/lib/invoices/issuer"
+import { deliverInvoiceReceiptEmail } from "@/lib/invoices/deliver-invoice-receipt-email"
 import { notifyMerchantInvoicePaid } from "@/lib/invoices/notify-invoice-paid"
-import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 
 export type StripePaymentInfoInput = {
@@ -21,6 +18,12 @@ export type StripePaymentInfoInput = {
   paymentIntentId: string
   chargeId?: string
   paymentMethodType?: string
+  brand?: string
+  last4?: string
+  wallet?: string | null
+  bankName?: string
+  customerEmail?: string
+  customerName?: string
   grossCents: number
   feeCents: number
   netCents: number
@@ -73,6 +76,12 @@ export async function markInvoicePaidStripe(
       paymentIntentId: input.paymentInfo.paymentIntentId,
       chargeId: input.paymentInfo.chargeId,
       paymentMethodType: input.paymentInfo.paymentMethodType ?? "card",
+      brand: input.paymentInfo.brand,
+      last4: input.paymentInfo.last4,
+      wallet: input.paymentInfo.wallet,
+      bankName: input.paymentInfo.bankName,
+      customerEmail: input.paymentInfo.customerEmail,
+      customerName: input.paymentInfo.customerName,
       grossCents: input.paymentInfo.grossCents,
       feeCents: input.paymentInfo.feeCents,
       netCents: input.paymentInfo.netCents,
@@ -155,29 +164,18 @@ export async function markInvoicePaidStripe(
     }).catch((e) => console.error("[stripe] paid merchant email:", e))
 
     if (settings.sendReceiptOnPaid !== false && mapped.customerEmail?.trim()) {
-      void (async () => {
-        try {
-          const ownerId = await resolveOrgOwnerUserId(admin, input.businessId, "")
-          const reply = await resolveInvoiceReplyEmail(admin, input.businessId, ownerId)
-          if (!reply) return
-          const pdf = await generateReceiptPdfBuffer(mapped)
-          const issuer = await fetchInvoiceIssuerForBusiness(admin, input.businessId)
-          const easetag =
-            typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
-          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com"
-          const viewUrl = buildInvoiceCustomerViewUrl(baseUrl, easetag, mapped)
-          await sendInvoiceReceiptEmail({
-            invoice: mapped,
-            pdfBuffer: pdf,
-            businessName: issuer.name,
-            businessReplyEmail: reply,
-            invoiceViewUrl: viewUrl,
-            issuer: { ...issuer, email: reply },
-          })
-        } catch (e) {
-          console.error("[stripe] paid receipt email:", e)
+      const easetag =
+        typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
+      void deliverInvoiceReceiptEmail(admin, {
+        businessId: input.businessId,
+        invoice: mapped,
+        actorUserId: actorUserId,
+        easetag,
+      }).then((result) => {
+        if (!result.ok) {
+          console.error("[stripe] paid receipt email:", result.error)
         }
-      })()
+      })
     }
   }
 

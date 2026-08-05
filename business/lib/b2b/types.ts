@@ -14,6 +14,12 @@ export interface InvoicePaymentInfo {
     paymentIntentId: string
     chargeId?: string
     paymentMethodType: string
+    brand?: string
+    last4?: string
+    wallet?: string | null
+    bankName?: string
+    customerEmail?: string
+    customerName?: string
     grossCents: number
     feeCents: number
     netCents: number

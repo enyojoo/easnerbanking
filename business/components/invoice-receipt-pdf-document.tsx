@@ -12,6 +12,9 @@ import type { Invoice } from "@/lib/b2b/types"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
+import { formatPaymentMethodText, paymentMethodIconKey } from "@/lib/stripe/payment-method-display"
+import { paymentBrandPngDataUrl } from "@/lib/stripe/payment-brand-png-data"
+import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 
 const styles = StyleSheet.create({
   page: {
@@ -130,6 +133,24 @@ const styles = StyleSheet.create({
     color: "#007ACC",
     textAlign: "center",
   },
+  pmValueRow: {
+    flex: 1.5,
+    padding: 12,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  pmBrandIcon: {
+    width: 36,
+    height: 24,
+    objectFit: "contain",
+    marginRight: 6,
+  },
+  pmValueText: {
+    fontSize: 10,
+    color: "#0F1110",
+    textAlign: "right",
+  },
 })
 
 function TableRow({
@@ -138,12 +159,14 @@ function TableRow({
   isFirst,
   isLast,
   rowStyle,
+  paymentMethod,
 }: {
   label: string
   value: string
   isFirst?: boolean
   isLast?: boolean
   rowStyle?: object
+  paymentMethod?: StripePaymentMethodDisplay | null
 }) {
   const base = isLast ? styles.tableRowLast : styles.tableRow
   return (
@@ -156,7 +179,17 @@ function TableRow({
       }}
     >
       <Text style={styles.tableCell}>{label}</Text>
-      <Text style={styles.tableCellValue}>{value}</Text>
+      {paymentMethod ? (
+        <View style={styles.pmValueRow}>
+          <Image
+            style={styles.pmBrandIcon}
+            src={paymentBrandPngDataUrl(paymentMethodIconKey(paymentMethod))}
+          />
+          <Text style={styles.pmValueText}>{value}</Text>
+        </View>
+      ) : (
+        <Text style={styles.tableCellValue}>{value}</Text>
+      )}
     </View>
   )
 }
@@ -201,12 +234,18 @@ export function InvoiceReceiptPDFDocument({
       })
     : "-"
 
-  const rows: { label: string; value: string }[] = [
+  type ReceiptRow = {
+    label: string
+    value: string
+    paymentMethod?: StripePaymentMethodDisplay | null
+  }
+
+  const rows: ReceiptRow[] = [
     { label: "Invoice Number", value: invoice.invoiceNumber },
     { label: "Customer", value: invoice.customerName },
   ]
 
-  let paymentSection: { label: string; value: string }[] = []
+  let paymentSection: ReceiptRow[] = []
 
   if (invoice.paymentInfo?.method === "cash") {
     paymentSection = [
@@ -239,14 +278,21 @@ export function InvoiceReceiptPDFDocument({
     }
   } else if (invoice.paymentInfo?.method === "stripe") {
     const stripe = invoice.paymentInfo.stripe
-    const pm =
-      stripe?.paymentMethodType === "us_bank_account"
-        ? "Bank account"
-        : stripe?.paymentMethodType
-          ? stripe.paymentMethodType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-          : "Card"
+    const pmDisplay: StripePaymentMethodDisplay | null = stripe
+      ? {
+          type: stripe.paymentMethodType || "card",
+          brand: stripe.brand,
+          last4: stripe.last4,
+          wallet: stripe.wallet,
+          bankName: stripe.bankName,
+        }
+      : null
+    const pmText = pmDisplay ? formatPaymentMethodText(pmDisplay) : "Card"
     paymentSection = [
-      { label: "Payment Method", value: `Online (${pm})` },
+      { label: "Payment Method", value: pmText, paymentMethod: pmDisplay },
+      ...(stripe?.customerEmail
+        ? [{ label: "Email", value: stripe.customerEmail }]
+        : []),
       ...(stripe
         ? [
             {
@@ -302,6 +348,7 @@ export function InvoiceReceiptPDFDocument({
               isFirst={i === 0}
               isLast={i === allRows.length - 1}
               rowStyle={i % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}
+              paymentMethod={row.paymentMethod}
             />
           ))}
         </View>

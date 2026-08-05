@@ -12,6 +12,8 @@ import {
   normalizeEasnerTransactionIdForLookup,
 } from "@/lib/easner-transaction-id"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
+import { healStripeInvoicePaymentMetadata } from "@/lib/stripe/heal-invoice-payment-metadata"
+import { isStripeInvoiceSettlementMetadata } from "@easner/shared"
 import {
   attachBankDepositDetailFieldsAsync,
   isBankOnrampPayInRow,
@@ -466,6 +468,21 @@ export async function GET(request: Request, routeCtx: Props) {
         .eq("id", String(ledgerRec.id))
         .maybeSingle()
       if (refreshed) ledgerRec = refreshed
+    }
+  }
+
+  if (ledgerRec.id) {
+    const metaForHeal = (ledgerRec.metadata ?? {}) as Record<string, unknown>
+    if (isStripeInvoiceSettlementMetadata(metaForHeal)) {
+      const healed = await healStripeInvoicePaymentMetadata(admin, {
+        ledgerRowId: String(ledgerRec.id),
+        metadata: metaForHeal,
+        invoiceId:
+          typeof metaForHeal.invoice_id === "string" ? metaForHeal.invoice_id : null,
+      })
+      if (healed.healed) {
+        ledgerRec = { ...ledgerRec, metadata: healed.metadata }
+      }
     }
   }
 

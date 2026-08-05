@@ -4,6 +4,8 @@ import { markInvoicePaidStripe } from "@/lib/invoices/mark-invoice-paid-stripe"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { getStripe } from "./client"
+import { parsePaymentMethodDisplayFromCharge } from "@/lib/stripe/parse-payment-method-display"
+import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 
 function asCents(n: unknown): number {
   const v = typeof n === "number" ? n : Number(n)
@@ -17,6 +19,7 @@ async function resolveFeeAndTransfer(
   feeCents: number
   chargeId: string | null
   paymentMethodType: string | null
+  paymentMethod: StripePaymentMethodDisplay | null
   transferId: string | null
   connectedAccountId: string | null
 }> {
@@ -34,10 +37,12 @@ async function resolveFeeAndTransfer(
         ? charge.balance_transaction
         : null
     const feeCents = bt && typeof bt.fee === "number" ? bt.fee : 0
+    const paymentMethod = parsePaymentMethodDisplayFromCharge(charge)
     const paymentMethodType =
-      charge && typeof charge.payment_method_details?.type === "string"
+      paymentMethod?.type ??
+      (charge && typeof charge.payment_method_details?.type === "string"
         ? charge.payment_method_details.type
-        : null
+        : null)
 
     let transferId: string | null = null
     if (charge && typeof charge.transfer === "string") {
@@ -59,6 +64,7 @@ async function resolveFeeAndTransfer(
       feeCents,
       chargeId,
       paymentMethodType,
+      paymentMethod,
       transferId,
       connectedAccountId: connectedFromPi || connectedFromMeta,
     }
@@ -68,6 +74,7 @@ async function resolveFeeAndTransfer(
       feeCents: 0,
       chargeId: null,
       paymentMethodType: null,
+      paymentMethod: null,
       transferId: null,
       connectedAccountId: null,
     }
@@ -88,6 +95,7 @@ export async function handleStripeCheckoutCompleted(
   let amountTotal = 0
   let currency = "USD"
   let customerEmail: string | null = null
+  let customerName: string | null = null
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session
@@ -102,12 +110,19 @@ export async function handleStripeCheckoutCompleted(
     customerEmail =
       session.customer_details?.email ||
       (typeof session.customer_email === "string" ? session.customer_email : null)
+    customerName =
+      typeof session.customer_details?.name === "string" && session.customer_details.name.trim()
+        ? session.customer_details.name.trim()
+        : null
   } else if (event.type === "payment_intent.succeeded") {
     const pi = event.data.object as Stripe.PaymentIntent
     paymentIntentId = pi.id
     metadata = (pi.metadata ?? {}) as Record<string, string>
     amountTotal = asCents(pi.amount_received || pi.amount)
     currency = String(pi.currency || "usd").toUpperCase()
+    if (typeof pi.receipt_email === "string" && pi.receipt_email.trim()) {
+      customerEmail = pi.receipt_email.trim()
+    }
   } else {
     return { handled: false }
   }
@@ -133,7 +148,7 @@ export async function handleStripeCheckoutCompleted(
     return { handled: true }
   }
 
-  const { feeCents, chargeId, paymentMethodType, transferId, connectedAccountId } =
+  const { feeCents, chargeId, paymentMethodType, paymentMethod, transferId, connectedAccountId } =
     await resolveFeeAndTransfer(stripe, paymentIntentId)
 
   const connectedFromMeta = String(metadata.easner_stripe_connected_account_id ?? "").trim() || null
@@ -150,6 +165,26 @@ export async function handleStripeCheckoutCompleted(
     }
   }
 
+  // Bill-to fallback for name/email from invoice row
+  const { data: invoiceRow } = await admin
+    .from("invoices")
+    .select("customer_name, customer_email")
+    .eq("id", invoiceId)
+    .eq("business_id", businessId)
+    .maybeSingle()
+
+  const billToName =
+    typeof invoiceRow?.customer_name === "string" && invoiceRow.customer_name.trim()
+      ? invoiceRow.customer_name.trim()
+      : null
+  const billToEmail =
+    typeof invoiceRow?.customer_email === "string" && invoiceRow.customer_email.trim()
+      ? invoiceRow.customer_email.trim()
+      : null
+
+  const resolvedCustomerName = customerName || billToName
+  const resolvedCustomerEmail = customerEmail || billToEmail
+
   const grossCents = amountTotal
   const netCents = Math.max(0, grossCents - feeCents)
   const paidAt = new Date().toISOString()
@@ -165,7 +200,7 @@ export async function handleStripeCheckoutCompleted(
         fee_cents: feeCents,
         net_cents: netCents,
         payment_method_type: paymentMethodType,
-        customer_email: customerEmail,
+        customer_email: resolvedCustomerEmail,
         completed_at: paidAt,
         ...(stripeConnectedAccountId
           ? { stripe_connected_account_id: stripeConnectedAccountId }
@@ -182,6 +217,7 @@ export async function handleStripeCheckoutCompleted(
         fee_cents: feeCents,
         net_cents: netCents,
         payment_method_type: paymentMethodType,
+        ...(resolvedCustomerEmail ? { customer_email: resolvedCustomerEmail } : {}),
         completed_at: paidAt,
         ...(stripeConnectedAccountId
           ? { stripe_connected_account_id: stripeConnectedAccountId }
@@ -198,6 +234,12 @@ export async function handleStripeCheckoutCompleted(
       paymentIntentId,
       chargeId: chargeId ?? undefined,
       paymentMethodType: paymentMethodType ?? undefined,
+      brand: paymentMethod?.brand,
+      last4: paymentMethod?.last4,
+      wallet: paymentMethod?.wallet,
+      bankName: paymentMethod?.bankName,
+      customerEmail: resolvedCustomerEmail ?? undefined,
+      customerName: resolvedCustomerName ?? undefined,
       grossCents,
       feeCents,
       netCents,
@@ -234,6 +276,9 @@ export async function handleStripeCheckoutCompleted(
       fee_cents: feeCents,
       net_cents: netCents,
       payment_method_type: paymentMethodType,
+      ...(paymentMethod ? { payment_method: paymentMethod } : {}),
+      ...(resolvedCustomerEmail ? { customer_email: resolvedCustomerEmail } : {}),
+      ...(resolvedCustomerName ? { customer_name: resolvedCustomerName } : {}),
       stripe_connected_account_id: stripeConnectedAccountId,
       stripe_transfer_id: transferId,
       headline: `Invoice #${invoiceNumber || invoice.invoiceNumber} payment`,

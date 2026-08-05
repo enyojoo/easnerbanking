@@ -4,6 +4,14 @@ import {
   type StripeInvoiceSettlementLifecycleStep,
 } from "@easner/shared"
 import { resolveLedgerWhenAtFromRow } from "@/lib/ledger/ledger-occurred-at"
+import {
+  paymentMethodDisplayFromMetadata,
+  type StripePaymentMethodDisplay,
+} from "@/lib/stripe/parse-payment-method-display"
+import {
+  formatPaymentMethodListLabel,
+  formatPaymentMethodText,
+} from "@/lib/stripe/payment-method-display"
 
 export type ResolvedStripeInvoiceSettlement = {
   lifecycle: StripeInvoiceSettlementLifecycleStep[]
@@ -16,6 +24,11 @@ export type ResolvedStripeInvoiceSettlement = {
   grossAmount: number
   netAmount: number
   paymentMethodLabel: string | null
+  /** Full label with mask when available. */
+  paymentMethodText: string | null
+  paymentMethod: StripePaymentMethodDisplay | null
+  customerName: string | null
+  customerEmail: string | null
   /** Friendly rail: Bank account | Stablecoin */
   settlementRailLabel: string | null
 }
@@ -24,23 +37,6 @@ function centsToMajor(cents: unknown): number {
   const n = typeof cents === "number" ? cents : Number(cents)
   if (!Number.isFinite(n)) return 0
   return n / 100
-}
-
-function paymentMethodLabel(raw: unknown): string | null {
-  const s = String(raw ?? "")
-    .trim()
-    .toLowerCase()
-  if (!s) return null
-  if (s === "card") return "Card"
-  if (s === "us_bank_account" || s === "ach_debit" || s === "ach") return "Bank"
-  if (s === "sepa_debit") return "SEPA"
-  if (s === "link") return "Link"
-  // Title-case unknown Stripe PM types: "apple_pay" → "Apple pay"
-  return s
-    .split("_")
-    .filter(Boolean)
-    .map((part, i) => (i === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part))
-    .join(" ")
 }
 
 function settlementRailLabel(raw: unknown): string | null {
@@ -72,6 +68,16 @@ export function resolveStripeInvoiceSettlementDetail(
       ? meta.invoice_number.trim()
       : null
 
+  const paymentMethod = paymentMethodDisplayFromMetadata(meta)
+  const customerName =
+    typeof meta.customer_name === "string" && meta.customer_name.trim()
+      ? meta.customer_name.trim()
+      : null
+  const customerEmail =
+    typeof meta.customer_email === "string" && meta.customer_email.trim()
+      ? meta.customer_email.trim()
+      : null
+
   return {
     lifecycle,
     settlementPhase: String(meta.settlement_phase ?? "payment_received"),
@@ -81,7 +87,11 @@ export function resolveStripeInvoiceSettlementDetail(
     feeAmount: centsToMajor(meta.fee_cents),
     grossAmount: centsToMajor(meta.gross_cents),
     netAmount: centsToMajor(meta.net_cents),
-    paymentMethodLabel: paymentMethodLabel(meta.payment_method_type),
+    paymentMethodLabel: paymentMethod ? formatPaymentMethodListLabel(paymentMethod) : null,
+    paymentMethodText: paymentMethod ? formatPaymentMethodText(paymentMethod) : null,
+    paymentMethod,
+    customerName,
+    customerEmail,
     settlementRailLabel: settlementRailLabel(meta.settlement_rail),
   }
 }

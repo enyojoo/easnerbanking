@@ -30,10 +30,15 @@ async function appendSettlementEvent(
 async function findSettlementByCharge(
   admin: SupabaseClient,
   chargeId: string,
-): Promise<{ id: string; phase: string; stripe_transfer_id: string | null } | null> {
+): Promise<{
+  id: string
+  phase: string
+  stripe_transfer_id: string | null
+  ledger_transaction_id: string | null
+} | null> {
   const { data } = await admin
     .from("invoice_stripe_settlements")
-    .select("id,phase,stripe_transfer_id")
+    .select("id,phase,stripe_transfer_id,ledger_transaction_id")
     .eq("stripe_charge_id", chargeId)
     .maybeSingle()
   return data
@@ -41,6 +46,9 @@ async function findSettlementByCharge(
         id: String(data.id),
         phase: String(data.phase),
         stripe_transfer_id: data.stripe_transfer_id ? String(data.stripe_transfer_id) : null,
+        ledger_transaction_id: data.ledger_transaction_id
+          ? String(data.ledger_transaction_id)
+          : null,
       }
     : null
 }
@@ -136,15 +144,53 @@ export async function applyStripeWebhookSideEffects(
     }
     case "transfer.created": {
       const transfer = event.data.object as Stripe.Transfer
-      const pi =
+      const chargeId =
         typeof transfer.source_transaction === "string"
-          ? null
-          : null
-      // Best-effort: match by destination + amount via payment intent metadata is harder here;
-      // Hop 1 already stores transfer id when available.
-      if (typeof transfer.destination === "string") {
-        console.info("[stripe] transfer.created", transfer.id, "→", transfer.destination, pi)
+          ? transfer.source_transaction
+          : transfer.source_transaction && typeof transfer.source_transaction === "object"
+            ? transfer.source_transaction.id
+            : null
+      if (!chargeId) {
+        console.info("[stripe] transfer.created without source_transaction", transfer.id)
+        return
       }
+      const settlement = await findSettlementByCharge(admin, chargeId)
+      if (!settlement) {
+        console.info("[stripe] transfer.created no settlement for charge", transfer.id, chargeId)
+        return
+      }
+      if (!settlement.stripe_transfer_id) {
+        await appendSettlementEvent(admin, settlement.id, event.id, {
+          stripe_transfer_id: transfer.id,
+        })
+        if (settlement.ledger_transaction_id) {
+          const { data: ledgerRow } = await admin
+            .from("transactions")
+            .select("id,metadata")
+            .eq("id", settlement.ledger_transaction_id)
+            .maybeSingle()
+          if (ledgerRow?.id && ledgerRow.metadata && typeof ledgerRow.metadata === "object") {
+            const meta = { ...(ledgerRow.metadata as Record<string, unknown>) }
+            if (!meta.stripe_transfer_id) {
+              meta.stripe_transfer_id = transfer.id
+              await admin
+                .from("transactions")
+                .update({ metadata: meta })
+                .eq("id", ledgerRow.id)
+            }
+          }
+        }
+      } else {
+        await appendSettlementEvent(admin, settlement.id, event.id)
+      }
+      console.info(
+        "[stripe] transfer.created",
+        transfer.id,
+        "→",
+        typeof transfer.destination === "string" ? transfer.destination : null,
+        "settlement",
+        settlement.id,
+      )
       return
     }
     default:

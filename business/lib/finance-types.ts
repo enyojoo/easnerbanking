@@ -91,6 +91,17 @@ export interface Transaction {
   quoteExpiresAt?: string | null
   /** Detail row label — e.g. Easetag P2P shows "Easetag". */
   paymentScheme?: string
+  /** Stripe invoice settlement: structured payment method for brand chip + mask. */
+  stripePaymentMethod?: {
+    type: string
+    brand?: string
+    last4?: string
+    wallet?: string | null
+    bankName?: string
+  }
+  /** Stripe invoice settlement payer identity (from checkout / bill-to). */
+  customerName?: string
+  customerEmail?: string
   /** User note from send flow (Easetag / payout metadata). */
   sendNote?: string
   /** Bank ACH pay-in detail only. */

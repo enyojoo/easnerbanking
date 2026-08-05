@@ -54,7 +54,6 @@ import {
   INVOICE_TOAST_COPY,
   PAGE_COPY,
 } from "@/lib/copy/business-ui-copy"
-import { InvoiceShareMenu } from "@/components/invoice/invoice-share-menu"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 import { useInvoiceDetail } from "@/hooks/queries/use-invoices"
 import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutations/use-invoices"
@@ -68,6 +67,8 @@ import {
 } from "@/lib/invoices/invoice-payment-copy"
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
+import { StripePaymentMethodRow } from "@/components/stripe-payment-method-row"
+import { formatPaymentMethodText } from "@/lib/stripe/payment-method-display"
 import type { Invoice } from "@/lib/b2b/types"
 import type { InvoiceManualStatusAction } from "@/lib/invoices/invoice-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -246,16 +247,19 @@ export default function InvoiceDetailPage() {
   const [showMoreActivities, setShowMoreActivities] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [isSendingEmail, setIsSendingEmail] = useState(false)
+  const [isSendingReceipt, setIsSendingReceipt] = useState(false)
   const [isIssuing, setIsIssuing] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [customerViews, setCustomerViews] = useState<{ viewedAt: string }[]>([])
   const [addNoteOpen, setAddNoteOpen] = useState(false)
   const [noteText, setNoteText] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false)
   const [markAsPaidOpen, setMarkAsPaidOpen] = useState(false)
   const [customerViewUrl, setCustomerViewUrl] = useState("")
   const [previewViewUrl, setPreviewViewUrl] = useState("")
-  const [stripeSettlement, setStripeSettlement] = useState<{
+  /** Enrichment from settlement table (ledger link / fresher phase). Banner shows from paymentInfo immediately. */
+  const [stripeSettlementLive, setStripeSettlementLive] = useState<{
     phase: string
     settlement_rail: string | null
     net_cents: number
@@ -264,6 +268,21 @@ export default function InvoiceDetailPage() {
     ledger_transaction_id: string | null
   } | null>(null)
   const [stripeRefunding, setStripeRefunding] = useState(false)
+
+  const stripeSettlementFromInvoice = useMemo(() => {
+    const stripe = invoice?.paymentInfo?.method === "stripe" ? invoice.paymentInfo.stripe : undefined
+    if (!invoice || !stripe) return null
+    return {
+      phase: stripe.settlementPhase,
+      settlement_rail: stripe.settlementRail ?? null,
+      net_cents: stripe.netCents,
+      fee_cents: stripe.feeCents,
+      currency: invoice.currency,
+      ledger_transaction_id: null as string | null,
+    }
+  }, [invoice])
+
+  const stripeSettlement = stripeSettlementLive ?? stripeSettlementFromInvoice
 
   const canProvisionDepositInstructions = invoice
     ? canProvisionInvoiceDepositInstructions(invoice.currency, tier1Complete, TIER2_COMPLETE_PLACEHOLDER)
@@ -357,6 +376,30 @@ export default function InvoiceDetailPage() {
       toast.error(err instanceof Error ? err.message : INVOICE_TOAST_COPY.emailFailed)
     } finally {
       setIsSendingEmail(false)
+    }
+  }
+
+  const sendReceiptEmailConfirmed = async () => {
+    if (!invoice) return
+    if (invoice.status !== "paid") return
+    if (!invoice.customerEmail?.trim()) {
+      toast.error(INVOICE_TOAST_COPY.noCustomerEmail)
+      return
+    }
+    setIsSendingReceipt(true)
+    try {
+      const res = await fetchWithSession("/api/invoices/send-receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: invoice.id }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string; to?: string }
+      if (!res.ok) throw new Error(data.error || INVOICE_TOAST_COPY.receiptEmailFailed)
+      toast.success(INVOICE_TOAST_COPY.receiptSentTo(data.to || invoice.customerEmail))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : INVOICE_TOAST_COPY.receiptEmailFailed)
+    } finally {
+      setIsSendingReceipt(false)
     }
   }
 
@@ -456,8 +499,8 @@ export default function InvoiceDetailPage() {
   }, [invoice?.id, invoice?.invoiceNumber, orgEasetag])
 
   useEffect(() => {
+    setStripeSettlementLive(null)
     if (!invoice?.id || invoice.paymentInfo?.method !== "stripe") {
-      setStripeSettlement(null)
       return
     }
     let cancelled = false
@@ -473,10 +516,10 @@ export default function InvoiceDetailPage() {
             ledger_transaction_id: string | null
           } | null
         }
-        if (!cancelled) setStripeSettlement(data.settlement ?? null)
+        if (!cancelled && data.settlement) setStripeSettlementLive(data.settlement)
       })
       .catch(() => {
-        if (!cancelled) setStripeSettlement(null)
+        // Keep paymentInfo-derived banner if enrichment fails.
       })
     return () => {
       cancelled = true
@@ -562,6 +605,33 @@ export default function InvoiceDetailPage() {
       router.replace(backHref)
     } catch {
       toast.error("Could not delete invoice")
+    }
+  }
+
+  const handleStripeRefund = async () => {
+    if (!invoice) return
+    setRefundDialogOpen(false)
+    setStripeRefunding(true)
+    try {
+      const res = await fetchWithSession(
+        `/api/business/b2b/invoices/${encodeURIComponent(invoice.id)}/stripe-refund`,
+        { method: "POST" },
+      )
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        refundId?: string
+      }
+      if (!res.ok) {
+        toast.error(data.error || "Refund failed")
+        return
+      }
+      toast.success("Refund submitted")
+      setStripeSettlementLive((prev) => {
+        const base = prev ?? stripeSettlementFromInvoice
+        return base ? { ...base, phase: "failed" } : prev
+      })
+    } finally {
+      setStripeRefunding(false)
     }
   }
 
@@ -741,7 +811,7 @@ export default function InvoiceDetailPage() {
                 ) : (
                   <>
                     <Mail className="h-4 w-4 mr-2" />
-                    {INVOICE_ACTION_COPY.emailCustomer}
+                    {INVOICE_ACTION_COPY.emailInvoice}
                   </>
                 )}
               </Button>
@@ -769,9 +839,28 @@ export default function InvoiceDetailPage() {
                 )}
               </Button>
             )}
-          {!invoice.archived ? (
-            <InvoiceShareMenu invoice={invoice} easetag={orgEasetag} />
-          ) : null}
+          {!invoice.archived &&
+            invoice.status === "paid" &&
+            invoice.customerEmail?.trim() && (
+              <Button
+                size="sm"
+                className={invoiceActionBtnClass.email}
+                onClick={() => void sendReceiptEmailConfirmed()}
+                disabled={isSendingReceipt}
+              >
+                {isSendingReceipt ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {INVOICE_ACTION_COPY.sending}
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4 mr-2" />
+                    {INVOICE_ACTION_COPY.emailReceipt}
+                  </>
+                )}
+              </Button>
+            )}
           {!invoice.archived && invoice.status !== "draft" && (
             <Button
               variant="outline"
@@ -896,38 +985,7 @@ export default function InvoiceDetailPage() {
                   variant="outline"
                   size="sm"
                   disabled={stripeRefunding}
-                  onClick={() => {
-                    void (async () => {
-                      if (
-                        !window.confirm(
-                          "Refund this online payment to the customer? This cannot be undone.",
-                        )
-                      ) {
-                        return
-                      }
-                      setStripeRefunding(true)
-                      try {
-                        const res = await fetchWithSession(
-                          `/api/business/b2b/invoices/${encodeURIComponent(invoice.id)}/stripe-refund`,
-                          { method: "POST" },
-                        )
-                        const data = (await res.json().catch(() => ({}))) as {
-                          error?: string
-                          refundId?: string
-                        }
-                        if (!res.ok) {
-                          toast.error(data.error || "Refund failed")
-                          return
-                        }
-                        toast.success("Refund submitted")
-                        setStripeSettlement((prev) =>
-                          prev ? { ...prev, phase: "failed" } : prev,
-                        )
-                      } finally {
-                        setStripeRefunding(false)
-                      }
-                    })()
-                  }}
+                  onClick={() => setRefundDialogOpen(true)}
                 >
                   {stripeRefunding ? (
                     <>
@@ -1156,6 +1214,34 @@ export default function InvoiceDetailPage() {
                           </div>
                         )}
                       </div>
+                    ) : paymentRecord.method === "stripe" ? (
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center gap-3">
+                          <span className="text-muted-foreground">Method</span>
+                          {paymentRecord.stripePaymentMethod?.brand ||
+                          paymentRecord.stripePaymentMethod?.last4 ? (
+                            <StripePaymentMethodRow pm={paymentRecord.stripePaymentMethod} />
+                          ) : (
+                            <span>
+                              {paymentRecord.stripePaymentMethod
+                                ? formatPaymentMethodText(paymentRecord.stripePaymentMethod)
+                                : "Online"}
+                            </span>
+                          )}
+                        </div>
+                        {paymentRecord.customerEmail ? (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Email</span>
+                            <span>{paymentRecord.customerEmail}</span>
+                          </div>
+                        ) : null}
+                        {paymentRecord.amount != null && paymentRecord.currency ? (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Amount</span>
+                            <span>{formatCurrency(paymentRecord.amount, paymentRecord.currency)}</span>
+                          </div>
+                        ) : null}
+                      </div>
                     ) : (
                       <div className="text-sm">
                         <p className="text-muted-foreground">Payment received by cash or other method</p>
@@ -1365,6 +1451,27 @@ export default function InvoiceDetailPage() {
               onClick={handleDelete}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Refund online payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Refund this online payment to the customer? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={stripeRefunding}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={stripeRefunding}
+              onClick={() => void handleStripeRefund()}
+            >
+              Refund
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

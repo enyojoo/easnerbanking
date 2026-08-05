@@ -78,7 +78,7 @@ function findTransactionById(id: string, transactions: Transaction[]): Transacti
 }
 
 export interface PaymentRecordDisplay {
-  method: "easner" | "cash"
+  method: "easner" | "cash" | "stripe"
   paidAt: string
   paymentMethod?: string
   amount?: number
@@ -88,6 +88,15 @@ export interface PaymentRecordDisplay {
   description?: string
   transactionId?: string
   cashNote?: string
+  stripePaymentMethod?: {
+    type: string
+    brand?: string
+    last4?: string
+    wallet?: string | null
+    bankName?: string
+  }
+  customerEmail?: string
+  customerName?: string
 }
 
 /**
@@ -106,6 +115,31 @@ export function getPaymentRecordDisplay(
       method: "cash",
       paidAt: info.paidAt,
       cashNote: info.cashNote,
+    }
+  }
+
+  if (info.method === "stripe") {
+    const stripe = info.stripe
+    const pm =
+      stripe && (stripe.brand || stripe.last4 || stripe.paymentMethodType)
+        ? {
+            type: stripe.paymentMethodType || "card",
+            brand: stripe.brand,
+            last4: stripe.last4,
+            wallet: stripe.wallet,
+            bankName: stripe.bankName,
+          }
+        : undefined
+    return {
+      method: "stripe",
+      paidAt: info.paidAt,
+      amount: stripe ? stripe.grossCents / 100 : invoice.total,
+      currency: invoice.currency,
+      date: info.paidAt,
+      transactionId: info.transactionId,
+      stripePaymentMethod: pm,
+      customerEmail: stripe?.customerEmail,
+      customerName: stripe?.customerName,
     }
   }
 

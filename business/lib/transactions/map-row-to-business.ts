@@ -382,9 +382,21 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       : {}),
     paymentScheme: isEasetagP2p
       ? "Easetag"
-      : stripeInvoiceSettlementDetail?.paymentMethodLabel
-        ? stripeInvoiceSettlementDetail.paymentMethodLabel
+      : stripeInvoiceSettlementDetail?.paymentMethodText ||
+          stripeInvoiceSettlementDetail?.paymentMethodLabel
+        ? stripeInvoiceSettlementDetail.paymentMethodText ||
+          stripeInvoiceSettlementDetail.paymentMethodLabel ||
+          undefined
         : stablecoinDepositDetail?.schemeLabel ?? undefined,
+    ...(stripeInvoiceSettlementDetail?.paymentMethod
+      ? { stripePaymentMethod: stripeInvoiceSettlementDetail.paymentMethod }
+      : {}),
+    ...(stripeInvoiceSettlementDetail?.customerName
+      ? { customerName: stripeInvoiceSettlementDetail.customerName }
+      : {}),
+    ...(stripeInvoiceSettlementDetail?.customerEmail
+      ? { customerEmail: stripeInvoiceSettlementDetail.customerEmail }
+      : {}),
     transferId: providerTxId || undefined,
     baseCurrency: listBaseCurrency,
     baseAmount: listBaseAmount,
@@ -457,7 +469,19 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
               stripeInvoiceSettlementDetail.feeAmount > 0
                 ? stripeInvoiceSettlementDetail.feeAmount
                 : undefined,
-            paymentScheme: stripeInvoiceSettlementDetail.paymentMethodLabel ?? undefined,
+            paymentScheme:
+              stripeInvoiceSettlementDetail.paymentMethodText ??
+              stripeInvoiceSettlementDetail.paymentMethodLabel ??
+              undefined,
+            ...(stripeInvoiceSettlementDetail.paymentMethod
+              ? { stripePaymentMethod: stripeInvoiceSettlementDetail.paymentMethod }
+              : {}),
+            ...(stripeInvoiceSettlementDetail.customerName
+              ? { customerName: stripeInvoiceSettlementDetail.customerName }
+              : {}),
+            ...(stripeInvoiceSettlementDetail.customerEmail
+              ? { customerEmail: stripeInvoiceSettlementDetail.customerEmail }
+              : {}),
             ledgerCreatedAt,
           }
         : stablecoinDepositDetail

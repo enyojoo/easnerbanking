@@ -30,6 +30,8 @@ type Props = {
   initialCheckout?: PublicInvoiceStripeCheckout | null
   /** Merchant preview — do not collect payment. */
   previewOnly?: boolean
+  /** Fired when Stripe confirms payment (parent can optimistically mark invoice paid). */
+  onPaid?: () => void
 }
 
 function hasReadyExpressMethods(methods: AvailablePaymentMethods | undefined): boolean {
@@ -229,8 +231,14 @@ export function InvoiceStripeCheckout({
   easetag,
   initialCheckout = null,
   previewOnly = false,
+  onPaid,
 }: Props) {
   const [paid, setPaid] = useState(false)
+
+  const handlePaid = useCallback(() => {
+    setPaid(true)
+    onPaid?.()
+  }, [onPaid])
   const [clientSecret, setClientSecret] = useState<string | null>(
     initialCheckout?.clientSecret ?? null,
   )
@@ -354,7 +362,7 @@ export function InvoiceStripeCheckout({
         },
       }}
     >
-      <CheckoutSurface invoice={invoice} onPaid={() => setPaid(true)} />
+      <CheckoutSurface invoice={invoice} onPaid={handlePaid} />
     </CheckoutElementsProvider>
   )
 }

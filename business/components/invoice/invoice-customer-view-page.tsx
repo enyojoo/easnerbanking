@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
 import { buildInvoicePdfPaymentSection } from "@/lib/invoices/invoice-payment-copy"
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
+import { StripePaymentMethodRow } from "@/components/stripe-payment-method-row"
 import { BRAND } from "@/components/brand/brand-constants"
 import { useFxRates } from "@/hooks/queries"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
@@ -68,6 +69,8 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
   const { data: fxRates = [] } = useFxRates()
   const [isDownloading, setIsDownloading] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const optimisticPaidRef = useRef(false)
+  const backgroundRefetchStartedRef = useRef(false)
 
   const fetchConfig = useMemo(() => {
     if (props.mode === "preview") {
@@ -88,6 +91,90 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     return { url, authenticated: false, valid: true }
   }, [props])
 
+  const applyPublicPayload = useCallback((data: PublicInvoicePayloadPartial) => {
+    if (!data.invoice) return
+    setInvoice((prev) => {
+      // Never revert optimistic paid → unpaid (webhook lag).
+      if (
+        optimisticPaidRef.current &&
+        prev?.status === "paid" &&
+        data.invoice &&
+        data.invoice.status !== "paid"
+      ) {
+        return {
+          ...data.invoice,
+          status: "paid",
+          paymentInfo: data.invoice.paymentInfo ?? prev.paymentInfo,
+        }
+      }
+      return data.invoice!
+    })
+    setPublicEasetag(
+      typeof data.businessEasetag === "string" && data.businessEasetag.trim()
+        ? data.businessEasetag.trim()
+        : null,
+    )
+    setIssuer(data.issuer ?? null)
+    const pi = data.payIn ?? {}
+    setPayIn(pi)
+    const online =
+      data.paymentDisplay?.showOnlinePayment === true || data.stripeOnlineEnabled === true
+    setShowOnlinePayment(online)
+    setStripeCheckout(data.stripeCheckout ?? null)
+    const tab =
+      data.paymentDisplay?.defaultTab ??
+      (online ? "online" : pi.bankAccount ? "bank" : "stablecoin")
+    setPaymentTab(tab)
+  }, [])
+
+  const refetchPublicInvoice = useCallback(async () => {
+    if (!fetchConfig.valid || !fetchConfig.url) return null
+    const res = fetchConfig.authenticated
+      ? await fetchWithSession(fetchConfig.url)
+      : await fetch(fetchConfig.url)
+    const data = (await res.json().catch(() => ({}))) as PublicInvoicePayloadPartial
+    if (!res.ok || !data.invoice) return null
+    applyPublicPayload(data)
+    return data.invoice
+  }, [fetchConfig, applyPublicPayload])
+
+  const scheduleBackgroundPaidRefetch = useCallback(() => {
+    if (backgroundRefetchStartedRef.current) return
+    backgroundRefetchStartedRef.current = true
+    const delays = [5000, 10000]
+    void (async () => {
+      for (const delay of delays) {
+        await new Promise((r) => setTimeout(r, delay))
+        try {
+          const next = await refetchPublicInvoice()
+          const stripe = next?.paymentInfo?.stripe
+          const hasPm = Boolean(stripe?.brand || stripe?.last4 || stripe?.paymentMethodType)
+          if (next?.status === "paid" && hasPm) break
+        } catch {
+          // keep optimistic UI
+        }
+      }
+    })()
+  }, [refetchPublicInvoice])
+
+  const markInvoicePaidOptimistically = useCallback(() => {
+    optimisticPaidRef.current = true
+    setInvoice((prev) => {
+      if (!prev) return prev
+      if (prev.status === "paid" && prev.paymentInfo?.method === "stripe") return prev
+      return {
+        ...prev,
+        status: "paid",
+        paymentInfo: {
+          method: "stripe",
+          paidAt: new Date().toISOString(),
+          ...(prev.paymentInfo?.stripe ? { stripe: prev.paymentInfo.stripe } : {}),
+        },
+      }
+    })
+    scheduleBackgroundPaidRefetch()
+  }, [scheduleBackgroundPaidRefetch])
+
   useEffect(() => {
     let cancelled = false
     setLoadState("loading")
@@ -96,6 +183,8 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     setIssuer(null)
     setPayIn({})
     setStripeCheckout(null)
+    optimisticPaidRef.current = false
+    backgroundRefetchStartedRef.current = false
 
     if (!fetchConfig.valid || !fetchConfig.url) {
       setLoadState("error")
@@ -117,23 +206,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
           setLoadState("error")
           return
         }
-        setInvoice(data.invoice)
-        setPublicEasetag(
-          typeof data.businessEasetag === "string" && data.businessEasetag.trim()
-            ? data.businessEasetag.trim()
-            : null,
-        )
-        setIssuer(data.issuer ?? null)
-        const pi = data.payIn ?? {}
-        setPayIn(pi)
-        const online =
-          data.paymentDisplay?.showOnlinePayment === true || data.stripeOnlineEnabled === true
-        setShowOnlinePayment(online)
-        setStripeCheckout(data.stripeCheckout ?? null)
-        const tab =
-          data.paymentDisplay?.defaultTab ??
-          (online ? "online" : pi.bankAccount ? "bank" : "stablecoin")
-        setPaymentTab(tab)
+        applyPublicPayload(data)
         setLoadState("ok")
       } catch {
         if (!cancelled) setLoadState("error")
@@ -144,7 +217,27 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     return () => {
       cancelled = true
     }
-  }, [fetchConfig])
+  }, [fetchConfig, applyPublicPayload])
+
+  // Return URL / ?stripe_session= → same optimistic paid + background refetch path
+  useEffect(() => {
+    if (mode !== "public" || loadState !== "ok" || !invoice) return
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    const session = params.get("stripe_session") || params.get("session_id")
+    if (!session) return
+    if (invoice.status === "paid") {
+      scheduleBackgroundPaidRefetch()
+      return
+    }
+    markInvoicePaidOptimistically()
+  }, [
+    mode,
+    loadState,
+    invoice,
+    markInvoicePaidOptimistically,
+    scheduleBackgroundPaidRefetch,
+  ])
 
   useEffect(() => {
     getStripeJs()
@@ -475,100 +568,122 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
               showOnlinePayment={showOnlinePayment}
               stripeCheckout={stripeCheckout}
               defaultTab={paymentTab}
+              onStripePaid={markInvoicePaidOptimistically}
             />
           )}
 
           {showReceiptCard &&
             (() => {
               const paymentRecord = getPaymentRecordDisplay(invoice)
+              const stripePm = paymentRecord?.stripePaymentMethod
+              const showStripePm =
+                paymentRecord?.method === "stripe" &&
+                Boolean(stripePm?.brand || stripePm?.last4)
               return (
                 <div className="rounded-lg border bg-muted/30 p-4 sm:p-6 space-y-4">
                   <h3 className="text-sm font-semibold">Invoice Receipt</h3>
-                  {paymentRecord && (
+                  {paymentRecord && paymentRecord.method === "easner" ? (
                     <div className="rounded-lg border bg-background p-4 space-y-3">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Payment record
                       </p>
-                      {paymentRecord.method === "easner" ? (
-                        <div className="space-y-2 text-sm">
-                          {paymentRecord.paymentMethod && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Method</span>
-                              <span>{paymentRecord.paymentMethod}</span>
+                      <div className="space-y-2 text-sm">
+                        {paymentRecord.paymentMethod && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Method</span>
+                            <span>{paymentRecord.paymentMethod}</span>
+                          </div>
+                        )}
+                        {paymentRecord.amount != null && paymentRecord.currency && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Amount</span>
+                            <span>{formatCurrency(paymentRecord.amount, paymentRecord.currency)}</span>
+                          </div>
+                        )}
+                        {paymentRecord.date && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Date</span>
+                            <span>{formatDate(paymentRecord.date)}</span>
+                          </div>
+                        )}
+                        {paymentRecord.reference && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Reference</span>
+                            <span>{paymentRecord.reference}</span>
+                          </div>
+                        )}
+                        {paymentRecord.transactionId && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground">Transaction ID</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs">{paymentRecord.transactionId}</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() =>
+                                  copyToClipboard(paymentRecord.transactionId!, "payment-txn-id")
+                                }
+                              >
+                                {copiedField === "payment-txn-id" ? (
+                                  <Check className="h-3 w-3 text-primary" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </Button>
                             </div>
-                          )}
-                          {paymentRecord.amount != null && paymentRecord.currency && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Amount</span>
-                              <span>{formatCurrency(paymentRecord.amount, paymentRecord.currency)}</span>
-                            </div>
-                          )}
-                          {paymentRecord.date && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Date</span>
-                              <span>{formatDate(paymentRecord.date)}</span>
-                            </div>
-                          )}
-                          {paymentRecord.reference && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Reference</span>
-                              <span>{paymentRecord.reference}</span>
-                            </div>
-                          )}
-                          {paymentRecord.transactionId && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-muted-foreground">Transaction ID</span>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs">{paymentRecord.transactionId}</span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                  onClick={() => copyToClipboard(paymentRecord.transactionId!, "payment-txn-id")}
-                                >
-                                  {copiedField === "payment-txn-id" ? (
-                                    <Check className="h-3 w-3 text-primary" />
-                                  ) : (
-                                    <Copy className="h-3 w-3" />
-                                  )}
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-sm">
-                          <p className="text-muted-foreground">Payment received by cash or other method</p>
-                          {paymentRecord.cashNote && (
-                            <p className="mt-2 p-2 rounded bg-muted/50 text-sm">{paymentRecord.cashNote}</p>
-                          )}
-                        </div>
-                      )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      if (!invoice) return
-                      setIsDownloading(true)
-                      try {
-                        await downloadInvoiceReceiptPdf(invoice)
-                      } catch (err) {
-                        console.error("Failed to download receipt:", err)
-                      } finally {
-                        setIsDownloading(false)
-                      }
-                    }}
-                    disabled={isDownloading}
-                  >
-                    {isDownloading ? (
-                      <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                    )}
-                    Download Receipt
-                  </Button>
+                  ) : paymentRecord && paymentRecord.method === "cash" ? (
+                    <div className="rounded-lg border bg-background p-4 space-y-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Payment record
+                      </p>
+                      <div className="text-sm">
+                        <p className="text-muted-foreground">Payment received by cash or other method</p>
+                        {paymentRecord.cashNote && (
+                          <p className="mt-2 p-2 rounded bg-muted/50 text-sm">{paymentRecord.cashNote}</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : paymentRecord && paymentRecord.method === "stripe" ? (
+                    <div className="rounded-lg border bg-background p-4 space-y-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Payment record
+                      </p>
+                      <p className="text-sm text-muted-foreground">Paid online</p>
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {showStripePm && stripePm ? (
+                      <StripePaymentMethodRow pm={stripePm} />
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        if (!invoice) return
+                        setIsDownloading(true)
+                        try {
+                          await downloadInvoiceReceiptPdf(invoice)
+                        } catch (err) {
+                          console.error("Failed to download receipt:", err)
+                        } finally {
+                          setIsDownloading(false)
+                        }
+                      }}
+                      disabled={isDownloading}
+                    >
+                      {isDownloading ? (
+                        <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                      )}
+                      Download Receipt
+                    </Button>
+                  </div>
                 </div>
               )
             })()}

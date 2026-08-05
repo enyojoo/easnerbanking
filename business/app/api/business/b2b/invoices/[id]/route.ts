@@ -12,11 +12,8 @@ import type { Invoice } from "@/lib/b2b/types"
 import { writeInvoiceAuditLog } from "@/lib/invoices/invoice-audit-log"
 import { dispatchInvoiceWebhooks } from "@/lib/invoices/invoice-webhooks"
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
-import { sendInvoiceReceiptEmail } from "@/lib/invoice-email-service"
-import { generateReceiptPdfBuffer } from "@/lib/generate-receipt-pdf"
-import { fetchInvoiceIssuerForBusiness, resolveInvoiceReplyEmail } from "@/lib/invoices/issuer"
+import { deliverInvoiceReceiptEmail } from "@/lib/invoices/deliver-invoice-receipt-email"
 import { notifyMerchantInvoicePaid } from "@/lib/invoices/notify-invoice-paid"
-import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 /** Single-invoice fetch for the invoice detail page (`useInvoiceDetail`). */
@@ -163,28 +160,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }).catch((e) => console.error("paid merchant email:", e))
 
     if (settings.sendReceiptOnPaid !== false && updated.customerEmail?.trim()) {
-      void (async () => {
-        try {
-          const reply = await resolveInvoiceReplyEmail(admin, ctx.businessId, ctx.userId)
-          if (!reply) return
-          const pdf = await generateReceiptPdfBuffer(updated)
-          const issuer = await fetchInvoiceIssuerForBusiness(admin, ctx.businessId)
-          const easetag =
-            typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
-          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com"
-          const viewUrl = buildInvoiceCustomerViewUrl(baseUrl, easetag, updated)
-          await sendInvoiceReceiptEmail({
-            invoice: updated,
-            pdfBuffer: pdf,
-            businessName: issuer.name,
-            businessReplyEmail: reply,
-            invoiceViewUrl: viewUrl,
-            issuer: { ...issuer, email: reply },
-          })
-        } catch (e) {
-          console.error("paid receipt email:", e)
-        }
-      })()
+      const easetag =
+        typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
+      void deliverInvoiceReceiptEmail(admin, {
+        businessId: ctx.businessId,
+        invoice: updated,
+        actorUserId: ctx.userId,
+        easetag,
+      }).then((result) => {
+        if (!result.ok) console.error("paid receipt email:", result.error)
+      })
     }
   }
 

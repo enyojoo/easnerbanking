@@ -57,6 +57,8 @@ interface InvoicePaymentOptionsProps {
   showOnlinePayment?: boolean
   /** Preloaded checkout session from the public invoice payload. */
   stripeCheckout?: PublicInvoiceStripeCheckout | null
+  /** Fired when Stripe confirms payment on the customer view. */
+  onStripePaid?: () => void
 }
 
 const audienceDescriptions = {
@@ -127,12 +129,14 @@ function OnlinePanel({
   publicInvoiceEasetag,
   stripeCheckout,
   showTabHint,
+  onStripePaid,
 }: {
   invoice: Invoice
   audience: "customer" | "business"
   publicInvoiceEasetag?: string | null
   stripeCheckout: PublicInvoiceStripeCheckout | null
   showTabHint: boolean
+  onStripePaid?: () => void
 }) {
   return (
     <div className="space-y-4">
@@ -144,6 +148,7 @@ function OnlinePanel({
         easetag={publicInvoiceEasetag?.trim() || "preview"}
         initialCheckout={stripeCheckout}
         previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
+        onPaid={onStripePaid}
       />
     </div>
   )
@@ -359,6 +364,7 @@ export function InvoicePaymentOptions({
   defaultTab,
   showOnlinePayment = false,
   stripeCheckout = null,
+  onStripePaid,
 }: InvoicePaymentOptionsProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const hasBank = bankAccount !== undefined
@@ -479,6 +485,7 @@ export function InvoicePaymentOptions({
           publicInvoiceEasetag={publicInvoiceEasetag}
           stripeCheckout={stripeCheckout}
           showTabHint={showTabHint}
+          onStripePaid={onStripePaid}
         />
       )
     }

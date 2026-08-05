@@ -320,6 +320,13 @@ describe("mapRowToBusinessTransaction", () => {
         invoice_number: "EINV-C792A19D610A",
         settlement_phase: "payment_received",
         payment_method_type: "card",
+        payment_method: {
+          type: "card",
+          brand: "visa",
+          last4: "4242",
+        },
+        customer_email: "payer@example.com",
+        customer_name: "Payer Name",
       },
       occurred_at: "2026-08-04T15:18:03.588Z",
       created_at: "2026-08-04T15:18:03.973Z",
@@ -327,9 +334,16 @@ describe("mapRowToBusinessTransaction", () => {
 
     expect(item.description).toBe("Invoice payment")
     expect(item.displayHeroTitle).toBe("Invoice payment")
+    expect(item.paymentScheme).toBe("Visa •••• 4242")
+    expect(item.stripePaymentMethod).toMatchObject({
+      type: "card",
+      brand: "visa",
+      last4: "4242",
+    })
+    expect(item.customerEmail).toBe("payer@example.com")
+    expect(item.customerName).toBe("Payer Name")
     expect(item.invoiceId).toBe("775370a7-d508-4812-8488-ea59d938a9b2")
     expect(item.reference).toBe("Invoice #EINV-C792A19D610A")
-    expect(item.paymentScheme).toBe("Card")
     expect(item.postedAmount).toBe(56888)
     expect(item.depositAmount).toBe(56888)
     expect(item.lifecycle?.some((s) => s.id === "payment_received")).toBe(true)

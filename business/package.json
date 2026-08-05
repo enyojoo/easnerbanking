@@ -8,6 +8,7 @@
     "dev": "NODE_OPTIONS='--max-http-header-size=1048576' next dev --port 3000 --turbo",
     "lint": "eslint .",
     "probe:yc-send-precision": "node --env-file=.env.local --import tsx scripts/probe-yc-send-precision.ts",
+    "stripe:invoice-payment-backfill": "node --env-file=.env.local --import tsx scripts/stripe-invoice-payment-backfill.ts",
     "start": "NODE_OPTIONS='--max-http-header-size=1048576' next start",
     "test": "vitest run"
   },

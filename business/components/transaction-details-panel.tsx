@@ -20,6 +20,7 @@ import { DepositReviewDetailsRows } from "@/components/transactions/deposit-revi
 import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
 import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
+import { StripePaymentMethodRow } from "@/components/stripe-payment-method-row"
 import { useScope } from "@/lib/query/scope"
 import { getTransactionDetailPrefetchOptions } from "@/hooks/queries/use-transactions"
 import {
@@ -226,8 +227,20 @@ function TransactionSummaryDetails({
           />
         ) : null}
 
-        {isStripeInvoiceSettlement && transaction.paymentScheme ? (
+        {isStripeInvoiceSettlement && transaction.stripePaymentMethod ? (
+          <TransactionDetailSummaryRow label="Payment method">
+            <StripePaymentMethodRow pm={transaction.stripePaymentMethod} />
+          </TransactionDetailSummaryRow>
+        ) : isStripeInvoiceSettlement && transaction.paymentScheme ? (
           <TransactionDetailSummaryRow label="Payment method" value={transaction.paymentScheme} />
+        ) : null}
+
+        {isStripeInvoiceSettlement && transaction.customerName ? (
+          <TransactionDetailSummaryRow label="Customer" value={transaction.customerName} />
+        ) : null}
+
+        {isStripeInvoiceSettlement && transaction.customerEmail ? (
+          <TransactionDetailSummaryRow label="Email" value={transaction.customerEmail} />
         ) : null}
 
         {isStripeInvoiceSettlement && transaction.paymentRail ? (
