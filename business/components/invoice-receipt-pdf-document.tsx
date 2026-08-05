@@ -143,11 +143,18 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     alignItems: "center",
   },
-  pmBrandIcon: {
-    width: 36,
-    height: 24,
-    objectFit: "contain",
+  /** Match web chip: ~h-6, slightly rounded corners. */
+  pmBrandIconWrap: {
+    width: 28,
+    height: 18,
     marginRight: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  pmBrandIcon: {
+    width: 28,
+    height: 18,
+    objectFit: "cover",
   },
   pmValueText: {
     fontSize: 10,
@@ -195,7 +202,9 @@ function TableRow({
       <Text style={styles.tableCell}>{label}</Text>
       {iconSrc ? (
         <View style={styles.pmValueRow}>
-          <Image style={styles.pmBrandIcon} src={iconSrc} />
+          <View style={styles.pmBrandIconWrap}>
+            <Image style={styles.pmBrandIcon} src={iconSrc} />
+          </View>
           {value ? <Text style={styles.pmValueText}>{value}</Text> : null}
         </View>
       ) : (
