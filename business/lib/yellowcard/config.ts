@@ -19,15 +19,6 @@ export function getYellowcardEnvironment(): "sandbox" | "production" {
   return env === "production" ? "production" : "sandbox"
 }
 
-/**
- * YC account top-up address (USDC on Solana) from their Treasury Portal.
- * Balance-settled sends (exact `localAmount`) draw on the YC USD balance, which is
- * replenished by sending USDC here — YC exposes no API to fetch this address.
- */
-export function getYellowcardUsdcTopupAddressSolana(): string {
-  return (process.env.YELLOWCARD_USDC_TOPUP_ADDRESS_SOL || "").trim()
-}
-
 /** Optional static-IP relay for production YC IP whitelisting (see business/yc-relay). */
 export function getYellowcardRelayUrl(): string {
   return (process.env.YELLOWCARD_RELAY_URL || "").trim().replace(/\/$/, "")
