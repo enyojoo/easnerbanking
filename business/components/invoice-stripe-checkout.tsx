@@ -157,10 +157,6 @@ function CheckoutSurface({
     )
   }
 
-  if (checkoutState.type === "loading") {
-    return <PaymentFormSkeleton />
-  }
-
   return (
     <div className="space-y-4">
       <ExpressCheckoutElement
@@ -198,10 +194,10 @@ function CheckoutSurface({
         disabled={!ready || submitting}
         onClick={() => void confirmPayment()}
       >
-        {submitting ? (
+        {!ready || submitting ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            Processing…
+            {submitting ? "Processing…" : "Loading payment methods…"}
           </>
         ) : (
           `Pay ${formatCurrency(invoice.total, invoice.currency)}`
@@ -218,46 +214,37 @@ export function InvoiceStripeCheckout({
   previewOnly = false,
 }: Props) {
   const [paid, setPaid] = useState(false)
-  const [clientSecret, setClientSecret] = useState<string | null>(null)
-  const [publishableKey, setPublishableKey] = useState<string | null>(
-    initialCheckout?.publishableKey ?? null,
+  const [clientSecret, setClientSecret] = useState<string | null>(
+    initialCheckout?.clientSecret ?? null,
   )
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(!previewOnly)
+  const [loading, setLoading] = useState(
+    !previewOnly && !initialCheckout?.clientSecret,
+  )
   const [reloadKey, setReloadKey] = useState(0)
 
   const elementsAppearance = useMemo(() => easnerStripeElementsAppearance(), [])
 
-  const stripePromise = useMemo(
-    () => getStripeJs(publishableKey ?? initialCheckout?.publishableKey),
-    [publishableKey, initialCheckout?.publishableKey],
-  )
+  const stripePromise = useMemo(() => getStripeJs(), [])
 
   useEffect(() => {
-    getStripeJs(publishableKey ?? initialCheckout?.publishableKey)
-  }, [publishableKey, initialCheckout?.publishableKey])
+    getStripeJs()
+  }, [])
 
   useEffect(() => {
     if (previewOnly || paid) return
-
-    let cancelled = false
-    const hadPrefetchedSecret = Boolean(initialCheckout?.clientSecret && reloadKey === 0)
-
-    if (hadPrefetchedSecret) {
-      setClientSecret(initialCheckout!.clientSecret)
-      setPublishableKey(initialCheckout!.publishableKey)
+    if (initialCheckout?.clientSecret && reloadKey === 0) {
+      setClientSecret(initialCheckout.clientSecret)
       setLoading(false)
       setLoadError(null)
-    } else {
-      setLoading(true)
-      setClientSecret(null)
+      return
     }
 
-    async function loadCheckoutSession() {
-      if (!hadPrefetchedSecret) {
-        setLoadError(null)
-      }
+    let cancelled = false
 
+    async function load() {
+      setLoading(true)
+      setLoadError(null)
       try {
         const res = await fetch(
           `/api/invoices/public/${encodeURIComponent(easetag)}/${encodeURIComponent(invoice.invoiceNumber)}/checkout-session`,
@@ -265,21 +252,15 @@ export function InvoiceStripeCheckout({
         )
         const json = (await res.json()) as {
           clientSecret?: string
-          publishableKey?: string
           error?: string
         }
         if (cancelled) return
         if (!res.ok || !json.clientSecret) {
-          if (hadPrefetchedSecret) return
           throw new Error(json.error || "Failed to start checkout")
         }
         setClientSecret(json.clientSecret)
-        if (json.publishableKey?.trim()) {
-          setPublishableKey(json.publishableKey.trim())
-        }
-        setLoadError(null)
       } catch (e) {
-        if (!cancelled && !hadPrefetchedSecret) {
+        if (!cancelled) {
           setLoadError(e instanceof Error ? e.message : "Failed to start checkout")
         }
       } finally {
@@ -287,7 +268,7 @@ export function InvoiceStripeCheckout({
       }
     }
 
-    void loadCheckoutSession()
+    void load()
     return () => {
       cancelled = true
     }
@@ -298,7 +279,6 @@ export function InvoiceStripeCheckout({
     invoice.invoiceNumber,
     reloadKey,
     initialCheckout?.clientSecret,
-    initialCheckout?.publishableKey,
   ])
 
   if (previewOnly) {
@@ -347,10 +327,11 @@ export function InvoiceStripeCheckout({
 
   return (
     <CheckoutElementsProvider
-      key={clientSecret}
       stripe={stripePromise}
       options={{
         clientSecret,
+        // Email is set server-side via customer_email on the Checkout Session.
+        // Do not pass defaultValues.email here — Stripe rejects updating email twice.
         elementsOptions: {
           appearance: elementsAppearance,
         },

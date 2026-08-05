@@ -126,14 +126,12 @@ function OnlinePanel({
   audience,
   publicInvoiceEasetag,
   stripeCheckout,
-  mountCheckout,
   showTabHint,
 }: {
   invoice: Invoice
   audience: "customer" | "business"
   publicInvoiceEasetag?: string | null
   stripeCheckout: PublicInvoiceStripeCheckout | null
-  mountCheckout: boolean
   showTabHint: boolean
 }) {
   return (
@@ -141,14 +139,12 @@ function OnlinePanel({
       {showTabHint ? (
         <TabHint>{customerPaymentTabHint("online", invoice.invoiceNumber)}</TabHint>
       ) : null}
-      {mountCheckout ? (
-        <InvoiceStripeCheckout
-          invoice={invoice}
-          easetag={publicInvoiceEasetag?.trim() || "preview"}
-          initialCheckout={stripeCheckout}
-          previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
-        />
-      ) : null}
+      <InvoiceStripeCheckout
+        invoice={invoice}
+        easetag={publicInvoiceEasetag?.trim() || "preview"}
+        initialCheckout={stripeCheckout}
+        previewOnly={audience === "business" || !publicInvoiceEasetag?.trim()}
+      />
     </div>
   )
 }
@@ -394,7 +390,6 @@ export function InvoicePaymentOptions({
   const resolvedDefaultTab: PaymentTab =
     defaultTab ?? (hasOnline ? "online" : hasBank ? "bank" : "stablecoin")
 
-  const activeTab = value ?? resolvedDefaultTab
   const brandName = businessDisplayName?.trim() || businessInfo.name
 
   const copyToClipboard = async (text: string, field?: string) => {
@@ -475,7 +470,7 @@ export function InvoicePaymentOptions({
     }
   }
 
-  const renderPanel = (method: PaymentTab, showTabHint: boolean, mountCheckout: boolean) => {
+  const renderPanel = (method: PaymentTab, showTabHint: boolean) => {
     if (method === "online" && hasOnline) {
       return (
         <OnlinePanel
@@ -483,7 +478,6 @@ export function InvoicePaymentOptions({
           audience={audience}
           publicInvoiceEasetag={publicInvoiceEasetag}
           stripeCheckout={stripeCheckout}
-          mountCheckout={mountCheckout}
           showTabHint={showTabHint}
         />
       )
@@ -571,25 +565,25 @@ export function InvoicePaymentOptions({
         </TabsList>
 
         {hasOnline ? (
-          <TabsContent value="online" className="mt-4">
-            {renderPanel("online", audience === "customer", activeTab === "online")}
+          <TabsContent value="online" forceMount className="mt-4">
+            {renderPanel("online", audience === "customer")}
           </TabsContent>
         ) : null}
 
         {hasBank ? (
           <TabsContent value="bank" className="mt-4">
-            {renderPanel("bank", audience === "customer", false)}
+            {renderPanel("bank", audience === "customer")}
           </TabsContent>
         ) : null}
 
         {hasStablecoin ? (
           <TabsContent value="stablecoin" className="mt-4">
-            {renderPanel("stablecoin", audience === "customer", false)}
+            {renderPanel("stablecoin", audience === "customer")}
           </TabsContent>
         ) : null}
       </Tabs>
     ) : (
-      <div className="mt-4">{singleMethod ? renderPanel(singleMethod, false, true) : null}</div>
+      <div className="mt-4">{singleMethod ? renderPanel(singleMethod, false) : null}</div>
     )
 
   if (embedded) {

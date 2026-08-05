@@ -55,9 +55,7 @@ export function readCachedInvoiceView(cacheKey: string): CachedInvoiceView | nul
   if (!cacheKey || typeof window === "undefined") return null
   try {
     const fromSession = readFromStore(sessionStorage, sessionStorageKey(cacheKey))
-    if (fromSession) {
-      return { ...fromSession, stripeCheckout: null }
-    }
+    if (fromSession) return fromSession
 
     const fromLocal = readFromStore(localStorage, localStorageKey(cacheKey), LOCAL_TTL_MS)
     if (fromLocal) {
