@@ -157,54 +157,69 @@ function CheckoutSurface({
     )
   }
 
-  // Always mount PaymentElement while the provider loads — Stripe Checkout
-  // Elements need these children mounted to finish initializing.
+  // Keep Elements mounted while loading (required for Stripe init). Show
+  // skeleton until ready, then reveal methods + Pay CTA together — never put
+  // "Loading payment methods…" on the button.
   return (
-    <div className="space-y-4">
-      <ExpressCheckoutElement
-        onReady={(event) => {
-          setHasWallets(hasReadyExpressMethods(event.availablePaymentMethods))
-        }}
-        onAvailablePaymentMethodsChange={(event) => {
-          setHasWallets(hasChangedExpressMethods(event.paymentMethods))
-        }}
-        onConfirm={(event) => void handleExpressConfirm(event)}
-      />
-
-      {hasWallets ? <OrPayWithDivider /> : null}
-
-      <PaymentElement
-        options={{
-          layout: {
-            type: "accordion",
-            // Omit defaultCollapsed — Checkout Elements' payment.update() rejects it.
-            radios: "always",
-            spacedAccordionItems: true,
-          },
-        }}
-      />
-
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <Button
-        type="button"
-        className="w-full h-11 text-base font-medium"
-        disabled={!ready || submitting}
-        onClick={() => void confirmPayment()}
+    <div className="relative">
+      {!ready ? <PaymentFormSkeleton /> : null}
+      <div
+        className={
+          ready
+            ? "space-y-4"
+            : "pointer-events-none absolute h-0 w-0 overflow-hidden opacity-0"
+        }
+        aria-hidden={!ready}
       >
-        {!ready || submitting ? (
+        <ExpressCheckoutElement
+          onReady={(event) => {
+            setHasWallets(hasReadyExpressMethods(event.availablePaymentMethods))
+          }}
+          onAvailablePaymentMethodsChange={(event) => {
+            setHasWallets(hasChangedExpressMethods(event.paymentMethods))
+          }}
+          onConfirm={(event) => void handleExpressConfirm(event)}
+        />
+
+        {hasWallets ? <OrPayWithDivider /> : null}
+
+        <PaymentElement
+          options={{
+            layout: {
+              type: "accordion",
+              // Omit defaultCollapsed — Checkout Elements' payment.update() rejects it.
+              radios: "always",
+              spacedAccordionItems: true,
+            },
+          }}
+        />
+
+        {ready ? (
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            {submitting ? "Processing…" : "Loading payment methods…"}
+            {error ? (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            ) : null}
+
+            <Button
+              type="button"
+              className="w-full h-11 text-base font-medium"
+              disabled={submitting}
+              onClick={() => void confirmPayment()}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  Processing…
+                </>
+              ) : (
+                `Pay ${formatCurrency(invoice.total, invoice.currency)}`
+              )}
+            </Button>
           </>
-        ) : (
-          `Pay ${formatCurrency(invoice.total, invoice.currency)}`
-        )}
-      </Button>
+        ) : null}
+      </div>
     </div>
   )
 }
