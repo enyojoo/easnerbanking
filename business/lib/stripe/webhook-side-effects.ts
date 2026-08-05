@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Stripe from "stripe"
 import { syncConnectAccountFromWebhook } from "./connect"
-import { handleStripeCheckoutCompleted } from "./handle-checkout-completed"
+import { handleStripeCheckoutCompleted, handleStripeChargeSucceededForInvoice } from "./handle-checkout-completed"
 import { handleStripePayoutPaid } from "./handle-payout-paid"
 import { applyInvoiceStripeRefundSideEffects } from "./apply-invoice-stripe-refund"
 
@@ -69,6 +69,10 @@ export async function applyStripeWebhookSideEffects(
     case "checkout.session.completed":
     case "payment_intent.succeeded": {
       await handleStripeCheckoutCompleted(admin, event)
+      return
+    }
+    case "charge.succeeded": {
+      await handleStripeChargeSucceededForInvoice(admin, event.data.object as Stripe.Charge)
       return
     }
     case "payout.paid":

@@ -3,6 +3,7 @@ import type Stripe from "stripe"
 import { getStripe } from "@/lib/stripe/client"
 import {
   parsePaymentMethodDisplayFromCharge,
+  parsePaymentMethodDisplayFromPaymentMethod,
   paymentMethodDisplayFromMetadata,
   type StripePaymentMethodDisplay,
 } from "@/lib/stripe/parse-payment-method-display"
@@ -11,6 +12,13 @@ export function needsPaymentMethodHeal(meta: Record<string, unknown>): boolean {
   const pm = paymentMethodDisplayFromMetadata(meta)
   if (!pm?.type) return true
   if (pm.type === "card" && !pm.brand && !pm.last4) return true
+  if (
+    (pm.type === "us_bank_account" || pm.type === "ach_debit" || pm.type === "ach") &&
+    !pm.last4 &&
+    !pm.bankName
+  ) {
+    return true
+  }
   return false
 }
 
@@ -57,6 +65,26 @@ async function retrieveCharge(
   return null
 }
 
+async function retrievePaymentMethodFromIntent(
+  stripe: Stripe,
+  meta: Record<string, unknown>,
+): Promise<StripePaymentMethodDisplay | null> {
+  const piId =
+    typeof meta.stripe_payment_intent_id === "string" && meta.stripe_payment_intent_id.trim()
+      ? meta.stripe_payment_intent_id.trim()
+      : null
+  if (!piId) return null
+  try {
+    const pi = await stripe.paymentIntents.retrieve(piId, { expand: ["payment_method"] })
+    const pmObj =
+      typeof pi.payment_method === "object" && pi.payment_method ? pi.payment_method : null
+    return parsePaymentMethodDisplayFromPaymentMethod(pmObj)
+  } catch (e) {
+    console.warn("[stripe] heal PI payment_method retrieve failed:", e)
+  }
+  return null
+}
+
 /**
  * Lazy-heal incomplete Stripe invoice ledger metadata (PM brand/last4, customer) on detail load.
  * Returns patched metadata (and whether anything changed).
@@ -97,6 +125,9 @@ export async function healStripeInvoicePaymentMetadata(
       if (typeof bd?.email === "string" && bd.email.trim()) chargeEmail = bd.email.trim()
       if (typeof bd?.name === "string" && bd.name.trim()) chargeName = bd.name.trim()
     }
+    if (!paymentMethod) {
+      paymentMethod = await retrievePaymentMethodFromIntent(stripe, meta)
+    }
   }
 
   let invoiceName: string | null = null
@@ -126,7 +157,7 @@ export async function healStripeInvoicePaymentMetadata(
   if (paymentMethod) {
     const prev = paymentMethodDisplayFromMetadata(meta)
     const merged: StripePaymentMethodDisplay = {
-      type: paymentMethod.type || prev?.type || "card",
+      type: paymentMethod.type || prev?.type || "",
       brand: paymentMethod.brand ?? prev?.brand,
       last4: paymentMethod.last4 ?? prev?.last4,
       wallet: paymentMethod.wallet ?? prev?.wallet ?? null,

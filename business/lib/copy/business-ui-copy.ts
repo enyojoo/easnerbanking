@@ -196,7 +196,6 @@ export const INVOICE_LIST_COPY = {
   emptyArchived: "No archived invoices.",
   emptySearch: "Try adjusting your search terms.",
   createCta: "Create invoice",
-  pastDueEmphasis: "Needs follow-up",
 } as const
 
 export const INVOICE_SETTINGS_COPY = {

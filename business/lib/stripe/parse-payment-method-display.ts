@@ -48,6 +48,34 @@ export function parsePaymentMethodDisplayFromCharge(
   return out
 }
 
+/**
+ * Parse Stripe PaymentMethod object (from expanded PaymentIntent.payment_method).
+ */
+export function parsePaymentMethodDisplayFromPaymentMethod(
+  pm: Stripe.PaymentMethod | null | undefined,
+): StripePaymentMethodDisplay | null {
+  if (!pm?.type || typeof pm.type !== "string" || !pm.type.trim()) return null
+
+  const type = pm.type.trim().toLowerCase()
+  const out: StripePaymentMethodDisplay = { type }
+
+  if (type === "card" && pm.card) {
+    out.brand = str(pm.card.brand)?.toLowerCase()
+    out.last4 = str(pm.card.last4)
+    const walletType = pm.card.wallet?.type
+    out.wallet = walletType ? String(walletType).toLowerCase() : null
+  } else if (type === "us_bank_account" && pm.us_bank_account) {
+    out.last4 = str(pm.us_bank_account.last4)
+    out.bankName = str(pm.us_bank_account.bank_name)
+  } else if (type === "sepa_debit" && pm.sepa_debit) {
+    out.last4 = str(pm.sepa_debit.last4)
+  } else if (type === "link" && pm.link) {
+    // Link may not expose last4 on PaymentMethod
+  }
+
+  return out
+}
+
 /** Merge payment_method object from metadata with legacy payment_method_type. */
 export function paymentMethodDisplayFromMetadata(
   meta: Record<string, unknown>,

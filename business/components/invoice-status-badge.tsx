@@ -3,14 +3,14 @@ import { invoiceStatusLabel, type InvoiceStatus } from "@/lib/invoices/invoice-s
 
 const statusVariants: Record<
   InvoiceStatus,
-  "default" | "secondary" | "destructive"
+  "neutral" | "emerald" | "amber" | "oxblood" | "slate" | "secondary"
 > = {
-  draft: "secondary",
-  unpaid: "default",
+  draft: "slate",
+  unpaid: "amber",
   sent: "secondary",
-  past_due: "destructive",
-  paid: "default",
-  void: "secondary",
+  past_due: "oxblood",
+  paid: "emerald",
+  void: "neutral",
 }
 
 export function InvoiceStatusBadge({ status }: { status: string }) {

@@ -72,6 +72,7 @@ import {
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import { StripePaymentMethodRow } from "@/components/stripe-payment-method-row"
+import { shouldShowStripePaymentMethod } from "@/lib/stripe/payment-method-display"
 import type { Invoice } from "@/lib/b2b/types"
 import type { InvoiceManualStatusAction } from "@/lib/invoices/invoice-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -1277,12 +1278,12 @@ export default function InvoiceDetailPage() {
                       </div>
                     ) : paymentRecord.method === "stripe" ? (
                       <div className="flex justify-between items-center gap-3 text-sm">
-                        <span className="text-muted-foreground">Paid online</span>
-                        {paymentRecord.stripePaymentMethod?.brand ||
-                        paymentRecord.stripePaymentMethod?.last4 ? (
+                        <span className="text-muted-foreground">Payment method</span>
+                        {paymentRecord.stripePaymentMethod &&
+                        shouldShowStripePaymentMethod(paymentRecord.stripePaymentMethod) ? (
                           <StripePaymentMethodRow pm={paymentRecord.stripePaymentMethod} />
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">Online</span>
                         )}
                       </div>
                     ) : (

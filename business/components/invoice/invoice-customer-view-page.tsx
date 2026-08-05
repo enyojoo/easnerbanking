@@ -19,6 +19,7 @@ import { buildInvoicePdfPaymentSection } from "@/lib/invoices/invoice-payment-co
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import { StripePaymentMethodRow } from "@/components/stripe-payment-method-row"
+import { shouldShowStripePaymentMethod } from "@/lib/stripe/payment-method-display"
 import { BRAND } from "@/components/brand/brand-constants"
 import { useFxRates } from "@/hooks/queries"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
@@ -149,7 +150,9 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
         try {
           const next = await refetchPublicInvoice()
           const stripe = next?.paymentInfo?.stripe
-          const hasPm = Boolean(stripe?.brand || stripe?.last4 || stripe?.paymentMethodType)
+          const hasPm = Boolean(
+            stripe?.brand || stripe?.last4 || stripe?.bankName || stripe?.paymentMethodType,
+          )
           if (next?.status === "paid" && hasPm) break
         } catch {
           // keep optimistic UI
@@ -593,7 +596,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
               const stripePm = paymentRecord?.stripePaymentMethod
               const showStripePm =
                 paymentRecord?.method === "stripe" &&
-                Boolean(stripePm?.brand || stripePm?.last4)
+                Boolean(stripePm && shouldShowStripePaymentMethod(stripePm))
               return (
                 <div className="rounded-lg border bg-muted/30 p-4 sm:p-6 space-y-4">
                   <h3 className="text-sm font-semibold">Invoice Receipt</h3>
@@ -669,11 +672,11 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
                         Payment record
                       </p>
                       <div className="flex justify-between items-center gap-3 text-sm">
-                        <span className="text-muted-foreground">Paid online</span>
+                        <span className="text-muted-foreground">Payment method</span>
                         {showStripePm && stripePm ? (
                           <StripePaymentMethodRow pm={stripePm} />
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">Online</span>
                         )}
                       </div>
                     </div>

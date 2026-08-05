@@ -46,7 +46,6 @@ import { formatDate, formatCurrency } from "@/lib/utils"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
 import { useInvoicesList } from "@/hooks/queries/use-invoices"
-import { isInvoicePastDue } from "@/lib/invoices/past-due"
 import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutations/use-invoices"
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
@@ -526,11 +525,6 @@ export default function InvoicesPage() {
               }`}
             >
               {tab.label}
-              {tab.id === "past_due" && tab.count > 0 ? (
-                <span className="ml-1.5 text-[11px] font-normal text-destructive/80">
-                  {INVOICE_LIST_COPY.pastDueEmphasis}
-                </span>
-              ) : null}
               {tab.count > 0 && (
                 <span className="ml-2 px-2 py-0.5 text-xs bg-muted rounded-full">
                   {tab.count}
@@ -626,9 +620,6 @@ export default function InvoicesPage() {
                       </td>
                       <td className="p-4 align-middle">
                         <InvoiceStatusBadge status={invoice.archived ? "archived" : invoice.status} />
-                        {isInvoicePastDue(invoice) && invoice.status !== "past_due" ? (
-                          <span className="ml-1 text-xs text-destructive">Overdue</span>
-                        ) : null}
                       </td>
                       <td className="p-4 align-middle">
                         <DropdownMenu>

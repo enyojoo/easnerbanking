@@ -7,12 +7,26 @@ import {
 } from "@/lib/invoices/issuer"
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { sendInvoicePaidNotificationEmail } from "@/lib/invoice-email-service"
+import { getPaymentRecordDisplay } from "@/lib/deposits"
+import {
+  formatPaymentMethodListLabel,
+  shouldShowStripePaymentMethod,
+} from "@/lib/stripe/payment-method-display"
 
 function paymentMethodLabel(invoice: Invoice): string {
-  const method = invoice.paymentInfo?.method
-  if (method === "stripe") return "Online"
-  if (method === "easner") return "Easner balance / transfer"
-  if (method === "cash") return "Marked paid"
+  const record = getPaymentRecordDisplay(invoice)
+  if (record?.method === "stripe") {
+    const pm = record.stripePaymentMethod
+    if (pm && shouldShowStripePaymentMethod(pm)) {
+      return formatPaymentMethodListLabel(pm)
+    }
+    if (pm?.type) return formatPaymentMethodListLabel(pm)
+    return "Online"
+  }
+  if (record?.method === "easner") {
+    return record.paymentMethod?.trim() || "Bank transfer"
+  }
+  if (record?.method === "cash") return "Marked paid"
   return "Marked paid"
 }
 

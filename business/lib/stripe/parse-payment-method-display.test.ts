@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest"
 import type Stripe from "stripe"
 import {
   parsePaymentMethodDisplayFromCharge,
+  parsePaymentMethodDisplayFromPaymentMethod,
   paymentMethodDisplayFromMetadata,
 } from "./parse-payment-method-display"
 import {
   formatPaymentMethodText,
   formatPaymentMethodTextBesideIcon,
+  formatPaymentMethodListLabel,
   paymentMethodIconKey,
+  shouldShowStripePaymentMethod,
 } from "./payment-method-display"
 
 function chargeWith(
@@ -46,6 +49,21 @@ describe("parsePaymentMethodDisplayFromCharge", () => {
         } as Stripe.Charge.PaymentMethodDetails.UsBankAccount,
       }),
     )
+    expect(pm).toEqual({
+      type: "us_bank_account",
+      last4: "6789",
+      bankName: "STRIPE TEST BANK",
+    })
+  })
+
+  it("parses us_bank_account from PaymentMethod", () => {
+    const pm = parsePaymentMethodDisplayFromPaymentMethod({
+      type: "us_bank_account",
+      us_bank_account: {
+        last4: "6789",
+        bank_name: "STRIPE TEST BANK",
+      },
+    } as Stripe.PaymentMethod)
     expect(pm).toEqual({
       type: "us_bank_account",
       last4: "6789",
@@ -145,5 +163,10 @@ describe("formatPaymentMethodText / icon key", () => {
     expect(
       formatPaymentMethodTextBesideIcon({ type: "card", last4: "4242" }),
     ).toBe("Card •••• 4242")
+  })
+
+  it("shows bank type even without last4", () => {
+    expect(shouldShowStripePaymentMethod({ type: "us_bank_account" })).toBe(true)
+    expect(formatPaymentMethodListLabel({ type: "us_bank_account" })).toBe("Bank")
   })
 })

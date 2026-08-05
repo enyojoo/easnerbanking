@@ -13,12 +13,16 @@ import {
 
 type InvoicesListEnvelope = { invoices: Invoice[] }
 
-function patchList(
+function listQueryFilter(scope: NonNullable<ReturnType<typeof useScope>["scope"]>) {
+  return { queryKey: [...qk.invoices.root(scope), "list"] as const }
+}
+
+function patchAllLists(
   qc: ReturnType<typeof useQueryClient>,
-  listKey: readonly unknown[],
+  scope: NonNullable<ReturnType<typeof useScope>["scope"]>,
   patch: (prev: Invoice[]) => Invoice[],
 ) {
-  qc.setQueryData<InvoicesListEnvelope>(listKey as never, (prev) => {
+  qc.setQueriesData<InvoicesListEnvelope>(listQueryFilter(scope), (prev) => {
     if (!prev) return prev
     return { ...prev, invoices: patch(prev.invoices ?? []) }
   })
@@ -37,10 +41,9 @@ export function useAddInvoice() {
       }),
     onMutate: async (invoice) => {
       if (!scope) return {}
-      const listKey = qk.invoices.list(scope, {})
-      await qc.cancelQueries({ queryKey: listKey })
-      const prev = qc.getQueryData<InvoicesListEnvelope>(listKey)
-      patchList(qc, listKey, (rows) => [invoice, ...rows.filter((i) => i.id !== invoice.id)])
+      await qc.cancelQueries({ queryKey: qk.invoices.root(scope) })
+      const prev = qc.getQueryData<InvoicesListEnvelope>(qk.invoices.list(scope, {}))
+      patchAllLists(qc, scope, (rows) => [invoice, ...rows.filter((i) => i.id !== invoice.id)])
       return { prev }
     },
     onError: (_err, _invoice, ctx) => {
@@ -52,7 +55,7 @@ export function useAddInvoice() {
       const created = data.invoice
       if (!created) return
       addInvoiceToStore(created)
-      patchList(qc, qk.invoices.list(scope, {}), (rows) => [
+      patchAllLists(qc, scope, (rows) => [
         created,
         ...rows.filter((i) => i.id !== created.id && i.id !== invoice.id),
       ])
@@ -76,14 +79,15 @@ export function useUpdateInvoice() {
       if (!scope) return {}
       const listKey = qk.invoices.list(scope, {})
       const detailKey = qk.invoices.detail(scope, id)
-      await qc.cancelQueries({ queryKey: listKey })
+      await qc.cancelQueries({ queryKey: qk.invoices.root(scope) })
       const prev = qc.getQueryData<InvoicesListEnvelope>(listKey)
       const prevDetail = qc.getQueryData<Invoice>(detailKey)
-      patchList(qc, listKey, (rows) =>
+      const base = prevDetail ?? prev?.invoices?.find((i) => i.id === id)
+      patchAllLists(qc, scope, (rows) =>
         rows.map((i) => (i.id === id ? ({ ...i, ...updates, id } as Invoice) : i)),
       )
-      if (prevDetail) {
-        qc.setQueryData(detailKey, { ...prevDetail, ...updates, id } as Invoice)
+      if (base) {
+        qc.setQueryData(detailKey, { ...base, ...updates, id } as Invoice)
       }
       return { prev, prevDetail }
     },
@@ -94,15 +98,15 @@ export function useUpdateInvoice() {
         qc.setQueryData(qk.invoices.detail(scope, variables.id), ctx.prevDetail)
       }
     },
-    onSuccess: (data, { id }) => {
+    onSuccess: async (data, { id }) => {
       if (!scope) return
       const updated = data.invoice
       if (!updated) return
+      // Drop any list/detail refetch that started during the PATCH so stale
+      // GET responses cannot overwrite the just-saved status.
+      await qc.cancelQueries({ queryKey: qk.invoices.root(scope) })
       updateInvoiceInStore(id, updated)
-      // Patch list in place — avoid invalidating the full invoices query.
-      patchList(qc, qk.invoices.list(scope, {}), (rows) =>
-        rows.map((i) => (i.id === id ? updated : i)),
-      )
+      patchAllLists(qc, scope, (rows) => rows.map((i) => (i.id === id ? updated : i)))
       qc.setQueryData(qk.invoices.detail(scope, id), updated)
     },
   })
@@ -120,10 +124,9 @@ export function useDeleteInvoice() {
       }),
     onMutate: async (id) => {
       if (!scope) return {}
-      const listKey = qk.invoices.list(scope, {})
-      await qc.cancelQueries({ queryKey: listKey })
-      const prev = qc.getQueryData<InvoicesListEnvelope>(listKey)
-      patchList(qc, listKey, (rows) => rows.filter((i) => i.id !== id))
+      await qc.cancelQueries({ queryKey: qk.invoices.root(scope) })
+      const prev = qc.getQueryData<InvoicesListEnvelope>(qk.invoices.list(scope, {}))
+      patchAllLists(qc, scope, (rows) => rows.filter((i) => i.id !== id))
       return { prev }
     },
     onError: (_err, _id, ctx) => {

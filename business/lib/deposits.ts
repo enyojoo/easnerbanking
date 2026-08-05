@@ -1,5 +1,6 @@
 import type { Invoice } from "@/lib/b2b/types"
 import type { Transaction } from "@/lib/finance-types"
+import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 import { sortDepositsByMatch } from "@/lib/invoices/deposit-match"
 
 export type InboundDepositSource = "bank" | "stablecoin"
@@ -120,10 +121,10 @@ export function getPaymentRecordDisplay(
 
   if (info.method === "stripe") {
     const stripe = info.stripe
-    const pm =
-      stripe && (stripe.brand || stripe.last4 || stripe.paymentMethodType)
+    const pm: StripePaymentMethodDisplay | undefined =
+      stripe?.paymentMethodType || stripe?.brand || stripe?.last4 || stripe?.bankName
         ? {
-            type: stripe.paymentMethodType || "card",
+            type: stripe.paymentMethodType ?? "",
             brand: stripe.brand,
             last4: stripe.last4,
             wallet: stripe.wallet,

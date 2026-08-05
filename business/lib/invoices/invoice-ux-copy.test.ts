@@ -59,7 +59,7 @@ describe("invoice UX copy", () => {
   it("provides list empty-state copy for each tab", () => {
     expect(INVOICE_LIST_COPY.emptyDraft).toBeTruthy()
     expect(INVOICE_LIST_COPY.emptyPastDue).toBeTruthy()
-    expect(INVOICE_LIST_COPY.pastDueEmphasis).toBe("Needs follow-up")
+    expect("pastDueEmphasis" in INVOICE_LIST_COPY).toBe(false)
   })
 })
 

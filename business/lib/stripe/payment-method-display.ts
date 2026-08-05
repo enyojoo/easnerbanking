@@ -190,6 +190,19 @@ export function formatPaymentMethodListLabel(
   return titleCaseType(type)
 }
 
+/** True when we have enough to render a Stripe PM row (icon and/or label). */
+export function shouldShowStripePaymentMethod(
+  pm: StripePaymentMethodDisplay | null | undefined,
+): boolean {
+  if (!pm?.type) return false
+  const type = pm.type.toLowerCase()
+  if (type === "card") return Boolean(pm.brand || pm.last4)
+  if (type === "us_bank_account" || type === "ach_debit" || type === "ach" || type === "sepa_debit") {
+    return Boolean(pm.bankName || pm.last4 || type)
+  }
+  return true
+}
+
 export function paymentBrandSvgSrc(key: PaymentBrandIconKey): string {
   return `/payment-brands/${key}.svg`
 }

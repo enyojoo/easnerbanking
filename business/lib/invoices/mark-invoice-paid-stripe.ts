@@ -64,7 +64,16 @@ export async function markInvoicePaidStripe(
     priorPayment?.method === "stripe" &&
     priorPayment.stripe?.paymentIntentId === input.paymentInfo.paymentIntentId
   ) {
-    return { invoice: existingInvoice, alreadyPaid: true }
+    const priorStripe = priorPayment.stripe
+    const incoming = input.paymentInfo
+    const pmEnriched =
+      Boolean(incoming.paymentMethodType && incoming.paymentMethodType !== priorStripe?.paymentMethodType) ||
+      Boolean(incoming.last4 && incoming.last4 !== priorStripe?.last4) ||
+      Boolean(incoming.bankName && incoming.bankName !== priorStripe?.bankName) ||
+      Boolean(incoming.brand && incoming.brand !== priorStripe?.brand)
+    if (!pmEnriched) {
+      return { invoice: existingInvoice, alreadyPaid: true }
+    }
   }
 
   // If already paid via cash/easner, continue and overwrite with Stripe payment info below.
@@ -74,26 +83,36 @@ export async function markInvoicePaidStripe(
     method: "stripe",
     stripe: {
       paymentIntentId: input.paymentInfo.paymentIntentId,
-      chargeId: input.paymentInfo.chargeId,
-      paymentMethodType: input.paymentInfo.paymentMethodType ?? "card",
-      brand: input.paymentInfo.brand,
-      last4: input.paymentInfo.last4,
-      wallet: input.paymentInfo.wallet,
-      bankName: input.paymentInfo.bankName,
-      customerEmail: input.paymentInfo.customerEmail,
-      customerName: input.paymentInfo.customerName,
+      chargeId: input.paymentInfo.chargeId ?? priorPayment?.stripe?.chargeId,
+      paymentMethodType:
+        input.paymentInfo.paymentMethodType ?? priorPayment?.stripe?.paymentMethodType,
+      brand: input.paymentInfo.brand ?? priorPayment?.stripe?.brand,
+      last4: input.paymentInfo.last4 ?? priorPayment?.stripe?.last4,
+      wallet: input.paymentInfo.wallet ?? priorPayment?.stripe?.wallet,
+      bankName: input.paymentInfo.bankName ?? priorPayment?.stripe?.bankName,
+      customerEmail: input.paymentInfo.customerEmail ?? priorPayment?.stripe?.customerEmail,
+      customerName: input.paymentInfo.customerName ?? priorPayment?.stripe?.customerName,
       grossCents: input.paymentInfo.grossCents,
       feeCents: input.paymentInfo.feeCents,
       netCents: input.paymentInfo.netCents,
       settlementPhase: input.paymentInfo.settlementPhase,
-      settlementRail: input.paymentInfo.settlementRail,
+      settlementRail: input.paymentInfo.settlementRail ?? priorPayment?.stripe?.settlementRail,
+      refundId: priorPayment?.stripe?.refundId,
+      refundedAt: priorPayment?.stripe?.refundedAt,
     },
   }
 
-  const statusHistory = [
-    ...(existingInvoice.statusHistory ?? []),
-    { status: "paid", timestamp: input.paymentInfo.paidAt },
-  ]
+  const isPmEnrichmentOnly =
+    existingInvoice.status === "paid" &&
+    priorPayment?.method === "stripe" &&
+    priorPayment.stripe?.paymentIntentId === input.paymentInfo.paymentIntentId
+
+  const statusHistory = isPmEnrichmentOnly
+    ? (existingInvoice.statusHistory ?? [])
+    : [
+        ...(existingInvoice.statusHistory ?? []),
+        { status: "paid", timestamp: input.paymentInfo.paidAt },
+      ]
 
   const updatedInvoice: Invoice = {
     ...existingInvoice,
@@ -137,7 +156,7 @@ export async function markInvoicePaidStripe(
     },
   })
 
-  if (existingInvoice.status !== "paid") {
+  if (existingInvoice.status !== "paid" && !isPmEnrichmentOnly) {
     void dispatchInvoiceWebhooks({
       businessId: input.businessId,
       event: "invoice.paid",
@@ -149,7 +168,7 @@ export async function markInvoicePaidStripe(
     })
   }
 
-  if (existingInvoice.status !== "paid") {
+  if (existingInvoice.status !== "paid" && !isPmEnrichmentOnly) {
     const { data: biz } = await admin
       .from("businesses")
       .select("invoice_settings, easetag, name")

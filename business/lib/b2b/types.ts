@@ -13,7 +13,7 @@ export interface InvoicePaymentInfo {
   stripe?: {
     paymentIntentId: string
     chargeId?: string
-    paymentMethodType: string
+    paymentMethodType?: string
     brand?: string
     last4?: string
     wallet?: string | null

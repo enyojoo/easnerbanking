@@ -279,20 +279,20 @@ export function InvoiceReceiptPDFDocument({
     }
   } else if (invoice.paymentInfo?.method === "stripe") {
     const stripe = invoice.paymentInfo.stripe
-    const pmDisplay: StripePaymentMethodDisplay | null = stripe
+    const pmDisplay: StripePaymentMethodDisplay | null = stripe?.paymentMethodType
       ? {
-          type: stripe.paymentMethodType || "card",
+          type: stripe.paymentMethodType,
           brand: stripe.brand,
           last4: stripe.last4,
           wallet: stripe.wallet,
           bankName: stripe.bankName,
         }
       : null
-    const iconKey = pmDisplay ? paymentMethodIconKey(pmDisplay) : "card"
+    const iconKey = pmDisplay ? paymentMethodIconKey(pmDisplay) : null
     const brandIconSrc =
-      pmDisplay && hasPaymentBrandIcon(pmDisplay) ? paymentBrandPngDataUrl(iconKey) : null
+      pmDisplay && hasPaymentBrandIcon(pmDisplay) ? paymentBrandPngDataUrl(iconKey!) : null
     const pmText = !pmDisplay
-      ? "Card"
+      ? "Online"
       : brandIconSrc
         ? formatPaymentMethodTextBesideIcon(pmDisplay) || formatPaymentMethodText(pmDisplay)
         : formatPaymentMethodText(pmDisplay)
