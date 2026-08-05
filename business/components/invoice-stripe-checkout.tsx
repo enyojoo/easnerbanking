@@ -194,10 +194,10 @@ function CheckoutSurface({
         disabled={!ready || submitting}
         onClick={() => void confirmPayment()}
       >
-        {!ready || submitting ? (
+        {submitting ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            {submitting ? "Processing…" : "Loading payment methods…"}
+            Processing…
           </>
         ) : (
           `Pay ${formatCurrency(invoice.total, invoice.currency)}`
@@ -233,10 +233,19 @@ export function InvoiceStripeCheckout({
 
   useEffect(() => {
     if (previewOnly || paid) return
-    if (initialCheckout?.clientSecret && reloadKey === 0) {
-      setClientSecret(initialCheckout.clientSecret)
+
+    if (initialCheckout?.clientSecret) {
+      if (initialCheckout.clientSecret !== clientSecret) {
+        setClientSecret(initialCheckout.clientSecret)
+        setLoadError(null)
+      }
       setLoading(false)
-      setLoadError(null)
+      return
+    }
+
+    if (reloadKey > 0) {
+      // fall through to fetch below
+    } else if (clientSecret) {
       return
     }
 
@@ -279,6 +288,7 @@ export function InvoiceStripeCheckout({
     invoice.invoiceNumber,
     reloadKey,
     initialCheckout?.clientSecret,
+    clientSecret,
   ])
 
   if (previewOnly) {
@@ -300,7 +310,7 @@ export function InvoiceStripeCheckout({
     return <PaymentSuccess invoice={invoice} compact />
   }
 
-  if (loading && !clientSecret && !loadError) {
+  if (loading && !clientSecret && !loadError && !initialCheckout?.clientSecret) {
     return <PaymentFormSkeleton />
   }
 
@@ -327,6 +337,7 @@ export function InvoiceStripeCheckout({
 
   return (
     <CheckoutElementsProvider
+      key={clientSecret}
       stripe={stripePromise}
       options={{
         clientSecret,

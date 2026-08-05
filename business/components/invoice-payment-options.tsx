@@ -276,7 +276,7 @@ export function InvoicePaymentOptions({
           </TabsList>
 
           {hasOnline ? (
-            <TabsContent value="online" forceMount className="space-y-4 mt-4">
+            <TabsContent value="online" className="space-y-4 mt-4">
               {audience === "customer" && !stripeCheckout ? (
                 <p className="text-sm text-muted-foreground">
                   {INVOICE_CUSTOMER_VIEW_COPY.payOnlineUnavailable}
@@ -398,76 +398,70 @@ export function InvoicePaymentOptions({
           </TabsContent>
           ) : null}
 
-          <TabsContent value="stablecoin" className="space-y-4 mt-4">
-            {hasStablecoin && stablecoinAccount ? (
-              <>
-                <div className="flex flex-col items-center">
-                  <div className="p-4 bg-white rounded-xl border">
-                    <QRCodeSVG
-                      value={stablecoinAccount.address}
-                      size={200}
-                      level="M"
-                    />
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Scan to send {stablecoinAccount.stablecoin}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Network</p>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <span className="text-sm font-medium">
-                      {stablecoinAccount.chain === "Solana"
-                        ? "SOL"
-                        : stablecoinAccount.chain === "Ethereum"
-                          ? "ETH"
-                          : stablecoinAccount.chain}
-                    </span>
-                    <span className="text-sm text-muted-foreground"> • </span>
-                    <span className="text-sm text-muted-foreground">
-                      {stablecoinAccount.chain}
-                    </span>
-                  </div>
-                </div>
-                <CopyableField
-                  label="Address"
-                  value={stablecoinAccount.address}
-                  copiedField={copiedField}
-                  fieldId="inv-addr"
-                  onCopy={copyToClipboard}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-2"
-                  onClick={() => handleShare("stablecoin")}
-                >
-                  {copiedField === "share-stablecoin" ? (
-                    <Check className="h-4 w-4 text-primary" />
-                  ) : (
-                    <Share2 className="h-4 w-4" />
-                  )}
-                  {copiedField === "share-stablecoin" ? "Copied" : `Share ${stablecoinAccount.stablecoin} Details`}
-                </Button>
-                <div className="pt-4 border-t">
-                  <p className="text-sm font-medium mb-2">Payment Instructions</p>
-                  <PaymentInstructions
-                    currency={invoice.currency}
-                    type="stablecoin"
-                    extraLines={[
-                      stablecoinPaymentExtraInstruction(invoice.total, invoice.currency),
-                    ]}
+          {hasStablecoin && stablecoinAccount ? (
+            <TabsContent value="stablecoin" className="space-y-4 mt-4">
+              <div className="flex flex-col items-center">
+                <div className="p-4 bg-white rounded-xl border">
+                  <QRCodeSVG
+                    value={stablecoinAccount.address}
+                    size={200}
+                    level="M"
                   />
                 </div>
-              </>
-            ) : (
-              <div className="py-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Stablecoin payments for {invoice.currency} are coming soon.
+                <p className="text-sm text-muted-foreground mt-1">
+                  Scan to send {stablecoinAccount.stablecoin}
                 </p>
               </div>
-            )}
-          </TabsContent>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Network</p>
+                <div className="p-3 bg-muted rounded-lg">
+                  <span className="text-sm font-medium">
+                    {stablecoinAccount.chain === "Solana"
+                      ? "SOL"
+                      : stablecoinAccount.chain === "Ethereum"
+                        ? "ETH"
+                        : stablecoinAccount.chain}
+                  </span>
+                  <span className="text-sm text-muted-foreground"> • </span>
+                  <span className="text-sm text-muted-foreground">
+                    {stablecoinAccount.chain}
+                  </span>
+                </div>
+              </div>
+              <CopyableField
+                label="Address"
+                value={stablecoinAccount.address}
+                copiedField={copiedField}
+                fieldId="inv-addr"
+                onCopy={copyToClipboard}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2"
+                onClick={() => handleShare("stablecoin")}
+              >
+                {copiedField === "share-stablecoin" ? (
+                  <Check className="h-4 w-4 text-primary" />
+                ) : (
+                  <Share2 className="h-4 w-4" />
+                )}
+                {copiedField === "share-stablecoin"
+                  ? "Copied"
+                  : `Share ${stablecoinAccount.stablecoin} Details`}
+              </Button>
+              <div className="pt-4 border-t">
+                <p className="text-sm font-medium mb-2">Payment Instructions</p>
+                <PaymentInstructions
+                  currency={invoice.currency}
+                  type="stablecoin"
+                  extraLines={[
+                    stablecoinPaymentExtraInstruction(invoice.total, invoice.currency),
+                  ]}
+                />
+              </div>
+            </TabsContent>
+          ) : null}
         </Tabs>
   )
 

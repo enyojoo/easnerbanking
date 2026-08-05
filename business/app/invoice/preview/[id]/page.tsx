@@ -7,5 +7,7 @@ export default function InvoicePreviewPage() {
   const params = useParams()
   const invoiceId = typeof params.id === "string" ? params.id : ""
 
-  return <InvoiceCustomerViewPage mode="preview" invoiceId={invoiceId} />
+  return (
+    <InvoiceCustomerViewPage key={invoiceId} mode="preview" invoiceId={invoiceId} />
+  )
 }

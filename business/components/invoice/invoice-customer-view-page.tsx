@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ import { formatDate, formatCurrency } from "@/lib/utils"
 import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
-import type { PublicInvoiceStripeCheckout } from "@/lib/invoices/json-public-invoice-from-row"
+import type { PublicInvoiceStripeCheckout, PublicInvoicePayload } from "@/lib/invoices/json-public-invoice-from-row"
 import { getStripeJs } from "@/lib/stripe/load-stripe-js"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
 import { buildInvoicePdfPaymentSection } from "@/lib/invoices/invoice-payment-copy"
@@ -23,6 +23,11 @@ import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { INVOICE_CUSTOMER_VIEW_COPY } from "@/lib/copy/business-ui-copy"
+import {
+  invoiceViewCacheKey,
+  readCachedInvoiceView,
+  writeCachedInvoiceView,
+} from "@/lib/invoices/invoice-view-cache"
 
 const FALLBACK_ISSUER: InvoicePdfIssuer = {
   name: businessInfo.name,
@@ -47,86 +52,178 @@ type InvoiceCustomerViewPageProps =
       invoiceId: string
     }
 
-type PublicInvoicePayload = {
-  invoice?: Invoice
-  issuer?: InvoicePdfIssuer
-  payIn?: InvoicePayInPayload
-  businessEasetag?: string | null
-  paymentDisplay?: {
-    defaultTab?: "online" | "bank" | "stablecoin"
-    showOnlinePayment?: boolean
-  }
-  stripeOnlineEnabled?: boolean
-  stripeCheckout?: PublicInvoiceStripeCheckout | null
+function publicSlugKey(slugParts: string[]): string {
+  return slugParts.join("/")
 }
 
-function InvoiceViewSkeleton() {
+function stateFromPayload(payload: PublicInvoicePayload) {
+  const pi = payload.payIn ?? {}
+  const online =
+    payload.paymentDisplay?.showOnlinePayment === true || payload.stripeOnlineEnabled === true
+  return {
+    loadState: "ok" as const,
+    invoice: payload.invoice,
+    publicEasetag:
+      typeof payload.businessEasetag === "string" && payload.businessEasetag.trim()
+        ? payload.businessEasetag.trim()
+        : null,
+    issuer: payload.issuer ?? null,
+    payIn: pi,
+    showOnlinePayment: online,
+    stripeCheckout: payload.stripeCheckout ?? null,
+    paymentTab: paymentTabFromPayload(payload),
+  }
+}
+
+function initialPublicViewState(slugParts: string[]) {
+  if (slugParts.length !== 1 && slugParts.length !== 2) {
+    return {
+      loadState: "error" as const,
+      invoice: null,
+      publicEasetag: null,
+      issuer: null,
+      payIn: {} as InvoicePayInPayload,
+      showOnlinePayment: false,
+      stripeCheckout: null as PublicInvoiceStripeCheckout | null,
+      paymentTab: "bank" as const,
+    }
+  }
+
+  return {
+    loadState: "loading" as const,
+    invoice: null,
+    publicEasetag: null,
+    issuer: null,
+    payIn: {} as InvoicePayInPayload,
+    showOnlinePayment: false,
+    stripeCheckout: null as PublicInvoiceStripeCheckout | null,
+    paymentTab: "bank" as const,
+  }
+}
+
+function resolveViewCacheKey(props: InvoiceCustomerViewPageProps): string | null {
+  if (props.mode === "public") {
+    if (props.slugParts.length !== 1 && props.slugParts.length !== 2) return null
+    return invoiceViewCacheKey("public", publicSlugKey(props.slugParts))
+  }
+  if (!props.invoiceId) return null
+  return invoiceViewCacheKey("preview", props.invoiceId)
+}
+
+function initialViewState(props: InvoiceCustomerViewPageProps) {
+  if (props.mode === "public") {
+    return initialPublicViewState(props.slugParts)
+  }
+  if (!props.invoiceId) {
+    return {
+      loadState: "error" as const,
+      invoice: null,
+      publicEasetag: null,
+      issuer: null,
+      payIn: {} as InvoicePayInPayload,
+      showOnlinePayment: false,
+      stripeCheckout: null as PublicInvoiceStripeCheckout | null,
+      paymentTab: "bank" as const,
+    }
+  }
+  return {
+    loadState: "loading" as const,
+    invoice: null,
+    publicEasetag: null,
+    issuer: null,
+    payIn: {} as InvoicePayInPayload,
+    showOnlinePayment: false,
+    stripeCheckout: null as PublicInvoiceStripeCheckout | null,
+    paymentTab: "bank" as const,
+  }
+}
+
+function applyPayloadToState(
+  data: PublicInvoicePayload,
+  setters: {
+    setInvoice: (v: Invoice) => void
+    setPublicEasetag: (v: string | null) => void
+    setIssuer: (v: InvoicePdfIssuer | null) => void
+    setPayIn: (v: InvoicePayInPayload) => void
+    setShowOnlinePayment: (v: boolean) => void
+    setStripeCheckout: (v: PublicInvoiceStripeCheckout | null) => void
+    setPaymentTab: (v: "online" | "bank" | "stablecoin") => void
+    setLoadState: (v: "ok") => void
+  },
+) {
+  const next = stateFromPayload(data)
+  setters.setInvoice(next.invoice)
+  setters.setPublicEasetag(next.publicEasetag)
+  setters.setIssuer(next.issuer)
+  setters.setPayIn(next.payIn)
+  setters.setShowOnlinePayment(next.showOnlinePayment)
+  setters.setStripeCheckout(next.stripeCheckout)
+  setters.setPaymentTab(next.paymentTab)
+  setters.setLoadState("ok")
+}
+
+function paymentTabFromPayload(payload: PublicInvoicePayload): "online" | "bank" | "stablecoin" {
+  const pi = payload.payIn ?? {}
+  const online =
+    payload.paymentDisplay?.showOnlinePayment === true || payload.stripeOnlineEnabled === true
   return (
-    <div className="w-full max-w-2xl">
-      <Card>
-        <CardContent className="p-4 pt-1 pb-0.5 sm:p-6 sm:pt-2 sm:pb-1 lg:p-8 lg:pt-3 lg:pb-2 space-y-6">
-          <div className="flex justify-end">
-            <div className="h-8 w-28 rounded-md bg-muted animate-pulse" />
-          </div>
-          <div className="grid grid-cols-2 gap-4 sm:gap-6">
-            <div className="space-y-2">
-              <div className="h-5 w-36 rounded bg-muted animate-pulse" />
-              <div className="h-3 w-44 rounded bg-muted animate-pulse" />
-              <div className="h-3 w-40 rounded bg-muted animate-pulse" />
-              <div className="h-3 w-28 rounded bg-muted animate-pulse" />
-            </div>
-            <div className="space-y-2 flex flex-col items-end">
-              <div className="h-6 w-24 rounded bg-muted animate-pulse" />
-              <div className="h-3 w-20 rounded bg-muted animate-pulse" />
-              <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <div className="h-3 w-16 rounded bg-muted animate-pulse" />
-              <div className="h-4 w-32 rounded bg-muted animate-pulse" />
-              <div className="h-3 w-40 rounded bg-muted animate-pulse" />
-            </div>
-            <div />
-            <div className="space-y-2">
-              <div className="h-3 w-24 rounded bg-muted animate-pulse" />
-              <div className="h-3 w-36 rounded bg-muted animate-pulse" />
-              <div className="h-3 w-32 rounded bg-muted animate-pulse" />
-            </div>
-          </div>
-          <div className="border rounded-lg overflow-hidden">
-            <div className="h-9 bg-muted animate-pulse" />
-            <div className="space-y-0">
-              <div className="h-12 border-t bg-muted/30 animate-pulse" />
-              <div className="h-12 border-t bg-muted/20 animate-pulse" />
-              <div className="h-12 border-t bg-muted/30 animate-pulse" />
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <div className="space-y-2 w-40">
-              <div className="h-3 w-full rounded bg-muted animate-pulse" />
-              <div className="h-6 w-full rounded bg-muted animate-pulse" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    payload.paymentDisplay?.defaultTab ??
+    (online ? "online" : pi.bankAccount ? "bank" : "stablecoin")
+  )
+}
+
+function InvoicePageSpinner() {
+  return (
+    <div className="w-full max-w-2xl flex items-center justify-center py-24">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-label="Loading invoice" />
     </div>
   )
 }
 
 export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
   const mode: InvoiceViewMode = props.mode
-  const [invoice, setInvoice] = useState<Invoice | null>(null)
-  const [publicEasetag, setPublicEasetag] = useState<string | null>(null)
-  const [issuer, setIssuer] = useState<InvoicePdfIssuer | null>(null)
-  const [payIn, setPayIn] = useState<InvoicePayInPayload>({})
-  const [loadState, setLoadState] = useState<"loading" | "error" | "unauthorized" | "ok">("loading")
-  const [paymentTab, setPaymentTab] = useState<"online" | "bank" | "stablecoin">("bank")
-  const [showOnlinePayment, setShowOnlinePayment] = useState(false)
-  const [stripeCheckout, setStripeCheckout] = useState<PublicInvoiceStripeCheckout | null>(null)
+  const viewInitial = initialViewState(props)
+  const hadCacheOnMount = useRef(false)
+
+  const [invoice, setInvoice] = useState<Invoice | null>(viewInitial.invoice)
+  const [publicEasetag, setPublicEasetag] = useState<string | null>(viewInitial.publicEasetag)
+  const [issuer, setIssuer] = useState<InvoicePdfIssuer | null>(viewInitial.issuer)
+  const [payIn, setPayIn] = useState<InvoicePayInPayload>(viewInitial.payIn)
+  const [loadState, setLoadState] = useState<"loading" | "error" | "unauthorized" | "ok">(
+    viewInitial.loadState,
+  )
+  const [paymentTab, setPaymentTab] = useState<"online" | "bank" | "stablecoin">(
+    viewInitial.paymentTab,
+  )
+  const [showOnlinePayment, setShowOnlinePayment] = useState(viewInitial.showOnlinePayment)
+  const [stripeCheckout, setStripeCheckout] = useState<PublicInvoiceStripeCheckout | null>(
+    viewInitial.stripeCheckout,
+  )
   const { data: fxRates = [] } = useFxRates()
   const [isDownloading, setIsDownloading] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  useLayoutEffect(() => {
+    if (viewInitial.loadState === "error") return
+
+    const cacheKey = resolveViewCacheKey(props)
+    if (!cacheKey) return
+
+    const cached = readCachedInvoiceView(cacheKey)
+    if (!cached) return
+
+    hadCacheOnMount.current = true
+    applyPayloadToState(cached, {
+      setInvoice,
+      setPublicEasetag,
+      setIssuer,
+      setPayIn,
+      setShowOnlinePayment,
+      setStripeCheckout,
+      setPaymentTab,
+      setLoadState,
+    })
+  }, [props, viewInitial.loadState])
 
   const fetchConfig = useMemo(() => {
     if (props.mode === "preview") {
@@ -149,15 +246,19 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
 
   useEffect(() => {
     let cancelled = false
-    setLoadState("loading")
-    setInvoice(null)
-    setPublicEasetag(null)
-    setIssuer(null)
-    setPayIn({})
-    setStripeCheckout(null)
+    const showLoadingUi = !hadCacheOnMount.current
+
+    if (showLoadingUi) {
+      setLoadState("loading")
+      setInvoice(null)
+      setPublicEasetag(null)
+      setIssuer(null)
+      setPayIn({})
+      setStripeCheckout(null)
+    }
 
     if (!fetchConfig.valid || !fetchConfig.url) {
-      setLoadState("error")
+      if (showLoadingUi) setLoadState("error")
       return
     }
 
@@ -169,33 +270,31 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
         const data = (await res.json().catch(() => ({}))) as PublicInvoicePayload
         if (cancelled) return
         if (res.status === 401) {
-          setLoadState("unauthorized")
+          if (showLoadingUi) setLoadState("unauthorized")
           return
         }
         if (!res.ok || !data.invoice) {
-          setLoadState("error")
+          if (showLoadingUi) setLoadState("error")
           return
         }
-        setInvoice(data.invoice)
-        setPublicEasetag(
-          typeof data.businessEasetag === "string" && data.businessEasetag.trim()
-            ? data.businessEasetag.trim()
-            : null,
-        )
-        setIssuer(data.issuer ?? null)
-        const pi = data.payIn ?? {}
-        setPayIn(pi)
-        const online =
-          data.paymentDisplay?.showOnlinePayment === true || data.stripeOnlineEnabled === true
-        setShowOnlinePayment(online)
-        setStripeCheckout(data.stripeCheckout ?? null)
-        const tab =
-          data.paymentDisplay?.defaultTab ??
-          (online ? "online" : pi.bankAccount ? "bank" : "stablecoin")
-        setPaymentTab(tab)
-        setLoadState("ok")
+
+        applyPayloadToState(data, {
+          setInvoice,
+          setPublicEasetag,
+          setIssuer,
+          setPayIn,
+          setShowOnlinePayment,
+          setStripeCheckout,
+          setPaymentTab,
+          setLoadState,
+        })
+
+        const cacheKey = resolveViewCacheKey(props)
+        if (cacheKey) {
+          writeCachedInvoiceView(cacheKey, data)
+        }
       } catch {
-        if (!cancelled) setLoadState("error")
+        if (!cancelled && showLoadingUi) setLoadState("error")
       }
     }
 
@@ -203,6 +302,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchConfig tracks slug/id; props read for cache scope only
   }, [fetchConfig])
 
   useEffect(() => {
@@ -258,7 +358,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
   }
 
   if (loadState === "loading") {
-    return <InvoiceViewSkeleton />
+    return <InvoicePageSpinner />
   }
 
   if (loadState === "unauthorized") {

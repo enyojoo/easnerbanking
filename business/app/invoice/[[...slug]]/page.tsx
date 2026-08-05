@@ -12,5 +12,7 @@ export default function InvoicePublicPage() {
     return Array.isArray(raw) ? raw : [String(raw)]
   }, [params.slug])
 
-  return <InvoiceCustomerViewPage mode="public" slugParts={slugParts} />
+  return (
+    <InvoiceCustomerViewPage key={slugParts.join("/")} mode="public" slugParts={slugParts} />
+  )
 }
