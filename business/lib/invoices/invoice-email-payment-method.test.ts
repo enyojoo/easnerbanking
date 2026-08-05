@@ -40,7 +40,7 @@ describe("resolveInvoiceEmailPaymentMethod", () => {
   it("returns PNG chip + mask for Stripe card payments", () => {
     const resolved = resolveInvoiceEmailPaymentMethod(paidStripeInvoice)
     expect(resolved).not.toBeNull()
-    expect(resolved!.brandIconSrc).toMatch(/^data:image\/png;base64,/)
+    expect(resolved!.brandIconSrc).toMatch(/\/payment-brands\/visa\.png$/)
     expect(resolved!.htmlText).toContain("4242")
     expect(resolved!.htmlText).not.toMatch(/visa/i)
     expect(resolved!.plainText).toMatch(/visa/i)

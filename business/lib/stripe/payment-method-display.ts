@@ -193,3 +193,13 @@ export function formatPaymentMethodListLabel(
 export function paymentBrandSvgSrc(key: PaymentBrandIconKey): string {
   return `/payment-brands/${key}.svg`
 }
+
+/** Absolute PNG URL for email clients (most block `data:` image URIs). */
+export function paymentBrandPngEmailUrl(key: PaymentBrandIconKey): string {
+  const base = (
+    process.env.NEXT_PUBLIC_BUSINESS_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://business.easner.com"
+  ).replace(/\/$/, "")
+  return `${base}/payment-brands/${key}.png`
+}

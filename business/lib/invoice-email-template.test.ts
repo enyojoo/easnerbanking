@@ -185,7 +185,7 @@ describe("invoice email templates", () => {
     })
     expect(html).toContain(">Payment method<")
     expect(html).toContain("4242")
-    expect(html).toContain("data:image/png;base64,")
+    expect(html).toContain("/payment-brands/visa.png")
     expect(html).toContain(">When<")
     expect(html.indexOf(">When<")).toBeLessThan(html.indexOf(">Status<"))
     expect(html).toContain("Aug 03, 2026")

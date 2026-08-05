@@ -5,15 +5,15 @@ import {
   formatPaymentMethodTextBesideIcon,
   hasPaymentBrandIcon,
   paymentMethodIconKey,
+  paymentBrandPngEmailUrl,
 } from "@/lib/stripe/payment-method-display"
-import { paymentBrandPngDataUrl } from "@/lib/stripe/payment-brand-png-data"
 
 export type InvoiceEmailPaymentMethodDisplay = {
   /** Plain-text email line (includes brand name when no chip). */
   plainText: string
   /** HTML value beside brand chip (mask / wallet only). */
   htmlText: string
-  /** PNG data URL for email clients (SVG is unreliable in email). */
+  /** Hosted PNG URL for email clients (inline data URIs are blocked by Gmail/Outlook). */
   brandIconSrc?: string
 }
 
@@ -30,7 +30,7 @@ export function resolveInvoiceEmailPaymentMethod(
       return { plainText: "Paid online", htmlText: "Paid online" }
     }
     const iconKey = paymentMethodIconKey(pm)
-    const brandIconSrc = hasPaymentBrandIcon(pm) ? paymentBrandPngDataUrl(iconKey) : null
+    const brandIconSrc = hasPaymentBrandIcon(pm) ? paymentBrandPngEmailUrl(iconKey) : null
     const plainText = formatPaymentMethodText(pm).trim() || "Paid online"
     const htmlText = brandIconSrc
       ? formatPaymentMethodTextBesideIcon(pm).trim() || plainText

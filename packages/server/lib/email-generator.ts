@@ -521,14 +521,18 @@ export type TransactionDetailRow = {
   value: string
   isStatus?: boolean
   statusClass?: string
-  /** PNG data URL — renders brand chip beside `value` (email-safe; SVG is avoided). */
+  /** Hosted PNG or data URL — renders brand chip beside `value` in HTML email. */
   brandIconSrc?: string | null
 }
 
 function paymentBrandIconEmailHtml(src: string): string | null {
   const trimmed = src.trim()
-  if (!trimmed.startsWith("data:image/png;base64,")) return null
-  return `<img src="${trimmed}" alt="" width="28" height="18" style="display:block;border-radius:3px;" />`
+  const isDataPng = trimmed.startsWith("data:image/png;base64,")
+  const isHostedPng =
+    trimmed.startsWith("https://") && /\/payment-brands\/[a-z0-9_]+\.png(?:\?|$)/i.test(trimmed)
+  if (!isDataPng && !isHostedPng) return null
+  const safeSrc = escapeHtml(trimmed)
+  return `<img src="${safeSrc}" alt="" width="28" height="18" style="display:block;border-radius:3px;" />`
 }
 
 function detailValueHtml(row: TransactionDetailRow): string {
