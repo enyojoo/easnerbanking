@@ -61,9 +61,12 @@ export const INVOICE_CREATE_SECTION_COPY = {
   customer: "Choose who you're billing.",
   details: "Set currency, due date, and reference.",
   items: "Add line items and amounts.",
-  paymentMethods: "Choose how this customer can pay.",
-  paymentMethodsSummary: "Payment options use your invoicing defaults.",
-  customizePaymentMethods: "Customize for this invoice",
+  paymentMethods: "How this customer can pay",
+  paymentMethodsHelp: "Uses your invoicing defaults until you customize.",
+  paymentMethodsCustomized: "Custom for this invoice",
+  customizePaymentMethods: "Customize",
+  usePaymentDefaults: "Use defaults",
+  defaultPaymentTab: "Default option",
   summary: "Review total before you send.",
   easetagHint: "Add a business handle for shorter invoice links.",
   saving: "Saving…",
@@ -73,6 +76,7 @@ export const INVOICE_CREATE_SECTION_COPY = {
   saveDraft: "Save draft",
   saveChanges: "Save changes",
   preview: "Preview",
+  notAvailable: "Not available",
 } as const
 
 export const INVOICE_ACTION_COPY = {

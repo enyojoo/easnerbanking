@@ -7,10 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { 
-  ArrowLeft, 
-  Plus, 
-  Trash2, 
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
   Search,
   Calendar as CalendarIcon,
   List,
@@ -19,7 +19,16 @@ import {
   MapPin,
   FileText,
   Loader2,
+  Eye,
 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -50,16 +59,11 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { invoiceBackHref, withReturnTo } from "@/lib/invoice-navigation"
 import { dueDateFromPaymentTerms } from "@/lib/invoices/due-date"
 import { useInvoicePayIn } from "@/hooks/use-invoice-pay-in"
-import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
-import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
-import { resolvePaymentDisplay, defaultPaymentDisplayFromForm, resolveDefaultTabFromPreferredMethod } from "@/lib/invoices/resolve-payment-display"
-import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
+import { defaultPaymentDisplayFromForm, resolveDefaultTabFromPreferredMethod } from "@/lib/invoices/resolve-payment-display"
 import { isInvoiceFieldsLocked, invoiceFieldsLockBanner } from "@/lib/invoices/invoice-edit-lock"
 import type { BusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
 import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoice-business-readiness"
 import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
-import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
-import { Checkbox } from "@/components/ui/checkbox"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
 import {
@@ -204,7 +208,6 @@ export default function CreateInvoicePage() {
   }
   const profile = useBusinessProfile()
   const { baseCurrency, isLoading: profileLoading, tier1Complete, invoiceSettings } = profile
-  const issuer = issuerFromBusinessProfile(profile)
   const orgEasetag =
     typeof profile.easetag === "string" && profile.easetag.trim() ? profile.easetag.trim() : null
   const invoiceReadiness = assessInvoiceBusinessReadinessFromProfile(profile)
@@ -236,7 +239,7 @@ export default function CreateInvoicePage() {
     lineItems: [{ id: "1", description: "", quantity: "", unitPrice: "" }]
   })
 
-  const { bankAccount: rawBank, stablecoinAccount: rawStable, loading: payInLoading } = useInvoicePayIn({
+  const { bankAccount: rawBank, stablecoinAccount: rawStable } = useInvoicePayIn({
     currency: formData.currency,
     tier1Complete,
     enabled: Boolean(formData.currency),
@@ -453,18 +456,6 @@ export default function CreateInvoicePage() {
   const stripeOnlineEnabled = Boolean(
     typeof process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY === "string" &&
       process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.trim(),
-  )
-  const draftPreviewInvoice = createInvoiceFromForm("unpaid")
-  const previewDisplay = resolvePaymentDisplay({
-    invoice: draftPreviewInvoice,
-    businessDefaults: invoiceSettings,
-    payIn: { bankAccount: rawBank, stablecoinAccount: rawStable },
-    payable: true,
-    stripeOnlineEnabled: stripeOnlineEnabled && formData.showOnlinePayment,
-  })
-  const previewPayIn = filterPayInByDisplay(
-    { bankAccount: rawBank, stablecoinAccount: rawStable },
-    previewDisplay,
   )
 
   const runIssueAndEmail = async () => {
@@ -923,202 +914,233 @@ export default function CreateInvoicePage() {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Action buttons - above Invoice Summary */}
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="outline"
-              className={invoiceActionBtnClass.flex}
-              disabled={!!invoiceAction}
-              onClick={handleSaveDraft}
-            >
-              {invoiceAction === "draft" ? (
+        <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+          <Card>
+            <CardContent className="flex flex-col gap-3 pt-6">
+              {!isEditMode ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {INVOICE_CREATE_SECTION_COPY.saving}
+                  <Button
+                    className="w-full"
+                    disabled={!!invoiceAction}
+                    onClick={() => void handleIssueAndEmail()}
+                  >
+                    {invoiceAction === "email" ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {INVOICE_ACTION_COPY.sending}
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="mr-2 h-4 w-4" />
+                        {INVOICE_CREATE_SECTION_COPY.issueAndEmail}
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={!!invoiceAction}
+                    onClick={handleSendInvoice}
+                  >
+                    {invoiceAction === "create" ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {INVOICE_ACTION_COPY.issuing}
+                      </>
+                    ) : (
+                      INVOICE_CREATE_SECTION_COPY.issue
+                    )}
+                  </Button>
                 </>
               ) : (
-                INVOICE_CREATE_SECTION_COPY.saveDraft
-              )}
-            </Button>
-            {!isEditMode ? (
-              <>
                 <Button
-                  className={invoiceActionBtnClass.flex}
-                  disabled={!!invoiceAction}
-                  onClick={() => void handleIssueAndEmail()}
-                >
-                  {invoiceAction === "email" ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {INVOICE_ACTION_COPY.sending}
-                    </>
-                  ) : (
-                    INVOICE_CREATE_SECTION_COPY.issueAndEmail
-                  )}
-                </Button>
-                <Button
-                  variant="secondary"
-                  className={invoiceActionBtnClass.flex}
+                  className="w-full"
                   disabled={!!invoiceAction}
                   onClick={handleSendInvoice}
                 >
                   {invoiceAction === "create" ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {INVOICE_ACTION_COPY.issuing}
+                      {INVOICE_CREATE_SECTION_COPY.saving}
                     </>
                   ) : (
-                    INVOICE_CREATE_SECTION_COPY.issue
+                    INVOICE_CREATE_SECTION_COPY.saveChanges
                   )}
                 </Button>
-              </>
-            ) : (
-              <Button
-                className={invoiceActionBtnClass.flex}
-                disabled={!!invoiceAction}
-                onClick={handleSendInvoice}
-              >
-                {invoiceAction === "create" ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {INVOICE_CREATE_SECTION_COPY.saving}
-                  </>
-                ) : (
-                  INVOICE_CREATE_SECTION_COPY.saveChanges
-                )}
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              className={invoiceActionBtnClass.flex}
-              disabled={!!invoiceAction}
-              onClick={handlePreview}
-            >
-              {INVOICE_CREATE_SECTION_COPY.preview}
-            </Button>
-            {isEditMode && saveState !== "idle" ? (
-              <p className="text-xs text-muted-foreground text-center">
-                {saveState === "saving"
-                  ? INVOICE_CREATE_SECTION_COPY.saving
-                  : INVOICE_CREATE_SECTION_COPY.saved}
-              </p>
-            ) : null}
-          </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  className="flex-1"
+                  disabled={!!invoiceAction}
+                  onClick={handleSaveDraft}
+                >
+                  {invoiceAction === "draft" ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {INVOICE_CREATE_SECTION_COPY.saving}
+                    </>
+                  ) : (
+                    INVOICE_CREATE_SECTION_COPY.saveDraft
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="flex-1"
+                  disabled={!!invoiceAction}
+                  onClick={handlePreview}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  {INVOICE_CREATE_SECTION_COPY.preview}
+                </Button>
+              </div>
+              {isEditMode && saveState !== "idle" ? (
+                <p className="text-xs text-muted-foreground text-center">
+                  {saveState === "saving"
+                    ? INVOICE_CREATE_SECTION_COPY.saving
+                    : INVOICE_CREATE_SECTION_COPY.saved}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
 
           <Card>
-            <CardHeader>
-              <SectionHeader
-                title="Payment methods on this invoice"
-                description={INVOICE_CREATE_SECTION_COPY.paymentMethods}
-              />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!customizePaymentMethods ? (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    {INVOICE_CREATE_SECTION_COPY.paymentMethodsSummary}
-                  </p>
-                  {paymentMethodChips.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {paymentMethodChips.map((label) => (
-                        <Badge key={label} variant="secondary" className="font-normal">
-                          {label}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <SectionHeader
+                  title={INVOICE_CREATE_SECTION_COPY.paymentMethods}
+                  description={
+                    customizePaymentMethods
+                      ? INVOICE_CREATE_SECTION_COPY.paymentMethodsCustomized
+                      : INVOICE_CREATE_SECTION_COPY.paymentMethodsHelp
+                  }
+                />
+                {!customizePaymentMethods ? (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
+                    className="shrink-0 -mt-1"
                     onClick={() => setCustomizePaymentMethods(true)}
                   >
                     {INVOICE_CREATE_SECTION_COPY.customizePaymentMethods}
                   </Button>
-                </>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 -mt-1"
+                    onClick={() => setCustomizePaymentMethods(false)}
+                  >
+                    {INVOICE_CREATE_SECTION_COPY.usePaymentDefaults}
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {!customizePaymentMethods ? (
+                paymentMethodChips.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {paymentMethodChips.map((label) => (
+                      <Badge key={label} variant="secondary" className="font-normal">
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {INVOICE_CREATE_SECTION_COPY.notAvailable}
+                  </p>
+                )
               ) : (
                 <>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <Label htmlFor="show-bank">{INVOICE_SETTINGS_COPY.bankTransfer}</Label>
+                      {!hasBankProvision ? (
+                        <p className="text-xs text-muted-foreground">
+                          {INVOICE_CREATE_SECTION_COPY.notAvailable}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Switch
                       id="show-bank"
-                      checked={formData.showBank}
+                      checked={formData.showBank && hasBankProvision}
                       disabled={!hasBankProvision}
-                      onCheckedChange={(v) => setFormData((p) => ({ ...p, showBank: v === true }))}
+                      onCheckedChange={(v) => setFormData((p) => ({ ...p, showBank: v }))}
                     />
-                    <Label htmlFor="show-bank" className="font-normal">
-                      Bank transfer {!hasBankProvision ? "(not available)" : ""}
-                    </Label>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <Label htmlFor="show-stable">{INVOICE_SETTINGS_COPY.stablecoin}</Label>
+                      {!hasStableProvision ? (
+                        <p className="text-xs text-muted-foreground">
+                          {INVOICE_CREATE_SECTION_COPY.notAvailable}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Switch
                       id="show-stable"
-                      checked={formData.showStablecoin}
+                      checked={formData.showStablecoin && hasStableProvision}
                       disabled={!hasStableProvision}
                       onCheckedChange={(v) =>
-                        setFormData((p) => ({ ...p, showStablecoin: v === true }))
+                        setFormData((p) => ({ ...p, showStablecoin: v }))
                       }
                     />
-                    <Label htmlFor="show-stable" className="font-normal">
-                      Stablecoin {!hasStableProvision ? "(not available)" : ""}
-                    </Label>
                   </div>
                   {stripeOnlineEnabled ? (
-                    <div className="flex items-center gap-2">
-                      <Checkbox
+                    <div className="flex items-center justify-between gap-4">
+                      <Label htmlFor="show-online">{INVOICE_SETTINGS_COPY.onlinePayments}</Label>
+                      <Switch
                         id="show-online"
                         checked={formData.showOnlinePayment}
                         onCheckedChange={(v) =>
-                          setFormData((p) => ({ ...p, showOnlinePayment: v === true }))
+                          setFormData((p) => ({ ...p, showOnlinePayment: v }))
                         }
                       />
-                      <Label htmlFor="show-online" className="font-normal">
-                        Pay online (card / bank)
-                      </Label>
                     </div>
                   ) : null}
                   {(formData.showBank && hasBankProvision) ||
                   (formData.showStablecoin && hasStableProvision) ||
                   (stripeOnlineEnabled && formData.showOnlinePayment) ? (
-                    <div className="space-y-2">
-                      <Label>Default tab</Label>
-                      <select
-                        className="w-full border rounded-md h-9 px-2 text-sm bg-background"
+                    <div className="flex items-center justify-between gap-4">
+                      <Label htmlFor="payment-default-tab">
+                        {INVOICE_CREATE_SECTION_COPY.defaultPaymentTab}
+                      </Label>
+                      <Select
                         value={formData.paymentDefaultTab}
-                        onChange={(e) =>
+                        onValueChange={(v) =>
                           setFormData((p) => ({
                             ...p,
-                            paymentDefaultTab: e.target.value as "bank" | "stablecoin" | "online",
+                            paymentDefaultTab: v as "bank" | "stablecoin" | "online",
                           }))
                         }
                       >
-                        {stripeOnlineEnabled && formData.showOnlinePayment ? (
-                          <option value="online">Pay online</option>
-                        ) : null}
-                        {formData.showBank && hasBankProvision ? (
-                          <option value="bank">Bank transfer</option>
-                        ) : null}
-                        {formData.showStablecoin && hasStableProvision ? (
-                          <option value="stablecoin">Stablecoin</option>
-                        ) : null}
-                      </select>
+                        <SelectTrigger id="payment-default-tab" className="w-[10.5rem]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          {stripeOnlineEnabled && formData.showOnlinePayment ? (
+                            <SelectItem value="online">
+                              {INVOICE_SETTINGS_COPY.onlinePayments}
+                            </SelectItem>
+                          ) : null}
+                          {formData.showBank && hasBankProvision ? (
+                            <SelectItem value="bank">
+                              {INVOICE_SETTINGS_COPY.bankTransfer}
+                            </SelectItem>
+                          ) : null}
+                          {formData.showStablecoin && hasStableProvision ? (
+                            <SelectItem value="stablecoin">
+                              {INVOICE_SETTINGS_COPY.stablecoin}
+                            </SelectItem>
+                          ) : null}
+                        </SelectContent>
+                      </Select>
                     </div>
                   ) : null}
-                  {payInLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  ) : (
-                    <InvoicePaymentOptions
-                      invoice={draftPreviewInvoice}
-                      bankAccount={previewPayIn.bankAccount}
-                      stablecoinAccount={previewPayIn.stablecoinAccount}
-                      embedded
-                      audience="business"
-                      businessDisplayName={issuer.name}
-                      defaultTab={formData.paymentDefaultTab}
-                      showOnlinePayment={previewDisplay.showOnlinePayment}
-                      publicInvoiceEasetag={orgEasetag}
-                    />
-                  )}
                 </>
               )}
             </CardContent>
