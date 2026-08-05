@@ -8,7 +8,8 @@ import {
 } from "@react-pdf/renderer"
 import type { Invoice } from "@/lib/b2b/types"
 import type { Transaction } from "@/lib/finance-types"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency } from "@/lib/utils"
+import { formatTransactionWhen } from "@easner/shared"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import {
   formatPaymentMethodText,
@@ -234,24 +235,10 @@ export function InvoiceReceiptPDFDocument({
     : formatCurrency(invoice.total, invoice.currency)
 
   const heroDateStr =
-    record?.method === "easner" && record.date ?
-      formatDate(record.date, {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      })
-    : record?.paidAt ?
-      formatDate(record.paidAt, {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      })
-    : invoice.paymentInfo ?
-      formatDate(invoice.paymentInfo.paidAt, {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      })
+    record?.paidAt ?
+      formatTransactionWhen(record.paidAt)
+    : invoice.paymentInfo?.paidAt ?
+      formatTransactionWhen(invoice.paymentInfo.paidAt)
     : "-"
 
   const rows: ReceiptRow[] = [
@@ -317,29 +304,6 @@ export function InvoiceReceiptPDFDocument({
       },
       ...(stripe?.customerEmail
         ? [{ label: "Email", value: stripe.customerEmail }]
-        : []),
-      ...(stripe
-        ? [
-            {
-              label: "Amount paid",
-              value: formatCurrency((stripe.grossCents ?? 0) / 100, invoice.currency),
-            },
-            ...(stripe.feeCents > 0
-              ? [
-                  {
-                    label: "Processing fee",
-                    value: formatCurrency(stripe.feeCents / 100, invoice.currency),
-                  },
-                ]
-              : []),
-            {
-              label: "Net to merchant",
-              value: formatCurrency((stripe.netCents ?? 0) / 100, invoice.currency),
-            },
-          ]
-        : []),
-      ...(invoice.paymentInfo.transactionId
-        ? [{ label: "Transaction ID", value: invoice.paymentInfo.transactionId }]
         : []),
     ]
   }
