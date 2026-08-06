@@ -126,6 +126,15 @@ export interface SecurityAlertEmailData {
   audience?: EmailAudience
 }
 
+/** easner.com “Get the app” popup — download link email to a non-account visitor. */
+export interface AppDownloadLinkEmailData {
+  email: string
+  appStoreUrl?: string
+  playStoreUrl?: string
+  downloadPageUrl?: string
+  appWebUrl?: string
+}
+
 /** @deprecated Legacy remittance shape — use TransactionEmailData from ledger descriptor */
 export interface LegacyTransactionEmailData {
   transactionId: string

@@ -32,6 +32,10 @@ Welcome, KYB/KYC, team invite, security, and invoice emails are always subject t
 | `SENDGRID_REPLY_TO` | Recommended | Reply-to / support routing |
 | `LEDGER_TRANSACTION_EMAIL_ENABLED` | Optional | Default **on**. Set `false` to disable ledger transaction emails platform-wide |
 | `NEXT_PUBLIC_MOBILE_APP_URL` | Optional | Personal email / universal-link origin (default `https://app.easner.com`) |
+| `EASNER_APP_STORE_URL` | Optional | iOS App Store listing for download emails / marketing |
+| `EASNER_PLAY_STORE_URL` | Optional | Google Play listing for download emails / marketing |
+| `EASNER_DOWNLOAD_PAGE_URL` | Optional | QR + smart redirect page (default `https://www.easner.com/download`) |
+| `MARKETING_APP_DOWNLOAD_EMAIL_ENABLED` | Optional | Default **on** when `SENDGRID_API_KEY` is set. Set `false` to disable easner.com popup sends |
 
 Before deploy, run:
 
@@ -90,6 +94,7 @@ Flow: owner invites via **Settings → Team** → `POST /api/settings/team` upse
 | `POST /api/auth/bootstrap` | **business** | Welcome email for new org owners; **team invite claim** when `membershipId` is sent. |
 | `GET /api/auth/invite-preview` | **business** | Pending invite preview for `/auth/join`. |
 | `POST /api/settings/team` | **business** | Team invitation emails on invite POST (`/auth/join/{membershipId}` link). |
+| `POST /api/marketing/app-download-link` | **business** | easner.com “Get the app” popup — sends **`appDownloadLink`** to visitor email (public, CORS for `easner.com`). |
 
 Mobile sets `EXPO_PUBLIC_API_URL` to the business app origin and must send `Authorization: Bearer` for user-triggered notification calls.
 
@@ -104,6 +109,31 @@ Personal SendGrid templates use **`https://app.easner.com/user/*`** universal li
 | Email preferences footer | `https://app.easner.com/user/notifications` |
 
 Override origin with `NEXT_PUBLIC_MOBILE_APP_URL` in the business app env. Mobile handles these paths in `pendingDeepLinkNavigation.ts` (native) and `linking.ts` (web).
+
+## Marketing app download email (easner.com)
+
+Template key: **`appDownloadLink`** (`packages/server/lib/email-templates.ts`).
+
+| Field | Value |
+|-------|--------|
+| **Trigger** | `POST /api/marketing/app-download-link` with `{ "email": "visitor@example.com" }` |
+| **From** | `SENDGRID_FROM_EMAIL` / **Easner** (`noreply@easner.com`) |
+| **Subject** | Your Easner app download link |
+| **CTAs** | App Store + Google Play pill buttons; fallback `app.easner.com` |
+| **Rate limit** | 10 requests/hour per IP, 3/hour per email |
+| **CORS** | `https://www.easner.com`, `https://easner.com` (via `business/lib/cors.ts`) |
+
+Website integration example:
+
+```ts
+await fetch("https://api.easner.com/api/marketing/app-download-link", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email }),
+})
+```
+
+Preview: `npx tsx packages/server/scripts/send-all-email-previews.ts --template appDownloadLink --to you@example.com`
 
 ## Business email branding
 

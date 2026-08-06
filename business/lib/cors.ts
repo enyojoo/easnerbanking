@@ -21,6 +21,9 @@ function parseAllowedOrigins(): Set<string> {
     /** Expo web consumer app (browser calls api.easner.com with Bearer + Noah scope header). */
     "https://app.easner.com",
     "https://easner-web.vercel.app",
+    /** Marketing site — app download popup email capture. */
+    "https://www.easner.com",
+    "https://easner.com",
   ]
   return new Set([...defaults, ...fromEnv])
 }

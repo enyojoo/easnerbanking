@@ -7,7 +7,12 @@ import type {
   TransactionEmailData,
   VerificationEmailData,
   WelcomeEmailData,
+  AppDownloadLinkEmailData,
 } from "./email-types"
+
+export const appDownloadLinkFixture: AppDownloadLinkEmailData = {
+  email: "visitor@example.com",
+}
 
 export const txSettledFixture: TransactionEmailData = {
   transactionId: "tx-uuid-1",
@@ -150,6 +155,7 @@ export const payrollFundingNeededFixture: PayrollFundingNeededEmailData = {
 
 /** Template key → fixture data for render tests */
 export const templateFixtures: Record<string, unknown> = {
+  appDownloadLink: appDownloadLinkFixture,
   welcomeBusiness: welcomeBusinessFixture,
   welcomePersonal: welcomePersonalFixture,
   transactionSettled: txSettledFixture,
@@ -184,6 +190,7 @@ export const templateFixtures: Record<string, unknown> = {
 
 /** Default audience per template (both tested where applicable). */
 export const templateDefaultAudience: Record<string, "business" | "personal"> = {
+  appDownloadLink: "personal",
   welcomeBusiness: "business",
   welcomePersonal: "personal",
   kybSubmitted: "business",

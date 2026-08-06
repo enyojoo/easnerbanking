@@ -50,6 +50,11 @@
       "import": "./src/mobile-personal-links.ts",
       "require": "./src/mobile-personal-links.ts"
     },
+    "./mobile-app-store-urls": {
+      "types": "./src/mobile-app-store-urls.ts",
+      "import": "./src/mobile-app-store-urls.ts",
+      "require": "./src/mobile-app-store-urls.ts"
+    },
     "./warm-flags": {
       "types": "./src/flags/warm-flags.native.ts",
       "import": "./src/flags/warm-flags.native.ts",

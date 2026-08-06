@@ -1,6 +1,7 @@
 // Email templates – design-system aligned, Business vs Personal variants
 
 import { personalMobileTransactionUrl } from "@easner/shared/mobile-personal-links"
+import { resolveMobileAppStoreUrls } from "@easner/shared/mobile-app-store-urls"
 import { formatTransactionWhen } from "@easner/shared"
 import {
   easnerUserGreetingParagraphHtml,
@@ -25,6 +26,7 @@ import type {
   OnlinePaymentsEmailData,
   VerificationEmailData,
   WelcomeEmailData,
+  AppDownloadLinkEmailData,
 } from "./email-types"
 
 const WELCOME_PERSONAL_PREHEADER =
@@ -167,7 +169,76 @@ function transactionReversedTemplate(): EmailTemplate {
   }
 }
 
+const APP_DOWNLOAD_PREHEADER = "Install Easner Banking on your iPhone or Android device"
+
+function appDownloadStoreButtonsHtml(appStoreUrl: string, playStoreUrl: string): string {
+  return `
+        <div class="cta-wrap">
+          <a href="${appStoreUrl}" class="cta-button">Download on the App Store</a>
+        </div>
+        <div class="cta-wrap">
+          <a href="${playStoreUrl}" class="cta-button">Get it on Google Play</a>
+        </div>
+  `.trim()
+}
+
 export const emailTemplates: Record<string, EmailTemplate> = {
+  appDownloadLink: {
+    subject: "Your Easner app download link",
+    preheader: APP_DOWNLOAD_PREHEADER,
+    html: (data: AppDownloadLinkEmailData) => {
+      const urls = resolveMobileAppStoreUrls({
+        downloadPage: data.downloadPageUrl,
+        appStore: data.appStoreUrl,
+        playStore: data.playStoreUrl,
+        appWeb: data.appWebUrl,
+      })
+      const content = `
+        <p class="confirmation-text">
+          You asked for a download link to the Easner app. Install Easner Banking on your phone to send, receive, and track money with the simplicity of traditional banking.
+        </p>
+        ${appDownloadStoreButtonsHtml(urls.appStore, urls.playStore)}
+        <p class="confirmation-text" style="text-align: center; color: #6F756F; font-size: 14px; margin-top: 8px;">
+          — or open in your mobile browser —<br>
+          <a href="${urls.appWeb}" style="color: #007ACC; text-decoration: none; font-weight: 600;">${urls.appWeb.replace(/^https:\/\//, "")}</a>
+        </p>
+        <p class="confirmation-text" style="font-size: 13px; color: #6F756F;">
+          If you did not request this email, you can safely ignore it.
+        </p>
+      `
+      return generateBaseEmailTemplate(
+        "Get the Easner app",
+        "Install Easner Banking on your phone",
+        content,
+        undefined,
+        {
+          audience: "personal",
+          preheader: APP_DOWNLOAD_PREHEADER,
+          showPreferencesLink: false,
+          recipientHasEasnerAccount: false,
+        },
+      )
+    },
+    text: (data: AppDownloadLinkEmailData) => {
+      const urls = resolveMobileAppStoreUrls({
+        downloadPage: data.downloadPageUrl,
+        appStore: data.appStoreUrl,
+        playStore: data.playStoreUrl,
+        appWeb: data.appWebUrl,
+      })
+      return `Get the Easner app
+
+You asked for a download link to the Easner app.
+
+App Store: ${urls.appStore}
+Google Play: ${urls.playStore}
+
+Or open in your mobile browser: ${urls.appWeb}
+
+If you did not request this email, you can safely ignore it.`
+    },
+  },
+
   welcomeBusiness: {
     subject: "Welcome to Easner Business Banking",
     preheader: WELCOME_BUSINESS_PREHEADER,

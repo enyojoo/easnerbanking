@@ -41,6 +41,7 @@ const TEMPLATE_PREFERENCE: Record<string, EmailPreferenceCategory> = {
   mfaDisabled: "security_alerts",
   newDeviceLogin: "security_alerts",
   adminTransactionNotification: "internal",
+  appDownloadLink: "marketing",
 }
 
 export function emailTemplatePreferenceCategory(templateKey: string): EmailPreferenceCategory {

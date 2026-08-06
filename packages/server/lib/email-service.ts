@@ -9,6 +9,7 @@ import {
   type EmailAudience,
 } from "./email-audience"
 import type {
+  AppDownloadLinkEmailData,
   EmailData,
   EmailServiceConfig,
   SendGridResponse,
@@ -155,6 +156,20 @@ export class EmailService {
       audience,
     })
   }
+
+  async sendAppDownloadLinkEmail(
+    data: AppDownloadLinkEmailData,
+  ): Promise<SendGridResponse> {
+    return this.sendEmail(
+      {
+        to: data.email,
+        template: "appDownloadLink",
+        data,
+        audience: "personal",
+      },
+      undefined,
+    )
+  }
 }
 
 export const emailService = new EmailService()
@@ -163,4 +178,5 @@ export const {
   sendWelcomeEmail,
   sendTransactionSettledEmail,
   sendTestEmail,
+  sendAppDownloadLinkEmail,
 } = emailService

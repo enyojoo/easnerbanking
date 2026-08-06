@@ -45,6 +45,7 @@ export {
 } from "./mobile-personal-links"
 export type { MobileDeepLinkHost } from "./constants/urls"
 export { buildAppleAppSiteAssociation, buildAssetLinks } from "./mobile-app-links"
+export { resolveMobileAppStoreUrls, type MobileAppStoreUrls } from "./mobile-app-store-urls"
 export { cn } from "./utils/cn"
 export {
   getCurrencySymbol,
