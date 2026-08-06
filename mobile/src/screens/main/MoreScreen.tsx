@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native'
+import Constants from 'expo-constants'
 import { haptics } from '../../lib/haptics'
 import type { LucideIcon } from 'lucide-react-native'
 import {
@@ -694,9 +695,11 @@ function MoreContent({ navigation }: NavigationProps) {
               </Pressable>
             </View>
 
-            {/* App Version */}
+            {/* App Version — tracks expo.version in app.json */}
             <View style={styles.versionContainer}>
-              <Text style={styles.versionText}>Easner · v1.0.0</Text>
+              <Text style={styles.versionText}>
+                Easner · v{Constants.expoConfig?.version ?? '—'}
+              </Text>
             </View>
           </View>
         </ScrollView>
