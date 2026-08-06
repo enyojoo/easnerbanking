@@ -69,13 +69,9 @@ describe("app-download-link marketing", () => {
     })
     expect(result).toEqual({ ok: true, sent: true })
     expect(enforcePayrollRateLimit).toHaveBeenCalledTimes(2)
-    expect(emailService.sendAppDownloadLinkEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        email: "visitor@example.com",
-        appStoreUrl: expect.stringContaining("/download"),
-        playStoreUrl: expect.stringContaining("/download"),
-        appWebUrl: "https://app.easner.com",
-      }),
-    )
+    expect(emailService.sendAppDownloadLinkEmail).toHaveBeenCalledWith({
+      email: "visitor@example.com",
+      downloadPageUrl: "https://www.easner.com/app",
+    })
   })
 })

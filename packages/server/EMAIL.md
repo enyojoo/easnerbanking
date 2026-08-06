@@ -34,7 +34,7 @@ Welcome, KYB/KYC, team invite, security, and invoice emails are always subject t
 | `NEXT_PUBLIC_MOBILE_APP_URL` | Optional | Personal email / universal-link origin (default `https://app.easner.com`) |
 | `EASNER_APP_STORE_URL` | Optional | iOS App Store listing for download emails / marketing |
 | `EASNER_PLAY_STORE_URL` | Optional | Google Play listing for download emails / marketing |
-| `EASNER_DOWNLOAD_PAGE_URL` | Optional | QR + smart redirect page (default `https://www.easner.com/download`) |
+| `EASNER_DOWNLOAD_PAGE_URL` | Optional | QR + smart redirect page (default **`https://www.easner.com/app`**) |
 | `MARKETING_APP_DOWNLOAD_EMAIL_ENABLED` | Optional | Default **on** when `SENDGRID_API_KEY` is set. Set `false` to disable easner.com popup sends |
 
 Before deploy, run:
@@ -119,7 +119,7 @@ Template key: **`appDownloadLink`** (`packages/server/lib/email-templates.ts`).
 | **Trigger** | `POST /api/marketing/app-download-link` with `{ "email": "visitor@example.com" }` |
 | **From** | `SENDGRID_FROM_EMAIL` / **Easner** (`noreply@easner.com`) |
 | **Subject** | Your Easner app download link |
-| **CTAs** | App Store + Google Play pill buttons; fallback `app.easner.com` |
+| **CTAs** | Single **Get the app** button → `EASNER_DOWNLOAD_PAGE_URL` (`www.easner.com/app`; smart redirect on the website) |
 | **Rate limit** | 10 requests/hour per IP, 3/hour per email |
 | **CORS** | `https://www.easner.com`, `https://easner.com` (via `business/lib/cors.ts`) |
 

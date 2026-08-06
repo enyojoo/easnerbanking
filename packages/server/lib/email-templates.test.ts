@@ -138,13 +138,16 @@ describe("emailTemplates", () => {
     ).toBe("Your Easner KYC verification update")
   })
 
-  it("appDownloadLink includes store CTAs and app web fallback", () => {
+  it("appDownloadLink includes single download CTA", () => {
     const html = emailTemplates.appDownloadLink.html(templateFixtures.appDownloadLink, "personal")
     expect(html).toContain("Get the Easner app")
     expect(html).toContain("Install Easner Banking on your phone")
-    expect(html).toContain("Download on the App Store")
-    expect(html).toContain("Get it on Google Play")
-    expect(html).toContain("app.easner.com")
+    expect(html).toContain("https://www.easner.com/app")
+    expect(html).not.toContain("Download on the App Store")
+    expect(html).not.toContain("Get it on Google Play")
+    expect(html).not.toContain("open in your mobile browser")
+    expect(html).not.toContain("easner.com/download")
+    expect(html).not.toContain("link.easner.com")
     expect(html).toContain("You received this email because you're creating an Easner account.")
   })
 

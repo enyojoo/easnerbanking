@@ -24,7 +24,7 @@ export function resolveMobileAppStoreUrls(overrides?: {
   const downloadPage =
     overrides?.downloadPage?.trim() ||
     process.env.EASNER_DOWNLOAD_PAGE_URL?.trim() ||
-    `${APP_URLS.website.replace(/\/$/, "")}/download`
+    APP_URLS.appDownload
 
   const appStore =
     overrides?.appStore?.trim() ||

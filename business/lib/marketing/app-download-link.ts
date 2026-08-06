@@ -86,9 +86,6 @@ export async function requestAppDownloadLinkEmail(input: {
   const result = await emailService.sendAppDownloadLinkEmail({
     email,
     downloadPageUrl: urls.downloadPage,
-    appStoreUrl: urls.appStore,
-    playStoreUrl: urls.playStore,
-    appWebUrl: urls.appWeb,
   })
 
   if (!result.success && !result.skipped) {
