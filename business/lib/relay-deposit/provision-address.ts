@@ -5,18 +5,26 @@ import { parseRelayFeesV3 } from "@/lib/relay/requests-v3"
 import { relayGetRequestV3 } from "@/lib/relay/client"
 import { requireRelayTronPlatformAddress } from "@/lib/relay/config"
 import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/relay/token-map"
+import { relayDepositRecipientFromVault } from "./recipient"
+import { ensureWalletAccountSplAta } from "./ensure-wallet-ata"
 
 const ROUTE = "tron_usdt_to_sol_usdc"
 
 export async function provisionRelayDepositAddress(
   admin: SupabaseClient,
-  input: { walletOwnerId: string; recipientVaultAta: string },
+  input: { walletOwnerId: string; recipientVaultAddress: string },
 ): Promise<{ tronAddress: string; relayRequestId?: string }> {
   const walletOwnerId = String(input.walletOwnerId || "").trim()
-  const recipientVaultAta = String(input.recipientVaultAta || "").trim()
-  if (!walletOwnerId || !recipientVaultAta) {
+  const recipientVaultAddress = relayDepositRecipientFromVault(input.recipientVaultAddress)
+  if (!walletOwnerId || !recipientVaultAddress) {
     throw new Error("relay_deposit_provision_invalid_input")
   }
+
+  await ensureWalletAccountSplAta(admin, {
+    walletOwnerId,
+    vaultAddress: recipientVaultAddress,
+    asset: "USDC",
+  })
 
   const source = resolveWalletSendToken("USDT", "Tron")
   const dest = sourceSolVaultToken("USD")
@@ -24,10 +32,11 @@ export async function provisionRelayDepositAddress(
 
   const tronPlatform = requireRelayTronPlatformAddress()
 
-  // Origin is Tron: Relay validates `user` on Tron. Customer receives USDC on Solana vault (`recipient`).
+  // Origin is Tron: Relay validates `user` on Tron. Customer receives USDC on the vault
+  // pubkey so Relay funds the canonical SPL ATA (owner = vault), same as Noah/Grid.
   const quote = await relayQuote({
     user: tronPlatform,
-    recipient: recipientVaultAta,
+    recipient: recipientVaultAddress,
     source,
     dest,
     amountRaw: "1000000",
@@ -56,7 +65,7 @@ export async function provisionRelayDepositAddress(
       wallet_owner_id: walletOwnerId,
       route: ROUTE,
       tron_address: tronAddress,
-      recipient_vault_ata: recipientVaultAta,
+      recipient_vault_ata: recipientVaultAddress,
       relay_request_id: relayRequestId ?? null,
       estimated_fee_bps: estimatedFeeBps,
       status: "active",

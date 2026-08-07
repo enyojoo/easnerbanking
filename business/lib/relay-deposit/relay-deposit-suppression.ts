@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isRelayTronInboundEnabled } from "@/lib/relay/config"
 import { relayDepositLedgerCreditExists } from "./settle-relay-deposit"
+import { findActiveRelayDepositAddress } from "./recipient"
 
 export type RelayDepositSuppression = {
   relayDepositId?: string
@@ -88,12 +89,7 @@ export async function findRelayDepositChainSettlementForSuppression(
   const chain = String(input.chain || "").toLowerCase()
 
   if (ata && asset === "USDC" && chain.includes("sol")) {
-    const { data: addrRow } = await admin
-      .from("relay_deposit_addresses")
-      .select("wallet_owner_id, tron_address, recipient_vault_ata")
-      .eq("recipient_vault_ata", ata)
-      .eq("status", "active")
-      .maybeSingle()
+    const addrRow = await findActiveRelayDepositAddress(admin, { solanaAddress: ata })
 
     if (
       addrRow?.wallet_owner_id &&

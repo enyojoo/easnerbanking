@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isRelayTronInboundEnabled } from "@/lib/relay/config"
 import { provisionRelayDepositAddress } from "./provision-address"
+import { relayDepositRecipientFromVault } from "./recipient"
 
 const MAX_ATTEMPTS = 5
 const BACKOFF_MS = 5000
@@ -8,22 +9,25 @@ const ROUTE = "tron_usdt_to_sol_usdc"
 
 export async function enqueueRelayDepositProvisionJob(
   admin: SupabaseClient,
-  input: { walletOwnerId: string; recipientVaultAta: string },
+  input: { walletOwnerId: string; recipientVaultAddress: string },
 ): Promise<void> {
   if (!isRelayTronInboundEnabled()) return
 
   const walletOwnerId = String(input.walletOwnerId || "").trim()
-  const recipientVaultAta = String(input.recipientVaultAta || "").trim()
-  if (!walletOwnerId || !recipientVaultAta) return
+  const recipientVaultAddress = relayDepositRecipientFromVault(input.recipientVaultAddress)
+  if (!walletOwnerId || !recipientVaultAddress) return
 
   const { data: existing } = await admin
     .from("relay_deposit_addresses")
-    .select("id, status")
+    .select("id, status, recipient_vault_ata")
     .eq("wallet_owner_id", walletOwnerId)
     .eq("route", ROUTE)
     .maybeSingle()
 
-  if (existing?.status === "active") return
+  if (existing?.status === "active") {
+    const stored = String(existing.recipient_vault_ata ?? "").trim()
+    if (stored === recipientVaultAddress) return
+  }
 
   const { data: pendingJob } = await admin
     .from("relay_deposit_provision_jobs")
@@ -37,7 +41,7 @@ export async function enqueueRelayDepositProvisionJob(
 
   await admin.from("relay_deposit_provision_jobs").insert({
     wallet_owner_id: walletOwnerId,
-    recipient_vault_ata: recipientVaultAta,
+    recipient_vault_ata: recipientVaultAddress,
     route: ROUTE,
     state: "pending",
     attempt_count: 0,
@@ -65,7 +69,7 @@ export async function processRelayDepositProvisionJobs(
     try {
       await provisionRelayDepositAddress(admin, {
         walletOwnerId: String(job.wallet_owner_id),
-        recipientVaultAta: String(job.recipient_vault_ata),
+        recipientVaultAddress: String(job.recipient_vault_ata),
       })
       await admin
         .from("relay_deposit_provision_jobs")

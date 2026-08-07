@@ -216,7 +216,7 @@ export async function processNextWalletProvisioningJob(opts?: {
       try {
         await enqueueRelayDepositProvisionJob(admin, {
           walletOwnerId: owner.id,
-          recipientVaultAta: associatedTokenAccountAddress,
+          recipientVaultAddress: address,
         })
       } catch (e) {
         console.warn("[turnkey-provisioning] relay deposit provision enqueue:", e)

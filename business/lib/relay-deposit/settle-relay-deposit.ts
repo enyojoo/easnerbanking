@@ -18,6 +18,7 @@ import {
 } from "@/lib/relay/requests-v3"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
+import { findActiveRelayDepositAddress } from "./recipient"
 
 export type RelayDepositRow = {
   id: string
@@ -109,16 +110,25 @@ async function resolveOwnerScope(
 ): Promise<{ userId: string; businessId: string | null } | null> {
   const { data: owner } = await admin
     .from("wallet_owners")
-    .select("owner_type, owner_ref, user_id")
+    .select("owner_type, owner_ref")
     .eq("id", walletOwnerId)
     .maybeSingle()
-  if (!owner) return null
+  if (!owner?.owner_ref || !owner?.owner_type) return null
+
   if (owner.owner_type === "business") {
-    return {
-      userId: String(owner.user_id ?? owner.owner_ref),
-      businessId: String(owner.owner_ref),
-    }
+    const businessId = String(owner.owner_ref)
+    const { data: orgOwner } = await admin
+      .from("users")
+      .select("id")
+      .eq("easner_business_id", businessId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    const userId = orgOwner?.id ? String(orgOwner.id) : null
+    if (!userId) return null
+    return { userId, businessId }
   }
+
   return { userId: String(owner.owner_ref), businessId: null }
 }
 
@@ -331,13 +341,9 @@ export async function reconcileRelayDepositCreditForSolanaTx(
   deposit = (byHash as RelayDepositRow | null) ?? null
 
   if (!deposit?.id && input.recipientVaultAta) {
-    const ata = String(input.recipientVaultAta).trim()
-    const { data: addrRow } = await admin
-      .from("relay_deposit_addresses")
-      .select("wallet_owner_id, tron_address, recipient_vault_ata")
-      .eq("recipient_vault_ata", ata)
-      .eq("status", "active")
-      .maybeSingle()
+    const addrRow = await findActiveRelayDepositAddress(admin, {
+      solanaAddress: input.recipientVaultAta,
+    })
 
     if (addrRow?.tron_address) {
       const scope = await resolveOwnerScope(admin, String(addrRow.wallet_owner_id))
@@ -466,8 +472,14 @@ export async function syncRelayDepositFromRequestId(
 
   const credit = await tryCreditRelayTronDeposit(admin, upserted.row.id)
   if (credit.credited) return { ok: true, action: "credited" }
-  if (credit.reason === "missing_turnkey_tx_hash" || credit.reason === "already_credited") {
-    return { ok: true, action: credit.reason === "already_credited" ? "already_credited" : "awaiting_turnkey" }
+  if (credit.reason === "already_credited") {
+    return { ok: true, action: "already_credited" }
+  }
+  if (mapped === "settled" && upserted.row.turnkey_tx_hash) {
+    return { ok: true, action: credit.reason ?? "awaiting_credit" }
+  }
+  if (credit.reason === "missing_turnkey_tx_hash") {
+    return { ok: true, action: "awaiting_turnkey" }
   }
   return { ok: true, action: credit.reason ?? "awaiting_turnkey" }
 }
@@ -519,12 +531,8 @@ export async function reconcileRelayDepositsForOwner(
     }
 
     if (row.turnkey_tx_hash) {
-      const rec = await reconcileRelayDepositCreditForSolanaTx(admin, {
-        solanaTxHash: String(row.turnkey_tx_hash),
-        userId: opts.userId,
-        businessId: opts.businessId,
-      })
-      if (rec.credited) credited += 1
+      const tryCredit = await tryCreditRelayTronDeposit(admin, String(row.id))
+      if (tryCredit.credited) credited += 1
       continue
     }
 
@@ -559,6 +567,9 @@ export async function reconcilePendingRelayDeposits(
     })
     if (sync.ok && sync.action !== "ignored_non_terminal") synced += 1
     if (sync.ok && sync.action === "credited") credited += 1
+
+    const tryCredit = await tryCreditRelayTronDeposit(admin, String(row.id))
+    if (tryCredit.credited) credited += 1
 
     if (row.turnkey_tx_hash) {
       const scopeOwner = await admin

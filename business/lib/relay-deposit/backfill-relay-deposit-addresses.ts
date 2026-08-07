@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
 import { isRelayTronInboundEnabled, requireRelayTronPlatformAddress } from "@/lib/relay/config"
 import { enqueueRelayDepositProvisionJob, processRelayDepositProvisionJobs } from "./provision-jobs"
+import { relayDepositRecipientFromVault } from "./recipient"
 
 const ROUTE = "tron_usdt_to_sol_usdc"
 
@@ -93,24 +94,32 @@ export async function backfillRelayDepositAddresses(
     result.candidates += 1
 
     if (activeOwnerIds.has(walletOwnerId)) {
-      result.alreadyActive += 1
-      continue
+      const { data: existingRow } = await admin
+        .from("relay_deposit_addresses")
+        .select("recipient_vault_ata")
+        .eq("wallet_owner_id", walletOwnerId)
+        .eq("route", ROUTE)
+        .eq("status", "active")
+        .maybeSingle()
+      const stored = String(existingRow?.recipient_vault_ata ?? "").trim()
+      const expectedVault = relayDepositRecipientFromVault(vaultAddress)
+      const derivedAta = deriveStablecoinAssociatedTokenAddress(vaultAddress, "USDC") || ""
+      if (stored === expectedVault) {
+        result.alreadyActive += 1
+        continue
+      }
+      if (stored === derivedAta) {
+        // Legacy row provisioned with SPL ATA as Relay recipient — re-provision with vault.
+      } else {
+        result.alreadyActive += 1
+        continue
+      }
     }
 
     const vaultAddress = String(vault.address ?? "").trim()
-    let ata = String(vault.associated_token_account_address ?? "").trim()
-    if (!ata && vaultAddress) {
-      ata = deriveStablecoinAssociatedTokenAddress(vaultAddress, "USDC") || ""
-      if (ata && !dryRun) {
-        await admin
-          .from("wallet_accounts")
-          .update({ associated_token_account_address: ata, updated_at: new Date().toISOString() })
-          .eq("id", vault.id)
-      }
-    }
-    if (!ata) {
+    if (!vaultAddress) {
       result.missingAta += 1
-      result.failures.push({ walletOwnerId, reason: "missing_usdc_ata" })
+      result.failures.push({ walletOwnerId, reason: "missing_vault_address" })
       continue
     }
 
@@ -122,7 +131,7 @@ export async function backfillRelayDepositAddresses(
     try {
       await enqueueRelayDepositProvisionJob(admin, {
         walletOwnerId,
-        recipientVaultAta: ata,
+        recipientVaultAddress: vaultAddress,
       })
       result.enqueued += 1
     } catch (e) {
