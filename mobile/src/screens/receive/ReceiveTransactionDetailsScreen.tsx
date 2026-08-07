@@ -19,6 +19,7 @@ import { PlainTwoColumnRowSkeleton } from '../../components/skeletons'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { formatMoneyDisplay } from '@easner/shared'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
+import { haptics } from '../../lib/haptics'
 
 interface ReceiveTransaction {
   id: string
@@ -335,7 +336,12 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
       <ScreenWrapper>
         <View style={styles.centerContainer}>
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable android_ripple={ripple.neutral} style={styles.backButton} onPress={loadTransaction}>
+          <Pressable
+            android_ripple={ripple.neutral}
+            style={styles.backButton}
+            onPressIn={() => haptics.tap()}
+            onPress={loadTransaction}
+          >
             <Text style={styles.backButtonText}>Try again</Text>
           </Pressable>
         </View>
@@ -348,7 +354,12 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
       <ScreenWrapper>
         <View style={styles.centerContainer}>
           <Text style={styles.errorText}>Transaction unavailable</Text>
-          <Pressable android_ripple={ripple.neutral} style={styles.backButton} onPress={loadTransaction}>
+          <Pressable
+            android_ripple={ripple.neutral}
+            style={styles.backButton}
+            onPressIn={() => haptics.tap()}
+            onPress={loadTransaction}
+          >
             <Text style={styles.backButtonText}>Try again</Text>
           </Pressable>
         </View>
@@ -475,6 +486,7 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
           <Pressable 
            android_ripple={ripple.neutral} 
             style={[styles.bottomButton, styles.secondaryButton]} 
+            onPressIn={() => haptics.tap()}
             onPress={() => navigation.navigate('MainTabs', { screen: 'Dashboard' })}
           >
             <Text style={styles.secondaryButtonText}>Dashboard</Text>
@@ -482,6 +494,7 @@ function ReceiveTransactionDetailsContent({ navigation, route }: NavigationProps
           <Pressable 
            android_ripple={ripple.neutral} 
             style={[styles.bottomButton, styles.primaryButton]} 
+            onPressIn={() => haptics.medium()}
             onPress={() => navigation.navigate('ReceiveMoney')}
           >
             <Text style={styles.primaryButtonText}>Add money</Text>

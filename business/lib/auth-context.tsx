@@ -16,6 +16,19 @@ import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
 import { clearBrowserQueryClient } from "@/lib/query/query-client"
 import { clearAllBusinessBrowserState } from "@/lib/query/web-persist"
 import { clearPendingTeamInvite, getPendingTeamInvite } from "@/lib/team-invite-storage"
+import {
+  isAppleWebSignInCanceled,
+  signInWithAppleWeb,
+} from "@/lib/auth/apple-sign-in-web"
+import {
+  applePrivateRelayFromIdToken,
+  signupEmailBlockMessageForCode,
+  SIGNUP_EMAIL_BLOCK_MESSAGES,
+} from "@easner/shared"
+import {
+  isSignupEmailBlockCode,
+  stashSignupBlockedMessage,
+} from "@/lib/auth/signup-blocked-message"
 
 function parseAuthFragment(hash: string): Record<string, string> {
   const raw = hash.replace(/^#/, "")
@@ -33,6 +46,7 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string) => Promise<{ needsEmailConfirmation: boolean }>
   verifySignupOtp: (email: string, otp: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
+  signInWithApple: () => Promise<void>
   logout: () => Promise<void>
   /** Reset idle timer (after PIN unlock, etc.). */
   resetSessionActivity: () => void
@@ -255,6 +269,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.warn("ensure-sub-org error:", e)
             }
           }
+        } else if (isSignupEmailBlockCode(bootJson.code)) {
+          const msg =
+            signupEmailBlockMessageForCode(bootJson.code) ||
+            bootJson.error ||
+            "This email can't be used to sign up."
+          stashSignupBlockedMessage(msg)
+          await supabase.auth.signOut()
+          if (typeof window !== "undefined") {
+            window.location.replace("/auth/signup")
+          }
         } else if (hasPendingInvite) {
           console.warn("team invite bootstrap failed:", bootRes.status, bootJson.error ?? bootJson.code)
         }
@@ -341,6 +365,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     analytics.trackSignIn("google")
   }
 
+  const signInWithApple = async () => {
+    try {
+      const { idToken, fullName } = await signInWithAppleWeb()
+      if (applePrivateRelayFromIdToken(idToken)) {
+        throw new Error(SIGNUP_EMAIL_BLOCK_MESSAGES.APPLE_PRIVATE_RELAY_EMAIL)
+      }
+
+      const { error: signInError } = await supabase.auth.signInWithIdToken({
+        provider: "apple",
+        token: idToken,
+      })
+      if (signInError) throw signInError
+
+      if (fullName) {
+        await supabase.auth.updateUser({ data: { name: fullName, full_name: fullName } })
+      }
+
+      analytics.trackSignIn("apple")
+      await ensureBusinessWebSurface(supabase)
+      await ensureBusinessAppSession(true)
+    } catch (error) {
+      if (isAppleWebSignInCanceled(error)) return
+      throw error
+    }
+  }
+
   const logout = async () => {
     const currentUserId = user?.id ?? null
     try {
@@ -364,6 +414,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signup,
     verifySignupOtp,
     signInWithGoogle,
+    signInWithApple,
     logout,
     resetSessionActivity,
     isLoading,
@@ -379,6 +430,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           signup,
           verifySignupOtp,
           signInWithGoogle,
+          signInWithApple,
           logout,
           resetSessionActivity,
           isLoading: true,

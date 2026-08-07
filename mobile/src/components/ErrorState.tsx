@@ -3,6 +3,7 @@ import { View, Text, Pressable, Platform, StyleSheet, ViewStyle } from 'react-na
 import { CircleAlert, RefreshCw } from 'lucide-react-native'
 import { colors, textStyles, spacing, borderRadius, fontFamily } from '../theme'
 import { ripple } from '../lib/androidRipple'
+import { haptics } from '../lib/haptics'
 
 interface ErrorStateProps {
   title?: string
@@ -33,6 +34,7 @@ export default function ErrorState({
             Platform.OS === 'android' && styles.retryButtonClip,
             pressed && Platform.OS === 'ios' && styles.retryPressedIOS,
           ]}
+          onPressIn={() => haptics.tap()}
           onPress={onRetry}
           android_ripple={ripple.primaryTint}
         >

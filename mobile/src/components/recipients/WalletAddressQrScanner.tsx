@@ -6,6 +6,7 @@ import { X } from 'lucide-react-native'
 import { extractWalletAddress } from '../../lib/extract-wallet-address'
 import { colors, spacing, textStyles, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 type WalletAddressQrScannerProps = {
   visible: boolean
@@ -47,6 +48,7 @@ export function WalletAddressQrScannerContent({
       const address = extractWalletAddress(data)
       if (!address) return
       scanHandledRef.current = true
+      haptics.success()
       onScan(address)
       onClose()
     },
@@ -72,16 +74,18 @@ export function WalletAddressQrScannerContent({
         />
         <Pressable
           style={styles.webPasteButton}
+          onPressIn={() => haptics.tap()}
           onPress={() => {
             const address = extractWalletAddress(pasteValue.trim())
             if (!address) return
+            haptics.success()
             onScan(address)
           }}
         >
           <Text style={styles.webPasteButtonText}>Use address</Text>
         </Pressable>
         {showHeader ? (
-          <Pressable style={styles.closeButton} onPress={onClose}>
+          <Pressable style={styles.closeButton} onPressIn={() => haptics.tap()} onPress={onClose}>
             <X size={22} color={colors.text.inverse} strokeWidth={2} />
           </Pressable>
         ) : null}
@@ -106,6 +110,7 @@ export function WalletAddressQrScannerContent({
             <Pressable
               android_ripple={ripple.neutral}
               style={styles.closeButton}
+              onPressIn={() => haptics.tap()}
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Close scanner"

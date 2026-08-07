@@ -7,6 +7,8 @@ import { getPendingTeamInvite, setPendingTeamInvite } from "@/lib/team-invite-st
 export type TeamInvitePreview = {
   businessName: string
   role: string
+  email: string
+  fullName: string | null
 }
 
 /** Resolve pending team invite from legacy `?membership=` query or localStorage (set on `/auth/join/{id}`). */
@@ -33,8 +35,20 @@ export function useTeamInviteContext() {
       try {
         const res = await fetch(`/api/auth/invite-preview?membership=${encodeURIComponent(resolved)}`)
         const json = (await res.json().catch(() => ({}))) as Partial<TeamInvitePreview>
-        if (!cancelled && res.ok && json.businessName && json.role) {
-          setInvitePreview({ businessName: json.businessName, role: json.role })
+        if (
+          !cancelled &&
+          res.ok &&
+          json.businessName &&
+          json.role &&
+          typeof json.email === "string" &&
+          json.email.trim()
+        ) {
+          setInvitePreview({
+            businessName: json.businessName,
+            role: json.role,
+            email: json.email.trim().toLowerCase(),
+            fullName: typeof json.fullName === "string" ? json.fullName.trim() || null : null,
+          })
         } else if (!cancelled) {
           setInvitePreview(null)
         }
@@ -52,5 +66,6 @@ export function useTeamInviteContext() {
     membershipId,
     isTeamInvite: Boolean(membershipId),
     invitePreview,
+    inviteEmail: invitePreview?.email ?? "",
   }
 }

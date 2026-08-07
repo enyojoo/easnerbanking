@@ -250,7 +250,7 @@ export async function getInvitePreviewByMembershipId(
   admin: Admin,
   membershipId: string,
 ): Promise<
-  | { ok: true; businessName: string; role: string; status: "invited" }
+  | { ok: true; businessName: string; role: string; status: "invited"; email: string; fullName: string | null }
   | { ok: false; code: "INVITE_NOT_FOUND"; message: string }
 > {
   const id = membershipId.trim()
@@ -260,11 +260,16 @@ export async function getInvitePreviewByMembershipId(
 
   const { data: row, error } = await admin
     .from("business_memberships")
-    .select("id,role,status,business_id")
+    .select("id,role,status,business_id,email,full_name")
     .eq("id", id)
     .maybeSingle()
 
   if (error || !row || row.status !== "invited") {
+    return { ok: false, code: "INVITE_NOT_FOUND", message: "Invitation not found or already accepted." }
+  }
+
+  const inviteEmail = normalizeInviteEmail(typeof row.email === "string" ? row.email : "")
+  if (!inviteEmail) {
     return { ok: false, code: "INVITE_NOT_FOUND", message: "Invitation not found or already accepted." }
   }
 
@@ -278,11 +283,16 @@ export async function getInvitePreviewByMembershipId(
     String(business?.display_name ?? business?.legal_name ?? business?.name ?? "Easner Business").trim() ||
     "Easner Business"
 
+  const fullName =
+    typeof row.full_name === "string" && row.full_name.trim() ? row.full_name.trim() : null
+
   return {
     ok: true,
     businessName,
     role: displayRoleFromMembership(row.role),
     status: "invited",
+    email: inviteEmail,
+    fullName,
   }
 }
 

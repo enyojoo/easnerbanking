@@ -1,6 +1,7 @@
 import React from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { ArrowRight } from 'lucide-react-native'
+import { haptics } from '../../lib/haptics'
 import { colors, spacing, fontSize, fontFamily, borderRadius } from '../../theme'
 
 export type StablecoinReceiveMethod = {
@@ -24,6 +25,7 @@ export function ReceiveStablecoinMethodList(props: {
         <Pressable
           key={method.id}
           style={[styles.row, method.status !== 'active' && styles.rowDisabled]}
+          onPressIn={() => method.status === 'active' && haptics.tap()}
           onPress={() => props.onSelect(method)}
           disabled={method.status !== 'active'}
         >

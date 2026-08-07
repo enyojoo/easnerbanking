@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { isDisposableEmail } from "@easner/shared"
+import { resolveSignupEmailBlock } from "@easner/shared"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
 
 type Surface = "business_web" | "consumer_mobile"
@@ -15,8 +15,8 @@ type PrecheckBody = {
 /**
  * Pre-sign-up gate (called BEFORE `supabase.auth.signUp`, so it needs no session).
  *
- * Blocks two things early, with clear messaging, instead of failing late after OTP:
- *  1. Disposable / throwaway email domains (anti-bot — see shared blocklist).
+ * Blocks early, with clear messaging, instead of failing late after OTP:
+ *  1. Disposable / throwaway email domains and Apple Hide My Email relay addresses.
  *  2. An email already registered on the *other* product surface (business vs mobile share one
  *     Supabase project; role lives in `public.users`). Same-surface existing accounts are left to the
  *     normal sign-in/OTP flow to avoid widening account-enumeration beyond the cross-surface case.
@@ -52,11 +52,12 @@ export async function POST(request: NextRequest) {
     return respond(200, { ok: true })
   }
 
-  if (isDisposableEmail(email)) {
+  const emailBlock = resolveSignupEmailBlock(email)
+  if (emailBlock) {
     return respond(200, {
       ok: false,
-      code: "DISPOSABLE_EMAIL",
-      error: "Please use a permanent email address. Temporary or disposable email providers aren't allowed.",
+      code: emailBlock.code,
+      error: emailBlock.error,
     })
   }
 

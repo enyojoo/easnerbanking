@@ -18,8 +18,11 @@ import { WebAwareModal } from '../WebAwareModal'
 import { CachedImage } from '../CachedImage'
 import { SectionCard, StatusPill } from '../ui'
 import { borderRadius, colors, fontFamily, spacing, textStyles } from '../../theme'
+import { haptics } from '../../lib/haptics'
 import type { PayrollConnectionSummary, PayrollMethodSummary } from '../../features/payroll/types'
 import { payrollMethodDescription, payrollMethodTitle } from '../../features/payroll/types'
+
+const hapticRow = { onPressIn: () => haptics.tap() } as const
 
 function MethodIcon({ type, size = 20 }: { type: PayrollMethodSummary['type']; size?: number }) {
   const props = { size, color: colors.primary.main }
@@ -144,6 +147,7 @@ export function PayrollInlineMethodsCard({
               ]}
             >
               <Pressable
+                {...hapticRow}
                 style={styles.inlineMethodSelect}
                 onPress={() => onSelect(method)}
                 disabled={readOnly || selected || Boolean(selectingMethodId)}
@@ -172,6 +176,7 @@ export function PayrollInlineMethodsCard({
               {externalMethod && !readOnly ? (
                 <View style={styles.inlineMethodActions}>
                   <Pressable
+                    {...hapticRow}
                     style={styles.iconAction}
                     onPress={() => onReplace(method)}
                     accessibilityRole="button"
@@ -180,6 +185,7 @@ export function PayrollInlineMethodsCard({
                     <Pencil size={18} color={colors.text.secondary} />
                   </Pressable>
                   <Pressable
+                    {...hapticRow}
                     style={styles.iconAction}
                     onPress={() => onDelete(method)}
                     accessibilityRole="button"
@@ -193,7 +199,7 @@ export function PayrollInlineMethodsCard({
           )
         })}
         {!readOnly ? (
-          <Pressable style={styles.addInlineRow} onPress={onAdd} accessibilityRole="button">
+          <Pressable {...hapticRow} style={styles.addInlineRow} onPress={onAdd} accessibilityRole="button">
             <View style={styles.addIcon}>
               <Plus size={20} color={colors.primary.main} />
             </View>
@@ -224,6 +230,7 @@ export function PayrollCurrentMethodCard({
         <Text style={styles.sectionTitle}>Receive payroll to</Text>
         {onChange ? (
           <Pressable
+            {...hapticRow}
             onPress={onChange}
             disabled={disabled}
             hitSlop={8}
@@ -289,7 +296,7 @@ export function PayrollMethodPickerSheet({
             {managing ? payrollMethodDescription(managing) : 'Choose where this business should send your payroll.'}
           </Text>
         </View>
-        <Pressable onPress={close} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close">
+        <Pressable {...hapticRow} onPress={close} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close">
           <X size={21} color={colors.text.secondary} />
         </Pressable>
       </View>
@@ -297,6 +304,7 @@ export function PayrollMethodPickerSheet({
       {managing ? (
         <View style={styles.pickerRows}>
           <Pressable
+            {...hapticRow}
             style={styles.actionRow}
             onPress={() => {
               const method = managing
@@ -315,6 +323,7 @@ export function PayrollMethodPickerSheet({
             <ChevronRight size={18} color={colors.text.tertiary} />
           </Pressable>
           <Pressable
+            {...hapticRow}
             style={styles.actionRow}
             onPress={() => {
               const method = managing
@@ -340,6 +349,7 @@ export function PayrollMethodPickerSheet({
             return (
               <View key={method.id} style={styles.pickerMethodRow}>
                 <Pressable
+                  {...hapticRow}
                   style={styles.pickerMethodSelect}
                   onPress={() => onSelect(method)}
                   disabled={Boolean(selectingMethodId) || selected}
@@ -368,6 +378,7 @@ export function PayrollMethodPickerSheet({
                 </Pressable>
                 {method.type !== 'easetag' ? (
                   <Pressable
+                    {...hapticRow}
                     onPress={() => setManaging(method)}
                     style={styles.moreButton}
                     accessibilityRole="button"
@@ -379,7 +390,7 @@ export function PayrollMethodPickerSheet({
               </View>
             )
           })}
-          <Pressable style={styles.addRow} onPress={() => onAddOrReplace(external)} accessibilityRole="button">
+          <Pressable {...hapticRow} style={styles.addRow} onPress={() => onAddOrReplace(external)} accessibilityRole="button">
             <View style={styles.addIcon}>
               <Plus size={20} color={colors.primary.main} />
             </View>

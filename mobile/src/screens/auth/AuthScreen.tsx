@@ -32,7 +32,8 @@ import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 import { useToast } from '../../components/ToastProvider'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import EaseEnter from '../../components/EaseEnter'
-import { haptics } from '../../lib/haptics'
+import { signupPrecheck } from '../lib/signupPrecheck'
+import { consumeSignupBlockedMessage } from '../lib/signupBlockedMessage'
 import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
 
 /**
@@ -103,6 +104,12 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   useEffect(() => {
     analytics.trackScreenView(mode === 'login' ? 'Login' : 'Register')
   }, [mode])
+
+  useEffect(() => {
+    void consumeSignupBlockedMessage().then((blocked) => {
+      if (blocked) showError(blocked)
+    })
+  }, [showError])
 
   const switchMode = async (newMode: AuthMode) => {
     if (newMode === mode) return
@@ -243,6 +250,11 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         }
       } else {
         await persistResidenceForSignup()
+        const precheck = await signupPrecheck(email)
+        if (!precheck.ok) {
+          showError(precheck.error)
+          return
+        }
         const { error: signUpError, needsEmailConfirmation } = await signUp(
           email,
           password,

@@ -11,6 +11,7 @@ import { AUTH_COPY } from "@/lib/copy/business-ui-copy"
 type InvitePreview = {
   businessName: string
   role: string
+  email?: string
 }
 
 export default function JoinTeamByIdPage() {
@@ -41,7 +42,11 @@ export default function JoinTeamByIdPage() {
           setPreviewError(json.error || "This invitation is no longer valid.")
           return
         }
-        setPreview({ businessName: json.businessName, role: json.role })
+        setPreview({
+          businessName: json.businessName,
+          role: json.role,
+          email: typeof json.email === "string" ? json.email.trim().toLowerCase() : undefined,
+        })
       } catch {
         if (!cancelled) setPreviewError("Could not load invitation details.")
       } finally {
@@ -72,8 +77,15 @@ export default function JoinTeamByIdPage() {
       <CardContent className="space-y-4">
         {preview ? (
           <p className="text-sm text-muted-foreground text-center">
-            You&apos;ve been invited as <strong className="text-foreground">{preview.role}</strong>. Use the email
-            address that received this invitation when you sign in or create an account.
+            You&apos;ve been invited as <strong className="text-foreground">{preview.role}</strong>.
+            {preview.email ? (
+              <>
+                {" "}
+                Continue with <strong className="text-foreground">{preview.email}</strong> to join the team.
+              </>
+            ) : (
+              <> Use the email address that received this invitation when you sign in or create an account.</>
+            )}
           </p>
         ) : null}
 

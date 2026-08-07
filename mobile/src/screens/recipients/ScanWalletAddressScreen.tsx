@@ -6,6 +6,7 @@ import { WalletAddressQrScannerContent } from '../../components/recipients/Walle
 import { NavigationProps } from '../../types'
 import { colors } from '../../theme'
 import { useToast } from '../../components/ToastProvider'
+import { haptics } from '../../lib/haptics'
 
 /**
  * Full-screen stack route for QR scan. Camera preview must live on this screen
@@ -32,11 +33,13 @@ export default function ScanWalletAddressScreen({ navigation }: NavigationProps)
   }, [cameraPermission, requestCameraPermission, navigation, showWarning])
 
   const handleClose = useCallback(() => {
+    haptics.tap()
     navigation.goBack()
   }, [navigation])
 
   const handleScan = useCallback(
     (address: string) => {
+      haptics.success()
       const state = navigation.getState()
       const routes = state?.routes
       if (!routes || routes.length < 2) {

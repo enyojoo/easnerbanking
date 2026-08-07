@@ -3,6 +3,7 @@ import { Modal, View, StyleSheet, Pressable, useWindowDimensions, type ModalProp
 import { EaseView } from 'react-native-ease'
 import { borderRadius, spacing, useThemeColors } from '../../theme'
 import { useWebCenteredModal, webCenteredModalStyles } from '../../lib/webCenteredModal'
+import { haptics } from '../../lib/haptics'
 
 type PremiumModalSheetProps = ModalProps & {
   visible: boolean
@@ -33,6 +34,7 @@ export default function PremiumModalSheet({
         <View style={webCenteredModalStyles.overlay}>
           <Pressable
             style={StyleSheet.absoluteFill}
+            onPressIn={() => haptics.tap()}
             onPress={onRequestClose}
             accessibilityRole="button"
             accessibilityLabel="Close dialog"
@@ -62,7 +64,11 @@ export default function PremiumModalSheet({
       onRequestClose={onRequestClose}
     >
       <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onRequestClose} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPressIn={() => haptics.tap()}
+          onPress={onRequestClose}
+        />
         <EaseView
           initialAnimate={{ translateY: sheetOffset }}
           animate={{ translateY: visible ? 0 : sheetOffset }}

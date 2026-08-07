@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 import { NavigationProps } from '../../types'
 import { useThemeColors } from '../../theme'
 import type { Colors } from '../../theme'
@@ -43,6 +44,7 @@ export default function SendMoneyScreen({ navigation }: NavigationProps) {
       <Pressable
        android_ripple={ripple.neutral}
         style={styles.button}
+        onPressIn={() => haptics.tap()}
         onPress={() => navigation.navigate('Send')}
       >
         <Text style={styles.buttonText}>Start New Transfer</Text>

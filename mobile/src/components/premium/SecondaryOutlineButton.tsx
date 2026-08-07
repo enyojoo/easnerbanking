@@ -2,6 +2,7 @@ import React from 'react'
 import { View, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native'
 import { borderRadius, spacing, textStyles, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 type SecondaryOutlineButtonProps = {
   title: string
@@ -18,6 +19,7 @@ export default function SecondaryOutlineButton({
   return (
     <View style={[styles.rowSlot, style]}>
       <Pressable
+        onPressIn={() => haptics.tap()}
         onPress={onPress}
         android_ripple={ripple.neutral}
         style={({ pressed }) => [

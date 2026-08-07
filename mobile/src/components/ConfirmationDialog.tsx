@@ -11,6 +11,7 @@ import {
 import { CircleAlert, TriangleAlert, Info } from 'lucide-react-native'
 import { colors, textStyles, borderRadius, spacing, shadows, fontFamily } from '../theme'
 import { ripple } from '../lib/androidRipple'
+import { haptics } from '../lib/haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { USE_NATIVE_DRIVER } from '../lib/animation'
 
@@ -135,6 +136,7 @@ export default function ConfirmationDialog({
                 Platform.OS === 'android' && styles.buttonClip,
                 pressed && Platform.OS === 'ios' && styles.dialogBtnPressedIOS,
               ]}
+              onPressIn={() => haptics.tap()}
               onPress={onCancel}
               android_ripple={ripple.neutral}
             >
@@ -148,6 +150,7 @@ export default function ConfirmationDialog({
                 Platform.OS === 'android' && styles.buttonClip,
                 pressed && Platform.OS === 'ios' && styles.dialogBtnPressedIOS,
               ]}
+              onPressIn={() => haptics[type === 'danger' ? 'medium' : 'tap']()}
               onPress={onConfirm}
               android_ripple={ripple.primaryTint}
             >

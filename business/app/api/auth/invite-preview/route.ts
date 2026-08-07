@@ -21,5 +21,7 @@ export async function GET(request: Request) {
     businessName: preview.businessName,
     role: preview.role,
     status: preview.status,
+    email: preview.email,
+    fullName: preview.fullName,
   })
 }

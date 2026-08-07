@@ -22,6 +22,7 @@ import { payrollMethodDescription, type PayrollConnectionSummary } from '../../f
 import { markPayrollActivityVisible } from '../../lib/payrollActivityVisibility'
 import { exitToMainTabs } from '../../navigation/stackBackNavigation'
 import { borderRadius, colors, fontFamily, spacing, textStyles } from '../../theme'
+import { haptics } from '../../lib/haptics'
 
 export default function PayrollConnectionsScreen({ navigation, route }: NavigationProps) {
   const { scope } = useScope()
@@ -72,6 +73,7 @@ export default function PayrollConnectionsScreen({ navigation, route }: Navigati
   const exitToMore = useCallback(() => {
     if (exitingRef.current) return
     exitingRef.current = true
+    haptics.tap()
     exitToMainTabs(navigation, 'More')
   }, [navigation])
 
@@ -85,6 +87,7 @@ export default function PayrollConnectionsScreen({ navigation, route }: Navigati
   }, [exitToMore, navigation])
 
   function openConnection(connection: PayrollConnectionSummary) {
+    haptics.tap()
     navigation.navigate('PayrollConnectionDetail', {
       connectionId: connection.id,
     })
@@ -121,7 +124,12 @@ export default function PayrollConnectionsScreen({ navigation, route }: Navigati
         }
       >
         {message ? (
-          <Pressable style={styles.success} onPress={() => setMessage('')} accessibilityRole="alert">
+          <Pressable
+            style={styles.success}
+            onPressIn={() => haptics.tap()}
+            onPress={() => setMessage('')}
+            accessibilityRole="alert"
+          >
             <Check size={18} color={colors.success.main} />
             <Text style={styles.successText}>{message}</Text>
           </Pressable>
@@ -130,7 +138,7 @@ export default function PayrollConnectionsScreen({ navigation, route }: Navigati
         {query.error && query.data ? (
           <View style={styles.error}>
             <Text style={styles.errorText}>Some Payroll information may be out of date.</Text>
-            <Pressable onPress={() => void query.refetch()}>
+            <Pressable onPressIn={() => haptics.tap()} onPress={() => void query.refetch()}>
               <Text style={styles.retry}>Retry</Text>
             </Pressable>
           </View>
@@ -169,6 +177,7 @@ export default function PayrollConnectionsScreen({ navigation, route }: Navigati
                     subtitle="Review payroll request"
                     logoUrl={invitation.businessLogoUrl}
                     divider={index < pending.length - 1}
+                    onPressIn={() => haptics.tap()}
                     onPress={() =>
                       navigation.navigate('PayrollInvitation', {
                         invitationId: invitation.id,
@@ -246,7 +255,10 @@ function ConnectionRow({
 }) {
   return (
     <Pressable
-      onPressIn={onPressIn}
+      onPressIn={() => {
+        haptics.tap()
+        onPressIn?.()
+      }}
       onPress={onPress}
       style={({ pressed }) => [styles.row, divider && styles.divider, pressed && styles.pressed]}
       accessibilityRole="button"

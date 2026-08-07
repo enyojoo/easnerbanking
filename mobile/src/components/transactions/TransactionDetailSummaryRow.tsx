@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, type ReactNode, type TextStyle } fro
 import { Check, Copy } from 'lucide-react-native'
 import { colors, spacing, textStyles, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 type Props = {
   label: string
@@ -63,6 +64,7 @@ export function TransactionDetailCopyableValue({
     <Pressable
       android_ripple={ripple.neutral}
       style={transactionDetailRowStyles.copyableValueRow}
+      onPressIn={() => haptics.tap()}
       onPress={onPress}
     >
       <Text

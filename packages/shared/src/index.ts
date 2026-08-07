@@ -38,6 +38,22 @@ export {
   isDisposableEmail,
 } from "./disposable-email"
 export {
+  APPLE_PRIVATE_RELAY_DOMAIN,
+  SIGNUP_EMAIL_BLOCK_MESSAGES,
+  applePrivateRelayFromIdToken,
+  decodeJwtPayload,
+  isApplePrivateRelayEmail,
+  isApplePrivateRelayFromIdentity,
+  parseAppleIsPrivateEmailClaim,
+  parseSignupEmailBlockFromJson,
+  parseSignupEmailBlockFromResponseText,
+  resolveSignupEmailBlock,
+  signupEmailBlockMessageForCode,
+  type ResolveSignupEmailBlockOptions,
+  type SignupEmailBlockCode,
+  type SignupEmailBlockReason,
+} from "./signup-email-policy"
+export {
   resolvePersonalMobileAppOrigin,
   personalMobileDashboardUrl,
   personalMobileNotificationsUrl,

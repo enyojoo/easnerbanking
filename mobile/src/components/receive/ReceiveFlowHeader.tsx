@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react-native'
 import { useNavigation } from '@react-navigation/native'
 import { colors, spacing, textStyles, surfaceChromeCircleStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
 
 type ReceiveFlowHeaderProps = {
@@ -27,7 +28,12 @@ export function ReceiveFlowHeader({ title, onBack, right, style }: ReceiveFlowHe
   return (
     <View style={[styles.header, style]}>
       <View style={styles.headerTopRow}>
-        <Pressable android_ripple={ripple.neutral} onPress={handleBack} style={styles.backButton}>
+        <Pressable
+          android_ripple={ripple.neutral}
+          onPressIn={() => haptics.tap()}
+          onPress={handleBack}
+          style={styles.backButton}
+        >
           <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
         </Pressable>
         <View style={styles.headerContent}>

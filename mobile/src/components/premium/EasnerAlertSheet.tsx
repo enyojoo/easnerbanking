@@ -16,6 +16,7 @@ import {
   useThemeColors,
 } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 export type EasnerAlertSheetProps = {
   visible: boolean
@@ -78,6 +79,7 @@ export default function EasnerAlertSheet({
               opacity: pressed ? 0.92 : 1,
             },
           ]}
+          onPressIn={() => haptics[primaryDestructive ? 'medium' : 'tap']()}
           onPress={onPrimary}
           disabled={primaryLoading}
         >
@@ -106,6 +108,7 @@ export default function EasnerAlertSheet({
                 opacity: pressed ? 0.9 : 1,
               },
             ]}
+            onPressIn={() => haptics.tap()}
             onPress={onSecondary}
             disabled={primaryLoading}
           >

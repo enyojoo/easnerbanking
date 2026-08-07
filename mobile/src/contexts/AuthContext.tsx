@@ -14,7 +14,8 @@ import { getSessionReliable, setAuthSessionCache, clearAuthSessionCache } from '
 import { User, AuthUser } from '../types'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { analytics } from '../lib/analytics'
-import { ensureBusinessAppUserBootstrap, getApiBaseUrl } from '../lib/apiClient'
+import { ensureBusinessAppUserBootstrap } from '../lib/apiClient'
+import { stashSignupBlockedMessage } from '../lib/signupBlockedMessage'
 import { clearJurisdictionCountryPolicyCache } from '../lib/jurisdictionCountryPolicy'
 import { clearPinAuth, updateSessionActivity, markFirstLoginAfterVerification } from '../lib/pinAuth'
 import { AUTH_INITIAL_MODE_KEY } from '../constants/auth'
@@ -35,6 +36,11 @@ import { warmAvatarCache, warmAvatarCacheAsync } from '../lib/avatarCache'
 import Constants from 'expo-constants'
 import { syncIntercomSession } from '../lib/intercom'
 import { isAppleWebSignInCanceled, signInWithAppleWeb } from '../lib/appleSignInWeb'
+import {
+  applePrivateRelayFromIdToken,
+  isApplePrivateRelayEmail,
+  SIGNUP_EMAIL_BLOCK_MESSAGES,
+} from '@easner/shared'
 
 // Completes the auth session on web popup flows. Native deep links are handled below.
 WebBrowser.maybeCompleteAuthSession()
@@ -78,11 +84,13 @@ async function finalizePostAuthSession(options?: {
   const boot = await ensureBusinessAppUserBootstrap()
   if (!boot.ok) {
     await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
-    return {
-      error: new Error(
-        `Account setup failed (bootstrap). API=${getApiBaseUrl()} status=${boot.status ?? 'n/a'}`,
-      ),
+    if (boot.blockReason) {
+      await stashSignupBlockedMessage(boot.blockReason.error)
     }
+    const msg =
+      boot.blockReason?.error ??
+      'We could not finish setting up your account. Please try again or use a different sign-in method.'
+    return { error: new Error(msg) }
   }
 
   const surfaceGate = await ensureConsumerMobileAccess()
@@ -505,6 +513,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const boot = await ensureBusinessAppUserBootstrap()
       if (!boot.ok) {
         console.warn('AuthContext: user bootstrap failed:', boot.status, boot.errorText)
+        if (boot.blockReason) {
+          await stashSignupBlockedMessage(boot.blockReason.error)
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+          setUser(null)
+          setUserProfile(null)
+          payoutCorridorsBootstrappedForUserRef.current = null
+          setLoading(false)
+          return null
+        }
       }
 
       const surfaceGate = await ensureConsumerMobileAccess()
@@ -1049,9 +1066,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [consumeOAuthCallbackIfPresent])
 
   const signInWithApple = useCallback(async (): Promise<{ error: Error | null }> => {
+    const relayBlocked = (): { error: Error } => ({
+      error: new Error(SIGNUP_EMAIL_BLOCK_MESSAGES.APPLE_PRIVATE_RELAY_EMAIL),
+    })
+
     if (Platform.OS === 'web') {
       try {
         const { idToken, fullName } = await signInWithAppleWeb()
+        if (applePrivateRelayFromIdToken(idToken)) return relayBlocked()
 
         // Omit nonce — matches native iOS; avoids GoTrue hex vs Apple base64url mismatch.
         const { error: signInError } = await supabase.auth.signInWithIdToken({
@@ -1089,8 +1111,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         ],
       })
 
+      if (credential.email && isApplePrivateRelayEmail(credential.email)) {
+        return relayBlocked()
+      }
+
       if (!credential.identityToken) {
         return { error: new Error('Apple sign-in did not return an identity token.') }
+      }
+
+      if (applePrivateRelayFromIdToken(credential.identityToken)) {
+        return relayBlocked()
       }
 
       const { error: signInError } = await supabase.auth.signInWithIdToken({

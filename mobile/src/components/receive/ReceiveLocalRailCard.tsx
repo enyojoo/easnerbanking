@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { ArrowRight } from 'lucide-react-native'
 import { colors, spacing, textStyles, borderRadius, surfaceFrameStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { haptics } from '../../lib/haptics'
 
 const FLAG_SIZE = 48
 
@@ -24,6 +25,7 @@ export function ReceiveLocalRailCard({ title, subtitle, leading, onPress, disabl
         surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.xl }),
         disabled && styles.cardDisabled,
       ]}
+      onPressIn={() => !disabled && haptics.tap()}
       onPress={onPress}
       disabled={disabled}
     >

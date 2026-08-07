@@ -2,6 +2,17 @@ import Constants from 'expo-constants'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
 import { PENDING_RESIDENCE_COUNTRY_KEY } from '../constants/residenceCountry'
+import type { SignupEmailBlockReason } from '@easner/shared'
+import { parseSignupEmailBlockFromResponseText } from '@easner/shared'
+
+export type BootstrapResult =
+  | { ok: true }
+  | {
+      ok: false
+      status?: number
+      errorText?: string
+      blockReason?: SignupEmailBlockReason
+    }
 
 /**
  * Last-resort API origin for release builds when `extra.apiUrl` / `EXPO_PUBLIC_API_URL`
@@ -43,7 +54,7 @@ export const getApiBaseUrl = (): string => {
  */
 export async function ensureBusinessAppUserBootstrap(options?: {
   countryCode?: string
-}): Promise<{ ok: boolean; status?: number; errorText?: string }> {
+}): Promise<BootstrapResult> {
   const apiBase = getApiBaseUrl()
   try {
     const {
@@ -82,7 +93,12 @@ export async function ensureBusinessAppUserBootstrap(options?: {
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       console.warn('auth bootstrap failed:', res.status, text)
-      return { ok: false, status: res.status, errorText: text }
+      return {
+        ok: false,
+        status: res.status,
+        errorText: text,
+        blockReason: parseSignupEmailBlockFromResponseText(text) ?? undefined,
+      }
     }
 
     const bootJson = (await res.json().catch(() => ({}))) as {

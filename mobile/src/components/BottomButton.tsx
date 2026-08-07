@@ -1,6 +1,7 @@
 import React from 'react'
 import { View, Pressable, Text, StyleSheet, Platform } from 'react-native'
 import { ripple } from '../lib/androidRipple'
+import { haptics } from '../lib/haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors, borderRadius, spacing, textStyles, fontSize, layout } from '../theme'
 
@@ -37,6 +38,7 @@ export default function BottomButton({
           Platform.OS === 'android' && styles.buttonClip,
           pressed && Platform.OS === 'ios' && !disabled && styles.buttonPressedIOS,
         ]}
+        onPressIn={() => haptics[variant === 'primary' ? 'medium' : 'tap']()}
         onPress={onPress}
         disabled={disabled}
         android_ripple={ripple.primaryTint}

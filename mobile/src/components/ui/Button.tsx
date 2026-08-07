@@ -10,6 +10,7 @@ import {
   StyleProp,
 } from 'react-native'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
+import { haptics } from '../../lib/haptics'
 
 const MIN_HEIGHT = {
   sm: 36,
@@ -48,6 +49,7 @@ export function Button({
 
   return (
     <Pressable
+      onPressIn={() => haptics.tap()}
       onPress={onPress}
       disabled={disabled || loading}
       style={({ pressed }) => [

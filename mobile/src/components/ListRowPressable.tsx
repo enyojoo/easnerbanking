@@ -1,6 +1,7 @@
 import React from 'react'
 import { PressableScale } from 'pressto'
 import type { StyleProp, ViewStyle } from 'react-native'
+import { haptics } from '../lib/haptics'
 
 type ListRowPressableProps = {
   children: React.ReactNode
@@ -22,7 +23,15 @@ export function ListRowPressable({
   enabled = true,
 }: ListRowPressableProps) {
   return (
-    <PressableScale style={style} enabled={enabled} onPress={onPress} onPressIn={onPressIn}>
+    <PressableScale
+      style={style}
+      enabled={enabled}
+      onPress={onPress}
+      onPressIn={() => {
+        haptics.tap()
+        onPressIn?.()
+      }}
+    >
       {children}
     </PressableScale>
   )

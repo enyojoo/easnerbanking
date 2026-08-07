@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
+import type { User } from "@supabase/supabase-js"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { countries } from "@/lib/countries"
-import { isDisposableEmail } from "@easner/shared"
+import {
+  isApplePrivateRelayFromIdentity,
+  resolveSignupEmailBlock,
+  type SignupEmailBlockReason,
+} from "@easner/shared"
 import { isCountryAllowedForSurface } from "@/lib/jurisdiction-country-policy"
 import { noahCustomerIdFromBusinessId, noahCustomerIdFromUserId } from "@/lib/noah/customer-id"
 import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-sub-org"
@@ -53,6 +58,34 @@ function parseName(fullName: string | null | undefined): { fullName: string | nu
   const trimmed = typeof fullName === "string" ? fullName.trim() : ""
   if (!trimmed) return { fullName: null }
   return { fullName: trimmed }
+}
+
+function signupEmailBlockForAuthUser(user: User): SignupEmailBlockReason | null {
+  const emailBlock = resolveSignupEmailBlock(user.email)
+  if (emailBlock) return emailBlock
+
+  for (const identity of user.identities ?? []) {
+    if (identity.provider !== "apple") continue
+    const data =
+      identity.identity_data && typeof identity.identity_data === "object"
+        ? (identity.identity_data as Record<string, unknown>)
+        : null
+    if (isApplePrivateRelayFromIdentity(data)) {
+      return resolveSignupEmailBlock(user.email, { applePrivateRelay: true })
+    }
+  }
+
+  return null
+}
+
+async function loadAuthUserForSignupPolicy(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  user: User,
+): Promise<User> {
+  if ((user.identities?.length ?? 0) > 0) return user
+  const { data, error } = await admin.auth.admin.getUserById(user.id)
+  if (error || !data.user) return user
+  return data.user
 }
 
 async function sendWelcomeEmailIfNew(input: {
@@ -198,18 +231,22 @@ export async function POST(request: Request) {
 
   /**
    * Server-side anti-bot guard (defense-in-depth behind the sign-up pre-check): refuse to create an
-   * app account for a disposable/throwaway email. Only applies to brand-new accounts so existing
-   * users are never locked out on a later sign-in.
+   * app account for a disposable/throwaway email or Apple Hide My Email relay. Only applies to
+   * brand-new accounts so existing users are never locked out on a later sign-in.
    */
-  if (!userRow?.id && isDisposableEmail(user.email)) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Please use a permanent email address. Temporary or disposable email providers aren't allowed.",
-        code: "DISPOSABLE_EMAIL",
-      },
-      { status: 403 },
-    )
+  if (!userRow?.id) {
+    const authUserForPolicy = await loadAuthUserForSignupPolicy(admin, user)
+    const emailBlock = signupEmailBlockForAuthUser(authUserForPolicy)
+    if (emailBlock) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: emailBlock.error,
+          code: emailBlock.code,
+        },
+        { status: 403 },
+      )
+    }
   }
 
   const dbFullNameTrim =

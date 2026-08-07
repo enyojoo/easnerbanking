@@ -3,6 +3,7 @@ import {
   claimTeamInvite,
   displayRoleFromMembership,
   findPendingTeamInvite,
+  getInvitePreviewByMembershipId,
   normalizeInviteEmail,
 } from "./claim-team-invite"
 
@@ -151,5 +152,52 @@ describe("claimTeamInvite", () => {
     })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.code).toBe("ALREADY_HAS_BUSINESS")
+  })
+})
+
+describe("getInvitePreviewByMembershipId", () => {
+  it("returns invite email and full name for pending membership", async () => {
+    const admin = mockAdmin({
+      business_memberships: (method: string) => {
+        if (method === "select") {
+          return {
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: "mem-1",
+                  role: "admin",
+                  status: "invited",
+                  business_id: "biz-1",
+                  email: " Invitee@Example.com ",
+                  full_name: "Alex Invite",
+                },
+                error: null,
+              }),
+            }),
+          }
+        }
+      },
+      businesses: (method: string) => {
+        if (method === "select") {
+          return {
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { display_name: "Acme Ltd" },
+                error: null,
+              }),
+            }),
+          }
+        }
+      },
+    })
+
+    const result = await getInvitePreviewByMembershipId(admin, "mem-1")
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.email).toBe("invitee@example.com")
+      expect(result.fullName).toBe("Alex Invite")
+      expect(result.businessName).toBe("Acme Ltd")
+      expect(result.role).toBe("Admin")
+    }
   })
 })
