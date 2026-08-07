@@ -22,7 +22,10 @@ import {
   type TransactionTimingRow,
 } from "@easner/shared"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
-import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
+import {
+  TransactionDetailSummaryRow,
+  TRANSACTION_DETAIL_MONEY_VALUE_CLASS,
+} from "@/components/transactions/transaction-detail-summary-row"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { formatTransactionRowDateTime } from "@/lib/transaction-row-present"
 import { Card, CardContent } from "@/components/ui/card"
@@ -142,7 +145,7 @@ export function PayoutReviewDetailsRows({
             {onCopy ? (
               <button
                 type="button"
-                className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
+                className="flex items-center gap-2 font-mono text-sm font-normal transition-colors hover:text-primary"
                 onClick={() => onCopy(transactionId, "transactionId")}
                 aria-label="Copy transaction id"
               >
@@ -154,7 +157,7 @@ export function PayoutReviewDetailsRows({
                 )}
               </button>
             ) : (
-              <span className="font-mono text-sm font-medium">{transactionId}</span>
+              <span className="font-mono text-sm font-normal">{transactionId}</span>
             )}
           </TransactionDetailSummaryRow>
         ) : null}
@@ -162,7 +165,7 @@ export function PayoutReviewDetailsRows({
         <TransactionDetailSummaryRow
           label={reviewPrimaryAmountLabel(reviewFlow, mode)}
           value={formatMoneyDisplay(payoutReview.you_send_amount, payoutReview.send_currency)}
-          valueClassName="text-xl font-semibold"
+          valueClassName={TRANSACTION_DETAIL_MONEY_VALUE_CLASS}
         />
 
         {showFeeBreakdown ? (
@@ -175,7 +178,6 @@ export function PayoutReviewDetailsRows({
                   feeDisplayAmount,
                   feeDisplayCurrency,
                 )}
-                valueClassName="font-semibold"
               />
             ) : null}
 
@@ -187,7 +189,6 @@ export function PayoutReviewDetailsRows({
                   payoutReview.receive_currency,
                   payoutReview.exchange_rate,
                 )}
-                valueClassName="font-semibold"
               />
             ) : null}
 
@@ -199,7 +200,7 @@ export function PayoutReviewDetailsRows({
                   payoutReview.total_debited,
                   payoutReview.send_currency,
                 )}
-                valueClassName="text-xl font-semibold"
+                valueClassName={TRANSACTION_DETAIL_MONEY_VALUE_CLASS}
               />
             ) : null}
           </>
@@ -220,7 +221,7 @@ export function PayoutReviewDetailsRows({
               payoutReview.requested_receive_amount ?? payoutReview.receive_amount,
               payoutReview.receive_currency,
             )}
-            valueClassName="text-xl font-semibold"
+            valueClassName={TRANSACTION_DETAIL_MONEY_VALUE_CLASS}
           />
         ) : null}
 
@@ -229,7 +230,7 @@ export function PayoutReviewDetailsRows({
             recipientNode
           ) : recipientSnapshot ? (
             <div className="min-w-0 max-w-[70%] shrink-0 text-right">
-              <p className="font-medium">{recipientSnapshot.full_name}</p>
+              <p className="font-normal">{recipientSnapshot.full_name}</p>
               {recipientSubtitle(recipientSnapshot, receiveNetwork) ? (
                 <p className="text-sm text-muted-foreground">
                   {recipientSubtitle(recipientSnapshot, receiveNetwork)}
@@ -238,7 +239,7 @@ export function PayoutReviewDetailsRows({
             </div>
           ) : recipientDisplayName || counterpartyAddress ? (
             <div className="min-w-0 max-w-[70%] shrink-0 text-right">
-              {recipientDisplayName ? <p className="font-medium">{recipientDisplayName}</p> : null}
+              {recipientDisplayName ? <p className="font-normal">{recipientDisplayName}</p> : null}
               {walletRecipientFallbackSubtitle({
                 bankName: "Wallet",
                 accountNumber: counterpartyAddress,

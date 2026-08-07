@@ -89,9 +89,9 @@ describe("emailTemplates", () => {
     expect(html).not.toContain(">Exchange fee<")
   })
 
-  it("renders canonical deposit detailRows (Scheme / Sender / Amount credited)", () => {
+  it("renders canonical deposit detailRows (Deposit method / Sender / Amount credited)", () => {
     const html = emailTemplates.transactionSettled.html(templateFixtures.transactionSettled, "personal")
-    expect(html).toContain(">Scheme<")
+    expect(html).toContain(">Deposit method<")
     expect(html).toContain(">Sender<")
     expect(html).toContain("Amount credited")
     expect(html).toContain(">When<")

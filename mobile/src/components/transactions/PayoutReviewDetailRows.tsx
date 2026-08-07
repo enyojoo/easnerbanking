@@ -84,6 +84,7 @@ export function PayoutReviewDetailRows({
       <TransactionDetailSummaryRow
         label={REVIEW_ROW_LABELS.sent}
         value={formatMoneyDisplay(payoutReview.you_send_amount, sendCurrency)}
+        valueBold
       />
       {showProcessingFee ? (
         <TransactionDetailSummaryRow

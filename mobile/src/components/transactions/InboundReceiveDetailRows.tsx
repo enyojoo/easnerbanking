@@ -71,7 +71,10 @@ export function InboundReceiveDetailRows({ snapshot, copiedStates, onCopy }: Pro
             key={`${row.label}-${index}`}
             label={row.label}
             value={row.value}
-            valueBold={row.label === REVIEW_ROW_LABELS.amountCredited}
+            valueBold={
+              row.label === REVIEW_ROW_LABELS.amountCredited ||
+              row.label === REVIEW_ROW_LABELS.amountPaid
+            }
           />
         )
       })}

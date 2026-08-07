@@ -28,6 +28,6 @@ describe("format-review-row-money", () => {
   it("formats by review row label", () => {
     expect(formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.amountCredited, 65, "USD")).toBe("+$65")
     expect(formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.processingFee, 0.65, "USD")).toBe("$0.65")
-    expect(formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.scheme, 0, "USD")).toBe("$0")
+    expect(formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.depositMethod, 0, "USD")).toBe("$0")
   })
 })

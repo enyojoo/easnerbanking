@@ -17,7 +17,7 @@ export function TransactionTimingRows({ rows, className }: Props) {
           className={className ?? transactionDetailRowClassName}
         >
           <span className="shrink-0 text-muted-foreground">{row.label}</span>
-          <span className="text-right font-medium">{row.value}</span>
+          <span className="text-right font-normal text-foreground">{row.value}</span>
         </div>
       ))}
     </>

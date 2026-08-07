@@ -128,6 +128,7 @@ describe("buildYcLocalPayInReviewRows", () => {
       usdCredit: 100,
     })
     expect(rows.find((r) => r.id === "transfer-method")?.value).toBe("Bank Transfer")
+    expect(rows.find((r) => r.id === "transfer-method")?.label).toBe("Deposit method")
   })
 
   it("locks fund-balance MoMo review with deposit amount and Total to pay", () => {

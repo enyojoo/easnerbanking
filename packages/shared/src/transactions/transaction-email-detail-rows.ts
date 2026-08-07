@@ -1,7 +1,7 @@
 /**
  * Canonical transaction detail rows for settled/failed/reversed emails — the same
  * Sent amount / Processing fee / Total debited / Recipient / Transfer method (payout) and
- * Scheme / Sender / Processing fee / Amount credited (deposit) rows shown in-app.
+ * Deposit method / Sender / Processing fee / Amount credited (deposit) rows shown in-app.
  *
  * Hidden ops fields (margin_amount, channel_cost) are never emitted. The displayed
  * "Processing fee" is the combined `computeDisplayProcessingFee` value so the email
@@ -210,7 +210,6 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
 
 function buildDepositRows(deposit: NonNullable<TransactionEmailDetailInput["deposit"]>): TransactionEmailDetailRow[] {
   const rows: TransactionEmailDetailRow[] = []
-  pushIf(rows, REVIEW_ROW_LABELS.scheme, deposit.scheme)
   pushIf(rows, REVIEW_ROW_LABELS.sender, deposit.senderDisplay)
   if (deposit.feeAmount != null && deposit.feeAmount > 0) {
     pushIf(
@@ -237,6 +236,7 @@ function buildDepositRows(deposit: NonNullable<TransactionEmailDetailInput["depo
     pushIf(rows, REVIEW_ROW_LABELS.creditTo, `${postedCurrency.toUpperCase()} Balance`)
   }
   pushIf(rows, REVIEW_ROW_LABELS.narration, deposit.narration)
+  pushIf(rows, REVIEW_ROW_LABELS.depositMethod, deposit.scheme)
   return rows
 }
 
@@ -297,7 +297,7 @@ function buildYcFundBalanceDepositRows(
     formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.amountCredited, review.usd_credit, "USD"),
   )
   pushIf(rows, REVIEW_ROW_LABELS.creditTo, review.credit_to)
-  pushIf(rows, REVIEW_ROW_LABELS.scheme, review.transfer_method)
+  pushIf(rows, REVIEW_ROW_LABELS.depositMethod, review.transfer_method)
   return rows
 }
 

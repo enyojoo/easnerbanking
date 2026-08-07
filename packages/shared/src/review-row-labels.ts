@@ -37,13 +37,15 @@ export const REVIEW_ROW_LABELS = {
   amountCredited: "Amount credited",
   processingFee: "Processing fee",
   exchangeRate: "Exchange rate",
+  /** Outbound payout / send rail (Bank transfer, Local Transfer, etc.). */
   transferMethod: "Transfer method",
+  /** Inbound deposit rail / how funds arrived (Wire, ACH, USDC on Solana, etc.). */
+  depositMethod: "Deposit method",
   arrival: "Arrival",
   /** Balance outbound — source account (confirm / detail / email). */
   debitedFrom: "Debited from",
   when: "When",
   note: "Note",
-  scheme: "Scheme",
   sender: "Sender",
   narration: "Narration",
   /** Cross-border pay-in completion (non fund-balance). */

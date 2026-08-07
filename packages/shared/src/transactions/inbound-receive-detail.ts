@@ -609,11 +609,9 @@ export function buildInboundReceiveDetailRows(
       }
       pushAmountCreditedIfNeeded(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
-      pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
       break
     }
     case "noah_va_funding": {
-      pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
       pushSenderRow(rows, snapshot)
       if (snapshot.processingFee) {
         pushIf(
@@ -632,7 +630,6 @@ export function buildInboundReceiveDetailRows(
       break
     }
     case "noah_verification": {
-      pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
       pushSenderRow(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
       if (includeVerificationHint && snapshot.creditDestination?.hint) {
@@ -645,7 +642,6 @@ export function buildInboundReceiveDetailRows(
       break
     }
     case "stablecoin": {
-      pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
       pushSenderRow(rows, snapshot)
       if (snapshot.processingFee) {
         pushIf(
@@ -666,12 +662,14 @@ export function buildInboundReceiveDetailRows(
       break
     }
     case "easetag_receive": {
-      pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme ?? "Easetag")
       pushCreditDestination(rows, snapshot.creditDestination)
       pushIf(rows, REVIEW_ROW_LABELS.note, snapshot.note)
       break
     }
   }
+
+  // Deposit method sits with Transfer method on payouts — last content row before When.
+  pushIf(rows, REVIEW_ROW_LABELS.depositMethod, snapshot.scheme)
 
   // Keep the timestamp as the final transaction-detail row for every deposit type.
   if (includeWhen) {

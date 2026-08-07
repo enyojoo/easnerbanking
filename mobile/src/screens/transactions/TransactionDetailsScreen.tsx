@@ -1160,7 +1160,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                 {isEasetagP2p && !inboundReceive ? (
                   <>
                     <TransactionDetailSummaryRow
-                      label={REVIEW_ROW_LABELS.scheme}
+                      label={REVIEW_ROW_LABELS.transferMethod}
                       value="Easetag"
                     />
                     {(() => {
@@ -1227,7 +1227,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                     )}
                     {transaction.source_payment_rail && (
                       <TransactionDetailSummaryRow
-                        label={REVIEW_ROW_LABELS.scheme}
+                        label={REVIEW_ROW_LABELS.depositMethod}
                         value={formatScheme(transaction, transaction.source_payment_rail)}
                       />
                     )}
@@ -1305,7 +1305,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
                     {transaction.source_payment_rail && (
                       <TransactionDetailSummaryRow
-                        label={REVIEW_ROW_LABELS.scheme}
+                        label={REVIEW_ROW_LABELS.transferMethod}
                         value={formatScheme(transaction, transaction.source_payment_rail)}
                       />
                     )}

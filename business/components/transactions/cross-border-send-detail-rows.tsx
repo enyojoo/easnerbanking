@@ -7,7 +7,10 @@ import {
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
 } from "@easner/shared"
-import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
+import {
+  TransactionDetailSummaryRow,
+  TRANSACTION_DETAIL_MONEY_VALUE_CLASS,
+} from "@/components/transactions/transaction-detail-summary-row"
 import { formatTransactionRowDateTime } from "@/lib/transaction-row-present"
 
 type Props = {
@@ -54,7 +57,7 @@ export function CrossBorderSendDetailRows({
           return (
             <TransactionDetailSummaryRow key={row.id} label={row.label}>
               <div className="min-w-0 max-w-[70%] shrink-0 text-right">
-                <p className="font-medium">{recipientSnapshot.full_name}</p>
+                <p className="font-normal">{recipientSnapshot.full_name}</p>
                 {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
               </div>
             </TransactionDetailSummaryRow>
@@ -65,7 +68,7 @@ export function CrossBorderSendDetailRows({
             key={row.id}
             label={row.label}
             value={row.value}
-            valueClassName={row.valueBold ? "font-semibold" : undefined}
+            valueClassName={row.valueBold ? TRANSACTION_DETAIL_MONEY_VALUE_CLASS : undefined}
           />
         )
       })}

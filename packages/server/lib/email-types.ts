@@ -39,7 +39,7 @@ export interface TransactionEmailData {
   firstName?: string
   /**
    * Canonical detail rows (Sent amount / Processing fee / Total debited / Recipient / Transfer method
-   * for payouts; Scheme / Sender / Processing fee / Amount credited for deposits). Built at dispatch
+   * for payouts; Deposit method / Sender / Processing fee / Amount credited for deposits). Built at dispatch
    * time via `buildTransactionEmailDetailRows`. When present, replaces the legacy generic rows.
    */
   detailRows?: { label: string; value: string }[]

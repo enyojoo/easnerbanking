@@ -2,7 +2,7 @@ import React from 'react'
 import { View, Text, StyleSheet, type TextStyle } from 'react-native'
 import { CurrencyFlagCircle } from '../flags/CurrencyFlagCircle'
 import { transactionDetailRowStyles } from './TransactionDetailSummaryRow'
-import { colors, spacing, textStyles, fontFamily } from '../../theme'
+import { spacing } from '../../theme'
 
 type Props = {
   label: string
@@ -47,10 +47,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   balanceLabel: {
-    ...textStyles.body,
-    color: colors.text.primary,
-    fontFamily: fontFamily.semibold,
-    flexShrink: 1,
-    textAlign: 'right',
+    ...transactionDetailRowStyles.value,
+    flex: 0,
+    marginLeft: 0,
   },
 })

@@ -19,8 +19,8 @@ export function CreditDestinationRow({
 }: Props) {
   return (
     <div className={cn(transactionDetailRowClassName, "items-center")}>
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <div className="flex shrink-0 items-center gap-2 font-medium whitespace-nowrap">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <div className="flex shrink-0 items-center gap-2 whitespace-nowrap font-normal text-foreground">
         <CurrencyFlagCircle currency={currency} size={flagSize} />
         <span className="whitespace-nowrap">{balanceLabel}</span>
       </div>

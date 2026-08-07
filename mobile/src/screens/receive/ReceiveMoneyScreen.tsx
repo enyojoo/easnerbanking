@@ -66,6 +66,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const copyToClipboard = useCopyToClipboard()
   const queryClient = useQueryClient()
   const { scope } = useScope()
+  const currency = ((route.params as any)?.currency || 'USD') as 'USD' | 'EUR'
   const vaQuery = useConsumerVirtualAccounts()
   const depositQuery = useConsumerDepositAddresses()
   const relayDepositQuery = useConsumerRelayDepositAddresses(currency === 'USD')
@@ -76,7 +77,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const [aboutSheetOpen, setAboutSheetOpen] = useState(false)
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
 
-  const currency = ((route.params as any)?.currency || 'USD') as 'USD' | 'EUR'
   const supportsStablecoins = currency === 'USD' || currency === 'EUR'
 
   const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])

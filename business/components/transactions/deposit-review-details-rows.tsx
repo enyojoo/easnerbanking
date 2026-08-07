@@ -12,7 +12,10 @@ import {
   type YcFundBalanceDepositReviewSnapshot,
 } from "@easner/shared"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
-import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
+import {
+  TransactionDetailSummaryRow,
+  TRANSACTION_DETAIL_MONEY_VALUE_CLASS,
+} from "@/components/transactions/transaction-detail-summary-row"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { formatTransactionRowDateTime } from "@/lib/transaction-row-present"
 import { Card, CardContent } from "@/components/ui/card"
@@ -54,7 +57,7 @@ export function DepositReviewDetailsRows({
           {onCopy ? (
             <button
               type="button"
-              className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
+              className="flex items-center gap-2 font-mono text-sm font-normal transition-colors hover:text-primary"
               onClick={() => onCopy(transactionId, "transactionId")}
               aria-label="Copy transaction id"
             >
@@ -66,7 +69,7 @@ export function DepositReviewDetailsRows({
               )}
             </button>
           ) : (
-            <span className="font-mono text-sm font-medium">{transactionId}</span>
+            <span className="font-mono text-sm font-normal">{transactionId}</span>
           )}
         </TransactionDetailSummaryRow>
 
@@ -74,7 +77,6 @@ export function DepositReviewDetailsRows({
           <TransactionDetailSummaryRow
             label={REVIEW_ROW_LABELS.exchangeRate}
             value={formatSendRateLabel("USD", depositReview.local_currency, depositReview.exchange_rate)}
-            valueClassName="font-semibold"
           />
         ) : null}
 
@@ -95,7 +97,6 @@ export function DepositReviewDetailsRows({
               breakdown.feeLocal,
               depositReview.local_currency,
             )}
-            valueClassName="font-semibold"
           />
         ) : null}
 
@@ -106,13 +107,13 @@ export function DepositReviewDetailsRows({
             breakdown.totalLocal,
             depositReview.local_currency,
           )}
-          valueClassName="text-xl font-semibold"
+          valueClassName={TRANSACTION_DETAIL_MONEY_VALUE_CLASS}
         />
 
         <TransactionDetailSummaryRow
           label={creditLabel}
           value={formatReviewRowMoneyDisplay(creditLabel, depositReview.usd_credit, "USD")}
-          valueClassName="text-xl font-semibold"
+          valueClassName={TRANSACTION_DETAIL_MONEY_VALUE_CLASS}
         />
 
         <CreditDestinationRow
@@ -122,7 +123,7 @@ export function DepositReviewDetailsRows({
         />
 
         <TransactionDetailSummaryRow
-          label={mode === "detail" ? REVIEW_ROW_LABELS.scheme : REVIEW_ROW_LABELS.transferMethod}
+          label={REVIEW_ROW_LABELS.depositMethod}
           value={depositReview.transfer_method}
         />
 

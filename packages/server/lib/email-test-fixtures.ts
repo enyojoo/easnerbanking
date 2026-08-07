@@ -29,7 +29,7 @@ export const txSettledFixture: TransactionEmailData = {
   createdAt: "2026-01-15T12:00:00.000Z",
   outcome: "success",
   detailRows: [
-    { label: "Scheme", value: "ACH" },
+    { label: "Deposit method", value: "ACH" },
     { label: "Sender", value: "Chase" },
     { label: "Processing fee", value: "-$0.05" },
     { label: "Amount credited", value: "+$99.95" },

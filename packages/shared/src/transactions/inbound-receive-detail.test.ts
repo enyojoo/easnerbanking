@@ -93,12 +93,12 @@ describe("buildInboundReceiveDetailRows", () => {
       REVIEW_ROW_LABELS.amountPaid,
       REVIEW_ROW_LABELS.amountCredited,
       REVIEW_ROW_LABELS.creditTo,
-      REVIEW_ROW_LABELS.scheme,
+      REVIEW_ROW_LABELS.depositMethod,
       REVIEW_ROW_LABELS.when,
     ])
     const map = rowMap(rows)
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$65")
-    expect(map[REVIEW_ROW_LABELS.scheme]).toBe("Bank Transfer")
+    expect(map[REVIEW_ROW_LABELS.depositMethod]).toBe("Bank Transfer")
   })
 
   it("Noah VA funding includes credit to and narration on detail", () => {
@@ -118,15 +118,16 @@ describe("buildInboundReceiveDetailRows", () => {
       ledger_created_at: "2026-01-15T12:00:00.000Z",
     })
     expect(snapshot?.kind).toBe("noah_va_funding")
-    const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
-    expect(map[REVIEW_ROW_LABELS.scheme]).toBe("Wire")
+    const rows = buildInboundReceiveDetailRows(snapshot!, { surface: "detail" })
+    const map = rowMap(rows)
+    expect(map[REVIEW_ROW_LABELS.depositMethod]).toBe("Wire")
     expect(map[REVIEW_ROW_LABELS.sender]).toBe("Acme Corp")
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$50")
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
     expect(map[REVIEW_ROW_LABELS.narration]).toBe("Invoice 42")
-    expect(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }).at(-1)?.label).toBe(
-      REVIEW_ROW_LABELS.when,
-    )
+    const labels = rows.filter((r) => r.label).map((r) => r.label)
+    expect(labels.at(-2)).toBe(REVIEW_ROW_LABELS.depositMethod)
+    expect(labels.at(-1)).toBe(REVIEW_ROW_LABELS.when)
   })
 
   it("Noah VA funding without fee omits amount credited on detail", () => {
@@ -272,7 +273,7 @@ describe("buildInboundReceiveDetailRows", () => {
     })
     expect(easetag?.kind).toBe("easetag_receive")
     const easetagRows = rowMap(buildInboundReceiveEmailDetailRows(easetag!))
-    expect(easetagRows[REVIEW_ROW_LABELS.scheme]).toBe("Easetag")
+    expect(easetagRows[REVIEW_ROW_LABELS.depositMethod]).toBe("Easetag")
     expect(easetagRows[REVIEW_ROW_LABELS.amountCredited]).toBeUndefined()
     expect(easetagRows[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
 

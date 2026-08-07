@@ -119,11 +119,15 @@ export const transactionDetailRowStyles = StyleSheet.create({
     marginLeft: spacing[2],
   },
   valueBold: {
+    // Same size as body — weight only for primary money totals.
     fontFamily: fontFamily.semibold,
   },
   valueMono: {
+    ...textStyles.body,
     fontFamily: fontFamily.mono,
     fontWeight: '500',
+    color: colors.text.primary,
+    textAlign: 'right',
   },
   copyableValueRow: {
     flexDirection: 'row',

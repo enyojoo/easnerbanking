@@ -8,7 +8,7 @@ import {
   type TransactionTimingRow,
 } from "@easner/shared"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
-import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
+import { TransactionDetailSummaryRow, TRANSACTION_DETAIL_MONEY_VALUE_CLASS } from "@/components/transactions/transaction-detail-summary-row"
 import { TransactionTimingRows } from "@/components/transactions/transaction-timing-rows"
 import { Card, CardContent } from "@/components/ui/card"
 import { Copy, Check } from "lucide-react"
@@ -40,7 +40,7 @@ export function InboundReceiveDetailsRows({
             {onCopy ? (
               <button
                 type="button"
-                className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
+                className="flex items-center gap-2 font-mono text-sm font-normal transition-colors hover:text-primary"
                 onClick={() => onCopy(transactionId, "transactionId")}
                 aria-label="Copy transaction id"
               >
@@ -52,7 +52,7 @@ export function InboundReceiveDetailsRows({
                 )}
               </button>
             ) : (
-              <span className="font-mono text-sm font-medium">{transactionId}</span>
+              <span className="font-mono text-sm font-normal">{transactionId}</span>
             )}
           </TransactionDetailSummaryRow>
 
@@ -90,7 +90,7 @@ export function InboundReceiveDetailsRows({
                 <TransactionDetailSummaryRow key={`${row.label}-${index}`} label={row.label}>
                   <button
                     type="button"
-                    className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
+                    className="flex items-center gap-2 font-mono text-sm font-normal transition-colors hover:text-primary"
                     onClick={() => onCopy(row.copyValue!, copyKey)}
                     aria-label={`Copy ${row.label}`}
                   >
@@ -111,7 +111,10 @@ export function InboundReceiveDetailsRows({
                 label={row.label}
                 value={row.value}
                 valueClassName={
-                  row.label === REVIEW_ROW_LABELS.amountCredited ? "text-xl font-semibold" : undefined
+                  row.label === REVIEW_ROW_LABELS.amountCredited ||
+                  row.label === REVIEW_ROW_LABELS.amountPaid
+                    ? TRANSACTION_DETAIL_MONEY_VALUE_CLASS
+                    : undefined
                 }
               />
             )

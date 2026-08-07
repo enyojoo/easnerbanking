@@ -94,7 +94,7 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(map["Exchange rate"]).toBeUndefined()
   })
 
-  it("bank deposit: Scheme, Sender, Processing fee, Amount credited", () => {
+  it("bank deposit: Deposit method, Sender, Processing fee, Amount credited", () => {
     const rows = buildTransactionEmailDetailRows({
       direction: "in",
       deposit: {
@@ -108,7 +108,7 @@ describe("buildTransactionEmailDetailRows", () => {
       },
     })
     const map = rowMap(rows)
-    expect(map["Scheme"]).toBe("Wire")
+    expect(map["Deposit method"]).toBe("Wire")
     expect(map["Sender"]).toBe("ACME CORP")
     expect(map["Processing fee"]).toBe("$0.05")
     expect(map["Amount credited"]).toBe("+$9.95")
@@ -154,7 +154,7 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(map["Exchange rate"]).toBeDefined()
     expect(map["Amount credited"]).toBe("+$65")
     expect(map["Credited to"]).toBe("USD Balance")
-    expect(map["Scheme"]).toBe("Bank Transfer")
+    expect(map["Deposit method"]).toBe("Bank Transfer")
     expect(map["Transfer method"]).toBeUndefined()
     expect(map["Amount to credit"]).toBeUndefined()
     expect(map["Narration"]).toBeUndefined()
@@ -178,7 +178,7 @@ describe("buildTransactionEmailDetailRows", () => {
     })
     const rows = buildTransactionEmailDetailRows({ direction: "in", inboundReceive: snapshot! })
     const map = rowMap(rows)
-    expect(map["Scheme"]).toBe("Mobile Money")
+    expect(map["Deposit method"]).toBe("Mobile Money")
     expect(map["Amount credited"]).toBe("+$65")
   })
 
@@ -198,7 +198,8 @@ describe("buildTransactionEmailDetailRows", () => {
       buildTransactionEmailDetailRows({ direction: "in", inboundReceive: snapshot! }),
     )
     expect(filtered.map((r) => r.label)).not.toContain("Narration")
-    expect(filtered.map((r) => r.label)).toContain("Amount credited")
+    expect(filtered.map((r) => r.label)).toContain("Deposit method")
+    expect(filtered.map((r) => r.label)).toContain("Credited to")
   })
 
   it("returns no rows for shapes without enrichment (e.g. Easetag)", () => {

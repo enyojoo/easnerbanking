@@ -159,7 +159,7 @@ export function buildYcLocalPayInReviewRows(input: {
 
   rows.push({
     id: "transfer-method",
-    label: REVIEW_ROW_LABELS.transferMethod,
+    label: isFundBalance ? REVIEW_ROW_LABELS.depositMethod : REVIEW_ROW_LABELS.transferMethod,
     value: transferMethod,
     ...(isFundBalance && isMomo ? {} : { valueBold: false }),
   })

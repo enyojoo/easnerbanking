@@ -190,7 +190,7 @@ function TransactionSummaryDetails({
       <CardContent className="p-6">
         <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-medium">{transaction.id}</span>
+            <span className="truncate text-sm font-normal">{transaction.id}</span>
             <Button
               variant="ghost"
               size="icon"
@@ -241,7 +241,10 @@ function TransactionSummaryDetails({
         ) : null}
 
         {!isStripeInvoiceSettlement && transaction.paymentScheme ? (
-          <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.scheme} value={transaction.paymentScheme} />
+          <TransactionDetailSummaryRow
+            label={isDeposit ? REVIEW_ROW_LABELS.depositMethod : REVIEW_ROW_LABELS.transferMethod}
+            value={transaction.paymentScheme}
+          />
         ) : null}
 
         {!isStripeInvoiceSettlement && isCard && cardLast4 ? (
