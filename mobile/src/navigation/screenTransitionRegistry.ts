@@ -44,6 +44,7 @@ export type ScreenRouteName =
   | 'SendPin'
   | 'ReceiveMoney'
   | 'ReceiveBankDetails'
+  | 'ReceiveStablecoinDetails'
   | 'ReceiveLocalRail'
   | 'ReceiveLocalAmount'
   | 'ReceiveLocalMomoSetup'
@@ -104,6 +105,7 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   // Receive flow
   ReceiveMoney: { intent: 'stackEntry' },
   ReceiveBankDetails: { intent: 'flowStep' },
+  ReceiveStablecoinDetails: { intent: 'flowStep' },
   ReceiveLocalRail: { intent: 'flowHub', hubGroup: 'receiveLocalHub' },
   ReceiveLocalAmount: { intent: 'flowStep' },
   ReceiveLocalMomoSetup: { intent: 'flowStep' },

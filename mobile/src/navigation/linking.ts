@@ -65,6 +65,7 @@ export const webLinking: LinkingOptions<Record<string, unknown>> = {
       ScanWalletAddress: 'user/send/scan',
       ReceiveMoney: 'user/receive',
       ReceiveBankDetails: 'user/receive/bank',
+      ReceiveStablecoinDetails: 'user/receive/stablecoin',
       ReceiveLocalRail: 'user/receive/local/rail',
       ReceiveLocalAmount: 'user/receive/local/amount',
       ReceiveLocalMomoSetup: 'user/receive/local/momo',

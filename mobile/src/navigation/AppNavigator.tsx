@@ -91,6 +91,7 @@ import SendPinScreenNative from '../screens/send/SendPinScreen'
 // Receive Money Flow Screens
 import ReceiveMoneyScreenNative from '../screens/receive/ReceiveMoneyScreen'
 import ReceiveBankDetailsScreenNative from '../screens/receive/ReceiveBankDetailsScreen'
+import ReceiveStablecoinDetailsScreenNative from '../screens/receive/ReceiveStablecoinDetailsScreen'
 import ReceiveLocalRailScreenNative from '../screens/receive/ReceiveLocalRailScreen'
 import ReceiveLocalAmountScreenNative from '../screens/receive/ReceiveLocalAmountScreen'
 import ReceiveLocalReviewScreenNative from '../screens/receive/ReceiveLocalReviewScreen'
@@ -131,6 +132,10 @@ const ReceiveMoneyScreen = createWebLazyScreen(
 const ReceiveBankDetailsScreen = createWebLazyScreen(
   () => import('../screens/receive/ReceiveBankDetailsScreen'),
   ReceiveBankDetailsScreenNative,
+)
+const ReceiveStablecoinDetailsScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveStablecoinDetailsScreen'),
+  ReceiveStablecoinDetailsScreenNative,
 )
 const ReceiveLocalRailScreen = createWebLazyScreen(
   () => import('../screens/receive/ReceiveLocalRailScreen'),
@@ -395,6 +400,11 @@ function MainStack() {
           name="ReceiveBankDetails"
           component={ReceiveBankDetailsScreen}
           options={transitionOptions('ReceiveBankDetails')}
+        />
+        <Stack.Screen
+          name="ReceiveStablecoinDetails"
+          component={ReceiveStablecoinDetailsScreen}
+          options={transitionOptions('ReceiveStablecoinDetails')}
         />
         <Stack.Screen
           name="ReceiveLocalRail"

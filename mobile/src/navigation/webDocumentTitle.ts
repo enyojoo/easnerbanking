@@ -22,6 +22,7 @@ const ROUTE_TITLES: Record<string, string> = {
   TransactionDetails: 'Transaction',
   ReceiveMoney: 'Add money',
   ReceiveBankDetails: 'Bank Account',
+  ReceiveStablecoinDetails: 'Stablecoin',
   ReceiveTransactionDetails: 'Add money',
   AccountVerification: 'Verification',
   Notifications: 'Notifications',

@@ -8,27 +8,17 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Platform,
-  Share,
 } from 'react-native'
 import {
-  AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Check,
-  Copy,
-  Info,
-  Share2,
   ShieldCheck,
-  Wallet,
 } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontSize, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
-import { PremiumModalSheet } from '../../components/premium'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -39,7 +29,6 @@ import {
   useConsumerRelayDepositAddresses,
 } from '../../hooks/queries/use-receive-deposit-queries'
 import { ReceiveStablecoinMethodList, type StablecoinReceiveMethod } from '../../components/receive/ReceiveStablecoinMethodList'
-import QRCode from 'react-native-qrcode-svg'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { haptics } from '../../lib/haptics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
@@ -63,7 +52,6 @@ type TabType = 'cash' | 'stablecoin'
 export default function ReceiveMoneyScreen({ navigation, route }: NavigationProps) {
   const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const { user, userProfile, refreshUserProfile } = useAuth()
-  const copyToClipboard = useCopyToClipboard()
   const queryClient = useQueryClient()
   const { scope } = useScope()
   const currency = ((route.params as any)?.currency || 'USD') as 'USD' | 'EUR'
@@ -72,9 +60,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const relayDepositQuery = useConsumerRelayDepositAddresses(currency === 'USD')
 
   const [activeTab, setActiveTab] = useState<TabType>('cash')
-  const [selectedStablecoinMethod, setSelectedStablecoinMethod] = useState<StablecoinReceiveMethod | null>(null)
-  const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
-  const [aboutSheetOpen, setAboutSheetOpen] = useState(false)
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
 
   const supportsStablecoins = currency === 'USD' || currency === 'EUR'
@@ -404,47 +389,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     }
   }, [showCashTab, showStablecoinTab])
 
-  const handleCopy = async (text: string, key: string) => {
-    const ok = await copyToClipboard(text)
-    if (!ok) return
-    haptics.success()
-    setCopiedStates((prev) => ({ ...prev, [key]: true }))
-    setTimeout(() => {
-      setCopiedStates((prev) => ({ ...prev, [key]: false }))
-    }, 2000)
-  }
-
-  const handleShare = async () => {
-    try {
-      haptics.medium()
-
-      if (stablecoinData.address) {
-        // Format stablecoin details for sharing
-        const stablecoinName = currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'
-        const networkTicker = stablecoinData.network === 'Solana' ? 'SOL' : stablecoinData.network.toUpperCase()
-        const networkName = stablecoinData.network
-        let shareText = `Your Stablecoin ${stablecoinName} Details\n\n`
-        
-        shareText += `Network: ${networkTicker} • ${networkName}\n`
-        shareText += `Address: ${stablecoinData.address}\n`
-        
-        if (stablecoinData.memo) {
-          shareText += `Memo (Required): ${stablecoinData.memo}\n`
-        }
-        
-        await Share.share({
-          message: shareText,
-          title: `${stablecoinName} Details`,
-        })
-      }
-    } catch (error: any) {
-      // User cancelled or error occurred - silently fail
-      if (error.message !== 'User did not share') {
-        console.error('Error sharing:', error)
-      }
-    }
-  }
-
   /** Turnkey Solana vault for this currency tab. */
   const getStablecoinAddress = () => {
     const raw = turnkeyDepositAddress || ''
@@ -454,105 +398,63 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
     return {
       address: addrValid ? raw : '',
-      network: 'Solana',
-      supportedStablecoins: currency === 'USD' ? ['USDC'] : ['EURC'],
+      network: 'Solana' as const,
       memo: addrValid ? memo : undefined,
-      isLiquidationAddress: false,
     }
   }
 
   const stablecoinData = getStablecoinAddress()
   const stablecoinMethods = useMemo((): StablecoinReceiveMethod[] => {
-    if (currency !== 'USD') return []
     const methods: StablecoinReceiveMethod[] = []
     if (stablecoinData.address) {
       methods.push({
-        id: 'usdc-solana',
-        asset: 'USDC',
+        id: currency === 'EUR' ? 'eurc-solana' : 'usdc-solana',
+        asset: currency === 'EUR' ? 'EURC' : 'USDC',
         network: 'Solana',
         status: 'active',
         address: stablecoinData.address,
+        memo: stablecoinData.memo,
       })
     }
-    const relay = relayDepositQuery.data
-    if (relay?.enabled) {
-      for (const row of relay.addresses ?? []) {
-        methods.push({
-          id: `relay-${row.asset}-${row.network}`.toLowerCase(),
-          asset: row.asset,
-          network: row.network,
-          status: 'active',
-          address: row.address,
-          estimatedFeeBps: row.estimatedFeeBps ?? null,
-        })
-      }
-      if (relay.status === 'provisioning' && methods.length <= 1) {
-        methods.push({
-          id: 'usdt-tron-provisioning',
-          asset: 'USDT',
-          network: 'Tron',
-          status: 'provisioning',
-        })
+    if (currency === 'USD') {
+      const relay = relayDepositQuery.data
+      if (relay?.enabled) {
+        for (const row of relay.addresses ?? []) {
+          methods.push({
+            id: `relay-${row.asset}-${row.network}`.toLowerCase(),
+            asset: row.asset,
+            network: row.network,
+            status: 'active',
+            address: row.address,
+            estimatedFeeBps: row.estimatedFeeBps ?? null,
+          })
+        }
+        if (relay.status === 'provisioning' && !methods.some((m) => m.asset === 'USDT')) {
+          methods.push({
+            id: 'usdt-tron-provisioning',
+            asset: 'USDT',
+            network: 'Tron',
+            status: 'provisioning',
+          })
+        }
       }
     }
     return methods
-  }, [currency, relayDepositQuery.data, stablecoinData.address])
+  }, [currency, relayDepositQuery.data, stablecoinData.address, stablecoinData.memo])
 
-  const activeStablecoinMethod =
-    selectedStablecoinMethod ??
-    (stablecoinMethods.length === 1 ? stablecoinMethods[0] : null)
-
-  const stablecoinName = activeStablecoinMethod?.asset ?? (currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC')
   const effectiveTab: TabType = showTabBar ? activeTab : showCashTab ? 'cash' : 'stablecoin'
 
-  const aboutSheetTitle = `About your ${stablecoinName} Address`
-  const aboutSheetIntro = `Please, take note of the following when sending ${stablecoinName} to your address:`
-
-  const aboutPaymentNotes = useMemo(() => {
-    if (activeStablecoinMethod?.network === 'Tron') {
-      return [
-        'Only send USDT on Tron (TRC-20) to this address.',
-        'Bridge fees apply and are deducted from your credited balance.',
-        'Sending other assets or networks may result in permanent loss.',
-      ]
-    }
-    return [
-      `Only send ${stablecoinName} on Solana to this address.`,
-      'Sending other assets or networks may result in permanent loss.',
-      'Processing time: within seconds.',
-    ]
-  }, [activeStablecoinMethod?.network, stablecoinName])
-
-  const shouldWrapCopyableValue = (value: string, key: string) =>
-    key === 'stablecoinAddress' || value.length > 28
-
-  const renderCopyableField = (label: string, value: string, key: string) => {
-    const wrapValue = shouldWrapCopyableValue(value, key)
-
-    return (
-      <View style={styles.fieldContainer}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        <Pressable
-          android_ripple={ripple.neutral}
-          style={[styles.fieldValueContainer, wrapValue && styles.fieldValueContainerWrap]}
-          onPress={() => handleCopy(value, key)}
-        >
-          <Text
-            style={[styles.fieldValue, wrapValue && styles.fieldValueWrap]}
-            {...(wrapValue ? {} : { numberOfLines: 1 })}
-          >
-            {value}
-          </Text>
-          <View style={styles.copyButton}>
-            {copiedStates[key] ? (
-              <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
-            ) : (
-              <Copy size={18} color={colors.text.secondary} strokeWidth={2} />
-            )}
-          </View>
-        </Pressable>
-      </View>
-    )
+  const navigateToStablecoinDetails = (method: StablecoinReceiveMethod) => {
+    if (method.status !== 'active' || !method.address) return
+    haptics.medium()
+    navigation.navigate('ReceiveStablecoinDetails' as never, {
+      currency,
+      asset: method.asset,
+      network: method.network,
+      address: method.address,
+      memo: method.memo,
+      estimatedFeeBps: method.estimatedFeeBps ?? null,
+    } as never)
   }
 
   const renderDepositVerificationNotice = (surface: 'cash' | 'stablecoin') => {
@@ -608,35 +510,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       </View>
     )
   }
-
-  const renderDetailActions = () => (
-    <View style={styles.detailActionsRow}>
-      <Pressable
-        android_ripple={ripple.neutral}
-        style={styles.detailActionButton}
-        onPress={handleShare}
-        accessibilityRole="button"
-        accessibilityLabel="Share address detail"
-      >
-        <Share2 size={20} color={colors.primary.main} strokeWidth={2} />
-        <Text style={styles.detailActionText}>Share Detail</Text>
-      </Pressable>
-
-      <Pressable
-        android_ripple={ripple.neutral}
-        style={styles.detailActionButton}
-        onPress={async () => {
-          haptics.tap()
-          setAboutSheetOpen(true)
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="About address"
-      >
-        <Info size={20} color={colors.primary.main} strokeWidth={2} />
-        <Text style={styles.detailActionText}>About Address</Text>
-      </Pressable>
-    </View>
-  )
 
   return (
     <ScreenWrapper>
@@ -728,156 +601,22 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               </View>
               )
             ) : effectiveTab === 'stablecoin' && showStablecoinTab ? (
-              <>
-                {showStablecoinDepositDetails && stablecoinMethods.length > 1 && !activeStablecoinMethod ? (
-                  <View style={styles.section}>
-                    <ReceiveStablecoinMethodList
-                      methods={stablecoinMethods}
-                      onSelect={(method) => setSelectedStablecoinMethod(method)}
-                    />
-                  </View>
-                ) : showStablecoinDepositDetails && activeStablecoinMethod?.address ? (
-                  <>
-                    <View style={styles.section}>
-                      {stablecoinMethods.length > 1 ? (
-                        <Pressable
-                          android_ripple={ripple.neutral}
-                          style={styles.backToMethodsRow}
-                          onPress={() => setSelectedStablecoinMethod(null)}
-                        >
-                          <ArrowLeft size={18} color={colors.text.secondary} />
-                          <Text style={styles.backToMethodsText}>All stablecoin methods</Text>
-                        </Pressable>
-                      ) : null}
-                      <View style={styles.qrSection}>
-                        <View style={styles.qrContainer}>
-                          <QRCode
-                            value={activeStablecoinMethod.address}
-                            size={200}
-                            color={colors.text.primary}
-                            backgroundColor={colors.background.primary}
-                          />
-                        </View>
-                        <Text style={styles.qrHint}>
-                          Scan to send {activeStablecoinMethod.asset} on {activeStablecoinMethod.network}
-                        </Text>
-                      </View>
-
-                      <View style={styles.fieldContainer}>
-                        <Text style={styles.fieldLabel}>Network</Text>
-                        <View style={styles.fieldValueContainer}>
-                          <Text style={styles.fieldValue}>{activeStablecoinMethod.network}</Text>
-                        </View>
-                      </View>
-
-                      {renderCopyableField(
-                        `${activeStablecoinMethod.asset} Address`,
-                        activeStablecoinMethod.address,
-                        'stablecoinAddress',
-                      )}
-
-                      {activeStablecoinMethod.estimatedFeeBps != null ? (
-                        <Text style={styles.feeDisclaimer}>
-                          Estimated bridge fee: ~{(activeStablecoinMethod.estimatedFeeBps / 100).toFixed(2)}%
-                        </Text>
-                      ) : null}
-                    </View>
-                    {renderDetailActions()}
-                  </>
-                ) : showStablecoinDepositDetails && stablecoinData.address ? (
-                  <>
-                    {/* Legacy single Solana detail when relay list is unavailable */}
-                    {/* Stablecoin Details */}
-                    <View style={styles.section}>
-                      {/* QR Code - First */}
-                      {stablecoinData.address && (
-                        <View style={styles.qrSection}>
-                          <View style={styles.qrContainer}>
-                            <QRCode
-                              value={stablecoinData.address}
-                              size={200}
-                              color={colors.text.primary}
-                              backgroundColor={colors.background.primary}
-                            />
-                          </View>
-                          <Text style={styles.qrHint}>Scan to send {stablecoinData.supportedStablecoins.join(' or ')}</Text>
-                        </View>
-                      )}
-
-                      {/* Network field - formatted as ticker (left) and full name (right end) */}
-                      <View style={styles.fieldContainer}>
-                        <Text style={styles.fieldLabel}>Network</Text>
-                        <View style={styles.fieldValueContainer}>
-                          <View style={styles.networkValueContainer}>
-                            <Text style={styles.networkTicker}>SOL</Text>
-                            <View style={styles.networkNameContainer}>
-                              <Text style={styles.networkName}>Solana</Text>
-                            </View>
-                          </View>
-                        </View>
-                      </View>
-
-                      {/* Address */}
-                      {stablecoinData.address && (
-                        renderCopyableField(
-                          currency.toLowerCase() === 'usd' ? 'USDC Address' : 'EURC Address',
-                          stablecoinData.address,
-                          'stablecoinAddress',
-                        )
-                      )}
-
-                      {/* Memo */}
-                      {stablecoinData.memo && (
-                        <>
-                          {renderCopyableField('Memo (Required)', stablecoinData.memo, 'memo')}
-                          <View style={styles.memoWarningContainer}>
-                            <AlertTriangle size={16} color={colors.warning.main} strokeWidth={2} />
-                            <Text style={styles.memoWarning}>
-                              Include this memo when sending to this address on {stablecoinData.network}
-                            </Text>
-                          </View>
-                        </>
-                      )}
-                    </View>
-
-                    {renderDetailActions()}
-                  </>
-                ) : !verificationComplete || depositFetched ? (
+              !verificationComplete || !showStablecoinDepositDetails ? (
+                !verificationComplete || depositFetched ? (
                   renderDepositVerificationNotice('stablecoin')
-                ) : null}
-              </>
+                ) : null
+              ) : (
+                <View style={{ gap: spacing[4] }}>
+                  <ReceiveStablecoinMethodList
+                    methods={stablecoinMethods}
+                    onSelect={navigateToStablecoinDetails}
+                  />
+                </View>
+              )
             ) : null}
           </View>
         </ScrollView>
       </View>
-
-      <PremiumModalSheet
-        visible={aboutSheetOpen}
-        onRequestClose={() => setAboutSheetOpen(false)}
-      >
-        <View style={styles.aboutSheetContent}>
-          <View style={styles.aboutSheetHeader}>
-            <View style={styles.aboutSheetIcon}>
-              <Wallet size={22} color={colors.primary.main} strokeWidth={2} />
-            </View>
-            <Text style={styles.aboutSheetTitle}>{aboutSheetTitle}</Text>
-          </View>
-          <Text style={styles.aboutSheetIntro}>{aboutSheetIntro}</Text>
-
-          <ScrollView
-            style={styles.aboutSheetScroll}
-            contentContainerStyle={styles.aboutSheetScrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {aboutPaymentNotes.map((note) => (
-              <View key={note} style={styles.aboutNoteRow}>
-                <View style={styles.aboutNoteDot} />
-                <Text style={styles.aboutNoteText}>{note}</Text>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </PremiumModalSheet>
     </ScreenWrapper>
   )
 }
