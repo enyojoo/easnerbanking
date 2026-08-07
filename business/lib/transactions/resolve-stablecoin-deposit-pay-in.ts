@@ -20,6 +20,7 @@ export function isStablecoinDepositPayInRow(row: Record<string, unknown>): boole
   if (isRelayTronDepositMetadata(meta)) return true
   const sourceType = String(meta.source_type ?? "").toLowerCase()
   if (sourceType === "liquidation_address") return true
+  const provider = String(row.provider ?? "").toLowerCase()
   if (provider === "turnkey" && (row.chain != null || row.asset != null)) return true
   return false
 }
