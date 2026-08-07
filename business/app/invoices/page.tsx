@@ -338,7 +338,7 @@ export default function InvoicesPage() {
     if (canProvision) {
       const res = await fetchWithSession(
         `/api/business/b2b/invoice-pay-in?currency=${encodeURIComponent(invoice.currency)}`,
-        { headers: { "X-Easner-Noah-Scope": "business" } },
+        { headers: { "X-Easner-Account-Scope": "business" } },
       )
       const data = (await res.json().catch(() => ({}))) as {
         bankAccount?: Account

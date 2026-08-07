@@ -26,7 +26,7 @@ type VaJson = {
   accountHolderName?: string
 }
 
-const NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
+const ACCOUNT_SCOPE_HEADERS = { "X-Easner-Account-Scope": "business" } as const
 
 function maskTail(s: string | undefined, visible = 4): string {
   if (!s) return "—"
@@ -100,7 +100,7 @@ export function useBusinessAccountRows() {
             `/api/noah/virtual-accounts`,
             {
               query: { currencies: batchable.join(",") },
-              headers: NOAH_HEADERS,
+              headers: ACCOUNT_SCOPE_HEADERS,
             },
           )
           const accounts = data.accounts ?? {}
@@ -293,7 +293,7 @@ export function useBusinessAccountRows() {
     hasProvisionedVirtualAccounts,
     profileLoading,
     refreshAccounts,
-    noahHeaders: NOAH_HEADERS,
+    accountScopeHeaders: ACCOUNT_SCOPE_HEADERS,
     displayName,
     balances,
     balancesSource: balancesSource ?? null,

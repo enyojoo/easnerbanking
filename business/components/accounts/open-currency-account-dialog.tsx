@@ -39,7 +39,7 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
   const loadVisibility = useCallback(async () => {
     try {
       const res = await fetchWithSession("/api/accounts/available-currencies", {
-        headers: { "X-Easner-Noah-Scope": "business" },
+        headers: { "X-Easner-Account-Scope": "business" },
       })
       if (!res.ok) {
         setCanOpenAny(false)
@@ -60,7 +60,7 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
     setError(null)
     try {
       const res = await fetchWithSession("/api/accounts/available-currencies", {
-        headers: { "X-Easner-Noah-Scope": "business" },
+        headers: { "X-Easner-Account-Scope": "business" },
       })
       const json = (await res.json()) as AvailablePayload & { error?: string }
       if (!res.ok) {
@@ -94,7 +94,7 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Easner-Noah-Scope": "business",
+          "X-Easner-Account-Scope": "business",
         },
         body: JSON.stringify({ currency: code }),
       })

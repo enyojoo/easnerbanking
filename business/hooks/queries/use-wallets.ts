@@ -8,7 +8,7 @@ import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 import { useScope } from "@/lib/query/scope"
 import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
 
-const NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
+const ACCOUNT_SCOPE_HEADERS = { "X-Easner-Account-Scope": "business" } as const
 const WALLET_LIST_CACHE_KEY_PREFIX = "easner_business_wallets_list_v1_"
 
 export interface OnChainBalances {
@@ -55,13 +55,13 @@ export function useWalletBalances() {
     enabled: Boolean(scope),
     queryFn: async () => {
       const [balances, available, deposits] = await Promise.all([
-        apiFetch<OnChainBalances>("/api/wallets/on-chain-balances", { headers: NOAH_HEADERS }),
+        apiFetch<OnChainBalances>("/api/wallets/on-chain-balances", { headers: ACCOUNT_SCOPE_HEADERS }),
         apiFetch<AvailableCurrencies>("/api/accounts/available-currencies", {
-          headers: NOAH_HEADERS,
+          headers: ACCOUNT_SCOPE_HEADERS,
         }),
         apiFetch<DepositAddresses>("/api/wallets/deposit-addresses", {
           query: { mode: "fast" },
-          headers: NOAH_HEADERS,
+          headers: ACCOUNT_SCOPE_HEADERS,
         }),
       ])
       const detail = String(balances?.detail ?? "")
@@ -162,7 +162,7 @@ export function useWalletBalance(walletId: string | null) {
       ? qk.wallets.balance(scope, walletId)
       : ["wallets", "balance", "disabled"],
     enabled: Boolean(scope) && Boolean(walletId),
-    queryFn: () => apiFetch<unknown>(`/api/wallets/balance/${walletId}`, { headers: NOAH_HEADERS }),
+    queryFn: () => apiFetch<unknown>(`/api/wallets/balance/${walletId}`, { headers: ACCOUNT_SCOPE_HEADERS }),
     staleTime: 15_000,
     gcTime: 10 * 60_000,
     meta: { safePersist: false, webPersist: "none", freshness: "critical" },

@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
 import { shouldRefreshAfterChainLedgerSync } from "@/lib/turnkey/sync-chain-ledger-response"
 
-const LEDGER_SCOPE_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
+const LEDGER_SCOPE_HEADERS = { "X-Easner-Account-Scope": "business" } as const
 /** Minimum gap between full server-side scans; ATA + light ingest still run every call. */
 const MIN_FULL_SCAN_INTERVAL_MS = 10 * 60_000
 

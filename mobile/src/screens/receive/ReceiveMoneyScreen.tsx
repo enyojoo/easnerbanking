@@ -426,7 +426,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
             network: row.network,
             status: 'active',
             address: row.address,
-            estimatedFeeBps: row.estimatedFeeBps ?? null,
           })
         }
         if (relay.status === 'provisioning' && !methods.some((m) => m.asset === 'USDT')) {
@@ -453,7 +452,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       network: method.network,
       address: method.address,
       memo: method.memo,
-      estimatedFeeBps: method.estimatedFeeBps ?? null,
     } as never)
   }
 
@@ -832,12 +830,6 @@ const styles = StyleSheet.create({
     ...textStyles.bodySmall,
     color: colors.text.secondary,
     fontFamily: fontFamily.medium,
-  },
-  feeDisclaimer: {
-    marginTop: spacing[2],
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    fontFamily: fontFamily.regular,
   },
   supportedStablecoinsContainer: {
     marginTop: spacing[4],

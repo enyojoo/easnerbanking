@@ -258,7 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  "X-Easner-Noah-Scope": "business",
+                  "X-Easner-Account-Scope": "business",
                 },
               })
               if (!er.ok) {

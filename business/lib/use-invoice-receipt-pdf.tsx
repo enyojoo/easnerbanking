@@ -27,7 +27,7 @@ async function getLogoDataUrl(): Promise<string> {
 async function loadLedgerForReceipt(): Promise<Transaction[]> {
   try {
     const res = await fetchWithSession("/api/transactions", {
-      headers: { "X-Easner-Noah-Scope": "business" },
+      headers: { "X-Easner-Account-Scope": "business" },
     })
     const body = (await res.json().catch(() => ({}))) as { transactions?: Transaction[] }
     if (!res.ok) return []

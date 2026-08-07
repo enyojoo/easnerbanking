@@ -520,7 +520,7 @@ export default function SendConfirmPage() {
           "Idempotency-Key": `biz-easetag-${plannedEtid || state.transactionId || Date.now()}`,
         }
         if (businessId) {
-          headers["X-Easner-Noah-Scope"] = "business"
+          headers["X-Easner-Account-Scope"] = "business"
         }
         const res = await fetchWithSession("/api/wallets/easetag-transfer", {
           method: "POST",
@@ -584,7 +584,7 @@ export default function SendConfirmPage() {
       setIsAuthorizing(true)
       try {
         const scopeHeaders: Record<string, string> = {}
-        if (businessId) scopeHeaders["X-Easner-Noah-Scope"] = "business"
+        if (businessId) scopeHeaders["X-Easner-Account-Scope"] = "business"
 
         const walletEtid =
           typeof state.transactionId === "string" &&
@@ -662,7 +662,7 @@ export default function SendConfirmPage() {
     setIsAuthorizing(true)
     try {
       const scopeHeaders: Record<string, string> = {}
-      if (businessId) scopeHeaders["X-Easner-Noah-Scope"] = "business"
+      if (businessId) scopeHeaders["X-Easner-Account-Scope"] = "business"
 
       const payoutEtid =
         typeof state.transactionId === "string" &&

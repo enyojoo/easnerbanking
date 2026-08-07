@@ -3,7 +3,7 @@
 
 import * as FileSystem from 'expo-file-system/legacy'
 import type { Session } from '@supabase/supabase-js'
-import { getApiBaseUrl, getNoahScopeHeaders } from './apiClient'
+import { getApiBaseUrl, getAccountScopeHeaders } from './apiClient'
 import { getSessionReliable } from './authSession'
 
 async function requireAuthSession(): Promise<Session> {
@@ -259,7 +259,7 @@ export const noahService = {
     branchCode?: string
   }): Promise<PayoutQuote> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const response = await fetch(`${apiUrl()}/api/payouts/quote`, {
       method: 'POST',
       headers: {
@@ -302,7 +302,7 @@ export const noahService = {
     branchCode?: string
   }): Promise<PayoutQuote> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const response = await fetch(`${apiUrl()}/api/payouts/confirm`, {
       method: 'POST',
       headers: {
@@ -335,7 +335,7 @@ export const noahService = {
 
   async confirmWalletSendOrder(input: { formSessionId: string }): Promise<WalletSendQuote> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const response = await fetch(`${apiUrl()}/api/wallets/send/confirm`, {
       method: 'POST',
       headers: {
@@ -360,7 +360,7 @@ export const noahService = {
     sendAmount?: number
   }): Promise<WalletSendQuote> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const response = await fetch(`${apiUrl()}/api/wallets/send/quote`, {
       method: 'POST',
       headers: {
@@ -392,7 +392,7 @@ export const noahService = {
     reviewSnapshot?: Record<string, unknown>
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const response = await fetch(`${apiUrl()}/api/wallets/send/execute`, {
       method: 'POST',
       headers: {
@@ -428,7 +428,7 @@ export const noahService = {
     as_of: string
   }> }> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const qs = new URLSearchParams()
     if (input?.destinations) qs.set('destinations', input.destinations)
     if (input?.networks) qs.set('networks', input.networks)
@@ -458,7 +458,7 @@ export const noahService = {
     best: { asset: string; network: string } | null
   }> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const response = await fetch(`${apiUrl()}/api/wallets/send/infer-address`, {
       method: 'POST',
       headers: {
@@ -519,7 +519,7 @@ export const noahService = {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
-        'X-Easner-Noah-Scope': 'individual',
+        'X-Easner-Account-Scope': 'individual',
       },
       body: JSON.stringify(body),
     })
@@ -653,7 +653,7 @@ export const noahService = {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
-            'X-Easner-Noah-Scope': scope,
+            'X-Easner-Account-Scope': scope,
           },
           signal: controller.signal,
         })
@@ -791,7 +791,7 @@ export const noahService = {
       headers: {
         Authorization: `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
-        'X-Easner-Noah-Scope': 'individual',
+        'X-Easner-Account-Scope': 'individual',
       },
     })
     const data = await response.json().catch(() => ({}))
@@ -948,7 +948,7 @@ export const noahService = {
    */
   async getWalletBalances(): Promise<NoahWalletBalances> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 8000)
@@ -1039,7 +1039,7 @@ export const noahService = {
     error?: string
   }> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 15000)
     try {
@@ -1092,7 +1092,7 @@ export const noahService = {
     const session = await requireAuthSession()
     await this.ensureTurnkeySubOrg().catch(() => undefined)
 
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 8000)
     const empty = (stablecoin: string) => ({
@@ -1162,7 +1162,7 @@ export const noahService = {
     error?: string
   }> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const currency = (input.currency || 'USD').toUpperCase()
     const countryCode =
       (input.countryCode || (currency === 'EUR' ? 'DE' : 'US')).toUpperCase()
@@ -1230,7 +1230,7 @@ export const noahService = {
     error?: string
   }> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const response = await fetch(`${apiUrl()}/api/noah/payouts/prepare-mobile`, {
       method: 'POST',
       headers: {
@@ -1276,7 +1276,7 @@ export const noahService = {
     note?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const etid = input.reservedDebitEtid?.trim().toUpperCase() ?? ''
     const response = await fetch(`${apiUrl()}/api/wallets/easetag-transfer`, {
       method: 'POST',
@@ -1350,7 +1350,7 @@ export const noahService = {
     lockId?: string
   }): Promise<NoahTransfer> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const etid = transferData.reservedDebitEtid?.trim().toUpperCase() ?? ''
 
     const response = await fetch(`${apiUrl()}/api/transfers`, {
@@ -1500,7 +1500,7 @@ export const noahService = {
     error?: string
   }> {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
 
     const qs = new URLSearchParams({
       sourceCurrency: params.sourceCurrency,
@@ -1534,7 +1534,7 @@ export const noahService = {
     Array<{ from_currency: string; to_currency: string; rate: number; as_of?: string; noah_mid?: number }>
   > {
     const session = await requireAuthSession()
-    const scopeHeaders = await getNoahScopeHeaders()
+    const scopeHeaders = await getAccountScopeHeaders()
     const dest = options?.destinations?.trim().toUpperCase()
     const path =
       dest && dest.length === 3

@@ -17,7 +17,10 @@ import {
   Wallet,
 } from 'lucide-react-native'
 import QRCode from 'react-native-qrcode-svg'
-import { formatStablecoinDepositSchemeLabel } from '@easner/shared'
+import {
+  formatStablecoinDepositSchemeLabel,
+  receiveStablecoinPaymentNotes,
+} from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import {
@@ -44,7 +47,6 @@ type RouteParams = {
   network?: string
   address?: string
   memo?: string
-  estimatedFeeBps?: number | null
 }
 
 export default function ReceiveStablecoinDetailsScreen({ navigation, route }: NavigationProps) {
@@ -59,30 +61,16 @@ export default function ReceiveStablecoinDetailsScreen({ navigation, route }: Na
   const network = String(params.network || 'Solana')
   const address = String(params.address || '').trim()
   const memo = String(params.memo || '').trim() || undefined
-  const estimatedFeeBps =
-    params.estimatedFeeBps != null && Number.isFinite(Number(params.estimatedFeeBps))
-      ? Number(params.estimatedFeeBps)
-      : null
 
   const screenTitle = formatStablecoinDepositSchemeLabel({ asset, chain: network })
 
   const handleBack = () => navigateStackBack(navigation)
   useStackHardwareBack(handleBack)
 
-  const aboutPaymentNotes = useMemo(() => {
-    if (network === 'Tron') {
-      return [
-        'Only send USDT on Tron (TRC-20) to this address.',
-        'Bridge fees apply and are deducted from your credited balance.',
-        'Sending other assets or networks may result in permanent loss.',
-      ]
-    }
-    return [
-      `Only send ${asset} on Solana to this address.`,
-      'Sending other assets or networks may result in permanent loss.',
-      'Processing time: within seconds.',
-    ]
-  }, [asset, network])
+  const aboutPaymentNotes = useMemo(
+    () => receiveStablecoinPaymentNotes({ asset, network }),
+    [asset, network],
+  )
 
   const handleCopy = async (text: string, key: string) => {
     const ok = await copyToClipboard(text)
@@ -200,13 +188,6 @@ export default function ReceiveStablecoinDetailsScreen({ navigation, route }: Na
                   {renderCopyableField(`${asset} Address`, address, 'stablecoinAddress')}
 
                   {memo ? renderCopyableField('Memo (Required)', memo, 'memo') : null}
-
-                  {estimatedFeeBps != null ? (
-                    <Text style={styles.feeDisclaimer}>
-                      Estimated bridge fee: ~{(estimatedFeeBps / 100).toFixed(2)}%
-                      {'\n'}Final fee is calculated when your deposit settles.
-                    </Text>
-                  ) : null}
                 </View>
 
                 <View style={styles.detailActionsRow}>
@@ -400,12 +381,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: spacing[2],
     flexShrink: 0,
-  },
-  feeDisclaimer: {
-    ...textStyles.caption,
-    color: colors.text.secondary,
-    marginTop: spacing[1],
-    lineHeight: 18,
   },
   detailActionsRow: {
     flexDirection: 'row',

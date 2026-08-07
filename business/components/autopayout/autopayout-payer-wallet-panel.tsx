@@ -27,7 +27,7 @@ import {
 import { Archive, ChevronDown, Loader2, Plus } from "lucide-react"
 import { toast } from "sonner"
 
-const BUSINESS_NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
+const BUSINESS_ACCOUNT_SCOPE_HEADERS = { "X-Easner-Account-Scope": "business" } as const
 
 function pairLabel(cryptoCurrency: string, network: string): string {
   return (
@@ -152,7 +152,7 @@ export function AutopayoutPayerWalletPanel({
     try {
       const res = await fetchWithSession("/api/autopayout/payer-wallets", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...BUSINESS_NOAH_HEADERS },
+        headers: { "Content-Type": "application/json", ...BUSINESS_ACCOUNT_SCOPE_HEADERS },
         body: JSON.stringify({
           crypto_currency: pair.cryptoCurrency,
           network: pair.network,

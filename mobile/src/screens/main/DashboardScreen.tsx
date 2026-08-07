@@ -51,7 +51,7 @@ import { useBalance } from '../../contexts/BalanceContext'
 import { apiGet, apiPost } from '../../lib/apiClient'
 import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
-import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import EmptyState from '../../components/EmptyState'
 import { ListRowSkeleton } from '../../components/skeletons'
 import { SectionCard } from '../../components/ui'
@@ -162,7 +162,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
       const run = (async () => {
         try {
           const response = await apiPost('/api/wallets/sync-chain-ledger', undefined, {
-            headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+            headers: { ...ACCOUNT_SCOPE_INDIVIDUAL_HEADERS },
           })
           if (!response.ok) return false
           const payload = await response.json().catch(() => null)

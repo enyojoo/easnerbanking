@@ -5,7 +5,7 @@ import * as TaskManager from 'expo-task-manager'
 import type { PersonalScope } from '@easner/shared'
 import { apiFetch } from '../query/api-client'
 import { getSessionReliable } from './authSession'
-import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from './apiClient'
+import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from './apiClient'
 import { isDefinitiveEmptyBalanceResponse } from './wallet-balance-display'
 import { BALANCE_SNAPSHOT_KEY_PREFIX } from './wallet-balance-snapshot'
 import { refreshLiveOperationalData } from '../query/refresh-money-feeds'
@@ -27,11 +27,11 @@ async function refreshBackgroundSnapshots(scope: PersonalScope): Promise<boolean
 
   const balancesResult = await Promise.allSettled([
     apiFetch<BalanceEnvelope>('/api/wallets/on-chain-balances', {
-      headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+      headers: { ...ACCOUNT_SCOPE_INDIVIDUAL_HEADERS },
     }),
     apiFetch<{ transactions?: unknown[] }>('/api/transactions', {
       query: { limit: TRANSACTIONS_LEDGER_PAGE_SIZE },
-      headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+      headers: { ...ACCOUNT_SCOPE_INDIVIDUAL_HEADERS },
     }),
   ])
 

@@ -398,7 +398,7 @@ export function LocalDepositWizard({
     setQuoteError(null)
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+      if (businessId) headers["X-Easner-Account-Scope"] = "business"
       const body: Record<string, unknown> =
         amountMode === "usd"
           ? {
@@ -487,7 +487,7 @@ export function LocalDepositWizard({
     void (async () => {
       try {
         const headers: Record<string, string> = { "Content-Type": "application/json" }
-        if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+        if (businessId) headers["X-Easner-Account-Scope"] = "business"
         const body: Record<string, unknown> =
           amountMode === "usd"
             ? {

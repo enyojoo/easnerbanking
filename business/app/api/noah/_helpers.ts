@@ -3,13 +3,14 @@ import { getUserFromApiRequest } from "@/lib/supabase/admin"
 import type { NoahCustomerScope } from "@/lib/noah/customer-id"
 import { isNoahConfigured, isNoahSigningConfigured } from "@/lib/noah/config"
 import {
+  readAccountScopeFromRequest,
   readNoahScopeFromRequest,
   resolveNoahContextAsync,
 } from "@/lib/noah/resolve-noah-context"
 
 export type { NoahCustomerScope }
 
-export { readNoahScopeFromRequest, resolveNoahContextAsync }
+export { readAccountScopeFromRequest, readNoahScopeFromRequest, resolveNoahContextAsync }
 
 export async function requireAuth(request: Request) {
   const user = await getUserFromApiRequest(request)

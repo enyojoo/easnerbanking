@@ -35,7 +35,7 @@ import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
 import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
-import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import {
   colors,
   textStyles,
@@ -429,7 +429,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
       const run = (async () => {
         try {
           const response = await apiPost('/api/wallets/sync-chain-ledger', undefined, {
-            headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+            headers: { ...ACCOUNT_SCOPE_INDIVIDUAL_HEADERS },
           })
           if (!response.ok) return false
           const payload = await response.json().catch(() => null)

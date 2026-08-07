@@ -15,7 +15,7 @@ import { dataCache, CACHE_KEYS } from "@/lib/cache"
 import { SectionHeader } from "@/components/copy/section-header"
 import { QR_PAY_CREATE_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 
-const BUSINESS_NOAH_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
+const BUSINESS_ACCOUNT_SCOPE_HEADERS = { "X-Easner-Account-Scope": "business" } as const
 
 export default function QrPayCreatePlacardPage() {
   const router = useRouter()
@@ -41,7 +41,7 @@ export default function QrPayCreatePlacardPage() {
     try {
       const res = await fetchWithSession("/api/autopayout", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...BUSINESS_NOAH_HEADERS },
+        headers: { "Content-Type": "application/json", ...BUSINESS_ACCOUNT_SCOPE_HEADERS },
         body: JSON.stringify({
           recipient_id: recipientId,
           payer_wallet_id: payerWalletId,
@@ -59,7 +59,7 @@ export default function QrPayCreatePlacardPage() {
       if (autopayoutId) {
         const placardRes = await fetchWithSession(`/api/autopayout/${encodeURIComponent(autopayoutId)}/placard`, {
           method: "POST",
-          headers: { ...BUSINESS_NOAH_HEADERS },
+          headers: { ...BUSINESS_ACCOUNT_SCOPE_HEADERS },
         })
         const placardBody = (await placardRes.json().catch(() => ({}))) as { error?: string; cached?: boolean }
         if (!placardRes.ok) {

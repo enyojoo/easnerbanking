@@ -5,7 +5,7 @@ import { useDocumentVisibility } from '../useDocumentVisibility'
 import { markRecentMoneyActivity, pollingIntervalFor, qk } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
-import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { isSuspiciousAuthoritativeZeroRegression } from '../../lib/wallet-balance-display'
 
@@ -48,7 +48,7 @@ export function useWalletBalances() {
     queryFn: async () => {
       const body = await apiFetch<Partial<WalletBalancesEnvelope>>(
         '/api/wallets/on-chain-balances',
-        { headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS } },
+        { headers: { ...ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } },
       )
       const source = body?.source
       const detail = String(body?.detail ?? '')

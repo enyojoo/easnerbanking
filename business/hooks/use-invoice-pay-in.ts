@@ -47,7 +47,7 @@ export function useInvoicePayIn({ currency, tier1Complete, enabled = true }: Opt
   const fetchPayIn = useCallback(async () => {
     const res = await fetchWithSession(
       `/api/business/b2b/invoice-pay-in?currency=${encodeURIComponent(code)}`,
-      { headers: { "X-Easner-Noah-Scope": "business" } },
+      { headers: { "X-Easner-Account-Scope": "business" } },
     )
     const data = (await res.json().catch(() => ({}))) as PayInResponse & { error?: string }
     if (!res.ok) {

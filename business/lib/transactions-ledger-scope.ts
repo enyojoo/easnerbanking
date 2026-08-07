@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { readAccountScopeFromHeaders } from "@easner/shared"
 
 export type LedgerListScope = "business" | "individual"
 
 /**
  * Resolves which Supabase ledger slice `/api/transactions` should read.
- * - Explicit `X-Easner-Noah-Scope: business` → org rows (requires easner_business_id).
- * - Explicit `X-Easner-Noah-Scope: individual` → personal Noah rows (user_id, business_id null).
+ * - Explicit `X-Easner-Account-Scope: business` → org rows (requires easner_business_id).
+ * - Explicit `X-Easner-Account-Scope: individual` → personal rows (user_id, business_id null).
  * - Header absent → business if user has easner_business_id, else individual (business web default).
+ * Legacy `X-Easner-Noah-Scope` is still accepted.
  */
 export async function resolveLedgerListScope(
   request: Request,
@@ -16,7 +18,7 @@ export async function resolveLedgerListScope(
   | { ok: true; scope: LedgerListScope; businessId: string | null }
   | { ok: false; response: NextResponse }
 > {
-  const headerScope = request.headers.get("x-easner-noah-scope")?.toLowerCase()
+  const headerScope = readAccountScopeFromHeaders((name) => request.headers.get(name))
   const admin = createSupabaseAdmin()
   const { data: userRow, error } = await admin
     .from("users")

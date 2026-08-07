@@ -28,7 +28,7 @@ async function syncBusinessNoahStatusOnce(): Promise<SyncBusinessNoahStatusResul
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Easner-Noah-Scope": "business",
+        "X-Easner-Account-Scope": "business",
       },
       signal: controller.signal,
     })

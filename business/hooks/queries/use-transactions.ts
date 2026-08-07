@@ -10,7 +10,7 @@ import { useScope } from "@/lib/query/scope"
 import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
 import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 
-const LEDGER_BUSINESS_HEADERS = { "X-Easner-Noah-Scope": "business" } as const
+const LEDGER_BUSINESS_HEADERS = { "X-Easner-Account-Scope": "business" } as const
 
 /** First page size for the unified ledger list. */
 export const BUSINESS_TRANSACTIONS_LIST_PAGE_SIZE = 50 as const

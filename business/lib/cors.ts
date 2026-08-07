@@ -18,7 +18,7 @@ function parseAllowedOrigins(): Set<string> {
     "http://localhost:19006",
     "http://127.0.0.1:19006",
     "https://easnerbanking-office.vercel.app",
-    /** Expo web consumer app (browser calls api.easner.com with Bearer + Noah scope header). */
+    /** Expo web consumer app (browser calls api.easner.com with Bearer + account scope header). */
     "https://app.easner.com",
     "https://easner-web.vercel.app",
     /** Marketing site — app download popup email capture. */
@@ -40,7 +40,7 @@ export function getCorsAllowedOrigins(): Set<string> {
 const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers":
-    "Content-Type, Authorization, X-Easner-Noah-Scope, Idempotency-Key",
+    "Content-Type, Authorization, X-Easner-Account-Scope, X-Easner-Noah-Scope, Idempotency-Key",
   "Access-Control-Max-Age": "86400",
 } as const
 

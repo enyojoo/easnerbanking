@@ -1,7 +1,10 @@
 "use client"
 
 import { ArrowRight } from "lucide-react"
-import { formatStablecoinDepositSchemeLabel } from "@easner/shared"
+import {
+  formatStablecoinDepositSchemeLabel,
+  receiveStablecoinDepositSubtitle,
+} from "@easner/shared"
 import { getTokenIconUrl } from "@/lib/crypto-icons"
 import { cn } from "@/lib/utils"
 
@@ -11,7 +14,6 @@ export type StablecoinReceiveMethod = {
   network: string
   status: "active" | "provisioning" | "unavailable"
   address?: string
-  estimatedFeeBps?: number | null
 }
 
 function methodTitle(method: StablecoinReceiveMethod): string {
@@ -22,10 +24,11 @@ function methodTitle(method: StablecoinReceiveMethod): string {
 }
 
 function methodSubtitle(method: StablecoinReceiveMethod): string {
-  if (method.status === "provisioning") return "Setting up…"
-  if (method.status === "unavailable") return "Unavailable"
-  if (method.network === "Tron") return "Bridge fee applies · Tron"
-  return `Instant · ${method.network}`
+  return receiveStablecoinDepositSubtitle({
+    asset: method.asset,
+    network: method.network,
+    status: method.status,
+  })
 }
 
 function TokenLeading({ asset }: { asset: string }) {

@@ -135,7 +135,7 @@ export async function ensurePayoutQuoteStashed(
   inflightQuote = (async () => {
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+      if (businessId) headers["X-Easner-Account-Scope"] = "business"
       const res = await fetchWithSession("/api/payouts/quote", {
         method: "POST",
         headers,
@@ -184,7 +184,7 @@ export async function ensurePayoutOrderConfirmed(
   inflightConfirm = (async () => {
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+      if (businessId) headers["X-Easner-Account-Scope"] = "business"
       const res = await fetchWithSession("/api/payouts/confirm", {
         method: "POST",
         headers,

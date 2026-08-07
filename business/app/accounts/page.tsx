@@ -28,7 +28,7 @@ export default function AccountsPage() {
     loading,
     profileLoading,
     refreshAccounts,
-    noahHeaders,
+    accountScopeHeaders,
     accountsProvisioning,
     tier1Complete,
   } = useBusinessAccountRows()
@@ -170,7 +170,7 @@ export default function AccountsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <StatementDownloadDialog
-                          noahScopeHeader={noahHeaders}
+                          accountScopeHeader={accountScopeHeaders}
                           accountCurrency={account.currency}
                           trigger={
                             <DropdownMenuItem

@@ -17,7 +17,7 @@ import { FileText, Loader2 } from "lucide-react"
 
 type Props = {
   trigger: ReactNode
-  noahScopeHeader: Record<string, string>
+  accountScopeHeader: Record<string, string>
   /** Account whose statement is being exported (e.g. card/menu this was opened from). */
   accountCurrency: string
 }
@@ -26,7 +26,7 @@ function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-export function StatementDownloadDialog({ trigger, noahScopeHeader, accountCurrency }: Props) {
+export function StatementDownloadDialog({ trigger, accountScopeHeader, accountCurrency }: Props) {
   const [open, setOpen] = useState(false)
   const [from, setFrom] = useState(() => {
     const x = new Date()
@@ -47,7 +47,7 @@ export function StatementDownloadDialog({ trigger, noahScopeHeader, accountCurre
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...noahScopeHeader,
+          ...accountScopeHeader,
         },
         body: JSON.stringify({ from, to, currency }),
       })

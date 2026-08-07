@@ -3,7 +3,7 @@ import type { PersonalScope } from '@easner/shared'
 import { qk } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
-import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 
 /** Noah `/api/noah/virtual-accounts` JSON — aligned with business `VaJson`. */
 export type NoahVirtualAccountDisplayJson = {
@@ -66,7 +66,7 @@ async function fetchConsumerVirtualAccountsMap(): Promise<
     `/api/noah/virtual-accounts`,
     {
       query: { currencies },
-      headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+      headers: { ...ACCOUNT_SCOPE_INDIVIDUAL_HEADERS },
     },
   )
   const accounts = data.accounts ?? {}
@@ -80,7 +80,7 @@ async function fetchConsumerVirtualAccountsMap(): Promise<
 async function fetchConsumerDepositAddresses(): Promise<TurnkeyDepositAddressesJson> {
   return apiFetch<TurnkeyDepositAddressesJson>(`/api/wallets/deposit-addresses`, {
     query: { mode: 'fast' },
-    headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+    headers: { ...ACCOUNT_SCOPE_INDIVIDUAL_HEADERS },
   })
 }
 
@@ -142,7 +142,7 @@ async function fetchConsumerRelayDepositAddresses(): Promise<{
   }>
 }> {
   return apiFetch(`/api/wallets/relay-deposit-addresses`, {
-    headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+    headers: { ...ACCOUNT_SCOPE_INDIVIDUAL_HEADERS },
   })
 }
 

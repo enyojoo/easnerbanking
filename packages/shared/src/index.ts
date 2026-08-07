@@ -631,7 +631,15 @@ export {
   resolveInboundReceiveDetail,
   resolveInboundReceiveNotification,
 } from "./transactions/inbound-receive-detail"
-export { formatStablecoinDepositSchemeLabel } from "./transactions/stablecoin-deposit-scheme"
+export { formatStablecoinDepositSchemeLabel, receiveStablecoinDepositSubtitle, receiveStablecoinPaymentNotes, receiveStablecoinCreditCurrency } from "./transactions/stablecoin-deposit-scheme"
+export {
+  EASNER_ACCOUNT_SCOPE_HEADER,
+  EASNER_ACCOUNT_SCOPE_HEADER_LEGACY,
+  ACCOUNT_SCOPE_INDIVIDUAL_HEADERS,
+  ACCOUNT_SCOPE_BUSINESS_HEADERS,
+  readAccountScopeFromHeaders,
+} from "./account-scope"
+export type { EasnerAccountScope } from "./account-scope"
 export type {
   InboundReceiveCreditDestination,
   InboundReceiveDetailRow,

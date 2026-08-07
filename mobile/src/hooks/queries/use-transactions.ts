@@ -10,7 +10,7 @@ import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useDocumentVisibility } from '../useDocumentVisibility'
-import { NOAH_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
+import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import {
   readCachedTransactionDetail,
   writeCachedTransactionDetail,
@@ -109,7 +109,7 @@ async function fetchTransactionDetail(scope: Scope, txId: string): Promise<Trans
   const body = await apiFetch<TransactionDetailResponse>(
     `/api/transactions/${encodeURIComponent(txId)}`,
     {
-      headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+      headers: { ...ACCOUNT_SCOPE_INDIVIDUAL_HEADERS },
     },
   )
   void writeCachedTransactionDetail(txId, body).catch(() => {
@@ -246,7 +246,7 @@ export function useTransactionsList(filters: TxFilters = {}, pageSize = TRANSACT
           cursor: pageParam ?? undefined,
           limit: pageSize,
         },
-        headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+        headers: { ...ACCOUNT_SCOPE_INDIVIDUAL_HEADERS },
       })
       return {
         transactions: body.transactions ?? [],

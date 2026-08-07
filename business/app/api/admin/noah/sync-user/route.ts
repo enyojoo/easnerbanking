@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const mis = requireNoahEnv()
   if (mis) return mis
 
-  let body: { userId?: string; noahScope?: "individual" | "business" }
+  let body: { userId?: string; accountScope?: "individual" | "business"; noahScope?: "individual" | "business" }
   try {
     body = await request.json()
   } catch {
@@ -25,10 +25,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "userId required" }, { status: 400 })
   }
 
-  const scope = body.noahScope === "business" ? "business" : "individual"
+  const scope =
+    body.accountScope === "business" || body.noahScope === "business" ? "business" : "individual"
   const synthetic = new Request("http://local/admin-noah", {
     method: "POST",
-    headers: new Headers([["x-easner-noah-scope", scope]]),
+    headers: new Headers([["x-easner-account-scope", scope]]),
   })
   const ctx = await resolveNoahContextAsync(userId, synthetic)
   if (!ctx.ok) return ctx.response

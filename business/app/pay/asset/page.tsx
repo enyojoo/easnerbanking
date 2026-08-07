@@ -44,7 +44,7 @@ export default function PayAssetPage() {
       terminalFiatAmount: fiatAmount.toFixed(2),
     })
     void fetchWithSession(`/api/noah/prices?${q.toString()}`, {
-      headers: { "X-Easner-Noah-Scope": "business" },
+      headers: { "X-Easner-Account-Scope": "business" },
     })
       .then(async (res) => {
         const body = (await res.json().catch(() => ({}))) as {
@@ -85,7 +85,7 @@ export default function PayAssetPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Easner-Noah-Scope": "business",
+          "X-Easner-Account-Scope": "business",
         },
         body: JSON.stringify({
           fiat_amount: fiatAmount,

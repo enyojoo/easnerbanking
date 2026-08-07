@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { readAccountScopeFromHeaders } from "@easner/shared"
 import {
   noahCustomerIdFromBusinessId,
   noahCustomerIdFromUserId,
@@ -7,14 +8,19 @@ import {
 } from "./customer-id"
 
 /**
- * Read requested Noah scope from header/query/body hint (no DB).
- * - **business**: header `X-Easner-Noah-Scope: business`, query `?noahScope=business`, or JSON `type: "business"`.
+ * Read requested account scope from header/query/body hint (no DB).
+ * - **business**: `X-Easner-Account-Scope: business` (legacy `X-Easner-Noah-Scope` still accepted),
+ *   query `?accountScope=business` (legacy `?noahScope=`), or JSON `type: "business"`.
  */
-export function readNoahScopeFromRequest(request: Request, bodyTypeHint?: string): NoahCustomerScope {
-  const headers = request.headers
+export function readAccountScopeFromRequest(
+  request: Request,
+  bodyTypeHint?: string,
+): NoahCustomerScope {
   const url = new URL(request.url)
-  const headerScope = headers.get("x-easner-noah-scope")?.toLowerCase()
-  const queryScope = url.searchParams.get("noahScope")?.toLowerCase()
+  const headerScope = readAccountScopeFromHeaders((name) => request.headers.get(name))
+  const queryScope = (
+    url.searchParams.get("accountScope") ?? url.searchParams.get("noahScope")
+  )?.toLowerCase()
   const hint = bodyTypeHint?.toLowerCase()
 
   if (headerScope === "business" || queryScope === "business" || hint === "business") {
@@ -22,6 +28,9 @@ export function readNoahScopeFromRequest(request: Request, bodyTypeHint?: string
   }
   return "individual"
 }
+
+/** @deprecated Use {@link readAccountScopeFromRequest} */
+export const readNoahScopeFromRequest = readAccountScopeFromRequest
 
 /**
  * Resolve Noah customer id for this session (org-based `ebiz_*` when scope is business).
@@ -41,7 +50,7 @@ export async function resolveNoahContextAsync(
     }
   | { ok: false; response: NextResponse }
 > {
-  const scope = readNoahScopeFromRequest(request, bodyTypeHint)
+  const scope = readAccountScopeFromRequest(request, bodyTypeHint)
   const admin = createSupabaseAdmin()
   const { data: userRow } = await admin
     .from("users")

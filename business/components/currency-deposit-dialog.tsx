@@ -101,6 +101,8 @@ function PaymentInstructions({
   )
 }
 
+const BUSINESS_ACCOUNT_SCOPE_HEADERS = { "X-Easner-Account-Scope": "business" } as const
+
 interface CurrencyDepositDialogProps {
   account: Account
   copiedField: string | null
@@ -253,7 +255,11 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     let cancelled = false
     void (async () => {
       try {
-        const res = await fetchWithSession("/api/wallets/relay-deposit-addresses")
+        // Must match other business wallet reads — without this header the API
+        // defaults to individual scope and never returns the org USDT address.
+        const res = await fetchWithSession("/api/wallets/relay-deposit-addresses", {
+          headers: BUSINESS_ACCOUNT_SCOPE_HEADERS,
+        })
         const data = (await res.json().catch(() => ({}))) as {
           enabled?: boolean
           status?: string
@@ -261,7 +267,6 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             asset: string
             network: string
             address: string
-            estimatedFeeBps?: number | null
           }>
         }
         if (cancelled) return
@@ -274,7 +279,6 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
               network: row.network,
               status: "active",
               address: row.address,
-              estimatedFeeBps: row.estimatedFeeBps ?? null,
             })
           }
           if (data.status === "provisioning" && !methods.some((m) => m.asset === "USDT")) {
@@ -712,7 +716,6 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                       stablecoin: activeStablecoinMethod.asset,
                       chain: activeStablecoinMethod.network,
                       address: activeStablecoinMethod.address!,
-                      estimatedFeeBps: activeStablecoinMethod.estimatedFeeBps ?? null,
                     }
                     return (
                       <>
@@ -749,14 +752,6 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                           fieldId={`stable-addr-${account.id}`}
                           onCopy={onCopy}
                         />
-
-                        {detail.estimatedFeeBps != null ? (
-                          <p className="text-xs text-muted-foreground">
-                            Estimated bridge fee: ~{(detail.estimatedFeeBps / 100).toFixed(2)}%
-                            <br />
-                            Final fee is calculated when your deposit settles.
-                          </p>
-                        ) : null}
 
                         <Button
                           variant="outline"

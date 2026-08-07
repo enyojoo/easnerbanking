@@ -1,3 +1,5 @@
+import { receiveStablecoinPaymentNotes } from "@easner/shared"
+
 /** Returns payment instruction strings for a given currency and type (for PDF or text) */
 export function getPaymentInstructions(
   currency: string,
@@ -34,23 +36,14 @@ export function getPaymentInstructions(
         : currency === "EUR"
           ? "EURC"
           : "USDC"
-    return [
-      `Only send ${stablecoin} on Solana to this address.`,
-      "Sending other assets or networks may result in permanent loss.",
-      "Processing time: within seconds.",
-    ]
+    return receiveStablecoinPaymentNotes({ asset: stablecoin, network: "Solana" })
   }
   return []
 }
 
-/** Tron USDT inbound via Relay open deposit address. */
+/** Tron USDT inbound via open deposit address. */
 export function getTronUsdtPaymentInstructions(): string[] {
-  return [
-    "Only send USDT on Tron (TRC-20) to this address.",
-    "Bridge fees apply and are deducted from your credited balance.",
-    "Sending other assets or networks may result in permanent loss.",
-    "Processing time: typically within minutes after on-chain confirmation.",
-  ]
+  return receiveStablecoinPaymentNotes({ asset: "USDT", network: "Tron" })
 }
 
 /** Pass stablecoin name explicitly for send flow */
@@ -58,9 +51,5 @@ export function getStablecoinPaymentInstructions(stablecoin: "USDC" | "USDT"): s
   if (stablecoin === "USDT") {
     return getTronUsdtPaymentInstructions()
   }
-  return [
-    `Only send ${stablecoin} on Solana to this address.`,
-    "Sending other assets or networks may result in permanent loss.",
-    "Processing time: within seconds.",
-  ]
+  return receiveStablecoinPaymentNotes({ asset: stablecoin, network: "Solana" })
 }

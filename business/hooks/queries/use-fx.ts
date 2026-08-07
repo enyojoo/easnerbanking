@@ -47,7 +47,7 @@ export function useFxRates() {
     queryKey: qk.fx.pairs(),
     queryFn: async () => {
       const body = await apiFetch<{ rates?: FxRate[] }>("/api/fx/exchange-rates", {
-        headers: { "X-Easner-Noah-Scope": "business" },
+        headers: { "X-Easner-Account-Scope": "business" },
       })
       return normalizeRates(body.rates ?? [])
     },

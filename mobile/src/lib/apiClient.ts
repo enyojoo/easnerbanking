@@ -216,15 +216,22 @@ export const apiRequest = async (
   }
 }
 
-/** Noah ledger/API scope: mobile consumer flows default to individual (personal wallet). */
-export const NOAH_SCOPE_INDIVIDUAL_HEADERS = { 'X-Easner-Noah-Scope': 'individual' } as const
+/** Account scope: mobile consumer flows default to individual (personal wallet). */
+export const ACCOUNT_SCOPE_INDIVIDUAL_HEADERS = { 'X-Easner-Account-Scope': 'individual' } as const
 
-export const NOAH_SCOPE_BUSINESS_HEADERS = { 'X-Easner-Noah-Scope': 'business' } as const
+export const ACCOUNT_SCOPE_BUSINESS_HEADERS = { 'X-Easner-Account-Scope': 'business' } as const
 
-/** Mobile is consumer-only — always use individual Noah scope. */
-export async function getNoahScopeHeaders(): Promise<typeof NOAH_SCOPE_INDIVIDUAL_HEADERS> {
-  return NOAH_SCOPE_INDIVIDUAL_HEADERS
+/** Mobile is consumer-only — always use individual account scope. */
+export async function getAccountScopeHeaders(): Promise<typeof ACCOUNT_SCOPE_INDIVIDUAL_HEADERS> {
+  return ACCOUNT_SCOPE_INDIVIDUAL_HEADERS
 }
+
+/** @deprecated Use ACCOUNT_SCOPE_INDIVIDUAL_HEADERS */
+export const NOAH_SCOPE_INDIVIDUAL_HEADERS = ACCOUNT_SCOPE_INDIVIDUAL_HEADERS
+/** @deprecated Use ACCOUNT_SCOPE_BUSINESS_HEADERS */
+export const NOAH_SCOPE_BUSINESS_HEADERS = ACCOUNT_SCOPE_BUSINESS_HEADERS
+/** @deprecated Use getAccountScopeHeaders */
+export const getNoahScopeHeaders = getAccountScopeHeaders
 
 /**
  * Helper for GET requests (`init` merges into fetch options, e.g. extra headers).

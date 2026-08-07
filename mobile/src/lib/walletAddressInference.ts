@@ -1,5 +1,5 @@
 import { resolveInferredWalletAssetNetwork, type WalletAddressInferenceCandidate } from '@easner/shared'
-import { getApiBaseUrl, getNoahScopeHeaders } from './apiClient'
+import { getApiBaseUrl, getAccountScopeHeaders } from './apiClient'
 import { getSessionReliable } from './authSession'
 
 export type AddressInferenceCandidate = WalletAddressInferenceCandidate
@@ -12,7 +12,7 @@ export async function inferWalletAddressFromApi(address: string): Promise<{
 }> {
   const session = await getSessionReliable()
   if (!session?.access_token) throw new Error('Not authenticated')
-  const scopeHeaders = await getNoahScopeHeaders()
+  const scopeHeaders = await getAccountScopeHeaders()
   const res = await fetch(`${getApiBaseUrl()}/api/wallets/send/infer-address`, {
     method: 'POST',
     headers: {

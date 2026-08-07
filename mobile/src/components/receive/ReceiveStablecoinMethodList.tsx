@@ -1,6 +1,9 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { formatStablecoinDepositSchemeLabel } from '@easner/shared'
+import {
+  formatStablecoinDepositSchemeLabel,
+  receiveStablecoinDepositSubtitle,
+} from '@easner/shared'
 import { colors, spacing, textStyles } from '../../theme'
 import { CachedImage } from '../CachedImage'
 import { getTokenIconUrl } from '../../lib/cryptoIcons'
@@ -15,7 +18,6 @@ export type StablecoinReceiveMethod = {
   status: 'active' | 'provisioning' | 'unavailable'
   address?: string
   memo?: string
-  estimatedFeeBps?: number | null
 }
 
 function methodTitle(method: StablecoinReceiveMethod): string {
@@ -26,10 +28,11 @@ function methodTitle(method: StablecoinReceiveMethod): string {
 }
 
 function methodSubtitle(method: StablecoinReceiveMethod): string {
-  if (method.status === 'provisioning') return 'Setting up…'
-  if (method.status === 'unavailable') return 'Unavailable'
-  if (method.network === 'Tron') return 'Bridge fee applies · Tron'
-  return `Instant · ${method.network}`
+  return receiveStablecoinDepositSubtitle({
+    asset: method.asset,
+    network: method.network,
+    status: method.status,
+  })
 }
 
 function StablecoinMethodIcon({ asset }: { asset: string }) {

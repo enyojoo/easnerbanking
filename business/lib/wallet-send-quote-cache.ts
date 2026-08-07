@@ -86,7 +86,7 @@ export async function ensureWalletSendQuoteStashed(
   businessId?: string | null,
 ): Promise<WalletSendQuoteResult | null> {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
-  if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+  if (businessId) headers["X-Easner-Account-Scope"] = "business"
 
   const key = quoteMetaKey(meta)
   if (inflightQuote && inflightQuoteKey === key) return inflightQuote
@@ -139,7 +139,7 @@ export async function ensureWalletSendOrderConfirmed(
   inflightConfirm = (async () => {
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (businessId) headers["X-Easner-Noah-Scope"] = "business"
+      if (businessId) headers["X-Easner-Account-Scope"] = "business"
       const res = await fetchWithSession("/api/wallets/send/confirm", {
         method: "POST",
         headers,
