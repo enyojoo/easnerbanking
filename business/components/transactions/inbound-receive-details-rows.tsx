@@ -84,6 +84,27 @@ export function InboundReceiveDetailsRows({
               )
             }
 
+            if (row.copyValue && onCopy) {
+              const copyKey = `inbound-${row.label}-${index}`
+              return (
+                <TransactionDetailSummaryRow key={`${row.label}-${index}`} label={row.label}>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 font-mono text-sm font-medium transition-colors hover:text-primary"
+                    onClick={() => onCopy(row.copyValue!, copyKey)}
+                    aria-label={`Copy ${row.label}`}
+                  >
+                    {row.value}
+                    {copiedKey === copyKey ? (
+                      <Check className="h-4 w-4 shrink-0 text-primary" />
+                    ) : (
+                      <Copy className="h-4 w-4 shrink-0" />
+                    )}
+                  </button>
+                </TransactionDetailSummaryRow>
+              )
+            }
+
             return (
               <TransactionDetailSummaryRow
                 key={`${row.label}-${index}`}

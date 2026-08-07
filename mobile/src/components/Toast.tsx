@@ -10,6 +10,7 @@ import {
 import { colors, textStyles, borderRadius, spacing, shadows, fontFamily } from '../theme'
 import { ripple } from '../lib/androidRipple'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { USE_NATIVE_DRIVER } from '../lib/animation'
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning'
 
@@ -41,12 +42,12 @@ export default function Toast({
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start()
 
@@ -63,12 +64,12 @@ export default function Toast({
       Animated.timing(slideAnim, {
         toValue: -100,
         duration: 250,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(opacityAnim, {
         toValue: 0,
         duration: 250,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => {
       onClose()

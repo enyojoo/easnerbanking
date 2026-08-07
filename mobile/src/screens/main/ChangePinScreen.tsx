@@ -22,6 +22,7 @@ import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { EasnerAlertSheet } from '../../components/premium'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { USE_NATIVE_DRIVER } from '../../lib/animation'
 
 type Step = 'verify' | 'pin' | 'confirm'
 
@@ -84,10 +85,10 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
 
   const runShake = () => {
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start()
   }
 

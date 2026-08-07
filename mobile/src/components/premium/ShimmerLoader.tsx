@@ -11,6 +11,7 @@ import React, { useEffect, useRef } from 'react'
 import { StyleSheet, View, ViewStyle, Animated } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { colors, borderRadius, motion } from '../../theme'
+import { USE_NATIVE_DRIVER } from '../../lib/animation'
 
 interface ShimmerLoaderProps {
   width: number | string
@@ -35,7 +36,7 @@ export default function ShimmerLoader({
       Animated.timing(shimmerAnim, {
         toValue: 1,
         duration: durationMs,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       })
     )
     animation.start()

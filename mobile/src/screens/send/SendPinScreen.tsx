@@ -28,6 +28,7 @@ import { PinKeypad } from '../../components/pin'
 import { PinLockedHintText } from '../../components/pin/PinLockedHintText'
 import { markBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
 import { haptics } from '../../lib/haptics'
+import { USE_NATIVE_DRIVER } from '../../lib/animation'
 
 export default function SendPinScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
@@ -121,10 +122,10 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
         setLockedOut(false)
       }
       Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
       ]).start()
       setPin('')
     })()

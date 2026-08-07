@@ -406,8 +406,8 @@ export default function App() {
     }
   }, [])
 
-  // Native: block first paint until fonts load (splash covers the gap). Web: render immediately.
-  if (!fontsLoaded && Platform.OS !== 'web') {
+  // Block first paint until fonts load (native splash covers the gap; web avoids FOUT + Chrome font interventions).
+  if (!fontsLoaded) {
     return null
   }
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { View, Image, StyleSheet, Animated, useWindowDimensions } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
+import { USE_NATIVE_DRIVER } from '../lib/animation'
 
 interface SplashScreenProps {
   onFinish: () => void
@@ -29,7 +30,7 @@ export default function CustomSplashScreen({ onFinish, isReady = false }: Splash
         Animated.timing(fadeAnim, {
           toValue: 0,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }).start(() => {
           onFinish()
         })

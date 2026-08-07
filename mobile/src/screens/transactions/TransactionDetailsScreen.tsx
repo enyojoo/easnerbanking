@@ -1148,7 +1148,13 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                       )}
                     />
                   </>
-                ) : inboundReceive ? <InboundReceiveDetailRows snapshot={inboundReceive} /> : null}
+                ) : inboundReceive ? (
+                  <InboundReceiveDetailRows
+                    snapshot={inboundReceive}
+                    copiedStates={copiedStates}
+                    onCopy={handleCopy}
+                  />
+                ) : null}
 
                 {/* Outbound Easetag — inbound uses InboundReceiveDetailRows; send was dropped in that unification. */}
                 {isEasetagP2p && !inboundReceive ? (

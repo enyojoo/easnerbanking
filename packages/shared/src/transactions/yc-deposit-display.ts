@@ -1,7 +1,10 @@
 import { computeDisplayProcessingFee } from "../payout-processing-fee"
 import { resolveReceiveCountryName } from "../receive-cash-method-labels"
-import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
-import { isVerificationDepositMetadata } from "./verification-deposit"
+import {
+  isBankOnrampDepositFlow,
+  isVerificationDepositMetadata,
+  isYcFundBalanceDepositMetadata,
+} from "./deposit-metadata-guards"
 import type { YcFundBalanceDepositReviewSnapshot, YcPayInRail } from "./global-deposit-types"
 
 const LOCAL_CURRENCY_TO_COUNTRY: Record<string, string> = {
@@ -286,10 +289,7 @@ export function resolveYcFundBalanceNotificationActivityLabelFromMetadata(
   })
 }
 
-export function isYcFundBalanceDepositMetadata(meta: Record<string, unknown> | null | undefined): boolean {
-  if (!meta || typeof meta !== "object") return false
-  return meta.yc_mode === "fund_balance"
-}
+export { isYcFundBalanceDepositMetadata } from "./deposit-metadata-guards"
 
 export function normalizeYcFundBalanceDepositReview(
   raw: unknown,

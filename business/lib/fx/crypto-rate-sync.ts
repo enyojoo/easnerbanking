@@ -2,7 +2,7 @@ import { applyCryptoCustomerRate, parseWalletSendMarginFromEnv, walletSendMargin
 import { createClient } from "@supabase/supabase-js"
 import { relayQuote } from "@/lib/relay/quote"
 import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/relay/token-map"
-import { isRelayConfigured, relayRateProbeTronAddress, requireCryptoRatesProbeSolAddress } from "@/lib/relay/config"
+import { isRelayConfigured, relayRateProbeTronAddress, requireCryptoRatesProbeSolAddress, requireRelayApiKey } from "@/lib/relay/config"
 import { WALLET_ASSET_NETWORKS } from "@/lib/wallet-asset-networks"
 import { isDirectTurnkeyCorridor } from "@/lib/wallet-send/routing"
 
@@ -129,15 +129,15 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
             continue
           }
 
-          const lifiMid = toAmt / fromAmt
+          const relayMid = toAmt / fromAmt
           const marginBps = resolveCryptoMarginBps(fromCurrency, asset, network)
           const effectiveMargin = marginBps / 10_000
           upserts.push({
             from_currency: fromCurrency,
             to_currency: asset,
             receive_network: network,
-            lifi_mid: lifiMid,
-            rate: applyCryptoCustomerRate(lifiMid, effectiveMargin),
+            lifi_mid: relayMid,
+            rate: applyCryptoCustomerRate(relayMid, effectiveMargin),
             margin_bps: marginBps,
             source: "relay_probe_sync",
             as_of: new Date().toISOString(),
@@ -199,15 +199,15 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
         continue
       }
 
-      const lifiMid = toAmt / fromAmt
+      const relayMid = toAmt / fromAmt
       const destAsset = toCurrency === "EUR" ? "EURC" : "USDC"
       const marginBps = resolveCryptoMarginBps(fromCurrency, destAsset, "Solana")
       upserts.push({
         from_currency: fromCurrency,
         to_currency: destAsset,
         receive_network: "Solana",
-        lifi_mid: lifiMid,
-        rate: applyCryptoCustomerRate(lifiMid, marginBps / 10_000),
+        lifi_mid: relayMid,
+        rate: applyCryptoCustomerRate(relayMid, marginBps / 10_000),
         margin_bps: marginBps,
         source: "relay_probe_sync",
         as_of: new Date().toISOString(),
@@ -227,6 +227,12 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
   if (options?.dryRun) {
     return { updated: upserts.length, skipped: skippedPairs.length, skippedPairs }
   }
+
+  // Legacy LI.FI probe rows → Relay naming (even if a corridor is skipped this run).
+  await supabase
+    .from("crypto_rates")
+    .update({ source: "relay_probe_sync", updated_at: new Date().toISOString() })
+    .eq("source", "lifi_probe_sync")
 
   let updated = 0
   for (const row of upserts) {

@@ -9,6 +9,7 @@ import { PinKeypad } from './PinKeypad'
 import { PinLockedHintText } from './PinLockedHintText'
 import { useDeferredLoading } from '../../hooks/useDeferredLoading'
 import { haptics } from '../../lib/haptics'
+import { USE_NATIVE_DRIVER } from '../../lib/animation'
 
 export type PinChallengePanelProps = {
   /** When false, resets internal PIN state (same semantics as modal `visible`). */
@@ -93,10 +94,10 @@ export function PinChallengePanel({
         setLockedOut(false)
       }
       Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
       ]).start()
       setPin('')
     })()

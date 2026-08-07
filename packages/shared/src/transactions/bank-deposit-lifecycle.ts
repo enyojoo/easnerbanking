@@ -8,10 +8,10 @@ import {
   deriveBankDepositSchemeLabel,
 } from "./bank-deposit-scheme"
 import {
-  BANK_VERIFICATION_COMPLETED_DESCRIPTION,
   isVerificationDepositMetadata,
-} from "./verification-deposit"
-import { isYcFundBalanceDepositMetadata } from "./yc-deposit-display"
+  isYcFundBalanceDepositMetadata,
+} from "./deposit-metadata-guards"
+import { BANK_VERIFICATION_COMPLETED_DESCRIPTION } from "./verification-deposit"
 import { buildYcPayInLifecycle } from "./yc-pay-in-display"
 export type BankDepositLifecycleStepId = "processing" | "completed" | "failed"
 export type BankDepositLifecycleStepState = "complete" | "current" | "upcoming"
@@ -174,7 +174,4 @@ export function buildBankDepositLifecycle(
   ]
 }
 
-export function isBankOnrampDepositFlow(metadata: Record<string, unknown> | null | undefined): boolean {
-  if (!metadata || typeof metadata !== "object") return false
-  return String(metadata.flow ?? "").toLowerCase() === "bank_onramp"
-}
+export { isBankOnrampDepositFlow } from "./deposit-metadata-guards"

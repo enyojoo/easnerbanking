@@ -129,6 +129,26 @@ describe("buildInboundReceiveDetailRows", () => {
     )
   })
 
+  it("Noah VA funding without fee omits amount credited on detail", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "noah",
+      metadata: {
+        flow: "bank_onramp",
+        source_type: "virtual_account",
+        posted_amount: 50,
+        posted_currency: "USD",
+        deposit_scheme_label: "Wire",
+        sender_name: "ACME CORP",
+      },
+      ledger_created_at: "2026-01-15T12:00:00.000Z",
+    })
+    expect(snapshot?.kind).toBe("noah_va_funding")
+    expect(snapshot?.processingFee).toBeUndefined()
+    const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.amountCredited]).toBeUndefined()
+  })
+
   it("verification uses credit for and detail hint", () => {
     const snapshot = resolveInboundReceiveDetail({
       direction: "in",
@@ -144,6 +164,7 @@ describe("buildInboundReceiveDetailRows", () => {
     expect(snapshot?.kind).toBe("noah_verification")
     const rows = buildInboundReceiveDetailRows(snapshot!, { surface: "detail" })
     expect(rows.some((r) => r.label === REVIEW_ROW_LABELS.creditFor)).toBe(true)
+    expect(rows.some((r) => r.label === REVIEW_ROW_LABELS.amountCredited)).toBe(false)
     expect(rows.some((r) => r.isVerificationHint)).toBe(true)
     expect(rows.at(-1)?.label).toBe(REVIEW_ROW_LABELS.when)
     expect(
@@ -188,6 +209,23 @@ describe("buildInboundReceiveDetailRows", () => {
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
   })
 
+  it("stablecoin without fee omits amount credited on detail", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "turnkey",
+      metadata: { source_type: "liquidation_address", source_payment_rail: "solana", source_currency: "USDC" },
+      chain: "solana",
+      asset: "USDC",
+      counterparty_address: "Fjw9otXwdkzbc3feiBzBnFqCr52858YbyZsxxLWfP5Xc",
+      posted_amount: 25,
+      posted_currency: "USD",
+      created_at: "2026-01-15T12:00:00.000Z",
+    })
+    expect(snapshot?.processingFee).toBeUndefined()
+    const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.amountCredited]).toBeUndefined()
+  })
+
   it("stablecoin deposit shows masked sender wallet address", () => {
     const snapshot = resolveInboundReceiveDetail({
       direction: "in",
@@ -201,11 +239,13 @@ describe("buildInboundReceiveDetailRows", () => {
       created_at: "2026-01-15T12:00:00.000Z",
     })
     expect(snapshot?.scheme).toBe("USDC on Solana")
-    const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(snapshot?.senderCopyValue).toBe("Fjw9otXwdkzbc3feiBzBnFqCr52858YbyZsxxLWfP5Xc")
+    const rows = buildInboundReceiveDetailRows(snapshot!, { surface: "detail" })
+    const map = rowMap(rows)
     expect(map[REVIEW_ROW_LABELS.sender]).toBe("Fjw9ot...WfP5Xc")
-    expect(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }).at(-1)?.label).toBe(
-      REVIEW_ROW_LABELS.when,
-    )
+    const senderRow = rows.find((r) => r.label === REVIEW_ROW_LABELS.sender)
+    expect(senderRow?.copyValue).toBe("Fjw9otXwdkzbc3feiBzBnFqCr52858YbyZsxxLWfP5Xc")
+    expect(rows.at(-1)?.label).toBe(REVIEW_ROW_LABELS.when)
   })
 
   it("stablecoin and easetag include credit to", () => {

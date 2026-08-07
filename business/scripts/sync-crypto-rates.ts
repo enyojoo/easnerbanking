@@ -1,5 +1,5 @@
 /**
- * Sync crypto_rates from LI.FI probe quotes + Easner wallet-send margin.
+ * Sync crypto_rates from Relay probe quotes + Easner wallet-send margin.
  *
  * Usage:
  *   cd business && node --env-file=.env.local --import tsx scripts/sync-crypto-rates.ts

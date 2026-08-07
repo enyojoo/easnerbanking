@@ -7,14 +7,19 @@ import {
   type InboundReceiveDetailSnapshot,
 } from '@easner/shared'
 import { CreditDestinationRow } from './CreditDestinationRow'
-import { TransactionDetailSummaryRow } from './TransactionDetailSummaryRow'
+import {
+  TransactionDetailSummaryRow,
+  TransactionDetailCopyableValue,
+} from './TransactionDetailSummaryRow'
 import { colors, spacing, textStyles } from '../../theme'
 
 type Props = {
   snapshot: InboundReceiveDetailSnapshot
+  copiedStates?: Record<string, boolean>
+  onCopy?: (text: string, key: string) => void
 }
 
-export function InboundReceiveDetailRows({ snapshot }: Props) {
+export function InboundReceiveDetailRows({ snapshot, copiedStates, onCopy }: Props) {
   const rows = buildInboundReceiveDetailRows(snapshot, { surface: 'detail' })
 
   return (
@@ -44,6 +49,20 @@ export function InboundReceiveDetailRows({ snapshot }: Props) {
               currency={creditCurrency}
               balanceLabel={balanceLabel}
             />
+          )
+        }
+
+        if (row.copyValue && onCopy) {
+          const copyKey = `inbound-${row.label}-${index}`
+          return (
+            <TransactionDetailSummaryRow key={`${row.label}-${index}`} label={row.label}>
+              <TransactionDetailCopyableValue
+                value={row.value}
+                mono
+                copied={Boolean(copiedStates?.[copyKey])}
+                onPress={() => onCopy(row.copyValue!, copyKey)}
+              />
+            </TransactionDetailSummaryRow>
           )
         }
 

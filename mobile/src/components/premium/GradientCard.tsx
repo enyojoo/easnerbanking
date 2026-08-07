@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { colors, shadows, borderRadius } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
+import { USE_NATIVE_DRIVER } from '../../lib/animation'
 
 interface GradientCardProps {
   children: React.ReactNode
@@ -56,7 +57,7 @@ export default function GradientCard({
     if (animated && onPress) {
       Animated.spring(scaleAnim, {
         toValue: 0.98,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
         speed: 50,
         bounciness: 4,
       }).start()
@@ -67,7 +68,7 @@ export default function GradientCard({
     if (animated && onPress) {
       Animated.spring(scaleAnim, {
         toValue: 1,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
         speed: 50,
         bounciness: 4,
       }).start()

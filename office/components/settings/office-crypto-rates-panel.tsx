@@ -79,6 +79,12 @@ function CryptoNetworkIcon({ network, size = 16 }: { network: string; size?: num
   return <CryptoIcon src={getNetworkIconUrl(network)} label={network} size={size} />
 }
 
+function formatCryptoRateSource(source: string | null | undefined): string {
+  const s = String(source || "sync").trim()
+  if (s === "lifi_probe_sync") return "relay_probe_sync"
+  return s || "sync"
+}
+
 type CurrencyRow = {
   id: string
   code: string
@@ -201,7 +207,7 @@ export function OfficeCryptoRatesPanel() {
     setError(null)
     setSyncSummary(null)
     try {
-      const result = await cryptoRatesApi.syncFromLifi()
+      const result = await cryptoRatesApi.syncFromRelay()
       setSyncSummary(
         `Updated ${result.updated}, skipped ${result.skipped}${
           result.skippedPairs.length
@@ -398,14 +404,14 @@ export function OfficeCryptoRatesPanel() {
                       </p>
                       <div className="flex items-center gap-2">
                         <Badge variant={row.source === "office" ? "default" : "secondary"}>
-                          {row.source || "sync"}
+                          {formatCryptoRateSource(row.source)}
                         </Badge>
                         <span className="text-xs text-muted-foreground">{formatAsOf(row.as_of)}</span>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       <div className="space-y-2">
-                        <Label>LI.FI mid</Label>
+                        <Label>Relay mid</Label>
                         <Input
                           type="number"
                           step="0.000001"

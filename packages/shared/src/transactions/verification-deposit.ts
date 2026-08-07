@@ -4,7 +4,10 @@
  */
 
 import { formatDisplayPersonName } from "../format-display-name"
-import { parseSentFromNarrationLabel } from "./bank-deposit-inbound-label"
+import { parseSentFromNarrationLabel } from "./bank-deposit-narration-parse"
+import { isVerificationDepositMetadata } from "./deposit-metadata-guards"
+
+export { isVerificationDepositMetadata } from "./deposit-metadata-guards"
 
 export type DepositKind = "verification" | "funding"
 
@@ -19,13 +22,6 @@ export const BANK_VERIFICATION_COMPLETED_DESCRIPTION =
 
 /** USD/EUR/GBP: Noah treats deposits under 1 unit as verification attempts. */
 export const VERIFICATION_FIAT_AMOUNT_THRESHOLD = 1
-
-export function isVerificationDepositMetadata(
-  metadata: Record<string, unknown> | null | undefined,
-): boolean {
-  if (!metadata || typeof metadata !== "object") return false
-  return String(metadata.deposit_kind ?? "").toLowerCase() === "verification"
-}
 
 function readFiatAmountFromPayload(payload: Record<string, unknown>): number | null {
   const fp = payload.FiatPayment as Record<string, unknown> | undefined

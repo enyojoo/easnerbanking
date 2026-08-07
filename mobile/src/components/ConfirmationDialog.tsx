@@ -12,6 +12,7 @@ import { CircleAlert, TriangleAlert, Info } from 'lucide-react-native'
 import { colors, textStyles, borderRadius, spacing, shadows, fontFamily } from '../theme'
 import { ripple } from '../lib/androidRipple'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { USE_NATIVE_DRIVER } from '../lib/animation'
 
 interface ConfirmationDialogProps {
   visible: boolean
@@ -43,14 +44,14 @@ export default function ConfirmationDialog({
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
           tension: 50,
           friction: 7,
         }),
         Animated.timing(opacityAnim, {
           toValue: 1,
           duration: 200,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
       ]).start()
     } else {
@@ -58,12 +59,12 @@ export default function ConfirmationDialog({
         Animated.timing(scaleAnim, {
           toValue: 0,
           duration: 150,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
         Animated.timing(opacityAnim, {
           toValue: 0,
           duration: 150,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
       ]).start()
     }

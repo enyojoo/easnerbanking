@@ -47,7 +47,7 @@ export const cryptoRatesApi = {
     await asJson<{ ok?: boolean }>(res)
   },
 
-  async syncFromLifi(): Promise<{
+  async syncFromRelay(): Promise<{
     updated: number
     skipped: number
     skippedPairs: string[]

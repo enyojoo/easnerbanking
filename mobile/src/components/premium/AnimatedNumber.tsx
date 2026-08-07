@@ -9,6 +9,7 @@
 import React, { useEffect, useRef } from 'react'
 import { Text, TextStyle, StyleSheet, Animated } from 'react-native'
 import { colors, textStyles } from '../../theme'
+import { USE_NATIVE_DRIVER } from '../../lib/animation'
 
 interface AnimatedNumberProps {
   value: number
@@ -37,7 +38,7 @@ export default function AnimatedNumber({
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }).start()
     }
   }, [value, animated, fadeAnim])
@@ -83,7 +84,7 @@ export function FadeNumber({
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 300,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_DRIVER,
     }).start()
   }, [value, fadeAnim])
 

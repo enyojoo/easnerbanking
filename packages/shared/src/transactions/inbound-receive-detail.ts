@@ -59,6 +59,8 @@ export type InboundReceiveDetailSnapshot = {
   creditDestination?: InboundReceiveCreditDestination
   scheme?: string
   sender?: string
+  /** Full wallet address when `sender` is a truncated on-chain address (for copy). */
+  senderCopyValue?: string
   amountPaid?: { amount: number; currency: string }
   depositAmount?: { amount: number; currency: string }
   processingFee?: { amount: number; currency: string }
@@ -76,6 +78,8 @@ export type InboundReceiveDetailRow = {
   creditCurrency?: string
   /** Verification explainer — detail surface only. */
   isVerificationHint?: boolean
+  /** Full value to copy (e.g. wallet address); display `value` may be truncated. */
+  copyValue?: string
 }
 
 export type InboundReceiveRowSurface = "detail" | "email" | "receipt"
@@ -275,6 +279,16 @@ function resolveDisplayTitle(kind: InboundReceiveKind, input: InboundReceiveReso
   }
 }
 
+function resolveSenderWalletAddress(input: InboundReceiveResolveInput): string {
+  const meta = input.metadata ?? {}
+  return (
+    readMetaString(meta, "counterparty_address") ||
+    readMetaString(meta, "from_address") ||
+    readMetaString(meta, "sender_tron_address") ||
+    (input.counterparty_address ? String(input.counterparty_address).trim() : "")
+  )
+}
+
 function resolveSender(input: InboundReceiveResolveInput): string | undefined {
   const meta = input.metadata ?? {}
   if (input.sender_display_name?.trim()) return input.sender_display_name.trim()
@@ -285,13 +299,26 @@ function resolveSender(input: InboundReceiveResolveInput): string | undefined {
   if (fromMeta?.trim()) return fromMeta.trim()
   const masked = formatMaskedSenderDisplay({
     senderName: readMetaString(meta, "sender_name"),
-    counterpartyAddress:
-      readMetaString(meta, "counterparty_address") ||
-      readMetaString(meta, "from_address") ||
-      readMetaString(meta, "sender_tron_address") ||
-      (input.counterparty_address ? String(input.counterparty_address).trim() : ""),
+    counterpartyAddress: resolveSenderWalletAddress(input),
   })
   return masked || undefined
+}
+
+/** Display sender + optional full wallet address for copy (when sender is on-chain). */
+function resolveSenderFields(input: InboundReceiveResolveInput): {
+  sender?: string
+  senderCopyValue?: string
+} {
+  const wallet = resolveSenderWalletAddress(input)
+  const display = resolveSender(input)
+  if (!display) return {}
+  if (wallet) {
+    const masked = formatMaskedSenderDisplay({ counterpartyAddress: wallet })
+    if (display === masked || display === wallet) {
+      return { sender: masked || display, senderCopyValue: wallet }
+    }
+  }
+  return { sender: display }
 }
 
 export function resolveInboundReceiveDetail(
@@ -418,7 +445,7 @@ export function resolveInboundReceiveDetail(
       amountCredited: { amount: creditedAmount, currency: creditedCurrency },
       creditDestination: resolveCreditDestination(creditedCurrency, kind),
       scheme: deriveBankDepositSchemeLabel({ metadata: meta, payload: input.payload ?? null }),
-      sender: resolveSender(input),
+      ...resolveSenderFields(input),
       ...(feeAmount > 0 ? { processingFee: { amount: feeAmount, currency: feeCurrency } } : {}),
       ...(readMetaString(meta, "reference") || readMetaString(meta, "narration") || input.reference
         ? {
@@ -453,7 +480,7 @@ export function resolveInboundReceiveDetail(
       amountCredited: { amount: creditedAmount, currency: creditedCurrency },
       creditDestination: resolveCreditDestination(creditedCurrency, kind),
       scheme: deriveStablecoinSchemeLabel(input),
-      sender: resolveSender(input),
+      ...resolveSenderFields(input),
       ...(feeAmount > 0 ? { processingFee: { amount: feeAmount, currency: feeCurrency } } : {}),
       ...(note ? { note } : {}),
     }
@@ -480,6 +507,40 @@ export function resolveInboundReceiveDetail(
 function pushIf(rows: InboundReceiveDetailRow[], label: string, value: string | null | undefined): void {
   const v = String(value ?? "").trim()
   if (v) rows.push({ label, value: v })
+}
+
+function pushSenderRow(rows: InboundReceiveDetailRow[], snapshot: InboundReceiveDetailSnapshot): void {
+  const sender = String(snapshot.sender ?? "").trim()
+  if (!sender) return
+  const copyValue = String(snapshot.senderCopyValue ?? "").trim()
+  rows.push({
+    label: REVIEW_ROW_LABELS.sender,
+    value: sender,
+    ...(copyValue ? { copyValue } : {}),
+  })
+}
+
+/** Amount credited is already in the hero for VA/crypto without a fee delta; local pay-in always shows it. */
+function shouldShowAmountCreditedRow(snapshot: InboundReceiveDetailSnapshot): boolean {
+  if (snapshot.kind === "yc_fund_balance") return true
+  if (snapshot.kind === "noah_verification" || snapshot.kind === "easetag_receive") return false
+  return Boolean(snapshot.processingFee && snapshot.processingFee.amount > 0)
+}
+
+function pushAmountCreditedIfNeeded(
+  rows: InboundReceiveDetailRow[],
+  snapshot: InboundReceiveDetailSnapshot,
+): void {
+  if (!shouldShowAmountCreditedRow(snapshot)) return
+  pushIf(
+    rows,
+    REVIEW_ROW_LABELS.amountCredited,
+    formatReviewRowMoneyDisplay(
+      REVIEW_ROW_LABELS.amountCredited,
+      snapshot.amountCredited.amount,
+      snapshot.amountCredited.currency,
+    ),
+  )
 }
 
 function pushCreditDestination(
@@ -546,22 +607,14 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
-      pushIf(
-        rows,
-        REVIEW_ROW_LABELS.amountCredited,
-        formatReviewRowMoneyDisplay(
-          REVIEW_ROW_LABELS.amountCredited,
-          snapshot.amountCredited.amount,
-          snapshot.amountCredited.currency,
-        ),
-      )
+      pushAmountCreditedIfNeeded(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
       pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
       break
     }
     case "noah_va_funding": {
       pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
-      pushIf(rows, REVIEW_ROW_LABELS.sender, snapshot.sender)
+      pushSenderRow(rows, snapshot)
       if (snapshot.processingFee) {
         pushIf(
           rows,
@@ -573,31 +626,14 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
-      pushIf(
-        rows,
-        REVIEW_ROW_LABELS.amountCredited,
-        formatReviewRowMoneyDisplay(
-          REVIEW_ROW_LABELS.amountCredited,
-          snapshot.amountCredited.amount,
-          snapshot.amountCredited.currency,
-        ),
-      )
+      pushAmountCreditedIfNeeded(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
       if (surface !== "receipt") pushIf(rows, REVIEW_ROW_LABELS.narration, snapshot.narration)
       break
     }
     case "noah_verification": {
       pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
-      pushIf(rows, REVIEW_ROW_LABELS.sender, snapshot.sender)
-      pushIf(
-        rows,
-        REVIEW_ROW_LABELS.amountCredited,
-        formatReviewRowMoneyDisplay(
-          REVIEW_ROW_LABELS.amountCredited,
-          snapshot.amountCredited.amount,
-          snapshot.amountCredited.currency,
-        ),
-      )
+      pushSenderRow(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
       if (includeVerificationHint && snapshot.creditDestination?.hint) {
         rows.push({
@@ -610,7 +646,7 @@ export function buildInboundReceiveDetailRows(
     }
     case "stablecoin": {
       pushIf(rows, REVIEW_ROW_LABELS.scheme, snapshot.scheme)
-      pushIf(rows, REVIEW_ROW_LABELS.sender, snapshot.sender)
+      pushSenderRow(rows, snapshot)
       if (snapshot.processingFee) {
         pushIf(
           rows,
@@ -623,15 +659,7 @@ export function buildInboundReceiveDetailRows(
         )
       }
       if (surface === "detail") {
-        pushIf(
-          rows,
-          REVIEW_ROW_LABELS.amountCredited,
-          formatReviewRowMoneyDisplay(
-            REVIEW_ROW_LABELS.amountCredited,
-            snapshot.amountCredited.amount,
-            snapshot.amountCredited.currency,
-          ),
-        )
+        pushAmountCreditedIfNeeded(rows, snapshot)
       }
       pushCreditDestination(rows, snapshot.creditDestination)
       pushIf(rows, REVIEW_ROW_LABELS.note, snapshot.note)

@@ -28,6 +28,7 @@ import { haptics } from '../../lib/haptics'
 import EaseEnter from '../../components/EaseEnter'
 import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
+import { USE_NATIVE_DRIVER } from '../../lib/animation'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const { shouldAnimateEnter } = useScreenDecorativeEnter()
@@ -139,10 +140,10 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
 
       // Shake animation on error
       Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: USE_NATIVE_DRIVER }),
       ]).start()
 
       setPin(['', '', '', ''])
