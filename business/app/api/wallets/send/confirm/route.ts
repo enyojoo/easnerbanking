@@ -3,10 +3,10 @@ import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "@/app/api/
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { isWalletSendEnabled } from "@/lib/lifi/client"
+import { isWalletSendEnabled } from "@/lib/relay/config"
 import { confirmWalletSendOrder } from "@/lib/wallet-send/confirm-wallet-send-order"
 
-/** Lock wallet send session for review (Turnkey direct + LI.FI). */
+/** Lock wallet send session for review (Turnkey direct + Relay bridge). */
 export async function POST(request: Request) {
   const mis = requireNoahEnv()
   if (mis) return mis

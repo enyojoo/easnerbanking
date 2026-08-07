@@ -831,6 +831,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const isWalletSendReview =
     transaction.metadata?.activity_type === 'wallet_send' ||
     transaction.payout_review?.execution_model === 'direct_turnkey' ||
+    transaction.payout_review?.execution_model === 'relay_bridge' ||
     transaction.payout_review?.execution_model === 'lifi_bridge'
   const payoutReviewHasFx =
     transaction.payout_review &&

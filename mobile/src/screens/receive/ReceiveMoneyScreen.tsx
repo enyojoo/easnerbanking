@@ -36,7 +36,9 @@ import { useScope } from '../../query/scope'
 import {
   useConsumerDepositAddresses,
   useConsumerVirtualAccounts,
+  useConsumerRelayDepositAddresses,
 } from '../../hooks/queries/use-receive-deposit-queries'
+import { ReceiveStablecoinMethodList, type StablecoinReceiveMethod } from '../../components/receive/ReceiveStablecoinMethodList'
 import QRCode from 'react-native-qrcode-svg'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { haptics } from '../../lib/haptics'
@@ -66,8 +68,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const { scope } = useScope()
   const vaQuery = useConsumerVirtualAccounts()
   const depositQuery = useConsumerDepositAddresses()
+  const relayDepositQuery = useConsumerRelayDepositAddresses(currency === 'USD')
 
   const [activeTab, setActiveTab] = useState<TabType>('cash')
+  const [selectedStablecoinMethod, setSelectedStablecoinMethod] = useState<StablecoinReceiveMethod | null>(null)
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
   const [aboutSheetOpen, setAboutSheetOpen] = useState(false)
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
@@ -458,20 +462,66 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   }
 
   const stablecoinData = getStablecoinAddress()
-  const stablecoinName = currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC'
+  const stablecoinMethods = useMemo((): StablecoinReceiveMethod[] => {
+    if (currency !== 'USD') return []
+    const methods: StablecoinReceiveMethod[] = []
+    if (stablecoinData.address) {
+      methods.push({
+        id: 'usdc-solana',
+        asset: 'USDC',
+        network: 'Solana',
+        status: 'active',
+        address: stablecoinData.address,
+      })
+    }
+    const relay = relayDepositQuery.data
+    if (relay?.enabled) {
+      for (const row of relay.addresses ?? []) {
+        methods.push({
+          id: `relay-${row.asset}-${row.network}`.toLowerCase(),
+          asset: row.asset,
+          network: row.network,
+          status: 'active',
+          address: row.address,
+          estimatedFeeBps: row.estimatedFeeBps ?? null,
+        })
+      }
+      if (relay.status === 'provisioning' && methods.length <= 1) {
+        methods.push({
+          id: 'usdt-tron-provisioning',
+          asset: 'USDT',
+          network: 'Tron',
+          status: 'provisioning',
+        })
+      }
+    }
+    return methods
+  }, [currency, relayDepositQuery.data, stablecoinData.address])
+
+  const activeStablecoinMethod =
+    selectedStablecoinMethod ??
+    (stablecoinMethods.length === 1 ? stablecoinMethods[0] : null)
+
+  const stablecoinName = activeStablecoinMethod?.asset ?? (currency.toLowerCase() === 'usd' ? 'USDC' : 'EURC')
   const effectiveTab: TabType = showTabBar ? activeTab : showCashTab ? 'cash' : 'stablecoin'
 
   const aboutSheetTitle = `About your ${stablecoinName} Address`
   const aboutSheetIntro = `Please, take note of the following when sending ${stablecoinName} to your address:`
 
-  const aboutPaymentNotes = useMemo(
-    () => [
+  const aboutPaymentNotes = useMemo(() => {
+    if (activeStablecoinMethod?.network === 'Tron') {
+      return [
+        'Only send USDT on Tron (TRC-20) to this address.',
+        'Bridge fees apply and are deducted from your credited balance.',
+        'Sending other assets or networks may result in permanent loss.',
+      ]
+    }
+    return [
       `Only send ${stablecoinName} on Solana to this address.`,
       'Sending other assets or networks may result in permanent loss.',
       'Processing time: within seconds.',
-    ],
-    [stablecoinName],
-  )
+    ]
+  }, [activeStablecoinMethod?.network, stablecoinName])
 
   const shouldWrapCopyableValue = (value: string, key: string) =>
     key === 'stablecoinAddress' || value.length > 28
@@ -679,10 +729,64 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
               )
             ) : effectiveTab === 'stablecoin' && showStablecoinTab ? (
               <>
-                {/* Stablecoin rails only while KYC approved; otherwise verification notice. */}
-                {showStablecoinDepositDetails && stablecoinData.address ? (
-                  /* Show wallet details when we have wallet data */
+                {showStablecoinDepositDetails && stablecoinMethods.length > 1 && !activeStablecoinMethod ? (
+                  <View style={styles.section}>
+                    <ReceiveStablecoinMethodList
+                      methods={stablecoinMethods}
+                      onSelect={(method) => setSelectedStablecoinMethod(method)}
+                    />
+                  </View>
+                ) : showStablecoinDepositDetails && activeStablecoinMethod?.address ? (
                   <>
+                    <View style={styles.section}>
+                      {stablecoinMethods.length > 1 ? (
+                        <Pressable
+                          android_ripple={ripple.neutral}
+                          style={styles.backToMethodsRow}
+                          onPress={() => setSelectedStablecoinMethod(null)}
+                        >
+                          <ArrowLeft size={18} color={colors.text.secondary} />
+                          <Text style={styles.backToMethodsText}>All stablecoin methods</Text>
+                        </Pressable>
+                      ) : null}
+                      <View style={styles.qrSection}>
+                        <View style={styles.qrContainer}>
+                          <QRCode
+                            value={activeStablecoinMethod.address}
+                            size={200}
+                            color={colors.text.primary}
+                            backgroundColor={colors.background.primary}
+                          />
+                        </View>
+                        <Text style={styles.qrHint}>
+                          Scan to send {activeStablecoinMethod.asset} on {activeStablecoinMethod.network}
+                        </Text>
+                      </View>
+
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.fieldLabel}>Network</Text>
+                        <View style={styles.fieldValueContainer}>
+                          <Text style={styles.fieldValue}>{activeStablecoinMethod.network}</Text>
+                        </View>
+                      </View>
+
+                      {renderCopyableField(
+                        `${activeStablecoinMethod.asset} Address`,
+                        activeStablecoinMethod.address,
+                        'stablecoinAddress',
+                      )}
+
+                      {activeStablecoinMethod.estimatedFeeBps != null ? (
+                        <Text style={styles.feeDisclaimer}>
+                          Estimated bridge fee: ~{(activeStablecoinMethod.estimatedFeeBps / 100).toFixed(2)}%
+                        </Text>
+                      ) : null}
+                    </View>
+                    {renderDetailActions()}
+                  </>
+                ) : showStablecoinDepositDetails && stablecoinData.address ? (
+                  <>
+                    {/* Legacy single Solana detail when relay list is unavailable */}
                     {/* Stablecoin Details */}
                     <View style={styles.section}>
                       {/* QR Code - First */}
@@ -978,6 +1082,23 @@ const styles = StyleSheet.create({
     color: colors.warning.dark,
     fontFamily: fontFamily.regular,
     flex: 1,
+  },
+  backToMethodsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[3],
+  },
+  backToMethodsText: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    fontFamily: fontFamily.medium,
+  },
+  feeDisclaimer: {
+    marginTop: spacing[2],
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    fontFamily: fontFamily.regular,
   },
   supportedStablecoinsContainer: {
     marginTop: spacing[4],

@@ -131,6 +131,21 @@ export function useConsumerVirtualAccounts() {
   })
 }
 
+async function fetchConsumerRelayDepositAddresses(): Promise<{
+  enabled: boolean
+  status?: string
+  addresses: Array<{
+    asset: string
+    network: string
+    address: string
+    estimatedFeeBps?: number | null
+  }>
+}> {
+  return apiFetch(`/api/wallets/relay-deposit-addresses`, {
+    headers: { ...NOAH_SCOPE_INDIVIDUAL_HEADERS },
+  })
+}
+
 /**
  * Turnkey USDC / EURC deposit lines — same route as `noahService.getTurnkeyDepositAddresses`.
  */
@@ -140,6 +155,20 @@ export function useConsumerDepositAddresses() {
     queryKey: scope ? qk.wallets.depositAddresses(scope) : (['wallets', 'deposit-addresses', 'disabled'] as const),
     enabled: Boolean(scope) && isReady,
     queryFn: fetchConsumerDepositAddresses,
+    staleTime: RECEIVE_DEPOSIT_STALE_MS,
+    gcTime: RECEIVE_DEPOSIT_GC_MS,
+    meta: RECEIVE_QUERY_META,
+  })
+}
+
+export function useConsumerRelayDepositAddresses(enabled = true) {
+  const { scope, isReady } = useScope()
+  return useQuery({
+    queryKey: scope
+      ? [...qk.wallets.depositAddresses(scope), 'relay']
+      : (['wallets', 'relay-deposit-addresses', 'disabled'] as const),
+    enabled: Boolean(scope) && isReady && enabled,
+    queryFn: fetchConsumerRelayDepositAddresses,
     staleTime: RECEIVE_DEPOSIT_STALE_MS,
     gcTime: RECEIVE_DEPOSIT_GC_MS,
     meta: RECEIVE_QUERY_META,

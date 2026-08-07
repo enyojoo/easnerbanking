@@ -6,6 +6,7 @@ import {
   linkNoahOrchestrationOutHashesForOwner,
   reconcileNoahBankOnrampCreditsForOwner,
 } from "@/lib/noah/credit-bank-onramp-wallet"
+import { reconcileRelayDepositsForOwner } from "@/lib/relay-deposit/settle-relay-deposit"
 import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-wallet-owner"
 import { createSolanaRpcConnection } from "@/lib/solana/rpc-connection"
 import { syncWalletBalancesFromSolanaAtaForOwner } from "@/lib/wallet/sync-wallet-balances-from-ata"
@@ -36,12 +37,14 @@ async function runOwnerLedgerSync(
   const balanceSync = await syncWalletBalancesFromSolanaAtaForOwner(admin, walletOwnerId, connection)
   const noahHashPrime = await linkNoahOrchestrationOutHashesForOwner(admin, ledgerScope)
   const noahReconcile = await reconcileNoahBankOnrampCreditsForOwner(admin, ledgerScope)
+  const relayReconcile = await reconcileRelayDepositsForOwner(admin, ledgerScope)
 
   if (mode === "cooldown") {
     return {
       balanceSync,
       noahHashPrime,
       noahReconcile,
+      relayReconcile,
       chainIngest: { skipped: true, reason: "cooldown_rpc_conservation" },
       result: null,
       organicInbound: null,
@@ -60,6 +63,7 @@ async function runOwnerLedgerSync(
       balanceSync,
       noahHashPrime,
       noahReconcile,
+      relayReconcile,
       result,
       organicInbound: null,
       chainIngest: { mode: "heavy" },
@@ -71,6 +75,7 @@ async function runOwnerLedgerSync(
       balanceSync,
       noahHashPrime,
       noahReconcile,
+      relayReconcile,
       result: null,
       organicInbound: { skipped: true, reason: "balance_webhooks_primary" },
       chainIngest: { mode: "organic_ata_skipped" },
@@ -90,6 +95,7 @@ async function runOwnerLedgerSync(
     balanceSync,
     noahHashPrime,
     noahReconcile,
+    relayReconcile,
     result: null,
     organicInbound,
     chainIngest: { mode: "organic_ata" },

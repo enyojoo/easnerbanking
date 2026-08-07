@@ -128,6 +128,7 @@ export {
   computeCryptoSendPricing,
   normalizeCryptoSendQuoteReceiveAmount,
   resolveLifiTicketPricingInput,
+  resolveBridgeTicketPricingInput,
   type ComputeCryptoSendPricingInput,
   type CryptoSendPricing,
 } from "./crypto-send-pricing"

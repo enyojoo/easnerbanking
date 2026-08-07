@@ -130,7 +130,7 @@ export interface SendFlowState {
     cryptoCurrency: string
     pricingQuoteId: string
     expiresAt: string
-    executionModel: "direct_turnkey" | "lifi_bridge"
+    executionModel: "direct_turnkey" | "relay_bridge" | "lifi_bridge"
     lifiFloor?: string
     quotePhase?: "preview" | "locked"
   }

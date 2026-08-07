@@ -70,7 +70,9 @@ export function normalizePayoutReviewSnapshot(
       ? { noah_channel_fee: Number(o.noah_channel_fee) }
       : {}),
     ...(Number.isFinite(Number(o.quote_noah_mid)) ? { quote_noah_mid: Number(o.quote_noah_mid) } : {}),
-    ...(o.execution_model === "direct_turnkey" || o.execution_model === "lifi_bridge"
+    ...(o.execution_model === "direct_turnkey" ||
+    o.execution_model === "relay_bridge" ||
+    o.execution_model === "lifi_bridge"
       ? { execution_model: o.execution_model }
       : {}),
     ...(Number.isFinite(Number(o.display_processing_fee_local)) &&

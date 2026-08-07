@@ -23,8 +23,8 @@ export type GlobalPayoutReviewSnapshot = {
   /** Ticket-sized Noah mid at quote time. */
   quote_noah_mid?: number
   network_fee?: number
-  /** Wallet send: hide processing fee row for `lifi_bridge` (margin is in customer rate). */
-  execution_model?: "direct_turnkey" | "lifi_bridge"
+  /** Wallet send execution model (relay_bridge replaces legacy lifi_bridge). */
+  execution_model?: "direct_turnkey" | "relay_bridge" | "lifi_bridge"
   /** Pay-in flows: combined fee in local currency for display (Easner 1% + YC legs). */
   display_processing_fee_local?: number
   /** Cross-border pay-in: local principal before processing fees. */

@@ -22,7 +22,12 @@ import { TIER2_COMPLETE_PLACEHOLDER } from "@/lib/compliance-placeholders"
 import {
   getPaymentInstructions,
   getStablecoinPaymentInstructions,
+  getTronUsdtPaymentInstructions,
 } from "@/lib/payment-instructions"
+import {
+  ReceiveStablecoinMethodList,
+  type StablecoinReceiveMethod,
+} from "@/components/receive/ReceiveStablecoinMethodList"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
@@ -221,6 +226,67 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const [dialogOpen, setDialogOpen] = useState(false)
   const [cashView, setCashView] = useState<CashView>("list")
   const [localRail, setLocalRail] = useState<LocalRail | null>(null)
+  const [relayDepositMethods, setRelayDepositMethods] = useState<StablecoinReceiveMethod[]>([])
+  const [selectedStablecoinMethod, setSelectedStablecoinMethod] = useState<StablecoinReceiveMethod | null>(null)
+
+  useEffect(() => {
+    if (!dialogOpen || account.currency !== "USD") return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetchWithSession("/api/wallets/relay-deposit-addresses")
+        const data = (await res.json().catch(() => ({}))) as {
+          enabled?: boolean
+          status?: string
+          addresses?: Array<{
+            asset: string
+            network: string
+            address: string
+            estimatedFeeBps?: number | null
+          }>
+        }
+        if (cancelled || !res.ok || !data.enabled) return
+        const methods: StablecoinReceiveMethod[] = []
+        if (stablecoinAccount?.address) {
+          methods.push({
+            id: "usdc-solana",
+            asset: "USDC",
+            network: "Solana",
+            status: "active",
+            address: stablecoinAccount.address,
+          })
+        }
+        for (const row of data.addresses ?? []) {
+          methods.push({
+            id: `relay-${row.asset}-${row.network}`.toLowerCase(),
+            asset: row.asset,
+            network: row.network,
+            status: "active",
+            address: row.address,
+            estimatedFeeBps: row.estimatedFeeBps ?? null,
+          })
+        }
+        if (data.status === "provisioning" && methods.length <= 1) {
+          methods.push({
+            id: "usdt-tron-provisioning",
+            asset: "USDT",
+            network: "Tron",
+            status: "provisioning",
+          })
+        }
+        setRelayDepositMethods(methods)
+      } catch {
+        // ignore — fall back to single Solana address
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [dialogOpen, account.currency, stablecoinAccount?.address])
+
+  const activeStablecoinMethod =
+    selectedStablecoinMethod ??
+    (relayDepositMethods.length === 1 ? relayDepositMethods[0] : null)
 
   const effectiveResidence =
     residenceCountry || String(countryCode ?? "").trim().toUpperCase() || null
@@ -581,14 +647,46 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             ) : null}
 
             <TabsContent value="stablecoin" className="space-y-4 mt-4">
-              {hasStablecoin && stablecoinAccount ? (
+              {hasStablecoin && stablecoinAccount && relayDepositMethods.length > 1 && !activeStablecoinMethod ? (
+                <ReceiveStablecoinMethodList
+                  methods={relayDepositMethods}
+                  onSelect={(method) => setSelectedStablecoinMethod(method)}
+                />
+              ) : hasStablecoin && stablecoinAccount ? (
                 <>
+                  {relayDepositMethods.length > 1 ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="px-0"
+                      onClick={() => setSelectedStablecoinMethod(null)}
+                    >
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      All stablecoin methods
+                    </Button>
+                  ) : null}
+                  {(() => {
+                    const detail = activeStablecoinMethod?.address
+                      ? {
+                          stablecoin: activeStablecoinMethod.asset,
+                          chain: activeStablecoinMethod.network,
+                          address: activeStablecoinMethod.address,
+                          estimatedFeeBps: activeStablecoinMethod.estimatedFeeBps,
+                        }
+                      : {
+                          stablecoin: stablecoinAccount.stablecoin,
+                          chain: stablecoinAccount.chain,
+                          address: stablecoinAccount.address,
+                          estimatedFeeBps: null as number | null,
+                        }
+                    return (
+                      <>
                   <div className="flex flex-col items-center">
                     <div className="p-4 bg-white rounded-xl border">
-                      <QRCodeSVG value={stablecoinAccount.address} size={200} level="M" />
+                      <QRCodeSVG value={detail.address} size={200} level="M" />
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Scan to send {stablecoinAccount.stablecoin}
+                      Scan to send {detail.stablecoin} on {detail.chain}
                     </p>
                   </div>
 
@@ -596,24 +694,30 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                     <p className="text-sm text-muted-foreground mb-1">Network</p>
                     <div className="p-3 bg-muted rounded-lg">
                       <span className="text-sm font-medium">
-                        {stablecoinAccount.chain === "Solana"
+                        {detail.chain === "Solana"
                           ? "SOL"
-                          : stablecoinAccount.chain === "Ethereum"
+                          : detail.chain === "Ethereum"
                             ? "ETH"
-                            : stablecoinAccount.chain}
+                            : detail.chain}
                       </span>
                       <span className="text-sm text-muted-foreground"> • </span>
-                      <span className="text-sm text-muted-foreground">{stablecoinAccount.chain}</span>
+                      <span className="text-sm text-muted-foreground">{detail.chain}</span>
                     </div>
                   </div>
 
                   <CopyableField
                     label="Address"
-                    value={stablecoinAccount.address}
+                    value={detail.address}
                     copiedField={copiedField}
                     fieldId={`stable-addr-${account.id}`}
                     onCopy={onCopy}
                   />
+
+                  {detail.estimatedFeeBps != null ? (
+                    <p className="text-xs text-muted-foreground">
+                      Estimated bridge fee: ~{(detail.estimatedFeeBps / 100).toFixed(2)}%
+                    </p>
+                  ) : null}
 
                   <Button
                     variant="outline"
@@ -622,7 +726,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                     onClick={() => handleShare("stablecoin")}
                   >
                     <Share2 className="h-4 w-4" />
-                    Share {stablecoinAccount.stablecoin} Details
+                    Share {detail.stablecoin} Details
                   </Button>
 
                   <div className="pt-4 border-t">
@@ -630,9 +734,12 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                     <PaymentInstructions
                       currency={account.currency}
                       type="stablecoin"
-                      stablecoinToken={stablecoinAccount?.stablecoin}
+                      stablecoinToken={detail.stablecoin as "USDC" | "USDT"}
                     />
                   </div>
+                      </>
+                    )
+                  })()}
                 </>
               ) : (
                 <div className="py-8 text-center">

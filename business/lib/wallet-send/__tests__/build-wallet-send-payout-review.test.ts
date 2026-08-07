@@ -45,7 +45,7 @@ describe("buildWalletSendPayoutReviewSnapshot", () => {
       channelCost: 3,
     })
     expect(review.you_send_amount + review.exchange_fee).toBeCloseTo(review.total_debited, 2)
-    expect(review.execution_model).toBe("lifi_bridge")
+    expect(review.execution_model).toBe("relay_bridge")
   })
 })
 
@@ -145,7 +145,7 @@ describe("resolveWalletSendPayoutReview", () => {
     expect(review?.you_send_amount).toBe(101.52)
     expect(review?.exchange_fee).toBe(3)
     expect(review?.total_debited).toBe(104.52)
-    expect(review?.execution_model).toBe("lifi_bridge")
+    expect(review?.execution_model).toBe("relay_bridge")
   })
 
   it("infers direct Turnkey when execution_model missing", () => {

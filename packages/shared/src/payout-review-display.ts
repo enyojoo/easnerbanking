@@ -69,7 +69,12 @@ export function shouldShowPayoutReviewFeeRow(input: {
   return isPayoutReviewFeeVisible(computeDisplayProcessingFee(input))
 }
 
-export type WalletSendExecutionModel = "direct_turnkey" | "lifi_bridge"
+export type WalletSendExecutionModel = "direct_turnkey" | "relay_bridge"
+
+export function isBridgeWalletSendExecutionModel(model: string | null | undefined): boolean {
+  const m = String(model || "").trim()
+  return m === "relay_bridge" || m === "lifi_bridge"
+}
 
 /**
  * Show the combined "Processing fee" row (Easner bps leg + channel/route cost).
@@ -115,7 +120,7 @@ export function shouldShowWalletSendNetworkFee(input: {
 }): boolean {
   if (
     input.executionModel === "direct_turnkey" ||
-    input.executionModel === "lifi_bridge"
+    isBridgeWalletSendExecutionModel(input.executionModel)
   ) {
     return false
   }

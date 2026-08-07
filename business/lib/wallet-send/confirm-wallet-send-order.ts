@@ -1,17 +1,31 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
-import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-map"
-import { quoteLifiWalletBridge, quoteLifiWalletBridgeFromAmountRaw } from "./lifi-wallet-quote"
-import { parseLifiToAmountHuman } from "./lifi-from-amount"
-import { meetsLifiReceiveTarget } from "./lifi-receive-search"
+import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/relay/token-map"
+import { isRelayWalletSendEnabled, requireRelayApiKey } from "@/lib/relay/config"
+import { parseRelayFromAmountRaw } from "@/lib/relay/quote"
+import {
+  quoteRelayWalletBridge,
+  quoteRelayWalletBridgeFromAmountRaw,
+} from "./relay-wallet-quote"
+import { parseRelayToAmountHumanFromQuote } from "./relay-from-amount"
+import { meetsRelayReceiveTarget } from "./relay-receive-search"
 import {
   getWalletSendSession,
   lockWalletSendSession,
   type WalletSendSessionRow,
 } from "./wallet-send-session"
+import { isBridgeExecutionModel } from "./routing"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 import type { WalletSendQuoteResult } from "./wallet-send-quote"
+
+function sessionBridgeMid(session: WalletSendSessionRow): number {
+  return session.relay_mid ?? session.lifi_mid
+}
+
+function sessionBridgeFloor(session: WalletSendSessionRow): number {
+  return session.relay_floor ?? session.lifi_floor
+}
 
 export async function confirmWalletSendOrder(input: {
   admin: SupabaseClient
@@ -28,7 +42,12 @@ export async function confirmWalletSendOrder(input: {
 
   let locked = session
   if (isPayoutLockOnReviewEnabled("wallet")) {
-    if (session.execution_model === "lifi_bridge") {
+    if (isBridgeExecutionModel(session.execution_model)) {
+      if (!isRelayWalletSendEnabled()) {
+        throw new Error("Relay wallet send is not configured.")
+      }
+      requireRelayApiKey()
+
       const balanceCurrency = session.source_balance_currency as "USD" | "EUR"
       const source = sourceSolVaultToken(balanceCurrency)
       const dest = resolveWalletSendToken(session.receive_asset, session.receive_network)
@@ -41,19 +60,23 @@ export async function confirmWalletSendOrder(input: {
       )
       if (!fromAddress) throw new Error("no_source_vault")
       const slippage = 0.03
-      const storedFromAmountRaw = String(session.lifi_from_amount_raw || "").trim()
+      const storedFromAmountRaw = String(
+        session.relay_from_amount_raw ?? session.lifi_from_amount_raw ?? "",
+      ).trim()
+      const bridgeMid = sessionBridgeMid(session)
+
       let quote
       if (storedFromAmountRaw) {
-        quote = await quoteLifiWalletBridgeFromAmountRaw({
+        quote = await quoteRelayWalletBridgeFromAmountRaw({
+          user: fromAddress,
+          recipient: session.destination_address,
           source,
           dest,
-          fromAddress,
-          toAddress: session.destination_address,
           fromAmountRaw: storedFromAmountRaw,
-          slippage,
+          slippageTolerance: String(Math.round(slippage * 10_000)),
         })
       } else {
-        quote = await quoteLifiWalletBridge({
+        quote = await quoteRelayWalletBridge({
           source,
           dest,
           fromAddress,
@@ -61,19 +84,24 @@ export async function confirmWalletSendOrder(input: {
           amountEntryMode: "receive",
           receiveAmount: session.receive_amount,
           customerRate: session.customer_rate,
-          lifiMid: session.lifi_mid,
+          bridgeMid,
           slippage,
         })
       }
-      const toHuman = parseLifiToAmountHuman(quote, dest.decimals)
-      if (!meetsLifiReceiveTarget(toHuman, session.receive_amount, slippage)) {
+      const toHuman = parseRelayToAmountHumanFromQuote(quote, dest.decimals)
+      if (!meetsRelayReceiveTarget(toHuman, session.receive_amount, slippage)) {
         throw new Error("Route no longer meets receive target. Go back and try again.")
       }
+      const quoteId = String(quote.requestId ?? quote.id ?? "").trim() || null
+      const fromAmountRaw = parseRelayFromAmountRaw(quote)
+
       await input.admin
         .from("wallet_send_sessions")
         .update({
-          lifi_quote_id: quote.id,
-          lifi_from_amount_raw: String(quote.estimate?.fromAmount || "").trim() || null,
+          lifi_quote_id: quoteId,
+          lifi_from_amount_raw: fromAmountRaw,
+          relay_quote_id: quoteId,
+          relay_from_amount_raw: fromAmountRaw,
           status: "locked",
         })
         .eq("form_session_id", session.form_session_id)
@@ -81,8 +109,10 @@ export async function confirmWalletSendOrder(input: {
       locked = {
         ...session,
         status: "locked",
-        lifi_quote_id: quote.id,
-        lifi_from_amount_raw: String(quote.estimate?.fromAmount || "").trim() || null,
+        lifi_quote_id: quoteId,
+        lifi_from_amount_raw: fromAmountRaw,
+        relay_quote_id: quoteId,
+        relay_from_amount_raw: fromAmountRaw,
       }
     } else {
       const next = await lockWalletSendSession(input.admin, session.form_session_id, input.userId)
@@ -98,17 +128,19 @@ export async function confirmWalletSendOrder(input: {
         ? Math.round((locked.receive_amount / locked.customer_rate) * 1_000_000) / 1_000_000
         : Math.max(0, locked.total_debited - locked.margin_amount)
 
-  // Explicit Easner processing fee leg (direct: margin_amount; LI.FI: total − floor − FX margin).
+  const bridgeFloor = sessionBridgeFloor(locked)
+  const bridgeMid = sessionBridgeMid(locked)
+
   const processingFee =
     locked.execution_model === "direct_turnkey"
       ? locked.margin_amount
       : Math.round(
-          Math.max(0, locked.total_debited - locked.lifi_floor - locked.margin_amount) * 1_000_000,
+          Math.max(0, locked.total_debited - bridgeFloor - locked.margin_amount) * 1_000_000,
         ) / 1_000_000
   const displayChannelCost =
-    locked.execution_model === "lifi_bridge" && locked.lifi_mid > 0
+    isBridgeExecutionModel(locked.execution_model) && bridgeMid > 0
       ? Math.round(
-          Math.max(0, locked.lifi_floor - locked.receive_amount / locked.lifi_mid) * 1_000_000,
+          Math.max(0, bridgeFloor - locked.receive_amount / bridgeMid) * 1_000_000,
         ) / 1_000_000
       : 0
 
@@ -116,7 +148,6 @@ export async function confirmWalletSendOrder(input: {
     receiveAmount: locked.receive_amount,
     receiveCurrency: locked.receive_asset,
     receiveNetwork: locked.receive_network,
-    // Sending/Sent is net principal — never the fee-inclusive total_debited.
     sendAmount: principalSendAmount,
     sendCurrency: locked.source_balance_currency,
     totalDebited: locked.total_debited,
@@ -127,14 +158,18 @@ export async function confirmWalletSendOrder(input: {
     networkFee: 0,
     rate: locked.customer_rate,
     customerRate: locked.customer_rate,
-    lifiMid: locked.lifi_mid,
+    lifiMid: bridgeMid,
+    relayMid: bridgeMid,
+    relayFloor: String(bridgeFloor),
     expiresAt: locked.expires_at,
     formSessionId: locked.form_session_id,
     pricingQuoteId: locked.form_session_id,
-    executionModel: locked.execution_model,
+    executionModel: isBridgeExecutionModel(locked.execution_model)
+      ? "relay_bridge"
+      : "direct_turnkey",
     wallet: {
-      cryptoAuthorizedAmount: String(locked.lifi_floor),
-      lifiFloor: String(locked.lifi_floor),
+      cryptoAuthorizedAmount: String(bridgeFloor),
+      lifiFloor: String(bridgeFloor),
     },
   }
 

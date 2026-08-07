@@ -121,7 +121,7 @@ export type WalletPrepareSession = {
   marginAmount?: string
   customerRate?: number
   lifiMid?: number
-  executionModel?: 'direct_turnkey' | 'lifi_bridge'
+  executionModel?: 'direct_turnkey' | 'relay_bridge' | 'lifi_bridge'
 }
 
 export function walletPrepareSessionFromQuote(

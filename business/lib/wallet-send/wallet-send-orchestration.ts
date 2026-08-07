@@ -5,12 +5,12 @@ import { createTurnkeySend } from "@/lib/turnkey/send"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { generateTransactionId } from "@/lib/transaction-id"
-import { isWalletSendEnabled } from "@/lib/lifi/client"
+import { isRelayWalletSendEnabled, isWalletSendEnabled, requireRelayApiKey } from "@/lib/relay/config"
 import { getTurnkeyDisplayBalancesUsdEur } from "@/lib/wallet/turnkey-chain-balances"
-import { resolveWalletSendExecutionModel } from "./routing"
+import { resolveWalletSendExecutionModel, isBridgeExecutionModel } from "./routing"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 import { getWalletSendSession, markWalletSendSessionExecuted } from "./wallet-send-session"
-import { executeLifiWalletSend } from "./lifi-execute"
+import { executeRelayWalletSend } from "./relay-execute"
 import type { WalletRecipientRow } from "./validate-recipient"
 import {
   assertWalletSendFeeSolanaAddressConfigured,
@@ -41,7 +41,7 @@ export type ExecuteWalletSendResult =
       ok: true
       easnerTransactionId: string
       status: "pending" | "settled" | "failed"
-      provider: "turnkey" | "lifi"
+      provider: "turnkey" | "relay" | "lifi"
       providerTransactionId: string
       txHash?: string | null
     }
@@ -154,7 +154,12 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
       ok: true,
       easnerTransactionId,
       status: String(existing.status) === "failed" ? "failed" : String(existing.status) === "pending" ? "pending" : "settled",
-      provider: String(existing.provider) === "lifi" ? "lifi" : "turnkey",
+      provider:
+        String(existing.provider) === "relay"
+          ? "relay"
+          : String(existing.provider) === "lifi"
+            ? "lifi"
+            : "turnkey",
       providerTransactionId: String(existing.provider_transaction_id || ""),
       txHash: existing.tx_hash == null ? null : String(existing.tx_hash),
     }
@@ -164,9 +169,12 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
   const balanceCurrency = session.source_balance_currency as "USD" | "EUR"
   const easnerTransactionId = input.reservedDebitEtid?.trim() || generateTransactionId()
 
+  const bridgeFloor = session.relay_floor ?? session.lifi_floor
+  const bridgeMid = session.relay_mid ?? session.lifi_mid
+
   const channelCost =
-    executionModel === "lifi_bridge"
-      ? Math.max(0, session.lifi_floor - session.receive_amount / session.lifi_mid)
+    isBridgeExecutionModel(executionModel) && bridgeMid > 0
+      ? Math.max(0, bridgeFloor - session.receive_amount / bridgeMid)
       : 0
   const payoutReview = buildWalletSendPayoutReviewSnapshot({
     session,
@@ -282,11 +290,9 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
   }
 
   const marginAmount = session.margin_amount
-  const lifiFloor = session.lifi_floor
-  // Explicit Easner 1% leg = total − lifiFloor − FX margin (also SPL-sent to the fee wallet).
   const processingFee = Math.max(
     0,
-    Math.round((session.total_debited - lifiFloor - marginAmount) * 1_000_000) / 1_000_000,
+    Math.round((session.total_debited - bridgeFloor - marginAmount) * 1_000_000) / 1_000_000,
   )
   const ready = await assertWalletSendExecuteReady(input.admin, {
     ctx: input.ctx,
@@ -294,7 +300,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     businessId: input.businessId,
     balanceCurrency,
     totalDebited: session.total_debited,
-    onChainOutTotal: lifiFloor,
+    onChainOutTotal: bridgeFloor,
   })
   if (!ready.ok) return ready
 
@@ -303,14 +309,19 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     return { ok: false, error: "wallet_send_fee_address_not_configured" }
   }
 
-  const lifi = await executeLifiWalletSend({
+  const { isRelayWalletSendEnabled, requireRelayApiKey } = await import("@/lib/relay/config")
+  if (!isRelayWalletSendEnabled()) {
+    return { ok: false, error: "relay_wallet_send_not_configured" }
+  }
+  requireRelayApiKey()
+  const bridgeResult = await executeRelayWalletSend({
     admin: input.admin,
     ctx: input.ctx,
     session,
     feeAddress,
     easnerTransactionId,
   })
-  if (!lifi.ok) return lifi
+  if (!bridgeResult.ok) return bridgeResult
 
   await debitWalletBalance(input.admin, {
     userId: input.userId,
@@ -319,39 +330,41 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     amount: session.total_debited,
   })
 
-  const feeLegAmount =
-    Math.round((marginAmount + processingFee) * 1_000_000) / 1_000_000
+  const feeLegAmount = Math.round((marginAmount + processingFee) * 1_000_000) / 1_000_000
+  const bridgeProvider = "relay"
 
   const occurredAt = new Date().toISOString()
   const upsert = await upsertLedgerTransaction(input.admin, {
     userId: input.userId,
     businessId: input.businessId,
-    provider: "lifi",
-    providerTransactionId: lifi.providerTransactionId,
-    status: lifi.status,
+    provider: bridgeProvider,
+    providerTransactionId: bridgeResult.providerTransactionId,
+    status: bridgeResult.status,
     amount: session.total_debited,
     currency: balanceCurrency,
     direction: "out",
     occurredAt,
-    ...(lifi.status === "settled" ? { settledAt: occurredAt } : {}),
-    txHash: lifi.txHash,
+    ...(bridgeResult.status === "settled" ? { settledAt: occurredAt } : {}),
+    txHash: bridgeResult.txHash,
     counterpartyAddress: session.destination_address,
     asset: session.receive_asset,
     chain: session.receive_network,
     metadata: {
       activity_type: "wallet_send",
-      execution_model: "lifi_bridge",
+      execution_model: "relay_bridge",
       margin_capture_mode: "fee_wallet_deferred",
       receive_asset: session.receive_asset,
       receive_network: session.receive_network,
       receive_amount: session.receive_amount,
       receive_currency: session.receive_asset,
-      lifi_floor: lifiFloor,
+      relay_floor: bridgeFloor,
+      lifi_floor: bridgeFloor,
       margin_amount: marginAmount,
       processing_fee: processingFee,
       fee_destination_address: feeAddress,
-      lifi_tool: lifi.lifiTool,
-      lifi_quote_id: lifi.lifiQuoteId,
+      relay_request_id:
+        "relayRequestId" in bridgeResult ? bridgeResult.relayRequestId : undefined,
+      relay_quote_id: session.relay_quote_id ?? session.lifi_quote_id,
       form_session_id: session.form_session_id,
       easner_transaction_id: easnerTransactionId,
       payout_review: payoutReview,
@@ -361,7 +374,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     },
   })
 
-  if (lifi.status === "settled" && upsert.transactionId) {
+  if (bridgeResult.status === "settled" && upsert.transactionId) {
     await captureWalletSendFeeLegIfPending(input.admin, {
       transactionId: upsert.transactionId,
       userId: input.userId,
@@ -373,10 +386,10 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
   return {
     ok: true,
     easnerTransactionId,
-    status: lifi.status,
-    provider: "lifi",
-    providerTransactionId: lifi.providerTransactionId,
-    txHash: lifi.txHash,
+    status: bridgeResult.status,
+    provider: bridgeProvider,
+    providerTransactionId: bridgeResult.providerTransactionId,
+    txHash: bridgeResult.txHash,
   }
 }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { isWalletSendEnabled } from "@/lib/lifi/client"
+import { isWalletSendEnabled } from "@/lib/relay/config"
 import { executeWalletSend, resolveWalletSendAccountContext } from "@/lib/wallet-send/wallet-send-orchestration"
 import { validateWalletRecipientForSend, type WalletRecipientRow } from "@/lib/wallet-send/validate-recipient"
 

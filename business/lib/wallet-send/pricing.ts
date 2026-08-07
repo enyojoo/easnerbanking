@@ -1,41 +1,30 @@
 import { parseWalletSendMarginFromEnv } from "@easner/rate-sync"
-import type { LifiQuoteResponse } from "@/lib/lifi/client"
+import type { RelayQuoteV2Response } from "@/lib/relay/types"
 import {
   computeCryptoSendPricing,
   computeDirectTurnkeyWalletSendPricing,
   parseWalletSendProcessingFeeBpsFromEnv,
   parseWalletSendProcessingFeeCapFromEnv,
-  resolveLifiTicketPricingInput,
+  resolveBridgeTicketPricingInput,
   type CryptoSendPricing,
 } from "@easner/shared"
+import { parseRelayFromAmountRaw, parseRelayNetworkFeeUsd } from "@/lib/relay/quote"
 
-export function parseLifiNetworkFeeUsd(quote: LifiQuoteResponse): number {
-  const gas = quote.estimate?.gasCosts ?? []
-  const fees = quote.estimate?.feeCosts ?? []
-  let total = 0
-  for (const row of [...gas, ...fees]) {
-    if (row.included) continue
-    const usd = Number(row.amountUSD ?? 0)
-    if (Number.isFinite(usd) && usd > 0) total += usd
-  }
-  return Math.round(total * 100) / 100
-}
-
-export function pricingFromLifiQuote(input: {
+export function pricingFromRelayQuote(input: {
   receiveAmount: number
   customerRate: number
-  lifiMid: number
-  quote: LifiQuoteResponse
+  bridgeMid: number
+  quote: RelayQuoteV2Response
   sourceDecimals: number
   processingFeeBps?: number
 }): CryptoSendPricing {
-  const fromRaw = Number(input.quote.estimate?.fromAmount ?? 0)
-  const lifiFloor = fromRaw / 10 ** input.sourceDecimals
-  const { customerRate, lifiMid } = resolveLifiTicketPricingInput({
+  const fromRaw = parseRelayFromAmountRaw(input.quote)
+  const relayFloor = Number(fromRaw) / 10 ** input.sourceDecimals
+  const { customerRate, lifiMid } = resolveBridgeTicketPricingInput({
     receiveAmount: input.receiveAmount,
     planningCustomerRate: input.customerRate,
-    planningLifiMid: input.lifiMid,
-    lifiFloor,
+    planningLifiMid: input.bridgeMid,
+    lifiFloor: relayFloor,
     margin: parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN),
   })
 
@@ -43,8 +32,8 @@ export function pricingFromLifiQuote(input: {
     receiveAmount: input.receiveAmount,
     customerRate,
     lifiMid,
-    lifiFloor,
-    networkFee: parseLifiNetworkFeeUsd(input.quote),
+    lifiFloor: relayFloor,
+    networkFee: parseRelayNetworkFeeUsd(input.quote),
     processingFeeBps:
       input.processingFeeBps ??
       parseWalletSendProcessingFeeBpsFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_BPS),

@@ -20,6 +20,10 @@
       "schedule": "*/2 * * * *"
     },
     {
+      "path": "/api/internal/relay-deposits/reconcile",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/sync-exchange-rates",
       "schedule": "0 1 * * *"
     },

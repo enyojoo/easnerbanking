@@ -10,6 +10,8 @@ import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
 import { ensureStablecoinTokenAccountOnChain } from "@/lib/turnkey/ensure-spl-token-account"
 import { DEFAULT_INDIVIDUAL_VAULTS } from "@/lib/wallet/vault-spec"
 import { ensureFiatVirtualAccountForLedgerCurrency } from "@/lib/noah/bank-onramp-virtual-accounts"
+import { enqueueRelayDepositProvisionJob } from "@/lib/relay-deposit/provision-jobs"
+import { isRelayTronInboundEnabled } from "@/lib/relay/config"
 import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 import { enqueueVaultProvisioningJobs, upsertWalletOwnerFromNoah } from "@/lib/wallet/turnkey-wallet-db"
 const MAX_ATTEMPTS = 5
@@ -207,6 +209,17 @@ export async function processNextWalletProvisioningJob(opts?: {
         })
       } catch (e) {
         console.warn("[turnkey-provisioning] bank onramp after vault:", e)
+      }
+    }
+
+    if (isRelayTronInboundEnabled() && ledger === "USD" && associatedTokenAccountAddress) {
+      try {
+        await enqueueRelayDepositProvisionJob(admin, {
+          walletOwnerId: owner.id,
+          recipientVaultAta: associatedTokenAccountAddress,
+        })
+      } catch (e) {
+        console.warn("[turnkey-provisioning] relay deposit provision enqueue:", e)
       }
     }
 

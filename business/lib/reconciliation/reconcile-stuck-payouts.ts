@@ -536,8 +536,6 @@ export async function reconcilePendingWalletSends(
   dryRun: boolean,
 ): Promise<{ scanned: number; patched: number }> {
   const { reconcileTurnkeySendStatus } = await import("@/lib/turnkey/send")
-  const { lifiGetStatus } = await import("@/lib/lifi/client")
-  const { upsertLedgerTransaction } = await import("@/lib/ledger/transactions")
 
   const { data: rows, error } = await admin
     .from("transactions")
@@ -561,7 +559,6 @@ export async function reconcilePendingWalletSends(
     if (dryRun) continue
 
     const executionModel = String(meta.execution_model || "")
-    const txHash = String(row.tx_hash || "").trim()
     const userId = String(row.user_id || "")
     const businessId = row.business_id != null ? String(row.business_id) : null
 
@@ -585,51 +582,17 @@ export async function reconcilePendingWalletSends(
         continue
       }
 
-      if (executionModel === "lifi_bridge" && txHash) {
-        const status = await lifiGetStatus(txHash)
-        const next = String(status.status || "").toUpperCase()
-        if (next === "DONE") {
-          const occurredAt = new Date().toISOString()
-          await upsertLedgerTransaction(admin, {
-            userId,
-            businessId,
-            provider: "lifi",
-            providerTransactionId: String(row.provider_transaction_id),
-            status: "settled",
-            amount: Number(row.amount ?? 0),
-            currency: String(row.currency ?? "USD"),
-            direction: "out",
-            occurredAt,
-            settledAt: occurredAt,
-            txHash,
-            walletAddress: row.wallet_address ? String(row.wallet_address) : null,
-            counterpartyAddress: row.counterparty_address ? String(row.counterparty_address) : null,
-            asset: row.asset ? String(row.asset) : null,
-            chain: row.chain ? String(row.chain) : null,
-            metadata: meta,
-            baseCurrency: String(row.currency ?? "USD"),
-          })
-          await captureWalletSendFeeLegIfPending(admin, {
-            transactionId: String(row.id),
-            userId,
-            businessId,
-          }).catch(() => undefined)
-          patched += 1
-        } else if (next === "FAILED") {
-          await upsertLedgerTransaction(admin, {
-            userId,
-            businessId,
-            provider: "lifi",
-            providerTransactionId: String(row.provider_transaction_id),
-            status: "failed",
-            amount: Number(row.amount ?? 0),
-            currency: String(row.currency ?? "USD"),
-            direction: "out",
-            txHash,
-            metadata: meta,
-            baseCurrency: String(row.currency ?? "USD"),
-          })
-          patched += 1
+      if (
+        (executionModel === "relay_bridge" || executionModel === "lifi_bridge") &&
+        row.id
+      ) {
+        const relayRequestId = String(meta.relay_request_id ?? "").trim()
+        if (relayRequestId) {
+          const { reconcileRelayWalletSendByRequestId } = await import(
+            "@/lib/wallet-send/settle-relay-wallet-send"
+          )
+          const rec = await reconcileRelayWalletSendByRequestId(admin, { relayRequestId })
+          if (rec.patched) patched += 1
         }
       }
     } catch (e) {

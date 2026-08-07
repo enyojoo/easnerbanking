@@ -1,7 +1,8 @@
 import { applyCryptoCustomerRate, parseWalletSendMarginFromEnv, walletSendMarginBps } from "@easner/rate-sync"
 import { createClient } from "@supabase/supabase-js"
-import { lifiQuote } from "@/lib/lifi/client"
-import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-map"
+import { relayQuote } from "@/lib/relay/quote"
+import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/relay/token-map"
+import { isRelayConfigured, requireCryptoRatesProbeSolAddress } from "@/lib/relay/config"
 import { WALLET_ASSET_NETWORKS } from "@/lib/wallet-asset-networks"
 import { isDirectTurnkeyCorridor } from "@/lib/wallet-send/routing"
 
@@ -22,9 +23,7 @@ function getSupabaseServiceConfig(): { supabaseUrl: string; serviceRoleKey: stri
 }
 
 function probeSolAddress(): string {
-  const addr = String(process.env.CRYPTO_RATES_PROBE_SOL_ADDRESS || "").trim()
-  if (!addr) throw new Error("CRYPTO_RATES_PROBE_SOL_ADDRESS not configured")
-  return addr
+  return requireCryptoRatesProbeSolAddress()
 }
 
 function dummyToAddress(asset: string, network: string): string {
@@ -99,19 +98,32 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
             continue
           }
 
-          const quote = await lifiQuote({
-            fromChain: source.chainId,
-            toChain: dest.chainId,
-            fromToken: source.address,
-            toToken: dest.address,
-            fromAddress: probeFrom,
-            toAddress: dummyToAddress(asset, network),
-            fromAmount: REFERENCE_FROM_AMOUNT_USDC,
-            fee: 0,
-          })
+          if (!isRelayConfigured()) {
+            skippedPairs.push({
+              from_currency: fromCurrency,
+              to_currency: asset,
+              receive_network: network,
+              reason: "relay_not_configured",
+            })
+            continue
+          }
+          requireRelayApiKey()
 
-          const fromAmt = Number(quote.estimate?.fromAmount ?? 0) / 10 ** source.decimals
-          const toAmt = Number(quote.estimate?.toAmount ?? 0) / 10 ** dest.decimals
+          let fromAmt: number
+          let toAmt: number
+          const quote = await relayQuote({
+            user: probeFrom,
+            recipient: dummyToAddress(asset, network),
+            source,
+            dest,
+            amountRaw: REFERENCE_FROM_AMOUNT_USDC,
+            tradeType: "EXACT_INPUT",
+          })
+          const fromRaw = Number(quote.details?.currencyIn?.amount ?? 0)
+          const toRaw = Number(quote.details?.currencyOut?.amount ?? 0)
+          fromAmt = fromRaw / 10 ** source.decimals
+          toAmt = toRaw / 10 ** dest.decimals
+
           if (!Number.isFinite(fromAmt) || !Number.isFinite(toAmt) || fromAmt <= 0 || toAmt <= 0) {
             skippedPairs.push({ from_currency: fromCurrency, to_currency: asset, receive_network: network, reason: "invalid quote amounts" })
             continue
@@ -127,7 +139,7 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
             lifi_mid: lifiMid,
             rate: applyCryptoCustomerRate(lifiMid, effectiveMargin),
             margin_bps: marginBps,
-            source: "lifi_probe_sync",
+            source: "relay_probe_sync",
             as_of: new Date().toISOString(),
             status: "active",
             updated_at: new Date().toISOString(),
@@ -141,6 +153,74 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
           })
         }
       }
+    }
+  }
+
+  // USD↔EUR convert planning rows (USDC ↔ EURC on Solana via Relay).
+  for (const [fromCurrency, toCurrency] of [
+    ["USD", "EUR"],
+    ["EUR", "USD"],
+  ] as const) {
+    try {
+      const source = sourceSolVaultToken(fromCurrency)
+      const dest = sourceSolVaultToken(toCurrency)
+      const useRelay = isRelayConfigured()
+      let fromAmt: number
+      let toAmt: number
+
+      if (useRelay) {
+        const quote = await relayQuote({
+          user: probeFrom,
+          recipient: probeFrom,
+          source,
+          dest,
+          amountRaw: REFERENCE_FROM_AMOUNT_USDC,
+          tradeType: "EXACT_INPUT",
+        })
+        fromAmt = Number(quote.details?.currencyIn?.amount ?? 0) / 10 ** source.decimals
+        toAmt = Number(quote.details?.currencyOut?.amount ?? 0) / 10 ** dest.decimals
+      } else {
+        skippedPairs.push({
+          from_currency: fromCurrency,
+          to_currency: toCurrency === "EUR" ? "EURC" : "USDC",
+          receive_network: "Solana",
+          reason: "relay_not_configured",
+        })
+        continue
+      }
+
+      if (!Number.isFinite(fromAmt) || !Number.isFinite(toAmt) || fromAmt <= 0 || toAmt <= 0) {
+        skippedPairs.push({
+          from_currency: fromCurrency,
+          to_currency: toCurrency === "EUR" ? "EURC" : "USDC",
+          receive_network: "Solana",
+          reason: "invalid convert quote amounts",
+        })
+        continue
+      }
+
+      const lifiMid = toAmt / fromAmt
+      const destAsset = toCurrency === "EUR" ? "EURC" : "USDC"
+      const marginBps = resolveCryptoMarginBps(fromCurrency, destAsset, "Solana")
+      upserts.push({
+        from_currency: fromCurrency,
+        to_currency: destAsset,
+        receive_network: "Solana",
+        lifi_mid: lifiMid,
+        rate: applyCryptoCustomerRate(lifiMid, marginBps / 10_000),
+        margin_bps: marginBps,
+        source: "relay_probe_sync",
+        as_of: new Date().toISOString(),
+        status: "active",
+        updated_at: new Date().toISOString(),
+      })
+    } catch (e) {
+      skippedPairs.push({
+        from_currency: fromCurrency,
+        to_currency: toCurrency === "EUR" ? "EURC" : "USDC",
+        receive_network: "Solana",
+        reason: e instanceof Error ? e.message.slice(0, 120) : String(e).slice(0, 120),
+      })
     }
   }
 

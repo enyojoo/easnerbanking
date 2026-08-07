@@ -10,13 +10,15 @@ import {
   resolveEffectiveWalletSendMin,
   validateWalletSendReceiveAmount,
 } from "@easner/shared"
-import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-map"
+import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/relay/token-map"
+import { isRelayWalletSendEnabled, requireCryptoRatesProbeSolAddress, requireRelayApiKey } from "@/lib/relay/config"
 import { findCryptoRate, listCryptoRates } from "@/lib/fx/crypto-rates"
 import { resolveWalletSendExecutionModel } from "./routing"
-import { pricingFromDirectTurnkey, pricingFromLifiQuote } from "./pricing"
+import { pricingFromDirectTurnkey, pricingFromRelayQuote } from "./pricing"
 import { coerceWalletRecipientRow } from "./coerce-recipient"
-import { quoteLifiWalletBridge } from "./lifi-wallet-quote"
-import { parseLifiToAmountHuman } from "./lifi-from-amount"
+import { quoteRelayWalletBridge } from "./relay-wallet-quote"
+import { parseRelayToAmountHumanFromQuote } from "./relay-from-amount"
+import { extractRelayRequestId, parseRelayFromAmountRaw } from "@/lib/relay/quote"
 import {
   validateWalletRecipientForSend,
   walletDestinationAddress,
@@ -48,7 +50,9 @@ export type WalletSendQuoteResult = {
   expiresAt: string
   formSessionId: string
   pricingQuoteId: string
-  executionModel: "direct_turnkey" | "lifi_bridge"
+  executionModel: "direct_turnkey" | "relay_bridge"
+  relayMid?: number
+  relayFloor?: string
   quotePhase?: "preview" | "locked"
   wallet: {
     cryptoAuthorizedAmount: string
@@ -172,26 +176,28 @@ export async function buildWalletSendQuote(input: {
   }
 
   let pricing
-  let lifiQuoteId: string | undefined
-  let lifiFromAmountRaw: string | undefined
-  let lifiFloorStr: string
+  let relayQuoteId: string | undefined
+  let relayFromAmountRaw: string | undefined
+  let bridgeFloorStr: string
 
   if (executionModel === "direct_turnkey") {
     pricing = pricingFromDirectTurnkey({ receiveAmount, processingFeeBps: feeBps })
-    lifiFloorStr = pricing.lifiFloor.toFixed(6)
+    bridgeFloorStr = pricing.lifiFloor.toFixed(6)
     customerRate = 1
     lifiMid = 1
   } else {
     const probeFrom =
-      input.probeFromAddress ||
-      String(process.env.CRYPTO_RATES_PROBE_SOL_ADDRESS || "").trim()
-    if (!probeFrom) throw new Error("Source Solana vault address not configured for LI.FI quote.")
+      input.probeFromAddress || requireCryptoRatesProbeSolAddress()
 
     const source = sourceSolVaultToken(sourceBalanceCurrency as "USD" | "EUR")
     const dest = resolveWalletSendToken(receiveAsset, receiveNetwork)
     if (!dest) throw new Error("Unsupported receive asset/network.")
+    if (!isRelayWalletSendEnabled()) {
+      throw new Error("Relay wallet send is not configured.")
+    }
+    requireRelayApiKey()
 
-    const quote = await quoteLifiWalletBridge({
+    const quote = await quoteRelayWalletBridge({
       source,
       dest,
       fromAddress: probeFrom,
@@ -200,31 +206,35 @@ export async function buildWalletSendQuote(input: {
       receiveAmount: amountEntryMode === "send" ? 0 : receiveAmount,
       sendBudget,
       customerRate,
-      lifiMid,
+      bridgeMid: lifiMid,
     })
 
     if (amountEntryMode === "send") {
-      receiveAmount = roundReceive(receiveAsset, parseLifiToAmountHuman(quote, dest.decimals))
+      receiveAmount = roundReceive(
+        receiveAsset,
+        parseRelayToAmountHumanFromQuote(quote, dest.decimals),
+      )
       if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) {
-        throw new Error("LI.FI quote returned an invalid receive amount.")
+        throw new Error("Relay quote returned an invalid receive amount.")
       }
       const minCheck = validateWalletSendReceiveAmount(receiveAmount, receiveAsset, { minReceive })
       if (!minCheck.ok) throw new Error(minCheck.message)
     }
 
-    lifiQuoteId = quote.id
-    lifiFromAmountRaw = String(quote.estimate?.fromAmount || "").trim() || undefined
-    pricing = pricingFromLifiQuote({
+    relayQuoteId = extractRelayRequestId(quote)
+    relayFromAmountRaw = parseRelayFromAmountRaw(quote)
+    pricing = pricingFromRelayQuote({
       receiveAmount,
       customerRate,
-      lifiMid,
+      bridgeMid: lifiMid,
       quote,
       sourceDecimals: source.decimals,
       processingFeeBps: feeBps,
     })
+
     customerRate = pricing.customerRate
     lifiMid = pricing.lifiMid
-    lifiFloorStr = pricing.lifiFloor.toFixed(6)
+    bridgeFloorStr = pricing.lifiFloor.toFixed(6)
   }
 
   const formSessionId = randomUUID()
@@ -244,11 +254,15 @@ export async function buildWalletSendQuote(input: {
     customer_rate: customerRate,
     lifi_mid: lifiMid,
     lifi_floor: pricing.lifiFloor,
+    relay_mid: lifiMid,
+    relay_floor: pricing.lifiFloor,
     total_debited: pricing.totalDebited,
     margin_amount: pricing.marginAmount,
     execution_model: executionModel,
-    lifi_quote_id: lifiQuoteId,
-    lifi_from_amount_raw: lifiFromAmountRaw ?? null,
+    lifi_quote_id: relayQuoteId ?? null,
+    lifi_from_amount_raw: relayFromAmountRaw ?? null,
+    relay_quote_id: relayQuoteId ?? null,
+    relay_from_amount_raw: relayFromAmountRaw ?? null,
     expires_at: expiresAt,
   })
 
@@ -267,13 +281,15 @@ export async function buildWalletSendQuote(input: {
     rate: customerRate,
     customerRate,
     lifiMid,
+    relayMid: lifiMid,
+    relayFloor: bridgeFloorStr,
     expiresAt,
     formSessionId,
     pricingQuoteId,
     executionModel,
     wallet: {
       cryptoAuthorizedAmount: pricing.totalDebited.toFixed(6),
-      lifiFloor: lifiFloorStr,
+      lifiFloor: bridgeFloorStr,
     },
   }
 }

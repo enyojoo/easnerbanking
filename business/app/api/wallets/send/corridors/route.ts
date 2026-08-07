@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { isWalletSendEnabled } from "@/lib/lifi/client"
-import { getWalletSendIconManifest } from "@/lib/lifi/icon-manifest"
+import { isWalletSendEnabled } from "@/lib/relay/config"
+import {
+  getWalletSendIconManifest,
+  tokenIconFromManifest,
+  networkIconFromManifest,
+} from "@/lib/wallet-send/icon-manifest"
 import { listWalletSendCorridors } from "@/lib/wallet-send/corridors"
-import { tokenIconFromManifest, networkIconFromManifest } from "@/lib/lifi/icon-manifest"
 
 export const runtime = "nodejs"
 

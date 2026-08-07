@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/lifi/client", () => ({
-  lifiQuote: vi.fn(),
-  lifiGetStatus: vi.fn(),
+vi.mock("@/lib/relay/client", () => ({
+  relayGetRequestV3: vi.fn(),
 }))
 
 vi.mock("@/lib/turnkey/resolve-send-client", () => ({
@@ -14,20 +13,24 @@ vi.mock("@/lib/turnkey/config", () => ({
   isTurnkeySolSponsorshipEnabled: () => true,
 }))
 
-vi.mock("@/lib/turnkey/send", () => ({
-  createTurnkeySend: vi.fn(),
-}))
-
 vi.mock("@/lib/wallet/resolve-wallet-owner", () => ({
   resolveTurnkeyAddressForNoahPair: vi.fn(),
   resolveWalletOwnerIdForEasnerContext: vi.fn().mockResolvedValue("owner-1"),
 }))
 
-import { lifiQuote } from "@/lib/lifi/client"
+vi.mock("../relay-wallet-quote", () => ({
+  quoteRelayWalletBridge: vi.fn(),
+  quoteRelayWalletBridgeFromAmountRaw: vi.fn(),
+}))
+
+import { relayGetRequestV3 } from "@/lib/relay/client"
 import { resolveTurnkeySendClient } from "@/lib/turnkey/resolve-send-client"
-import { createTurnkeySend } from "@/lib/turnkey/send"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
-import { executeLifiWalletSend } from "../lifi-execute"
+import {
+  quoteRelayWalletBridge,
+  quoteRelayWalletBridgeFromAmountRaw,
+} from "../relay-wallet-quote"
+import { executeRelayWalletSend } from "../relay-execute"
 
 const admin = {
   from: vi.fn().mockReturnValue({
@@ -53,22 +56,29 @@ const session = {
   receive_amount: 10,
   customer_rate: 0.96,
   lifi_mid: 0.98,
+  relay_mid: 0.98,
   lifi_floor: 10.5,
+  relay_floor: 10.5,
   total_debited: 12,
   margin_amount: 0,
-  execution_model: "lifi_bridge" as const,
+  execution_model: "relay_bridge" as const,
   status: "quoted",
   expires_at: new Date(Date.now() + 60_000).toISOString(),
 }
 
-describe("executeLifiWalletSend", () => {
+const quoteFixture = {
+  requestId: "req-exec",
+  details: {
+    currencyIn: { amount: "10500000" },
+    currencyOut: { amount: "10000000", amountFormatted: "10" },
+  },
+  steps: [{ items: [{ data: { data: "unsigned-tx" } }] }],
+}
+
+describe("executeRelayWalletSend", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(resolveTurnkeyAddressForNoahPair).mockResolvedValue("vault-sol")
-    vi.mocked(createTurnkeySend).mockResolvedValue({
-      status: "settled",
-      providerTransactionId: "tk-margin",
-    })
     vi.mocked(resolveTurnkeySendClient).mockResolvedValue({
       ok: true,
       client: {
@@ -80,77 +90,52 @@ describe("executeLifiWalletSend", () => {
       organizationId: "sub-org",
       stampingMode: "root",
     })
-    vi.mocked(lifiQuote).mockResolvedValue({
-      id: "q-exec",
-      tool: "relay",
-      estimate: {
-        fromAmount: "10500000",
-        toAmount: "10000000",
-      },
-      transactionRequest: { data: "unsigned-tx" },
-    })
+    vi.mocked(quoteRelayWalletBridgeFromAmountRaw).mockResolvedValue(quoteFixture as never)
+    vi.mocked(quoteRelayWalletBridge).mockResolvedValue(quoteFixture as never)
+    vi.mocked(relayGetRequestV3).mockResolvedValue(null)
   })
 
-  it("uses single LI.FI quote when lifi_from_amount_raw is stored", async () => {
-    const result = await executeLifiWalletSend({
+  it("uses single Relay quote when relay_from_amount_raw is stored", async () => {
+    const result = await executeRelayWalletSend({
       admin,
       ctx: {} as never,
-      session: { ...session, lifi_from_amount_raw: "10500000" },
+      session: { ...session, relay_from_amount_raw: "10500000" },
       feeAddress: "fee-wallet",
       easnerTransactionId: "ETID-1",
     })
 
     expect(result.ok).toBe(true)
-    expect(vi.mocked(lifiQuote)).toHaveBeenCalledTimes(1)
-    expect(createTurnkeySend).not.toHaveBeenCalled()
-    expect(vi.mocked(lifiQuote).mock.calls[0][0]).toMatchObject({
-      fromAmount: "10500000",
-      fee: 0,
-    })
+    expect(vi.mocked(quoteRelayWalletBridgeFromAmountRaw)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(quoteRelayWalletBridge)).not.toHaveBeenCalled()
   })
 
   it("rejects when single-shot quote exceeds session floor", async () => {
-    vi.mocked(lifiQuote).mockResolvedValue({
-      id: "q-high",
-      estimate: { fromAmount: "12000000", toAmount: "10000000" },
-      transactionRequest: { data: "unsigned-tx" },
-    })
+    vi.mocked(quoteRelayWalletBridgeFromAmountRaw).mockResolvedValue({
+      ...quoteFixture,
+      details: { currencyIn: { amount: "12000000" }, currencyOut: { amount: "10000000" } },
+    } as never)
 
-    const result = await executeLifiWalletSend({
+    const result = await executeRelayWalletSend({
       admin,
       ctx: {} as never,
-      session: { ...session, lifi_from_amount_raw: "12000000", lifi_floor: 10.5 },
+      session: { ...session, relay_from_amount_raw: "12000000", relay_floor: 10.5 },
       feeAddress: "fee-wallet",
       easnerTransactionId: "ETID-1",
     })
 
-    expect(result).toEqual({ ok: false, error: "lifi_floor_exceeded" })
+    expect(result).toEqual({ ok: false, error: "relay_floor_exceeded" })
   })
 
-  it("falls back to binary search when lifi_from_amount_raw is missing", async () => {
-    vi.mocked(lifiQuote).mockImplementation(async (params) => {
-      const from = Number(params.fromAmount) / 1e6
-      const to = from >= 10.5 ? 10 : from * 0.7
-      return {
-        id: `q-${from}`,
-        tool: "relay",
-        estimate: {
-          fromAmount: params.fromAmount,
-          toAmount: String(Math.round(to * 1e6)),
-        },
-        transactionRequest: { data: "unsigned-tx" },
-      }
-    })
-
-    const result = await executeLifiWalletSend({
+  it("falls back to receive search when relay_from_amount_raw is missing", async () => {
+    const result = await executeRelayWalletSend({
       admin,
       ctx: {} as never,
-      session: { ...session, lifi_from_amount_raw: null },
+      session: { ...session, relay_from_amount_raw: null },
       feeAddress: "fee-wallet",
       easnerTransactionId: "ETID-1",
     })
 
     expect(result.ok).toBe(true)
-    expect(vi.mocked(lifiQuote).mock.calls.length).toBeGreaterThan(1)
+    expect(vi.mocked(quoteRelayWalletBridge)).toHaveBeenCalledTimes(1)
   })
 })

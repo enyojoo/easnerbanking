@@ -7,5 +7,5 @@ export function inferWalletSendExecutionModel(
 ): WalletSendExecutionModel {
   return isDirectTurnkeyWalletCorridor(receiveCurrency, receiveNetwork)
     ? "direct_turnkey"
-    : "lifi_bridge"
+    : "relay_bridge"
 }

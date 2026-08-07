@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   findGlobalPayoutSettlement: vi.fn(),
   reconcileNoah: vi.fn(),
   linkNoahPayInHash: vi.fn(),
+  findRelay: vi.fn(),
+  reconcileRelay: vi.fn(),
   findEasetag: vi.fn(),
   updateEasetag: vi.fn(),
   upsertLedger: vi.fn(),
@@ -55,6 +57,12 @@ vi.mock("@/lib/yellowcard/execute-yc-fund-balance-split", () => ({
 }))
 vi.mock("@/lib/deposit-omnibus/config", () => ({
   isDepositSplitEnabled: () => false,
+}))
+vi.mock("@/lib/relay-deposit/relay-deposit-suppression", () => ({
+  findRelayDepositChainSettlementForSuppression: mocks.findRelay,
+}))
+vi.mock("@/lib/relay-deposit/settle-relay-deposit", () => ({
+  reconcileRelayDepositCreditForSolanaTx: mocks.reconcileRelay,
 }))
 vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
   turnkeyInboundLedgerRowExists: vi.fn().mockResolvedValue(false),
@@ -109,6 +117,31 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     })
     mocks.reconcileNoah.mockResolvedValue({ credited: true })
     mocks.linkNoahPayInHash.mockResolvedValue(undefined)
+    mocks.findRelay.mockResolvedValue(null)
+    mocks.reconcileRelay.mockResolvedValue({ credited: false })
+  })
+
+  it("suppresses relay Tron vault inbound and reconciles relay credit", async () => {
+    mocks.findRelay.mockResolvedValue({
+      reason: "relay_vault_inbound",
+      recipientVaultAta: "Ata111",
+      tronAddress: "T123",
+    })
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      txHash: "hash-relay-fill",
+    })
+    expect(result.kind).toBe("suppressed_noah")
+    expect(mocks.reconcileRelay).toHaveBeenCalledWith(admin, {
+      solanaTxHash: "hash-relay-fill",
+      userId: "user-1",
+      businessId: null,
+      inboundAmount: 10,
+      recipientVaultAta: "Ata111",
+    })
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
   })
 
   it("suppresses Noah bank on-ramp hash and reconciles credit", async () => {

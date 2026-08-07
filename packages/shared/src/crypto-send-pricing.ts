@@ -61,6 +61,9 @@ export function resolveLifiTicketPricingInput(input: {
   return { customerRate: planningCustomerRate, lifiMid: planningLifiMid }
 }
 
+/** Alias for Relay bridge pricing (same math as LI.FI). */
+export const resolveBridgeTicketPricingInput = resolveLifiTicketPricingInput
+
 /**
  * LI.FI bridge pricing. Ledger and on-chain out both equal lifiFloor + marginAmount
  * (= customerPrincipal + routeCost). Margin is in customerRate; execute SPL-sends margin to fee wallet.

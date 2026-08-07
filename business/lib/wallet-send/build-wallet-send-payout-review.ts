@@ -3,7 +3,7 @@ import {
   isWalletSendOutRow as isWalletSendOutRowShared,
   resolveWalletSendTransferMethod,
 } from "@easner/shared"
-import { resolveWalletSendExecutionModel, type WalletSendExecutionModel } from "./routing"
+import { resolveWalletSendExecutionModel, isBridgeExecutionModel, type WalletSendExecutionModel } from "./routing"
 import type { WalletSendSessionRow } from "./wallet-send-session"
 
 function roundMoney(n: number): number {
@@ -41,9 +41,11 @@ function readNestedPayoutReview(raw: unknown): GlobalPayoutReviewSnapshot | null
   if (!Number.isFinite(receiveAmount) || receiveAmount <= 0) return null
   if (!Number.isFinite(totalDebited) || totalDebited <= 0) return null
   const executionModel =
-    o.execution_model === "direct_turnkey" || o.execution_model === "lifi_bridge"
-      ? o.execution_model
-      : undefined
+    o.execution_model === "direct_turnkey"
+      ? "direct_turnkey"
+      : o.execution_model === "relay_bridge" || o.execution_model === "lifi_bridge"
+        ? "relay_bridge"
+        : undefined
   const youSendAmount = normalizeDirectYouSendAmount({
     executionModel,
     youSendAmount: Number.isFinite(youSend) ? youSend : 0,
@@ -78,12 +80,23 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
     | "execution_model"
     | "lifi_floor"
     | "lifi_mid"
+    | "relay_floor"
+    | "relay_mid"
   >
   channelCost?: number
   reviewSnapshot?: Record<string, unknown> | null
 }): GlobalPayoutReviewSnapshot {
   const balanceCurrency = input.session.source_balance_currency.trim().toUpperCase()
-  const executionModel = input.session.execution_model
+  const executionModelRaw = input.session.execution_model
+  const executionModel: WalletSendExecutionModel =
+    executionModelRaw === "direct_turnkey"
+      ? "direct_turnkey"
+      : executionModelRaw === "lifi_bridge" || executionModelRaw === "relay_bridge"
+        ? "relay_bridge"
+        : resolveWalletSendExecutionModel(
+            input.session.receive_asset,
+            input.session.receive_network,
+          )
   const receiveAmount = input.session.receive_amount
   const totalDebited = input.session.total_debited
   const marginAmount = input.session.margin_amount
@@ -104,10 +117,13 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
   })
 
   const exchangeFeeFromReview = Number(input.reviewSnapshot?.exchange_fee)
+  const bridgeFloor = input.session.relay_floor ?? input.session.lifi_floor
+  const bridgeMid = input.session.relay_mid ?? input.session.lifi_mid
+
   const channelCostFromSession =
     input.channelCost ??
-    (executionModel === "lifi_bridge"
-      ? roundMoney(Math.max(0, input.session.lifi_floor - receiveAmount / input.session.lifi_mid))
+    (isBridgeExecutionModel(executionModel) && bridgeMid > 0
+      ? roundMoney(Math.max(0, bridgeFloor - receiveAmount / bridgeMid))
       : 0)
   const exchangeFee =
     Number.isFinite(exchangeFeeFromReview) && exchangeFeeFromReview >= 0
@@ -134,7 +150,7 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
   const fallbackProcessingFee =
     executionModel === "direct_turnkey"
       ? marginAmount
-      : roundMoney(Math.max(0, totalDebited - input.session.lifi_floor - marginAmount))
+      : roundMoney(Math.max(0, totalDebited - bridgeFloor - marginAmount))
   const processingFee =
     Number.isFinite(processingFeeFromReview) && processingFeeFromReview >= 0
       ? processingFeeFromReview
@@ -206,9 +222,11 @@ export function resolveWalletSendPayoutReview(
   const sendCurrency = String(meta.send_currency ?? ledgerCurrency).trim().toUpperCase()
   const executionModelRaw = String(meta.execution_model ?? "").trim()
   const executionModel: WalletSendExecutionModel =
-    executionModelRaw === "direct_turnkey" || executionModelRaw === "lifi_bridge"
-      ? executionModelRaw
-      : resolveWalletSendExecutionModel(receiveCurrency, receiveNetwork)
+    executionModelRaw === "direct_turnkey"
+      ? "direct_turnkey"
+      : executionModelRaw === "lifi_bridge" || executionModelRaw === "relay_bridge"
+        ? "relay_bridge"
+        : resolveWalletSendExecutionModel(receiveCurrency, receiveNetwork)
 
   const marginAmount = Number(meta.margin_amount ?? meta.processing_fee ?? 0)
   const youSendRaw = Number(meta.you_send_amount)

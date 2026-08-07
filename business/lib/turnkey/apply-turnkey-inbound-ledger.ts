@@ -12,6 +12,8 @@ import {
   findNoahBankOnrampChainSettlementForSuppression,
   findPendingNoahBankOnrampForInboundAmount,
 } from "@/lib/noah/noah-bank-onramp-chain-suppression"
+import { findRelayDepositChainSettlementForSuppression } from "@/lib/relay-deposit/relay-deposit-suppression"
+import { reconcileRelayDepositCreditForSolanaTx } from "@/lib/relay-deposit/settle-relay-deposit"
 import { tryCompleteDepositSplitFromUserVaultInbound } from "@/lib/deposit-omnibus/execute-deposit-split"
 import { tryCompleteYcFundBalanceFromUserVaultInbound } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 import { isDepositSplitEnabled } from "@/lib/deposit-omnibus/config"
@@ -103,6 +105,26 @@ export async function applyTurnkeyInboundLedgerEvent(
           solanaTxHash: txHash,
           userId,
           businessId,
+        }).catch(() => {})
+        return { kind: "suppressed_noah" }
+      }
+
+      const relaySuppressed = await findRelayDepositChainSettlementForSuppression(admin, {
+        txHash,
+        userId,
+        businessId,
+        inboundAmount: input.amount,
+        recipientVaultAta: input.walletAccount.associated_token_account_address,
+        asset: input.asset,
+        chain: input.chain,
+      })
+      if (relaySuppressed) {
+        await reconcileRelayDepositCreditForSolanaTx(admin, {
+          solanaTxHash: txHash,
+          userId,
+          businessId,
+          inboundAmount: input.amount,
+          recipientVaultAta: input.walletAccount.associated_token_account_address,
         }).catch(() => {})
         return { kind: "suppressed_noah" }
       }

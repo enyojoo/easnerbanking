@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server"
 import { assertInternalCronAuthorized } from "@/lib/api/internal-auth"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { processRelayDepositProvisionJobs } from "@/lib/relay-deposit/provision-jobs"
 import { processNextWalletProvisioningJob } from "@/lib/wallet/turnkey-provisioning"
 
 export const runtime = "nodejs"
 
 async function drainWalletProvisioningBatch(): Promise<
-  NextResponse<{ ok: true; results: Awaited<ReturnType<typeof processNextWalletProvisioningJob>>[] }>
+  NextResponse<{
+    ok: true
+    results: Awaited<ReturnType<typeof processNextWalletProvisioningJob>>[]
+    relayProvision: Awaited<ReturnType<typeof processRelayDepositProvisionJobs>>
+  }>
 > {
+  const admin = createSupabaseAdmin()
   const results: Awaited<ReturnType<typeof processNextWalletProvisioningJob>>[] = []
   for (let i = 0; i < 100; i++) {
     const r = await processNextWalletProvisioningJob()
@@ -15,7 +22,8 @@ async function drainWalletProvisioningBatch(): Promise<
       break
     }
   }
-  return NextResponse.json({ ok: true, results })
+  const relayProvision = await processRelayDepositProvisionJobs(admin, 20)
+  return NextResponse.json({ ok: true, results, relayProvision })
 }
 
 function unauthorizedResponse(e: unknown): NextResponse<{ error: string }> {

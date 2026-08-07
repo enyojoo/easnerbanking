@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 
 const {
   createTurnkeySend,
-  executeLifiWalletSend,
+  executeRelayWalletSend,
   applyWalletBalanceDelta,
   upsertLedgerTransaction,
   getTurnkeyDisplayBalancesUsdEur,
@@ -10,7 +10,7 @@ const {
   markWalletSendSessionExecuted,
 } = vi.hoisted(() => ({
   createTurnkeySend: vi.fn(),
-  executeLifiWalletSend: vi.fn(),
+  executeRelayWalletSend: vi.fn(),
   applyWalletBalanceDelta: vi.fn(),
   upsertLedgerTransaction: vi.fn(),
   getTurnkeyDisplayBalancesUsdEur: vi.fn(),
@@ -19,7 +19,12 @@ const {
 }))
 
 vi.mock("@/lib/turnkey/send", () => ({ createTurnkeySend }))
-vi.mock("../lifi-execute", () => ({ executeLifiWalletSend }))
+vi.mock("../relay-execute", () => ({ executeRelayWalletSend }))
+vi.mock("@/lib/relay/config", () => ({
+  isWalletSendEnabled: () => true,
+  isRelayWalletSendEnabled: () => true,
+  requireRelayApiKey: vi.fn(),
+}))
 vi.mock("@/lib/wallet/wallet-balances-db", () => ({ applyWalletBalanceDelta }))
 vi.mock("@/lib/ledger/transactions", () => ({ upsertLedgerTransaction }))
 vi.mock("@/lib/wallet/turnkey-chain-balances", () => ({
@@ -29,7 +34,6 @@ vi.mock("../wallet-send-session", () => ({
   getWalletSendSession,
   markWalletSendSessionExecuted,
 }))
-vi.mock("@/lib/lifi/client", () => ({ isWalletSendEnabled: () => true }))
 vi.mock("../fee-address", () => ({
   assertWalletSendFeeSolanaAddressConfigured: vi.fn(),
   resolveWalletSendFeeSolanaAddress: () => "fee-wallet-address",
@@ -58,6 +62,7 @@ const baseSession = {
   form_session_id: "sess-1",
   user_id: "user-1",
   recipient_id: "rec-1",
+  destination_ref: "recipient:rec-1",
   source_balance_currency: "USD",
   receive_asset: "USDC",
   receive_network: "Solana",
@@ -138,24 +143,24 @@ describe("executeWalletSend", () => {
     expect(upsertLedgerTransaction).not.toHaveBeenCalled()
   })
 
-  it("debits after LI.FI bridge succeeds; fee leg deferred", async () => {
+  it("debits after Relay bridge succeeds; fee leg deferred", async () => {
     getWalletSendSession.mockResolvedValue({
       ...baseSession,
       receive_asset: "USDT",
       receive_network: "Tron",
-      execution_model: "lifi_bridge",
+      execution_model: "relay_bridge",
       total_debited: 104.52,
       margin_amount: 1.52,
+      relay_floor: 103,
       lifi_floor: 103,
       customer_rate: 0.985,
     })
-    executeLifiWalletSend.mockResolvedValue({
+    executeRelayWalletSend.mockResolvedValue({
       ok: true,
-      providerTransactionId: "lifi-1",
+      providerTransactionId: "relay-1",
       status: "pending",
-      txHash: "lifi-hash",
-      lifiTool: "relay",
-      lifiQuoteId: "q-1",
+      txHash: "relay-hash",
+      relayRequestId: "req-1",
     })
 
     const result = await executeWalletSend({
@@ -168,16 +173,16 @@ describe("executeWalletSend", () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(executeLifiWalletSend).toHaveBeenCalledTimes(1)
+    expect(executeRelayWalletSend).toHaveBeenCalledTimes(1)
     expect(applyWalletBalanceDelta).toHaveBeenCalledTimes(1)
     expect(upsertLedgerTransaction).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        provider: "lifi",
+        provider: "relay",
         metadata: expect.objectContaining({
           processing_fee_pending: true,
           payout_review: expect.objectContaining({
-            execution_model: "lifi_bridge",
+            execution_model: "relay_bridge",
             total_debited: 104.52,
           }),
         }),

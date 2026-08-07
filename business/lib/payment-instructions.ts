@@ -43,8 +43,21 @@ export function getPaymentInstructions(
   return []
 }
 
+/** Tron USDT inbound via Relay open deposit address. */
+export function getTronUsdtPaymentInstructions(): string[] {
+  return [
+    "Only send USDT on Tron (TRC-20) to this address.",
+    "Bridge fees apply and are deducted from your credited balance.",
+    "Sending other assets or networks may result in permanent loss.",
+    "Processing time: typically within minutes after on-chain confirmation.",
+  ]
+}
+
 /** Pass stablecoin name explicitly for send flow */
 export function getStablecoinPaymentInstructions(stablecoin: "USDC" | "USDT"): string[] {
+  if (stablecoin === "USDT") {
+    return getTronUsdtPaymentInstructions()
+  }
   return [
     `Only send ${stablecoin} on Solana to this address.`,
     "Sending other assets or networks may result in permanent loss.",

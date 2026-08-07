@@ -1,18 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { resolveTurnkeySendClient } from "@/lib/turnkey/resolve-send-client"
+import { relayGetRequestV3 } from "@/lib/relay/client"
+import {
+  extractRelayRequestId,
+  extractRelaySolanaUnsignedTx,
+  parseRelayFromAmountRaw,
+} from "@/lib/relay/quote"
+import {
+  extractRelayOutTxHashesV3,
+  isRelayRequestTerminalV3,
+  mapRelayRequestStatusV3,
+} from "@/lib/relay/requests-v3"
+import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/relay/token-map"
 import { getTurnkeySolanaBroadcastCaip2, isTurnkeySolSponsorshipEnabled } from "@/lib/turnkey/config"
-import { lifiGetStatus } from "@/lib/lifi/client"
-import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/lifi/token-map"
+import { resolveTurnkeySendClient } from "@/lib/turnkey/resolve-send-client"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
+import { isBridgeExecutionModel } from "./routing"
 import type { WalletSendSessionRow } from "./wallet-send-session"
-import { parseLifiToAmountHuman } from "./lifi-from-amount"
-import { meetsLifiReceiveTarget } from "./lifi-receive-search"
-import { quoteLifiWalletBridge, quoteLifiWalletBridgeFromAmountRaw } from "./lifi-wallet-quote"
+import { parseRelayToAmountHumanFromQuote } from "./relay-from-amount"
+import { meetsRelayReceiveTarget } from "./relay-receive-search"
+import { quoteRelayWalletBridge, quoteRelayWalletBridgeFromAmountRaw } from "./relay-wallet-quote"
 
-type TurnkeyClientLike = Record<string, (...args: unknown[]) => Promise<unknown>>
-
-export async function executeLifiWalletSend(input: {
+export async function executeRelayWalletSend(input: {
   admin: SupabaseClient
   ctx: NoahAccountContext
   session: WalletSendSessionRow
@@ -24,11 +33,14 @@ export async function executeLifiWalletSend(input: {
       providerTransactionId: string
       status: "pending" | "settled" | "failed"
       txHash?: string | null
-      lifiTool?: string
-      lifiQuoteId?: string
+      relayRequestId?: string
     }
   | { ok: false; error: string }
 > {
+  if (!isBridgeExecutionModel(input.session.execution_model)) {
+    return { ok: false, error: "not_relay_bridge_session" }
+  }
+
   const balanceCurrency = input.session.source_balance_currency as "USD" | "EUR"
   const source = sourceSolVaultToken(balanceCurrency)
   const dest = resolveWalletSendToken(input.session.receive_asset, input.session.receive_network)
@@ -43,25 +55,28 @@ export async function executeLifiWalletSend(input: {
   if (!fromAddress) return { ok: false, error: "no_source_vault" }
 
   const slippage = 0.03
-  const storedFromAmountRaw = String(input.session.lifi_from_amount_raw || "").trim()
+  const slippageTolerance = String(Math.round(slippage * 10_000))
+  const storedFromAmountRaw = String(
+    input.session.relay_from_amount_raw ?? input.session.lifi_from_amount_raw ?? "",
+  ).trim()
+
   let quote
   try {
     if (storedFromAmountRaw) {
-      quote = await quoteLifiWalletBridgeFromAmountRaw({
+      quote = await quoteRelayWalletBridgeFromAmountRaw({
+        user: fromAddress,
+        recipient: input.session.destination_address,
         source,
         dest,
-        fromAddress,
-        toAddress: input.session.destination_address,
         fromAmountRaw: storedFromAmountRaw,
-        slippage,
+        slippageTolerance,
       })
-      const toHuman = parseLifiToAmountHuman(quote, dest.decimals)
-      if (!meetsLifiReceiveTarget(toHuman, input.session.receive_amount, slippage)) {
-        return { ok: false, error: "lifi_receive_target_not_met" }
+      const toHuman = parseRelayToAmountHumanFromQuote(quote, dest.decimals)
+      if (!meetsRelayReceiveTarget(toHuman, input.session.receive_amount, slippage)) {
+        return { ok: false, error: "relay_receive_target_not_met" }
       }
     } else {
-      // Legacy sessions without stored fromAmount — full binary search.
-      quote = await quoteLifiWalletBridge({
+      quote = await quoteRelayWalletBridge({
         source,
         dest,
         fromAddress,
@@ -69,19 +84,25 @@ export async function executeLifiWalletSend(input: {
         amountEntryMode: "receive",
         receiveAmount: input.session.receive_amount,
         customerRate: input.session.customer_rate,
-        lifiMid: input.session.lifi_mid,
+        bridgeMid: input.session.relay_mid ?? input.session.lifi_mid,
         slippage,
       })
     }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "lifi_quote_failed" }
+    return { ok: false, error: e instanceof Error ? e.message : "relay_quote_failed" }
   }
 
-  const fromRaw = Number(quote.estimate?.fromAmount ?? 0)
-  const execFloor = fromRaw / 10 ** source.decimals
-  const sessionFloor = input.session.lifi_floor
+  let execFloor: number
+  try {
+    const fromRaw = parseRelayFromAmountRaw(quote)
+    execFloor = Number(fromRaw) / 10 ** source.decimals
+  } catch {
+    return { ok: false, error: "relay_quote_missing_from_amount" }
+  }
+
+  const sessionFloor = input.session.relay_floor ?? input.session.lifi_floor
   if (Number.isFinite(sessionFloor) && sessionFloor > 0 && execFloor > sessionFloor * 1.02) {
-    return { ok: false, error: "lifi_floor_exceeded" }
+    return { ok: false, error: "relay_floor_exceeded" }
   }
 
   const subOrgId = await resolveSubOrgId(input.admin, input.ctx)
@@ -95,10 +116,11 @@ export async function executeLifiWalletSend(input: {
   const client = resolved.client
   if (!client.solSendTransaction) return { ok: false, error: "turnkey_not_configured" }
 
-  const txReq = quote.transactionRequest as Record<string, unknown> | undefined
-  const unsigned = String(txReq?.data ?? "").trim()
-  if (!unsigned) {
-    return { ok: false, error: "lifi_missing_transaction_request" }
+  let unsigned: string
+  try {
+    unsigned = extractRelaySolanaUnsignedTx(quote)
+  } catch {
+    return { ok: false, error: "relay_missing_solana_transaction" }
   }
 
   const sponsor = isTurnkeySolSponsorshipEnabled()
@@ -118,32 +140,34 @@ export async function executeLifiWalletSend(input: {
       },
     })) as Record<string, unknown>
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "lifi_sign_failed" }
+    return { ok: false, error: e instanceof Error ? e.message : "relay_sign_failed" }
   }
+
+  const relayRequestId =
+    extractRelayRequestId(quote) ??
+    (String(input.session.relay_quote_id ?? input.session.lifi_quote_id ?? "").trim() || undefined)
 
   const providerTransactionId = String(
     (sendRes as { sendTransactionStatusId?: string }).sendTransactionStatusId ||
-      quote.id ||
+      relayRequestId ||
       input.session.form_session_id,
   )
 
   const txHash =
     String(sendRes.signature ?? sendRes.txHash ?? sendRes.transactionHash ?? "").trim() || null
 
-  const marginAmount = input.session.margin_amount
-  void marginAmount
-
-  if (txHash) {
+  if (relayRequestId) {
     try {
-      const status = await lifiGetStatus(txHash, quote.tool)
-      if (status.status === "DONE") {
+      const req = await relayGetRequestV3(relayRequestId)
+      if (req && isRelayRequestTerminalV3(String(req.status))) {
+        const mapped = mapRelayRequestStatusV3(String(req.status))
+        const fillHashes = extractRelayOutTxHashesV3(req)
         return {
           ok: true,
           providerTransactionId,
-          status: "settled",
-          txHash,
-          lifiTool: quote.tool,
-          lifiQuoteId: quote.id,
+          status: mapped,
+          txHash: fillHashes[0] ?? txHash,
+          relayRequestId,
         }
       }
     } catch {
@@ -156,8 +180,7 @@ export async function executeLifiWalletSend(input: {
     providerTransactionId,
     status: "pending",
     txHash,
-    lifiTool: quote.tool,
-    lifiQuoteId: quote.id,
+    relayRequestId,
   }
 }
 

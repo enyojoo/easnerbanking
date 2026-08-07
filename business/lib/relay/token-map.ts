@@ -1,6 +1,6 @@
-import { lifiChainForNoahNetwork, type NoahNetworkId } from "./chain-map"
+import { relayChainForNoahNetwork, type NoahNetworkId } from "./chain-map"
 
-/** Well-known mainnet token addresses for LI.FI quotes. */
+/** Well-known mainnet token addresses for Relay quotes. */
 const TOKEN_BY_ASSET_NETWORK: Partial<
   Record<string, Partial<Record<NoahNetworkId, { address: string; decimals: number }>>>
 > = {
@@ -8,7 +8,6 @@ const TOKEN_BY_ASSET_NETWORK: Partial<
     Solana: { address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", decimals: 6 },
     Ethereum: { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6 },
     Base: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
-    Tron: { address: "TR8uUYpffcPib4NioKAs81LZxUF98CgHYs", decimals: 6 },
   },
   USDT: {
     Solana: { address: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", decimals: 6 },
@@ -24,7 +23,7 @@ const TOKEN_BY_ASSET_NETWORK: Partial<
 export type WalletSendTokenRef = {
   asset: string
   network: NoahNetworkId
-  chainId: number | string
+  chainId: number
   chainKey: string
   address: string
   decimals: number
@@ -33,7 +32,7 @@ export type WalletSendTokenRef = {
 export function resolveWalletSendToken(asset: string, network: string): WalletSendTokenRef | null {
   const a = String(asset || "").toUpperCase()
   const n = String(network || "").trim() as NoahNetworkId
-  const chain = lifiChainForNoahNetwork(n)
+  const chain = relayChainForNoahNetwork(n)
   const token = TOKEN_BY_ASSET_NETWORK[a]?.[n]
   if (!chain || !token?.address) return null
   return {

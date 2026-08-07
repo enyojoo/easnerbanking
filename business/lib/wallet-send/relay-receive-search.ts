@@ -1,7 +1,7 @@
-import type { LifiQuoteResponse } from "@/lib/lifi/client"
-import { parseLifiToAmountHuman } from "./lifi-from-amount"
+import type { RelayQuoteV2Response } from "@/lib/relay/types"
+import { parseRelayToAmountHumanFromQuote } from "./relay-from-amount"
 
-export function meetsLifiReceiveTarget(
+export function meetsRelayReceiveTarget(
   toHuman: number,
   receiveAmount: number,
   slippage: number,
@@ -21,46 +21,43 @@ export function humanToFromAmountRaw(human: number, sourceDecimals: number): str
   return String(Math.ceil(human * 10 ** sourceDecimals))
 }
 
-export function maxLifiReceiveSearchSourceHuman(input: {
+export function maxRelayReceiveSearchSourceHuman(input: {
   receiveAmount: number
-  lifiMid: number
+  bridgeMid: number
   minSourceHuman: number
   absoluteCapHuman?: number
 }): number {
-  const { receiveAmount, lifiMid, minSourceHuman } = input
+  const { receiveAmount, bridgeMid, minSourceHuman } = input
   const absoluteCap = input.absoluteCapHuman ?? 500
   const planning =
-    lifiMid > 0 && receiveAmount > 0 ? (receiveAmount / lifiMid) * 2.5 : minSourceHuman
+    bridgeMid > 0 && receiveAmount > 0 ? (receiveAmount / bridgeMid) * 2.5 : minSourceHuman
   return Math.min(absoluteCap, Math.max(minSourceHuman, planning))
 }
 
-export type LifiReceiveQuoteFn = (fromAmountRaw: string) => Promise<LifiQuoteResponse>
+export type RelayReceiveQuoteFn = (fromAmountRaw: string) => Promise<RelayQuoteV2Response>
 
-/**
- * Minimum fromAmount (USDC/EURC in) so LI.FI toAmount meets receive target within slippage.
- */
-export async function findMinLifiFromAmountRaw(input: {
+export async function findMinRelayFromAmountRaw(input: {
   receiveAmount: number
-  lifiMid: number
+  bridgeMid: number
   sourceDecimals: number
   destDecimals: number
   slippage: number
   minSourceHuman: number
   maxSourceHuman: number
   initialHighRaw: string
-  quoteFn: LifiReceiveQuoteFn
-}): Promise<{ fromAmountRaw: string; quote: LifiQuoteResponse }> {
+  quoteFn: RelayReceiveQuoteFn
+}): Promise<{ fromAmountRaw: string; quote: RelayQuoteV2Response }> {
   const minRaw = humanToFromAmountRaw(input.minSourceHuman, input.sourceDecimals)
   let highRaw = String(Math.max(Number(minRaw), Number(input.initialHighRaw)))
 
-  let highQuote: LifiQuoteResponse | null = null
+  let highQuote: RelayQuoteV2Response | null = null
   const maxRaw = humanToFromAmountRaw(input.maxSourceHuman, input.sourceDecimals)
 
   for (let expand = 0; expand < 8; expand++) {
     if (Number(highRaw) > Number(maxRaw)) break
     const quote = await input.quoteFn(highRaw)
-    const toHuman = parseLifiToAmountHuman(quote, input.destDecimals)
-    if (meetsLifiReceiveTarget(toHuman, input.receiveAmount, input.slippage)) {
+    const toHuman = parseRelayToAmountHumanFromQuote(quote, input.destDecimals)
+    if (meetsRelayReceiveTarget(toHuman, input.receiveAmount, input.slippage)) {
       highQuote = quote
       break
     }
@@ -68,7 +65,7 @@ export async function findMinLifiFromAmountRaw(input: {
   }
 
   if (!highQuote) {
-    throw new Error("lifi_receive_target_not_met")
+    throw new Error("relay_receive_target_not_met")
   }
 
   let lo = Number(minRaw)
@@ -80,8 +77,8 @@ export async function findMinLifiFromAmountRaw(input: {
     const mid = Math.floor((lo + hi) / 2)
     const midRaw = String(Math.max(Number(minRaw), mid))
     const quote = await input.quoteFn(midRaw)
-    const toHuman = parseLifiToAmountHuman(quote, input.destDecimals)
-    if (meetsLifiReceiveTarget(toHuman, input.receiveAmount, input.slippage)) {
+    const toHuman = parseRelayToAmountHumanFromQuote(quote, input.destDecimals)
+    if (meetsRelayReceiveTarget(toHuman, input.receiveAmount, input.slippage)) {
       bestRaw = Number(midRaw)
       bestQuote = quote
       hi = mid
@@ -90,7 +87,6 @@ export async function findMinLifiFromAmountRaw(input: {
     }
   }
 
-  // Refine downward — LI.FI routes can be non-monotonic at small tickets (e.g. USDT/Tron).
   const minStep = Math.max(1, Math.floor(10 ** (input.sourceDecimals - 2)))
   let step = Math.max(minStep, Math.floor((bestRaw - Number(minRaw)) / 4))
   while (step >= minStep) {
@@ -100,8 +96,8 @@ export async function findMinLifiFromAmountRaw(input: {
       continue
     }
     const quote = await input.quoteFn(String(candidate))
-    const toHuman = parseLifiToAmountHuman(quote, input.destDecimals)
-    if (meetsLifiReceiveTarget(toHuman, input.receiveAmount, input.slippage)) {
+    const toHuman = parseRelayToAmountHumanFromQuote(quote, input.destDecimals)
+    if (meetsRelayReceiveTarget(toHuman, input.receiveAmount, input.slippage)) {
       bestRaw = candidate
       bestQuote = quote
       step = Math.max(minStep, Math.floor(step / 2))

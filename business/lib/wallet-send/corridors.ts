@@ -5,7 +5,7 @@ export type WalletSendCorridor = {
   asset: string
   network: string
   enabled: boolean
-  executionModel: "direct_turnkey" | "lifi_bridge"
+  executionModel: "direct_turnkey" | "relay_bridge"
 }
 
 /**
@@ -28,7 +28,7 @@ export function listWalletSendCorridors(): WalletSendCorridor[] {
         asset,
         network,
         enabled,
-        executionModel: isDirectTurnkeyCorridor(asset, network) ? "direct_turnkey" : "lifi_bridge",
+        executionModel: isDirectTurnkeyCorridor(asset, network) ? "direct_turnkey" : "relay_bridge",
       })
     }
   }
