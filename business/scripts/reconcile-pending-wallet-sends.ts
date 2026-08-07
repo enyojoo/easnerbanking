@@ -12,7 +12,7 @@ const days = daysArg ? Number.parseInt(daysArg.split("=")[1] || "7", 10) : 7
 const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
 
 function isBridgeExecutionModel(model: string): boolean {
-  return model === "relay_bridge" || model === "lifi_bridge"
+  return model === "relay_bridge"
 }
 
 async function reconcileBridgeRow(

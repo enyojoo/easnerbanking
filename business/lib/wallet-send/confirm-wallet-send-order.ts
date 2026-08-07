@@ -20,11 +20,11 @@ import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 import type { WalletSendQuoteResult } from "./wallet-send-quote"
 
 function sessionBridgeMid(session: WalletSendSessionRow): number {
-  return session.relay_mid ?? session.lifi_mid
+  return session.relay_mid
 }
 
 function sessionBridgeFloor(session: WalletSendSessionRow): number {
-  return session.relay_floor ?? session.lifi_floor
+  return session.relay_floor
 }
 
 export async function confirmWalletSendOrder(input: {
@@ -60,9 +60,7 @@ export async function confirmWalletSendOrder(input: {
       )
       if (!fromAddress) throw new Error("no_source_vault")
       const slippage = 0.03
-      const storedFromAmountRaw = String(
-        session.relay_from_amount_raw ?? session.lifi_from_amount_raw ?? "",
-      ).trim()
+      const storedFromAmountRaw = String(session.relay_from_amount_raw ?? "").trim()
       const bridgeMid = sessionBridgeMid(session)
 
       let quote
@@ -98,8 +96,6 @@ export async function confirmWalletSendOrder(input: {
       await input.admin
         .from("wallet_send_sessions")
         .update({
-          lifi_quote_id: quoteId,
-          lifi_from_amount_raw: fromAmountRaw,
           relay_quote_id: quoteId,
           relay_from_amount_raw: fromAmountRaw,
           status: "locked",
@@ -109,8 +105,6 @@ export async function confirmWalletSendOrder(input: {
       locked = {
         ...session,
         status: "locked",
-        lifi_quote_id: quoteId,
-        lifi_from_amount_raw: fromAmountRaw,
         relay_quote_id: quoteId,
         relay_from_amount_raw: fromAmountRaw,
       }
@@ -158,7 +152,7 @@ export async function confirmWalletSendOrder(input: {
     networkFee: 0,
     rate: locked.customer_rate,
     customerRate: locked.customer_rate,
-    lifiMid: bridgeMid,
+    bridgeMid,
     relayMid: bridgeMid,
     relayFloor: String(bridgeFloor),
     expiresAt: locked.expires_at,
@@ -169,7 +163,7 @@ export async function confirmWalletSendOrder(input: {
       : "direct_turnkey",
     wallet: {
       cryptoAuthorizedAmount: String(bridgeFloor),
-      lifiFloor: String(bridgeFloor),
+      bridgeFloor: String(bridgeFloor),
     },
   }
 

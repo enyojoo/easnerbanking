@@ -365,8 +365,7 @@ export function TransactionDetailsPanel({
   const isYcFundBalanceDeposit = Boolean(transaction.depositReview)
   const isWalletSendPayout =
     transaction.payoutReview?.execution_model === "direct_turnkey" ||
-    transaction.payoutReview?.execution_model === "relay_bridge" ||
-    transaction.payoutReview?.execution_model === "lifi_bridge"
+    transaction.payoutReview?.execution_model === "relay_bridge"
   const walletSendExecutionModel = transaction.payoutReview?.execution_model
   const walletReceiveNetwork =
     transaction.chain?.trim() ||

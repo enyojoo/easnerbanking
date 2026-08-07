@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   computeCryptoSendPricing,
-  resolveLifiTicketPricingInput,
+  resolveBridgeTicketPricingInput,
 } from "./crypto-send-pricing"
 
 describe("computeCryptoSendPricing", () => {
@@ -9,8 +9,8 @@ describe("computeCryptoSendPricing", () => {
     const p = computeCryptoSendPricing({
       receiveAmount: 100,
       customerRate: 0.985,
-      lifiMid: 1,
-      lifiFloor: 103,
+      bridgeMid: 1,
+      bridgeFloor: 103,
     })
     expect(p.marginAmount).toBeGreaterThan(0)
     // Explicit Easner 1% leg is charged on top of the FX margin now.
@@ -29,21 +29,21 @@ describe("computeCryptoSendPricing", () => {
   })
 })
 
-describe("resolveLifiTicketPricingInput", () => {
+describe("resolveBridgeTicketPricingInput", () => {
   it("uses ticket mid when floor is inflated vs planning mid (USDT/Tron pattern)", () => {
-    const lifiFloor = 21.5945
-    const { customerRate, lifiMid } = resolveLifiTicketPricingInput({
+    const bridgeFloor = 21.5945
+    const { customerRate, bridgeMid } = resolveBridgeTicketPricingInput({
       planningCustomerRate: 0.963282,
-      planningLifiMid: 0.977951,
-      lifiFloor,
+      planningBridgeMid: 0.977951,
+      bridgeFloor,
       receiveAmount: 10,
       margin: 0.015,
     })
     const p = computeCryptoSendPricing({
       receiveAmount: 10,
       customerRate,
-      lifiMid,
-      lifiFloor,
+      bridgeMid,
+      bridgeFloor,
     })
     expect(p.routeCost).toBeCloseTo(0, 4)
     // No route cost, so Total = Sending + explicit 1% processing fee.

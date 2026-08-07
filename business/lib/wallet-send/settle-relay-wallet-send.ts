@@ -68,7 +68,7 @@ export async function reconcileRelayWalletSendByRequestId(
 
   const meta = asMeta(row.metadata)
   const executionModel = String(meta.execution_model || "")
-  if (executionModel !== "relay_bridge" && executionModel !== "lifi_bridge") {
+  if (executionModel !== "relay_bridge") {
     return { patched: false, action: "not_relay_bridge_send" }
   }
 
@@ -141,7 +141,7 @@ export async function reconcilePendingRelayWalletSends(
     const meta = asMeta(row.metadata)
     if (meta.activity_type !== "wallet_send") continue
     const executionModel = String(meta.execution_model || "")
-    if (executionModel !== "relay_bridge" && executionModel !== "lifi_bridge") continue
+    if (executionModel !== "relay_bridge") continue
     const relayRequestId = String(meta.relay_request_id ?? "").trim()
     if (!relayRequestId || seen.has(relayRequestId)) continue
     seen.add(relayRequestId)

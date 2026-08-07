@@ -4,7 +4,7 @@ export type CryptoRateRow = {
   from_currency: string
   to_currency: string
   receive_network: string
-  lifi_mid: number
+  bridge_mid: number
   rate: number
   margin_bps: number
   source: string
@@ -25,7 +25,7 @@ export async function listCryptoRates(
   let q = admin
     .from("crypto_rates")
     .select(
-      "from_currency,to_currency,receive_network,lifi_mid,rate,margin_bps,source,as_of,status",
+      "from_currency,to_currency,receive_network,bridge_mid,rate,margin_bps,source,as_of,status",
     )
 
   const status = filters?.status ?? "active"
@@ -50,7 +50,7 @@ export async function listCryptoRates(
     from_currency: String(row.from_currency ?? "").toUpperCase(),
     to_currency: String(row.to_currency ?? "").toUpperCase(),
     receive_network: String(row.receive_network ?? ""),
-    lifi_mid: Number(row.lifi_mid ?? 0),
+    bridge_mid: Number(row.bridge_mid ?? 0),
     rate: Number(row.rate ?? 0),
     margin_bps: Number(row.margin_bps ?? 0),
     source: String(row.source ?? ""),
@@ -82,7 +82,7 @@ export function findCryptoRate(
 }
 
 export function isCryptoRateFresh(row: CryptoRateRow, maxAgeMs = getCryptoRatesRefreshTtlMs()): boolean {
-  if (row.status !== "active" || row.rate <= 0 || row.lifi_mid <= 0) return false
+  if (row.status !== "active" || row.rate <= 0 || row.bridge_mid <= 0) return false
   const asOfMs = new Date(row.as_of).getTime()
   if (!Number.isFinite(asOfMs) || asOfMs <= 0) return false
   return Date.now() - asOfMs <= maxAgeMs

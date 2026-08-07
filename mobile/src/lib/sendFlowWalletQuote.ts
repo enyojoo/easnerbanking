@@ -120,8 +120,8 @@ export type WalletPrepareSession = {
   totalDebited?: string
   marginAmount?: string
   customerRate?: number
-  lifiMid?: number
-  executionModel?: 'direct_turnkey' | 'relay_bridge' | 'lifi_bridge'
+  bridgeMid?: number
+  executionModel?: 'direct_turnkey' | 'relay_bridge'
 }
 
 export function walletPrepareSessionFromQuote(
@@ -136,7 +136,7 @@ export function walletPrepareSessionFromQuote(
     totalDebited: String(quote.totalDebited),
     marginAmount: String(quote.marginAmount),
     customerRate: quote.customerRate,
-    lifiMid: quote.lifiMid,
+    bridgeMid: quote.bridgeMid,
     executionModel: quote.executionModel,
   }
 }

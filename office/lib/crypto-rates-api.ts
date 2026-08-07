@@ -5,7 +5,7 @@ export type CryptoRateAdminRow = {
   from_currency: string
   to_currency: string
   receive_network: string
-  lifi_mid: number
+  bridge_mid: number
   rate: number
   margin_bps: number
   source: string
@@ -26,7 +26,10 @@ export const cryptoRatesApi = {
   async list(): Promise<CryptoRateAdminRow[]> {
     const res = await officeFetch("/api/admin/crypto-rates")
     const data = await asJson<{ rates?: CryptoRateAdminRow[] }>(res)
-    return data.rates ?? []
+    return (data.rates ?? []).map((row) => ({
+      ...row,
+      bridge_mid: Number(row.bridge_mid ?? 0),
+    }))
   },
 
   async upsert(
@@ -35,7 +38,7 @@ export const cryptoRatesApi = {
       to_currency: string
       receive_network: string
       rate: number
-      lifi_mid?: number
+      bridge_mid?: number
       margin_bps?: number
       status: string
     }>,

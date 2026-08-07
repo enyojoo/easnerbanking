@@ -45,14 +45,14 @@ describe("payout-review-display", () => {
 
   it("shows the combined Processing fee for LI.FI bridge (explicit 1% leg now visible)", () => {
     expect(
-      shouldShowWalletSendProcessingFee({ executionModel: "lifi_bridge", processingFee: 1.5 }),
+      shouldShowWalletSendProcessingFee({ executionModel: "relay_bridge", processingFee: 1.5 }),
     ).toBe(true)
     expect(
       shouldShowWalletSendProcessingFee({ executionModel: "direct_turnkey", processingFee: 1 }),
     ).toBe(true)
     // Channel-only cost (no explicit leg) still surfaces in the combined row.
     expect(
-      shouldShowWalletSendProcessingFee({ executionModel: "lifi_bridge", exchangeFee: 0.8 }),
+      shouldShowWalletSendProcessingFee({ executionModel: "relay_bridge", exchangeFee: 0.8 }),
     ).toBe(true)
   })
 
@@ -74,7 +74,7 @@ describe("payout-review-display", () => {
     expect(
       shouldShowPayoutReviewProcessingFee({
         payoutFlow: "wallet_send",
-        executionModel: "lifi_bridge",
+        executionModel: "relay_bridge",
         processingFee: 1.5,
       }),
     ).toBe(true)
@@ -82,7 +82,7 @@ describe("payout-review-display", () => {
 
   it("hides wallet send network fee for both execution models", () => {
     expect(
-      shouldShowWalletSendNetworkFee({ executionModel: "lifi_bridge", networkFee: 0.5 }),
+      shouldShowWalletSendNetworkFee({ executionModel: "relay_bridge", networkFee: 0.5 }),
     ).toBe(false)
     expect(
       shouldShowWalletSendNetworkFee({ executionModel: "direct_turnkey", networkFee: 0.5 }),

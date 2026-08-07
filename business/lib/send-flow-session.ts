@@ -124,14 +124,14 @@ export interface SendFlowState {
     displayChannelCost?: number
     networkFee: number
     customerRate: number
-    lifiMid: number
+    bridgeMid: number
     formSessionId: string
     cryptoAuthorizedAmount: string
     cryptoCurrency: string
     pricingQuoteId: string
     expiresAt: string
-    executionModel: "direct_turnkey" | "relay_bridge" | "lifi_bridge"
-    lifiFloor?: string
+    executionModel: "direct_turnkey" | "relay_bridge"
+    bridgeFloor?: string
     quotePhase?: "preview" | "locked"
   }
 }

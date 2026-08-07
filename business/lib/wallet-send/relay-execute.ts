@@ -56,9 +56,7 @@ export async function executeRelayWalletSend(input: {
 
   const slippage = 0.03
   const slippageTolerance = String(Math.round(slippage * 10_000))
-  const storedFromAmountRaw = String(
-    input.session.relay_from_amount_raw ?? input.session.lifi_from_amount_raw ?? "",
-  ).trim()
+  const storedFromAmountRaw = String(input.session.relay_from_amount_raw ?? "").trim()
 
   let quote
   try {
@@ -84,7 +82,7 @@ export async function executeRelayWalletSend(input: {
         amountEntryMode: "receive",
         receiveAmount: input.session.receive_amount,
         customerRate: input.session.customer_rate,
-        bridgeMid: input.session.relay_mid ?? input.session.lifi_mid,
+        bridgeMid: input.session.relay_mid,
         slippage,
       })
     }
@@ -100,7 +98,7 @@ export async function executeRelayWalletSend(input: {
     return { ok: false, error: "relay_quote_missing_from_amount" }
   }
 
-  const sessionFloor = input.session.relay_floor ?? input.session.lifi_floor
+  const sessionFloor = input.session.relay_floor
   if (Number.isFinite(sessionFloor) && sessionFloor > 0 && execFloor > sessionFloor * 1.02) {
     return { ok: false, error: "relay_floor_exceeded" }
   }
@@ -145,7 +143,7 @@ export async function executeRelayWalletSend(input: {
 
   const relayRequestId =
     extractRelayRequestId(quote) ??
-    (String(input.session.relay_quote_id ?? input.session.lifi_quote_id ?? "").trim() || undefined)
+    (String(input.session.relay_quote_id ?? "").trim() || undefined)
 
   const providerTransactionId = String(
     (sendRes as { sendTransactionStatusId?: string }).sendTransactionStatusId ||

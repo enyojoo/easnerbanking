@@ -16,8 +16,8 @@ describe("buildWalletSendPayoutReviewSnapshot", () => {
         margin_amount: 1,
         customer_rate: 1,
         execution_model: "direct_turnkey",
-        lifi_floor: 100,
-        lifi_mid: 1,
+        relay_floor: 100,
+        relay_mid: 1,
       },
     })
     expect(review.you_send_amount).toBe(100)
@@ -28,7 +28,7 @@ describe("buildWalletSendPayoutReviewSnapshot", () => {
     expect(review.transfer_method).toMatch(/^USDC on SOL/i)
   })
 
-  it("builds LI.FI review rows that add up", () => {
+  it("builds Relay bridge review rows that add up", () => {
     const review = buildWalletSendPayoutReviewSnapshot({
       session: {
         receive_amount: 100,
@@ -38,9 +38,9 @@ describe("buildWalletSendPayoutReviewSnapshot", () => {
         total_debited: 104.52,
         margin_amount: 1.52,
         customer_rate: 0.985,
-        execution_model: "lifi_bridge",
-        lifi_floor: 103,
-        lifi_mid: 1,
+        execution_model: "relay_bridge",
+        relay_floor: 103,
+        relay_mid: 1,
       },
       channelCost: 3,
     })
@@ -112,8 +112,8 @@ describe("resolveWalletSendPayoutReview", () => {
         margin_amount: 0.03,
         customer_rate: 1,
         execution_model: "direct_turnkey",
-        lifi_floor: 3,
-        lifi_mid: 1,
+        relay_floor: 3,
+        relay_mid: 1,
       },
       reviewSnapshot: {
         you_send_amount: 3.03,
@@ -137,7 +137,7 @@ describe("resolveWalletSendPayoutReview", () => {
         exchange_fee: 3,
         total_debited: 104.52,
         margin_amount: 1.52,
-        execution_model: "lifi_bridge",
+        execution_model: "relay_bridge",
       },
       104.52,
       "USD",

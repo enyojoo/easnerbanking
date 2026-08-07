@@ -20,14 +20,14 @@ function sampleQuote(overrides?: Partial<WalletSendQuote>): WalletSendQuote {
     networkFee: 0,
     rate: 1,
     customerRate: 1,
-    lifiMid: 1,
+    bridgeMid: 1,
     expiresAt,
     formSessionId: 'wallet-session-a',
     pricingQuoteId: '',
     executionModel: 'direct_turnkey',
     wallet: {
       cryptoAuthorizedAmount: '100',
-      lifiFloor: '100',
+      bridgeFloor: '100',
     },
     ...overrides,
   }

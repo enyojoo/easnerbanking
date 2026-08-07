@@ -14,17 +14,13 @@ export type WalletSendSessionRow = {
   destination_address: string
   receive_amount: number
   customer_rate: number
-  lifi_mid: number
-  lifi_floor: number
+  relay_mid: number
+  relay_floor: number
   total_debited: number
   margin_amount: number
   execution_model: WalletSendExecutionModel
-  lifi_quote_id?: string | null
-  lifi_from_amount_raw?: string | null
   relay_quote_id?: string | null
   relay_from_amount_raw?: string | null
-  relay_floor?: number
-  relay_mid?: number
   status: string
   expires_at: string
 }
@@ -43,38 +39,14 @@ function rowFromDb(data: Record<string, unknown>): WalletSendSessionRow {
     destination_address: String(data.destination_address),
     receive_amount: Number(data.receive_amount),
     customer_rate: Number(data.customer_rate),
-    lifi_mid: Number(data.lifi_mid),
-    lifi_floor: Number(data.lifi_floor),
+    relay_mid: Number(data.relay_mid ?? 1),
+    relay_floor: Number(data.relay_floor ?? 0),
     total_debited: Number(data.total_debited),
     margin_amount: Number(data.margin_amount),
     execution_model: data.execution_model as WalletSendExecutionModel,
-    lifi_quote_id: data.lifi_quote_id == null ? null : String(data.lifi_quote_id),
-    lifi_from_amount_raw:
-      data.lifi_from_amount_raw == null ? null : String(data.lifi_from_amount_raw),
-    relay_quote_id:
-      data.relay_quote_id == null
-        ? data.lifi_quote_id == null
-          ? null
-          : String(data.lifi_quote_id)
-        : String(data.relay_quote_id),
+    relay_quote_id: data.relay_quote_id == null ? null : String(data.relay_quote_id),
     relay_from_amount_raw:
-      data.relay_from_amount_raw == null
-        ? data.lifi_from_amount_raw == null
-          ? null
-          : String(data.lifi_from_amount_raw)
-        : String(data.relay_from_amount_raw),
-    relay_floor:
-      data.relay_floor != null
-        ? Number(data.relay_floor)
-        : Number.isFinite(Number(data.lifi_floor))
-          ? Number(data.lifi_floor)
-          : undefined,
-    relay_mid:
-      data.relay_mid != null
-        ? Number(data.relay_mid)
-        : Number.isFinite(Number(data.lifi_mid))
-          ? Number(data.lifi_mid)
-          : undefined,
+      data.relay_from_amount_raw == null ? null : String(data.relay_from_amount_raw),
     status: String(data.status),
     expires_at: String(data.expires_at),
   }
@@ -95,17 +67,13 @@ export async function createWalletSendSession(
     destination_address: input.destination_address,
     receive_amount: input.receive_amount,
     customer_rate: input.customer_rate,
-    lifi_mid: input.lifi_mid,
-    lifi_floor: input.lifi_floor,
+    relay_mid: input.relay_mid,
+    relay_floor: input.relay_floor,
     total_debited: input.total_debited,
     margin_amount: input.margin_amount,
     execution_model: input.execution_model,
-    lifi_quote_id: input.lifi_quote_id ?? input.relay_quote_id ?? null,
-    lifi_from_amount_raw: input.lifi_from_amount_raw ?? input.relay_from_amount_raw ?? null,
-    relay_quote_id: input.relay_quote_id ?? input.lifi_quote_id ?? null,
-    relay_from_amount_raw: input.relay_from_amount_raw ?? input.lifi_from_amount_raw ?? null,
-    relay_floor: input.relay_floor ?? input.lifi_floor,
-    relay_mid: input.relay_mid ?? input.lifi_mid,
+    relay_quote_id: input.relay_quote_id ?? null,
+    relay_from_amount_raw: input.relay_from_amount_raw ?? null,
     status: "quoted",
     expires_at: input.expires_at,
   })

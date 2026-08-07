@@ -6,20 +6,20 @@ export function walletSendMarginBps(margin = WALLET_SEND_MARGIN): number {
 }
 
 /**
- * Customer-facing wallet send rate from LI.FI mid (receive units per 1 source unit).
+ * Customer-facing wallet send rate from bridge mid (receive units per 1 source unit).
  * Outbound: user receives fewer destination units per 1 USD/EUR.
  */
 export function applyCryptoCustomerRate(
-  lifiMid: number,
+  bridgeMid: number,
   margin = WALLET_SEND_MARGIN,
 ): number {
-  if (!Number.isFinite(lifiMid) || lifiMid <= 0) {
-    throw new Error("lifiMid must be a positive finite number")
+  if (!Number.isFinite(bridgeMid) || bridgeMid <= 0) {
+    throw new Error("bridgeMid must be a positive finite number")
   }
   if (!Number.isFinite(margin) || margin < 0 || margin >= 1) {
     throw new Error("margin must be in [0, 1)")
   }
-  return Number((lifiMid * (1 - margin)).toPrecision(14))
+  return Number((bridgeMid * (1 - margin)).toPrecision(14))
 }
 
 export function parseWalletSendMarginFromEnv(raw: string | undefined): number {

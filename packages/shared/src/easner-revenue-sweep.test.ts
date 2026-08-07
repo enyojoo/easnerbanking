@@ -19,7 +19,7 @@ describe("computeWalletSendFeeWalletSweepAmount", () => {
   it("sums distinct LI.FI FX margin + processing fee legs", () => {
     expect(
       computeWalletSendFeeWalletSweepAmount({
-        executionModel: "lifi_bridge",
+        executionModel: "relay_bridge",
         marginAmount: 1.52,
         processingFee: 1,
       }),

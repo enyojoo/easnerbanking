@@ -6,7 +6,7 @@ import {
   resolveEffectiveWalletSendMin,
   validateWalletSendReceiveAmount,
   WALLET_SEND_MIN_RECEIVE_AMOUNT,
-  minReceiveForLifiBridge,
+  minReceiveForRelayBridge,
 } from './wallet-send-limits'
 
 describe('wallet-send-limits', () => {
@@ -32,8 +32,8 @@ describe('wallet-send-limits', () => {
     expect(getBusinessWalletSendMin('EURC')).toBe(10)
   })
 
-  it('uses the higher of LI.FI and business minimums for bridge corridors', () => {
-    expect(minReceiveForLifiBridge(1)).toBe(7)
+  it('uses the higher of Relay and business minimums for bridge corridors', () => {
+    expect(minReceiveForRelayBridge(1)).toBe(7)
     expect(
       resolveEffectiveWalletSendMin({
         receiveCurrency: 'USDT',

@@ -47,7 +47,7 @@ type Props = {
   reviewFlow?: ReviewFlowKind
   globalFiatPayout?: boolean
   receiveNetwork?: string | null
-  walletSendExecutionModel?: "direct_turnkey" | "relay_bridge" | "lifi_bridge" | null
+  walletSendExecutionModel?: "direct_turnkey" | "relay_bridge" | null
   recipientDisplayName?: string | null
   counterpartyAddress?: string | null
   whenAt?: string | null

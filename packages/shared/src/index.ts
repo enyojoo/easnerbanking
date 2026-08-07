@@ -143,7 +143,6 @@ export {
 export {
   computeCryptoSendPricing,
   normalizeCryptoSendQuoteReceiveAmount,
-  resolveLifiTicketPricingInput,
   resolveBridgeTicketPricingInput,
   type ComputeCryptoSendPricingInput,
   type CryptoSendPricing,
@@ -341,8 +340,8 @@ export {
   resolveEffectiveWalletSendMin,
   validateWalletSendReceiveAmount,
   WALLET_SEND_MIN_RECEIVE_AMOUNT,
-  LIFI_BRIDGE_MIN_SOURCE_USDC,
-  minReceiveForLifiBridge,
+  RELAY_BRIDGE_MIN_SOURCE_USDC,
+  minReceiveForRelayBridge,
 } from "./wallet-send-limits"
 export { inferWalletSendExecutionModel } from "./infer-wallet-send-execution-model"
 export {

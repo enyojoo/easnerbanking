@@ -583,7 +583,7 @@ export async function reconcilePendingWalletSends(
       }
 
       if (
-        (executionModel === "relay_bridge" || executionModel === "lifi_bridge") &&
+        executionModel === "relay_bridge" &&
         row.id
       ) {
         const relayRequestId = String(meta.relay_request_id ?? "").trim()

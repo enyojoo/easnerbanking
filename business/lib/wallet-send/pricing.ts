@@ -20,19 +20,19 @@ export function pricingFromRelayQuote(input: {
 }): CryptoSendPricing {
   const fromRaw = parseRelayFromAmountRaw(input.quote)
   const relayFloor = Number(fromRaw) / 10 ** input.sourceDecimals
-  const { customerRate, lifiMid } = resolveBridgeTicketPricingInput({
+  const { customerRate, bridgeMid } = resolveBridgeTicketPricingInput({
     receiveAmount: input.receiveAmount,
     planningCustomerRate: input.customerRate,
-    planningLifiMid: input.bridgeMid,
-    lifiFloor: relayFloor,
+    planningBridgeMid: input.bridgeMid,
+    bridgeFloor: relayFloor,
     margin: parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN),
   })
 
   return computeCryptoSendPricing({
     receiveAmount: input.receiveAmount,
     customerRate,
-    lifiMid,
-    lifiFloor: relayFloor,
+    bridgeMid,
+    bridgeFloor: relayFloor,
     networkFee: parseRelayNetworkFeeUsd(input.quote),
     processingFeeBps:
       input.processingFeeBps ??

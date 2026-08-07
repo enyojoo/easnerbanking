@@ -79,7 +79,7 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
             from_currency: fromCurrency,
             to_currency: asset,
             receive_network: network,
-            lifi_mid: 1,
+            bridge_mid: 1,
             rate: applyCryptoCustomerRate(1, effectiveMargin),
             margin_bps: marginBps,
             source: "direct_turnkey",
@@ -136,7 +136,7 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
             from_currency: fromCurrency,
             to_currency: asset,
             receive_network: network,
-            lifi_mid: relayMid,
+            bridge_mid: relayMid,
             rate: applyCryptoCustomerRate(relayMid, effectiveMargin),
             margin_bps: marginBps,
             source: "relay_probe_sync",
@@ -206,7 +206,7 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
         from_currency: fromCurrency,
         to_currency: destAsset,
         receive_network: "Solana",
-        lifi_mid: relayMid,
+        bridge_mid: relayMid,
         rate: applyCryptoCustomerRate(relayMid, marginBps / 10_000),
         margin_bps: marginBps,
         source: "relay_probe_sync",
@@ -227,12 +227,6 @@ export async function syncCryptoExchangeRates(options?: { dryRun?: boolean }): P
   if (options?.dryRun) {
     return { updated: upserts.length, skipped: skippedPairs.length, skippedPairs }
   }
-
-  // Legacy LI.FI probe rows → Relay naming (even if a corridor is skipped this run).
-  await supabase
-    .from("crypto_rates")
-    .update({ source: "relay_probe_sync", updated_at: new Date().toISOString() })
-    .eq("source", "lifi_probe_sync")
 
   let updated = 0
   for (const row of upserts) {

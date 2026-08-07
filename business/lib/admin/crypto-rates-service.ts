@@ -9,7 +9,7 @@ export type CryptoRateUpsertRow = {
   from_currency: string
   to_currency: string
   receive_network: string
-  lifi_mid?: number
+  bridge_mid?: number
   rate: number
   margin_bps?: number
   status?: string
@@ -56,9 +56,9 @@ export async function upsertCryptoRatesAdmin(admin: SupabaseClient, rows: Crypto
 
   const payload = rows.map((row) => {
     const { from, to, network } = assertCryptoRateRow(row)
-    const lifiMid =
-      row.lifi_mid != null && Number.isFinite(row.lifi_mid) && row.lifi_mid > 0
-        ? Number(row.lifi_mid)
+    const bridgeMid =
+      row.bridge_mid != null && Number.isFinite(row.bridge_mid) && row.bridge_mid > 0
+        ? Number(row.bridge_mid)
         : Number(row.rate) || 0
     const marginBps =
       row.margin_bps != null && Number.isFinite(row.margin_bps)
@@ -67,13 +67,13 @@ export async function upsertCryptoRatesAdmin(admin: SupabaseClient, rows: Crypto
     const rate =
       row.rate != null && Number.isFinite(row.rate) && row.rate > 0
         ? Number(row.rate)
-        : applyCryptoCustomerRate(lifiMid, marginBps / 10_000)
+        : applyCryptoCustomerRate(bridgeMid, marginBps / 10_000)
 
     return {
       from_currency: from,
       to_currency: to,
       receive_network: network,
-      lifi_mid: lifiMid,
+      bridge_mid: bridgeMid,
       rate,
       margin_bps: marginBps,
       status: row.status ?? "active",

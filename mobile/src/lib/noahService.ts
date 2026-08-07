@@ -204,16 +204,16 @@ export interface WalletSendQuote {
   networkFee: number
   rate: number
   customerRate: number
-  lifiMid: number
+  bridgeMid: number
   expiresAt: string
   formSessionId: string
   pricingQuoteId: string
-  executionModel: 'direct_turnkey' | 'relay_bridge' | 'lifi_bridge'
+  executionModel: 'direct_turnkey' | 'relay_bridge'
   relayMid?: number
   quotePhase?: 'preview' | 'locked'
   wallet: {
     cryptoAuthorizedAmount: string
-    lifiFloor: string
+    bridgeFloor: string
     tokenIconUrl?: string
     networkIconUrl?: string
   }
@@ -424,7 +424,7 @@ export const noahService = {
     to_currency: string
     receive_network: string
     rate: number
-    lifi_mid: number
+    bridge_mid: number
     as_of: string
   }> }> {
     const session = await requireAuthSession()
@@ -448,7 +448,7 @@ export const noahService = {
       to_currency: string
       receive_network: string
       rate: number
-      lifi_mid: number
+      bridge_mid: number
       as_of: string
     }> }
   },

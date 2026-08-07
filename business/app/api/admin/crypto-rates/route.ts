@@ -40,7 +40,7 @@ export async function PUT(request: Request) {
           to_currency: String(r.to_currency ?? ""),
           receive_network: String(r.receive_network ?? ""),
           rate: Number(r.rate) || 0,
-          lifi_mid: r.lifi_mid == null ? undefined : Number(r.lifi_mid),
+          bridge_mid: r.bridge_mid == null ? undefined : Number(r.bridge_mid),
           margin_bps: r.margin_bps == null ? undefined : Number(r.margin_bps),
           status: String(r.status ?? "active"),
         }

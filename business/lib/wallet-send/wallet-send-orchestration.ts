@@ -41,7 +41,7 @@ export type ExecuteWalletSendResult =
       ok: true
       easnerTransactionId: string
       status: "pending" | "settled" | "failed"
-      provider: "turnkey" | "relay" | "lifi"
+      provider: "turnkey" | "relay"
       providerTransactionId: string
       txHash?: string | null
     }
@@ -154,12 +154,7 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
       ok: true,
       easnerTransactionId,
       status: String(existing.status) === "failed" ? "failed" : String(existing.status) === "pending" ? "pending" : "settled",
-      provider:
-        String(existing.provider) === "relay"
-          ? "relay"
-          : String(existing.provider) === "lifi"
-            ? "lifi"
-            : "turnkey",
+      provider: String(existing.provider) === "relay" ? "relay" : "turnkey",
       providerTransactionId: String(existing.provider_transaction_id || ""),
       txHash: existing.tx_hash == null ? null : String(existing.tx_hash),
     }
@@ -169,8 +164,8 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
   const balanceCurrency = session.source_balance_currency as "USD" | "EUR"
   const easnerTransactionId = input.reservedDebitEtid?.trim() || generateTransactionId()
 
-  const bridgeFloor = session.relay_floor ?? session.lifi_floor
-  const bridgeMid = session.relay_mid ?? session.lifi_mid
+  const bridgeFloor = session.relay_floor
+  const bridgeMid = session.relay_mid
 
   const channelCost =
     isBridgeExecutionModel(executionModel) && bridgeMid > 0
@@ -358,13 +353,12 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
       receive_amount: session.receive_amount,
       receive_currency: session.receive_asset,
       relay_floor: bridgeFloor,
-      lifi_floor: bridgeFloor,
       margin_amount: marginAmount,
       processing_fee: processingFee,
       fee_destination_address: feeAddress,
       relay_request_id:
         "relayRequestId" in bridgeResult ? bridgeResult.relayRequestId : undefined,
-      relay_quote_id: session.relay_quote_id ?? session.lifi_quote_id,
+      relay_quote_id: session.relay_quote_id,
       form_session_id: session.form_session_id,
       easner_transaction_id: easnerTransactionId,
       payout_review: payoutReview,

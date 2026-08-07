@@ -69,8 +69,8 @@ const baseSession = {
   destination_address: "dest",
   receive_amount: 100,
   customer_rate: 1,
-  lifi_mid: 1,
-  lifi_floor: 100,
+  relay_mid: 1,
+  relay_floor: 100,
   total_debited: 101,
   margin_amount: 1,
   execution_model: "direct_turnkey" as const,
@@ -152,7 +152,7 @@ describe("executeWalletSend", () => {
       total_debited: 104.52,
       margin_amount: 1.52,
       relay_floor: 103,
-      lifi_floor: 103,
+      relay_floor: 103,
       customer_rate: 0.985,
     })
     executeRelayWalletSend.mockResolvedValue({

@@ -12,7 +12,7 @@ export type CryptoSendRateRow = {
   to_currency: string
   receive_network: string
   rate: number
-  lifi_mid: number
+  bridge_mid: number
   as_of: string
 }
 

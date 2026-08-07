@@ -25,7 +25,7 @@ export function hasPayoutCrossCurrencyFx(sendCurrency: string, receiveCurrency: 
   return normCur(sendCurrency) !== normCur(receiveCurrency)
 }
 
-/** Hide FX rows for direct Turnkey USDC/EURC · Solana; LI.FI bridges still show rate when cross-asset. */
+/** Hide FX rows for direct Turnkey USDC/EURC · Solana; Relay bridges still show rate when cross-asset. */
 export function hasWalletSendFxDisplay(
   sendCurrency: string,
   receiveCurrency: string,
@@ -72,13 +72,12 @@ export function shouldShowPayoutReviewFeeRow(input: {
 export type WalletSendExecutionModel = "direct_turnkey" | "relay_bridge"
 
 export function isBridgeWalletSendExecutionModel(model: string | null | undefined): boolean {
-  const m = String(model || "").trim()
-  return m === "relay_bridge" || m === "lifi_bridge"
+  return String(model || "").trim() === "relay_bridge"
 }
 
 /**
  * Show the combined "Processing fee" row (Easner bps leg + channel/route cost).
- * All rails including LI.FI now surface an explicit fee.
+ * All rails including Relay bridge now surface an explicit fee.
  */
 export function shouldShowWalletSendProcessingFee(input: {
   executionModel?: WalletSendExecutionModel | string | null

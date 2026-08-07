@@ -181,7 +181,6 @@ export async function quoteRelayWalletBridge(input: {
   sendBudget?: number
   customerRate: number
   bridgeMid: number
-  lifiMid?: number
   slippage?: number
 }): Promise<RelayQuoteV2Response> {
   if (!isRelayWalletSendEnabled()) {
@@ -190,7 +189,7 @@ export async function quoteRelayWalletBridge(input: {
 
   const slippage = input.slippage ?? 0.03
   const slippageTolerance = String(Math.round(slippage * 10_000))
-  const bridgeMid = input.bridgeMid > 0 ? input.bridgeMid : Number(input.lifiMid ?? 1)
+  const bridgeMid = input.bridgeMid > 0 ? input.bridgeMid : 1
   const minReceive = minReceiveForRelayBridge(input.customerRate)
   const user = String(input.fromAddress || input.user || "").trim()
   const recipient = String(input.toAddress || input.recipient || "").trim()

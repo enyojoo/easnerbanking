@@ -72,10 +72,9 @@ export function attachWalletSendDetailFields(
     executionModel: payoutReview.execution_model,
   })
   // Direct Turnkey (and Easetag-style instant sends) settle during execute — no transfer tracker.
-  // LI.FI bridge may return pending; show Processing → Complete only while still in flight.
+  // Relay bridge may return pending; show Processing → Complete only while still in flight.
   const lifecycle =
-    (payoutReview.execution_model === "relay_bridge" ||
-      payoutReview.execution_model === "lifi_bridge") &&
+    payoutReview.execution_model === "relay_bridge" &&
     (ledgerStatus === "pending" || ledgerStatus === "processing")
       ? buildGlobalPayoutLifecycle({
           status: ledgerStatus,

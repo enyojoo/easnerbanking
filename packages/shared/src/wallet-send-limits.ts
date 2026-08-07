@@ -2,12 +2,12 @@
 
 export const WALLET_SEND_MIN_RECEIVE_AMOUNT = 1
 
-/** LI.FI Allbridge-style bridges reject quotes below ~7 USDC source (Sol→Tron etc.). */
-export const LIFI_BRIDGE_MIN_SOURCE_USDC = 7
+/** Relay bridge quotes reject source amounts below ~7 USDC (Sol→Tron etc.). */
+export const RELAY_BRIDGE_MIN_SOURCE_USDC = 7
 
 /**
- * Easner minimum receive amounts for LI.FI wallet-send corridors (stablecoin units).
- * Applied as max(lifiMin, businessMin) — same pattern as fiat payout mins.
+ * Easner minimum receive amounts for Relay wallet-send corridors (stablecoin units).
+ * Applied as max(relayMin, businessMin) — same pattern as fiat payout mins.
  */
 const WALLET_SEND_BUSINESS_MIN: Record<string, number> = {
   USDC: 10,
@@ -35,15 +35,15 @@ export function getBusinessWalletSendMin(receiveAsset: string): number | null {
   return WALLET_SEND_BUSINESS_MIN[asset] ?? null
 }
 
-export function minReceiveForLifiBridge(
+export function minReceiveForRelayBridge(
   customerRate: number,
-  minSourceUsdc = LIFI_BRIDGE_MIN_SOURCE_USDC,
+  minSourceUsdc = RELAY_BRIDGE_MIN_SOURCE_USDC,
 ): number {
   const rate = customerRate > 0 ? customerRate : 1
   return Math.ceil((minSourceUsdc / rate) * 100) / 100
 }
 
-/** Effective wallet receive min: direct Turnkey floor, or max(LI.FI bridge floor, Easner business min). */
+/** Effective wallet receive min: direct Turnkey floor, or max(Relay bridge floor, Easner business min). */
 export function resolveEffectiveWalletSendMin(input: {
   receiveCurrency: string
   receiveNetwork: string
@@ -53,12 +53,12 @@ export function resolveEffectiveWalletSendMin(input: {
   if (isDirectTurnkeyWalletCorridor(input.receiveCurrency, input.receiveNetwork)) {
     return WALLET_SEND_MIN_RECEIVE_AMOUNT
   }
-  const lifiMin = minReceiveForLifiBridge(
+  const relayMin = minReceiveForRelayBridge(
     input.customerRate,
-    input.minSourceUsdc ?? LIFI_BRIDGE_MIN_SOURCE_USDC,
+    input.minSourceUsdc ?? RELAY_BRIDGE_MIN_SOURCE_USDC,
   )
   const business = getBusinessWalletSendMin(input.receiveCurrency) ?? 0
-  const effective = Math.max(lifiMin, business)
+  const effective = Math.max(relayMin, business)
   return effective > 0 ? effective : WALLET_SEND_MIN_RECEIVE_AMOUNT
 }
 

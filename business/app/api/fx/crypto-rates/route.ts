@@ -33,7 +33,7 @@ export async function GET(request: Request) {
         to_currency: r.to_currency,
         receive_network: r.receive_network,
         rate: r.rate,
-        lifi_mid: r.lifi_mid,
+        bridge_mid: r.bridge_mid,
         as_of: r.as_of,
       })),
     },

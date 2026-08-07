@@ -80,9 +80,7 @@ function CryptoNetworkIcon({ network, size = 16 }: { network: string; size?: num
 }
 
 function formatCryptoRateSource(source: string | null | undefined): string {
-  const s = String(source || "sync").trim()
-  if (s === "lifi_probe_sync") return "relay_probe_sync"
-  return s || "sync"
+  return String(source || "sync").trim() || "sync"
 }
 
 type CurrencyRow = {
@@ -134,11 +132,11 @@ function buildDraftForSource(fromCode: WalletSourceCode, rates: CryptoRateAdminR
     }))
 }
 
-function customerRateFromMid(lifiMid: number, marginBps: number): number {
-  if (!Number.isFinite(lifiMid) || lifiMid <= 0) return 0
+function customerRateFromMid(bridgeMid: number, marginBps: number): number {
+  if (!Number.isFinite(bridgeMid) || bridgeMid <= 0) return 0
   const margin = marginBps / 10_000
-  if (margin < 0 || margin >= 1) return lifiMid
-  return Number((lifiMid * (1 - margin)).toPrecision(14))
+  if (margin < 0 || margin >= 1) return bridgeMid
+  return Number((bridgeMid * (1 - margin)).toPrecision(14))
 }
 
 export function OfficeCryptoRatesPanel() {
@@ -241,7 +239,7 @@ export function OfficeCryptoRatesPanel() {
     setDraft((prev) =>
       prev.map((r) => {
         if (r._key !== key) return r
-        return { ...r, rate: customerRateFromMid(Number(r.lifi_mid) || 0, Number(r.margin_bps) || 0) }
+        return { ...r, rate: customerRateFromMid(Number(r.bridge_mid) || 0, Number(r.margin_bps) || 0) }
       }),
     )
   }
@@ -256,7 +254,7 @@ export function OfficeCryptoRatesPanel() {
         to_currency: row.to_currency,
         receive_network: row.receive_network,
         rate: Number(row.rate) || 0,
-        lifi_mid: Number(row.lifi_mid) || 0,
+        bridge_mid: Number(row.bridge_mid) || 0,
         margin_bps: Number(row.margin_bps) || 0,
         status: row.status || "active",
       }))
@@ -415,9 +413,9 @@ export function OfficeCryptoRatesPanel() {
                         <Input
                           type="number"
                           step="0.000001"
-                          value={row.lifi_mid}
+                          value={row.bridge_mid}
                           onChange={(e) =>
-                            updateDraft(row._key, { lifi_mid: parseFloat(e.target.value) || 0 })
+                            updateDraft(row._key, { bridge_mid: parseFloat(e.target.value) || 0 })
                           }
                         />
                       </div>

@@ -46,7 +46,7 @@ export type WalletSendQuoteResult = {
   networkFee: number
   rate: number
   customerRate: number
-  lifiMid: number
+  bridgeMid: number
   expiresAt: string
   formSessionId: string
   pricingQuoteId: string
@@ -56,7 +56,7 @@ export type WalletSendQuoteResult = {
   quotePhase?: "preview" | "locked"
   wallet: {
     cryptoAuthorizedAmount: string
-    lifiFloor: string
+    bridgeFloor: string
     tokenIconUrl?: string
     networkIconUrl?: string
   }
@@ -107,7 +107,7 @@ export async function buildWalletSendQuote(input: {
   const feeCap = parseWalletSendProcessingFeeCapFromEnv(process.env.WALLET_SEND_PROCESSING_FEE_CAP)
 
   let customerRate = 1
-  let lifiMid = 1
+  let bridgeMid = 1
   let receiveAmount: number
   const sendBudget =
     amountEntryMode === "send" && input.sendAmount != null && input.sendAmount > 0
@@ -128,12 +128,12 @@ export async function buildWalletSendQuote(input: {
     const rateRow =
       findCryptoRate(rates, sourceBalanceCurrency, receiveAsset, receiveNetwork) ??
       ({
-        lifi_mid: 1,
+        bridge_mid: 1,
         rate: applyCryptoCustomerRate(1, parseWalletSendMarginFromEnv(process.env.WALLET_SEND_MARGIN)),
-      } as { lifi_mid: number; rate: number })
+      } as { bridge_mid: number; rate: number })
 
     customerRate = rateRow.rate
-    lifiMid = rateRow.lifi_mid
+    bridgeMid = rateRow.bridge_mid
 
     if (amountEntryMode === "send" && sendBudget != null) {
       if (!Number.isFinite(sendBudget) || sendBudget <= 0) {
@@ -182,9 +182,9 @@ export async function buildWalletSendQuote(input: {
 
   if (executionModel === "direct_turnkey") {
     pricing = pricingFromDirectTurnkey({ receiveAmount, processingFeeBps: feeBps })
-    bridgeFloorStr = pricing.lifiFloor.toFixed(6)
+    bridgeFloorStr = pricing.bridgeFloor.toFixed(6)
     customerRate = 1
-    lifiMid = 1
+    bridgeMid = 1
   } else {
     const probeFrom =
       input.probeFromAddress || requireCryptoRatesProbeSolAddress()
@@ -206,7 +206,7 @@ export async function buildWalletSendQuote(input: {
       receiveAmount: amountEntryMode === "send" ? 0 : receiveAmount,
       sendBudget,
       customerRate,
-      bridgeMid: lifiMid,
+      bridgeMid: bridgeMid,
     })
 
     if (amountEntryMode === "send") {
@@ -226,15 +226,15 @@ export async function buildWalletSendQuote(input: {
     pricing = pricingFromRelayQuote({
       receiveAmount,
       customerRate,
-      bridgeMid: lifiMid,
+      bridgeMid: bridgeMid,
       quote,
       sourceDecimals: source.decimals,
       processingFeeBps: feeBps,
     })
 
     customerRate = pricing.customerRate
-    lifiMid = pricing.lifiMid
-    bridgeFloorStr = pricing.lifiFloor.toFixed(6)
+    bridgeMid = pricing.bridgeMid
+    bridgeFloorStr = pricing.bridgeFloor.toFixed(6)
   }
 
   const formSessionId = randomUUID()
@@ -252,15 +252,11 @@ export async function buildWalletSendQuote(input: {
     destination_address: destinationAddress,
     receive_amount: receiveAmount,
     customer_rate: customerRate,
-    lifi_mid: lifiMid,
-    lifi_floor: pricing.lifiFloor,
-    relay_mid: lifiMid,
-    relay_floor: pricing.lifiFloor,
+    relay_mid: bridgeMid,
+    relay_floor: pricing.bridgeFloor,
     total_debited: pricing.totalDebited,
     margin_amount: pricing.marginAmount,
     execution_model: executionModel,
-    lifi_quote_id: relayQuoteId ?? null,
-    lifi_from_amount_raw: relayFromAmountRaw ?? null,
     relay_quote_id: relayQuoteId ?? null,
     relay_from_amount_raw: relayFromAmountRaw ?? null,
     expires_at: expiresAt,
@@ -280,8 +276,8 @@ export async function buildWalletSendQuote(input: {
     networkFee: pricing.networkFee,
     rate: customerRate,
     customerRate,
-    lifiMid,
-    relayMid: lifiMid,
+    bridgeMid,
+    relayMid: bridgeMid,
     relayFloor: bridgeFloorStr,
     expiresAt,
     formSessionId,
@@ -289,7 +285,7 @@ export async function buildWalletSendQuote(input: {
     executionModel,
     wallet: {
       cryptoAuthorizedAmount: pricing.totalDebited.toFixed(6),
-      lifiFloor: bridgeFloorStr,
+      bridgeFloor: bridgeFloorStr,
     },
   }
 }

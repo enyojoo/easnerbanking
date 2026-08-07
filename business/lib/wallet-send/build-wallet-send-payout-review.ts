@@ -43,7 +43,7 @@ function readNestedPayoutReview(raw: unknown): GlobalPayoutReviewSnapshot | null
   const executionModel =
     o.execution_model === "direct_turnkey"
       ? "direct_turnkey"
-      : o.execution_model === "relay_bridge" || o.execution_model === "lifi_bridge"
+      : o.execution_model === "relay_bridge"
         ? "relay_bridge"
         : undefined
   const youSendAmount = normalizeDirectYouSendAmount({
@@ -78,8 +78,6 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
     | "margin_amount"
     | "customer_rate"
     | "execution_model"
-    | "lifi_floor"
-    | "lifi_mid"
     | "relay_floor"
     | "relay_mid"
   >
@@ -91,7 +89,7 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
   const executionModel: WalletSendExecutionModel =
     executionModelRaw === "direct_turnkey"
       ? "direct_turnkey"
-      : executionModelRaw === "lifi_bridge" || executionModelRaw === "relay_bridge"
+      : executionModelRaw === "relay_bridge"
         ? "relay_bridge"
         : resolveWalletSendExecutionModel(
             input.session.receive_asset,
@@ -117,8 +115,8 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
   })
 
   const exchangeFeeFromReview = Number(input.reviewSnapshot?.exchange_fee)
-  const bridgeFloor = input.session.relay_floor ?? input.session.lifi_floor
-  const bridgeMid = input.session.relay_mid ?? input.session.lifi_mid
+  const bridgeFloor = input.session.relay_floor
+  const bridgeMid = input.session.relay_mid
 
   const channelCostFromSession =
     input.channelCost ??
@@ -145,7 +143,7 @@ export function buildWalletSendPayoutReviewSnapshot(input: {
       : customerRate
 
   // Explicit Easner 1% leg. Direct Turnkey: margin_amount IS the fee. LI.FI: derive the bps
-  // leg = total − lifiFloor − FX margin (FX margin stays hidden, folded into the rate).
+  // leg = total − bridgeFloor − FX margin (FX margin stays hidden, folded into the rate).
   const processingFeeFromReview = Number(input.reviewSnapshot?.processing_fee)
   const fallbackProcessingFee =
     executionModel === "direct_turnkey"
@@ -224,7 +222,7 @@ export function resolveWalletSendPayoutReview(
   const executionModel: WalletSendExecutionModel =
     executionModelRaw === "direct_turnkey"
       ? "direct_turnkey"
-      : executionModelRaw === "lifi_bridge" || executionModelRaw === "relay_bridge"
+      : executionModelRaw === "relay_bridge"
         ? "relay_bridge"
         : resolveWalletSendExecutionModel(receiveCurrency, receiveNetwork)
 
