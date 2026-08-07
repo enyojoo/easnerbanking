@@ -32,8 +32,8 @@ import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 import { useToast } from '../../components/ToastProvider'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import EaseEnter from '../../components/EaseEnter'
-import { signupPrecheck } from '../lib/signupPrecheck'
-import { consumeSignupBlockedMessage } from '../lib/signupBlockedMessage'
+import { signupPrecheck } from '../../lib/signupPrecheck'
+import { consumeSignupBlockedMessage } from '../../lib/signupBlockedMessage'
 import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
 
 /**
