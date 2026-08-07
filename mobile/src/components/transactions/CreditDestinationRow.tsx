@@ -2,7 +2,7 @@ import React from 'react'
 import { View, Text, StyleSheet, type TextStyle } from 'react-native'
 import { CurrencyFlagCircle } from '../flags/CurrencyFlagCircle'
 import { transactionDetailRowStyles } from './TransactionDetailSummaryRow'
-import { spacing } from '../../theme'
+import { colors, spacing, textStyles } from '../../theme'
 
 type Props = {
   label: string
@@ -20,13 +20,17 @@ export function CreditDestinationRow({
   flagSize = 22,
   valueStyle,
 }: Props) {
+  const resolvedBalanceLabel =
+    String(balanceLabel ?? '').trim() ||
+    (currency ? `${String(currency).trim().toUpperCase()} Balance` : 'Balance')
+
   return (
     <View style={[transactionDetailRowStyles.row, styles.creditRow]}>
       <Text style={transactionDetailRowStyles.label}>{label}</Text>
       <View style={styles.creditValue}>
         <CurrencyFlagCircle currency={currency} size={flagSize} />
         <Text style={[styles.balanceLabel, valueStyle]} numberOfLines={1}>
-          {balanceLabel}
+          {resolvedBalanceLabel}
         </Text>
       </View>
     </View>
@@ -47,8 +51,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   balanceLabel: {
-    ...transactionDetailRowStyles.value,
-    flex: 0,
-    marginLeft: 0,
+    ...textStyles.body,
+    color: colors.text.primary,
+    flexShrink: 1,
+    textAlign: 'right',
   },
 })

@@ -17,12 +17,18 @@ export function CreditDestinationRow({
   balanceLabel,
   flagSize = 22,
 }: Props) {
+  const resolvedBalanceLabel =
+    String(balanceLabel ?? "").trim() ||
+    (currency ? `${String(currency).trim().toUpperCase()} Balance` : "Balance")
+
   return (
     <div className={cn(transactionDetailRowClassName, "items-center")}>
       <span className="shrink-0 text-muted-foreground">{label}</span>
-      <div className="flex shrink-0 items-center gap-2 whitespace-nowrap font-normal text-foreground">
+      <div className="flex min-w-0 max-w-[72%] shrink items-center justify-end gap-2 whitespace-nowrap font-normal text-foreground">
         <CurrencyFlagCircle currency={currency} size={flagSize} />
-        <span className="whitespace-nowrap">{balanceLabel}</span>
+        <span className="shrink-0 whitespace-nowrap text-sm text-foreground">
+          {resolvedBalanceLabel}
+        </span>
       </div>
     </div>
   )
