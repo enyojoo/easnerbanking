@@ -153,6 +153,61 @@ describe("buildInboundReceiveDetailRows", () => {
     ).toBe(false)
   })
 
+  it("classifies relay Tron deposit as stablecoin inbound", () => {
+    expect(
+      classifyInboundReceiveKind({
+        direction: "in",
+        provider: "relay",
+        metadata: { activity_type: "relay_tron_deposit" },
+      }),
+    ).toBe("stablecoin")
+  })
+
+  it("relay Tron deposit shows processing fee and amount credited like VA", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "relay",
+      metadata: {
+        activity_type: "relay_tron_deposit",
+        source_payment_rail: "tron",
+        source_currency: "USDT",
+        gross_usdt: 100,
+        posted_amount: 99,
+        posted_currency: "USD",
+        fee_amount: 1,
+      },
+      amount: 99,
+      currency: "USD",
+      ledger_created_at: "2026-01-15T12:00:00.000Z",
+    })
+    expect(snapshot?.kind).toBe("stablecoin")
+    expect(snapshot?.scheme).toBe("USDT on Tron")
+    const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.processingFee]).toBe("$1")
+    expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$99")
+    expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
+  })
+
+  it("stablecoin deposit shows masked sender wallet address", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "turnkey",
+      metadata: { source_type: "liquidation_address", source_payment_rail: "solana", source_currency: "USDC" },
+      chain: "solana",
+      asset: "USDC",
+      counterparty_address: "Fjw9otXwdkzbc3feiBzBnFqCr52858YbyZsxxLWfP5Xc",
+      posted_amount: 25,
+      posted_currency: "USD",
+      created_at: "2026-01-15T12:00:00.000Z",
+    })
+    expect(snapshot?.scheme).toBe("USDC on Solana")
+    const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.sender]).toBe("Fjw9ot...WfP5Xc")
+    expect(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }).at(-1)?.label).toBe(
+      REVIEW_ROW_LABELS.when,
+    )
+  })
+
   it("stablecoin and easetag include credit to", () => {
     const stablecoin = resolveInboundReceiveDetail({
       direction: "in",

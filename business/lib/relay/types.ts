@@ -14,6 +14,7 @@ export type RelayQuoteV2Request = {
   maxSubsidizationAmount?: string
   slippageTolerance?: string
   referrer?: string
+  refundTo?: string
 }
 
 export type RelayCurrencyAmount = {

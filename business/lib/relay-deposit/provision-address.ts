@@ -3,6 +3,7 @@ import { relayQuote } from "@/lib/relay/quote"
 import { extractRelayDepositAddress, extractRelayRequestId } from "@/lib/relay/quote"
 import { parseRelayFeesV3 } from "@/lib/relay/requests-v3"
 import { relayGetRequestV3 } from "@/lib/relay/client"
+import { requireRelayTronPlatformAddress } from "@/lib/relay/config"
 import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/relay/token-map"
 
 const ROUTE = "tron_usdt_to_sol_usdc"
@@ -21,14 +22,18 @@ export async function provisionRelayDepositAddress(
   const dest = sourceSolVaultToken("USD")
   if (!source || !dest) throw new Error("relay_deposit_token_map")
 
+  const tronPlatform = requireRelayTronPlatformAddress()
+
+  // Origin is Tron: Relay validates `user` on Tron. Customer receives USDC on Solana vault (`recipient`).
   const quote = await relayQuote({
-    user: recipientVaultAta,
+    user: tronPlatform,
     recipient: recipientVaultAta,
     source,
     dest,
     amountRaw: "1000000",
     tradeType: "EXACT_INPUT",
     useDepositAddress: true,
+    refundTo: tronPlatform,
   })
 
   const tronAddress = extractRelayDepositAddress(quote)

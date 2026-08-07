@@ -29,6 +29,7 @@ import {
   resolveYcFundBalanceNotificationActivityLabelFromMetadata,
 } from "./yc-deposit-display"
 import { deriveEasnerInboundRemitterDisplayName } from "./product-label"
+import { formatStablecoinDepositSchemeLabel } from "./stablecoin-deposit-scheme"
 import {
   BANK_VERIFICATION_COMPLETED_DESCRIPTION,
   deriveVerificationBankName,
@@ -86,6 +87,8 @@ export type InboundReceiveResolveInput = {
   payload?: Record<string, unknown> | null
   source_type?: string | null
   chain?: string | null
+  asset?: string | null
+  counterparty_address?: string | null
   currency?: string | null
   amount?: number | null
   deposit_review?: YcFundBalanceDepositReviewSnapshot | null
@@ -98,6 +101,7 @@ export type InboundReceiveResolveInput = {
   settled_amount?: number | null
   settled_currency?: string | null
   occurred_at?: string | null
+  settled_at?: string | null
   created_at?: string | null
   ledger_created_at?: string | null
   easner_transaction_id?: string | null
@@ -115,6 +119,7 @@ const CHAIN_ABBREVIATIONS: Record<string, string> = {
   polygonpos: "MATIC",
   base: "BASE",
   arbitrum: "ARB",
+  tron: "TRX",
 }
 
 function readMetaString(meta: Record<string, unknown>, key: string): string {
@@ -147,25 +152,55 @@ function abbreviateChain(chain: string): string {
 
 function deriveStablecoinSchemeLabel(input: InboundReceiveResolveInput): string {
   const meta = input.metadata ?? {}
-  const rail = String(
-    input.source_payment_rail ?? meta.source_payment_rail ?? meta.payment_rail ?? input.chain ?? "solana",
+  return formatStablecoinDepositSchemeLabel({
+    sourceCurrency: String(
+      meta.source_currency ??
+        input.asset ??
+        input.posted_currency ??
+        input.settled_currency ??
+        input.currency ??
+        "",
+    ),
+    paymentRail: String(
+      input.source_payment_rail ?? meta.source_payment_rail ?? meta.payment_rail ?? input.chain ?? "solana",
+    ),
+    chain: input.chain != null ? String(input.chain) : meta.chain != null ? String(meta.chain) : undefined,
+    asset: input.asset != null ? String(input.asset) : meta.asset != null ? String(meta.asset) : undefined,
+  })
+}
+
+function isRelayTronDepositInbound(input: InboundReceiveResolveInput): boolean {
+  const meta = input.metadata ?? {}
+  const provider = String(input.provider ?? "").toLowerCase()
+  return (
+    provider === "relay" &&
+    String(meta.activity_type ?? "").trim().toLowerCase() === "relay_tron_deposit"
   )
-  const railDisplay = abbreviateChain(rail)
-  const sourceCurrency = String(
-    meta.source_currency ?? input.posted_currency ?? input.settled_currency ?? input.currency ?? "",
-  ).toUpperCase()
-  const stablecoin = sourceCurrency === "EUR" || sourceCurrency === "EURC" ? "EURC" : "USDC"
-  return `${stablecoin} on ${railDisplay}`
 }
 
 function isStablecoinInbound(input: InboundReceiveResolveInput): boolean {
   const meta = input.metadata ?? {}
   if (String(meta.flow ?? "").toLowerCase() === "bank_onramp") return false
+  if (isRelayTronDepositInbound(input)) return true
   const sourceType = String(meta.source_type ?? input.source_type ?? "").toLowerCase()
   if (sourceType === "liquidation_address") return true
   const provider = String(input.provider ?? "").toLowerCase()
   if (provider === "turnkey" && (input.chain || meta.chain || input.source_payment_rail)) return true
   return false
+}
+
+function resolveStablecoinProcessingFee(
+  input: InboundReceiveResolveInput,
+  creditedAmount: number,
+): number {
+  const meta = input.metadata ?? {}
+  const explicit = pickAmount(input.fee_amount, meta.fee_amount, meta.fee)
+  if (explicit != null) return explicit
+  const gross = pickAmount(meta.gross_usdt)
+  if (gross != null && creditedAmount > 0 && gross > creditedAmount) {
+    return Math.round((gross - creditedAmount) * 100) / 100
+  }
+  return 0
 }
 
 function isEasetagInbound(input: InboundReceiveResolveInput): boolean {
@@ -250,7 +285,11 @@ function resolveSender(input: InboundReceiveResolveInput): string | undefined {
   if (fromMeta?.trim()) return fromMeta.trim()
   const masked = formatMaskedSenderDisplay({
     senderName: readMetaString(meta, "sender_name"),
-    counterpartyAddress: readMetaString(meta, "counterparty_address") || readMetaString(meta, "from_address"),
+    counterpartyAddress:
+      readMetaString(meta, "counterparty_address") ||
+      readMetaString(meta, "from_address") ||
+      readMetaString(meta, "sender_tron_address") ||
+      (input.counterparty_address ? String(input.counterparty_address).trim() : ""),
   })
   return masked || undefined
 }
@@ -268,9 +307,13 @@ export function resolveInboundReceiveDetail(
     meta.transaction_id,
   )
   const whenAt = pickIso(
-    input.created_at,
     input.ledger_created_at,
     input.occurred_at,
+    input.settled_at,
+    input.created_at,
+    meta.on_chain_settled_at,
+    meta.completed_at,
+    meta.processing_at,
     meta.ledger_created_at,
     meta.created_at,
   )
@@ -397,8 +440,10 @@ export function resolveInboundReceiveDetail(
     const creditedAmount =
       pickAmount(input.posted_amount, input.settled_amount, input.amount, meta.posted_amount, meta.settled_amount) ??
       0
-    const feeAmount = pickAmount(input.fee_amount, meta.fee_amount, meta.fee) ?? 0
-    const feeCurrency = String(input.currency ?? creditedCurrency).toUpperCase()
+    const feeAmount = resolveStablecoinProcessingFee(input, creditedAmount)
+    const feeCurrency = isRelayTronDepositInbound(input)
+      ? "USD"
+      : String(input.currency ?? creditedCurrency).toUpperCase()
     return {
       kind,
       displayTitle: resolveDisplayTitle(kind, input),
@@ -577,6 +622,17 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
+      if (surface === "detail") {
+        pushIf(
+          rows,
+          REVIEW_ROW_LABELS.amountCredited,
+          formatReviewRowMoneyDisplay(
+            REVIEW_ROW_LABELS.amountCredited,
+            snapshot.amountCredited.amount,
+            snapshot.amountCredited.currency,
+          ),
+        )
+      }
       pushCreditDestination(rows, snapshot.creditDestination)
       pushIf(rows, REVIEW_ROW_LABELS.note, snapshot.note)
       break
@@ -590,7 +646,10 @@ export function buildInboundReceiveDetailRows(
   }
 
   // Keep the timestamp as the final transaction-detail row for every deposit type.
-  if (includeWhen) pushIf(rows, REVIEW_ROW_LABELS.when, formatTransactionWhen(snapshot.whenAt))
+  if (includeWhen) {
+    const formatted = snapshot.whenAt ? formatTransactionWhen(snapshot.whenAt) : ""
+    rows.push({ label: REVIEW_ROW_LABELS.when, value: formatted || "—" })
+  }
 
   return rows
 }

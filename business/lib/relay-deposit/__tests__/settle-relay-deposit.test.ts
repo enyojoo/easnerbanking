@@ -29,6 +29,7 @@ vi.mock("@/lib/deposit-omnibus/config", () => ({
 import {
   tryCreditRelayTronDeposit,
   syncRelayDepositFromRequestId,
+  resolveRelayDepositCustomerFee,
 } from "../settle-relay-deposit"
 
 function adminMock(state: {
@@ -129,6 +130,29 @@ describe("settle-relay-deposit", () => {
       currency: "USD",
       delta: 98,
     })
+    expect(mocks.upsertLedger).toHaveBeenCalledWith(
+      admin,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          activity_type: "relay_tron_deposit",
+          fee_amount: 2,
+          posted_amount: 98,
+          source_payment_rail: "tron",
+          source_currency: "USDT",
+        }),
+      }),
+    )
+  })
+
+  it("derives customer fee from gross minus posted", () => {
+    expect(
+      resolveRelayDepositCustomerFee({
+        gross_usdt: 100,
+        posted_amount: 99,
+        relay_fee: 0.5,
+        easner_deposit_fee: 0,
+      }),
+    ).toBe(1)
   })
 
   it("returns awaiting_turnkey when relay success has fill hash but credit deferred", async () => {

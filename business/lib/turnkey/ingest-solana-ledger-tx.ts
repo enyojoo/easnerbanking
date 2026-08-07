@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Connection } from "@solana/web3.js"
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
-import { accountPubkeyAtIndex, type ParsedTx, resolvedAccountKeys } from "@/lib/turnkey/solana-parsed-tx-accounts"
+import {
+  resolveSplTransferSenderForVaultInbound,
+  tokenBalanceDeltaForVault,
+} from "@/lib/turnkey/solana-inbound-sender"
+import { type ParsedTx, resolvedAccountKeys } from "@/lib/turnkey/solana-parsed-tx-accounts"
 import { findEasetagSettlementForChainSuppression } from "@/lib/ledger/easetag-settlement"
 import { findNoahBankOnrampChainSettlementForSuppression } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { findYcFundBalanceChainSettlementForSuppression } from "@/lib/yellowcard/yc-ledger"
@@ -38,51 +42,7 @@ function errorMessage(e: unknown): string {
 /**
  * Find SPL balance change for vault owner or ATA (handles v0 txs and missing `owner` on token rows).
  */
-export function tokenBalanceDeltaForVault(
-  tx: ParsedTx,
-  mint: string,
-  ownerLower: string,
-  ataLower: string | null,
-): { delta: bigint; decimals: number } | null {
-  const pre = tx.meta?.preTokenBalances || []
-  const post = tx.meta?.postTokenBalances || []
-  const indices = new Set<number>()
-  for (const row of [...pre, ...post]) {
-    if (row.mint === mint) indices.add(row.accountIndex)
-  }
-
-  for (const accountIndex of indices) {
-    const preRow = pre.find((r) => r.accountIndex === accountIndex && r.mint === mint)
-    const postRow = post.find((r) => r.accountIndex === accountIndex && r.mint === mint)
-    const owner = String(postRow?.owner ?? preRow?.owner ?? "").toLowerCase()
-    const acct = accountPubkeyAtIndex(tx, accountIndex)?.toLowerCase() ?? ""
-
-    const matchesVault =
-      owner === ownerLower || (ataLower && (acct === ataLower || owner === ataLower))
-    if (!matchesVault) continue
-
-    const preAmt = parseAtomic(preRow?.uiTokenAmount?.amount)
-    const postAmt = parseAtomic(postRow?.uiTokenAmount?.amount)
-    const decimals = Number(postRow?.uiTokenAmount?.decimals ?? preRow?.uiTokenAmount?.decimals ?? 6)
-    const delta = postAmt - preAmt
-    if (delta !== BigInt(0)) return { delta, decimals }
-  }
-
-  // Fallback: any positive mint delta where owner matches (legacy path)
-  for (const row of post) {
-    if (row.mint !== mint) continue
-    if ((row.owner || "").toLowerCase() !== ownerLower) continue
-    const preRow = pre.find((r) => r.accountIndex === row.accountIndex && r.mint === mint)
-    const preAmt = parseAtomic(preRow?.uiTokenAmount?.amount)
-    const postAmt = parseAtomic(row.uiTokenAmount?.amount)
-    const decimals = Number(row.uiTokenAmount?.decimals ?? 6)
-    const delta = postAmt - preAmt
-    if (delta !== BigInt(0)) return { delta, decimals }
-  }
-
-  void resolvedAccountKeys
-  return null
-}
+export { tokenBalanceDeltaForVault } from "@/lib/turnkey/solana-inbound-sender"
 
 export async function ingestTurnkeySolanaTxForOwnerVault(
   admin: SupabaseClient,
@@ -177,6 +137,13 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
     return { upserts: 0, kind: "noop", reason: "easetag_settlement" }
   }
 
+  const counterpartyAddress = resolveSplTransferSenderForVaultInbound(
+    tx,
+    mint,
+    ownerLower,
+    ataLower,
+  )
+
   try {
     const result = await applyTurnkeyInboundLedgerEvent(
       admin,
@@ -202,10 +169,15 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
           source: "solana_rpc_sync",
           accountKeys: resolvedAccountKeys(tx).length,
         },
-        metadata: { source: "turnkey_chain_sync" },
+        metadata: {
+          source: "turnkey_chain_sync",
+          source_payment_rail: "solana",
+          source_currency: params.asset,
+          ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
+        },
         txHash: params.signature,
         walletAddress: params.ownerAddress,
-        counterpartyAddress: null,
+        counterpartyAddress,
         occurredAt,
         settledAt: occurredAt,
         asset: params.asset,

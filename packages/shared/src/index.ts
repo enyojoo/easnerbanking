@@ -615,6 +615,7 @@ export {
   resolveInboundReceiveDetail,
   resolveInboundReceiveNotification,
 } from "./transactions/inbound-receive-detail"
+export { formatStablecoinDepositSchemeLabel } from "./transactions/stablecoin-deposit-scheme"
 export type {
   InboundReceiveCreditDestination,
   InboundReceiveDetailRow,

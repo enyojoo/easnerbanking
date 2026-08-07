@@ -323,6 +323,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           payload: payload ?? null,
           source_type: meta?.source_type != null ? String(meta.source_type) : undefined,
           chain: row.chain != null ? String(row.chain) : undefined,
+          asset: row.asset != null ? String(row.asset) : undefined,
+          counterparty_address:
+            row.counterparty_address != null ? String(row.counterparty_address) : undefined,
           currency: row.currency != null ? String(row.currency) : undefined,
           amount: typeof row.amount === "number" ? row.amount : Number(row.amount) || null,
           deposit_review: bankDepositDetail?.depositReview ?? undefined,
@@ -345,6 +348,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           settled_currency: row.settled_currency != null ? String(row.settled_currency) : undefined,
           created_at: row.created_at != null ? String(row.created_at) : undefined,
           occurred_at: row.occurred_at != null ? String(row.occurred_at) : undefined,
+          settled_at: row.settled_at != null ? String(row.settled_at) : undefined,
           ledger_created_at:
             bankDepositDetail?.ledgerCreatedAt ??
             stablecoinDepositDetail?.ledgerCreatedAt ??

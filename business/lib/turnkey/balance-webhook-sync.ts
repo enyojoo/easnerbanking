@@ -7,6 +7,9 @@ import { turnkeyBalanceDepositProviderTransactionId } from "@/lib/turnkey/turnke
 import { resolveTurnkeyWalletScopeFromEvent } from "@/lib/turnkey/resolve-turnkey-wallet-scope"
 import { isDepositOmnibusAddress } from "@/lib/deposit-omnibus/config"
 import { handleDepositOmnibusInbound } from "@/lib/deposit-omnibus/handle-omnibus-inbound"
+import { createSolanaRpcConnection, isSolanaRpcRateLimitedError } from "@/lib/solana/rpc-connection"
+import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
+import { resolveSolanaInboundSenderFromTxHash } from "@/lib/turnkey/solana-inbound-sender"
 import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
 import { findYcCrossBorderFeeWalletRefundSuppression } from "@/lib/yellowcard/yc-ledger"
 
@@ -100,6 +103,19 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
 
   const providerTransactionId = turnkeyBalanceDepositProviderTransactionId(deposit, addressForId)
 
+  let counterpartyAddress = deposit.counterpartyAddress
+  if (!counterpartyAddress && deposit.txHash && chain === "solana") {
+    const mint = mintForStablecoinAsset(asset)
+    if (mint) {
+      counterpartyAddress = await resolveSolanaInboundSenderFromTxHash(createSolanaRpcConnection(), {
+        txHash: deposit.txHash,
+        mint,
+        ownerAddress: scope.walletAddress,
+        tokenAccountAddress: scope.tokenAccountAddress,
+      }).catch(() => null)
+    }
+  }
+
   const result = await applyTurnkeyInboundLedgerEvent(admin, {
     userId: scope.userId,
     businessId: scope.businessId,
@@ -117,10 +133,16 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     currency,
     direction: "in",
     payload: deposit.raw,
-    metadata: { source: "turnkey_balance_webhook", operation: "deposit" },
+    metadata: {
+      source: "turnkey_balance_webhook",
+      operation: "deposit",
+      source_payment_rail: chain,
+      source_currency: asset,
+      ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
+    },
     txHash: deposit.txHash,
     walletAddress: scope.walletAddress,
-    counterpartyAddress: deposit.counterpartyAddress,
+    counterpartyAddress,
     occurredAt: deposit.occurredAt,
     settledAt: deposit.settledAt,
     asset,

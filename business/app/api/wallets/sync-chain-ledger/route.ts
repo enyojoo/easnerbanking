@@ -13,6 +13,7 @@ import { syncWalletBalancesFromSolanaAtaForOwner } from "@/lib/wallet/sync-walle
 import { backfillTurnkeyOnchainTransactions } from "@/lib/turnkey/onchain-backfill"
 import { isTurnkeyBalanceWebhooksIngestEnabled } from "@/lib/turnkey/config"
 import { syncOrganicInboundDepositsForOwner } from "@/lib/turnkey/sync-organic-inbound-deposits"
+import { backfillStablecoinDepositSendersForOwner } from "@/lib/transactions/backfill-stablecoin-deposit-sender"
 
 export const runtime = "nodejs"
 
@@ -45,11 +46,16 @@ async function runOwnerLedgerSync(
       noahHashPrime,
       noahReconcile,
       relayReconcile,
+      senderBackfill: { scanned: 0, updated: 0, skipped: 0, failures: [] },
       chainIngest: { skipped: true, reason: "cooldown_rpc_conservation" },
       result: null,
       organicInbound: null,
     }
   }
+
+  const senderBackfill = await backfillStablecoinDepositSendersForOwner(admin, ledgerScope, {
+    limit: 12,
+  }).catch(() => ({ scanned: 0, updated: 0, skipped: 0, failures: [] as { id: string; reason?: string }[] }))
 
   if (mode === "heavy") {
     const result = await backfillTurnkeyOnchainTransactions(admin, {
@@ -64,6 +70,7 @@ async function runOwnerLedgerSync(
       noahHashPrime,
       noahReconcile,
       relayReconcile,
+      senderBackfill,
       result,
       organicInbound: null,
       chainIngest: { mode: "heavy" },
@@ -76,6 +83,7 @@ async function runOwnerLedgerSync(
       noahHashPrime,
       noahReconcile,
       relayReconcile,
+      senderBackfill,
       result: null,
       organicInbound: { skipped: true, reason: "balance_webhooks_primary" },
       chainIngest: { mode: "organic_ata_skipped" },
@@ -96,6 +104,7 @@ async function runOwnerLedgerSync(
     noahHashPrime,
     noahReconcile,
     relayReconcile,
+    senderBackfill,
     result: null,
     organicInbound,
     chainIngest: { mode: "organic_ata" },

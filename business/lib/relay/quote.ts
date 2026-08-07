@@ -13,6 +13,7 @@ export type RelayQuoteParams = {
   useDepositAddress?: boolean
   slippageTolerance?: string
   referrer?: string
+  refundTo?: string
 }
 
 export function buildRelayQuoteRequest(input: RelayQuoteParams): RelayQuoteV2Request {
@@ -28,6 +29,7 @@ export function buildRelayQuoteRequest(input: RelayQuoteParams): RelayQuoteV2Req
     useDepositAddress: input.useDepositAddress,
     slippageTolerance: input.slippageTolerance,
     referrer: input.referrer,
+    refundTo: input.refundTo,
     ...relayQuoteFeeParams(),
   }
 }
@@ -94,6 +96,8 @@ export function extractRelaySolanaUnsignedTx(quote: RelayQuoteV2Response): strin
 /** Open deposit address from quote (Tron inbound provision). */
 export function extractRelayDepositAddress(quote: RelayQuoteV2Response): string | undefined {
   for (const step of quote.steps ?? []) {
+    const stepLevel = String((step as { depositAddress?: string }).depositAddress ?? "").trim()
+    if (stepLevel) return stepLevel
     for (const item of step.items ?? []) {
       const data = item.data
       if (!data || typeof data !== "object") continue

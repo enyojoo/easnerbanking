@@ -79,7 +79,7 @@ export async function reconcileRelayWalletSendByRequestId(
 
   const mapped = mapRelayRequestStatusV3(String(request.status))
   const fillHashes = extractRelayOutTxHashesV3(request)
-  const txHash = fillHashes[0] ?? String(row.tx_hash || "").trim() || null
+  const txHash = fillHashes[0] ?? (String(row.tx_hash || "").trim() || null)
   const userId = String(row.user_id || "")
   const businessId = row.business_id != null ? String(row.business_id) : null
   const occurredAt = new Date().toISOString()

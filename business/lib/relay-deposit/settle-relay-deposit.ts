@@ -32,6 +32,7 @@ export type RelayDepositRow = {
   status: string
   turnkey_tx_hash: string | null
   ledger_tx_id: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 const AMOUNT_MATCH_EPSILON = 0.02
@@ -46,6 +47,24 @@ function applyOwnerScope<T extends { eq: (col: string, val: string) => T; is: (c
 
 function roundMoney(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000
+}
+
+/** Total customer-visible fee (bridge + Easner deposit fee) for transaction detail rows. */
+export function resolveRelayDepositCustomerFee(row: {
+  gross_usdt?: number | null
+  posted_amount?: number | null
+  relay_fee?: number | null
+  easner_deposit_fee?: number | null
+}): number {
+  const gross = Number(row.gross_usdt ?? 0)
+  const posted = Number(row.posted_amount ?? 0)
+  if (Number.isFinite(gross) && gross > 0 && Number.isFinite(posted) && gross > posted) {
+    return roundMoney(gross - posted)
+  }
+  const relayFee = Number(row.relay_fee ?? 0)
+  const easnerFee = Number(row.easner_deposit_fee ?? 0)
+  const combined = (Number.isFinite(relayFee) ? relayFee : 0) + (Number.isFinite(easnerFee) ? easnerFee : 0)
+  return combined > 0 ? roundMoney(combined) : 0
 }
 
 function parseDepositAmounts(request: RelayRequestV3): {
@@ -68,6 +87,14 @@ function parseDepositAmounts(request: RelayRequestV3): {
   const postedAmount = roundMoney(Math.max(0, onChainUsdc - easnerDepositFee))
   const fillHashes = extractRelayOutTxHashesV3(request)
   return { grossUsdt, onChainUsdc, relayFee, easnerDepositFee, postedAmount, fillHashes }
+}
+
+function resolveRelayTronDepositSender(request: RelayRequestV3): string | null {
+  const sender = String(request.sender ?? "").trim()
+  if (sender) return sender
+  const depositor = String(request.depositAddress?.depositor ?? "").trim()
+  if (depositor) return depositor
+  return null
 }
 
 function depositStatusFromRelay(mapped: "pending" | "settled" | "failed", hasLedgerCredit: boolean): string {
@@ -130,6 +157,7 @@ export async function upsertRelayDepositFromRequestV3(
   const mapped = mapRelayRequestStatusV3(String(input.request.status || ""))
   const amounts = parseDepositAmounts(input.request)
   const turnkeyTxHash = amounts.fillHashes[0] ?? null
+  const senderTronAddress = resolveRelayTronDepositSender(input.request)
 
   const { data: existing } = await admin
     .from("relay_deposits")
@@ -161,7 +189,14 @@ export async function upsertRelayDepositFromRequestV3(
         posted_amount: amounts.postedAmount,
         status,
         turnkey_tx_hash: turnkeyTxHash ?? existing?.turnkey_tx_hash ?? null,
-        metadata: input.webhookPayload ? { webhook: input.webhookPayload } : undefined,
+        metadata: input.webhookPayload
+          ? {
+              webhook: input.webhookPayload,
+              ...(senderTronAddress ? { sender_tron_address: senderTronAddress } : {}),
+            }
+          : senderTronAddress
+            ? { sender_tron_address: senderTronAddress }
+            : undefined,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "relay_request_id" },
@@ -208,6 +243,15 @@ export async function tryCreditRelayTronDeposit(
   }
 
   const occurredAt = new Date().toISOString()
+  const customerFee = resolveRelayDepositCustomerFee(row)
+  const depositMeta =
+    row.metadata && typeof row.metadata === "object"
+      ? (row.metadata as Record<string, unknown>)
+      : {}
+  const senderTronAddress =
+    typeof depositMeta.sender_tron_address === "string"
+      ? depositMeta.sender_tron_address.trim()
+      : ""
   const upsert = await upsertLedgerTransaction(admin, {
     userId: scope.userId,
     businessId: scope.businessId,
@@ -222,14 +266,21 @@ export async function tryCreditRelayTronDeposit(
     txHash,
     asset: "USDC",
     chain: "Solana",
+    counterpartyAddress: senderTronAddress || null,
     metadata: {
       activity_type: "relay_tron_deposit",
+      source_type: "relay_tron_deposit",
+      source_payment_rail: "tron",
+      source_currency: "USDT",
       tron_address: row.tron_address,
       gross_usdt: row.gross_usdt,
       relay_fee: row.relay_fee,
       on_chain_usdc: row.on_chain_usdc,
       easner_deposit_fee: row.easner_deposit_fee,
+      fee_amount: customerFee > 0 ? customerFee : undefined,
       posted_amount: postedAmount,
+      posted_currency: "USD",
+      ...(senderTronAddress ? { sender_tron_address: senderTronAddress, from_address: senderTronAddress } : {}),
       relay_request_id: row.relay_request_id,
       balance_delta_applied: true,
     },

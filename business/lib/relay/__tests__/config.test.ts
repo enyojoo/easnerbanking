@@ -2,7 +2,9 @@ import { describe, expect, it, afterEach } from "vitest"
 import {
   getRelayBridgeMinSourceUsdc,
   relayQuoteFeeParams,
+  relayRateProbeTronAddress,
   requireCryptoRatesProbeSolAddress,
+  requireRelayTronPlatformAddress,
   resolveCryptoRatesProbeSolAddress,
 } from "../config"
 
@@ -32,5 +34,14 @@ describe("relay config", () => {
     process.env.DEPOSIT_OMNIBUS_SOLANA_ADDRESS_USD = "OmnibusProbe111"
     expect(resolveCryptoRatesProbeSolAddress()).toBe("OmnibusProbe111")
     expect(requireCryptoRatesProbeSolAddress()).toBe("OmnibusProbe111")
+  })
+
+  it("requires RELAY_TRON_PLATFORM_ADDRESS when unset", () => {
+    delete process.env.RELAY_TRON_PLATFORM_ADDRESS
+    expect(() => requireRelayTronPlatformAddress()).toThrow(/RELAY_TRON_PLATFORM_ADDRESS/)
+  })
+
+  it("uses hardcoded valid Tron probe recipient", () => {
+    expect(relayRateProbeTronAddress()).toMatch(/^T[A-Za-z0-9]{33}$/)
   })
 })

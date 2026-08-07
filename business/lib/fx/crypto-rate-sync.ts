@@ -2,7 +2,7 @@ import { applyCryptoCustomerRate, parseWalletSendMarginFromEnv, walletSendMargin
 import { createClient } from "@supabase/supabase-js"
 import { relayQuote } from "@/lib/relay/quote"
 import { resolveWalletSendToken, sourceSolVaultToken } from "@/lib/relay/token-map"
-import { isRelayConfigured, requireCryptoRatesProbeSolAddress } from "@/lib/relay/config"
+import { isRelayConfigured, relayRateProbeTronAddress, requireCryptoRatesProbeSolAddress } from "@/lib/relay/config"
 import { WALLET_ASSET_NETWORKS } from "@/lib/wallet-asset-networks"
 import { isDirectTurnkeyCorridor } from "@/lib/wallet-send/routing"
 
@@ -27,7 +27,7 @@ function probeSolAddress(): string {
 }
 
 function dummyToAddress(asset: string, network: string): string {
-  if (network === "Tron") return "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
+  if (network === "Tron") return relayRateProbeTronAddress()
   if (network === "Solana") return "11111111111111111111111111111112"
   return "0x0000000000000000000000000000000000000001"
 }

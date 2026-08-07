@@ -2,25 +2,12 @@ import {
   buildStablecoinDepositLifecycle,
   buildTransactionTimingRows,
   formatMaskedSenderDisplay,
+  formatStablecoinDepositSchemeLabel,
   resolveTransactionTimingAnchors,
   type StablecoinDepositLifecycleStep,
   type TransactionTimingRow,
 } from "@easner/shared"
 import { resolveLedgerWhenAtFromRow } from "@/lib/ledger/ledger-occurred-at"
-
-const CHAIN_ABBREVIATIONS: Record<string, string> = {
-  solana: "SOL",
-  ethereum: "ETH",
-  polygon: "MATIC",
-  polygonpos: "MATIC",
-  base: "BASE",
-  arbitrum: "ARB",
-}
-
-function abbreviateChain(chain: string): string {
-  const key = chain.trim().toLowerCase()
-  return CHAIN_ABBREVIATIONS[key] || key.toUpperCase()
-}
 
 /** True for genuine inbound stablecoin (liquidation address) deposits — not Easetag, bank onramp, or payouts. */
 export function isStablecoinDepositPayInRow(row: Record<string, unknown>): boolean {
@@ -30,6 +17,12 @@ export function isStablecoinDepositPayInRow(row: Record<string, unknown>): boole
   if (String(meta.source ?? "").toLowerCase() === "easetag_p2p") return false
   if (String(meta.flow ?? "").toLowerCase() === "bank_onramp") return false
   const provider = String(row.provider ?? "").toLowerCase()
+  if (
+    provider === "relay" &&
+    String(meta.activity_type ?? "").trim().toLowerCase() === "relay_tron_deposit"
+  ) {
+    return true
+  }
   const sourceType = String(meta.source_type ?? "").toLowerCase()
   if (sourceType === "liquidation_address") return true
   if (provider === "turnkey" && (row.chain != null || row.asset != null)) return true
@@ -59,16 +52,6 @@ function pickIso(...candidates: unknown[]): string | null {
   return null
 }
 
-function deriveSchemeLabel(row: Record<string, unknown>, meta: Record<string, unknown>): string {
-  const rail = String(meta.source_payment_rail ?? meta.payment_rail ?? row.chain ?? "solana")
-  const railDisplay = abbreviateChain(rail)
-  const sourceCurrency = String(
-    meta.source_currency ?? row.currency ?? "",
-  ).toUpperCase()
-  const stablecoin = sourceCurrency === "EUR" || sourceCurrency === "EURC" ? "EURC" : "USDC"
-  return `${stablecoin} on ${railDisplay}`
-}
-
 export function resolveStablecoinDepositPayInDetail(
   row: Record<string, unknown>,
 ): ResolvedStablecoinDepositPayIn | null {
@@ -95,7 +78,11 @@ export function resolveStablecoinDepositPayInDetail(
       ? String(row.counterparty_address)
       : typeof meta.counterparty_address === "string"
         ? meta.counterparty_address
-        : null
+        : typeof meta.from_address === "string"
+          ? meta.from_address
+          : typeof meta.sender_tron_address === "string"
+            ? meta.sender_tron_address
+            : null
   const senderDisplay =
     formatMaskedSenderDisplay({ senderName, counterpartyAddress }) || null
 
@@ -134,10 +121,17 @@ export function resolveStablecoinDepositPayInDetail(
     showTerminalDuration: false,
   })
 
-  const feeAmount =
+  let feeAmount =
     typeof meta.fee_amount === "number" && Number.isFinite(meta.fee_amount)
       ? meta.fee_amount
       : 0
+  if (feeAmount <= 0) {
+    const gross =
+      typeof meta.gross_usdt === "number" && Number.isFinite(meta.gross_usdt) ? meta.gross_usdt : 0
+    if (gross > postedAmount && postedAmount > 0) {
+      feeAmount = Math.round((gross - postedAmount) * 100) / 100
+    }
+  }
 
   return {
     lifecycle,
@@ -145,7 +139,12 @@ export function resolveStablecoinDepositPayInDetail(
     postedCurrency,
     feeAmount,
     senderDisplay,
-    schemeLabel: deriveSchemeLabel(row, meta),
+    schemeLabel: formatStablecoinDepositSchemeLabel({
+      sourceCurrency: meta.source_currency ?? row.asset ?? row.currency,
+      paymentRail: meta.source_payment_rail ?? meta.payment_rail ?? row.chain,
+      chain: row.chain,
+      asset: row.asset,
+    }),
     sourcePaymentRail: String(meta.source_payment_rail ?? meta.payment_rail ?? row.chain ?? "solana"),
     transactionTiming,
     ledgerCreatedAt: createdAt,
