@@ -47,7 +47,6 @@ export function receiveStablecoinCreditCurrency(asset: string): "USD" | "EUR" {
 
 /**
  * Subtitle for receive stablecoin method rows (cash-row parity).
- * Fee-bearing rails (e.g. USDT on Tron) avoid partner jargon — plain “deposit fees”.
  */
 export function receiveStablecoinDepositSubtitle(input: {
   asset: string
@@ -59,10 +58,6 @@ export function receiveStablecoinDepositSubtitle(input: {
   if (status === "unavailable") return "Unavailable"
 
   const asset = resolveStablecoinAsset(input.asset)
-  const network = resolveNetworkLabel(String(input.network ?? ""))
-  if (asset === "USDT" || network === "Tron") {
-    return "Deposit fees apply and are deducted."
-  }
   const credit = receiveStablecoinCreditCurrency(asset)
   return `Deposit ${asset} to credit your ${credit} Balance`
 }

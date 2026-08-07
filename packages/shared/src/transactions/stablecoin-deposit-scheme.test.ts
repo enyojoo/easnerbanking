@@ -41,10 +41,10 @@ describe("receiveStablecoinDepositSubtitle", () => {
     ).toBe("Deposit USDC to credit your USD Balance")
   })
 
-  it("uses plain deposit-fee copy for USDT (no bridge jargon)", () => {
+  it("mirrors cash deposit copy for USDT", () => {
     expect(
       receiveStablecoinDepositSubtitle({ asset: "USDT", network: "Tron" }),
-    ).toBe("Deposit fees apply and are deducted.")
+    ).toBe("Deposit USDT to credit your USD Balance")
   })
 
   it("returns status copy while provisioning", () => {
