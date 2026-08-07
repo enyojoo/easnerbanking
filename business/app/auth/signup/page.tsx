@@ -64,8 +64,6 @@ export default function SignupPage() {
     }
   }, [invitePreview])
 
-  }, [invitePreview, name])
-
   const countryPolicy = useAllowedCountryCodes("signup")
   const countriesForPicker = useMemo(
     () => filterCountriesByPolicy(countries, countryPolicy.unrestricted ? null : countryPolicy.codes),
