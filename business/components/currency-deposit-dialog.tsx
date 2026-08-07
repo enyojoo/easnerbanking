@@ -230,7 +230,26 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const [selectedStablecoinMethod, setSelectedStablecoinMethod] = useState<StablecoinReceiveMethod | null>(null)
 
   useEffect(() => {
-    if (!dialogOpen || account.currency !== "USD") return
+    if (!dialogOpen) {
+      setSelectedStablecoinMethod(null)
+      return
+    }
+    // Always seed Turnkey Solana method; merge Relay USDT when USD + enabled.
+    const base: StablecoinReceiveMethod[] = []
+    if (stablecoinAccount?.address) {
+      base.push({
+        id: account.currency === "EUR" ? "eurc-solana" : "usdc-solana",
+        asset: account.currency === "EUR" ? "EURC" : "USDC",
+        network: "Solana",
+        status: "active",
+        address: stablecoinAccount.address,
+      })
+    }
+    if (account.currency !== "USD") {
+      setRelayDepositMethods(base)
+      return
+    }
+
     let cancelled = false
     void (async () => {
       try {
@@ -245,38 +264,31 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             estimatedFeeBps?: number | null
           }>
         }
-        if (cancelled || !res.ok || !data.enabled) return
-        const methods: StablecoinReceiveMethod[] = []
-        if (stablecoinAccount?.address) {
-          methods.push({
-            id: "usdc-solana",
-            asset: "USDC",
-            network: "Solana",
-            status: "active",
-            address: stablecoinAccount.address,
-          })
-        }
-        for (const row of data.addresses ?? []) {
-          methods.push({
-            id: `relay-${row.asset}-${row.network}`.toLowerCase(),
-            asset: row.asset,
-            network: row.network,
-            status: "active",
-            address: row.address,
-            estimatedFeeBps: row.estimatedFeeBps ?? null,
-          })
-        }
-        if (data.status === "provisioning" && methods.length <= 1) {
-          methods.push({
-            id: "usdt-tron-provisioning",
-            asset: "USDT",
-            network: "Tron",
-            status: "provisioning",
-          })
+        if (cancelled) return
+        const methods = [...base]
+        if (res.ok && data.enabled) {
+          for (const row of data.addresses ?? []) {
+            methods.push({
+              id: `relay-${row.asset}-${row.network}`.toLowerCase(),
+              asset: row.asset,
+              network: row.network,
+              status: "active",
+              address: row.address,
+              estimatedFeeBps: row.estimatedFeeBps ?? null,
+            })
+          }
+          if (data.status === "provisioning" && !methods.some((m) => m.asset === "USDT")) {
+            methods.push({
+              id: "usdt-tron-provisioning",
+              asset: "USDT",
+              network: "Tron",
+              status: "provisioning",
+            })
+          }
         }
         setRelayDepositMethods(methods)
       } catch {
-        // ignore — fall back to single Solana address
+        if (!cancelled) setRelayDepositMethods(base)
       }
     })()
     return () => {
@@ -284,9 +296,24 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     }
   }, [dialogOpen, account.currency, stablecoinAccount?.address])
 
-  const activeStablecoinMethod =
-    selectedStablecoinMethod ??
-    (relayDepositMethods.length === 1 ? relayDepositMethods[0] : null)
+  const stablecoinMethods =
+    relayDepositMethods.length > 0
+      ? relayDepositMethods
+      : stablecoinAccount?.address
+        ? [
+            {
+              id: account.currency === "EUR" ? "eurc-solana" : "usdc-solana",
+              asset: account.currency === "EUR" ? "EURC" : "USDC",
+              network: "Solana",
+              status: "active" as const,
+              address: stablecoinAccount.address,
+            },
+          ]
+        : []
+
+  const activeStablecoinMethod = selectedStablecoinMethod
+  const showStablecoinMethodList = hasStablecoin && !activeStablecoinMethod
+  const showStablecoinDetail = hasStablecoin && Boolean(activeStablecoinMethod?.address)
 
   const effectiveResidence =
     residenceCountry || String(countryCode ?? "").trim().toUpperCase() || null
@@ -395,7 +422,10 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
   const handleDialogOpenChange = (open: boolean) => {
     setDialogOpen(open)
-    if (!open) resetCashView()
+    if (!open) {
+      resetCashView()
+      setSelectedStablecoinMethod(null)
+    }
   }
 
   const isNgn = account.currency === "NGN"
@@ -440,16 +470,23 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
           ]
             .filter(Boolean)
             .join("\n")
-        : type === "local" && effectiveResidence
+          : type === "local" && effectiveResidence
           ? `Local ${localPayInCurrency} deposit to USD balance`
-          : stablecoinAccount
+          : activeStablecoinMethod?.address
             ? [
-                `Network: SOL • Solana`,
-                `${stablecoinAccount.stablecoin} Address: ${stablecoinAccount.address}`,
+                `Network: ${activeStablecoinMethod.network === "Solana" ? "SOL" : activeStablecoinMethod.network} • ${activeStablecoinMethod.network}`,
+                `${activeStablecoinMethod.asset} Address: ${activeStablecoinMethod.address}`,
               ]
                 .filter(Boolean)
                 .join("\n")
-            : ""
+            : stablecoinAccount
+              ? [
+                  `Network: SOL • Solana`,
+                  `${stablecoinAccount.stablecoin} Address: ${stablecoinAccount.address}`,
+                ]
+                  .filter(Boolean)
+                  .join("\n")
+              : ""
 
     if (navigator.share) {
       try {
@@ -647,96 +684,98 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             ) : null}
 
             <TabsContent value="stablecoin" className="space-y-4 mt-4">
-              {hasStablecoin && stablecoinAccount && relayDepositMethods.length > 1 && !activeStablecoinMethod ? (
+              {showStablecoinDetail ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 -ml-2 w-fit"
+                  onClick={() => setSelectedStablecoinMethod(null)}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+              ) : null}
+
+              {showStablecoinMethodList ? (
                 <ReceiveStablecoinMethodList
-                  methods={relayDepositMethods}
-                  onSelect={(method) => setSelectedStablecoinMethod(method)}
+                  methods={stablecoinMethods}
+                  onSelect={(method) => {
+                    if (method.status !== "active" || !method.address) return
+                    setSelectedStablecoinMethod(method)
+                  }}
                 />
-              ) : hasStablecoin && stablecoinAccount ? (
+              ) : showStablecoinDetail && activeStablecoinMethod ? (
                 <>
-                  {relayDepositMethods.length > 1 ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="px-0"
-                      onClick={() => setSelectedStablecoinMethod(null)}
-                    >
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      All stablecoin methods
-                    </Button>
-                  ) : null}
                   {(() => {
-                    const detail = activeStablecoinMethod?.address
-                      ? {
-                          stablecoin: activeStablecoinMethod.asset,
-                          chain: activeStablecoinMethod.network,
-                          address: activeStablecoinMethod.address,
-                          estimatedFeeBps: activeStablecoinMethod.estimatedFeeBps,
-                        }
-                      : {
-                          stablecoin: stablecoinAccount.stablecoin,
-                          chain: stablecoinAccount.chain,
-                          address: stablecoinAccount.address,
-                          estimatedFeeBps: null as number | null,
-                        }
+                    const detail = {
+                      stablecoin: activeStablecoinMethod.asset,
+                      chain: activeStablecoinMethod.network,
+                      address: activeStablecoinMethod.address!,
+                      estimatedFeeBps: activeStablecoinMethod.estimatedFeeBps ?? null,
+                    }
                     return (
                       <>
-                  <div className="flex flex-col items-center">
-                    <div className="p-4 bg-white rounded-xl border">
-                      <QRCodeSVG value={detail.address} size={200} level="M" />
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Scan to send {detail.stablecoin} on {detail.chain}
-                    </p>
-                  </div>
+                        <div className="flex flex-col items-center">
+                          <div className="rounded-xl border bg-white p-4">
+                            <QRCodeSVG value={detail.address} size={200} level="M" />
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Scan to send {detail.stablecoin} on {detail.chain}
+                          </p>
+                        </div>
 
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Network</p>
-                    <div className="p-3 bg-muted rounded-lg">
-                      <span className="text-sm font-medium">
-                        {detail.chain === "Solana"
-                          ? "SOL"
-                          : detail.chain === "Ethereum"
-                            ? "ETH"
-                            : detail.chain}
-                      </span>
-                      <span className="text-sm text-muted-foreground"> • </span>
-                      <span className="text-sm text-muted-foreground">{detail.chain}</span>
-                    </div>
-                  </div>
+                        <div>
+                          <p className="mb-1 text-sm text-muted-foreground">Network</p>
+                          <div className="rounded-lg bg-muted p-3">
+                            <span className="text-sm font-medium">
+                              {detail.chain === "Solana"
+                                ? "SOL"
+                                : detail.chain === "Ethereum"
+                                  ? "ETH"
+                                  : detail.chain === "Tron"
+                                    ? "TRX"
+                                    : detail.chain}
+                            </span>
+                            <span className="text-sm text-muted-foreground"> • </span>
+                            <span className="text-sm text-muted-foreground">{detail.chain}</span>
+                          </div>
+                        </div>
 
-                  <CopyableField
-                    label="Address"
-                    value={detail.address}
-                    copiedField={copiedField}
-                    fieldId={`stable-addr-${account.id}`}
-                    onCopy={onCopy}
-                  />
+                        <CopyableField
+                          label={`${detail.stablecoin} Address`}
+                          value={detail.address}
+                          copiedField={copiedField}
+                          fieldId={`stable-addr-${account.id}`}
+                          onCopy={onCopy}
+                        />
 
-                  {detail.estimatedFeeBps != null ? (
-                    <p className="text-xs text-muted-foreground">
-                      Estimated bridge fee: ~{(detail.estimatedFeeBps / 100).toFixed(2)}%
-                    </p>
-                  ) : null}
+                        {detail.estimatedFeeBps != null ? (
+                          <p className="text-xs text-muted-foreground">
+                            Estimated bridge fee: ~{(detail.estimatedFeeBps / 100).toFixed(2)}%
+                            <br />
+                            Final fee is calculated when your deposit settles.
+                          </p>
+                        ) : null}
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full gap-2"
-                    onClick={() => handleShare("stablecoin")}
-                  >
-                    <Share2 className="h-4 w-4" />
-                    Share {detail.stablecoin} Details
-                  </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-2"
+                          onClick={() => handleShare("stablecoin")}
+                        >
+                          <Share2 className="h-4 w-4" />
+                          Share {detail.stablecoin} Details
+                        </Button>
 
-                  <div className="pt-4 border-t">
-                    <p className="text-sm font-medium mb-2">Payment Instructions</p>
-                    <PaymentInstructions
-                      currency={account.currency}
-                      type="stablecoin"
-                      stablecoinToken={detail.stablecoin as "USDC" | "USDT"}
-                    />
-                  </div>
+                        <div className="border-t pt-4">
+                          <p className="mb-2 text-sm font-medium">Payment Instructions</p>
+                          <PaymentInstructions
+                            currency={account.currency}
+                            type="stablecoin"
+                            stablecoinToken={detail.stablecoin as "USDC" | "USDT"}
+                          />
+                        </div>
                       </>
                     )
                   })()}
