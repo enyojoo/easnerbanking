@@ -19,6 +19,24 @@ export function relayDepositRecipientFromVault(vaultAddress: string): string {
   return String(vaultAddress || "").trim()
 }
 
+/** True when stored recipient is the SPL ATA (or otherwise not the vault pubkey). */
+export function needsRelayDepositRecipientReprovision(
+  storedRecipient: string,
+  vaultAddress: string,
+  asset: "USDC" | "EURC" = "USDC",
+): boolean {
+  const stored = String(storedRecipient || "").trim()
+  const vault = relayDepositRecipientFromVault(vaultAddress)
+  if (!vault) return false
+  if (!stored) return true
+  if (stored === vault) return false
+
+  const ata = deriveStablecoinAssociatedTokenAddress(vault, asset)
+  if (ata && stored === ata) return true
+
+  return stored !== vault
+}
+
 function matchesStoredRecipient(
   stored: string,
   vaultAddress: string,

@@ -60,6 +60,37 @@ export async function provisionRelayDepositAddress(
     }
   }
 
+  const { data: existingRow } = await admin
+    .from("relay_deposit_addresses")
+    .select("tron_address, relay_request_id, recipient_vault_ata, metadata")
+    .eq("wallet_owner_id", walletOwnerId)
+    .eq("route", ROUTE)
+    .maybeSingle()
+
+  const existingMeta =
+    existingRow?.metadata && typeof existingRow.metadata === "object"
+      ? (existingRow.metadata as Record<string, unknown>)
+      : {}
+  const retiredTronAddresses = Array.isArray(existingMeta.retired_tron_addresses)
+    ? (existingMeta.retired_tron_addresses as Array<Record<string, unknown>>)
+    : []
+  const priorTron = String(existingRow?.tron_address ?? "").trim()
+  const priorRecipient = String(existingRow?.recipient_vault_ata ?? "").trim()
+  if (
+    priorTron &&
+    priorTron !== tronAddress &&
+    priorRecipient &&
+    priorRecipient !== recipientVaultAddress
+  ) {
+    retiredTronAddresses.push({
+      tron_address: priorTron,
+      relay_request_id: existingRow?.relay_request_id ?? null,
+      recipient: priorRecipient,
+      retired_at: new Date().toISOString(),
+      reason: "recipient_vault_reprovision",
+    })
+  }
+
   await admin.from("relay_deposit_addresses").upsert(
     {
       wallet_owner_id: walletOwnerId,
@@ -69,6 +100,11 @@ export async function provisionRelayDepositAddress(
       relay_request_id: relayRequestId ?? null,
       estimated_fee_bps: estimatedFeeBps,
       status: "active",
+      metadata: {
+        ...existingMeta,
+        recipient_kind: "vault_pubkey",
+        ...(retiredTronAddresses.length ? { retired_tron_addresses: retiredTronAddresses } : {}),
+      },
       updated_at: new Date().toISOString(),
     },
     { onConflict: "wallet_owner_id,route" },

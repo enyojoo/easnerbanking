@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isRelayTronInboundEnabled } from "@/lib/relay/config"
 import { provisionRelayDepositAddress } from "./provision-address"
-import { relayDepositRecipientFromVault } from "./recipient"
+import { needsRelayDepositRecipientReprovision, relayDepositRecipientFromVault } from "./recipient"
 
 const MAX_ATTEMPTS = 5
 const BACKOFF_MS = 5000
@@ -24,9 +24,14 @@ export async function enqueueRelayDepositProvisionJob(
     .eq("route", ROUTE)
     .maybeSingle()
 
-  if (existing?.status === "active") {
-    const stored = String(existing.recipient_vault_ata ?? "").trim()
-    if (stored === recipientVaultAddress) return
+  if (
+    existing?.status === "active" &&
+    !needsRelayDepositRecipientReprovision(
+      String(existing.recipient_vault_ata ?? ""),
+      recipientVaultAddress,
+    )
+  ) {
+    return
   }
 
   const { data: pendingJob } = await admin

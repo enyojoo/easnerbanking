@@ -1,14 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
 import { isRelayTronInboundEnabled, requireRelayTronPlatformAddress } from "@/lib/relay/config"
 import { enqueueRelayDepositProvisionJob, processRelayDepositProvisionJobs } from "./provision-jobs"
-import { relayDepositRecipientFromVault } from "./recipient"
+import { needsRelayDepositRecipientReprovision } from "./recipient"
 
 const ROUTE = "tron_usdt_to_sol_usdc"
 
 export type BackfillRelayDepositAddressesResult = {
   candidates: number
   alreadyActive: number
+  legacyReprovision: number
   missingAta: number
   enqueued: number
   skipped: number
@@ -39,6 +39,7 @@ export async function backfillRelayDepositAddresses(
   const result: BackfillRelayDepositAddressesResult = {
     candidates: 0,
     alreadyActive: 0,
+    legacyReprovision: 0,
     missingAta: 0,
     enqueued: 0,
     skipped: 0,
@@ -87,11 +88,18 @@ export async function backfillRelayDepositAddresses(
 
   for (const vault of vaults ?? []) {
     const walletOwnerId = String(vault.wallet_owner_id ?? "").trim()
+    const vaultAddress = String(vault.address ?? "").trim()
     if (!walletOwnerId) {
       result.skipped += 1
       continue
     }
     result.candidates += 1
+
+    if (!vaultAddress) {
+      result.missingAta += 1
+      result.failures.push({ walletOwnerId, reason: "missing_vault_address" })
+      continue
+    }
 
     if (activeOwnerIds.has(walletOwnerId)) {
       const { data: existingRow } = await admin
@@ -102,25 +110,11 @@ export async function backfillRelayDepositAddresses(
         .eq("status", "active")
         .maybeSingle()
       const stored = String(existingRow?.recipient_vault_ata ?? "").trim()
-      const expectedVault = relayDepositRecipientFromVault(vaultAddress)
-      const derivedAta = deriveStablecoinAssociatedTokenAddress(vaultAddress, "USDC") || ""
-      if (stored === expectedVault) {
+      if (!needsRelayDepositRecipientReprovision(stored, vaultAddress)) {
         result.alreadyActive += 1
         continue
       }
-      if (stored === derivedAta) {
-        // Legacy row provisioned with SPL ATA as Relay recipient — re-provision with vault.
-      } else {
-        result.alreadyActive += 1
-        continue
-      }
-    }
-
-    const vaultAddress = String(vault.address ?? "").trim()
-    if (!vaultAddress) {
-      result.missingAta += 1
-      result.failures.push({ walletOwnerId, reason: "missing_vault_address" })
-      continue
+      result.legacyReprovision += 1
     }
 
     if (dryRun) {
