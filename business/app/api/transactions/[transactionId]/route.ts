@@ -41,6 +41,7 @@ import {
   deriveEasnerInboundRemitterDisplayName,
   formatTransactionDetailHeroTitle,
   isEasnerProductReceiveTitle,
+  isRelayTronDepositMetadata,
   toEasnerTransactionPrimaryLabel,
   toEasnerTransactionProductCategory,
   resolveLedgerWhenAt,
@@ -181,12 +182,13 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
   const dirRaw = String(row.direction ?? "").toLowerCase()
   const st = String(row.status ?? "").toLowerCase()
   const provider = String(row.provider ?? "noah").toLowerCase()
+  const isRelayTronDeposit = isRelayTronDepositMetadata(meta)
   const created = ledgerWhenAtFromRow(row)
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const sourceType =
     isEasetagP2p
       ? "easetag_p2p"
-      : provider === "turnkey"
+      : provider === "turnkey" || isRelayTronDeposit
         ? "liquidation_address"
         : String(meta?.source_type ?? meta?.collection_channel ?? "virtual_account")
   const referenceFromMeta =
@@ -243,6 +245,7 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
         : base.currency
   return {
     ...base,
+    provider: String(row.provider ?? "noah"),
     transaction_product,
     sender_display_name,
     noah_transaction_id: easnerId || undefined,
@@ -274,7 +277,11 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
       asset: row.asset ?? null,
       chain: row.chain ?? null,
     },
-    ...(isEasetagP2p ? { display_hero_title: base.name } : {}),
+    ...(isEasetagP2p
+      ? { display_hero_title: base.name }
+      : isRelayTronDeposit || isStablecoinDepositPayInRow(row)
+        ? { display_hero_title: "Stablecoin Deposit" }
+        : {}),
   }
 }
 

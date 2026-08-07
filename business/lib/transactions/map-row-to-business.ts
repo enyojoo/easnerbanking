@@ -490,6 +490,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           }
         : stablecoinDepositDetail
         ? {
+            displayHeroTitle: "Stablecoin Deposit",
             lifecycle: stablecoinDepositDetail.lifecycle,
             transactionTiming: stablecoinDepositDetail.transactionTiming,
             postedAmount: stablecoinDepositDetail.postedAmount || undefined,

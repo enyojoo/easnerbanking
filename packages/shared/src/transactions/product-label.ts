@@ -19,6 +19,7 @@ import {
   isVerificationDepositMetadata,
 } from "./verification-deposit"
 import { isStripeInvoiceSettlementMetadata } from "./stripe-invoice-settlement-lifecycle"
+import { isRelayTronDepositMetadata } from "./relay-tron-deposit"
 
 export type EasnerLedgerDirection = "in" | "out"
 
@@ -179,8 +180,10 @@ export function toEasnerTransactionProductCategory(input: {
   const isStablecoin =
     !isWalletSend &&
     (provider === "turnkey" ||
+      provider === "relay" ||
       collectionChannel === "autopayout" ||
       (direction === "in" && String(meta?.source_type ?? "").toLowerCase() === "liquidation_address") ||
+      (direction === "in" && isRelayTronDepositMetadata(meta)) ||
       (direction === "in" && isNoahPayloadCryptoInbound(input.payload ?? undefined)))
 
   if (isStablecoin) {
@@ -240,8 +243,10 @@ export function toEasnerTransactionPrimaryLabel(input: {
   const isStablecoin =
     !isWalletSend &&
     (provider === "turnkey" ||
+      provider === "relay" ||
       collectionChannel === "autopayout" ||
       (direction === "in" && String(meta?.source_type ?? "").toLowerCase() === "liquidation_address") ||
+      (direction === "in" && isRelayTronDepositMetadata(meta)) ||
       (direction === "in" && isNoahPayloadCryptoInbound(input.payload ?? undefined)))
 
   if (isStablecoin) {

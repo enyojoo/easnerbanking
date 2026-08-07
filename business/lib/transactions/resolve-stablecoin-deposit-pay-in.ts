@@ -3,6 +3,7 @@ import {
   buildTransactionTimingRows,
   formatMaskedSenderDisplay,
   formatStablecoinDepositSchemeLabel,
+  isRelayTronDepositMetadata,
   resolveTransactionTimingAnchors,
   type StablecoinDepositLifecycleStep,
   type TransactionTimingRow,
@@ -16,13 +17,7 @@ export function isStablecoinDepositPayInRow(row: Record<string, unknown>): boole
   const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
   if (String(meta.source ?? "").toLowerCase() === "easetag_p2p") return false
   if (String(meta.flow ?? "").toLowerCase() === "bank_onramp") return false
-  const provider = String(row.provider ?? "").toLowerCase()
-  if (
-    provider === "relay" &&
-    String(meta.activity_type ?? "").trim().toLowerCase() === "relay_tron_deposit"
-  ) {
-    return true
-  }
+  if (isRelayTronDepositMetadata(meta)) return true
   const sourceType = String(meta.source_type ?? "").toLowerCase()
   if (sourceType === "liquidation_address") return true
   if (provider === "turnkey" && (row.chain != null || row.asset != null)) return true

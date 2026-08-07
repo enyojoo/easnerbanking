@@ -179,8 +179,20 @@ describe("buildInboundReceiveDetailRows", () => {
     expect(
       classifyInboundReceiveKind({
         direction: "in",
-        provider: "relay",
         metadata: { activity_type: "relay_tron_deposit" },
+      }),
+    ).toBe("stablecoin")
+  })
+
+  it("classifies relay Tron deposit as stablecoin inbound without provider field", () => {
+    expect(
+      classifyInboundReceiveKind({
+        direction: "in",
+        metadata: {
+          activity_type: "relay_tron_deposit",
+          source_currency: "USDT",
+          source_payment_rail: "tron",
+        },
       }),
     ).toBe("stablecoin")
   })

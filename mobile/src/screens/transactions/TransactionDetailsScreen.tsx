@@ -80,6 +80,7 @@ import {
   hasWalletSendFxDisplay,
   shouldShowPayoutReviewFeeRow,
   REVIEW_ROW_LABELS,
+  isRelayTronDepositMetadata,
   resolveInboundReceiveDetail,
   resolvePayoutReviewFlow,
   type GlobalPayoutReviewSnapshot,
@@ -799,7 +800,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const isEasetagP2p = transaction.source_type === 'easetag_p2p'
   const isStablecoinReceive =
     transaction.transaction_type === 'receive' &&
-    transaction.source_type === 'liquidation_address'
+    (transaction.source_type === 'liquidation_address' ||
+      isRelayTronDepositMetadata(transaction.metadata))
   const isYcFundBalanceDeposit =
     transaction.transaction_type === 'receive' && Boolean(transaction.deposit_review)
   const isBankOnrampReceive =

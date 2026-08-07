@@ -632,6 +632,7 @@ export {
   resolveInboundReceiveNotification,
 } from "./transactions/inbound-receive-detail"
 export { formatStablecoinDepositSchemeLabel, receiveStablecoinDepositSubtitle, receiveStablecoinPaymentNotes, receiveStablecoinCreditCurrency } from "./transactions/stablecoin-deposit-scheme"
+export { isRelayTronDepositInbound, isRelayTronDepositMetadata } from "./transactions/relay-tron-deposit"
 export {
   EASNER_ACCOUNT_SCOPE_HEADER,
   EASNER_ACCOUNT_SCOPE_HEADER_LEGACY,

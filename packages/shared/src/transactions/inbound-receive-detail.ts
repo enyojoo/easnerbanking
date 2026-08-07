@@ -30,6 +30,7 @@ import {
 } from "./yc-deposit-display"
 import { deriveEasnerInboundRemitterDisplayName } from "./product-label"
 import { formatStablecoinDepositSchemeLabel } from "./stablecoin-deposit-scheme"
+import { isRelayTronDepositInbound } from "./relay-tron-deposit"
 import {
   BANK_VERIFICATION_COMPLETED_DESCRIPTION,
   deriveVerificationBankName,
@@ -171,15 +172,6 @@ function deriveStablecoinSchemeLabel(input: InboundReceiveResolveInput): string 
     chain: input.chain != null ? String(input.chain) : meta.chain != null ? String(meta.chain) : undefined,
     asset: input.asset != null ? String(input.asset) : meta.asset != null ? String(meta.asset) : undefined,
   })
-}
-
-function isRelayTronDepositInbound(input: InboundReceiveResolveInput): boolean {
-  const meta = input.metadata ?? {}
-  const provider = String(input.provider ?? "").toLowerCase()
-  return (
-    provider === "relay" &&
-    String(meta.activity_type ?? "").trim().toLowerCase() === "relay_tron_deposit"
-  )
 }
 
 function isStablecoinInbound(input: InboundReceiveResolveInput): boolean {
