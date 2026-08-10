@@ -1,4 +1,4 @@
-import React, { useCallback, type ReactNode } from 'react'
+import React, { useEffect, type ReactNode } from 'react'
 import {
   View,
   Text,
@@ -6,35 +6,36 @@ import {
   ScrollView,
   Pressable,
   Linking,
-  InteractionManager,
 } from 'react-native'
 import { ArrowLeft, ChevronRight, MessageCircle, Mail } from 'lucide-react-native'
-import { useFocusEffect } from '@react-navigation/native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
-import { alertIntercomError, intercomPresentErrorMessage, presentIntercomMessenger, prepareIntercomMessenger } from '../../lib/intercom'
+import {
+  alertIntercomError,
+  intercomPresentErrorMessage,
+  prepareIntercomMessenger,
+  presentIntercomMessenger,
+} from '../../lib/intercom'
 import { colors, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 
+/**
+ * Keep mount/focus light like Legal so the stack push is immediate.
+ * Warm Intercom only after the push animation ends (and on Live Chat if still cold).
+ */
 export default function SupportScreen({ navigation }: NavigationProps) {
   const scrollBottomPadding = useScrollBottomPadding(spacing[4])
 
-  useFocusEffect(
-    useCallback(() => {
-      analytics.trackScreenView('Support')
-      // Defer Intercom warm-up until the stack push finishes so native JWT/login
-      // work does not contend with the transition.
-      const task = InteractionManager.runAfterInteractions(() => {
-        void prepareIntercomMessenger()
-      })
-      return () => {
-        task.cancel()
-      }
-    }, []),
-  )
+  // Warm after the push animation (~180ms), not on focus — keeps open instant.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void prepareIntercomMessenger()
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [])
 
   const handleLiveChat = () => {
     analytics.trackSupportLiveChatOpened()

@@ -628,8 +628,11 @@ export default function AppNavigator() {
           markWebPinSessionUnlocked(user.id)
         }
         setPinGate('main')
-        prefetchIntercomModule()
-        void prepareIntercomMessenger()
+        // Defer Intercom off the unlock/navigation frame so Support (and other) pushes stay snappy.
+        setTimeout(() => {
+          prefetchIntercomModule()
+          void prepareIntercomMessenger()
+        }, 750)
       } else if (event === 'locked') {
         const avatarUri = avatarImageUri(userProfile?.profile?.avatar_url)
         if (avatarUri) {
@@ -644,22 +647,25 @@ export default function AppNavigator() {
   useEffect(() => {
     const ready = pinGate === 'main'
     setPushNavMainReady(ready)
-    if (ready) {
-      const navRef = (global as any).rootNavigationRef?.current
-      enterMainAppOnWeb()
-      const scope: PersonalScope | null = user?.id ? { kind: 'personal', userId: user.id } : null
-      flushPendingPushNavigation(navRef, scope)
-      flushPendingDeepLinkNavigation(navRef)
+    if (!ready) return
+    const navRef = (global as any).rootNavigationRef?.current
+    enterMainAppOnWeb()
+    const scope: PersonalScope | null = user?.id ? { kind: 'personal', userId: user.id } : null
+    flushPendingPushNavigation(navRef, scope)
+    flushPendingDeepLinkNavigation(navRef)
+    const warmTimer = setTimeout(() => {
       prefetchIntercomModule()
       void prepareIntercomMessenger()
-    }
+    }, 750)
+    return () => clearTimeout(warmTimer)
   }, [pinGate, lockTick, user?.id])
 
-  // Warm Intercom + pending push transaction detail while user is on PIN entry.
+  // Prefetch Intercom native module on PIN entry; full identity warm waits until unlock (above).
   useEffect(() => {
     if (!user?.id || pinGate !== 'pin') return
-    prefetchIntercomModule()
-    void prepareIntercomMessenger()
+    const prefetchTimer = setTimeout(() => {
+      prefetchIntercomModule()
+    }, 300)
     const scope: PersonalScope = { kind: 'personal', userId: user.id }
     void (async () => {
       const pending = await peekPendingPushPayload()
@@ -667,6 +673,7 @@ export default function AppNavigator() {
         await warmPendingPushTransactionDetail(scope)
       }
     })()
+    return () => clearTimeout(prefetchTimer)
   }, [user?.id, pinGate])
 
   useEffect(() => {

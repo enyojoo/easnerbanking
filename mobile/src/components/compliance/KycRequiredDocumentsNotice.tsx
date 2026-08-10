@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import {
-  FlatList,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -28,8 +28,6 @@ type Props = {
   style?: object
 }
 
-type Section = (typeof KYC_REQUIRED_DOCUMENTS_DIALOG.sections)[number]
-
 export function KycRequiredDocumentsNotice({ style }: Props) {
   const [open, setOpen] = useState(false)
   const copy = KYC_REQUIRED_DOCUMENTS_DIALOG
@@ -43,15 +41,9 @@ export function KycRequiredDocumentsNotice({ style }: Props) {
 
   const sheetMaxHeight = Math.round(windowHeight * 0.88)
   const bottomPad = Math.max(insets.bottom, spacing[5]) + spacing[2]
-  /** Title + grabber + close CTA + paddings — leave the rest for scrollable body. */
-  const bodyMaxHeight = Math.max(240, sheetMaxHeight - 168 - bottomPad)
-
-  const renderSection = ({ item }: { item: Section }) => (
-    <View style={styles.section}>
-      <Text style={styles.sectionHeading}>{item.heading}</Text>
-      <Text style={styles.sectionBody}>{item.body}</Text>
-    </View>
-  )
+  /** Grabber + title row + Got it CTA + gaps — keep an explicit scroll viewport below. */
+  const chromeHeight = 56 + 48 + 56 + spacing[3] + spacing[2] + spacing[2]
+  const bodyHeight = Math.max(200, sheetMaxHeight - chromeHeight - bottomPad)
 
   return (
     <>
@@ -74,7 +66,12 @@ export function KycRequiredDocumentsNotice({ style }: Props) {
         nativePanelStyle={{ maxHeight: sheetMaxHeight }}
         webPanelStyle={{ maxHeight: sheetMaxHeight }}
       >
-        <View style={[styles.modalPanel, { paddingBottom: bottomPad, maxHeight: sheetMaxHeight }]}>
+        <View
+          style={[
+            styles.modalPanel,
+            { paddingBottom: bottomPad, maxHeight: sheetMaxHeight, overflow: 'hidden' },
+          ]}
+        >
           {Platform.OS !== 'web' ? <View style={styles.grabber} /> : null}
           <View style={styles.modalHeader}>
             <Text style={styles.title} numberOfLines={2}>
@@ -90,16 +87,23 @@ export function KycRequiredDocumentsNotice({ style }: Props) {
               <X size={20} color={colors.text.secondary} strokeWidth={2} />
             </Pressable>
           </View>
-          <FlatList
-            data={[...copy.sections]}
-            keyExtractor={(item) => item.heading}
-            renderItem={renderSection}
-            style={{ maxHeight: bodyMaxHeight }}
-            contentContainerStyle={styles.listContent}
+          <ScrollView
+            style={{ height: bodyHeight }}
+            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator
-            ListHeaderComponent={<Text style={styles.intro}>{copy.intro}</Text>}
-            ListFooterComponent={<Text style={styles.closing}>{copy.closing}</Text>}
-          />
+            bounces
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={styles.intro}>{copy.intro}</Text>
+            {copy.sections.map((section) => (
+              <View key={section.heading} style={styles.section}>
+                <Text style={styles.sectionHeading}>{section.heading}</Text>
+                <Text style={styles.sectionBody}>{section.body}</Text>
+              </View>
+            ))}
+            <Text style={styles.closing}>{copy.closing}</Text>
+          </ScrollView>
           <GlossyPrimaryButton title="Got it" onPress={close} style={styles.closeCta} />
         </View>
       </WebAwareModal>
@@ -152,7 +156,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.semantic.muted,
   },
-  listContent: {
+  scrollContent: {
     paddingBottom: spacing[3],
   },
   intro: {
