@@ -886,17 +886,24 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         }}
         keyboardAvoiding
       >
-        <View style={styles.legacyResidencePanel}>
+        <View
+          style={[
+            styles.legacyResidencePanel,
+            { paddingBottom: Math.max(insets.bottom, spacing[5]) + spacing[2] },
+          ]}
+        >
+          <View style={styles.legacyResidenceGrabber} />
           <Text style={styles.legacyResidenceTitle}>Country of residence</Text>
           <Text style={styles.legacyResidenceBody}>
-            We need your country of residence before starting verification. This is used for eligibility
-            checks only and is collected once here.
+            Needed once for eligibility before starting verification.
           </Text>
           <ResidenceCountryField
             value={legacyResidenceCode}
             onChange={setLegacyResidenceCode}
+            label=""
             disabled={savingLegacyResidence}
             error={legacyResidenceError}
+            containerStyle={styles.legacyResidenceField}
           />
           <GlossyPrimaryButton
             title={savingLegacyResidence ? 'Saving…' : 'Continue'}
@@ -1176,7 +1183,16 @@ const styles = StyleSheet.create({
     }),
   },
   legacyResidencePanel: {
-    padding: spacing[5],
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[2],
+  },
+  legacyResidenceGrabber: {
+    width: 40,
+    height: 4,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.semantic.border,
+    alignSelf: 'center',
+    marginBottom: spacing[4],
   },
   legacyResidenceTitle: {
     ...textStyles.headlineSmall,
@@ -1189,8 +1205,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
     lineHeight: 20,
   },
+  legacyResidenceField: {
+    marginBottom: spacing[3],
+  },
   legacyResidenceCta: {
-    marginTop: spacing[2],
+    marginTop: spacing[1],
+    marginBottom: spacing[1],
   },
 })
 

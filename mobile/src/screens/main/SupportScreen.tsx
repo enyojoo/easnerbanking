@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, type ReactNode } from 'react'
 import {
   View,
   Text,
@@ -6,8 +6,9 @@ import {
   ScrollView,
   Pressable,
   Linking,
+  InteractionManager,
 } from 'react-native'
-import { ArrowLeft, ChevronRight } from 'lucide-react-native'
+import { ArrowLeft, ChevronRight, MessageCircle, Mail } from 'lucide-react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -24,7 +25,14 @@ export default function SupportScreen({ navigation }: NavigationProps) {
   useFocusEffect(
     useCallback(() => {
       analytics.trackScreenView('Support')
-      void prepareIntercomMessenger()
+      // Defer Intercom warm-up until the stack push finishes so native JWT/login
+      // work does not contend with the transition.
+      const task = InteractionManager.runAfterInteractions(() => {
+        void prepareIntercomMessenger()
+      })
+      return () => {
+        task.cancel()
+      }
     }, []),
   )
 
@@ -44,7 +52,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
   const renderContactButton = (
     title: string,
     onPress: () => void,
-    icon: string,
+    icon: ReactNode,
     isLast: boolean = false,
     subtitle?: string,
   ) => (
@@ -56,7 +64,7 @@ export default function SupportScreen({ navigation }: NavigationProps) {
         onPress()
       }}
     >
-      <Text style={styles.contactIcon}>{icon}</Text>
+      <View style={styles.contactIconWrap}>{icon}</View>
       <View style={styles.contactInfo}>
         <Text style={styles.contactTitle}>{title}</Text>
         {subtitle ? <Text style={styles.contactSubtitle}>{subtitle}</Text> : null}
@@ -93,11 +101,17 @@ export default function SupportScreen({ navigation }: NavigationProps) {
             {renderContactButton(
               'Live Chat',
               handleLiveChat,
-              '💬',
+              <MessageCircle size={22} color={colors.primary.main} strokeWidth={2} />,
               false,
               'Message our team in the app',
             )}
-            {renderContactButton('Email Support', handleEmailSupport, '📧', true, 'support@easner.com')}
+            {renderContactButton(
+              'Email Support',
+              handleEmailSupport,
+              <Mail size={22} color={colors.primary.main} strokeWidth={2} />,
+              true,
+              'support@easner.com',
+            )}
           </View>
         </ScrollView>
       </View>
@@ -156,9 +170,11 @@ const styles = StyleSheet.create({
   contactButtonLast: {
     borderBottomWidth: 0,
   },
-  contactIcon: {
-    fontSize: 24,
+  contactIconWrap: {
+    width: 24,
     marginRight: spacing[4],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   contactInfo: {
     flex: 1,

@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native'
+import { Platform, StyleSheet } from 'react-native'
 import { colors } from './colors'
 import { fontFamily } from './typography'
 import { surfaceChromeCircleStyle } from './surfaceFrame'
@@ -22,10 +22,16 @@ export const userAvatarStyles = StyleSheet.create({
     height: '100%',
   },
   initials: {
-    fontSize: 16,
+    fontSize: 14,
+    lineHeight: 16,
     fontWeight: '700',
     color: colors.primary.main,
     fontFamily: fontFamily.bold,
+    textAlign: 'center',
+    ...Platform.select({
+      android: { includeFontPadding: false, textAlignVertical: 'center' as const },
+      default: {},
+    }),
   },
   pinEntryCircle: {
     ...surfaceChromeCircleStyle(colors, PIN_ENTRY_AVATAR_SIZE, { shadow: 'none' }),
@@ -33,9 +39,15 @@ export const userAvatarStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   pinEntryInitials: {
-    fontSize: 24,
+    fontSize: 22,
+    lineHeight: 26,
     fontWeight: '700',
     color: colors.primary.main,
     fontFamily: fontFamily.bold,
+    textAlign: 'center',
+    ...Platform.select({
+      android: { includeFontPadding: false, textAlignVertical: 'center' as const },
+      default: {},
+    }),
   },
 })

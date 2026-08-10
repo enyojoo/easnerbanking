@@ -47,12 +47,12 @@ export function ProfileAvatarCircle({
   }, [uri])
 
   if (!uri || failed) {
-    return <View style={style}>{fallback}</View>
+    return <View style={[styles.fallbackHost, style]}>{fallback}</View>
   }
 
   return (
     <View style={[styles.shell, style]}>
-      {!ready ? fallback : null}
+      {!ready ? <View style={[styles.fallbackHost, StyleSheet.absoluteFill]}>{fallback}</View> : null}
       <AvatarImage
         avatarUrl={avatarUrl}
         style={[StyleSheet.absoluteFill, imageStyle]}
@@ -70,5 +70,13 @@ export function ProfileAvatarCircle({
 const styles = StyleSheet.create({
   shell: {
     overflow: 'hidden',
+  },
+  /** Keep initials (or other fallback) optically centered in the circle. */
+  fallbackHost: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 })

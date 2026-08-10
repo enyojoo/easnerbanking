@@ -148,20 +148,22 @@ export function ResidenceCountryField({
 
   return (
     <View style={[styles.wrap, containerStyle]}>
-      <View style={styles.labelRow}>
-        <Text style={styles.label}>{label}</Text>
-        {tooltip ? (
-          <Pressable
-            ref={infoRef}
-            onPress={toggleTooltip}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`${label} info`}
-          >
-            <Info size={15} color={colors.semantic.mutedForeground} strokeWidth={2} />
-          </Pressable>
-        ) : null}
-      </View>
+      {label ? (
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>{label}</Text>
+          {tooltip ? (
+            <Pressable
+              ref={infoRef}
+              onPress={toggleTooltip}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`${label} info`}
+            >
+              <Info size={15} color={colors.semantic.mutedForeground} strokeWidth={2} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {helperText ? <Text style={styles.helper}>{helperText}</Text> : null}
       <Pressable
         style={[styles.trigger, disabled && styles.triggerDisabled, error ? styles.triggerError : null]}

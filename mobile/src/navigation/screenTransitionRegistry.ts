@@ -114,7 +114,7 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   // Stack entry from tabs
   OpenCurrencyAccount: { intent: 'stackEntry' },
   Recipients: { intent: 'stackEntry' },
-  Support: { intent: 'stackEntry' },
+  Support: { intent: 'settingsLeaf' },
   Notifications: { intent: 'stackEntry' },
   AccountVerification: { intent: 'stackEntry' },
   Profile: { intent: 'stackEntry' },
