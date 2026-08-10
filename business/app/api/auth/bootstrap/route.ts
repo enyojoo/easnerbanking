@@ -340,25 +340,35 @@ export async function POST(request: Request) {
     )
   }
 
+  const existingResidence =
+    typeof userRow?.residence_country === "string" ? userRow.residence_country.trim().toUpperCase() : ""
+  const shouldSetResidence = role === "individual" && Boolean(countryCode) && !existingResidence
+
   const baseUserPayload: Record<string, unknown> = {
     id: user.id,
     email: user.email ?? null,
     full_name: resolvedBootstrapFullName,
     updated_at: new Date().toISOString(),
   }
-  if (role === "individual" && countryCode) {
-    const curRes =
-      typeof userRow?.residence_country === "string" ? userRow.residence_country.trim() : ""
-    if (!curRes) {
-      baseUserPayload.residence_country = countryCode
-    }
+  if (shouldSetResidence) {
+    baseUserPayload.residence_country = countryCode
   }
 
-  // Support both migrated and pre-migration schemas.
+  const isMissingResidenceColumn = (err: { code?: string; message?: string } | null | undefined) =>
+    err?.code === "42703" || Boolean(err?.message && /residence_country/i.test(err.message))
+
+  let residencePersisted = Boolean(existingResidence)
+  if (shouldSetResidence && countryCode) {
+    residencePersisted = false
+  }
+
+  // Prefer full payload; only strip residence_country when the column is missing (pre-migration).
   const { error: upsertErrWithRole } = await admin
     .from("users")
     .upsert({ ...baseUserPayload, role: existingRole ?? role }, { onConflict: "id" })
-  if (upsertErrWithRole) {
+  if (!upsertErrWithRole) {
+    if (shouldSetResidence) residencePersisted = true
+  } else if (isMissingResidenceColumn(upsertErrWithRole) && shouldSetResidence) {
     const payloadNoResidence = {
       id: user.id,
       email: user.email ?? null,
@@ -383,7 +393,38 @@ export async function POST(request: Request) {
           )
       }
     }
+    residencePersisted = false
+  } else {
+    // Unrelated upsert error — retry without role / minimal fields, but keep residence when we can.
+    const { error: upsertErrNoRole } = await admin.from("users").upsert(baseUserPayload, { onConflict: "id" })
+    if (!upsertErrNoRole) {
+      if (shouldSetResidence) residencePersisted = true
+    } else if (isMissingResidenceColumn(upsertErrNoRole) && shouldSetResidence) {
+      const payloadNoResidence = {
+        id: user.id,
+        email: user.email ?? null,
+        full_name: resolvedBootstrapFullName,
+        updated_at: new Date().toISOString(),
+      }
+      await admin.from("users").upsert(payloadNoResidence, { onConflict: "id" })
+      residencePersisted = false
+    } else {
+      await admin
+        .from("users")
+        .upsert(
+          {
+            id: user.id,
+            email: user.email ?? null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" },
+        )
+      if (shouldSetResidence) residencePersisted = false
+    }
   }
+
+  const resolvedResidenceCountry =
+    (residencePersisted && (existingResidence || countryCode)) || existingResidence || null
 
   /**
    * When DB `full_name` differs from JWT (e.g. edited in Supabase or profile API), align auth metadata
@@ -437,6 +478,7 @@ export async function POST(request: Request) {
       userId: user.id,
       businessId: userRow?.easner_business_id ?? null,
       turnkeySubOrgReady,
+      residenceCountry: resolvedResidenceCountry,
     })
   }
 

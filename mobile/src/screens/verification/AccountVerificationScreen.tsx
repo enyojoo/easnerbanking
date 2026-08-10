@@ -9,7 +9,6 @@ import {
   Platform,
   ActivityIndicator,
   Animated,
-  Modal,
 } from 'react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import {
@@ -22,21 +21,15 @@ import {
   Map,
 } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { WebView } from 'react-native-webview'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
-import {
-  IframeWebViewModalHeader,
-  iframeModalTitleTextStyle,
-} from '../../components/IframeWebViewModalHeader'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
-import { getApiBaseUrl } from '../../lib/apiClient'
 import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -93,14 +86,12 @@ function tierTitleDisplay(title: string) {
 }
 
 function AccountVerificationContent({ navigation }: NavigationProps) {
-  const { userProfile, refreshUserProfile } = useAuth()
+  const { user, userProfile, refreshUserProfile } = useAuth()
   const queryClient = useQueryClient()
   const { scope } = useScope()
   const insets = useSafeAreaInsets()
   const { showInfo, showError, showSuccess, showWarning } = useToast()
 
-  const [creatingCustomer, setCreatingCustomer] = useState(false)
-  const [customerError, setCustomerError] = useState<string | null>(null)
   const [fiatProvisionResolved, setFiatProvisionResolved] = useState(false)
   // Ref to prevent multiple simultaneous Noah / verification status fetches
   const fetchingNoahStatusRef = useRef(false)
@@ -109,14 +100,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   // Ref to prevent multiple simultaneous syncs
   const syncingRef = useRef(false)
 
-  // KYC Link state
-  const [kycLink, setKycLink] = useState<string | null>(null)
-  const [kycLinkId, setKycLinkId] = useState<string | null>(null)
-  const [kycStatus, setKycStatus] = useState<string | null>(null)
-  const [showKycModal, setShowKycModal] = useState(false)
+  // KYC open state (hosted link opens via in-app browser — same as Legal)
   const [loadingKyc, setLoadingKyc] = useState(false)
-  const [kycCompleted, setKycCompleted] = useState(false)
-  const kycProcessedRef = useRef(false)
   const externalLink = useExternalLink()
   const [legacyResidenceOpen, setLegacyResidenceOpen] = useState(false)
   const [legacyResidenceCode, setLegacyResidenceCode] = useState('')
@@ -391,14 +376,19 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     ''
 
   const proceedOpenKyc = async (residenceOverride?: string) => {
-    if (!userProfile?.email) {
-      showWarning('Please complete your profile information before starting KYC verification.')
+    const email =
+      (typeof userProfile?.email === 'string' && userProfile.email.trim()) ||
+      (typeof userProfile?.profile?.email === 'string' && userProfile.profile.email.trim()) ||
+      (typeof user?.email === 'string' && user.email.trim()) ||
+      ''
+    if (!email) {
+      showWarning(
+        'Your account is missing an email address. Sign out and sign back in, or contact support@easner.com.',
+      )
       return
     }
     
     setLoadingKyc(true)
-    kycProcessedRef.current = false
-    setKycCompleted(false)
     
     try {
       // Always sync latest Noah customer status before opening KYC
@@ -452,12 +442,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       const fullName =
         userProfile?.profile?.full_name?.trim() ||
         [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ').trim() ||
-        userProfile.email.split('@')[0] ||
+        email.split('@')[0] ||
         'Account holder'
       
       let response
       try {
-        response = await noahService.getKycLink(fullName, userProfile.email, 'individual', {
+        response = await noahService.getKycLink(fullName, email, 'individual', {
           residenceCountry: residenceOverride || residenceCountry || undefined,
         })
       } catch (error: any) {
@@ -486,10 +476,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           throw error
         }
       }
-      
-      setKycLink(response.kyc_link)
-      setKycLinkId(response.kyc_link_id || null)
-      setKycStatus(response.kyc_status || 'not_started')
       
       // If customer_id is returned, store it in database and fetch current status from Noah
       if (response.customer_id && userProfile?.id) {
@@ -556,7 +542,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         return
       }
       
-      // Production Noah HostedURL is checkout.noah.com/kyc?session=… — open as-is in the system browser.
+      // Noah HostedURL (checkout.noah.com/kyc?session=…) — same in-app browser as Legal
+      // (SFSafariViewController / Chrome Custom Tabs via useExternalLink).
       // ReturnURL (NOAH_ONBOARDING_RETURN_URL) should be /auth/noah-complete?context=kyc on the business web app.
       await externalLink.openLink(response.kyc_link, 'Verification for global banking')
       try {
@@ -616,58 +603,9 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
   }
 
-  const handleKycModalClose = () => {
-    setShowKycModal(false)
-    if (refreshUserProfile && userProfile?.id) {
-      void refreshUserProfile()
-    }
-  }
-
-  /** In-app WebView only — legacy Sumsub-style /verify URLs; Noah production uses checkout.noah.com/kyc. */
-  const buildKycIframeUrl = (link: string): string => {
-    if (!link.includes('/verify')) {
-      return link
-    }
-    const widgetUrl = link.replace('/verify', '/widget')
-    const origin = getApiBaseUrl()
-    const separator = widgetUrl.includes('?') ? '&' : '?'
-    return `${widgetUrl}${separator}iframe-origin=${encodeURIComponent(origin)}`
-  }
-
-  // TOS polling removed - relying on:
-  // 1. PostMessage from WebView (immediate)
-  // 2. Noah webhooks (automatic)
-  // 3. sync-status when screen loads (fallback)
-
-  const createNoahCustomer = async (signedAgreementId: string) => {
-    if (creatingCustomer) return // Prevent duplicate calls
-    
-    setCreatingCustomer(true)
-    setCustomerError(null)
-    
-    try {
-      await noahService.createCustomerWithKyc({
-        signedAgreementId,
-        needsUSD: true,
-        needsEUR: true,
-      })
-      
-      showSuccess(
-        'Account setup in progress. You will receive USD and EUR account details once your verification is complete.',
-        4500,
-      )
-      
-      if (refreshUserProfile) {
-        await refreshUserProfile()
-      }
-    } catch (error: any) {
-      console.error('Error creating Noah customer:', error)
-      setCustomerError(error.message || 'Failed to create Easner account')
-      showError(error.message || 'Failed to create your Easner account. Please try again later.')
-    } finally {
-      setCreatingCustomer(false)
-    }
-  }
+  // Status updates after hosted KYC rely on:
+  // 1. Noah webhooks (automatic)
+  // 2. sync-status when screen loads / after browser dismiss (fallback)
 
   const getStatusBadge = (status: string | undefined) => {
     const label = verificationStatusLabel(status, { detail: true })
@@ -931,124 +869,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               ))}
             </View>
 
-            {/* KYC WebView Modal (Noah hosted onboarding — identity + partner terms in one session) */}
-            <Modal
-              visible={showKycModal}
-              animationType="slide"
-              presentationStyle="pageSheet"
-              onRequestClose={handleKycModalClose}
-            >
-              <View style={styles.modalContainer}>
-                <IframeWebViewModalHeader onClose={handleKycModalClose}>
-                    <View style={styles.modalKycTitleRow}>
-                      <Text style={[iframeModalTitleTextStyle, styles.modalKycTitleText]} numberOfLines={2}>
-                        Verification for global banking
-                      </Text>
-                      <View style={styles.tierPill}>
-                        <Text style={styles.tierPillText}>Tier 1</Text>
-                      </View>
-                    </View>
-                </IframeWebViewModalHeader>
-                {kycLink && Platform.OS === 'web' ? (
-                  React.createElement('iframe', {
-                    src: buildKycIframeUrl(kycLink),
-                    title: 'Verification for global banking',
-                    style: {
-                      flex: 1,
-                      width: '100%',
-                      height: '100%',
-                      border: 'none',
-                    },
-                  })
-                ) : kycLink ? (
-                  <WebView
-                    source={{ uri: buildKycIframeUrl(kycLink) }}
-                    style={styles.webView}
-                    javaScriptEnabled={true}
-                    domStorageEnabled={true}
-                    onShouldStartLoadWithRequest={(request) => {
-                      // Suppress warnings for about:srcdoc (used by iframes with inline HTML)
-                      if (request.url === 'about:srcdoc') {
-                        return false
-                      }
-                      return true
-                    }}
-                    onError={(syntheticEvent) => {
-                      const { nativeEvent } = syntheticEvent
-                      // Suppress harmless about:srcdoc warnings
-                      if (nativeEvent.url === 'about:srcdoc') {
-                        return
-                      }
-                      console.warn('[KYC-WEBVIEW] WebView error:', nativeEvent)
-                    }}
-                    onHttpError={(syntheticEvent) => {
-                      const { nativeEvent } = syntheticEvent
-                      console.warn('[KYC-WEBVIEW] HTTP error:', nativeEvent.statusCode, nativeEvent.url)
-                    }}
-                    onMessage={async (event) => {
-                      console.log('[KYC-WEBVIEW] 📨 Message received from WebView:', {
-                        data: event.nativeEvent.data,
-                        type: typeof event.nativeEvent.data,
-                        alreadyProcessed: kycProcessedRef.current
-                      })
-                      
-                      if (kycProcessedRef.current) {
-                        console.log('[KYC-WEBVIEW] ⚠️ Message already processed, ignoring')
-                        return
-                      }
-                      
-                      try {
-                        const messageData = event.nativeEvent.data
-                        let data: any
-                        
-                        if (typeof messageData === 'string') {
-                          data = JSON.parse(messageData)
-                        } else {
-                          data = messageData
-                        }
-                        
-                        console.log('[KYC-WEBVIEW] 📋 Parsed message data:', data)
-                        
-                        // Handle KYC completion
-                        if (data && (data.kycCompleted || data.status === 'completed' || data.kyc_status === 'approved' || data.kyc_status === 'under_review')) {
-                          console.log('[KYC-WEBVIEW] ✅ KYC completed')
-                          kycProcessedRef.current = true
-                          setKycCompleted(true)
-                          setKycStatus(data.kyc_status || 'approved')
-                          
-                          // Sync from Noah → Supabase and provision wallets + fiat accounts inline
-                          if (userProfile?.id) {
-                            try {
-                              console.log('[KYC-WEBVIEW] Syncing status and provisioning accounts...')
-                              await syncNoahStatus(false, true)
-                              console.log('[KYC-WEBVIEW] ✅ Status synced and accounts provisioned')
-                            } catch (syncError: any) {
-                              console.error('[KYC-WEBVIEW] Error syncing KYC data:', syncError)
-                              // Don't block the flow - data will be synced via webhook
-                            }
-                          }
-                          
-                          if (data.kyc_status === 'approved' || data.kyc_status === 'Approved') {
-                            showSuccess('Verification complete. Your accounts are ready.', 3500)
-                          } else {
-                            showSuccess('Verification submitted. We will update your status shortly.', 3500)
-                          }
-                          handleKycModalClose()
-                        }
-                      } catch (error: any) {
-                        console.error('[KYC-WEBVIEW] Error processing message:', error)
-                      }
-                    }}
-                    onNavigationStateChange={(navState) => {
-                      console.log('[KYC-WEBVIEW] Navigation changed:', {
-                        url: navState.url,
-                        loading: navState.loading,
-                      })
-                    }}
-                  />
-                ) : null}
-              </View>
-            </Modal>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1354,25 +1174,6 @@ const styles = StyleSheet.create({
       android: { includeFontPadding: false, lineHeight: 16 },
       default: {},
     }),
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: colors.background.primary,
-  },
-  modalKycTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: spacing[2],
-    flexWrap: 'wrap',
-    maxWidth: '100%',
-  },
-  modalKycTitleText: {
-    flexShrink: 1,
-    textAlign: 'left',
-  },
-  webView: {
-    flex: 1,
   },
   legacyResidencePanel: {
     padding: spacing[5],

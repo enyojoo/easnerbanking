@@ -563,6 +563,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
         const row = regularUser as Record<string, unknown>
         const profile = mapUsersRowToUser(row)
+        const sessionEmail =
+          typeof session?.user?.email === 'string' ? session.user.email.trim() : ''
+        const rowEmail = typeof profile.email === 'string' ? profile.email.trim() : ''
+        const resolvedEmail = rowEmail || sessionEmail
+        if (!rowEmail && resolvedEmail) {
+          profile.email = resolvedEmail
+        }
         setUser(profile)
         if (payoutCorridorsBootstrappedForUserRef.current !== userId) {
           payoutCorridorsBootstrappedForUserRef.current = userId
@@ -571,7 +578,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         const nextProfile: AuthUser = {
           id: regularUser.id,
-          email: regularUser.email,
+          email: resolvedEmail,
           isAdmin: false,
           email_confirmed_at: emailConfirmedAt,
           noah_customer_id: profile.noah_customer_id,

@@ -1,16 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  FlatList,
   Modal,
+  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
-import { ChevronDown, Info, MapPin } from 'lucide-react-native'
+import { ChevronDown, Info, MapPin, X } from 'lucide-react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { filterResidenceCountryCatalog } from '../../lib/residenceCountryCatalog'
 import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
 import { WebAwareModal } from '../WebAwareModal'
@@ -30,6 +33,8 @@ type Props = {
   containerStyle?: StyleProp<ViewStyle>
 }
 
+type CountryRow = { code: string; name: string }
+
 export function ResidenceCountryField({
   value,
   onChange,
@@ -45,6 +50,8 @@ export function ResidenceCountryField({
   const [tooltipOpen, setTooltipOpen] = useState(false)
   const [tipTop, setTipTop] = useState<number | null>(null)
   const infoRef = useRef<View>(null)
+  const insets = useSafeAreaInsets()
+  const { height: windowHeight } = useWindowDimensions()
 
   // Allowlist policy is best-effort. `null` means "show everything", so the
   // list renders instantly from the local catalog and never blocks/spins on
@@ -108,6 +115,37 @@ export function ResidenceCountryField({
     )
   }, [countries, search])
 
+  const closePicker = () => {
+    setOpen(false)
+    setSearch('')
+  }
+
+  /** Tall sheet so the country list fills most of the viewport (was hard-capped at 320px). */
+  const sheetMaxHeight = Math.round(windowHeight * 0.88)
+  const bottomPad = Math.max(insets.bottom, spacing[4])
+  /** Title + grabber + search + paddings ≈ 160–180; keep list roomy on small phones. */
+  const listMaxHeight = Math.max(280, sheetMaxHeight - 176 - bottomPad)
+
+  const renderCountry = ({ item }: { item: CountryRow }) => {
+    const isSelected = item.code === value
+    return (
+      <Pressable
+        style={[styles.row, isSelected && styles.rowSelected]}
+        onPress={() => {
+          haptics.tap()
+          onChange(item.code)
+          closePicker()
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isSelected }}
+      >
+        <CountryFlag code={item.code} size={22} />
+        <Text style={styles.rowText}>{item.name}</Text>
+        {isSelected ? <Text style={styles.selectedMark}>Selected</Text> : null}
+      </Pressable>
+    )
+  }
+
   return (
     <View style={[styles.wrap, containerStyle]}>
       <View style={styles.labelRow}>
@@ -169,14 +207,28 @@ export function ResidenceCountryField({
 
       <WebAwareModal
         visible={open}
-        onRequestClose={() => {
-          setOpen(false)
-          setSearch('')
-        }}
+        onRequestClose={closePicker}
         keyboardAvoiding
+        nativePanelStyle={{ maxHeight: sheetMaxHeight }}
+        webPanelStyle={{ maxHeight: sheetMaxHeight }}
       >
-        <View style={styles.modalPanel}>
-          <Text style={styles.modalTitle}>{label}</Text>
+        <View style={[styles.modalPanel, { paddingBottom: bottomPad, maxHeight: sheetMaxHeight }]}>
+          {Platform.OS !== 'web' ? <View style={styles.grabber} /> : null}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{label}</Text>
+            <Pressable
+              onPress={() => {
+                haptics.tap()
+                closePicker()
+              }}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Close country list"
+              style={styles.closeBtn}
+            >
+              <X size={20} color={colors.text.secondary} strokeWidth={2} />
+            </Pressable>
+          </View>
           <TextInput
             style={styles.search}
             placeholder="Search countries…"
@@ -185,33 +237,26 @@ export function ResidenceCountryField({
             onChangeText={setSearch}
             autoCapitalize="none"
             autoCorrect={false}
+            clearButtonMode="while-editing"
+            returnKeyType="search"
           />
-          <ScrollView
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.code}
+            renderItem={renderCountry}
             keyboardShouldPersistTaps="handled"
-            style={styles.list}
-            nestedScrollEnabled
+            keyboardDismissMode="on-drag"
+            style={{ maxHeight: listMaxHeight }}
+            contentContainerStyle={
+              filtered.length === 0 ? styles.listEmptyContent : styles.listContent
+            }
             showsVerticalScrollIndicator
-          >
-            {filtered.length === 0 ? (
+            initialNumToRender={16}
+            windowSize={8}
+            ListEmptyComponent={
               <Text style={styles.empty}>No countries found.</Text>
-            ) : (
-              filtered.map((item) => (
-                <Pressable
-                  key={item.code}
-                  style={styles.row}
-                  onPress={() => {
-                    haptics.tap()
-                    onChange(item.code)
-                    setOpen(false)
-                    setSearch('')
-                  }}
-                >
-                  <CountryFlag code={item.code} size={22} />
-                  <Text style={styles.rowText}>{item.name}</Text>
-                </Pressable>
-              ))
-            )}
-          </ScrollView>
+            }
+          />
         </View>
       </WebAwareModal>
     </View>
@@ -299,39 +344,82 @@ const styles = StyleSheet.create({
     marginTop: spacing[1],
   },
   modalPanel: {
-    padding: spacing[4],
-    maxHeight: '80%',
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[2],
+  },
+  grabber: {
+    width: 40,
+    height: 4,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.semantic.border,
+    alignSelf: 'center',
+    marginBottom: spacing[3],
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing[3],
+    gap: spacing[3],
   },
   modalTitle: {
     ...textStyles.headlineSmall,
     color: colors.text.primary,
-    marginBottom: spacing[3],
+    flex: 1,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.semantic.muted,
   },
   search: {
     borderWidth: 1,
     borderColor: colors.frame.border,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    marginBottom: spacing[3],
+    paddingVertical: spacing[3],
+    marginBottom: spacing[2],
     fontSize: fontSize.sm,
     color: colors.text.primary,
+    minHeight: 44,
   },
-  list: {
-    maxHeight: 320,
+  listContent: {
+    paddingBottom: spacing[2],
+  },
+  listEmptyContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingVertical: spacing[6],
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     paddingVertical: spacing[3],
+    paddingHorizontal: spacing[1],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.frame.border,
+    minHeight: 52,
+  },
+  rowSelected: {
+    backgroundColor: colors.semantic.muted,
+    borderRadius: borderRadius.md,
+    borderBottomWidth: 0,
+    marginVertical: 2,
+    paddingHorizontal: spacing[2],
   },
   rowText: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     flex: 1,
+  },
+  selectedMark: {
+    ...textStyles.labelSmall,
+    color: colors.primary.main,
+    fontWeight: '600',
   },
   empty: {
     ...textStyles.bodySmall,

@@ -32,6 +32,7 @@ import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 import { useToast } from '../../components/ToastProvider'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import EaseEnter from '../../components/EaseEnter'
+import { haptics } from '../../lib/haptics'
 import { signupPrecheck } from '../../lib/signupPrecheck'
 import { consumeSignupBlockedMessage } from '../../lib/signupBlockedMessage'
 import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
@@ -90,8 +91,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
           setFromOnboarding(true)
         }
         const initialMode = await AsyncStorage.getItem(AUTH_INITIAL_MODE_KEY)
-        if (initialMode === 'signup') {
-          setModeStack(['signup'])
+        if (initialMode === 'signup' || initialMode === 'login') {
+          setModeStack([initialMode])
           await AsyncStorage.removeItem(AUTH_INITIAL_MODE_KEY)
         }
       } catch (error) {

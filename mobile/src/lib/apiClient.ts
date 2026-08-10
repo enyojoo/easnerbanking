@@ -103,12 +103,16 @@ export async function ensureBusinessAppUserBootstrap(options?: {
 
     const bootJson = (await res.json().catch(() => ({}))) as {
       turnkeySubOrgReady?: boolean
+      residenceCountry?: string | null
     }
 
     /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side — refresh JWT. */
     await supabase.auth.refreshSession().catch(() => undefined)
 
-    if (countryCode) {
+    /** Only clear pending residence once the server confirms it was persisted. */
+    const savedResidence =
+      typeof bootJson.residenceCountry === 'string' ? bootJson.residenceCountry.trim().toUpperCase() : ''
+    if (savedResidence && (!countryCode || savedResidence === countryCode)) {
       await AsyncStorage.removeItem(PENDING_RESIDENCE_COUNTRY_KEY).catch(() => undefined)
     }
 

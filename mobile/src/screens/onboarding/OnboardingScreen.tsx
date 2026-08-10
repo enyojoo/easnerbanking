@@ -110,10 +110,9 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
       // Mark that user is coming from onboarding to show back arrow on auth screen
       await AsyncStorage.setItem('@easner_from_onboarding', 'true')
       await AsyncStorage.setItem(AUTH_INITIAL_MODE_KEY, 'signup')
-      // Small delay to ensure AsyncStorage is saved before AppNavigator re-checks
-      setTimeout(() => {
-        // AppNavigator will automatically switch to AuthStack
-      }, 100)
+      if ((global as any).triggerOnboardingCheck) {
+        ;(global as any).triggerOnboardingCheck()
+      }
     } catch (error) {
       console.error('Error saving onboarding status:', error)
     }
@@ -214,13 +213,13 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
             haptics.tap()
             try {
               // Mark onboarding as completed
-            await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true')
+              await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true')
               // Mark that user is coming from onboarding to show back arrow on auth screen
               await AsyncStorage.setItem('@easner_from_onboarding', 'true')
-              // Small delay to ensure AsyncStorage is saved before AppNavigator re-checks
-              setTimeout(() => {
-                // AppNavigator will automatically switch to AuthStack
-              }, 100)
+              await AsyncStorage.setItem(AUTH_INITIAL_MODE_KEY, 'login')
+              if ((global as any).triggerOnboardingCheck) {
+                ;(global as any).triggerOnboardingCheck()
+              }
             } catch (error) {
               console.error('Error navigating to login:', error)
             }
