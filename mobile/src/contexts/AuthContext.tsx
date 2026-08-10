@@ -7,6 +7,7 @@ import {
 } from '../lib/pendingDeepLinkNavigation'
 import { makeRedirectUri } from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
+import { openEasnerInAppBrowser } from '../lib/inAppBrowser'
 import * as AppleAuthentication from 'expo-apple-authentication'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase, clearInvalidPersistedAuthSession } from '../lib/supabase'
@@ -45,9 +46,8 @@ import {
 // Completes the auth session on web popup flows. Native deep links are handled below.
 WebBrowser.maybeCompleteAuthSession()
 
-/** iOS: close SFSafariViewController after deep-link callback. Android: no-op (Expo closes Custom Tab). */
+/** Close the shared in-app browser after an OAuth deep-link callback lands. */
 function dismissOAuthBrowserIfNeeded(): void {
-  if (Platform.OS === 'android') return
   try {
     const result = WebBrowser.dismissBrowser() as Promise<unknown> | undefined
     if (result && typeof result.catch === 'function') {
@@ -1041,27 +1041,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { error: null }
       }
 
-      const authSessionResult = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo, {
-        controlsColor: '#0F1110',
-        enableBarCollapsing: true,
-        showTitle: true,
-        // singleTask MainActivity: keep Custom Tab in-app so the OAuth redirect URL is returned.
-        ...(Platform.OS === 'android' ? { createTask: false } : {}),
-      })
+      // Same SFSafariViewController / Chrome Custom Tab as Legal + KYC.
+      // Do not use openAuthSessionAsync — that triggers iOS “wants to use supabase.co to Sign In”.
+      // OAuth completion is delivered via Linking → consumeOAuthCallbackIfPresent (same as before).
+      await openEasnerInAppBrowser(authUrl)
 
-      if (authSessionResult.type === 'cancel') {
-        return { error: null }
+      // Deep-link exchange can land as the browser closes. Give Linking a short settle, then
+      // finalizePostAuthSession (up to 20s) so a slow Android callback is not treated as cancel.
+      const settleStarted = Date.now()
+      while (Date.now() - settleStarted < 1_500) {
+        // eslint-disable-next-line no-await-in-loop
+        const session = await getSessionReliable()
+        if (session?.access_token) break
+        if (oauthConsumeInFlightRef.current) break
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 100))
       }
 
-      if (authSessionResult.type === 'success' && authSessionResult.url) {
-        await consumeOAuthCallbackIfPresent(authSessionResult.url)
-      } else if (authSessionResult.type === 'dismiss') {
-        if (Platform.OS === 'ios') {
-          // User closed the auth sheet before completing sign-in.
-          return { error: null }
-        }
-        // Android sometimes reports `dismiss` even after redirect; allow Linking/session to settle.
-        await new Promise((r) => setTimeout(r, 400))
+      const sessionAfterBrowser = await getSessionReliable()
+      if (!sessionAfterBrowser?.access_token && !oauthConsumeInFlightRef.current) {
+        // Browser closed with no callback in flight — user cancelled.
+        return { error: null }
       }
 
       return finalizePostAuthSession({
@@ -1070,7 +1070,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (e) {
       return { error: e instanceof Error ? e : new Error('Unable to continue with Google.') }
     }
-  }, [consumeOAuthCallbackIfPresent])
+  }, [])
 
   const signInWithApple = useCallback(async (): Promise<{ error: Error | null }> => {
     const relayBlocked = (): { error: Error } => ({

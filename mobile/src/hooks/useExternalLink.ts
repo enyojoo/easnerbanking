@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import * as WebBrowser from 'expo-web-browser'
+import { openEasnerInAppBrowser } from '../lib/inAppBrowser'
 
 interface UseExternalLinkOptions {
   showBackButton?: boolean
@@ -14,11 +14,7 @@ export function useExternalLink(options: UseExternalLinkOptions = {}) {
     setUrl(linkUrl)
     setTitle(linkTitle || '')
     try {
-      await WebBrowser.openBrowserAsync(linkUrl, {
-        controlsColor: '#0F1110',
-        enableBarCollapsing: true,
-        showTitle: true,
-      })
+      await openEasnerInAppBrowser(linkUrl)
       setIsVisible(false)
     } catch {
       // Fallback to in-app modal WebView when native browser fails.
