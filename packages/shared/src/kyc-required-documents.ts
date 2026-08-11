@@ -1,16 +1,17 @@
 /**
  * Individual KYC expectations for hosted onboarding (informational copy only).
- * Derived from Noah Individual Customer Prefill docs — not submitted via prefill today.
+ * Derived from Noah Individual Customer Prefill docs – not submitted via prefill today.
  * @see https://docs.noah.com/recipes/onboarding/individual-customer-prefill/
  */
 
 export const KYC_REQUIRED_DOCUMENTS_DIALOG = {
   title: "What you'll need for verification",
-  intro: "To verify your identity, please have the following ready.",
+  intro:
+    "To verify your identity, please have the following ready. Requirements can vary by country of residence.",
   sections: [
     {
       heading: "Identity",
-      body: "A valid physical government-issued photo ID (paper-format IDs are not accepted), current and fully visible — all pages or sides, with no glare or blur.",
+      body: "A valid physical government-issued photo ID (paper-format IDs are not accepted), current and fully visible – all pages or sides, with no glare or blur.",
     },
     {
       heading: "Selfie",
@@ -18,15 +19,15 @@ export const KYC_REQUIRED_DOCUMENTS_DIALOG = {
     },
     {
       heading: "Personal details",
-      body: "Full legal name, date of birth, nationality, residential address, and email — they must match your ID exactly.",
+      body: "Full legal name, date of birth, nationality, residential address, and email – they must match your ID exactly.",
     },
     {
       heading: "Tax identifiers",
-      body: "Where applicable for your country (for example BVN for Nigeria; SSN may be requested for US users).",
+      body: "Your national tax ID or equivalent identifier, if required for your country of residence (for example a tax reference number, national ID used for tax, or similar).",
     },
     {
       heading: "Additional questions",
-      body: "You may be asked about source of funds, employment, and how you plan to use your account — especially if you're in a higher-risk region. These are collected in the hosted verification flow.",
+      body: "You may be asked about source of funds, employment, and how you plan to use your account – especially in higher-risk regions. These are collected in the hosted verification flow.",
     },
   ] as const,
   closing:

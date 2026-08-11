@@ -26,6 +26,9 @@ type WebAwareModalProps = {
 
 /**
  * Bottom sheet on native; centered dialog on Expo web (business parity).
+ *
+ * Do not put `onStartShouldSetResponder` on the panel — that steals the
+ * responder from nested ScrollView / FlatList and blocks scrolling.
  */
 export function WebAwareModal({
   visible,
@@ -70,7 +73,6 @@ export function WebAwareModal({
               },
               webPanelStyle,
             ]}
-            onStartShouldSetResponder={() => true}
           >
             {children}
           </View>
@@ -88,7 +90,6 @@ export function WebAwareModal({
           { backgroundColor: palette.background.primary },
           nativePanelStyle,
         ]}
-        onStartShouldSetResponder={() => true}
       >
         {children}
       </View>
@@ -129,6 +130,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: borderRadius['3xl'],
     borderTopRightRadius: borderRadius['3xl'],
     paddingTop: spacing[2],
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
