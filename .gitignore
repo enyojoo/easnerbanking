@@ -131,3 +131,7 @@ next-env.d.ts
 # Local / internal docs (not part of app deploy)
 /docs/
 .env*
+
+# Expo/EAS live under mobile/ only — block accidental root project configs
+/app.json
+/eas.json
