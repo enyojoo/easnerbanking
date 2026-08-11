@@ -56,7 +56,7 @@ export async function createWalletSendSession(
   admin: SupabaseClient,
   input: Omit<WalletSendSessionRow, "status">,
 ): Promise<void> {
-  const { error } = await admin.from("wallet_send_sessions").upsert({
+  const payload = {
     form_session_id: input.form_session_id,
     user_id: input.user_id,
     recipient_id: input.recipient_id,
@@ -76,7 +76,21 @@ export async function createWalletSendSession(
     relay_from_amount_raw: input.relay_from_amount_raw ?? null,
     status: "quoted",
     expires_at: input.expires_at,
+  }
+
+  // Pre-migration DBs still have NOT NULL on lifi_mid (Turnkey never used LI.FI).
+  // Post-migration those columns are dropped — retry without the legacy mirrors.
+  let { error } = await admin.from("wallet_send_sessions").upsert({
+    ...payload,
+    lifi_mid: input.relay_mid,
+    lifi_floor: input.relay_floor,
   })
+  if (
+    error &&
+    /lifi_mid|lifi_floor|Could not find the .* column|PGRST204/i.test(error.message)
+  ) {
+    ;({ error } = await admin.from("wallet_send_sessions").upsert(payload))
+  }
   if (error) {
     throw new Error(`wallet_send_session_create_failed: ${error.message}`)
   }
