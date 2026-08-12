@@ -1,14 +1,13 @@
-// Partner-aligned country filter — excludes Prohibited and Controlled jurisdictions.
+// Mobile signup/residence — Noah fully prohibited VA list (product-split).
 // Legal reference (keep in sync): docs/legal/compliance.md §3
 
-import { isEasnerBlockedJurisdiction } from '@easner/shared'
+import { isBlockedForMobile } from '@easner/shared'
 
 /**
- * Check if a country code (ISO alpha-2) is supported for Easner onboarding.
- * Returns false for Prohibited and Controlled jurisdictions.
+ * Check if a country code (ISO alpha-2) is supported for Mobile onboarding.
  */
 export function isNoahSupportedCountry(countryCode: string): boolean {
-  return !isEasnerBlockedJurisdiction(countryCode)
+  return !isBlockedForMobile(countryCode)
 }
 
 /**

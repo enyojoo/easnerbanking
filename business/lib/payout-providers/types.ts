@@ -9,6 +9,8 @@ export type CorridorContext = {
   currencyCode: string
   rail: PayoutRailKind
   providerRouting: ProviderRoutingEntry[]
+  /** Sender business registration / user residence (Grid digital-asset payout gate). */
+  senderCountryCode?: string | null
 }
 
 export interface PayoutProvider {

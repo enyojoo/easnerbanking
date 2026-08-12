@@ -124,6 +124,8 @@ export async function POST(request: Request) {
             : "bank_transfer",
         mobileProvider: gateRow.mobile_provider,
         bankName: gateRow.bank_name,
+        businessId: acc.ctx.subjectBusinessId,
+        userId: user.id,
       })
       const envProvider: PayoutEnvProviderId =
         provider.id === "yellowcard" || provider.id === "grid" ? provider.id : "noah"

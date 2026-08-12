@@ -1,8 +1,8 @@
-// Email templates – design-system aligned, Business vs Personal variants
+// Email templates - design-system aligned, Business vs Personal variants
 
 import { personalMobileTransactionUrl } from "@easner/shared/mobile-personal-links"
 import { resolveMobileAppStoreUrls } from "@easner/shared/mobile-app-store-urls"
-import { formatTransactionWhen } from "@easner/shared"
+import { formatTransactionWhen, renderGridReceiptDisclosureHtml } from "@easner/shared"
 import {
   easnerUserGreetingParagraphHtml,
   formatEasnerUserGreetingPlain,
@@ -49,12 +49,14 @@ function txDetailUrl(data: TransactionEmailData, audience: EmailAudience): strin
 }
 
 function buildTransactionDetailRows(data: TransactionEmailData): TransactionDetailRow[] {
-  const rows: TransactionDetailRow[] = [
-    {
+  const rows: TransactionDetailRow[] = []
+
+  if (!data.isGridMoneyTransmissionReceipt) {
+    rows.push({
       label: "Transaction ID",
       value: data.easnerTransactionId || data.transactionId,
-    },
-  ]
+    })
+  }
 
   if (data.detailRows?.length) {
     for (const row of data.detailRows) rows.push({ label: row.label, value: row.value })
@@ -67,7 +69,7 @@ function buildTransactionDetailRows(data: TransactionEmailData): TransactionDeta
     if (data.paymentRail) rows.push({ label: "Payment method", value: data.paymentRail })
   }
 
-  if (data.createdAt) {
+  if (data.createdAt && !data.isGridMoneyTransmissionReceipt) {
     rows.push({
       label: "When",
       value: formatTransactionWhen(data.createdAt),
@@ -84,7 +86,11 @@ function buildTransactionDetailRows(data: TransactionEmailData): TransactionDeta
 }
 
 function transactionEmailSubject(data: TransactionEmailData): string {
-  return data.emailSubject?.trim() || data.title
+  if (data.emailSubject?.trim()) return data.emailSubject.trim()
+  if (data.isGridMoneyTransmissionReceipt && data.amountDisplay?.trim()) {
+    return `Your Easner transfer receipt - ${data.amountDisplay.trim()}`
+  }
+  return data.title
 }
 
 function escapeHtmlText(value: string): string {
@@ -111,14 +117,24 @@ function transactionSettledTemplate(): EmailTemplate {
     subject: (data: TransactionEmailData) => transactionEmailSubject(data),
     preheader: (data: TransactionEmailData) => data.body,
     html: (data: TransactionEmailData, audience = "personal") => {
+      const tableHeading = data.isGridMoneyTransmissionReceipt ? "Transfer receipt" : undefined
       const content = `
         ${transactionEmailIntroHtml(data)}
-        ${generateTransactionDetailsTable(buildTransactionDetailRows(data))}
+        ${generateTransactionDetailsTable(buildTransactionDetailRows(data), tableHeading)}
       `
       return generateBaseEmailTemplate(data.title, "", content, {
         text: "View transaction",
         url: txDetailUrl(data, audience),
-      }, { audience, preheader: data.body, showPreferencesLink: false })
+      }, {
+        audience,
+        preheader: data.body,
+        showPreferencesLink: false,
+        footerDisclaimerHtml: data.isGridMoneyTransmissionReceipt
+          ? renderGridReceiptDisclosureHtml({
+              includeForeignRemittanceDisclosure: Boolean(data.includeForeignRemittanceDisclosure),
+            })
+          : undefined,
+      })
     },
     text: (data: TransactionEmailData, audience = "personal") =>
       `${data.title}\n\n${transactionEmailIntroText(data)}\n\nView transaction: ${txDetailUrl(data, audience)}`,
@@ -225,18 +241,18 @@ If you did not request this email, you can safely ignore it.`
       const content = `
         ${easnerUserGreetingParagraphHtml(data.firstName)}
         <p class="confirmation-text">
-          Congratulations on creating your Easner Business account. We're excited to have you with us as you start managing multi-currency accounts, global payouts, collections, and more – all in one dashboard.
+          Congratulations on creating your Easner Business account. We're excited to have you with us as you start managing multi-currency accounts, global payouts, collections, and more - all in one dashboard.
         </p>
         <div class="security-note">
           <h3>Quick next steps</h3>
           <p>
-            <strong>Complete your KYB verification</strong> – Log in at business.easner.com and finish business verification. This usually takes just a few minutes and unlocks full access where supported.<br><br>
-            <strong>Fund your account</strong> – Add funds via USD or EUR bank accounts or stablecoin to start sending payouts or collecting payments where enabled.<br><br>
-            <strong>Explore the platform</strong> – Multi-currency balances, global payouts, invoicing, QR Pay, team controls, and reporting.
+            <strong>Complete your KYB verification</strong> - Log in at business.easner.com and finish business verification. This usually takes just a few minutes and unlocks full access where supported.<br><br>
+            <strong>Fund your account</strong> - Add funds via USD or EUR bank accounts or stablecoin to start sending payouts or collecting payments where enabled.<br><br>
+            <strong>Explore the platform</strong> - Multi-currency balances, global payouts, invoicing, QR Pay, team controls, and reporting.
           </p>
         </div>
         <p class="confirmation-text">
-          <strong>Want a personalized walkthrough?</strong> We offer free 15–20 minute onboarding calls. We can walk you through the dashboard, help with KYB questions, and show you the fastest ways to send payouts or set up collections.
+          <strong>Want a personalized walkthrough?</strong> We offer free 15-20 minute onboarding calls. We can walk you through the dashboard, help with KYB questions, and show you the fastest ways to send payouts or set up collections.
         </p>
         <p class="confirmation-text">
           Book a call at <a href="${EASNER_CONTACT_URL}" style="color: #007ACC;">easner.com/contact</a> or reply to this email with your preferred time.
@@ -452,7 +468,7 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
     subject: (data: PayrollRunSummaryEmailData) =>
       data.failed > 0
         ? `Payroll completed with ${data.failed} failed payment${data.failed === 1 ? "" : "s"}`
-        : `Payroll completed — ${data.runName}`,
+        : `Payroll completed - ${data.runName}`,
     html: (data: PayrollRunSummaryEmailData) => {
       const content = `
         <p class="confirmation-text">
@@ -506,7 +522,7 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
   },
 
   payrollPaid: {
-    subject: (data: PayrollPaidEmailData) => `You've been paid — ${data.businessName}`,
+    subject: (data: PayrollPaidEmailData) => `You've been paid - ${data.businessName}`,
     html: (data: PayrollPaidEmailData) => {
       const content = `
         <p class="confirmation-text">
@@ -531,7 +547,7 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
 
   adminTransactionNotification: {
     subject: (data: { status?: string; transactionId?: string }) =>
-      `New transfer ${data.status === "pending" ? "created" : "updated"} – #${data.transactionId}`,
+      `New transfer ${data.status === "pending" ? "created" : "updated"} - #${data.transactionId}`,
     html: (data: { status?: string; userName?: string }) => {
       const userName =
         data.userName && data.userName !== "User" && data.userName !== "Unknown"
@@ -550,7 +566,7 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
     },
     text: (data: { status?: string; transactionId?: string }) => {
       const adminUrl = process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"
-      return `Transaction ${data.transactionId} – ${data.status}\n${adminUrl}/transactions`
+      return `Transaction ${data.transactionId} - ${data.status}\n${adminUrl}/transactions`
     },
   },
 }

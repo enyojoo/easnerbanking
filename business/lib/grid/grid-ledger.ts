@@ -31,6 +31,7 @@ export function buildGridBalancePayoutOutMetadata(input: {
     easner_payout_id: input.easnerPayoutId,
     easner_transaction_id: input.easnerTransactionId,
     payout_provider: "grid",
+    grid_mode: "balance_payout",
     grid_quote_id: input.quoteId,
     grid_sequence_id: input.sequenceId,
     grid_customer_id: input.customerId,

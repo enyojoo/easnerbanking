@@ -103,6 +103,8 @@ export async function POST(request: Request) {
           : "bank_transfer",
       mobileProvider: rec.mobile_provider,
       bankName: rec.bank_name,
+      businessId: noahCtxResult.scope === "business" ? noahCtxResult.businessId : null,
+      userId: user.id,
     })
     const envProvider: PayoutEnvProviderId =
       provider.id === "yellowcard" || provider.id === "grid" ? provider.id : "noah"

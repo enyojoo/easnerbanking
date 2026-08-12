@@ -30,7 +30,7 @@ const INVOICE_EMAIL_OPTIONS = {
 
 function invoiceAmountLine(invoice: Invoice): string {
   const amount = formatCurrency(invoice.total, invoice.currency)
-  return `${invoice.invoiceNumber} – ${amount} ${invoice.currency}`
+  return `${invoice.invoiceNumber} - ${amount} ${invoice.currency}`
 }
 
 function invoiceSummaryRows(invoice: Invoice): TransactionDetailRow[] {
@@ -309,7 +309,7 @@ export interface InvoiceCustomerRefundEmailData {
 
 function invoiceRefundDetailRows(invoice: Invoice): TransactionDetailRow[] {
   const rows: TransactionDetailRow[] = [...invoiceSummaryRows(invoice)]
-  // Invoice status is no longer paid after refund — resolve PM from paymentInfo directly.
+  // Invoice status is no longer paid after refund - resolve PM from paymentInfo directly.
   const stripe = invoice.paymentInfo?.method === "stripe" ? invoice.paymentInfo.stripe : undefined
   if (stripe) {
     const pm = resolveInvoiceEmailPaymentMethod({
@@ -472,7 +472,7 @@ export function generateInvoiceReceiptEmailHtml(data: InvoiceReceiptEmailData): 
 
   const content = `
     ${customerGreetingParagraphHtml(invoice.customerName)}
-    <p class="confirmation-text">Thank you — we received your payment for this invoice from ${businessName}.</p>
+    <p class="confirmation-text">Thank you - we received your payment for this invoice from ${businessName}.</p>
     ${invoiceDetailsTable(invoicePaidDetailRows(invoice))}
   `.trim()
 
@@ -495,7 +495,7 @@ export function generateInvoiceReceiptEmailText(data: InvoiceReceiptEmailData): 
   return `
 ${formatCustomerGreetingPlain(invoice.customerName)}
 
-Thank you — we received your payment for this invoice from ${businessName}.
+Thank you - we received your payment for this invoice from ${businessName}.
 
 ${invoicePaidDetailPlainLines(invoice).join("\n")}
 
@@ -513,9 +513,9 @@ export interface InvoiceEmailData {
   invoice: Invoice
   invoiceViewUrl: string
   businessName: string
-  /** Merchant support email — used for Reply-To and footer contact line. */
+  /** Merchant support email - used for Reply-To and footer contact line. */
   businessReplyEmail?: string
-  /** Merchant profile — used for Reply-To resolution upstream; not shown in email body. */
+  /** Merchant profile - used for Reply-To resolution upstream; not shown in email body. */
   issuer: InvoicePdfIssuer
   /** When true, add pay-via-link context and use "View & pay invoice" CTA when applicable. */
   includePaymentContext?: boolean
@@ -591,7 +591,7 @@ function resolveEmailCopy(data: InvoiceEmailData): {
 export function getInvoiceEmailSubject(data: InvoiceEmailData): string {
   const { invoice, businessName } = data
   const config = resolveEmailCopy(data)
-  return `${config.subject} ${businessName} – ${invoice.invoiceNumber}`
+  return `${config.subject} ${businessName} - ${invoice.invoiceNumber}`
 }
 
 function getBodyIntro(data: InvoiceEmailData): string {

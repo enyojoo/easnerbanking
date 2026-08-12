@@ -258,6 +258,37 @@ describe("emailTemplates", () => {
     expect(html).toContain("https://business.easner.com/transactions/ET-1001")
   })
 
+  it("Grid money-transmission receipt includes verbatim Lightspark disclosures", () => {
+    const data = {
+      ...templateFixtures.transactionSettled,
+      isGridMoneyTransmissionReceipt: true,
+      gridTransactionId: "Transaction:019542f5-b3e7-1d02-0000-000000000030",
+      includeForeignRemittanceDisclosure: true,
+      detailRows: [
+        { label: "Grid transaction ID", value: "Transaction:019542f5-b3e7-1d02-0000-000000000030" },
+        { label: "Easner reference", value: "ET-1001" },
+        { label: "Sender", value: "Acme Corp" },
+        { label: "Recipient", value: "Sofía Herrera" },
+      ],
+      amountDisplay: "$502.50",
+    }
+    const html = emailTemplates.transactionSettled.html(data, "business")
+    expect(html).toContain("Transfer receipt")
+    expect(html).toContain("Lightspark Payments, LLC")
+    expect(html).toContain("NMLS ID 2429193")
+    expect(html).toContain("8605 Santa Monica Blvd, PMB 64461, West Hollywood, CA 90069")
+    expect(html).toContain(
+      "To report fraud or suspected fraud in connection with the money transmission services, please call customer services toll-free at (855) 516-0103.",
+    )
+    expect(html).toContain(
+      "Recipient may receive less than the total to recipient due to fees charged by the recipient's bank and any foreign taxes.",
+    )
+    expect(html).not.toContain("Transaction Hash")
+    expect(html).not.toContain("VC Address")
+    const subject = renderSubject("transactionSettled", data, "business")
+    expect(subject).toContain("Your Easner transfer receipt")
+  })
+
   it("welcome business html mentions Easner Business in body copy", () => {
     const html = emailTemplates.welcomeBusiness.html(templateFixtures.welcomeBusiness, "business")
     expect(html).toContain("Easner Business account")

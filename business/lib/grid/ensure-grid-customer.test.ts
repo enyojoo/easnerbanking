@@ -25,6 +25,14 @@ const CANONICAL_EB = ebFromBusinessId(BUSINESS_ID)
 const CANONICAL_EI = eiFromUserId(USER_ID)
 const STORED_CUSTOMER = "Customer:019fbdc4-7bc5-938e-0000-993715172f81"
 
+const TERMS_CONSENT_ROW = {
+  id: USER_ID,
+  grid_end_user_terms_version: "2025-10-01",
+  grid_end_user_terms_accepted_at: "2026-08-12T10:00:00.000Z",
+  grid_end_user_terms_accept_ip: "203.0.113.10",
+  grid_end_user_terms_accept_method: "signup_email",
+}
+
 function mockAdminForBusiness(storedGridId: string | null) {
   const businessUpdate = vi.fn().mockReturnValue({
     eq: vi.fn().mockResolvedValue({ error: null }),
@@ -82,8 +90,8 @@ function mockAdminForBusiness(storedGridId: string | null) {
             eq: vi.fn().mockReturnValue({
               maybeSingle: vi.fn().mockResolvedValue({
                 data: storedGridId
-                  ? { grid_customer_id: storedGridId }
-                  : { grid_customer_id: null },
+                  ? { grid_customer_id: storedGridId, ...TERMS_CONSENT_ROW }
+                  : { grid_customer_id: null, ...TERMS_CONSENT_ROW },
               }),
             }),
           }),
@@ -106,7 +114,14 @@ describe("ensureGridBusinessCustomer", () => {
   })
 
   it("uses stored grid_customer_id when GET succeeds (Enyo path)", async () => {
-    mockGridFetch.mockResolvedValueOnce({ id: STORED_CUSTOMER, kybStatus: "APPROVED" })
+    // verify exists + full GET (consent already present → no PATCH)
+    mockGridFetch
+      .mockResolvedValueOnce({ id: STORED_CUSTOMER })
+      .mockResolvedValueOnce({
+        id: STORED_CUSTOMER,
+        kybStatus: "APPROVED",
+        endUserTermsConsent: { termsVersion: "2025-10-01" },
+      })
 
     const admin = mockAdminForBusiness(STORED_CUSTOMER)
     const result = await ensureGridBusinessCustomer({
@@ -128,7 +143,13 @@ describe("ensureGridBusinessCustomer", () => {
 
   it("looks up by canonical eb_ platformCustomerId when stored id missing", async () => {
     mockGridFetch.mockResolvedValueOnce({
-      data: [{ id: STORED_CUSTOMER, platformCustomerId: CANONICAL_EB }],
+      data: [
+        {
+          id: STORED_CUSTOMER,
+          platformCustomerId: CANONICAL_EB,
+          endUserTermsConsent: { termsVersion: "2025-10-01" },
+        },
+      ],
     })
 
     const admin = mockAdminForBusiness(null)
@@ -155,7 +176,12 @@ describe("ensureGridCustomer", () => {
   })
 
   it("uses stored grid_customer_id for individual scope", async () => {
-    mockGridFetch.mockResolvedValueOnce({ id: STORED_CUSTOMER })
+    mockGridFetch
+      .mockResolvedValueOnce({ id: STORED_CUSTOMER })
+      .mockResolvedValueOnce({
+        id: STORED_CUSTOMER,
+        endUserTermsConsent: { termsVersion: "2025-10-01" },
+      })
 
     const admin = mockAdminForBusiness(STORED_CUSTOMER)
     const result = await ensureGridCustomer({

@@ -57,6 +57,8 @@ export async function GET(request: Request) {
         rail: sendRail,
         mobileProvider: recipient.mobile_provider,
         bankName: recipient.bank_name,
+        senderCountryCode: String(userRow?.residence_country ?? "").trim().toUpperCase() || null,
+        userId: user.id,
       })
       balanceProvider =
         provider.id === "yellowcard"

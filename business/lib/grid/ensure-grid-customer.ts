@@ -7,6 +7,12 @@ import {
   gridPlatformCustomerIdFromBusinessId,
   gridPlatformCustomerIdFromUserId,
 } from "./customer-id"
+import {
+  customerNeedsEndUserTermsConsentPatch,
+  loadGridEndUserTermsConsentForUser,
+  markGridEndUserTermsSynced,
+  type GridEndUserTermsConsentPayload,
+} from "./end-user-terms-consent"
 import { normalizeGridCustomerId } from "./quote-request"
 import type { GridCustomer } from "./types"
 
@@ -86,6 +92,35 @@ async function findGridCustomerByPlatformId(platformCustomerId: string): Promise
   return row?.id ? row : null
 }
 
+async function requireIndividualEndUserTermsConsent(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<GridEndUserTermsConsentPayload> {
+  const consent = await loadGridEndUserTermsConsentForUser(admin, userId)
+  if (!consent) {
+    throw new Error("grid_end_user_terms_required")
+  }
+  return consent
+}
+
+async function syncEndUserTermsConsentIfNeeded(input: {
+  admin: SupabaseClient
+  customerId: string
+  customer: GridCustomer
+  consent: GridEndUserTermsConsentPayload
+  userId: string
+}): Promise<void> {
+  if (!customerNeedsEndUserTermsConsentPatch(input.customer, input.consent)) {
+    return
+  }
+  await gridFetch<GridCustomer>({
+    method: "PATCH",
+    path: `/customers/${encodeURIComponent(input.customerId)}`,
+    json: { endUserTermsConsent: input.consent },
+  })
+  await markGridEndUserTermsSynced(input.admin, input.userId)
+}
+
 /**
  * Ensure a Grid customer exists for the Easner subject (BYO KYC from Noah profile).
  * Gates on caller having verified Noah KYC before money movement.
@@ -103,6 +138,8 @@ export async function ensureGridCustomer(input: {
     scope: input.scope,
   })
 
+  const consent = await requireIndividualEndUserTermsConsent(input.admin, input.userId)
+
   const stored = await readStoredGridCustomerId(input.admin, input)
   if (stored) {
     const customerId = normalizeGridCustomerId(stored)
@@ -115,6 +152,17 @@ export async function ensureGridCustomer(input: {
           customerId,
         })
       }
+      const customer = await gridFetch<GridCustomer>({
+        method: "GET",
+        path: `/customers/${encodeURIComponent(customerId)}`,
+      })
+      await syncEndUserTermsConsentIfNeeded({
+        admin: input.admin,
+        customerId,
+        customer,
+        consent,
+        userId: input.userId,
+      })
       return { customerId, platformCustomerId }
     }
     await clearStoredGridCustomerId(input.admin, input)
@@ -129,13 +177,23 @@ export async function ensureGridCustomer(input: {
       scope: input.scope,
       customerId,
     })
+    await syncEndUserTermsConsentIfNeeded({
+      admin: input.admin,
+      customerId,
+      customer: existing,
+      consent,
+      userId: input.userId,
+    })
     return { customerId, platformCustomerId }
   }
 
-  const payload = buildGridIndividualCustomerPayload({
-    platformCustomerId,
-    profile: input.profile,
-  })
+  const payload = {
+    ...buildGridIndividualCustomerPayload({
+      platformCustomerId,
+      profile: input.profile,
+    }),
+    endUserTermsConsent: consent,
+  }
 
   const created = await gridFetch<GridCustomer>({
     method: "POST",
@@ -155,6 +213,7 @@ export async function ensureGridCustomer(input: {
     scope: input.scope,
     customerId,
   })
+  await markGridEndUserTermsSynced(input.admin, input.userId)
 
   return { customerId, platformCustomerId }
 }

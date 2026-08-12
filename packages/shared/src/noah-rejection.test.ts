@@ -55,9 +55,9 @@ describe("noah-rejection display", () => {
 })
 
 describe("noah-restricted-geographies", () => {
-  it("never blocks GB", async () => {
+  it("blocks GB on Mobile Noah pre-screen", async () => {
     const { isNoahRestrictedGeography } = await import("./noah-restricted-geographies")
-    expect(isNoahRestrictedGeography("GB")).toBe(false)
-    expect(isNoahRestrictedGeography("gb")).toBe(false)
+    expect(isNoahRestrictedGeography("GB")).toBe(true)
+    expect(isNoahRestrictedGeography("gb")).toBe(true)
   })
 })

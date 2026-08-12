@@ -37,7 +37,14 @@ export type GridCustomer = {
   platformCustomerId?: string
   customerType?: string
   kycStatus?: string
+  kybStatus?: string
   fullName?: string
+  endUserTermsConsent?: {
+    acceptanceMethod?: string
+    acceptedAt?: string
+    ipAddress?: string
+    termsVersion?: string
+  } | null
 }
 
 export type GridExternalAccount = {

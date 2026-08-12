@@ -7,6 +7,12 @@ import {
 } from "./business-kyc-metadata"
 import { buildGridBusinessProfileShell } from "./business-profile-shell"
 import { gridPlatformCustomerIdFromBusinessId } from "./customer-id"
+import {
+  customerNeedsEndUserTermsConsentPatch,
+  loadGridEndUserTermsConsentForBusiness,
+  markGridEndUserTermsSynced,
+  type GridEndUserTermsConsentPayload,
+} from "./end-user-terms-consent"
 import { normalizeGridCustomerId } from "./quote-request"
 import type { GridCustomer } from "./types"
 
@@ -103,6 +109,41 @@ async function withGridBusinessContactEmail(
   return { ...profile, email }
 }
 
+async function requireBusinessEndUserTermsConsent(
+  admin: SupabaseClient,
+  businessId: string,
+  userId: string,
+): Promise<{ consent: GridEndUserTermsConsentPayload; ownerUserId: string }> {
+  const { consent, ownerUserId } = await loadGridEndUserTermsConsentForBusiness(
+    admin,
+    businessId,
+    userId,
+  )
+  if (!consent) {
+    throw new Error("grid_end_user_terms_required")
+  }
+  return { consent, ownerUserId }
+}
+
+async function syncEndUserTermsConsentIfNeeded(input: {
+  admin: SupabaseClient
+  customerId: string
+  customer: GridCustomer
+  consent: GridEndUserTermsConsentPayload
+  ownerUserId: string
+}): Promise<GridCustomer> {
+  if (!customerNeedsEndUserTermsConsentPatch(input.customer, input.consent)) {
+    return input.customer
+  }
+  const patched = await gridFetch<GridCustomer>({
+    method: "PATCH",
+    path: `/customers/${encodeURIComponent(input.customerId)}`,
+    json: { endUserTermsConsent: input.consent },
+  })
+  await markGridEndUserTermsSynced(input.admin, input.ownerUserId)
+  return patched
+}
+
 /** Ensure a Grid BUSINESS customer exists for the org. */
 export async function ensureGridBusinessCustomer(input: {
   admin: SupabaseClient
@@ -122,14 +163,26 @@ export async function ensureGridBusinessCustomer(input: {
     input.userId,
     rawProfile,
   )
+  const { consent, ownerUserId } = await requireBusinessEndUserTermsConsent(
+    input.admin,
+    input.businessId,
+    input.userId,
+  )
 
   const stored = await readStoredGridCustomerId(input.admin, input.businessId)
   if (stored) {
     const customerId = normalizeGridCustomerId(stored)
     if (await verifyGridCustomerExists(customerId)) {
-      const customer = await gridFetch<GridCustomer>({
+      let customer = await gridFetch<GridCustomer>({
         method: "GET",
         path: `/customers/${encodeURIComponent(customerId)}`,
+      })
+      customer = await syncEndUserTermsConsentIfNeeded({
+        admin: input.admin,
+        customerId,
+        customer,
+        consent,
+        ownerUserId,
       })
       if (customerId !== stored) {
         await persistGridCustomerId(input.admin, input.businessId, customerId)
@@ -142,10 +195,20 @@ export async function ensureGridBusinessCustomer(input: {
   if (existing?.id) {
     const customerId = normalizeGridCustomerId(existing.id)
     await persistGridCustomerId(input.admin, input.businessId, customerId)
-    return { customerId, platformCustomerId, customer: existing }
+    const customer = await syncEndUserTermsConsentIfNeeded({
+      admin: input.admin,
+      customerId,
+      customer: existing,
+      consent,
+      ownerUserId,
+    })
+    return { customerId, platformCustomerId, customer }
   }
 
-  const payload = buildGridBusinessCustomerPayload({ platformCustomerId, profile })
+  const payload = {
+    ...buildGridBusinessCustomerPayload({ platformCustomerId, profile }),
+    endUserTermsConsent: consent,
+  }
   const created = await gridFetch<GridCustomer>({
     method: "POST",
     path: "/customers",
@@ -156,5 +219,6 @@ export async function ensureGridBusinessCustomer(input: {
   const customerId = normalizeGridCustomerId(String(created.id ?? ""))
   if (!customerId) throw new Error("Grid BUSINESS customer create did not return id")
   await persistGridCustomerId(input.admin, input.businessId, customerId)
+  await markGridEndUserTermsSynced(input.admin, ownerUserId)
   return { customerId, platformCustomerId, customer: created }
 }

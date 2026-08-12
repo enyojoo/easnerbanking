@@ -15,6 +15,15 @@ import { getEmailAudienceProfile } from "@easner/server"
 import { claimTeamInvite } from "@/lib/business/claim-team-invite"
 import { ensureDefaultCommunicationPreferences } from "@/lib/notifications/ensure-communication-preferences"
 import { cancelAccountDeletion } from "@/lib/settings/account-deletion"
+import { isGridConfigured } from "@/lib/grid/config"
+import {
+  fetchCurrentEndUserTermsVersion,
+  inferAcceptanceMethod,
+  recordGridEndUserTermsAcceptance,
+  resolveClientIp,
+  shouldRefreshGridTermsAcceptance,
+  type GridEndUserTermsUserRow,
+} from "@/lib/grid/end-user-terms-consent"
 
 type BootstrapBody = {
   countryCode?: string
@@ -174,7 +183,9 @@ export async function POST(request: Request) {
 
   const { data: userRow } = await admin
     .from("users")
-    .select("id,easner_business_id,full_name,role,residence_country,deletion_scheduled_at,deleted_at")
+    .select(
+      "id,easner_business_id,full_name,role,residence_country,deletion_scheduled_at,deleted_at,grid_end_user_terms_version,grid_end_user_terms_accepted_at,grid_end_user_terms_accept_ip,grid_end_user_terms_accept_method",
+    )
     .eq("id", user.id)
     .maybeSingle()
 
@@ -420,6 +431,25 @@ export async function POST(request: Request) {
           { onConflict: "id" },
         )
       if (shouldSetResidence) residencePersisted = false
+    }
+  }
+
+  // Grid End User Terms audit — non-blocking if Grid is down; ensure* fails closed later.
+  if (isGridConfigured()) {
+    try {
+      const { version } = await fetchCurrentEndUserTermsVersion()
+      const termsRow = (userRow ?? { id: null }) as GridEndUserTermsUserRow
+      if (shouldRefreshGridTermsAcceptance(termsRow, version)) {
+        const authUserForMethod = await loadAuthUserForSignupPolicy(admin, user)
+        await recordGridEndUserTermsAcceptance(admin, {
+          userId: user.id,
+          ip: resolveClientIp(request),
+          method: inferAcceptanceMethod(!userRow?.id, authUserForMethod.identities),
+          version,
+        })
+      }
+    } catch (e) {
+      console.warn("[bootstrap] grid end-user-terms record (non-fatal):", e)
     }
   }
 

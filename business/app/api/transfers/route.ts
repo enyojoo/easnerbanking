@@ -148,6 +148,8 @@ export async function POST(request: Request) {
         mobileProvider: recipient.mobile_provider,
         bankName: recipient.bank_name,
         rail: recipient.mobile_provider ? "mobile_money" : "bank_transfer",
+        businessId: noahContext.scope === "business" ? noahContext.businessId : null,
+        userId: user.id,
       })
       provider = route.id
     } catch (e) {

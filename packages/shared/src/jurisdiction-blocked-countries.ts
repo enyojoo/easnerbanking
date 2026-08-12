@@ -1,59 +1,150 @@
 /**
- * ISO 3166-1 alpha-2 codes blocked per Easner KYC/KYB policy.
- * Keep in sync with docs/legal/compliance.md §3 (Prohibited and Controlled jurisdictions).
+ * Product-split jurisdiction hard blocks.
+ * Keep in sync with docs/legal/compliance.md §3.
+ *
+ * Business signup/KYB → Grid main prohibited residences.
+ * Mobile signup/residence → Noah fully prohibited VA residences (incl. GB).
+ * Grid digital-asset extras → signup allowed; exclude Grid payout rails only.
  */
 
-/** Prohibited — no onboarding or services. */
-export const EASNER_PROHIBITED_JURISDICTION_ISO2 = [
-  "CU", // Cuba
-  "IR", // Iran
-  "MM", // Myanmar
-  "KP", // North Korea
-  "SY", // Syria
-] as const
+export type JurisdictionProduct = "business" | "mobile"
 
-/**
- * Controlled — not available except specially approved partner programs.
- * Not generally available through Easner signup/KYB pickers.
- */
-export const EASNER_CONTROLLED_JURISDICTION_ISO2 = [
+/** Lightspark Grid main prohibited jurisdictions (onboarding / residence). */
+export const GRID_PROHIBITED_RESIDENCE_ISO2 = [
   "AF", // Afghanistan
-  "DZ", // Algeria
-  "BD", // Bangladesh
   "BY", // Belarus
-  "CN", // China
+  "BT", // Bhutan
+  "BI", // Burundi
   "CD", // Congo (Democratic Republic of the)
+  "CU", // Cuba
   "PS", // Gaza Strip / West Bank (Palestinian Territories)
+  "GW", // Guinea-Bissau
   "HT", // Haiti
+  "IR", // Iran
   "IQ", // Iraq
+  "KE", // Kenya
+  "XK", // Kosovo
   "LB", // Lebanon
   "LY", // Libya
-  "MA", // Morocco
   "MZ", // Mozambique
-  "NP", // Nepal
-  "NI", // Nicaragua
-  "MK", // North Macedonia
-  "QA", // Qatar
+  "MM", // Myanmar
+  "KP", // North Korea
   "PK", // Pakistan
+  "QA", // Qatar
   "RU", // Russia
   "SO", // Somalia
   "SS", // South Sudan
   "SD", // Sudan
+  "SY", // Syria
   "VE", // Venezuela
   "YE", // Yemen
+  "ZW", // Zimbabwe
 ] as const
 
-const BLOCKED_SET = new Set<string>([
-  ...EASNER_PROHIBITED_JURISDICTION_ISO2,
-  ...EASNER_CONTROLLED_JURISDICTION_ISO2,
-])
+/**
+ * Noah fully prohibited VA residences (no VA on listed rails).
+ * Includes GB — Mobile blocks UK signup; Business keeps GB open.
+ */
+export const NOAH_FULLY_PROHIBITED_VA_ISO2 = [
+  "AF", // Afghanistan
+  "BF", // Burkina Faso
+  "BY", // Belarus
+  "CD", // Congo (Democratic Republic of the)
+  "CF", // Central African Republic
+  "CU", // Cuba
+  "GB", // United Kingdom
+  "GW", // Guinea-Bissau
+  "HT", // Haiti
+  "IQ", // Iraq
+  "IR", // Iran
+  "KP", // North Korea
+  "LB", // Lebanon
+  "LY", // Libya
+  "ML", // Mali
+  "MM", // Myanmar
+  "MZ", // Mozambique
+  "NI", // Nicaragua
+  "PA", // Panama
+  "PK", // Pakistan
+  "PS", // Palestinian Territory
+  "RU", // Russia
+  "SD", // Sudan
+  "SO", // Somalia
+  "SS", // South Sudan
+  "SY", // Syria
+  "UA", // Ukraine
+  "VE", // Venezuela
+  "VU", // Vanuatu
+  "YE", // Yemen
+  "ZW", // Zimbabwe
+] as const
 
-export function isEasnerBlockedJurisdiction(countryCode: string | null | undefined): boolean {
-  if (!countryCode) return false
+/**
+ * Grid digital-asset extra prohibited residences.
+ * Signup allowed; balance/corridor payouts must not use Grid.
+ */
+export const GRID_DIGITAL_ASSET_EXTRA_ISO2 = [
+  "DZ", // Algeria
+  "BD", // Bangladesh
+  "CN", // China
+  "MA", // Morocco
+  "NP", // Nepal
+] as const
+
+/** @deprecated Use GRID_PROHIBITED_RESIDENCE_ISO2 — transitional alias for shared sanctions core. */
+export const EASNER_PROHIBITED_JURISDICTION_ISO2 = [
+  "CU",
+  "IR",
+  "MM",
+  "KP",
+  "SY",
+] as const
+
+/** @deprecated Controlled split retired — empty for transitional imports. */
+export const EASNER_CONTROLLED_JURISDICTION_ISO2 = [] as const
+
+const BUSINESS_BLOCKED = new Set<string>(GRID_PROHIBITED_RESIDENCE_ISO2)
+const MOBILE_BLOCKED = new Set<string>(NOAH_FULLY_PROHIBITED_VA_ISO2)
+const GRID_DIGITAL_ASSET = new Set<string>(GRID_DIGITAL_ASSET_EXTRA_ISO2)
+
+function normalizeIso2(countryCode: string | null | undefined): string | null {
+  if (!countryCode) return null
   const code = countryCode.trim().toUpperCase()
-  return BLOCKED_SET.has(code)
+  if (!/^[A-Z]{2}$/.test(code)) return null
+  return code
+}
+
+export function isBlockedForBusiness(countryCode: string | null | undefined): boolean {
+  const code = normalizeIso2(countryCode)
+  if (!code) return false
+  return BUSINESS_BLOCKED.has(code)
+}
+
+export function isBlockedForMobile(countryCode: string | null | undefined): boolean {
+  const code = normalizeIso2(countryCode)
+  if (!code) return false
+  return MOBILE_BLOCKED.has(code)
+}
+
+export function isGridDigitalAssetJurisdiction(countryCode: string | null | undefined): boolean {
+  const code = normalizeIso2(countryCode)
+  if (!code) return false
+  return GRID_DIGITAL_ASSET.has(code)
+}
+
+/** Business signup/KYB alias — prefer isBlockedForBusiness at new call sites. */
+export function isEasnerBlockedJurisdiction(countryCode: string | null | undefined): boolean {
+  return isBlockedForBusiness(countryCode)
 }
 
 export function filterBlockedJurisdictions(codes: string[]): string[] {
-  return codes.filter((code) => !isEasnerBlockedJurisdiction(code))
+  return filterBlockedJurisdictionsForProduct("business", codes)
+}
+
+export function filterBlockedJurisdictionsForProduct(
+  product: JurisdictionProduct,
+  codes: string[],
+): string[] {
+  const blocked = product === "mobile" ? isBlockedForMobile : isBlockedForBusiness
+  return codes.filter((code) => !blocked(code))
 }

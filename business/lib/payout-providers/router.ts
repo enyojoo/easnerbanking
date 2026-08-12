@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { ProviderRoutingEntry } from "@easner/shared"
+import { isGridDigitalAssetJurisdiction } from "@easner/shared"
 import { gridPayoutProvider } from "./grid-provider"
 import { noahPayoutProvider } from "./noah-provider"
 import { yellowcardPayoutProvider } from "./yellowcard-provider"
+import { resolvePayoutSenderCountryCode } from "./resolve-sender-country"
 import type { CorridorContext, PayoutProvider, PayoutRailKind } from "./types"
 import { NoProviderForCorridorError } from "./types"
 
@@ -31,14 +33,36 @@ function parseRouting(raw: unknown): ProviderRoutingEntry[] {
 }
 
 /**
+ * Grid digital-asset extra residences cannot use Grid payouts.
+ * Strip `grid` and keep priority order among remaining providers.
+ */
+export function filterProviderRoutingForSender(
+  routing: ProviderRoutingEntry[],
+  senderCountryCode: string | null | undefined,
+): ProviderRoutingEntry[] {
+  if (!isGridDigitalAssetJurisdiction(senderCountryCode)) {
+    return routing
+  }
+  return routing
+    .filter((entry) => String(entry.provider).trim().toLowerCase() !== "grid")
+    .sort((a, b) => a.priority - b.priority)
+}
+
+/**
  * Manual Office routing: use the priority-1 provider only.
  * Do not walk secondaries (that would be auto-failover).
+ * Sender digital-asset filter may remove Grid before picking primary.
  */
 export async function selectProvider(ctx: CorridorContext): Promise<PayoutProvider> {
-  const routing = parseRouting(ctx.providerRouting)
+  const routing = filterProviderRoutingForSender(
+    parseRouting(ctx.providerRouting),
+    ctx.senderCountryCode,
+  )
   if (!routing.length) {
     throw new NoProviderForCorridorError(
-      "Payout provider is not configured for this corridor. Enable a provider in Office Platform Control.",
+      isGridDigitalAssetJurisdiction(ctx.senderCountryCode)
+        ? "Grid payouts are not available for your country of registration. Use another configured payout provider for this corridor."
+        : "Payout provider is not configured for this corridor. Enable a provider in Office Platform Control.",
     )
   }
 
@@ -85,6 +109,9 @@ export async function selectProviderForCorridor(
     rail: PayoutRailKind
     mobileProvider?: string | null
     bankName?: string | null
+    senderCountryCode?: string | null
+    businessId?: string | null
+    userId?: string | null
   },
 ): Promise<PayoutProvider> {
   const rail: PayoutRailKind =
@@ -98,11 +125,20 @@ export async function selectProviderForCorridor(
     rail,
   })
 
+  let senderCountryCode = input.senderCountryCode ?? null
+  if (!senderCountryCode && (input.businessId || input.userId)) {
+    senderCountryCode = await resolvePayoutSenderCountryCode(admin, {
+      businessId: input.businessId,
+      userId: input.userId,
+    })
+  }
+
   return selectProvider({
     countryCode: input.countryCode.trim().toUpperCase(),
     currencyCode: input.currencyCode.trim().toUpperCase(),
     rail,
     providerRouting,
+    senderCountryCode,
   })
 }
 

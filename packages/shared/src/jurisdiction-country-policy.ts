@@ -1,4 +1,9 @@
-import { filterBlockedJurisdictions, isEasnerBlockedJurisdiction } from "./jurisdiction-blocked-countries"
+import {
+  filterBlockedJurisdictions,
+  filterBlockedJurisdictionsForProduct,
+  isBlockedForBusiness,
+  isEasnerBlockedJurisdiction,
+} from "./jurisdiction-blocked-countries"
 
 export type JurisdictionSurface = "signup" | "kyb" | "individual_residence"
 
@@ -86,10 +91,11 @@ export function resolveJurisdictionAllowlist(
     rawAllowlist == null
       ? [...catalogSet]
       : rawAllowlist.map((c) => c.toUpperCase()).filter((c) => catalogSet.has(c))
-  return filterBlockedJurisdictions(base)
+  // Business/Office pickers use Grid main prohibited list only.
+  return filterBlockedJurisdictionsForProduct("business", base)
 }
 
-export { isEasnerBlockedJurisdiction, filterBlockedJurisdictions }
+export { isEasnerBlockedJurisdiction, filterBlockedJurisdictions, isBlockedForBusiness }
 
 /** `allowedCodes === null` or `unrestricted === true` keeps full catalog. */
 export function filterCountriesByPolicy<T extends CountryCatalogEntry>(

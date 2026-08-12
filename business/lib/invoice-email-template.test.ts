@@ -176,7 +176,7 @@ describe("invoice email templates", () => {
       reminderType: "due_today" as const,
     }
     expect(getInvoiceEmailSubject(data)).toBe(
-      "Reminder: Invoice due today from Acme Ltd – INV-001",
+      "Reminder: Invoice due today from Acme Ltd - INV-001",
     )
     const html = generateInvoiceEmailHtml(data)
     expect(html).toContain("This is a reminder that your invoice is due today.")
@@ -192,7 +192,7 @@ describe("invoice email templates", () => {
       issuer: sampleIssuer,
       reminderType: "overdue_7d" as const,
     }
-    expect(getInvoiceEmailSubject(data)).toBe("Reminder: Your invoice from Acme Ltd – INV-001")
+    expect(getInvoiceEmailSubject(data)).toBe("Reminder: Your invoice from Acme Ltd - INV-001")
     const html = generateInvoiceEmailHtml(data)
     expect(html).toContain("This is a reminder that your invoice is past due.")
   })

@@ -2,9 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import "server-only"
 import {
   buildTransactionEmailDetailRows,
+  buildGridReceiptEmailDetailRows,
   deriveTransactionNotification,
   descriptorToPushContent,
   formatMaskedSenderDisplay,
+  formatMoneyDisplay,
+  formatTransactionWhen,
   isWalletSendOutRow,
   parseCommunicationPreferences,
   personalMobileTransactionUrl,
@@ -198,6 +201,131 @@ function buildEmailDetailRows(
   return undefined
 }
 
+function isGridMoneyTransmissionProvider(provider: string | null | undefined): boolean {
+  return String(provider ?? "").trim().toLowerCase() === "grid"
+}
+
+function moneyDisplayFromMeta(
+  amount: unknown,
+  currency: unknown,
+  fallbackDisplay?: string | null,
+): string | undefined {
+  const n = typeof amount === "number" ? amount : Number(amount)
+  const cur = typeof currency === "string" ? currency.trim().toUpperCase() : ""
+  if (Number.isFinite(n) && cur) return formatMoneyDisplay(n, cur)
+  return fallbackDisplay?.trim() || undefined
+}
+
+/** Grid regulatory receipt rows — fiat only; no crypto/chain fields. */
+function buildGridEmailDetailRows(
+  descriptor: ReturnType<typeof deriveTransactionNotification>,
+  input: DispatchTransactionNotificationInput,
+): { label: string; value: string }[] | undefined {
+  const meta = (input.metadata ?? {}) as Record<string, unknown>
+  const gridTransactionId = firstString([
+    meta.grid_transaction_id,
+    meta.provider_transaction_id,
+    input.transactionId,
+  ])
+  if (!gridTransactionId) return undefined
+
+  const snap = meta.recipient_snapshot as Record<string, unknown> | undefined
+  const payoutReview = readValidPayoutReview(meta.payout_review)
+  const senderName =
+    firstString([
+      meta.sender_name,
+      meta.sender_display_name,
+      meta.business_name,
+      meta.platform_customer_name,
+    ]) || undefined
+  const recipientName =
+    firstString([
+      snap?.full_name,
+      meta.recipient_name,
+      meta.beneficiary_name,
+      meta.counterparty_name,
+      descriptor.counterpartyName,
+    ]) || undefined
+
+  const transferAmount =
+    moneyDisplayFromMeta(
+      payoutReview?.you_send_amount ?? meta.send_amount ?? meta.transfer_amount ?? input.amount,
+      payoutReview?.send_currency ?? meta.send_currency ?? input.currency,
+      descriptor.amountDisplay,
+    ) || descriptor.amountDisplay
+
+  const totalToRecipient = moneyDisplayFromMeta(
+    payoutReview?.receive_amount ?? meta.receive_amount ?? meta.total_to_recipient,
+    payoutReview?.receive_currency ?? meta.receive_currency ?? meta.destination_currency,
+  )
+
+  const fees = moneyDisplayFromMeta(
+    payoutReview?.processing_fee ??
+      meta.fee_amount ??
+      meta.total_transfer_fees ??
+      meta.fees,
+    payoutReview?.send_currency ?? meta.fee_currency ?? input.currency,
+  )
+
+  const total = moneyDisplayFromMeta(
+    payoutReview?.total_debited ?? meta.total_debited ?? meta.total,
+    payoutReview?.send_currency ?? meta.send_currency ?? input.currency,
+    transferAmount,
+  )
+
+  const rate = Number(payoutReview?.exchange_rate ?? meta.exchange_rate ?? meta.customer_rate)
+  const sendCur = firstString([
+    payoutReview?.send_currency,
+    meta.send_currency,
+    input.currency,
+  ])
+  const recvCur = firstString([
+    payoutReview?.receive_currency,
+    meta.receive_currency,
+    meta.destination_currency,
+  ])
+  const exchangeRateDisplay =
+    Number.isFinite(rate) && rate > 0 && sendCur && recvCur && sendCur !== recvCur
+      ? `1 ${sendCur} = ${rate.toFixed(4)} ${recvCur}`
+      : undefined
+
+  const mode = firstString([meta.grid_mode, meta.yc_mode, meta.mode])
+  const transactionType =
+    mode === "cross_border_send"
+      ? "Cross-border send"
+      : mode === "fund_balance"
+        ? "Fund balance"
+        : mode === "balance_payout"
+          ? "Balance payout"
+          : descriptor.direction === "in"
+            ? "Incoming payment"
+            : "Outgoing payment"
+
+  const settledAtDisplay = formatTransactionWhen(
+    firstString([
+      meta.settled_at,
+      input.createdAt,
+      meta.occurred_at,
+      meta.ledger_created_at,
+    ]) ?? "",
+  )
+
+  const rows = buildGridReceiptEmailDetailRows({
+    gridTransactionId,
+    easnerTransactionId: input.easnerTransactionId ?? input.transactionId,
+    senderName,
+    recipientName,
+    transferAmountDisplay: transferAmount,
+    totalToRecipientDisplay: totalToRecipient,
+    totalTransferFeesDisplay: fees,
+    totalDisplay: total,
+    exchangeRateDisplay,
+    transactionType,
+    settledAtDisplay: settledAtDisplay || undefined,
+  })
+  return rows.length ? rows : undefined
+}
+
 function descriptorToEmailData(
   descriptor: ReturnType<typeof deriveTransactionNotification>,
   input: DispatchTransactionNotificationInput,
@@ -209,11 +337,32 @@ function descriptorToEmailData(
     process.env.NEXT_PUBLIC_APP_URL ||
     "https://business.easner.com"
   const id = input.easnerTransactionId || input.transactionId
+  const isGrid =
+    isGridMoneyTransmissionProvider(input.provider) && (input.outcome ?? "success") === "success"
+  const meta = (input.metadata ?? {}) as Record<string, unknown>
+  const gridTransactionId = isGrid
+    ? firstString([meta.grid_transaction_id, meta.provider_transaction_id])
+    : undefined
+  const mode = firstString([meta.grid_mode, meta.yc_mode, meta.mode])
+  const recvCurForDisclosure = firstString([
+    meta.receive_currency,
+    meta.fiat_currency,
+    meta.destination_currency,
+  ])
+  const sendCurForDisclosure = firstString([meta.send_currency, input.currency, "USD"])
+  const includeForeignRemittance =
+    isGrid &&
+    (mode === "cross_border_send" ||
+      mode === "balance_payout" ||
+      Boolean(recvCurForDisclosure && sendCurForDisclosure && recvCurForDisclosure !== sendCurForDisclosure))
+
   return {
     transactionId: input.transactionId,
     easnerTransactionId: input.easnerTransactionId,
     title: descriptor.title,
-    emailSubject: descriptor.emailSubject,
+    emailSubject: isGrid
+      ? `Your Easner transfer receipt - ${descriptor.amountDisplay}`
+      : descriptor.emailSubject,
     body: descriptor.body,
     amountDisplay: descriptor.amountDisplay,
     counterpartyLabel: descriptor.counterpartyLabel,
@@ -234,17 +383,22 @@ function descriptorToEmailData(
       audience === "business"
         ? `${businessBase}/transactions/${encodeURIComponent(id)}`
         : personalMobileTransactionUrl(id, process.env.NEXT_PUBLIC_MOBILE_APP_URL),
-    detailRows: buildEmailDetailRows(descriptor, input),
+    detailRows: isGrid
+      ? buildGridEmailDetailRows(descriptor, input) ?? buildEmailDetailRows(descriptor, input)
+      : buildEmailDetailRows(descriptor, input),
     createdAt:
       input.createdAt ??
       firstString([
-        (input.metadata as Record<string, unknown> | null | undefined)?.occurred_at,
-        (input.metadata as Record<string, unknown> | null | undefined)?.ledger_created_at,
-        (input.metadata as Record<string, unknown> | null | undefined)?.created_at,
-        (input.metadata as Record<string, unknown> | null | undefined)?.transaction_started_at,
+        meta.occurred_at,
+        meta.ledger_created_at,
+        meta.created_at,
+        meta.transaction_started_at,
       ]),
     firstName,
     audience,
+    isGridMoneyTransmissionReceipt: isGrid,
+    gridTransactionId,
+    includeForeignRemittanceDisclosure: includeForeignRemittance,
   }
 }
 
@@ -316,9 +470,33 @@ export async function dispatchTransactionNotification(
         contact.firstName,
       )
       const { emailService } = await import("@easner/server")
-      await emailService
+      const sendResult = await emailService
         .sendTransactionSettledEmail(email, emailData, prefs)
-        .catch((e) => console.warn("transaction notification email (non-fatal):", e))
+        .catch((e) => {
+          console.warn("transaction notification email (non-fatal):", e)
+          return null
+        })
+
+      if (
+        sendResult?.success &&
+        emailData.isGridMoneyTransmissionReceipt &&
+        emailData.gridTransactionId &&
+        (input.outcome ?? "success") === "success"
+      ) {
+        try {
+          const { confirmGridReceiptDelivery } = await import(
+            "@/lib/grid/confirm-receipt-delivery"
+          )
+          await confirmGridReceiptDelivery({
+            admin,
+            ledgerTransactionId: input.transactionId,
+            gridTransactionId: emailData.gridTransactionId,
+            metadata: (input.metadata ?? {}) as Record<string, unknown>,
+          })
+        } catch (e) {
+          console.warn("grid receipt confirm (non-fatal):", e)
+        }
+      }
     } else {
       console.warn(
         `[email] skipped ledger transaction email user=${input.userId} tx=${input.transactionId}: no users.email`,

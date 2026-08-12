@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { isGridDigitalAssetJurisdiction } from "@easner/shared"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { gridFetchAllPages } from "./http"
 import { normalizeGridCustomerId } from "./quote-request"
 import { registerTurnkeyUsdcExternalAccount } from "./turnkey-external-account"
+import { resolveBusinessCountryIso2 } from "./business-profile-shell"
 import { trySyncTurnkeyDepositVaultsIfNeeded } from "@/lib/wallet/sync-deposit-vaults"
 import { scheduleTurnkeyWalletsAfterKycApproved } from "@/lib/wallet/turnkey-provisioning"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
@@ -134,12 +136,25 @@ export async function provisionGridAfterBusinessKybApproved(input: {
 
   let externalAccountId: string | null = null
   if (input.gridCustomerId) {
-    externalAccountId = await registerTurnkeyUsdcExternalAccount({
-      admin: input.admin,
-      businessId: input.businessId,
-      userId: subjectUserId,
-      gridCustomerId: input.gridCustomerId,
-    }).catch(() => null)
+    try {
+      const { data: biz } = await input.admin
+        .from("businesses")
+        .select("country")
+        .eq("id", input.businessId)
+        .maybeSingle()
+      const senderCountry = resolveBusinessCountryIso2(biz?.country ?? null)
+      if (!isGridDigitalAssetJurisdiction(senderCountry)) {
+        externalAccountId = await registerTurnkeyUsdcExternalAccount({
+          admin: input.admin,
+          businessId: input.businessId,
+          userId: subjectUserId,
+          gridCustomerId: input.gridCustomerId,
+        }).catch(() => null)
+      }
+    } catch {
+      // Best-effort: never fail KYB provision on USDC external-account skip/errors.
+      externalAccountId = null
+    }
   }
 
   let vaPersisted = 0

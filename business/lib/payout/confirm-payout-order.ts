@@ -53,6 +53,8 @@ export async function confirmPayoutOrder(
           : "bank_transfer",
       mobileProvider: recipient.mobile_provider,
       bankName: recipient.bank_name,
+      businessId: input.businessId,
+      userId: input.userId,
     })
     providerId = provider.id
   } catch (e) {
@@ -201,6 +203,7 @@ export async function confirmPayoutOrder(
 
   const quote = await buildPayoutQuote({
     userId: kycUserId,
+    businessId: input.businessId,
     noahCustomerId: input.noahCustomerId,
     recipientId: input.recipientId,
     recipient,

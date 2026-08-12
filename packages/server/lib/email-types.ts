@@ -44,6 +44,11 @@ export interface TransactionEmailData {
    */
   detailRows?: { label: string; value: string }[]
   audience?: EmailAudience
+  /** When true, email includes Lightspark money-transmission receipt disclosures. */
+  isGridMoneyTransmissionReceipt?: boolean
+  gridTransactionId?: string
+  /** Cross-border foreign remittance shortfall disclosure. */
+  includeForeignRemittanceDisclosure?: boolean
 }
 
 export interface WelcomeEmailData {

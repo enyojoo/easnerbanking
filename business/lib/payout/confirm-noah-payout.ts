@@ -79,6 +79,8 @@ export async function confirmNoahPayoutOrder(
         : "bank_transfer",
     mobileProvider: input.recipient.mobile_provider,
     bankName: input.recipient.bank_name,
+    businessId: input.businessId,
+    userId: input.userId,
   })
   if (provider.id === "yellowcard") {
     throw new Error("Yellowcard corridor must use YC confirm path.")
@@ -89,6 +91,7 @@ export async function confirmNoahPayoutOrder(
 
   const preview = await lockNoahBalancePayoutQuote({
     userId: input.userId,
+    businessId: input.businessId,
     noahCustomerId: input.noahCustomerId,
     recipientId: input.recipientId,
     recipient: input.recipient,

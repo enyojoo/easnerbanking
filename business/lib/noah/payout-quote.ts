@@ -500,6 +500,7 @@ export async function buildNoahBalancePayoutPreview(input: {
  */
 export async function lockNoahBalancePayoutQuote(input: {
   userId: string
+  businessId?: string | null
   noahCustomerId: string
   recipientId?: string
   recipient: RecipientSellPrepareRow
@@ -543,6 +544,8 @@ export async function lockNoahBalancePayoutQuote(input: {
             : "bank_transfer",
         mobileProvider: row.mobile_provider,
         bankName: row.bank_name,
+        businessId: input.businessId,
+        userId: input.userId,
       })
       if (provider.id !== "noah") {
         throw new Error(`Payout provider "${provider.id}" must use its own confirm path.`)
@@ -848,6 +851,7 @@ export async function lockNoahBalancePayoutQuote(input: {
 /** Route by corridor provider; Noah/YC/Grid previews are DB-only (lock on `/confirm`). */
 export async function buildPayoutQuote(input: {
   userId: string
+  businessId?: string | null
   noahCustomerId: string
   recipientId?: string
   recipient: RecipientSellPrepareRow
@@ -884,6 +888,8 @@ export async function buildPayoutQuote(input: {
             : "bank_transfer",
         mobileProvider: row.mobile_provider,
         bankName: row.bank_name,
+        businessId: input.businessId,
+        userId: input.userId,
       })
       if (provider.id === "yellowcard") {
         return buildYellowcardBalancePayoutQuoteFromRow({

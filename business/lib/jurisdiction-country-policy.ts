@@ -6,8 +6,7 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   effectiveAllowlistForSurface,
-  isEasnerBlockedJurisdiction,
-  isNoahRestrictedGeography,
+  isBlockedForBusiness,
   parseJurisdictionCountryPolicyJson,
   resolveJurisdictionAllowlist,
   type JurisdictionCountryPolicyV1,
@@ -55,8 +54,8 @@ export async function isCountryAllowedForSurface(
   if (!countryCode) return surface === "individual_residence" ? false : true
   const code = countryCode.trim().toUpperCase()
   if (!/^[A-Z]{2}$/.test(code)) return false
-  if (isEasnerBlockedJurisdiction(code)) return false
-  if (isNoahRestrictedGeography(code)) return false
+  // Business product: Grid main prohibited only (never Noah geography / digital-asset extras).
+  if (isBlockedForBusiness(code)) return false
   const resolved = await getJurisdictionPolicyResolved(admin)
   const list =
     surface === "kyb"
