@@ -70,7 +70,7 @@ export function NgLocalVerificationNotice({ missingType, style, onSaved }: Props
           {copy.inlineLink}
         </Text>
       </Text>
-      <WebAwareModal visible={open} onRequestClose={() => setOpen(false)} compact>
+      <WebAwareModal visible={open} onRequestClose={() => setOpen(false)} keyboardAvoiding compact>
         <View style={styles.modalPanel}>
           <Text style={styles.title}>{copy.title}</Text>
           <Text style={styles.intro}>{copy.introBoth}</Text>
@@ -83,6 +83,9 @@ export function NgLocalVerificationNotice({ missingType, style, onSaved }: Props
             onChangeText={(t) => setValue(t.replace(/\D/g, '').slice(0, 11))}
             placeholder="00000000000"
             placeholderTextColor={colors.text.tertiary}
+            autoFocus
+            returnKeyType="done"
+            textContentType="none"
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable

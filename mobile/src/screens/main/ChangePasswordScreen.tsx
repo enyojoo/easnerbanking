@@ -13,6 +13,7 @@ import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
+import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { NavigationProps } from '../../types'
@@ -119,7 +120,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
   return (
     <ScreenWrapper>
       <CenteredWebFlowPage>
-      <View style={styles.container}>
+      <KeyboardSafeContainer style={styles.container}>
         <ScrollView
           style={styles.scrollContainer}
           contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
@@ -180,6 +181,11 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   placeholder="Enter current password"
                   placeholderTextColor={colors.text.tertiary}
                   secureTextEntry={!showCurrentPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  textContentType="password"
+                  autoComplete="password"
                   editable={!loading}
                 />
                 <Pressable
@@ -206,6 +212,11 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   placeholder="Enter new password"
                   placeholderTextColor={colors.text.tertiary}
                   secureTextEntry={!showNewPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  textContentType="newPassword"
+                  autoComplete="password-new"
                   editable={!loading}
                 />
                 <Pressable
@@ -232,6 +243,11 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                   placeholder="Confirm new password"
                   placeholderTextColor={colors.text.tertiary}
                   secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  textContentType="newPassword"
+                  autoComplete="password-new"
                   editable={!loading}
                 />
                 <Pressable
@@ -258,7 +274,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
             </View>
           </Animated.View>
         </ScrollView>
-      </View>
+      </KeyboardSafeContainer>
       </CenteredWebFlowPage>
     </ScreenWrapper>
   )

@@ -4,7 +4,6 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  ActivityIndicator,
   Platform,
 } from 'react-native'
 import { ArrowLeft, HelpCircle } from 'lucide-react-native'
@@ -13,13 +12,10 @@ import { getApiBaseUrl } from '../../lib/apiClient'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { colors, surfaceChromeCircleStyle, textStyles, spacing } from '../../theme'
-import { otpCodeBoxStyles } from '../../theme/otpCodeBoxVisual'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
-import { TextField } from '../../components/ui'
+import { TextField, OtpCodeInput } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
-import { PinKeypad } from '../../components/pin'
-import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 import { useToast } from '../../components/ToastProvider'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import { haptics } from '../../lib/haptics'
@@ -100,15 +96,6 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   }
 
   const otpDigits = otpCode.replace(/\D/g, '').slice(0, 6)
-  const otpActiveIndex = Math.min(otpDigits.length, 5)
-
-  const handleOtpBackspace = () => {
-    if (loading) return
-    if (otpDigits.length === 0) return
-    if (error) setError('')
-    if (message) setMessage('')
-    setOtpCode(otpDigits.slice(0, -1))
-  }
 
   const handleOtpSubmit = async (overrideCode?: string) => {
     const code = (overrideCode ?? otpDigits).replace(/\D/g, '').slice(0, 6)
@@ -178,18 +165,6 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
     },
     [error, handleOtpSubmit, message],
   )
-
-  useOtpClipboardAutofill({
-    enabled: step === 'otp' && !loading,
-    value: otpCode,
-    onAutofill: applyOtpCode,
-  })
-
-  const handleOtpDigit = (d: string) => {
-    if (loading) return
-    if (otpDigits.length >= 6) return
-    applyOtpCode(`${otpDigits}${d}`)
-  }
 
   const handleResendOtp = async () => {
     if (resendCooldown > 0) return
@@ -284,6 +259,9 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  returnKeyType="go"
+                  textContentType="emailAddress"
+                  autoComplete="email"
                   editable={!loading}
                   error={error || undefined}
                   containerStyle={styles.fieldFlush}
@@ -304,27 +282,15 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                   <Text style={styles.subtitle}>
                     We've sent a 6-digit code to {email}
                   </Text>
-                  <View style={[otpCodeBoxStyles.boxRow, styles.otpBoxesRowMargins]} accessibilityLabel="One-time code">
-                    {loading ? (
-                      <View style={otpCodeBoxStyles.boxesLoadingOnly}>
-                        <ActivityIndicator size="small" color={colors.primary.main} />
-                      </View>
-                    ) : (
-                      Array.from({ length: 6 }, (_, i) => (
-                        <View
-                          key={i}
-                          style={[
-                            otpCodeBoxStyles.box,
-                            otpActiveIndex === i ? otpCodeBoxStyles.boxActive : otpCodeBoxStyles.boxIdle,
-                          ]}
-                          accessibilityElementsHidden
-                          importantForAccessibility="no-hide-descendants"
-                        >
-                          <Text style={otpCodeBoxStyles.digit}>{otpDigits[i] ?? ''}</Text>
-                        </View>
-                      ))
-                    )}
-                  </View>
+                  <OtpCodeInput
+                    id="forgot-password-otp"
+                    value={otpCode}
+                    onChange={applyOtpCode}
+                    autoFocus
+                    disabled={loading}
+                    loading={loading}
+                    containerStyle={styles.otpInput}
+                  />
                   <View style={styles.otpHintSlot} accessibilityLiveRegion="polite">
                     {error ? (
                       <Text style={styles.otpErrorText}>{error}</Text>
@@ -345,15 +311,6 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
                     {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code'}
                   </Text>
                 </Pressable>
-
-                <View style={styles.otpKeypad}>
-                  <PinKeypad
-                    onDigit={handleOtpDigit}
-                    onBackspace={handleOtpBackspace}
-                    disabled={loading}
-                    filledCount={otpDigits.length}
-                  />
-                </View>
               </>
             )}
           </View>
@@ -443,13 +400,10 @@ const styles = StyleSheet.create({
   otpSection: {
     marginBottom: spacing[5],
   },
-  otpBoxesRowMargins: {
+  otpInput: {
     marginTop: spacing[2],
-    marginBottom: spacing[6],
-  },
-  otpKeypad: {
+    marginBottom: spacing[2],
     width: '100%',
-    marginTop: spacing[4],
   },
   resendButton: {
     alignItems: 'center',

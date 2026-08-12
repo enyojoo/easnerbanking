@@ -47,7 +47,7 @@ export async function evaluateGridBusinessKycLinksPreflight(params: {
   const countryDisplay = displayCountryFromBusinessSetting(biz?.country as string | null | undefined)
   const registrationCode = countryCodeFromName(countryDisplay || (biz?.country as string | undefined))
   if (registrationCode) {
-    const allowed = await isCountryAllowedForSurface(admin, registrationCode, "signup")
+    const allowed = isCountryAllowedForSurface(registrationCode, "signup")
     if (!allowed) {
       return {
         action: "respond",

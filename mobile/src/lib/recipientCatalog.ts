@@ -274,23 +274,6 @@ export const recipientCatalog: RecipientCatalogEntry[] = [
   { countryCode: 'US', countryName: 'United States', currencyCode: 'PYUSD', currencyName: 'PayPal USD', recipientType: 'wallet', status: 'supported', providers: ['Base', 'Bitcoin'], fields: walletFields },
 ]
 
-/** Intersect corridor/static catalog with office jurisdiction (KYB country allowlist). */
-export function filterCatalogByJurisdictionPolicy(
-  entries: RecipientCatalogEntry[],
-  policy: { unrestricted: boolean; codes: string[] | null },
-): RecipientCatalogEntry[] {
-  if (policy.unrestricted || policy.codes == null) return entries
-  const set = new Set(policy.codes.map((c) => c.toUpperCase()))
-  return entries.filter((e) => set.has(e.countryCode.toUpperCase()))
-}
-
-export function getCatalogByRecipientTypeWithJurisdiction(
-  recipientType: RecipientType,
-  policy: { unrestricted: boolean; codes: string[] | null },
-): RecipientCatalogEntry[] {
-  return filterCatalogByJurisdictionPolicy(getCatalogByRecipientType(recipientType), policy)
-}
-
 /** Office send-destinations rows for recipient forms (parity with business recipient-form). */
 export function buildRecipientCatalogForType(
   recipientType: RecipientType,

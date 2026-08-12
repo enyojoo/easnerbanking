@@ -1584,6 +1584,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       {/* Step 2: Bank Account Form Modal */}
       <WebAwareModal
         visible={showBankAccountForm}
+        keyboardAvoiding
         onRequestClose={() => {
           closeAllDropdowns()
           setShowBankAccountForm(false)

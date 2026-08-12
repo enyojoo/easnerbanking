@@ -21,7 +21,6 @@ import { Eye, EyeOff, Info, MapPin, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { countries } from "@/lib/countries"
 import { setOnboarding } from "@/lib/onboarding-store"
-import { useAllowedCountryCodes } from "@/hooks/use-allowed-country-codes"
 import { filterCountriesForProductPicker } from "@easner/shared"
 import { CountryFlag } from "@/components/flags"
 import { OtpCodeInput } from "@/components/otp-code-input"
@@ -64,15 +63,10 @@ export default function SignupPage() {
     }
   }, [invitePreview])
 
-  const countryPolicy = useAllowedCountryCodes("signup")
+  // Business signup: catalog − Grid hard-blocks.
   const countriesForPicker = useMemo(
-    () =>
-      filterCountriesForProductPicker(
-        countries,
-        "business",
-        countryPolicy.unrestricted ? null : countryPolicy.codes,
-      ),
-    [countryPolicy.codes, countryPolicy.unrestricted],
+    () => filterCountriesForProductPicker(countries, "business"),
+    [],
   )
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -275,9 +269,7 @@ export default function SignupPage() {
                     <Command>
                       <CommandInput placeholder="Search..." className="h-9 text-sm" />
                       <CommandList className="max-h-[200px]">
-                        <CommandEmpty className="text-sm">
-                          {countryPolicy.loading ? "Loading countries…" : "No country found."}
-                        </CommandEmpty>
+                        <CommandEmpty className="text-sm">No country found.</CommandEmpty>
                         <CommandGroup>
                           {countriesForPicker.map((country) => (
                             <CommandItem

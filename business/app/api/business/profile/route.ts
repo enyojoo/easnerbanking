@@ -424,7 +424,7 @@ export async function PUT(request: Request) {
       if (!cc) {
         return NextResponse.json({ error: "Invalid country code" }, { status: 400 })
       }
-      if (!(await isCountryAllowedForSurface(admin, cc, "kyb"))) {
+      if (!isCountryAllowedForSurface(cc, "kyb")) {
         return NextResponse.json(
           { error: "This country is not allowed for your business profile." },
           { status: 400 },

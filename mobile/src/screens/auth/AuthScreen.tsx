@@ -11,7 +11,7 @@ import { ArrowLeft, Eye, EyeOff, HelpCircle } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
-import { TextField } from '../../components/ui'
+import { TextField, OtpCodeInput } from '../../components/ui'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { AppleSignInButton, GoogleOutlineButton, OrDivider, WebAppleSignInButton } from '../../components/auth/AuthChrome'
 import { ResidenceCountryField } from '../../components/compliance/ResidenceCountryField'
@@ -23,13 +23,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { colors, spacing, surfaceChromeCircleStyle } from '../../theme'
-import { otpCodeBoxStyles } from '../../theme/otpCodeBoxVisual'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
 import { AUTH_INITIAL_MODE_KEY, TERMS_URL } from '../../constants/auth'
-import { PinKeypad } from '../../components/pin'
-import { ActivityIndicator } from 'react-native'
-import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
 import { useToast } from '../../components/ToastProvider'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import EaseEnter from '../../components/EaseEnter'
@@ -326,8 +322,6 @@ export default function AuthScreen({ navigation }: NavigationProps) {
 
   const isLogin = mode === 'login'
   const isSignupOtp = !isLogin && signupStep === 'otp'
-  const signupOtpDigits = signupOtp.replace(/\D/g, '').slice(0, 6)
-  const otpActiveIndex = Math.min(signupOtpDigits.length, 5)
 
   const applySignupOtp = useCallback(
     (nextValue: string) => {
@@ -343,26 +337,6 @@ export default function AuthScreen({ navigation }: NavigationProps) {
     },
     [handleSubmit, signupOtpError, signupOtpNotice],
   )
-
-  useOtpClipboardAutofill({
-    enabled: isSignupOtp && !isLoading,
-    value: signupOtp,
-    onAutofill: applySignupOtp,
-  })
-
-  const handleOtpDigit = (d: string) => {
-    if (isLoading) return
-    if (signupOtpDigits.length >= 6) return
-    applySignupOtp(`${signupOtpDigits}${d}`)
-  }
-
-  const handleOtpBackspace = () => {
-    if (isLoading) return
-    if (signupOtpDigits.length === 0) return
-    if (signupOtpError) setSignupOtpError('')
-    if (signupOtpNotice) setSignupOtpNotice('')
-    setSignupOtp(signupOtpDigits.slice(0, -1))
-  }
 
   useEffect(() => {
     if (signupResendCooldown <= 0) return
@@ -498,6 +472,9 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                   secureTextEntry={!passwordVisible}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  returnKeyType={isLogin ? 'done' : 'go'}
+                  textContentType={isLogin ? 'password' : 'newPassword'}
+                  autoComplete={isLogin ? 'password' : 'password-new'}
                   editable={!isLoading}
                   containerStyle={styles.fieldFlush}
                   rightAccessory={
@@ -535,27 +512,15 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                 <Text style={styles.otpHint}>
                   Enter the 6-digit code we sent to {email || 'your email'}
                 </Text>
-                <View style={[otpCodeBoxStyles.boxRow, styles.otpBoxesRowMargins]} accessibilityLabel="One-time code">
-                  {isLoading ? (
-                    <View style={otpCodeBoxStyles.boxesLoadingOnly}>
-                      <ActivityIndicator size="small" color={colors.primary.main} />
-                    </View>
-                  ) : (
-                    Array.from({ length: 6 }, (_, i) => (
-                      <View
-                        key={i}
-                        style={[
-                          otpCodeBoxStyles.box,
-                          otpActiveIndex === i ? otpCodeBoxStyles.boxActive : otpCodeBoxStyles.boxIdle,
-                        ]}
-                        accessibilityElementsHidden
-                        importantForAccessibility="no-hide-descendants"
-                      >
-                        <Text style={otpCodeBoxStyles.digit}>{signupOtpDigits[i] ?? ''}</Text>
-                      </View>
-                    ))
-                  )}
-                </View>
+                <OtpCodeInput
+                  id="signup-otp"
+                  value={signupOtp}
+                  onChange={applySignupOtp}
+                  autoFocus
+                  disabled={isLoading}
+                  loading={isLoading}
+                  containerStyle={styles.otpInput}
+                />
                 <View style={styles.otpHintSlot} accessibilityLiveRegion="polite">
                   {signupOtpError ? (
                     <Text style={styles.otpErrorText}>{signupOtpError}</Text>
@@ -594,14 +559,6 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                       : 'Resend code'}
                   </Text>
                 </Pressable>
-                <View style={styles.otpKeypad}>
-                  <PinKeypad
-                    onDigit={handleOtpDigit}
-                    onBackspace={handleOtpBackspace}
-                    disabled={isLoading}
-                    filledCount={signupOtpDigits.length}
-                  />
-                </View>
               </View>
             )}
 
@@ -700,12 +657,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing[4],
   },
-  otpBoxesRowMargins: {
-    marginBottom: spacing[6],
-  },
-  otpKeypad: {
+  otpInput: {
+    marginBottom: spacing[2],
     width: '100%',
-    marginTop: spacing[4],
   },
   otpHintSlot: {
     width: '100%',

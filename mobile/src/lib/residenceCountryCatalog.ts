@@ -21,11 +21,3 @@ function sortResidenceCountries(countries: Country[]): Country[] {
 export const RESIDENCE_COUNTRY_CATALOG = sortResidenceCountries(
   countryService.getAllIncludingUnsupportedSync(),
 )
-
-export function filterResidenceCountryCatalog(allowedCodes: string[] | null): Country[] {
-  if (allowedCodes == null) return RESIDENCE_COUNTRY_CATALOG
-  const allowed = new Set(allowedCodes.map((c) => c.trim().toUpperCase()).filter(Boolean))
-  if (allowed.size === 0) return RESIDENCE_COUNTRY_CATALOG
-  const narrowed = RESIDENCE_COUNTRY_CATALOG.filter((c) => allowed.has(c.code))
-  return narrowed.length > 0 ? narrowed : RESIDENCE_COUNTRY_CATALOG
-}

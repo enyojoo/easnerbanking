@@ -17,7 +17,6 @@ import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { analytics } from '../lib/analytics'
 import { ensureBusinessAppUserBootstrap } from '../lib/apiClient'
 import { stashSignupBlockedMessage } from '../lib/signupBlockedMessage'
-import { clearJurisdictionCountryPolicyCache } from '../lib/jurisdictionCountryPolicy'
 import { clearPinAuth, updateSessionActivity, markFirstLoginAfterVerification } from '../lib/pinAuth'
 import { AUTH_INITIAL_MODE_KEY } from '../constants/auth'
 import {
@@ -1261,7 +1260,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       payoutCorridorsBootstrappedForUserRef.current = null
       setLoading(false) // Also set loading to false to ensure AppNavigator doesn't wait
 
-      await clearJurisdictionCountryPolicyCache()
       clearAuthSessionCache()
 
       // Sign out from Supabase (this will trigger onAuthStateChange which also sets user to null)

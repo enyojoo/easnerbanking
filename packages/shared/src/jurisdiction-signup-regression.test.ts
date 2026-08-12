@@ -1,42 +1,37 @@
 import { describe, expect, it } from "vitest"
 import {
   filterCountriesForProductPicker,
-  resolveJurisdictionAllowlist,
-} from "./jurisdiction-country-policy"
-import {
   isBlockedForBusiness,
   isBlockedForMobile,
   isGridDigitalAssetJurisdiction,
 } from "./jurisdiction-blocked-countries"
 
-describe("signup allowlist regression", () => {
-  const catalog = ["NG", "KE", "MA", "GB", "PA", "UA", "QA", "IR", "US", "DZ", "CN"]
+describe("signup jurisdiction regression", () => {
+  const catalog = ["NG", "KE", "MA", "GB", "PA", "UA", "QA", "IR", "US", "DZ", "CN"].map(
+    (code) => ({ code, name: code }),
+  )
 
-  it("Business allowlist drops Grid hard blocks and keeps MA/GB/PA/UA/digital-asset", () => {
-    const allowed = resolveJurisdictionAllowlist(null, catalog)
-    expect(allowed).toContain("MA")
-    expect(allowed).toContain("GB")
-    expect(allowed).toContain("PA")
-    expect(allowed).toContain("UA")
-    expect(allowed).toContain("DZ")
-    expect(allowed).toContain("CN")
-    expect(allowed).toContain("NG")
-    expect(allowed).not.toContain("KE")
-    expect(allowed).not.toContain("QA")
-    expect(allowed).not.toContain("IR")
-  })
-
-  it("product picker helper strips the right blocks without Office allowlist", () => {
-    const rows = catalog.map((code) => ({ code, name: code }))
-    const business = filterCountriesForProductPicker(rows, "business", null).map((r) => r.code)
-    const mobile = filterCountriesForProductPicker(rows, "mobile", null).map((r) => r.code)
+  it("Business picker drops Grid hard blocks and keeps MA/GB/PA/UA/digital-asset", () => {
+    const business = filterCountriesForProductPicker(catalog, "business").map((r) => r.code)
     expect(business).toContain("MA")
     expect(business).toContain("GB")
+    expect(business).toContain("PA")
+    expect(business).toContain("UA")
+    expect(business).toContain("DZ")
+    expect(business).toContain("CN")
+    expect(business).toContain("NG")
     expect(business).not.toContain("KE")
+    expect(business).not.toContain("QA")
+    expect(business).not.toContain("IR")
+  })
+
+  it("Mobile picker strips Noah hard blocks and keeps KE/MA", () => {
+    const mobile = filterCountriesForProductPicker(catalog, "mobile").map((r) => r.code)
     expect(mobile).toContain("KE")
     expect(mobile).toContain("MA")
     expect(mobile).not.toContain("GB")
     expect(mobile).not.toContain("PA")
+    expect(mobile).not.toContain("UA")
   })
 
   it("Mobile helpers match expected signup matrix", () => {
@@ -59,6 +54,6 @@ describe("signup allowlist regression", () => {
     expect(() => isBlockedForBusiness(null)).not.toThrow()
     expect(() => isBlockedForMobile("")).not.toThrow()
     expect(() => isGridDigitalAssetJurisdiction("12")).not.toThrow()
-    expect(() => resolveJurisdictionAllowlist(null, [])).not.toThrow()
+    expect(() => filterCountriesForProductPicker([], "business")).not.toThrow()
   })
 })

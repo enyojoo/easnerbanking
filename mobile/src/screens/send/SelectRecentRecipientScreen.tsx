@@ -1136,6 +1136,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       {/* Step 2: Bank Account Form Modal */}
       <WebAwareModal
         visible={showBankAccountForm}
+        keyboardAvoiding
         onRequestClose={() => {
           closeAllDropdowns()
           setShowBankAccountForm(false)

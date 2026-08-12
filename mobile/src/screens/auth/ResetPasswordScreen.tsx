@@ -210,6 +210,9 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               secureTextEntry={!passwordVisible}
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="next"
+              textContentType="newPassword"
+              autoComplete="password-new"
               editable={!loading}
               containerStyle={styles.fieldFlush}
               rightAccessory={
@@ -236,6 +239,9 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
               secureTextEntry={!confirmPasswordVisible}
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="go"
+              textContentType="newPassword"
+              autoComplete="password-new"
               editable={!loading}
               containerStyle={styles.fieldFlush}
               rightAccessory={

@@ -114,4 +114,6 @@ export function useOtpClipboardAutofill({
     hasSeenEligibleFocusRef.current = false
     resetClipboardSession()
   }, [enabled, resetClipboardSession])
+
+  return { checkClipboard }
 }

@@ -1,6 +1,6 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -43,6 +43,24 @@ export function WebAwareModal({
   const palette = useThemeColors()
   const useCenteredModal = useWebCenteredModal()
   const resolvedAnimation = animationType ?? (useCenteredModal ? 'fade' : 'slide')
+  const [keyboardBottom, setKeyboardBottom] = useState(0)
+
+  useEffect(() => {
+    if (!keyboardAvoiding || !visible) {
+      setKeyboardBottom(0)
+      return
+    }
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+    const onShow = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardBottom(e.endCoordinates?.height ?? 0)
+    })
+    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardBottom(0))
+    return () => {
+      onShow.remove()
+      onHide.remove()
+    }
+  }, [keyboardAvoiding, visible])
 
   if (!visible) return null
 
@@ -81,20 +99,8 @@ export function WebAwareModal({
     )
   }
 
-  const nativeSheet = (
-    <>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onRequestClose} />
-      <View
-        style={[
-          styles.nativePanel,
-          { backgroundColor: palette.background.primary },
-          nativePanelStyle,
-        ]}
-      >
-        {children}
-      </View>
-    </>
-  )
+  const keyboardPanelStyle: ViewStyle | undefined =
+    keyboardAvoiding && keyboardBottom > 0 ? { marginBottom: keyboardBottom } : undefined
 
   return (
     <Modal
@@ -104,17 +110,19 @@ export function WebAwareModal({
       onRequestClose={onRequestClose}
       statusBarTranslucent
     >
-      {keyboardAvoiding ? (
-        <KeyboardAvoidingView
-          style={styles.nativeOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      <View style={styles.nativeOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onRequestClose} />
+        <View
+          style={[
+            styles.nativePanel,
+            { backgroundColor: palette.background.primary },
+            keyboardPanelStyle,
+            nativePanelStyle,
+          ]}
         >
-          {nativeSheet}
-        </KeyboardAvoidingView>
-      ) : (
-        <View style={styles.nativeOverlay}>{nativeSheet}</View>
-      )}
+          {children}
+        </View>
+      </View>
     </Modal>
   )
 }

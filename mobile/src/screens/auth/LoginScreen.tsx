@@ -4,11 +4,7 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Animated,
-  Keyboard,
 } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -23,6 +19,7 @@ import { authScreenStyles } from '../../theme/authScreen'
 import { TextField } from '../../components/ui'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 
 export default function LoginScreen({ navigation }: NavigationProps) {
   const themeColors = useThemeColors()
@@ -71,14 +68,11 @@ export default function LoginScreen({ navigation }: NavigationProps) {
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.semantic.background }]}>
-      <KeyboardAvoidingView
+      <KeyboardAwareScreen
         style={styles.keyboardContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        contentContainerStyle={[styles.scrollContainer, { paddingBottom: Math.max(insets.bottom, spacing[5]) }]}
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView 
-          contentContainerStyle={[styles.scrollContainer, { paddingBottom: Math.max(insets.bottom, spacing[5]) }]}
-          showsVerticalScrollIndicator={false}
-        >
           <Animated.View
             style={[
               styles.header,
@@ -120,8 +114,9 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={() => Keyboard.dismiss()}
+                returnKeyType="next"
+                textContentType="emailAddress"
+                autoComplete="email"
                 containerStyle={styles.fieldFlush}
               />
 
@@ -133,7 +128,9 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
-                returnKeyType="done"
+                returnKeyType="go"
+                textContentType="password"
+                autoComplete="password"
                 onSubmitEditing={handleLogin}
                 containerStyle={styles.fieldFlush}
               />
@@ -197,8 +194,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
               <Text style={authScreenStyles.footerLink}>Sign up</Text>
             </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScreen>
     </View>
   )
 }

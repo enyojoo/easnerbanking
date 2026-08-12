@@ -148,3 +148,17 @@ export function filterBlockedJurisdictionsForProduct(
   const blocked = product === "mobile" ? isBlockedForMobile : isBlockedForBusiness
   return codes.filter((code) => !blocked(code))
 }
+
+export type CountryCatalogEntry = { name: string; code: string }
+
+/** Signup/KYB picker: catalog minus product hard-blocks. */
+export function filterCountriesForProductPicker<T extends CountryCatalogEntry>(
+  catalog: T[],
+  product: JurisdictionProduct,
+): T[] {
+  return catalog.filter((row) => {
+    const code = String(row.code || "").trim().toUpperCase()
+    if (!/^[A-Z]{2}$/.test(code)) return false
+    return product === "mobile" ? !isBlockedForMobile(code) : !isBlockedForBusiness(code)
+  })
+}

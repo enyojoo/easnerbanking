@@ -172,7 +172,7 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdmin()
 
   if (role === "business" && countryCode) {
-    const ok = await isCountryAllowedForSurface(admin, countryCode, "signup")
+    const ok = isCountryAllowedForSurface(countryCode, "signup")
     if (!ok) {
       return NextResponse.json(
         { ok: false, error: "This country is not available for registration. Choose another or contact support." },
@@ -226,7 +226,7 @@ export async function POST(request: Request) {
       )
     }
     if (countryCode) {
-      const ok = await isCountryAllowedForSurface(admin, countryCode, "individual_residence")
+      const ok = isCountryAllowedForSurface(countryCode, "individual_residence")
       if (!ok) {
         return NextResponse.json(
           {

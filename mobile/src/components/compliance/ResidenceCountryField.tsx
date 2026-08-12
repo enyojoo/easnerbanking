@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   FlatList,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -12,13 +13,21 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
-import { ChevronDown, Info, MapPin, X } from 'lucide-react-native'
+import { Check, ChevronDown, Info, MapPin, Search, X } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { RESIDENCE_COUNTRY_CATALOG } from '../../lib/residenceCountryCatalog'
 import { filterNoahSupportedCountries } from '../../lib/noahSupportedCountries'
 import { WebAwareModal } from '../WebAwareModal'
 import { CountryFlag } from '../flags/CountryFlag'
-import { colors, spacing, textStyles, borderRadius, fontSize } from '../../theme'
+import {
+  colors,
+  spacing,
+  textStyles,
+  borderRadius,
+  dropdownSearchRowStyle,
+  dropdownSearchInputStyle,
+  surfaceFrameStyle,
+} from '../../theme'
 import { haptics } from '../../lib/haptics'
 
 type Props = {
@@ -49,7 +58,9 @@ export function ResidenceCountryField({
   const [search, setSearch] = useState('')
   const [tooltipOpen, setTooltipOpen] = useState(false)
   const [tipTop, setTipTop] = useState<number | null>(null)
+  const [keyboardHeight, setKeyboardHeight] = useState(0)
   const infoRef = useRef<View>(null)
+  const searchRef = useRef<TextInput>(null)
   const insets = useSafeAreaInsets()
   const { height: windowHeight } = useWindowDimensions()
 
@@ -66,6 +77,29 @@ export function ResidenceCountryField({
     const id = setTimeout(() => setTooltipOpen(false), 4000)
     return () => clearTimeout(id)
   }, [tooltipOpen])
+
+  useEffect(() => {
+    if (!open) {
+      setKeyboardHeight(0)
+      return
+    }
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+    const onShow = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates?.height ?? 0)
+    })
+    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0))
+    return () => {
+      onShow.remove()
+      onHide.remove()
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const id = setTimeout(() => searchRef.current?.focus(), 120)
+    return () => clearTimeout(id)
+  }, [open])
 
   const toggleTooltip = () => {
     haptics.tap()
@@ -101,13 +135,16 @@ export function ResidenceCountryField({
   const closePicker = () => {
     setOpen(false)
     setSearch('')
+    Keyboard.dismiss()
   }
 
-  /** Tall sheet so the country list fills most of the viewport (was hard-capped at 320px). */
-  const sheetMaxHeight = Math.round(windowHeight * 0.88)
   const bottomPad = Math.max(insets.bottom, spacing[4])
-  /** Title + grabber + search + paddings ≈ 160–180; keep list roomy on small phones. */
-  const listMaxHeight = Math.max(280, sheetMaxHeight - 176 - bottomPad)
+  const topGap = insets.top + spacing[2]
+  const preferredSheetHeight = Math.round(windowHeight * 0.72)
+  const sheetHeight = Math.max(
+    320,
+    Math.min(preferredSheetHeight, windowHeight - topGap - keyboardHeight),
+  )
 
   const renderCountry = ({ item }: { item: CountryRow }) => {
     const isSelected = item.code === value
@@ -123,8 +160,13 @@ export function ResidenceCountryField({
         accessibilityState={{ selected: isSelected }}
       >
         <CountryFlag code={item.code} size={22} />
-        <Text style={styles.rowText}>{item.name}</Text>
-        {isSelected ? <Text style={styles.selectedMark}>Selected</Text> : null}
+        <View style={styles.rowTextWrap}>
+          <Text style={styles.rowName}>{item.name}</Text>
+          <Text style={styles.rowCode}>{item.code}</Text>
+        </View>
+        {isSelected ? (
+          <Check size={18} color={colors.primary.main} strokeWidth={2.5} />
+        ) : null}
       </Pressable>
     )
   }
@@ -194,10 +236,10 @@ export function ResidenceCountryField({
         visible={open}
         onRequestClose={closePicker}
         keyboardAvoiding
-        nativePanelStyle={{ maxHeight: sheetMaxHeight }}
-        webPanelStyle={{ maxHeight: sheetMaxHeight }}
+        nativePanelStyle={{ height: sheetHeight, maxHeight: sheetHeight }}
+        webPanelStyle={{ height: sheetHeight, maxHeight: sheetHeight }}
       >
-        <View style={[styles.modalPanel, { paddingBottom: bottomPad, maxHeight: sheetMaxHeight }]}>
+        <View style={[styles.modalPanel, { paddingBottom: bottomPad, height: sheetHeight }]}>
           {Platform.OS !== 'web' ? <View style={styles.grabber} /> : null}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{label}</Text>
@@ -214,24 +256,39 @@ export function ResidenceCountryField({
               <X size={20} color={colors.text.secondary} strokeWidth={2} />
             </Pressable>
           </View>
-          <TextInput
-            style={styles.search}
-            placeholder="Search countries…"
-            placeholderTextColor={colors.semantic.mutedForeground}
-            value={search}
-            onChangeText={setSearch}
-            autoCapitalize="none"
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-            returnKeyType="search"
-          />
+          <View style={styles.searchRow}>
+            <Search size={18} color={colors.semantic.mutedForeground} strokeWidth={2} />
+            <TextInput
+              ref={searchRef}
+              style={styles.searchInput}
+              placeholder="Search countries…"
+              placeholderTextColor={colors.semantic.mutedForeground}
+              value={search}
+              onChangeText={setSearch}
+              autoCapitalize="none"
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+              returnKeyType="search"
+              accessibilityLabel="Search countries"
+            />
+            {search.length > 0 && Platform.OS !== 'ios' ? (
+              <Pressable
+                onPress={() => setSearch('')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
+                <X size={16} color={colors.semantic.mutedForeground} strokeWidth={2} />
+              </Pressable>
+            ) : null}
+          </View>
           <FlatList
             data={filtered}
             keyExtractor={(item) => item.code}
             renderItem={renderCountry}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
-            style={{ maxHeight: listMaxHeight }}
+            style={styles.list}
             contentContainerStyle={
               filtered.length === 0 ? styles.listEmptyContent : styles.listContent
             }
@@ -360,16 +417,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.semantic.muted,
   },
-  search: {
-    borderWidth: 1,
-    borderColor: colors.frame.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
-    marginBottom: spacing[2],
-    fontSize: fontSize.sm,
+  searchRow: {
+    ...dropdownSearchRowStyle,
+    ...surfaceFrameStyle(colors, { shadow: 'none', radius: borderRadius.lg }),
+    marginBottom: spacing[3],
+  },
+  searchInput: {
+    ...dropdownSearchInputStyle,
     color: colors.text.primary,
-    minHeight: 44,
+  },
+  list: {
+    flex: 1,
+    minHeight: 0,
   },
   listContent: {
     paddingBottom: spacing[2],
@@ -384,7 +443,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
     paddingVertical: spacing[3],
-    paddingHorizontal: spacing[1],
+    paddingHorizontal: spacing[2],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.frame.border,
     minHeight: 52,
@@ -394,17 +453,19 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderBottomWidth: 0,
     marginVertical: 2,
-    paddingHorizontal: spacing[2],
   },
-  rowText: {
+  rowTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rowName: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
-    flex: 1,
   },
-  selectedMark: {
+  rowCode: {
     ...textStyles.labelSmall,
-    color: colors.primary.main,
-    fontWeight: '600',
+    color: colors.text.secondary,
+    marginTop: 2,
   },
   empty: {
     ...textStyles.bodySmall,

@@ -385,16 +385,6 @@ export {
   type OtherSendCurrency,
 } from "./send-destination-options"
 export {
-  parseJurisdictionCountryPolicyJson,
-  effectiveAllowlistForSurface,
-  resolveJurisdictionAllowlist,
-  filterCountriesByPolicy,
-  filterCountriesForProductPicker,
-  serializeJurisdictionPolicy,
-  isEasnerBlockedJurisdiction,
-  filterBlockedJurisdictions,
-} from "./jurisdiction-country-policy"
-export {
   GRID_PROHIBITED_RESIDENCE_ISO2,
   NOAH_FULLY_PROHIBITED_VA_ISO2,
   GRID_DIGITAL_ASSET_EXTRA_ISO2,
@@ -403,15 +393,14 @@ export {
   isBlockedForBusiness,
   isBlockedForMobile,
   isGridDigitalAssetJurisdiction,
+  isEasnerBlockedJurisdiction,
+  filterBlockedJurisdictions,
   filterBlockedJurisdictionsForProduct,
+  filterCountriesForProductPicker,
   type JurisdictionProduct,
+  type CountryCatalogEntry,
 } from "./jurisdiction-blocked-countries"
 export { EASNER_COUNTRY_PICKER_PRIORITY, sortByEasnerCountryPickerOrder } from "./country-picker-order"
-export type {
-  JurisdictionSurface,
-  JurisdictionCountryPolicyV1,
-  CountryCatalogEntry,
-} from "./jurisdiction-country-policy"
 export {
   getNoahRejectionDisplay,
   canResubmitNoahVerification,

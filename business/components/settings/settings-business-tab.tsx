@@ -36,7 +36,6 @@ import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 import { useBusinessEasetagAvailability } from "@/hooks/use-business-easetag-availability"
 import { useAllowedBaseCurrencies } from "@/hooks/use-allowed-base-currencies"
-import { useAllowedCountryCodes } from "@/hooks/use-allowed-country-codes"
 import { filterCountriesForProductPicker } from "@easner/shared"
 import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
 function getCountryFromCode(code: string) {
@@ -85,21 +84,16 @@ export function SettingsBusinessTab() {
     loading: baseCurrenciesLoading,
     error: baseCurrenciesError,
   } = useAllowedBaseCurrencies()
-  const kybCountryPolicy = useAllowedCountryCodes("kyb")
   const [countryCode, setCountryCode] = useState("")
   const [countryOpen, setCountryOpen] = useState(false)
   const countriesForKybPicker = useMemo(() => {
-    const base = filterCountriesForProductPicker(
-      countries,
-      "business",
-      kybCountryPolicy.unrestricted ? null : kybCountryPolicy.codes,
-    )
+    const base = filterCountriesForProductPicker(countries, "business")
     const cur = countries.find((c) => c.code === countryCode)
     if (cur && !base.some((b) => b.code === cur.code)) {
       return [cur, ...base]
     }
     return base
-  }, [kybCountryPolicy.unrestricted, kybCountryPolicy.codes, countryCode])
+  }, [countryCode])
   const easetagAvail = useBusinessEasetagAvailability({ profileEasetag: profile.easetag })
   const [editingSection, setEditingSection] = useState<string | null>(null)
   /** Which card section is currently persisting (Save); disables actions and shows spinner on that Save. */
@@ -556,9 +550,7 @@ export function SettingsBusinessTab() {
                   <Command>
                     <CommandInput placeholder="Search country..." />
                     <CommandList className="max-h-[200px]">
-                      <CommandEmpty>
-                        {kybCountryPolicy.loading ? "Loading countries…" : "No country found."}
-                      </CommandEmpty>
+                        <CommandEmpty>No country found.</CommandEmpty>
                       <CommandGroup>
                         {countriesForKybPicker.map((c) => (
                           <CommandItem
