@@ -24,11 +24,12 @@ export async function GET(request: Request) {
       : surface === "individual_residence"
         ? resolved.signupAllowlist
         : resolved.signupAllowlist
+  const unrestricted = surface === "kyb" ? resolved.kybUnrestricted : resolved.signupUnrestricted
 
   return NextResponse.json({
     surface,
     policyVersion: resolved.policyVersion,
-    unrestricted: false,
+    unrestricted,
     codes,
   })
 }

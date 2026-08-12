@@ -37,7 +37,7 @@ import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 import { useBusinessEasetagAvailability } from "@/hooks/use-business-easetag-availability"
 import { useAllowedBaseCurrencies } from "@/hooks/use-allowed-base-currencies"
 import { useAllowedCountryCodes } from "@/hooks/use-allowed-country-codes"
-import { filterCountriesByPolicy } from "@easner/shared"
+import { filterCountriesForProductPicker } from "@easner/shared"
 import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
@@ -89,8 +89,9 @@ export function SettingsBusinessTab() {
   const [countryCode, setCountryCode] = useState("")
   const [countryOpen, setCountryOpen] = useState(false)
   const countriesForKybPicker = useMemo(() => {
-    const base = filterCountriesByPolicy(
+    const base = filterCountriesForProductPicker(
       countries,
+      "business",
       kybCountryPolicy.unrestricted ? null : kybCountryPolicy.codes,
     )
     const cur = countries.find((c) => c.code === countryCode)

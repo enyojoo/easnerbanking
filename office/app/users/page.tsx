@@ -237,14 +237,12 @@ export default function AdminUsersPage() {
     return matchesSearch && matchesRole && matchesVerification
   })
 
-  function accountTypeLabel(user: UserData): "Consumer" | "Business" | "Both" | null {
+  function accountTypeLabel(user: UserData): "Consumer" | "Business" | null {
     const role = String(user.role || "").toLowerCase()
     const hasOrg = Boolean(user.easner_business_id)
-    const isBusiness = role === "business" || hasOrg
-    const isConsumer = role === "individual" || user.totalTransactions > 0
-    if (isBusiness && isConsumer) return "Both"
-    if (isBusiness) return "Business"
-    if (isConsumer) return "Consumer"
+    // A linked business always wins — role can be stale when bootstrap fallback omits it.
+    if (role === "business" || hasOrg) return "Business"
+    if (role === "individual" || user.totalTransactions > 0) return "Consumer"
     return null
   }
 
@@ -252,16 +250,15 @@ export default function AdminUsersPage() {
   function dialogVerificationRows(user: UserData) {
     const at = accountTypeLabel(user)
     return {
-      showIdentity: at === "Consumer" || at === "Both" || at === null,
-      showBusiness: at === "Business" || at === "Both",
+      showIdentity: at === "Consumer" || at === null,
+      showBusiness: at === "Business",
     }
   }
 
   const getAccountTypeBadge = (user: UserData) => {
     const label = accountTypeLabel(user)
     if (!label) return <span className="text-xs text-muted-foreground">—</span>
-    const variant: "emerald" | "slate" | "outline" =
-      label === "Both" ? "outline" : label === "Business" ? "emerald" : "slate"
+    const variant: "emerald" | "slate" = label === "Business" ? "emerald" : "slate"
     return <Badge variant={variant}>{label}</Badge>
   }
 

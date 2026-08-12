@@ -30,7 +30,7 @@ export const authSeo = {
     },
     hero: {
       h1: "Sign Up",
-      subhead: "Create your Easner Business account.",
+      subhead: "Open an Easner Business account.",
       altText: "Sign up for Easner Business",
     },
   },

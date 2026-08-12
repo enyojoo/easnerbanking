@@ -573,23 +573,22 @@ export async function POST(request: Request) {
     updated_at: new Date().toISOString(),
   }
 
-  const { error: linkErrWithRole } = await admin
-    .from("users")
-    .upsert({ ...userLinkPayload, role: "business" }, { onConflict: "id" })
-  if (linkErrWithRole) {
-    const { error: linkErrNoRole } = await admin.from("users").upsert(userLinkPayload, { onConflict: "id" })
-    if (linkErrNoRole) {
-      await admin
-        .from("users")
-        .upsert(
-          {
-            id: user.id,
-            email: user.email ?? null,
-            easner_business_id: businessId,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "id" },
-        )
+  const businessUserPayload = { ...userLinkPayload, role: "business" as const }
+  const { error: linkErr } = await admin.from("users").upsert(businessUserPayload, { onConflict: "id" })
+  if (linkErr) {
+    // Retry field-by-field so a partial row never keeps role=individual with a linked org.
+    const { error: linkErrMinimal } = await admin.from("users").upsert(
+      {
+        id: user.id,
+        email: user.email ?? null,
+        easner_business_id: businessId,
+        role: "business",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    )
+    if (linkErrMinimal) {
+      return NextResponse.json({ ok: false, error: linkErrMinimal.message }, { status: 500 })
     }
   }
 

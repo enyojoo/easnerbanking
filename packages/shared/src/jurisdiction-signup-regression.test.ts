@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { resolveJurisdictionAllowlist } from "./jurisdiction-country-policy"
+import {
+  filterCountriesForProductPicker,
+  resolveJurisdictionAllowlist,
+} from "./jurisdiction-country-policy"
 import {
   isBlockedForBusiness,
   isBlockedForMobile,
@@ -21,6 +24,19 @@ describe("signup allowlist regression", () => {
     expect(allowed).not.toContain("KE")
     expect(allowed).not.toContain("QA")
     expect(allowed).not.toContain("IR")
+  })
+
+  it("product picker helper strips the right blocks without Office allowlist", () => {
+    const rows = catalog.map((code) => ({ code, name: code }))
+    const business = filterCountriesForProductPicker(rows, "business", null).map((r) => r.code)
+    const mobile = filterCountriesForProductPicker(rows, "mobile", null).map((r) => r.code)
+    expect(business).toContain("MA")
+    expect(business).toContain("GB")
+    expect(business).not.toContain("KE")
+    expect(mobile).toContain("KE")
+    expect(mobile).toContain("MA")
+    expect(mobile).not.toContain("GB")
+    expect(mobile).not.toContain("PA")
   })
 
   it("Mobile helpers match expected signup matrix", () => {

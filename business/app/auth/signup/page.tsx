@@ -22,7 +22,7 @@ import Link from "next/link"
 import { countries } from "@/lib/countries"
 import { setOnboarding } from "@/lib/onboarding-store"
 import { useAllowedCountryCodes } from "@/hooks/use-allowed-country-codes"
-import { filterCountriesByPolicy } from "@easner/shared"
+import { filterCountriesForProductPicker } from "@easner/shared"
 import { CountryFlag } from "@/components/flags"
 import { OtpCodeInput } from "@/components/otp-code-input"
 import { useTeamInviteContext } from "@/lib/use-team-invite-context"
@@ -66,7 +66,12 @@ export default function SignupPage() {
 
   const countryPolicy = useAllowedCountryCodes("signup")
   const countriesForPicker = useMemo(
-    () => filterCountriesByPolicy(countries, countryPolicy.unrestricted ? null : countryPolicy.codes),
+    () =>
+      filterCountriesForProductPicker(
+        countries,
+        "business",
+        countryPolicy.unrestricted ? null : countryPolicy.codes,
+      ),
     [countryPolicy.codes, countryPolicy.unrestricted],
   )
 
@@ -194,9 +199,7 @@ export default function SignupPage() {
             </CardDescription>
           ) : isTeamInvite ? (
             <CardDescription>{AUTH_COPY.join}</CardDescription>
-          ) : (
-            <CardDescription>{AUTH_COPY.signup}</CardDescription>
-          )}
+          ) : null}
         </CardHeader>
         <CardContent>
           <form onSubmit={step === "signup" ? handleSubmit : handleVerifyOtp} className="space-y-4">

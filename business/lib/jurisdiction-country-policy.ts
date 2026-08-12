@@ -23,6 +23,10 @@ export type { JurisdictionSurface, JurisdictionCountryPolicyV1 }
 export type JurisdictionPolicyResolved = {
   policy: JurisdictionCountryPolicyV1 | null
   policyVersion: number
+  /** True when Office has no signup allowlist configured (catalog − hard-blocks). */
+  signupUnrestricted: boolean
+  /** True when Office has no KYB allowlist configured. */
+  kybUnrestricted: boolean
   signupAllowlist: string[]
   kybAllowlist: string[]
 }
@@ -41,6 +45,8 @@ export async function getJurisdictionPolicyResolved(admin: SupabaseAdmin): Promi
   return {
     policy,
     policyVersion,
+    signupUnrestricted: signupRaw == null,
+    kybUnrestricted: kybRaw == null,
     signupAllowlist: resolveJurisdictionAllowlist(signupRaw, catalogCodes),
     kybAllowlist: resolveJurisdictionAllowlist(kybRaw, catalogCodes),
   }

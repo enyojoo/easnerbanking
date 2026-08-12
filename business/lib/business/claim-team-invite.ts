@@ -215,23 +215,23 @@ export async function claimTeamInvite(admin: Admin, input: ClaimInput): Promise<
     updated_at: now,
   }
 
-  const { error: userErrWithRole } = await admin.from("users").upsert(userPayload, { onConflict: "id" })
-  if (userErrWithRole) {
-    const { error: userErrNoRole } = await admin.from("users").upsert(
+  const { error: userErr } = await admin.from("users").upsert(userPayload, { onConflict: "id" })
+  if (userErr) {
+    const { error: userErrMinimal } = await admin.from("users").upsert(
       {
         id: input.userId,
         email: authEmail,
-        full_name: displayName,
         easner_business_id: invite.business_id,
+        role: "business",
         updated_at: now,
       },
       { onConflict: "id" },
     )
-    if (userErrNoRole) {
+    if (userErrMinimal) {
       return {
         ok: false,
         code: "INVITE_NOT_FOUND",
-        message: userErrNoRole.message,
+        message: userErrMinimal.message,
         httpStatus: 500,
       }
     }

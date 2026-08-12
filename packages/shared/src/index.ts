@@ -389,6 +389,7 @@ export {
   effectiveAllowlistForSurface,
   resolveJurisdictionAllowlist,
   filterCountriesByPolicy,
+  filterCountriesForProductPicker,
   serializeJurisdictionPolicy,
   isEasnerBlockedJurisdiction,
   filterBlockedJurisdictions,

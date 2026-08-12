@@ -315,7 +315,6 @@ export const DEVELOPER_TOOL_COPY = {
 } as const
 
 export const AUTH_COPY = {
-  signup: "Create your Easner Business account.",
   join: "Accept your team invitation.",
   joinInvalid: "This invitation link is invalid or incomplete.",
   joinEmailHint: "Continue with the email address that received this invitation.",

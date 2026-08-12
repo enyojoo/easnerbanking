@@ -16,6 +16,7 @@ import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { AppleSignInButton, GoogleOutlineButton, OrDivider, WebAppleSignInButton } from '../../components/auth/AuthChrome'
 import { ResidenceCountryField } from '../../components/compliance/ResidenceCountryField'
 import { PENDING_RESIDENCE_COUNTRY_KEY } from '../../constants/residenceCountry'
+import { isNoahSupportedCountry } from '../../lib/noahSupportedCountries'
 import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
@@ -199,6 +200,10 @@ export default function AuthScreen({ navigation }: NavigationProps) {
     }
     if (!residenceCountry.trim()) {
       showError('Please select your country of residence')
+      return false
+    }
+    if (!isNoahSupportedCountry(residenceCountry.trim())) {
+      showError('Easner Personal Banking is not available in your country of residence.')
       return false
     }
     return true

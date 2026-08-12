@@ -25,8 +25,6 @@ import { AppleSignInButton } from "@/components/auth/apple-sign-in-button"
 import { consumeSignupBlockedMessage } from "@/lib/auth/signup-blocked-message"
 import { AUTH_COPY } from "@/lib/copy/business-ui-copy"
 
-const TERMS_URL = "https://www.easner.com/terms?from=register"
-
 type Step = "password" | "mfa"
 
 export default function LoginPage() {
@@ -222,18 +220,6 @@ export default function LoginPage() {
 
           {step === "password" && (
             <>
-              <p className="text-sm text-muted-foreground text-center">
-                By signing in you agree to our{" "}
-                <a
-                  href={TERMS_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary font-medium hover:underline"
-                >
-                  Terms
-                </a>
-                .
-              </p>
               {!isTeamInvite ? (
                 <>
                   <AppleSignInButton

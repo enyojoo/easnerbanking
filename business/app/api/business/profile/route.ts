@@ -143,6 +143,7 @@ async function ensureOrganizationId(
         id: userId,
         email: email ?? null,
         easner_business_id: org.id,
+        role: "business",
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" },

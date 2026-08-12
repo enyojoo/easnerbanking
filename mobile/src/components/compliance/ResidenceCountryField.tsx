@@ -14,8 +14,8 @@ import {
 } from 'react-native'
 import { ChevronDown, Info, MapPin, X } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { filterResidenceCountryCatalog } from '../../lib/residenceCountryCatalog'
-import { getAllowedCountriesCached } from '../../lib/jurisdictionCountryPolicy'
+import { RESIDENCE_COUNTRY_CATALOG } from '../../lib/residenceCountryCatalog'
+import { filterNoahSupportedCountries } from '../../lib/noahSupportedCountries'
 import { WebAwareModal } from '../WebAwareModal'
 import { CountryFlag } from '../flags/CountryFlag'
 import { colors, spacing, textStyles, borderRadius, fontSize } from '../../theme'
@@ -53,29 +53,12 @@ export function ResidenceCountryField({
   const insets = useSafeAreaInsets()
   const { height: windowHeight } = useWindowDimensions()
 
-  // Allowlist policy is best-effort. `null` means "show everything", so the
-  // list renders instantly from the local catalog and never blocks/spins on
-  // the network; it only narrows once (and if) the policy resolves.
-  const [allowedCodes, setAllowedCodes] = useState<string[] | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const policy = await getAllowedCountriesCached('individual_residence')
-        if (!cancelled) setAllowedCodes(policy.unrestricted ? null : policy.codes)
-      } catch {
-        if (!cancelled) setAllowedCodes(null)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
+  // Product hard-blocks only (Noah fully prohibited VA). Do not use the Business
+  // Office allowlist API — that strips Grid-blocked countries (e.g. KE) and keeps
+  // Mobile-blocked ones (e.g. GB).
   const countries = useMemo(
-    () => filterResidenceCountryCatalog(allowedCodes),
-    [allowedCodes],
+    () => filterNoahSupportedCountries(RESIDENCE_COUNTRY_CATALOG),
+    [],
   )
 
   useEffect(() => {

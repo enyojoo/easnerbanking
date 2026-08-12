@@ -3,6 +3,7 @@ import {
   filterBlockedJurisdictionsForProduct,
   isBlockedForBusiness,
   isEasnerBlockedJurisdiction,
+  type JurisdictionProduct,
 } from "./jurisdiction-blocked-countries"
 
 export type JurisdictionSurface = "signup" | "kyb" | "individual_residence"
@@ -105,6 +106,25 @@ export function filterCountriesByPolicy<T extends CountryCatalogEntry>(
   if (allowedCodes == null) return catalog
   const set = new Set(allowedCodes.map((c) => c.toUpperCase()))
   return catalog.filter((row) => set.has(String(row.code).toUpperCase()))
+}
+
+/**
+ * Signup/KYB picker: full catalog minus product hard-blocks, optionally
+ * intersected with an Office allowlist when one is configured.
+ */
+export function filterCountriesForProductPicker<T extends CountryCatalogEntry>(
+  catalog: T[],
+  product: JurisdictionProduct,
+  officeAllowlist: string[] | null = null,
+): T[] {
+  const hardAllowed = new Set(
+    filterBlockedJurisdictionsForProduct(
+      product,
+      catalog.map((row) => String(row.code).toUpperCase()),
+    ),
+  )
+  const stripped = catalog.filter((row) => hardAllowed.has(String(row.code).toUpperCase()))
+  return filterCountriesByPolicy(stripped, officeAllowlist)
 }
 
 export function serializeJurisdictionPolicy(policy: JurisdictionCountryPolicyV1): string {
