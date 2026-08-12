@@ -27,11 +27,13 @@ import {
   SIGNUP_EXISTING_ACCOUNT_SAME_SURFACE,
   isSupabaseSignupDuplicateUser,
   mapSupabaseSignupDuplicateError,
+  mapOtpVerifyErrorMessage,
 } from "@easner/shared"
 import {
   isSignupEmailBlockCode,
   stashSignupBlockedMessage,
 } from "@/lib/auth/signup-blocked-message"
+import { runBusinessBootstrapClient } from "@/lib/auth/run-business-bootstrap-client"
 
 function parseAuthFragment(hash: string): Record<string, string> {
   const raw = hash.replace(/^#/, "")
@@ -48,6 +50,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>
   signup: (email: string, password: string, name: string) => Promise<{ needsEmailConfirmation: boolean }>
   verifySignupOtp: (email: string, otp: string) => Promise<void>
+  resendSignupOtp: (email: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
   signInWithApple: () => Promise<void>
   logout: () => Promise<void>
@@ -352,14 +355,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (token.length !== 6) {
       throw new Error("Enter the 6-digit code from your email.")
     }
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       email: email.trim(),
       token,
       type: "signup",
     })
-    if (error) throw error
+    if (error) throw new Error(mapOtpVerifyErrorMessage(error.message))
+
+    const verifiedUser = data.session?.user ?? data.user
+    const verifiedFullName =
+      typeof verifiedUser?.user_metadata?.name === "string"
+        ? verifiedUser.user_metadata.name.trim()
+        : [verifiedUser?.user_metadata?.first_name, verifiedUser?.user_metadata?.last_name]
+            .filter(Boolean)
+            .join(" ")
+            .trim() || undefined
+
     await ensureBusinessWebSurface(supabase)
     await ensureBusinessAppSession(true)
+
+    const boot = await runBusinessBootstrapClient({ fullName: verifiedFullName })
+    if (!boot.ok) {
+      console.warn("signup bootstrap after OTP verify:", boot.error ?? boot.code)
+    }
+  }
+
+  const resendSignupOtp = async (email: string) => {
+    const addr = email.trim()
+    if (!addr) throw new Error("Enter your email address first.")
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: addr,
+    })
+    if (error) throw new Error(error.message || "Unable to resend code.")
   }
 
   const signInWithGoogle = async () => {
@@ -422,6 +450,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     signup,
     verifySignupOtp,
+    resendSignupOtp,
     signInWithGoogle,
     signInWithApple,
     logout,
@@ -438,6 +467,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           login,
           signup,
           verifySignupOtp,
+          resendSignupOtp,
           signInWithGoogle,
           signInWithApple,
           logout,

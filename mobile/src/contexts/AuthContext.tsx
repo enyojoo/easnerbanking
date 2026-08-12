@@ -30,6 +30,7 @@ import {
   SIGNUP_EXISTING_ACCOUNT_SAME_SURFACE,
   isSupabaseSignupDuplicateUser,
   mapSupabaseSignupDuplicateError,
+  mapOtpVerifyErrorMessage,
 } from '@easner/shared'
 import { mapUsersRowToUser, splitFullNameForForm } from '../lib/userProfileHelpers'
 import type { PersonalSettingsPayload } from '../lib/userService'
@@ -464,7 +465,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         token: digits,
         type: 'signup',
       })
-      if (error) return { error: new Error(error.message || 'Invalid verification code.') }
+      if (error) return { error: new Error(mapOtpVerifyErrorMessage(error.message)) }
 
       // Surface gate as soon as the session exists; PIN gate will happen in AppNavigator.
       const surfaceGate = await ensureConsumerMobileAccess()

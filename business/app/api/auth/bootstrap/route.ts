@@ -13,6 +13,7 @@ import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-s
 import { emailService } from "@easner/server"
 import { getEmailAudienceProfile } from "@easner/server"
 import { claimTeamInvite } from "@/lib/business/claim-team-invite"
+import { ensureBusinessOrganizationId, firstNameFromFullName } from "@/lib/business/ensure-business-organization"
 import { ensureDefaultCommunicationPreferences } from "@/lib/notifications/ensure-communication-preferences"
 import { cancelAccountDeletion } from "@/lib/settings/account-deletion"
 import { isGridConfigured } from "@/lib/grid/config"
@@ -42,25 +43,6 @@ function countryNameFromCode(code: string | null): string | null {
   if (!code) return null
   const match = countries.find((c) => c.code === code)
   return match?.name ?? null
-}
-
-function defaultOrgName(email: string | undefined, fallbackId: string): string {
-  const local = (email ?? "").split("@")[0]?.trim()
-  if (local) return `${local} Business`
-  return `Business ${fallbackId.slice(0, 8)}`
-}
-
-function firstNameFromFullName(fullName: string | null | undefined): string | null {
-  if (!fullName) return null
-  const trimmed = fullName.trim()
-  if (!trimmed) return null
-  return trimmed.split(/\s+/)[0] ?? null
-}
-
-function possessiveBusinessName(firstName: string): string {
-  const clean = firstName.replace(/[^a-zA-Z0-9'-]/g, "").trim()
-  const base = clean || "Owner"
-  return `${base}'s Business`
 }
 
 function parseName(fullName: string | null | undefined): { fullName: string | null } {
@@ -516,44 +498,13 @@ export async function POST(request: Request) {
   const isNewBusinessAccount = !userRow?.id
 
   if (!businessId) {
-    const first = firstNameFromFullName(resolvedBootstrapFullName)
-    const orgName = first ? possessiveBusinessName(first) : defaultOrgName(user.email, user.id)
-    const orgPayloadWithCountry = {
-      name: orgName,
-      easetag: null as string | null,
+    businessId = await ensureBusinessOrganizationId(admin, {
+      userId: user.id,
+      email: user.email ?? null,
+      fullName: resolvedBootstrapFullName,
       country,
-    }
-
-    const { data: insertedWithCountry, error: insertErrWithCountry } = await admin
-      .from("businesses")
-      .insert(orgPayloadWithCountry)
-      .select("id")
-      .single()
-
-    if (insertErrWithCountry) {
-      const { data: insertedNoCountry, error: insertErrNoCountry } = await admin
-        .from("businesses")
-        .insert({
-          name: orgName,
-          easetag: null as string | null,
-        })
-        .select("id")
-        .single()
-      if (insertErrNoCountry) {
-        return NextResponse.json({ ok: false, error: insertErrNoCountry.message }, { status: 500 })
-      }
-      businessId = insertedNoCountry.id
-    } else {
-      businessId = insertedWithCountry.id
-    }
-  }
-  /**
-   * Do not overwrite `businesses.country` on existing orgs.
-   *
-   * Exception: if the org country is still null/empty (new org created without country or older data),
-   * and the signup bootstrap provides an explicit country, backfill it once.
-   */
-  if (businessId && country) {
+    })
+  } else if (country) {
     try {
       const { data: orgRow } = await admin.from("businesses").select("country").eq("id", businessId).maybeSingle()
       const cur = typeof orgRow?.country === "string" ? orgRow.country.trim() : ""

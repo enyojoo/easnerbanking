@@ -31,6 +31,7 @@ import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import EaseEnter from '../../components/EaseEnter'
 import { haptics } from '../../lib/haptics'
 import { signupPrecheck } from '../../lib/signupPrecheck'
+import { clearSignupOtpEmail, readSignupOtpEmail, stashSignupOtpEmail } from '../../lib/signupOtpEmailStorage'
 import { consumeSignupBlockedMessage } from '../../lib/signupBlockedMessage'
 import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
 
@@ -100,6 +101,16 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   }, [])
 
   useEffect(() => {
+    void readSignupOtpEmail().then((storedEmail) => {
+      if (!storedEmail) return
+      setModeStack((prev) => (prev[prev.length - 1] === 'signup' ? prev : ['signup']))
+      setEmail(storedEmail)
+      setSignupStep('otp')
+      setSignupResendCooldown(60)
+    })
+  }, [])
+
+  useEffect(() => {
     analytics.trackScreenView(mode === 'login' ? 'Login' : 'Register')
   }, [mode])
 
@@ -121,6 +132,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
     setSignupOtp('')
     setSignupOtpError('')
     setSignupOtpNotice('')
+    void clearSignupOtpEmail()
     setSignupResendCooldown(0)
   }
 
@@ -229,6 +241,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
           setSignupOtpError(error.message || 'Invalid verification code.')
           return
         }
+        void clearSignupOtpEmail()
         // No modal: successful verification continues into PIN/app flow via auth state change.
       } finally {
         setIsLoading(false)
@@ -265,6 +278,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         if (signUpError) {
           showError(signUpError.message || 'Something went wrong.')
         } else if (needsEmailConfirmation) {
+          void stashSignupOtpEmail(email)
           setSignupStep('otp')
           setSignupOtp('')
           setSignupOtpNotice('')

@@ -2,6 +2,12 @@ import { NextResponse } from "next/server"
 import { removeAllOrganizationLogoObjects } from "@/lib/organization-logo-storage"
 import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
+import {
+  defaultBusinessOrgName,
+  ensureBusinessOrganizationId,
+  firstNameFromFullName,
+  possessiveBusinessOrgName,
+} from "@/lib/business/ensure-business-organization"
 import { resolveInvoiceReplyEmailWithSource } from "@/lib/invoices/issuer"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { isBusinessProfileLockedFromKybFields, getVerificationRejectionDisplay } from "@easner/shared"
@@ -60,25 +66,6 @@ function countryCodeFromName(name: string | null | undefined): string | null {
   return found?.code ?? null
 }
 
-function defaultOrgName(email: string | undefined, fallbackId: string): string {
-  const local = (email ?? "").split("@")[0]?.trim()
-  if (local) return `${local} Business`
-  return `Business ${fallbackId.slice(0, 8)}`
-}
-
-function firstNameFromFullName(fullName: string | null | undefined): string | null {
-  if (!fullName) return null
-  const trimmed = fullName.trim()
-  if (!trimmed) return null
-  return trimmed.split(/\s+/)[0] ?? null
-}
-
-function possessiveBusinessName(firstName: string): string {
-  const clean = firstName.replace(/[^a-zA-Z0-9'-]/g, "").trim()
-  const base = clean || "Owner"
-  return `${base}'s Business`
-}
-
 function ownerNameFromAuthUser(user: { user_metadata?: Record<string, unknown> | null; email?: string | null }) {
   const meta = user.user_metadata ?? {}
   const directName = typeof meta.name === "string" ? meta.name.trim() : ""
@@ -116,40 +103,6 @@ async function resolveCanManageBusinessVerification(
   }
 
   return userId === orgOwnerUserId
-}
-
-async function ensureOrganizationId(
-  admin: ReturnType<typeof createSupabaseAdmin>,
-  userId: string,
-  email?: string,
-  fullName?: string | null,
-) {
-  const { data: userRow } = await admin.from("users").select("easner_business_id,full_name").eq("id", userId).maybeSingle()
-  if (userRow?.easner_business_id) return userRow.easner_business_id
-
-  const first = firstNameFromFullName(fullName ?? userRow?.full_name ?? null)
-  const orgName = first ? possessiveBusinessName(first) : defaultOrgName(email, userId)
-  const { data: org, error } = await admin
-    .from("businesses")
-    .insert({ name: orgName, easetag: null })
-    .select("id")
-    .single()
-  if (error) throw new Error(error.message)
-
-  await admin
-    .from("users")
-    .upsert(
-      {
-        id: userId,
-        email: email ?? null,
-        easner_business_id: org.id,
-        role: "business",
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" },
-    )
-
-  return org.id
 }
 
 async function fetchBusinessProfile(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string) {
@@ -227,13 +180,13 @@ export async function GET(request: Request) {
   let orgId = userRow?.easner_business_id ?? null
   if (!orgId && userRow?.role !== "individual") {
     try {
-      orgId = await ensureOrganizationId(
-        admin,
-        user.id,
-        user.email ?? undefined,
-        userRow?.full_name ??
+      orgId = await ensureBusinessOrganizationId(admin, {
+        userId: user.id,
+        email: user.email ?? null,
+        fullName:
+          userRow?.full_name ??
           (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null),
-      )
+      })
     } catch {
       orgId = null
     }
@@ -246,8 +199,8 @@ export async function GET(request: Request) {
   const onboardingComplete = Boolean(org && org.business_type && org.base_currency && org.description)
   const generatedOrgName = (() => {
     const first = firstNameFromFullName(ownerName)
-    if (first) return possessiveBusinessName(first)
-    return defaultOrgName(user.email, user.id)
+    if (first) return possessiveBusinessOrgName(first)
+    return defaultBusinessOrgName(user.email, user.id)
   })()
   let tier1Complete = false
   let tier1VerificationStatus: string | null = null
@@ -372,12 +325,11 @@ export async function PUT(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const businessId = await ensureOrganizationId(
-    admin,
-    user.id,
-    user.email,
-    typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null,
-  )
+  const businessId = await ensureBusinessOrganizationId(admin, {
+    userId: user.id,
+    email: user.email ?? null,
+    fullName: typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null,
+  })
 
   const { data: orgRow } = await admin
     .from("businesses")

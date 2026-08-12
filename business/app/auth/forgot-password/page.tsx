@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft } from "lucide-react"
 import { OtpCodeInput } from "@/components/otp-code-input"
+import { mapOtpVerifyErrorMessage } from "@easner/shared"
 
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState<"email" | "otp">("email")
@@ -73,7 +74,11 @@ export default function ForgotPasswordPage() {
       })
       const json = (await res.json().catch(() => ({}))) as { resetToken?: string; error?: string }
       if (!res.ok || !json.resetToken) {
-        setError(typeof json.error === "string" ? json.error : "Invalid or expired verification code.")
+        setError(
+          mapOtpVerifyErrorMessage(
+            typeof json.error === "string" ? json.error : "Invalid or expired verification code.",
+          ),
+        )
         return
       }
       sessionStorage.setItem("reset-token", json.resetToken)

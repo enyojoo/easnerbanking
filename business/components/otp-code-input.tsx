@@ -10,6 +10,8 @@ export interface OtpCodeInputProps {
   length?: number
   value: string
   onChange: (digits: string) => void
+  /** Fired once when `length` digits are entered (typing or paste). */
+  onComplete?: (digits: string) => void
   autoFocus?: boolean
   disabled?: boolean
   className?: string
@@ -27,6 +29,7 @@ export function OtpCodeInput({
   length = 6,
   value,
   onChange,
+  onComplete,
   autoFocus,
   disabled,
   className,
@@ -36,8 +39,22 @@ export function OtpCodeInput({
   /** Next slot while typing; last cell when full — avoids “no highlight” jitter at 6 digits. */
   const activeIndex = Math.min(digits.length, length - 1)
 
+  const applyDigits = (raw: string) => {
+    const next = raw.replace(/\D/g, "").slice(0, length)
+    onChange(next)
+    if (next.length === length) onComplete?.(next)
+    return next
+  }
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(e.target.value.replace(/\D/g, "").slice(0, length))
+    applyDigits(e.target.value)
+  }
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("text")
+    if (!pasted) return
+    e.preventDefault()
+    applyDigits(pasted)
   }
 
   return (
@@ -67,6 +84,7 @@ export function OtpCodeInput({
           maxLength={length}
           value={digits}
           onChange={handleChange}
+          onPaste={handlePaste}
           disabled={disabled}
           className="absolute inset-0 h-full w-full cursor-text text-transparent caret-transparent opacity-0 outline-none ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:!opacity-0 disabled:cursor-not-allowed"
           autoFocus={autoFocus}

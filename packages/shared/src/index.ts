@@ -62,6 +62,7 @@ export {
   type SignupExistingAccountBlock,
   type SignupExistingRole,
 } from "./signup-existing-account"
+export { mapOtpVerifyErrorMessage } from "./otp-verify-errors"
 export {
   resolvePersonalMobileAppOrigin,
   personalMobileDashboardUrl,

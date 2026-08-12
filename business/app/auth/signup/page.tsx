@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef, useMemo, useEffect } from "react"
+import { useState, useRef, useMemo, useEffect, useCallback } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -28,6 +28,12 @@ import { useTeamInviteContext } from "@/lib/use-team-invite-context"
 import { AUTH_COPY } from "@/lib/copy/business-ui-copy"
 import { AppleSignInButton } from "@/components/auth/apple-sign-in-button"
 import { consumeSignupBlockedMessage } from "@/lib/auth/signup-blocked-message"
+import {
+  clearSignupOtpEmail,
+  readSignupOtpEmail,
+  stashSignupOtpEmail,
+} from "@/lib/auth/signup-otp-email-storage"
+import { mapOtpVerifyErrorMessage } from "@easner/shared"
 
 const TERMS_URL = "https://www.easner.com/terms?from=register"
 
@@ -44,15 +50,34 @@ export default function SignupPage() {
   const [message, setMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [dropdownWidth, setDropdownWidth] = useState<number | undefined>(undefined)
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const [otpDeliveryEmail, setOtpDeliveryEmail] = useState("")
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const { signup, verifySignupOtp, signInWithGoogle, signInWithApple } = useAuth()
+  const { signup, verifySignupOtp, resendSignupOtp, signInWithGoogle, signInWithApple } = useAuth()
   const router = useRouter()
   const { isTeamInvite, invitePreview, inviteEmail } = useTeamInviteContext()
   const teamInviteEmailLocked = isTeamInvite && Boolean(inviteEmail)
 
   useEffect(() => {
+    if (step !== "otp" || resendCooldown <= 0) return
+    const t = window.setInterval(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1))
+    }, 1000)
+    return () => window.clearInterval(t)
+  }, [resendCooldown, step])
+
+  useEffect(() => {
     const blocked = consumeSignupBlockedMessage()
     if (blocked) setError(blocked)
+  }, [])
+
+  useEffect(() => {
+    const storedEmail = readSignupOtpEmail()
+    if (!storedEmail) return
+    setOtpDeliveryEmail(storedEmail)
+    setEmail(storedEmail)
+    setStep("otp")
+    setResendCooldown(60)
   }, [])
 
   useEffect(() => {
@@ -98,9 +123,13 @@ export default function SignupPage() {
       setOnboarding({ countryCode: country, businessOnboardingComplete: false })
       const result = await signup(email, password, name)
       if (result.needsEmailConfirmation) {
+        const deliveryEmail = email.trim()
+        setOtpDeliveryEmail(deliveryEmail)
+        stashSignupOtpEmail(deliveryEmail)
         setStep("otp")
         setOtp("")
         setMessage("")
+        setResendCooldown(60)
         return
       }
       router.push("/dashboard")
@@ -112,16 +141,61 @@ export default function SignupPage() {
     }
   }
 
+  const deliveryEmail = otpDeliveryEmail || email.trim()
+
+  const verifyOtpCode = useCallback(
+    async (code: string) => {
+      if (isSubmitting) return
+      if (!deliveryEmail) {
+        setError("We lost your email address. Go back and create your account again.")
+        return
+      }
+      setError("")
+      setMessage("")
+      try {
+        setIsSubmitting(true)
+        await verifySignupOtp(deliveryEmail, code)
+        clearSignupOtpEmail()
+        router.push("/dashboard")
+      } catch (err: unknown) {
+        setError(
+          err instanceof Error
+            ? mapOtpVerifyErrorMessage(err.message)
+            : "This code has expired or is incorrect. Request a new code below.",
+        )
+      } finally {
+        setIsSubmitting(false)
+      }
+    },
+    [deliveryEmail, isSubmitting, router, verifySignupOtp],
+  )
+
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault()
+    await verifyOtpCode(otp)
+  }
+
+  const handleOtpChange = (next: string) => {
+    setOtp(next)
+    if (error) setError("")
+    if (message) setMessage("")
+  }
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || isSubmitting) return
+    if (!deliveryEmail) {
+      setError("We lost your email address. Go back and create your account again.")
+      return
+    }
     setError("")
     setMessage("")
     try {
       setIsSubmitting(true)
-      await verifySignupOtp(email, otp)
-      router.push("/dashboard")
+      await resendSignupOtp(deliveryEmail)
+      setMessage("New code sent to your email address.")
+      setResendCooldown(60)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Invalid or expired code.")
+      setError(err instanceof Error ? err.message : "Failed to resend code. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
@@ -186,7 +260,12 @@ export default function SignupPage() {
             {step === "otp" ? "Verify your email" : isTeamInvite ? "Join your team" : "Open an account"}
           </CardTitle>
           {step === "otp" ? (
-            <CardDescription>Enter the 6-digit code we sent to your email</CardDescription>
+            <CardDescription className="space-y-1">
+              <span>Enter the 6-digit code we sent to</span>
+              <span className="block break-all font-medium text-foreground">
+                {deliveryEmail || "your email"}
+              </span>
+            </CardDescription>
           ) : isTeamInvite && invitePreview ? (
             <CardDescription>
               Create an account to join {invitePreview.businessName} as {invitePreview.role}
@@ -425,17 +504,32 @@ export default function SignupPage() {
                 <OtpCodeInput
                   id="signup-otp"
                   value={otp}
-                  onChange={setOtp}
+                  onChange={handleOtpChange}
+                  onComplete={(digits) => {
+                    window.setTimeout(() => {
+                      void verifyOtpCode(digits)
+                    }, 80)
+                  }}
                   autoFocus
                   disabled={isSubmitting}
                 />
                 {error && <p className="text-sm text-destructive">{error}</p>}
+                {message && <p className="text-sm text-primary">{message}</p>}
                 <Button
                   type="submit"
                   className="w-full mt-2"
                   disabled={otp.replace(/\D/g, "").length !== 6 || isSubmitting}
                 >
                   {isSubmitting ? "Verifying…" : "Continue"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  disabled={isSubmitting || resendCooldown > 0}
+                  onClick={() => void handleResendOtp()}
+                >
+                  {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
                 </Button>
               </>
             )}
