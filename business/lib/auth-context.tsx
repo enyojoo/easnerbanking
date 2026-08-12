@@ -24,6 +24,9 @@ import {
   applePrivateRelayFromIdToken,
   signupEmailBlockMessageForCode,
   SIGNUP_EMAIL_BLOCK_MESSAGES,
+  SIGNUP_EXISTING_ACCOUNT_SAME_SURFACE,
+  isSupabaseSignupDuplicateUser,
+  mapSupabaseSignupDuplicateError,
 } from "@easner/shared"
 import {
   isSignupEmailBlockCode,
@@ -324,7 +327,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: { name: name.trim() },
       },
     })
-    if (error) throw error
+    if (error) {
+      const mapped = mapSupabaseSignupDuplicateError(error.message)
+      throw mapped ? new Error(mapped) : error
+    }
+    if (isSupabaseSignupDuplicateUser(data.user)) {
+      throw new Error(SIGNUP_EXISTING_ACCOUNT_SAME_SURFACE)
+    }
     if (data.user?.id) {
       analytics.identify(data.user.id, {
         email: data.user.email || email.trim(),

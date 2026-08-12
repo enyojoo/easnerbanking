@@ -54,6 +54,15 @@ export {
   type SignupEmailBlockReason,
 } from "./signup-email-policy"
 export {
+  SIGNUP_EXISTING_ACCOUNT_SAME_SURFACE,
+  isSupabaseSignupDuplicateUser,
+  mapSupabaseSignupDuplicateError,
+  resolveSignupExistingAccountBlock,
+  type SignupAuthSurface,
+  type SignupExistingAccountBlock,
+  type SignupExistingRole,
+} from "./signup-existing-account"
+export {
   resolvePersonalMobileAppOrigin,
   personalMobileDashboardUrl,
   personalMobileNotificationsUrl,

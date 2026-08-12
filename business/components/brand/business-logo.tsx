@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import { BRAND } from "./brand-constants"
 
 interface BusinessLogoProps {
@@ -7,26 +8,43 @@ interface BusinessLogoProps {
   /** Link href - if provided, wraps in Link */
   href?: string
   className?: string
+  /** LCP candidate on auth / shell entry */
+  priority?: boolean
 }
 
-const sizeClasses = {
-  sm: "h-4",
-  md: "h-6",
-  lg: "h-7",
-}
+const sizePx = {
+  sm: { width: 96, height: 16 },
+  md: { width: 144, height: 24 },
+  lg: { width: 168, height: 28 },
+} as const
 
-export function BusinessLogo({ size = "md", href = "/", className = "" }: BusinessLogoProps) {
+export function BusinessLogo({
+  size = "md",
+  href = "/",
+  className = "",
+  priority = false,
+}: BusinessLogoProps) {
+  const { width, height } = sizePx[size]
+
   const img = (
     <>
-      <img
+      <Image
         src={BRAND.logoBusinessLight}
         alt="Easner Business"
-        className={`w-auto object-contain dark:hidden ${sizeClasses[size]} ${className}`}
+        width={width}
+        height={height}
+        priority={priority}
+        className={`w-auto object-contain dark:hidden ${className}`}
+        style={{ height: size === "sm" ? 16 : size === "md" ? 24 : 28, width: "auto" }}
       />
-      <img
+      <Image
         src={BRAND.logoBusinessDark}
         alt="Easner Business"
-        className={`hidden w-auto object-contain dark:block ${sizeClasses[size]} ${className}`}
+        width={width}
+        height={height}
+        priority={priority}
+        className={`hidden w-auto object-contain dark:block ${className}`}
+        style={{ height: size === "sm" ? 16 : size === "md" ? 24 : 28, width: "auto" }}
       />
     </>
   )

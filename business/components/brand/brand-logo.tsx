@@ -1,23 +1,36 @@
+import Image from "next/image"
 import { BRAND } from "./brand-constants"
 
 interface BrandLogoProps {
   href?: string
   className?: string
   size?: "sm" | "md" | "lg"
+  priority?: boolean
 }
 
-export function BrandLogo({ href, className = "", size = "md" }: BrandLogoProps) {
-  const sizeClasses = {
-    sm: "h-4",
-    md: "h-6",
-    lg: "h-7",
-  }
+const sizePx = {
+  sm: { width: 80, height: 16 },
+  md: { width: 120, height: 24 },
+  lg: { width: 140, height: 28 },
+} as const
+
+export function BrandLogo({
+  href,
+  className = "",
+  size = "md",
+  priority = false,
+}: BrandLogoProps) {
+  const { width, height } = sizePx[size]
 
   const img = (
-    <img
+    <Image
       src={BRAND.logo}
       alt={`${BRAND.name} Logo`}
-      className={`w-auto object-contain ${sizeClasses[size]} ${className}`}
+      width={width}
+      height={height}
+      priority={priority}
+      className={`w-auto object-contain ${className}`}
+      style={{ height: size === "sm" ? 16 : size === "md" ? 24 : 28, width: "auto" }}
     />
   )
 

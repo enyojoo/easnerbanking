@@ -250,11 +250,12 @@ export function InvoiceStripeCheckout({
 
   const elementsAppearance = useMemo(() => easnerStripeElementsAppearance(), [])
 
-  const stripePromise = useMemo(() => getStripeJs(), [])
+  const stripePromise = useMemo(() => (clientSecret ? getStripeJs() : null), [clientSecret])
 
   useEffect(() => {
+    if (!clientSecret) return
     getStripeJs()
-  }, [])
+  }, [clientSecret])
 
   useEffect(() => {
     if (previewOnly || paid) return

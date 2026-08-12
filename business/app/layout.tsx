@@ -6,9 +6,9 @@ import { Toaster } from "@/components/ui/sonner"
 import { ClientAuthProvider } from "@/components/client-auth-provider"
 import { ChunkLoadErrorHandler } from "@/components/chunk-load-error-handler"
 import { PostHogProvider } from "@/components/posthog-provider"
-import { Providers } from "@/components/providers"
+import { SurfaceProviders } from "@/components/surface-providers"
+import { WebVitalsReporter } from "@/components/web-vitals-reporter"
 import { Suspense } from "react"
-import { LoadingSpinner } from "@/components/loading-spinner"
 import { PwaStandaloneRoot } from "@/components/pwa/pwa-standalone-root"
 import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider"
 import { BusinessViewportGate } from "@/components/layout/business-viewport-gate"
@@ -75,21 +75,22 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <ChunkLoadErrorHandler />
-        <Suspense fallback={<LoadingSpinner />}>
+        <Suspense fallback={null}>
           <PostHogProvider>
             <ClientAuthProvider>
               <PwaStandaloneRoot />
               <PwaInstallProvider>
-                <Providers>
+                <SurfaceProviders>
                   <BusinessViewportGate>
                     <AppSurfaceLayout>{children}</AppSurfaceLayout>
                   </BusinessViewportGate>
-                </Providers>
+                </SurfaceProviders>
               </PwaInstallProvider>
+              <WebVitalsReporter />
             </ClientAuthProvider>
           </PostHogProvider>
-          <Toaster />
         </Suspense>
+        <Toaster />
       </body>
     </html>
   )

@@ -11,6 +11,7 @@ import {
   registerIntercomHideOnClose,
   resetIntercomHideOnCloseRegistration,
 } from "@/lib/intercom-messenger"
+import { scheduleAfterIdle } from "@/lib/schedule-after-idle"
 
 type IntercomRegion = "us" | "eu" | "ap"
 
@@ -102,11 +103,18 @@ export function BusinessIntercom() {
 
   const prevUserIdRef = React.useRef<string | null>(null)
   const userRef = React.useRef<User | null>(null)
+  const [bootAllowed, setBootAllowed] = React.useState(false)
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    return scheduleAfterIdle(() => setBootAllowed(true), 2500)
+  }, [])
 
   React.useEffect(() => {
     userRef.current = user
 
     if (typeof window === "undefined") return
+    if (!bootAllowed) return
 
     if (!appId) {
       if (process.env.NODE_ENV === "development") {
@@ -174,7 +182,7 @@ export function BusinessIntercom() {
     return () => {
       cancelled = true
     }
-  }, [appId, region, user, isLoading])
+  }, [appId, bootAllowed, region, user, isLoading])
 
   return null
 }

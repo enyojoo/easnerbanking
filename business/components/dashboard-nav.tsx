@@ -244,7 +244,7 @@ export function DashboardNav() {
       {user?.id ? <BusinessOnboardingChecklist key={user.id} /> : null}
 
       <div className="px-5 py-4 border-t border-sidebar-border flex items-center justify-center">
-        <BusinessLogo size="md" href="/" />
+        <BusinessLogo size="md" href="/" priority />
       </div>
     </div>
   )

@@ -117,7 +117,18 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
   }, [isLoading, router, user?.id])
 
   if (isLoading || !user) {
-    return null
+    return (
+      <div className="min-h-dvh bg-background text-foreground">
+        <div className="ml-64 flex h-dvh flex-col overflow-hidden">
+          <header className="z-30 flex h-16 min-h-16 shrink-0 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8">
+            <div className="h-9 w-9 shrink-0 animate-pulse rounded-full border-2 border-border bg-muted" />
+          </header>
+          <main className="flex-1 min-h-0 overflow-hidden px-8 pb-10 pt-6">
+            <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />
+          </main>
+        </div>
+      </div>
+    )
   }
 
   return (

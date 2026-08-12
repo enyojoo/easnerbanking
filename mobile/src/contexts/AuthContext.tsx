@@ -25,7 +25,12 @@ import {
   totpFactorsFromListResponse,
   clearIncompleteMfaSessionOnColdStart,
 } from '../lib/auth-mfa'
-import { buildVerifiedIdentityFromKycFields } from '@easner/shared'
+import {
+  buildVerifiedIdentityFromKycFields,
+  SIGNUP_EXISTING_ACCOUNT_SAME_SURFACE,
+  isSupabaseSignupDuplicateUser,
+  mapSupabaseSignupDuplicateError,
+} from '@easner/shared'
 import { mapUsersRowToUser, splitFullNameForForm } from '../lib/userProfileHelpers'
 import type { PersonalSettingsPayload } from '../lib/userService'
 import { ensureConsumerMobileAccess } from '../lib/validateAppSurface'
@@ -1185,7 +1190,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       })
 
       if (error) {
-        return { error }
+        const mapped = mapSupabaseSignupDuplicateError(error.message)
+        return { error: mapped ? new Error(mapped) : error }
+      }
+
+      if (isSupabaseSignupDuplicateUser(data.user)) {
+        return { error: new Error(SIGNUP_EXISTING_ACCOUNT_SAME_SURFACE) }
       }
 
       if (data.user?.id) {

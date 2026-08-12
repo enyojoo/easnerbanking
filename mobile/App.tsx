@@ -48,6 +48,7 @@ import { ShellAwareSafeArea } from './src/components/layout/ShellAwareSafeArea'
 import { WebViewportFrame } from './src/components/layout/WebViewportFrame'
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap'
 import { WebIntercomMessenger } from './src/components/WebIntercomMessenger'
+import { WebVitalsReporter } from './src/components/WebVitalsReporter'
 import {
   ThemePaletteProvider,
   useThemeColors,
@@ -276,13 +277,22 @@ function AppContent() {
 }
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
-    'Geist-Regular': require('./assets/fonts/geist-sans/Geist-Regular.ttf'),
-    'Geist-Medium': require('./assets/fonts/geist-sans/Geist-Medium.ttf'),
-    'Geist-SemiBold': require('./assets/fonts/geist-sans/Geist-SemiBold.ttf'),
-    'Geist-Bold': require('./assets/fonts/geist-sans/Geist-Bold.ttf'),
-    'Geist-Black': require('./assets/fonts/geist-sans/Geist-Black.ttf'),
-  })
+  const [fontsLoaded] = useFonts(
+    Platform.OS === 'web'
+      ? {
+          'Geist-Regular': require('./assets/fonts/geist-sans/Geist-Regular.ttf'),
+          'Geist-Medium': require('./assets/fonts/geist-sans/Geist-Medium.ttf'),
+          'Geist-SemiBold': require('./assets/fonts/geist-sans/Geist-SemiBold.ttf'),
+          'Geist-Bold': require('./assets/fonts/geist-sans/Geist-Bold.ttf'),
+        }
+      : {
+          'Geist-Regular': require('./assets/fonts/geist-sans/Geist-Regular.ttf'),
+          'Geist-Medium': require('./assets/fonts/geist-sans/Geist-Medium.ttf'),
+          'Geist-SemiBold': require('./assets/fonts/geist-sans/Geist-SemiBold.ttf'),
+          'Geist-Bold': require('./assets/fonts/geist-sans/Geist-Bold.ttf'),
+          'Geist-Black': require('./assets/fonts/geist-sans/Geist-Black.ttf'),
+        },
+  )
   
   // Initialize deep linking
   useEffect(() => {
@@ -290,6 +300,23 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      const startWarm = () => {
+        void hydrateWarmImageUrls()
+        warmBundledFlagCache()
+      }
+      const w = window as Window & {
+        requestIdleCallback?: (cb: IdleRequestCallback, opts?: IdleRequestOptions) => number
+        cancelIdleCallback?: (id: number) => void
+      }
+      if (typeof w.requestIdleCallback === 'function') {
+        const id = w.requestIdleCallback(() => startWarm(), { timeout: 2500 })
+        return () => w.cancelIdleCallback?.(id)
+      }
+      const timeout = window.setTimeout(startWarm, 400)
+      return () => window.clearTimeout(timeout)
+    }
+
     void hydrateWarmImageUrls()
     warmBundledFlagCache()
   }, [])
@@ -406,8 +433,8 @@ export default function App() {
     }
   }, [])
 
-  // Block first paint until fonts load (native splash covers the gap; web avoids FOUT + Chrome font interventions).
-  if (!fontsLoaded) {
+  // Block first paint until fonts load on native; web paints with system fallback.
+  if (!fontsLoaded && Platform.OS !== 'web') {
     return null
   }
 
@@ -438,6 +465,7 @@ export default function App() {
                 <QueryProvider>
                   <PushNotificationBootstrap />
                   <WebIntercomMessenger />
+                  <WebVitalsReporter />
                   <BalanceProvider>
                     <NotificationsProvider>
                       <ToastProvider>

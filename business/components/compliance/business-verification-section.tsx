@@ -26,8 +26,8 @@ import { Badge } from "@/components/ui/badge"
 import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
 import { isGridCompleteUrl } from "@/lib/grid/grid-complete-url"
 import { cn } from "@/lib/utils"
+import dynamic from "next/dynamic"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
-import { GridSumsubWebSdk } from "@/components/compliance/grid-sumsub-websdk"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SettingsStripeConnectPanel } from "@/components/settings/settings-stripe-connect-panel"
@@ -37,6 +37,11 @@ import {
   NOAH_FINAL_REJECTION_USER_MESSAGE,
   NOAH_VERIFICATION_IN_REVIEW_COPY,
 } from "@easner/shared"
+
+const GridSumsubWebSdk = dynamic(
+  () => import("@/components/compliance/grid-sumsub-websdk").then((m) => ({ default: m.GridSumsubWebSdk })),
+  { ssr: false, loading: () => <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" /> },
+)
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()

@@ -13,7 +13,6 @@ import { getInvoiceDiscountAmount } from "@/lib/b2b/invoice-totals"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
 import { InvoicePaymentOptions } from "@/components/invoice-payment-options"
 import type { PublicInvoiceStripeCheckout, PublicInvoicePayload } from "@/lib/invoices/json-public-invoice-from-row"
-import { getStripeJs } from "@/lib/stripe/load-stripe-js"
 import { downloadInvoicePdf } from "@/lib/use-invoice-pdf"
 import { buildInvoicePdfPaymentSection } from "@/lib/invoices/invoice-payment-copy"
 import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
@@ -242,10 +241,6 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     markInvoicePaidOptimistically,
     scheduleBackgroundPaidRefetch,
   ])
-
-  useEffect(() => {
-    getStripeJs()
-  }, [])
 
   const displayIssuer = issuer ?? FALLBACK_ISSUER
 

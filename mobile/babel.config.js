@@ -1,7 +1,9 @@
 const path = require('path')
 
 module.exports = function (api) {
+  const isWeb = api.caller((caller) => caller?.platform === 'web')
   api.cache(true)
+
   return {
     presets: ['babel-preset-expo'],
     plugins: [
@@ -14,11 +16,15 @@ module.exports = function (api) {
             // `@easner/shared/currency-flag` → `packages/shared/currency-flag` (missing).
             '@easner/shared/warm-flags': path.resolve(
               __dirname,
-              '../packages/shared/src/flags/warm-flags.native',
+              isWeb
+                ? '../packages/shared/src/flags/warm-flags.web'
+                : '../packages/shared/src/flags/warm-flags.native',
             ),
             '@easner/shared/currency-flag': path.resolve(
               __dirname,
-              '../packages/shared/src/components/CountryFlag.native',
+              isWeb
+                ? '../packages/shared/src/components/CountryFlag'
+                : '../packages/shared/src/components/CountryFlag.native',
             ),
             // Monorepo: shared package source (not only root node_modules).
             '@easner/shared': path.resolve(__dirname, '../packages/shared'),

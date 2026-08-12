@@ -36,10 +36,27 @@ import { MobileAppLockShell } from '../components/MobileAppLockShell'
 import { enterMainAppOnWeb } from './webMainEntry'
 import { webStackScreenListeners } from './webStackScreenListeners'
 import { staticScreenTransitionOptions, useMainStackTransitionOptionsFactory } from './useScreenTransitionOptions'
-import { createWebLazyScreen } from './createWebLazyScreen'
-
-// Onboarding Screen
-import OnboardingScreen from '../screens/onboarding/OnboardingScreen'
+import { OnboardingStack } from './onboardingStack'
+import {
+  AccountVerificationScreen,
+  CardScreen,
+  ReceiveBankDetailsScreen,
+  ReceiveLocalAmountScreen,
+  ReceiveLocalMomoSetupScreen,
+  ReceiveLocalRailScreen,
+  ReceiveLocalReviewScreen,
+  ReceiveMoneyScreen,
+  ReceiveStablecoinDetailsScreen,
+  ReceiveTransactionDetailsScreen,
+  RecipientsScreen,
+  ScanWalletAddressScreen,
+  SelectRecentRecipientScreen,
+  SelectRecipientScreen,
+  SendAmountScreen,
+  SendConfirmScreen,
+  SendCrossBorderMomoSetupScreen,
+  SendPinScreen,
+} from './screenRegistry'
 
 // Auth Screens
 import AuthScreen from '../screens/auth/AuthScreen'
@@ -54,13 +71,11 @@ import PinSetupPrompt from '../components/PinSetupPrompt'
 
 // Main Screens
 import DashboardScreen from '../screens/main/DashboardScreen'
-import RecipientsScreen from '../screens/main/RecipientsScreen'
 import TransactionsScreen from '../screens/main/TransactionsScreen'
 import MoreScreen from '../screens/main/MoreScreen'
 import OpenCurrencyAccountScreen from '../screens/main/OpenCurrencyAccountScreen'
 import ProfileEditScreen from '../screens/main/ProfileEditScreen'
 import SupportScreen from '../screens/main/SupportScreen'
-import CardScreenNative from '../screens/main/CardScreen'
 import TransactionCardScreen from '../screens/main/TransactionCardScreen'
 import ChangePasswordScreen from '../screens/main/ChangePasswordScreen'
 import ChangePinScreen from '../screens/main/ChangePinScreen'
@@ -79,90 +94,6 @@ function loadTransactionDetailsScreen() {
   return require('../screens/transactions/TransactionDetailsScreen').default
 }
 
-// Send Money Flow Screens
-import SendAmountScreenNative from '../screens/send/SendAmountScreen'
-import SelectRecentRecipientScreenNative from '../screens/send/SelectRecentRecipientScreen'
-import ScanWalletAddressScreenNative from '../screens/recipients/ScanWalletAddressScreen'
-import SelectRecipientScreenNative from '../screens/send/SelectRecipientScreen'
-import SendConfirmScreenNative from '../screens/send/SendConfirmScreen'
-import SendCrossBorderMomoSetupScreenNative from '../screens/send/SendCrossBorderMomoSetupScreen'
-import SendPinScreenNative from '../screens/send/SendPinScreen'
-
-// Receive Money Flow Screens
-import ReceiveMoneyScreenNative from '../screens/receive/ReceiveMoneyScreen'
-import ReceiveBankDetailsScreenNative from '../screens/receive/ReceiveBankDetailsScreen'
-import ReceiveStablecoinDetailsScreenNative from '../screens/receive/ReceiveStablecoinDetailsScreen'
-import ReceiveLocalRailScreenNative from '../screens/receive/ReceiveLocalRailScreen'
-import ReceiveLocalAmountScreenNative from '../screens/receive/ReceiveLocalAmountScreen'
-import ReceiveLocalReviewScreenNative from '../screens/receive/ReceiveLocalReviewScreen'
-import ReceiveLocalMomoSetupScreenNative from '../screens/receive/ReceiveLocalMomoSetupScreen'
-import ReceiveTransactionDetailsScreenNative from '../screens/receive/ReceiveTransactionDetailsScreen'
-
-// Verification Screens
-import AccountVerificationScreenNative from '../screens/verification/AccountVerificationScreen'
-
-const SendAmountScreen = createWebLazyScreen(() => import('../screens/send/SendAmountScreen'), SendAmountScreenNative)
-const SelectRecentRecipientScreen = createWebLazyScreen(
-  () => import('../screens/send/SelectRecentRecipientScreen'),
-  SelectRecentRecipientScreenNative,
-)
-const ScanWalletAddressScreen = createWebLazyScreen(
-  () => import('../screens/recipients/ScanWalletAddressScreen'),
-  ScanWalletAddressScreenNative,
-)
-const SelectRecipientScreen = createWebLazyScreen(
-  () => import('../screens/send/SelectRecipientScreen'),
-  SelectRecipientScreenNative,
-)
-const SendConfirmScreen = createWebLazyScreen(
-  () => import('../screens/send/SendConfirmScreen'),
-  SendConfirmScreenNative,
-)
-const SendCrossBorderMomoSetupScreen = createWebLazyScreen(
-  () => import('../screens/send/SendCrossBorderMomoSetupScreen'),
-  SendCrossBorderMomoSetupScreenNative,
-)
-const SendPinScreen = createWebLazyScreen(() => import('../screens/send/SendPinScreen'), SendPinScreenNative)
-
-const CardScreen = createWebLazyScreen(() => import('../screens/main/CardScreen'), CardScreenNative)
-const ReceiveMoneyScreen = createWebLazyScreen(
-  () => import('../screens/receive/ReceiveMoneyScreen'),
-  ReceiveMoneyScreenNative,
-)
-const ReceiveBankDetailsScreen = createWebLazyScreen(
-  () => import('../screens/receive/ReceiveBankDetailsScreen'),
-  ReceiveBankDetailsScreenNative,
-)
-const ReceiveStablecoinDetailsScreen = createWebLazyScreen(
-  () => import('../screens/receive/ReceiveStablecoinDetailsScreen'),
-  ReceiveStablecoinDetailsScreenNative,
-)
-const ReceiveLocalRailScreen = createWebLazyScreen(
-  () => import('../screens/receive/ReceiveLocalRailScreen'),
-  ReceiveLocalRailScreenNative,
-)
-const ReceiveLocalAmountScreen = createWebLazyScreen(
-  () => import('../screens/receive/ReceiveLocalAmountScreen'),
-  ReceiveLocalAmountScreenNative,
-)
-const ReceiveLocalReviewScreen = createWebLazyScreen(
-  () => import('../screens/receive/ReceiveLocalReviewScreen'),
-  ReceiveLocalReviewScreenNative,
-)
-const ReceiveLocalMomoSetupScreen = createWebLazyScreen(
-  () => import('../screens/receive/ReceiveLocalMomoSetupScreen'),
-  ReceiveLocalMomoSetupScreenNative,
-)
-const ReceiveTransactionDetailsScreen = createWebLazyScreen(
-  () => import('../screens/receive/ReceiveTransactionDetailsScreen'),
-  ReceiveTransactionDetailsScreenNative,
-)
-
-const AccountVerificationScreen = createWebLazyScreen(
-  () => import('../screens/verification/AccountVerificationScreen'),
-  AccountVerificationScreenNative,
-)
-
 const Stack = createStackNavigator()
 const Tab = createBottomTabNavigator()
 
@@ -170,18 +101,6 @@ const Tab = createBottomTabNavigator()
 const FLOW_STACK_SCREEN_OPTIONS = {
   headerShown: false,
 } as const
-
-function OnboardingStack() {
-  return (
-    <Stack.Navigator screenOptions={FLOW_STACK_SCREEN_OPTIONS} screenListeners={webStackScreenListeners}>
-      <Stack.Screen
-        name="Onboarding"
-        component={OnboardingScreen}
-        options={staticScreenTransitionOptions('Onboarding')}
-      />
-    </Stack.Navigator>
-  )
-}
 
 function MfaStack() {
   return (
