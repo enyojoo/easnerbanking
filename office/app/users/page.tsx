@@ -73,8 +73,8 @@ function userDisplayName(user: Pick<UserData, "id" | "email" | "full_name">) {
 function resolveOverviewVerificationStatus(user: UserData): string {
   const role = String(user.role || "").toLowerCase()
   const isBizContext = role === "business" || Boolean(user.easner_business_id)
-  if (isBizContext && user.noah_kyb_status) {
-    return String(user.noah_kyb_status)
+  if (isBizContext && user.verification_status) {
+    return String(user.verification_status)
   }
   return String(user.noah_kyc_status || user.noahKycStatus || "not_started")
 }
@@ -294,7 +294,7 @@ export default function AdminUsersPage() {
           u.easner_business_id || "",
           u.email_confirmed_at ? "yes" : "no",
           u.noah_kyc_status || "",
-          u.noah_kyb_status || "",
+          u.verification_status || "",
           formatDate(u.created_at),
         ].join(","),
       ),
@@ -575,7 +575,7 @@ export default function AdminUsersPage() {
                                         {ver.showBusiness ? (
                                           <div className="flex justify-between gap-4 items-center">
                                             <span className="text-gray-600">Business verification</span>
-                                            <NoahVerificationBadge rawStatus={selectedUser.noah_kyb_status || "not_started"} />
+                                            <NoahVerificationBadge rawStatus={selectedUser.verification_status || "not_started"} />
                                           </div>
                                         ) : null}
                                       </div>

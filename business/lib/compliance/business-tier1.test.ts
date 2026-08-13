@@ -7,72 +7,43 @@ import {
 } from "./business-tier1"
 
 describe("business-tier1 grid KYB", () => {
-  it("uses verification_status only when provider is grid", () => {
+  it("uses verification_status for grid provider", () => {
     expect(
       businessTier1Status({
         verification_provider: "grid",
         verification_status: "not_started",
-        noah_kyb_status: "under_review",
       }),
     ).toBe("not_started")
     expect(
       isBusinessTier1Complete({
         verification_provider: "grid",
-        verification_status: "not_started",
-        noah_kyb_status: "approved",
-      }),
-    ).toBe(false)
-  })
-
-  it("falls back to Noah status when provider is not grid", () => {
-    expect(
-      businessTier1Status({
-        verification_provider: "noah",
-        verification_status: "not_started",
-        noah_kyb_status: "under_review",
-      }),
-    ).toBe("under_review")
-    expect(
-      businessTier1Status({
-        verification_provider: "noah",
-        verification_status: null,
-        noah_kyb_status: "under_review",
-      }),
-    ).toBe("under_review")
-    expect(
-      businessTier1Status({
-        verification_provider: "noah",
         verification_status: "approved",
-        noah_kyb_status: "under_review",
       }),
-    ).toBe("approved")
+    ).toBe(true)
   })
 
-  it("ignores legacy Noah rejection when verification_provider is grid", () => {
+  it("reads verification rejection reasons", () => {
     expect(
       businessTier1RejectionReasons({
         verification_provider: "grid",
-        verification_status: "not_started",
-        verification_rejection_reasons: null,
-        noah_kyb_rejection_reasons: [{ rejectType: "Final" }],
+        verification_status: "rejected",
+        verification_rejection_reasons: [{ rejectType: "Final" }],
       }),
-    ).toBeNull()
+    ).toEqual([{ rejectType: "Final" }])
   })
 
-  it("uses grid customer id only on grid provider", () => {
+  it("uses grid customer id for hosted KYB", () => {
+    expect(
+      businessHostedKybCustomerId({
+        verification_provider: "grid",
+        grid_customer_id: "Customer:abc",
+      }),
+    ).toBe("Customer:abc")
     expect(
       businessHostedKybCustomerId({
         verification_provider: "grid",
         grid_customer_id: null,
-        noah_customer_id: "ebiz_abc",
       }),
     ).toBeNull()
-    expect(
-      businessHostedKybCustomerId({
-        verification_provider: "noah",
-        grid_customer_id: null,
-        noah_customer_id: "ebiz_abc",
-      }),
-    ).toBe("ebiz_abc")
   })
 })

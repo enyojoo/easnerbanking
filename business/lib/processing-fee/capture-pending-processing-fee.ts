@@ -39,18 +39,12 @@ export async function resolveNoahAccountContextFromLedgerScope(
   if (input.businessId) {
     const businessId = String(input.businessId).trim()
     const ownerUserId = (await resolveBusinessOrgOwnerUserId(admin, businessId, userId)) || userId
-    const { data } = await admin
-      .from("businesses")
-      .select("noah_customer_id")
-      .eq("id", businessId)
-      .maybeSingle()
-    const stored = String(data?.noah_customer_id ?? "").trim()
     return {
       scope: "business",
       customerType: "Business",
       subjectBusinessId: businessId,
       subjectUserId: ownerUserId,
-      noahCustomerId: stored || noahCustomerIdFromBusinessId(businessId),
+      noahCustomerId: noahCustomerIdFromBusinessId(businessId),
     }
   }
 

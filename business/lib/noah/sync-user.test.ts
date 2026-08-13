@@ -63,7 +63,13 @@ const mockFrom = vi.fn((table: string) => {
   return {
     select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
-        maybeSingle: vi.fn().mockResolvedValue({ data: { noah_kyb_status: "not_started" } }),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            verification_provider: "noah",
+            verification_status: "not_started",
+            verification_rejection_reasons: null,
+          },
+        }),
       }),
     }),
     update: mockBusinessUpdate,

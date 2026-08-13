@@ -98,6 +98,7 @@ export async function getVirtualAccountDisplayFromDb(
       "noah_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name,updated_at,provider,status",
     )
     .neq("status", "retired")
+    .neq("status", "inactive")
     .in("currency", currencyKeys)
     .order("updated_at", { ascending: false })
     .limit(8)

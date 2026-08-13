@@ -196,6 +196,34 @@ export async function markGridEndUserTermsSynced(
     .eq("id", userId)
 }
 
+function readTermsObject(customer: Record<string, unknown>): Record<string, unknown> | null {
+  const terms = customer.endUserTermsConsent ?? customer.end_user_terms_consent
+  return terms && typeof terms === "object" ? (terms as Record<string, unknown>) : null
+}
+
+/** Mirror Grid BUSINESS customer endUserTermsConsent → owner `users` audit columns. */
+export function parseGridEndUserTermsFromGridCustomer(
+  customer: Record<string, unknown>,
+): Partial<GridEndUserTermsUserRow> {
+  const terms = readTermsObject(customer)
+  if (!terms) return {}
+
+  const version = String(terms.termsVersion ?? terms.terms_version ?? "").trim()
+  const acceptedAt = String(terms.acceptedAt ?? terms.accepted_at ?? "").trim()
+  const ipAddress = String(terms.ipAddress ?? terms.ip_address ?? "").trim()
+  const acceptanceMethod = String(terms.acceptanceMethod ?? terms.acceptance_method ?? "").trim()
+
+  const out: Partial<GridEndUserTermsUserRow> = {}
+  if (version) out.grid_end_user_terms_version = version
+  if (acceptedAt) out.grid_end_user_terms_accepted_at = acceptedAt
+  if (ipAddress) out.grid_end_user_terms_accept_ip = ipAddress.slice(0, 128)
+  if (acceptanceMethod) {
+    out.grid_end_user_terms_accept_method = `grid_${acceptanceMethod.toLowerCase()}`
+  }
+  out.grid_end_user_terms_synced_at = new Date().toISOString()
+  return out
+}
+
 /**
  * Returns true when the Grid customer needs endUserTermsConsent PATCHed
  * (missing or stale vs our stored audit version).

@@ -27,7 +27,8 @@ export type OfficeUserRow = {
   noah_eur_virtual_account_id?: string | null
   noah_gbp_virtual_account_id?: string | null
   noah_kyb_customer_id?: string | null
-  noah_kyb_status?: string | null
+  grid_customer_id?: string | null
+  verification_status?: string | null
   linkedBusinessName?: string | null
   enabled_extra_account_currencies?: string[]
   email_confirmed_at?: string | null
@@ -77,7 +78,8 @@ export function useOfficeUsersDirectory() {
           noah_eur_virtual_account_id: row.noah_eur_virtual_account_id as string | null | undefined,
           noah_gbp_virtual_account_id: row.noah_gbp_virtual_account_id as string | null | undefined,
           noah_kyb_customer_id: row.noah_kyb_customer_id as string | null | undefined,
-          noah_kyb_status: row.noah_kyb_status as string | null | undefined,
+          grid_customer_id: row.grid_customer_id as string | null | undefined,
+          verification_status: row.verification_status as string | null | undefined,
           linkedBusinessName: (row.linkedBusinessName as string | null | undefined) ?? null,
           enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
           email_confirmed_at: row.email_confirmed_at as string | null | undefined,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { resolveConnectPanelPhase, resolveConnectPanelUx } from "./connect-panel-ux"
 import type { ConnectStatusSnapshot } from "./connect-panel-ux"
+import { optimisticConnectStatus } from "./connect-status-cache"
 
 function base(overrides: Partial<ConnectStatusSnapshot> = {}): ConnectStatusSnapshot {
   return {
@@ -59,6 +60,13 @@ describe("resolveConnectPanelUx", () => {
     expect(ux.primary?.label).toBe("Get started")
     expect(ux.primary?.dialogTitle).toBe("Set up online payments")
     expect(ux.secondary).toBeUndefined()
+  })
+
+  it("optimistic first paint matches the not-started card", () => {
+    const ux = resolveConnectPanelUx(optimisticConnectStatus())
+    expect(ux.phase).toBe("not_started")
+    expect(ux.badgeLabel).toBe("Not started")
+    expect(ux.primary?.label).toBe("Get started")
   })
 
   it("shows link payout as primary when almost ready", () => {

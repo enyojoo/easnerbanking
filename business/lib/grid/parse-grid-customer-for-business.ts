@@ -5,6 +5,7 @@ export type ParsedGridCustomerForBusiness = {
   registration_number?: string | null
   tax_id?: string | null
   country?: string | null
+  support_email?: string | null
   address_line1?: string | null
   city?: string | null
   state?: string | null
@@ -25,7 +26,7 @@ function pickString(obj: Record<string, unknown> | null, ...keys: string[]): str
   return null
 }
 
-/** Map approved Grid BUSINESS customer → businesses row (Noah parity: backfill after KYB). */
+/** Map Grid BUSINESS customer → `businesses` row (backfill after KYB submission or approval). */
 export function parseGridCustomerForBusiness(
   customer: Record<string, unknown>,
   opts?: { occurredAt?: string },
@@ -49,6 +50,9 @@ export function parseGridCustomerForBusiness(
   if (taxId) out.tax_id = taxId
 
   if (countryIso) out.country = countryDisplayName(countryIso) || countryIso
+
+  const supportEmail = pickString(customer, "email")
+  if (supportEmail) out.support_email = supportEmail
 
   const line1 = pickString(address, "line1", "line_1", "street")
   if (line1) out.address_line1 = line1

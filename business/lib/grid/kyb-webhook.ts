@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { syncGridBusinessKybToSupabase } from "./sync-kyb"
 import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
+import { gridWebhookCustomerId } from "./webhook-event-id"
 import type { GridWebhookEvent } from "./types"
 
 function webhookData(event: GridWebhookEvent): Record<string, unknown> | undefined {
@@ -10,33 +12,39 @@ function webhookData(event: GridWebhookEvent): Record<string, unknown> | undefin
 }
 
 function readCustomerId(event: GridWebhookEvent): string | null {
-  const data = webhookData(event)
-  const fromData = String(data?.customerId ?? data?.customer_id ?? "").trim()
+  const fromData = gridWebhookCustomerId(webhookData(event))
   if (fromData) return fromData
   const fromRoot = String((event as Record<string, unknown>).customerId ?? "").trim()
   return fromRoot || null
 }
 
-async function resolveBusinessByGridCustomerId(
+async function resolveBusinessSubject(
   admin: SupabaseClient,
   customerId: string,
+  data?: Record<string, unknown>,
 ): Promise<{ businessId: string; userId: string } | null> {
   const { data: biz } = await admin
     .from("businesses")
     .select("id")
     .eq("grid_customer_id", customerId)
     .maybeSingle()
-  if (!biz?.id) return null
 
-  const { data: owner } = await admin
-    .from("users")
-    .select("id")
-    .eq("easner_business_id", biz.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle()
+  let businessId = biz?.id ? String(biz.id) : null
+  if (!businessId && data) {
+    const platformCustomerId = String(data.platformCustomerId ?? data.platform_customer_id ?? "").trim()
+    if (platformCustomerId) {
+      const { data: byExternal } = await admin
+        .from("businesses")
+        .select("id")
+        .eq("external_customer_id", platformCustomerId)
+        .maybeSingle()
+      businessId = byExternal?.id ? String(byExternal.id) : null
+    }
+  }
+  if (!businessId) return null
 
-  return { businessId: String(biz.id), userId: String(owner?.id ?? biz.id) }
+  const userId = await resolveOrgOwnerUserId(admin, businessId, businessId)
+  return { businessId, userId }
 }
 
 export async function handleGridKybWebhook(
@@ -46,14 +54,20 @@ export async function handleGridKybWebhook(
   const type = String(event.eventType ?? event.type ?? "").trim().toUpperCase()
   if (!type.includes("CUSTOMER.KYB")) return { handled: false }
 
+  const data = webhookData(event)
   const customerId = readCustomerId(event)
   if (!customerId) return { handled: false }
 
-  const subject = await resolveBusinessByGridCustomerId(admin, customerId)
+  const subject = await resolveBusinessSubject(admin, customerId, data)
   if (!subject) return { handled: false }
 
   const occurredAt =
-    String(event.createdAt ?? (event as Record<string, unknown>).created_at ?? "").trim() || undefined
+    String(
+      event.createdAt ??
+        (event as Record<string, unknown>).created_at ??
+        (event as Record<string, unknown>).timestamp ??
+        "",
+    ).trim() || undefined
 
   const { status } = await syncGridBusinessKybToSupabase({
     admin,

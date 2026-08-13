@@ -75,18 +75,11 @@ export async function resolveNoahContextAsync(
         ),
       }
     }
-    const { data: businessRow } = await admin
-      .from("businesses")
-      .select("noah_customer_id")
-      .eq("id", businessId)
-      .maybeSingle()
-    const businessStoredNoahId =
-      (businessRow?.noah_customer_id as string | null | undefined)?.trim() || null
     return {
       ok: true,
       scope: "business",
       customerType: "Business",
-      noahCustomerId: businessStoredNoahId || noahCustomerIdFromBusinessId(businessId),
+      noahCustomerId: noahCustomerIdFromBusinessId(businessId),
       businessId,
     }
   }

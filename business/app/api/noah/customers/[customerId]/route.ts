@@ -23,22 +23,13 @@ export async function GET(request: Request, ctx: Ctx) {
     .maybeSingle()
 
   const easnerBusinessId = (u?.easner_business_id as string | null) ?? null
-  let businessStoredNoahId: string | null = null
-  if (easnerBusinessId) {
-    const { data: b } = await admin
-      .from("businesses")
-      .select("noah_customer_id")
-      .eq("id", easnerBusinessId)
-      .maybeSingle()
-    businessStoredNoahId = (b?.noah_customer_id as string | null) ?? null
-  }
 
   const scope = customerIdAllowedForSession({
     sessionUserId: user.id,
     easnerBusinessId,
     customerId,
     userStoredNoahCustomerId: (u?.noah_customer_id as string | null) ?? null,
-    businessStoredNoahCustomerId: businessStoredNoahId,
+    businessStoredNoahCustomerId: null,
   })
   if (!scope) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })

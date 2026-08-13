@@ -38,7 +38,7 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
   const businessId = row.business_id
   const { data: biz } = await admin
     .from("businesses")
-    .select("verification_status, noah_kyb_status, invoice_settings, easetag")
+    .select("verification_status, invoice_settings, easetag")
     .eq("id", businessId)
     .maybeSingle()
 

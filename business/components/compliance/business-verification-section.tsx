@@ -386,7 +386,7 @@ export function BusinessVerificationSection() {
     canManageBusinessVerification &&
     !tier1Complete &&
     tier1CanResubmit &&
-    (!tier1AwaitingReview || hostedResumeAvailable !== false) &&
+    (!tier1AwaitingReview || hostedResumeAvailable === true) &&
     (!tier1OnHold || tier1CanResubmit)
   const tier1HostedCtaLabel = tier1Rejected || tier1OnHold
     ? "Retry verification"

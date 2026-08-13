@@ -41,12 +41,10 @@ export async function buildNoahContextForWalletOwner(
     if (!bid) return null
     const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, bid)
     if (!ownerUserId) return null
-    const { data: b } = await admin.from("businesses").select("noah_customer_id").eq("id", bid).maybeSingle()
-    const stored = (b?.noah_customer_id as string | null | undefined)?.trim() || null
     return {
       scope: "business",
       customerType: "Business",
-      noahCustomerId: stored || noahCustomerIdFromBusinessId(bid),
+      noahCustomerId: noahCustomerIdFromBusinessId(bid),
       subjectBusinessId: bid,
       subjectUserId: ownerUserId,
     }

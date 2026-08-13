@@ -55,7 +55,7 @@ export async function resolvePayInForBusiness(
 
   const { data: biz } = await admin
     .from("businesses")
-    .select("name, verification_status, noah_kyb_status")
+    .select("name, verification_status, invoice_settings")
     .eq("id", businessId)
     .maybeSingle()
 

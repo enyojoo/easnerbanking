@@ -46,7 +46,7 @@ export async function resolvePayrollInvitation(
   const tokenHash = hashPayrollInvitationToken(token)
   const { data: invitation } = await admin
     .from("payroll_connection_invitations")
-    .select("*, payroll_connections(*), payroll_people(*), businesses(name,easetag,logo_url,verification_status,noah_kyb_status)")
+    .select("*, payroll_connections(*), payroll_people(*), businesses(name,easetag,logo_url,verification_status)")
     .eq("token_hash", tokenHash)
     .maybeSingle()
 

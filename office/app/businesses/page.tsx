@@ -39,8 +39,8 @@ type BusinessRow = {
   state?: string | null
   postal_code?: string | null
   enabled_extra_account_currencies?: string[]
-  noah_customer_id?: string | null
-  noah_kyb_status?: string | null
+  grid_customer_id?: string | null
+  verification_status?: string | null
   created_at: string
   updated_at?: string | null
   owner_user_id?: string | null
@@ -282,7 +282,7 @@ function BusinessesPageInner() {
                         </TableCell>
                         <TableCell className="max-w-[220px] text-sm">{businessTypeDisplayText(o.business_type)}</TableCell>
                         <TableCell className="text-center">
-                          <KybBadge rawStatus={o.noah_kyb_status || "not_started"} />
+                          <KybBadge rawStatus={o.verification_status || "not_started"} />
                         </TableCell>
                         <TableCell className="text-center">
                           <Button variant="outline" size="sm" onClick={() => setSelectedBusiness(o)}>
@@ -417,10 +417,10 @@ function BusinessesPageInner() {
                     <div className="mt-2 space-y-2">
                       <div className="flex justify-between gap-4 text-sm">
                         <span className="shrink-0 text-gray-600">KYB status</span>
-                        <KybBadge rawStatus={selectedBusiness.noah_kyb_status || "not_started"} />
+                        <KybBadge rawStatus={selectedBusiness.verification_status || "not_started"} />
                       </div>
                       <DetailRow label="Noah customer ID" mono>
-                        {displayText(selectedBusiness.noah_customer_id)}
+                        {displayText(selectedBusiness.grid_customer_id)}
                       </DetailRow>
                       <p className="text-xs text-gray-600">
                         Fiat bank details are in <span className="font-mono">virtual_accounts</span> (Grid or Noah).

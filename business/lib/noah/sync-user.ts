@@ -10,6 +10,7 @@ import {
   notifyIndividualKycStatusChange,
 } from "@/lib/notifications/verification-notify"
 import { mapNoahPartnerStatus, persistVerificationStatus } from "@/lib/compliance"
+import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 
 type VerificationStatus = "not_started" | "under_review" | "approved" | "rejected"
 
@@ -31,34 +32,45 @@ export async function syncNoahCustomerToSupabase(
   if (target.kind === "business") {
     const { data: priorBiz } = await admin
       .from("businesses")
-      .select("noah_kyb_status")
+      .select("verification_provider,verification_status,verification_rejection_reasons")
       .eq("id", target.businessId)
       .maybeSingle()
-    const previousStatus = String(priorBiz?.noah_kyb_status ?? "not_started").toLowerCase() as VerificationStatus
+
+    if (businessUsesGridVerification(priorBiz as { verification_provider?: string | null } | null)) {
+      return
+    }
+
+    const previousStatus = String(priorBiz?.verification_status ?? "not_started").toLowerCase() as VerificationStatus
 
     let rejectionReasons = extractedReasons
     if (kyc === "rejected") {
-      const { data: existingRow } = await admin
-        .from("businesses")
-        .select("noah_kyb_rejection_reasons")
-        .eq("id", target.businessId)
-        .maybeSingle()
       rejectionReasons = pickNoahRejectionReasonsToStore(
-        existingRow?.noah_kyb_rejection_reasons as unknown[] | null | undefined,
+        priorBiz?.verification_rejection_reasons as unknown[] | null | undefined,
         extractedReasons,
       )
     }
 
-    const update: Record<string, unknown> = {
-      noah_customer_id: customerId,
-      noah_kyb_status: kyc,
-      noah_kyb_rejection_reasons: rejectionReasons,
-      updated_at: now,
+    const profilePatch: Record<string, unknown> =
+      kyc === "approved"
+        ? parseNoahCustomerForBusiness(customer, { occurredAt: options?.occurredAt })
+        : {}
+    if (Object.keys(profilePatch).length > 0) {
+      await admin
+        .from("businesses")
+        .update({ ...profilePatch, updated_at: now })
+        .eq("id", target.businessId)
     }
-    if (kyc === "approved") {
-      Object.assign(update, parseNoahCustomerForBusiness(customer, { occurredAt: options?.occurredAt }))
-    }
-    await admin.from("businesses").update(update).eq("id", target.businessId)
+
+    const ownerUserId = await resolveOrgOwnerUserId(admin, target.businessId, "")
+    await persistVerificationStatus(admin, {
+      kind: "business",
+      businessId: target.businessId,
+      userId: ownerUserId || target.businessId,
+      provider: "noah",
+      status: mapNoahPartnerStatus(kyc),
+      rejectionReasons,
+      verifiedAt: kyc === "approved" ? options?.occurredAt ?? now : null,
+    })
 
     await notifyBusinessKybStatusChange(
       admin,
@@ -68,9 +80,7 @@ export async function syncNoahCustomerToSupabase(
       Array.isArray(rejectionReasons) ? rejectionReasons.map(String) : null,
     ).catch((e) => console.warn("kyb verification email (non-fatal):", e))
 
-    if (kyc === "approved") {
-      const ownerUserId = await resolveOrgOwnerUserId(admin, target.businessId, "")
-      if (ownerUserId) {
+    if (kyc === "approved" && ownerUserId) {
         const { data: ownerRow } = await admin
           .from("users")
           .select("noah_kyc_status, email")
@@ -108,7 +118,6 @@ export async function syncNoahCustomerToSupabase(
               .eq("id", ownerUserId)
           }
         }
-      }
     }
     return
   }

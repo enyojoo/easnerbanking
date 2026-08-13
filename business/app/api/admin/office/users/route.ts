@@ -46,18 +46,18 @@ export async function GET(request: Request) {
   ]
   const orgKybByBusinessId = new Map<
     string,
-    { name: string | null; noah_customer_id: string | null; noah_kyb_status: string | null }
+    { name: string | null; grid_customer_id: string | null; verification_status: string | null }
   >()
   if (bizIds.length) {
     const { data: orgs } = await admin
       .from("businesses")
-      .select("id,name,noah_customer_id,noah_kyb_status")
+      .select("id,name,grid_customer_id,verification_status")
       .in("id", bizIds)
     for (const o of orgs ?? []) {
       orgKybByBusinessId.set(String(o.id), {
         name: (o.name as string | null) ?? null,
-        noah_customer_id: (o.noah_customer_id as string | null) ?? null,
-        noah_kyb_status: (o.noah_kyb_status as string | null) ?? null,
+        grid_customer_id: (o.grid_customer_id as string | null) ?? null,
+        verification_status: (o.verification_status as string | null) ?? null,
       })
     }
   }
@@ -91,8 +91,8 @@ export async function GET(request: Request) {
       email_confirmed_at: authById.get(r.id) ?? null,
       ...(org
         ? {
-            noah_kyb_customer_id: org.noah_customer_id,
-            noah_kyb_status: org.noah_kyb_status,
+            grid_customer_id: org.grid_customer_id,
+            verification_status: org.verification_status,
             linkedBusinessName: org.name,
           }
         : {}),

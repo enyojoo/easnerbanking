@@ -107,7 +107,7 @@ async function resolveCanManageBusinessVerification(
 
 async function fetchBusinessProfile(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string) {
   const richSelect =
-    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country,noah_kyb_status,kyb_verified_at,invoice_settings"
+    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country,verification_status,kyb_verified_at,invoice_settings"
   const baseSelect = "id,name,easetag,logo_url,business_type,base_currency,description,country"
   const minimalSelect = "id,name,easetag,country"
 
@@ -164,7 +164,7 @@ export async function GET(request: Request) {
     state: string | null
     postal_code: string | null
     country: string | null
-    noah_kyb_status?: string | null
+    verification_status?: string | null
     kyb_verified_at?: string | null
     invoice_settings?: unknown
   }
@@ -205,7 +205,7 @@ export async function GET(request: Request) {
   let tier1Complete = false
   let tier1VerificationStatus: string | null = null
   let tier1RejectionReasons: unknown[] | null = null
-  /** Noah B2B customer id on the org (`businesses.noah_customer_id`). */
+  /** Grid customer id for hosted KYB on the org. */
   let noahKybCustomerId: string | null = null
   let canManageBusinessVerification = true
   let orgKyb: Record<string, unknown> | null = null
@@ -217,7 +217,7 @@ export async function GET(request: Request) {
     const { data: orgKybRow } = await admin
       .from("businesses")
       .select(
-        "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,noah_kyb_status,noah_customer_id,noah_kyb_rejection_reasons,kyb_verified_at",
+        "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,kyb_verified_at",
       )
       .eq("id", orgId)
       .maybeSingle()
@@ -334,7 +334,7 @@ export async function PUT(request: Request) {
   const { data: orgRow } = await admin
     .from("businesses")
     .select(
-      "name,country,registration_number,address_line1,city,state,postal_code,verification_status,noah_kyb_status,kyb_verified_at",
+      "name,country,registration_number,address_line1,city,state,postal_code,verification_status,kyb_verified_at",
     )
     .eq("id", businessId)
     .maybeSingle()

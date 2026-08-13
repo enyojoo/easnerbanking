@@ -5,10 +5,7 @@ export type BusinessVerificationFields = {
   verification_status?: string | null
   verification_provider?: string | null
   verification_rejection_reasons?: unknown
-  noah_kyb_status?: string | null
-  noah_kyb_rejection_reasons?: unknown
   grid_customer_id?: string | null
-  noah_customer_id?: string | null
 }
 
 function usesGridVerification(row: BusinessVerificationFields | null | undefined): boolean {
@@ -22,27 +19,11 @@ export function businessUsesGridVerification(
   return usesGridVerification(row)
 }
 
-/** Effective Tier 1 status — Grid business KYB reads `verification_status` only. */
+/** Effective Tier 1 status — reads canonical `verification_status`. */
 export function businessTier1Status(row: BusinessVerificationFields | null | undefined): string | null {
   if (!row) return null
-  if (usesGridVerification(row)) {
-    const status = String(row.verification_status ?? "not_started").trim()
-    return status || "not_started"
-  }
-  const direct = String(row.verification_status ?? "")
-    .trim()
-    .toLowerCase()
-  if (
-    direct === "approved" ||
-    direct === "pending" ||
-    direct === "rejected" ||
-    direct === "hold"
-  ) {
-    return direct
-  }
-  // Treat not_started/empty as stale vs live Noah KYB mirrors.
-  const noah = String(row.noah_kyb_status ?? "").trim()
-  return noah || direct || null
+  const status = String(row.verification_status ?? "not_started").trim()
+  return status || "not_started"
 }
 
 /** Product Tier 1 complete for a business row (canonical verification_status). */
@@ -56,21 +37,15 @@ export function businessTier1RejectionReasons(
   row: BusinessVerificationFields | null | undefined,
 ): unknown[] | null {
   if (!row) return null
-  if (usesGridVerification(row)) {
-    const reasons = row.verification_rejection_reasons
-    return Array.isArray(reasons) ? reasons : null
-  }
-  const reasons = row.verification_rejection_reasons ?? row.noah_kyb_rejection_reasons
+  const reasons = row.verification_rejection_reasons
   return Array.isArray(reasons) ? reasons : null
 }
 
-/** Grid customer id for hosted KYB; on Grid SoR ignore legacy Noah customer id. */
+/** Grid customer id for hosted KYB. */
 export function businessHostedKybCustomerId(
   row: BusinessVerificationFields | null | undefined,
 ): string | null {
   if (!row) return null
   const gridId = String(row.grid_customer_id ?? "").trim()
-  if (usesGridVerification(row)) return gridId || null
-  const noahId = String(row.noah_customer_id ?? "").trim()
-  return gridId || noahId || null
+  return gridId || null
 }

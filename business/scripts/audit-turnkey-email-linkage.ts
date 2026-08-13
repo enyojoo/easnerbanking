@@ -243,8 +243,8 @@ async function main() {
     console.log("business:", {
       id: biz?.id,
       name: biz?.name,
-      noah_customer_id: biz?.noah_customer_id,
-      noah_kyb_status: biz?.noah_kyb_status,
+      grid_customer_id: biz?.grid_customer_id,
+      verification_status: biz?.verification_status,
     })
     console.log("wallet_owner:", wo)
     console.log("memberships:", members)

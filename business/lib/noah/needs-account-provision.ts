@@ -55,13 +55,7 @@ async function resolveNoahCustomerId(
   },
 ): Promise<string> {
   if (opts.scope === "business" && opts.subjectBusinessId) {
-    const { data } = await admin
-      .from("businesses")
-      .select("noah_customer_id")
-      .eq("id", opts.subjectBusinessId)
-      .maybeSingle()
-    const stored = (data as { noah_customer_id?: string | null } | null)?.noah_customer_id?.trim()
-    return stored || noahCustomerIdFromBusinessId(opts.subjectBusinessId)
+    return noahCustomerIdFromBusinessId(opts.subjectBusinessId)
   }
   const { data } = await admin
     .from("users")

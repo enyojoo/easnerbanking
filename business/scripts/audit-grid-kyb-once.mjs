@@ -94,7 +94,19 @@ async function main() {
     .select("verification_status,kyb_verified_at,name,registration_number")
     .eq("id", businessId)
     .single()
-  console.log("after", after)
+  console.log("after_business", after)
+
+  const ownerUserId = owner?.id
+  if (ownerUserId) {
+    const { data: ownerAfter } = await admin
+      .from("users")
+      .select(
+        "id,email,full_name,residence_country,verification_status,verification_provider,grid_beneficial_owner_id,grid_end_user_terms_version,grid_end_user_terms_accepted_at,grid_end_user_terms_synced_at",
+      )
+      .eq("id", ownerUserId)
+      .single()
+    console.log("after_owner", ownerAfter)
+  }
 }
 
 main().catch((e) => {

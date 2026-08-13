@@ -83,7 +83,7 @@ export async function persistGridVirtualAccountsFromInternalAccounts(input: {
         status: "active" as const,
         settlement_target: "turnkey" as const,
         noah_virtual_account_id: providerAccountId,
-        noah_customer_id: customerId,
+        provider_customer_id: customerId,
         ...bank,
         updated_at: now,
       }

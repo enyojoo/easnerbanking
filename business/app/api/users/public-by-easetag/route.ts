@@ -71,7 +71,7 @@ export async function GET(request: Request) {
 
   const { data: bizRow, error: berr } = await admin
     .from("businesses")
-    .select("id,easetag,name,logo_url,verification_status,noah_kyb_status")
+    .select("id,easetag,name,logo_url,verification_status")
     .eq("easetag", clean)
     .maybeSingle()
 

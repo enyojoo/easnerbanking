@@ -34,9 +34,9 @@ export type BusinessProfile = {
   onboardingComplete: boolean
   role: "business" | "individual"
   ownerName: string
-  /** Org-level Tier 1: Business KYB approved on org (`noah_kyb_status === 'approved'`). */
+  /** Org-level Tier 1: Business KYB approved (`verification_status === 'approved'`). */
   tier1Complete: boolean
-  /** Org `noah_kyb_status` from profile API (provider-backed; Easner-facing label via UI copy). */
+  /** Org verification status from profile API (Grid canonical `verification_status`). */
   tier1VerificationStatus: string | null
   /** Decline reasons from Noah when org KYB is rejected. */
   tier1RejectionReasons: unknown[] | null

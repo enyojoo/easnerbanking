@@ -13,6 +13,7 @@ import { SettingsCustomersTab } from "@/components/settings/settings-customers-t
 import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
+import { primeConnectStatus } from "@/lib/stripe/connect-status-cache"
 
 const TABS = ["personal", "business", "verification", "team", "recipients", "customers", "communication", "invoicing"] as const
 type TabValue = (typeof TABS)[number]
@@ -40,6 +41,7 @@ function SettingsContent() {
       tier1Complete,
       tier1CanResubmit,
     })
+    primeConnectStatus(businessId)
   }, [businessId, canManageBusinessVerification, tier1CanResubmit, tier1Complete])
 
   const primeVerificationFlow = () => {
@@ -49,6 +51,7 @@ function SettingsContent() {
       tier1Complete,
       tier1CanResubmit,
     })
+    primeConnectStatus(businessId)
   }
 
   const handleTabChange = (value: string) => {

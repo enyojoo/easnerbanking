@@ -62,7 +62,7 @@ async function resolveOrgKybApproved(
   if (!businessId) return false
   const { data } = await admin
     .from("businesses")
-    .select("verification_provider,verification_status,noah_kyb_status,kyb_verified_at")
+    .select("verification_provider,verification_status,kyb_verified_at")
     .eq("id", businessId)
     .maybeSingle()
   return isBusinessProfileLockedFromKybFields((data ?? null) as Record<string, unknown> | null)

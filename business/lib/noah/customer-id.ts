@@ -39,7 +39,7 @@ export function customerIdAllowedForSession(opts: {
   customerId: string
   /** From `users.noah_customer_id` when Noah returned a non–Easner-shaped id. */
   userStoredNoahCustomerId?: string | null
-  /** From `businesses.noah_customer_id` for the session org. */
+  /** Legacy Noah id override when stored separately from deterministic `ebiz_` (business scope only). */
   businessStoredNoahCustomerId?: string | null
 }): NoahCustomerScope | null {
   const {

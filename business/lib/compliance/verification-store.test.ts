@@ -2,52 +2,42 @@ import { describe, expect, it } from "vitest"
 import { canonicalVerificationStatus } from "./verification-store"
 
 describe("canonicalVerificationStatus", () => {
-  it("Grid business KYB uses verification_status only (never Noah mirrors)", () => {
+  it("Grid business KYB uses verification_status only", () => {
     expect(
       canonicalVerificationStatus({
         verification_provider: "grid",
         verification_status: "not_started",
-        verification_rejection_reasons: null,
-        noah_kyb_status: "approved",
       }),
     ).toBe("not_started")
     expect(
       canonicalVerificationStatus({
         verification_provider: "grid",
-        verification_status: "",
-        verification_rejection_reasons: null,
-        noah_kyb_status: "approved",
-      }),
-    ).toBe("not_started")
-  })
-
-  it("falls back to Noah mirror when SoR is not_started (non-Grid)", () => {
-    expect(
-      canonicalVerificationStatus({
-        verification_provider: "noah",
-        verification_status: "not_started",
-        verification_rejection_reasons: null,
-        noah_kyc_status: "approved",
+        verification_status: "approved",
       }),
     ).toBe("approved")
+  })
+
+  it("falls back to Noah status for individual users", () => {
     expect(
       canonicalVerificationStatus({
         verification_provider: "noah",
         verification_status: "not_started",
-        verification_rejection_reasons: null,
         noah_kyc_status: "under_review",
       }),
     ).toBe("pending")
-  })
-
-  it("prefers progressed canonical status over Noah mirror", () => {
     expect(
       canonicalVerificationStatus({
         verification_provider: "noah",
-        verification_status: "rejected",
-        verification_rejection_reasons: null,
-        noah_kyc_status: "approved",
+        verification_status: null,
+        noah_kyc_status: "under_review",
       }),
-    ).toBe("rejected")
+    ).toBe("pending")
+    expect(
+      canonicalVerificationStatus({
+        verification_provider: "noah",
+        verification_status: "approved",
+        noah_kyc_status: "under_review",
+      }),
+    ).toBe("approved")
   })
 })

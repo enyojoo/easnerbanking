@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -46,9 +47,11 @@ import {
   EASNER_STRIPE_CONNECT_TERMS_URL,
 } from "@/lib/stripe/connect/legal-urls"
 import {
+  fetchAndCacheConnectStatus,
+  initialConnectStatus,
   readCachedConnectStatus,
   writeCachedConnectStatus,
-  type CachedConnectStatus,
+  type ConnectStatusPayload,
 } from "@/lib/stripe/connect-status-cache"
 import {
   resolveConnectPanelUx,
@@ -58,8 +61,6 @@ import {
 import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
-
-type ConnectStatusResponse = Omit<CachedConnectStatus, "cachedAt">
 
 type StatusKind = "ready" | "almost_ready" | "pending" | "in_progress" | "not_started" | "blocked"
 
@@ -168,11 +169,7 @@ export function SettingsStripeConnectPanel({
   unavailableFallback?: ReactNode
 } = {}) {
   const { businessId } = useBusinessProfile()
-  const [status, setStatus] = useState<ConnectStatusResponse | null>(() => {
-    const cached = readCachedConnectStatus(businessId)
-    return cached ? { ...cached } : null
-  })
-  const [loading, setLoading] = useState(() => !readCachedConnectStatus(businessId))
+  const [status, setStatus] = useState<ConnectStatusPayload | null>(() => initialConnectStatus())
   const [linking, setLinking] = useState(false)
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   const [onboardingLoading, setOnboardingLoading] = useState(false)
@@ -192,46 +189,30 @@ export function SettingsStripeConnectPanel({
       : ""
 
   const applyStatus = useCallback(
-    (next: ConnectStatusResponse | null) => {
+    (next: ConnectStatusPayload | null) => {
       setStatus(next)
-      if (next && businessId) {
-        writeCachedConnectStatus(businessId, next)
-      }
+      if (next) writeCachedConnectStatus(businessId, next)
     },
     [businessId],
   )
 
-  const refreshStatus = useCallback(
-    async (opts?: { background?: boolean }) => {
-      const background = opts?.background === true
-      if (!background) setLoading(true)
-      try {
-        const res = await fetchWithSession("/api/business/stripe/connect/status")
-        const json = (await res.json()) as ConnectStatusResponse
-        applyStatus(json)
-        return json
-      } catch {
-        if (!background) applyStatus(null)
-        return null
-      } finally {
-        setLoading(false)
-      }
-    },
-    [applyStatus],
-  )
+  const refreshStatus = useCallback(async () => {
+    const json = await fetchAndCacheConnectStatus(businessId)
+    if (json) applyStatus(json)
+    return json
+  }, [applyStatus, businessId])
 
-  useEffect(() => {
-    if (!businessId) return
+  useLayoutEffect(() => {
     const cached = readCachedConnectStatus(businessId)
-    if (cached) {
-      applyStatus({ ...cached })
-      setLoading(false)
-    }
-    void refreshStatus({ background: Boolean(cached) })
-  }, [applyStatus, businessId, refreshStatus])
+    if (cached) applyStatus(cached)
+  }, [applyStatus, businessId])
 
   useEffect(() => {
-    const onFocus = () => void refreshStatus({ background: true })
+    void refreshStatus()
+  }, [refreshStatus])
+
+  useEffect(() => {
+    const onFocus = () => void refreshStatus()
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
   }, [refreshStatus])
@@ -268,7 +249,7 @@ export function SettingsStripeConnectPanel({
   const closeOnboardingAndSync = useCallback(async () => {
     setOnboardingOpen(false)
     await fetchWithSession("/api/business/stripe/connect/sync", { method: "POST" }).catch(() => null)
-    const next = await refreshStatus({ background: true })
+    const next = await refreshStatus()
     if (next?.ready) {
       toast.success("Online payments are ready")
     } else if (next?.externalAccountLinked && next.detailsSubmitted) {
@@ -294,7 +275,7 @@ export function SettingsStripeConnectPanel({
       setOnboardingOpen(false)
       void fetchWithSession("/api/business/stripe/connect/sync", { method: "POST" })
         .catch(() => null)
-        .then(() => refreshStatus({ background: true }))
+        .then(() => refreshStatus())
       clearConnectInstance()
     },
     [clearConnectInstance, refreshStatus],
@@ -350,7 +331,7 @@ export function SettingsStripeConnectPanel({
       toast.success(
         `Payout destination linked${json.maskedDestination ? ` (${json.maskedDestination})` : ""}`,
       )
-      await refreshStatus({ background: true })
+      await refreshStatus()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to link payout destination")
     } finally {
@@ -386,17 +367,6 @@ export function SettingsStripeConnectPanel({
     },
     [linkPayoutDestination, panelUx, startOnboarding],
   )
-
-  if (loading && !status) {
-    return (
-      <Card className="flex h-full flex-col">
-        <CardContent className="flex flex-1 items-center gap-2 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading…
-        </CardContent>
-      </Card>
-    )
-  }
 
   if (!status?.enabled || !panelUx) {
     return unavailableFallback ?? null

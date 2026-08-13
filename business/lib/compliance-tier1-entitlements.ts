@@ -36,7 +36,7 @@
  *
  * - **Mobile Tier 1 complete:** `users.noah_kyc_status === 'approved'` (see `mobile/src/lib/compliance.ts`,
  *   `AccountVerificationScreen`, send guards).
- * - **Business web Tier 1 complete:** `tier1Complete` from profile API — org `noah_kyb_status === 'approved'` on
+ * - **Business web Tier 1 complete:** `tier1Complete` from profile API — org `verification_status === 'approved'` on
  *   `businesses` (see `GET /api/business/profile`, `business-profile-store`).
  *
  * Use `TIER1_ENTITLEMENTS_REFERENCE` only as a checklist for engineering; do not surface provider names to users.

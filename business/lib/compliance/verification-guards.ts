@@ -55,6 +55,7 @@ export async function hasProvisionedArtifacts(
     .from("virtual_accounts")
     .select("id")
     .neq("status", "retired")
+    .neq("status", "inactive")
     .limit(1)
   if (businessId) va = va.eq("business_id", businessId)
   else va = va.eq("user_id", userId)

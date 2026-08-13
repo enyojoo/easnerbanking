@@ -28,15 +28,6 @@ export async function resolveNoahCustomerTarget(
   const parsed = parseEasnerNoahCustomerId(customerId)
   if (parsed) return parsed
 
-  const { data: bizByNoahId } = await admin
-    .from("businesses")
-    .select("id")
-    .eq("noah_customer_id", customerId)
-    .maybeSingle()
-  if (bizByNoahId?.id) {
-    return { kind: "business", businessId: String(bizByNoahId.id) }
-  }
-
   const { data: userByNoahId } = await admin
     .from("users")
     .select("id")

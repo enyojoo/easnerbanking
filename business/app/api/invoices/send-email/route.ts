@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     const { data: biz } = await admin
       .from("businesses")
-      .select("verification_status, noah_kyb_status, invoice_settings")
+      .select("verification_status, invoice_settings")
       .eq("id", ctx.businessId)
       .maybeSingle()
 

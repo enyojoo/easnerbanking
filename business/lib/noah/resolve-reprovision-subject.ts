@@ -28,17 +28,11 @@ export async function resolveReprovisionSubject(
   if (businessId) {
     const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, businessId)
     if (!ownerUserId) return { error: "business_owner_not_found" }
-    const { data: biz } = await admin
-      .from("businesses")
-      .select("noah_customer_id")
-      .eq("id", businessId)
-      .maybeSingle()
-    const stored = (biz?.noah_customer_id as string | null | undefined)?.trim() || null
     return {
       scope: "business",
       subjectUserId: ownerUserId,
       subjectBusinessId: businessId,
-      noahCustomerId: stored || noahCustomerIdInput || noahCustomerIdFromBusinessId(businessId),
+      noahCustomerId: noahCustomerIdInput || noahCustomerIdFromBusinessId(businessId),
     }
   }
 
@@ -81,18 +75,14 @@ export async function resolveReprovisionSubject(
     }
   }
 
-  const { data: bizByStored } = await admin
-    .from("businesses")
-    .select("id, noah_customer_id")
-    .eq("noah_customer_id", noahCustomerIdInput)
-    .maybeSingle()
-  if (bizByStored?.id) {
-    const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, String(bizByStored.id))
+  const parsedBiz = parseEasnerNoahCustomerId(noahCustomerIdInput)
+  if (parsedBiz?.kind === "business") {
+    const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, parsedBiz.businessId)
     if (!ownerUserId) return { error: "business_owner_not_found" }
     return {
       scope: "business",
       subjectUserId: ownerUserId,
-      subjectBusinessId: String(bizByStored.id),
+      subjectBusinessId: parsedBiz.businessId,
       noahCustomerId: noahCustomerIdInput,
     }
   }

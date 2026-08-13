@@ -10,6 +10,7 @@ import {
 import { notifyBusinessKybStatusChange } from "@/lib/notifications/verification-notify"
 import { extractGridCustomerRejectionReasons } from "@easner/shared"
 import { parseGridCustomerForBusiness } from "./parse-grid-customer-for-business"
+import { syncGridBusinessOwnerUserFromKyb } from "./sync-grid-business-owner-user"
 
 type KybEmailStatus = "not_started" | "under_review" | "approved" | "rejected"
 
@@ -30,6 +31,10 @@ export async function fetchGridCustomer(customerId: string): Promise<GridCustome
 export function gridBusinessKybStatus(customer: Record<string, unknown>): VerificationStatus {
   const kyb = customer.kybStatus ?? customer.kycStatus
   return mapGridPartnerStatus(String(kyb ?? ""))
+}
+
+function shouldBackfillBusinessProfile(status: VerificationStatus): boolean {
+  return status === "approved" || status === "pending" || status === "hold"
 }
 
 export async function syncGridBusinessKybToSupabase(input: {
@@ -79,9 +84,9 @@ export async function syncGridBusinessKybToSupabase(input: {
   })
 
   const now = new Date().toISOString()
-  if (status === "approved") {
+  if (shouldBackfillBusinessProfile(status)) {
     const kybFields = parseGridCustomerForBusiness(customer, {
-      occurredAt: verifiedAt,
+      occurredAt: status === "approved" ? verifiedAt : undefined,
     })
     if (Object.keys(kybFields).length > 0) {
       await input.admin
@@ -89,6 +94,14 @@ export async function syncGridBusinessKybToSupabase(input: {
         .update({ ...kybFields, updated_at: now })
         .eq("id", input.businessId)
     }
+
+    await syncGridBusinessOwnerUserFromKyb({
+      admin: input.admin,
+      businessId: input.businessId,
+      fallbackUserId: input.userId,
+      customer,
+      occurredAt: status === "approved" ? verifiedAt : undefined,
+    })
   }
 
   await notifyBusinessKybStatusChange(

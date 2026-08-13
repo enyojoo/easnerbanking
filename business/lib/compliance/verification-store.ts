@@ -9,7 +9,6 @@ export type StoredVerificationRow = {
   verified_at?: string | null
   grid_customer_id?: string | null
   noah_kyc_status?: string | null
-  noah_kyb_status?: string | null
 }
 
 export async function readVerificationRow(
@@ -21,7 +20,7 @@ export async function readVerificationRow(
     const { data, error } = await admin
       .from("businesses")
       .select(
-        "verification_provider,verification_status,verification_rejection_reasons,kyb_verified_at,grid_customer_id,noah_kyb_status",
+        "verification_provider,verification_status,verification_rejection_reasons,kyb_verified_at,grid_customer_id",
       )
       .eq("id", input.businessId)
       .maybeSingle()
@@ -75,7 +74,7 @@ export function canonicalVerificationStatus(row: StoredVerificationRow | null): 
   if (isProgressedVerificationStatus(direct)) {
     return direct
   }
-  return mapNoahPartnerStatus(row.noah_kyb_status ?? row.noah_kyc_status)
+  return mapNoahPartnerStatus(row.noah_kyc_status)
 }
 
 export async function persistVerificationStatus(

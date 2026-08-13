@@ -25,6 +25,16 @@ export function gridWebhookQuoteId(data: Record<string, unknown> | undefined): s
   return String(data.quoteId ?? data.quote_id ?? "").trim()
 }
 
+/** Grid KYB webhooks put the customer on `data.id` (`Customer:…`); legacy shapes may use `customerId`. */
+export function gridWebhookCustomerId(data: Record<string, unknown> | undefined): string {
+  if (!data) return ""
+  const fromField = String(data.customerId ?? data.customer_id ?? "").trim()
+  if (fromField.startsWith("Customer:")) return fromField
+  const id = String(data.id ?? "").trim()
+  if (id.startsWith("Customer:")) return id
+  return fromField || id
+}
+
 export function gridWebhookEventId(payload: Record<string, unknown>): string {
   const eventType = gridWebhookEventType(payload)
   const topId = String(payload.id ?? payload.eventId ?? "").trim()

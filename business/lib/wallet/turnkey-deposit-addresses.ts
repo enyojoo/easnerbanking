@@ -161,13 +161,7 @@ export async function getTurnkeyDepositAddressesForBusiness(
   admin: SupabaseClient,
   businessId: string,
 ): Promise<TurnkeyDepositAddressesResponse> {
-  const { data: biz } = await admin
-    .from("businesses")
-    .select("noah_customer_id")
-    .eq("id", businessId)
-    .maybeSingle()
-  const noahId =
-    String(biz?.noah_customer_id ?? "").trim() || noahCustomerIdFromBusinessId(businessId)
+  const noahId = noahCustomerIdFromBusinessId(businessId)
 
   const ownerId = await resolveWalletOwnerIdForEasnerContext(admin, {
     scope: "business",

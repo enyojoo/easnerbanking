@@ -3,10 +3,15 @@
 alter table if exists public.users
   add column if not exists grid_customer_id text;
 
+alter table if exists public.users
+  add column if not exists grid_beneficial_owner_id text;
+
 alter table if exists public.businesses
   add column if not exists grid_customer_id text;
 
 create index if not exists users_grid_customer_id_idx on public.users (grid_customer_id);
+create index if not exists users_grid_beneficial_owner_id_idx on public.users (grid_beneficial_owner_id)
+  where grid_beneficial_owner_id is not null;
 create index if not exists businesses_grid_customer_id_idx on public.businesses (grid_customer_id);
 
 create table if not exists public.grid_transfers (

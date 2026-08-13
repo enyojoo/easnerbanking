@@ -41,11 +41,11 @@ export async function evaluateKycLinksPreflight(params: {
   if (scope === "business" && businessId) {
     const { data: biz } = await admin
       .from("businesses")
-      .select("noah_kyb_status,noah_kyb_rejection_reasons,country")
+      .select("verification_status,verification_rejection_reasons,country")
       .eq("id", businessId)
       .maybeSingle()
 
-    const rejectionReasons = (biz?.noah_kyb_rejection_reasons as unknown[] | null | undefined) ?? null
+    const rejectionReasons = (biz?.verification_rejection_reasons as unknown[] | null | undefined) ?? null
     if (!canResubmitNoahVerification(rejectionReasons)) {
       return {
         action: "respond",
@@ -77,10 +77,10 @@ export async function evaluateKycLinksPreflight(params: {
       }
     }
 
-    if (shouldSkipNewHostedSession(biz?.noah_kyb_status as string | null | undefined)) {
+    if (shouldSkipNewHostedSession(biz?.verification_status as string | null | undefined)) {
       return {
         action: "skipHostedPost",
-        kycStatus: String(biz?.noah_kyb_status ?? "pending").toLowerCase(),
+        kycStatus: String(biz?.verification_status ?? "pending").toLowerCase(),
       }
     }
 

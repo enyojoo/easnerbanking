@@ -129,17 +129,13 @@ async function loadRejected(table, statusCol, reasonsCol) {
 
 async function main() {
   const userRows = await loadRejected("users", "noah_kyc_status", "noah_kyc_rejection_reasons")
-  const bizRows = await loadRejected("businesses", "noah_kyb_status", "noah_kyb_rejection_reasons")
 
   const patches = []
   for (const row of userRows) {
     const p = planPatch("users", row, "noah_kyc_rejection_reasons", "noah_kyc_status")
     if (p) patches.push(p)
   }
-  for (const row of bizRows) {
-    const p = planPatch("businesses", row, "noah_kyb_rejection_reasons", "noah_kyb_status")
-    if (p) patches.push(p)
-  }
+  // businesses.noah_kyb_* columns removed — use verification_rejection_reasons on Grid SoR orgs instead.
 
   if (!patches.length) {
     console.log("No rejection rows need backfill.")

@@ -50,19 +50,20 @@ async function main() {
           id: biz.id,
           name: biz.name,
           email: biz.email,
-          noah_customer_id: biz.noah_customer_id,
-          noah_kyb_status: biz.noah_kyb_status,
+          grid_customer_id: biz.grid_customer_id,
+          verification_status: biz.verification_status,
+          external_customer_id: biz.external_customer_id,
         }
       : "NOT FOUND",
   )
 
-  const { data: bizByNoah } = await admin
+  const { data: bizByExternal } = await admin
     .from("businesses")
-    .select("id,name,email,noah_customer_id,noah_kyb_status")
-    .eq("noah_customer_id", noahId)
+    .select("id,name,email,grid_customer_id,verification_status,external_customer_id")
+    .eq("id", businessId)
     .maybeSingle()
-  console.log("\n--- businesses by noah_customer_id ---")
-  console.log(bizByNoah ?? "none")
+  console.log("\n--- businesses by id (Grid SoR fields) ---")
+  console.log(bizByExternal ?? "none")
 
   const { data: members } = await admin
     .from("business_memberships")
@@ -111,7 +112,7 @@ async function main() {
   try {
     const { customer, resolvedCustomerId } = await fetchNoahCustomerWithBusinessFallback(
       businessId,
-      (biz?.noah_customer_id as string | null) ?? noahId,
+      noahId,
     )
     const kyb = mapNoahVerificationToKycStatus(customer)
     const c = customer as Record<string, unknown>

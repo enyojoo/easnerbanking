@@ -17,7 +17,8 @@ select
   b.easetag,
   b.country,
   b.business_type,
-  b.noah_customer_id,
+  b.grid_customer_id,
+  b.verification_status,
   b.created_at,
   b.updated_at
 from public.businesses b

@@ -56,7 +56,7 @@ type VirtualAccountUpsert = {
   user_id: string
   business_id: string | null
   noah_virtual_account_id: string
-  noah_customer_id: string | null
+  provider_customer_id: string | null
   currency: string
   account_number: string | null
   routing_number: string | null
@@ -193,7 +193,7 @@ async function upsertMergedUsdVirtualAccount(
     user_id: opts.subjectUserId,
     business_id: opts.businessId ?? null,
     noah_virtual_account_id: opts.merged.canonicalPmId,
-    noah_customer_id: opts.noahCustomerId?.trim() || null,
+    provider_customer_id: opts.noahCustomerId?.trim() || null,
     currency: "USD",
     account_number: opts.merged.accountNumber,
     routing_number: opts.merged.routingNumber,
@@ -244,7 +244,7 @@ function buildUpsertRow(input: {
     user_id: input.subjectUserId,
     business_id: input.businessId ?? null,
     noah_virtual_account_id: input.pmId,
-    noah_customer_id: input.noahCustomerId?.trim() || null,
+    provider_customer_id: input.noahCustomerId?.trim() || null,
     currency: input.currency.toUpperCase(),
     account_number: input.cols.accountNumber,
     routing_number: input.cols.routingNumber,

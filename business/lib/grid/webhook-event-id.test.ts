@@ -54,6 +54,18 @@ describe("gridWebhookQuoteId", () => {
   })
 })
 
+describe("gridWebhookCustomerId", () => {
+  it("reads Customer id from data.id", async () => {
+    const { gridWebhookCustomerId } = await import("@/lib/grid/webhook-event-id")
+    expect(
+      gridWebhookCustomerId({
+        id: "Customer:019ff8a6-443d-938e-0000-f6f502845e5b",
+        platformCustomerId: "eb_4769329da17149cf86477e9b8a0128d3",
+      }),
+    ).toBe("Customer:019ff8a6-443d-938e-0000-f6f502845e5b")
+  })
+})
+
 describe("gridWebhookEventType", () => {
   it("reads eventType or type", () => {
     expect(gridWebhookEventType({ eventType: "INCOMING_PAYMENT.COMPLETED" })).toBe(

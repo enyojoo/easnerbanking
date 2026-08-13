@@ -35,7 +35,7 @@ export async function resolveConnectReadyForCheckout(
 
   const { data: biz } = await admin
     .from("businesses")
-    .select("verification_status, verification_provider, noah_kyb_status, grid_customer_id")
+    .select("verification_status, verification_provider, grid_customer_id")
     .eq("id", businessId)
     .maybeSingle()
 

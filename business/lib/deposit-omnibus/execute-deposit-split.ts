@@ -39,12 +39,10 @@ async function buildNoahContextForLedgerScope(
   if (businessId) {
     const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, businessId)
     if (!ownerUserId) return null
-    const { data: b } = await admin.from("businesses").select("noah_customer_id").eq("id", businessId).maybeSingle()
-    const stored = (b?.noah_customer_id as string | null | undefined)?.trim() || null
     return {
       scope: "business",
       customerType: "Business",
-      noahCustomerId: stored || noahCustomerIdFromBusinessId(businessId),
+      noahCustomerId: noahCustomerIdFromBusinessId(businessId),
       subjectBusinessId: businessId,
       subjectUserId: ownerUserId,
     }
