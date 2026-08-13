@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { useIsRestoring } from "@tanstack/react-query-persist-client"
+import { useIsRestoring } from "@tanstack/react-query"
 import type { TransactionWithSource } from "@/lib/transactions"
 import { useTransactionsList } from "@/hooks/queries/use-transactions"
 import { useScope } from "@/lib/query/scope"
