@@ -23,7 +23,7 @@ type PersonalUpdateBody = {
 }
 
 const USER_SELECT =
-  "id,email,full_name,phone,date_of_birth,avatar_url,easner_business_id,noah_kyc_status,kyc_verified_at,kyc_id_type,kyc_id_number,kyc_id_issuing_country,kyc_address_street,kyc_address_city,kyc_address_state,kyc_address_post_code,kyc_address_country"
+  "id,email,full_name,phone,date_of_birth,avatar_url,easner_business_id,noah_kyc_status,kyc_verified_at,verification_provider,verification_status,kyc_id_type,kyc_id_number,kyc_id_issuing_country,kyc_address_street,kyc_address_city,kyc_address_state,kyc_address_post_code,kyc_address_country"
 
 const USER_SELECT_LEGACY =
   "id,email,full_name,phone,date_of_birth,avatar_url,noah_kyc_status"

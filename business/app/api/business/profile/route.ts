@@ -35,6 +35,7 @@ type UpdateBody = {
   businessLogo?: string | null
   businessType?: string
   registrationNumber?: string
+  taxId?: string
   baseCurrency?: string
   businessDescription?: string
   website?: string
@@ -266,6 +267,7 @@ export async function GET(request: Request) {
       logoUrl: org?.logo_url ?? null,
       businessType: org?.business_type ?? "",
       registrationNumber: org?.registration_number ?? "",
+      taxId: org?.tax_id ?? "",
       baseCurrency: org?.base_currency ?? "USD",
       description: org?.description ?? "",
       website: org?.website ?? "",
@@ -334,7 +336,7 @@ export async function PUT(request: Request) {
   const { data: orgRow } = await admin
     .from("businesses")
     .select(
-      "name,country,registration_number,address_line1,city,state,postal_code,verification_status,kyb_verified_at",
+      "name,country,registration_number,tax_id,address_line1,city,state,postal_code,verification_status,kyb_verified_at",
     )
     .eq("id", businessId)
     .maybeSingle()
@@ -348,6 +350,7 @@ export async function PUT(request: Request) {
       body.businessName !== undefined ||
       body.countryCode !== undefined ||
       body.registrationNumber !== undefined ||
+      body.taxId !== undefined ||
       body.addressLine1 !== undefined ||
       body.city !== undefined ||
       body.state !== undefined ||
@@ -419,6 +422,7 @@ export async function PUT(request: Request) {
 
   if (body.businessType !== undefined) updates.business_type = body.businessType?.trim() || null
   if (body.registrationNumber !== undefined) updates.registration_number = body.registrationNumber?.trim() || null
+  if (body.taxId !== undefined) updates.tax_id = body.taxId?.trim() || null
   if (body.baseCurrency !== undefined) {
     const cur = body.baseCurrency?.trim() || ""
     updates.base_currency = cur ? cur.toUpperCase() : null

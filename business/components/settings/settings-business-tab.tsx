@@ -64,6 +64,7 @@ type BusinessSettingsForm = {
   businessLogo: string | null
   businessType: string
   registrationNumber: string
+  taxId: string
   website: string
   email: string
   phone: string
@@ -104,6 +105,7 @@ export function SettingsBusinessTab() {
     businessLogo: null,
     businessType: "",
     registrationNumber: "",
+    taxId: "",
     website: "",
     email: "",
     phone: "",
@@ -131,6 +133,7 @@ export function SettingsBusinessTab() {
       businessLogo: profile.logoUrl ?? prev.businessLogo,
       businessType: profile.businessType || prev.businessType,
       registrationNumber: profile.registrationNumber || prev.registrationNumber,
+      taxId: profile.taxId || prev.taxId,
       baseCurrency: profile.baseCurrency || prev.baseCurrency,
       description: profile.description || prev.description,
       website: profile.website || prev.website,
@@ -150,6 +153,7 @@ export function SettingsBusinessTab() {
     profile.logoUrl,
     profile.businessType,
     profile.registrationNumber,
+    profile.taxId,
     profile.baseCurrency,
     profile.description,
     profile.website,
@@ -198,6 +202,7 @@ export function SettingsBusinessTab() {
         updated = await updateBusinessProfile({
           ...(countryCode.trim() ? { countryCode } : {}),
           registrationNumber: formData.registrationNumber,
+          taxId: formData.taxId,
         })
       } else if (section === "address") {
         updated = await updateBusinessProfile({
@@ -230,6 +235,7 @@ export function SettingsBusinessTab() {
       businessLogo: p.logoUrl ?? prev.businessLogo,
       businessType: p.businessType || prev.businessType,
       registrationNumber: p.registrationNumber || prev.registrationNumber,
+      taxId: p.taxId || prev.taxId,
       baseCurrency: p.baseCurrency || prev.baseCurrency,
       description: p.description || prev.description,
       website: p.website || prev.website,

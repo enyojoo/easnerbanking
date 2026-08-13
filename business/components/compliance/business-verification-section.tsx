@@ -126,7 +126,13 @@ export function BusinessVerificationSection() {
   )
 
   const primeHostedCredentials = useCallback(async () => {
-    if (!businessId || !canManageBusinessVerification || tier1Complete || tier1FinalRejectForPrefetch) {
+    if (
+      !businessId ||
+      !canManageBusinessVerification ||
+      tier1Complete ||
+      tier1FinalRejectForPrefetch ||
+      tier1AwaitingReviewForProbe
+    ) {
       return readHostedCredentialsCache(businessId)
     }
     try {
@@ -153,10 +159,17 @@ export function BusinessVerificationSection() {
     hostedOpen,
     tier1Complete,
     tier1FinalRejectForPrefetch,
+    tier1AwaitingReviewForProbe,
   ])
 
   useEffect(() => {
-    if (!businessId || !canManageBusinessVerification || tier1Complete || tier1FinalRejectForPrefetch) {
+    if (
+      !businessId ||
+      !canManageBusinessVerification ||
+      tier1Complete ||
+      tier1FinalRejectForPrefetch ||
+      tier1AwaitingReviewForProbe
+    ) {
       probedHostedUrlRef.current = null
       probedHostedTokenRef.current = null
       setHostedResumeAvailable(null)
@@ -183,25 +196,7 @@ export function BusinessVerificationSection() {
     tier1CanResubmit,
     tier1Complete,
     tier1FinalRejectForPrefetch,
-  ])
-
-  useEffect(() => {
-    if (
-      !canManageBusinessVerification ||
-      !businessId ||
-      tier1Complete ||
-      !tier1AwaitingReviewForProbe
-    ) {
-      return
-    }
-    if (probedHostedUrlRef.current || probedHostedTokenRef.current) return
-    void primeHostedCredentials()
-  }, [
-    businessId,
-    canManageBusinessVerification,
-    primeHostedCredentials,
     tier1AwaitingReviewForProbe,
-    tier1Complete,
   ])
 
   const applyHostedCredentials = useCallback(
@@ -386,7 +381,7 @@ export function BusinessVerificationSection() {
     canManageBusinessVerification &&
     !tier1Complete &&
     tier1CanResubmit &&
-    (!tier1AwaitingReview || hostedResumeAvailable === true) &&
+    !tier1AwaitingReview &&
     (!tier1OnHold || tier1CanResubmit)
   const tier1HostedCtaLabel = tier1Rejected || tier1OnHold
     ? "Retry verification"

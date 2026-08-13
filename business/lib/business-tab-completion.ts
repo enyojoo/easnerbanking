@@ -1,5 +1,5 @@
 import { countries } from "@/lib/countries"
-import { getKybFields } from "@/lib/kyb-by-country"
+import { getKybFields, kybFieldValue } from "@/lib/kyb-by-country"
 import type { BusinessProfile } from "@/lib/use-business-profile"
 
 function getCountryFromCode(code: string) {
@@ -40,7 +40,7 @@ export function isBusinessTabComplete(profile: BusinessProfile): boolean {
   if (!code) return false
 
   for (const f of getKybFields(code)) {
-    if (f.id === "registrationNumber" && !nonEmpty(profile.registrationNumber)) return false
+    if (!nonEmpty(kybFieldValue(f.id, profile))) return false
   }
 
   if (!nonEmpty(profile.addressLine1)) return false

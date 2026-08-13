@@ -101,6 +101,19 @@ export type ProfileLockOptions = {
   orgKybApproved?: boolean
 }
 
+function hasGridSyncedKycFields(row: Record<string, unknown>): boolean {
+  if (String(row.verification_provider ?? "").toLowerCase() !== "grid") return false
+  return Boolean(row.kyc_id_type || row.kyc_id_number || row.kyc_address_street)
+}
+
+function countryRefFromStored(value: unknown): VerifiedCountryRef | null {
+  const raw = String(value ?? "").trim()
+  if (!raw) return null
+  const iso = normalizeCountryIso(raw)
+  if (iso) return { code: iso, name: countryDisplayName(iso) }
+  return { code: "", name: raw }
+}
+
 export function isBusinessProfileLockedFromKybFields(
   row: Record<string, unknown> | null | undefined,
 ): boolean {
@@ -164,7 +177,9 @@ export function buildVerifiedIdentityFromKycFields(
   row: Record<string, unknown> | null | undefined,
   opts?: ProfileLockOptions,
 ): VerifiedIdentityPayload {
-  if (!row || !isProfileLockedFromKycFields(row, opts)) {
+  const locked = isProfileLockedFromKycFields(row, opts)
+  const gridSynced = row ? hasGridSyncedKycFields(row) : false
+  if (!row || (!locked && !gridSynced)) {
     return { visible: false }
   }
   const hasId = Boolean(row.kyc_id_type || row.kyc_id_number)
@@ -173,10 +188,8 @@ export function buildVerifiedIdentityFromKycFields(
     return { visible: false }
   }
 
-  const issuingCode =
-    typeof row.kyc_id_issuing_country === "string" ? row.kyc_id_issuing_country.trim().toUpperCase() : ""
-  const addressCountryCode =
-    typeof row.kyc_address_country === "string" ? row.kyc_address_country.trim().toUpperCase() : ""
+  const issuingCountry = countryRefFromStored(row.kyc_id_issuing_country)
+  const addressCountry = countryRefFromStored(row.kyc_address_country)
 
   const addressLines: string[] = []
   if (typeof row.kyc_address_street === "string" && row.kyc_address_street.trim()) {
@@ -201,12 +214,8 @@ export function buildVerifiedIdentityFromKycFields(
       typeof row.kyc_id_number === "string" && row.kyc_id_number.trim()
         ? maskIdNumber(row.kyc_id_number)
         : null,
-    issuingCountry: issuingCode
-      ? { code: issuingCode, name: countryDisplayName(issuingCode) }
-      : null,
+    issuingCountry,
     addressLines,
-    addressCountry: addressCountryCode
-      ? { code: addressCountryCode, name: countryDisplayName(addressCountryCode) }
-      : null,
+    addressCountry,
   }
 }

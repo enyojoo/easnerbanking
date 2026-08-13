@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { sumIncomingBalances } from "@/lib/stripe/incoming-balances"
 
 /**
  * SUM(net_cents) of unsettled Stripe invoice settlements per currency.
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
   const admin = createSupabaseAdmin()
   const { data, error } = await admin
     .from("invoice_stripe_settlements")
-    .select("currency, net_cents, phase")
+    .select("currency, net_cents, ledger_transaction_id")
     .eq("business_id", ctx.businessId)
     .in("phase", ["payment_received", "payout_sent"])
 
@@ -21,18 +22,30 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const byCurrency: Record<string, number> = {}
-  for (const row of data ?? []) {
-    const currency = String(row.currency ?? "").toUpperCase()
-    if (!currency) continue
-    const cents = Number(row.net_cents ?? 0)
-    if (!Number.isFinite(cents) || cents <= 0) continue
-    byCurrency[currency] = (byCurrency[currency] ?? 0) + cents
+  const rows = data ?? []
+  const ledgerIds = [
+    ...new Set(
+      rows
+        .map((row) => String(row.ledger_transaction_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ]
+
+  const existingLedgerIds = new Set<string>()
+  if (ledgerIds.length > 0) {
+    const { data: ledgerRows, error: ledgerError } = await admin
+      .from("transactions")
+      .select("id")
+      .in("id", ledgerIds)
+    if (ledgerError) {
+      return NextResponse.json({ error: ledgerError.message }, { status: 500 })
+    }
+    for (const row of ledgerRows ?? []) {
+      if (row.id) existingLedgerIds.add(String(row.id))
+    }
   }
 
-  const balances = Object.fromEntries(
-    Object.entries(byCurrency).map(([currency, cents]) => [currency, cents / 100]),
-  )
+  const balances = sumIncomingBalances(rows, existingLedgerIds)
 
   return NextResponse.json({ balances })
 }

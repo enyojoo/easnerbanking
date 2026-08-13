@@ -1,47 +1,75 @@
 /**
  * KYB (Know Your Business) field requirements by country.
- * Based on regulatory requirements: business registries, tax authorities, and AML/KYC frameworks.
+ * Maps to `businesses.registration_number` and `businesses.tax_id`.
  *
- * USA: EIN from IRS (9-digit federal tax ID)
- * UK: Companies House registration number
- * Nigeria: CAC (Corporate Affairs Commission) registration/RC number
- * Estonia: Registry code (8-digit, serves as both registration and tax ID)
- * Canada: Business Number (BN) from CRA (9-digit)
- * Most countries: Registration number + Tax ID/VAT (generic)
+ * - Two fields when registries and tax authorities issue separate IDs (US, UK, NG, most countries).
+ * - One field when a single national identifier covers both (Estonia registrikood, Canada BN).
  */
 export interface KybField {
-  id: string
+  id: "registrationNumber" | "taxId"
   label: string
   placeholder?: string
 }
 
+export type KybFieldId = KybField["id"]
+
+const registrationNumber = (
+  label: string,
+  placeholder?: string,
+): KybField => ({
+  id: "registrationNumber",
+  label,
+  placeholder,
+})
+
+const taxId = (label: string, placeholder?: string): KybField => ({
+  id: "taxId",
+  label,
+  placeholder,
+})
+
+/** Registration + separate tax ID (default for most jurisdictions). */
+const REGISTRATION_AND_TAX: KybField[] = [
+  registrationNumber("Business registration number", "From company registry"),
+  taxId("Tax ID / VAT number", "National tax or VAT identifier"),
+]
+
 export const KYB_BY_COUNTRY: Record<string, KybField[]> = {
   US: [
-    {
-      id: "registrationNumber",
-      label: "EIN (Employer Identification Number)",
-      placeholder: "12-3456789",
-    },
+    registrationNumber("Registration number", "State registry filing number"),
+    taxId("EIN (Employer Identification Number)", "12-3456789"),
   ],
   GB: [
-    { id: "registrationNumber", label: "Companies House registration number", placeholder: "e.g. 12345678" },
+    registrationNumber("Companies House registration number", "e.g. 12345678"),
+    taxId("VAT number", "e.g. GB123456789"),
   ],
   NG: [
-    { id: "registrationNumber", label: "CAC registration number (RC number)", placeholder: "From Corporate Affairs Commission" },
+    registrationNumber("CAC registration number (RC number)", "From Corporate Affairs Commission"),
+    taxId("Tax Identification Number (TIN)", "From FIRS"),
   ],
+  /** Registry code is the canonical business identifier for both registry and tax in Estonia. */
   EE: [
-    { id: "registrationNumber", label: "Registry code (registrikood)", placeholder: "8-digit code from e-Business Register" },
+    registrationNumber("Registry code (registrikood)", "8-digit code from e-Business Register"),
   ],
+  /** CRA Business Number is used across registry and tax programs. */
   CA: [
-    { id: "registrationNumber", label: "Business Number (BN)", placeholder: "9-digit CRA identifier" },
+    registrationNumber("Business Number (BN)", "9-digit CRA identifier"),
   ],
 }
 
-/** Default field for countries not explicitly listed. */
-export const KYB_DEFAULT: KybField[] = [
-  { id: "registrationNumber", label: "Business registration number", placeholder: "From company registry" },
-]
+/** Default when country is not explicitly listed. */
+export const KYB_DEFAULT: KybField[] = REGISTRATION_AND_TAX
 
 export function getKybFields(countryCode: string): KybField[] {
-  return KYB_BY_COUNTRY[countryCode] ?? KYB_DEFAULT
+  const code = countryCode.trim().toUpperCase()
+  return KYB_BY_COUNTRY[code] ?? KYB_DEFAULT
+}
+
+/** Read a KYB form value from business profile fields. */
+export function kybFieldValue(
+  fieldId: KybFieldId,
+  profile: { registrationNumber?: string | null; taxId?: string | null },
+): string {
+  if (fieldId === "taxId") return String(profile.taxId ?? "").trim()
+  return String(profile.registrationNumber ?? "").trim()
 }

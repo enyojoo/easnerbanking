@@ -18,6 +18,7 @@ export type BusinessProfile = {
   logoUrl: string | null
   businessType: string
   registrationNumber: string
+  taxId: string
   baseCurrency: string
   /** True when org KYB approved and verified entity fields are locked. */
   profileLocked?: boolean
@@ -61,6 +62,7 @@ const DEFAULT_PROFILE: BusinessProfile = {
   logoUrl: null,
   businessType: "",
   registrationNumber: "",
+  taxId: "",
   baseCurrency: "USD",
   profileLocked: false,
   description: "",
@@ -101,6 +103,7 @@ export async function updateBusinessProfile(payload: {
   businessLogo?: string | null
   businessType?: string
   registrationNumber?: string
+  taxId?: string
   baseCurrency?: string
   businessDescription?: string
   website?: string
