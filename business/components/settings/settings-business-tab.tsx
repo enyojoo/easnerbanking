@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -37,6 +38,7 @@ import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 import { useBusinessEasetagAvailability } from "@/hooks/use-business-easetag-availability"
 import { useAllowedBaseCurrencies } from "@/hooks/use-allowed-base-currencies"
 import { filterCountriesForProductPicker } from "@easner/shared"
+import { formatPostalAddressBlock, hasPostalAddressParts } from "@easner/shared/postal-address"
 import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
@@ -263,6 +265,38 @@ export function SettingsBusinessTab() {
   const selectedCountry = getCountryFromCode(countryCode)
   const kybFields = getKybFields(countryCode)
   const profileLocked = profile.profileLocked ?? false
+  const registeredAddressDisplay = useMemo(
+    () =>
+      formatPostalAddressBlock({
+        line1: profile.registeredAddressLine1,
+        city: profile.registeredAddressCity,
+        state: profile.registeredAddressState,
+        postalCode: profile.registeredAddressPostalCode,
+        country: profile.country,
+      }),
+    [
+      profile.registeredAddressLine1,
+      profile.registeredAddressCity,
+      profile.registeredAddressState,
+      profile.registeredAddressPostalCode,
+      profile.country,
+    ],
+  )
+  const hasRegisteredAddress = useMemo(
+    () =>
+      hasPostalAddressParts({
+        line1: profile.registeredAddressLine1,
+        city: profile.registeredAddressCity,
+        state: profile.registeredAddressState,
+        postalCode: profile.registeredAddressPostalCode,
+      }),
+    [
+      profile.registeredAddressLine1,
+      profile.registeredAddressCity,
+      profile.registeredAddressState,
+      profile.registeredAddressPostalCode,
+    ],
+  )
   const easetagDraftLen = formData.easetag.replace(/^@/, "").trim().length
   const easetagStatus =
     easetagDraftLen > 0 ?
@@ -620,6 +654,22 @@ export function SettingsBusinessTab() {
               </div>
             </div>
           )}
+
+          <div className="space-y-2 pt-2">
+            <Label htmlFor="registeredAddress">Registered Address</Label>
+            <Textarea
+              id="registeredAddress"
+              readOnly
+              rows={hasRegisteredAddress ? 4 : 2}
+              className={`${SETTINGS_CONTROL_SURFACE} resize-none`}
+              value={
+                hasRegisteredAddress
+                  ? registeredAddressDisplay
+                  : "Provided during business verification"
+              }
+              disabled
+            />
+          </div>
           </>
           )}
         </CardContent>
@@ -631,10 +681,10 @@ export function SettingsBusinessTab() {
             title={
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="h-5 w-5" />
-                Registered Address
+                Business Address
               </CardTitle>
             }
-            description={SETTINGS_CARD_COPY.registeredAddress}
+            description={SETTINGS_CARD_COPY.businessAddress}
             actions={
               loading ? (
                 <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
@@ -653,7 +703,7 @@ export function SettingsBusinessTab() {
                     Save
                   </Button>
                 </div>
-              ) : profileLocked ? null : (
+              ) : (
                 <Button variant="outline" size="sm" onClick={() => handleEdit("address")}>
                   <Edit className="h-4 w-4 mr-1" />
                   Edit
@@ -681,7 +731,7 @@ export function SettingsBusinessTab() {
               className={SETTINGS_CONTROL_SURFACE}
               value={formData.address}
               onChange={(e) => handleInputChange("address", e.target.value)}
-              disabled={profileLocked || editingSection !== "address"}
+              disabled={editingSection !== "address"}
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -692,7 +742,7 @@ export function SettingsBusinessTab() {
                 className={SETTINGS_CONTROL_SURFACE}
                 value={formData.city}
                 onChange={(e) => handleInputChange("city", e.target.value)}
-                disabled={profileLocked || editingSection !== "address"}
+                disabled={editingSection !== "address"}
               />
             </div>
             <div className="space-y-2">
@@ -702,7 +752,7 @@ export function SettingsBusinessTab() {
                 className={SETTINGS_CONTROL_SURFACE}
                 value={formData.state}
                 onChange={(e) => handleInputChange("state", e.target.value)}
-                disabled={profileLocked || editingSection !== "address"}
+                disabled={editingSection !== "address"}
               />
             </div>
             <div className="space-y-2">
@@ -712,7 +762,7 @@ export function SettingsBusinessTab() {
                 className={SETTINGS_CONTROL_SURFACE}
                 value={formData.zipCode}
                 onChange={(e) => handleInputChange("zipCode", e.target.value)}
-                disabled={profileLocked || editingSection !== "address"}
+                disabled={editingSection !== "address"}
               />
             </div>
           </div>

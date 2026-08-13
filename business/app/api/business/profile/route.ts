@@ -108,7 +108,7 @@ async function resolveCanManageBusinessVerification(
 
 async function fetchBusinessProfile(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string) {
   const richSelect =
-    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,country,verification_status,kyb_verified_at,invoice_settings"
+    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,registered_address_line1,registered_address_city,registered_address_state,registered_address_postal_code,country,verification_status,kyb_verified_at,invoice_settings"
   const baseSelect = "id,name,easetag,logo_url,business_type,base_currency,description,country"
   const minimalSelect = "id,name,easetag,country"
 
@@ -164,6 +164,10 @@ export async function GET(request: Request) {
     city: string | null
     state: string | null
     postal_code: string | null
+    registered_address_line1: string | null
+    registered_address_city: string | null
+    registered_address_state: string | null
+    registered_address_postal_code: string | null
     country: string | null
     verification_status?: string | null
     kyb_verified_at?: string | null
@@ -277,6 +281,10 @@ export async function GET(request: Request) {
       city: org?.city ?? "",
       state: org?.state ?? "",
       postalCode: org?.postal_code ?? "",
+      registeredAddressLine1: org?.registered_address_line1 ?? "",
+      registeredAddressCity: org?.registered_address_city ?? "",
+      registeredAddressState: org?.registered_address_state ?? "",
+      registeredAddressPostalCode: org?.registered_address_postal_code ?? "",
       country: (() => {
         const d = displayCountryFromBusinessSetting(org?.country)
         return d || null
@@ -350,11 +358,7 @@ export async function PUT(request: Request) {
       body.businessName !== undefined ||
       body.countryCode !== undefined ||
       body.registrationNumber !== undefined ||
-      body.taxId !== undefined ||
-      body.addressLine1 !== undefined ||
-      body.city !== undefined ||
-      body.state !== undefined ||
-      body.postalCode !== undefined
+      body.taxId !== undefined
     if (blocked) {
       return NextResponse.json(
         { error: "Verified business fields cannot be changed after KYB approval." },

@@ -20,6 +20,11 @@
       "import": "./src/verified-identity.ts",
       "require": "./src/verified-identity.ts"
     },
+    "./postal-address": {
+      "types": "./src/postal-address.ts",
+      "import": "./src/postal-address.ts",
+      "require": "./src/postal-address.ts"
+    },
     "./format-display-name": {
       "types": "./src/format-display-name.ts",
       "import": "./src/format-display-name.ts",

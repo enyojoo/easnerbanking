@@ -30,6 +30,10 @@ export type BusinessProfile = {
   city: string
   state: string
   postalCode: string
+  registeredAddressLine1: string
+  registeredAddressCity: string
+  registeredAddressState: string
+  registeredAddressPostalCode: string
   country: string | null
   countryCode: string | null
   onboardingComplete: boolean
@@ -73,6 +77,10 @@ const DEFAULT_PROFILE: BusinessProfile = {
   city: "",
   state: "",
   postalCode: "",
+  registeredAddressLine1: "",
+  registeredAddressCity: "",
+  registeredAddressState: "",
+  registeredAddressPostalCode: "",
   country: null,
   countryCode: null,
   onboardingComplete: false,

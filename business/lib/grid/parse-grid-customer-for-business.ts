@@ -6,10 +6,10 @@ export type ParsedGridCustomerForBusiness = {
   tax_id?: string | null
   country?: string | null
   support_email?: string | null
-  address_line1?: string | null
-  city?: string | null
-  state?: string | null
-  postal_code?: string | null
+  registered_address_line1?: string | null
+  registered_address_city?: string | null
+  registered_address_state?: string | null
+  registered_address_postal_code?: string | null
   kyb_verified_at?: string
 }
 
@@ -55,16 +55,16 @@ export function parseGridCustomerForBusiness(
   if (supportEmail) out.support_email = supportEmail
 
   const line1 = pickString(address, "line1", "line_1", "street")
-  if (line1) out.address_line1 = line1
+  if (line1) out.registered_address_line1 = line1
 
   const city = pickString(address, "city")
-  if (city) out.city = city
+  if (city) out.registered_address_city = city
 
   const state = pickString(address, "state", "region")
-  if (state) out.state = state
+  if (state) out.registered_address_state = state
 
   const postal = pickString(address, "postalCode", "postal_code", "zip")
-  if (postal) out.postal_code = postal
+  if (postal) out.registered_address_postal_code = postal
 
   const status = String(customer.kybStatus ?? customer.kycStatus ?? "").toUpperCase()
   if (status === "APPROVED") {
