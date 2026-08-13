@@ -16,7 +16,7 @@ import {
   BUSINESS_WEB_QUERY_CACHE_BUSTER,
   BUSINESS_WEB_QUERY_CACHE_MAX_AGE_MS,
   createBusinessQueryPersister,
-  readStoredSupabaseSessionUserId,
+  probeStoredSupabaseSession,
   shouldPersistBusinessQuery,
   writeBusinessStartupSnapshot,
   clearAllBusinessBrowserState,
@@ -42,7 +42,10 @@ import { ImageWarmBootstrap } from "@/components/image-warm-bootstrap"
 export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getBrowserQueryClient()
   const { user } = useAuth()
-  const restoredSessionUserId = React.useMemo(() => readStoredSupabaseSessionUserId(), [])
+  const restoredSessionUserId = React.useMemo(() => {
+    const probe = probeStoredSupabaseSession()
+    return probe.likelyAuthenticated ? probe.userId : null
+  }, [])
   const persistedUserId = user?.id ?? restoredSessionUserId
   const persister = React.useMemo(
     () => createBusinessQueryPersister(persistedUserId),

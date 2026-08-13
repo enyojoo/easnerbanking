@@ -25,12 +25,12 @@ async function fetchRecipientsSafe(userId: string): Promise<Beneficiary[]> {
  * When {@param enabled} is false, no fetch runs (e.g. parent supplies an explicit list).
  */
 export function useRecipientsCached(enabled: boolean) {
-  const { user, isLoading } = useAuth()
+  const { user, sessionUserId } = useAuth()
 
   return useCachedData<Beneficiary[]>({
-    enabled: enabled && !isLoading && Boolean(user?.id),
-    cacheKey: user?.id ? CACHE_KEYS.RECIPIENTS(user.id) : null,
-    persistKey: user?.id ? `recipients_cache_v2_${user.id}` : undefined,
+    enabled: enabled && Boolean(user?.id),
+    cacheKey: sessionUserId ? CACHE_KEYS.RECIPIENTS(sessionUserId) : null,
+    persistKey: sessionUserId ? `recipients_cache_v2_${sessionUserId}` : undefined,
     initialData: [],
     ttlMs: RECIPIENTS_CACHE_TTL_MS,
     fetcher: async () => fetchRecipientsSafe(user!.id),

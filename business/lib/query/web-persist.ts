@@ -74,6 +74,71 @@ function findUserId(value: unknown, depth = 0): string | null {
   return null
 }
 
+function findNumberField(value: unknown, field: string, depth = 0): number | null {
+  if (depth > 5 || value == null) return null
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const record = value as JsonRecord
+    const direct = record[field]
+    if (typeof direct === "number" && Number.isFinite(direct)) return direct
+    if (typeof direct === "string" && direct.trim()) {
+      const parsed = Number(direct)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    for (const key of ["currentSession", "session", "data"]) {
+      const nested = findNumberField(record[key], field, depth + 1)
+      if (nested != null) return nested
+    }
+  }
+  return null
+}
+
+function findStringField(value: unknown, field: string, depth = 0): string | null {
+  if (depth > 5 || value == null) return null
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const record = value as JsonRecord
+    const direct = record[field]
+    if (typeof direct === "string" && direct.trim()) return direct
+    for (const key of ["currentSession", "session", "data"]) {
+      const nested = findStringField(record[key], field, depth + 1)
+      if (nested) return nested
+    }
+  }
+  return null
+}
+
+export type StoredSupabaseSessionProbe = {
+  userId: string | null
+  /** True when local storage has a session that can still authenticate (valid access or refresh token). */
+  likelyAuthenticated: boolean
+}
+
+/** Synchronous read of Supabase auth storage — used for instant login redirect vs optimistic cache boot. */
+export function probeStoredSupabaseSession(): StoredSupabaseSessionProbe {
+  if (typeof window === "undefined") {
+    return { userId: null, likelyAuthenticated: false }
+  }
+  const storageKey = getSupabaseAuthStorageKey()
+  if (!storageKey) return { userId: null, likelyAuthenticated: false }
+  const parsed = safeParse<unknown>(window.localStorage.getItem(storageKey))
+  const userId = findUserId(parsed)
+  if (!userId) return { userId: null, likelyAuthenticated: false }
+
+  const accessToken = findStringField(parsed, "access_token")
+  const refreshToken = findStringField(parsed, "refresh_token")
+  if (!accessToken && !refreshToken) {
+    return { userId, likelyAuthenticated: false }
+  }
+
+  const expiresAt = findNumberField(parsed, "expires_at")
+  const nowSec = Math.floor(Date.now() / 1000)
+  const accessValid = expiresAt == null || expiresAt > nowSec - 15
+
+  return {
+    userId,
+    likelyAuthenticated: accessValid || Boolean(refreshToken),
+  }
+}
+
 function localStorageKeys(): string[] {
   if (typeof window === "undefined") return []
   const keys: string[] = []
@@ -100,11 +165,7 @@ export function businessWebQueryCacheKey(userId: string): string {
 }
 
 export function readStoredSupabaseSessionUserId(): string | null {
-  if (typeof window === "undefined") return null
-  const storageKey = getSupabaseAuthStorageKey()
-  if (!storageKey) return null
-  const parsed = safeParse<unknown>(window.localStorage.getItem(storageKey))
-  return findUserId(parsed)
+  return probeStoredSupabaseSession().userId
 }
 
 export function readBusinessStartupSnapshot(): BusinessStartupSnapshot | null {

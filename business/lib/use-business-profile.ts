@@ -148,14 +148,15 @@ export async function updateBusinessProfile(payload: {
 }
 
 export function useBusinessProfile() {
-  const { user } = useAuth()
+  const { user, sessionUserId } = useAuth()
+  const profileUserId = sessionUserId
   const PROFILE_CACHE_TTL_MS = 60 * 60 * 1000
   const PROFILE_PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
-  const cacheKey = user?.id ? CACHE_KEYS.BUSINESS_PROFILE(user.id) : null
+  const cacheKey = profileUserId ? CACHE_KEYS.BUSINESS_PROFILE(profileUserId) : null
   const { data: profileData, setData, loading: isLoading } = useCachedData<BusinessProfile>({
     enabled: Boolean(user?.id),
     cacheKey,
-    persistKey: user?.id ? `business_profile_cache_${user.id}` : undefined,
+    persistKey: profileUserId ? `business_profile_cache_${profileUserId}` : undefined,
     initialData: DEFAULT_PROFILE,
     ttlMs: PROFILE_CACHE_TTL_MS,
     persistMaxAgeMs: PROFILE_PERSIST_MAX_AGE_MS,
@@ -215,8 +216,7 @@ export function useBusinessProfile() {
   const isFresh = Boolean(cacheKey && hasCachedProfile && !dataCache.isStale(cacheKey))
   /** True when memory cache has profile OR we already finished a load (survives `dataCache.invalidate` during `business-profile-updated` without detail). */
   const hasLoadedProfile = Boolean(
-    user?.id &&
-      !isLoading &&
+    profileUserId &&
       (profileData.businessId != null || profileData.name.trim().length > 0),
   )
   const hasData = hasCachedProfile || hasLoadedProfile

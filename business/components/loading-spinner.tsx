@@ -2,35 +2,17 @@
  * Business web loading surfaces.
  *
  * Contract (see packages/shared/src/query/ux-rules.ts):
- * - WorkspaceBootLoader: session boot only (DashboardShell auth gate)
  * - LoadingSpinner: public/unauthenticated surfaces (/pay, invoice customer view)
+ * - Workspace boot: render DashboardShell immediately; auth resolves in background
  * - Do not add route loading.tsx on cached workspace routes
  * - Do not use dynamic() loading fallbacks on core flows
  * - Page-level skeletons: isPending && !data only
  */
-import { BusinessLogo } from "@/components/brand/business-logo"
 
 export function LoadingSpinner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-    </div>
-  )
-}
-
-/** Full-screen branded loader while workspace session resolves. */
-export function WorkspaceBootLoader() {
-  return (
-    <div
-      className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background"
-      aria-label="Loading Easner Business"
-      aria-busy="true"
-    >
-      <BusinessLogo size="lg" priority />
-      <div
-        className="h-10 w-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"
-        aria-hidden
-      />
     </div>
   )
 }

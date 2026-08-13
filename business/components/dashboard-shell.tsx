@@ -3,7 +3,7 @@
 import type React from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useEffect, useLayoutEffect } from "react"
 import Link from "next/link"
 import { MessageCircle } from "lucide-react"
 import { DashboardNav } from "@/components/dashboard-nav"
@@ -17,7 +17,7 @@ import { openBusinessSupport } from "@/lib/intercom-messenger"
 import { BANNER_COPY } from "@/lib/copy/business-ui-copy"
 import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { cn } from "@/lib/utils"
-import { WorkspaceBootLoader } from "@/components/loading-spinner"
+import { redirectToWorkspaceLogin } from "@/lib/auth/workspace-login-redirect"
 
 interface DashboardShellProps {
   children: React.ReactNode
@@ -27,8 +27,20 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children, constrained = false }: DashboardShellProps) {
   useBusinessNoahSync()
-  const { user, isLoading, logout } = useAuth()
+  const { user, isLoading, logout, sessionUserId, hasStoredSession } = useAuth()
   const router = useRouter()
+  const canShowWorkspace = Boolean(user) || (isLoading && hasStoredSession)
+
+  useLayoutEffect(() => {
+    if (user) return
+    if (!hasStoredSession) {
+      redirectToWorkspaceLogin()
+      return
+    }
+    if (!isLoading && !user) {
+      redirectToWorkspaceLogin()
+    }
+  }, [user, isLoading, hasStoredSession])
   const {
     name: businessName,
     ownerName,
@@ -64,13 +76,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
   }, [showTier1Banner, businessId, canManageBusinessVerification, tier1CanResubmit, tier1Complete])
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/auth/login")
-    }
-  }, [user, isLoading, router])
-
-  useEffect(() => {
-    if (isLoading || !user?.id) return
+    if (!sessionUserId) return
     const criticalRoutes = [
       "/dashboard",
       "/send",
@@ -115,10 +121,10 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
     }
     const t = window.setTimeout(prefetchSecondary, 250)
     return () => window.clearTimeout(t)
-  }, [isLoading, router, user?.id])
+  }, [isLoading, router, sessionUserId])
 
-  if (isLoading || !user) {
-    return <WorkspaceBootLoader />
+  if (!canShowWorkspace) {
+    return null
   }
 
   return (

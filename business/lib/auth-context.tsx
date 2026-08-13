@@ -34,6 +34,8 @@ import {
   stashSignupBlockedMessage,
 } from "@/lib/auth/signup-blocked-message"
 import { runBusinessBootstrapClient } from "@/lib/auth/run-business-bootstrap-client"
+import { probeStoredSupabaseSession } from "@/lib/query/web-persist"
+import { redirectToWorkspaceLogin } from "@/lib/auth/workspace-login-redirect"
 
 function parseAuthFragment(hash: string): Record<string, string> {
   const raw = hash.replace(/^#/, "")
@@ -57,6 +59,10 @@ interface AuthContextType {
   /** Reset idle timer (after PIN unlock, etc.). */
   resetSessionActivity: () => void
   isLoading: boolean
+  /** Supabase user id when confirmed, else last-known id from local session storage for cache/scope bootstrap. */
+  sessionUserId: string | null
+  /** Local Supabase storage indicates a session that can still authenticate. */
+  hasStoredSession: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -66,6 +72,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const [storedProbe] = useState(() =>
+    typeof window !== "undefined"
+      ? probeStoredSupabaseSession()
+      : { userId: null as string | null, likelyAuthenticated: false },
+  )
+  const restoredUserId = useMemo(
+    () => (mounted && storedProbe.likelyAuthenticated ? storedProbe.userId : null),
+    [mounted, storedProbe.likelyAuthenticated, storedProbe.userId],
+  )
+  const sessionUserId = user?.id ?? restoredUserId
+  const hasStoredSession = storedProbe.likelyAuthenticated
   const bootstrapFullName = useMemo(() => {
     if (!user) return ""
     const fullNameFromMeta =
@@ -146,11 +163,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data } = await supabase.auth.getSession()
       if (!active) return
       const nextUser = data.session?.user ?? null
-      setUser(nextUser)
       if (!nextUser) {
         clearBrowserQueryClient()
         clearAllBusinessBrowserState()
+        setIsLoading(false)
+        redirectToWorkspaceLogin()
+        return
       }
+      setUser(nextUser)
       setIsLoading(false)
     })()
 
@@ -456,6 +476,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     resetSessionActivity,
     isLoading,
+    sessionUserId,
+    hasStoredSession,
   }
 
   // Don't render until mounted to prevent hydration mismatch
@@ -473,6 +495,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           logout,
           resetSessionActivity,
           isLoading: true,
+          sessionUserId: null,
+          hasStoredSession: false,
         }}
       >
         {children}

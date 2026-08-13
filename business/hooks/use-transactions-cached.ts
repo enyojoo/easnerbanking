@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
+import { useIsRestoring } from "@tanstack/react-query-persist-client"
 import type { TransactionWithSource } from "@/lib/transactions"
 import { useTransactionsList } from "@/hooks/queries/use-transactions"
 import { useScope } from "@/lib/query/scope"
@@ -19,6 +20,7 @@ import { useIsPostUnlockResumeActive } from "@/lib/post-unlock-resume-context"
 export function useTransactionsCached() {
   const { scope } = useScope()
   const postUnlockResume = useIsPostUnlockResumeActive()
+  const isRestoring = useIsRestoring()
   const query = useTransactionsList()
   const flattened = useMemo<TransactionWithSource[]>(() => {
     const pages = query.data?.pages ?? []
@@ -29,7 +31,8 @@ export function useTransactionsCached() {
   const loading =
     Boolean(scope) &&
     empty &&
-    (query.isPending ||
+    !isRestoring &&
+    ((query.isPending && !query.data) ||
       query.isLoading ||
       (Boolean(postUnlockResume) && query.isFetching))
 
