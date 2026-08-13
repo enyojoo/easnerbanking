@@ -1,12 +1,13 @@
 "use client"
 
 import type React from "react"
-import { useLayoutEffect } from "react"
+import { useLayoutEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { WorkspaceBootSplash } from "@/components/loading-spinner"
 import { useAuth } from "@/lib/auth-context"
 import { redirectToWorkspaceLogin } from "@/lib/auth/workspace-login-redirect"
+import { probeStoredSupabaseSession } from "@/lib/query/web-persist"
 
 const DASHBOARD_SHELL_ROOTS = [
   "/accounts",
@@ -44,20 +45,41 @@ function resolveShellProps(pathname: string) {
 export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { user, isLoading, canBootstrapWorkspace } = useAuth()
+  const [clientReady, setClientReady] = useState(false)
+
+  useLayoutEffect(() => {
+    setClientReady(true)
+  }, [])
 
   if (!pathname || !isDashboardShellPath(pathname)) {
     return <>{children}</>
   }
 
-  const canShowWorkspace = Boolean(user) || (isLoading && canBootstrapWorkspace)
+  const storedSessionLikelyValid = clientReady
+    ? probeStoredSupabaseSession().likelyAuthenticated
+    : canBootstrapWorkspace
+
+  const canShowWorkspace =
+    Boolean(user) ||
+    ((isLoading || !clientReady) && (canBootstrapWorkspace || storedSessionLikelyValid))
+
+  const definitivelyLoggedOut =
+    clientReady &&
+    !isLoading &&
+    !user &&
+    !canBootstrapWorkspace &&
+    !storedSessionLikelyValid
 
   useLayoutEffect(() => {
-    if (canShowWorkspace) return
+    if (canShowWorkspace || isLoading) return
     redirectToWorkspaceLogin()
-  }, [canShowWorkspace])
+  }, [canShowWorkspace, isLoading])
 
   if (!canShowWorkspace) {
-    return <WorkspaceBootSplash />
+    if (definitivelyLoggedOut) {
+      return <WorkspaceBootSplash />
+    }
+    return null
   }
 
   const { constrained } = resolveShellProps(pathname)

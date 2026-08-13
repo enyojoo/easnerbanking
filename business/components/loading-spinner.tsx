@@ -9,7 +9,8 @@
  *   - Empty: isQueryTrulyEmpty(query, isEmpty) → zero-state copy after fetch completes
  *
  * Full-screen loaders:
- *   - WorkspaceBootSplash: logo-only, logged-out workspace redirect only (no shell)
+ *   - WorkspaceBootSplash: logo-only when workspace is reached with no session at all
+ *     (definitively logged out — not during auth resolve, hydration, or soft reload)
  *   - LoadingSpinner: public/unauthenticated surfaces (/pay, invoice customer view)
  *
  * Workspace rules:
