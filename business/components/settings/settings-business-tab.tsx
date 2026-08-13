@@ -4,11 +4,8 @@ import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import {
   Building2,
   Globe,
@@ -37,8 +34,7 @@ import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 import { useBusinessEasetagAvailability } from "@/hooks/use-business-easetag-availability"
 import { useAllowedBaseCurrencies } from "@/hooks/use-allowed-base-currencies"
-import { filterCountriesForProductPicker } from "@easner/shared"
-import { formatPostalAddressBlock, hasPostalAddressParts } from "@easner/shared/postal-address"
+import { formatPostalAddressLine, hasPostalAddressParts } from "@easner/shared/postal-address"
 import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
@@ -88,15 +84,6 @@ export function SettingsBusinessTab() {
     error: baseCurrenciesError,
   } = useAllowedBaseCurrencies()
   const [countryCode, setCountryCode] = useState("")
-  const [countryOpen, setCountryOpen] = useState(false)
-  const countriesForKybPicker = useMemo(() => {
-    const base = filterCountriesForProductPicker(countries, "business")
-    const cur = countries.find((c) => c.code === countryCode)
-    if (cur && !base.some((b) => b.code === cur.code)) {
-      return [cur, ...base]
-    }
-    return base
-  }, [countryCode])
   const easetagAvail = useBusinessEasetagAvailability({ profileEasetag: profile.easetag })
   const [editingSection, setEditingSection] = useState<string | null>(null)
   /** Which card section is currently persisting (Save); disables actions and shows spinner on that Save. */
@@ -200,12 +187,6 @@ export function SettingsBusinessTab() {
           baseCurrency: formData.baseCurrency,
           businessDescription: formData.description,
         })
-      } else if (section === "legal") {
-        updated = await updateBusinessProfile({
-          ...(countryCode.trim() ? { countryCode } : {}),
-          registrationNumber: formData.registrationNumber,
-          taxId: formData.taxId,
-        })
       } else if (section === "address") {
         updated = await updateBusinessProfile({
           addressLine1: formData.address,
@@ -255,19 +236,12 @@ export function SettingsBusinessTab() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleCountryChange = (code: string) => {
-    setCountryCode(code)
-    const c = getCountryFromCode(code)
-    if (c) handleInputChange("country", c.name)
-    setCountryOpen(false)
-  }
-
   const selectedCountry = getCountryFromCode(countryCode)
   const kybFields = getKybFields(countryCode)
   const profileLocked = profile.profileLocked ?? false
   const registeredAddressDisplay = useMemo(
     () =>
-      formatPostalAddressBlock({
+      formatPostalAddressLine({
         line1: profile.registeredAddressLine1,
         city: profile.registeredAddressCity,
         state: profile.registeredAddressState,
@@ -525,29 +499,7 @@ export function SettingsBusinessTab() {
             }
             description={SETTINGS_CARD_COPY.legalEntity}
             actions={
-              loading ? (
-                <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
-              ) : editingSection === "legal" ? (
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={handleCancel} disabled={Boolean(savingSection)}>
-                    <X className="h-4 w-4 mr-1" />
-                    Cancel
-                  </Button>
-                  <Button size="sm" onClick={() => void handleSave("legal")} disabled={Boolean(savingSection)}>
-                    {savingSection === "legal" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    ) : (
-                      <Check className="h-4 w-4" aria-hidden />
-                    )}
-                    Save
-                  </Button>
-                </div>
-              ) : profileLocked ? null : (
-                <Button variant="outline" size="sm" onClick={() => handleEdit("legal")}>
-                  <Edit className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
-              )
+              loading ? <div className="h-9 w-24 animate-pulse rounded-md bg-muted" /> : null
             }
           />
         </CardHeader>
@@ -564,73 +516,26 @@ export function SettingsBusinessTab() {
           <>
           <div className="space-y-2">
             <Label>Country</Label>
-            {editingSection === "legal" ? (
-              <Popover open={countryOpen} onOpenChange={setCountryOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={countryOpen}
-                    className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      {selectedCountry ? (
-                        <>
-                          <CountryFlag code={selectedCountry.code} size={22} />
-                          <span className="truncate">{selectedCountry.name}</span>
-                        </>
-                      ) : (
-                        <span className="text-muted-foreground">Select country</span>
-                      )}
-                    </span>
-                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search country..." />
-                    <CommandList className="max-h-[200px]">
-                        <CommandEmpty>No country found.</CommandEmpty>
-                      <CommandGroup>
-                        {countriesForKybPicker.map((c) => (
-                          <CommandItem
-                            key={c.code}
-                            value={c.name}
-                            onSelect={() => handleCountryChange(c.code)}
-                          >
-                            <div className="flex items-center gap-2 w-full">
-                              <CountryFlag code={c.code} size={22} />
-                              <span className="flex-1">{c.name}</span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                disabled
-                tabIndex={-1}
-                className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
-                aria-readonly="true"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  {selectedCountry ? (
-                    <>
-                      <CountryFlag code={selectedCountry.code} size={22} />
-                      <span className="truncate">{selectedCountry.name}</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">{formData.country || "—"}</span>
-                  )}
-                </span>
-                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              disabled
+              tabIndex={-1}
+              className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
+              aria-readonly="true"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                {selectedCountry ? (
+                  <>
+                    <CountryFlag code={selectedCountry.code} size={22} />
+                    <span className="truncate">{selectedCountry.name}</span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">{formData.country || "—"}</span>
+                )}
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
+            </Button>
           </div>
 
           {kybFields.length > 0 && (
@@ -643,33 +548,15 @@ export function SettingsBusinessTab() {
                       id={field.id}
                       className={SETTINGS_CONTROL_SURFACE}
                       value={formData[field.id as keyof typeof formData] as string}
-                      onChange={(e) =>
-                        handleInputChange(field.id as keyof BusinessSettingsForm, e.target.value)
-                      }
+                      readOnly
+                      disabled
                       placeholder={field.placeholder}
-                      disabled={profileLocked || editingSection !== "legal"}
                     />
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          <div className="space-y-2 pt-2">
-            <Label htmlFor="registeredAddress">Registered Address</Label>
-            <Textarea
-              id="registeredAddress"
-              readOnly
-              rows={hasRegisteredAddress ? 4 : 2}
-              className={`${SETTINGS_CONTROL_SURFACE} resize-none`}
-              value={
-                hasRegisteredAddress
-                  ? registeredAddressDisplay
-                  : "Provided during business verification"
-              }
-              disabled
-            />
-          </div>
           </>
           )}
         </CardContent>
@@ -724,6 +611,20 @@ export function SettingsBusinessTab() {
             </div>
           ) : (
           <>
+          <div className="space-y-2">
+            <Label htmlFor="registeredAddress">Registered Address</Label>
+            <Input
+              id="registeredAddress"
+              readOnly
+              className={SETTINGS_CONTROL_SURFACE}
+              value={
+                hasRegisteredAddress
+                  ? registeredAddressDisplay
+                  : "Provided during business verification"
+              }
+              disabled
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="street">Street Address</Label>
             <Input

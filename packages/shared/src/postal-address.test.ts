@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { formatPostalAddressBlock, hasPostalAddressParts } from "./postal-address"
+import { formatPostalAddressBlock, formatPostalAddressLine, hasPostalAddressParts } from "./postal-address"
 
 describe("formatPostalAddressBlock", () => {
   it("formats street, locality, and country on separate lines", () => {
@@ -12,6 +12,20 @@ describe("formatPostalAddressBlock", () => {
         country: "United States",
       }),
     ).toBe("131 Continental Dr Suite 305\nNewark, DE 19713\nUnited States")
+  })
+})
+
+describe("formatPostalAddressLine", () => {
+  it("formats a single comma-separated line", () => {
+    expect(
+      formatPostalAddressLine({
+        line1: "131 Continental Dr Suite 305",
+        city: "Newark",
+        state: "DE",
+        postalCode: "19713",
+        country: "United States",
+      }),
+    ).toBe("131 Continental Dr Suite 305, Newark, DE 19713, United States")
   })
 })
 

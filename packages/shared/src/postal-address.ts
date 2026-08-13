@@ -25,6 +25,11 @@ export function formatPostalAddressBlock(parts: PostalAddressParts): string {
   return lines.join("\n")
 }
 
+/** Single-line comma-separated postal address for compact read-only fields. */
+export function formatPostalAddressLine(parts: PostalAddressParts): string {
+  return formatPostalAddressBlock(parts).replace(/\n+/g, ", ")
+}
+
 export function hasPostalAddressParts(parts: PostalAddressParts): boolean {
   return Boolean(
     String(parts.line1 ?? "").trim() ||
