@@ -249,10 +249,12 @@ export function resolveGridLockedPayoutCustomerRate(input: {
   return raw
 }
 
-export async function fetchLiveGridExchangeRates(): Promise<
-  Array<{ from: string; to: string; mid: number; country?: string }>
-> {
-  const raw = await listGridExchangeRates()
+export async function fetchLiveGridExchangeRates(opts?: {
+  fiatCodes?: string[]
+}): Promise<Array<{ from: string; to: string; mid: number; country?: string }>> {
+  const raw = await listGridExchangeRates(
+    opts?.fiatCodes?.length ? { fiatCodes: opts.fiatCodes } : undefined,
+  )
   return raw
     .map((r) => ({
       from: gridCurrencyCode(r.sourceCurrency),

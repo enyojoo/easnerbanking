@@ -9,6 +9,7 @@ import { buildGridIndividualCustomerPayload } from "@/lib/grid/kyc-metadata"
 import {
   buildGridBusinessCustomerPayload,
   gridShellBusinessTaxId,
+  isGridShellBusinessTaxId,
 } from "@/lib/grid/business-kyc-metadata"
 import { buildGridIdempotencyKey } from "@/lib/grid/idempotency"
 import { resolvePrimaryPayoutProvider } from "@easner/shared"
@@ -59,18 +60,22 @@ describe("grid webhook verify", () => {
 describe("buildGridBusinessCustomerPayload", () => {
   const platformCustomerId = "eb_abc123456789012345678901234567890"
 
-  it("uses a 9-digit shell taxId when org has none", () => {
+  it("uses a 9-digit shell taxId when org has none (hosted KYB start without pre-form EIN)", () => {
     const payload = buildGridBusinessCustomerPayload({
       platformCustomerId,
       profile: {
         legalName: "Acme Ltd",
         email: "owner@example.com",
+        country: "US",
+        registrationNumber: "10609372",
         createdAt: "2024-06-01T00:00:00Z",
       },
     })
     const taxId = (payload.businessInfo as { taxId?: string }).taxId
     expect(taxId).toMatch(/^\d{9}$/)
     expect(taxId).toBe(gridShellBusinessTaxId(platformCustomerId))
+    // US file number must not be reused as EIN
+    expect(taxId).not.toBe("10609372")
   })
 
   it("normalizes stored EIN-style tax ids", () => {
@@ -86,6 +91,26 @@ describe("buildGridBusinessCustomerPayload", () => {
     expect((payload.businessInfo as { taxId?: string }).taxId).toBe("123456789")
   })
 
+  it("uses registry number as Grid taxId only for registry-only countries", () => {
+    const payload = buildGridBusinessCustomerPayload({
+      platformCustomerId,
+      profile: {
+        legalName: "Acme EE",
+        email: "owner@example.com",
+        country: "EE",
+        registrationNumber: "12345678",
+        createdAt: "2024-06-01T00:00:00Z",
+      },
+    })
+    expect((payload.businessInfo as { taxId?: string }).taxId).toBe("12345678")
+  })
+
+  it("recognizes historic shell tax ids", () => {
+    expect(isGridShellBusinessTaxId("246398107", "eb_4769329da17149cf86477e9b8a0128d3")).toBe(
+      true,
+    )
+  })
+
   it("omits address for US businesses so Grid does not treat state CA as Canada", () => {
     const payload = buildGridBusinessCustomerPayload({
       platformCustomerId,
@@ -93,6 +118,7 @@ describe("buildGridBusinessCustomerPayload", () => {
         legalName: "Easner Group, Inc",
         email: "support@example.com",
         country: "United States",
+        taxId: "32-0855540",
         addressLine1: "28 Geary St Ste 650",
         city: "San Francisco",
         state: "CA",
@@ -102,6 +128,7 @@ describe("buildGridBusinessCustomerPayload", () => {
     })
     expect(payload.address).toBeUndefined()
     expect((payload.businessInfo as { country?: string }).country).toBe("US")
+    expect((payload.businessInfo as { taxId?: string }).taxId).toBe("320855540")
   })
 })
 

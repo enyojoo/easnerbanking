@@ -9,6 +9,7 @@ import {
 } from "@/lib/compliance"
 import { notifyBusinessKybStatusChange } from "@/lib/notifications/verification-notify"
 import { extractGridCustomerRejectionReasons } from "@easner/shared"
+import { isGridShellBusinessTaxId } from "./business-kyc-metadata"
 import { parseGridCustomerForBusiness } from "./parse-grid-customer-for-business"
 import { syncGridBusinessOwnerUserFromKyb } from "./sync-grid-business-owner-user"
 
@@ -65,7 +66,7 @@ export async function syncGridBusinessKybToSupabase(input: {
 
   const { data: priorBiz } = await input.admin
     .from("businesses")
-    .select("verification_status")
+    .select("verification_status,tax_id")
     .eq("id", input.businessId)
     .maybeSingle()
   const previousStatus = verificationStatusForKybEmail(
@@ -88,6 +89,15 @@ export async function syncGridBusinessKybToSupabase(input: {
     const kybFields = parseGridCustomerForBusiness(customer, {
       occurredAt: status === "approved" ? verifiedAt : undefined,
     })
+    const platformCustomerId = String(customer.platformCustomerId ?? "").trim()
+    // Never persist historic shell tax ids, and don't clobber a corrected local EIN.
+    if (kybFields.tax_id) {
+      if (isGridShellBusinessTaxId(kybFields.tax_id, platformCustomerId)) {
+        delete kybFields.tax_id
+      } else if (String(priorBiz?.tax_id ?? "").trim()) {
+        delete kybFields.tax_id
+      }
+    }
     if (Object.keys(kybFields).length > 0) {
       await input.admin
         .from("businesses")

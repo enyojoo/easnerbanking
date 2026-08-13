@@ -3,6 +3,8 @@ import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { gridFetch, GridHttpError } from "./http"
 import {
   buildGridBusinessCustomerPayload,
+  isGridShellBusinessTaxId,
+  normalizeStoredBusinessTaxId,
   type GridBusinessProfile,
 } from "./business-kyc-metadata"
 import { buildGridBusinessProfileShell } from "./business-profile-shell"
@@ -144,6 +146,47 @@ async function syncEndUserTermsConsentIfNeeded(input: {
   return patched
 }
 
+function readGridBusinessTaxId(customer: GridCustomer & Record<string, unknown>): string | null {
+  const businessInfo =
+    customer.businessInfo && typeof customer.businessInfo === "object"
+      ? (customer.businessInfo as Record<string, unknown>)
+      : null
+  const raw = businessInfo?.taxId ?? businessInfo?.tax_id
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null
+}
+
+/** Push the org's real tax id to Grid when create used a shell / stale value. */
+async function syncGridBusinessTaxIdIfNeeded(input: {
+  customerId: string
+  customer: GridCustomer
+  profile: GridBusinessProfile
+  platformCustomerId: string
+}): Promise<GridCustomer> {
+  const desired = normalizeStoredBusinessTaxId(input.profile.taxId)
+  // Only push a real org tax id — never "fix" Grid with another shell.
+  if (!desired || isGridShellBusinessTaxId(desired, input.platformCustomerId)) {
+    return input.customer
+  }
+
+  const current = readGridBusinessTaxId(input.customer as GridCustomer & Record<string, unknown>)
+  const currentDigits = String(current ?? "").replace(/\D/g, "")
+  if (currentDigits === desired) return input.customer
+
+  // Only auto-correct when Grid still has our historic shell, or has no tax id yet.
+  if (current && !isGridShellBusinessTaxId(current, input.platformCustomerId)) {
+    return input.customer
+  }
+
+  return gridFetch<GridCustomer>({
+    method: "PATCH",
+    path: `/customers/${encodeURIComponent(input.customerId)}`,
+    json: {
+      customerType: "BUSINESS",
+      businessInfo: { taxId: desired },
+    },
+  })
+}
+
 /** Ensure a Grid BUSINESS customer exists for the org. */
 export async function ensureGridBusinessCustomer(input: {
   admin: SupabaseClient
@@ -184,6 +227,12 @@ export async function ensureGridBusinessCustomer(input: {
         consent,
         ownerUserId,
       })
+      customer = await syncGridBusinessTaxIdIfNeeded({
+        customerId,
+        customer,
+        profile,
+        platformCustomerId,
+      })
       if (customerId !== stored) {
         await persistGridCustomerId(input.admin, input.businessId, customerId)
       }
@@ -195,12 +244,18 @@ export async function ensureGridBusinessCustomer(input: {
   if (existing?.id) {
     const customerId = normalizeGridCustomerId(existing.id)
     await persistGridCustomerId(input.admin, input.businessId, customerId)
-    const customer = await syncEndUserTermsConsentIfNeeded({
+    let customer = await syncEndUserTermsConsentIfNeeded({
       admin: input.admin,
       customerId,
       customer: existing,
       consent,
       ownerUserId,
+    })
+    customer = await syncGridBusinessTaxIdIfNeeded({
+      customerId,
+      customer,
+      profile,
+      platformCustomerId,
     })
     return { customerId, platformCustomerId, customer }
   }

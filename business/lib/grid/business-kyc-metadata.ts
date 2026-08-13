@@ -12,6 +12,7 @@ export type GridBusinessProfile = {
   createdAt?: string | null
 }
 
+import { getKybFields } from "@/lib/kyb-by-country"
 import { resolveBusinessCountryIso2 } from "./business-profile-shell"
 
 function isoDateFromTimestamp(value: string | null | undefined): string | null {
@@ -26,7 +27,14 @@ function digitsOnly(value: string): string {
   return value.replace(/\D/g, "")
 }
 
-/** Stable 9-digit shell tax id for Grid create when org has none yet (SumSub collects verified value). */
+/**
+ * Stable 9-digit placeholder for Grid BUSINESS create when the org has no tax id yet.
+ * Needed because Grid requires `businessInfo.taxId` at create, while our UX lets users
+ * start hosted KYB (SumSub) without filling EIN in Easner first.
+ *
+ * Important: Grid/SumSub do not reliably overwrite this with the EIN collected in-host.
+ * Prefer patching Grid once a real tax id is known (settings, approval backfill, or Grid support).
+ */
 export function gridShellBusinessTaxId(platformCustomerId: string): string {
   let hash = 0
   for (let i = 0; i < platformCustomerId.length; i++) {
@@ -35,15 +43,51 @@ export function gridShellBusinessTaxId(platformCustomerId: string): string {
   return String((Math.abs(hash) % 900_000_000) + 100_000_000)
 }
 
-function normalizeGridBusinessTaxId(input: {
+export function isGridShellBusinessTaxId(
+  taxId: string | null | undefined,
+  platformCustomerId: string | null | undefined,
+): boolean {
+  const digits = digitsOnly(String(taxId ?? ""))
+  const platformId = String(platformCustomerId ?? "").trim()
+  if (!digits || !platformId) return false
+  return digits === gridShellBusinessTaxId(platformId)
+}
+
+/** Normalize a user-supplied tax id for Grid (US EIN → 9 digits). */
+export function normalizeStoredBusinessTaxId(raw: string | null | undefined): string | null {
+  const trimmed = String(raw ?? "").trim()
+  if (!trimmed) return null
+  const digits = digitsOnly(trimmed)
+  if (digits.length === 9) return digits
+  if (digits.length >= 8) return digits
+  return trimmed
+}
+
+/**
+ * Resolve taxId for Grid BUSINESS create/update.
+ * - Prefer real `taxId` when present.
+ * - For registry-only countries (EE/CA), Grid still requires taxId — use registration number.
+ * - Otherwise fall back to a deterministic shell so hosted KYB can start without a pre-form EIN.
+ *   Do not use a separate US registration/file number as taxId (Delaware file # ≠ EIN).
+ */
+export function resolveGridBusinessTaxId(input: {
   taxId?: string | null
   registrationNumber?: string | null
+  country?: string | null
   platformCustomerId: string
 }): string {
-  for (const raw of [input.taxId, input.registrationNumber]) {
-    const digits = digitsOnly(String(raw ?? ""))
-    if (digits.length === 9) return digits
+  const countryIso2 = resolveBusinessCountryIso2(input.country) ?? ""
+  const fields = getKybFields(countryIso2)
+  const collectsSeparateTaxId = fields.some((f) => f.id === "taxId")
+
+  const fromTaxId = normalizeStoredBusinessTaxId(input.taxId)
+  if (fromTaxId) return fromTaxId
+
+  if (!collectsSeparateTaxId) {
+    const fromRegistration = normalizeStoredBusinessTaxId(input.registrationNumber)
+    if (fromRegistration) return fromRegistration
   }
+
   return gridShellBusinessTaxId(input.platformCustomerId)
 }
 
@@ -60,9 +104,10 @@ export function buildGridBusinessCustomerPayload(input: {
 
   const businessInfo: Record<string, unknown> = { legalName }
 
-  businessInfo.taxId = normalizeGridBusinessTaxId({
+  businessInfo.taxId = resolveGridBusinessTaxId({
     taxId: input.profile.taxId,
     registrationNumber: input.profile.registrationNumber,
+    country: input.profile.country,
     platformCustomerId: input.platformCustomerId,
   })
 

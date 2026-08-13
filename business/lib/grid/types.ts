@@ -73,6 +73,7 @@ export type GridExchangeRate = {
   rate?: number
   exchangeRate?: number
   country?: string
+  destinationPaymentRail?: string
 }
 
 export function gridCurrencyCode(value: GridExchangeRate["sourceCurrency"]): string {

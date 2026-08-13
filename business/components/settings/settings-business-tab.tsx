@@ -557,6 +557,21 @@ export function SettingsBusinessTab() {
               </div>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="registeredAddress">Registered Address</Label>
+            <Input
+              id="registeredAddress"
+              readOnly
+              className={SETTINGS_CONTROL_SURFACE}
+              value={
+                hasRegisteredAddress
+                  ? registeredAddressDisplay
+                  : "Provided during business verification"
+              }
+              disabled
+            />
+          </div>
           </>
           )}
         </CardContent>
@@ -611,20 +626,6 @@ export function SettingsBusinessTab() {
             </div>
           ) : (
           <>
-          <div className="space-y-2">
-            <Label htmlFor="registeredAddress">Registered Address</Label>
-            <Input
-              id="registeredAddress"
-              readOnly
-              className={SETTINGS_CONTROL_SURFACE}
-              value={
-                hasRegisteredAddress
-                  ? registeredAddressDisplay
-                  : "Provided during business verification"
-              }
-              disabled
-            />
-          </div>
           <div className="space-y-2">
             <Label htmlFor="street">Street Address</Label>
             <Input

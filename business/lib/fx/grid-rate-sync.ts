@@ -9,6 +9,7 @@ import {
   buildGridCrossPairsFromFiats,
   loadGridFiatCurrenciesFromSupabase,
 } from "@/lib/fx/grid-pair-catalog"
+import { collectFiatCodesFromDiscoveries, listGridDiscoveries } from "@/lib/grid/discoveries"
 import { getGridPayoutMarginBps } from "@/lib/grid/config"
 
 export type GridRateSyncResult = {
@@ -123,7 +124,13 @@ export async function syncGridExchangeRates(options?: {
   })
 
   const defaultMarginBps = getGridPayoutMarginBps()
-  const live = await fetchLiveGridExchangeRates()
+
+  const corridorFiats = await loadGridFiatCurrenciesFromSupabase(admin)
+  const discoveries = await listGridDiscoveries(true)
+  const discoveryFiats = collectFiatCodesFromDiscoveries(discoveries)
+  const fiatCodes = [...new Set([...corridorFiats, ...discoveryFiats])].sort()
+
+  const live = await fetchLiveGridExchangeRates({ fiatCodes })
   if (live.length === 0) {
     return { ok: true, upserted: 0, skipped: 0 }
   }
@@ -186,7 +193,6 @@ export async function syncGridExchangeRates(options?: {
     }
   }
 
-  const corridorFiats = await loadGridFiatCurrenciesFromSupabase(admin)
   const apiFiats = [...usdPerByFiat.keys()].sort()
   const fiatsForCross =
     corridorFiats.length > 0 ? apiFiats.filter((f) => corridorFiats.includes(f)) : apiFiats
