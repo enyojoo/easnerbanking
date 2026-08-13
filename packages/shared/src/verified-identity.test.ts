@@ -64,8 +64,8 @@ describe("verified-identity lock helpers", () => {
     ).toBe(false)
   })
 
-  it("buildVerifiedIdentityFromKycFields shows Grid-synced owner KYC while KYB is pending", () => {
-    const identity = buildVerifiedIdentityFromKycFields(
+  it("buildVerifiedIdentityFromKycFields hides owner KYC until KYB is approved", () => {
+    const pending = buildVerifiedIdentityFromKycFields(
       {
         verification_provider: "grid",
         verification_status: "pending",
@@ -78,10 +78,25 @@ describe("verified-identity lock helpers", () => {
       },
       { orgKybApproved: false },
     )
-    expect(identity.visible).toBe(true)
-    expect(identity.idType).toBe("Tax ID")
-    expect(identity.addressLines?.length).toBeGreaterThan(0)
-    expect(identity.addressCountry?.name).toBe("Nigeria")
+    expect(pending.visible).toBe(false)
+
+    const approved = buildVerifiedIdentityFromKycFields(
+      {
+        verification_provider: "grid",
+        verification_status: "approved",
+        kyc_id_type: "Tax ID",
+        kyc_id_number: "22380755976",
+        kyc_id_issuing_country: "Nigeria",
+        kyc_address_street: "39 Plot, Apo Dutse",
+        kyc_address_city: "Abuja",
+        kyc_address_country: "Nigeria",
+      },
+      { orgKybApproved: true },
+    )
+    expect(approved.visible).toBe(true)
+    expect(approved.idType).toBe("Tax ID")
+    expect(approved.addressLines?.length).toBeGreaterThan(0)
+    expect(approved.addressCountry?.name).toBe("Nigeria")
   })
 })
 

@@ -48,14 +48,6 @@ export function buildRecipientInsertPayload(
     metadata,
   })
 
-  const metadataWithCad = applyCadRoutingToRecipientMetadata({
-    countryCode,
-    currency: recipientData.currency,
-    routingNumber: recipientData.routingNumber,
-    sortCode: recipientData.sortCode,
-    metadata,
-  })
-
   return {
     user_id: userId,
     full_name: recipientData.fullName,

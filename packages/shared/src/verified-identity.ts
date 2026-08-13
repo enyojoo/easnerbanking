@@ -101,11 +101,6 @@ export type ProfileLockOptions = {
   orgKybApproved?: boolean
 }
 
-function hasGridSyncedKycFields(row: Record<string, unknown>): boolean {
-  if (String(row.verification_provider ?? "").toLowerCase() !== "grid") return false
-  return Boolean(row.kyc_id_type || row.kyc_id_number || row.kyc_address_street)
-}
-
 function countryRefFromStored(value: unknown): VerifiedCountryRef | null {
   const raw = String(value ?? "").trim()
   if (!raw) return null
@@ -177,11 +172,15 @@ export function buildVerifiedIdentityFromKycFields(
   row: Record<string, unknown> | null | undefined,
   opts?: ProfileLockOptions,
 ): VerifiedIdentityPayload {
-  const locked = isProfileLockedFromKycFields(row, opts)
-  const gridSynced = row ? hasGridSyncedKycFields(row) : false
-  if (!row || (!locked && !gridSynced)) {
+  if (!row) return { visible: false }
+
+  // Org owner: same gate as Legal Entity — only after KYB is fully approved.
+  if (opts) {
+    if (!opts.orgKybApproved) return { visible: false }
+  } else if (!isProfileLockedFromKycFields(row)) {
     return { visible: false }
   }
+
   const hasId = Boolean(row.kyc_id_type || row.kyc_id_number)
   const hasAddress = Boolean(row.kyc_address_street)
   if (!hasId && !hasAddress) {
