@@ -3,10 +3,10 @@ import { resolveIsOrgOwnerForUser } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import {
   buildVerifiedIdentityFromKycFields,
-  isBusinessProfileLockedFromKybFields,
   isProfileLockedFromKycFields,
   type VerifiedIdentityPayload,
 } from "@easner/shared"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import { removeAllProfileAvatarObjects } from "@/lib/profile-avatar-storage"
 
 type PersonalUpdateBody = {
@@ -65,7 +65,7 @@ async function resolveOrgKybApproved(
     .select("verification_provider,verification_status,kyb_verified_at")
     .eq("id", businessId)
     .maybeSingle()
-  return isBusinessProfileLockedFromKybFields((data ?? null) as Record<string, unknown> | null)
+  return isBusinessTier1Complete(data)
 }
 
 async function fetchUserRow(admin: ReturnType<typeof createSupabaseAdmin>, userId: string) {
