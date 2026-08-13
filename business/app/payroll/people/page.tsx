@@ -111,7 +111,7 @@ export default function PayrollPeoplePage() {
         ]}
       />
 
-      {peopleQuery.isPending ? (
+      {peopleQuery.isPending && !peopleQuery.data ? (
         <Card className="overflow-hidden shadow-soft"><CardContent className="space-y-3 p-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-14 w-full rounded-xl" />)}</CardContent></Card>
       ) : peopleQuery.isError ? (
         <Card><CardContent className="p-8 text-center"><p className="font-medium">People couldn’t be loaded</p><Button className="mt-4" variant="outline" onClick={() => void peopleQuery.refetch()}>Try again</Button></CardContent></Card>

@@ -6,8 +6,8 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SendRecipientPicker } from "@/components/send-recipient-picker"
 import {
   formatSendRateLabel,
   formatMoneyDisplay,
@@ -33,13 +33,6 @@ import {
   resolveBalancePayoutProvider,
   type NoahWalletRateRow,
 } from "@easner/shared"
-
-const SendRecipientPicker = dynamic(
-  () => import("@/components/send-recipient-picker").then((m) => ({ default: m.SendRecipientPicker })),
-  {
-    loading: () => <Skeleton className="h-24 w-full rounded-xl" aria-label="Loading recipient picker" />,
-  },
-)
 import { getCurrencySymbol, getSendAmountFieldSymbol } from "@/lib/utils"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"

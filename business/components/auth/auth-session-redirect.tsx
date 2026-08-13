@@ -75,8 +75,8 @@ export function AuthSessionRedirect({ children }: { children: ReactNode }) {
 
   if (showRedirecting) {
     // Intentionally render nothing during the short auth → dashboard redirect
-    // instead of an intermediary spinner. The destination route has its own
-    // loading UI (the app-wide LoadingSpinner) so a second spinner here would
+    // instead of an intermediary spinner. Workspace routes use WorkspaceBootLoader
+    // in DashboardShell during session resolve, so a second loader here would
     // feel like a double loading state.
     return null
   }
