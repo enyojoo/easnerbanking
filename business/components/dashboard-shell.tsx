@@ -3,7 +3,7 @@
 import type React from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useEffect, useLayoutEffect } from "react"
 import Link from "next/link"
 import { MessageCircle } from "lucide-react"
 import { DashboardNav } from "@/components/dashboard-nav"
@@ -27,15 +27,20 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children, constrained = false }: DashboardShellProps) {
   useBusinessNoahSync()
-  const { user, isLoading, logout, sessionUserId } = useAuth()
+  const { user, isLoading, logout, sessionUserId, canBootstrapWorkspace } = useAuth()
   const router = useRouter()
-  const canShowWorkspace = isLoading || Boolean(user)
+  const canShowWorkspace = Boolean(user) || (isLoading && canBootstrapWorkspace)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (user) return
+    if (!canBootstrapWorkspace) {
+      redirectToWorkspaceLogin()
+      return
+    }
     if (!isLoading && !user) {
       redirectToWorkspaceLogin()
     }
-  }, [isLoading, user])
+  }, [user, isLoading, canBootstrapWorkspace])
   const {
     name: businessName,
     ownerName,

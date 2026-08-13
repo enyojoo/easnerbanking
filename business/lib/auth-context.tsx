@@ -61,6 +61,8 @@ interface AuthContextType {
   isLoading: boolean
   /** Supabase user id when confirmed, else last-known id from local session storage for cache/scope bootstrap. */
   sessionUserId: string | null
+  /** True when local storage has tokens that can still authenticate (show shell while getSession runs). */
+  canBootstrapWorkspace: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -75,8 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? probeStoredSupabaseSession()
       : { userId: null as string | null, likelyAuthenticated: false },
   )
-  const restoredUserId = storedProbe.userId
-  const sessionUserId = user?.id ?? restoredUserId
+  const canBootstrapWorkspace = storedProbe.likelyAuthenticated
+  const sessionUserId = user?.id ?? (canBootstrapWorkspace ? storedProbe.userId : null)
   const bootstrapFullName = useMemo(() => {
     if (!user) return ""
     const fullNameFromMeta =
@@ -471,6 +473,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetSessionActivity,
     isLoading,
     sessionUserId,
+    canBootstrapWorkspace,
   }
 
   // Don't render until mounted to prevent hydration mismatch
@@ -488,7 +491,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           logout,
           resetSessionActivity,
           isLoading: true,
-          sessionUserId: storedProbe.userId,
+          sessionUserId: canBootstrapWorkspace ? storedProbe.userId : null,
+          canBootstrapWorkspace,
         }}
       >
         {children}

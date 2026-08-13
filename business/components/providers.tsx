@@ -42,7 +42,10 @@ import { ImageWarmBootstrap } from "@/components/image-warm-bootstrap"
 export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getBrowserQueryClient()
   const { user } = useAuth()
-  const restoredSessionUserId = React.useMemo(() => probeStoredSupabaseSession().userId, [])
+  const restoredSessionUserId = React.useMemo(() => {
+    const probe = probeStoredSupabaseSession()
+    return probe.likelyAuthenticated ? probe.userId : null
+  }, [])
   const persistedUserId = user?.id ?? restoredSessionUserId
   const persister = React.useMemo(
     () => createBusinessQueryPersister(persistedUserId),

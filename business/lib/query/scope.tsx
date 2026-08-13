@@ -36,7 +36,7 @@ export function BusinessScopeProvider({ children }: { children: React.ReactNode 
       ? probeStoredSupabaseSession()
       : { userId: null as string | null, likelyAuthenticated: false },
   )
-  const bootUserId = bootProbe.userId
+  const bootUserId = bootProbe.likelyAuthenticated ? bootProbe.userId : null
   const scopeUserId = user?.id ?? sessionUserId ?? bootUserId
   const [override, setOverride] = React.useState<BusinessScope | null>(null)
   /** Always tagged with the user it belongs to so a switch cannot reuse the prior org id. */
