@@ -288,8 +288,8 @@ export const PAYROLL_SUBPAGE_COPY = {
 export const ONBOARDING_STEP_COPY = {
   businessPending: "Add company details in Settings.",
   businessComplete: "Business profile complete",
-  mfaPending: "Add an authenticator app for a second sign-in step.",
-  mfaComplete: "Two-factor authentication enabled",
+  mfaPending: "Add an authenticator app.",
+  mfaComplete: "2FA enabled",
   verifyPending: "Complete business verification.",
   verifyComplete: VERIFICATION_STATUS_COPY.verified,
   verifyRejected: VERIFICATION_STATUS_COPY.actionNeeded,

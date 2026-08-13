@@ -170,7 +170,7 @@ export function BusinessOnboardingChecklist() {
       },
       {
         id: "mfa",
-        title: "Set up two-factor authentication",
+        title: "Set up 2FA",
         subtitle: step2Done ? ONBOARDING_STEP_COPY.mfaComplete : ONBOARDING_STEP_COPY.mfaPending,
         href: "/settings?tab=personal&setupMfa=1",
         visual: step2Done ? ("complete" as const) : ("pending" as const),
