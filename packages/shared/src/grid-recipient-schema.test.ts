@@ -3,8 +3,95 @@ import { isGridBalancePayoutCorridor } from "./payout-corridor"
 import {
   resolveCorridorRecipientOptions,
   resolveGridBankName,
+  resolveGridCorridorSchema,
+  resolveGridStaticCorridorSchema,
   isBankNameAllowedForCorridor,
+  validateGridRecipientForCorridor,
+  mapCadRoutingToGridMetadata,
 } from "./yc-recipient-schema"
+
+describe("resolveGridCorridorSchema", () => {
+  it("uses static Grid API schema when DB has generic placeholder", () => {
+    const schema = resolveGridCorridorSchema({
+      countryCode: "AE",
+      currencyCode: "AED",
+      fieldsSchema: {
+        grid: {
+          status: "ready",
+          channel_type: "bank",
+          note: "Generic Grid bank schema for AE/AED",
+        },
+      },
+    })
+    expect(schema?.account_number_label).toBe("IBAN")
+    expect(schema?.note).toContain("AED_ACCOUNT")
+  })
+
+  it("returns CAD bank/branch extra fields from static schema", () => {
+    const schema = resolveGridStaticCorridorSchema("CA", "CAD")
+    expect(schema?.extra_fields?.map((f) => f.key)).toEqual(["bank_code", "branch_code"])
+  })
+
+  it("validates CAD bank_code and branch_code extras", () => {
+    const ok = validateGridRecipientForCorridor({
+      countryCode: "CA",
+      currencyCode: "CAD",
+      row: {
+        currency: "CAD",
+        full_name: "Jane Doe",
+        account_number: "1234567",
+        bank_name: "RBC",
+        metadata: { bank_code: "003", branch_code: "00012" },
+      },
+    })
+    expect(ok).toEqual({ ok: true })
+    const missing = validateGridRecipientForCorridor({
+      countryCode: "CA",
+      currencyCode: "CAD",
+      row: {
+        currency: "CAD",
+        full_name: "Jane Doe",
+        account_number: "1234567",
+        bank_name: "RBC",
+        metadata: {},
+      },
+    })
+    expect(missing.ok).toBe(false)
+  })
+
+  it("validates IN IFSC extra field", () => {
+    const ok = validateGridRecipientForCorridor({
+      countryCode: "IN",
+      currencyCode: "INR",
+      row: {
+        currency: "INR",
+        full_name: "Priya",
+        account_number: "1234567890",
+        bank_name: "HDFC Bank",
+        metadata: { ifsc: "HDFC0001234" },
+      },
+    })
+    expect(ok).toEqual({ ok: true })
+    const missing = validateGridRecipientForCorridor({
+      countryCode: "IN",
+      currencyCode: "INR",
+      row: {
+        currency: "INR",
+        full_name: "Priya",
+        account_number: "1234567890",
+        bank_name: "HDFC Bank",
+        metadata: {},
+      },
+    })
+    expect(missing.ok).toBe(false)
+  })
+
+  it("returns momo providers for UG when discoveries are absent", () => {
+    const schema = resolveGridStaticCorridorSchema("UG", "UGX")
+    expect(schema?.channel_type).toBe("momo")
+    expect(schema?.momo_provider_enum?.map((e) => e.label)).toEqual(["Airtel Money", "MTN"])
+  })
+})
 
 describe("resolveCorridorRecipientOptions", () => {
   it("unions bank enums from Noah, YC, and Grid schemas when no primary is set", () => {
@@ -67,11 +154,32 @@ describe("resolveGridBankName", () => {
   })
 })
 
+describe("mapCadRoutingToGridMetadata", () => {
+  it("parses CPA 9-digit routing into bank_code and branch_code", () => {
+    expect(
+      mapCadRoutingToGridMetadata({
+        routingNumber: "000300012",
+        sortCode: "",
+      }),
+    ).toEqual({ bank_code: "003", branch_code: "00012" })
+  })
+
+  it("uses 3-digit routing and 5-digit sort as bank/branch", () => {
+    expect(
+      mapCadRoutingToGridMetadata({
+        routingNumber: "003",
+        sortCode: "00012",
+      }),
+    ).toEqual({ bank_code: "003", branch_code: "00012" })
+  })
+})
+
 describe("isGridBalancePayoutCorridor", () => {
   it("returns true when Grid is primary payout provider", () => {
     expect(
       isGridBalancePayoutCorridor({
         provider_routing: [{ provider: "grid", priority: 1, settlement_asset: "USDC" }],
+        metadata: { grid_send_enabled: true },
       }),
     ).toBe(true)
   })

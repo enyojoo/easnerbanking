@@ -14,6 +14,11 @@ import {
 } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { findRelayDepositChainSettlementForSuppression } from "@/lib/relay-deposit/relay-deposit-suppression"
 import { reconcileRelayDepositCreditForSolanaTx } from "@/lib/relay-deposit/settle-relay-deposit"
+import {
+  findGridVaBankDepositChainSettlementForSuppression,
+  findPendingGridVaBankDepositForInboundAmount,
+} from "@/lib/grid/grid-bank-deposit-chain-suppression"
+import { reconcileGridVaBankDepositCreditForSolanaTx } from "@/lib/grid/grid-bank-deposit-credit"
 import { tryCompleteDepositSplitFromUserVaultInbound } from "@/lib/deposit-omnibus/execute-deposit-split"
 import { tryCompleteYcFundBalanceFromUserVaultInbound } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 import { isDepositSplitEnabled } from "@/lib/deposit-omnibus/config"
@@ -109,6 +114,22 @@ export async function applyTurnkeyInboundLedgerEvent(
         return { kind: "suppressed_noah" }
       }
 
+      const gridSuppressed = await findGridVaBankDepositChainSettlementForSuppression(admin, {
+        txHash,
+        userId,
+        businessId,
+      })
+      if (gridSuppressed) {
+        await reconcileGridVaBankDepositCreditForSolanaTx(admin, {
+          solanaTxHash: txHash,
+          userId,
+          businessId,
+          inboundAmount: input.amount,
+          ledgerCurrency: String(input.currency ?? "USD").toUpperCase() === "EUR" ? "EUR" : "USD",
+        }).catch(() => {})
+        return { kind: "suppressed_noah" }
+      }
+
       const relaySuppressed = await findRelayDepositChainSettlementForSuppression(admin, {
         txHash,
         userId,
@@ -159,6 +180,33 @@ export async function applyTurnkeyInboundLedgerEvent(
           solanaTxHash: txHash,
           userId,
           businessId,
+        }).catch(() => {})
+      }
+      return { kind: "suppressed_noah" }
+    }
+
+    const pendingGridVa = await findPendingGridVaBankDepositForInboundAmount(admin, {
+      userId,
+      businessId,
+      amount: input.amount,
+      currency: input.currency,
+    })
+    if (pendingGridVa) {
+      if (txHash) {
+        await admin
+          .from("transactions")
+          .update({
+            tx_hash: txHash,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", pendingGridVa.transactionId)
+          .catch(() => undefined)
+        await reconcileGridVaBankDepositCreditForSolanaTx(admin, {
+          solanaTxHash: txHash,
+          userId,
+          businessId,
+          inboundAmount: input.amount,
+          ledgerCurrency: String(input.currency ?? "USD").toUpperCase() === "EUR" ? "EUR" : "USD",
         }).catch(() => {})
       }
       return { kind: "suppressed_noah" }

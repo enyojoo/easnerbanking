@@ -112,11 +112,14 @@ import {
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
   resolveYcCorridorSchema,
+  resolvePrimaryPayoutProvider,
   validateYcRecipientForCorridor,
+  validateGridRecipientForCorridor,
+  mapCadRoutingToGridMetadata,
   ycAccountNumberLabel,
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
-import { YcRecipientExtraFields } from '../../components/recipients/YcRecipientExtraFields'
+import { CorridorRecipientExtraFields } from '../../components/recipients/YcRecipientExtraFields'
 import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
 import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import { haptics } from '../../lib/haptics'
@@ -294,22 +297,51 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     ycIdentificationType: '',
     ycIdentificationNumber: '',
     ycAccountType: '',
+    ycIfsc: '',
+    ycBankCode: '',
+    ycBranchCode: '',
+    ycGridRegion: '',
   })
 
+  const payoutProvider = resolvePrimaryPayoutProvider(selectedBankCorridor?.provider_routing)
+
   const buildFormYcMetadata = useCallback(() => {
-    return normalizeRecipientYcMetadata({
+    const extras = normalizeRecipientYcMetadata({
       pix_key_type: newRecipient.ycPixKeyType,
       cuit: newRecipient.ycCuit,
       identification_type: newRecipient.ycIdentificationType,
       identification_number: newRecipient.ycIdentificationNumber,
       account_type: newRecipient.ycAccountType,
+      ifsc: newRecipient.ycIfsc,
+      bank_code: newRecipient.ycBankCode,
+      branch_code: newRecipient.ycBranchCode,
+      grid_region: newRecipient.ycGridRegion,
     })
+    if (
+      selectedCountryCurrency?.countryCode === 'CA' &&
+      String(newRecipient.currency || '').toUpperCase() === 'CAD'
+    ) {
+      return mapCadRoutingToGridMetadata({
+        routingNumber: newRecipient.routingNumber,
+        sortCode: newRecipient.sortCode,
+        metadata: extras,
+      })
+    }
+    return extras
   }, [
     newRecipient.ycPixKeyType,
     newRecipient.ycCuit,
     newRecipient.ycIdentificationType,
     newRecipient.ycIdentificationNumber,
     newRecipient.ycAccountType,
+    newRecipient.ycIfsc,
+    newRecipient.ycBankCode,
+    newRecipient.ycBranchCode,
+    newRecipient.ycGridRegion,
+    newRecipient.routingNumber,
+    newRecipient.sortCode,
+    newRecipient.currency,
+    selectedCountryCurrency?.countryCode,
   ])
 
   // Track screen view
@@ -780,6 +812,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         (recipient.metadata as Record<string, unknown> | undefined)?.identification_number ?? '',
       ),
       ycAccountType: String((recipient.metadata as Record<string, unknown> | undefined)?.account_type ?? ''),
+      ycIfsc: String((recipient.metadata as Record<string, unknown> | undefined)?.ifsc ?? ''),
+      ycBankCode: String((recipient.metadata as Record<string, unknown> | undefined)?.bank_code ?? ''),
+      ycBranchCode: String((recipient.metadata as Record<string, unknown> | undefined)?.branch_code ?? ''),
+      ycGridRegion: String((recipient.metadata as Record<string, unknown> | undefined)?.grid_region ?? ''),
     })
     setShowBankAccountForm(true)
   }
@@ -1058,6 +1094,28 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       if (!ycCheck.ok) return false
     }
 
+    if (
+      selectedRecipientType === 'bank' &&
+      selectedCountryCurrency &&
+      (payoutProvider === 'grid' || corridorRecipientOptions.extraFields.length > 0)
+    ) {
+      const gridCheck = validateGridRecipientForCorridor({
+        countryCode: selectedCountryCurrency.countryCode,
+        currencyCode: selectedCountryCurrency.currencyCode,
+        fieldsSchema: selectedBankCorridor?.fields_schema,
+        row: {
+          country_code: selectedCountryCurrency.countryCode,
+          currency: newRecipient.currency,
+          full_name: newRecipient.fullName,
+          account_number: newRecipient.accountNumber,
+          bank_name: newRecipient.bankName,
+          phone_number: newRecipient.phoneNumber,
+          metadata: buildFormYcMetadata(),
+        },
+      })
+      if (!gridCheck.ok) return false
+    }
+
     return true
   }
 
@@ -1087,6 +1145,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       ycIdentificationType: '',
       ycIdentificationNumber: '',
       ycAccountType: '',
+      ycIfsc: '',
+      ycBankCode: '',
+      ycBranchCode: '',
+      ycGridRegion: '',
     })
     setError('')
     setFieldErrors({})
@@ -2390,7 +2452,12 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                         {fieldErrors.accountNumber && (
                           <Text style={styles.errorText}>{fieldErrors.accountNumber}</Text>
                         )}
-                        <YcRecipientExtraFields
+                        <CorridorRecipientExtraFields
+                          fields={
+                            corridorRecipientOptions.extraFields.length
+                              ? corridorRecipientOptions.extraFields
+                              : ycCorridorSchema?.extra_fields
+                          }
                           schema={ycCorridorSchema}
                           values={buildFormYcMetadata()}
                           onChange={(patch) =>
@@ -2409,6 +2476,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                               ...(patch.account_type != null
                                 ? { ycAccountType: patch.account_type }
                                 : {}),
+                              ...(patch.ifsc != null ? { ycIfsc: patch.ifsc } : {}),
+                              ...(patch.bank_code != null ? { ycBankCode: patch.bank_code } : {}),
+                              ...(patch.branch_code != null ? { ycBranchCode: patch.branch_code } : {}),
+                              ...(patch.grid_region != null ? { ycGridRegion: patch.grid_region } : {}),
                             }))
                           }
                           fieldErrors={fieldErrors}

@@ -6,7 +6,7 @@ import type {
   SendDestinationsResponse,
 } from "@easner/shared"
 import type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail, PayoutCorridorPayInMetadata } from "@easner/shared"
-import { isBalancePayoutCorridorExecutable } from "@easner/shared"
+import { isBalancePayoutCorridorExecutable, isCustomerFacingFiatCorridorLive } from "@easner/shared"
 import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
 import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
@@ -43,7 +43,10 @@ function publicPayInMetadata(raw: unknown): PayoutCorridorPayInMetadata | null {
     "noah_receive",
     "noah_receive_enabled",
     "yc_send",
+    "yc_send_enabled",
     "grid_send",
+    "grid_send_enabled",
+    "noah_send_enabled",
   ] as const
   for (const key of keys) {
     if (m[key] !== undefined) {
@@ -203,6 +206,7 @@ export async function buildSendDestinationsCatalog(input?: {
     fiatRows = fiatRows.filter((row) =>
       isBalancePayoutCorridorExecutable({
         provider_routing: parseProviderRouting(row.provider_routing),
+        metadata: publicPayInMetadata(row.metadata),
         noah_sell_available: row.noah_sell_available,
         grid_send_available: row.grid_send_available,
         yc_send_available: row.yc_send_available,
@@ -210,6 +214,14 @@ export async function buildSendDestinationsCatalog(input?: {
       }),
     )
   }
+
+  fiatRows = fiatRows.filter((row) =>
+    isCustomerFacingFiatCorridorLive({
+      enabled: true,
+      provider_routing: parseProviderRouting(row.provider_routing),
+      metadata: row.metadata,
+    }),
+  )
 
   const bank = fiatRows.filter((r) => r.rail === "bank_transfer").map(publicCorridor)
   const mobile = fiatRows.filter((r) => r.rail === "mobile_money").map(publicCorridor)

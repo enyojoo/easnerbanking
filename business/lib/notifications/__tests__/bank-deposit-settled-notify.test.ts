@@ -44,6 +44,17 @@ describe("shouldDeferBankDepositSettledPush", () => {
     ).toBe(false)
   })
 
+  it("defers Grid VA inbound bank deposits until on-chain settlement", () => {
+    expect(
+      shouldDeferBankDepositSettledPush({
+        flow: "bank_onramp",
+        payout_provider: "grid",
+        grid_va_inbound: true,
+        deposit_kind: "funding",
+      }),
+    ).toBe(true)
+  })
+
   it("defers YC fund balance pay-in until on-chain vault settlement", () => {
     expect(
       shouldDeferBankDepositSettledPush({

@@ -29,6 +29,7 @@ describe("isYcBalancePayoutCorridor", () => {
           { provider: "noah", priority: 2, settlement_asset: "USDC" },
           { provider: "yellowcard", priority: 1, settlement_asset: "USDC" },
         ],
+        metadata: { yc_send_enabled: true },
       }),
     ).toBe(true)
   })

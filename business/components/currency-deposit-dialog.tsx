@@ -29,15 +29,17 @@ import {
   type StablecoinReceiveMethod,
 } from "@/components/receive/ReceiveStablecoinMethodList"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle } from "@easner/shared"
+import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import {
-  prefetchYcReceiveRails,
+  prefetchReceiveRails,
   readCachedReceiveRails,
+  readCachedReceiveRailsForProvider,
   warmYcLocalDepositCaches,
   type ReceiveRailsResponse,
 } from "@/lib/yc-local-deposit-cache"
+import { effectivePayInCountry } from "@/lib/pay-in-residence"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -319,8 +321,10 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const showStablecoinMethodList = hasStablecoin && !activeStablecoinMethod
   const showStablecoinDetail = hasStablecoin && Boolean(activeStablecoinMethod?.address)
 
-  const effectiveResidence =
-    residenceCountry || String(countryCode ?? "").trim().toUpperCase() || null
+  const effectiveResidence = effectivePayInCountry({
+    businessCountryCode: countryCode,
+    userResidenceCountry: residenceCountry,
+  })
   const localPayInCurrency = useMemo(
     () => (effectiveResidence ? mapResidenceToLocalPayInCurrency(effectiveResidence) : null),
     [effectiveResidence],
@@ -372,20 +376,57 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
       setReceiveRailsLoading(false)
       return
     }
-    const cached = readCachedReceiveRails(effectiveResidence, localPayInCurrency)
     let cancelled = false
-    if (cached) {
-      setReceiveRails(cached)
-      setReceiveRailsLoading(false)
-    } else {
-      setReceiveRailsLoading(true)
-    }
-    void warmYcLocalDepositCaches({
-      residenceCountry: effectiveResidence,
-      localPayInCurrency,
-    })
     void (async () => {
-      const data = await prefetchYcReceiveRails(effectiveResidence, localPayInCurrency)
+      let payInProvider: "yellowcard" | "grid" | "noah" = "yellowcard"
+      try {
+        const res = await fetchWithSession(
+          `/api/payout-corridors?rail=bank_transfer`,
+        )
+        const data = (await res.json().catch(() => ({}))) as {
+          corridors?: Array<{
+            country_code?: string
+            currency_code?: string
+            metadata?: Record<string, unknown>
+            provider_routing?: unknown
+          }>
+        }
+        const row = (data.corridors ?? []).find(
+          (c) =>
+            String(c.country_code ?? "").toUpperCase() === effectiveResidence &&
+            String(c.currency_code ?? "").toUpperCase() === localPayInCurrency,
+        )
+        if (row) {
+          payInProvider = resolvePayInProvider({
+            providerRouting: row.provider_routing as never,
+            metadata: row.metadata ?? null,
+          })
+        }
+      } catch {
+        // default yellowcard
+      }
+      if (cancelled) return
+      const cached = readCachedReceiveRailsForProvider(
+        payInProvider,
+        effectiveResidence,
+        localPayInCurrency,
+      )
+      if (cached) {
+        setReceiveRails(cached)
+        setReceiveRailsLoading(false)
+      } else {
+        setReceiveRailsLoading(true)
+      }
+      await warmYcLocalDepositCaches({
+        residenceCountry: effectiveResidence,
+        localPayInCurrency,
+        payInProvider,
+      })
+      const data = await prefetchReceiveRails({
+        provider: payInProvider,
+        country: effectiveResidence,
+        currency: localPayInCurrency,
+      })
       if (!cancelled) {
         setReceiveRails(data ?? cached)
         setReceiveRailsLoading(false)

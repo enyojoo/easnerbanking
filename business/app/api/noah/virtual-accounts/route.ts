@@ -15,7 +15,7 @@ import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
 import { resolveNoahAccountContext, type NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { ensureCurrencyUsable } from "@/lib/accounts/currency-controls"
 import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
-import { provisionGridAfterBusinessKybApproved } from "@/lib/grid/provision-after-approval"
+import { refreshGridBusinessReceiveRails } from "@/lib/grid/provision-after-approval"
 import { isGridConfigured } from "@/lib/grid/config"
 
 type VaCurrency = "usd" | "eur" | "gbp"
@@ -141,10 +141,10 @@ async function resolveAccountsForCurrencies(input: {
       .maybeSingle()
     const gridCustomerId = String(biz?.grid_customer_id ?? "").trim()
     if (gridCustomerId) {
-      await provisionGridAfterBusinessKybApproved({
+      await refreshGridBusinessReceiveRails({
         admin,
         businessId: subjectBusinessId,
-        subjectUserId,
+        userId: subjectUserId,
         gridCustomerId,
       }).catch(() => undefined)
     }

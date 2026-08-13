@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { extractCorridorRecipientCandidates, type GridMomoProviderOption } from "@easner/shared"
+import { buildGridCorridorSchema } from "@/lib/fx/grid-schema-sync"
+import { listGridDiscoveries } from "@/lib/grid/discoveries"
 
 export type GridRecipientBankCandidates = {
   bankNames: string[]
@@ -43,11 +45,12 @@ export async function loadGridRecipientBankCandidates(
   }
 
   const discoveries = await listGridDiscoveries()
-  const built = buildGridSchemaFromDiscoveries({
+  const built = buildGridCorridorSchema({
     discoveries,
     countryCode,
     currencyCode,
     rail,
+    fieldsSchema: corridor?.fields_schema,
   })
 
   return {

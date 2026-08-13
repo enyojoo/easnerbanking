@@ -2,6 +2,10 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import { validateRecipientYcExtrasForSave } from "@/lib/recipients-yc-validation"
+import {
+  applyCadRoutingToRecipientMetadata,
+  validateRecipientGridExtrasForSave,
+} from "@/lib/recipients-grid-validation"
 import { attachProviderBindingsToPayload } from "@/lib/recipients-provider-bindings"
 import {
   isBankNameAllowedForCorridor,
@@ -38,7 +42,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { data: existing } = await admin
     .from("recipients")
     .select(
-      "user_id,country_code,currency,mobile_provider,wallet_network,bank_name,swift_bic,phone_number,email,full_name,account_number,checking_or_savings,metadata",
+      "user_id,country_code,currency,mobile_provider,wallet_network,bank_name,swift_bic,phone_number,email,full_name,account_number,checking_or_savings,metadata,routing_number,sort_code",
     )
     .eq("id", id)
     .maybeSingle()
@@ -157,7 +161,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
-    const ycErr = await validateRecipientYcExtrasForSave(admin, {
+    const savePayload = applyCadRoutingToRecipientMetadata({
       country_code: merged.country_code,
       currency: merged.currency,
       full_name: payload.full_name ?? existing.full_name ?? "",
@@ -166,11 +170,19 @@ export async function PATCH(request: Request, context: RouteContext) {
       phone_number: payload.phone_number ?? existing.phone_number ?? null,
       mobile_provider: merged.mobile_provider,
       checking_or_savings: payload.checking_or_savings ?? existing.checking_or_savings ?? null,
+      routing_number: payload.routing_number ?? existing.routing_number ?? null,
+      sort_code: payload.sort_code ?? existing.sort_code ?? null,
       metadata: payload.metadata ?? existing.metadata ?? {},
     })
+    const ycErr = await validateRecipientYcExtrasForSave(admin, savePayload)
     if (ycErr) {
       return NextResponse.json({ error: ycErr }, { status: 400 })
     }
+    const gridErr = await validateRecipientGridExtrasForSave(admin, savePayload)
+    if (gridErr) {
+      return NextResponse.json({ error: gridErr }, { status: 400 })
+    }
+    payload.metadata = savePayload.metadata
 
     const bindingPayload = {
       country_code: merged.country_code,

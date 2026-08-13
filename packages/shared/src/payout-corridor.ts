@@ -48,7 +48,10 @@ export type PayoutCorridorPayInMetadata = {
   noah_receive?: boolean
   noah_receive_enabled?: boolean
   yc_send?: boolean
+  yc_send_enabled?: boolean
   grid_send?: boolean
+  grid_send_enabled?: boolean
+  noah_send_enabled?: boolean
 }
 
 /** Public shape returned by GET /api/payout-corridors */
@@ -110,34 +113,74 @@ export function corridorMatchesCountryCurrency(
 
 /** True when balance payout routes through Yellowcard direct settlement. */
 export function isYcBalancePayoutCorridor(
-  corridor: Pick<PayoutCorridorPublic, "provider_routing"> | null | undefined,
+  corridor: Pick<PayoutCorridorPublic, "provider_routing" | "metadata"> | null | undefined,
 ): boolean {
-  if (!corridor) return false
-  return resolvePrimaryPayoutProvider(corridor.provider_routing) === "yellowcard"
+  return resolveOfficePayoutProvider(corridor ?? {}) === "yellowcard"
 }
 
 /** True when balance payout routes through Grid quote lock + execute. */
 export function isGridBalancePayoutCorridor(
-  corridor: Pick<PayoutCorridorPublic, "provider_routing"> | null | undefined,
+  corridor: Pick<PayoutCorridorPublic, "provider_routing" | "metadata"> | null | undefined,
 ): boolean {
-  if (!corridor) return false
-  return resolvePrimaryPayoutProvider(corridor.provider_routing) === "grid"
+  return resolveOfficePayoutProvider(corridor ?? {}) === "grid"
 }
 
 /** Primary Office provider for USD balance → local fiat payout on this corridor. */
 export function resolveBalancePayoutProvider(
   corridor: Pick<PayoutCorridorPublic, "provider_routing"> | null | undefined,
 ): PayoutProviderId | null {
-  if (!corridor) return null
+  if (!corridor?.provider_routing?.length) return null
   return resolvePrimaryPayoutProvider(corridor.provider_routing)
+}
+
+function corridorMetadataRecord(metadata: unknown): PayoutCorridorPayInMetadata {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {}
+  return metadata as PayoutCorridorPayInMetadata
+}
+
+/** Office-selected payout provider when routing + live send flags agree; null when payout is off. */
+export function resolveOfficePayoutProvider(input: {
+  provider_routing?: ProviderRoutingEntry[] | null
+  metadata?: unknown
+}): PayoutProviderId | null {
+  if (!input.provider_routing?.length) return null
+  const primary = resolvePrimaryPayoutProvider(input.provider_routing)
+  const meta = corridorMetadataRecord(input.metadata)
+  if (primary === "grid" && meta.grid_send_enabled !== true) return null
+  if (primary === "yellowcard" && meta.yc_send_enabled !== true) return null
+  if (primary === "noah" && meta.noah_send_enabled !== true) return null
+  return primary
+}
+
+/** Office-selected pay-in provider from receive flags; null when pay-in is off. */
+export function resolveOfficePayInProvider(metadata: unknown): PayoutProviderId | null {
+  const meta = corridorMetadataRecord(metadata)
+  if (meta.grid_receive_enabled === true) return "grid"
+  if (meta.yc_receive_enabled === true) return "yellowcard"
+  if (meta.noah_receive_enabled === true) return "noah"
+  return null
+}
+
+/**
+ * True when Office has enabled this corridor row and selected payout or pay-in on this rail.
+ * Used to hide orphan rows (e.g. bank_transfer with no routed provider) from customer catalogs.
+ */
+export function isCustomerFacingFiatCorridorLive(input: {
+  enabled?: boolean | null
+  provider_routing?: ProviderRoutingEntry[] | null
+  metadata?: unknown
+}): boolean {
+  if (input.enabled !== true) return false
+  if (resolveOfficePayoutProvider(input)) return true
+  if (resolveOfficePayInProvider(input.metadata)) return true
+  return false
 }
 
 /** True when balance payout uses Noah sell/prepare (not YC direct or Grid quote lock). */
 export function isNoahBalancePayoutCorridor(
-  corridor: Pick<PayoutCorridorPublic, "provider_routing"> | null | undefined,
+  corridor: Pick<PayoutCorridorPublic, "provider_routing" | "metadata"> | null | undefined,
 ): boolean {
-  if (!corridor) return false
-  return resolvePrimaryPayoutProvider(corridor.provider_routing) === "noah"
+  return resolveOfficePayoutProvider(corridor ?? {}) === "noah"
 }
 
 /**
@@ -149,6 +192,7 @@ export function isBalancePayoutCorridorExecutable(
     | Pick<
         PayoutCorridorPublic,
         | "provider_routing"
+        | "metadata"
         | "noah_sell_available"
         | "grid_send_available"
         | "yc_send_available"
@@ -158,7 +202,8 @@ export function isBalancePayoutCorridorExecutable(
     | undefined,
 ): boolean {
   if (!corridor) return false
-  const primary = resolvePrimaryPayoutProvider(corridor.provider_routing)
+  const primary = resolveOfficePayoutProvider(corridor)
+  if (!primary) return false
 
   if (primary === "grid") {
     if (corridor.provider_health?.grid === "unavailable") return false

@@ -13,6 +13,8 @@ import { ensureFiatVirtualAccountForLedgerCurrency } from "@/lib/noah/bank-onram
 import { enqueueRelayDepositProvisionJob } from "@/lib/relay-deposit/provision-jobs"
 import { isRelayTronInboundEnabled } from "@/lib/relay/config"
 import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
+import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
+import { refreshGridBusinessReceiveRails } from "@/lib/grid/provision-after-approval"
 import { enqueueVaultProvisioningJobs, upsertWalletOwnerFromNoah } from "@/lib/wallet/turnkey-wallet-db"
 const MAX_ATTEMPTS = 5
 const BACKOFF_MS = 5000
@@ -209,6 +211,22 @@ export async function processNextWalletProvisioningJob(opts?: {
         })
       } catch (e) {
         console.warn("[turnkey-provisioning] bank onramp after vault:", e)
+      }
+    }
+
+    if (skipNoahOnramp && owner.owner_type === "business" && ledger === "USD") {
+      try {
+        const businessId = String(owner.owner_ref ?? "").trim()
+        if (businessId) {
+          const userId = await resolveBusinessOrgOwnerUserId(admin, businessId, businessId)
+          await refreshGridBusinessReceiveRails({
+            admin,
+            businessId,
+            userId,
+          })
+        }
+      } catch (e) {
+        console.warn("[turnkey-provisioning] grid receive rails after vault:", e)
       }
     }
 

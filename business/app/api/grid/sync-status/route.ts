@@ -3,7 +3,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { ensureGridBusinessCustomer, loadGridBusinessProfile } from "@/lib/grid/ensure-grid-business-customer"
 import { syncGridBusinessKybToSupabase } from "@/lib/grid/sync-kyb"
 import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
-import { needsBusinessProvisionAfterApproval } from "@/lib/compliance/needs-business-provision"
+import { resolveGridBusinessProvisionNeeds } from "@/lib/compliance/needs-business-provision"
 import { formatGridApiError } from "@/lib/grid/format-grid-api-error"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
 
@@ -75,26 +75,36 @@ async function runGridBusinessSync(request: Request) {
       })
     }
 
-    const needsFiatAccountsAfter =
+    const provisionNeeds =
       status === "approved"
-        ? await needsBusinessProvisionAfterApproval(admin, {
+        ? await resolveGridBusinessProvisionNeeds(admin, {
             businessId: ctx.businessId,
             userId: ctx.userId,
           })
-        : false
+        : { needsTurnkeyVaults: false, needsUsdVirtualAccount: false }
+
+    const needsFiatAccountsAfter =
+      status === "approved" &&
+      (provisionNeeds.needsTurnkeyVaults || provisionNeeds.needsUsdVirtualAccount)
+
+    const provisionHint =
+      provisionNeeds.needsTurnkeyVaults && provisionNeeds.needsUsdVirtualAccount
+        ? "KYB is approved but your wallet and USD bank receive details are still provisioning. Retry sync in a moment."
+        : provisionNeeds.needsTurnkeyVaults
+          ? "KYB is approved but your Turnkey wallet is still provisioning. Retry sync in a moment."
+          : provisionNeeds.needsUsdVirtualAccount
+            ? "KYB is approved but USD bank receive details are still provisioning. Retry sync in a moment."
+            : undefined
 
     return NextResponse.json({
       success: true,
       kycStatus: status,
       provisioned,
       needsFiatAccounts: needsFiatAccountsAfter,
+      needsTurnkeyVaults: provisionNeeds.needsTurnkeyVaults,
+      needsUsdVirtualAccount: provisionNeeds.needsUsdVirtualAccount,
       fiatAccountsProvisionAttempted: status === "approved",
-      ...(needsFiatAccountsAfter && status === "approved"
-        ? {
-            hint:
-              "KYB is approved but bank receive details are still provisioning. Retry sync in a moment.",
-          }
-        : {}),
+      ...(provisionHint ? { hint: provisionHint } : {}),
     })
   } catch (e: unknown) {
     const msg = formatGridApiError(e)

@@ -1,10 +1,10 @@
-/** Grid fund_balance credits ledger from Grid internal USD — disabled under Turnkey-only custody. */
+/** Grid fund_balance is enabled by default; office corridor routing gates live corridors. */
 export const GRID_FUND_BALANCE_DISABLED_MESSAGE =
-  "Grid balance funding is temporarily unavailable while we align custody with your Turnkey wallet. Use local pay-in corridors or USDC receive instead."
+  "Grid balance funding is not enabled for this corridor."
 
 export function isGridFundBalanceCustodyDisabled(): boolean {
-  const flag = String(process.env.GRID_FUND_BALANCE_DISABLED ?? "true").trim().toLowerCase()
-  return flag !== "false" && flag !== "0"
+  const flag = String(process.env.GRID_FUND_BALANCE_DISABLED ?? "false").trim().toLowerCase()
+  return flag === "true" || flag === "1"
 }
 
 export function assertGridFundBalanceAllowed(): void {

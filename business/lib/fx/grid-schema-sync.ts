@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   isNestedPayoutFieldsSchema,
+  isGenericGridCorridorSchema,
+  resolveGridStaticCorridorSchema,
+  synthesizeGridSchemaFromNoah,
   unwrapNoahFieldsSchema,
   unwrapYcFieldsSchema,
   type GridCorridorSchemaHint,
@@ -88,6 +91,41 @@ export function buildGridSchemaFromDiscoveries(input: {
   }
 }
 
+/** Discoveries first, then static Grid API account shapes, then Noah bank hints. */
+export function buildGridCorridorSchema(input: {
+  discoveries: GridDiscovery[]
+  countryCode: string
+  currencyCode: string
+  rail: "bank_transfer" | "mobile_money"
+  fieldsSchema?: unknown
+}): GridCorridorSchemaHint | null {
+  const fromDiscoveries = buildGridSchemaFromDiscoveries(input)
+  if (fromDiscoveries) return fromDiscoveries
+
+  const staticSchema = resolveGridStaticCorridorSchema(input.countryCode, input.currencyCode)
+  if (staticSchema) {
+    if (
+      input.rail === "mobile_money" &&
+      staticSchema.channel_type === "bank" &&
+      !staticSchema.momo_provider_enum?.length
+    ) {
+      return null
+    }
+    return staticSchema
+  }
+
+  const priorGrid = (() => {
+    const fs = input.fieldsSchema
+    if (!fs || typeof fs !== "object") return null
+    const grid = (fs as { grid?: GridCorridorSchemaHint }).grid
+    if (grid?.status === "ready" && !isGenericGridCorridorSchema(grid)) return grid
+    return null
+  })()
+  if (priorGrid) return priorGrid
+
+  return synthesizeGridSchemaFromNoah(unwrapNoahFieldsSchema(input.fieldsSchema))
+}
+
 export type GridSchemaSyncResult = {
   ok: boolean
   updated: number
@@ -117,11 +155,12 @@ export async function syncGridCorridorSchemas(
     const cur = String(row.currency_code ?? "").trim().toUpperCase()
     const rail = row.rail === "mobile_money" ? "mobile_money" : "bank_transfer"
 
-    const gridSchema = buildGridSchemaFromDiscoveries({
+    const gridSchema = buildGridCorridorSchema({
       discoveries,
       countryCode: cc,
       currencyCode: cur,
       rail,
+      fieldsSchema: row.fields_schema,
     })
     if (!gridSchema) {
       skipped++

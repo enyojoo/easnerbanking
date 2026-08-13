@@ -22,7 +22,7 @@ export function shouldDeferBankDepositSettledPush(metadata: unknown): boolean {
 async function dispatchFundBalanceSettledPush(
   admin: SupabaseClient,
   transactionId: string,
-  provider: "noah" | "yellowcard",
+  provider: "noah" | "yellowcard" | "grid",
 ): Promise<void> {
   const id = String(transactionId || "").trim()
   if (!id) return
@@ -75,4 +75,12 @@ export async function notifyYcFundBalanceSettledPush(
   transactionId: string,
 ): Promise<void> {
   await dispatchFundBalanceSettledPush(admin, transactionId, "yellowcard")
+}
+
+/** Send settled push + email for Grid VA bank pay-in after on-chain settlement. */
+export async function notifyGridBankDepositPayInSettledPush(
+  admin: SupabaseClient,
+  transactionId: string,
+): Promise<void> {
+  await dispatchFundBalanceSettledPush(admin, transactionId, "grid")
 }

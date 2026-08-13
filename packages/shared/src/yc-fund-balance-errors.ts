@@ -65,6 +65,14 @@ export function mapResidenceToLocalPayInCurrency(countryCode: string): string | 
     CO: "COP",
     CL: "CLP",
     RW: "RWF",
+    EG: "EGP",
+    VN: "VND",
+    PH: "PHP",
+    AE: "AED",
+    CA: "CAD",
+    SV: "USD",
+    IN: "INR",
+    DK: "DKK",
   }
   return map[cc] ?? null
 }

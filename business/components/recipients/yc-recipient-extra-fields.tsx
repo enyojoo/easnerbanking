@@ -9,24 +9,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { RecipientYcMetadata, YcCorridorSchemaHint } from "@easner/shared"
+import type { RecipientYcMetadata, YcCorridorSchemaHint, YcRecipientFieldDef } from "@easner/shared"
 
 type Props = {
-  schema: YcCorridorSchemaHint | null
+  schema?: YcCorridorSchemaHint | null
+  fields?: YcRecipientFieldDef[]
   values: RecipientYcMetadata
   onChange: (patch: Partial<RecipientYcMetadata>) => void
   errors?: Record<string, string>
   disabled?: boolean
 }
 
-/** Dynamic Yellowcard LatAm fields (Pix type, CUIT, COP ID, …). */
-export function YcRecipientExtraFields({ schema, values, onChange, errors, disabled }: Props) {
-  const fields = schema?.extra_fields ?? []
-  if (!fields.length) return null
+/** Dynamic corridor extras (Grid IFSC/bank_code, YC Pix/CUIT, …). */
+export function CorridorRecipientExtraFields({
+  schema,
+  fields,
+  values,
+  onChange,
+  errors,
+  disabled,
+}: Props) {
+  const list = fields ?? schema?.extra_fields ?? []
+  if (!list.length) return null
 
   return (
     <div className="space-y-4">
-      {fields.map((field) => {
+      {list.map((field) => {
         const key = field.key
         if (key === "account_number") return null
         const value = String(values[key as keyof RecipientYcMetadata] ?? "")
@@ -81,3 +89,6 @@ export function YcRecipientExtraFields({ schema, values, onChange, errors, disab
     </div>
   )
 }
+
+/** @deprecated Use CorridorRecipientExtraFields */
+export const YcRecipientExtraFields = CorridorRecipientExtraFields

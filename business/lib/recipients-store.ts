@@ -3,7 +3,7 @@
 import type { Beneficiary } from "@/lib/recipient-types"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { readEasenetPublicProfileCache } from "@/lib/easenet-public-profile-cache"
-import { countryCodeForRecipientSave, getCountryCodeForCurrency } from "@easner/shared"
+import { countryCodeForRecipientSave, getCountryCodeForCurrency, mapCadRoutingToGridMetadata } from "@easner/shared"
 
 export type RecipientRow = {
   id: string
@@ -107,6 +107,15 @@ function deriveBankName(input: RecipientUpsertInput): string {
 }
 
 function toWritePayload(input: RecipientUpsertInput) {
+  const metadata =
+    String(input.countryCode || "").toUpperCase() === "CA" &&
+    String(input.currency || "").toUpperCase() === "CAD"
+      ? mapCadRoutingToGridMetadata({
+          routingNumber: input.routingNumber,
+          sortCode: input.sortCode,
+          metadata: input.ycMetadata,
+        })
+      : (input.ycMetadata ?? {})
   return {
     country_code:
       countryCodeForRecipientSave({
@@ -131,7 +140,7 @@ function toWritePayload(input: RecipientUpsertInput) {
     postal_code: input.postalCode || null,
     mobile_provider: input.mobileProvider || null,
     wallet_network: input.walletNetwork || null,
-    metadata: input.ycMetadata ?? {},
+    metadata,
   }
 }
 

@@ -26,11 +26,20 @@ describe("collectGridCorridorTargets", () => {
     })
 
     expect(targets).toEqual(
+      expect.arrayContaining([{ countryCode: "KE", currencyCode: "KES", rail: "mobile_money" }]),
+    )
+    expect(targets.some((t) => t.countryCode === "KE" && t.rail === "bank_transfer")).toBe(false)
+  })
+
+  it("adds mobile_money targets for static Grid momo corridors without discoveries", () => {
+    const targets = collectGridCorridorTargets({ discoveries: [], exchangeRates: [] })
+    expect(targets).toEqual(
       expect.arrayContaining([
-        { countryCode: "KE", currencyCode: "KES", rail: "bank_transfer" },
-        { countryCode: "KE", currencyCode: "KES", rail: "mobile_money" },
+        { countryCode: "UG", currencyCode: "UGX", rail: "mobile_money" },
+        { countryCode: "RW", currencyCode: "RWF", rail: "mobile_money" },
       ]),
     )
+    expect(targets.some((t) => t.countryCode === "UG" && t.rail === "bank_transfer")).toBe(false)
   })
 
   it("does not add targets from USD exchange rates without discoveries", () => {
@@ -42,7 +51,8 @@ describe("collectGridCorridorTargets", () => {
       ],
     })
 
-    expect(targets).toEqual([])
+    expect(targets.every((t) => t.rail === "mobile_money")).toBe(true)
+    expect(targets.some((t) => t.currencyCode === "INR" || t.currencyCode === "BRL")).toBe(false)
   })
 
   it("excludes NG mobile money corridor target", () => {
@@ -99,6 +109,8 @@ describe("collectGridCorridorTargets", () => {
       exchangeRates: [{ from: "USD", to: "EUR", country: "DK" }],
     })
 
-    expect(targets).toEqual([{ countryCode: "DK", currencyCode: "DKK", rail: "bank_transfer" }])
+    expect(targets).toEqual(
+      expect.arrayContaining([{ countryCode: "DK", currencyCode: "DKK", rail: "bank_transfer" }]),
+    )
   })
 })

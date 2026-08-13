@@ -1,6 +1,6 @@
 import { createHash } from "crypto"
 import { NextResponse } from "next/server"
-import { isBalancePayoutCorridorExecutable, type ProviderRoutingEntry } from "@easner/shared"
+import { isBalancePayoutCorridorExecutable, isCustomerFacingFiatCorridorLive, type ProviderRoutingEntry } from "@easner/shared"
 import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
 import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
@@ -19,6 +19,7 @@ type PayoutCorridorRow = {
   sort_order: number | null
   providers: unknown
   provider_routing?: unknown
+  metadata?: unknown
   updated_at: string
 }
 
@@ -109,7 +110,7 @@ export async function GET(request: Request) {
   let q = admin
     .from("payout_corridors")
     .select(
-      "id,rail,country_code,country_name,currency_code,currency_name,sort_order,providers,provider_routing,updated_at",
+      "id,rail,country_code,country_name,currency_code,currency_name,sort_order,providers,provider_routing,metadata,updated_at",
     )
     .eq("enabled", true)
     .order("sort_order", { ascending: true, nullsFirst: false })
@@ -135,12 +136,20 @@ export async function GET(request: Request) {
     rows = (rows as AnnotatedCorridorRow[]).filter((row) =>
       isBalancePayoutCorridorExecutable({
         provider_routing: parseProviderRouting(row.provider_routing),
+        metadata: row.metadata,
         noah_sell_available: row.noah_sell_available,
         grid_send_available: row.grid_send_available,
         yc_send_available: row.yc_send_available,
       }),
     )
   }
+  rows = (rows as AnnotatedCorridorRow[]).filter((row) =>
+    isCustomerFacingFiatCorridorLive({
+      enabled: true,
+      provider_routing: parseProviderRouting(row.provider_routing),
+      metadata: row.metadata,
+    }),
+  )
   const etag = weakEtagFromRows(rows)
   const inm = request.headers.get("if-none-match")
   if (inm && inm === etag) {

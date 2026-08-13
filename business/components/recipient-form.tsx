@@ -20,6 +20,8 @@ import {
   sortByEasnerCountryPickerOrder,
   unwrapNoahFieldsSchema,
   validateYcRecipientForCorridor,
+  validateGridRecipientForCorridor,
+  mapCadRoutingToGridMetadata,
   ycAccountNumberLabel,
   type RecipientYcMetadata,
 } from "@easner/shared"
@@ -48,7 +50,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { resolveInferredWalletAssetNetwork } from "@easner/shared"
 import { inferWalletAddressFromApi } from "@/lib/wallet-send/infer-wallet-address-client"
-import { YcRecipientExtraFields } from "@/components/recipients/yc-recipient-extra-fields"
+import { CorridorRecipientExtraFields } from "@/components/recipients/yc-recipient-extra-fields"
 
 const RECIPIENT_TYPE_TABS = [
   { id: "bank" as const, label: "Bank Account" },
@@ -638,6 +640,38 @@ export function RecipientForm({
       }
     }
 
+    if (
+      formData.recipientType === "bank" &&
+      selectedCountry &&
+      (payoutProvider === "grid" || corridorRecipientOptions.extraFields.length > 0)
+    ) {
+      const gridMeta =
+        currency === "CAD"
+          ? mapCadRoutingToGridMetadata({
+              routingNumber: formData.routingNumber,
+              sortCode: formData.sortCode,
+              metadata: ycMetadata,
+            })
+          : ycMetadata
+      const gridCheck = validateGridRecipientForCorridor({
+        countryCode: selectedCountry.code,
+        currencyCode: currency,
+        fieldsSchema: selectedCorridorRow?.fields_schema,
+        row: {
+          country_code: selectedCountry.code,
+          currency,
+          full_name: formData.name,
+          account_number: formData.accountNumber,
+          bank_name: formData.bankName,
+          phone_number: formData.phone,
+          metadata: gridMeta,
+        },
+      })
+      if (!gridCheck.ok) {
+        newErrors.accountNumber = gridCheck.message
+      }
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -726,7 +760,16 @@ export function RecipientForm({
         isUsdBank || recipientFormNeedsAddress({ hints: payoutFormHints, currencyCode: currency })
           ? formData.postalCode.trim()
           : undefined,
-      ycMetadata: formData.recipientType === "bank" ? normalizeRecipientYcMetadata(ycMetadata) : undefined,
+      ycMetadata:
+        formData.recipientType === "bank"
+          ? currency === "CAD"
+            ? mapCadRoutingToGridMetadata({
+                routingNumber: formData.routingNumber,
+                sortCode: formData.sortCode,
+                metadata: ycMetadata,
+              })
+            : normalizeRecipientYcMetadata(ycMetadata)
+          : undefined,
     }
 
     try {
@@ -1490,7 +1533,12 @@ export function RecipientForm({
                 />
                 {errors.accountNumber && <p className="text-xs text-red-500">{errors.accountNumber}</p>}
               </div>
-              <YcRecipientExtraFields
+              <CorridorRecipientExtraFields
+                fields={
+                  corridorRecipientOptions.extraFields.length
+                    ? corridorRecipientOptions.extraFields
+                    : ycCorridorSchema?.extra_fields
+                }
                 schema={ycCorridorSchema}
                 values={ycMetadata}
                 onChange={(patch) => setYcMetadata((prev) => ({ ...prev, ...patch }))}

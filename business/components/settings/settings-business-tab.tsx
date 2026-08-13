@@ -488,6 +488,7 @@ export function SettingsBusinessTab() {
         </CardContent>
       </Card>
 
+      {profile.tier1Complete ? (
       <Card>
         <CardHeader>
           <SettingsCardHeader
@@ -576,6 +577,7 @@ export function SettingsBusinessTab() {
           )}
         </CardContent>
       </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

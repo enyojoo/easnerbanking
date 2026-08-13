@@ -134,43 +134,75 @@ export async function provisionGridAfterBusinessKybApproved(input: {
   }
   await trySyncTurnkeyDepositVaultsIfNeeded(input.admin, accountCtx)
 
-  let externalAccountId: string | null = null
-  if (input.gridCustomerId) {
-    try {
-      const { data: biz } = await input.admin
-        .from("businesses")
-        .select("country")
-        .eq("id", input.businessId)
-        .maybeSingle()
-      const senderCountry = resolveBusinessCountryIso2(biz?.country ?? null)
-      if (!isGridDigitalAssetJurisdiction(senderCountry)) {
-        externalAccountId = await registerTurnkeyUsdcExternalAccount({
-          admin: input.admin,
-          businessId: input.businessId,
-          userId: subjectUserId,
-          gridCustomerId: input.gridCustomerId,
-        }).catch(() => null)
-      }
-    } catch {
-      // Best-effort: never fail KYB provision on USDC external-account skip/errors.
-      externalAccountId = null
-    }
-  }
-
-  let vaPersisted = 0
-  if (input.gridCustomerId) {
-    const res = await persistGridVirtualAccountsFromInternalAccounts({
-      admin: input.admin,
-      businessId: input.businessId,
-      userId: subjectUserId,
-      customerId: input.gridCustomerId,
-    }).catch(() => ({ persisted: 0 }))
-    vaPersisted = res.persisted
-  }
+  const receiveRails = await refreshGridBusinessReceiveRails({
+    admin: input.admin,
+    businessId: input.businessId,
+    userId: subjectUserId,
+    gridCustomerId: input.gridCustomerId,
+  })
 
   return {
     turnkey: true,
+    gridExternalAccountId: receiveRails.gridExternalAccountId,
+    gridVirtualAccountsPersisted: receiveRails.gridVirtualAccountsPersisted,
+  }
+}
+
+/** Re-fetch Grid fiat VAs + Turnkey USDC external account (safe to call after vault jobs). */
+export async function refreshGridBusinessReceiveRails(input: {
+  admin: SupabaseClient
+  businessId: string
+  userId: string
+  gridCustomerId?: string | null
+}): Promise<{ gridVirtualAccountsPersisted: number; gridExternalAccountId: string | null }> {
+  let gridCustomerId = String(input.gridCustomerId ?? "").trim()
+  let country: string | null = null
+
+  if (!gridCustomerId) {
+    const { data: biz } = await input.admin
+      .from("businesses")
+      .select("grid_customer_id,country")
+      .eq("id", input.businessId)
+      .maybeSingle()
+    gridCustomerId = String(biz?.grid_customer_id ?? "").trim()
+    country = biz?.country ?? null
+  } else {
+    const { data: biz } = await input.admin
+      .from("businesses")
+      .select("country")
+      .eq("id", input.businessId)
+      .maybeSingle()
+    country = biz?.country ?? null
+  }
+
+  if (!gridCustomerId) {
+    return { gridVirtualAccountsPersisted: 0, gridExternalAccountId: null }
+  }
+
+  let externalAccountId: string | null = null
+  try {
+    const senderCountry = resolveBusinessCountryIso2(country)
+    if (!isGridDigitalAssetJurisdiction(senderCountry)) {
+      externalAccountId = await registerTurnkeyUsdcExternalAccount({
+        admin: input.admin,
+        businessId: input.businessId,
+        userId: input.userId,
+        gridCustomerId,
+      }).catch(() => null)
+    }
+  } catch {
+    externalAccountId = null
+  }
+
+  const vaRes = await persistGridVirtualAccountsFromInternalAccounts({
+    admin: input.admin,
+    businessId: input.businessId,
+    userId: input.userId,
+    customerId: gridCustomerId,
+  }).catch(() => ({ persisted: 0 }))
+
+  return {
+    gridVirtualAccountsPersisted: vaRes.persisted,
     gridExternalAccountId: externalAccountId,
-    gridVirtualAccountsPersisted: vaPersisted,
   }
 }

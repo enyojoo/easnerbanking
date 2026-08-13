@@ -1,5 +1,24 @@
 import type { RecipientData } from './recipientService'
 import { mergeRecipientProviderBindings } from './recipientCatalog'
+import { mapCadRoutingToGridMetadata } from '@easner/shared'
+
+export function applyCadRoutingToRecipientMetadata(input: {
+  countryCode?: string | null
+  currency?: string | null
+  routingNumber?: string | null
+  sortCode?: string | null
+  metadata?: Record<string, unknown> | null
+}): Record<string, unknown> {
+  const cc = String(input.countryCode ?? '').trim().toUpperCase()
+  const cur = String(input.currency ?? '').trim().toUpperCase()
+  const metadata = input.metadata ?? {}
+  if (cc !== 'CA' || cur !== 'CAD') return metadata
+  return mapCadRoutingToGridMetadata({
+    routingNumber: input.routingNumber,
+    sortCode: input.sortCode,
+    metadata,
+  })
+}
 
 export function buildRecipientInsertPayload(
   userId: string,
@@ -20,6 +39,22 @@ export function buildRecipientInsertPayload(
           metadata: recipientData.metadata ?? {},
         })
       : (recipientData.metadata ?? {})
+
+  const metadataWithCad = applyCadRoutingToRecipientMetadata({
+    countryCode,
+    currency: recipientData.currency,
+    routingNumber: recipientData.routingNumber,
+    sortCode: recipientData.sortCode,
+    metadata,
+  })
+
+  const metadataWithCad = applyCadRoutingToRecipientMetadata({
+    countryCode,
+    currency: recipientData.currency,
+    routingNumber: recipientData.routingNumber,
+    sortCode: recipientData.sortCode,
+    metadata,
+  })
 
   return {
     user_id: userId,
@@ -42,6 +77,6 @@ export function buildRecipientInsertPayload(
     postal_code: recipientData.postalCode || null,
     mobile_provider: recipientData.mobileProvider || null,
     wallet_network: recipientData.walletNetwork || null,
-    metadata,
+    metadata: metadataWithCad,
   }
 }

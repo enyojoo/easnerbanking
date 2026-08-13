@@ -2,6 +2,10 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
 import { validateRecipientYcExtrasForSave } from "@/lib/recipients-yc-validation"
+import {
+  applyCadRoutingToRecipientMetadata,
+  validateRecipientGridExtrasForSave,
+} from "@/lib/recipients-grid-validation"
 import { attachProviderBindingsToPayload } from "@/lib/recipients-provider-bindings"
 import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone, isBankNameAllowedForCorridor, resolveCorridorRecipientOptions, resolvePrimaryPayoutProvider, unwrapNoahFieldsSchema } from "@easner/shared"
 import {
@@ -122,6 +126,12 @@ export async function POST(request: Request) {
     const ycErr = await validateRecipientYcExtrasForSave(admin, payload)
     if (ycErr) {
       return NextResponse.json({ error: ycErr }, { status: 400 })
+    }
+    const mappedCad = applyCadRoutingToRecipientMetadata(payload)
+    payload.metadata = mappedCad.metadata
+    const gridErr = await validateRecipientGridExtrasForSave(admin, mappedCad)
+    if (gridErr) {
+      return NextResponse.json({ error: gridErr }, { status: 400 })
     }
 
     attachProviderBindingsToPayload({

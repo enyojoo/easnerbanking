@@ -7,14 +7,30 @@ import type { GridPersonProfile } from "./kyc-metadata"
 import {
   applyProviderBindingToRecipient,
   normalizeGridBankAccountNumber,
+  normalizeRecipientYcMetadata,
   normalizeYcMomoPhone,
   resolveGridBankName,
   resolveGridMomoProvider,
+  mapCadRoutingToGridMetadata,
   type GridMomoProviderOption,
 } from "@easner/shared"
 
 function currencyAccountType(currency: string): string {
   return `${currency.trim().toUpperCase()}_ACCOUNT`
+}
+
+const GRID_IBAN_CURRENCIES = new Set(["AED", "DKK"])
+const GRID_MOMO_FIAT_CURRENCIES = new Set(["UGX", "RWF", "KES", "TZS", "MWK", "BWP", "ZMW", "XOF", "XAF"])
+
+function gridUsesMomoAccountShape(input: {
+  rail: "bank_transfer" | "mobile_money"
+  currency: string
+  mobileProvider?: string
+  bankName?: string
+}): boolean {
+  if (input.rail === "mobile_money") return true
+  if (input.mobileProvider) return true
+  return GRID_MOMO_FIAT_CURRENCIES.has(input.currency) && !input.bankName
 }
 
 function beneficiaryFromRecipient(input: {
@@ -65,25 +81,66 @@ export function buildGridExternalAccountPayload(input: {
     String(recipient.mobile_provider ?? "").trim(),
     input.gridMomoCandidates,
   )
+  const metadata = normalizeRecipientYcMetadata(recipient.metadata)
+  const useMomo = gridUsesMomoAccountShape({
+    rail: input.rail,
+    currency,
+    mobileProvider,
+    bankName,
+  })
 
   const accountInfo: Record<string, unknown> = {
     accountType,
     beneficiary,
   }
 
-  if (input.rail === "mobile_money") {
-    const phone = String(recipient.phone_number ?? input.profile?.phone ?? "").trim()
+  if (useMomo) {
+    const phone = String(recipient.phone_number ?? input.profile?.phone ?? accountNumber ?? "").trim()
     if (!phone) throw new Error("Mobile money recipient requires phone number.")
     accountInfo.phoneNumber = normalizeYcMomoPhone(phone, country ?? "")
     if (mobileProvider) accountInfo.provider = mobileProvider
+    if (currency === "XOF" && country && ["BJ", "CI", "SN", "TG"].includes(country)) {
+      accountInfo.region = country
+    }
+    if (currency === "XAF" && country && ["CM", "CG"].includes(country)) {
+      accountInfo.region = country
+    }
+  } else if (GRID_IBAN_CURRENCIES.has(currency)) {
+    const iban = String(recipient.iban ?? accountNumber).replace(/\s/g, "").toUpperCase()
+    if (!iban) throw new Error("IBAN is required for this bank recipient.")
+    accountInfo.iban = iban
+    const swift = String(recipient.swift_bic ?? "").trim()
+    if (swift) accountInfo.swiftCode = swift.toUpperCase()
   } else {
     if (!accountNumber) throw new Error("Bank recipient requires account number.")
-    accountInfo.accountNumber = accountNumber
+    if (currency === "MXN") {
+      accountInfo.clabeNumber = accountNumber
+    } else {
+      accountInfo.accountNumber = accountNumber
+    }
     if (bankName) accountInfo.bankName = bankName
-    const meta = (recipient.metadata ?? {}) as Record<string, unknown>
-    if (meta.branch_code) accountInfo.branchCode = String(meta.branch_code)
-    if (input.recipient.sort_code) accountInfo.sortCode = input.recipient.sort_code
-    if (meta.bank_code) accountInfo.bankCode = String(meta.bank_code)
+    if (currency === "CAD") {
+      const cad = mapCadRoutingToGridMetadata({
+        routingNumber: recipient.routing_number,
+        sortCode: recipient.sort_code,
+        metadata,
+      })
+      if (cad.bank_code) accountInfo.bankCode = cad.bank_code
+      if (cad.branch_code) accountInfo.branchCode = cad.branch_code
+    } else {
+      if (metadata.branch_code) accountInfo.branchCode = metadata.branch_code
+      if (recipient.sort_code) accountInfo.sortCode = recipient.sort_code
+      if (metadata.bank_code) accountInfo.bankCode = metadata.bank_code
+    }
+    if (metadata.ifsc) accountInfo.ifsc = metadata.ifsc
+    const swift = String(recipient.swift_bic ?? "").trim()
+    if (swift) accountInfo.swiftCode = swift.toUpperCase()
+    if (currency === "XOF" && country && ["BJ", "CI", "SN", "TG"].includes(country)) {
+      accountInfo.region = country
+    }
+    if (currency === "XAF" && country && ["CM", "CG"].includes(country)) {
+      accountInfo.region = country
+    }
   }
 
   return {

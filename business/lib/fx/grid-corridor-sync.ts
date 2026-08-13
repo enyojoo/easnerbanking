@@ -1,10 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { currencyDisplayName, countryDisplayName, getCountryCodeForCurrency, localPaymentCurrencyForCountry } from "@easner/shared"
+import {
+  currencyDisplayName,
+  countryDisplayName,
+  getCountryCodeForCurrency,
+  listGridMomoOnlyCorridorPairs,
+  localPaymentCurrencyForCountry,
+} from "@easner/shared"
 import {
   gridDiscoverySupportsCorridor,
   listGridDiscoveries,
 } from "@/lib/grid/discoveries"
 import type { GridDiscovery } from "@/lib/grid/types"
+import { realignGridMomoCorridorRouting } from "@/lib/fx/grid-momo-corridor-routing"
+import {
+  disableOrphanPayoutCorridors,
+  syncCorridorLiveFlagsWithEnabled,
+} from "@/lib/fx/orphan-payout-corridor-cleanup"
 import { isExcludedPayoutCorridorCountry, isExcludedPayoutCorridorTarget } from "@/lib/payout-corridors-exclusions"
 import { upsertPayoutCorridor } from "@/lib/payout-corridors-upsert"
 
@@ -30,6 +41,8 @@ export type GridCorridorSyncResult = {
   skipped: number
   pruned: number
   targets: number
+  realigned?: number
+  flagsCleared?: number
   error?: string
 }
 
@@ -109,6 +122,17 @@ export function collectGridCorridorTargets(input: {
         targets.set(corridorTargetKey(target), target)
       }
     }
+  }
+
+  for (const pair of listGridMomoOnlyCorridorPairs()) {
+    if (isExcludedPayoutCorridorTarget(pair.countryCode, pair.currencyCode, "mobile_money")) continue
+    const momoTarget: GridCorridorTarget = {
+      countryCode: pair.countryCode,
+      currencyCode: pair.currencyCode,
+      rail: "mobile_money",
+    }
+    targets.set(corridorTargetKey(momoTarget), momoTarget)
+    targets.delete(`${pair.countryCode}:${pair.currencyCode}:bank_transfer`)
   }
 
   return preferLocalCurrencyTargets(
@@ -239,7 +263,58 @@ export async function syncGridPayoutCorridors(
     else updated++
   }
 
-  return { ok: true, inserted, updated, skipped, pruned: 0, targets: targets.length }
+  const realign = await realignGridMomoCorridorRouting(admin)
+  if (!realign.ok) {
+    return {
+      ok: false,
+      inserted,
+      updated,
+      skipped,
+      pruned: 0,
+      targets: targets.length,
+      error: realign.error,
+    }
+  }
+
+  const orphanCleanup = await disableOrphanPayoutCorridors(admin)
+  if (!orphanCleanup.ok) {
+    return {
+      ok: false,
+      inserted,
+      updated,
+      skipped,
+      pruned: 0,
+      targets: targets.length,
+      realigned: realign.realigned,
+      error: orphanCleanup.error,
+    }
+  }
+
+  const flags = await syncCorridorLiveFlagsWithEnabled(admin)
+  if (!flags.ok) {
+    return {
+      ok: false,
+      inserted,
+      updated,
+      skipped,
+      pruned: orphanCleanup.disabled,
+      targets: targets.length,
+      realigned: realign.realigned,
+      flagsCleared: flags.cleared,
+      error: flags.error,
+    }
+  }
+
+  return {
+    ok: true,
+    inserted,
+    updated,
+    skipped,
+    pruned: orphanCleanup.disabled,
+    targets: targets.length,
+    realigned: realign.realigned,
+    flagsCleared: flags.cleared,
+  }
 }
 
 export async function syncGridPayoutCorridorsSafe(

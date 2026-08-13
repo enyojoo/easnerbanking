@@ -22,7 +22,7 @@ async function main() {
     process.exit(1)
   }
   console.log(
-    `grid_corridor_sync done targets=${provision.targets} inserted=${provision.inserted} updated=${provision.updated} skipped=${provision.skipped}`,
+    `grid_corridor_sync done targets=${provision.targets} inserted=${provision.inserted} updated=${provision.updated} skipped=${provision.skipped} orphans_disabled=${provision.pruned}`,
   )
 
   const schemas = await syncGridCorridorSchemas(admin, { forceRefresh: false })

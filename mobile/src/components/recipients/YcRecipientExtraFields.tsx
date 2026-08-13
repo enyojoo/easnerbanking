@@ -1,30 +1,32 @@
 import React from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native'
-import type { RecipientYcMetadata, YcCorridorSchemaHint } from '@easner/shared'
+import type { RecipientYcMetadata, YcCorridorSchemaHint, YcRecipientFieldDef } from '@easner/shared'
 import { colors, spacing, textStyles, compactInputMetrics, fontFamily } from '../../theme'
 
 type Props = {
-  schema: YcCorridorSchemaHint | null
+  schema?: YcCorridorSchemaHint | null
+  fields?: YcRecipientFieldDef[]
   values: RecipientYcMetadata
   onChange: (patch: Partial<RecipientYcMetadata>) => void
   fieldErrors?: Record<string, string>
   isSubmitting?: boolean
 }
 
-/** Yellowcard LatAm extras — Pix type, CUIT, COP ID fields. */
-export function YcRecipientExtraFields({
+/** Corridor extras (Grid IFSC/bank_code, YC Pix/CUIT, …). */
+export function CorridorRecipientExtraFields({
   schema,
+  fields,
   values,
   onChange,
   fieldErrors,
   isSubmitting,
 }: Props) {
-  const fields = schema?.extra_fields ?? []
-  if (!fields.length) return null
+  const list = fields ?? schema?.extra_fields ?? []
+  if (!list.length) return null
 
   return (
     <View style={styles.wrap}>
-      {fields.map((field) => {
+      {list.map((field) => {
         const key = field.key
         if (key === 'account_number') return null
         const value = String(values[key as keyof RecipientYcMetadata] ?? '')
@@ -75,6 +77,9 @@ export function YcRecipientExtraFields({
     </View>
   )
 }
+
+/** @deprecated Use CorridorRecipientExtraFields */
+export const YcRecipientExtraFields = CorridorRecipientExtraFields
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing[3] },

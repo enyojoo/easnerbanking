@@ -167,6 +167,13 @@ export function getBankFieldsForCurrency(currencyCode: string): RecipientFieldSp
       { key: 'fullName', label: 'Account name', placeholder: 'Account name', required: true },
       { key: 'bankName', label: 'Bank name', placeholder: 'Bank name', required: true },
       {
+        key: 'sortCode',
+        label: 'Branch code',
+        placeholder: 'Branch code',
+        required: true,
+        keyboardType: 'number-pad',
+      },
+      {
         key: 'routingNumber',
         label: 'Routing number (CPA)',
         placeholder: '9 digits (0 + institution + transit)',

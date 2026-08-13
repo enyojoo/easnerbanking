@@ -30,6 +30,7 @@ import {
   attestPayInPayment,
   REVIEW_ROW_LABELS,
   normalizeYcMomoPhone,
+  resolveGridPayInLimits,
   type NgLocalIdType,
   type YcFundBalanceAmountPreview,
   type YcRateClientRow,
@@ -264,13 +265,24 @@ export function LocalDepositWizard({
     return preview
   }, [quote, quoteMatchesAmount, preview])
 
-  const payInLimits = useMemo(
-    () => ({
+  const payInLimits = useMemo(() => {
+    const fromRails = {
       minLocalPayIn: rails?.rails[rail]?.minLocalPayIn ?? null,
       maxLocalPayIn: rails?.rails[rail]?.maxLocalPayIn ?? null,
-    }),
-    [rails, rail],
-  )
+    }
+    if (
+      payInProvider === "grid" &&
+      fromRails.minLocalPayIn == null &&
+      fromRails.maxLocalPayIn == null
+    ) {
+      return resolveGridPayInLimits({
+        country: residenceCountry,
+        currency: localPayInCurrency,
+        rail,
+      })
+    }
+    return fromRails
+  }, [rails, rail, payInProvider, residenceCountry, localPayInCurrency])
 
   const minEnforcementSeedKey =
     customerRate && localPayInCurrency

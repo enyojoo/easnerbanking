@@ -25,7 +25,13 @@ export {
   type VerificationScope,
 } from "./verification-guards"
 export { isBusinessTier1Complete, businessTier1Status, businessUsesGridVerification } from "./business-tier1"
-export { needsBusinessProvisionAfterApproval } from "./needs-business-provision"
+export {
+  needsBusinessProvisionAfterApproval,
+  needsBusinessTurnkeyVaultProvision,
+  needsGridBusinessUsdVirtualAccountProvision,
+  resolveGridBusinessProvisionNeeds,
+  type GridBusinessProvisionNeeds,
+} from "./needs-business-provision"
 
 /** @deprecated Use hasProvisionedArtifacts */
 export { hasProvisionedArtifacts as hasNoahProvisionedArtifacts } from "./verification-guards"

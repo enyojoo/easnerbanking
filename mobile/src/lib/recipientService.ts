@@ -3,7 +3,7 @@ import { countryCodeForRecipientSave } from '@easner/shared'
 import { supabase } from './supabase'
 import { enrichEasenetRecipientFromCache, primeAndAttachEasenetSnapshot } from './enrichEasenetRecipient'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from './easenetRecipientUi'
-import { buildRecipientInsertPayload } from './recipientPersistPayload'
+import { buildRecipientInsertPayload, applyCadRoutingToRecipientMetadata } from './recipientPersistPayload'
 import { mergeRecipientProviderBindings } from './recipientCatalog'
 import type { Recipient } from '../types'
 
@@ -304,7 +304,7 @@ export const recipientService = {
     try {
       const { data: existingRow } = await supabase
         .from('recipients')
-        .select('country_code,currency,bank_name,mobile_provider,metadata')
+        .select('country_code,currency,bank_name,mobile_provider,metadata,routing_number,sort_code')
         .eq('id', recipientId)
         .maybeSingle()
 
@@ -314,15 +314,27 @@ export const recipientService = {
       const mobileProvider = mergedMobile ?? String(existingRow?.mobile_provider ?? '')
       const rail = mobileProvider ? ('mobile_money' as const) : ('bank_transfer' as const)
       if (cc && cur && (bankName || mobileProvider)) {
-        updateData.metadata = mergeRecipientProviderBindings({
+        updateData.metadata = applyCadRoutingToRecipientMetadata({
           countryCode: cc,
-          currencyCode: cur,
-          rail,
-          bankName,
-          mobileProvider: mobileProvider || null,
-          metadata: (updateData.metadata as Record<string, unknown> | undefined) ??
-            (existingRow?.metadata as Record<string, unknown> | undefined) ??
-            {},
+          currency: cur,
+          routingNumber:
+            updates.routingNumber !== undefined
+              ? updates.routingNumber
+              : (existingRow as { routing_number?: string } | null)?.routing_number,
+          sortCode:
+            updates.sortCode !== undefined
+              ? updates.sortCode
+              : (existingRow as { sort_code?: string } | null)?.sort_code,
+          metadata: mergeRecipientProviderBindings({
+            countryCode: cc,
+            currencyCode: cur,
+            rail,
+            bankName,
+            mobileProvider: mobileProvider || null,
+            metadata: (updateData.metadata as Record<string, unknown> | undefined) ??
+              (existingRow?.metadata as Record<string, unknown> | undefined) ??
+              {},
+          }),
         })
       }
     } catch {

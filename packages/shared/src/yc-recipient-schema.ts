@@ -30,6 +30,13 @@ export type RecipientYcMetadata = {
   identification_number?: string
   /** COP local account type: cc | ch | dp */
   account_type?: string
+  /** Grid CAD_ACCOUNT */
+  bank_code?: string
+  branch_code?: string
+  /** Grid INR_ACCOUNT */
+  ifsc?: string
+  /** Grid XAF/XOF regional routing when country alone is insufficient */
+  grid_region?: string
 }
 
 export type YcRecipientMetadataKey = keyof RecipientYcMetadata
@@ -238,6 +245,161 @@ export const YC_STATIC_CORRIDOR_SCHEMAS: Record<string, YcCorridorSchemaHint> = 
   },
 }
 
+function gridMomoProviders(...labels: string[]): GridCorridorSchemaHint {
+  return {
+    status: "ready",
+    channel_type: "momo",
+    account_number_label: "Phone number",
+    momo_provider_enum: labels.map((label) => ({ value: label, label })),
+    note: "Static Grid schema (mobile money account type)",
+  }
+}
+
+/**
+ * Grid corridors with no discovery rows — field shapes from Grid external account API types.
+ * @see Grid `customers.externalAccounts.create` accountInfo variants (AED_ACCOUNT, CAD_ACCOUNT, …)
+ */
+export const GRID_STATIC_CORRIDOR_SCHEMAS: Record<string, GridCorridorSchemaHint> = {
+  "AE:AED": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "IBAN",
+    account_number_hint: "UAE IBAN (23 characters)",
+    extra_fields: [],
+    note: "Static Grid AED_ACCOUNT (IBAN + optional SWIFT)",
+  },
+  "CA:CAD": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [
+      { key: "bank_code", label: "Bank code", required: true, kind: "text", digits: 3 },
+      { key: "branch_code", label: "Branch code", required: true, kind: "text", digits: 5 },
+    ],
+    note: "Static Grid CAD_ACCOUNT",
+  },
+  "IN:INR": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [
+      {
+        key: "ifsc",
+        label: "IFSC",
+        required: true,
+        kind: "text",
+        minDigits: 11,
+        maxDigits: 11,
+        placeholder: "11-character bank branch code",
+      },
+    ],
+    note: "Static Grid INR_ACCOUNT",
+  },
+  "DK:DKK": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "IBAN",
+    extra_fields: [],
+    note: "Static Grid DKK_ACCOUNT (IBAN + optional SWIFT)",
+  },
+  "HK:HKD": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    account_number_hint: "Requires SWIFT/BIC on recipient",
+    extra_fields: [],
+    note: "Static Grid HKD_ACCOUNT",
+  },
+  "SG:SGD": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    account_number_hint: "Requires SWIFT/BIC on recipient",
+    extra_fields: [],
+    note: "Static Grid SGD_ACCOUNT",
+  },
+  "MX:MXN": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "CLABE",
+    account_number_hint: "18-digit CLABE",
+    extra_fields: [],
+    note: "Static Grid MXN_ACCOUNT",
+  },
+  "BW:BWP": gridMomoProviders("MyZaka"),
+  "KE:KES": gridMomoProviders("M-PESA", "Airtel Money"),
+  "MW:MWK": gridMomoProviders("Airtel Money", "TNM"),
+  "RW:RWF": gridMomoProviders("Airtel Money"),
+  "TZ:TZS": gridMomoProviders("Airtel Money", "TigoPesa"),
+  "UG:UGX": gridMomoProviders("Airtel Money", "MTN"),
+  "ZM:ZMW": gridMomoProviders("Airtel Money", "MTN", "TNM"),
+  "SN:XOF": gridMomoProviders("MTN", "Orange", "Moov Money", "Wave", "Free"),
+  "CM:XAF": gridMomoProviders("MTN", "Orange", "Moov Money"),
+}
+
+export function isGenericGridCorridorSchema(schema: GridCorridorSchemaHint | null | undefined): boolean {
+  const note = String(schema?.note ?? "")
+  return note.includes("Generic Grid bank schema")
+}
+
+export function synthesizeGridSchemaFromNoah(
+  noah: PayoutFieldsSchemaHint | null,
+): GridCorridorSchemaHint | null {
+  if (!noah?.bank_enum?.length) return null
+  return {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    extra_fields: [],
+    bank_enum: noah.bank_enum,
+    note: "Derived from Noah corridor hints for Grid payout",
+  }
+}
+
+export function resolveGridStaticCorridorSchema(
+  countryCode: string,
+  currencyCode: string,
+): GridCorridorSchemaHint | null {
+  const key = ycCorridorSchemaKey(countryCode, currencyCode)
+  return GRID_STATIC_CORRIDOR_SCHEMAS[key] ?? null
+}
+
+/** Grid API supports mobile money only for this country/currency (no bank rail). */
+export function isGridMomoOnlyCorridor(countryCode: string, currencyCode: string): boolean {
+  return resolveGridStaticCorridorSchema(countryCode, currencyCode)?.channel_type === "momo"
+}
+
+export function listGridMomoOnlyCorridorPairs(): Array<{
+  countryCode: string
+  currencyCode: string
+}> {
+  return Object.entries(GRID_STATIC_CORRIDOR_SCHEMAS)
+    .filter(([, schema]) => schema.channel_type === "momo")
+    .map(([key]) => {
+      const [countryCode, currencyCode] = key.split(":")
+      return { countryCode, currencyCode }
+    })
+}
+
+/** Runtime Grid schema: DB → static API shapes → Noah bank list (bank corridors only). */
+export function resolveGridCorridorSchema(input: {
+  countryCode: string
+  currencyCode: string
+  fieldsSchema?: unknown
+}): GridCorridorSchemaHint | null {
+  const fromDb = unwrapGridFieldsSchema(input.fieldsSchema)
+  if (fromDb?.status === "ready" && !isGenericGridCorridorSchema(fromDb)) {
+    return fromDb
+  }
+
+  const fromStatic = resolveGridStaticCorridorSchema(input.countryCode, input.currencyCode)
+  if (fromStatic) return fromStatic
+
+  if (fromDb?.status === "ready") return fromDb
+
+  return synthesizeGridSchemaFromNoah(unwrapNoahFieldsSchema(input.fieldsSchema))
+}
+
 export function ycCorridorSchemaKey(countryCode: string, currencyCode: string): string {
   return `${String(countryCode || "").trim().toUpperCase()}:${String(currencyCode || "").trim().toUpperCase()}`
 }
@@ -341,6 +503,18 @@ export function normalizeRecipientYcMetadata(raw: unknown): RecipientYcMetadata 
   }
   if (typeof o.account_type === "string" && o.account_type.trim()) {
     out.account_type = o.account_type.trim().toLowerCase()
+  }
+  if (typeof o.bank_code === "string" && o.bank_code.trim()) {
+    out.bank_code = o.bank_code.replace(/\D/g, "")
+  }
+  if (typeof o.branch_code === "string" && o.branch_code.trim()) {
+    out.branch_code = o.branch_code.replace(/\D/g, "")
+  }
+  if (typeof o.ifsc === "string" && o.ifsc.trim()) {
+    out.ifsc = o.ifsc.trim().toUpperCase()
+  }
+  if (typeof o.grid_region === "string" && o.grid_region.trim()) {
+    out.grid_region = o.grid_region.trim().toUpperCase()
   }
   return out
 }
@@ -496,6 +670,75 @@ export function validateYcRecipientForCorridor(input: {
     if (!isBankNameAllowedForCorridor(bankName, options)) {
       return { ok: false, message: "Select a bank from the corridor list." }
     }
+  }
+
+  return { ok: true }
+}
+
+/** Map CAD form routing/sort into Grid CAD_ACCOUNT bank_code + branch_code. */
+export function mapCadRoutingToGridMetadata(input: {
+  routingNumber?: string | null
+  sortCode?: string | null
+  metadata?: RecipientYcMetadata | Record<string, unknown> | null
+}): RecipientYcMetadata {
+  const meta = normalizeRecipientYcMetadata(input.metadata)
+  const routing = digitsOnly(String(input.routingNumber ?? ""))
+  const sort = digitsOnly(String(input.sortCode ?? ""))
+  let bankCode = meta.bank_code
+  let branchCode = meta.branch_code
+  if (routing.length === 9) {
+    bankCode = routing.slice(1, 4)
+    branchCode = routing.slice(4, 9)
+  } else if (routing.length === 3) {
+    bankCode = routing
+  }
+  if (sort.length === 5) branchCode = sort
+  else if (sort.length === 3 && !bankCode) bankCode = sort
+  return {
+    ...meta,
+    ...(bankCode ? { bank_code: bankCode } : {}),
+    ...(branchCode ? { branch_code: branchCode } : {}),
+  }
+}
+
+/** Validate saved recipient against Grid corridor extra_fields (CA bank_code, IN ifsc, …). */
+export function validateGridRecipientForCorridor(input: {
+  countryCode: string
+  currencyCode: string
+  row: YcRecipientRowLike
+  fieldsSchema?: unknown
+}): { ok: true } | { ok: false; message: string } {
+  const cc = String(input.countryCode || "").trim().toUpperCase()
+  const cur = String(input.currencyCode || "").trim().toUpperCase()
+  if (!cc || !cur) return { ok: false, message: "Recipient country is required for Grid payout." }
+
+  const schema = resolveGridCorridorSchema({
+    countryCode: cc,
+    currencyCode: cur,
+    fieldsSchema: input.fieldsSchema,
+  })
+  if (!schema || schema.status !== "ready") return { ok: true }
+
+  const isMomo =
+    Boolean(input.row.mobile_provider) ||
+    String(input.row.bank_name || "").toLowerCase().includes("mobile money") ||
+    schema.channel_type === "momo"
+  if (isMomo) {
+    if (!String(input.row.phone_number || input.row.account_number || "").trim()) {
+      return { ok: false, message: "Mobile money recipient requires a phone number." }
+    }
+    return { ok: true }
+  }
+
+  const metadata = normalizeRecipientYcMetadata(input.row.metadata)
+  const accountNumber = String(input.row.account_number || "").trim()
+  if (!accountNumber && cur !== "AED" && cur !== "DKK") {
+    return { ok: false, message: "Account number is required." }
+  }
+
+  for (const field of schema.extra_fields ?? []) {
+    const err = validateExtraField(field, metadata, accountNumber)
+    if (err) return { ok: false, message: err }
   }
 
   return { ok: true }
@@ -658,7 +901,15 @@ export function extractCorridorRecipientCandidates(input: {
         : unwrapYcFieldsSchema(input.fieldsSchema)
       : null
   const grid =
-    !primary || primary === "grid" ? unwrapGridFieldsSchema(input.fieldsSchema) : null
+    !primary || primary === "grid"
+      ? input.countryCode && input.currencyCode
+        ? resolveGridCorridorSchema({
+            countryCode: input.countryCode,
+            currencyCode: input.currencyCode,
+            fieldsSchema: input.fieldsSchema,
+          })
+        : unwrapGridFieldsSchema(input.fieldsSchema)
+      : null
 
   const bankNames = uniqueStrings([
     ...(noah?.bank_enum ?? []),
@@ -745,7 +996,13 @@ export function resolveCorridorRecipientOptions(input: {
         })
       : null
   const grid =
-    !primary || primary === "grid" ? unwrapGridFieldsSchema(input.fieldsSchema) : null
+    !primary || primary === "grid"
+      ? resolveGridCorridorSchema({
+          countryCode: input.countryCode,
+          currencyCode: input.currencyCode,
+          fieldsSchema: input.fieldsSchema,
+        })
+      : null
   const schemaForExtras =
     primary === "grid" ? grid : primary === "yellowcard" ? yc : primary === "noah" ? null : yc ?? grid
 
