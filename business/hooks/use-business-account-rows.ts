@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useIsRestoring, useQuery, useQueryClient } from "@tanstack/react-query"
 import { qk, isVaAnswerSettled, shouldShowBankDepositTab } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -47,6 +47,7 @@ function normalizeAvailableExtras(input: string[] | undefined): string[] {
 export function useBusinessAccountRows() {
   const queryClient = useQueryClient()
   const { scope } = useScope()
+  const isRestoring = useIsRestoring()
   const { tier1Complete, isLoading: profileLoading, name, baseCurrency } = useBusinessProfile()
   const walletQuery = useWalletBalances()
   const lastKnownAuthoritativeBalancesRef = useRef<{ USD: string; EUR: string } | null>(null)
@@ -273,14 +274,15 @@ export function useBusinessAccountRows() {
     (walletQuery.isFetched || virtualAccountsQuery.isFetched)
 
   const loading =
-    profileLoading ||
-    (accountRows.length === 0 &&
-      ((walletQuery.isPending && !walletQuery.data) ||
-        (virtualAccountsQuery.isPending && !virtualAccountsQuery.data))) ||
-    (tier1Complete &&
-      accountRows.length === 0 &&
-      !isAuthoritativeBalanceRead &&
-      !lastKnownAuthoritativeBalancesRef.current)
+    !isRestoring &&
+    (profileLoading ||
+      (accountRows.length === 0 &&
+        ((walletQuery.isPending && !walletQuery.data) ||
+          (virtualAccountsQuery.isPending && !virtualAccountsQuery.data))) ||
+      (tier1Complete &&
+        accountRows.length === 0 &&
+        !isAuthoritativeBalanceRead &&
+        !lastKnownAuthoritativeBalancesRef.current))
 
   return {
     accountRows,

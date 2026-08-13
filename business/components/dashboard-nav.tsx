@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import {
   CreditCard,
@@ -28,6 +29,8 @@ import { BusinessOnboardingChecklist } from "@/components/business-onboarding-ch
 import { StableImage } from "@easner/shared"
 import { normalizeBusinessLogoUrl, warmBusinessLogoUrl } from "@/lib/image-cache"
 import { isNavPathActive } from "@/lib/navigation/is-nav-path-active"
+import { useScope } from "@/lib/query/scope"
+import { prefetchRouteWorkspaceData } from "@/lib/query/workspace-prefetch"
 
 /** Hide Collections (Terminal, QR Pay) in sidebar — routes and pages stay available via direct URL. */
 const SHOW_COLLECTIONS_IN_NAV = false
@@ -46,6 +49,8 @@ function deriveOpenGroups(pathname: string) {
 export function DashboardNav() {
   const pathname = usePathname()
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
   const { user } = useAuth()
   const {
     name: businessName,
@@ -122,6 +127,9 @@ export function DashboardNav() {
       router.prefetch(href)
     } catch {
       // Best-effort only.
+    }
+    if (scope) {
+      void prefetchRouteWorkspaceData(queryClient, scope, href)
     }
   }
 

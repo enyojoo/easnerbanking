@@ -1,8 +1,12 @@
 "use client"
 
 import type React from "react"
+import { useLayoutEffect } from "react"
 import { usePathname } from "next/navigation"
 import { DashboardShell } from "@/components/dashboard-shell"
+import { WorkspaceBootSplash } from "@/components/loading-spinner"
+import { useAuth } from "@/lib/auth-context"
+import { redirectToWorkspaceLogin } from "@/lib/auth/workspace-login-redirect"
 
 const DASHBOARD_SHELL_ROOTS = [
   "/accounts",
@@ -39,9 +43,21 @@ function resolveShellProps(pathname: string) {
 
 export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const { user, isLoading, canBootstrapWorkspace } = useAuth()
 
   if (!pathname || !isDashboardShellPath(pathname)) {
     return <>{children}</>
+  }
+
+  const canShowWorkspace = Boolean(user) || (isLoading && canBootstrapWorkspace)
+
+  useLayoutEffect(() => {
+    if (canShowWorkspace) return
+    redirectToWorkspaceLogin()
+  }, [canShowWorkspace])
+
+  if (!canShowWorkspace) {
+    return <WorkspaceBootSplash />
   }
 
   const { constrained } = resolveShellProps(pathname)

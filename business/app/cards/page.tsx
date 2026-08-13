@@ -18,6 +18,7 @@ import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 export default function CardsPage() {
   const { data: rows, loading: listLoading } = useTransactionsCached()
+  const showListSkeleton = listLoading && rows.length === 0
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -126,7 +127,7 @@ export default function CardsPage() {
 
           <div className="rounded-lg border bg-card flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 min-h-0 overflow-y-auto divide-y">
-              {listLoading ?
+              {showListSkeleton ?
                 <div className="space-y-3 p-4">
                   <div className="h-16 animate-pulse rounded-md bg-muted" />
                   <div className="h-16 animate-pulse rounded-md bg-muted" />

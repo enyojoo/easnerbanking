@@ -108,7 +108,6 @@ export function useTransactionsList(filters: TxFilters = {}) {
     getNextPageParam: (last) => last.nextCursor,
     staleTime: 90_000,
     gcTime: 30 * 60_000,
-    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchInterval: tabVisible ? pollingIntervalFor("operational", realtimeHealth) : false,
     refetchIntervalInBackground: false,

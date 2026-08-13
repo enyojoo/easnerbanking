@@ -26,14 +26,15 @@ async function fetchRecipientsSafe(userId: string): Promise<Beneficiary[]> {
  */
 export function useRecipientsCached(enabled: boolean) {
   const { user, sessionUserId } = useAuth()
+  const profileUserId = sessionUserId ?? user?.id
 
   return useCachedData<Beneficiary[]>({
-    enabled: enabled && Boolean(user?.id),
-    cacheKey: sessionUserId ? CACHE_KEYS.RECIPIENTS(sessionUserId) : null,
-    persistKey: sessionUserId ? `recipients_cache_v2_${sessionUserId}` : undefined,
+    enabled: enabled && Boolean(profileUserId),
+    cacheKey: profileUserId ? CACHE_KEYS.RECIPIENTS(profileUserId) : null,
+    persistKey: profileUserId ? `recipients_cache_v2_${profileUserId}` : undefined,
     initialData: [],
     ttlMs: RECIPIENTS_CACHE_TTL_MS,
-    fetcher: async () => fetchRecipientsSafe(user!.id),
+    fetcher: async () => fetchRecipientsSafe(profileUserId!),
     onError: (err) => {
       const message = err instanceof Error ? err.message : String(err)
       console.error("Failed to load recipients:", message)

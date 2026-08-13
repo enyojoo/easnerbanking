@@ -1,18 +1,39 @@
 /**
  * Business web loading surfaces.
  *
- * Contract (see packages/shared/src/query/ux-rules.ts):
- * - LoadingSpinner: public/unauthenticated surfaces (/pay, invoice customer view)
- * - Workspace boot: render DashboardShell immediately; auth resolves in background
- * - Do not add route loading.tsx on cached workspace routes
- * - Do not use dynamic() loading fallbacks on core flows
- * - Page-level skeletons: isPending && !data only
+ * Contract (see packages/shared/src/query/ux-rules.ts and lib/query/loading-state.ts):
+ *
+ * Three content states per surface — never mix:
+ *   - Cached: data exists → show immediately, silent background refetch
+ *   - First-load: isQueryFirstLoad(query) → inline skeleton in that surface only
+ *   - Empty: isQueryTrulyEmpty(query, isEmpty) → zero-state copy after fetch completes
+ *
+ * Full-screen loaders:
+ *   - WorkspaceBootSplash: logo-only, logged-out workspace redirect only (no shell)
+ *   - LoadingSpinner: public/unauthenticated surfaces (/pay, invoice customer view)
+ *
+ * Workspace rules:
+ *   - Render DashboardShell immediately when session probe passes
+ *   - No route loading.tsx on cached workspace routes
+ *   - No dynamic() loading fallbacks on core flows
+ *   - Never downgrade cached UI to skeleton
  */
+
+import { BusinessLogo } from "@/components/brand/business-logo"
 
 export function LoadingSpinner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+    </div>
+  )
+}
+
+/** Logo-only splash for logged-out workspace redirect — not a data-loading screen. */
+export function WorkspaceBootSplash() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-background">
+      <BusinessLogo size="lg" href={undefined} priority />
     </div>
   )
 }

@@ -1,11 +1,10 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { qk } from "@easner/shared"
-import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
+import { incomingBalancesQueryOptions, type IncomingBalances } from "@/lib/query/workspace-prefetch"
 
-export type IncomingBalances = Record<string, number>
+export type { IncomingBalances }
 
 /**
  * Unsettled Stripe invoice settlement totals by currency (Incoming on Accounts).
@@ -13,20 +12,16 @@ export type IncomingBalances = Record<string, number>
  */
 export function useIncomingBalances() {
   const { scope } = useScope()
-  const queryKey = scope
-    ? ([...qk.wallets.root(scope), "incoming-balances"] as const)
-    : (["wallets", "incoming-balances", "disabled"] as const)
+  const options = scope ? incomingBalancesQueryOptions(scope) : null
 
-  return useQuery({
-    queryKey,
+  return useQuery<IncomingBalances>({
+    ...(options ?? {
+      queryKey: ["wallets", "incoming-balances", "disabled"] as const,
+      queryFn: async (): Promise<IncomingBalances> => ({}),
+      staleTime: 60_000,
+      gcTime: 10 * 60_000,
+    }),
     enabled: Boolean(scope),
-    staleTime: 15_000,
-    queryFn: async () => {
-      const res = await apiFetch<{ balances?: IncomingBalances }>(
-        "/api/business/incoming-balances",
-      )
-      return (res.balances ?? {}) as IncomingBalances
-    },
   })
 }
 

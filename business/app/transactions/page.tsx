@@ -76,6 +76,7 @@ export default function TransactionsPage() {
     hasNextPage,
     isFetchingNextPage,
   } = useTransactionsCached()
+  const showListSkeleton = listLoading && rows.length === 0
   useTurnkeyLedgerRepair()
   const { baseCurrency: profileBaseCurrency } = useBusinessProfile()
   const baseCurrencyCode = (profileBaseCurrency || "USD").toUpperCase()
@@ -99,7 +100,7 @@ export default function TransactionsPage() {
   }, [searchParams])
 
   useEffect(() => {
-    if (listLoading) return
+    if (showListSkeleton) return
     const id = searchParams.get("txnId") || searchParams.get("transaction")
     if (!id) return
     const match = rows.find((t) => t.id === id)
@@ -111,7 +112,7 @@ export default function TransactionsPage() {
     if (match) {
       router.push(transactionWebDetailPath(match.id, { returnTo: "transactions" }))
     }
-  }, [listLoading, rows, searchParams, router])
+  }, [showListSkeleton, rows, searchParams, router])
 
   const { start, end } = getDateRange({ timePeriod, customDateRange })
 
@@ -227,7 +228,7 @@ export default function TransactionsPage() {
             size="sm"
             className="h-8 gap-2 shrink-0"
             onClick={handleExport}
-            disabled={listLoading}
+            disabled={showListSkeleton}
           >
             <Download className="h-4 w-4" />
             Export
@@ -237,7 +238,7 @@ export default function TransactionsPage() {
 
       <Card>
         <CardContent className="p-6">
-          {listLoading ? (
+          {showListSkeleton ? (
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               <div className="space-y-2 text-center">
                 <div className="mx-auto h-4 w-24 animate-pulse rounded bg-muted" />
@@ -270,7 +271,7 @@ export default function TransactionsPage() {
               </div>
             </div>
           )}
-          {!listLoading && showBaseChangeNote ? (
+          {!showListSkeleton && showBaseChangeNote ? (
             <p className="text-xs text-muted-foreground mt-6 border-t border-border pt-4">
               {REPORTING_FX_BASE_CHANGE_NOTE}
             </p>
@@ -280,7 +281,7 @@ export default function TransactionsPage() {
 
       <Card>
         <CardContent className="p-0">
-          {listLoading ? (
+          {showListSkeleton ? (
             <div className="space-y-3 p-4">
               <div className="h-16 animate-pulse rounded-md bg-muted" />
               <div className="h-16 animate-pulse rounded-md bg-muted" />
@@ -366,7 +367,7 @@ export default function TransactionsPage() {
       </Card>
 
       <div className="text-sm text-muted-foreground">
-        {listLoading ? "—" : `${filteredTransactions.length} result${filteredTransactions.length !== 1 ? "s" : ""}`}
+        {showListSkeleton ? "—" : `${filteredTransactions.length} result${filteredTransactions.length !== 1 ? "s" : ""}`}
       </div>
     </div>
   )

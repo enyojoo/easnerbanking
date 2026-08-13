@@ -154,7 +154,7 @@ export function useBusinessProfile() {
   const PROFILE_PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
   const cacheKey = profileUserId ? CACHE_KEYS.BUSINESS_PROFILE(profileUserId) : null
   const { data: profileData, setData, loading: isLoading } = useCachedData<BusinessProfile>({
-    enabled: Boolean(user?.id),
+    enabled: Boolean(sessionUserId ?? user?.id),
     cacheKey,
     persistKey: profileUserId ? `business_profile_cache_${profileUserId}` : undefined,
     initialData: DEFAULT_PROFILE,

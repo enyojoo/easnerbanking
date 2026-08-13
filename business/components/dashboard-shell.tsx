@@ -3,7 +3,8 @@
 import type React from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
-import { useEffect, useLayoutEffect } from "react"
+import { useEffect } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { MessageCircle } from "lucide-react"
 import { DashboardNav } from "@/components/dashboard-nav"
@@ -17,7 +18,8 @@ import { openBusinessSupport } from "@/lib/intercom-messenger"
 import { BANNER_COPY } from "@/lib/copy/business-ui-copy"
 import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { cn } from "@/lib/utils"
-import { redirectToWorkspaceLogin } from "@/lib/auth/workspace-login-redirect"
+import { useScope } from "@/lib/query/scope"
+import { prefetchWorkspaceCriticalData } from "@/lib/query/workspace-prefetch"
 
 interface DashboardShellProps {
   children: React.ReactNode
@@ -27,20 +29,10 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children, constrained = false }: DashboardShellProps) {
   useBusinessNoahSync()
-  const { user, isLoading, logout, sessionUserId, canBootstrapWorkspace } = useAuth()
+  const { user, logout, sessionUserId } = useAuth()
   const router = useRouter()
-  const canShowWorkspace = Boolean(user) || (isLoading && canBootstrapWorkspace)
-
-  useLayoutEffect(() => {
-    if (user) return
-    if (!canBootstrapWorkspace) {
-      redirectToWorkspaceLogin()
-      return
-    }
-    if (!isLoading && !user) {
-      redirectToWorkspaceLogin()
-    }
-  }, [user, isLoading, canBootstrapWorkspace])
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
   const {
     name: businessName,
     ownerName,
@@ -76,7 +68,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
   }, [showTier1Banner, businessId, canManageBusinessVerification, tier1CanResubmit, tier1Complete])
 
   useEffect(() => {
-    if (!sessionUserId) return
+    if (!sessionUserId || !scope) return
     const criticalRoutes = [
       "/dashboard",
       "/send",
@@ -93,7 +85,6 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
       "/settings",
     ] as const
 
-    // Prefetch critical routes immediately (first click feels instant).
     for (const href of criticalRoutes) {
       try {
         router.prefetch(href)
@@ -110,22 +101,20 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
           // Best-effort only; never block render.
         }
       }
+      void prefetchWorkspaceCriticalData(queryClient, scope)
     }
 
-    // Prefetch after first paint so it doesn't compete with hydration.
-    // Use idle time when available; fallback to a small delay.
-    const w = window as any
+    const w = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+      cancelIdleCallback?: (id: number) => void
+    }
     if (typeof w.requestIdleCallback === "function") {
       const id = w.requestIdleCallback(prefetchSecondary, { timeout: 2000 })
       return () => w.cancelIdleCallback?.(id)
     }
     const t = window.setTimeout(prefetchSecondary, 250)
     return () => window.clearTimeout(t)
-  }, [isLoading, router, sessionUserId])
-
-  if (!canShowWorkspace) {
-    return null
-  }
+  }, [queryClient, router, scope, sessionUserId])
 
   return (
     <AppLockProvider>

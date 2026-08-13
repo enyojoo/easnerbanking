@@ -23,6 +23,11 @@ import {
 } from "@/lib/query/web-persist"
 import { BusinessIntercom } from "@/components/intercom-business"
 import { ImageWarmBootstrap } from "@/components/image-warm-bootstrap"
+import {
+  hasWarmWorkspaceCache,
+  prefetchWorkspaceCriticalData,
+  refetchStaleReducedQueries,
+} from "@/lib/query/workspace-prefetch"
 
 /**
  * Root client provider tree for Easner Business.
@@ -70,6 +75,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <BusinessScopeProvider>
           <ScopeRealtimeBridge>
             <PersistedBusinessLifecycleBridge />
+            <WorkspaceDataWarmBridge />
             <InvoiceModuleStoreSync />
             {children}
           </ScopeRealtimeBridge>
@@ -109,10 +115,7 @@ function PersistedBusinessLifecycleBridge() {
       try {
         await ensureBusinessAppSession()
         if (cancelled) return
-        await queryClient.invalidateQueries({
-          predicate: (query) => query.meta?.webPersist === "reduced",
-          refetchType: "active",
-        })
+        await refetchStaleReducedQueries(queryClient)
       } catch {
         // ignore background warm failures
       }
@@ -158,16 +161,27 @@ function PersistedBusinessLifecycleBridge() {
           return
         }
 
-        await queryClient.invalidateQueries({
-          predicate: (query) => query.meta?.webPersist === "reduced",
-          refetchType: "active",
-        })
+        await refetchStaleReducedQueries(queryClient)
       })()
     }
 
     window.addEventListener("pageshow", onPageShow)
     return () => window.removeEventListener("pageshow", onPageShow)
   }, [queryClient, user?.id])
+
+  return null
+}
+
+function WorkspaceDataWarmBridge() {
+  const { scope } = useScope()
+  const queryClient = useQueryClient()
+
+  React.useEffect(() => {
+    if (!scope) return
+    if (!hasWarmWorkspaceCache(queryClient, scope)) {
+      void prefetchWorkspaceCriticalData(queryClient, scope)
+    }
+  }, [queryClient, scope])
 
   return null
 }

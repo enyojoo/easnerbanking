@@ -34,13 +34,7 @@ export default function AccountsPage() {
   } = useBusinessAccountRows()
   const incomingQuery = useIncomingBalances()
 
-  // Keep cards hidden until balances + incoming settle so nothing pops in after paint.
-  const waitingForIncoming =
-    accountRows.length > 0 &&
-    incomingQuery.isPending &&
-    !incomingQuery.isFetched
-  const showCardSkeleton =
-    (loading && accountRows.length === 0) || waitingForIncoming
+  const showCardSkeleton = loading && accountRows.length === 0
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text)
