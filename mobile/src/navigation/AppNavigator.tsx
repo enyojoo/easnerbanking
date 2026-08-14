@@ -13,6 +13,7 @@ import {
   isAppLocked,
   dismissPinPrompt,
   markSessionInteraction,
+  updateSessionActivity,
   evaluateIdleLock,
   applyColdStartPinLockIfNeeded,
   markWebPinSessionUnlocked,
@@ -669,6 +670,7 @@ export default function AppNavigator() {
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState !== 'active') return
       try {
+        await updateSessionActivity()
         const r = await evaluateIdleLock(user.id)
         if (r === 'signed_out') {
           await signOut()

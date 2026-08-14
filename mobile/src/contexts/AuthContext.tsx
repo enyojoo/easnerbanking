@@ -34,7 +34,7 @@ import {
 } from '@easner/shared'
 import { mapUsersRowToUser, splitFullNameForForm } from '../lib/userProfileHelpers'
 import type { PersonalSettingsPayload } from '../lib/userService'
-import { ensureConsumerMobileAccess } from '../lib/validateAppSurface'
+import { ensureConsumerMobileAccess, isDefinitiveMobileSurfaceDenial } from '../lib/validateAppSurface'
 import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../lib/payoutCorridors'
 import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
 import { clearMfaVerified } from '../lib/mfaStatusCache'
@@ -107,18 +107,28 @@ async function finalizePostAuthSession(options?: {
 
   const boot = await ensureBusinessAppUserBootstrap()
   if (!boot.ok) {
-    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
     if (boot.blockReason) {
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
       await stashSignupBlockedMessage(boot.blockReason.error)
+      const msg =
+        boot.blockReason.error ??
+        'We could not finish setting up your account. Please try again or use a different sign-in method.'
+      return { error: new Error(msg) }
     }
-    const msg =
-      boot.blockReason?.error ??
-      'We could not finish setting up your account. Please try again or use a different sign-in method.'
-    return { error: new Error(msg) }
+    return {
+      error: new Error(
+        'We could not finish setting up your account. Check your connection and try again.',
+      ),
+    }
   }
 
   const surfaceGate = await ensureConsumerMobileAccess()
-  if (surfaceGate.error) {
+  if (surfaceGate.kind === 'denied' && isDefinitiveMobileSurfaceDenial(surfaceGate.code)) {
+    const msg = surfaceGate.error?.message || 'This account cannot use the Easner mobile app.'
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+    return { error: new Error(msg) }
+  }
+  if (surfaceGate.error && surfaceGate.kind === 'denied') {
     const msg = surfaceGate.error.message || 'This account cannot use the Easner mobile app.'
     await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
     return { error: new Error(msg) }
@@ -130,8 +140,10 @@ async function finalizePostAuthSession(options?: {
     .eq('id', session.user.id)
     .maybeSingle()
   if (userRowErr) {
-    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
-    return { error: new Error(userRowErr.message || 'Could not load your user profile.') }
+    console.warn('finalizePostAuthSession: users row query failed:', userRowErr.message)
+    return {
+      error: new Error('Could not load your user profile. Check your connection and try again.'),
+    }
   }
   if (!userRow?.id) {
     await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
@@ -145,6 +157,15 @@ async function markAccountClosureCancelledIfNeeded(deletionCancelled?: boolean):
   if (!deletionCancelled) return
   await AsyncStorage.setItem(ACCOUNT_CLOSURE_CANCELLED_KEY, '1').catch(() => undefined)
   analytics.trackAccountClosureCancelled()
+}
+
+function shouldRunPostAuthBootstrap(sourceEvent?: string): boolean {
+  return (
+    sourceEvent === 'SIGNED_IN' ||
+    sourceEvent === 'INITIAL_SESSION' ||
+    sourceEvent === 'USER_UPDATED' ||
+    sourceEvent === 'PASSWORD_RECOVERY'
+  )
 }
 
 function getOAuthRedirectUri(): string {
@@ -548,7 +569,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return null
       }
 
-      const boot = await ensureBusinessAppUserBootstrap()
+      const boot = shouldRunPostAuthBootstrap(opts?.sourceEvent)
+        ? await ensureBusinessAppUserBootstrap()
+        : { ok: true as const }
       if (!boot.ok) {
         console.warn('AuthContext: user bootstrap failed:', boot.status, boot.errorText)
         if (boot.blockReason) {
@@ -562,24 +585,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
 
-      const surfaceGate = await ensureConsumerMobileAccess()
-      if (surfaceGate.error) {
-        if (surfaceGate.error.message === 'Unauthorized') {
+      if (shouldRunPostAuthBootstrap(opts?.sourceEvent)) {
+        const surfaceGate = await ensureConsumerMobileAccess()
+        if (surfaceGate.kind === 'denied' && surfaceGate.error) {
+          console.warn('AuthContext: App surface denied:', surfaceGate.error.message)
+          analytics.trackError('sign_in_failed', {
+            reason: surfaceGate.error.message,
+            source: 'fetchUserProfile',
+            code: surfaceGate.code,
+          })
+          await stashSignupBlockedMessage(surfaceGate.error.message)
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+          clearSessionUserHydrated()
+          setUser(null)
+          setUserProfile(null)
+          payoutCorridorsBootstrappedForUserRef.current = null
+          setLoading(false)
           return null
         }
-        console.warn('AuthContext: App surface denied:', surfaceGate.error.message)
-        analytics.trackError('sign_in_failed', {
-          reason: surfaceGate.error.message,
-          source: 'fetchUserProfile',
-        })
-        await stashSignupBlockedMessage(surfaceGate.error.message)
-        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
-        clearSessionUserHydrated()
-        setUser(null)
-        setUserProfile(null)
-        payoutCorridorsBootstrappedForUserRef.current = null
-        setLoading(false)
-        return null
       }
 
       // Get email_confirmed_at from Supabase auth user
@@ -597,8 +620,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.warn(
           'AuthContext: public.users query error (check RLS: users need SELECT for auth.uid() = id):',
           regularUserError.message,
-          regularUserError.code ?? ''
+          regularUserError.code ?? '',
         )
+        if (regularUserError.code !== 'PGRST116') {
+          return null
+        }
       }
 
       if (regularUser && !regularUserError) {

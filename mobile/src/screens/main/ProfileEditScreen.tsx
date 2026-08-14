@@ -50,6 +50,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { EasnerAlertSheet } from '../../components/premium'
 import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { haptics } from '../../lib/haptics'
+import {
+  formatCalendarDate,
+  formatCalendarDateDisplay,
+  parseCalendarDate,
+} from '../../lib/calendarDate'
 
 import { ACCOUNT_DELETED_FLAG_KEY } from '../../constants/auth'
 
@@ -96,14 +101,17 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   }, [userProfile?.verifiedIdentity, userProfile?.profile])
 
   const [showDatePicker, setShowDatePicker] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    // Initialize with existing date or default to 25 years ago
-    if (userProfile?.profile?.date_of_birth) {
-      return new Date(userProfile.profile.date_of_birth)
-    }
+  const defaultBirthDate = (): Date => {
     const date = new Date()
     date.setFullYear(date.getFullYear() - 25)
     return date
+  }
+
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const parsed = userProfile?.profile?.date_of_birth
+      ? parseCalendarDate(userProfile.profile.date_of_birth)
+      : null
+    return parsed ?? defaultBirthDate()
   })
   const viewAvatarUrl = useMemo(() => {
     const fromForm = profileData.avatarUrl?.trim()
@@ -156,11 +164,9 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     setProfileData(data)
     setEditProfileData(data)
     if (dob) {
-      setSelectedDate(new Date(dob))
+      setSelectedDate(parseCalendarDate(dob) ?? defaultBirthDate())
     } else {
-      const date = new Date()
-      date.setFullYear(date.getFullYear() - 25)
-      setSelectedDate(date)
+      setSelectedDate(defaultBirthDate())
     }
   }, [userProfile, isEditing])
 
@@ -243,7 +249,9 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       setProfileData(updatedProfileData)
       setEditProfileData(updatedProfileData)
       if (updatedProfileData.dateOfBirth) {
-        setSelectedDate(new Date(updatedProfileData.dateOfBirth))
+        setSelectedDate(
+          parseCalendarDate(updatedProfileData.dateOfBirth) ?? defaultBirthDate(),
+        )
       }
       skipNextProfileHydrateRef.current = true
 
@@ -451,59 +459,44 @@ function ProfileEditContent({ navigation }: NavigationProps) {
     }
   }
 
-  // Helper function to format date as YYYY-MM-DD using local timezone
-  const formatDateToISO = (date: Date): string => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
   const handleDateChange = (event: any, date?: Date) => {
     if (Platform.OS === 'android') {
       setShowDatePicker(false)
       if (event.type === 'set' && date) {
         setSelectedDate(date)
-        const dateString = formatDateToISO(date) // Use local timezone
-        setEditProfileData(prev => ({ ...prev, dateOfBirth: dateString }))
+        setEditProfileData((prev) => ({
+          ...prev,
+          dateOfBirth: formatCalendarDate(date),
+        }))
       }
-    } else {
+    } else if (date) {
       // iOS - update date as user scrolls
-      if (date) {
-        setSelectedDate(date)
-      }
+      setSelectedDate(date)
     }
   }
 
   const handleDatePickerConfirm = () => {
     // iOS only - called when user taps "Done"
-    if (selectedDate) {
-      const dateString = formatDateToISO(selectedDate) // Use local timezone
-      setEditProfileData(prev => ({ ...prev, dateOfBirth: dateString }))
-    }
+    setEditProfileData((prev) => ({
+      ...prev,
+      dateOfBirth: formatCalendarDate(selectedDate),
+    }))
     setShowDatePicker(false)
   }
 
   const handleDatePickerCancel = () => {
     // iOS only - restore original date if cancelled
     if (editProfileData.dateOfBirth) {
-      setSelectedDate(new Date(editProfileData.dateOfBirth))
+      setSelectedDate(
+        parseCalendarDate(editProfileData.dateOfBirth) ?? defaultBirthDate(),
+      )
     }
     setShowDatePicker(false)
   }
 
   const formatDateOfBirth = (dateString: string) => {
     if (!dateString) return 'Not set'
-    try {
-      const date = new Date(dateString)
-      return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      })
-    } catch {
-      return dateString
-    }
+    return formatCalendarDateDisplay(dateString)
   }
 
   const handleDeleteAccount = async () => {
@@ -668,7 +661,9 @@ function ProfileEditContent({ navigation }: NavigationProps) {
             onPress={() => {
               // Initialize selectedDate with current value when opening picker
               if (editProfileData.dateOfBirth) {
-                setSelectedDate(new Date(editProfileData.dateOfBirth))
+                setSelectedDate(
+                  parseCalendarDate(editProfileData.dateOfBirth) ?? defaultBirthDate(),
+                )
               }
               setShowDatePicker(true)
             }} >
