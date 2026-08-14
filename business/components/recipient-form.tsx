@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils"
 import { resolveInferredWalletAssetNetwork } from "@easner/shared"
 import { inferWalletAddressFromApi } from "@/lib/wallet-send/infer-wallet-address-client"
 import { CorridorRecipientExtraFields } from "@/components/recipients/yc-recipient-extra-fields"
+import { toast } from "sonner"
 
 const RECIPIENT_TYPE_TABS = [
   { id: "bank" as const, label: "Bank Account" },
@@ -188,6 +189,7 @@ export function RecipientForm({
     mobileCorridors,
     cryptoDestinations,
     loading: bankCorridorsLoading,
+    error: sendDestinationsError,
     refresh: refreshSendDestinations,
   } = useSendDestinations()
 
@@ -708,7 +710,8 @@ export function RecipientForm({
         onSuccessWithData?.(beneficiary)
         onSuccess()
       } catch (err) {
-        console.error("Failed to save recipient:", err instanceof Error ? err.message : err)
+        const message = err instanceof Error ? err.message : "Failed to save recipient"
+        toast.error(message)
       } finally {
         setIsSubmitting(false)
       }
@@ -784,7 +787,8 @@ export function RecipientForm({
       onSuccessWithData?.(beneficiary)
       onSuccess()
     } catch (err) {
-      console.error("Failed to save recipient:", err instanceof Error ? err.message : err)
+      const message = err instanceof Error ? err.message : "Failed to save recipient"
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -881,6 +885,9 @@ export function RecipientForm({
 
   return (
     <form id={formId} onSubmit={handleSubmit} className="min-w-0 space-y-6">
+      {sendDestinationsError ? (
+        <p className="text-sm text-destructive">{sendDestinationsError}</p>
+      ) : null}
       {recipientTypeTabs.length > 1 ? (
         <div className="space-y-2 max-w-3xl">
           <label className="text-sm font-medium">

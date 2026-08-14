@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react"
-import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
+import { syncBusinessGridStatus, syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
   fetchHostedVerificationCredentials,
@@ -32,6 +32,7 @@ import { Tier1VerificationBadge } from "@/components/compliance/tier1-verificati
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SettingsStripeConnectPanel } from "@/components/settings/settings-stripe-connect-panel"
 import { SETTINGS_TAB_COPY, VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
+import { analytics } from "@/lib/analytics"
 import {
   getVerificationRejectionDisplay,
   NOAH_FINAL_REJECTION_USER_MESSAGE,
@@ -72,6 +73,7 @@ export function BusinessVerificationSection() {
 
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [refreshingStatus, setRefreshingStatus] = useState(false)
   const [hostedResumeAvailable, setHostedResumeAvailable] = useState<boolean | null>(() =>
     readHostedResumeAvailable(businessId),
   )
@@ -222,6 +224,30 @@ export function BusinessVerificationSection() {
     const result = await syncBusinessGridStatusUntilAccountsReady()
     return result.ok
   }, [])
+
+  const handleRefreshVerificationStatus = useCallback(async () => {
+    setRefreshingStatus(true)
+    setError(null)
+    const priorStatus = tier1VerificationStatus
+    try {
+      const syncResult = await syncBusinessGridStatus()
+      const ok = await syncBusinessTier1FromGrid()
+      if (
+        priorStatus === "pending" &&
+        syncResult.verificationStatus === "not_started"
+      ) {
+        analytics.trackKybStatusCorrected({
+          from: priorStatus,
+          to: syncResult.verificationStatus,
+        })
+      }
+      setInfo(ok ? "Verification status updated." : "Still syncing with our verification partner. Try again shortly.")
+    } catch {
+      setError("Could not refresh verification status. Try again.")
+    } finally {
+      setRefreshingStatus(false)
+    }
+  }, [syncBusinessTier1FromGrid, tier1VerificationStatus])
 
   const closeHostedAndSync = useCallback(() => {
     setHostedOpen(false)
@@ -509,9 +535,29 @@ export function BusinessVerificationSection() {
                             </p>
                           ) : null}
                           {tier1UnderReview && !tier1ActionRequired ? (
-                            <p className="text-sm text-muted-foreground">
-                              {NOAH_VERIFICATION_IN_REVIEW_COPY}
-                            </p>
+                            <div className="space-y-2">
+                              <p className="text-sm text-muted-foreground">
+                                {NOAH_VERIFICATION_IN_REVIEW_COPY}
+                              </p>
+                              {canManageBusinessVerification ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={refreshingStatus}
+                                  onClick={() => void handleRefreshVerificationStatus()}
+                                >
+                                  {refreshingStatus ? (
+                                    <>
+                                      <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                                      Refreshing…
+                                    </>
+                                  ) : (
+                                    "Refresh status"
+                                  )}
+                                </Button>
+                              ) : null}
+                            </div>
                           ) : null}
                           {tier1Rejected && tier1FinalReject ? (
                             <p className="text-sm text-muted-foreground">

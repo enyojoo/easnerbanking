@@ -51,7 +51,7 @@ import { EasnerAlertSheet } from '../../components/premium'
 import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { haptics } from '../../lib/haptics'
 
-const ACCOUNT_DELETED_FLAG_KEY = '@easner_account_deleted'
+import { ACCOUNT_DELETED_FLAG_KEY } from '../../constants/auth'
 
 function ProfileEditContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, applyPersonalSettingsFromServer, signOut } = useAuth()
@@ -548,7 +548,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
       await AsyncStorage.setItem(ACCOUNT_DELETED_FLAG_KEY, '1').catch(() => undefined)
       // Ensure local state is cleared and user exits to Auth stack.
       // Account remains recoverable for 7 days; signing back in cancels deletion.
-      await signOut()
+      await signOut({ preserveOnboarding: true })
     } catch (e) {
       setShowDeleteDialog(false)
       setNoticeSheet({

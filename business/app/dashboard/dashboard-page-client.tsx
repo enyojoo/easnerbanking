@@ -37,8 +37,16 @@ import {
 import { resolveReportingAmountForFeed } from "@easner/shared"
 
 export function DashboardPageClient() {
-  const { data: rows } = useTransactionsCached()
-  const { balances, baseCurrency, hasAuthoritativeBalances } = useBusinessAccountRows()
+  const { data: rows, loading: transactionsLoading, error: transactionsError, refetch: refetchTransactions } =
+    useTransactionsCached()
+  const {
+    balances,
+    baseCurrency,
+    hasAuthoritativeBalances,
+    loading: accountsLoading,
+    loadError: accountsError,
+    refreshAccounts,
+  } = useBusinessAccountRows()
   const { data: fxRates = [] } = useFxRates()
   useTurnkeyLedgerRepair()
 
@@ -125,6 +133,36 @@ export function DashboardPageClient() {
     ? (lastStableBalanceText ??
         (hasAuthoritativeBalances ? computedPrimaryBalanceText : zeroPrimaryBalanceText))
     : MASK
+
+  const loadError = transactionsError || accountsError
+  const isLoading = transactionsLoading || accountsLoading
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-sm text-destructive">{loadError}</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void refetchTransactions()
+            void refreshAccounts()
+          }}
+        >
+          Try again
+        </Button>
+      </div>
+    )
+  }
+
+  if (isLoading && rows.length === 0) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center p-6 text-sm text-muted-foreground">
+        Loading dashboard…
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -284,7 +322,7 @@ export function DashboardPageClient() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-foreground">
-                            {txn.description.replace(/^Transfer to\s+/i, "")}
+                            {(txn.description ?? "").replace(/^Transfer to\s+/i, "")}
                           </p>
                           <p className="mt-1 truncate text-xs text-muted-foreground">
                             {formatTransactionRowDateTime(txn.displayWhenAt ?? txn.date)}

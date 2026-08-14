@@ -12,7 +12,10 @@ vi.mock("@/lib/compliance", () => ({
   mapGridPartnerStatus: (raw: string) => {
     const s = String(raw ?? "").toUpperCase()
     if (s === "APPROVED") return "approved"
+    if (s === "REJECTED") return "rejected"
+    if (s === "HOLD") return "hold"
     if (s === "PENDING") return "pending"
+    if (s === "UNVERIFIED" || !s) return "not_started"
     return "not_started"
   },
   persistVerificationStatus: (...args: unknown[]) => mockPersistVerificationStatus(...args),
@@ -127,7 +130,6 @@ describe("syncGridBusinessKybToSupabase", () => {
     })
     mockParseGridCustomerForBusiness.mockReturnValue({
       name: "Easner Group, Inc",
-      support_email: "support@easner.com",
     })
 
     await syncGridBusinessKybToSupabase({
@@ -139,7 +141,7 @@ describe("syncGridBusinessKybToSupabase", () => {
 
     expect(mockParseGridCustomerForBusiness).toHaveBeenCalled()
     expect(mockBusinessUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Easner Group, Inc", support_email: "support@easner.com" }),
+      expect.objectContaining({ name: "Easner Group, Inc" }),
     )
     expect(syncGridBusinessOwnerUserFromKyb).toHaveBeenCalledWith(
       expect.objectContaining({

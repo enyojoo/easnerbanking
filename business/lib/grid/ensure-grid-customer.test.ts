@@ -33,13 +33,29 @@ const TERMS_CONSENT_ROW = {
   grid_end_user_terms_accept_method: "signup_email",
 }
 
-function mockAdminForBusiness(storedGridId: string | null) {
+function mockAdminForBusiness(storedGridId: string | null, opts?: { supportEmail?: string; ownerEmail?: string }) {
+  const supportEmail = opts?.supportEmail ?? "owner@example.com"
+  const ownerEmail = opts?.ownerEmail ?? "owner@example.com"
   const businessUpdate = vi.fn().mockReturnValue({
     eq: vi.fn().mockResolvedValue({ error: null }),
   })
   const userUpdate = vi.fn().mockReturnValue({
     eq: vi.fn().mockResolvedValue({ error: null }),
   })
+  const businessRow = {
+    grid_customer_id: storedGridId,
+    name: "Test Biz",
+    easetag: null,
+    registration_number: null,
+    tax_id: null,
+    country: "US",
+    address_line1: null,
+    city: null,
+    state: null,
+    postal_code: null,
+    support_email: supportEmail,
+    created_at: "2024-01-01T00:00:00Z",
+  }
   return {
     from: vi.fn((table: string) => {
       if (table === "businesses") {
@@ -47,34 +63,7 @@ function mockAdminForBusiness(storedGridId: string | null) {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               maybeSingle: vi.fn().mockResolvedValue({
-                data: storedGridId
-                  ? {
-                      grid_customer_id: storedGridId,
-                      name: "Test Biz",
-                      easetag: null,
-                      registration_number: null,
-                      tax_id: null,
-                      country: "US",
-                      address_line1: null,
-                      city: null,
-                      state: null,
-                      postal_code: null,
-                      support_email: "owner@example.com",
-                      created_at: "2024-01-01T00:00:00Z",
-                    }
-                  : {
-                      name: "Test Biz",
-                      easetag: null,
-                      registration_number: null,
-                      tax_id: null,
-                      country: "US",
-                      address_line1: null,
-                      city: null,
-                      state: null,
-                      postal_code: null,
-                      support_email: "owner@example.com",
-                      created_at: "2024-01-01T00:00:00Z",
-                    },
+                data: storedGridId ? businessRow : { ...businessRow, grid_customer_id: undefined },
               }),
             }),
           }),
@@ -85,7 +74,7 @@ function mockAdminForBusiness(storedGridId: string | null) {
         return {
           select: vi.fn().mockReturnValue({
             in: vi.fn().mockResolvedValue({
-              data: [{ id: USER_ID, email: "owner@example.com" }],
+              data: [{ id: USER_ID, email: ownerEmail, full_name: "Jane Owner" }],
             }),
             eq: vi.fn().mockReturnValue({
               maybeSingle: vi.fn().mockResolvedValue({
@@ -119,6 +108,7 @@ describe("ensureGridBusinessCustomer", () => {
       .mockResolvedValueOnce({ id: STORED_CUSTOMER })
       .mockResolvedValueOnce({
         id: STORED_CUSTOMER,
+        email: "owner@example.com",
         kybStatus: "APPROVED",
         endUserTermsConsent: { termsVersion: "2025-10-01" },
       })
@@ -141,11 +131,47 @@ describe("ensureGridBusinessCustomer", () => {
     )
   })
 
+  it("patches Grid customer email to org owner when support email differs", async () => {
+    mockGridFetch
+      .mockResolvedValueOnce({ id: STORED_CUSTOMER })
+      .mockResolvedValueOnce({
+        id: STORED_CUSTOMER,
+        email: "support@easner.com",
+        kybStatus: "PENDING",
+        endUserTermsConsent: { termsVersion: "2025-10-01" },
+      })
+      .mockResolvedValueOnce({
+        id: STORED_CUSTOMER,
+        email: "samuel@easner.com",
+        kybStatus: "PENDING",
+      })
+
+    const admin = mockAdminForBusiness(STORED_CUSTOMER, {
+      supportEmail: "support@easner.com",
+      ownerEmail: "samuel@easner.com",
+    })
+    const result = await ensureGridBusinessCustomer({
+      admin: admin as never,
+      userId: USER_ID,
+      businessId: BUSINESS_ID,
+    })
+
+    expect(result.customer.email).toBe("samuel@easner.com")
+    expect(mockGridFetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "PATCH",
+        path: `/customers/${encodeURIComponent(STORED_CUSTOMER)}`,
+        json: { email: "samuel@easner.com" },
+      }),
+    )
+  })
+
   it("looks up by canonical eb_ platformCustomerId when stored id missing", async () => {
     mockGridFetch.mockResolvedValueOnce({
       data: [
         {
           id: STORED_CUSTOMER,
+          email: "owner@example.com",
           platformCustomerId: CANONICAL_EB,
           endUserTermsConsent: { termsVersion: "2025-10-01" },
         },

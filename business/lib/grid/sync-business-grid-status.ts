@@ -5,6 +5,7 @@ export type SyncBusinessGridStatusResult = {
   ok: boolean
   needsFiatAccounts?: boolean
   accountsReady?: boolean
+  verificationStatus?: string
 }
 
 const SYNC_STATUS_TIMEOUT_MS = 65_000
@@ -35,10 +36,12 @@ async function syncBusinessGridStatusOnce(): Promise<SyncBusinessGridStatusResul
     if (!res.ok) return { ok: false }
 
     let needsFiatAccounts: boolean | undefined
+    let verificationStatus: string | undefined
     if (text) {
       try {
-        const json = JSON.parse(text) as { needsFiatAccounts?: boolean }
+        const json = JSON.parse(text) as { needsFiatAccounts?: boolean; kycStatus?: string }
         needsFiatAccounts = json.needsFiatAccounts
+        verificationStatus = json.kycStatus
       } catch {
         /* ignore */
       }
@@ -49,6 +52,7 @@ async function syncBusinessGridStatusOnce(): Promise<SyncBusinessGridStatusResul
       ok: true,
       needsFiatAccounts,
       accountsReady: needsFiatAccounts === false,
+      verificationStatus,
     }
   } catch {
     return { ok: false }

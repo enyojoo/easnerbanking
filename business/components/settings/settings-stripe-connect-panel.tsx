@@ -173,6 +173,8 @@ export function SettingsStripeConnectPanel({
   const [linking, setLinking] = useState(false)
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   const [onboardingLoading, setOnboardingLoading] = useState(false)
+  const [onboardingFrameReady, setOnboardingFrameReady] = useState(false)
+  const [onboardingError, setOnboardingError] = useState<string | null>(null)
   const [dialogCopy, setDialogCopy] = useState({ title: "", description: "" })
   const [connectInstance, setConnectInstance] = useState<ReturnType<
     typeof loadConnectAndInitialize
@@ -242,6 +244,8 @@ export function SettingsStripeConnectPanel({
     clearInstanceAfterCloseRef.current = setTimeout(() => {
       setConnectInstance(null)
       setOnboardingLoading(false)
+      setOnboardingFrameReady(false)
+      setOnboardingError(null)
       clearInstanceAfterCloseRef.current = null
     }, 280)
   }, [])
@@ -293,6 +297,8 @@ export function SettingsStripeConnectPanel({
           clearInstanceAfterCloseRef.current = null
         }
         setDialogCopy(copy)
+        setOnboardingError(null)
+        setOnboardingFrameReady(false)
         setOnboardingLoading(true)
         setOnboardingOpen(true)
         const instance = loadConnectAndInitialize({
@@ -306,11 +312,25 @@ export function SettingsStripeConnectPanel({
       } catch (e) {
         setOnboardingOpen(false)
         setOnboardingLoading(false)
-        toast.error(e instanceof Error ? e.message : "Could not start onboarding")
+        setOnboardingFrameReady(false)
+        const message = e instanceof Error ? e.message : "Could not start onboarding"
+        setOnboardingError(message)
+        toast.error(message)
       }
     },
     [fetchClientSecret, publishableKey],
   )
+
+  useEffect(() => {
+    if (!onboardingOpen || onboardingFrameReady || !connectInstance) return
+    const timeoutId = window.setTimeout(() => {
+      const message =
+        status?.reason?.trim() ||
+        "Verification is taking longer than expected. Check your connection and try again."
+      setOnboardingError(message)
+    }, 30_000)
+    return () => window.clearTimeout(timeoutId)
+  }, [connectInstance, onboardingFrameReady, onboardingOpen, status?.reason])
 
   const linkPayoutDestination = useCallback(async () => {
     setLinking(true)
@@ -402,22 +422,44 @@ export function SettingsStripeConnectPanel({
           {panelUx.primary || panelUx.secondary ? (
             <div className="flex flex-wrap gap-2">
               {panelUx.primary ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={panelUx.primary.variant}
-                  disabled={panelUx.primary.kind === "link_payout" && (linking || !status.hasGridVa)}
-                  onClick={() => runAction(panelUx.primary!)}
-                >
-                  {panelUx.primary.kind === "link_payout" && linking ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Linking…
-                    </>
-                  ) : (
-                    panelUx.primary.label
-                  )}
-                </Button>
+                panelUx.primary.kind === "link_payout" && !status.hasGridVa ? (
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={panelUx.primary.variant}
+                            disabled
+                          >
+                            {panelUx.primary.label}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Complete business verification and open a virtual account before linking payouts.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={panelUx.primary.variant}
+                    disabled={panelUx.primary.kind === "link_payout" && linking}
+                    onClick={() => runAction(panelUx.primary!)}
+                  >
+                    {panelUx.primary.kind === "link_payout" && linking ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Linking…
+                      </>
+                    ) : (
+                      panelUx.primary.label
+                    )}
+                  </Button>
+                )
               ) : null}
               {panelUx.secondary ? (
                 <Button
@@ -445,7 +487,25 @@ export function SettingsStripeConnectPanel({
             ) : null}
           </DialogHeader>
           <div className="relative min-h-0 flex-1 overflow-y-auto bg-[#faf9f6] px-4 pb-6 pt-2">
-            {onboardingLoading || !connectInstance ? (
+            {onboardingError ? (
+              <div className="flex size-full min-h-[16rem] flex-col items-center justify-center gap-3 px-4 text-center">
+                <p className="text-sm text-destructive">{onboardingError}</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setOnboardingError(null)
+                    void startOnboarding({
+                      title: dialogCopy.title || "Verification",
+                      description: dialogCopy.description,
+                    })
+                  }}
+                >
+                  Try again
+                </Button>
+              </div>
+            ) : onboardingLoading || !connectInstance || !onboardingFrameReady ? (
               <div className="flex size-full min-h-[16rem] flex-col items-center justify-center gap-3 text-muted-foreground">
                 <Loader2 className="size-8 animate-spin" aria-hidden />
                 <p className="text-sm">Opening verification…</p>
@@ -454,6 +514,7 @@ export function SettingsStripeConnectPanel({
               <ConnectComponentsProvider connectInstance={connectInstance}>
                 <ConnectAccountOnboarding
                   onExit={() => void closeOnboardingAndSync()}
+                  onStepChange={() => setOnboardingFrameReady(true)}
                   fullTermsOfServiceUrl={EASNER_STRIPE_CONNECT_TERMS_URL}
                   privacyPolicyUrl={EASNER_STRIPE_CONNECT_PRIVACY_URL}
                   collectionOptions={connectOnboardingCollectionOptions}

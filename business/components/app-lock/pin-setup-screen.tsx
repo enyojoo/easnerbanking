@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import { setPin } from "@/lib/login-pin"
 import { appPinStrings } from "@/lib/i18n/app-pin-en"
+import { touchSessionActivity } from "@/lib/session-activity"
+import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 import { PinEntryBlock } from "./pin-entry-block"
 
 type Step = "enter" | "confirm"
@@ -21,6 +23,12 @@ export function PinSetupScreen({
   const [shake, setShake] = useState(false)
   const [busy, setBusy] = useState(false)
   const firstRef = useRef("")
+
+  useSuspendIdleLock(true)
+
+  useEffect(() => {
+    touchSessionActivity()
+  }, [])
 
   const pin = step === "enter" ? first : confirm
 

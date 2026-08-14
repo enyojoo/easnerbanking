@@ -18,7 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, fontSize, fontFamily, lineHeight } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
-import { AUTH_INITIAL_MODE_KEY } from '../../constants/auth'
+import { AUTH_INITIAL_MODE_KEY, ACCOUNT_DELETED_FLAG_KEY } from '../../constants/auth'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
 // Onboarding images
@@ -41,7 +41,6 @@ const ONBOARDING_DATA = [
 ]
 
 const ONBOARDING_COMPLETED_KEY = '@easner_onboarding_completed'
-const ACCOUNT_DELETED_FLAG_KEY = '@easner_account_deleted'
 
 export default function OnboardingScreen({ navigation }: NavigationProps) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions()

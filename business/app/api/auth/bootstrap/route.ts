@@ -187,9 +187,11 @@ export async function POST(request: Request) {
   }
 
   // Signing back in during the grace period cancels pending account closure.
+  let deletionCancelled = false
   if (userRow?.id && userRow.deletion_scheduled_at) {
     try {
       await cancelAccountDeletion(admin, user.id)
+      deletionCancelled = true
     } catch (e) {
       console.warn("[bootstrap] cancel pending account deletion:", e)
     }
@@ -491,6 +493,7 @@ export async function POST(request: Request) {
       businessId: userRow?.easner_business_id ?? null,
       turnkeySubOrgReady,
       residenceCountry: resolvedResidenceCountry,
+      deletionCancelled,
     })
   }
 
@@ -586,5 +589,6 @@ export async function POST(request: Request) {
     businessId,
     country: country ?? null,
     turnkeySubOrgReady,
+    deletionCancelled,
   })
 }

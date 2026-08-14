@@ -227,6 +227,7 @@ export function SendRecipientPicker({
               variant="outline"
               className="w-full"
               onClick={() => {
+                setIsPickerOpen(false)
                 setIsAddDialogOpen(true)
               }}
             >

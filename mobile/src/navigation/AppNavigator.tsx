@@ -24,6 +24,8 @@ import {
   setPushNavMainReady,
   warmPendingPushTransactionDetail,
 } from '../lib/pendingPushNavigation'
+import { ACCOUNT_CLOSURE_CANCELLED_KEY } from '../constants/auth'
+import { useToast } from '../components/ToastProvider'
 import type { PersonalScope } from '@easner/shared'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
 import { prefetchIntercomModule, prepareIntercomMessenger } from '../lib/intercom'
@@ -470,6 +472,7 @@ function AuthFlowLoadingShell({ palette, testId }: { palette: ReturnType<typeof 
 
 export default function AppNavigator() {
   const { user, userProfile, loading, mfaPending, mfaGateResolved, signOut } = useAuth()
+  const { showSuccess } = useToast()
   const signOutRef = useRef(signOut)
   signOutRef.current = signOut
   const palette = useThemeColors()
@@ -480,6 +483,22 @@ export default function AppNavigator() {
   // const [pinSetup, setPinSetup] = useState<boolean | null>(null)
   // const [sessionValid, setSessionValid] = useState<boolean | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(Platform.OS !== 'web')
+
+  useEffect(() => {
+    if (!user?.id) return
+    void (async () => {
+      try {
+        const flag = await AsyncStorage.getItem(ACCOUNT_CLOSURE_CANCELLED_KEY)
+        if (flag === '1') {
+          await AsyncStorage.removeItem(ACCOUNT_CLOSURE_CANCELLED_KEY).catch(() => undefined)
+          showSuccess('Account closure cancelled. Welcome back!')
+        }
+      } catch {
+        // ignore
+      }
+    })()
+  }, [user?.id, showSuccess])
+
   // const [isNewUser, setIsNewUser] = useState<boolean | null>(null)
   // const [showPinPrompt, setShowPinPrompt] = useState(false)
   // const [justLoggedIn, setJustLoggedIn] = useState(false)

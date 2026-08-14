@@ -24,6 +24,7 @@ import { useTeamInviteContext } from "@/lib/use-team-invite-context"
 import { AppleSignInButton } from "@/components/auth/apple-sign-in-button"
 import { consumeSignupBlockedMessage } from "@/lib/auth/signup-blocked-message"
 import { AUTH_COPY } from "@/lib/copy/business-ui-copy"
+import { analytics } from "@/lib/analytics"
 
 type Step = "password" | "mfa"
 
@@ -90,6 +91,10 @@ export default function LoginPage() {
         setStep("mfa")
         return
       }
+      const { data: userData } = await supabase.auth.getUser()
+      if (userData.user?.id) {
+        analytics.trackSignIn("email", { userId: userData.user.id })
+      }
       router.push(nextPath || "/dashboard")
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Invalid credentials"
@@ -146,6 +151,10 @@ export default function LoginPage() {
         setError(e instanceof Error ? e.message : "This account cannot access Easner Business.")
         return
       }
+      const { data: userData } = await supabase.auth.getUser()
+      if (userData.user?.id) {
+        analytics.trackSignIn("email", { userId: userData.user.id })
+      }
       router.push(nextPath || "/dashboard")
     } finally {
       setMfaSubmitting(false)
@@ -153,6 +162,7 @@ export default function LoginPage() {
   }
 
   const backToPassword = async () => {
+    analytics.trackSignInCancelled("email", { step: "mfa" })
     setError("")
     setMfaCode("")
     setMfaFactorId(null)
@@ -178,6 +188,30 @@ export default function LoginPage() {
     setOauthSigningIn(true)
     try {
       await signInWithApple()
+      const supabase = createSupabaseBrowser()
+      const { needsOtp, error: mfaResolveErr } = await resolvePostSignInMfaRequirement(supabase)
+      if (mfaResolveErr) {
+        setError(mfaResolveErr.message || "Could not verify sign-in level.")
+        return
+      }
+      if (needsOtp) {
+        const { data: factors, error: facErr } = await supabase.auth.mfa.listFactors()
+        if (facErr) {
+          setError(facErr.message || "Could not load two-factor settings.")
+          return
+        }
+        const fid = getVerifiedTotpFactorId(totpFactorsFromListResponse(factors))
+        if (!fid) {
+          setError(
+            "Additional verification is required, but no authenticator was found. Contact support.",
+          )
+          return
+        }
+        setMfaFactorId(fid)
+        setMfaCode("")
+        setStep("mfa")
+        return
+      }
       router.push(nextPath || "/dashboard")
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unable to continue with Apple. Please try again."

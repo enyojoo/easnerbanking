@@ -304,8 +304,23 @@ export const ONBOARDING_STEP_COPY = {
 export const BANNER_COPY = {
   verification:
     "Complete verification to unlock payments and accounts.",
+  verificationInReview:
+    "Verification is in progress. This usually completes within 1–3 days.",
+  verificationActionNeeded:
+    "Verification needs your attention. Review the status in settings.",
   invoiceProfileTitle: "Finish your business profile to create invoices.",
 } as const
+
+export function verificationBannerCopy(status: string | null | undefined): string {
+  const s = String(status ?? "").toLowerCase().trim()
+  if (s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")) {
+    return BANNER_COPY.verificationInReview
+  }
+  if (s === "rejected" || s === "hold") {
+    return BANNER_COPY.verificationActionNeeded
+  }
+  return BANNER_COPY.verification
+}
 
 export const DEVELOPER_TOOL_COPY = {
   apiReference: "Browse endpoints and examples.",

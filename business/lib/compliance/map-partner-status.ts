@@ -8,7 +8,8 @@ export function mapGridPartnerStatus(raw: string | null | undefined): Verificati
   if (s === "APPROVED") return "approved"
   if (s === "REJECTED") return "rejected"
   if (s === "HOLD") return "hold"
-  if (s === "PENDING" || s === "UNVERIFIED") return "pending"
+  if (s === "PENDING") return "pending"
+  if (s === "UNVERIFIED" || !s) return "not_started"
   return "not_started"
 }
 

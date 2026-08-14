@@ -3,6 +3,7 @@ import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { enqueuePayrollExecution } from "@/lib/payroll/execution-jobs"
 import { sanitizePayrollExecutionError } from "@/lib/payroll/execution-error"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 
 export async function POST(
   request: Request,
@@ -14,6 +15,18 @@ export async function POST(
   const { id } = await params
   const admin = createSupabaseAdmin()
   let transitionedScheduled = false
+
+  const { data: business } = await admin
+    .from("businesses")
+    .select("verification_status,verification_provider")
+    .eq("id", ctx.businessId)
+    .maybeSingle()
+  if (!isBusinessTier1Complete(business)) {
+    return NextResponse.json(
+      { error: "Business verification must be approved before executing payroll." },
+      { status: 403 },
+    )
+  }
 
   try {
     const { data: pendingRun } = await admin

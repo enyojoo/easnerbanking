@@ -15,10 +15,55 @@ import {
   markGridEndUserTermsSynced,
   type GridEndUserTermsConsentPayload,
 } from "./end-user-terms-consent"
+import { pickGridBeneficialOwner } from "./parse-grid-beneficial-owner-for-users"
 import { normalizeGridCustomerId } from "./quote-request"
 import type { GridCustomer } from "./types"
 
 export type { GridBusinessProfile } from "./business-kyc-metadata"
+
+export type GridBusinessKybContact = {
+  email: string
+  ownerUserId: string
+  ownerFullName: string | null
+}
+
+/** Org owner login email for Grid KYB/SumSub; support email is fallback only. */
+export async function resolveGridBusinessKybContact(input: {
+  admin: SupabaseClient
+  businessId: string
+  userId: string
+  supportEmail?: string | null
+}): Promise<GridBusinessKybContact> {
+  const ownerUserId = await resolveOrgOwnerUserId(input.admin, input.businessId, input.userId)
+  const userIds = [...new Set([ownerUserId, input.userId].filter(Boolean))]
+  const { data: users } = await input.admin.from("users").select("id,email,full_name").in("id", userIds)
+  const rowById = new Map(
+    (users ?? []).map((row) => [
+      String(row.id),
+      {
+        email: String(row.email ?? "").trim(),
+        fullName: String(row.full_name ?? "").trim() || null,
+      },
+    ]),
+  )
+
+  const ownerRow = rowById.get(ownerUserId) ?? rowById.get(input.userId)
+  const ownerEmail = ownerRow?.email ?? ""
+  if (ownerEmail) {
+    return {
+      email: ownerEmail,
+      ownerUserId,
+      ownerFullName: ownerRow?.fullName ?? null,
+    }
+  }
+
+  const supportEmail = String(input.supportEmail ?? "").trim()
+  if (supportEmail) {
+    return { email: supportEmail, ownerUserId, ownerFullName: ownerRow?.fullName ?? null }
+  }
+
+  throw new Error("A contact email is required to start business verification")
+}
 
 async function readStoredGridCustomerId(
   admin: SupabaseClient,
@@ -85,30 +130,24 @@ export async function loadGridBusinessProfile(
     city: data.city,
     state: data.state,
     postalCode: data.postal_code,
-    email: data.support_email,
     createdAt: data.created_at,
   })
 }
 
-async function withGridBusinessContactEmail(
+async function withGridBusinessKybContactEmail(
   admin: SupabaseClient,
   businessId: string,
   userId: string,
   profile: GridBusinessProfile,
-): Promise<GridBusinessProfile> {
-  if (profile.email?.trim()) return profile
-
-  const ownerId = await resolveOrgOwnerUserId(admin, businessId, userId)
-  const userIds = [...new Set([ownerId, userId].filter(Boolean))]
-  const { data: users } = await admin.from("users").select("id,email").in("id", userIds)
-  const emailById = new Map(
-    (users ?? []).map((row) => [String(row.id), String(row.email ?? "").trim()]),
-  )
-  const email = emailById.get(ownerId) || emailById.get(userId) || ""
-  if (!email) {
-    throw new Error("A contact email is required to start business verification")
-  }
-  return { ...profile, email }
+  supportEmail: string | null | undefined,
+): Promise<{ profile: GridBusinessProfile; contact: GridBusinessKybContact }> {
+  const contact = await resolveGridBusinessKybContact({
+    admin,
+    businessId,
+    userId,
+    supportEmail,
+  })
+  return { profile: { ...profile, email: contact.email }, contact }
 }
 
 async function requireBusinessEndUserTermsConsent(
@@ -187,6 +226,71 @@ async function syncGridBusinessTaxIdIfNeeded(input: {
   })
 }
 
+/** Keep Grid customer email aligned with org owner (SumSub primary contact). */
+async function syncGridBusinessKybContactEmailIfNeeded(input: {
+  customerId: string
+  customer: GridCustomer
+  desiredEmail: string
+}): Promise<GridCustomer> {
+  const desired = input.desiredEmail.trim()
+  const current = String(input.customer.email ?? "").trim()
+  if (!desired || current.toLowerCase() === desired.toLowerCase()) {
+    return input.customer
+  }
+
+  return gridFetch<GridCustomer>({
+    method: "PATCH",
+    path: `/customers/${encodeURIComponent(input.customerId)}`,
+    json: { email: desired },
+  })
+}
+
+/** Ensure beneficial owner has the org owner email for hosted owner KYC. */
+async function syncGridBeneficialOwnerEmailIfNeeded(input: {
+  customer: GridCustomer & Record<string, unknown>
+  contact: GridBusinessKybContact
+}): Promise<void> {
+  if (!input.customer || typeof input.customer !== "object") return
+
+  const owner = pickGridBeneficialOwner(input.customer, {
+    ownerEmail: input.contact.email,
+    ownerFullName: input.contact.ownerFullName,
+  })
+  const ownerId = String(owner?.id ?? "").trim()
+  if (!ownerId) return
+
+  const personalInfo =
+    owner?.personalInfo && typeof owner.personalInfo === "object"
+      ? (owner.personalInfo as Record<string, unknown>)
+      : null
+  const current = String(personalInfo?.email ?? "").trim()
+  const desired = input.contact.email.trim()
+  if (!desired || current.toLowerCase() === desired.toLowerCase()) return
+
+  await gridFetch({
+    method: "PATCH",
+    path: `/beneficial-owners/${encodeURIComponent(ownerId)}`,
+    json: { personalInfo: { email: desired } },
+  })
+}
+
+async function syncGridBusinessKybContactsIfNeeded(input: {
+  customerId: string
+  customer: GridCustomer
+  contact: GridBusinessKybContact
+}): Promise<GridCustomer> {
+  const customer = await syncGridBusinessKybContactEmailIfNeeded({
+    customerId: input.customerId,
+    customer: input.customer,
+    desiredEmail: input.contact.email,
+  })
+  await syncGridBeneficialOwnerEmailIfNeeded({
+    customer: customer as GridCustomer & Record<string, unknown>,
+    contact: input.contact,
+  })
+  return customer
+}
+
 /** Ensure a Grid BUSINESS customer exists for the org. */
 export async function ensureGridBusinessCustomer(input: {
   admin: SupabaseClient
@@ -195,16 +299,25 @@ export async function ensureGridBusinessCustomer(input: {
   profile?: GridBusinessProfile
 }): Promise<{ customerId: string; platformCustomerId: string; customer: GridCustomer }> {
   const platformCustomerId = gridPlatformCustomerIdFromBusinessId(input.businessId)
-  const rawProfile =
+  const loadedProfile =
     input.profile ?? (await loadGridBusinessProfile(input.admin, input.businessId))
-  if (!rawProfile) {
+  if (!loadedProfile) {
     throw new Error("Business organization not found")
   }
-  const profile = await withGridBusinessContactEmail(
+
+  const { data: bizRow } = await input.admin
+    .from("businesses")
+    .select("support_email")
+    .eq("id", input.businessId)
+    .maybeSingle()
+  const supportEmail = String(bizRow?.support_email ?? "").trim() || null
+
+  const { profile, contact } = await withGridBusinessKybContactEmail(
     input.admin,
     input.businessId,
     input.userId,
-    rawProfile,
+    loadedProfile,
+    supportEmail,
   )
   const { consent, ownerUserId } = await requireBusinessEndUserTermsConsent(
     input.admin,
@@ -233,6 +346,11 @@ export async function ensureGridBusinessCustomer(input: {
         profile,
         platformCustomerId,
       })
+      customer = await syncGridBusinessKybContactsIfNeeded({
+        customerId,
+        customer,
+        contact,
+      })
       if (customerId !== stored) {
         await persistGridCustomerId(input.admin, input.businessId, customerId)
       }
@@ -256,6 +374,11 @@ export async function ensureGridBusinessCustomer(input: {
       customer,
       profile,
       platformCustomerId,
+    })
+    customer = await syncGridBusinessKybContactsIfNeeded({
+      customerId,
+      customer,
+      contact,
     })
     return { customerId, platformCustomerId, customer }
   }

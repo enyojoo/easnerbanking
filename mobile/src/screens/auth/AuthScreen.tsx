@@ -25,7 +25,7 @@ import { analytics } from '../../lib/analytics'
 import { colors, spacing, surfaceChromeCircleStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
-import { AUTH_INITIAL_MODE_KEY, TERMS_URL } from '../../constants/auth'
+import { AUTH_INITIAL_MODE_KEY, TERMS_URL, ACCOUNT_DELETED_FLAG_KEY, ACCOUNT_CLOSURE_CANCELLED_KEY } from '../../constants/auth'
 import { useToast } from '../../components/ToastProvider'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import EaseEnter from '../../components/EaseEnter'
@@ -47,6 +47,36 @@ type AuthMode = 'login' | 'signup'
 type SignupStep = 'form' | 'otp'
 
 const FROM_ONBOARDING_KEY = '@easner_from_onboarding'
+
+function resolveLoginErrorMessage(error: { message?: string }): string {
+  const msg = (error.message ?? '').trim()
+  const lower = msg.toLowerCase()
+  if (!msg) return 'Invalid credentials'
+  if (lower.includes('email not confirmed')) {
+    return 'Please confirm your email before signing in.'
+  }
+  if (lower === 'unauthorized' || lower.includes('session')) {
+    return 'Sign-in is still loading. Please wait a moment and try again.'
+  }
+  if (lower.includes('account has been closed') || lower.includes('account_closed')) {
+    return 'This account has been closed. Contact support@easner.com if you need help restoring access.'
+  }
+  if (
+    lower.includes('easner business') ||
+    lower.includes('business user') ||
+    lower.includes('business.easner.com')
+  ) {
+    return msg
+  }
+  if (
+    lower.includes('invalid login credentials') ||
+    lower.includes('invalid email or password') ||
+    lower.includes('invalid credentials')
+  ) {
+    return 'Invalid credentials'
+  }
+  return msg
+}
 
 export default function AuthScreen({ navigation }: NavigationProps) {
   const { shouldAnimateEnter } = useScreenDecorativeEnter()
@@ -88,6 +118,14 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         if (fromFlag === 'true') {
           setFromOnboarding(true)
         }
+        const deletedFlag = await AsyncStorage.getItem(ACCOUNT_DELETED_FLAG_KEY)
+        if (deletedFlag === '1') {
+          await AsyncStorage.removeItem(ACCOUNT_DELETED_FLAG_KEY).catch(() => undefined)
+          showInfo(
+            'Account closure scheduled. Your login access will be removed in 7 days. Sign in anytime before then to cancel.\n\nQuestions? support@easner.com',
+            7000,
+          )
+        }
         const initialMode = await AsyncStorage.getItem(AUTH_INITIAL_MODE_KEY)
         if (initialMode === 'signup' || initialMode === 'login') {
           setModeStack([initialMode])
@@ -97,8 +135,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         console.error('Error checking from onboarding:', error)
       }
     }
-    checkFromOnboarding()
-  }, [])
+    void checkFromOnboarding()
+  }, [showInfo])
 
   useEffect(() => {
     void readSignupOtpEmail().then((storedEmail) => {
@@ -256,12 +294,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
       if (mode === 'login') {
         const { error } = await signIn(email, password, false)
         if (error) {
-          const msg = error.message || ''
-          if (msg.toLowerCase().includes('email not confirmed')) {
-            showError('Please confirm your email before signing in.')
-          } else {
-            showError('Invalid credentials')
-          }
+          showError(resolveLoginErrorMessage(error))
         }
       } else {
         await persistResidenceForSignup()

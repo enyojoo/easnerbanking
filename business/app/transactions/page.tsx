@@ -49,7 +49,7 @@ function exportToCsv(
   const headers = ["Date", "Description", "Type", "Source", "Amount", "Currency", "Status", "Reference", "Fee"]
   const rows = transactions.map((t) => [
     formatDate(t.date),
-    `"${t.description.replace(/"/g, '""')}"`,
+    `"${(t.description ?? "").replace(/"/g, '""')}"`,
     t.type.toUpperCase(),
     t.source === "account" ? "Account" : "Card",
     t.direction === "credit" ? `+${Math.abs(t.amount).toFixed(2)}` : `-${Math.abs(t.amount).toFixed(2)}`,
@@ -319,7 +319,7 @@ export default function TransactionsPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">
-                          {txn.description.replace(/^Transfer to\s+/i, "")}
+                          {(txn.description ?? "").replace(/^Transfer to\s+/i, "")}
                         </p>
                         <p className="mt-1 truncate text-xs text-muted-foreground">
                           {txn.reference &&

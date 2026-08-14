@@ -144,6 +144,18 @@ export const analytics = {
     capture('error_occurred', { error, ...properties })
   },
 
+  trackSignInCancelled: (method: string, properties?: Props) => {
+    capture('sign_in_cancelled', { method, ...properties })
+  },
+
+  trackAccountClosureCancelled: (properties?: Props) => {
+    capture('account_closure_cancelled', properties)
+  },
+
+  track: (event: string, properties?: Props) => {
+    capture(event, properties)
+  },
+
   // App lifecycle
   trackAppOpened: () => {
     capture('app_opened')

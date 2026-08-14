@@ -27,21 +27,12 @@ function loadEnvLocal() {
 
 loadEnvLocal()
 
-const businessId = process.argv[2] ?? "fd9c4c9a-a8c8-4019-9475-eb7317894f43"
-const runSync = process.argv.includes("--sync")
+const args = process.argv.slice(2)
+const runSync = args.includes("--sync")
+const runBatch = args.includes("--batch")
+const businessIdArg = args.find((a) => !a.startsWith("--"))
 
-async function main() {
-  const admin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  )
-
-  const { syncGridBusinessKybToSupabase } = await import("../lib/grid/sync-kyb.ts")
-  const { provisionAfterVerificationApproved } = await import(
-    "../lib/verification/provision-after-approval.ts"
-  )
-
+async function syncOneBusiness(admin, syncGridBusinessKybToSupabase, provisionAfterVerificationApproved, businessId) {
   const { data: biz } = await admin
     .from("businesses")
     .select("id,name,grid_customer_id,verification_status,kyb_verified_at")
@@ -49,8 +40,8 @@ async function main() {
     .single()
 
   if (!biz?.grid_customer_id) {
-    console.error("No grid_customer_id on business")
-    process.exit(1)
+    console.warn(`skip ${businessId}: no grid_customer_id`)
+    return { businessId, skipped: true }
   }
 
   const { data: owner } = await admin
@@ -64,8 +55,7 @@ async function main() {
   console.log("before", biz)
 
   if (!runSync) {
-    console.log("Pass --sync to pull Grid KYB and provision")
-    return
+    return { businessId, dryRun: true }
   }
 
   const userId = owner?.id ?? businessId
@@ -75,7 +65,7 @@ async function main() {
     userId,
     customerId: String(biz.grid_customer_id),
   })
-  console.log("sync_status", status)
+  console.log("sync_status", businessId, status)
 
   if (status === "approved") {
     const provisioned = await provisionAfterVerificationApproved({
@@ -86,7 +76,7 @@ async function main() {
       partnerCustomerId: String(biz.grid_customer_id),
       provider: "grid",
     })
-    console.log("provisioned", provisioned)
+    console.log("provisioned", businessId, provisioned)
   }
 
   const { data: after } = await admin
@@ -94,19 +84,74 @@ async function main() {
     .select("verification_status,kyb_verified_at,name,registration_number")
     .eq("id", businessId)
     .single()
-  console.log("after_business", after)
+  console.log("after_business", businessId, after)
 
-  const ownerUserId = owner?.id
-  if (ownerUserId) {
-    const { data: ownerAfter } = await admin
-      .from("users")
-      .select(
-        "id,email,full_name,residence_country,verification_status,verification_provider,grid_beneficial_owner_id,grid_end_user_terms_version,grid_end_user_terms_accepted_at,grid_end_user_terms_synced_at",
-      )
-      .eq("id", ownerUserId)
-      .single()
-    console.log("after_owner", ownerAfter)
+  return { businessId, status, after }
+}
+
+async function listBatchBusinessIds(admin) {
+  const { data, error } = await admin
+    .from("businesses")
+    .select("id")
+    .eq("verification_provider", "grid")
+    .eq("verification_status", "pending")
+    .is("kyb_verified_at", null)
+    .not("grid_customer_id", "is", null)
+
+  if (error) throw error
+  return (data ?? []).map((row) => String(row.id))
+}
+
+async function main() {
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  )
+
+  if (runBatch) {
+    const ids = await listBatchBusinessIds(admin)
+    console.log(`batch: ${ids.length} businesses`)
+    if (!runSync) {
+      console.log("Pass --sync to re-sync all affected businesses")
+      for (const id of ids) console.log(id)
+      return
+    }
   }
+
+  const { syncGridBusinessKybToSupabase } = await import("../lib/grid/sync-kyb.ts")
+  const { provisionAfterVerificationApproved } = await import(
+    "../lib/verification/provision-after-approval.ts"
+  )
+
+  if (runBatch) {
+    const ids = await listBatchBusinessIds(admin)
+    const BATCH = 20
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const slice = ids.slice(i, i + BATCH)
+      for (const id of slice) {
+        await syncOneBusiness(
+          admin,
+          syncGridBusinessKybToSupabase,
+          provisionAfterVerificationApproved,
+          id,
+        )
+      }
+      if (i + BATCH < ids.length) {
+        await new Promise((r) => setTimeout(r, 1000))
+      }
+    }
+    return
+  }
+
+  const businessId = businessIdArg ?? "fd9c4c9a-a8c8-4019-9475-eb7317894f43"
+  if (!runSync) {
+    await syncOneBusiness(admin, syncGridBusinessKybToSupabase, provisionAfterVerificationApproved, businessId)
+    console.log("Pass --sync to pull Grid KYB and provision")
+    return
+  }
+
+  await syncOneBusiness(admin, syncGridBusinessKybToSupabase, provisionAfterVerificationApproved, businessId)
 }
 
 main().catch((e) => {

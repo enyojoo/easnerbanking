@@ -15,7 +15,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useBusinessNoahSync } from "@/hooks/use-business-noah-sync"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { openBusinessSupport } from "@/lib/intercom-messenger"
-import { BANNER_COPY } from "@/lib/copy/business-ui-copy"
+import { BANNER_COPY, verificationBannerCopy } from "@/lib/copy/business-ui-copy"
 import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { cn } from "@/lib/utils"
 import { useScope } from "@/lib/query/scope"
@@ -39,6 +39,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
     isLoading: profileLoading,
     hasData: profileHasData,
     tier1Complete,
+    tier1VerificationStatus,
     businessId,
     canManageBusinessVerification,
     tier1CanResubmit,
@@ -156,7 +157,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
               className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] px-8 py-2.5 text-sm text-[hsl(var(--warning))] backdrop-blur-sm"
               role="status"
             >
-              <span>{BANNER_COPY.verification}</span>
+              <span>{verificationBannerCopy(tier1VerificationStatus)}</span>
               <Link
                 href="/settings?tab=verification"
                 className="font-semibold text-[hsl(var(--warning))] underline underline-offset-2"

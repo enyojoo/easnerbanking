@@ -74,7 +74,7 @@ export function useBusinessNoahSync(): void {
 
   useEffect(() => {
     if (!shouldSync) return
-    const pollMs = isBusinessTier1Complete(profileSlice) ? 10_000 : 5 * 60 * 1000
+    const pollMs = isBusinessTier1Complete(profileSlice) ? 10_000 : 60_000
     const id = window.setInterval(() => {
       void runSync()
     }, pollMs)

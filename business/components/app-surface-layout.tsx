@@ -47,13 +47,11 @@ export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, canBootstrapWorkspace } = useAuth()
   const [clientReady, setClientReady] = useState(false)
 
+  const isShellRoute = Boolean(pathname && isDashboardShellPath(pathname))
+
   useLayoutEffect(() => {
     setClientReady(true)
   }, [])
-
-  if (!pathname || !isDashboardShellPath(pathname)) {
-    return <>{children}</>
-  }
 
   const storedSessionLikelyValid = clientReady
     ? probeStoredSupabaseSession().likelyAuthenticated
@@ -71,9 +69,14 @@ export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
     !storedSessionLikelyValid
 
   useLayoutEffect(() => {
+    if (!isShellRoute) return
     if (canShowWorkspace || isLoading) return
     redirectToWorkspaceLogin()
-  }, [canShowWorkspace, isLoading])
+  }, [isShellRoute, canShowWorkspace, isLoading])
+
+  if (!isShellRoute) {
+    return <>{children}</>
+  }
 
   if (!canShowWorkspace) {
     if (definitivelyLoggedOut) {
@@ -82,7 +85,7 @@ export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
     return null
   }
 
-  const { constrained } = resolveShellProps(pathname)
+  const { constrained } = resolveShellProps(pathname!)
   return (
     <DashboardShell constrained={constrained}>
       {children}

@@ -25,12 +25,12 @@ describe("parseGridCustomerForBusiness", () => {
       country: "United States",
       registration_number: "10609372",
       tax_id: "246398107",
-      support_email: "support@easner.com",
       registered_address_line1: "131 Continental Dr Suite 305",
       registered_address_city: "Newark",
       registered_address_state: "DE",
       registered_address_postal_code: "19713",
     })
+    expect(parsed).not.toHaveProperty("support_email")
     expect(parsed).not.toHaveProperty("address_line1")
   })
 })

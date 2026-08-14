@@ -18,7 +18,7 @@ import { analytics } from '../lib/analytics'
 import { ensureBusinessAppUserBootstrap } from '../lib/apiClient'
 import { stashSignupBlockedMessage } from '../lib/signupBlockedMessage'
 import { clearPinAuth, updateSessionActivity, markFirstLoginAfterVerification } from '../lib/pinAuth'
-import { AUTH_INITIAL_MODE_KEY } from '../constants/auth'
+import { AUTH_INITIAL_MODE_KEY, ACCOUNT_CLOSURE_CANCELLED_KEY } from '../constants/auth'
 import {
   getVerifiedTotpFactorId,
   resolvePostSignInMfaRequirement,
@@ -63,9 +63,28 @@ function dismissOAuthBrowserIfNeeded(): void {
   }
 }
 
+function mapSessionUserToAppUser(authUser: SupabaseUser, emailFallback?: string): User {
+  const { first_name, last_name } = mapNameFromMetadata(
+    authUser.user_metadata as Record<string, unknown> | undefined,
+  )
+  return {
+    id: authUser.id,
+    email: authUser.email || emailFallback?.trim() || '',
+    full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
+    first_name,
+    last_name,
+    phone: authUser.phone ?? undefined,
+    status: 'active',
+    base_currency: 'USD',
+    enabled_extra_account_currencies: [],
+    created_at: authUser.created_at,
+    updated_at: authUser.updated_at || authUser.created_at,
+  }
+}
+
 async function finalizePostAuthSession(options?: {
   noSessionMessage?: string
-}): Promise<{ error: Error | null }> {
+}): Promise<{ error: Error | null; deletionCancelled?: boolean }> {
   let session = await getSessionReliable()
 
   if (!session?.access_token) {
@@ -119,7 +138,13 @@ async function finalizePostAuthSession(options?: {
     return { error: new Error('Account setup did not create a user profile row. Please try again.') }
   }
 
-  return { error: null }
+  return { error: null, deletionCancelled: boot.deletionCancelled === true }
+}
+
+async function markAccountClosureCancelledIfNeeded(deletionCancelled?: boolean): Promise<void> {
+  if (!deletionCancelled) return
+  await AsyncStorage.setItem(ACCOUNT_CLOSURE_CANCELLED_KEY, '1').catch(() => undefined)
+  analytics.trackAccountClosureCancelled()
 }
 
 function getOAuthRedirectUri(): string {
@@ -258,7 +283,7 @@ interface AuthContextType {
     password: string,
     name: string
   ) => Promise<{ error: any; needsEmailConfirmation?: boolean }>
-  signOut: () => Promise<void>
+  signOut: (options?: { preserveOnboarding?: boolean }) => Promise<void>
   refreshUserProfile: () => Promise<void>
   /** Merge `PUT/GET /api/settings/personal` payload into session + snapshot (avoids stale Supabase read after save). */
   applyPersonalSettingsFromServer: (
@@ -325,6 +350,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   /** Avoid repeated payout-corridor hydration (and dev Metro re-bundling) on every profile refetch. */
   const payoutCorridorsBootstrappedForUserRef = useRef<string | null>(null)
   const oauthConsumeInFlightRef = useRef(false)
+  const oauthCallbackErrorRef = useRef<string | null>(null)
 
   useEffect(() => {
     userProfileRef.current = userProfile
@@ -447,6 +473,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (surfaceGate.error) {
         return { error: surfaceGate.error }
       }
+      const finalized = await finalizePostAuthSession()
+      if (finalized.error) {
+        return { error: finalized.error }
+      }
+      if (finalized.deletionCancelled) {
+        await markAccountClosureCancelledIfNeeded(true)
+      }
       /** After surface is OK — avoids a blank frame: clearing MFA before this left AppNavigator without MfaStack while still awaiting network. */
       setMfaPending(null)
       return { error: null }
@@ -531,11 +564,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const surfaceGate = await ensureConsumerMobileAccess()
       if (surfaceGate.error) {
-        /** Session not hydrated yet — never clear user; profile fetch will run again. */
         if (surfaceGate.error.message === 'Unauthorized') {
           return null
         }
         console.warn('AuthContext: App surface denied:', surfaceGate.error.message)
+        analytics.trackError('sign_in_failed', {
+          reason: surfaceGate.error.message,
+          source: 'fetchUserProfile',
+        })
+        await stashSignupBlockedMessage(surfaceGate.error.message)
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+        clearSessionUserHydrated()
         setUser(null)
         setUserProfile(null)
         payoutCorridorsBootstrappedForUserRef.current = null
@@ -608,10 +647,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       console.log('AuthContext: No user row in public.users yet')
-      // If user not found in either table, clear state
+      analytics.trackError('sign_in_failed', {
+        reason: 'missing_user_profile',
+        source: 'fetchUserProfile',
+      })
+      await stashSignupBlockedMessage(
+        'Account setup did not create a user profile row. Please try again or contact support.',
+      )
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+      clearSessionUserHydrated()
       setUser(null)
       setUserProfile(null)
       payoutCorridorsBootstrappedForUserRef.current = null
+      setLoading(false)
       return null
     } catch (error) {
       console.error('Error fetching user profile:', error)
@@ -663,6 +711,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const { code, accessToken, refreshToken, error, errorDescription } = parseAuthCallbackUrl(url)
     if (error) {
       console.warn('AuthContext: OAuth error:', error, errorDescription ?? '')
+      oauthCallbackErrorRef.current =
+        error === 'access_denied'
+          ? 'Google sign-in was cancelled.'
+          : errorDescription?.trim() || 'Sign-in failed. Please try again.'
+      analytics.trackSignInCancelled('google', { reason: error })
       return false
     }
     if (!code && !accessToken) return false
@@ -904,8 +957,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signIn = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
       console.log('AuthContext: Attempting sign in for:', email)
-      // Don't set loading to true here to prevent loading screen during login
-      
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -913,55 +965,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (error) {
         console.log('AuthContext: Sign in error:', error.message)
+        analytics.trackError('sign_in_failed', { method: 'email', reason: error.message })
         return { error }
       }
 
       console.log('AuthContext: Sign in successful, session:', !!data.session)
-      if (data.user) {
-        const { first_name, last_name } = mapNameFromMetadata(
-          data.user.user_metadata as Record<string, unknown> | undefined,
-        )
-        const mappedUser: User = {
-          id: data.user.id,
-          email: data.user.email || email.trim(),
-          full_name: [first_name, last_name].filter(Boolean).join(' ') || null,
-          first_name,
-          last_name,
-          phone: data.user.phone ?? undefined,
-          status: 'active',
-          base_currency: 'USD',
-          enabled_extra_account_currencies: [],
-          created_at: data.user.created_at,
-          updated_at: data.user.updated_at || data.user.created_at,
-        }
-        /** Hold PIN until MFA requirement is resolved (`mfaGateResolved`). */
-        markSessionUserHydrated(mappedUser.id)
-        setUser(mappedUser)
-        setLoading(false)
-      }
 
-      // Track successful sign in
-      analytics.trackSignIn('email', {
-        rememberMe,
-        userId: data.user?.id
-      })
-      if (data.user?.id) {
-        analytics.identify(data.user.id, {
-          email: data.user.email || email.trim(),
-          authMethod: 'email',
-        })
-      }
-
-      // Don't mark first login here - only mark after PIN is set up
-      // This way, users with active sessions are treated as existing users
-
-      // Don't update session activity here - it should only be updated after PIN verification
-      // This ensures the flow is: Login → PIN Entry → Main App
-      // If we update here, session becomes valid immediately and skips PIN entry
-
-      // If remember me is checked, extend session duration
       if (rememberMe && data.session) {
-        // Set a longer session duration (30 days)
         await supabase.auth.setSession({
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
@@ -970,6 +980,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const gate = await syncMfaGateFromSession()
       if (gate === 'missing_factor') {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
         return {
           error: {
             message:
@@ -978,17 +989,57 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
 
-      // Defer surface + bootstrap checks until AAL2: `verifyMfa` runs `ensureConsumerMobileAccess` after OTP.
-      if (gate !== 'pending') {
-        const surfaceGate = await ensureConsumerMobileAccess()
-        if (surfaceGate.error) {
-          return { error: { message: surfaceGate.error.message } }
+      if (gate === 'pending') {
+        if (data.user) {
+          const mappedUser = mapSessionUserToAppUser(data.user, email)
+          markSessionUserHydrated(mappedUser.id)
+          setUser(mappedUser)
+          setLoading(false)
         }
+        return { error: null }
+      }
+
+      const finalized = await finalizePostAuthSession()
+      if (finalized.error) {
+        analytics.trackError('sign_in_failed', {
+          method: 'email',
+          reason: finalized.error.message,
+        })
+        clearSessionUserHydrated()
+        setUser(null)
+        setUserProfile(null)
+        return { error: finalized.error }
+      }
+
+      if (finalized.deletionCancelled) {
+        await markAccountClosureCancelledIfNeeded(true)
+      }
+
+      if (data.user) {
+        const mappedUser = mapSessionUserToAppUser(data.user, email)
+        markSessionUserHydrated(mappedUser.id)
+        setUser(mappedUser)
+        setLoading(false)
+      }
+
+      analytics.trackSignIn('email', {
+        rememberMe,
+        userId: data.user?.id,
+      })
+      if (data.user?.id) {
+        analytics.identify(data.user.id, {
+          email: data.user.email || email.trim(),
+          authMethod: 'email',
+        })
       }
 
       return { error: null }
     } catch (error) {
       console.error('Sign in error:', error)
+      analytics.trackError('sign_in_failed', {
+        method: 'email',
+        reason: error instanceof Error ? error.message : 'unknown',
+      })
       return { error }
     }
   }
@@ -1065,13 +1116,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const sessionAfterBrowser = await getSessionReliable()
       if (!sessionAfterBrowser?.access_token && !oauthConsumeInFlightRef.current) {
-        // Browser closed with no callback in flight — user cancelled.
+        if (oauthCallbackErrorRef.current) {
+          const err = new Error(oauthCallbackErrorRef.current)
+          oauthCallbackErrorRef.current = null
+          return { error: err }
+        }
+        analytics.trackSignInCancelled('google', { reason: 'dismissed' })
         return { error: null }
       }
 
-      return finalizePostAuthSession({
+      const finalized = await finalizePostAuthSession({
         noSessionMessage: 'Google sign-in did not create a session in the app.',
       })
+      if (finalized.deletionCancelled) {
+        await markAccountClosureCancelledIfNeeded(true)
+      }
+      return finalized
     } catch (e) {
       return { error: e instanceof Error ? e : new Error('Unable to continue with Google.') }
     }
@@ -1100,10 +1160,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
           await supabase.auth.updateUser({ data: { name: fullName, full_name: fullName } })
         }
 
-        analytics.trackSignIn('apple')
-        return finalizePostAuthSession({
+        const finalized = await finalizePostAuthSession({
           noSessionMessage: 'Apple sign-in did not create a session in the app.',
         })
+        if (finalized.deletionCancelled) {
+          await markAccountClosureCancelledIfNeeded(true)
+        }
+        return finalized
       } catch (e) {
         if (isAppleWebSignInCanceled(e)) return { error: null }
         return { error: e instanceof Error ? e : new Error('Unable to continue with Apple.') }
@@ -1152,11 +1215,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
 
-      analytics.trackSignIn('apple')
-      return finalizePostAuthSession()
+      const finalized = await finalizePostAuthSession()
+      if (finalized.deletionCancelled) {
+        await markAccountClosureCancelledIfNeeded(true)
+      }
+      return finalized
     } catch (e: unknown) {
       const err = e as { code?: string }
       if (err?.code === 'ERR_REQUEST_CANCELED') {
+        analytics.trackSignInCancelled('apple', { reason: 'dismissed' })
         return { error: null }
       }
       return { error: e instanceof Error ? e : new Error('Unable to continue with Apple.') }
@@ -1240,7 +1307,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
-  const signOut = async () => {
+  const signOut = async (options?: { preserveOnboarding?: boolean }) => {
     const mfaCacheUserId = user?.id
     try {
       console.log('AuthContext: Signing out user')
@@ -1254,15 +1321,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Clear PIN auth data on logout
       await clearPinAuth()
       
-      // Clear from onboarding flag so back arrow doesn't show after logout
-      await AsyncStorage.removeItem('@easner_from_onboarding')
+      if (!options?.preserveOnboarding) {
+        // Clear from onboarding flag so back arrow doesn't show after logout
+        await AsyncStorage.removeItem('@easner_from_onboarding')
+
+        // Clear onboarding completion flag so user goes to onboarding screen on logout (native only)
+        if (Platform.OS !== 'web') {
+          await AsyncStorage.removeItem('@easner_onboarding_completed')
+        }
+      }
 
       await AsyncStorage.removeItem(AUTH_INITIAL_MODE_KEY)
-      
-      // Clear onboarding completion flag so user goes to onboarding screen on logout (native only)
-      if (Platform.OS !== 'web') {
-        await AsyncStorage.removeItem('@easner_onboarding_completed')
-      }
       
       // Clear user state IMMEDIATELY and synchronously to trigger navigation
       // This must happen FIRST before anything else to ensure AppNavigator responds immediately
@@ -1289,6 +1358,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   const cancelMfaSignIn = useCallback(async () => {
+    analytics.trackSignInCancelled('email', { step: 'mfa' })
     await signOut()
   }, [signOut])
 

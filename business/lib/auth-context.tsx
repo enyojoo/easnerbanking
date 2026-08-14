@@ -171,8 +171,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })()
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN") {
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
         resetSessionActivity()
+      }
+      if (event === "SIGNED_IN" && session?.user) {
+        const oauthProvider = (session.user.identities ?? []).find(
+          (i) => i.provider === "google" || i.provider === "apple",
+        )?.provider
+        if (oauthProvider === "google" || oauthProvider === "apple") {
+          analytics.trackSignIn(oauthProvider, { userId: session.user.id })
+        }
       }
       setUser((prev) => {
         const nextUser = session?.user ?? null
@@ -332,7 +340,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error
     if (data.user?.id) {
       analytics.identify(data.user.id, { email: data.user.email || email.trim() })
-      analytics.trackSignIn("email", { userId: data.user.id })
     }
     await ensureBusinessWebSurface(supabase)
     await ensureBusinessAppSession(true)
@@ -415,7 +422,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     })
     if (error) throw error
-    analytics.trackSignIn("google")
   }
 
   const signInWithApple = async () => {
@@ -435,7 +441,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.updateUser({ data: { name: fullName, full_name: fullName } })
       }
 
-      analytics.trackSignIn("apple")
       await ensureBusinessWebSurface(supabase)
       await ensureBusinessAppSession(true)
     } catch (error) {

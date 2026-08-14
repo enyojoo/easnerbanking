@@ -6,7 +6,7 @@ import type { SignupEmailBlockReason } from '@easner/shared'
 import { parseSignupEmailBlockFromResponseText } from '@easner/shared'
 
 export type BootstrapResult =
-  | { ok: true }
+  | { ok: true; deletionCancelled?: boolean }
   | {
       ok: false
       status?: number
@@ -104,6 +104,7 @@ export async function ensureBusinessAppUserBootstrap(options?: {
     const bootJson = (await res.json().catch(() => ({}))) as {
       turnkeySubOrgReady?: boolean
       residenceCountry?: string | null
+      deletionCancelled?: boolean
     }
 
     /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side — refresh JWT. */
@@ -134,7 +135,7 @@ export async function ensureBusinessAppUserBootstrap(options?: {
         console.warn('ensure-sub-org after bootstrap error:', e)
       }
     }
-    return { ok: true }
+    return { ok: true, deletionCancelled: bootJson.deletionCancelled === true }
   } catch (e) {
     console.warn('auth bootstrap error:', e)
     return { ok: false, errorText: e instanceof Error ? e.message : String(e) }

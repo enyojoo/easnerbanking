@@ -128,8 +128,9 @@ export function buildGridBusinessCustomerPayload(input: {
 
   const email = String(input.profile.email ?? "").trim()
   if (!email) {
-    throw new Error("Contact email is required for Grid business verification")
+    throw new Error("Org owner contact email is required for Grid business verification")
   }
+  // Grid uses customer.email as the primary contact for hosted KYB/SumSub (org owner).
   payload.email = email
 
   // Omit address on initial create: Grid treats address.state as an ISO country code
