@@ -12,7 +12,7 @@ import { BusinessDropdown } from "@/components/business-dropdown"
 import { AppLockProvider } from "@/components/app-lock/app-lock-provider"
 import { Button } from "@/components/ui/button"
 import { useBusinessProfile } from "@/lib/use-business-profile"
-import { useBusinessNoahSync } from "@/hooks/use-business-noah-sync"
+import { useBusinessSync } from "@/hooks/use-business-sync"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { openBusinessSupport } from "@/lib/intercom-messenger"
 import { verificationBannerCopy } from "@/lib/copy/business-ui-copy"
@@ -27,7 +27,7 @@ interface DashboardShellProps {
 }
 
 export function DashboardShell({ children, constrained = false }: DashboardShellProps) {
-  useBusinessNoahSync()
+  useBusinessSync()
   const { user, logout, sessionUserId } = useAuth()
   const router = useRouter()
   const queryClient = useQueryClient()

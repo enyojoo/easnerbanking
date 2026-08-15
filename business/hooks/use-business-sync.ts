@@ -14,16 +14,47 @@ import {
 } from "@/lib/grid/sync-business-grid-status"
 import { useScope } from "@/lib/query/scope"
 
+const DEFAULT_INCOMPLETE_POLL_MS = 60_000
+const IN_REVIEW_POLL_MS = 30_000
+const IN_REVIEW_ON_VERIFICATION_TAB_POLL_MS = 15_000
+const APPROVED_PROVISIONING_POLL_MS = 10_000
+const MIN_SYNC_MS = 15_000
+const MIN_SYNC_MS_IN_REVIEW = 10_000
+
+export function resolveBusinessSyncPollMs(input: {
+  tier1Complete: boolean
+  verificationStatus: string | null | undefined
+}): number {
+  if (isBusinessTier1Complete({ tier1Complete: input.tier1Complete })) {
+    return APPROVED_PROVISIONING_POLL_MS
+  }
+  const status = String(input.verificationStatus ?? "").toLowerCase()
+  if (status === "pending") {
+    const onVerificationTab =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("tab") === "verification"
+    return onVerificationTab ? IN_REVIEW_ON_VERIFICATION_TAB_POLL_MS : IN_REVIEW_POLL_MS
+  }
+  return DEFAULT_INCOMPLETE_POLL_MS
+}
+
+export function resolveBusinessSyncMinMs(verificationStatus: string | null | undefined): number {
+  return String(verificationStatus ?? "").toLowerCase() === "pending"
+    ? MIN_SYNC_MS_IN_REVIEW
+    : MIN_SYNC_MS
+}
+
 /**
- * Business KYB: POST `/api/grid/sync-status` while KYB is incomplete or approved but receive rails
- * are still provisioning (parity with mobile consumer sync).
+ * Background Grid KYB sync: POST `/api/grid/sync-status` while KYB is incomplete or approved
+ * but receive rails are still provisioning. Polls faster while KYB is in review (`pending`).
  */
-export function useBusinessNoahSync(): void {
+export function useBusinessSync(): void {
   const queryClient = useQueryClient()
   const { scope } = useScope()
   const {
     businessId,
     tier1Complete,
+    tier1VerificationStatus,
     canManageBusinessVerification,
     isLoading,
   } = useBusinessProfile()
@@ -47,8 +78,8 @@ export function useBusinessNoahSync(): void {
   const runSync = useCallback(async () => {
     if (!shouldSync) return
     const now = Date.now()
-    const MIN_MS = 15_000
-    if (now - lastAutoSyncMsRef.current < MIN_MS) return
+    const minMs = resolveBusinessSyncMinMs(tier1VerificationStatus)
+    if (now - lastAutoSyncMsRef.current < minMs) return
     lastAutoSyncMsRef.current = now
 
     try {
@@ -66,7 +97,14 @@ export function useBusinessNoahSync(): void {
     } catch {
       /* non-blocking; hosted return + webhooks can still update */
     }
-  }, [shouldSync, queryClient, scope, fiatProvisionResolved, profileSlice])
+  }, [
+    shouldSync,
+    queryClient,
+    scope,
+    fiatProvisionResolved,
+    profileSlice,
+    tier1VerificationStatus,
+  ])
 
   useEffect(() => {
     void runSync()
@@ -74,12 +112,15 @@ export function useBusinessNoahSync(): void {
 
   useEffect(() => {
     if (!shouldSync) return
-    const pollMs = isBusinessTier1Complete(profileSlice) ? 10_000 : 60_000
+    const pollMs = resolveBusinessSyncPollMs({
+      tier1Complete,
+      verificationStatus: tier1VerificationStatus,
+    })
     const id = window.setInterval(() => {
       void runSync()
     }, pollMs)
     return () => window.clearInterval(id)
-  }, [shouldSync, runSync, profileSlice])
+  }, [shouldSync, runSync, tier1Complete, tier1VerificationStatus])
 
   useEffect(() => {
     if (!shouldSync) return

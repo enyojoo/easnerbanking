@@ -15,7 +15,7 @@ import { useScope } from '../query/scope'
 
 /**
  * Consumer (individual) KYC: POST `/api/noah/sync-status` with `individual` scope after the user
- * reaches the main app — same idea as business KYB auto-sync (`useBusinessNoahSync`).
+ * reaches the main app — same idea as business KYB auto-sync (`useBusinessSync`).
  *
  * The backend resolves Noah customer id as `users.noah_customer_id` or deterministic `eind_{userId}`,
  * so we **must not** require a stored `noah_customer_id` row for sync to run (Noah may approve

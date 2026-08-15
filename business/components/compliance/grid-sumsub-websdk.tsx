@@ -12,10 +12,12 @@ type Props = {
   theme?: "light" | "dark"
 }
 
-/** Mid-flow Sumsub `pending` must not close the embed — only terminal applicant states. */
+/** Terminal Sumsub review statuses for `onApplicantStatusChanged` (not initial load). */
 export function sumsubReviewStatusTriggersComplete(reviewStatus: string | null | undefined): boolean {
   const s = String(reviewStatus ?? "").toLowerCase()
-  return s === "completed" || s === "onhold"
+  // `onHold` is the applicant's current state when reopening — not "user finished".
+  // `pending` fires mid-KYB when only some steps are done.
+  return s === "completed"
 }
 
 async function refreshGridKycToken(): Promise<string> {
@@ -58,6 +60,9 @@ export function GridSumsubWebSdk({ accessToken, onComplete, onError, theme = "da
       .withConf({ lang: "en", theme })
       // false = fill our dialog height; true shrinks iframe to SumSub card height (leaves empty gap).
       .withOptions({ addViewportTag: false, adaptIframeHeight: false })
+      .on("idCheck.onApplicantSubmitted", () => {
+        onCompleteRef.current()
+      })
       .on("idCheck.onApplicantStatusChanged", (payload) => {
         const reviewStatus = String(
           (payload as { reviewStatus?: string } | null)?.reviewStatus ?? "",
