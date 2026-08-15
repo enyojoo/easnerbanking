@@ -51,12 +51,77 @@ describe("resolveGridBusinessKybLocalStatus", () => {
     ).toBe("pending")
   })
 
-  it("treats PENDING with RESOLVE_ERRORS verifications as in_progress", () => {
+  it("treats PENDING with RESOLVE_ERRORS verifications as in_progress when profile is incomplete", () => {
     expect(
       resolveGridBusinessKybLocalStatus({
         customer: { kybStatus: "PENDING" },
         verifications: [{ verificationStatus: "RESOLVE_ERRORS" }],
       }),
     ).toBe("in_progress")
+  })
+
+  it("treats PENDING with BYO RESOLVE_ERRORS and complete hosted profile as pending (in review)", () => {
+    expect(
+      resolveGridBusinessKybLocalStatus({
+        customer: {
+          kybStatus: "PENDING",
+          businessInfo: {
+            legalName: "Easner Group, Inc",
+            taxId: "246398107",
+            country: "US",
+          },
+          beneficialOwners: [
+            {
+              kycStatus: "PENDING",
+              roles: ["UBO"],
+              personalInfo: {
+                firstName: "Samuel",
+                lastName: "Odiba",
+                birthDate: "1996-11-06",
+                identifier: "22380755976",
+                email: "hello@easner.com",
+                address: { country: "NG" },
+              },
+            },
+          ],
+        },
+        verifications: [
+          {
+            verificationStatus: "RESOLVE_ERRORS",
+            errors: [{ type: "MISSING_FIELD" }, { type: "MISSING_IDENTITY_DOCUMENT" }],
+          },
+        ],
+      }),
+    ).toBe("pending")
+  })
+
+  it("treats PENDING with complete hosted profile and no verifications as pending (in review)", () => {
+    expect(
+      resolveGridBusinessKybLocalStatus({
+        customer: {
+          kybStatus: "PENDING",
+          businessInfo: {
+            legalName: "Easner Group, Inc",
+            taxId: "246398107",
+            country: "US",
+          },
+          beneficialOwners: [
+            {
+              kycStatus: "PENDING",
+              roles: ["UBO"],
+              personalInfo: {
+                firstName: "Samuel",
+                lastName: "Odiba",
+                birthDate: "1996-11-06",
+                identifier: "22380755976",
+                email: "hello@easner.com",
+                address: { country: "NG" },
+              },
+            },
+          ],
+        },
+        verifications: [],
+      }),
+    ).toBe("pending")
   })
 })
