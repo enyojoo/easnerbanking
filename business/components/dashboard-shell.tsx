@@ -15,8 +15,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useBusinessNoahSync } from "@/hooks/use-business-noah-sync"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { openBusinessSupport } from "@/lib/intercom-messenger"
-import { BANNER_COPY, verificationBannerCopy } from "@/lib/copy/business-ui-copy"
-import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
+import { verificationBannerCopy } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 import { useScope } from "@/lib/query/scope"
 import { prefetchWorkspaceCriticalData } from "@/lib/query/workspace-prefetch"
@@ -40,33 +39,11 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
     hasData: profileHasData,
     tier1Complete,
     tier1VerificationStatus,
-    businessId,
-    canManageBusinessVerification,
-    tier1CanResubmit,
   } = useBusinessProfile()
   const { avatarUrl: profileImageUrl } = usePersonalProfileAvatar()
   /** Keep header avatar visible when personal settings are hydrated even if business profile is still loading. */
   const showProfileChromeSkeleton = profileLoading && !profileHasData && !profileImageUrl
   const showTier1Banner = profileHasData && !profileLoading && !tier1Complete
-
-  const primeVerificationFlow = () => {
-    primeBusinessVerificationFlow({
-      businessId,
-      canManageBusinessVerification,
-      tier1Complete,
-      tier1CanResubmit,
-    })
-  }
-
-  useEffect(() => {
-    if (!showTier1Banner) return
-    primeBusinessVerificationFlow({
-      businessId,
-      canManageBusinessVerification,
-      tier1Complete,
-      tier1CanResubmit,
-    })
-  }, [showTier1Banner, businessId, canManageBusinessVerification, tier1CanResubmit, tier1Complete])
 
   useEffect(() => {
     if (!sessionUserId || !scope) return
@@ -161,8 +138,6 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
               <Link
                 href="/settings?tab=verification"
                 className="font-semibold text-[hsl(var(--warning))] underline underline-offset-2"
-                onPointerEnter={primeVerificationFlow}
-                onFocus={primeVerificationFlow}
               >
                 Verify
               </Link>

@@ -348,6 +348,7 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
   kybSubmitted: verificationTemplate("KYB", "business", "submitted"),
   kybApproved: verificationTemplate("KYB", "business", "approved"),
   kybRejected: verificationTemplate("KYB", "business", "rejected"),
+  kybActionNeeded: verificationTemplate("KYB", "business", "action_needed"),
   kycSubmitted: verificationTemplate("KYC", "personal", "submitted"),
   kycApproved: verificationTemplate("KYC", "personal", "approved"),
   kycRejected: verificationTemplate("KYC", "personal", "rejected"),
@@ -643,12 +644,19 @@ function onlinePaymentsTemplate(status: OnlinePaymentsEmailData["status"]): Emai
   }
 }
 
+function verificationSettingsUrl(data: VerificationEmailData, audience: EmailAudience): string {
+  const profile = getEmailAudienceProfile(audience)
+  const base = (data.dashboardUrl || profile.dashboardUrl).replace(/\/$/, "")
+  return `${base}/settings?tab=verification`
+}
+
 function verificationSubject(kind: "KYB" | "KYC", status: VerificationEmailData["status"]): string {
   if (kind === "KYC") {
     const kycSubjects = {
       submitted: "Your Easner KYC verification submitted",
       approved: "Your Easner KYC verification is complete",
       rejected: "Your Easner KYC verification update",
+      action_needed: "Your Easner KYC verification needs attention",
     } as const
     return kycSubjects[status]
   }
@@ -656,6 +664,7 @@ function verificationSubject(kind: "KYB" | "KYC", status: VerificationEmailData[
     submitted: "Your Easner KYB verification submitted",
     approved: "Your Easner KYB verification is complete",
     rejected: "Your Easner KYB verification update",
+    action_needed: "Action needed for your Easner KYB verification",
   } as const
   return kybSubjects[status]
 }
@@ -670,14 +679,17 @@ function verificationTemplate(
     submitted: `We've received your ${kind} verification. We'll email you when there is an update.`,
     approved: `Your ${kind} verification is complete. You can now access features where enabled for your profile.`,
     rejected: `Your ${kind} verification could not be completed at this time.`,
+    action_needed: `We need a bit more information to complete your ${kind} verification. Sign in to review the details and continue.`,
   }
   const bodyLine = bodies[status]
+  const showsReasons = (status === "rejected" || status === "action_needed") && true
+  const showsVerificationCta = status === "rejected" || status === "action_needed"
   return {
     subject: () => subjectLine,
     preheader: () => bodyLine,
     html: (data: VerificationEmailData) => {
       const reasons =
-        status === "rejected" && data.rejectionReasons?.length
+        showsReasons && data.rejectionReasons?.length
           ? `<p class="confirmation-text"><strong>Details:</strong> ${data.rejectionReasons.join("; ")}</p>`
           : ""
       const profile = getEmailAudienceProfile(audience)
@@ -692,17 +704,23 @@ function verificationTemplate(
         content,
         status === "approved"
           ? { text: "Go to dashboard", url: data.dashboardUrl || profile.dashboardUrl }
-          : undefined,
+          : showsVerificationCta
+            ? { text: "Continue verification", url: verificationSettingsUrl(data, audience) }
+            : undefined,
         { audience, showPreferencesLink: false, preheader: bodyLine },
       )
     },
     text: (data: VerificationEmailData) => {
       const profile = getEmailAudienceProfile(audience)
       let t = `${subjectLine}\n\n${formatEasnerUserGreetingPlain(data.firstName)}\n\n${bodies[status]}`
-      if (status === "rejected" && data.rejectionReasons?.length) {
+      if (showsReasons && data.rejectionReasons?.length) {
         t += `\n\nDetails: ${data.rejectionReasons.join("; ")}`
       }
-      if (status === "approved") t += `\n\n${data.dashboardUrl || profile.dashboardUrl}`
+      if (status === "approved") {
+        t += `\n\n${data.dashboardUrl || profile.dashboardUrl}`
+      } else if (showsVerificationCta) {
+        t += `\n\n${verificationSettingsUrl(data, audience)}`
+      }
       return t
     },
   }

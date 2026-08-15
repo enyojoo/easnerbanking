@@ -232,6 +232,9 @@ describe("emailTemplates", () => {
     expect(
       emailTemplates.kybRejected.subject(templateFixtures.kybRejected, "business"),
     ).toBe("Your Easner KYB verification update")
+    expect(
+      emailTemplates.kybActionNeeded.subject(templateFixtures.kybActionNeeded, "business"),
+    ).toBe("Action needed for your Easner KYB verification")
   })
 
   it("business security uses Easner Business subjects", () => {

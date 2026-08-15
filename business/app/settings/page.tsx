@@ -12,7 +12,6 @@ import { SettingsRecipientsTab } from "@/components/settings/settings-recipients
 import { SettingsCustomersTab } from "@/components/settings/settings-customers-tab"
 import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
 import { useBusinessProfile } from "@/lib/use-business-profile"
-import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { primeConnectStatus } from "@/lib/stripe/connect-status-cache"
 
 const TABS = ["personal", "business", "verification", "team", "recipients", "customers", "communication", "invoicing"] as const
@@ -25,9 +24,6 @@ function SettingsContent() {
   const [activeTab, setActiveTab] = useState<TabValue>(validTab)
   const {
     businessId,
-    canManageBusinessVerification,
-    tier1Complete,
-    tier1CanResubmit,
   } = useBusinessProfile()
 
   useEffect(() => {
@@ -35,24 +31,8 @@ function SettingsContent() {
   }, [validTab])
 
   useEffect(() => {
-    primeBusinessVerificationFlow({
-      businessId,
-      canManageBusinessVerification,
-      tier1Complete,
-      tier1CanResubmit,
-    })
     primeConnectStatus(businessId)
-  }, [businessId, canManageBusinessVerification, tier1CanResubmit, tier1Complete])
-
-  const primeVerificationFlow = () => {
-    primeBusinessVerificationFlow({
-      businessId,
-      canManageBusinessVerification,
-      tier1Complete,
-      tier1CanResubmit,
-    })
-    primeConnectStatus(businessId)
-  }
+  }, [businessId])
 
   const handleTabChange = (value: string) => {
     if (!TABS.includes(value as TabValue)) return
@@ -79,13 +59,7 @@ function SettingsContent() {
         <TabsList className="w-full shrink-0 justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="business">Business</TabsTrigger>
-          <TabsTrigger
-            value="verification"
-            onPointerEnter={primeVerificationFlow}
-            onFocus={primeVerificationFlow}
-          >
-            Verification
-          </TabsTrigger>
+          <TabsTrigger value="verification">Verification</TabsTrigger>
           <TabsTrigger value="team">Team</TabsTrigger>
           <TabsTrigger value="recipients">Recipients</TabsTrigger>
           <TabsTrigger value="customers">Customers</TabsTrigger>

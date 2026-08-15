@@ -2,6 +2,7 @@ export type VerificationProvider = "grid" | "noah"
 
 export type VerificationStatus =
   | "not_started"
+  | "in_progress"
   | "pending"
   | "approved"
   | "rejected"

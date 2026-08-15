@@ -4,6 +4,7 @@
  */
 export const VERIFICATION_STATUS_COPY = {
   verified: "Verified",
+  inProgress: "In progress",
   inReview: "In review",
   actionNeeded: "Action needed",
   unverified: "Unverified",
@@ -29,6 +30,10 @@ export function verificationStatusLabel(
 
   if (s === "approved") {
     return VERIFICATION_STATUS_COPY.verified
+  }
+
+  if (s === "in_progress") {
+    return VERIFICATION_STATUS_COPY.inProgress
   }
 
   if (

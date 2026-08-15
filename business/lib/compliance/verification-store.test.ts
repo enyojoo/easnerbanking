@@ -15,6 +15,12 @@ describe("canonicalVerificationStatus", () => {
         verification_status: "approved",
       }),
     ).toBe("approved")
+    expect(
+      canonicalVerificationStatus({
+        verification_provider: "grid",
+        verification_status: "in_progress",
+      }),
+    ).toBe("in_progress")
   })
 
   it("falls back to Noah status for individual users", () => {

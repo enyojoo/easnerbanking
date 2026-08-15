@@ -13,13 +13,11 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
   fetchHostedVerificationCredentials,
   hostedCredentialsAreReady,
-  primeHostedVerificationCredentials,
   preloadSumsubWebSdk,
   readHostedCredentialsCache,
   readHostedResumeAvailable,
   writeHostedCredentialsCache,
 } from "@/lib/compliance/hosted-verification-credentials"
-import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -46,6 +44,7 @@ const GridSumsubWebSdk = dynamic(
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
+  if (s === "in_progress") return false
   return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
 }
 
@@ -139,14 +138,24 @@ export function BusinessVerificationSection() {
     }
     try {
       preloadSumsubWebSdk()
-      const credentials = await primeHostedVerificationCredentials({ businessId })
-      probedHostedUrlRef.current = credentials.link
-      probedHostedTokenRef.current = credentials.token
+      const { link: fetchedLink, token: fetchedToken, json, res } =
+        await fetchHostedVerificationCredentials()
+      const link = fetchedLink
+      const token = fetchedToken
+      probedHostedUrlRef.current = link
+      probedHostedTokenRef.current = token
+      const credentials = { link, token }
+      if (res.ok) {
+        writeHostedCredentialsCache(businessId, credentials)
+      }
       const ready = hostedCredentialsAreReady(credentials)
       setHostedResumeAvailable(ready || readHostedResumeAvailable(businessId) === true)
       if (!hostedOpen) {
-        setHostedUrl(credentials.link)
-        setHostedToken(credentials.token)
+        setHostedUrl(link)
+        setHostedToken(token)
+      }
+      if (json.canResubmit === false) {
+        return credentials
       }
       return credentials
     } catch {
@@ -183,19 +192,11 @@ export function BusinessVerificationSection() {
       return
     }
     setHostedResumeAvailable(readHostedResumeAvailable(businessId))
-    primeBusinessVerificationFlow({
-      businessId,
-      canManageBusinessVerification,
-      tier1Complete,
-      tier1CanResubmit,
-    })
-    void primeHostedCredentials()
+    preloadSumsubWebSdk()
   }, [
     businessId,
     canManageBusinessVerification,
-    primeHostedCredentials,
     syncCredentialsFromCache,
-    tier1CanResubmit,
     tier1Complete,
     tier1FinalRejectForPrefetch,
     tier1AwaitingReviewForProbe,
@@ -400,20 +401,27 @@ export function BusinessVerificationSection() {
     tier1ActionRequired ? getVerificationRejectionDisplay(tier1RejectionReasons) : null
   const tier1FinalReject = tier1RejectionType === "Final" || rejectionDisplay?.isFinal === true
   const tier1UnderReview = tier1StatusIsInReview(tier1VerificationStatus)
+  const tier1InProgress = tier1VerificationStatus === "in_progress"
   const tier1AwaitingReview = tier1UnderReview && !tier1Rejected
+  const hasGridCustomer = Boolean(noahKybCustomerId?.trim())
   const tier1StartedNotSubmitted =
-    !tier1Rejected && !tier1AwaitingReview && Boolean(noahKybCustomerId?.trim())
+    !tier1Rejected &&
+    !tier1AwaitingReview &&
+    (tier1InProgress || (tier1VerificationStatus === "not_started" && hasGridCustomer))
   const showTier1HostedCta =
     canManageBusinessVerification &&
     !tier1Complete &&
     tier1CanResubmit &&
     !tier1AwaitingReview &&
     (!tier1OnHold || tier1CanResubmit)
-  const tier1HostedCtaLabel = tier1Rejected || tier1OnHold
-    ? "Retry verification"
-    : tier1StartedNotSubmitted || hostedResumeAvailable === true
-      ? "Continue verification"
-      : "Begin verification"
+  const tier1HostedCtaLabel =
+    tier1Rejected
+      ? "Retry verification"
+      : tier1OnHold
+        ? "Continue verification"
+        : tier1StartedNotSubmitted || hostedResumeAvailable === true
+          ? "Continue verification"
+          : "Begin verification"
 
   const hasHostedCredentials = Boolean(hostedToken?.trim() || hostedUrl?.trim())
 

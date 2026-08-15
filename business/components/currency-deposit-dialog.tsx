@@ -43,6 +43,7 @@ import { effectivePayInCountry } from "@/lib/pay-in-residence"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
+  if (s === "in_progress") return false
   return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
 }
 

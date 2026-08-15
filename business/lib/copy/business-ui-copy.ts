@@ -313,6 +313,9 @@ export const BANNER_COPY = {
 
 export function verificationBannerCopy(status: string | null | undefined): string {
   const s = String(status ?? "").toLowerCase().trim()
+  if (s === "in_progress") {
+    return BANNER_COPY.verification
+  }
   if (s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")) {
     return BANNER_COPY.verificationInReview
   }
@@ -372,5 +375,5 @@ export const VERIFICATION_SECTION_COPY = {
   accountsProvisioning:
     "Setting up your accounts and deposit details. This usually completes within a few minutes.",
   verificationOnHold:
-    "Verification is on hold. Review the note below or contact support if you need help.",
+    "We need a bit more information. Review the note below, then continue verification to provide it.",
 } as const

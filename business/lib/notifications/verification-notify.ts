@@ -6,7 +6,7 @@ import { resolveEmailAudience } from "@/lib/notifications/resolve-email-audience
 import { fetchUserEmailContact } from "@/lib/notifications/user-contact"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 
-type VerificationStatus = "not_started" | "under_review" | "approved" | "rejected"
+type VerificationStatus = "not_started" | "under_review" | "approved" | "rejected" | "action_needed"
 
 function mapToEmailStatus(
   prev: VerificationStatus | null | undefined,
@@ -15,6 +15,7 @@ function mapToEmailStatus(
   if (prev === next) return null
   if (next === "approved") return "approved"
   if (next === "rejected") return "rejected"
+  if (next === "action_needed") return "action_needed"
   if (next === "under_review" && prev !== "under_review") return "submitted"
   return null
 }
@@ -48,7 +49,9 @@ export async function notifyVerificationStatusChange(input: {
         ? "kybApproved"
         : emailStatus === "rejected"
           ? "kybRejected"
-          : "kybSubmitted"
+          : emailStatus === "action_needed"
+            ? "kybActionNeeded"
+            : "kybSubmitted"
       : emailStatus === "approved"
         ? "kycApproved"
         : emailStatus === "rejected"

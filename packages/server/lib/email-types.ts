@@ -63,7 +63,7 @@ export interface WelcomeEmailData {
 export interface VerificationEmailData {
   firstName?: string
   email: string
-  status: "submitted" | "approved" | "rejected"
+  status: "submitted" | "approved" | "rejected" | "action_needed"
   rejectionReasons?: string[]
   dashboardUrl?: string
   audience?: EmailAudience

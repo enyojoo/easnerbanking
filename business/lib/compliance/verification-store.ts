@@ -50,6 +50,7 @@ export async function readVerificationRow(
 function isProgressedVerificationStatus(status: string): status is VerificationStatus {
   return (
     status === "approved" ||
+    status === "in_progress" ||
     status === "pending" ||
     status === "rejected" ||
     status === "hold"

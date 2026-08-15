@@ -3,7 +3,6 @@ import { gridFetch, GridHttpError } from "./http"
 import { normalizeGridCustomerId } from "./quote-request"
 import type { GridCustomer } from "./types"
 import {
-  mapGridPartnerStatus,
   persistVerificationStatus,
   type VerificationStatus,
 } from "@/lib/compliance"
@@ -12,13 +11,18 @@ import { extractGridCustomerRejectionReasons } from "@easner/shared"
 import { isGridShellBusinessTaxId } from "./business-kyc-metadata"
 import { parseGridCustomerForBusiness } from "./parse-grid-customer-for-business"
 import { syncGridBusinessOwnerUserFromKyb } from "./sync-grid-business-owner-user"
+import {
+  resolveGridBusinessKybLocalStatus,
+  type GridVerificationSummary,
+} from "./resolve-grid-business-kyb-status"
 
-type KybEmailStatus = "not_started" | "under_review" | "approved" | "rejected"
+type KybEmailStatus = "not_started" | "under_review" | "approved" | "rejected" | "action_needed"
 
 function verificationStatusForKybEmail(status: VerificationStatus): KybEmailStatus {
   if (status === "approved") return "approved"
   if (status === "rejected") return "rejected"
-  if (status === "pending" || status === "hold") return "under_review"
+  if (status === "hold") return "action_needed"
+  if (status === "pending") return "under_review"
   return "not_started"
 }
 
@@ -29,9 +33,21 @@ export async function fetchGridCustomer(customerId: string): Promise<GridCustome
   })
 }
 
-export function gridBusinessKybStatus(customer: Record<string, unknown>): VerificationStatus {
-  const kyb = customer.kybStatus ?? customer.kycStatus
-  return mapGridPartnerStatus(String(kyb ?? ""))
+export async function fetchGridVerificationsForCustomer(
+  customerId: string,
+): Promise<GridVerificationSummary[]> {
+  const response = await gridFetch<{ data?: GridVerificationSummary[] }>({
+    method: "GET",
+    path: `/verifications?customerId=${encodeURIComponent(normalizeGridCustomerId(customerId))}&limit=20`,
+  }).catch(() => ({ data: [] as GridVerificationSummary[] }))
+  return Array.isArray(response.data) ? response.data : []
+}
+
+export function gridBusinessKybStatus(
+  customer: Record<string, unknown>,
+  verifications?: GridVerificationSummary[],
+): VerificationStatus {
+  return resolveGridBusinessKybLocalStatus({ customer, verifications })
 }
 
 function shouldBackfillBusinessProfile(status: VerificationStatus): boolean {
@@ -55,7 +71,8 @@ export async function syncGridBusinessKybToSupabase(input: {
     throw e
   })
 
-  const status = gridBusinessKybStatus(customer)
+  const verifications = await fetchGridVerificationsForCustomer(customerId)
+  const status = gridBusinessKybStatus(customer, verifications)
   const gridStatusRaw = String(customer.kybStatus ?? customer.kycStatus ?? "").trim() || null
   const rejectionReasons =
     status === "rejected" || status === "hold"

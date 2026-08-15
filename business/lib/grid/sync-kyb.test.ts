@@ -9,15 +9,6 @@ const mockNotifyBusinessKybStatusChange = vi.fn().mockResolvedValue(undefined)
 const mockGridFetch = vi.fn()
 
 vi.mock("@/lib/compliance", () => ({
-  mapGridPartnerStatus: (raw: string) => {
-    const s = String(raw ?? "").toUpperCase()
-    if (s === "APPROVED") return "approved"
-    if (s === "REJECTED") return "rejected"
-    if (s === "HOLD") return "hold"
-    if (s === "PENDING") return "pending"
-    if (s === "UNVERIFIED" || !s) return "not_started"
-    return "not_started"
-  },
   persistVerificationStatus: (...args: unknown[]) => mockPersistVerificationStatus(...args),
 }))
 
@@ -52,12 +43,6 @@ const mockBusinessUpdate = vi.fn()
 const mockEq = vi.fn().mockResolvedValue({ error: null })
 mockBusinessUpdate.mockReturnValue({ eq: mockEq })
 
-vi.mock("@/lib/business/org-owner", () => ({
-  resolveOrgOwnerUserId: vi.fn().mockResolvedValue("user-1"),
-}))
-
-import { syncGridBusinessOwnerUserFromKyb } from "./sync-grid-business-owner-user"
-
 const mockFrom = vi.fn(() => ({
   select: vi.fn().mockReturnValue({
     eq: vi.fn().mockReturnValue({
@@ -71,21 +56,42 @@ const mockFrom = vi.fn(() => ({
 
 const mockAdmin = { from: mockFrom }
 
+import { syncGridBusinessOwnerUserFromKyb } from "./sync-grid-business-owner-user"
 import { syncGridBusinessKybToSupabase } from "./sync-kyb"
+
+function mockGridReads(customer: Record<string, unknown>, verifications: unknown[] = []) {
+  mockGridFetch.mockImplementation((req: { path?: string }) => {
+    const path = String(req.path ?? "")
+    if (path.includes("/verifications")) {
+      return Promise.resolve({ data: verifications })
+    }
+    return Promise.resolve(customer)
+  })
+}
 
 describe("syncGridBusinessKybToSupabase", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { verification_status: "not_started" },
+          }),
+        }),
+      }),
+      update: mockBusinessUpdate,
+    })
     mockBusinessUpdate.mockReturnValue({ eq: mockEq })
     mockParseGridCustomerForBusiness.mockReturnValue({
       name: "Acme Ltd",
       kyb_verified_at: "2025-01-01T00:00:00Z",
     })
-    mockGridFetch.mockResolvedValue({ kybStatus: "PENDING" })
+    mockGridReads({ kybStatus: "PENDING", beneficialOwners: [{ kycStatus: "PENDING" }] })
   })
 
   it("always fetches customer from Grid API (webhook + poll parity)", async () => {
-    mockGridFetch.mockResolvedValue({ kybStatus: "UNVERIFIED" })
+    mockGridReads({ kybStatus: "UNVERIFIED" })
     mockParseGridCustomerForBusiness.mockReturnValue({})
 
     await syncGridBusinessKybToSupabase({
@@ -110,24 +116,54 @@ describe("syncGridBusinessKybToSupabase", () => {
     expect(mockBusinessUpdate).not.toHaveBeenCalled()
   })
 
-  it("backfills business profile fields when Grid KYB is pending (submitted)", async () => {
-    mockGridFetch.mockResolvedValue({
-      kybStatus: "PENDING",
-      email: "support@easner.com",
-      businessInfo: {
-        legalName: "Easner Group, Inc",
-        country: "US",
-        registrationNumber: "10609372",
-        taxId: "246398107",
+  it("maps mid-flow PENDING + pending UBO to in_progress without profile backfill", async () => {
+    mockGridReads(
+      {
+        kybStatus: "PENDING",
+        email: "support@easner.com",
+        businessInfo: { legalName: "Easner Group, Inc" },
+        beneficialOwners: [{ kycStatus: "PENDING", roles: ["UBO"] }],
       },
-      beneficialOwners: [
-        {
-          roles: ["UBO"],
-          ownershipPercentage: 90,
-          personalInfo: { firstName: "Samuel", lastName: "Odiba", birthDate: "1996-11-06" },
-        },
-      ],
+      [],
+    )
+
+    await syncGridBusinessKybToSupabase({
+      admin: mockAdmin as never,
+      businessId: "biz-1",
+      userId: "user-1",
+      customerId: "Customer:abc",
     })
+
+    expect(mockPersistVerificationStatus).toHaveBeenCalledWith(
+      mockAdmin,
+      expect.objectContaining({ status: "in_progress" }),
+    )
+    expect(mockParseGridCustomerForBusiness).not.toHaveBeenCalled()
+    expect(mockBusinessUpdate).not.toHaveBeenCalled()
+    expect(mockNotifyBusinessKybStatusChange).toHaveBeenCalledWith(
+      mockAdmin,
+      "biz-1",
+      "not_started",
+      "not_started",
+      null,
+    )
+  })
+
+  it("backfills business profile fields when Grid KYB is truly pending (in review)", async () => {
+    mockGridReads(
+      {
+        kybStatus: "PENDING",
+        email: "support@easner.com",
+        businessInfo: {
+          legalName: "Easner Group, Inc",
+          country: "US",
+          registrationNumber: "10609372",
+          taxId: "246398107",
+        },
+        beneficialOwners: [{ kycStatus: "APPROVED", roles: ["UBO"] }],
+      },
+      [{ verificationStatus: "PENDING_MANUAL_REVIEW" }],
+    )
     mockParseGridCustomerForBusiness.mockReturnValue({
       name: "Easner Group, Inc",
     })
@@ -139,23 +175,26 @@ describe("syncGridBusinessKybToSupabase", () => {
       customerId: "Customer:abc",
     })
 
+    expect(mockPersistVerificationStatus).toHaveBeenCalledWith(
+      mockAdmin,
+      expect.objectContaining({ status: "pending" }),
+    )
     expect(mockParseGridCustomerForBusiness).toHaveBeenCalled()
     expect(mockBusinessUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ name: "Easner Group, Inc" }),
     )
-    expect(syncGridBusinessOwnerUserFromKyb).toHaveBeenCalledWith(
-      expect.objectContaining({
-        businessId: "biz-1",
-        fallbackUserId: "user-1",
-      }),
+    expect(syncGridBusinessOwnerUserFromKyb).toHaveBeenCalled()
+    expect(mockNotifyBusinessKybStatusChange).toHaveBeenCalledWith(
+      mockAdmin,
+      "biz-1",
+      "not_started",
+      "under_review",
+      null,
     )
   })
 
   it("backfills business profile fields when Grid KYB is approved", async () => {
-    mockGridFetch.mockResolvedValue({
-      kybStatus: "APPROVED",
-      businessInfo: { legalName: "Acme Ltd" },
-    })
+    mockGridReads({ kybStatus: "APPROVED", businessInfo: { legalName: "Acme Ltd" } })
 
     await syncGridBusinessKybToSupabase({
       admin: mockAdmin as never,
@@ -172,8 +211,72 @@ describe("syncGridBusinessKybToSupabase", () => {
     expect(mockEq).toHaveBeenCalledWith("id", "biz-1")
   })
 
+  it("does not email when correcting pending to in_progress", async () => {
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { verification_status: "pending" },
+          }),
+        }),
+      }),
+      update: mockBusinessUpdate,
+    })
+    mockGridReads(
+      {
+        kybStatus: "PENDING",
+        beneficialOwners: [{ kycStatus: "PENDING", roles: ["UBO"] }],
+      },
+      [],
+    )
+
+    await syncGridBusinessKybToSupabase({
+      admin: mockAdmin as never,
+      businessId: "biz-1",
+      userId: "user-1",
+      customerId: "Customer:abc",
+    })
+
+    expect(mockNotifyBusinessKybStatusChange).toHaveBeenCalledWith(
+      mockAdmin,
+      "biz-1",
+      "under_review",
+      "not_started",
+      null,
+    )
+  })
+
+  it("sends action-needed email when Grid KYB moves to hold", async () => {
+    mockGridReads(
+      {
+        kybStatus: "HOLD",
+        businessInfo: { legalName: "Acme Ltd" },
+      },
+      [],
+    )
+
+    await syncGridBusinessKybToSupabase({
+      admin: mockAdmin as never,
+      businessId: "biz-1",
+      userId: "user-1",
+      customerId: "Customer:abc",
+    })
+
+    expect(mockPersistVerificationStatus).toHaveBeenCalledWith(
+      mockAdmin,
+      expect.objectContaining({ status: "hold" }),
+    )
+    expect(mockNotifyBusinessKybStatusChange).toHaveBeenCalledWith(
+      mockAdmin,
+      "biz-1",
+      "not_started",
+      "action_needed",
+      expect.any(Array),
+    )
+  })
+
   it("sends KYB status emails on transitions", async () => {
-    mockGridFetch.mockResolvedValue({ kybStatus: "APPROVED" })
+    mockGridReads({ kybStatus: "APPROVED" })
 
     await syncGridBusinessKybToSupabase({
       admin: mockAdmin as never,

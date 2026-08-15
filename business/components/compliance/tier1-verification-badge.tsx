@@ -57,6 +57,13 @@ export function Tier1VerificationBadge({
   }
 
   const s = (tier1VerificationStatus || "").toLowerCase()
+  if (s === "in_progress") {
+    return (
+      <Badge variant="outline" className={cn("shrink-0 font-medium text-foreground", sizeClass, className)}>
+        {label}
+      </Badge>
+    )
+  }
   if (s.includes("review") || s === "pending" || s === "in_review" || s === "under_review") {
     return (
       <Badge variant="secondary" className={cn("shrink-0 font-medium", sizeClass, className)}>

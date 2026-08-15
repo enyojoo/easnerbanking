@@ -28,12 +28,8 @@ function digitsOnly(value: string): string {
 }
 
 /**
- * Stable 9-digit placeholder for Grid BUSINESS create when the org has no tax id yet.
- * Needed because Grid requires `businessInfo.taxId` at create, while our UX lets users
- * start hosted KYB (SumSub) without filling EIN in Easner first.
- *
- * Important: Grid/SumSub do not reliably overwrite this with the EIN collected in-host.
- * Prefer patching Grid once a real tax id is known (settings, approval backfill, or Grid support).
+ * Stable 9-digit placeholder historically sent on Grid BUSINESS create.
+ * Kept only for detecting leaked shell values — do not send on new creates.
  */
 export function gridShellBusinessTaxId(platformCustomerId: string): string {
   let hash = 0
@@ -64,36 +60,35 @@ export function normalizeStoredBusinessTaxId(raw: string | null | undefined): st
 }
 
 /**
- * Resolve taxId for Grid BUSINESS create/update.
- * - Prefer real `taxId` when present.
- * - For registry-only countries (EE/CA), Grid still requires taxId — use registration number.
- * - Otherwise fall back to a deterministic shell so hosted KYB can start without a pre-form EIN.
- *   Do not use a separate US registration/file number as taxId (Delaware file # ≠ EIN).
+ * Resolve taxId for Grid BUSINESS create/update when we have a real value.
+ * Returns null when the org has no tax id (hosted Sumsub collects it).
  */
 export function resolveGridBusinessTaxId(input: {
   taxId?: string | null
   registrationNumber?: string | null
   country?: string | null
   platformCustomerId: string
-}): string {
+}): string | null {
   const countryIso2 = resolveBusinessCountryIso2(input.country) ?? ""
   const fields = getKybFields(countryIso2)
   const collectsSeparateTaxId = fields.some((f) => f.id === "taxId")
 
   const fromTaxId = normalizeStoredBusinessTaxId(input.taxId)
-  if (fromTaxId) return fromTaxId
+  if (fromTaxId && !isGridShellBusinessTaxId(fromTaxId, input.platformCustomerId)) {
+    return fromTaxId
+  }
 
   if (!collectsSeparateTaxId) {
     const fromRegistration = normalizeStoredBusinessTaxId(input.registrationNumber)
     if (fromRegistration) return fromRegistration
   }
 
-  return gridShellBusinessTaxId(input.platformCustomerId)
+  return null
 }
 
 /**
- * Minimal Grid BUSINESS customer for hosted KYB (SumSub collects the rest).
- * Grid docs: customer must exist before createKYCLink; hosted flow ≠ API verifications.submit.
+ * Thin Grid BUSINESS customer for hosted KYB (SumSub collects the rest).
+ * Grid docs: customer must exist before createKYCLink; omit fields we do not have.
  */
 export function buildGridBusinessCustomerPayload(input: {
   platformCustomerId: string
@@ -104,21 +99,21 @@ export function buildGridBusinessCustomerPayload(input: {
 
   const businessInfo: Record<string, unknown> = { legalName }
 
-  businessInfo.taxId = resolveGridBusinessTaxId({
+  const taxId = resolveGridBusinessTaxId({
     taxId: input.profile.taxId,
     registrationNumber: input.profile.registrationNumber,
     country: input.profile.country,
     platformCustomerId: input.platformCustomerId,
   })
+  if (taxId) businessInfo.taxId = taxId
 
   const registrationNumber = String(input.profile.registrationNumber ?? "").trim()
   if (registrationNumber) businessInfo.registrationNumber = registrationNumber
 
   if (countryIso2) businessInfo.country = countryIso2
 
-  // Grid requires incorporatedOn on BUSINESS create; prefer org created_at.
-  businessInfo.incorporatedOn =
-    isoDateFromTimestamp(input.profile.createdAt) ?? new Date().toISOString().slice(0, 10)
+  const incorporatedOn = isoDateFromTimestamp(input.profile.createdAt)
+  if (incorporatedOn) businessInfo.incorporatedOn = incorporatedOn
 
   const payload: Record<string, unknown> = {
     customerType: "BUSINESS",
@@ -130,11 +125,7 @@ export function buildGridBusinessCustomerPayload(input: {
   if (!email) {
     throw new Error("Org owner contact email is required for Grid business verification")
   }
-  // Grid uses customer.email as the primary contact for hosted KYB/SumSub (org owner).
   payload.email = email
-
-  // Omit address on initial create: Grid treats address.state as an ISO country code
-  // (e.g. CA → Canada) even when address.country is US. SumSub collects address in hosted KYB.
 
   return payload
 }

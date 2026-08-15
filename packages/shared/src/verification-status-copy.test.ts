@@ -15,6 +15,10 @@ describe("verificationStatusLabel", () => {
     expect(verificationStatusLabel("approved")).toBe(VERIFICATION_STATUS_COPY.verified)
   })
 
+  it("maps in_progress to In progress", () => {
+    expect(verificationStatusLabel("in_progress")).toBe(VERIFICATION_STATUS_COPY.inProgress)
+  })
+
   it("maps review states to In review", () => {
     expect(verificationStatusLabel("pending")).toBe(VERIFICATION_STATUS_COPY.inReview)
     expect(verificationStatusLabel("in_review")).toBe(VERIFICATION_STATUS_COPY.inReview)

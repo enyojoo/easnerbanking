@@ -60,22 +60,20 @@ describe("grid webhook verify", () => {
 describe("buildGridBusinessCustomerPayload", () => {
   const platformCustomerId = "eb_abc123456789012345678901234567890"
 
-  it("uses a 9-digit shell taxId when org has none (hosted KYB start without pre-form EIN)", () => {
+  it("omits taxId, country, and incorporatedOn when org has none (hosted KYB start)", () => {
     const payload = buildGridBusinessCustomerPayload({
       platformCustomerId,
       profile: {
         legalName: "Acme Ltd",
         email: "owner@example.com",
-        country: "US",
         registrationNumber: "10609372",
-        createdAt: "2024-06-01T00:00:00Z",
       },
     })
-    const taxId = (payload.businessInfo as { taxId?: string }).taxId
-    expect(taxId).toMatch(/^\d{9}$/)
-    expect(taxId).toBe(gridShellBusinessTaxId(platformCustomerId))
-    // US file number must not be reused as EIN
-    expect(taxId).not.toBe("10609372")
+    const businessInfo = payload.businessInfo as Record<string, unknown>
+    expect(businessInfo.taxId).toBeUndefined()
+    expect(businessInfo.country).toBeUndefined()
+    expect(businessInfo.incorporatedOn).toBeUndefined()
+    expect(businessInfo.registrationNumber).toBe("10609372")
   })
 
   it("normalizes stored EIN-style tax ids", () => {
@@ -105,10 +103,18 @@ describe("buildGridBusinessCustomerPayload", () => {
     expect((payload.businessInfo as { taxId?: string }).taxId).toBe("12345678")
   })
 
-  it("recognizes historic shell tax ids", () => {
-    expect(isGridShellBusinessTaxId("246398107", "eb_4769329da17149cf86477e9b8a0128d3")).toBe(
-      true,
-    )
+  it("treats stored shell tax ids as empty on create", () => {
+    const shell = gridShellBusinessTaxId(platformCustomerId)
+    const payload = buildGridBusinessCustomerPayload({
+      platformCustomerId,
+      profile: {
+        legalName: "Acme Ltd",
+        email: "owner@example.com",
+        taxId: shell,
+      },
+    })
+    expect((payload.businessInfo as { taxId?: string }).taxId).toBeUndefined()
+    expect(isGridShellBusinessTaxId(shell, platformCustomerId)).toBe(true)
   })
 
   it("omits address for US businesses so Grid does not treat state CA as Canada", () => {
