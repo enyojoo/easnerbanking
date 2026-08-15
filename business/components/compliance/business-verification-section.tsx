@@ -38,6 +38,7 @@ import {
   NOAH_VERIFICATION_IN_REVIEW_COPY,
 } from "@easner/shared"
 import { SETTINGS_VERIFICATION_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
+import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 
 const GridSumsubWebSdk = dynamic(
   () => import("@/components/compliance/grid-sumsub-websdk").then((m) => ({ default: m.GridSumsubWebSdk })),
@@ -102,6 +103,9 @@ export function BusinessVerificationSection({
   const useSumsubSdk = Boolean(hostedToken?.trim())
   const hostedIframeSrc = !useSumsubSdk ? hostedUrl : null
   const hostedFlowActive = fullPageFlow || flowFromUrl || hostedOpen
+
+  // SumSub runs in a cross-origin iframe; parent window does not receive pointer/keyboard events.
+  useSuspendIdleLock(hostedFlowActive)
 
   const pushVerificationFlowUrl = useCallback(() => {
     onFlowOpenChange?.(true)
