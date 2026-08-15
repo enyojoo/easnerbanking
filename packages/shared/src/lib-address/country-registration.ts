@@ -20,7 +20,10 @@ export async function ensureOperationalAddressCountryRegistered(countryCode: str
   }
 
   const task = (async () => {
-    const mod = await import(`lib-address/countries/${code}.json`)
+    const mod = await import(
+      /* webpackMode: "lazy-once" */
+      `../../../../node_modules/lib-address/countries/${code}.json`
+    )
     const data = (mod as { default?: unknown }).default ?? mod
     registerCountry(data as Parameters<typeof registerCountry>[0])
     registered.add(code)
