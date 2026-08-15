@@ -12,6 +12,8 @@ where id in (
 
 -- Null known leaked shell tax_ids from historic Grid create stubs.
 -- Do not touch Easner Group real EIN 320855540.
+-- Grid-side stubs are repaired automatically on the next Begin/Continue via
+-- scrubGridBusinessKybStubFieldsIfNeeded in ensure-grid-business-customer.ts.
 update public.businesses
 set tax_id = null,
     updated_at = now()

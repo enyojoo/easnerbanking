@@ -8,6 +8,9 @@ import {
 import { buildGridIndividualCustomerPayload } from "@/lib/grid/kyc-metadata"
 import {
   buildGridBusinessCustomerPayload,
+  buildGridBusinessInfoResyncPatch,
+  gridBusinessKybStubFieldsNeedResync,
+  gridBusinessTaxIdIsInvalidOnGrid,
   gridShellBusinessTaxId,
   isGridShellBusinessTaxId,
 } from "@/lib/grid/business-kyc-metadata"
@@ -135,6 +138,67 @@ describe("buildGridBusinessCustomerPayload", () => {
     expect(payload.address).toBeUndefined()
     expect((payload.businessInfo as { country?: string }).country).toBe("US")
     expect((payload.businessInfo as { taxId?: string }).taxId).toBe("320855540")
+  })
+})
+
+describe("gridBusinessKyb stub resync", () => {
+  const platformCustomerId = "eb_4afbef7f008749c3b5d87807b37710e9"
+  const profile = {
+    legalName: "Fruitful Africa Limited",
+    email: "owner@example.com",
+    country: "NG",
+    createdAt: "2026-08-12T10:41:27.468649+00:00",
+  }
+
+  it("flags explicit null taxId on Grid as invalid", () => {
+    expect(
+      gridBusinessTaxIdIsInvalidOnGrid({
+        customer: { businessInfo: { legalName: "Fruitful Africa Limited", taxId: null } },
+        platformCustomerId,
+        profile,
+      }),
+    ).toBe(true)
+    expect(
+      gridBusinessKybStubFieldsNeedResync({
+        customer: { businessInfo: { legalName: "Fruitful Africa Limited", taxId: null } },
+        platformCustomerId,
+        profile,
+      }),
+    ).toBe(true)
+  })
+
+  it("flags historic shell taxId when org has no real tax id", () => {
+    const shell = gridShellBusinessTaxId(platformCustomerId)
+    expect(shell).toBe("942523714")
+    expect(
+      gridBusinessTaxIdIsInvalidOnGrid({
+        customer: { businessInfo: { legalName: "Fruitful Africa Limited", taxId: shell } },
+        platformCustomerId,
+        profile: { ...profile, taxId: null },
+      }),
+    ).toBe(true)
+  })
+
+  it("builds a resync patch without taxId for hosted KYB", () => {
+    const patch = buildGridBusinessInfoResyncPatch({ platformCustomerId, profile })
+    expect(patch.taxId).toBeUndefined()
+    expect(patch.legalName).toBe("Fruitful Africa Limited")
+    expect(patch.country).toBe("NG")
+    expect(patch.incorporatedOn).toBe("2026-08-12")
+  })
+
+  it("does not flag a real stored tax id", () => {
+    expect(
+      gridBusinessTaxIdIsInvalidOnGrid({
+        customer: { businessInfo: { legalName: "Easner Group, Inc", taxId: "320855540" } },
+        platformCustomerId: "eb_4769329da17149cf86477e9b8a0128d3",
+        profile: {
+          legalName: "Easner Group, Inc",
+          email: "owner@example.com",
+          taxId: "32-0855540",
+        },
+      }),
+    ).toBe(false)
   })
 })
 

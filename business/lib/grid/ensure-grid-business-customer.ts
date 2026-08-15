@@ -3,6 +3,9 @@ import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { gridFetch, GridHttpError } from "./http"
 import {
   buildGridBusinessCustomerPayload,
+  buildGridBusinessInfoResyncPatch,
+  gridBusinessKybStubFieldsNeedResync,
+  gridBusinessTaxIdIsInvalidOnGrid,
   isGridShellBusinessTaxId,
   normalizeStoredBusinessTaxId,
   type GridBusinessProfile,
@@ -86,6 +89,16 @@ async function persistGridCustomerId(
   await admin
     .from("businesses")
     .update({ grid_customer_id: customerId, updated_at: new Date().toISOString() })
+    .eq("id", businessId)
+}
+
+async function clearStoredGridCustomerId(
+  admin: SupabaseClient,
+  businessId: string,
+): Promise<void> {
+  await admin
+    .from("businesses")
+    .update({ grid_customer_id: null, updated_at: new Date().toISOString() })
     .eq("id", businessId)
 }
 
@@ -195,6 +208,71 @@ function readGridBusinessTaxId(customer: GridCustomer & Record<string, unknown>)
   return typeof raw === "string" && raw.trim() ? raw.trim() : null
 }
 
+function canSafelyRecreateGridBusinessCustomer(customer: GridCustomer): boolean {
+  const status = String(customer.kybStatus ?? customer.kycStatus ?? "")
+    .trim()
+    .toUpperCase()
+  return status !== "APPROVED" && status !== "REJECTED"
+}
+
+/**
+ * Repair historic Grid stubs (null taxId, shell taxId) before hosted KYB link creation.
+ * Falls back to delete + recreate when PATCH cannot clear invalid taxId.
+ */
+async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
+  admin: SupabaseClient
+  businessId: string
+  customerId: string
+  customer: GridCustomer
+  profile: GridBusinessProfile
+  platformCustomerId: string
+}): Promise<GridCustomer | "recreate"> {
+  const customerRecord = input.customer as GridCustomer & Record<string, unknown>
+  if (
+    !gridBusinessKybStubFieldsNeedResync({
+      customer: customerRecord,
+      platformCustomerId: input.platformCustomerId,
+      profile: input.profile,
+    })
+  ) {
+    return input.customer
+  }
+
+  const businessInfo = buildGridBusinessInfoResyncPatch({
+    platformCustomerId: input.platformCustomerId,
+    profile: input.profile,
+  })
+  let patched = await gridFetch<GridCustomer>({
+    method: "PATCH",
+    path: `/customers/${encodeURIComponent(input.customerId)}`,
+    json: gridBusinessCustomerUpdatePayload({ businessInfo }),
+  })
+
+  if (
+    !gridBusinessTaxIdIsInvalidOnGrid({
+      customer: patched as GridCustomer & Record<string, unknown>,
+      platformCustomerId: input.platformCustomerId,
+      profile: input.profile,
+    })
+  ) {
+    return patched
+  }
+
+  if (!canSafelyRecreateGridBusinessCustomer(patched)) {
+    return patched
+  }
+
+  await gridFetch({
+    method: "DELETE",
+    path: `/customers/${encodeURIComponent(input.customerId)}`,
+  }).catch((e) => {
+    if (e instanceof GridHttpError && e.status === 404) return
+    throw e
+  })
+  await clearStoredGridCustomerId(input.admin, input.businessId)
+  return "recreate"
+}
+
 /** Push the org's real tax id to Grid when create used a shell / stale value. */
 async function syncGridBusinessTaxIdIfNeeded(input: {
   customerId: string
@@ -291,6 +369,52 @@ async function syncGridBusinessKybContactsIfNeeded(input: {
   return customer
 }
 
+async function finalizeGridBusinessCustomer(input: {
+  admin: SupabaseClient
+  businessId: string
+  customerId: string
+  customer: GridCustomer
+  profile: GridBusinessProfile
+  platformCustomerId: string
+  consent: GridEndUserTermsConsentPayload
+  ownerUserId: string
+  contact: GridBusinessKybContact
+  storedId?: string | null
+}): Promise<{ customerId: string; customer: GridCustomer } | "recreate"> {
+  let customer = await syncEndUserTermsConsentIfNeeded({
+    admin: input.admin,
+    customerId: input.customerId,
+    customer: input.customer,
+    consent: input.consent,
+    ownerUserId: input.ownerUserId,
+  })
+  const scrubbed = await scrubGridBusinessKybStubFieldsIfNeeded({
+    admin: input.admin,
+    businessId: input.businessId,
+    customerId: input.customerId,
+    customer,
+    profile: input.profile,
+    platformCustomerId: input.platformCustomerId,
+  })
+  if (scrubbed === "recreate") return "recreate"
+  customer = scrubbed
+  customer = await syncGridBusinessTaxIdIfNeeded({
+    customerId: input.customerId,
+    customer,
+    profile: input.profile,
+    platformCustomerId: input.platformCustomerId,
+  })
+  customer = await syncGridBusinessKybContactsIfNeeded({
+    customerId: input.customerId,
+    customer,
+    contact: input.contact,
+  })
+  if (input.storedId && input.customerId !== input.storedId) {
+    await persistGridCustomerId(input.admin, input.businessId, input.customerId)
+  }
+  return { customerId: input.customerId, customer }
+}
+
 /** Ensure a Grid BUSINESS customer exists for the org. */
 export async function ensureGridBusinessCustomer(input: {
   admin: SupabaseClient
@@ -329,32 +453,25 @@ export async function ensureGridBusinessCustomer(input: {
   if (stored) {
     const customerId = normalizeGridCustomerId(stored)
     if (await verifyGridCustomerExists(customerId)) {
-      let customer = await gridFetch<GridCustomer>({
+      const customer = await gridFetch<GridCustomer>({
         method: "GET",
         path: `/customers/${encodeURIComponent(customerId)}`,
       })
-      customer = await syncEndUserTermsConsentIfNeeded({
+      const finalized = await finalizeGridBusinessCustomer({
         admin: input.admin,
-        customerId,
-        customer,
-        consent,
-        ownerUserId,
-      })
-      customer = await syncGridBusinessTaxIdIfNeeded({
+        businessId: input.businessId,
         customerId,
         customer,
         profile,
         platformCustomerId,
-      })
-      customer = await syncGridBusinessKybContactsIfNeeded({
-        customerId,
-        customer,
+        consent,
+        ownerUserId,
         contact,
+        storedId: stored,
       })
-      if (customerId !== stored) {
-        await persistGridCustomerId(input.admin, input.businessId, customerId)
+      if (finalized !== "recreate") {
+        return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
       }
-      return { customerId, platformCustomerId, customer }
     }
   }
 
@@ -362,25 +479,20 @@ export async function ensureGridBusinessCustomer(input: {
   if (existing?.id) {
     const customerId = normalizeGridCustomerId(existing.id)
     await persistGridCustomerId(input.admin, input.businessId, customerId)
-    let customer = await syncEndUserTermsConsentIfNeeded({
+    const finalized = await finalizeGridBusinessCustomer({
       admin: input.admin,
+      businessId: input.businessId,
       customerId,
       customer: existing,
-      consent,
-      ownerUserId,
-    })
-    customer = await syncGridBusinessTaxIdIfNeeded({
-      customerId,
-      customer,
       profile,
       platformCustomerId,
-    })
-    customer = await syncGridBusinessKybContactsIfNeeded({
-      customerId,
-      customer,
+      consent,
+      ownerUserId,
       contact,
     })
-    return { customerId, platformCustomerId, customer }
+    if (finalized !== "recreate") {
+      return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
+    }
   }
 
   const payload = {

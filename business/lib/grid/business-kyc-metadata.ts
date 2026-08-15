@@ -129,3 +129,75 @@ export function buildGridBusinessCustomerPayload(input: {
 
   return payload
 }
+
+export function readGridBusinessInfo(
+  customer: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const businessInfo = customer.businessInfo
+  return businessInfo && typeof businessInfo === "object"
+    ? (businessInfo as Record<string, unknown>)
+    : null
+}
+
+function readGridBusinessInfoStringField(
+  businessInfo: Record<string, unknown> | null,
+  ...keys: string[]
+): string | null | undefined {
+  if (!businessInfo) return undefined
+  const hasKey = keys.some((key) => key in businessInfo)
+  if (!hasKey) return undefined
+  const raw = keys.map((key) => businessInfo[key]).find((value) => value !== undefined)
+  if (raw === null) return null
+  if (typeof raw !== "string") return undefined
+  const trimmed = raw.trim()
+  return trimmed || null
+}
+
+/** True when Grid stores taxId as null/empty or a historic shell we no longer send. */
+export function gridBusinessTaxIdIsInvalidOnGrid(input: {
+  customer: Record<string, unknown>
+  platformCustomerId: string
+  profile: GridBusinessProfile
+}): boolean {
+  const businessInfo = readGridBusinessInfo(input.customer)
+  const raw = readGridBusinessInfoStringField(businessInfo, "taxId", "tax_id")
+  if (raw === null) return true
+  if (raw === undefined) return false
+
+  const desired = resolveGridBusinessTaxId({
+    taxId: input.profile.taxId,
+    registrationNumber: input.profile.registrationNumber,
+    country: input.profile.country,
+    platformCustomerId: input.platformCustomerId,
+  })
+  if (desired) return false
+  return isGridShellBusinessTaxId(raw, input.platformCustomerId)
+}
+
+export function gridBusinessIncorporatedOnIsInvalidOnGrid(
+  customer: Record<string, unknown>,
+): boolean {
+  const businessInfo = readGridBusinessInfo(customer)
+  if (!businessInfo || !("incorporatedOn" in businessInfo)) return false
+  const raw = businessInfo.incorporatedOn
+  return raw === null || raw === ""
+}
+
+export function gridBusinessKybStubFieldsNeedResync(input: {
+  customer: Record<string, unknown>
+  platformCustomerId: string
+  profile: GridBusinessProfile
+}): boolean {
+  if (gridBusinessTaxIdIsInvalidOnGrid(input)) return true
+  if (!gridBusinessIncorporatedOnIsInvalidOnGrid(input.customer)) return false
+  return Boolean(isoDateFromTimestamp(input.profile.createdAt))
+}
+
+/** Canonical businessInfo we would send on a fresh thin create for hosted KYB. */
+export function buildGridBusinessInfoResyncPatch(input: {
+  platformCustomerId: string
+  profile: GridBusinessProfile
+}): Record<string, unknown> {
+  const payload = buildGridBusinessCustomerPayload(input)
+  return (payload.businessInfo ?? {}) as Record<string, unknown>
+}
