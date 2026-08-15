@@ -66,6 +66,7 @@ export async function GET(request: Request) {
     enabled: true,
     connectEnabled: true,
     ready: freshReady.ready,
+    tier1Complete: freshReady.tier1Complete,
     reason: freshReady.reason,
     stripeAccountId: freshReady.stripeAccountId,
     onboardingStatus: freshReady.onboardingStatus,

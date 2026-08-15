@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest"
-import { resolveConnectPanelPhase, resolveConnectPanelUx } from "./connect-panel-ux"
+import {
+  connectPanelVerificationPresentation,
+  resolveConnectPanelPhase,
+  resolveConnectPanelUx,
+} from "./connect-panel-ux"
 import type { ConnectStatusSnapshot } from "./connect-panel-ux"
 import { optimisticConnectStatus } from "./connect-status-cache"
+import { NOAH_VERIFICATION_IN_REVIEW_COPY } from "@easner/shared"
+import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 
 function base(overrides: Partial<ConnectStatusSnapshot> = {}): ConnectStatusSnapshot {
   return {
     enabled: true,
     connectEnabled: true,
     ready: false,
+    tier1Complete: true,
     stripeAccountId: null,
     transfersEnabled: false,
     payoutsEnabled: false,
@@ -54,22 +61,64 @@ describe("resolveConnectPanelPhase", () => {
   })
 })
 
+describe("connectPanelVerificationPresentation", () => {
+  it("maps phases to Tier 1 verification status vocabulary", () => {
+    expect(connectPanelVerificationPresentation("not_started", false)).toEqual({
+      status: "not_started",
+      complete: false,
+    })
+    expect(connectPanelVerificationPresentation("pending_review", false)).toEqual({
+      status: "pending",
+      complete: false,
+    })
+    expect(connectPanelVerificationPresentation("ready", true)).toEqual({
+      status: "approved",
+      complete: true,
+    })
+  })
+})
+
 describe("resolveConnectPanelUx", () => {
-  it("shows minimal start CTA for new accounts", () => {
+  it("optimistic first paint waits on Tier 1 before online payments verification", () => {
+    const ux = resolveConnectPanelUx(optimisticConnectStatus())
+    expect(ux.phase).toBe("kyb_required")
+    expect(ux.verificationStatus).toBe("not_started")
+    expect(ux.bodyCopy).toBe(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
+    expect(ux.primary).toBeUndefined()
+  })
+
+  it("locks online payments until Tier 1 is approved", () => {
+    const ux = resolveConnectPanelUx(
+      base({
+        tier1Complete: false,
+        reason: "Complete business verification first to set up online payments",
+      }),
+    )
+    expect(ux.phase).toBe("kyb_required")
+    expect(ux.primary).toBeUndefined()
+    expect(ux.bodyCopy).toBe(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
+  })
+
+  it("shows Begin verification after Tier 1 is approved", () => {
     const ux = resolveConnectPanelUx(base())
-    expect(ux.primary?.label).toBe("Get started")
-    expect(ux.primary?.dialogTitle).toBe("Set up online payments")
+    expect(ux.primary?.label).toBe("Begin verification")
+    expect(ux.primary?.dialogTitle).toBe("Online payment verification")
     expect(ux.secondary).toBeUndefined()
   })
 
-  it("optimistic first paint matches the not-started card", () => {
-    const ux = resolveConnectPanelUx(optimisticConnectStatus())
-    expect(ux.phase).toBe("not_started")
-    expect(ux.badgeLabel).toBe("Not started")
-    expect(ux.primary?.label).toBe("Get started")
+  it("shows Continue verification when Stripe onboarding started", () => {
+    const ux = resolveConnectPanelUx(
+      base({
+        stripeAccountId: "acct_1",
+        detailsSubmitted: false,
+      }),
+    )
+    expect(ux.phase).toBe("in_progress")
+    expect(ux.primary?.label).toBe("Continue verification")
+    expect(ux.primary?.dialogTitle).toBe("Continue verification")
   })
 
-  it("shows link payout as primary when almost ready", () => {
+  it("shows Continue verification when linking payouts", () => {
     const ux = resolveConnectPanelUx(
       base({
         stripeAccountId: "acct_1",
@@ -79,11 +128,11 @@ describe("resolveConnectPanelUx", () => {
       }),
     )
     expect(ux.primary?.kind).toBe("link_payout")
-    expect(ux.primary?.label).toBe("Link payouts")
+    expect(ux.primary?.label).toBe("Continue verification")
     expect(ux.secondary).toBeUndefined()
   })
 
-  it("shows one onboarding CTA when requirements are due", () => {
+  it("shows Continue verification when requirements are due", () => {
     const ux = resolveConnectPanelUx(
       base({
         stripeAccountId: "acct_1",
@@ -91,12 +140,11 @@ describe("resolveConnectPanelUx", () => {
       }),
     )
     expect(ux.phase).toBe("requirements_due")
-    expect(ux.primary?.label).toBe("Complete")
-    expect(ux.primary?.dialogTitle).toBe("Complete requirements")
-    expect(ux.secondary).toBeUndefined()
+    expect(ux.primary?.label).toBe("Continue verification")
+    expect(ux.bodyCopy).toBe(VERIFICATION_SECTION_COPY.verificationOnHold)
   })
 
-  it("shows no CTAs when ready", () => {
+  it("shows in-review copy with no CTA while Stripe reviews", () => {
     const ux = resolveConnectPanelUx(
       base({
         ready: true,
@@ -107,13 +155,29 @@ describe("resolveConnectPanelUx", () => {
         externalAccountLinked: true,
       }),
     )
-    expect(ux.badgeLabel).toBe("Ready")
+    expect(ux.verificationComplete).toBe(true)
     expect(ux.primary).toBeUndefined()
     expect(ux.secondary).toBeUndefined()
-    expect(ux.summary).toBeUndefined()
+    expect(ux.bodyCopy).toBeUndefined()
   })
 
-  it("shows no CTAs while verification is pending", () => {
+  it("shows in-review copy while Stripe verification is pending", () => {
+    const ux = resolveConnectPanelUx(
+      base({
+        stripeAccountId: "acct_1",
+        detailsSubmitted: true,
+        transfersEnabled: true,
+        payoutsEnabled: false,
+        externalAccountLinked: true,
+        hasGridVa: true,
+      }),
+    )
+    expect(ux.phase).toBe("activating")
+    expect(ux.bodyCopy).toBe(NOAH_VERIFICATION_IN_REVIEW_COPY)
+    expect(ux.primary).toBeUndefined()
+  })
+
+  it("shows no CTA while USD account is still provisioning", () => {
     const ux = resolveConnectPanelUx(
       base({
         stripeAccountId: "acct_1",

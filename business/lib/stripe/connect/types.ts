@@ -32,6 +32,7 @@ export type BusinessStripeConnectAccountRow = {
 export type ConnectReadyStatus = {
   ready: boolean
   reason?: string
+  tier1Complete: boolean
   stripeAccountId: string | null
   onboardingStatus: ConnectOnboardingStatus | null
   transfersEnabled: boolean

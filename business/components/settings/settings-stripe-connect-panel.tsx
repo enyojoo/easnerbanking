@@ -21,7 +21,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -36,7 +35,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Check, Circle, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
 import { isStripePublishableConfigured } from "@/lib/stripe/public-enabled"
@@ -54,102 +53,15 @@ import {
   type ConnectStatusPayload,
 } from "@/lib/stripe/connect-status-cache"
 import {
+  connectPanelVerificationPresentation,
   resolveConnectPanelUx,
   type ConnectPanelAction,
   type ConnectStatusSnapshot,
 } from "@/lib/stripe/connect-panel-ux"
 import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
+import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
-
-type StatusKind = "ready" | "almost_ready" | "pending" | "in_progress" | "not_started" | "blocked"
-
-function StripeConnectStatusBadge({
-  label,
-  kind,
-}: {
-  label: string
-  kind: StatusKind
-}) {
-  if (kind === "ready") {
-    return (
-      <Badge className="shrink-0 border-transparent bg-success font-medium text-success-foreground hover:bg-success text-xs">
-        {label}
-      </Badge>
-    )
-  }
-  if (kind === "blocked") {
-    return (
-      <Badge variant="destructive" className="shrink-0 font-medium text-xs">
-        {label}
-      </Badge>
-    )
-  }
-  if (kind === "pending" || kind === "almost_ready" || kind === "in_progress") {
-    return (
-      <Badge variant="secondary" className="shrink-0 font-medium text-xs">
-        {label}
-      </Badge>
-    )
-  }
-  return (
-    <Badge variant="outline" className="shrink-0 font-medium text-muted-foreground text-xs">
-      {label}
-    </Badge>
-  )
-}
-
-function ConnectStatusChecklistTooltip({
-  label,
-  kind,
-  summary,
-  checklist,
-}: {
-  label: string
-  kind: StatusKind
-  summary?: string | null
-  checklist: Array<{ label: string; done: boolean }>
-}) {
-  return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex cursor-default rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={`${label}. Show setup checklist.`}
-          >
-            <StripeConnectStatusBadge label={label} kind={kind} />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent
-          side="bottom"
-          align="end"
-          collisionPadding={16}
-          className="max-w-[min(17.5rem,calc(100vw-2rem))] space-y-2 p-3"
-        >
-          {summary ? <p className="text-xs leading-snug text-popover-foreground">{summary}</p> : null}
-          {checklist.length > 0 ? (
-            <ul className="space-y-1.5">
-              {checklist.map((item) => (
-                <li key={item.label} className="flex items-start gap-2 text-xs">
-                  {item.done ? (
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" aria-hidden />
-                  ) : (
-                    <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />
-                  )}
-                  <span className={item.done ? "text-popover-foreground" : "text-muted-foreground"}>
-                    {item.label}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  )
-}
 
 const connectDialogContentClass =
   "flex h-[min(94vh,52rem)] w-[min(calc(100vw-1.5rem),56rem)] max-w-none flex-col gap-0 overflow-hidden p-0 duration-300 data-[state=open]:duration-300 data-[state=closed]:duration-300 sm:max-w-[min(calc(100vw-1.5rem),56rem)]"
@@ -168,11 +80,11 @@ export function SettingsStripeConnectPanel({
   /** Rendered when Connect is not enabled for this business/environment. */
   unavailableFallback?: ReactNode
 } = {}) {
-  const { businessId } = useBusinessProfile()
+  const { businessId, tier1Complete } = useBusinessProfile()
   const [status, setStatus] = useState<ConnectStatusPayload | null>(() => initialConnectStatus())
   const [linking, setLinking] = useState(false)
+  const [openingOnboarding, setOpeningOnboarding] = useState(false)
   const [onboardingOpen, setOnboardingOpen] = useState(false)
-  const [onboardingLoading, setOnboardingLoading] = useState(false)
   const [onboardingFrameReady, setOnboardingFrameReady] = useState(false)
   const [onboardingError, setOnboardingError] = useState<string | null>(null)
   const [dialogCopy, setDialogCopy] = useState({ title: "", description: "" })
@@ -180,6 +92,7 @@ export function SettingsStripeConnectPanel({
     typeof loadConnectAndInitialize
   > | null>(null)
   const clearInstanceAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const prefetchedClientSecretRef = useRef<string | null>(null)
 
   // Stripe Connect onboarding is a cross-origin iframe — parent activity listeners
   // never see typing/clicks. Suspend idle PIN lock for the duration of the dialog.
@@ -239,13 +152,22 @@ export function SettingsStripeConnectPanel({
     return json.clientSecret
   }, [])
 
+  const prefetchClientSecret = useCallback(async () => {
+    if (!tier1Complete || prefetchedClientSecretRef.current) return
+    try {
+      prefetchedClientSecretRef.current = await fetchClientSecret()
+    } catch {
+      prefetchedClientSecretRef.current = null
+    }
+  }, [fetchClientSecret, tier1Complete])
+
   const clearConnectInstance = useCallback(() => {
     if (clearInstanceAfterCloseRef.current) clearTimeout(clearInstanceAfterCloseRef.current)
     clearInstanceAfterCloseRef.current = setTimeout(() => {
       setConnectInstance(null)
-      setOnboardingLoading(false)
       setOnboardingFrameReady(false)
       setOnboardingError(null)
+      prefetchedClientSecretRef.current = null
       clearInstanceAfterCloseRef.current = null
     }, 280)
   }, [])
@@ -287,6 +209,10 @@ export function SettingsStripeConnectPanel({
 
   const startOnboarding = useCallback(
     async (copy: { title: string; description: string }) => {
+      if (!tier1Complete) {
+        toast.message("Complete Tier 1 business verification before setting up online payments.")
+        return
+      }
       if (!publishableKey || !isStripePublishableConfigured()) {
         toast.error("Online payments are not available yet")
         return
@@ -296,41 +222,51 @@ export function SettingsStripeConnectPanel({
           clearTimeout(clearInstanceAfterCloseRef.current)
           clearInstanceAfterCloseRef.current = null
         }
-        setDialogCopy(copy)
+        setOpeningOnboarding(true)
         setOnboardingError(null)
         setOnboardingFrameReady(false)
-        setOnboardingLoading(true)
-        setOnboardingOpen(true)
+        const clientSecret =
+          prefetchedClientSecretRef.current ?? (await fetchClientSecret())
+        prefetchedClientSecretRef.current = clientSecret
         const instance = loadConnectAndInitialize({
           publishableKey,
-          fetchClientSecret,
+          fetchClientSecret: async () => {
+            const cached = prefetchedClientSecretRef.current
+            if (cached) {
+              prefetchedClientSecretRef.current = null
+              return cached
+            }
+            return fetchClientSecret()
+          },
           locale: browserStripeLocale(),
           appearance: easnerStripeConnectAppearance(),
         })
         setConnectInstance(instance)
-        setOnboardingLoading(false)
+        setDialogCopy(copy)
+        setOnboardingOpen(true)
       } catch (e) {
         setOnboardingOpen(false)
-        setOnboardingLoading(false)
         setOnboardingFrameReady(false)
+        prefetchedClientSecretRef.current = null
         const message = e instanceof Error ? e.message : "Could not start onboarding"
         setOnboardingError(message)
         toast.error(message)
+      } finally {
+        setOpeningOnboarding(false)
       }
     },
-    [fetchClientSecret, publishableKey],
+    [fetchClientSecret, publishableKey, tier1Complete],
   )
 
   useEffect(() => {
     if (!onboardingOpen || onboardingFrameReady || !connectInstance) return
     const timeoutId = window.setTimeout(() => {
-      const message =
-        status?.reason?.trim() ||
-        "Verification is taking longer than expected. Check your connection and try again."
-      setOnboardingError(message)
+      setOnboardingError(
+        "Stripe verification is taking longer than expected. Check your connection and try again.",
+      )
     }, 30_000)
     return () => window.clearTimeout(timeoutId)
-  }, [connectInstance, onboardingFrameReady, onboardingOpen, status?.reason])
+  }, [connectInstance, onboardingFrameReady, onboardingOpen])
 
   const linkPayoutDestination = useCallback(async () => {
     setLinking(true)
@@ -359,19 +295,26 @@ export function SettingsStripeConnectPanel({
     }
   }, [refreshStatus])
 
+  useEffect(() => {
+    if (tier1Complete) void prefetchClientSecret()
+  }, [tier1Complete, prefetchClientSecret])
+
   const panelUx = useMemo(() => {
     if (!status) return null
     if (!status.connectEnabled) {
-      return {
-        phase: "disabled" as const,
-        badgeLabel: "Not enabled",
-        badgeKind: "blocked" as const,
-        summary: "Online payments are not enabled.",
-        checklist: [],
-      }
+      return null
     }
-    return resolveConnectPanelUx(status as ConnectStatusSnapshot)
-  }, [status])
+    const statusForUx: ConnectStatusSnapshot = {
+      ...(status as ConnectStatusSnapshot),
+      tier1Complete,
+    }
+    return resolveConnectPanelUx(statusForUx)
+  }, [status, tier1Complete])
+
+  const badgePresentation = useMemo(() => {
+    if (!panelUx) return { status: "not_started", complete: false }
+    return connectPanelVerificationPresentation(panelUx.phase, panelUx.verificationComplete)
+  }, [panelUx])
 
   const runAction = useCallback(
     (action: ConnectPanelAction) => {
@@ -393,24 +336,16 @@ export function SettingsStripeConnectPanel({
   }
 
   const tier3 = BUSINESS_TIER_LADDER.tiers.find((t) => t.tier === 3)
-  const tooltipSummary =
-    (!status.ready && status.reason && panelUx.phase !== "requirements_due"
-      ? status.reason
-      : null) ||
-    panelUx.summary ||
-    null
 
   return (
     <>
-      <Card className="flex h-full flex-col">
+      <Card className="flex h-full flex-col border-primary/25 md:border-primary/40">
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-base">{tier3?.title ?? "Online payments"}</CardTitle>
-            <ConnectStatusChecklistTooltip
-              label={panelUx.badgeLabel}
-              kind={panelUx.badgeKind}
-              summary={tooltipSummary}
-              checklist={panelUx.checklist}
+            <Tier1VerificationBadge
+              tier1Complete={badgePresentation.complete}
+              tier1VerificationStatus={badgePresentation.status}
             />
           </div>
           <CardDescription className="text-sm">
@@ -418,10 +353,16 @@ export function SettingsStripeConnectPanel({
               "Accept card payments on invoices. Settled to your Easner balance."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="mt-auto space-y-3 pt-0">
-          {panelUx.primary || panelUx.secondary ? (
+        <CardContent className="mt-auto space-y-4 pt-0">
+          {panelUx?.bodyCopyDestructive ? (
+            <p className="text-sm text-destructive">{panelUx.bodyCopyDestructive}</p>
+          ) : null}
+          {panelUx?.bodyCopy ? (
+            <p className="text-sm text-muted-foreground">{panelUx.bodyCopy}</p>
+          ) : null}
+          {panelUx?.primary || panelUx?.secondary ? (
             <div className="flex flex-wrap gap-2">
-              {panelUx.primary ? (
+              {panelUx?.primary ? (
                 panelUx.primary.kind === "link_payout" && !status.hasGridVa ? (
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
@@ -447,10 +388,24 @@ export function SettingsStripeConnectPanel({
                     type="button"
                     size="sm"
                     variant={panelUx.primary.variant}
-                    disabled={panelUx.primary.kind === "link_payout" && linking}
+                    disabled={
+                      openingOnboarding ||
+                      (panelUx.primary.kind === "link_payout" && linking)
+                    }
+                    onMouseEnter={() => {
+                      if (panelUx.primary?.kind === "open_onboarding") void prefetchClientSecret()
+                    }}
+                    onFocus={() => {
+                      if (panelUx.primary?.kind === "open_onboarding") void prefetchClientSecret()
+                    }}
                     onClick={() => runAction(panelUx.primary!)}
                   >
-                    {panelUx.primary.kind === "link_payout" && linking ? (
+                    {openingOnboarding && panelUx.primary.kind === "open_onboarding" ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Opening…
+                      </>
+                    ) : panelUx.primary.kind === "link_payout" && linking ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Linking…
@@ -461,11 +416,18 @@ export function SettingsStripeConnectPanel({
                   </Button>
                 )
               ) : null}
-              {panelUx.secondary ? (
+              {panelUx?.secondary ? (
                 <Button
                   type="button"
                   size="sm"
                   variant={panelUx.secondary.variant}
+                  disabled={openingOnboarding}
+                  onMouseEnter={() => {
+                    if (panelUx.secondary?.kind === "open_onboarding") void prefetchClientSecret()
+                  }}
+                  onFocus={() => {
+                    if (panelUx.secondary?.kind === "open_onboarding") void prefetchClientSecret()
+                  }}
                   onClick={() => runAction(panelUx.secondary!)}
                 >
                   {panelUx.secondary.label}
@@ -505,10 +467,10 @@ export function SettingsStripeConnectPanel({
                   Try again
                 </Button>
               </div>
-            ) : onboardingLoading || !connectInstance || !onboardingFrameReady ? (
+            ) : !connectInstance || !onboardingFrameReady ? (
               <div className="flex size-full min-h-[16rem] flex-col items-center justify-center gap-3 text-muted-foreground">
                 <Loader2 className="size-8 animate-spin" aria-hidden />
-                <p className="text-sm">Opening verification…</p>
+                <p className="text-sm">Loading Stripe verification…</p>
               </div>
             ) : (
               <ConnectComponentsProvider connectInstance={connectInstance}>

@@ -15,6 +15,7 @@ export {
   syncConnectAccountIfLinked,
 } from "./sync-connect-side-effects"
 export {
+  CONNECT_KYB_REQUIRED_REASON,
   getConnectAccountRow,
   resolveConnectReadyForCheckout,
 } from "./resolve-connect-account"

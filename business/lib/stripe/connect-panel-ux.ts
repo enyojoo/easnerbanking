@@ -1,8 +1,11 @@
 import type { CachedConnectStatus } from "@/lib/stripe/connect-status-cache"
+import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
+import { NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY } from "@easner/shared"
 
 export type ConnectStatusSnapshot = Omit<CachedConnectStatus, "cachedAt">
 
 export type ConnectPanelPhase =
+  | "kyb_required"
   | "not_started"
   | "in_progress"
   | "requirements_due"
@@ -24,19 +27,25 @@ export type ConnectPanelAction = {
 
 export type ConnectPanelUx = {
   phase: ConnectPanelPhase
-  badgeLabel: string
-  badgeKind: "ready" | "almost_ready" | "pending" | "in_progress" | "not_started" | "blocked"
-  summary?: string
-  checklist: Array<{ label: string; done: boolean }>
+  /** Maps to Tier 1 badge via `connectPanelVerificationPresentation`. */
+  verificationStatus: string
+  verificationComplete: boolean
+  bodyCopy?: string
+  bodyCopyDestructive?: string
   primary?: ConnectPanelAction
   secondary?: ConnectPanelAction
 }
+
+const BEGIN_VERIFICATION = "Begin verification"
+const CONTINUE_VERIFICATION = "Continue verification"
+const ONLINE_PAYMENT_VERIFICATION = "Online payment verification"
 
 function requirementsDue(status: ConnectStatusSnapshot): string[] {
   return status.requirementsCurrentlyDue ?? []
 }
 
 export function resolveConnectPanelPhase(status: ConnectStatusSnapshot): ConnectPanelPhase {
+  if (status.tier1Complete === false) return "kyb_required"
   if (status.ready) return "ready"
 
   const due = requirementsDue(status)
@@ -53,6 +62,32 @@ export function resolveConnectPanelPhase(status: ConnectStatusSnapshot): Connect
   if (!status.transfersEnabled || !status.payoutsEnabled) return "activating"
 
   return "pending_review"
+}
+
+/** Align Online payments badge styling with Tier 1 KYB. */
+export function connectPanelVerificationPresentation(
+  phase: ConnectPanelPhase,
+  ready: boolean,
+): { status: string; complete: boolean } {
+  if (ready || phase === "ready") {
+    return { status: "approved", complete: true }
+  }
+  switch (phase) {
+    case "kyb_required":
+    case "not_started":
+      return { status: "not_started", complete: false }
+    case "in_progress":
+    case "link_payout":
+    case "missing_virtual_account":
+      return { status: "in_progress", complete: false }
+    case "requirements_due":
+      return { status: "hold", complete: false }
+    case "pending_review":
+    case "activating":
+      return { status: "pending", complete: false }
+    default:
+      return { status: "not_started", complete: false }
+  }
 }
 
 function onboardingAction(
@@ -72,94 +107,92 @@ function onboardingAction(
 
 export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPanelUx {
   const phase = resolveConnectPanelPhase(status)
-
-  const checklist = [
-    { label: "Business verified", done: Boolean(status.detailsSubmitted) },
-    { label: "Transfers enabled", done: Boolean(status.transfersEnabled) },
-    { label: "Payouts enabled", done: Boolean(status.payoutsEnabled) },
-    { label: "Easner USD account ready", done: Boolean(status.hasGridVa) },
-    { label: "Payouts linked to Easner", done: Boolean(status.externalAccountLinked) },
-  ]
+  const presentation = connectPanelVerificationPresentation(phase, Boolean(status.ready))
 
   switch (phase) {
+    case "kyb_required":
+      return {
+        phase,
+        verificationStatus: presentation.status,
+        verificationComplete: presentation.complete,
+        bodyCopy: VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required,
+      }
+
     case "not_started":
       return {
         phase,
-        badgeLabel: "Not started",
-        badgeKind: "not_started",
-        summary: "Verify your business to accept card payments on invoices.",
-        checklist,
-        primary: onboardingAction("Get started", "Set up online payments"),
+        verificationStatus: presentation.status,
+        verificationComplete: presentation.complete,
+        primary: onboardingAction(BEGIN_VERIFICATION, ONLINE_PAYMENT_VERIFICATION),
       }
 
     case "in_progress":
       return {
         phase,
-        badgeLabel: "In progress",
-        badgeKind: "in_progress",
-        checklist,
-        primary: onboardingAction("Continue", "Continue verification"),
+        verificationStatus: presentation.status,
+        verificationComplete: presentation.complete,
+        primary: onboardingAction(CONTINUE_VERIFICATION, CONTINUE_VERIFICATION),
       }
 
     case "requirements_due":
       return {
         phase,
-        badgeLabel: "Action required",
-        badgeKind: "blocked",
-        summary: status.reason ?? "Additional information is required.",
-        checklist,
-        primary: onboardingAction("Complete", "Complete requirements"),
+        verificationStatus: presentation.status,
+        verificationComplete: presentation.complete,
+        bodyCopy:
+          status.reason?.trim() || VERIFICATION_SECTION_COPY.verificationOnHold,
+        primary: onboardingAction(CONTINUE_VERIFICATION, CONTINUE_VERIFICATION),
       }
 
     case "pending_review":
+    case "activating":
       return {
         phase,
-        badgeLabel: "Verification pending",
-        badgeKind: "pending",
-        summary: "We're reviewing your details. This updates automatically.",
-        checklist,
+        verificationStatus: presentation.status,
+        verificationComplete: presentation.complete,
+        bodyCopy: NOAH_VERIFICATION_IN_REVIEW_COPY,
       }
 
     case "missing_virtual_account":
       return {
         phase,
-        badgeLabel: "Setup incomplete",
-        badgeKind: "blocked",
-        summary: "Your Easner USD account is needed before payouts can be linked.",
-        checklist,
+        verificationStatus: presentation.status,
+        verificationComplete: presentation.complete,
+        bodyCopy:
+          status.reason?.trim() ||
+          "Your Easner USD account is still provisioning. Online payment verification will be available shortly.",
       }
 
     case "link_payout":
       return {
         phase,
-        badgeLabel: "Almost ready",
-        badgeKind: "almost_ready",
-        summary: "Link payouts to your Easner USD account to finish setup.",
-        checklist,
+        verificationStatus: presentation.status,
+        verificationComplete: presentation.complete,
+        bodyCopy: "Link payouts to your Easner USD account to finish verification.",
         primary: {
           kind: "link_payout",
-          label: "Link payouts",
+          label: CONTINUE_VERIFICATION,
           variant: "default",
-          dialogTitle: "Link payouts to Easner",
+          dialogTitle: CONTINUE_VERIFICATION,
         },
-      }
-
-    case "activating":
-      return {
-        phase,
-        badgeLabel: "Activating",
-        badgeKind: "pending",
-        summary: "We're enabling transfers and payouts. This updates automatically.",
-        checklist,
       }
 
     case "ready":
     default:
       return {
         phase: "ready",
-        badgeLabel: "Ready",
-        badgeKind: "ready",
-        checklist,
+        verificationStatus: presentation.status,
+        verificationComplete: presentation.complete,
       }
   }
+}
+
+/** @deprecated Use connectPanelVerificationPresentation + verificationStatusLabel */
+export function connectPanelBadgeLabel(phase: ConnectPanelPhase, ready: boolean): string {
+  const { status, complete } = connectPanelVerificationPresentation(phase, ready)
+  if (complete) return VERIFICATION_STATUS_COPY.verified
+  if (status === "in_progress") return VERIFICATION_STATUS_COPY.inProgress
+  if (status === "pending") return VERIFICATION_STATUS_COPY.inReview
+  if (status === "hold") return VERIFICATION_STATUS_COPY.actionNeeded
+  return VERIFICATION_STATUS_COPY.notStarted
 }

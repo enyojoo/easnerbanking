@@ -9,6 +9,7 @@ export type CachedConnectStatus = {
   enabled: boolean
   connectEnabled: boolean
   ready: boolean
+  tier1Complete?: boolean
   reason?: string | null
   stripeAccountId?: string | null
   onboardingStatus?: string | null
@@ -47,6 +48,7 @@ export function optimisticConnectStatus(): ConnectStatusPayload {
     enabled: true,
     connectEnabled: true,
     ready: false,
+    tier1Complete: false,
     stripeAccountId: null,
     transfersEnabled: false,
     payoutsEnabled: false,

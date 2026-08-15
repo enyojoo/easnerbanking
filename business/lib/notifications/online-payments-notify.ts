@@ -29,6 +29,7 @@ export function connectReadyToStatusSnapshot(
     enabled: true,
     connectEnabled: true,
     ready: ready.ready,
+    tier1Complete: ready.tier1Complete,
     reason: ready.reason ?? null,
     stripeAccountId: ready.stripeAccountId,
     onboardingStatus: ready.onboardingStatus,

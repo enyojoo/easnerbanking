@@ -220,7 +220,6 @@ async function syncGridBusinessTaxIdIfNeeded(input: {
     method: "PATCH",
     path: `/customers/${encodeURIComponent(input.customerId)}`,
     json: {
-      customerType: "BUSINESS",
       businessInfo: { taxId: desired },
     },
   })

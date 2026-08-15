@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import {
+  CONNECT_KYB_REQUIRED_REASON,
   createConnectAccountSession,
   stripeConnectClientIp,
 } from "@/lib/stripe/connect"
@@ -20,6 +22,15 @@ export async function POST(request: Request) {
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
+  const { data: biz } = await admin
+    .from("businesses")
+    .select("verification_status, verification_provider, grid_customer_id")
+    .eq("id", ctx.businessId)
+    .maybeSingle()
+  if (!isBusinessTier1Complete(biz)) {
+    return NextResponse.json({ error: CONNECT_KYB_REQUIRED_REASON }, { status: 403 })
+  }
+
   const { data: userRow } = await admin
     .from("users")
     .select("email")
