@@ -3,10 +3,11 @@
 /**
  * Hosted KYB on the Verification settings tab. Prefer SumSub WebSDK via Grid `kyc_token`.
  * Fall back to iframing `kyc_link` if no token. One section card holds the hub;
- * CTA replaces the whole card with the in-tab SumSub flow (Back restores the card).
+ * CTA opens full-page flow (`?flow=hosted`); Back restores the tabbed hub.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react"
 import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -35,6 +36,7 @@ import {
   NOAH_FINAL_REJECTION_USER_MESSAGE,
   NOAH_VERIFICATION_IN_REVIEW_COPY,
 } from "@easner/shared"
+import { SETTINGS_VERIFICATION_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
 
 const GridSumsubWebSdk = dynamic(
   () => import("@/components/compliance/grid-sumsub-websdk").then((m) => ({ default: m.GridSumsubWebSdk })),
@@ -51,7 +53,15 @@ function tierLadderCopy(tier: 1 | 2 | 3) {
   return BUSINESS_TIER_LADDER.tiers.find((x) => x.tier === tier)
 }
 
-export function BusinessVerificationSection() {
+type BusinessVerificationSectionProps = {
+  /** Settings hides title/tabs when the hosted KYB flow is active. */
+  fullPageFlow?: boolean
+}
+
+export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVerificationSectionProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const flowFromUrl = searchParams.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
   const {
     tier1Complete,
     tier1VerificationStatus,
@@ -82,9 +92,25 @@ export function BusinessVerificationSection() {
   const [hostedToken, setHostedToken] = useState<string | null>(null)
   const [hostedTierLevel, setHostedTierLevel] = useState<1 | 2 | 3>(1)
   const clearSessionAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flowAutoOpenRef = useRef(false)
 
   const useSumsubSdk = Boolean(hostedToken?.trim())
   const hostedIframeSrc = !useSumsubSdk ? hostedUrl : null
+  const hostedFlowActive = fullPageFlow || flowFromUrl || hostedOpen
+
+  const pushVerificationFlowUrl = useCallback(() => {
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", "verification")
+    next.set("flow", SETTINGS_VERIFICATION_FLOW_PARAM)
+    router.push(`/settings?${next.toString()}`)
+  }, [router, searchParams])
+
+  const clearVerificationFlowUrl = useCallback(() => {
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", "verification")
+    next.delete("flow")
+    router.replace(`/settings?${next.toString()}`)
+  }, [router, searchParams])
 
   useEffect(() => {
     return () => {
@@ -93,7 +119,7 @@ export function BusinessVerificationSection() {
   }, [])
 
   useEffect(() => {
-    if (hostedOpen) {
+    if (hostedFlowActive) {
       document.documentElement.dataset.verificationFlowOpen = "true"
       document.querySelector("main")?.scrollTo({ top: 0 })
     } else {
@@ -102,7 +128,7 @@ export function BusinessVerificationSection() {
     return () => {
       delete document.documentElement.dataset.verificationFlowOpen
     }
-  }, [hostedOpen])
+  }, [hostedFlowActive])
 
   const tier1RejectedForProbe = tier1VerificationStatus === "rejected"
   const tier1UnderReviewForProbe = tier1StatusIsInReview(tier1VerificationStatus)
@@ -227,6 +253,7 @@ export function BusinessVerificationSection() {
   const closeHostedAndSync = useCallback(() => {
     setHostedOpen(false)
     setHostedLoading(false)
+    clearVerificationFlowUrl()
     void syncBusinessTier1FromGrid()
     if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
     clearSessionAfterCloseRef.current = setTimeout(() => {
@@ -234,10 +261,10 @@ export function BusinessVerificationSection() {
       setHostedToken(null)
       clearSessionAfterCloseRef.current = null
     }, 280)
-  }, [syncBusinessTier1FromGrid])
+  }, [clearVerificationFlowUrl, syncBusinessTier1FromGrid])
 
   useEffect(() => {
-    if (!hostedOpen) return
+    if (!hostedFlowActive) return
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return
       const data = event.data as
@@ -254,7 +281,7 @@ export function BusinessVerificationSection() {
     }
     window.addEventListener("message", onMessage)
     return () => window.removeEventListener("message", onMessage)
-  }, [hostedOpen, closeHostedAndSync])
+  }, [hostedFlowActive, closeHostedAndSync])
 
   const handleHostedIframeLoad = useCallback(
     (event: React.SyntheticEvent<HTMLIFrameElement>) => {
@@ -295,6 +322,9 @@ export function BusinessVerificationSection() {
 
     setHostedOpen(true)
     setHostedTierLevel(1)
+    if (!flowFromUrl) {
+      pushVerificationFlowUrl()
+    }
 
     if (link || token) {
       applyHostedCredentials(link, token)
@@ -308,6 +338,7 @@ export function BusinessVerificationSection() {
       const { link: fetchedLink, token: fetchedToken, json, res } = await fetchHostedVerificationCredentials()
       if (res.status === 431) {
         setHostedOpen(false)
+        clearVerificationFlowUrl()
         setError(
           json.error ??
             "Session data is too large (often from a profile image stored in your account). Sign out and sign in again, or visit Personal settings after we refresh your session.",
@@ -316,17 +347,20 @@ export function BusinessVerificationSection() {
       }
       if (!res.ok) {
         setHostedOpen(false)
+        clearVerificationFlowUrl()
         setError(json.error ?? "Could not start verification.")
         return
       }
       if (json.canResubmit === false) {
         setHostedOpen(false)
+        clearVerificationFlowUrl()
         setInfo("Verification could not be completed for this account. Please contact support if you have questions.")
         return
       }
       if (json.alreadyOnboarded || (!fetchedLink && !fetchedToken)) {
         void syncBusinessTier1FromGrid()
         setHostedOpen(false)
+        clearVerificationFlowUrl()
         if (json.kyc_status === "approved") {
           setError(null)
           setInfo(null)
@@ -348,6 +382,7 @@ export function BusinessVerificationSection() {
       applyHostedCredentials(fetchedLink, fetchedToken)
     } catch (e: unknown) {
       setHostedOpen(false)
+      clearVerificationFlowUrl()
       setError(e instanceof Error ? e.message : "Something went wrong.")
     } finally {
       setHostedLoading(false)
@@ -355,12 +390,37 @@ export function BusinessVerificationSection() {
   }, [
     applyHostedCredentials,
     businessId,
+    clearVerificationFlowUrl,
+    flowFromUrl,
     hostedToken,
     hostedUrl,
     primeHostedCredentials,
+    pushVerificationFlowUrl,
     syncBusinessTier1FromGrid,
     tier1VerificationStatus,
   ])
+
+  useEffect(() => {
+    if (!flowFromUrl) {
+      flowAutoOpenRef.current = false
+      return
+    }
+    if (flowAutoOpenRef.current || hostedOpen) return
+    flowAutoOpenRef.current = true
+    void openHostedVerification()
+  }, [flowFromUrl, hostedOpen, openHostedVerification])
+
+  useEffect(() => {
+    if (flowFromUrl || !hostedOpen) return
+    setHostedOpen(false)
+    setHostedLoading(false)
+    if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
+    clearSessionAfterCloseRef.current = setTimeout(() => {
+      setHostedUrl(null)
+      setHostedToken(null)
+      clearSessionAfterCloseRef.current = null
+    }, 280)
+  }, [flowFromUrl, hostedOpen])
 
   if (isLoading && !hasData) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
@@ -399,15 +459,13 @@ export function BusinessVerificationSection() {
 
   const hasHostedCredentials = Boolean(hostedToken?.trim() || hostedUrl?.trim())
 
-  /** Fits remaining viewport below shell header + Settings title/tabs (no page scroll). */
-  const verificationFlowPanelClass =
-    "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
+  /** Full-page flow uses the settings content area; in-tab fallback keeps title/tabs chrome. */
+  const verificationFlowPanelClass = hostedFlowActive
+    ? "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-2.5rem)] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-2.5rem)]"
+    : "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
 
   const hostedFlowPanel = (
-    <div
-      className={cn("relative flex flex-col overflow-hidden", verificationFlowPanelClass)}
-      style={{ "--verification-settings-chrome": "14rem" } as React.CSSProperties}
-    >
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <Button
         type="button"
         variant="ghost"
@@ -449,23 +507,22 @@ export function BusinessVerificationSection() {
     </div>
   )
 
+  if (hostedFlowActive) {
+    return (
+      <div
+        id="business-verification"
+        className={verificationFlowPanelClass}
+        data-verification-flow="open"
+      >
+        {hostedFlowPanel}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6" id="business-verification">
-      <Card
-        padding={hostedOpen ? "none" : undefined}
-        className={cn(hostedOpen && cn("overflow-hidden", verificationFlowPanelClass))}
-        style={
-          hostedOpen
-            ? ({ "--verification-settings-chrome": "14rem" } as React.CSSProperties)
-            : undefined
-        }
-        data-verification-flow={hostedOpen ? "open" : undefined}
-      >
-        {hostedOpen ? (
-          hostedFlowPanel
-        ) : (
-          <>
-            <CardHeader>
+      <Card>
+        <CardHeader>
               <SettingsCardHeader
                 title={
                   <CardTitle className="flex items-center gap-2">
@@ -586,8 +643,6 @@ export function BusinessVerificationSection() {
                 })}
               </div>
             </CardContent>
-          </>
-        )}
       </Card>
     </div>
   )

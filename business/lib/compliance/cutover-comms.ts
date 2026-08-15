@@ -1,6 +1,11 @@
 /** Settings deep link for hosted business KYB (Verification tab). */
 export const SETTINGS_VERIFICATION_HREF = "/settings?tab=verification"
 
+/** Full-page hosted KYB flow on Settings (hides tab chrome; Back returns to tab hub). */
+export const SETTINGS_VERIFICATION_FLOW_HREF = "/settings?tab=verification&flow=hosted"
+
+export const SETTINGS_VERIFICATION_FLOW_PARAM = "hosted" as const
+
 /** Email template for business KYB cutover — re-verification required. */
 export function buildBusinessKybCutoverEmail(input: {
   businessName: string

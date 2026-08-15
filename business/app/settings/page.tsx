@@ -13,6 +13,8 @@ import { SettingsCustomersTab } from "@/components/settings/settings-customers-t
 import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { primeConnectStatus } from "@/lib/stripe/connect-status-cache"
+import { SETTINGS_VERIFICATION_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
+import { cn } from "@/lib/utils"
 
 const TABS = ["personal", "business", "verification", "team", "recipients", "customers", "communication", "invoicing"] as const
 type TabValue = (typeof TABS)[number]
@@ -21,6 +23,8 @@ function SettingsContent() {
   const searchParams = useSearchParams()
   const tab = (searchParams.get("tab") || "personal") as TabValue
   const validTab = TABS.includes(tab) ? tab : "personal"
+  const verificationFlowOpen =
+    validTab === "verification" && searchParams.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
   const [activeTab, setActiveTab] = useState<TabValue>(validTab)
   const {
     businessId,
@@ -49,23 +53,27 @@ function SettingsContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-2">Manage your account settings and preferences</p>
-      </div>
+    <div className={cn(verificationFlowOpen ? "-mt-6 space-y-0" : "space-y-6")}>
+      {!verificationFlowOpen ? (
+        <div>
+          <h1 className="text-3xl font-semibold text-foreground">Settings</h1>
+          <p className="text-muted-foreground mt-2">Manage your account settings and preferences</p>
+        </div>
+      ) : null}
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="w-full shrink-0 justify-start flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="personal">Personal</TabsTrigger>
-          <TabsTrigger value="business">Business</TabsTrigger>
-          <TabsTrigger value="verification">Verification</TabsTrigger>
-          <TabsTrigger value="team">Team</TabsTrigger>
-          <TabsTrigger value="recipients">Recipients</TabsTrigger>
-          <TabsTrigger value="customers">Customers</TabsTrigger>
-          <TabsTrigger value="communication">Communication</TabsTrigger>
-          <TabsTrigger value="invoicing">Invoicing</TabsTrigger>
-        </TabsList>
+        {!verificationFlowOpen ? (
+          <TabsList className="w-full shrink-0 justify-start flex-wrap h-auto gap-1 p-1">
+            <TabsTrigger value="personal">Personal</TabsTrigger>
+            <TabsTrigger value="business">Business</TabsTrigger>
+            <TabsTrigger value="verification">Verification</TabsTrigger>
+            <TabsTrigger value="team">Team</TabsTrigger>
+            <TabsTrigger value="recipients">Recipients</TabsTrigger>
+            <TabsTrigger value="customers">Customers</TabsTrigger>
+            <TabsTrigger value="communication">Communication</TabsTrigger>
+            <TabsTrigger value="invoicing">Invoicing</TabsTrigger>
+          </TabsList>
+        ) : null}
 
         <TabsContent value="personal" className="mt-6">
           <SettingsPersonalTab />
@@ -73,8 +81,8 @@ function SettingsContent() {
         <TabsContent value="business" className="mt-6">
           <SettingsBusinessTab />
         </TabsContent>
-        <TabsContent value="verification" className="mt-6">
-          <SettingsVerificationTab />
+        <TabsContent value="verification" className={verificationFlowOpen ? "mt-0" : "mt-6"}>
+          <SettingsVerificationTab fullPageFlow={verificationFlowOpen} />
         </TabsContent>
         <TabsContent value="team" className="mt-6">
           <SettingsTeamTab />
