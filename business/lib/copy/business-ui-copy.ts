@@ -379,11 +379,11 @@ export function verificationBannerCta(
   if (s === "hold") {
     return BANNER_CTA_COPY.continue
   }
-  if (s === "in_progress" || opts?.started) {
-    return BANNER_CTA_COPY.continue
-  }
   if (verificationBannerIsInReview(s)) {
     return BANNER_CTA_COPY.status
+  }
+  if (s === "in_progress" || opts?.started) {
+    return BANNER_CTA_COPY.continue
   }
   return BANNER_CTA_COPY.begin
 }

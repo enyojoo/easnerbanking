@@ -54,6 +54,8 @@ describe("verificationBannerCta", () => {
   it("returns Status while in review", () => {
     expect(verificationBannerCta("pending")).toBe(BANNER_CTA_COPY.status)
     expect(verificationBannerCta("in_review")).toBe(BANNER_CTA_COPY.status)
+    expect(verificationBannerCta("in_review", { started: true })).toBe(BANNER_CTA_COPY.status)
+    expect(verificationBannerCta("pending", { started: true })).toBe(BANNER_CTA_COPY.status)
   })
 
   it("returns Retry for rejected and Continue for hold", () => {
