@@ -157,21 +157,22 @@ function emptyOperationalAddressFormConfig(countryCode: string): OperationalAddr
 function mapLibAddressError(err: unknown): Partial<Record<OperationalAddressField, string>> {
   if (!isAddressError(err)) return {}
 
+  const libErr = err
   const errors: Partial<Record<OperationalAddressField, string>> = {}
   const add = (field: OperationalAddressField, message: string) => {
     if (!errors[field]) errors[field] = message
   }
 
-  if (err instanceof AddressValidationError) {
-    for (const child of err.errors) {
+  if (libErr instanceof AddressValidationError) {
+    for (const child of libErr.errors) {
       Object.assign(errors, mapLibAddressError(child))
     }
     return errors
   }
 
-  const code = err.code
-  if (code === "MISSING_FIELD" && "field" in err) {
-    const mapped = LIB_TO_EASNER_FIELD[String((err as { field: string }).field)]
+  const code = libErr.code
+  if (code === "MISSING_FIELD" && "field" in libErr) {
+    const mapped = LIB_TO_EASNER_FIELD[String((libErr as { field: string }).field)]
     if (mapped) add(mapped, "This field is required")
     return errors
   }
@@ -266,7 +267,7 @@ export function sanitizeSubdivisionForCountry(countryCode: string, subdivision: 
 
   const subdivisions = getCountrySubdivisions(code as CountryCode)
   if (subdivisions.length === 0) return value
-  if (subdivisions.some((row) => row.value === value)) return value
+  if (subdivisions.some((row: { value: string; label: string }) => row.value === value)) return value
   if (isValidCountrySubdivisionCode(code as CountryCode, value)) return value
   return ""
 }

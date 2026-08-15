@@ -19,6 +19,6 @@ export {
   isValidCountrySubdivisionCode,
   registerCountry,
   validateAddress,
-} from "../../../../node_modules/lib-address/dist/entry-browser.mjs"
+} from "lib-address"
 
-export type { CountryCode } from "../../../../node_modules/lib-address/dist/generated.ts"
+export type { CountryCode } from "lib-address"
