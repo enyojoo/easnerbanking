@@ -4,8 +4,14 @@ import { BusinessVerificationSection } from "@/components/compliance/business-ve
 
 type SettingsVerificationTabProps = {
   fullPageFlow?: boolean
+  onFlowOpenChange?: (open: boolean) => void
 }
 
-export function SettingsVerificationTab({ fullPageFlow = false }: SettingsVerificationTabProps) {
-  return <BusinessVerificationSection fullPageFlow={fullPageFlow} />
+export function SettingsVerificationTab({
+  fullPageFlow = false,
+  onFlowOpenChange,
+}: SettingsVerificationTabProps) {
+  return (
+    <BusinessVerificationSection fullPageFlow={fullPageFlow} onFlowOpenChange={onFlowOpenChange} />
+  )
 }

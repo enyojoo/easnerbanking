@@ -9,6 +9,7 @@ type Props = {
   accessToken: string
   onComplete: () => void
   onError?: (message: string) => void
+  onReady?: () => void
   theme?: "light" | "dark"
 }
 
@@ -41,12 +42,14 @@ async function refreshGridKycToken(): Promise<string> {
  * Embed SumSub via Grid `createKYCLink.token` (preferred over iframing `kycUrl`).
  * Grid docs: token and hosted URL both update the same customer kyc/kyb status.
  */
-export function GridSumsubWebSdk({ accessToken, onComplete, onError, theme = "dark" }: Props) {
+export function GridSumsubWebSdk({ accessToken, onComplete, onError, onReady, theme = "dark" }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const onCompleteRef = useRef(onComplete)
   const onErrorRef = useRef(onError)
+  const onReadyRef = useRef(onReady)
   onCompleteRef.current = onComplete
   onErrorRef.current = onError
+  onReadyRef.current = onReady
 
   useEffect(() => {
     const el = containerRef.current
@@ -62,6 +65,9 @@ export function GridSumsubWebSdk({ accessToken, onComplete, onError, theme = "da
       .withOptions({ addViewportTag: false, adaptIframeHeight: false })
       .on("idCheck.onApplicantSubmitted", () => {
         onCompleteRef.current()
+      })
+      .on("idCheck.onReady", () => {
+        onReadyRef.current?.()
       })
       .on("idCheck.onApplicantStatusChanged", (payload) => {
         const reviewStatus = String(

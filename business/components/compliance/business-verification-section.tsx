@@ -7,18 +7,19 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react"
 import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
-  fetchHostedVerificationCredentials,
   hostedCredentialsAreReady,
   preloadSumsubWebSdk,
+  primeHostedVerificationCredentials,
   readHostedCredentialsCache,
   readHostedResumeAvailable,
   writeHostedCredentialsCache,
 } from "@/lib/compliance/hosted-verification-credentials"
+import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -56,10 +57,13 @@ function tierLadderCopy(tier: 1 | 2 | 3) {
 type BusinessVerificationSectionProps = {
   /** Settings hides title/tabs when the hosted KYB flow is active. */
   fullPageFlow?: boolean
+  onFlowOpenChange?: (open: boolean) => void
 }
 
-export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVerificationSectionProps) {
-  const router = useRouter()
+export function BusinessVerificationSection({
+  fullPageFlow = false,
+  onFlowOpenChange,
+}: BusinessVerificationSectionProps) {
   const searchParams = useSearchParams()
   const flowFromUrl = searchParams.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
   const {
@@ -91,6 +95,7 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
   const [hostedUrl, setHostedUrl] = useState<string | null>(null)
   const [hostedToken, setHostedToken] = useState<string | null>(null)
   const [hostedTierLevel, setHostedTierLevel] = useState<1 | 2 | 3>(1)
+  const [openingVerification, setOpeningVerification] = useState(false)
   const clearSessionAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flowAutoOpenRef = useRef(false)
 
@@ -99,18 +104,20 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
   const hostedFlowActive = fullPageFlow || flowFromUrl || hostedOpen
 
   const pushVerificationFlowUrl = useCallback(() => {
+    onFlowOpenChange?.(true)
     const next = new URLSearchParams(searchParams.toString())
     next.set("tab", "verification")
     next.set("flow", SETTINGS_VERIFICATION_FLOW_PARAM)
-    router.push(`/settings?${next.toString()}`)
-  }, [router, searchParams])
+    window.history.replaceState(null, "", `/settings?${next.toString()}`)
+  }, [onFlowOpenChange, searchParams])
 
   const clearVerificationFlowUrl = useCallback(() => {
+    onFlowOpenChange?.(false)
     const next = new URLSearchParams(searchParams.toString())
     next.set("tab", "verification")
     next.delete("flow")
-    router.replace(`/settings?${next.toString()}`)
-  }, [router, searchParams])
+    window.history.replaceState(null, "", `/settings?${next.toString()}`)
+  }, [onFlowOpenChange, searchParams])
 
   useEffect(() => {
     return () => {
@@ -161,25 +168,15 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
       return readHostedCredentialsCache(businessId)
     }
     try {
-      preloadSumsubWebSdk()
-      const { link: fetchedLink, token: fetchedToken, json, res } =
-        await fetchHostedVerificationCredentials()
-      const link = fetchedLink
-      const token = fetchedToken
+      const { link, token } = await primeHostedVerificationCredentials({ businessId })
       probedHostedUrlRef.current = link
       probedHostedTokenRef.current = token
       const credentials = { link, token }
-      if (res.ok) {
-        writeHostedCredentialsCache(businessId, credentials)
-      }
       const ready = hostedCredentialsAreReady(credentials)
       setHostedResumeAvailable(ready || readHostedResumeAvailable(businessId) === true)
       if (!hostedOpen) {
         setHostedUrl(link)
         setHostedToken(token)
-      }
-      if (json.canResubmit === false) {
-        return credentials
       }
       return credentials
     } catch {
@@ -211,16 +208,21 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
       return
     }
     const cached = syncCredentialsFromCache(businessId)
+    primeBusinessVerificationFlow({
+      businessId,
+      canManageBusinessVerification,
+      tier1Complete,
+      tier1CanResubmit,
+    })
     if (hostedCredentialsAreReady(cached)) {
-      preloadSumsubWebSdk()
       return
     }
     setHostedResumeAvailable(readHostedResumeAvailable(businessId))
-    preloadSumsubWebSdk()
   }, [
     businessId,
     canManageBusinessVerification,
     syncCredentialsFromCache,
+    tier1CanResubmit,
     tier1Complete,
     tier1FinalRejectForPrefetch,
     tier1AwaitingReviewForProbe,
@@ -253,6 +255,7 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
   const closeHostedAndSync = useCallback(() => {
     setHostedOpen(false)
     setHostedLoading(false)
+    setOpeningVerification(false)
     clearVerificationFlowUrl()
     void syncBusinessTier1FromGrid()
     if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
@@ -262,6 +265,13 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
       clearSessionAfterCloseRef.current = null
     }, 280)
   }, [clearVerificationFlowUrl, syncBusinessTier1FromGrid])
+
+  const abortHostedVerification = useCallback(() => {
+    setHostedOpen(false)
+    setHostedLoading(false)
+    setOpeningVerification(false)
+    clearVerificationFlowUrl()
+  }, [clearVerificationFlowUrl])
 
   useEffect(() => {
     if (!hostedFlowActive) return
@@ -285,6 +295,7 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
 
   const handleHostedIframeLoad = useCallback(
     (event: React.SyntheticEvent<HTMLIFrameElement>) => {
+      setHostedLoading(false)
       try {
         const href = event.currentTarget.contentWindow?.location?.href
         if (href && isGridCompleteUrl(href)) {
@@ -305,40 +316,43 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
       return
     }
 
-    preloadSumsubWebSdk()
-
-    const resolveCredentials = () => {
-      const link = probedHostedUrlRef.current ?? hostedUrl
-      const token = probedHostedTokenRef.current ?? hostedToken
-      return { link, token }
+    const resolveCachedCredentials = () => {
+      const fromRefs = {
+        link: probedHostedUrlRef.current ?? hostedUrl,
+        token: probedHostedTokenRef.current ?? hostedToken,
+      }
+      if (hostedCredentialsAreReady(fromRefs)) return fromRefs
+      const cached = readHostedCredentialsCache(businessId)
+      if (hostedCredentialsAreReady(cached)) return cached
+      return null
     }
 
-    let { link, token } = resolveCredentials()
-    if (!link && !token) {
-      const primed = await primeHostedCredentials()
-      link = primed.link
-      token = primed.token
-    }
-
-    setHostedOpen(true)
-    setHostedTierLevel(1)
-    if (!flowFromUrl) {
+    const beginHostedFlow = () => {
+      setOpeningVerification(true)
+      preloadSumsubWebSdk()
+      setHostedLoading(true)
+      setHostedOpen(true)
+      setHostedTierLevel(1)
       pushVerificationFlowUrl()
     }
 
-    if (link || token) {
-      applyHostedCredentials(link, token)
+    const cachedReady = resolveCachedCredentials()
+    if (cachedReady) {
+      beginHostedFlow()
+      applyHostedCredentials(cachedReady.link, cachedReady.token)
+      if (!cachedReady.token?.trim()) {
+        setOpeningVerification(false)
+      }
       return
     }
 
-    setHostedLoading(true)
-    setHostedToken(null)
-    setHostedUrl(null)
+    beginHostedFlow()
+
     try {
-      const { link: fetchedLink, token: fetchedToken, json, res } = await fetchHostedVerificationCredentials()
+      const { link, token, json, res } = await primeHostedVerificationCredentials({ businessId })
+
       if (res.status === 431) {
-        setHostedOpen(false)
-        clearVerificationFlowUrl()
+        abortHostedVerification()
         setError(
           json.error ??
             "Session data is too large (often from a profile image stored in your account). Sign out and sign in again, or visit Personal settings after we refresh your session.",
@@ -346,21 +360,18 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
         return
       }
       if (!res.ok) {
-        setHostedOpen(false)
-        clearVerificationFlowUrl()
+        abortHostedVerification()
         setError(json.error ?? "Could not start verification.")
         return
       }
       if (json.canResubmit === false) {
-        setHostedOpen(false)
-        clearVerificationFlowUrl()
+        abortHostedVerification()
         setInfo("Verification could not be completed for this account. Please contact support if you have questions.")
         return
       }
-      if (json.alreadyOnboarded || (!fetchedLink && !fetchedToken)) {
+      if (json.alreadyOnboarded || (!link && !token)) {
         void syncBusinessTier1FromGrid()
-        setHostedOpen(false)
-        clearVerificationFlowUrl()
+        abortHostedVerification()
         if (json.kyc_status === "approved") {
           setError(null)
           setInfo(null)
@@ -379,22 +390,21 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
         setInfo("No additional verification steps are available right now. We'll update your status shortly.")
         return
       }
-      applyHostedCredentials(fetchedLink, fetchedToken)
+
+      applyHostedCredentials(link, token)
+      if (!token?.trim()) {
+        setOpeningVerification(false)
+      }
     } catch (e: unknown) {
-      setHostedOpen(false)
-      clearVerificationFlowUrl()
+      abortHostedVerification()
       setError(e instanceof Error ? e.message : "Something went wrong.")
-    } finally {
-      setHostedLoading(false)
     }
   }, [
+    abortHostedVerification,
     applyHostedCredentials,
     businessId,
-    clearVerificationFlowUrl,
-    flowFromUrl,
     hostedToken,
     hostedUrl,
-    primeHostedCredentials,
     pushVerificationFlowUrl,
     syncBusinessTier1FromGrid,
     tier1VerificationStatus,
@@ -414,6 +424,7 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
     if (flowFromUrl || !hostedOpen) return
     setHostedOpen(false)
     setHostedLoading(false)
+    setOpeningVerification(false)
     if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
     clearSessionAfterCloseRef.current = setTimeout(() => {
       setHostedUrl(null)
@@ -492,7 +503,14 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
             accessToken={hostedToken}
             theme="light"
             onComplete={closeHostedAndSync}
-            onError={(message) => setError(message)}
+            onReady={() => {
+              setHostedLoading(false)
+              setOpeningVerification(false)
+            }}
+            onError={(message) => {
+              setHostedLoading(false)
+              setError(message)
+            }}
           />
         ) : hostedIframeSrc ? (
           <iframe
@@ -618,9 +636,16 @@ export function BusinessVerificationSection({ fullPageFlow = false }: BusinessVe
                                 onClick={() => void openHostedVerification()}
                                 onMouseEnter={() => void primeHostedCredentials()}
                                 onFocus={() => void primeHostedCredentials()}
-                                disabled={!businessId}
+                                disabled={!businessId || openingVerification}
                               >
-                                {tier1HostedCtaLabel}
+                                {openingVerification ? (
+                                  <>
+                                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                                    Opening…
+                                  </>
+                                ) : (
+                                  tier1HostedCtaLabel
+                                )}
                               </Button>
                             ) : null}
                           </div>

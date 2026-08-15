@@ -81,11 +81,18 @@ export type PrimeHostedVerificationOptions = {
  */
 export async function primeHostedVerificationCredentials(
   options: PrimeHostedVerificationOptions,
-): Promise<HostedCredentials> {
+): Promise<HostedCredentialsFetchResult> {
   const { businessId, useCache = true } = options
   if (useCache) {
     const cached = readHostedCredentialsCache(businessId)
-    if (hostedCredentialsAreReady(cached)) return cached
+    if (hostedCredentialsAreReady(cached)) {
+      return {
+        link: cached.link,
+        token: cached.token,
+        json: {},
+        res: new Response(null, { status: 200 }),
+      }
+    }
   }
 
   let inFlight = inFlightByBusinessId.get(businessId)
@@ -104,8 +111,7 @@ export async function primeHostedVerificationCredentials(
     })
   }
 
-  const result = await inFlight
-  return { link: result.link, token: result.token }
+  return inFlight
 }
 
 export function preloadSumsubWebSdk(): void {
