@@ -22,7 +22,7 @@ describe("parseGridCustomerForBusiness", () => {
 
     expect(parsed).toMatchObject({
       name: "Easner Group, Inc",
-      country: "United States",
+      registration_country: "United States",
       registration_number: "10609372",
       tax_id: "246398107",
       registered_address_line1: "131 Continental Dr Suite 305",

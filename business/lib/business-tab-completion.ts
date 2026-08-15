@@ -10,8 +10,10 @@ function nonEmpty(s: string | null | undefined): boolean {
   return Boolean(String(s ?? "").trim())
 }
 
-/** ISO country code for KYB rules; mirrors Settings → Business country picker. */
-export function countryCodeFromProfileForKyb(profile: Pick<BusinessProfile, "countryCode" | "country">): string {
+function countryCodeFromProfile(profile: {
+  countryCode?: string | null
+  country?: string | null
+}): string {
   const fromApi = profile.countryCode?.trim().toUpperCase()
   if (fromApi && getCountryFromCode(fromApi)) return fromApi
   const stored = profile.country?.trim()
@@ -24,6 +26,23 @@ export function countryCodeFromProfileForKyb(profile: Pick<BusinessProfile, "cou
     if (m) return m.code
   }
   return ""
+}
+
+export function countryCodeFromProfileForKyb(
+  profile: Pick<
+    BusinessProfile,
+    "registrationCountryCode" | "registrationCountry" | "countryCode" | "country"
+  >,
+): string {
+  const fromRegistration = countryCodeFromProfile({
+    countryCode: profile.registrationCountryCode,
+    country: profile.registrationCountry,
+  })
+  if (fromRegistration) return fromRegistration
+  return countryCodeFromProfile({
+    countryCode: profile.countryCode,
+    country: profile.country,
+  })
 }
 
 /**

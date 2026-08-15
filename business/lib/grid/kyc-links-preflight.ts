@@ -26,7 +26,7 @@ export async function evaluateGridBusinessKycLinksPreflight(params: {
 
   const { data: biz } = await admin
     .from("businesses")
-    .select("verification_status,verification_rejection_reasons,country")
+    .select("verification_status,verification_rejection_reasons,country,registration_country")
     .eq("id", businessId)
     .maybeSingle()
 
@@ -44,7 +44,9 @@ export async function evaluateGridBusinessKycLinksPreflight(params: {
     }
   }
 
-  const countryDisplay = displayCountryFromBusinessSetting(biz?.country as string | null | undefined)
+  const countryDisplay = displayCountryFromBusinessSetting(
+    (biz?.registration_country as string | null | undefined) ?? (biz?.country as string | null | undefined),
+  )
   const registrationCode = countryCodeFromName(countryDisplay || (biz?.country as string | undefined))
   if (registrationCode) {
     const allowed = isCountryAllowedForSurface(registrationCode, "signup")

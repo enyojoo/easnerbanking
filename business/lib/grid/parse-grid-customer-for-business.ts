@@ -4,7 +4,7 @@ export type ParsedGridCustomerForBusiness = {
   name?: string
   registration_number?: string | null
   tax_id?: string | null
-  country?: string | null
+  registration_country?: string | null
   registered_address_line1?: string | null
   registered_address_city?: string | null
   registered_address_state?: string | null
@@ -48,7 +48,7 @@ export function parseGridCustomerForBusiness(
   const taxId = pickString(businessInfo, "taxId", "tax_id")
   if (taxId) out.tax_id = taxId
 
-  if (countryIso) out.country = countryDisplayName(countryIso) || countryIso
+  if (countryIso) out.registration_country = countryDisplayName(countryIso) || countryIso
 
   const line1 = pickString(address, "line1", "line_1", "street")
   if (line1) out.registered_address_line1 = line1

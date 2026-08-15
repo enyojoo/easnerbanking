@@ -108,7 +108,7 @@ async function resolveCanManageBusinessVerification(
 
 async function fetchBusinessProfile(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string) {
   const richSelect =
-    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,registered_address_line1,registered_address_city,registered_address_state,registered_address_postal_code,country,verification_status,kyb_verified_at,invoice_settings"
+    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,registered_address_line1,registered_address_city,registered_address_state,registered_address_postal_code,country,registration_country,verification_status,kyb_verified_at,invoice_settings"
   const baseSelect = "id,name,easetag,logo_url,business_type,base_currency,description,country"
   const minimalSelect = "id,name,easetag,country"
 
@@ -169,6 +169,7 @@ export async function GET(request: Request) {
     registered_address_state: string | null
     registered_address_postal_code: string | null
     country: string | null
+    registration_country: string | null
     verification_status?: string | null
     kyb_verified_at?: string | null
     invoice_settings?: unknown
@@ -290,6 +291,15 @@ export async function GET(request: Request) {
         return d || null
       })(),
       countryCode: countryCodeFromName(displayCountryFromBusinessSetting(org?.country) || org?.country),
+      registrationCountry: (() => {
+        const d = displayCountryFromBusinessSetting(org?.registration_country ?? org?.country)
+        return d || null
+      })(),
+      registrationCountryCode: countryCodeFromName(
+        displayCountryFromBusinessSetting(org?.registration_country ?? org?.country) ||
+          org?.registration_country ||
+          org?.country,
+      ),
       onboardingComplete,
       role: userRow?.role ?? "business",
       ownerName,
@@ -356,7 +366,6 @@ export async function PUT(request: Request) {
   if (profileLocked) {
     const blocked =
       body.businessName !== undefined ||
-      body.countryCode !== undefined ||
       body.registrationNumber !== undefined ||
       body.taxId !== undefined
     if (blocked) {

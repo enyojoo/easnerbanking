@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import {
   Building2,
   Globe,
@@ -35,6 +37,7 @@ import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 import { useBusinessEasetagAvailability } from "@/hooks/use-business-easetag-availability"
 import { useAllowedBaseCurrencies } from "@/hooks/use-allowed-base-currencies"
 import { formatPostalAddressLine, hasPostalAddressParts } from "@easner/shared/postal-address"
+import { filterCountriesForProductPicker } from "@easner/shared"
 import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
@@ -84,6 +87,16 @@ export function SettingsBusinessTab() {
     error: baseCurrenciesError,
   } = useAllowedBaseCurrencies()
   const [countryCode, setCountryCode] = useState("")
+  const [addressCountryCode, setAddressCountryCode] = useState("")
+  const [addressCountryOpen, setAddressCountryOpen] = useState(false)
+  const countriesForAddressPicker = useMemo(() => {
+    const base = filterCountriesForProductPicker(countries, "business")
+    const cur = countries.find((c) => c.code === addressCountryCode)
+    if (cur && !base.some((b) => b.code === cur.code)) {
+      return [cur, ...base]
+    }
+    return base
+  }, [addressCountryCode])
   const easetagAvail = useBusinessEasetagAvailability({ profileEasetag: profile.easetag })
   const [editingSection, setEditingSection] = useState<string | null>(null)
   /** Which card section is currently persisting (Save); disables actions and shows spinner on that Save. */
@@ -109,12 +122,20 @@ export function SettingsBusinessTab() {
 
   useEffect(() => {
     if (profile.isLoading) return
-    // Avoid overwriting Easetag (and racing the availability check) while editing business details.
-    if (editingSection === "business") return
-    const code = countryCodeFromProfile(profile)
-    setCountryCode(code)
-    const c = getCountryFromCode(code)
-    const countryLabel = profile.country?.trim() || c?.name || ""
+    // Avoid overwriting in-flight edits while a section is open.
+    if (editingSection === "business" || editingSection === "address") return
+    const registrationCode = countryCodeFromProfile({
+      countryCode: profile.registrationCountryCode,
+      country: profile.registrationCountry,
+    })
+    const operationalCode = countryCodeFromProfile({
+      countryCode: profile.countryCode,
+      country: profile.country,
+    })
+    setCountryCode(registrationCode)
+    setAddressCountryCode(operationalCode)
+    const operationalCountryRow = getCountryFromCode(operationalCode)
+    const countryLabel = profile.country?.trim() || operationalCountryRow?.name || ""
     setFormData((prev) => ({
       ...prev,
       businessName: profile.name || prev.businessName,
@@ -137,6 +158,8 @@ export function SettingsBusinessTab() {
   }, [
     profile.isLoading,
     profile.countryCode,
+    profile.registrationCountry,
+    profile.registrationCountryCode,
     profile.name,
     profile.easetag,
     profile.logoUrl,
@@ -193,6 +216,7 @@ export function SettingsBusinessTab() {
           city: formData.city,
           state: formData.state,
           postalCode: formData.zipCode,
+          ...(addressCountryCode.trim() ? { countryCode: addressCountryCode } : {}),
         })
       } else if (section === "public") {
         updated = await updateBusinessProfile({
@@ -208,9 +232,17 @@ export function SettingsBusinessTab() {
     if (!updated) return
 
     const p = updated
-    const nextCountryCode = countryCodeFromProfile(p)
-    setCountryCode(nextCountryCode)
-    const countryRow = getCountryFromCode(nextCountryCode)
+    const nextRegistrationCode = countryCodeFromProfile({
+      countryCode: p.registrationCountryCode,
+      country: p.registrationCountry,
+    })
+    const nextOperationalCode = countryCodeFromProfile({
+      countryCode: p.countryCode,
+      country: p.country,
+    })
+    setCountryCode(nextRegistrationCode)
+    setAddressCountryCode(nextOperationalCode)
+    const operationalCountryRow = getCountryFromCode(nextOperationalCode)
     setFormData((prev) => ({
       ...prev,
       businessName: p.name || prev.businessName,
@@ -228,7 +260,7 @@ export function SettingsBusinessTab() {
       city: p.city || prev.city,
       state: p.state || prev.state,
       zipCode: p.postalCode || prev.zipCode,
-      country: p.country?.trim() || countryRow?.name || prev.country,
+      country: p.country?.trim() || operationalCountryRow?.name || prev.country,
     }))
     setEditingSection(null)
   }
@@ -236,7 +268,15 @@ export function SettingsBusinessTab() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
+  const handleAddressCountryChange = (code: string) => {
+    setAddressCountryCode(code)
+    const c = getCountryFromCode(code)
+    if (c) handleInputChange("country", c.name)
+    setAddressCountryOpen(false)
+  }
+
   const selectedCountry = getCountryFromCode(countryCode)
+  const selectedAddressCountry = getCountryFromCode(addressCountryCode)
   const kybFields = getKybFields(countryCode)
   const profileLocked = profile.profileLocked ?? false
   const registeredAddressDisplay = useMemo(
@@ -246,13 +286,14 @@ export function SettingsBusinessTab() {
         city: profile.registeredAddressCity,
         state: profile.registeredAddressState,
         postalCode: profile.registeredAddressPostalCode,
-        country: profile.country,
+        country: profile.registrationCountry ?? profile.country,
       }),
     [
       profile.registeredAddressLine1,
       profile.registeredAddressCity,
       profile.registeredAddressState,
       profile.registeredAddressPostalCode,
+      profile.registrationCountry,
       profile.country,
     ],
   )
@@ -669,6 +710,76 @@ export function SettingsBusinessTab() {
                 disabled={editingSection !== "address"}
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Country</Label>
+            {editingSection === "address" ? (
+              <Popover open={addressCountryOpen} onOpenChange={setAddressCountryOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={addressCountryOpen}
+                    className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {selectedAddressCountry ? (
+                        <>
+                          <CountryFlag code={selectedAddressCountry.code} size={22} />
+                          <span className="truncate">{selectedAddressCountry.name}</span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">Select country</span>
+                      )}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search country..." />
+                    <CommandList className="max-h-[200px]">
+                      <CommandEmpty>No country found.</CommandEmpty>
+                      <CommandGroup>
+                        {countriesForAddressPicker.map((c) => (
+                          <CommandItem
+                            key={c.code}
+                            value={c.name}
+                            onSelect={() => handleAddressCountryChange(c.code)}
+                          >
+                            <div className="flex w-full items-center gap-2">
+                              <CountryFlag code={c.code} size={22} />
+                              <span className="flex-1">{c.name}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                disabled
+                tabIndex={-1}
+                className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
+                aria-readonly="true"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  {selectedAddressCountry ? (
+                    <>
+                      <CountryFlag code={selectedAddressCountry.code} size={22} />
+                      <span className="truncate">{selectedAddressCountry.name}</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">{formData.country || "—"}</span>
+                  )}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
+              </Button>
+            )}
           </div>
           </>
           )}

@@ -34,8 +34,12 @@ export type BusinessProfile = {
   registeredAddressCity: string
   registeredAddressState: string
   registeredAddressPostalCode: string
+  /** Operational address country (invoices/statements). */
   country: string | null
   countryCode: string | null
+  /** KYB registration country (legal entity; read-only in Settings). */
+  registrationCountry: string | null
+  registrationCountryCode: string | null
   onboardingComplete: boolean
   role: "business" | "individual"
   ownerName: string
@@ -83,6 +87,8 @@ const DEFAULT_PROFILE: BusinessProfile = {
   registeredAddressPostalCode: "",
   country: null,
   countryCode: null,
+  registrationCountry: null,
+  registrationCountryCode: null,
   onboardingComplete: false,
   role: "business",
   ownerName: "",
@@ -209,6 +215,9 @@ export function useBusinessProfile() {
       ...profileData,
       logoUrl: normalizeBusinessLogoUrl(profileData.logoUrl),
       countryCode: profileData.countryCode ?? countryCodeFromName(profileData.country),
+      registrationCountryCode:
+        profileData.registrationCountryCode ??
+        countryCodeFromName(profileData.registrationCountry ?? profileData.country),
     }),
     [profileData],
   )

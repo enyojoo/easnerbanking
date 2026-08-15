@@ -116,7 +116,7 @@ export async function loadGridBusinessProfile(
   const { data } = await admin
     .from("businesses")
     .select(
-      "name,easetag,registration_number,tax_id,country,address_line1,city,state,postal_code,support_email,created_at",
+      "name,easetag,registration_number,tax_id,country,registration_country,address_line1,city,state,postal_code,support_email,created_at",
     )
     .eq("id", businessId)
     .maybeSingle()
@@ -126,7 +126,7 @@ export async function loadGridBusinessProfile(
     easetag: data.easetag,
     registrationNumber: data.registration_number,
     taxId: data.tax_id,
-    country: data.country,
+    country: data.registration_country ?? data.country,
     addressLine1: data.address_line1,
     city: data.city,
     state: data.state,
