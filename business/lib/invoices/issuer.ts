@@ -103,7 +103,11 @@ export async function fetchInvoiceIssuerForBusiness(
   admin: ReturnType<typeof createSupabaseAdmin>,
   businessId: string,
 ): Promise<InvoicePdfIssuer> {
-  await ensureBusinessOperationalAddressCountriesRegistered()
+  try {
+    await ensureBusinessOperationalAddressCountriesRegistered()
+  } catch (error) {
+    console.warn("operational address country registration failed (non-fatal):", error)
+  }
 
   const { data: org, error } = await admin
     .from("businesses")

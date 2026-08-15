@@ -550,7 +550,11 @@ export async function ensureGridBusinessCustomer(input: {
   }
 
   const payload = {
-    ...buildGridBusinessCustomerPayload({ platformCustomerId, profile }),
+    ...buildGridBusinessCustomerPayload({
+      platformCustomerId,
+      profile,
+      forGridCreate: true,
+    }),
     endUserTermsConsent: consent,
   }
   const created = await gridFetch<GridCustomer>({

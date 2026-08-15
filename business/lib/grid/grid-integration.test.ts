@@ -97,6 +97,24 @@ describe("buildGridBusinessCustomerPayload", () => {
     expect(businessInfo.incorporatedOn).toBeUndefined()
   })
 
+  it("sends Grid-required create stubs when forGridCreate is set", () => {
+    const platformCustomerId = "eb_4afbef7f008749c3b5d87807b37710e9"
+    const payload = buildGridBusinessCustomerPayload({
+      platformCustomerId,
+      forGridCreate: true,
+      profile: {
+        legalName: "Fruitful Africa Limited",
+        email: "owner@example.com",
+        country: "NG",
+        createdAt: "2026-08-12T10:41:27.468649+00:00",
+      },
+    })
+    const businessInfo = payload.businessInfo as Record<string, unknown>
+    expect(businessInfo.country).toBe("NG")
+    expect(businessInfo.incorporatedOn).toBe("2026-08-12")
+    expect(businessInfo.taxId).toBe(gridShellBusinessTaxId(platformCustomerId))
+  })
+
   it("normalizes stored EIN-style tax ids", () => {
     const payload = buildGridBusinessCustomerPayload({
       platformCustomerId,

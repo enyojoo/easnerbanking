@@ -93,6 +93,11 @@ export function resolveGridBusinessTaxId(input: {
 export function buildGridBusinessCustomerPayload(input: {
   platformCustomerId: string
   profile: GridBusinessProfile
+  /**
+   * Grid POST /customers on production still requires country, incorporatedOn, and taxId.
+   * Use only on create — hosted KYB collects real values in Sumsub.
+   */
+  forGridCreate?: boolean
 }): Record<string, unknown> {
   const legalName = String(input.profile.legalName ?? "").trim() || "Easner Business"
   const countryIso2 = resolveBusinessCountryIso2(input.profile.country)
@@ -115,6 +120,11 @@ export function buildGridBusinessCustomerPayload(input: {
     if (countryIso2) businessInfo.country = countryIso2
     const incorporatedOn = isoDateFromTimestamp(input.profile.createdAt)
     if (incorporatedOn) businessInfo.incorporatedOn = incorporatedOn
+  } else if (input.forGridCreate) {
+    if (countryIso2) businessInfo.country = countryIso2
+    const incorporatedOn = isoDateFromTimestamp(input.profile.createdAt)
+    if (incorporatedOn) businessInfo.incorporatedOn = incorporatedOn
+    businessInfo.taxId = gridShellBusinessTaxId(input.platformCustomerId)
   }
 
   const payload: Record<string, unknown> = {

@@ -125,6 +125,16 @@ async function fetchBusinessProfile(admin: ReturnType<typeof createSupabaseAdmin
 }
 
 export async function GET(request: Request) {
+  try {
+    return await getBusinessProfileResponse(request)
+  } catch (error) {
+    console.error("[GET /api/business/profile]", error)
+    const message = error instanceof Error ? error.message : "Failed to load business profile"
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+async function getBusinessProfileResponse(request: Request) {
   const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -250,10 +260,14 @@ export async function GET(request: Request) {
   let invoiceReplyEmailSource: "support" | "owner" | "sender" | null = null
   let invoiceSettings: BusinessInvoiceSettings = parseBusinessInvoiceSettings(null)
   if (orgId) {
-    const reply = await resolveInvoiceReplyEmailWithSource(admin, orgId, user.id)
-    if (reply) {
-      invoiceReplyEmail = reply.email
-      invoiceReplyEmailSource = reply.source
+    try {
+      const reply = await resolveInvoiceReplyEmailWithSource(admin, orgId, user.id)
+      if (reply) {
+        invoiceReplyEmail = reply.email
+        invoiceReplyEmailSource = reply.source
+      }
+    } catch (error) {
+      console.warn("[GET /api/business/profile] invoice reply resolve failed (non-fatal):", error)
     }
   }
 
