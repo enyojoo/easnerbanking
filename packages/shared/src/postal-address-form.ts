@@ -280,29 +280,46 @@ export type FormatOperationalAddressOptions = {
   preserveCase?: boolean
 }
 
+function formatOperationalAddressPlain(
+  parts: OperationalAddressParts,
+  opts?: FormatOperationalAddressOptions,
+): string {
+  const code = normalizeCountryCode(parts.countryCode)
+  const line1 = String(parts.line1 ?? "").trim()
+  const city = String(parts.city ?? "").trim()
+  const state = String(parts.state ?? "").trim()
+  const postal = String(parts.postalCode ?? "").trim()
+  const lines: string[] = []
+  if (line1) lines.push(line1)
+  const locality = [city, state].filter(Boolean).join(", ")
+  const localityPostal = [locality, postal].filter(Boolean).join(" ")
+  if (localityPostal) lines.push(localityPostal)
+  if (opts?.appendCountry && /^[A-Z]{2}$/.test(code) && isOperationalAddressCountryRegistered(code)) {
+    const countryName = getCountryData(code as CountryCode)?.name
+    if (countryName) lines.push(countryName)
+  }
+  return lines.join("\n")
+}
+
 export function formatOperationalAddress(
   parts: OperationalAddressParts,
   opts?: FormatOperationalAddressOptions,
 ): string {
   const code = normalizeCountryCode(parts.countryCode)
   if (!/^[A-Z]{2}$/.test(code) || !isOperationalAddressCountryRegistered(code)) {
-    const line1 = String(parts.line1 ?? "").trim()
-    const city = String(parts.city ?? "").trim()
-    const state = String(parts.state ?? "").trim()
-    const postal = String(parts.postalCode ?? "").trim()
-    const lines: string[] = []
-    if (line1) lines.push(line1)
-    const locality = [city, state].filter(Boolean).join(", ")
-    const localityPostal = [locality, postal].filter(Boolean).join(" ")
-    if (localityPostal) lines.push(localityPostal)
-    return lines.join("\n")
+    return formatOperationalAddressPlain(parts, opts)
   }
 
-  return formatAddress(toLibAddressInput(parts), {
-    appendCountry: opts?.appendCountry ?? false,
-    preserveCase: opts?.preserveCase ?? false,
-    ...LIB_ADDRESS_ENGLISH_DISPLAY,
-  })
+  try {
+    return formatAddress(toLibAddressInput(parts), {
+      appendCountry: opts?.appendCountry ?? false,
+      preserveCase: opts?.preserveCase ?? false,
+      ...LIB_ADDRESS_ENGLISH_DISPLAY,
+    })
+  } catch {
+    // Stored addresses may be stale or country/postal mismatched — still render for display.
+    return formatOperationalAddressPlain(parts, opts)
+  }
 }
 
 export function formatOperationalAddressLines(

@@ -355,6 +355,23 @@ describe("postal-address-form exemplars", () => {
     expect(formatted).toContain("95014")
     expect(formatted.toUpperCase()).toContain("UNITED STATES")
   })
+
+  it("falls back to plain formatting when postal code fails lib-address validation", () => {
+    const formatted = formatOperationalAddress(
+      {
+        line1: "12 Admiralty Way",
+        city: "Lagos",
+        state: "LA",
+        postalCode: "BAD-ZIP",
+        countryCode: "IN",
+      },
+      { appendCountry: true },
+    )
+    expect(formatted).toContain("12 Admiralty Way")
+    expect(formatted).toContain("Lagos")
+    expect(formatted).toContain("BAD-ZIP")
+    expect(formatted.toUpperCase()).toContain("INDIA")
+  })
 })
 
 describe("postal-address-form business country sweep", () => {
