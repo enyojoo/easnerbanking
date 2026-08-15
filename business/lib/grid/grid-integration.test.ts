@@ -9,6 +9,7 @@ import { buildGridIndividualCustomerPayload } from "@/lib/grid/kyc-metadata"
 import {
   buildGridBusinessCustomerPayload,
   buildGridBusinessInfoResyncPatch,
+  gridBusinessHostedKybBusinessInfoIsOverfilled,
   gridBusinessKybStubFieldsNeedResync,
   gridBusinessTaxIdIsInvalidOnGrid,
   gridShellBusinessTaxId,
@@ -77,6 +78,23 @@ describe("buildGridBusinessCustomerPayload", () => {
     expect(businessInfo.country).toBeUndefined()
     expect(businessInfo.incorporatedOn).toBeUndefined()
     expect(businessInfo.registrationNumber).toBe("10609372")
+  })
+
+  it("omits country and incorporatedOn without a real taxId (hosted KYB)", () => {
+    const payload = buildGridBusinessCustomerPayload({
+      platformCustomerId: "eb_4afbef7f008749c3b5d87807b37710e9",
+      profile: {
+        legalName: "Fruitful Africa Limited",
+        email: "owner@example.com",
+        country: "NG",
+        createdAt: "2026-08-12T10:41:27.468649+00:00",
+      },
+    })
+    const businessInfo = payload.businessInfo as Record<string, unknown>
+    expect(businessInfo.legalName).toBe("Fruitful Africa Limited")
+    expect(businessInfo.taxId).toBeUndefined()
+    expect(businessInfo.country).toBeUndefined()
+    expect(businessInfo.incorporatedOn).toBeUndefined()
   })
 
   it("normalizes stored EIN-style tax ids", () => {
@@ -179,12 +197,42 @@ describe("gridBusinessKyb stub resync", () => {
     ).toBe(true)
   })
 
-  it("builds a resync patch without taxId for hosted KYB", () => {
+  it("builds a resync patch without taxId, country, or incorporatedOn for hosted KYB", () => {
     const patch = buildGridBusinessInfoResyncPatch({ platformCustomerId, profile })
     expect(patch.taxId).toBeUndefined()
     expect(patch.legalName).toBe("Fruitful Africa Limited")
-    expect(patch.country).toBe("NG")
-    expect(patch.incorporatedOn).toBe("2026-08-12")
+    expect(patch.country).toBeUndefined()
+    expect(patch.incorporatedOn).toBeUndefined()
+  })
+
+  it("flags country/incorporation without taxId as overfilled", () => {
+    expect(
+      gridBusinessHostedKybBusinessInfoIsOverfilled({
+        customer: {
+          businessInfo: {
+            legalName: "Fruitful Africa Limited",
+            country: "NG",
+            incorporatedOn: "2026-08-12",
+          },
+        },
+        platformCustomerId,
+        profile,
+      }),
+    ).toBe(true)
+    expect(
+      gridBusinessKybStubFieldsNeedResync({
+        customer: {
+          businessInfo: {
+            legalName: "Fruitful Africa Limited",
+            country: "NG",
+            incorporatedOn: "2026-08-12",
+            taxId: "942523714",
+          },
+        },
+        platformCustomerId,
+        profile: { ...profile, taxId: null },
+      }),
+    ).toBe(true)
   })
 
   it("does not flag a real stored tax id", () => {

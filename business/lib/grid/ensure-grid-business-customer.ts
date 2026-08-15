@@ -4,6 +4,7 @@ import { gridFetch, GridHttpError } from "./http"
 import {
   buildGridBusinessCustomerPayload,
   buildGridBusinessInfoResyncPatch,
+  gridBusinessHostedKybBusinessInfoIsOverfilled,
   gridBusinessKybStubFieldsNeedResync,
   gridBusinessTaxIdIsInvalidOnGrid,
   isGridShellBusinessTaxId,
@@ -215,6 +216,34 @@ function canSafelyRecreateGridBusinessCustomer(customer: GridCustomer): boolean 
   return status !== "APPROVED" && status !== "REJECTED"
 }
 
+function gridBusinessKybStubStillPresent(input: {
+  customer: GridCustomer
+  platformCustomerId: string
+  profile: GridBusinessProfile
+}): boolean {
+  const customerRecord = input.customer as GridCustomer & Record<string, unknown>
+  return gridBusinessKybStubFieldsNeedResync({
+    customer: customerRecord,
+    platformCustomerId: input.platformCustomerId,
+    profile: input.profile,
+  })
+}
+
+async function deleteGridBusinessCustomerForRecreate(input: {
+  admin: SupabaseClient
+  businessId: string
+  customerId: string
+}): Promise<void> {
+  await gridFetch({
+    method: "DELETE",
+    path: `/customers/${encodeURIComponent(input.customerId)}`,
+  }).catch((e) => {
+    if (e instanceof GridHttpError && e.status === 404) return
+    throw e
+  })
+  await clearStoredGridCustomerId(input.admin, input.businessId)
+}
+
 /**
  * Repair historic Grid stubs (null taxId, shell taxId) before hosted KYB link creation.
  * Falls back to delete + recreate when PATCH cannot clear invalid taxId.
@@ -238,19 +267,38 @@ async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
     return input.customer
   }
 
-  const businessInfo = buildGridBusinessInfoResyncPatch({
-    platformCustomerId: input.platformCustomerId,
-    profile: input.profile,
-  })
-  let patched = await gridFetch<GridCustomer>({
-    method: "PATCH",
-    path: `/customers/${encodeURIComponent(input.customerId)}`,
-    json: gridBusinessCustomerUpdatePayload({ businessInfo }),
-  })
+  const skipPatch =
+    gridBusinessTaxIdIsInvalidOnGrid({
+      customer: customerRecord,
+      platformCustomerId: input.platformCustomerId,
+      profile: input.profile,
+    }) ||
+    gridBusinessHostedKybBusinessInfoIsOverfilled({
+      customer: customerRecord,
+      platformCustomerId: input.platformCustomerId,
+      profile: input.profile,
+    })
+
+  let patched = input.customer
+  if (!skipPatch) {
+    const businessInfo = buildGridBusinessInfoResyncPatch({
+      platformCustomerId: input.platformCustomerId,
+      profile: input.profile,
+    })
+    try {
+      patched = await gridFetch<GridCustomer>({
+        method: "PATCH",
+        path: `/customers/${encodeURIComponent(input.customerId)}`,
+        json: gridBusinessCustomerUpdatePayload({ businessInfo }),
+      })
+    } catch {
+      patched = input.customer
+    }
+  }
 
   if (
-    !gridBusinessTaxIdIsInvalidOnGrid({
-      customer: patched as GridCustomer & Record<string, unknown>,
+    !gridBusinessKybStubStillPresent({
+      customer: patched,
       platformCustomerId: input.platformCustomerId,
       profile: input.profile,
     })
@@ -262,14 +310,11 @@ async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
     return patched
   }
 
-  await gridFetch({
-    method: "DELETE",
-    path: `/customers/${encodeURIComponent(input.customerId)}`,
-  }).catch((e) => {
-    if (e instanceof GridHttpError && e.status === 404) return
-    throw e
+  await deleteGridBusinessCustomerForRecreate({
+    admin: input.admin,
+    businessId: input.businessId,
+    customerId: input.customerId,
   })
-  await clearStoredGridCustomerId(input.admin, input.businessId)
   return "recreate"
 }
 
@@ -450,6 +495,8 @@ export async function ensureGridBusinessCustomer(input: {
   )
 
   const stored = await readStoredGridCustomerId(input.admin, input.businessId)
+  let forceCreate = false
+
   if (stored) {
     const customerId = normalizeGridCustomerId(stored)
     if (await verifyGridCustomerExists(customerId)) {
@@ -472,26 +519,33 @@ export async function ensureGridBusinessCustomer(input: {
       if (finalized !== "recreate") {
         return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
       }
+      forceCreate = true
+    } else {
+      await clearStoredGridCustomerId(input.admin, input.businessId)
+      forceCreate = true
     }
   }
 
-  const existing = await findGridCustomerByPlatformId(platformCustomerId).catch(() => null)
-  if (existing?.id) {
-    const customerId = normalizeGridCustomerId(existing.id)
-    await persistGridCustomerId(input.admin, input.businessId, customerId)
-    const finalized = await finalizeGridBusinessCustomer({
-      admin: input.admin,
-      businessId: input.businessId,
-      customerId,
-      customer: existing,
-      profile,
-      platformCustomerId,
-      consent,
-      ownerUserId,
-      contact,
-    })
-    if (finalized !== "recreate") {
-      return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
+  if (!forceCreate) {
+    const existing = await findGridCustomerByPlatformId(platformCustomerId).catch(() => null)
+    if (existing?.id) {
+      const customerId = normalizeGridCustomerId(existing.id)
+      await persistGridCustomerId(input.admin, input.businessId, customerId)
+      const finalized = await finalizeGridBusinessCustomer({
+        admin: input.admin,
+        businessId: input.businessId,
+        customerId,
+        customer: existing,
+        profile,
+        platformCustomerId,
+        consent,
+        ownerUserId,
+        contact,
+      })
+      if (finalized !== "recreate") {
+        return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
+      }
+      forceCreate = true
     }
   }
 
@@ -503,7 +557,7 @@ export async function ensureGridBusinessCustomer(input: {
     method: "POST",
     path: "/customers",
     json: payload,
-    idempotencyKey: platformCustomerId,
+    idempotencyKey: forceCreate ? `${platformCustomerId}:hosted-kyb-v2` : platformCustomerId,
   })
 
   const customerId = normalizeGridCustomerId(String(created.id ?? ""))

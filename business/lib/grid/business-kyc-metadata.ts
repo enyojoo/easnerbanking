@@ -110,10 +110,12 @@ export function buildGridBusinessCustomerPayload(input: {
   const registrationNumber = String(input.profile.registrationNumber ?? "").trim()
   if (registrationNumber) businessInfo.registrationNumber = registrationNumber
 
-  if (countryIso2) businessInfo.country = countryIso2
-
-  const incorporatedOn = isoDateFromTimestamp(input.profile.createdAt)
-  if (incorporatedOn) businessInfo.incorporatedOn = incorporatedOn
+  // Hosted KYB: country/incorporation trigger Grid taxId validation — only send with a real taxId.
+  if (taxId) {
+    if (countryIso2) businessInfo.country = countryIso2
+    const incorporatedOn = isoDateFromTimestamp(input.profile.createdAt)
+    if (incorporatedOn) businessInfo.incorporatedOn = incorporatedOn
+  }
 
   const payload: Record<string, unknown> = {
     customerType: "BUSINESS",
@@ -183,12 +185,39 @@ export function gridBusinessIncorporatedOnIsInvalidOnGrid(
   return raw === null || raw === ""
 }
 
+/** Grid rejects hosted KYB when country/incorporation are set without a real taxId. */
+export function gridBusinessHostedKybBusinessInfoIsOverfilled(input: {
+  customer: Record<string, unknown>
+  platformCustomerId: string
+  profile: GridBusinessProfile
+}): boolean {
+  const businessInfo = readGridBusinessInfo(input.customer)
+  if (!businessInfo) return false
+
+  const hasCountry = Boolean(String(businessInfo.country ?? "").trim())
+  const hasIncorporatedOn = Boolean(String(businessInfo.incorporatedOn ?? "").trim())
+  if (!hasCountry && !hasIncorporatedOn) return false
+
+  const desiredTaxId = resolveGridBusinessTaxId({
+    taxId: input.profile.taxId,
+    registrationNumber: input.profile.registrationNumber,
+    country: input.profile.country,
+    platformCustomerId: input.platformCustomerId,
+  })
+  if (desiredTaxId) return false
+
+  const rawTaxId = readGridBusinessInfoStringField(businessInfo, "taxId", "tax_id")
+  if (rawTaxId === undefined) return true
+  return gridBusinessTaxIdIsInvalidOnGrid(input)
+}
+
 export function gridBusinessKybStubFieldsNeedResync(input: {
   customer: Record<string, unknown>
   platformCustomerId: string
   profile: GridBusinessProfile
 }): boolean {
   if (gridBusinessTaxIdIsInvalidOnGrid(input)) return true
+  if (gridBusinessHostedKybBusinessInfoIsOverfilled(input)) return true
   if (!gridBusinessIncorporatedOnIsInvalidOnGrid(input.customer)) return false
   return Boolean(isoDateFromTimestamp(input.profile.createdAt))
 }
