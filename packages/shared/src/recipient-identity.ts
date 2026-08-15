@@ -70,7 +70,7 @@ export type RecipientRowShape = {
   iban?: string | null
 }
 
-function normalizeSpaces(value: string): string {
+function normalizeSpaces(value: string | null | undefined): string {
   return String(value || "").replace(/\s+/g, "").toLowerCase()
 }
 
