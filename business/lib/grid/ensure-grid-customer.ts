@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { gridIndividualCustomerUpdatePayload } from "./customer-update-payload"
 import { gridFetch, GridHttpError } from "./http"
 import { buildGridIndividualCustomerPayload, type GridPersonProfile } from "./kyc-metadata"
 export type { GridPersonProfile } from "./kyc-metadata"
@@ -116,7 +117,7 @@ async function syncEndUserTermsConsentIfNeeded(input: {
   await gridFetch<GridCustomer>({
     method: "PATCH",
     path: `/customers/${encodeURIComponent(input.customerId)}`,
-    json: { endUserTermsConsent: input.consent },
+    json: gridIndividualCustomerUpdatePayload({ endUserTermsConsent: input.consent }),
   })
   await markGridEndUserTermsSynced(input.admin, input.userId)
 }

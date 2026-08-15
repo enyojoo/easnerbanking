@@ -16,6 +16,7 @@ import {
   type GridEndUserTermsConsentPayload,
 } from "./end-user-terms-consent"
 import { pickGridBeneficialOwner } from "./parse-grid-beneficial-owner-for-users"
+import { gridBusinessCustomerUpdatePayload } from "./customer-update-payload"
 import { normalizeGridCustomerId } from "./quote-request"
 import type { GridCustomer } from "./types"
 
@@ -179,7 +180,7 @@ async function syncEndUserTermsConsentIfNeeded(input: {
   const patched = await gridFetch<GridCustomer>({
     method: "PATCH",
     path: `/customers/${encodeURIComponent(input.customerId)}`,
-    json: { endUserTermsConsent: input.consent },
+    json: gridBusinessCustomerUpdatePayload({ endUserTermsConsent: input.consent }),
   })
   await markGridEndUserTermsSynced(input.admin, input.ownerUserId)
   return patched
@@ -219,9 +220,9 @@ async function syncGridBusinessTaxIdIfNeeded(input: {
   return gridFetch<GridCustomer>({
     method: "PATCH",
     path: `/customers/${encodeURIComponent(input.customerId)}`,
-    json: {
+    json: gridBusinessCustomerUpdatePayload({
       businessInfo: { taxId: desired },
-    },
+    }),
   })
 }
 
@@ -240,7 +241,7 @@ async function syncGridBusinessKybContactEmailIfNeeded(input: {
   return gridFetch<GridCustomer>({
     method: "PATCH",
     path: `/customers/${encodeURIComponent(input.customerId)}`,
-    json: { email: desired },
+    json: gridBusinessCustomerUpdatePayload({ email: desired }),
   })
 }
 

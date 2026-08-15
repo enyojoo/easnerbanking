@@ -161,7 +161,7 @@ describe("ensureGridBusinessCustomer", () => {
       expect.objectContaining({
         method: "PATCH",
         path: `/customers/${encodeURIComponent(STORED_CUSTOMER)}`,
-        json: { email: "samuel@easner.com" },
+        json: { customerType: "BUSINESS", email: "samuel@easner.com" },
       }),
     )
   })
