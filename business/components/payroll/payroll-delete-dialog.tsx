@@ -2,7 +2,6 @@
 
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -10,7 +9,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
+
+async function runDeleteAndClose(
+  onDelete: () => void | Promise<void>,
+  onOpenChange: (open: boolean) => void,
+) {
+  try {
+    await onDelete()
+    onOpenChange(false)
+  } catch {
+    // Keep the dialog open so the user can read the error toast and retry or cancel.
+  }
+}
 
 export function PayrollDeleteDialog({
   open,
@@ -38,18 +49,14 @@ export function PayrollDeleteDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Keep it</AlertDialogCancel>
-          <AlertDialogAction
-            className={buttonVariants({ variant: "destructive" })}
+          <Button
+            type="button"
+            variant="destructive"
             disabled={pending}
-            onClick={(event) => {
-              event.preventDefault()
-              void Promise.resolve(onDelete())
-                .then(() => onOpenChange(false))
-                .catch(() => undefined)
-            }}
+            onClick={() => void runDeleteAndClose(onDelete, onOpenChange)}
           >
             {pending ? "Deleting…" : label}
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
