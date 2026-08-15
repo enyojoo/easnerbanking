@@ -14,6 +14,8 @@ import { CACHE_KEYS } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
+import { SETTINGS_INPUT_CLASS, SETTINGS_SELECT_TRIGGER_BASE, SETTINGS_SELECT_TRIGGER_CLASS } from "@/lib/settings-control-surface"
+import { cn } from "@/lib/utils"
 
 type TeamMember = {
   id: string
@@ -246,7 +248,7 @@ export function SettingsTeamTab() {
                           onValueChange={(v) => void updateMemberRole(member, v as InviteDraft["role"])}
                           disabled={updatingId === rowMembershipId}
                         >
-                          <SelectTrigger className="h-8 w-[110px]">
+                          <SelectTrigger className={cn(SETTINGS_SELECT_TRIGGER_BASE, "w-[110px]")}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -303,6 +305,7 @@ export function SettingsTeamTab() {
                 <div className="md:col-span-4">
                   <Input
                     placeholder="Full name"
+                    className={SETTINGS_INPUT_CLASS}
                     value={row.fullName}
                     onChange={(e) => updateInviteRow(idx, "fullName", e.target.value)}
                   />
@@ -311,13 +314,14 @@ export function SettingsTeamTab() {
                   <Input
                     placeholder="Email"
                     type="email"
+                    className={SETTINGS_INPUT_CLASS}
                     value={row.email}
                     onChange={(e) => updateInviteRow(idx, "email", e.target.value)}
                   />
                 </div>
                 <div className="md:col-span-2">
                   <Select value={row.role} onValueChange={(v) => updateInviteRow(idx, "role", v as InviteDraft["role"])}>
-                    <SelectTrigger>
+                    <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

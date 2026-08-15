@@ -17,7 +17,10 @@ import {
   type OperationalAddressFormConfig,
 } from "@easner/shared/postal-address-form"
 import { ensureBusinessOperationalAddressCountryRegistered } from "@/lib/address/register-lib-address-countries"
-import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
+import {
+  SETTINGS_COMBOBOX_TRIGGER_CLASS,
+  SETTINGS_INPUT_CLASS,
+} from "@/lib/settings-control-surface"
 
 export type BusinessAddressValues = {
   line1: string
@@ -118,7 +121,7 @@ export function BusinessAddressFields({
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,11rem)_minmax(0,1fr)] md:items-end">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-end">
         <div className="space-y-2">
           <Label>Country</Label>
           {isEditing ? (
@@ -128,7 +131,7 @@ export function BusinessAddressFields({
                   variant="outline"
                   role="combobox"
                   aria-expanded={countryOpen}
-                  className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
+                  className={SETTINGS_COMBOBOX_TRIGGER_CLASS}
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     {selectedCountry ? (
@@ -168,7 +171,7 @@ export function BusinessAddressFields({
               variant="outline"
               disabled
               tabIndex={-1}
-              className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
+              className={SETTINGS_COMBOBOX_TRIGGER_CLASS}
               aria-readonly="true"
             >
               <span className="flex min-w-0 items-center gap-2">
@@ -190,7 +193,7 @@ export function BusinessAddressFields({
           <Input
             id="street"
             autoComplete="address-line1"
-            className={SETTINGS_CONTROL_SURFACE}
+            className={SETTINGS_INPUT_CLASS}
             value={values.line1}
             onChange={(e) => onChange({ line1: e.target.value })}
             disabled={!isEditing}
@@ -205,7 +208,7 @@ export function BusinessAddressFields({
             <Input
               id="city"
               autoComplete="address-level2"
-              className={SETTINGS_CONTROL_SURFACE}
+              className={SETTINGS_INPUT_CLASS}
               value={values.city}
               onChange={(e) => onChange({ city: e.target.value })}
               disabled={!isEditing}
@@ -225,7 +228,7 @@ export function BusinessAddressFields({
                       variant="outline"
                       role="combobox"
                       aria-expanded={subdivisionOpen}
-                      className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
+                      className={SETTINGS_COMBOBOX_TRIGGER_CLASS}
                     >
                       <span className="truncate">
                         {selectedSubdivision?.label ?? (values.state ? values.state : `Select ${config.subdivision.label.toLowerCase()}`)}
@@ -259,7 +262,7 @@ export function BusinessAddressFields({
               ) : (
                 <Input
                   id="state"
-                  className={SETTINGS_CONTROL_SURFACE}
+                  className={SETTINGS_INPUT_CLASS}
                   value={selectedSubdivision?.label ?? values.state}
                   disabled
                   readOnly
@@ -269,7 +272,7 @@ export function BusinessAddressFields({
               <Input
                 id="state"
                 autoComplete="address-level1"
-                className={SETTINGS_CONTROL_SURFACE}
+                className={SETTINGS_INPUT_CLASS}
                 value={values.state}
                 onChange={(e) => onChange({ state: e.target.value })}
                 disabled={!isEditing}
@@ -284,7 +287,7 @@ export function BusinessAddressFields({
             <Input
               id="zipCode"
               autoComplete="postal-code"
-              className={SETTINGS_CONTROL_SURFACE}
+              className={SETTINGS_INPUT_CLASS}
               value={values.postalCode}
               onChange={(e) => onChange({ postalCode: e.target.value })}
               disabled={!isEditing}

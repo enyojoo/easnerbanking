@@ -310,6 +310,28 @@ export {
   type RecipientProviderBinding,
   type RecipientProviderBindings,
 } from "./recipient-provider-bindings"
+export {
+  buildDraftRecipientId,
+  DRAFT_RECIPIENT_ID_PREFIX,
+  findMatchingRecipient,
+  inferRecipientRailFromRow,
+  isDraftRecipientId,
+  normalizeRecipientBankName,
+  parseEasetagFromBankLabel,
+  parseMobileProviderFromBankLabel,
+  parseWalletDescriptorFromBankLabel,
+  recipientIdentityFromUpsertInput,
+  recipientIdentityFromWritePayload,
+  recipientIdentityKey,
+  type BankRecipientIdentity,
+  type EasetagRecipientIdentity,
+  type MobileRecipientIdentity,
+  type RecipientIdentity,
+  type RecipientRail,
+  type RecipientRowShape,
+  type RecipientUpsertShape,
+  type WalletRecipientIdentity,
+} from "./recipient-identity"
 export { pickYcSendNetworkId, type YcNetworkLike } from "./yc-network-resolve"
 export {
   DEFAULT_YC_PAYMENT_REASON,

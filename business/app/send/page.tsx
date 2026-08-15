@@ -100,7 +100,8 @@ import {
   stashPayoutQuotePreview,
   type PayoutQuoteStashMeta,
 } from "@/lib/payout-quote-cache"
-import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
+import { coerceBeneficiaryEasenetDisplay, type RecipientUpsertInput } from "@/lib/recipients-store"
+import { isDraftRecipientId, resolveDraftRecipient } from "@/lib/draft-recipient"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useSendDestinations } from "@/lib/use-send-destinations"
 import {
@@ -179,6 +180,8 @@ export default function SendPage() {
     useBusinessProfile()
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
+  const [draftRecipientPersist, setDraftRecipientPersist] = useState<RecipientUpsertInput | undefined>()
+  const draftRecipientPersistRef = useRef<RecipientUpsertInput | undefined>(undefined)
   const [amountStr, setAmountStr] = useState("")
   const [amountEntryMode, setAmountEntryMode] = useState<"receive" | "send">("receive")
   const [sourceAccountId, setSourceAccountId] = useState<string | null>(null)
@@ -206,11 +209,39 @@ export default function SendPage() {
   const continueSpinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    draftRecipientPersistRef.current = draftRecipientPersist
+  }, [draftRecipientPersist])
+
+  const handleRecipientSelect = useCallback(
+    (next: Beneficiary | null, options?: { draftRecipientPersist?: RecipientUpsertInput }) => {
+      setRecipient(next)
+      setDraftRecipientPersist(options?.draftRecipientPersist)
+      payoutQuoteCacheRef.current = null
+      walletQuoteCacheRef.current = null
+    },
+    [],
+  )
+
+  const ensureRecipientPersisted = useCallback(async (): Promise<Beneficiary | null> => {
+    if (!recipient) return null
+    if (!isDraftRecipientId(recipient.id)) return recipient
+    const persist = draftRecipientPersistRef.current
+    if (!persist) return recipient
+    const resolved = await resolveDraftRecipient(recipient, persist)
+    setRecipient(resolved)
+    setDraftRecipientPersist(undefined)
+    payoutQuoteCacheRef.current = null
+    walletQuoteCacheRef.current = null
+    return resolved
+  }, [recipient])
+
+  useEffect(() => {
     const raw = sessionStorage.getItem(SEND_FLOW_STATE_KEY)
     if (raw) {
       try {
         const s = JSON.parse(raw) as SendFlowState
         setRecipient(s.recipient)
+        setDraftRecipientPersist(s.draftRecipientPersist)
         setAmountStr(s.amount > 0 ? formatAmountForDisplay(String(s.amount)) : "")
         setSourceAccountId(s.sourceAccountId ?? null)
         setPaymentMethod(s.paymentMethod ?? "balance")
@@ -1221,13 +1252,15 @@ export default function SendPage() {
 
     const promise = (async () => {
       try {
+        const activeRecipient = await ensureRecipientPersisted()
+        if (!activeRecipient?.id || isDraftRecipientId(activeRecipient.id)) return null
         const headers: Record<string, string> = { "Content-Type": "application/json" }
         if (businessId) headers["X-Easner-Account-Scope"] = "business"
         const res = await fetchWithSession("/api/payouts/quote", {
           method: "POST",
           headers,
           body: JSON.stringify({
-            recipientId: recipient.id,
+            recipientId: activeRecipient.id,
             receiveAmount: displayReceiveAmount,
             sourceBalanceCurrency: sendCurrency,
             amountEntryMode,
@@ -1246,7 +1279,7 @@ export default function SendPage() {
         payoutQuoteCacheRef.current = { key: payoutQuoteCacheKey, quote: data.quote }
         setPayoutQuotePreview(data.quote)
         const previewMeta: PayoutQuoteStashMeta = {
-          recipientId: recipient.id,
+          recipientId: activeRecipient.id,
           amountEntryMode,
           entryAmount:
             amountEntryMode === "send" && displaySendAmount > 0
@@ -1284,6 +1317,7 @@ export default function SendPage() {
     note,
     paymentPurpose,
     businessId,
+    ensureRecipientPersisted,
   ])
 
   const fetchWalletQuote = useCallback(async (): Promise<WalletSendQuoteResult | null> => {
@@ -1299,13 +1333,15 @@ export default function SendPage() {
 
     const promise = (async () => {
       try {
+        const activeRecipient = await ensureRecipientPersisted()
+        if (!activeRecipient?.id || isDraftRecipientId(activeRecipient.id)) return null
         const headers: Record<string, string> = { "Content-Type": "application/json" }
         if (businessId) headers["X-Easner-Account-Scope"] = "business"
         const res = await fetchWithSession("/api/wallets/send/quote", {
           method: "POST",
           headers,
           body: JSON.stringify({
-            recipientId: recipient.id,
+            recipientId: activeRecipient.id,
             sourceBalanceCurrency: sendCurrency,
             amountEntryMode: "receive",
             receiveAmount,
@@ -1343,16 +1379,29 @@ export default function SendPage() {
     amountEntryMode,
     sendCurrency,
     businessId,
+    ensureRecipientPersisted,
   ])
 
   useEffect(() => {
-    if (!needsWalletQuoteBeforeConfirm || !debouncedWalletQuoteCacheKey || !recipient?.id) return
+    if (
+      !needsWalletQuoteBeforeConfirm ||
+      !debouncedWalletQuoteCacheKey ||
+      !recipient?.id ||
+      isDraftRecipientId(recipient.id)
+    )
+      return
     void fetchWalletQuote()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsWalletQuoteBeforeConfirm, debouncedWalletQuoteCacheKey, recipient?.id])
 
   useEffect(() => {
-    if (!needsPayoutQuoteBeforeConfirm || !debouncedPayoutQuotePrefetchKey || !recipient?.id) return
+    if (
+      !needsPayoutQuoteBeforeConfirm ||
+      !debouncedPayoutQuotePrefetchKey ||
+      !recipient?.id ||
+      isDraftRecipientId(recipient.id)
+    )
+      return
     if (!payoutQuotePrefetchReady) return
     void fetchPayoutQuote()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1364,7 +1413,13 @@ export default function SendPage() {
   ])
 
   useEffect(() => {
-    if (!debouncedCrossBorderBankQuotePrefetchKey || !recipient?.id || !otherCurrency) return
+    if (
+      !debouncedCrossBorderBankQuotePrefetchKey ||
+      !recipient?.id ||
+      !otherCurrency ||
+      isDraftRecipientId(recipient.id)
+    )
+      return
     const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
     if (!payInCountry) return
     prefetchCrossBorderQuotePipeline({
@@ -1380,6 +1435,8 @@ export default function SendPage() {
 
   const handleContinue = async () => {
     if (!canContinue || !recipient || isContinuePending || isContinueLoading) return
+    const activeRecipient = await ensureRecipientPersisted()
+    if (!activeRecipient) return
     if (isEasetagRecipient && paymentMethod === "otherCurrency") {
       setAmountFieldError("Easetag sends are only supported from your balance.")
       return
@@ -1442,9 +1499,9 @@ export default function SendPage() {
     const walletAmountEntryMode = isWalletRecipient ? ("receive" as const) : amountEntryMode
 
     const payoutQuoteMeta: PayoutQuoteStashMeta | null =
-      needsPayoutQuoteBeforeConfirm && recipient?.id
+      needsPayoutQuoteBeforeConfirm && activeRecipient?.id
         ? {
-            recipientId: recipient.id,
+            recipientId: activeRecipient.id,
             amountEntryMode,
             entryAmount: amountEntryMode === "send" ? sendAmount : receiveAmount,
             receiveCurrency,
@@ -1454,9 +1511,9 @@ export default function SendPage() {
           }
         : null
     const walletQuoteMeta: WalletQuoteStashMeta | null =
-      needsWalletQuoteBeforeConfirm && recipient?.id
+      needsWalletQuoteBeforeConfirm && activeRecipient?.id
         ? {
-            recipientId: recipient.id,
+            recipientId: activeRecipient.id,
             amountEntryMode: walletAmountEntryMode,
             entryAmount: receiveAmount,
             receiveCurrency,
@@ -1465,7 +1522,10 @@ export default function SendPage() {
         : null
 
     const state: SendFlowState = {
-      recipient: coerceBeneficiaryEasenetDisplay(recipient),
+      recipient: coerceBeneficiaryEasenetDisplay(activeRecipient),
+      ...(isDraftRecipientId(activeRecipient.id) && draftRecipientPersistRef.current
+        ? { draftRecipientPersist: draftRecipientPersistRef.current }
+        : {}),
       requestedReceiveAmount: receiveAmount,
       amount: receiveAmount,
       receiveCurrency,
@@ -1510,7 +1570,7 @@ export default function SendPage() {
           router.push("/send/momo-setup")
           return
         }
-        if (otherPaymentMethod === "bank_transfer" && otherCurrency && recipient) {
+        if (otherPaymentMethod === "bank_transfer" && otherCurrency && activeRecipient) {
           const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
           if (!payInCountry) {
             setAmountFieldError("Could not resolve pay-in country for bank transfer.")
@@ -1522,7 +1582,7 @@ export default function SendPage() {
             continueSpinnerTimerRef,
           )
           const crossBorderMeta = {
-            recipientId: recipient.id,
+            recipientId: activeRecipient.id,
             payInCurrency: otherCurrency,
             payInCountry,
             payInRail: "bank_transfer" as const,
@@ -1609,7 +1669,7 @@ export default function SendPage() {
 
       <SendRecipientPicker
         selected={recipient}
-        onSelect={setRecipient}
+        onSelect={handleRecipientSelect}
       />
 
       {recipient && !isEasetagRecipient && !isWalletRecipient && !payoutCorridorExecutable ? (

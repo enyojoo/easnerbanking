@@ -1,5 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { countryCodeForRecipientSave } from '@easner/shared'
+import {
+  countryCodeForRecipientSave,
+  findMatchingRecipient,
+  normalizeRecipientBankName,
+  parseEasetagFromBankLabel,
+  parseWalletDescriptorFromBankLabel,
+  recipientIdentityFromWritePayload,
+} from '@easner/shared'
 import { supabase } from './supabase'
 import { enrichEasenetRecipientFromCache, primeAndAttachEasenetSnapshot } from './enrichEasenetRecipient'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from './easenetRecipientUi'
@@ -71,12 +78,25 @@ function now() {
   return new Date().toISOString()
 }
 
-function buildMobileBankName(provider: string, countryCode?: string) {
-  const cleanProvider = String(provider || '').trim()
-  const cc = String(countryCode || '').trim().toUpperCase()
-  if (!cleanProvider) return 'Mobile Money'
-  if (!cc) return `Mobile Money (${cleanProvider})`
-  return `Mobile Money (${cleanProvider}|CC:${cc})`
+function inferRecipientDataRail(data: RecipientData): 'easetag' | 'wallet' | 'mobile' | 'bank' {
+  const bankLower = String(data.bankName || '').toLowerCase()
+  if (bankLower.includes('easetag') || bankLower.includes('easenet')) return 'easetag'
+  if (data.walletNetwork || bankLower.startsWith('wallet (')) return 'wallet'
+  if (data.mobileProvider || bankLower.startsWith('mobile money (')) return 'mobile'
+  return 'bank'
+}
+
+function resolveBankNameForPersist(data: RecipientData): string {
+  const rail = inferRecipientDataRail(data)
+  const descriptor = parseWalletDescriptorFromBankLabel(data.bankName)
+  return normalizeRecipientBankName({
+    recipientType: rail,
+    mobileProvider: data.mobileProvider,
+    walletAsset: descriptor?.asset || data.currency,
+    walletNetwork: data.walletNetwork || descriptor?.network,
+    payeeEasetag: parseEasetagFromBankLabel(data.bankName) || data.accountNumber,
+    bankName: data.bankName,
+  })
 }
 
 function parseMobileBankName(bankName: string): { provider?: string; countryCode?: string; normalizedBankName: string } {
@@ -143,24 +163,61 @@ async function enrichEasenetAfterMutate(
 }
 
 export const recipientService = {
-  async create(userId: string, recipientData: RecipientData): Promise<Recipient> {
-    const bankNameForPersist = recipientData.mobileProvider
-      ? buildMobileBankName(recipientData.mobileProvider, recipientData.countryCode)
-      : recipientData.bankName
+  async findOrCreate(userId: string, recipientData: RecipientData): Promise<Recipient> {
+    const bankNameForPersist = resolveBankNameForPersist(recipientData)
     const countryCode = countryCodeForRecipientSave({
       countryCode: recipientData.countryCode,
       currencyCode: recipientData.currency,
     })
+    const insertPayload = buildRecipientInsertPayload(
+      userId,
+      recipientData,
+      bankNameForPersist,
+      recipientData.swiftBic,
+      countryCode,
+    )
+    const identity = recipientIdentityFromWritePayload(insertPayload)
+    if (identity) {
+      const existing = await this.getByUserId(userId)
+      const match = findMatchingRecipient(existing, identity)
+      if (match) {
+        return enrichEasenetAfterMutate(match, {
+          fullName: recipientData.fullName,
+          payeeAvatarUrl: recipientData.payeeAvatarUrl,
+          payeeAccountKind: recipientData.payeeAccountKind,
+        })
+      }
+    }
+    return this.insertRecipient(userId, recipientData, bankNameForPersist, countryCode)
+  },
+
+  async create(userId: string, recipientData: RecipientData): Promise<Recipient> {
+    return this.findOrCreate(userId, recipientData)
+  },
+
+  async insertRecipient(
+    userId: string,
+    recipientData: RecipientData,
+    bankNameForPersist?: string,
+    countryCode?: string,
+  ): Promise<Recipient> {
+    const resolvedBankName = bankNameForPersist ?? resolveBankNameForPersist(recipientData)
+    const resolvedCountryCode =
+      countryCode ??
+      countryCodeForRecipientSave({
+        countryCode: recipientData.countryCode,
+        currencyCode: recipientData.currency,
+      })
     const row: Recipient = {
       id: newId(),
       user_id: userId,
       full_name: recipientData.fullName,
       account_number: recipientData.accountNumber,
-      bank_name: bankNameForPersist,
+      bank_name: resolvedBankName,
       phone_number: recipientData.phoneNumber || undefined,
       email: recipientData.email || undefined,
       currency: recipientData.currency,
-      country_code: countryCode || undefined,
+      country_code: resolvedCountryCode || undefined,
       routing_number: recipientData.routingNumber || undefined,
       sort_code: recipientData.sortCode || undefined,
       iban: recipientData.iban || undefined,
@@ -181,9 +238,9 @@ export const recipientService = {
       const payload = buildRecipientInsertPayload(
         userId,
         recipientData,
-        bankNameForPersist,
+        resolvedBankName,
         recipientData.swiftBic,
-        countryCode,
+        resolvedCountryCode,
       )
       const { data, error } = await supabase
         .from('recipients')
@@ -264,9 +321,15 @@ export const recipientService = {
       updates.bankName !== undefined
         ? updates.bankName
         : updates.mobileProvider !== undefined
-          ? buildMobileBankName(updates.mobileProvider, updates.countryCode)
+          ? normalizeRecipientBankName({
+              recipientType: 'mobile',
+              mobileProvider: updates.mobileProvider,
+            })
           : updates.walletNetwork !== undefined
-            ? `Wallet (${updates.walletNetwork})`
+            ? normalizeRecipientBankName({
+                recipientType: 'wallet',
+                walletNetwork: updates.walletNetwork,
+              })
             : undefined
     const updateData: Record<string, unknown> = {}
     if (updates.fullName !== undefined) updateData.full_name = updates.fullName

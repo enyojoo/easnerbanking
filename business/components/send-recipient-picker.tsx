@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dialog"
 import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
+import type { RecipientUpsertInput } from "@/lib/recipients-store"
+import { buildDraftBeneficiary } from "@/lib/draft-recipient"
 import { Label } from "@/components/ui/label"
 import { Search, Plus, ChevronDown, Loader2 } from "lucide-react"
 import { SendSelectedRecipientSummary } from "@/components/send/send-selected-recipient-summary"
@@ -22,7 +24,10 @@ import { filterBeneficiariesBySearch } from "@/lib/send-hub-recipient-search"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
 interface SendRecipientPickerProps {
   selected: Beneficiary | null
-  onSelect: (recipient: Beneficiary | null) => void
+  onSelect: (
+    recipient: Beneficiary | null,
+    options?: { draftRecipientPersist?: RecipientUpsertInput },
+  ) => void
   beneficiaries?: Beneficiary[]
   label?: string
 }
@@ -134,10 +139,12 @@ export function SendRecipientPicker({
     return [hubVirtualRecipient, ...hubDisplayRecipients]
   }, [hubVirtualRecipient, hubDisplayRecipients])
 
-  const handleAddSuccess = (newBeneficiary?: Beneficiary) => {
+  const handleAddSuccess = (newBeneficiary?: Beneficiary, draftPersist?: RecipientUpsertInput) => {
     if (newBeneficiary) {
-      setBeneficiaries((prev) => [...prev, newBeneficiary])
-      onSelect(newBeneficiary)
+      if (!draftPersist) {
+        setBeneficiaries((prev) => [...prev, newBeneficiary])
+      }
+      onSelect(newBeneficiary, draftPersist ? { draftRecipientPersist: draftPersist } : undefined)
     }
     setIsAddDialogOpen(false)
     setIsPickerOpen(false)
@@ -245,8 +252,11 @@ export function SendRecipientPicker({
             <DialogDescription>Enter the recipient&apos;s details</DialogDescription>
           </DialogHeader>
           <RecipientForm
+            onValidatedSubmit={async (payload) => {
+              const draft = buildDraftBeneficiary(payload)
+              handleAddSuccess(draft, payload)
+            }}
             onSuccess={() => handleAddSuccess()}
-            onSuccessWithData={(b) => handleAddSuccess(b)}
           />
         </DialogContent>
       </Dialog>

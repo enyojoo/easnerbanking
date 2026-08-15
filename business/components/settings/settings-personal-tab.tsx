@@ -49,7 +49,7 @@ import {
 import { useMfaStatus } from "@/hooks/use-mfa-status"
 import { hasPin } from "@/lib/login-pin"
 import { PinSettingsDialog } from "@/components/app-lock/pin-settings-dialog"
-import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
+import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
 import {
   formatMaskedIdForDisplay,
   formatVerifiedAddressDisplay,
@@ -336,7 +336,7 @@ export function SettingsPersonalTab() {
               ) : (
                 <Input
                   id="fullName"
-                  className={SETTINGS_CONTROL_SURFACE}
+                  className={SETTINGS_INPUT_CLASS}
                   value={formData.fullName}
                   onChange={(e) => handleInputChange("fullName", e.target.value)}
                   disabled={profileLocked || editingSection !== "personal"}
@@ -353,7 +353,7 @@ export function SettingsPersonalTab() {
               ) : (
                 <Input
                   id="email"
-                  className={SETTINGS_CONTROL_SURFACE}
+                  className={SETTINGS_INPUT_CLASS}
                   type="email"
                   value={formData.email}
                   readOnly
@@ -372,7 +372,7 @@ export function SettingsPersonalTab() {
                 ) : (
                   <Input
                     id="phone"
-                    className={SETTINGS_CONTROL_SURFACE}
+                    className={SETTINGS_INPUT_CLASS}
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => handleInputChange("phone", e.target.value)}
@@ -392,7 +392,7 @@ export function SettingsPersonalTab() {
                 ) : (
                   <Input
                     id="dateOfBirth"
-                    className={SETTINGS_CONTROL_SURFACE}
+                    className={SETTINGS_INPUT_CLASS}
                     type="date"
                     value={formData.dateOfBirth}
                     onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}

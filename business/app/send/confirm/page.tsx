@@ -25,6 +25,7 @@ import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
+import { isDraftRecipientId, resolveDraftRecipient } from "@/lib/draft-recipient"
 import { SendSelectedRecipientSummary } from "@/components/send/send-selected-recipient-summary"
 import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review-details-rows"
 import { YcPayInReviewSection } from "@/components/yc/yc-pay-in-review-section"
@@ -293,6 +294,32 @@ export default function SendConfirmPage() {
     router.replace("/send/momo-setup")
   }, [state, isYcMomo, router])
 
+  useEffect(() => {
+    if (!state || isEasenetRecipient(state.recipient)) return
+    if (!isDraftRecipientId(state.recipient.id) || !state.draftRecipientPersist) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const resolved = await resolveDraftRecipient(state.recipient, state.draftRecipientPersist)
+        if (cancelled) return
+        const next: SendFlowState = {
+          ...state,
+          recipient: coerceBeneficiaryEasenetDisplay(resolved),
+          draftRecipientPersist: undefined,
+        }
+        setState(next)
+        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
+      } catch (e) {
+        if (!cancelled) {
+          setAuthorizeError(e instanceof Error ? e.message : "Could not save recipient")
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [state?.recipient.id, state?.draftRecipientPersist])
+
   const crossBorderMeta = useMemo((): CrossBorderQuoteStashMeta | null => {
     if (!state || !isYcCrossBorderFlow(state) || !(state.amount > 0)) return null
     const payInCurrency = state.otherCurrency!.toUpperCase()
@@ -339,7 +366,7 @@ export default function SendConfirmPage() {
    * runs on Pay via YcPayInReviewSection — do not auto-confirm on mount.
    */
   useEffect(() => {
-    if (!state || !crossBorderMeta) return
+    if (!state || !crossBorderMeta || isDraftRecipientId(state.recipient.id)) return
     if (
       state.ycCrossBorder?.transferId &&
       state.ycCrossBorder.localPayIn > 0 &&
@@ -376,7 +403,14 @@ export default function SendConfirmPage() {
   ])
 
   useEffect(() => {
-    if (!state || isYcCrossBorderFlow(state) || isEasenetRecipient(state.recipient) || isWalletRecipient(state.recipient) || !(state.amount > 0))
+    if (
+      !state ||
+      isYcCrossBorderFlow(state) ||
+      isEasenetRecipient(state.recipient) ||
+      isWalletRecipient(state.recipient) ||
+      isDraftRecipientId(state.recipient.id) ||
+      !(state.amount > 0)
+    )
       return
     const requestedReceiveAmount =
       state.requestedReceiveAmount ?? state.payoutQuote?.requestedReceiveAmount ?? state.amount
@@ -444,7 +478,14 @@ export default function SendConfirmPage() {
   ])
 
   useEffect(() => {
-    if (!state || isEasenetRecipient(state.recipient) || !isWalletRecipient(state.recipient) || !(state.amount > 0))
+    if (
+      !state ||
+      isYcCrossBorderFlow(state) ||
+      isEasenetRecipient(state.recipient) ||
+      !isWalletRecipient(state.recipient) ||
+      isDraftRecipientId(state.recipient.id) ||
+      !(state.amount > 0)
+    )
       return
     if (isWalletQuoteFresh(state.walletQuote, state.amount, state.recipient.id)) return
 
@@ -506,10 +547,25 @@ export default function SendConfirmPage() {
     if (!state) return
     setAuthorizeError(null)
 
-    if (isEasenetRecipient(state.recipient)) {
+    let flowRecipient = state.recipient
+    if (isDraftRecipientId(flowRecipient.id) && state.draftRecipientPersist) {
+      try {
+        flowRecipient = await resolveDraftRecipient(flowRecipient, state.draftRecipientPersist)
+        setState({
+          ...state,
+          recipient: flowRecipient,
+          draftRecipientPersist: undefined,
+        })
+      } catch (e) {
+        setAuthorizeError(e instanceof Error ? e.message : "Could not save recipient")
+        return
+      }
+    }
+
+    if (isEasenetRecipient(flowRecipient)) {
       setIsAuthorizing(true)
       try {
-        const tag = state.recipient.payeeEasetag!.trim().replace(/^@+/, "")
+        const tag = flowRecipient.payeeEasetag!.trim().replace(/^@+/, "")
         const plannedEtid =
           typeof state.transactionId === "string" &&
           isEasnerClientTransactionIdFormat(state.transactionId)
@@ -570,13 +626,13 @@ export default function SendConfirmPage() {
       return
     }
 
-    if (isWalletRecipient(state.recipient)) {
+    if (isWalletRecipient(flowRecipient)) {
       const wq = state.walletQuote
       if (!wq?.formSessionId) {
         setAuthorizeError(walletQuoteError || "Wallet send quote is not ready. Go back and try again.")
         return
       }
-      if (wq.recipientId && wq.recipientId !== state.recipient.id) {
+      if (wq.recipientId && wq.recipientId !== flowRecipient.id) {
         setAuthorizeError("Wallet quote doesn't match this recipient. Go back and tap Continue again.")
         return
       }
@@ -592,7 +648,7 @@ export default function SendConfirmPage() {
             ? state.transactionId.trim().toUpperCase()
             : ""
 
-        const receiveNetwork = state.recipient.walletNetwork?.trim() || wq.receiveNetwork
+        const receiveNetwork = flowRecipient.walletNetwork?.trim() || wq.receiveNetwork
         const reviewSnapshot = {
           you_send_amount: wq.sendAmount,
           total_debited: wq.totalDebited,
@@ -617,7 +673,7 @@ export default function SendConfirmPage() {
             ...scopeHeaders,
           },
           body: JSON.stringify({
-            recipientId: state.recipient.id,
+            recipientId: flowRecipient.id,
             formSessionId: wq.formSessionId,
             ...(walletEtid ? { reservedDebitEtid: walletEtid } : {}),
             reviewSnapshot,
@@ -654,7 +710,7 @@ export default function SendConfirmPage() {
       setAuthorizeError(payoutQuoteError || "Payout quote is not ready. Go back and try again.")
       return
     }
-    if (pq.recipientId && pq.recipientId !== state.recipient.id) {
+    if (pq.recipientId && pq.recipientId !== flowRecipient.id) {
       setAuthorizeError("Payout quote doesn't match this recipient. Go back and tap Continue again.")
       return
     }
@@ -670,7 +726,7 @@ export default function SendConfirmPage() {
           ? state.transactionId.trim().toUpperCase()
           : ""
 
-      const transferMethod = corridorTransferMethod(state.recipient, state.receiveCurrency)
+      const transferMethod = corridorTransferMethod(flowRecipient, state.receiveCurrency)
       const processingTime = arrivalHint ?? undefined
       const reviewYouSend = pq!.customerPrincipal ?? pq!.sendAmount
       const reviewExchangeRate = pq!.midRate && pq!.midRate > 0 ? pq!.midRate : 1
@@ -706,9 +762,9 @@ export default function SendConfirmPage() {
         formSessionId: pq.formSessionId,
         cryptoAuthorizedAmount: pq.cryptoAuthorizedAmount,
         cryptoCurrency: pq.cryptoCurrency,
-        countryCode: state.recipient.countryCode?.toUpperCase(),
+        countryCode: flowRecipient.countryCode?.toUpperCase(),
         ...(state.payoutQuote?.channelId ? { channelId: state.payoutQuote.channelId } : {}),
-        recipientId: state.recipient.id,
+        recipientId: flowRecipient.id,
         ...(payoutEtid ? { reservedDebitEtid: payoutEtid } : {}),
         ...(state.note ? { note: state.note } : {}),
         ...(state.paymentPurpose ? { paymentPurpose: state.paymentPurpose } : {}),

@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
+import { cn } from "@/lib/utils"
 import {
   Plus,
   Search,
@@ -187,7 +189,7 @@ export function SettingsCustomersTab() {
                   placeholder="Search customers..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
+                  className={cn(SETTINGS_INPUT_CLASS, "pl-9")}
                 />
               </div>
               <div className="h-24 w-full animate-pulse rounded-lg bg-muted" />
@@ -210,7 +212,7 @@ export function SettingsCustomersTab() {
                   placeholder="Search customers..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
+                  className={cn(SETTINGS_INPUT_CLASS, "pl-9")}
                 />
               </div>
               <div className="space-y-4">

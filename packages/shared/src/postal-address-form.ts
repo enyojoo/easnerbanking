@@ -75,6 +75,9 @@ function fieldVisible(flag: "required" | "optional" | undefined): boolean {
   return flag === "required" || flag === "optional"
 }
 
+/** Prefer Latin/English display labels where metadata provides them (e.g. UAE emirates). */
+const LIB_ADDRESS_ENGLISH_DISPLAY = { useLatin: true } as const
+
 export function toLibAddressInput(parts: OperationalAddressParts): {
   country: CountryCode
   addressLine1?: string
@@ -95,7 +98,7 @@ export function toLibAddressInput(parts: OperationalAddressParts): {
 export function listSubdivisions(countryCode: string): { value: string; label: string }[] {
   const code = normalizeCountryCode(countryCode) as CountryCode
   if (!isOperationalAddressCountryRegistered(code)) return []
-  return getCountrySubdivisions(code)
+  return getCountrySubdivisions(code, LIB_ADDRESS_ENGLISH_DISPLAY)
 }
 
 export function getOperationalAddressFormConfig(countryCode: string): OperationalAddressFormConfig {
@@ -298,6 +301,7 @@ export function formatOperationalAddress(
   return formatAddress(toLibAddressInput(parts), {
     appendCountry: opts?.appendCountry ?? false,
     preserveCase: opts?.preserveCase ?? false,
+    ...LIB_ADDRESS_ENGLISH_DISPLAY,
   })
 }
 

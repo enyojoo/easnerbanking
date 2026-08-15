@@ -306,6 +306,21 @@ describe("postal-address-form exemplars", () => {
     expect(listSubdivisions("NG").length).toBeGreaterThan(10)
   })
 
+  it("AE uses English emirate labels and city formatting", () => {
+    const subdivisions = listSubdivisions("AE")
+    expect(subdivisions.find((row) => row.value === "DU")?.label).toBe("Dubai")
+    expect(subdivisions.some((row) => /[\u0600-\u06FF]/.test(row.label))).toBe(false)
+
+    const formatted = formatOperationalAddress({
+      line1: "Sheikh Zayed Road",
+      city: "Dubai",
+      state: "DU",
+      countryCode: "AE",
+    })
+    expect(formatted).toContain("Dubai")
+    expect(formatted).not.toMatch(/[\u0600-\u06FF]/)
+  })
+
   it("rejects invalid US ZIP", () => {
     const result = validateOperationalAddress("US", {
       line1: "1 Infinite Loop",

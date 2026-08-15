@@ -39,7 +39,13 @@ import { useAllowedBaseCurrencies } from "@/hooks/use-allowed-base-currencies"
 import { formatPostalAddressLine, hasPostalAddressParts } from "@easner/shared/postal-address"
 import { BusinessAddressFields } from "@/components/settings/business-address-fields"
 import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
-import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
+import {
+  SETTINGS_COMBOBOX_TRIGGER_CLASS,
+  SETTINGS_CONTROL_SURFACE,
+  SETTINGS_FIELD_HEIGHT_CLASS,
+  SETTINGS_INPUT_CLASS,
+  SETTINGS_SELECT_TRIGGER_CLASS,
+} from "@/lib/settings-control-surface"
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
 }
@@ -385,7 +391,7 @@ export function SettingsBusinessTab() {
               <Label htmlFor="businessName">Business Name</Label>
               <Input
                 id="businessName"
-                className={SETTINGS_CONTROL_SURFACE}
+                className={SETTINGS_INPUT_CLASS}
                 value={formData.businessName}
                 onChange={(e) => handleInputChange("businessName", e.target.value)}
                 disabled={profileLocked || editingSection !== "business"}
@@ -423,14 +429,14 @@ export function SettingsBusinessTab() {
                 ) : null}
               </div>
               <div
-                className={`flex overflow-hidden rounded-md border border-input ${SETTINGS_CONTROL_SURFACE}`}
+                className={`flex ${SETTINGS_FIELD_HEIGHT_CLASS} overflow-hidden rounded-md border border-input ${SETTINGS_CONTROL_SURFACE}`}
               >
-                <span className="flex items-center border-r border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                <span className="flex h-full items-center border-r border-input bg-muted/40 px-3 text-sm text-muted-foreground">
                   @
                 </span>
                 <Input
                   id="businessEasetag"
-                  className="rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent"
+                  className="h-full min-h-0 rounded-none border-0 bg-transparent px-3 shadow-none focus-visible:ring-0 dark:bg-transparent"
                   value={formData.easetag}
                   onChange={(e) => handleEasetagInput(e.target.value)}
                   disabled={editingSection !== "business"}
@@ -474,10 +480,7 @@ export function SettingsBusinessTab() {
                   baseCurrencies.length === 0
                 }
               >
-                <SelectTrigger
-                  id="baseCurrency"
-                  className={`h-10 w-full data-[size=default]:h-10 ${SETTINGS_CONTROL_SURFACE}`}
-                >
+                <SelectTrigger id="baseCurrency" className={SETTINGS_SELECT_TRIGGER_CLASS}>
                   <SelectValue
                     placeholder={
                       baseCurrenciesLoading ? "Loading currencies…" : "Select base currency"
@@ -557,7 +560,7 @@ export function SettingsBusinessTab() {
               variant="outline"
               disabled
               tabIndex={-1}
-              className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
+              className={SETTINGS_COMBOBOX_TRIGGER_CLASS}
               aria-readonly="true"
             >
               <span className="flex min-w-0 items-center gap-2">
@@ -582,7 +585,7 @@ export function SettingsBusinessTab() {
                     <Label htmlFor={field.id}>{field.label}</Label>
                     <Input
                       id={field.id}
-                      className={SETTINGS_CONTROL_SURFACE}
+                      className={SETTINGS_INPUT_CLASS}
                       value={formData[field.id as keyof typeof formData] as string}
                       readOnly
                       disabled
@@ -599,7 +602,7 @@ export function SettingsBusinessTab() {
             <Input
               id="registeredAddress"
               readOnly
-              className={SETTINGS_CONTROL_SURFACE}
+              className={SETTINGS_INPUT_CLASS}
               value={
                 hasRegisteredAddress
                   ? registeredAddressDisplay
@@ -654,7 +657,7 @@ export function SettingsBusinessTab() {
         <CardContent className="space-y-4">
           {loading ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
                 <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
                 <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
               </div>
@@ -739,7 +742,7 @@ export function SettingsBusinessTab() {
             <Label htmlFor="website">Website</Label>
             <Input
               id="website"
-              className={SETTINGS_CONTROL_SURFACE}
+              className={SETTINGS_INPUT_CLASS}
               value={formData.website}
               onChange={(e) => handleInputChange("website", e.target.value)}
               disabled={editingSection !== "public"}
@@ -749,7 +752,7 @@ export function SettingsBusinessTab() {
             <Label htmlFor="supportEmail">Support Email</Label>
             <Input
               id="supportEmail"
-              className={SETTINGS_CONTROL_SURFACE}
+              className={SETTINGS_INPUT_CLASS}
               type="email"
               value={formData.email}
               onChange={(e) => handleInputChange("email", e.target.value)}
@@ -760,7 +763,7 @@ export function SettingsBusinessTab() {
             <Label htmlFor="phone">Business Phone</Label>
             <Input
               id="phone"
-              className={SETTINGS_CONTROL_SURFACE}
+              className={SETTINGS_INPUT_CLASS}
               type="tel"
               value={formData.phone}
               onChange={(e) => handleInputChange("phone", e.target.value)}

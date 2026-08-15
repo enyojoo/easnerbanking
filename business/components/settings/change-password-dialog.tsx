@@ -4,6 +4,8 @@ import { useState } from "react"
 import { Eye, EyeOff, Key, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
+import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 import {
   Dialog,
@@ -141,7 +143,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 value={current}
                 onChange={(e) => setCurrent(e.target.value)}
                 autoComplete="current-password"
-                className="pr-10"
+                className={cn(SETTINGS_INPUT_CLASS, "pr-10")}
               />
               <Button
                 type="button"
@@ -168,7 +170,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 value={next}
                 onChange={(e) => setNext(e.target.value)}
                 autoComplete="new-password"
-                className="pr-10"
+                className={cn(SETTINGS_INPUT_CLASS, "pr-10")}
               />
               <Button
                 type="button"
@@ -195,7 +197,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 autoComplete="new-password"
-                className="pr-10"
+                className={cn(SETTINGS_INPUT_CLASS, "pr-10")}
               />
               <Button
                 type="button"

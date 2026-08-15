@@ -304,6 +304,8 @@ export const ONBOARDING_STEP_COPY = {
 export const BANNER_COPY = {
   verification:
     "Complete verification to unlock payments and accounts.",
+  verificationInProgress:
+    "Finish verification to unlock payments and accounts.",
   verificationInReview:
     "Verification is in progress. This usually completes within 1–3 days.",
   verificationActionNeeded:
@@ -311,18 +313,79 @@ export const BANNER_COPY = {
   invoiceProfileTitle: "Finish your business profile to create invoices.",
 } as const
 
+/** Short link label on the dashboard / pay verification banner. */
+export const BANNER_CTA_COPY = {
+  begin: "Begin",
+  continue: "Continue",
+  status: "Status",
+  retry: "Retry",
+} as const
+
+export type VerificationBannerOpts = {
+  /** Hosted KYB started (in progress or Grid customer exists) but Tier 1 not complete. */
+  started?: boolean
+  /** False when the signed-in user cannot start hosted verification (non-owner). */
+  canManage?: boolean
+}
+
+function normalizeVerificationBannerStatus(status: string | null | undefined): string {
+  return String(status ?? "").toLowerCase().trim()
+}
+
+function verificationBannerIsInReview(status: string): boolean {
+  return (
+    status === "pending" ||
+    status === "in_review" ||
+    status === "under_review" ||
+    status.includes("review")
+  )
+}
+
+export function verificationBannerStarted(
+  status: string | null | undefined,
+  gridCustomerId: string | null | undefined,
+): boolean {
+  return (
+    normalizeVerificationBannerStatus(status) === "in_progress" || Boolean(gridCustomerId?.trim())
+  )
+}
+
 export function verificationBannerCopy(status: string | null | undefined): string {
-  const s = String(status ?? "").toLowerCase().trim()
+  const s = normalizeVerificationBannerStatus(status)
   if (s === "in_progress") {
-    return BANNER_COPY.verification
+    return BANNER_COPY.verificationInProgress
   }
-  if (s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")) {
+  if (verificationBannerIsInReview(s)) {
     return BANNER_COPY.verificationInReview
   }
   if (s === "rejected" || s === "hold") {
     return BANNER_COPY.verificationActionNeeded
   }
   return BANNER_COPY.verification
+}
+
+export function verificationBannerCta(
+  status: string | null | undefined,
+  opts?: VerificationBannerOpts,
+): string {
+  if (opts?.canManage === false) {
+    return BANNER_CTA_COPY.status
+  }
+
+  const s = normalizeVerificationBannerStatus(status)
+  if (s === "rejected") {
+    return BANNER_CTA_COPY.retry
+  }
+  if (s === "hold") {
+    return BANNER_CTA_COPY.continue
+  }
+  if (s === "in_progress" || opts?.started) {
+    return BANNER_CTA_COPY.continue
+  }
+  if (verificationBannerIsInReview(s)) {
+    return BANNER_CTA_COPY.status
+  }
+  return BANNER_CTA_COPY.begin
 }
 
 export const DEVELOPER_TOOL_COPY = {

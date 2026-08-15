@@ -45,6 +45,8 @@ import {
   filterRecipientsBySearch,
 } from '../../lib/recentSendRecipients'
 import { buildDraftEasenetRecipient, isDraftEasenetRecipient } from '../../lib/draftEasenetRecipient'
+import { buildDraftRecipient } from '../../lib/draftRecipient'
+import type { RecipientData } from '../../lib/recipientService'
 import { NavigationProps, Recipient } from '../../types'
 import {
   colors,
@@ -621,7 +623,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           return
         }
         const tag = easenetProfile.easetag
-        const newRecipientData = await recipientService.create(userProfile.id, {
+        const persistPayload: RecipientData = {
           fullName: easenetProfile.fullName,
           accountNumber: tag,
           bankName: `Easetag (@${tag})`,
@@ -629,14 +631,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           countryCode: 'US',
           payeeAvatarUrl: easenetProfile.avatarUrl,
           payeeAccountKind: easenetProfile.accountKind,
-        })
-        if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
+        }
+        const draftRecipient = buildDraftRecipient(userProfile.id, persistPayload, 'easenet')
         setError('')
         resetForm()
         setShowBankAccountForm(false)
         setShowRecipientTypeModal(false)
         navigation.navigate('SendAmount' as never, {
-          recipient: newRecipientData,
+          recipient: draftRecipient,
+          draftRecipientPersist: persistPayload,
           fromSelectRecentRecipient: true,
           preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
             ? preferredBalanceCurrency
@@ -672,7 +675,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       const needsAddr =
         selectedRecipientType === 'bank' &&
         recipientFormNeedsAddress({ hints: bankSchemaHints, currencyCode: newRecipient.currency })
-      const newRecipientData = await recipientService.create(userProfile.id, {
+      const persistPayload: RecipientData = {
         fullName: newRecipient.fullName,
         accountNumber: accountNumberForType,
         bankName: bankNameForType,
@@ -712,18 +715,23 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           selectedCountryCurrency?.countryCode === 'US' || needsAddr
             ? newRecipient.postalCode || undefined
             : undefined,
-      })
-
-      if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
+      }
+      const draftKind =
+        selectedRecipientType === 'wallet'
+          ? 'wallet'
+          : selectedRecipientType === 'mobile'
+            ? 'mobile'
+            : 'bank'
+      const draftRecipient = buildDraftRecipient(userProfile.id, persistPayload, draftKind)
 
       setError('')
       resetForm()
       setShowBankAccountForm(false)
       setShowRecipientTypeModal(false)
-      
-      // Navigate to SendAmountScreen with the newly added recipient
+
       navigation.navigate('SendAmount' as never, {
-        recipient: newRecipientData,
+        recipient: draftRecipient,
+        draftRecipientPersist: persistPayload,
         fromSelectRecentRecipient: true,
         preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
           ? preferredBalanceCurrency

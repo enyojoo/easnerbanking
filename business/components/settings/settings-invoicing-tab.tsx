@@ -19,6 +19,8 @@ import {
   DEFAULT_INVOICE_PAYMENT_DEFAULTS,
   type BusinessInvoiceSettings,
 } from "@/lib/invoices/invoice-settings"
+import { SETTINGS_SELECT_TRIGGER_BASE } from "@/lib/settings-control-surface"
+import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import {
@@ -140,7 +142,7 @@ export function SettingsInvoicingTab() {
                 })
               }
             >
-              <SelectTrigger className="w-[13.5rem]">
+              <SelectTrigger className={cn(SETTINGS_SELECT_TRIGGER_BASE, "w-[13.5rem]")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent align="end">

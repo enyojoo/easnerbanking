@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
 import { BUSINESS_INDUSTRY_GROUPS, getIndustryById } from "@/lib/business-industries"
-import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
+import { SETTINGS_COMBOBOX_TRIGGER_CLASS } from "@/lib/settings-control-surface"
 
 type Props = {
   value: string
@@ -43,8 +43,7 @@ export function BusinessIndustryCombobox({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "h-10 w-full justify-between font-normal px-3",
-            SETTINGS_CONTROL_SURFACE,
+            SETTINGS_COMBOBOX_TRIGGER_CLASS,
             !selected && "text-muted-foreground",
             className,
           )}

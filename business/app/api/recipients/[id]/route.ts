@@ -22,6 +22,7 @@ import {
   toRecipientLegacyPayload,
   type RecipientWritePayload,
 } from "@/lib/recipients-write-payload"
+import { findRecipientIdentityCollision } from "@/lib/recipients-find-or-create"
 import { requirePayrollAccess } from "@/lib/payroll/require-payroll-access"
 
 type RouteContext = { params: Promise<{ id: string }> }
@@ -41,9 +42,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const admin = createSupabaseAdmin()
   const { data: existing } = await admin
     .from("recipients")
-    .select(
-      "user_id,country_code,currency,mobile_provider,wallet_network,bank_name,swift_bic,phone_number,email,full_name,account_number,checking_or_savings,metadata,routing_number,sort_code",
-    )
+    .select("*")
     .eq("id", id)
     .maybeSingle()
 
@@ -197,6 +196,37 @@ export async function PATCH(request: Request, context: RouteContext) {
       rail,
     })
     payload.metadata = bindingPayload.metadata
+  }
+
+  const mergedWritePayload: RecipientWritePayload = {
+    country_code: payload.country_code ?? existing.country_code ?? null,
+    full_name: payload.full_name ?? existing.full_name ?? "",
+    account_number: payload.account_number ?? existing.account_number ?? "",
+    bank_name: payload.bank_name ?? existing.bank_name ?? "",
+    phone_number: payload.phone_number ?? existing.phone_number ?? null,
+    email: payload.email ?? existing.email ?? null,
+    currency: payload.currency ?? existing.currency ?? "",
+    routing_number: payload.routing_number ?? existing.routing_number ?? null,
+    sort_code: payload.sort_code ?? existing.sort_code ?? null,
+    iban: payload.iban ?? existing.iban ?? null,
+    swift_bic: payload.swift_bic ?? existing.swift_bic ?? null,
+    transfer_type: payload.transfer_type ?? existing.transfer_type ?? null,
+    checking_or_savings: payload.checking_or_savings ?? existing.checking_or_savings ?? null,
+    address_line1: payload.address_line1 ?? existing.address_line1 ?? null,
+    city: payload.city ?? existing.city ?? null,
+    state: payload.state ?? existing.state ?? null,
+    postal_code: payload.postal_code ?? existing.postal_code ?? null,
+    mobile_provider: payload.mobile_provider ?? existing.mobile_provider ?? null,
+    wallet_network: payload.wallet_network ?? existing.wallet_network ?? null,
+    metadata: payload.metadata ?? existing.metadata ?? null,
+  }
+  const ownerUserId = String(existing.user_id)
+  const collision = await findRecipientIdentityCollision(admin, ownerUserId, mergedWritePayload, id)
+  if (collision) {
+    return NextResponse.json(
+      { error: "Another saved recipient already uses these payout details." },
+      { status: 409 },
+    )
   }
 
   const primary = await admin

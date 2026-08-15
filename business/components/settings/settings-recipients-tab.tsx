@@ -5,6 +5,8 @@ import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
+import { cn } from "@/lib/utils"
 import { Plus, Search, MoreVertical, Edit, Trash2, User, Send, Users } from "lucide-react"
 import {
   DropdownMenu,
@@ -28,7 +30,6 @@ import { SendSelectedRecipientSummary } from "@/components/send/send-selected-re
 import { useAuth } from "@/lib/auth-context"
 import { useRecipientsCached } from "@/hooks/use-recipients-cached"
 import { createSendFlowSeedForRecipient, persistSendFlowState } from "@/lib/send-flow-session"
-import { cn } from "@/lib/utils"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 
@@ -168,7 +169,7 @@ export function SettingsRecipientsTab() {
                   placeholder="Search recipients..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
+                  className={cn(SETTINGS_INPUT_CLASS, "pl-9")}
                 />
               </div>
               <div className="h-20 w-full animate-pulse rounded-lg bg-muted" />
@@ -191,7 +192,7 @@ export function SettingsRecipientsTab() {
                   placeholder="Search recipients..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
+                  className={cn(SETTINGS_INPUT_CLASS, "pl-9")}
                 />
               </div>
               {filteredBeneficiaries.map((recipient) => (

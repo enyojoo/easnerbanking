@@ -1,9 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { qk, scopeKey, type Scope } from '@easner/shared'
+import { qk, scopeKey, type Scope, isDraftRecipientId } from '@easner/shared'
 import { noahService, type NoahTransfer } from '../lib/noahService'
 import type { Recipient, User } from '../types'
-import { recipientService } from '../lib/recipientService'
-import { isDraftEasenetRecipient } from '../lib/draftEasenetRecipient'
+import { recipientService, type RecipientData } from '../lib/recipientService'
 import { invalidateRecipientsFeed } from '../query/refresh-user-feeds'
 import { recordRecipientSentTouch } from '../lib/recentSendRecipients'
 import { resolveRecipientEasetagForUi } from '../lib/easenetRecipientUi'
@@ -87,6 +86,8 @@ export type ExecuteBalanceSendInput = {
   reservedDebitEtid?: string
   note?: string
   paymentPurpose?: string
+  /** Persist draft recipients after successful send (easetag and other rails). */
+  draftRecipientPersist?: RecipientData
 }
 
 export type ExecuteBalanceSendContext = {
@@ -256,26 +257,32 @@ export async function executeBalanceSend(
   if (
     ctx.userId &&
     recipient?.id &&
-    easetag &&
-    isDraftEasenetRecipient(recipient.id) &&
+    isDraftRecipientId(recipient.id) &&
     ctx.userProfile?.id
   ) {
     try {
       const tag = easetag
-      const created = await recipientService.create(ctx.userProfile.id, {
-        fullName: recipient.full_name,
-        accountNumber: tag,
-        bankName: `Easetag (@${tag})`,
-        currency: 'USD',
-        countryCode: 'US',
-        payeeAvatarUrl: recipient.payee_avatar_url,
-        payeeAccountKind: recipient.payee_account_kind,
-      })
-      if (ctx.scope && ctx.userId) await invalidateRecipientsFeed(ctx.qc, ctx.scope, ctx.userId)
-      recipientForDetails = created
-      void recordRecipientSentTouch(ctx.userId, created.id)
+      const persist =
+        input.draftRecipientPersist ??
+        (tag
+          ? {
+              fullName: recipient.full_name,
+              accountNumber: tag,
+              bankName: `Easetag (@${tag})`,
+              currency: 'USD',
+              countryCode: 'US',
+              payeeAvatarUrl: recipient.payee_avatar_url,
+              payeeAccountKind: recipient.payee_account_kind,
+            }
+          : undefined)
+      if (persist) {
+        const created = await recipientService.findOrCreate(ctx.userProfile.id, persist)
+        if (ctx.scope && ctx.userId) await invalidateRecipientsFeed(ctx.qc, ctx.scope, ctx.userId)
+        recipientForDetails = created
+        void recordRecipientSentTouch(ctx.userId, created.id)
+      }
     } catch (persistErr) {
-      console.warn('Post-send Easetag recipient save failed:', persistErr)
+      console.warn('Post-send draft recipient save failed:', persistErr)
     }
   } else if (ctx.userId && recipient?.id) {
     void recordRecipientSentTouch(ctx.userId, recipient.id)

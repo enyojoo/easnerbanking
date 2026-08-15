@@ -8,11 +8,8 @@ import {
 } from "@/lib/recipients-grid-validation"
 import { attachProviderBindingsToPayload } from "@/lib/recipients-provider-bindings"
 import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone, isBankNameAllowedForCorridor, resolveCorridorRecipientOptions, resolvePrimaryPayoutProvider, unwrapNoahFieldsSchema } from "@easner/shared"
-import {
-  looksLikeMissingStructuredColumn,
-  toRecipientLegacyPayload,
-  type RecipientWritePayload,
-} from "@/lib/recipients-write-payload"
+import type { RecipientWritePayload } from "@/lib/recipients-write-payload"
+import { findOrCreateRecipient } from "@/lib/recipients-find-or-create"
 
 export async function GET(request: Request) {
   const user = await getUserFromApiRequest(request)
@@ -141,39 +138,6 @@ export async function POST(request: Request) {
     })
   }
 
-  const primary = await admin
-    .from("recipients")
-    .insert({ ...payload, user_id: user.id })
-    .select("*")
-    .single()
-  if (!primary.error) return NextResponse.json({ recipient: primary.data }, { status: 201 })
-
-  if (!looksLikeMissingStructuredColumn(primary.error)) {
-    return NextResponse.json(
-      {
-        error: primary.error.message,
-        code: primary.error.code,
-        details: primary.error.details,
-        hint: primary.error.hint,
-      },
-      { status: 400 },
-    )
-  }
-
-  const fallback = await admin
-    .from("recipients")
-    .insert({ ...toRecipientLegacyPayload(payload), user_id: user.id })
-    .select("*")
-    .single()
-  if (!fallback.error) return NextResponse.json({ recipient: fallback.data }, { status: 201 })
-
-  return NextResponse.json(
-    {
-      error: fallback.error.message,
-      code: fallback.error.code,
-      details: fallback.error.details,
-      hint: fallback.error.hint,
-    },
-    { status: 400 },
-  )
+  const { recipient, created } = await findOrCreateRecipient(admin, user.id, payload)
+  return NextResponse.json({ recipient }, { status: created ? 201 : 200 })
 }

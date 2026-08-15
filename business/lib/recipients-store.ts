@@ -3,7 +3,7 @@
 import type { Beneficiary } from "@/lib/recipient-types"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { readEasenetPublicProfileCache } from "@/lib/easenet-public-profile-cache"
-import { countryCodeForRecipientSave, getCountryCodeForCurrency, mapCadRoutingToGridMetadata } from "@easner/shared"
+import { countryCodeForRecipientSave, getCountryCodeForCurrency, mapCadRoutingToGridMetadata, normalizeRecipientBankName } from "@easner/shared"
 
 export type RecipientRow = {
   id: string
@@ -91,19 +91,22 @@ function resolveCountryName(currency: string, countryCode?: string): string {
 }
 
 function deriveBankName(input: RecipientUpsertInput): string {
-  if (input.recipientType === "easenet" && input.payeeEasetag) {
-    return `Easetag (@${input.payeeEasetag})`
-  }
-  if (input.recipientType === "mobile" && input.mobileProvider) {
-    return `Mobile Money (${input.mobileProvider})`
-  }
-  if (input.recipientType === "wallet" && input.walletAsset && input.walletNetwork) {
-    return `Wallet (${input.walletAsset}/${input.walletNetwork})`
-  }
-  if (input.recipientType === "wallet" && input.walletNetwork) {
-    return `Wallet (${input.walletNetwork})`
-  }
-  return input.bankName
+  const rail =
+    input.recipientType === "easenet"
+      ? "easetag"
+      : input.recipientType === "mobile"
+        ? "mobile"
+        : input.recipientType === "wallet"
+          ? "wallet"
+          : "bank"
+  return normalizeRecipientBankName({
+    recipientType: rail,
+    mobileProvider: input.mobileProvider,
+    walletAsset: input.walletAsset,
+    walletNetwork: input.walletNetwork,
+    payeeEasetag: input.payeeEasetag,
+    bankName: input.bankName,
+  })
 }
 
 function toWritePayload(input: RecipientUpsertInput) {

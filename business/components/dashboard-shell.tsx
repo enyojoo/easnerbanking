@@ -15,7 +15,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useBusinessSync } from "@/hooks/use-business-sync"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { openBusinessSupport } from "@/lib/intercom-messenger"
-import { verificationBannerCopy } from "@/lib/copy/business-ui-copy"
+import { verificationBannerCopy, verificationBannerCta, verificationBannerStarted } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 import { useScope } from "@/lib/query/scope"
 import { prefetchWorkspaceCriticalData } from "@/lib/query/workspace-prefetch"
@@ -39,6 +39,8 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
     hasData: profileHasData,
     tier1Complete,
     tier1VerificationStatus,
+    noahKybCustomerId,
+    canManageBusinessVerification,
   } = useBusinessProfile()
   const { avatarUrl: profileImageUrl } = usePersonalProfileAvatar()
   /** Keep header avatar visible when personal settings are hydrated even if business profile is still loading. */
@@ -139,7 +141,10 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
                 href="/settings?tab=verification"
                 className="font-semibold text-[hsl(var(--warning))] underline underline-offset-2"
               >
-                Verify
+                {verificationBannerCta(tier1VerificationStatus, {
+                  started: verificationBannerStarted(tier1VerificationStatus, noahKybCustomerId),
+                  canManage: canManageBusinessVerification,
+                })}
               </Link>
             </div>
           ) : null}

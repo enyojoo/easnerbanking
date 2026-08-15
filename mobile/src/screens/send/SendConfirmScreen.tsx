@@ -24,6 +24,7 @@ import {
   SEND_REVIEW_CONFIRM_CTA,
   formatAccountBalanceLabel,
   formatReviewRowMoneyDisplay,
+  isDraftRecipientId,
 } from '@easner/shared'
 import { CreditDestinationRow } from '../../components/transactions/CreditDestinationRow'
 import { TransactionDetailSummaryRow } from '../../components/transactions/TransactionDetailSummaryRow'
@@ -59,6 +60,8 @@ import type { PricingQuote } from '../../lib/noahService'
 import { noahService } from '../../lib/noahService'
 import type { PayoutPrepareSession } from '../../lib/payoutPrepareSession'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
+import { resolveDraftRecipient } from '../../lib/resolveDraftRecipient'
+import type { RecipientData } from '../../lib/recipientService'
 import { useEasenetRecipientHydration } from '../../hooks/useEasenetRecipientHydration'
 import { SendSelectedRecipientSummary } from '../../components/send/SendSelectedRecipientSummary'
 import { getSendDestinationsMemory } from '../../lib/sendDestinations'
@@ -142,6 +145,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
   const params = route.params as {
     recipient?: Recipient
+    draftRecipientPersist?: RecipientData
     calculatedSendingAmount?: number
     calculatedFeeAmount?: number
     calculatedTotalAmount?: number
@@ -177,7 +181,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     Boolean(params.ycPayInCurrency) &&
     Boolean(params.ycPayInRail)
 
-  const recipient = params.recipient
+  const [recipient, setRecipient] = useState(params.recipient)
+  const draftRecipientPersist = params.draftRecipientPersist
   const isWalletRecipient =
     Boolean(params.isWalletSend) || isWalletSendRecipient(recipient ?? null)
   const receiveAmountValue = params.receiveAmountValue ?? 0
@@ -488,11 +493,30 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     analytics.trackScreenView('SendConfirm')
   }, [])
 
+  useEffect(() => {
+    if (!recipient || !user?.id || easetagUi) return
+    if (!isDraftRecipientId(recipient.id) || !draftRecipientPersist) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const resolved = await resolveDraftRecipient(user.id, recipient, draftRecipientPersist)
+        if (!cancelled) setRecipient(resolved)
+      } catch (e) {
+        if (!cancelled) {
+          setTransferError(e instanceof Error ? e.message : 'Could not save recipient')
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [recipient, user?.id, draftRecipientPersist, easetagUi])
+
   /** Refresh quote only when not preloaded on amount screen. */
   useEffect(() => {
     if (isYcCrossBorder) return
     if (!recipient || easetagUi) return
-    if (!recipient.id || !(receiveAmountValue > 0)) return
+    if (!recipient.id || !(receiveAmountValue > 0) || isDraftRecipientId(recipient.id)) return
     if (isWalletRecipient) {
       if (walletSessionMatchesRecipient(walletSession, recipient.id)) return
       if (isStashedWalletQuoteFresh(quoteStashMeta)) {
@@ -661,6 +685,17 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       void (async () => {
         setSendingAfterPin(true)
         try {
+          let flowRecipient = recipient
+          if (
+            isDraftRecipientId(recipient.id) &&
+            draftRecipientPersist &&
+            user?.id &&
+            !easetagUi
+          ) {
+            flowRecipient = await resolveDraftRecipient(user.id, recipient, draftRecipientPersist)
+            setRecipient(flowRecipient)
+          }
+
           const reviewSnapshot =
             !easetagUi && calculatedTotalAmount > 0 && quotedReceiveAmount > 0
               ? {
@@ -693,7 +728,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
           const { detailId } = await executeBalanceSend(
             {
-              recipient,
+              recipient: flowRecipient,
               calculatedTotalAmount,
               receiveAmountValue: quotedReceiveAmount,
               selectedBalanceCurrency,
@@ -703,6 +738,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               ...(sendReservedDebitEtid ? { reservedDebitEtid: sendReservedDebitEtid } : {}),
               ...(sendNote ? { note: sendNote } : {}),
               ...(sendPaymentPurpose ? { paymentPurpose: sendPaymentPurpose } : {}),
+              ...(draftRecipientPersist ? { draftRecipientPersist } : {}),
             },
             {
               userId: user.id,

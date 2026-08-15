@@ -136,7 +136,10 @@ import {
 } from '../../lib/sendDestinations'
 import type { SendDestinationsResponse } from '@easner/shared'
 import { getTokenIconUrl } from '../../lib/cryptoIcons'
+import { isDraftRecipientId } from '@easner/shared'
 import type { Recipient } from '../../types'
+import type { RecipientData } from '../../lib/recipientService'
+import { resolveDraftRecipient } from '../../lib/resolveDraftRecipient'
 import { resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { isMobileMoneyRecipient } from '../../lib/recipientPayoutPreview'
 import { isWalletSendRecipient, resolveRecipientWalletNetwork } from '../../lib/recipientWalletMeta'
@@ -188,6 +191,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   
   // Get recipient from route params if coming from the send recipient hub
   const recipientFromRoute = (route.params as any)?.recipient as Recipient | undefined
+  const draftRecipientPersistFromRoute = (route.params as any)?.draftRecipientPersist as
+    | RecipientData
+    | undefined
   const preferredBalanceCurrencyFromRoute = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
   const selectedPaymentMethodFromRoute = (route.params as any)?.selectedPaymentMethod as
     | 'balance'
@@ -206,6 +212,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   
   // UI State only - no backend integration
   const [recipient, setRecipient] = useState<Recipient | null>(recipientFromRoute || null)
+  const [draftRecipientPersist, setDraftRecipientPersist] = useState<RecipientData | undefined>(
+    draftRecipientPersistFromRoute,
+  )
   const easenetDisplay = useEasenetRecipientHydration(recipient)
   /** Internal Easetag P2P does not use fiat payout corridors — don’t block the CTA on corridor status. */
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient).trim() : ''
@@ -527,6 +536,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       if (params?.recipient) {
         // Update recipient immediately for smooth transition
         setRecipient(params.recipient as Recipient)
+      }
+      if (params?.draftRecipientPersist) {
+        setDraftRecipientPersist(params.draftRecipientPersist as RecipientData)
       }
       if (params?.fromSendAgain && !sendAgainPrefillAppliedRef.current) {
         const prefilled = initialSendAmountFromRouteParams(params)
@@ -1176,7 +1188,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     useDebouncedValue(payoutQuotePrefetchKey)
 
   useEffect(() => {
-    if (!debouncedPayoutQuotePrefetchKey || !recipient?.id) return
+    if (!debouncedPayoutQuotePrefetchKey || !recipient?.id || isDraftRecipientId(recipient.id)) return
     if (!payoutQuotePrefetchReady) return
     const meta = {
       recipientId: recipient.id,
@@ -1215,7 +1227,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     useDebouncedValue(walletQuotePrefetchKey)
 
   useEffect(() => {
-    if (!debouncedWalletQuotePrefetchKey || !recipient?.id) return
+    if (!debouncedWalletQuotePrefetchKey || !recipient?.id || isDraftRecipientId(recipient.id)) return
     let cancelled = false
     void ensureSendWalletQuoteStashed(
       () =>
@@ -1263,7 +1275,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [debouncedCrossBorderQuotePrefetchKey] = useDebouncedValue(crossBorderQuotePrefetchKey)
 
   useEffect(() => {
-    if (!debouncedCrossBorderQuotePrefetchKey || !recipient?.id || !selectedOtherCurrency) return
+    if (!debouncedCrossBorderQuotePrefetchKey || !recipient?.id || !selectedOtherCurrency || isDraftRecipientId(recipient.id)) return
     const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
     if (!payInCountry) return
     void prefetchCrossBorderQuotePipeline({
@@ -1347,6 +1359,23 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       const enteredAmountValue = Number.parseFloat(sendAmount.replace(/,/g, ''))
       if (!sendAmount || sendAmount === '0' || enteredAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
 
+      let activeRecipient = recipient
+      if (
+        userProfile?.id &&
+        isDraftRecipientId(recipient.id) &&
+        draftRecipientPersist &&
+        !isEasetagRecipient
+      ) {
+        activeRecipient = await resolveDraftRecipient(userProfile.id, recipient, draftRecipientPersist)
+        setRecipient(activeRecipient)
+        setDraftRecipientPersist(undefined)
+      }
+
+      const draftPersistForNavigate =
+        isDraftRecipientId(activeRecipient.id) && draftRecipientPersist
+          ? draftRecipientPersist
+          : undefined
+
       if (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) return
 
       if (isEasetagRecipient && selectedPaymentMethod === 'otherCurrency') {
@@ -1403,7 +1432,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         ? walletReceiveAmount
         : normalizePayoutReceiveAmountForCurrency(receiveCurrency, navAmounts.receiveAmount)
       const quoteStashMeta = {
-        recipientId: recipient.id,
+        recipientId: activeRecipient.id,
         amountEntryMode: isWalletRecipient ? ('receive' as const) : amountEntryMode,
         entryAmount: isWalletRecipient
           ? walletReceiveAmount
@@ -1479,7 +1508,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           ? await ensureSendWalletOrderConfirmed(
               () =>
                 noahService.createWalletSendQuote({
-                  recipientId: recipient.id,
+                  recipientId: activeRecipient.id,
                   sourceBalanceCurrency: selectedBalanceCurrency,
                   amountEntryMode: 'receive',
                   receiveAmount: receiveAmountValue,
@@ -1504,7 +1533,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           stashedQuote = await ensureSendPayoutQuoteLocked(
             () =>
               noahService.createPayoutQuote({
-                recipientId: recipient.id,
+                recipientId: activeRecipient.id,
                 receiveAmount: receiveAmountValue,
                 sourceBalanceCurrency: selectedBalanceCurrency,
                 amountEntryMode,
@@ -1516,7 +1545,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               }),
             () =>
               noahService.confirmPayoutOrder({
-                recipientId: recipient.id,
+                recipientId: activeRecipient.id,
                 receiveAmount: receiveAmountValue,
                 sourceBalanceCurrency: selectedBalanceCurrency,
                 amountEntryMode,
@@ -1580,13 +1609,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         }
 
         navigation.navigate('SendConfirm' as never, {
-          recipient,
+          recipient: activeRecipient,
+          ...(draftPersistForNavigate ? { draftRecipientPersist: draftPersistForNavigate } : {}),
           calculatedSendingAmount,
           calculatedFeeAmount,
           calculatedTotalAmount,
           receiveAmountValue,
           selectedBalanceCurrency,
-          receiveCurrency: recipient.currency,
+          receiveCurrency: activeRecipient.currency,
           amountEntryMode: isWalletRecipient ? 'receive' : amountEntryMode,
           amountScreenSendAmount: navAmounts.sendAmount,
           transactionId,
@@ -1624,10 +1654,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             return
           }
           navigation.navigate('SendCrossBorderMomoSetup' as never, {
-            recipient,
+            recipient: activeRecipient,
             ycPayInCurrency: selectedOtherCurrency,
             receiveAmountValue,
-            receiveCurrency: recipient.currency,
+            receiveCurrency: activeRecipient.currency,
             amountEntryMode,
             amountScreenSendAmount: navAmounts.sendAmount,
             crossBorderProvider: ycFlow.crossBorderProvider,
@@ -1650,7 +1680,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             continueSpinnerTimerRef.current = null
           }
           const crossBorderMeta = {
-            recipientId: recipient.id,
+            recipientId: activeRecipient.id,
             payInCurrency: selectedOtherCurrency,
             payInCountry,
             payInRail: rail,
@@ -1663,12 +1693,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             return
           }
           navigation.navigate('SendConfirm' as never, {
-            recipient,
+            recipient: activeRecipient,
+            ...(draftPersistForNavigate ? { draftRecipientPersist: draftPersistForNavigate } : {}),
             paymentMethod: 'otherCurrency',
             ycPayInCurrency: selectedOtherCurrency,
             ycPayInRail: rail,
             receiveAmountValue,
-            receiveCurrency: recipient.currency,
+            receiveCurrency: activeRecipient.currency,
             amountEntryMode,
             amountScreenSendAmount: navAmounts.sendAmount,
             calculatedSendingAmount: previewQuote.localPayIn,
@@ -1688,12 +1719,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           return
         }
         navigation.navigate('SendConfirm' as never, {
-          recipient,
+          recipient: activeRecipient,
+          ...(draftPersistForNavigate ? { draftRecipientPersist: draftPersistForNavigate } : {}),
           paymentMethod: 'otherCurrency',
           ycPayInCurrency: selectedOtherCurrency,
           ycPayInRail: rail,
           receiveAmountValue,
-          receiveCurrency: recipient.currency,
+          receiveCurrency: activeRecipient.currency,
           amountEntryMode,
           amountScreenSendAmount: navAmounts.sendAmount,
           calculatedSendingAmount: sendingAmount,
