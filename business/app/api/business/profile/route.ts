@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { removeAllOrganizationLogoObjects } from "@/lib/organization-logo-storage"
 import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
+import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import {
   defaultBusinessOrgName,
@@ -28,6 +29,7 @@ import {
   type BusinessInvoiceSettings,
 } from "@/lib/invoices/invoice-settings"
 import type { InvoicePaymentDefaults } from "@/lib/b2b/types"
+import { validateOperationalAddress } from "@easner/shared/postal-address-form"
 
 type UpdateBody = {
   businessName?: string
@@ -448,6 +450,45 @@ export async function PUT(request: Request) {
   if (body.city !== undefined) updates.city = body.city?.trim() || null
   if (body.state !== undefined) updates.state = body.state?.trim() || null
   if (body.postalCode !== undefined) updates.postal_code = body.postalCode?.trim() || null
+
+  const addressTouched =
+    body.addressLine1 !== undefined ||
+    body.city !== undefined ||
+    body.state !== undefined ||
+    body.postalCode !== undefined ||
+    body.countryCode !== undefined
+
+  if (addressTouched) {
+    await ensureBusinessOperationalAddressCountriesRegistered()
+
+    const operationalCountryCode =
+      body.countryCode !== undefined
+        ? normalizeCountryCode(body.countryCode) ?? ""
+        : countryCodeFromName((orgRow?.country as string | null) ?? null) ??
+          normalizeCountryCode((orgRow?.country as string | null) ?? "") ??
+          ""
+
+    const validation = validateOperationalAddress(operationalCountryCode, {
+      line1:
+        body.addressLine1 !== undefined
+          ? body.addressLine1
+          : ((orgRow?.address_line1 as string | null) ?? ""),
+      city: body.city !== undefined ? body.city : ((orgRow?.city as string | null) ?? ""),
+      state: body.state !== undefined ? body.state : ((orgRow?.state as string | null) ?? ""),
+      postalCode:
+        body.postalCode !== undefined
+          ? body.postalCode
+          : ((orgRow?.postal_code as string | null) ?? ""),
+      countryCode: operationalCountryCode,
+    })
+
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: "Invalid business address", fieldErrors: validation.errors },
+        { status: 400 },
+      )
+    }
+  }
 
   if (body.invoiceSettings !== undefined) {
     const { data: existingBiz } = await admin

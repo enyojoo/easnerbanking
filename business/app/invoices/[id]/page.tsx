@@ -1074,11 +1074,16 @@ export default function InvoiceDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mb-6 sm:mb-8">
                 <div className="min-w-0">
                   <h2 className="text-sm sm:text-base font-semibold">{issuer.name}</h2>
-                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">{issuer.address}</p>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    {issuer.city}, {issuer.state} {issuer.zipCode}
-                  </p>
-                  <p className="text-xs sm:text-sm text-muted-foreground">{issuer.country}</p>
+                  {(issuer.addressLines.length > 0
+                    ? issuer.addressLines
+                    : [issuer.address, `${issuer.city}, ${issuer.state} ${issuer.zipCode}`.trim(), issuer.country].filter(
+                        Boolean,
+                      )
+                  ).map((line) => (
+                    <p key={line} className="text-xs sm:text-sm text-muted-foreground mt-1">
+                      {line}
+                    </p>
+                  ))}
                   <p className="text-xs sm:text-sm text-muted-foreground mt-2">{issuer.email}</p>
                   <p className="text-xs sm:text-sm text-muted-foreground">{issuer.phone}</p>
                 </div>

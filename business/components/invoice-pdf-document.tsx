@@ -256,6 +256,8 @@ export function InvoicePDFDocument({
     state: defaultBusinessInfo.state,
     zipCode: defaultBusinessInfo.zipCode,
     country: defaultBusinessInfo.country,
+    countryCode: "",
+    addressLines: [],
     email: defaultBusinessInfo.email,
     phone: defaultBusinessInfo.phone,
   }
@@ -282,11 +284,14 @@ export function InvoicePDFDocument({
         <View style={styles.header}>
           <View style={styles.businessInfo}>
             <Text style={styles.businessName}>{biz.name}</Text>
-            <Text style={styles.businessText}>{biz.address}</Text>
-            <Text style={styles.businessText}>
-              {biz.city}, {biz.state} {biz.zipCode}
-            </Text>
-            <Text style={styles.businessText}>{biz.country}</Text>
+            {(biz.addressLines.length > 0
+              ? biz.addressLines
+              : [biz.address, `${biz.city}, ${biz.state} ${biz.zipCode}`.trim(), biz.country].filter(Boolean)
+            ).map((line) => (
+              <Text key={line} style={styles.businessText}>
+                {line}
+              </Text>
+            ))}
             <Text style={styles.businessText}>{biz.email}</Text>
             <Text style={styles.businessText}>{biz.phone}</Text>
           </View>

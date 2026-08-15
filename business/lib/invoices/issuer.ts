@@ -1,8 +1,10 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { displayCountryFromBusinessSetting } from "@/lib/countries"
+import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import type { BusinessProfile } from "@/lib/use-business-profile"
 import { pickInvoiceReplyEmail, pickInvoiceReplyEmailWithSource } from "@/lib/invoices/invoice-reply-email"
 import type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
+import { formatOperationalAddressLines } from "@easner/shared/postal-address-form"
+import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
 
 export { pickInvoiceReplyEmail, pickInvoiceReplyEmailWithSource } from "@/lib/invoices/invoice-reply-email"
 export type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
@@ -15,6 +17,8 @@ export type InvoicePdfIssuer = {
   state: string
   zipCode: string
   country: string
+  countryCode: string
+  addressLines: string[]
   email: string
   phone: string
 }
@@ -26,8 +30,52 @@ const EMPTY_ISSUER: InvoicePdfIssuer = {
   state: "",
   zipCode: "",
   country: "",
+  countryCode: "",
+  addressLines: [],
   email: "",
   phone: "",
+}
+
+function countryCodeFromBusinessSetting(value: string | null | undefined): string {
+  const raw = String(value ?? "").trim()
+  if (!raw) return ""
+  if (/^[A-Za-z]{2}$/.test(raw)) return raw.toUpperCase()
+  const match = countries.find((c) => c.name.toLowerCase() === raw.toLowerCase())
+  return match?.code ?? ""
+}
+
+function buildIssuerAddressLines(input: {
+  address: string
+  city: string
+  state: string
+  zipCode: string
+  country: string
+  countryCode: string
+}): string[] {
+  const lines = formatOperationalAddressLines(
+    {
+      line1: input.address,
+      city: input.city,
+      state: input.state,
+      postalCode: input.zipCode,
+      countryCode: input.countryCode,
+    },
+    { appendCountry: true },
+  )
+  if (lines.length > 0) return lines
+
+  const fallback: string[] = []
+  if (input.address) fallback.push(input.address)
+  const locality = [input.city, input.state].filter(Boolean).join(", ")
+  const localityPostal = [locality, input.zipCode].filter(Boolean).join(" ")
+  if (localityPostal) fallback.push(localityPostal)
+  if (input.country) fallback.push(input.country)
+  return fallback
+}
+
+function finalizeIssuer(input: Omit<InvoicePdfIssuer, "addressLines">): InvoicePdfIssuer {
+  const addressLines = buildIssuerAddressLines(input)
+  return { ...input, addressLines }
 }
 
 export function issuerFromBusinessProfile(profile: BusinessProfile): InvoicePdfIssuer {
@@ -35,22 +83,28 @@ export function issuerFromBusinessProfile(profile: BusinessProfile): InvoicePdfI
     displayCountryFromBusinessSetting(profile.country) ||
     displayCountryFromBusinessSetting(profile.countryCode) ||
     ""
-  return {
+  const countryCode =
+    countryCodeFromBusinessSetting(profile.countryCode) ||
+    countryCodeFromBusinessSetting(profile.country)
+  return finalizeIssuer({
     name: profile.name?.trim() || "Business",
     address: profile.addressLine1?.trim() || "",
     city: profile.city?.trim() || "",
     state: profile.state?.trim() || "",
     zipCode: profile.postalCode?.trim() || "",
     country,
+    countryCode,
     email: profile.supportEmail?.trim() || "",
     phone: profile.supportPhone?.trim() || "",
-  }
+  })
 }
 
 export async function fetchInvoiceIssuerForBusiness(
   admin: ReturnType<typeof createSupabaseAdmin>,
   businessId: string,
 ): Promise<InvoicePdfIssuer> {
+  await ensureBusinessOperationalAddressCountriesRegistered()
+
   const { data: org, error } = await admin
     .from("businesses")
     .select(
@@ -62,16 +116,18 @@ export async function fetchInvoiceIssuerForBusiness(
   if (error || !org) return { ...EMPTY_ISSUER, name: "Business" }
 
   const countryRaw = (org.country as string | null)?.trim() || ""
-  return {
+  const countryCode = countryCodeFromBusinessSetting(countryRaw)
+  return finalizeIssuer({
     name: (org.name as string | null)?.trim() || "Business",
     address: (org.address_line1 as string | null)?.trim() || "",
     city: (org.city as string | null)?.trim() || "",
     state: (org.state as string | null)?.trim() || "",
     zipCode: (org.postal_code as string | null)?.trim() || "",
     country: displayCountryFromBusinessSetting(countryRaw || null) || "",
+    countryCode,
     email: (org.support_email as string | null)?.trim() || "",
     phone: (org.support_phone as string | null)?.trim() || "",
-  }
+  })
 }
 
 /**

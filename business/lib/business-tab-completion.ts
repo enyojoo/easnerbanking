@@ -1,6 +1,7 @@
 import { countries } from "@/lib/countries"
 import { getKybFields, kybFieldValue } from "@/lib/kyb-by-country"
 import type { BusinessProfile } from "@/lib/use-business-profile"
+import { isOperationalAddressComplete } from "@easner/shared/postal-address-form"
 
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
@@ -64,8 +65,18 @@ export function isBusinessTabComplete(profile: BusinessProfile): boolean {
 
   if (!nonEmpty(profile.addressLine1)) return false
   if (!nonEmpty(profile.city)) return false
-  if (!nonEmpty(profile.postalCode)) return false
-  if (code === "US" && !nonEmpty(profile.state)) return false
+
+  const addressParts = {
+    line1: profile.addressLine1,
+    city: profile.city,
+    state: profile.state,
+    postalCode: profile.postalCode,
+    countryCode: countryCodeFromProfile({
+      countryCode: profile.countryCode,
+      country: profile.country,
+    }),
+  }
+  if (!isOperationalAddressComplete(addressParts.countryCode ?? code, addressParts)) return false
 
   if (!nonEmpty(profile.website)) return false
   if (!nonEmpty(profile.supportEmail)) return false

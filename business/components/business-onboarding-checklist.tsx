@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { isBusinessInfoStepComplete } from "@/lib/business-tab-completion"
+import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
 import { parseBalanceString } from "@/hooks/use-business-account-rows"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
 import { usePayrollOverview } from "@/hooks/queries/use-payroll"
@@ -81,6 +82,10 @@ export function BusinessOnboardingChecklist() {
     )
 
   // Drop legacy sticky progress keys that leaked completed steps across accounts.
+  useEffect(() => {
+    void ensureBusinessOperationalAddressCountriesRegistered()
+  }, [])
+
   useEffect(() => {
     if (typeof window === "undefined") return
     try {

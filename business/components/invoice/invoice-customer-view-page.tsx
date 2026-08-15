@@ -34,6 +34,12 @@ const FALLBACK_ISSUER: InvoicePdfIssuer = {
   state: businessInfo.state,
   zipCode: businessInfo.zipCode,
   country: businessInfo.country,
+  countryCode: "",
+  addressLines: [
+    businessInfo.address,
+    `${businessInfo.city}, ${businessInfo.state} ${businessInfo.zipCode}`.trim(),
+    businessInfo.country,
+  ].filter(Boolean),
   email: businessInfo.email,
   phone: businessInfo.phone,
 }
@@ -404,11 +410,18 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
           <div className="grid grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold">{displayIssuer.name}</h2>
-              <p className="text-sm text-muted-foreground mt-1">{displayIssuer.address}</p>
-              <p className="text-sm text-muted-foreground">
-                {displayIssuer.city}, {displayIssuer.state} {displayIssuer.zipCode}
-              </p>
-              <p className="text-sm text-muted-foreground">{displayIssuer.country}</p>
+              {(displayIssuer.addressLines.length > 0
+                ? displayIssuer.addressLines
+                : [
+                    displayIssuer.address,
+                    `${displayIssuer.city}, ${displayIssuer.state} ${displayIssuer.zipCode}`.trim(),
+                    displayIssuer.country,
+                  ].filter(Boolean)
+              ).map((line) => (
+                <p key={line} className="text-sm text-muted-foreground mt-1">
+                  {line}
+                </p>
+              ))}
               <p className="text-sm text-muted-foreground mt-2">{displayIssuer.email}</p>
               <p className="text-sm text-muted-foreground">{displayIssuer.phone}</p>
             </div>

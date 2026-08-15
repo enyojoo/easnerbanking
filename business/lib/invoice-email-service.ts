@@ -80,6 +80,8 @@ export async function sendInvoiceEmail(
       state: "",
       zipCode: "",
       country: "",
+      countryCode: "",
+      addressLines: [],
       email: replyEmail,
       phone: "",
     }
@@ -256,6 +258,8 @@ export async function sendInvoiceCustomerRefundEmail(input: {
       state: "",
       zipCode: "",
       country: "",
+      countryCode: "",
+      addressLines: [],
       email: input.businessReplyEmail,
       phone: "",
     }
@@ -309,6 +313,8 @@ export async function sendInvoiceReceiptEmail(input: {
       state: "",
       zipCode: "",
       country: "",
+      countryCode: "",
+      addressLines: [],
       email: input.businessReplyEmail,
       phone: "",
     }

@@ -33,6 +33,7 @@ const nextConfig = {
       "@noble/hashes/sha3.js": nobleHashesSubpath("sha3"),
       "@noble/hashes/hmac": nobleHashesSubpath("hmac"),
       "@noble/hashes/hmac.js": nobleHashesSubpath("hmac"),
+      "lib-address": resolve(__dirname, "../node_modules/lib-address/dist/entry-browser.mjs"),
     }
     return config
   },

@@ -1,4 +1,8 @@
 import type { BusinessProfile } from "@/lib/use-business-profile"
+import {
+  getOperationalAddressMissingLabels,
+  isOperationalAddressComplete,
+} from "@easner/shared/postal-address-form"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 
 const SETTINGS_BUSINESS_HREF = "/settings?tab=business"
@@ -34,7 +38,10 @@ export function assessInvoiceBusinessReadiness(input: {
   name?: string | null
   addressLine1?: string | null
   city?: string | null
+  state?: string | null
+  postalCode?: string | null
   country?: string | null
+  countryCode?: string | null
   supportEmail?: string | null
   invoiceReplyEmail?: string | null
 }): InvoiceBusinessReadiness {
@@ -43,10 +50,25 @@ export function assessInvoiceBusinessReadiness(input: {
   if (!nonEmpty(input.invoiceReplyEmail) && !nonEmpty(input.supportEmail)) {
     missing.push("support email")
   }
-  if (!nonEmpty(input.addressLine1)) missing.push("business address")
-  if (!nonEmpty(input.city)) missing.push("city")
+  const countryCode = String(input.countryCode ?? "").trim().toUpperCase()
+  const addressParts = {
+    line1: input.addressLine1,
+    city: input.city,
+    state: input.state,
+    postalCode: input.postalCode,
+    countryCode,
+  }
+
   if (!nonEmpty(input.country)) missing.push("country")
-  return buildReadiness(missing)
+
+  if (!countryCode) {
+    if (!nonEmpty(input.addressLine1)) missing.push("business address")
+    if (!nonEmpty(input.city)) missing.push("city")
+  } else if (!isOperationalAddressComplete(countryCode, addressParts)) {
+    missing.push(...getOperationalAddressMissingLabels(countryCode, addressParts))
+  }
+
+  return buildReadiness([...new Set(missing)])
 }
 
 export function assessInvoiceBusinessReadinessFromProfile(
@@ -55,7 +77,10 @@ export function assessInvoiceBusinessReadinessFromProfile(
     | "name"
     | "addressLine1"
     | "city"
+    | "state"
+    | "postalCode"
     | "country"
+    | "countryCode"
     | "supportEmail"
     | "invoiceReplyEmail"
   >,
@@ -64,7 +89,10 @@ export function assessInvoiceBusinessReadinessFromProfile(
     name: profile.name,
     addressLine1: profile.addressLine1,
     city: profile.city,
+    state: profile.state,
+    postalCode: profile.postalCode,
     country: profile.country,
+    countryCode: profile.countryCode,
     supportEmail: profile.supportEmail,
     invoiceReplyEmail: profile.invoiceReplyEmail,
   })
@@ -78,7 +106,10 @@ export function assessInvoiceBusinessReadinessFromIssuer(
     name: issuer.name,
     addressLine1: issuer.address,
     city: issuer.city,
+    state: issuer.state,
+    postalCode: issuer.zipCode,
     country: issuer.country,
+    countryCode: issuer.countryCode,
     supportEmail: issuer.email,
     invoiceReplyEmail,
   })

@@ -25,6 +25,11 @@
       "import": "./src/postal-address.ts",
       "require": "./src/postal-address.ts"
     },
+    "./postal-address-form": {
+      "types": "./src/postal-address-form.ts",
+      "import": "./src/postal-address-form.ts",
+      "require": "./src/postal-address-form.ts"
+    },
     "./format-display-name": {
       "types": "./src/format-display-name.ts",
       "import": "./src/format-display-name.ts",
@@ -79,6 +84,7 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "lib-address": "^0.7.0",
     "tailwind-merge": "^2.5.5"
   },
   "peerDependencies": {

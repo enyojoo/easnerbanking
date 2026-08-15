@@ -37,7 +37,8 @@ import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 import { useBusinessEasetagAvailability } from "@/hooks/use-business-easetag-availability"
 import { useAllowedBaseCurrencies } from "@/hooks/use-allowed-base-currencies"
 import { formatPostalAddressLine, hasPostalAddressParts } from "@easner/shared/postal-address"
-import { filterCountriesForProductPicker } from "@easner/shared"
+import { BusinessAddressFields } from "@/components/settings/business-address-fields"
+import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
 import { SETTINGS_CONTROL_SURFACE } from "@/lib/settings-control-surface"
 function getCountryFromCode(code: string) {
   return countries.find((c) => c.code === code)
@@ -88,15 +89,6 @@ export function SettingsBusinessTab() {
   } = useAllowedBaseCurrencies()
   const [countryCode, setCountryCode] = useState("")
   const [addressCountryCode, setAddressCountryCode] = useState("")
-  const [addressCountryOpen, setAddressCountryOpen] = useState(false)
-  const countriesForAddressPicker = useMemo(() => {
-    const base = filterCountriesForProductPicker(countries, "business")
-    const cur = countries.find((c) => c.code === addressCountryCode)
-    if (cur && !base.some((b) => b.code === cur.code)) {
-      return [cur, ...base]
-    }
-    return base
-  }, [addressCountryCode])
   const easetagAvail = useBusinessEasetagAvailability({ profileEasetag: profile.easetag })
   const [editingSection, setEditingSection] = useState<string | null>(null)
   /** Which card section is currently persisting (Save); disables actions and shows spinner on that Save. */
@@ -119,6 +111,10 @@ export function SettingsBusinessTab() {
     baseCurrency: "USD",
     description: "",
   })
+
+  useEffect(() => {
+    void ensureBusinessOperationalAddressCountriesRegistered()
+  }, [])
 
   useEffect(() => {
     if (profile.isLoading) return
@@ -272,11 +268,9 @@ export function SettingsBusinessTab() {
     setAddressCountryCode(code)
     const c = getCountryFromCode(code)
     if (c) handleInputChange("country", c.name)
-    setAddressCountryOpen(false)
   }
 
   const selectedCountry = getCountryFromCode(countryCode)
-  const selectedAddressCountry = getCountryFromCode(addressCountryCode)
   const kybFields = getKybFields(countryCode)
   const profileLocked = profile.profileLocked ?? false
   const registeredAddressDisplay = useMemo(
@@ -660,7 +654,10 @@ export function SettingsBusinessTab() {
         <CardContent className="space-y-4">
           {loading ? (
             <div className="space-y-4">
-              <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+                <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
+              </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
                 <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
@@ -669,118 +666,24 @@ export function SettingsBusinessTab() {
             </div>
           ) : (
           <>
-          <div className="space-y-2">
-            <Label htmlFor="street">Street Address</Label>
-            <Input
-              id="street"
-              className={SETTINGS_CONTROL_SURFACE}
-              value={formData.address}
-              onChange={(e) => handleInputChange("address", e.target.value)}
-              disabled={editingSection !== "address"}
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="city">City</Label>
-              <Input
-                id="city"
-                className={SETTINGS_CONTROL_SURFACE}
-                value={formData.city}
-                onChange={(e) => handleInputChange("city", e.target.value)}
-                disabled={editingSection !== "address"}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="state">State</Label>
-              <Input
-                id="state"
-                className={SETTINGS_CONTROL_SURFACE}
-                value={formData.state}
-                onChange={(e) => handleInputChange("state", e.target.value)}
-                disabled={editingSection !== "address"}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="zipCode">ZIP Code</Label>
-              <Input
-                id="zipCode"
-                className={SETTINGS_CONTROL_SURFACE}
-                value={formData.zipCode}
-                onChange={(e) => handleInputChange("zipCode", e.target.value)}
-                disabled={editingSection !== "address"}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Country</Label>
-            {editingSection === "address" ? (
-              <Popover open={addressCountryOpen} onOpenChange={setAddressCountryOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={addressCountryOpen}
-                    className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      {selectedAddressCountry ? (
-                        <>
-                          <CountryFlag code={selectedAddressCountry.code} size={22} />
-                          <span className="truncate">{selectedAddressCountry.name}</span>
-                        </>
-                      ) : (
-                        <span className="text-muted-foreground">Select country</span>
-                      )}
-                    </span>
-                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search country..." />
-                    <CommandList className="max-h-[200px]">
-                      <CommandEmpty>No country found.</CommandEmpty>
-                      <CommandGroup>
-                        {countriesForAddressPicker.map((c) => (
-                          <CommandItem
-                            key={c.code}
-                            value={c.name}
-                            onSelect={() => handleAddressCountryChange(c.code)}
-                          >
-                            <div className="flex w-full items-center gap-2">
-                              <CountryFlag code={c.code} size={22} />
-                              <span className="flex-1">{c.name}</span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                disabled
-                tabIndex={-1}
-                className={`h-10 w-full justify-between font-normal ${SETTINGS_CONTROL_SURFACE}`}
-                aria-readonly="true"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  {selectedAddressCountry ? (
-                    <>
-                      <CountryFlag code={selectedAddressCountry.code} size={22} />
-                      <span className="truncate">{selectedAddressCountry.name}</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">{formData.country || "—"}</span>
-                  )}
-                </span>
-                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
-              </Button>
-            )}
-          </div>
+          <BusinessAddressFields
+            countryCode={addressCountryCode}
+            values={{
+              line1: formData.address,
+              city: formData.city,
+              state: formData.state,
+              postalCode: formData.zipCode,
+            }}
+            onChange={(patch) => {
+              if (patch.line1 !== undefined) handleInputChange("address", patch.line1)
+              if (patch.city !== undefined) handleInputChange("city", patch.city)
+              if (patch.state !== undefined) handleInputChange("state", patch.state)
+              if (patch.postalCode !== undefined) handleInputChange("zipCode", patch.postalCode)
+            }}
+            onCountryCodeChange={handleAddressCountryChange}
+            editing={editingSection === "address"}
+            disabled={editingSection !== "address"}
+          />
           </>
           )}
         </CardContent>
