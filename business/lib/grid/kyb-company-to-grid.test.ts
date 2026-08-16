@@ -12,7 +12,7 @@ describe("gridBusinessInfoFromKybCompany", () => {
     company.expectedRecipientJurisdictions = ["gb"]
     const info = gridBusinessInfoFromKybCompany(company)
     expect(info.sourceOfFunds).toBe("Loan or credit")
-    expect(info.sourceOfFundsCategories).toEqual(["LOAN"])
+    expect(info.sourceOfFundsCategories).toEqual(["LOANS"])
     expect(info.countriesOfOperation).toEqual(["US", "NG"])
     expect(info.expectedRecipientJurisdictions).toEqual(["GB"])
   })

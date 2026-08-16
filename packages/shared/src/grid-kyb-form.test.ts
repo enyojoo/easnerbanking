@@ -40,7 +40,7 @@ describe("resolveGridKybSourceOfFunds", () => {
   it("maps a business option to Grid string + category", () => {
     expect(resolveGridKybSourceOfFunds({ id: "revenue_from_operations" })).toEqual({
       sourceOfFunds: "Revenue from operations",
-      sourceOfFundsCategories: ["SELF_EMPLOYMENT_INCOME"],
+      sourceOfFundsCategories: ["OPERATING_REVENUE"],
     })
   })
 

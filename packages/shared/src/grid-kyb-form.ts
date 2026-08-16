@@ -153,48 +153,59 @@ export type GridKybSourceOfFundsOption = {
   sourceOfFundsCategories: string[]
 }
 
+/** Grid `businessInfo.sourceOfFundsCategories` closed enum. */
+export const GRID_KYB_SOURCE_OF_FUNDS_CATEGORIES = [
+  "OPERATING_REVENUE",
+  "INVESTMENT_INCOME",
+  "LOANS",
+  "VENTURE_CAPITAL",
+  "PERSONAL_SAVINGS",
+  "DONATIONS",
+  "OTHER",
+] as const
+
 export const GRID_KYB_SOURCE_OF_FUNDS: readonly GridKybSourceOfFundsOption[] = [
   {
     id: "revenue_from_operations",
     label: "Revenue from operations",
     sourceOfFunds: "Revenue from operations",
-    sourceOfFundsCategories: ["SELF_EMPLOYMENT_INCOME"],
+    sourceOfFundsCategories: ["OPERATING_REVENUE"],
   },
   {
     id: "client_customer_payments",
     label: "Client and customer payments",
     sourceOfFunds: "Client and customer payments",
-    sourceOfFundsCategories: ["SELF_EMPLOYMENT_INCOME"],
+    sourceOfFundsCategories: ["OPERATING_REVENUE"],
   },
   {
     id: "investor_shareholder_funding",
     label: "Investor or shareholder funding",
     sourceOfFunds: "Investor or shareholder funding",
-    sourceOfFundsCategories: ["INVESTMENT_INCOME"],
+    sourceOfFundsCategories: ["VENTURE_CAPITAL"],
   },
   {
     id: "owner_capital_contribution",
     label: "Owner capital contribution",
     sourceOfFunds: "Owner capital contribution",
-    sourceOfFundsCategories: ["SAVINGS"],
+    sourceOfFundsCategories: ["PERSONAL_SAVINGS"],
   },
   {
     id: "loan_or_credit",
     label: "Loan or credit",
     sourceOfFunds: "Loan or credit",
-    sourceOfFundsCategories: ["LOAN"],
+    sourceOfFundsCategories: ["LOANS"],
   },
   {
     id: "sale_of_business_assets",
     label: "Sale of business assets",
     sourceOfFunds: "Sale of business assets",
-    sourceOfFundsCategories: ["SALE_OF_ASSETS"],
+    sourceOfFundsCategories: ["OTHER"],
   },
   {
     id: "grants_or_donations",
     label: "Grants or donations",
     sourceOfFunds: "Grants or donations",
-    sourceOfFundsCategories: ["GIFT"],
+    sourceOfFundsCategories: ["DONATIONS"],
   },
   {
     id: "other",
