@@ -119,8 +119,8 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
     <AppLockProvider>
       <div className="min-h-dvh bg-background text-foreground">
         <DashboardNav />
-        <div className="ml-64 flex h-dvh flex-col overflow-hidden">
-          <header className="z-30 flex h-16 min-h-16 shrink-0 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+        <div className="flex h-dvh flex-col overflow-hidden lg:ml-56 xl:ml-64">
+          <header className="z-30 flex h-16 min-h-16 shrink-0 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 sm:px-6 lg:px-8">
           {showProfileChromeSkeleton ? (
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 animate-pulse rounded-full border-2 border-border bg-muted" />
@@ -152,7 +152,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
           </header>
           {showTier1Banner ? (
             <div
-              className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] px-8 py-2.5 text-sm text-[hsl(var(--warning))] backdrop-blur-sm"
+              className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] px-4 py-2.5 text-sm text-[hsl(var(--warning))] backdrop-blur-sm sm:px-6 lg:px-8"
               role="status"
             >
               <span>{verificationBannerCopy(tier1VerificationStatus)}</span>
@@ -180,7 +180,8 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
               } as React.CSSProperties
             }
             className={cn(
-              "flex-1 min-h-0 overflow-y-auto overscroll-contain px-8 pb-10 pt-6",
+              "flex flex-1 min-h-0 flex-col overflow-y-auto overscroll-contain px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8",
+              "pb-[max(2.5rem,env(safe-area-inset-bottom,0px))]",
               constrained ? "mx-auto w-full max-w-6xl" : "mx-auto w-full max-w-[1440px]",
             )}
           >

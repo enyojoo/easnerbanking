@@ -11,7 +11,7 @@ import {
   isLoginPinModuleAvailable,
   setAppLocked,
 } from "@/lib/login-pin"
-import { resetSessionActivity } from "@/lib/session-activity"
+import { isIdleLockSuspended, resetSessionActivity } from "@/lib/session-activity"
 import { PinSetupScreen } from "./pin-setup-screen"
 import { PinUnlockScreen } from "./pin-unlock-screen"
 
@@ -32,6 +32,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
 
   useLayoutEffect(() => {
     if (!user?.id) return
+    if (isIdleLockSuspended()) return
     const action = applyIdlePolicy(user.id)
     if (action === "logout") {
       void logout()
@@ -75,7 +76,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   }
 
   const idleRequiresLock = evaluateIdlePolicy(uid) === "lock"
-  if (isAppLocked(uid) || idleRequiresLock) {
+  if (!isIdleLockSuspended() && (isAppLocked(uid) || idleRequiresLock)) {
     return (
       <PostUnlockResumeProvider resumeUntil={resume.until} resumeVersion={resume.version}>
         <PinUnlockScreen

@@ -64,7 +64,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 
 const connectDialogContentClass =
-  "flex h-[min(94vh,52rem)] w-[min(calc(100vw-1.5rem),56rem)] max-w-none flex-col gap-0 overflow-hidden p-0 duration-300 data-[state=open]:duration-300 data-[state=closed]:duration-300 sm:max-w-[min(calc(100vw-1.5rem),56rem)]"
+  "flex h-[min(94dvh,52rem)] w-[min(calc(100dvw-1.5rem),56rem)] max-w-none flex-col gap-0 overflow-hidden p-0 duration-300 data-[state=open]:duration-300 data-[state=closed]:duration-300 sm:max-w-[min(calc(100dvw-1.5rem),56rem)]"
 
 const connectOnboardingCollectionOptions = {
   fields: "eventually_due" as const,

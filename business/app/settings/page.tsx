@@ -16,12 +16,15 @@ import { primeConnectStatus } from "@/lib/stripe/connect-status-cache"
 import { SETTINGS_VERIFICATION_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
 import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
+import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 
 const TABS = ["personal", "business", "verification", "team", "recipients", "customers", "communication", "invoicing"] as const
 type TabValue = (typeof TABS)[number]
 
 function SettingsContent() {
   const searchParams = useSearchParams()
+  const { user } = useAuth()
   const tab = (searchParams.get("tab") || "personal") as TabValue
   const validTab = TABS.includes(tab) ? tab : "personal"
   const flowFromUrl =
@@ -29,6 +32,12 @@ function SettingsContent() {
   const [verificationFlowActive, setVerificationFlowActive] = useState(flowFromUrl)
   const verificationChromeHidden = validTab === "verification" && verificationFlowActive
   const [activeTab, setActiveTab] = useState<TabValue>(validTab)
+
+  useSuspendIdleLock(
+    validTab === "verification" &&
+      (verificationFlowActive || searchParams.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM),
+    user?.id,
+  )
   const {
     businessId,
     canManageBusinessVerification,
@@ -100,7 +109,7 @@ function SettingsContent() {
   }
 
   return (
-    <div className={cn(verificationChromeHidden ? "-mt-6 space-y-0" : "space-y-6")}>
+    <div className={cn(verificationChromeHidden ? "-mt-4 flex min-h-0 flex-1 flex-col sm:-mt-6" : "space-y-6")}>
       {!verificationChromeHidden ? (
         <div>
           <h1 className="text-3xl font-semibold text-foreground">Settings</h1>
@@ -108,7 +117,11 @@ function SettingsContent() {
         </div>
       ) : null}
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className={cn("w-full", verificationChromeHidden && "flex min-h-0 flex-1 flex-col")}
+      >
         {!verificationChromeHidden ? (
           <TabsList className="w-full shrink-0 justify-start flex-wrap h-auto gap-1 p-1">
             <TabsTrigger value="personal">Personal</TabsTrigger>
@@ -128,7 +141,12 @@ function SettingsContent() {
         <TabsContent value="business" className="mt-6">
           <SettingsBusinessTab />
         </TabsContent>
-        <TabsContent value="verification" className={verificationChromeHidden ? "mt-0" : "mt-6"}>
+        <TabsContent
+          value="verification"
+          className={cn(
+            verificationChromeHidden ? "mt-0 flex min-h-0 flex-1 flex-col" : "mt-6",
+          )}
+        >
           <SettingsVerificationTab
             fullPageFlow={verificationChromeHidden}
             onFlowOpenChange={handleVerificationFlowOpenChange}

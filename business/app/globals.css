@@ -371,8 +371,28 @@ html[data-pwa-standalone="true"] body {
   min-height: 100dvh;
 }
 
-/* Settings KYB flow: keep SumSub in viewport; scroll only inside the SDK host */
+/*
+ * Workspace fill: pages inside DashboardShell <main> that should use remaining
+ * viewport height (cards split-pane, settings KYB flow). Parent main must be
+ * `flex flex-col` so flex-1 children receive a bounded height.
+ */
+.workspace-fill {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.workspace-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Settings KYB flow: bounded main column; SumSub scrolls inside its host */
 html[data-verification-flow-open="true"] main {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 

@@ -13,17 +13,81 @@ export type HostedCredentialsFetchResult = HostedCredentials & {
     alreadyOnboarded?: boolean
     kyc_status?: string
     canResubmit?: boolean
+    expiresAt?: string | null
   }
   res: Response
 }
 
+const STORAGE_PREFIX = "easner:kyb-credentials:"
 const credentialsCache = new Map<string, HostedCredentials>()
 const resumeAvailableCache = new Map<string, boolean>()
 const inFlightByBusinessId = new Map<string, Promise<HostedCredentialsFetchResult>>()
 
+type StoredCredentials = HostedCredentials & {
+  storedAt: number
+  expiresAt: string | null
+}
+
+function storageKey(businessId: string): string {
+  return `${STORAGE_PREFIX}${businessId}`
+}
+
+function credentialsAreExpired(stored: StoredCredentials): boolean {
+  if (stored.expiresAt) {
+    const expiresMs = Date.parse(stored.expiresAt)
+    if (Number.isFinite(expiresMs) && Date.now() >= expiresMs) return true
+  }
+  // SumSub tokens are short-lived; refresh after 12h if Grid omitted expiresAt.
+  const maxAgeMs = 12 * 60 * 60 * 1000
+  return Date.now() - stored.storedAt > maxAgeMs
+}
+
+function readSessionCredentials(businessId: string): HostedCredentials | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = sessionStorage.getItem(storageKey(businessId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as StoredCredentials
+    if (!parsed || credentialsAreExpired(parsed)) {
+      sessionStorage.removeItem(storageKey(businessId))
+      return null
+    }
+    return { link: parsed.link ?? null, token: parsed.token ?? null }
+  } catch {
+    return null
+  }
+}
+
+function writeSessionCredentials(
+  businessId: string,
+  credentials: HostedCredentials,
+  expiresAt?: string | null,
+): void {
+  if (typeof window === "undefined") return
+  if (!hostedCredentialsAreReady(credentials)) return
+  try {
+    const payload: StoredCredentials = {
+      link: credentials.link,
+      token: credentials.token,
+      storedAt: Date.now(),
+      expiresAt: expiresAt ?? null,
+    }
+    sessionStorage.setItem(storageKey(businessId), JSON.stringify(payload))
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 export function readHostedCredentialsCache(businessId: string | null | undefined): HostedCredentials {
   if (!businessId) return { link: null, token: null }
-  return credentialsCache.get(businessId) ?? { link: null, token: null }
+  const memory = credentialsCache.get(businessId)
+  if (memory && hostedCredentialsAreReady(memory)) return memory
+  const session = readSessionCredentials(businessId)
+  if (session && hostedCredentialsAreReady(session)) {
+    credentialsCache.set(businessId, session)
+    return session
+  }
+  return memory ?? { link: null, token: null }
 }
 
 export function hostedCredentialsAreReady(credentials: HostedCredentials): boolean {
@@ -35,13 +99,22 @@ export function readHostedResumeAvailable(businessId: string | null | undefined)
   return resumeAvailableCache.get(businessId) ?? null
 }
 
-function storeHostedCredentials(businessId: string, credentials: HostedCredentials) {
+function storeHostedCredentials(
+  businessId: string,
+  credentials: HostedCredentials,
+  expiresAt?: string | null,
+): void {
   credentialsCache.set(businessId, credentials)
   resumeAvailableCache.set(businessId, hostedCredentialsAreReady(credentials))
+  writeSessionCredentials(businessId, credentials, expiresAt)
 }
 
-export function writeHostedCredentialsCache(businessId: string, credentials: HostedCredentials) {
-  storeHostedCredentials(businessId, credentials)
+export function writeHostedCredentialsCache(
+  businessId: string,
+  credentials: HostedCredentials,
+  expiresAt?: string | null,
+): void {
+  storeHostedCredentials(businessId, credentials, expiresAt)
 }
 
 export async function fetchHostedVerificationCredentials(): Promise<HostedCredentialsFetchResult> {
@@ -99,7 +172,11 @@ export async function primeHostedVerificationCredentials(
   if (!inFlight) {
     inFlight = fetchHostedVerificationCredentials().then((result) => {
       if (result.res.ok) {
-        storeHostedCredentials(businessId, { link: result.link, token: result.token })
+        storeHostedCredentials(
+          businessId,
+          { link: result.link, token: result.token },
+          result.json.expiresAt ?? null,
+        )
       }
       return result
     })

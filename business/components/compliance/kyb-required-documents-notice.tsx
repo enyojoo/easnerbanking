@@ -32,7 +32,7 @@ export function KybRequiredDocumentsNotice({ className }: Props) {
         {copy.inlineSuffix}
       </p>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[min(90vh,36rem)] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="max-h-[min(90dvh,36rem)] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{copy.title}</DialogTitle>
             <DialogDescription className="text-left text-sm leading-relaxed text-foreground/90 pt-2">

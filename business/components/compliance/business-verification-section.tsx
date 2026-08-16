@@ -39,6 +39,7 @@ import {
 } from "@easner/shared"
 import { SETTINGS_VERIFICATION_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
+import { useAuth } from "@/lib/auth-context"
 
 const GridSumsubWebSdk = dynamic(
   () => import("@/components/compliance/grid-sumsub-websdk").then((m) => ({ default: m.GridSumsubWebSdk })),
@@ -66,6 +67,7 @@ export function BusinessVerificationSection({
   onFlowOpenChange,
 }: BusinessVerificationSectionProps) {
   const searchParams = useSearchParams()
+  const { user } = useAuth()
   const flowFromUrl = searchParams.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
   const {
     tier1Complete,
@@ -105,7 +107,7 @@ export function BusinessVerificationSection({
   const hostedFlowActive = fullPageFlow || flowFromUrl || hostedOpen
 
   // SumSub runs in a cross-origin iframe; parent window does not receive pointer/keyboard events.
-  useSuspendIdleLock(hostedFlowActive)
+  useSuspendIdleLock(hostedFlowActive, user?.id)
 
   const pushVerificationFlowUrl = useCallback(() => {
     onFlowOpenChange?.(true)
@@ -233,7 +235,7 @@ export function BusinessVerificationSection({
   ])
 
   const applyHostedCredentials = useCallback(
-    (link: string | null, token: string | null) => {
+    (link: string | null, token: string | null, expiresAt?: string | null) => {
       if (clearSessionAfterCloseRef.current) {
         clearTimeout(clearSessionAfterCloseRef.current)
         clearSessionAfterCloseRef.current = null
@@ -244,7 +246,7 @@ export function BusinessVerificationSection({
       probedHostedUrlRef.current = link
       probedHostedTokenRef.current = token
       if (businessId) {
-        writeHostedCredentialsCache(businessId, { link, token })
+        writeHostedCredentialsCache(businessId, { link, token }, expiresAt)
         setHostedResumeAvailable(hostedCredentialsAreReady({ link, token }))
       }
     },
@@ -395,13 +397,13 @@ export function BusinessVerificationSection({
         return
       }
 
-      applyHostedCredentials(link, token)
+      applyHostedCredentials(link, token, json.expiresAt ?? null)
       if (!token?.trim()) {
         setOpeningVerification(false)
       }
     } catch (e: unknown) {
       abortHostedVerification()
-      setError(e instanceof Error ? e.message : "Something went wrong.")
+      setError(e instanceof Error ? e.message : "Could not start verification.")
     }
   }, [
     abortHostedVerification,
@@ -474,11 +476,6 @@ export function BusinessVerificationSection({
 
   const hasHostedCredentials = Boolean(hostedToken?.trim() || hostedUrl?.trim())
 
-  /** Full-page flow uses the settings content area; in-tab fallback keeps title/tabs chrome. */
-  const verificationFlowPanelClass = hostedFlowActive
-    ? "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-2.5rem)] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-2.5rem)]"
-    : "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
-
   const hostedFlowPanel = (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <Button
@@ -533,7 +530,7 @@ export function BusinessVerificationSection({
     return (
       <div
         id="business-verification"
-        className={verificationFlowPanelClass}
+        className="workspace-fill workspace-panel"
         data-verification-flow="open"
       >
         {hostedFlowPanel}
@@ -556,7 +553,7 @@ export function BusinessVerificationSection({
               />
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
                 {BUSINESS_TIER_LADDER.tiers.map((t) => {
                   const isT1 = t.tier === 1
                   const isT3 = t.tier === 3

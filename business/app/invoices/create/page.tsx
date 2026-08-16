@@ -1005,7 +1005,7 @@ export default function CreateInvoicePage() {
           setIsCustomerDialogOpen(open)
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-4">
+        <DialogContent className="max-w-2xl max-h-[90dvh] flex flex-col gap-4">
           <DialogHeader className="shrink-0">
             <DialogTitle>Select Customer</DialogTitle>
           </DialogHeader>
