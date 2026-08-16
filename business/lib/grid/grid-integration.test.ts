@@ -111,12 +111,14 @@ describe("buildGridBusinessCustomerPayload", () => {
         email: "owner@example.com",
         country: "NG",
         createdAt: "2026-08-12T10:41:27.468649+00:00",
+        registrationNumber: "10609372",
       },
     })
     const businessInfo = payload.businessInfo as Record<string, unknown>
     expect(businessInfo.country).toBe("NG")
     expect(businessInfo.incorporatedOn).toBe("2026-08-12")
     expect(businessInfo.taxId).toBe(gridShellBusinessTaxId(platformCustomerId))
+    expect(businessInfo.registrationNumber).toBeUndefined()
   })
 
   it("normalizes stored EIN-style tax ids", () => {

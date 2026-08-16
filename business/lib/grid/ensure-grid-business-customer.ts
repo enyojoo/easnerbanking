@@ -20,8 +20,8 @@ import {
 } from "./business-kyc-metadata"
 import { buildGridBusinessProfileShell, resolveBusinessCountryIso2 } from "./business-profile-shell"
 import {
-  gridPlatformCustomerIdFresh,
   gridPlatformCustomerIdFromBusinessId,
+  gridPlatformCustomerIdRandom,
 } from "./customer-id"
 import {
   customerNeedsEndUserTermsConsentPatch,
@@ -505,9 +505,7 @@ export async function ensureGridBusinessCustomer(input: {
   let lastCreateError: unknown
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const useFreshId = skipCanonicalPlatformId || attempt > 0
-    usedPlatformId = useFreshId
-      ? gridPlatformCustomerIdFresh(input.businessId, Date.now() * 10 + attempt)
-      : platformCustomerId
+    usedPlatformId = useFreshId ? gridPlatformCustomerIdRandom() : platformCustomerId
     const payload = {
       ...buildGridBusinessCustomerPayload({
         platformCustomerId: usedPlatformId,

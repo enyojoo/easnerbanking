@@ -112,8 +112,12 @@ export function buildGridBusinessCustomerPayload(input: {
   })
   if (taxId) businessInfo.taxId = taxId
 
-  const registrationNumber = String(input.profile.registrationNumber ?? "").trim()
-  if (registrationNumber) businessInfo.registrationNumber = registrationNumber
+  // Do not send registrationNumber on create. Grid 404s CUSTOMER_NOT_FOUND when a
+  // deleted customer still owns that number (Easner 10609372). SumSub collects it.
+  if (!input.forGridCreate) {
+    const registrationNumber = String(input.profile.registrationNumber ?? "").trim()
+    if (registrationNumber) businessInfo.registrationNumber = registrationNumber
+  }
 
   // Hosted KYB: country/incorporation trigger Grid taxId validation — only send with a real taxId.
   if (taxId) {
