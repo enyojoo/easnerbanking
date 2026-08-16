@@ -1,12 +1,36 @@
 import { describe, expect, it } from "vitest"
 import {
   firstGridKybErrorSection,
+  GRID_KYB_ENTITY_TYPES,
   gridKybApplicationIsEditable,
   gridKybApplicationStatusFromVerification,
   mapGridKybVerificationErrors,
   resolveGridKybSourceOfFunds,
   sourceOfFundsIdFromStored,
 } from "./grid-kyb-form"
+
+describe("GRID_KYB_ENTITY_TYPES", () => {
+  it("keeps Grid enum values and includes non-US legal-form search terms", () => {
+    const values = GRID_KYB_ENTITY_TYPES.map((row) => row.value)
+    expect(values).toEqual([
+      "SOLE_PROPRIETORSHIP",
+      "PARTNERSHIP",
+      "LLC",
+      "CORPORATION",
+      "S_CORPORATION",
+      "NON_PROFIT",
+      "PUBLICLY_LISTED_COMPANY",
+      "TRUST",
+      "PRIVATE_FOUNDATION",
+      "CHARITY",
+      "OTHER",
+    ])
+    const llc = GRID_KYB_ENTITY_TYPES.find((row) => row.value === "LLC")
+    expect(llc?.label).toMatch(/Ltd|GmbH/i)
+    expect(llc?.aliases).toMatch(/GmbH/i)
+    expect(llc?.aliases).toMatch(/SARL/i)
+  })
+})
 
 describe("resolveGridKybSourceOfFunds", () => {
   it("maps a business option to Grid string + category", () => {

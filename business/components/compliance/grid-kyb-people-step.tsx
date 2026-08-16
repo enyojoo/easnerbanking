@@ -10,6 +10,7 @@ import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
 import type { KybPersonPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
+import { GridKybCountrySelect } from "./grid-kyb-country-select"
 import { GridKybDocumentUpload } from "./grid-kyb-document-upload"
 import { Checkbox } from "@/components/ui/checkbox"
 
@@ -169,7 +170,12 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
             </div>
             <div className="space-y-2">
               <Label>Nationality</Label>
-              <Input className={SETTINGS_INPUT_CLASS} value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value.toUpperCase() })} maxLength={2} disabled={disabled} />
+              <GridKybCountrySelect
+                value={form.nationality}
+                onChange={(nationality) => setForm({ ...form, nationality })}
+                placeholder="Select nationality"
+                disabled={disabled}
+              />
             </div>
             <div className="space-y-2">
               <Label>Ownership %</Label>
@@ -182,6 +188,15 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
             <div className="space-y-2">
               <Label>ID number</Label>
               <Input className={SETTINGS_INPUT_CLASS} value={form.identifier} onChange={(e) => setForm({ ...form, identifier: e.target.value })} disabled={disabled} />
+            </div>
+            <div className="space-y-2">
+              <Label>ID issuing country</Label>
+              <GridKybCountrySelect
+                value={form.countryOfIssuance}
+                onChange={(countryOfIssuance) => setForm({ ...form, countryOfIssuance })}
+                placeholder="Select issuing country"
+                disabled={disabled}
+              />
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label>Address</Label>
@@ -197,7 +212,12 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
             </div>
             <div className="space-y-2">
               <Label>Country</Label>
-              <Input className={SETTINGS_INPUT_CLASS} value={form.addressCountry} onChange={(e) => setForm({ ...form, addressCountry: e.target.value.toUpperCase() })} maxLength={2} disabled={disabled} />
+              <GridKybCountrySelect
+                value={form.addressCountry}
+                onChange={(addressCountry) => setForm({ ...form, addressCountry })}
+                placeholder="Select country"
+                disabled={disabled}
+              />
             </div>
           </div>
           <div className="space-y-2">

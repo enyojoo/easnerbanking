@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
+import { GridKybCountrySelect } from "./grid-kyb-country-select"
 
 type Props = {
   title: string
@@ -91,13 +92,11 @@ export function GridKybDocumentUpload({
       </div>
       <div className="space-y-2">
         <Label htmlFor={`issuing-country-${category}`}>Issuing country</Label>
-        <Input
+        <GridKybCountrySelect
           id={`issuing-country-${category}`}
-          className={SETTINGS_INPUT_CLASS}
           value={issuingCountry}
-          onChange={(event) => setIssuingCountry(event.target.value.toUpperCase())}
-          placeholder="US"
-          maxLength={2}
+          onChange={setIssuingCountry}
+          placeholder="Select issuing country"
           disabled={disabled}
         />
       </div>

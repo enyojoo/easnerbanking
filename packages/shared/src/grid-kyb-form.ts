@@ -3,20 +3,63 @@ export type GridKybFormSection = "company" | "people" | "documents"
 export type GridKybSelectOption<T extends string = string> = {
   value: T
   label: string
+  /** Extra terms so search finds local legal forms. Not sent to Grid. */
+  aliases?: string
 }
 
 export const GRID_KYB_ENTITY_TYPES = [
-  { value: "SOLE_PROPRIETORSHIP", label: "Sole proprietorship" },
-  { value: "PARTNERSHIP", label: "Partnership" },
-  { value: "LLC", label: "LLC" },
-  { value: "CORPORATION", label: "Corporation" },
-  { value: "S_CORPORATION", label: "S corporation" },
-  { value: "NON_PROFIT", label: "Nonprofit" },
-  { value: "PUBLICLY_LISTED_COMPANY", label: "Publicly listed company" },
-  { value: "TRUST", label: "Trust" },
-  { value: "PRIVATE_FOUNDATION", label: "Private foundation" },
-  { value: "CHARITY", label: "Charity" },
-  { value: "OTHER", label: "Other" },
+  {
+    value: "SOLE_PROPRIETORSHIP",
+    label: "Sole trader / sole proprietorship",
+    aliases: "sole proprietor individual enterprise self-employed freelancer EI EIRL empresario individual",
+  },
+  {
+    value: "PARTNERSHIP",
+    label: "Partnership / LLP",
+    aliases: "general partnership limited partnership LP LLP GP OHG KG SENC SNC sociedade em nome coletivo",
+  },
+  {
+    value: "LLC",
+    label: "Private limited company (LLC, Ltd, GmbH)",
+    aliases:
+      "LLC Ltd Limited Pty Ltd GmbH SARL SRL BV Oy ApS Kft Sp z oo Ltda limitada private company limited by shares CC close corporation Pte Ltd SDN BHD",
+  },
+  {
+    value: "CORPORATION",
+    label: "Corporation / company limited by shares",
+    aliases: "Inc Corp Corporation C-Corp AG SA NV NV PLC joint stock company sociedade anonima SpA KK Kabushiki",
+  },
+  {
+    value: "S_CORPORATION",
+    label: "S corporation (US tax election)",
+    aliases: "S-Corp S corp United States",
+  },
+  {
+    value: "NON_PROFIT",
+    label: "Nonprofit / NGO / association",
+    aliases: "non-profit not-for-profit NGO ASBL eV Verein association AISBL",
+  },
+  {
+    value: "PUBLICLY_LISTED_COMPANY",
+    label: "Publicly listed company",
+    aliases: "public company listed PLC NYSE LSE publicly traded quoted",
+  },
+  {
+    value: "TRUST",
+    label: "Trust",
+    aliases: "unit trust discretionary trust business trust",
+  },
+  {
+    value: "PRIVATE_FOUNDATION",
+    label: "Private foundation",
+    aliases: "Stiftung fondation stichting foundation",
+  },
+  {
+    value: "CHARITY",
+    label: "Charity / charitable company",
+    aliases: "CIC charitable incorporated organisation CIO registered charity",
+  },
+  { value: "OTHER", label: "Other", aliases: "cooperative coop co-op SCICA unlimited company UC" },
 ] as const satisfies readonly GridKybSelectOption[]
 
 export const GRID_KYB_BUSINESS_TYPES = [

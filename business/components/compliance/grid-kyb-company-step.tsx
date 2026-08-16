@@ -101,6 +101,9 @@ export function GridKybCompanyStep({ company, onChange, errors, disabled }: Prop
         </div>
         <div className="space-y-2">
           <Label>Entity type</Label>
+          <p className="text-xs text-muted-foreground">
+            Choose the closest match. Search Ltd, GmbH, SARL, or your local form.
+          </p>
           <GridKybEnumSelect
             value={company.entityType}
             onChange={(entityType) => onChange({ entityType })}

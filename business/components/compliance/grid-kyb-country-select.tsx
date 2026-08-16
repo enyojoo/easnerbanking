@@ -1,36 +1,47 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Check, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { CountryFlag } from "@/components/flags"
+import { countries } from "@/lib/countries"
+import { filterCountriesForProductPicker } from "@easner/shared"
 import { SETTINGS_COMBOBOX_TRIGGER_CLASS } from "@/lib/settings-control-surface"
 import { cn } from "@/lib/utils"
-
-type Option = { value: string; label: string; aliases?: string }
 
 type Props = {
   id?: string
   value: string
-  onChange: (value: string) => void
-  options: readonly Option[]
+  onChange: (code: string) => void
   placeholder: string
   disabled?: boolean
   invalid?: boolean
 }
 
-export function GridKybEnumSelect({
+function countryFromCode(code: string) {
+  const normalized = code.trim().toUpperCase()
+  return countries.find((row) => row.code === normalized)
+}
+
+export function GridKybCountrySelect({
   id,
   value,
   onChange,
-  options,
   placeholder,
   disabled,
   invalid,
 }: Props) {
   const [open, setOpen] = useState(false)
-  const selected = options.find((option) => option.value === value)
+  const selected = countryFromCode(value)
+  const options = useMemo(() => {
+    const base = filterCountriesForProductPicker(countries, "business")
+    if (selected && !base.some((row) => row.code === selected.code)) {
+      return [selected, ...base]
+    }
+    return base
+  }, [selected])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -45,29 +56,37 @@ export function GridKybEnumSelect({
           aria-invalid={invalid || undefined}
           className={cn(SETTINGS_COMBOBOX_TRIGGER_CLASS, invalid && "border-destructive")}
         >
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>
-            {selected?.label ?? placeholder}
+          <span className={cn("flex min-w-0 items-center gap-2", !selected && "text-muted-foreground")}>
+            {selected ? (
+              <>
+                <CountryFlag code={selected.code} className="size-4" />
+                <span className="truncate">{selected.name}</span>
+              </>
+            ) : (
+              placeholder
+            )}
           </span>
           <ChevronDown className="size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search" />
+          <CommandInput placeholder="Search country" />
           <CommandList>
-            <CommandEmpty>No match found.</CommandEmpty>
+            <CommandEmpty>No country found.</CommandEmpty>
             <CommandGroup>
-              {options.map((option) => (
+              {options.map((country) => (
                 <CommandItem
-                  key={option.value}
-                  value={`${option.label} ${option.value} ${option.aliases ?? ""}`}
+                  key={country.code}
+                  value={`${country.name} ${country.code}`}
                   onSelect={() => {
-                    onChange(option.value)
+                    onChange(country.code)
                     setOpen(false)
                   }}
                 >
-                  <span className="flex-1">{option.label}</span>
-                  {selected?.value === option.value ? <Check className="size-4" /> : null}
+                  <CountryFlag code={country.code} className="size-4" />
+                  <span className="flex-1">{country.name}</span>
+                  {selected?.code === country.code ? <Check className="size-4" /> : null}
                 </CommandItem>
               ))}
             </CommandGroup>

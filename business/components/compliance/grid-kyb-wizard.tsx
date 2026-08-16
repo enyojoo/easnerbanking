@@ -8,6 +8,7 @@ import {
   type GridKybCompanyDraft,
   type GridKybFormSection,
 } from "@easner/shared"
+import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
@@ -133,15 +134,19 @@ export function GridKybWizard({ onClose }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="border-b px-4 pb-3 pt-12 sm:px-6">
-        <nav className="flex gap-2">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b px-2 py-2 sm:px-4">
+        <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 px-2" onClick={onClose}>
+          <ArrowLeft className="size-4" aria-hidden />
+          Back
+        </Button>
+        <nav className="flex justify-center gap-1.5 sm:gap-2">
           {SECTIONS.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setSection(item.id)}
               className={cn(
-                "rounded-full px-3 py-1.5 text-sm",
+                "rounded-full px-2.5 py-1.5 text-sm sm:px-3",
                 section === item.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
               )}
             >
@@ -150,6 +155,7 @@ export function GridKybWizard({ onClose }: Props) {
             </button>
           ))}
         </nav>
+        <span className="invisible pointer-events-none h-8 w-[4.25rem]" aria-hidden />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-2xl">

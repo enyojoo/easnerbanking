@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { ArrowLeft, ShieldCheck } from "lucide-react"
+import { ShieldCheck } from "lucide-react"
 import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Button } from "@/components/ui/button"
@@ -192,17 +192,7 @@ export function BusinessVerificationSection({
 
   const hostedFlowPanel = (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="absolute left-2 top-2 z-20 h-8 gap-1 bg-background/90 px-2 shadow-sm backdrop-blur-sm hover:bg-background"
-        onClick={closeHostedAndSync}
-      >
-        <ArrowLeft className="size-4" aria-hidden />
-        Back
-      </Button>
-      <div className="relative min-h-0 flex-1 overflow-hidden pt-10">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         <GridKybWizard onClose={closeHostedAndSync} />
       </div>
     </div>
