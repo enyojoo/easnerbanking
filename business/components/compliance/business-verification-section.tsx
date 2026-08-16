@@ -9,7 +9,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react"
-import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
+import {
+  syncBusinessGridStatus,
+  syncBusinessGridStatusUntilAccountsReady,
+} from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
   hostedCredentialsAreReady,
@@ -44,6 +47,7 @@ import {
 } from "@/lib/compliance/cutover-comms"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 import { DelayedOpeningVerificationWait } from "@/components/compliance/opening-verification-wait"
+import { gridKybStatusClosesHostedFlow } from "@/lib/compliance/sumsub-hosted-kyb-status"
 
 const GridSumsubWebSdk = dynamic(
   () => import("@/components/compliance/grid-sumsub-websdk").then((m) => ({ default: m.GridSumsubWebSdk })),
@@ -277,6 +281,29 @@ export function BusinessVerificationSection({
     }, 280)
   }, [clearVerificationFlowUrl, syncBusinessTier1FromGrid])
 
+  const closeHostedAndSyncRef = useRef(closeHostedAndSync)
+  closeHostedAndSyncRef.current = closeHostedAndSync
+  const sumsubProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleSumsubProgress = useCallback((reviewStatus: string) => {
+    if (sumsubProgressTimerRef.current) clearTimeout(sumsubProgressTimerRef.current)
+    const delayMs = reviewStatus.toLowerCase() === "completed" ? 0 : 800
+    sumsubProgressTimerRef.current = setTimeout(() => {
+      void (async () => {
+        const result = await syncBusinessGridStatus()
+        if (gridKybStatusClosesHostedFlow(result.verificationStatus)) {
+          closeHostedAndSyncRef.current()
+        }
+      })()
+    }, delayMs)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (sumsubProgressTimerRef.current) clearTimeout(sumsubProgressTimerRef.current)
+    }
+  }, [])
+
   const abortHostedVerification = useCallback(() => {
     setHostedOpen(false)
     setOpeningVerification(false)
@@ -506,6 +533,7 @@ export function BusinessVerificationSection({
             accessToken={hostedToken}
             theme="light"
             onComplete={closeHostedAndSync}
+            onProgress={handleSumsubProgress}
             onReady={() => {
               setOpeningVerification(false)
             }}

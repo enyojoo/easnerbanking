@@ -98,16 +98,17 @@ async function persistGridCustomerId(
   admin: SupabaseClient,
   businessId: string,
   customerId: string,
-  platformCustomerId?: string,
 ): Promise<void> {
-  const patch: Record<string, unknown> = {
-    grid_customer_id: customerId,
-    updated_at: new Date().toISOString(),
+  const { error } = await admin
+    .from("businesses")
+    .update({
+      grid_customer_id: customerId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", businessId)
+  if (error) {
+    throw new Error(`persistGridCustomerId: ${error.message}`)
   }
-  if (platformCustomerId?.trim()) {
-    patch.external_customer_id = platformCustomerId.trim()
-  }
-  await admin.from("businesses").update(patch).eq("id", businessId)
 }
 
 async function verifyGridCustomerExists(customerId: string): Promise<boolean> {
@@ -500,7 +501,7 @@ async function ensureGridBusinessCustomerUnlocked(input: {
     const customerId = normalizeGridCustomerId(existing.id)
     const liveExisting = await requireExistingGridCustomer(customerId)
     if (liveExisting) {
-      await persistGridCustomerId(input.admin, input.businessId, customerId, platformCustomerId)
+      await persistGridCustomerId(input.admin, input.businessId, customerId)
       const finalized = await finalizeGridBusinessCustomer({
         admin: input.admin,
         businessId: input.businessId,
@@ -625,7 +626,7 @@ async function ensureGridBusinessCustomerUnlocked(input: {
   const customerId = normalizeGridCustomerId(String(created.id ?? ""))
   if (!customerId) throw new Error("Grid BUSINESS customer create did not return id")
   const live = (await requireExistingGridCustomer(customerId)) ?? created
-  await persistGridCustomerId(input.admin, input.businessId, customerId, usedPlatformId)
+  await persistGridCustomerId(input.admin, input.businessId, customerId)
   const finalized = await finalizeGridBusinessCustomer({
     admin: input.admin,
     businessId: input.businessId,

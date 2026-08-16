@@ -253,6 +253,12 @@ describe("ensureGridBusinessCustomer", () => {
     expect(postCount).toBe(1)
     expect(a.customerId).toBe(STORED_CUSTOMER)
     expect(b.customerId).toBe(STORED_CUSTOMER)
+    expect(admin.businessUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ grid_customer_id: STORED_CUSTOMER }),
+    )
+    expect(admin.businessUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ external_customer_id: expect.anything() }),
+    )
     expect(mockGridFetch).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "POST",

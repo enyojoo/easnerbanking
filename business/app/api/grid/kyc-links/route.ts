@@ -11,7 +11,10 @@ import {
   gridBusinessKybStatus,
   syncGridBusinessKybToSupabase,
 } from "@/lib/grid/sync-kyb"
-import { resetBusinessKybToNotStarted } from "@/lib/compliance/verification-store"
+import {
+  persistVerificationStatus,
+  resetBusinessKybToNotStarted,
+} from "@/lib/compliance/verification-store"
 import { formatHostedKybStartError } from "@/lib/grid/format-grid-api-error"
 import { isGridCustomerNotFoundError } from "@/lib/grid/find-grid-customer"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
@@ -84,6 +87,16 @@ export async function POST(request: Request) {
         userId: ctx.userId,
         customerId,
         customer: customer as Record<string, unknown>,
+      })
+    } else {
+      // Fresh UNVERIFIED creates used to skip this — Grid got a customer, the business row did not.
+      await persistVerificationStatus(admin, {
+        kind: "business",
+        businessId: ctx.businessId,
+        userId: ctx.userId,
+        provider: "grid",
+        status: kycStatus,
+        gridCustomerId: customerId,
       })
     }
 

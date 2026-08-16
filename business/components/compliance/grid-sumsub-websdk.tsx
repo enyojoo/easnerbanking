@@ -3,22 +3,26 @@
 import { useEffect, useRef } from "react"
 import snsWebSdk from "@sumsub/websdk"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import {
+  sumsubReviewStatusShouldSyncGrid,
+  sumsubReviewStatusTriggersComplete,
+} from "@/lib/compliance/sumsub-hosted-kyb-status"
 import { cn } from "@/lib/utils"
+
+export {
+  gridKybStatusClosesHostedFlow,
+  sumsubReviewStatusShouldSyncGrid,
+  sumsubReviewStatusTriggersComplete,
+} from "@/lib/compliance/sumsub-hosted-kyb-status"
 
 type Props = {
   accessToken: string
   onComplete: () => void
+  /** Pull Grid KYB after a SumSub step. Must not close the pane (company-only `pending`). */
+  onProgress?: (reviewStatus: string) => void
   onError?: (message: string) => void
   onReady?: () => void
   theme?: "light" | "dark"
-}
-
-/** Terminal Sumsub review statuses for `onApplicantStatusChanged` (not initial load). */
-export function sumsubReviewStatusTriggersComplete(reviewStatus: string | null | undefined): boolean {
-  const s = String(reviewStatus ?? "").toLowerCase()
-  // `onHold` is the applicant's current state when reopening — not "user finished".
-  // `pending` fires mid-KYB when only some steps are done.
-  return s === "completed"
 }
 
 async function refreshGridKycToken(): Promise<string> {
@@ -42,12 +46,21 @@ async function refreshGridKycToken(): Promise<string> {
  * Embed SumSub via Grid `createKYCLink.token` (preferred over iframing `kycUrl`).
  * Grid docs: token and hosted URL both update the same customer kyc/kyb status.
  */
-export function GridSumsubWebSdk({ accessToken, onComplete, onError, onReady, theme = "dark" }: Props) {
+export function GridSumsubWebSdk({
+  accessToken,
+  onComplete,
+  onProgress,
+  onError,
+  onReady,
+  theme = "dark",
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const onCompleteRef = useRef(onComplete)
+  const onProgressRef = useRef(onProgress)
   const onErrorRef = useRef(onError)
   const onReadyRef = useRef(onReady)
   onCompleteRef.current = onComplete
+  onProgressRef.current = onProgress
   onErrorRef.current = onError
   onReadyRef.current = onReady
 
@@ -70,6 +83,9 @@ export function GridSumsubWebSdk({ accessToken, onComplete, onError, onReady, th
         const reviewStatus = String(
           (payload as { reviewStatus?: string } | null)?.reviewStatus ?? "",
         )
+        if (sumsubReviewStatusShouldSyncGrid(reviewStatus)) {
+          onProgressRef.current?.(reviewStatus)
+        }
         if (sumsubReviewStatusTriggersComplete(reviewStatus)) {
           onCompleteRef.current()
         }
