@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
-import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../../_helpers"
+import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
 
 function normalizeMembershipRole(value: string | null | undefined): string {
   const raw = String(value ?? "").trim().toLowerCase()
