@@ -389,7 +389,17 @@ html[data-pwa-standalone="true"] body {
   overflow: hidden;
 }
 
-/* Settings KYB flow: bounded main column; SumSub scrolls inside its host */
+/* Settings KYB flow: full workspace for SumSub; hide shell chrome so width is not clipped */
+html[data-verification-flow-open="true"] [data-dashboard-nav],
+html[data-verification-flow-open="true"] [data-dashboard-header],
+html[data-verification-flow-open="true"] [data-dashboard-banner] {
+  display: none;
+}
+
+html[data-verification-flow-open="true"] [data-dashboard-frame] {
+  margin-left: 0;
+}
+
 html[data-verification-flow-open="true"] main {
   display: flex;
   flex-direction: column;

@@ -10,9 +10,9 @@ const COPY: Record<
 > = {
   business: {
     title: "Easner Business works best on a wide screen",
-    lede: "Use a computer or a large tablet in landscape with enough vertical space for forms and tables.",
+    lede: "Use a computer or a large tablet in landscape.",
     detail:
-      "Most phones and small tablets in portrait are not supported. If content feels clipped, try maximizing the browser window or rotating to landscape.",
+      "Most phones and small tablets in portrait are not supported. If this message appears on a laptop, try maximizing the browser window.",
   },
   office: {
     title: "Easner Office works best on a wide screen",
