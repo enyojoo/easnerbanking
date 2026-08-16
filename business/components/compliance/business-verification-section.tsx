@@ -232,7 +232,8 @@ export function BusinessVerificationSection({
   const tier1FinalReject = tier1RejectionType === "Final" || rejectionDisplay?.isFinal === true
   const tier1UnderReview = tier1StatusIsInReview(tier1VerificationStatus)
   const tier1InProgress = tier1VerificationStatus === "in_progress"
-  const tier1AwaitingReview = tier1UnderReview && !tier1Rejected
+  const packetWaiting = kybPacket?.status === "in_review" || kybPacket?.status === "submitted"
+  const tier1AwaitingReview = !tier1Rejected && (tier1UnderReview || packetWaiting)
   const hasGridCustomer = Boolean(noahKybCustomerId?.trim())
   const tier1StartedNotSubmitted =
     !tier1Rejected &&
@@ -241,6 +242,7 @@ export function BusinessVerificationSection({
   const showTier1HostedCta =
     canManageBusinessVerification &&
     !tier1Complete &&
+    !tier1AwaitingReview &&
     tier1CanResubmit &&
     (!tier1OnHold || tier1CanResubmit)
   const tier1HostedCtaLabel =
@@ -248,11 +250,9 @@ export function BusinessVerificationSection({
       ? "Retry verification"
       : tier1OnHold
         ? "Continue verification"
-        : tier1AwaitingReview
-          ? "View progress"
-          : tier1InProgress || tier1StartedNotSubmitted
-            ? "Continue verification"
-            : "Begin verification"
+        : tier1InProgress || tier1StartedNotSubmitted
+          ? "Continue verification"
+          : "Begin verification"
 
   /** Full-page flow fills remaining main; in-tab fallback keeps title/tabs chrome. */
   const verificationFlowPanelClass = hostedFlowActive
@@ -353,7 +353,7 @@ export function BusinessVerificationSection({
                               {VERIFICATION_SECTION_COPY.verificationOnHold}
                             </p>
                           ) : null}
-                          {tier1UnderReview && !tier1ActionRequired ? (
+                          {tier1AwaitingReview && !tier1ActionRequired ? (
                             <p className="text-sm text-muted-foreground">
                               {NOAH_VERIFICATION_IN_REVIEW_COPY}
                             </p>

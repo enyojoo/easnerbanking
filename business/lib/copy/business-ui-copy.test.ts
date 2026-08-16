@@ -4,12 +4,13 @@ import {
   BANNER_CTA_COPY,
   verificationBannerCopy,
   verificationBannerCta,
+  verificationBannerHasCta,
   verificationBannerStarted,
 } from "./business-ui-copy"
 
 describe("verificationBannerCopy", () => {
-  it("uses in-progress body when KYB is in_progress", () => {
-    expect(verificationBannerCopy("in_progress")).toBe(BANNER_COPY.verificationInProgress)
+  it("uses in-review body when KYB is in_progress", () => {
+    expect(verificationBannerCopy("in_progress")).toBe(BANNER_COPY.verificationInReview)
   })
 
   it("uses in-review body for pending and review statuses", () => {
@@ -46,16 +47,17 @@ describe("verificationBannerCta", () => {
     expect(verificationBannerCta(null)).toBe(BANNER_CTA_COPY.begin)
   })
 
-  it("returns View while KYB is in progress", () => {
-    expect(verificationBannerCta("in_progress")).toBe(BANNER_CTA_COPY.viewProgress)
+  it("returns Continue after KYB has started but is not in review", () => {
     expect(verificationBannerCta("not_started", { started: true })).toBe(BANNER_CTA_COPY.continue)
   })
 
-  it("returns Status while in review", () => {
-    expect(verificationBannerCta("pending")).toBe(BANNER_CTA_COPY.status)
-    expect(verificationBannerCta("in_review")).toBe(BANNER_CTA_COPY.status)
-    expect(verificationBannerCta("in_review", { started: true })).toBe(BANNER_CTA_COPY.status)
-    expect(verificationBannerCta("pending", { started: true })).toBe(BANNER_CTA_COPY.status)
+  it("hides the CTA while Grid is reviewing", () => {
+    expect(verificationBannerHasCta("in_progress")).toBe(false)
+    expect(verificationBannerHasCta("pending")).toBe(false)
+    expect(verificationBannerHasCta("in_review")).toBe(false)
+    expect(verificationBannerHasCta("not_started")).toBe(true)
+    expect(verificationBannerHasCta("rejected")).toBe(true)
+    expect(verificationBannerHasCta("hold")).toBe(true)
   })
 
   it("returns Retry for rejected and Continue for hold", () => {

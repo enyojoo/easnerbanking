@@ -211,7 +211,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     forgetDocument(id)
   }
 
-  if (status === "in_review" && !editable) {
+  if ((status === "in_review" || status === "submitted") && !editable) {
     return (
       <div className="flex h-full min-h-0 flex-col bg-background">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b px-2 py-2 sm:px-4">

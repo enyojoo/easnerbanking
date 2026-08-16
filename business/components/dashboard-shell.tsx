@@ -15,7 +15,12 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useBusinessSync } from "@/hooks/use-business-sync"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
 import { openBusinessSupport } from "@/lib/intercom-messenger"
-import { verificationBannerCopy, verificationBannerCta, verificationBannerStarted } from "@/lib/copy/business-ui-copy"
+import {
+  verificationBannerCopy,
+  verificationBannerCta,
+  verificationBannerHasCta,
+  verificationBannerStarted,
+} from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 import { useScope } from "@/lib/query/scope"
 import { primeWorkspaceNav, WORKSPACE_WARM_EVENT } from "@/lib/query/prime-workspace-nav"
@@ -161,15 +166,17 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
               role="status"
             >
               <span>{verificationBannerCopy(tier1VerificationStatus)}</span>
-              <Link
-                href="/settings?tab=verification"
-                className="font-semibold text-[hsl(var(--warning))] underline underline-offset-2"
-              >
-                {verificationBannerCta(tier1VerificationStatus, {
-                  started: verificationBannerStarted(tier1VerificationStatus, noahKybCustomerId),
-                  canManage: canManageBusinessVerification,
-                })}
-              </Link>
+              {verificationBannerHasCta(tier1VerificationStatus) ? (
+                <Link
+                  href="/settings?tab=verification"
+                  className="font-semibold text-[hsl(var(--warning))] underline underline-offset-2"
+                >
+                  {verificationBannerCta(tier1VerificationStatus, {
+                    started: verificationBannerStarted(tier1VerificationStatus, noahKybCustomerId),
+                    canManage: canManageBusinessVerification,
+                  })}
+                </Link>
+              ) : null}
             </div>
           ) : null}
           {/*

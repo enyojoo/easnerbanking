@@ -125,6 +125,16 @@ describe("gridKybApplicationStatusFromVerification", () => {
       gridKybApplicationStatusFromVerification({ verificationStatus: "PENDING_MANUAL_REVIEW" }),
     ).toBe("in_review")
   })
+
+  it("treats Grid review job states as in_review", () => {
+    expect(
+      gridKybApplicationStatusFromVerification({ verificationStatus: "IN_PROGRESS" }),
+    ).toBe("in_review")
+    expect(
+      gridKybApplicationStatusFromVerification({ verificationStatus: "READY_FOR_VERIFICATION" }),
+    ).toBe("in_review")
+    expect(gridKybApplicationIsEditable("submitted")).toBe(false)
+  })
 })
 
 describe("mergeGridKybCompanyDraft", () => {

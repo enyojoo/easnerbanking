@@ -305,7 +305,7 @@ export const BANNER_COPY = {
   verification:
     "Complete verification to unlock payments and accounts.",
   verificationInProgress:
-    "Verification is in progress. You can see status or what's left.",
+    "Verification is in progress. This usually completes within 1–3 days.",
   verificationInReview:
     "Verification is in progress. This usually completes within 1–3 days.",
   verificationActionNeeded:
@@ -351,12 +351,18 @@ export function verificationBannerStarted(
   )
 }
 
+export function verificationBannerIsWaiting(status: string | null | undefined): boolean {
+  const s = normalizeVerificationBannerStatus(status)
+  return s === "in_progress" || verificationBannerIsInReview(s)
+}
+
+export function verificationBannerHasCta(status: string | null | undefined): boolean {
+  return !verificationBannerIsWaiting(status)
+}
+
 export function verificationBannerCopy(status: string | null | undefined): string {
   const s = normalizeVerificationBannerStatus(status)
-  if (s === "in_progress") {
-    return BANNER_COPY.verificationInProgress
-  }
-  if (verificationBannerIsInReview(s)) {
+  if (verificationBannerIsWaiting(s)) {
     return BANNER_COPY.verificationInReview
   }
   if (s === "rejected" || s === "hold") {
@@ -380,11 +386,8 @@ export function verificationBannerCta(
   if (s === "hold") {
     return BANNER_CTA_COPY.continue
   }
-  if (verificationBannerIsInReview(s)) {
+  if (verificationBannerIsWaiting(s)) {
     return BANNER_CTA_COPY.status
-  }
-  if (s === "in_progress") {
-    return BANNER_CTA_COPY.viewProgress
   }
   if (opts?.started) {
     return BANNER_CTA_COPY.continue

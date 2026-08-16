@@ -7,7 +7,12 @@ import { BRAND } from "@/components/brand/brand-constants"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
 import { useBusinessProfile } from "@/lib/use-business-profile"
-import { verificationBannerCopy, verificationBannerCta, verificationBannerStarted } from "@/lib/copy/business-ui-copy"
+import {
+  verificationBannerCopy,
+  verificationBannerCta,
+  verificationBannerHasCta,
+  verificationBannerStarted,
+} from "@/lib/copy/business-ui-copy"
 
 export function PayShell({ children }: { children: React.ReactNode }) {
   const { user, isLoading, logout } = useAuth()
@@ -29,15 +34,17 @@ export function PayShell({ children }: { children: React.ReactNode }) {
             role="status"
           >
             <span>{verificationBannerCopy(tier1VerificationStatus)}</span>
-            <Link
-              href="/settings?tab=verification"
-              className="font-semibold text-amber-950 underline underline-offset-2"
-            >
-              {verificationBannerCta(tier1VerificationStatus, {
-                started: verificationBannerStarted(tier1VerificationStatus, noahKybCustomerId),
-                canManage: canManageBusinessVerification,
-              })}
-            </Link>
+            {verificationBannerHasCta(tier1VerificationStatus) ? (
+              <Link
+                href="/settings?tab=verification"
+                className="font-semibold text-amber-950 underline underline-offset-2"
+              >
+                {verificationBannerCta(tier1VerificationStatus, {
+                  started: verificationBannerStarted(tier1VerificationStatus, noahKybCustomerId),
+                  canManage: canManageBusinessVerification,
+                })}
+              </Link>
+            ) : null}
           </div>
         ) : null}
 

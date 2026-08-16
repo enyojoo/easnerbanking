@@ -657,11 +657,12 @@ export function gridKybApplicationStatusFromVerification(input: {
   if (
     verification === "PENDING_MANUAL_REVIEW" ||
     verification === "IN_PROGRESS" ||
+    verification === "READY_FOR_VERIFICATION" ||
     local === "pending"
   ) {
     return "in_review"
   }
-  if (verification === "READY_FOR_VERIFICATION" || local === "in_progress") return "submitted"
+  if (local === "in_progress") return "submitted"
   return "draft"
 }
 
