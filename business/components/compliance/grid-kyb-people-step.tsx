@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { AlertTriangle, Plus } from "lucide-react"
+import { useRef, useState } from "react"
+import { AlertTriangle, Loader2, Plus } from "lucide-react"
 import { GRID_KYB_DOCUMENT_CATEGORIES, GRID_KYB_ID_TYPES, GRID_KYB_OWNER_ROLES, type GridKybErrorPointer } from "@easner/shared"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,7 @@ import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
 import type { KybPersonPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
 import { GridKybCountrySelect } from "./grid-kyb-country-select"
-import { GridKybDocumentUpload } from "./grid-kyb-document-upload"
+import { GridKybDocumentUpload, type GridKybDocumentUploadHandle } from "./grid-kyb-document-upload"
 import { Checkbox } from "@/components/ui/checkbox"
 
 type Props = {
@@ -35,7 +35,7 @@ const emptyPerson = {
   state: "",
   postalCode: "",
   addressCountry: "",
-  ownershipPercentage: 0,
+  ownershipPercentage: "",
   roles: [] as string[],
   idType: "",
   identifier: "",
@@ -47,6 +47,7 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
   const [form, setForm] = useState(emptyPerson)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const idUploadRef = useRef<GridKybDocumentUploadHandle>(null)
 
   function openNew() {
     setForm(emptyPerson)
@@ -68,7 +69,8 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
       state: person.state,
       postalCode: person.postalCode,
       addressCountry: person.addressCountry,
-      ownershipPercentage: person.ownershipPercentage ?? 0,
+      ownershipPercentage:
+        person.ownershipPercentage == null ? "" : String(person.ownershipPercentage),
       roles: person.roles,
       idType: person.idType,
       identifier: person.identifier,
@@ -81,13 +83,26 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
     setSaving(true)
     setError(null)
     try {
+      const ownership = String(form.ownershipPercentage).trim()
+      const parsedOwnership = ownership === "" ? null : Number(ownership)
+      const payload = {
+        ...form,
+        ownershipPercentage:
+          parsedOwnership != null && Number.isFinite(parsedOwnership) ? parsedOwnership : null,
+      }
       const res = await fetch("/api/grid/kyb/owners", {
         method: editingId && editingId !== "new" ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingId && editingId !== "new" ? { id: editingId, ...form } : form),
+        body: JSON.stringify(editingId && editingId !== "new" ? { id: editingId, ...payload } : payload),
       })
-      const json = (await res.json().catch(() => ({}))) as { error?: string }
+      const json = (await res.json().catch(() => ({}))) as { error?: string; person?: { id?: string } }
       if (!res.ok) throw new Error(json.error || "Could not save owner")
+      const personId = json.person?.id || (editingId && editingId !== "new" ? editingId : "")
+      if (personId && editingId === "new") setEditingId(personId)
+      if (idUploadRef.current?.hasPendingFile()) {
+        if (!personId) throw new Error("Could not attach the ID document")
+        await idUploadRef.current.submit(personId)
+      }
       setEditingId(null)
       await onReload()
     } catch (err) {
@@ -179,7 +194,14 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
             </div>
             <div className="space-y-2">
               <Label>Ownership %</Label>
-              <Input type="number" className={SETTINGS_INPUT_CLASS} value={form.ownershipPercentage} onChange={(e) => setForm({ ...form, ownershipPercentage: Number(e.target.value) })} disabled={disabled} />
+              <Input
+                className={SETTINGS_INPUT_CLASS}
+                inputMode="decimal"
+                value={form.ownershipPercentage}
+                onChange={(e) => setForm({ ...form, ownershipPercentage: e.target.value })}
+                placeholder="e.g. 25"
+                disabled={disabled}
+              />
             </div>
             <div className="space-y-2">
               <Label>ID type</Label>
@@ -242,28 +264,29 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
               ))}
             </div>
           </div>
+          <GridKybDocumentUpload
+            ref={idUploadRef}
+            title="Upload owner ID document"
+            category="identity"
+            acceptedDocumentTypes={
+              errors.find((error) => error.resourceId === selected?.gridBeneficialOwnerId)
+                ?.acceptedDocumentTypes ?? GRID_KYB_DOCUMENT_CATEGORIES.identity.acceptedDocumentTypes
+            }
+            extraFields={{ personId: selected?.id, issuingAuthority: true, documentNumber: true }}
+            disabled={disabled}
+            hideSubmit
+            onUploaded={onReload}
+          />
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <div className="flex gap-2">
             <Button type="button" size="sm" disabled={disabled || saving} onClick={() => void save()}>
-              {saving ? "Saving…" : "Save owner"}
+              {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+              Save owner
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setEditingId(null)}>
               Back to list
             </Button>
           </div>
-          {selected ? (
-            <GridKybDocumentUpload
-              title="Upload owner ID document"
-              category="identity"
-              acceptedDocumentTypes={
-                errors.find((error) => error.resourceId === selected.gridBeneficialOwnerId)?.acceptedDocumentTypes ??
-                GRID_KYB_DOCUMENT_CATEGORIES.identity.acceptedDocumentTypes
-              }
-              extraFields={{ personId: selected.id, issuingAuthority: true, documentNumber: true }}
-              disabled={disabled}
-              onUploaded={onReload}
-            />
-          ) : null}
         </div>
       )}
     </div>

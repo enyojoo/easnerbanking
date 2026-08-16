@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   emptyGridKybCompanyDraft,
   firstGridKybErrorSection,
@@ -8,7 +8,7 @@ import {
   type GridKybCompanyDraft,
   type GridKybFormSection,
 } from "@easner/shared"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
@@ -16,10 +16,11 @@ import type { KybPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybCompanyStep } from "./grid-kyb-company-step"
 import { GridKybPeopleStep } from "./grid-kyb-people-step"
 import { GridKybDocumentsStep } from "./grid-kyb-documents-step"
-import { DelayedOpeningVerificationWait } from "./opening-verification-wait"
 
 type Props = {
   onClose: () => void
+  initialCompany?: GridKybCompanyDraft
+  initialInReview?: boolean
 }
 
 const SECTIONS: { id: GridKybFormSection; label: string }[] = [
@@ -28,20 +29,24 @@ const SECTIONS: { id: GridKybFormSection; label: string }[] = [
   { id: "documents", label: "Documents" },
 ]
 
-export function GridKybWizard({ onClose }: Props) {
+export function GridKybWizard({ onClose, initialCompany, initialInReview = false }: Props) {
   const [packet, setPacket] = useState<KybPacket | null>(null)
-  const [company, setCompany] = useState<GridKybCompanyDraft>(emptyGridKybCompanyDraft())
+  const [company, setCompany] = useState<GridKybCompanyDraft>(
+    () => initialCompany ?? emptyGridKybCompanyDraft(),
+  )
   const [section, setSection] = useState<GridKybFormSection>("company")
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [pendingCta, setPendingCta] = useState<"exit" | "next" | "complete" | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const companyDirtyRef = useRef(false)
 
   const load = useCallback(async () => {
     const res = await fetch("/api/grid/kyb/packet")
     const json = (await res.json().catch(() => ({}))) as KybPacket & { error?: string }
     if (!res.ok) throw new Error(json.error || "Could not load verification")
     setPacket(json)
-    setCompany(json.company)
+    if (!companyDirtyRef.current) {
+      setCompany(json.company)
+    }
     if (json.errorPointers?.length) {
       setSection(firstGridKybErrorSection(json.errors))
     }
@@ -49,12 +54,11 @@ export function GridKybWizard({ onClose }: Props) {
   }, [])
 
   useEffect(() => {
-    void load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Could not load verification"))
-      .finally(() => setLoading(false))
+    void load().catch((err) => setError(err instanceof Error ? err.message : "Could not load verification"))
   }, [load])
 
-  const editable = gridKybApplicationIsEditable(packet?.status)
+  const status = packet?.status ?? (initialInReview ? "in_review" : null)
+  const editable = gridKybApplicationIsEditable(status)
   const pointers = packet?.errorPointers ?? []
   const counts = useMemo(() => {
     return {
@@ -65,37 +69,40 @@ export function GridKybWizard({ onClose }: Props) {
   }, [pointers])
 
   async function saveCompany() {
-    setSaving(true)
-    setError(null)
-    try {
-      const res = await fetch("/api/grid/kyb/company", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(company),
-      })
-      const json = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) throw new Error(json.error || "Could not save company details")
-    } finally {
-      setSaving(false)
-    }
+    if (!packet) await load()
+    const res = await fetch("/api/grid/kyb/company", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(company),
+    })
+    const json = (await res.json().catch(() => ({}))) as { error?: string }
+    if (!res.ok) throw new Error(json.error || "Could not save company details")
   }
 
   async function goNext() {
-    if (section === "company") {
-      await saveCompany()
-      setSection("people")
-      return
-    }
+    if (pendingCta === "next") return
     if (section === "people") {
       setSection("documents")
+      return
+    }
+    setPendingCta("next")
+    setError(null)
+    try {
+      await saveCompany()
+      setSection("people")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save company details")
+    } finally {
+      setPendingCta(null)
     }
   }
 
   async function complete() {
-    await saveCompany()
-    setSaving(true)
+    if (pendingCta === "complete") return
+    setPendingCta("complete")
     setError(null)
     try {
+      await saveCompany()
       const res = await fetch("/api/grid/kyb/complete", { method: "POST" })
       const json = (await res.json().catch(() => ({}))) as {
         error?: string
@@ -107,7 +114,20 @@ export function GridKybWizard({ onClose }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit verification")
     } finally {
-      setSaving(false)
+      setPendingCta(null)
+    }
+  }
+
+  async function saveAndExit() {
+    if (pendingCta === "exit") return
+    setPendingCta("exit")
+    setError(null)
+    try {
+      await saveCompany()
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save company details")
+      setPendingCta(null)
     }
   }
 
@@ -121,13 +141,19 @@ export function GridKybWizard({ onClose }: Props) {
     await load()
   }
 
-  if (loading) return <DelayedOpeningVerificationWait />
-
-  if (packet && !editable && packet.status === "in_review") {
+  if (status === "in_review" && !editable) {
     return (
-      <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center px-6 py-16 text-center">
-        <h2 className="text-xl font-semibold">{GRID_KYB_WIZARD_COPY.waitingTitle}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">{GRID_KYB_WIZARD_COPY.waitingBody}</p>
+      <div className="flex h-full min-h-0 flex-col bg-background">
+        <div className="flex items-center border-b px-2 py-2 sm:px-4">
+          <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 px-2" onClick={onClose}>
+            <ArrowLeft className="size-4" aria-hidden />
+            Back
+          </Button>
+        </div>
+        <div className="mx-auto flex min-h-0 flex-1 max-w-xl flex-col justify-center px-6 py-16 text-center">
+          <h2 className="text-xl font-semibold">{GRID_KYB_WIZARD_COPY.waitingTitle}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{GRID_KYB_WIZARD_COPY.waitingBody}</p>
+        </div>
       </div>
     )
   }
@@ -163,7 +189,10 @@ export function GridKybWizard({ onClose }: Props) {
           {section === "company" ? (
             <GridKybCompanyStep
               company={company}
-              onChange={(patch) => setCompany((prev) => ({ ...prev, ...patch }))}
+              onChange={(patch) => {
+                companyDirtyRef.current = true
+                setCompany((prev) => ({ ...prev, ...patch }))
+              }}
               errors={pointers}
               disabled={!editable}
             />
@@ -192,17 +221,25 @@ export function GridKybWizard({ onClose }: Props) {
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-background px-4 py-3 sm:px-6">
-        <Button type="button" variant="outline" size="sm" onClick={() => void saveCompany().then(onClose)}>
+        <Button type="button" variant="outline" size="sm" disabled={pendingCta === "exit"} onClick={() => void saveAndExit()}>
+          {pendingCta === "exit" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
           {GRID_KYB_WIZARD_COPY.saveAndExit}
         </Button>
         <div className="flex gap-2">
           {section !== "documents" ? (
-            <Button type="button" size="sm" disabled={!editable || saving} onClick={() => void goNext()}>
+            <Button type="button" size="sm" disabled={!editable || pendingCta === "next"} onClick={() => void goNext()}>
+              {pendingCta === "next" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
               {GRID_KYB_WIZARD_COPY.continue}
             </Button>
           ) : (
-            <Button type="button" size="sm" disabled={!editable || saving} onClick={() => void complete()}>
-              {saving ? "Submitting…" : GRID_KYB_WIZARD_COPY.complete}
+            <Button
+              type="button"
+              size="sm"
+              disabled={!editable || pendingCta === "complete"}
+              onClick={() => void complete()}
+            >
+              {pendingCta === "complete" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+              {GRID_KYB_WIZARD_COPY.complete}
             </Button>
           )}
         </div>

@@ -21,6 +21,7 @@ import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SettingsStripeConnectPanel } from "@/components/settings/settings-stripe-connect-panel"
 import { SETTINGS_TAB_COPY, VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import {
+  emptyGridKybCompanyDraft,
   getVerificationRejectionDisplay,
   NOAH_FINAL_REJECTION_USER_MESSAGE,
   NOAH_VERIFICATION_IN_REVIEW_COPY,
@@ -71,6 +72,15 @@ export function BusinessVerificationSection({
     businessId,
     noahKybCustomerId,
     invoiceSettings,
+    name,
+    registrationNumber,
+    taxId,
+    countryCode,
+    registrationCountryCode,
+    addressLine1,
+    city,
+    state,
+    postalCode,
   } = useBusinessProfile()
 
   const showOnlinePayments = invoiceSettings?.showOnlinePayment !== false
@@ -193,7 +203,22 @@ export function BusinessVerificationSection({
   const hostedFlowPanel = (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        <GridKybWizard onClose={closeHostedAndSync} />
+        <GridKybWizard
+          onClose={closeHostedAndSync}
+          initialInReview={tier1AwaitingReview}
+          initialCompany={{
+            ...emptyGridKybCompanyDraft(),
+            legalName: name.trim(),
+            registrationNumber: registrationNumber.trim(),
+            taxId: taxId.trim(),
+            country: (registrationCountryCode || countryCode || "").toUpperCase(),
+            addressCountry: (countryCode || registrationCountryCode || "").toUpperCase(),
+            addressLine1,
+            city,
+            state,
+            postalCode,
+          }}
+        />
       </div>
     </div>
   )

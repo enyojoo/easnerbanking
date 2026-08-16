@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, ChevronRight } from "lucide-react"
+import { AlertTriangle, ChevronRight, Loader2 } from "lucide-react"
 import {
   GRID_KYB_COMPANY_DOCUMENT_CATEGORIES,
   GRID_KYB_DOCUMENT_CATEGORIES,
@@ -23,6 +23,7 @@ type Props = {
 
 export function GridKybDocumentsStep({ documents, errors, disabled, onReload, onRemove }: Props) {
   const [openCategory, setOpenCategory] = useState<GridKybDocumentCategory | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
 
   return (
     <div className="space-y-6">
@@ -60,9 +61,13 @@ export function GridKybDocumentsStep({ documents, errors, disabled, onReload, on
                         type="button"
                         variant="ghost"
                         size="sm"
-                        disabled={disabled}
-                        onClick={() => void onRemove(doc.id)}
+                        disabled={disabled || removingId === doc.id}
+                        onClick={() => {
+                          setRemovingId(doc.id)
+                          void onRemove(doc.id).finally(() => setRemovingId(null))
+                        }}
                       >
+                        {removingId === doc.id ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
                         Remove
                       </Button>
                     </div>

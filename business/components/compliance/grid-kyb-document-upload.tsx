@@ -1,6 +1,7 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { forwardRef, useImperativeHandle, useRef, useState } from "react"
+import { Loader2 } from "lucide-react"
 import { GRID_KYB_DOCUMENT_TYPE_LABELS } from "@easner/shared"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,16 +21,26 @@ type Props = {
     documentNumber?: boolean
   }
   category: string
+  hideSubmit?: boolean
 }
 
-export function GridKybDocumentUpload({
+export type GridKybDocumentUploadHandle = {
+  hasPendingFile: () => boolean
+  submit: (personId?: string) => Promise<void>
+}
+
+export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Props>(function GridKybDocumentUpload(
+  {
   title,
   acceptedDocumentTypes,
   disabled,
   onUploaded,
   extraFields,
   category,
-}: Props) {
+  hideSubmit,
+}: Props,
+  ref,
+) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [documentType, setDocumentType] = useState(acceptedDocumentTypes[0] ?? "")
   const [issuingCountry, setIssuingCountry] = useState("")
@@ -45,10 +56,10 @@ export function GridKybDocumentUpload({
     label: GRID_KYB_DOCUMENT_TYPE_LABELS[value] ?? value,
   }))
 
-  async function upload() {
+  async function upload(personId = extraFields?.personId) {
     if (!file) {
       setError("Choose a file.")
-      return
+      throw new Error("Choose a file.")
     }
     setSaving(true)
     setError(null)
@@ -58,7 +69,7 @@ export function GridKybDocumentUpload({
       form.set("category", category)
       form.set("documentType", documentType)
       form.set("issuingCountry", issuingCountry)
-      if (extraFields?.personId) form.set("personId", extraFields.personId)
+      if (personId) form.set("personId", personId)
       if (issuingAuthority) form.set("issuingAuthority", issuingAuthority)
       if (documentNumber) form.set("documentNumber", documentNumber)
       const res = await fetch("/api/grid/kyb/documents", { method: "POST", body: form })
@@ -68,11 +79,18 @@ export function GridKybDocumentUpload({
       setFileName("No file chosen")
       await onUploaded()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed")
+      const message = err instanceof Error ? err.message : "Upload failed"
+      setError(message)
+      throw err instanceof Error ? err : new Error(message)
     } finally {
       setSaving(false)
     }
   }
+
+  useImperativeHandle(ref, () => ({
+    hasPendingFile: () => Boolean(file),
+    submit: (personId) => upload(personId ?? extraFields?.personId),
+  }))
 
   return (
     <div className="space-y-4 rounded-2xl border bg-card p-4">
@@ -153,9 +171,12 @@ export function GridKybDocumentUpload({
         />
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="button" size="sm" disabled={disabled || saving} onClick={() => void upload()}>
-        {saving ? "Uploading…" : "Upload"}
-      </Button>
+      {hideSubmit ? null : (
+        <Button type="button" size="sm" disabled={disabled || saving} onClick={() => void upload()}>
+          {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+          Upload
+        </Button>
+      )}
     </div>
   )
-}
+})
