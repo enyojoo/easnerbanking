@@ -73,6 +73,9 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     value,
     label: GRID_KYB_DOCUMENT_TYPE_LABELS[value] ?? value,
   }))
+  const hasStoredFile = existingDocuments.length > 0
+  const showFilePicker = !hasStoredFile && !file
+  const showUpload = !hideSubmit && Boolean(file) && !hasStoredFile
 
   async function upload(personId = extraFields?.personId) {
     if (!file) {
@@ -204,20 +207,24 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
             ) : null}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">{fileName}</p>
+          <p className="text-sm text-muted-foreground">No file chosen</p>
         )}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            onClick={() => inputRef.current?.click()}
-          >
-            {existingDocuments.length || file ? "Replace or add file" : "Choose file"}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">PDF, JPEG, or PNG. Maximum file size is 10 MB.</p>
+        {showFilePicker ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={disabled}
+                onClick={() => inputRef.current?.click()}
+              >
+                Choose file
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">PDF, JPEG, or PNG. Maximum file size is 10 MB.</p>
+          </>
+        ) : null}
         <input
           ref={inputRef}
           type="file"
@@ -231,12 +238,12 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
         />
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      {hideSubmit ? null : (
+      {showUpload ? (
         <Button type="button" size="sm" disabled={disabled || saving} onClick={() => void upload()}>
           {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
           Upload
         </Button>
-      )}
+      ) : null}
     </div>
   )
 })
