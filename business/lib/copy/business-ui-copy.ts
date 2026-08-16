@@ -448,6 +448,11 @@ export const GRID_KYB_WIZARD_COPY = {
   continue: "Continue",
   saveAndExit: "Save and exit",
   complete: "Complete",
+  readinessNotSubmitted: "Not submitted",
+  readinessNeedsAttention: "Needs attention",
+  readinessReady: "Ready to submit",
+  readinessInReview: "In review",
+  readinessApproved: "Approved",
   waitingTitle: "Verification is in review",
   waitingBody: "We’re checking the information you submitted. This usually completes within 1–3 days.",
 } as const

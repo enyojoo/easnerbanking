@@ -52,7 +52,16 @@ export function BusinessAddressFields({
 }: Props) {
   const [countryOpen, setCountryOpen] = useState(false)
   const [subdivisionOpen, setSubdivisionOpen] = useState(false)
-  const [countryReady, setCountryReady] = useState(false)
+  const [countryReady, setCountryReady] = useState(() => {
+    const code = countryCode.trim().toUpperCase()
+    if (!/^[A-Z]{2}$/.test(code)) return false
+    try {
+      getOperationalAddressFormConfig(code)
+      return true
+    } catch {
+      return false
+    }
+  })
 
   const countriesForPicker = useMemo(() => {
     const base = filterCountriesForProductPicker(countries, "business")
@@ -216,10 +225,10 @@ export function BusinessAddressFields({
           </div>
         ) : null}
 
-        {config?.subdivision.visible ? (
+        {config?.subdivision.visible || (!config && /^[A-Z]{2}$/i.test(countryCode.trim())) ? (
           <div className="space-y-2">
-            <Label htmlFor="state">{config.subdivision.label}</Label>
-            {config.subdivision.mode === "dropdown" ? (
+            <Label htmlFor="state">{config?.subdivision.label ?? "State / region"}</Label>
+            {config?.subdivision.mode === "dropdown" ? (
               isEditing ? (
                 <Popover open={subdivisionOpen} onOpenChange={setSubdivisionOpen}>
                   <PopoverTrigger asChild>
@@ -231,14 +240,14 @@ export function BusinessAddressFields({
                       className={SETTINGS_COMBOBOX_TRIGGER_CLASS}
                     >
                       <span className="truncate">
-                        {selectedSubdivision?.label ?? (values.state ? values.state : `Select ${config.subdivision.label.toLowerCase()}`)}
+                        {selectedSubdivision?.label ?? (values.state ? values.state : `Select ${(config?.subdivision.label ?? "state").toLowerCase()}`)}
                       </span>
                       <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                     <Command>
-                      <CommandInput placeholder={`Search ${config.subdivision.label.toLowerCase()}...`} />
+                      <CommandInput placeholder={`Search ${(config?.subdivision.label ?? "state").toLowerCase()}...`} />
                       <CommandList className="max-h-[200px]">
                         <CommandEmpty>No match found.</CommandEmpty>
                         <CommandGroup>
@@ -281,9 +290,9 @@ export function BusinessAddressFields({
           </div>
         ) : null}
 
-        {config?.postal.visible ? (
+        {config?.postal.visible || (!config && /^[A-Z]{2}$/i.test(countryCode.trim())) ? (
           <div className="space-y-2">
-            <Label htmlFor="zipCode">{config.postal.label}</Label>
+            <Label htmlFor="zipCode">{config?.postal.label ?? "Postal code"}</Label>
             <Input
               id="zipCode"
               autoComplete="postal-code"
@@ -291,7 +300,7 @@ export function BusinessAddressFields({
               value={values.postalCode}
               onChange={(e) => onChange({ postalCode: e.target.value })}
               disabled={!isEditing}
-              placeholder={config.postal.examples[0] ?? undefined}
+              placeholder={config?.postal.examples[0] ?? undefined}
             />
           </div>
         ) : null}

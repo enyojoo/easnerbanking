@@ -410,6 +410,164 @@ export function firstGridKybErrorSection(errors: GridKybVerificationError[] | nu
   return mapGridKybVerificationErrors(errors)[0]?.section ?? "company"
 }
 
+function lastFieldSegment(field: string): string {
+  const parts = field.split(".").filter(Boolean)
+  return parts[parts.length - 1] ?? field
+}
+
+export function gridKybCompanyFieldIsFilled(company: GridKybCompanyDraft, field: string): boolean {
+  const path = field.replace(/^businessInfo\./, "")
+  if (path.startsWith("address.")) {
+    const addr = lastFieldSegment(path)
+    if (addr === "line1" || addr === "addressLine1") return Boolean(company.addressLine1.trim())
+    if (addr === "line2" || addr === "addressLine2") return Boolean(company.addressLine2.trim())
+    if (addr === "city") return Boolean(company.city.trim())
+    if (addr === "state" || addr === "region") return Boolean(company.state.trim())
+    if (addr === "postalCode" || addr === "zip" || addr === "zipCode") return Boolean(company.postalCode.trim())
+    if (addr === "country") return Boolean(company.addressCountry.trim())
+  }
+
+  const key = lastFieldSegment(path)
+  if (key === "purposeOfAccount") {
+    return Boolean(company.purposeOfAccount.trim()) &&
+      (company.purposeOfAccount !== "OTHER" || Boolean(company.purposeOfAccountOtherDescription.trim()))
+  }
+  if (key === "sourceOfFunds" || key === "sourceOfFundsCategories" || key === "sourceOfFundsId") {
+    return Boolean(company.sourceOfFundsId.trim()) &&
+      (company.sourceOfFundsId !== "other" || Boolean(company.sourceOfFundsOtherDescription.trim()))
+  }
+  if (key === "countriesOfOperation") return company.countriesOfOperation.length > 0
+  if (key === "expectedRecipientJurisdictions") return company.expectedRecipientJurisdictions.length > 0
+
+  const value = (company as Record<string, unknown>)[key]
+  if (Array.isArray(value)) return value.length > 0
+  return String(value ?? "").trim().length > 0
+}
+
+export type GridKybPointerPerson = {
+  id: string
+  gridBeneficialOwnerId: string | null
+  roles: string[]
+  firstName?: string
+  lastName?: string
+  email?: string
+  birthDate?: string
+  nationality?: string
+  addressLine1?: string
+  city?: string
+  addressCountry?: string
+  idType?: string
+  identifier?: string
+  countryOfIssuance?: string
+}
+
+export type GridKybPointerDocument = {
+  personId: string | null
+  category: string
+}
+
+export function gridKybOwnerResourceMatches(
+  person: Pick<GridKybPointerPerson, "gridBeneficialOwnerId">,
+  resourceId: string | null | undefined,
+): boolean {
+  const raw = String(resourceId ?? "").trim()
+  if (!raw || !person.gridBeneficialOwnerId) return false
+  const ownerId = raw.replace(/^BeneficialOwner:/, "")
+  return (
+    person.gridBeneficialOwnerId === raw ||
+    person.gridBeneficialOwnerId === ownerId ||
+    `BeneficialOwner:${person.gridBeneficialOwnerId}` === raw
+  )
+}
+
+function personFieldIsFilled(person: GridKybPointerPerson, field: string): boolean {
+  const key = lastFieldSegment(field)
+  const aliases: Record<string, string | undefined> = {
+    firstName: person.firstName,
+    lastName: person.lastName,
+    email: person.email,
+    birthDate: person.birthDate,
+    dateOfBirth: person.birthDate,
+    nationality: person.nationality,
+    addressLine1: person.addressLine1,
+    line1: person.addressLine1,
+    city: person.city,
+    country: person.addressCountry,
+    addressCountry: person.addressCountry,
+    idType: person.idType,
+    identifier: person.identifier,
+    countryOfIssuance: person.countryOfIssuance,
+  }
+  return Boolean(String(aliases[key] ?? "").trim())
+}
+
+export function filterResolvedGridKybErrorPointers(input: {
+  pointers: GridKybErrorPointer[]
+  company: GridKybCompanyDraft
+  people: GridKybPointerPerson[]
+  documents: GridKybPointerDocument[]
+}): GridKybErrorPointer[] {
+  const { pointers, company, people, documents } = input
+  return pointers.filter((pointer) => {
+    if (pointer.documentCategory === "identity") {
+      const identityDocs = documents.filter((row) => row.category === "identity")
+      if (pointer.resourceId) {
+        const person = people.find((row) => gridKybOwnerResourceMatches(row, pointer.resourceId))
+        if (!person) return true
+        return !identityDocs.some((row) => row.personId === person.id)
+      }
+      return people.length === 0 || people.some((person) => !identityDocs.some((row) => row.personId === person.id))
+    }
+    if (pointer.documentCategory) {
+      return !documents.some((row) => !row.personId && row.category === pointer.documentCategory)
+    }
+    if (pointer.section === "company" && pointer.field) {
+      return !gridKybCompanyFieldIsFilled(company, pointer.field)
+    }
+    if (pointer.section === "people" && pointer.field) {
+      if (!pointer.resourceId) return true
+      const person = people.find((row) => gridKybOwnerResourceMatches(row, pointer.resourceId))
+      if (!person) return true
+      return !personFieldIsFilled(person, pointer.field)
+    }
+    const reason = pointer.reason.toLowerCase()
+    if (reason.includes("beneficial owner") && reason.includes("required")) {
+      return people.length === 0
+    }
+    if (reason.includes("control person") && reason.includes("required")) {
+      return !people.some((row) => row.roles.includes("CONTROL_PERSON"))
+    }
+    return true
+  })
+}
+
+export type GridKybWizardReadiness =
+  | "not_submitted"
+  | "needs_attention"
+  | "ready_to_submit"
+  | "in_review"
+  | "approved"
+
+export function gridKybWizardReadiness(input: {
+  status: GridKybApplicationStatus | null | undefined
+  remainingPointers: number
+  company: GridKybCompanyDraft
+  peopleCount: number
+  hasIdentityDocument: boolean
+  hasCompanyDocument: boolean
+}): GridKybWizardReadiness {
+  const status = input.status ?? "draft"
+  if (status === "approved") return "approved"
+  if (status === "in_review" || status === "submitted") return "in_review"
+  if (input.remainingPointers > 0) return "needs_attention"
+  const ready =
+    Boolean(input.company.legalName.trim()) &&
+    input.peopleCount > 0 &&
+    input.hasIdentityDocument &&
+    input.hasCompanyDocument
+  return ready ? "ready_to_submit" : "not_submitted"
+}
+
 export type GridKybApplicationStatus =
   | "draft"
   | "submitted"
@@ -495,4 +653,33 @@ export function emptyGridKybCompanyDraft(): GridKybCompanyDraft {
     postalCode: "",
     addressCountry: "",
   }
+}
+
+function companyFieldFilled(value: GridKybCompanyDraft[keyof GridKybCompanyDraft]): boolean {
+  if (Array.isArray(value)) return value.length > 0
+  return String(value ?? "").trim().length > 0
+}
+
+/** Merge drafts without wiping values the user (or Settings) already has. */
+export function mergeGridKybCompanyDraft(
+  base: GridKybCompanyDraft,
+  incoming: Partial<GridKybCompanyDraft>,
+  mode: "fill-empty" | "prefer-incoming",
+): GridKybCompanyDraft {
+  const next = { ...base }
+  for (const key of Object.keys(emptyGridKybCompanyDraft()) as (keyof GridKybCompanyDraft)[]) {
+    const incomingValue = incoming[key]
+    if (incomingValue === undefined) continue
+    const incomingFilled = companyFieldFilled(incomingValue as GridKybCompanyDraft[typeof key])
+    if (mode === "prefer-incoming") {
+      if (incomingFilled) {
+        Object.assign(next, { [key]: incomingValue })
+      }
+      continue
+    }
+    if (!companyFieldFilled(next[key]) && incomingFilled) {
+      Object.assign(next, { [key]: incomingValue })
+    }
+  }
+  return next
 }

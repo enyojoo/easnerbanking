@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { emptyGridKybCompanyDraft, mapGridKybVerificationErrors } from "@easner/shared"
+import { mapGridKybVerificationErrors, mergeGridKybCompanyDraft, type GridKybCompanyDraft } from "@easner/shared"
 import { requireKybContext } from "../_context"
 import {
   ensureKybApplication,
@@ -9,7 +9,7 @@ import {
 import { ensureGridBusinessCustomer, loadGridBusinessProfile } from "@/lib/grid/ensure-grid-business-customer"
 
 function prefillCompanyFromProfile(
-  company: ReturnType<typeof emptyGridKybCompanyDraft>,
+  company: GridKybCompanyDraft,
   profile: {
     legalName?: string | null
     registrationNumber?: string | null
@@ -21,19 +21,23 @@ function prefillCompanyFromProfile(
     postalCode?: string | null
   } | null,
 ) {
-  if (company.legalName.trim() || !profile) return company
-  return {
-    ...company,
-    legalName: String(profile.legalName ?? "").trim(),
-    registrationNumber: String(profile.registrationNumber ?? "").trim(),
-    taxId: String(profile.taxId ?? "").trim(),
-    country: String(profile.country ?? "").trim().toUpperCase(),
-    addressCountry: String(profile.country ?? "").trim().toUpperCase(),
-    addressLine1: String(profile.addressLine1 ?? "").trim(),
-    city: String(profile.city ?? "").trim(),
-    state: String(profile.state ?? "").trim(),
-    postalCode: String(profile.postalCode ?? "").trim(),
-  }
+  if (!profile) return company
+  const country = String(profile.country ?? "").trim().toUpperCase()
+  return mergeGridKybCompanyDraft(
+    company,
+    {
+      legalName: String(profile.legalName ?? "").trim(),
+      registrationNumber: String(profile.registrationNumber ?? "").trim(),
+      taxId: String(profile.taxId ?? "").trim(),
+      country,
+      addressCountry: country,
+      addressLine1: String(profile.addressLine1 ?? "").trim(),
+      city: String(profile.city ?? "").trim(),
+      state: String(profile.state ?? "").trim(),
+      postalCode: String(profile.postalCode ?? "").trim(),
+    },
+    "fill-empty",
+  )
 }
 
 export async function GET(request: Request) {
@@ -43,7 +47,7 @@ export async function GET(request: Request) {
   const application = await ensureKybApplication(ctx.admin, ctx.businessId)
   const profile = await loadGridBusinessProfile(ctx.admin, ctx.businessId)
   const company = prefillCompanyFromProfile(application.company, profile)
-  if (!application.company.legalName.trim() && company.legalName.trim()) {
+  if (JSON.stringify(application.company) !== JSON.stringify(company)) {
     await ctx.admin
       .from("business_kyb_applications")
       .update({ company, updated_at: new Date().toISOString() })

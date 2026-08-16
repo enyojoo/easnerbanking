@@ -2,7 +2,13 @@
 
 import { useRef, useState } from "react"
 import { AlertTriangle, Loader2, Plus } from "lucide-react"
-import { GRID_KYB_DOCUMENT_CATEGORIES, GRID_KYB_ID_TYPES, GRID_KYB_OWNER_ROLES, type GridKybErrorPointer } from "@easner/shared"
+import {
+  GRID_KYB_DOCUMENT_CATEGORIES,
+  GRID_KYB_ID_TYPES,
+  GRID_KYB_OWNER_ROLES,
+  gridKybOwnerResourceMatches,
+  type GridKybErrorPointer,
+} from "@easner/shared"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -155,7 +161,10 @@ export function GridKybPeopleStep({
             const needsId = errors.some(
               (error) =>
                 error.section === "people" &&
-                (error.resourceId === person.gridBeneficialOwnerId || error.documentCategory === "identity"),
+                error.documentCategory === "identity" &&
+                (error.resourceId
+                  ? gridKybOwnerResourceMatches(person, error.resourceId)
+                  : identityDocsFor(person.id).length === 0),
             )
             return (
               <button
@@ -303,7 +312,7 @@ export function GridKybPeopleStep({
             title="Upload owner ID document"
             category="identity"
             acceptedDocumentTypes={
-              errors.find((error) => error.resourceId === selected?.gridBeneficialOwnerId)
+              errors.find((error) => selected && gridKybOwnerResourceMatches(selected, error.resourceId))
                 ?.acceptedDocumentTypes ?? GRID_KYB_DOCUMENT_CATEGORIES.identity.acceptedDocumentTypes
             }
             extraFields={{ personId: selected?.id, issuingAuthority: true, documentNumber: true }}

@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest"
 import {
+  emptyGridKybCompanyDraft,
+  mergeGridKybCompanyDraft,
+  filterResolvedGridKybErrorPointers,
   firstGridKybErrorSection,
   GRID_KYB_ENTITY_TYPES,
   gridKybApplicationIsEditable,
   gridKybApplicationStatusFromVerification,
+  gridKybWizardReadiness,
   mapGridKybVerificationErrors,
   resolveGridKybSourceOfFunds,
   sourceOfFundsIdFromStored,
@@ -120,5 +124,86 @@ describe("gridKybApplicationStatusFromVerification", () => {
     expect(
       gridKybApplicationStatusFromVerification({ verificationStatus: "PENDING_MANUAL_REVIEW" }),
     ).toBe("in_review")
+  })
+})
+
+describe("mergeGridKybCompanyDraft", () => {
+  it("keeps settings values when the saved draft is still empty", () => {
+    const settings = { ...emptyGridKybCompanyDraft(), legalName: "Acme Ltd", city: "Berlin" }
+    const saved = emptyGridKybCompanyDraft()
+    expect(mergeGridKybCompanyDraft(settings, saved, "prefer-incoming")).toEqual(settings)
+  })
+
+  it("lets a saved draft overwrite empty settings fields only", () => {
+    const settings = { ...emptyGridKybCompanyDraft(), legalName: "Acme Ltd" }
+    const saved = { ...emptyGridKybCompanyDraft(), purposeOfAccount: "CONTRACTOR_PAYOUTS" }
+    expect(mergeGridKybCompanyDraft(settings, saved, "prefer-incoming")).toMatchObject({
+      legalName: "Acme Ltd",
+      purposeOfAccount: "CONTRACTOR_PAYOUTS",
+    })
+  })
+})
+
+describe("filterResolvedGridKybErrorPointers", () => {
+  it("drops company field pointers once the field is filled", () => {
+    const remaining = filterResolvedGridKybErrorPointers({
+      pointers: [
+        { section: "company", field: "businessInfo.purposeOfAccount", reason: "Required" },
+        { section: "company", field: "businessInfo.businessType", reason: "Required" },
+      ],
+      company: { ...emptyGridKybCompanyDraft(), purposeOfAccount: "CONTRACTOR_PAYOUTS" },
+      people: [],
+      documents: [],
+    })
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0]?.field).toBe("businessInfo.businessType")
+  })
+
+  it("drops document and identity pointers after uploads", () => {
+    const remaining = filterResolvedGridKybErrorPointers({
+      pointers: [
+        { section: "documents", documentCategory: "ownership_structure", reason: "Required" },
+        {
+          section: "people",
+          documentCategory: "identity",
+          resourceId: "BeneficialOwner:abc",
+          reason: "Required",
+        },
+      ],
+      company: emptyGridKybCompanyDraft(),
+      people: [{ id: "p1", gridBeneficialOwnerId: "abc", roles: [] }],
+      documents: [
+        { personId: null, category: "ownership_structure" },
+        { personId: "p1", category: "identity" },
+      ],
+    })
+    expect(remaining).toEqual([])
+  })
+})
+
+describe("gridKybWizardReadiness", () => {
+  it("is not submitted until the draft has owners and documents", () => {
+    expect(
+      gridKybWizardReadiness({
+        status: "draft",
+        remainingPointers: 0,
+        company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
+        peopleCount: 0,
+        hasIdentityDocument: false,
+        hasCompanyDocument: false,
+      }),
+    ).toBe("not_submitted")
+  })
+
+  it("needs attention while pointers remain, then ready to submit", () => {
+    const base = {
+      status: "resolve_errors" as const,
+      company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
+      peopleCount: 1,
+      hasIdentityDocument: true,
+      hasCompanyDocument: true,
+    }
+    expect(gridKybWizardReadiness({ ...base, remainingPointers: 2 })).toBe("needs_attention")
+    expect(gridKybWizardReadiness({ ...base, remainingPointers: 0 })).toBe("ready_to_submit")
   })
 })

@@ -3,13 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   emptyGridKybCompanyDraft,
+  filterResolvedGridKybErrorPointers,
   firstGridKybErrorSection,
   gridKybApplicationIsEditable,
+  gridKybWizardReadiness,
+  mergeGridKybCompanyDraft,
   type GridKybCompanyDraft,
   type GridKybFormSection,
+  type GridKybWizardReadiness,
 } from "@easner/shared"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ensureBusinessOperationalAddressCountryRegistered } from "@/lib/address/register-lib-address-countries"
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 import type { KybDocumentPacket, KybPacket } from "@/lib/grid/kyb-packet-types"
@@ -46,7 +51,7 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
     if (!res.ok) throw new Error(json.error || "Could not load verification")
     setPacket(json)
     if (!companyDirtyRef.current) {
-      setCompany(json.company)
+      setCompany((prev) => mergeGridKybCompanyDraft(prev, json.company, "prefer-incoming"))
     }
     if (!hydratedSectionRef.current && json.errorPointers?.length) {
       setSection(firstGridKybErrorSection(json.errors))
@@ -59,9 +64,26 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
     void load().catch((err) => setError(err instanceof Error ? err.message : "Could not load verification"))
   }, [load])
 
+  useEffect(() => {
+    if (!initialCompany || companyDirtyRef.current) return
+    setCompany((prev) => mergeGridKybCompanyDraft(prev, initialCompany, "fill-empty"))
+  }, [initialCompany])
+
+  useEffect(() => {
+    const code = (company.addressCountry || company.country).trim()
+    if (code) void ensureBusinessOperationalAddressCountryRegistered(code)
+  }, [company.addressCountry, company.country])
+
   const status = packet?.status ?? (initialInReview ? "in_review" : null)
   const editable = gridKybApplicationIsEditable(status)
-  const pointers = packet?.errorPointers ?? []
+  const pointers = useMemo(() => {
+    return filterResolvedGridKybErrorPointers({
+      pointers: packet?.errorPointers ?? [],
+      company,
+      people: packet?.people ?? [],
+      documents: packet?.documents ?? [],
+    })
+  }, [packet, company])
   const counts = useMemo(() => {
     return {
       company: pointers.filter((row) => row.section === "company").length,
@@ -69,6 +91,17 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
       documents: pointers.filter((row) => row.section === "documents").length,
     }
   }, [pointers])
+  const readiness = useMemo(() => {
+    const documents = packet?.documents ?? []
+    return gridKybWizardReadiness({
+      status,
+      remainingPointers: pointers.length,
+      company,
+      peopleCount: packet?.people.length ?? 0,
+      hasIdentityDocument: documents.some((row) => row.category === "identity"),
+      hasCompanyDocument: documents.some((row) => !row.personId),
+    })
+  }, [status, pointers.length, company, packet])
 
   async function saveCompany() {
     if (!packet) await load()
@@ -169,11 +202,13 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
   if (status === "in_review" && !editable) {
     return (
       <div className="flex h-full min-h-0 flex-col bg-background">
-        <div className="flex items-center border-b px-2 py-2 sm:px-4">
-          <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 px-2" onClick={onClose}>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b px-2 py-2 sm:px-4">
+          <Button type="button" variant="ghost" size="sm" className="h-8 min-w-[8.5rem] justify-start gap-1 px-2" onClick={onClose}>
             <ArrowLeft className="size-4" aria-hidden />
             Back
           </Button>
+          <span />
+          <GridKybReadinessLabel readiness="in_review" />
         </div>
         <div className="mx-auto flex min-h-0 flex-1 max-w-xl flex-col justify-center px-6 py-16 text-center">
           <h2 className="text-xl font-semibold">{GRID_KYB_WIZARD_COPY.waitingTitle}</h2>
@@ -186,7 +221,7 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b px-2 py-2 sm:px-4">
-        <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 px-2" onClick={onClose}>
+        <Button type="button" variant="ghost" size="sm" className="h-8 min-w-[8.5rem] justify-start gap-1 px-2" onClick={onClose}>
           <ArrowLeft className="size-4" aria-hidden />
           Back
         </Button>
@@ -206,7 +241,7 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
             </button>
           ))}
         </nav>
-        <span className="invisible pointer-events-none h-8 w-[4.25rem]" aria-hidden />
+        <GridKybReadinessLabel readiness={readiness} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-2xl">
@@ -260,7 +295,7 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
             <Button
               type="button"
               size="sm"
-              disabled={!editable || pendingCta === "complete"}
+              disabled={!editable || readiness !== "ready_to_submit" || pendingCta === "complete"}
               onClick={() => void complete()}
             >
               {pendingCta === "complete" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
@@ -270,5 +305,28 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
         </div>
       </div>
     </div>
+  )
+}
+
+function GridKybReadinessLabel({ readiness }: { readiness: GridKybWizardReadiness }) {
+  const copy = {
+    not_submitted: GRID_KYB_WIZARD_COPY.readinessNotSubmitted,
+    needs_attention: GRID_KYB_WIZARD_COPY.readinessNeedsAttention,
+    ready_to_submit: GRID_KYB_WIZARD_COPY.readinessReady,
+    in_review: GRID_KYB_WIZARD_COPY.readinessInReview,
+    approved: GRID_KYB_WIZARD_COPY.readinessApproved,
+  }[readiness]
+  return (
+    <p
+      className={cn(
+        "min-w-[8.5rem] text-right text-xs font-medium",
+        readiness === "needs_attention" && "text-amber-700 dark:text-amber-400",
+        readiness === "ready_to_submit" && "text-emerald-700 dark:text-emerald-400",
+        (readiness === "not_submitted" || readiness === "in_review") && "text-muted-foreground",
+        readiness === "approved" && "text-emerald-700 dark:text-emerald-400",
+      )}
+    >
+      {copy}
+    </p>
   )
 }

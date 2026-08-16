@@ -5,7 +5,7 @@
  * CTA opens full-page wizard (`?flow=hosted`); Back restores the tabbed hub.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { ShieldCheck } from "lucide-react"
 import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
@@ -81,6 +81,10 @@ export function BusinessVerificationSection({
     city,
     state,
     postalCode,
+    registeredAddressLine1,
+    registeredAddressCity,
+    registeredAddressState,
+    registeredAddressPostalCode,
   } = useBusinessProfile()
 
   const showOnlinePayments = invoiceSettings?.showOnlinePayment !== false
@@ -161,7 +165,38 @@ export function BusinessVerificationSection({
     setHostedOpen(false)
   }, [embeddedFlow, flowFromUrl, hostedOpen])
 
-  if (isLoading && !hasData) {
+  const profileReady = Boolean(businessId || name.trim())
+  const initialCompany = useMemo(
+    () => ({
+      ...emptyGridKybCompanyDraft(),
+      legalName: name.trim(),
+      registrationNumber: registrationNumber.trim(),
+      taxId: taxId.trim(),
+      country: (registrationCountryCode || countryCode || "").toUpperCase(),
+      addressCountry: (countryCode || registrationCountryCode || "").toUpperCase(),
+      addressLine1: (registeredAddressLine1 || addressLine1).trim(),
+      city: (registeredAddressCity || city).trim(),
+      state: (registeredAddressState || state).trim(),
+      postalCode: (registeredAddressPostalCode || postalCode).trim(),
+    }),
+    [
+      name,
+      registrationNumber,
+      taxId,
+      registrationCountryCode,
+      countryCode,
+      registeredAddressLine1,
+      addressLine1,
+      registeredAddressCity,
+      city,
+      registeredAddressState,
+      state,
+      registeredAddressPostalCode,
+      postalCode,
+    ],
+  )
+
+  if ((isLoading && !hasData) || (hostedFlowActive && !profileReady)) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
   }
 
@@ -206,18 +241,7 @@ export function BusinessVerificationSection({
         <GridKybWizard
           onClose={closeHostedAndSync}
           initialInReview={tier1AwaitingReview}
-          initialCompany={{
-            ...emptyGridKybCompanyDraft(),
-            legalName: name.trim(),
-            registrationNumber: registrationNumber.trim(),
-            taxId: taxId.trim(),
-            country: (registrationCountryCode || countryCode || "").toUpperCase(),
-            addressCountry: (countryCode || registrationCountryCode || "").toUpperCase(),
-            addressLine1,
-            city,
-            state,
-            postalCode,
-          }}
+          initialCompany={initialCompany}
         />
       </div>
     </div>
