@@ -510,9 +510,11 @@ export function BusinessVerificationSection({
       ? "Retry verification"
       : tier1OnHold
         ? "Continue verification"
-        : tier1StartedNotSubmitted || hostedResumeAvailable === true
-          ? "Continue verification"
-          : "Begin verification"
+        : tier1InProgress
+          ? "View progress"
+          : tier1StartedNotSubmitted || hostedResumeAvailable === true
+            ? "Continue verification"
+            : "Begin verification"
 
   /** Full-page flow fills remaining main; in-tab fallback keeps title/tabs chrome. */
   const verificationFlowPanelClass = hostedFlowActive

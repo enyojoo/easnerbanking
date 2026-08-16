@@ -305,7 +305,7 @@ export const BANNER_COPY = {
   verification:
     "Complete verification to unlock payments and accounts.",
   verificationInProgress:
-    "Finish verification to unlock payments and accounts.",
+    "Verification is in progress. View progress to see what's left.",
   verificationInReview:
     "Verification is in progress. This usually completes within 1–3 days.",
   verificationActionNeeded:
@@ -317,6 +317,7 @@ export const BANNER_COPY = {
 export const BANNER_CTA_COPY = {
   begin: "Begin",
   continue: "Continue",
+  viewProgress: "View progress",
   status: "Status",
   retry: "Retry",
 } as const
@@ -382,7 +383,10 @@ export function verificationBannerCta(
   if (verificationBannerIsInReview(s)) {
     return BANNER_CTA_COPY.status
   }
-  if (s === "in_progress" || opts?.started) {
+  if (s === "in_progress") {
+    return BANNER_CTA_COPY.viewProgress
+  }
+  if (opts?.started) {
     return BANNER_CTA_COPY.continue
   }
   return BANNER_CTA_COPY.begin
