@@ -570,9 +570,10 @@ export function filterResolvedGridKybErrorPointers(input: {
       return !gridKybCompanyFieldIsFilled(company, pointer.field)
     }
     if (pointer.section === "people" && pointer.field) {
+      const field = pointer.field
       const targets = peopleForPointer(people, pointer.resourceId)
       if (targets.length === 0) return true
-      return targets.some((person) => !personFieldIsFilled(person, pointer.field))
+      return targets.some((person) => !personFieldIsFilled(person, field))
     }
     const reason = pointer.reason.toLowerCase()
     if (reason.includes("beneficial owner") && reason.includes("required")) {
