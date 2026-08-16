@@ -583,13 +583,21 @@ export function deriveTransactionNotification(
     })
     if (inboundSnapshot?.kind === "stablecoin") {
       const notification = resolveInboundReceiveNotification(inboundSnapshot)
+      const creditedDisplay = formatMoneyDisplay(
+        inboundSnapshot.amountCredited.amount,
+        inboundSnapshot.amountCredited.currency,
+      )
       return finalizeDescriptor(
         {
           ...base,
           kind: "stablecoin_deposit",
+          amountDisplay: creditedDisplay,
           body: notification.successBody,
           pushBody: notification.successBody,
           category: notification.activityLabel,
+          ...(inboundSnapshot.sender
+            ? { counterpartyLabel: "Sender", counterpartyName: inboundSnapshot.sender }
+            : {}),
         },
         notification.activityLabel,
       )

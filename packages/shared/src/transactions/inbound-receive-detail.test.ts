@@ -220,6 +220,11 @@ describe("buildInboundReceiveDetailRows", () => {
     expect(map[REVIEW_ROW_LABELS.processingFee]).toBe("$1")
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$99")
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
+
+    const emailMap = rowMap(buildInboundReceiveEmailDetailRows(snapshot!))
+    expect(emailMap[REVIEW_ROW_LABELS.processingFee]).toBe("$1")
+    expect(emailMap[REVIEW_ROW_LABELS.amountCredited]).toBe("+$99")
+    expect(emailMap[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
   })
 
   it("stablecoin without fee omits amount credited on detail", () => {

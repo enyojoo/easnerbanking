@@ -65,3 +65,30 @@ describe("deriveTransactionNotification Noah VA funding", () => {
     expect(descriptor.pushTitle).toBe("US bank deposit complete")
   })
 })
+
+describe("deriveTransactionNotification relay stablecoin deposit", () => {
+  it("uses credited posted amount in push body and amountDisplay", () => {
+    const descriptor = deriveTransactionNotification({
+      provider: "relay",
+      direction: "in",
+      amount: 2.31,
+      currency: "USD",
+      metadata: {
+        activity_type: "relay_tron_deposit",
+        source_payment_rail: "tron",
+        source_currency: "USDT",
+        gross_usdt: 3,
+        posted_amount: 2.307509,
+        posted_currency: "USD",
+        fee_amount: 0.692491,
+        sender_tron_address: "TQbRULEB1NwizCwpCHTGbmt4Nnsfej6VhT",
+      },
+      outcome: "success",
+    })
+
+    expect(descriptor.pushTitle).toBe("Stablecoin deposit complete")
+    expect(descriptor.pushBody).toBe("$2.31 credited to your USD Balance")
+    expect(descriptor.body).toBe("$2.31 credited to your USD Balance")
+    expect(descriptor.amountDisplay).toBe("$2.31")
+  })
+})

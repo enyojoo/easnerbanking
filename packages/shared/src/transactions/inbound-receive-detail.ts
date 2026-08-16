@@ -646,9 +646,7 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
-      if (surface === "detail") {
-        pushAmountCreditedIfNeeded(rows, snapshot)
-      }
+      pushAmountCreditedIfNeeded(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
       pushIf(rows, REVIEW_ROW_LABELS.note, snapshot.note)
       break

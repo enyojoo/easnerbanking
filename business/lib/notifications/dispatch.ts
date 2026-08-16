@@ -418,6 +418,19 @@ export async function writeInAppNotificationRow(
   // no-op — extension point for future in-app feed
 }
 
+function resolveNotificationCreditedAmount(input: DispatchTransactionNotificationInput): {
+  amount: number
+  currency: string
+} {
+  const meta = (input.metadata ?? {}) as Record<string, unknown>
+  const posted = Number(meta.posted_amount ?? meta.settled_amount)
+  const amount = Number.isFinite(posted) && posted > 0 ? posted : input.amount
+  const currency = String(
+    meta.posted_currency ?? meta.settled_currency ?? input.currency ?? "USD",
+  ).toUpperCase()
+  return { amount, currency }
+}
+
 /** Unified push + email dispatch for ledger transaction events. */
 export async function dispatchTransactionNotification(
   admin: SupabaseClient,
@@ -439,6 +452,7 @@ export async function dispatchTransactionNotification(
 
   // Business is email-only — no Expo push.
   if (audience !== "business" && sendPush && parsed.channels.push) {
+    const credited = resolveNotificationCreditedAmount(input)
     await sendTransactionSettledPush(admin, {
       userId: input.userId,
       transactionId: input.transactionId,
@@ -448,8 +462,8 @@ export async function dispatchTransactionNotification(
         type: "transaction_settled",
         transactionId: input.transactionId,
         easnerTransactionId: input.easnerTransactionId ?? undefined,
-        amount: input.amount,
-        currency: input.currency,
+        amount: credited.amount,
+        currency: credited.currency,
         direction: input.direction ?? undefined,
         status: "settled",
         category: descriptor.category,
