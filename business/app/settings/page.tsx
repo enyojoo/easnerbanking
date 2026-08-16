@@ -18,6 +18,7 @@ import {
   type SettingsVerificationEmbeddedFlow,
 } from "@/lib/compliance/cutover-comms"
 import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
+import { usePrimeKybPacket } from "@/lib/grid/kyb-packet-query"
 import { cn } from "@/lib/utils"
 
 const TABS = ["personal", "business", "verification", "team", "recipients", "customers", "communication", "invoicing"] as const
@@ -67,6 +68,8 @@ function SettingsContent() {
   useEffect(() => {
     setActiveTab(validTab)
   }, [validTab])
+
+  usePrimeKybPacket(Boolean(businessId && canManageBusinessVerification))
 
   useEffect(() => {
     primeConnectStatus(businessId)

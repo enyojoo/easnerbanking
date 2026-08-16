@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { ShieldCheck } from "lucide-react"
+import { Loader2, ShieldCheck } from "lucide-react"
 import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Button } from "@/components/ui/button"
@@ -33,6 +33,7 @@ import {
 } from "@/lib/compliance/cutover-comms"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 import { GridKybWizard } from "@/components/compliance/grid-kyb-wizard"
+import { useKybPacket } from "@/lib/grid/kyb-packet-query"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -92,7 +93,10 @@ export function BusinessVerificationSection({
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [hostedOpen, setHostedOpen] = useState(false)
+  const [opening, setOpening] = useState(false)
   const flowAutoOpenRef = useRef(false)
+  const kybPacketQuery = useKybPacket(Boolean(businessId && canManageBusinessVerification))
+  const kybPacket = kybPacketQuery.data ?? null
 
   const hostedFlowActive = hostedOpen || flowFromUrl || embeddedFlow === "hosted"
   const connectFlowActive = embeddedFlow === "connect" || connectFromUrl
@@ -139,16 +143,31 @@ export function BusinessVerificationSection({
     void syncBusinessTier1FromGrid()
   }, [clearVerificationFlowUrl, syncBusinessTier1FromGrid])
 
-  const openHostedVerification = useCallback(() => {
+  const openHostedVerification = useCallback(async () => {
     setError(null)
     setInfo(null)
     if (!businessId) {
       setInfo("Your organization is still being set up. Refresh and try again in a moment.")
       return
     }
+    if (!kybPacket) {
+      setOpening(true)
+      try {
+        const result = await kybPacketQuery.refetch()
+        if (!result.data) {
+          setError(result.error instanceof Error ? result.error.message : "Could not load verification")
+          return
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load verification")
+        return
+      } finally {
+        setOpening(false)
+      }
+    }
     setHostedOpen(true)
     pushVerificationFlowUrl()
-  }, [businessId, pushVerificationFlowUrl])
+  }, [businessId, kybPacket, kybPacketQuery, pushVerificationFlowUrl])
 
   useEffect(() => {
     if (!flowFromUrl) {
@@ -196,8 +215,13 @@ export function BusinessVerificationSection({
     ],
   )
 
-  if ((isLoading && !hasData) || (hostedFlowActive && !profileReady)) {
-    return <div className="text-sm text-muted-foreground">Loading verification status…</div>
+  if ((isLoading && !hasData) || (hostedFlowActive && (!profileReady || !kybPacket))) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 py-16 text-sm text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" aria-hidden />
+        Loading verification…
+      </div>
+    )
   }
 
   const tier1Rejected = tier1VerificationStatus === "rejected"
@@ -235,17 +259,18 @@ export function BusinessVerificationSection({
     ? "flex min-h-0 flex-1 flex-col"
     : "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
 
-  const hostedFlowPanel = (
+  const hostedFlowPanel = kybPacket ? (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <GridKybWizard
           onClose={closeHostedAndSync}
           initialInReview={tier1AwaitingReview}
           initialCompany={initialCompany}
+          initialPacket={kybPacket}
         />
       </div>
     </div>
-  )
+  ) : null
 
   if (connectFlowActive) {
     return (
@@ -370,9 +395,10 @@ export function BusinessVerificationSection({
                             {showTier1HostedCta ? (
                               <Button
                                 size="sm"
-                                onClick={() => openHostedVerification()}
-                                disabled={!businessId}
+                                onClick={() => void openHostedVerification()}
+                                disabled={!businessId || opening}
                               >
+                                {opening ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
                                 {tier1HostedCtaLabel}
                               </Button>
                             ) : null}

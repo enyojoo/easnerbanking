@@ -45,7 +45,25 @@ export async function GET(request: Request) {
   if ("error" in ctx) return ctx.error
 
   const application = await ensureKybApplication(ctx.admin, ctx.businessId)
-  const profile = await loadGridBusinessProfile(ctx.admin, ctx.businessId)
+  let people: Awaited<ReturnType<typeof listKybPeople>> = []
+  let documents: Awaited<ReturnType<typeof listKybDocuments>> = []
+  const [profile] = await Promise.all([
+    loadGridBusinessProfile(ctx.admin, ctx.businessId),
+    listKybPeople(ctx.admin, application.id, true)
+      .then((rows) => {
+        people = rows
+      })
+      .catch((error) => {
+        console.warn("[grid/kyb/packet] list people:", error)
+      }),
+    listKybDocuments(ctx.admin, application.id, true)
+      .then((rows) => {
+        documents = rows
+      })
+      .catch((error) => {
+        console.warn("[grid/kyb/packet] list documents:", error)
+      }),
+  ])
   const company = prefillCompanyFromProfile(application.company, profile)
   if (JSON.stringify(application.company) !== JSON.stringify(company)) {
     await ctx.admin
@@ -54,7 +72,7 @@ export async function GET(request: Request) {
       .eq("id", application.id)
   }
 
-  if (profile) {
+  if (profile && !application.grid_customer_id) {
     try {
       const ensured = await ensureGridBusinessCustomer({
         admin: ctx.admin,
@@ -75,17 +93,6 @@ export async function GET(request: Request) {
     } catch (error) {
       console.warn("[grid/kyb/packet] ensure customer:", error)
     }
-  }
-
-  let people: Awaited<ReturnType<typeof listKybPeople>> = []
-  let documents: Awaited<ReturnType<typeof listKybDocuments>> = []
-  try {
-    ;[people, documents] = await Promise.all([
-      listKybPeople(ctx.admin, application.id, true),
-      listKybDocuments(ctx.admin, application.id, true),
-    ])
-  } catch (error) {
-    console.warn("[grid/kyb/packet] list people/documents:", error)
   }
 
   return NextResponse.json({

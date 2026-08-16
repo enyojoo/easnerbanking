@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
+import { resolveCountryIso2 } from "@/lib/countries"
+import { cn } from "@/lib/utils"
 import type { KybDocumentPacket, KybPersonPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
 import { BusinessAddressFields } from "@/components/settings/business-address-fields"
@@ -80,19 +82,19 @@ export function GridKybPeopleStep({
       email: person.email,
       phone: person.phone,
       birthDate: person.birthDate,
-      nationality: person.nationality,
+      nationality: resolveCountryIso2(person.nationality),
       addressLine1: person.addressLine1,
       addressLine2: person.addressLine2,
       city: person.city,
       state: person.state,
       postalCode: person.postalCode,
-      addressCountry: person.addressCountry,
+      addressCountry: resolveCountryIso2(person.addressCountry),
       ownershipPercentage:
         person.ownershipPercentage == null ? "" : String(person.ownershipPercentage),
       roles: person.roles,
       idType: person.idType,
       identifier: person.identifier,
-      countryOfIssuance: person.countryOfIssuance,
+      countryOfIssuance: resolveCountryIso2(person.countryOfIssuance),
     })
     setEditingId(person.id)
   }
@@ -105,6 +107,9 @@ export function GridKybPeopleStep({
       const parsedOwnership = ownership === "" ? null : Number(ownership)
       const payload = {
         ...form,
+        nationality: resolveCountryIso2(form.nationality) || form.nationality,
+        addressCountry: resolveCountryIso2(form.addressCountry) || form.addressCountry,
+        countryOfIssuance: resolveCountryIso2(form.countryOfIssuance) || form.countryOfIssuance,
         ownershipPercentage:
           parsedOwnership != null && Number.isFinite(parsedOwnership) ? parsedOwnership : null,
       }
@@ -135,6 +140,40 @@ export function GridKybPeopleStep({
   const identityDocsFor = (personId: string | null | undefined) =>
     documents.filter((doc) => doc.category === "identity" && doc.personId && doc.personId === personId)
 
+  function peopleErrorsFor(person: Pick<KybPersonPacket, "id" | "gridBeneficialOwnerId"> | null) {
+    return errors.filter((error) => {
+      if (error.section !== "people") return false
+      if (error.resourceId) {
+        return person ? gridKybOwnerResourceMatches(person, error.resourceId) : false
+      }
+      if (error.documentCategory === "identity" && person) {
+        return identityDocsFor(person.id).length === 0
+      }
+      return true
+    })
+  }
+
+  function fieldError(field: string) {
+    return peopleErrorsFor(selected).find(
+      (error) => error.field === field || error.field?.endsWith(`.${field.split(".").pop()}`),
+    )
+  }
+
+  const selectedErrors = peopleErrorsFor(selected)
+  const nationalityError = fieldError("nationality")
+  const birthDateError = fieldError("birthDate") || fieldError("dateOfBirth")
+  const addressError = selectedErrors.find(
+    (error) =>
+      error.field?.toLowerCase().includes("address") ||
+      error.field?.endsWith("country") ||
+      error.field?.endsWith("line1") ||
+      error.field?.endsWith("city") ||
+      error.field?.endsWith("state") ||
+      error.field?.endsWith("postalCode"),
+  )
+  const identityError = selectedErrors.find((error) => error.documentCategory === "identity")
+  const idTypeError = fieldError("idType") || fieldError("identifier") || fieldError("countryOfIssuance")
+
   return (
     <div className="space-y-6">
       <div>
@@ -144,6 +183,11 @@ export function GridKybPeopleStep({
 
       {!editingId ? (
         <div className="space-y-2">
+          {people.length === 0 && errors.some((error) => error.section === "people") ? (
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              {errors.find((error) => error.section === "people")?.reason || "Add a business owner."}
+            </p>
+          ) : null}
           <button
             type="button"
             disabled={disabled}
@@ -158,27 +202,27 @@ export function GridKybPeopleStep({
             </span>
           </button>
           {people.map((person) => {
-            const needsId = errors.some(
-              (error) =>
-                error.section === "people" &&
-                error.documentCategory === "identity" &&
-                (error.resourceId
-                  ? gridKybOwnerResourceMatches(person, error.resourceId)
-                  : identityDocsFor(person.id).length === 0),
-            )
+            const personErrors = peopleErrorsFor(person)
+            const needsAttention = personErrors.length > 0
+            const needsId = personErrors.some((error) => error.documentCategory === "identity")
             return (
               <button
                 key={person.id}
                 type="button"
                 onClick={() => openExisting(person)}
-                className="flex w-full items-center justify-between rounded-2xl border bg-card px-4 py-3 text-left"
+                className={cn(
+                  "flex w-full items-center justify-between rounded-2xl border bg-card px-4 py-3 text-left",
+                  needsAttention && "border-amber-300",
+                )}
               >
                 <span>
                   <span className="block text-sm font-medium">
                     {person.firstName} {person.lastName}
                   </span>
-                  {needsId ? (
-                    <span className="text-xs text-muted-foreground">Needs ID document</span>
+                  {needsAttention ? (
+                    <span className="text-xs text-amber-700 dark:text-amber-400">
+                      {personErrors[0]?.reason || (needsId ? "Needs ID document" : "Needs attention")}
+                    </span>
                   ) : identityDocsFor(person.id).length ? (
                     <span className="text-xs text-muted-foreground">
                       {identityDocsFor(person.id)
@@ -189,7 +233,7 @@ export function GridKybPeopleStep({
                     <span className="text-xs text-muted-foreground">{person.roles.join(", ") || "Owner"}</span>
                   )}
                 </span>
-                {needsId ? <AlertTriangle className="size-4 text-amber-600" /> : null}
+                {needsAttention ? <AlertTriangle className="size-4 text-amber-600" /> : null}
               </button>
             )
           })}
@@ -211,7 +255,14 @@ export function GridKybPeopleStep({
             </div>
             <div className="space-y-2">
               <Label>Date of birth</Label>
-              <Input type="date" className={SETTINGS_INPUT_CLASS} value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} disabled={disabled} />
+              <Input
+                type="date"
+                className={cn(SETTINGS_INPUT_CLASS, birthDateError && "border-destructive")}
+                value={form.birthDate}
+                onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
+                disabled={disabled}
+              />
+              {birthDateError ? <p className="text-sm text-destructive">{birthDateError.reason}</p> : null}
             </div>
             <div className="space-y-2">
               <Label>Nationality</Label>
@@ -221,7 +272,9 @@ export function GridKybPeopleStep({
                 placeholder="Select nationality"
                 catalog="all"
                 disabled={disabled}
+                invalid={Boolean(nationalityError)}
               />
+              {nationalityError ? <p className="text-sm text-destructive">{nationalityError.reason}</p> : null}
             </div>
             <div className="space-y-2">
               <Label>Ownership %</Label>
@@ -236,7 +289,14 @@ export function GridKybPeopleStep({
             </div>
             <div className="space-y-2">
               <Label>ID type</Label>
-              <GridKybEnumSelect value={form.idType} onChange={(idType) => setForm({ ...form, idType })} options={GRID_KYB_ID_TYPES} placeholder="Select ID type" disabled={disabled} />
+              <GridKybEnumSelect
+                value={form.idType}
+                onChange={(idType) => setForm({ ...form, idType })}
+                options={GRID_KYB_ID_TYPES}
+                placeholder="Select ID type"
+                disabled={disabled}
+                invalid={Boolean(idTypeError)}
+              />
             </div>
             <div className="space-y-2">
               <Label>ID number</Label>
@@ -250,30 +310,36 @@ export function GridKybPeopleStep({
                 placeholder="Select issuing country"
                 catalog="all"
                 disabled={disabled}
+                invalid={Boolean(idTypeError)}
               />
             </div>
           </div>
-          <BusinessAddressFields
-            countryCode={form.addressCountry}
-            values={{
-              line1: form.addressLine1,
-              city: form.city,
-              state: form.state,
-              postalCode: form.postalCode,
-            }}
-            onChange={(patch) =>
-              setForm({
-                ...form,
-                addressLine1: patch.line1 ?? form.addressLine1,
-                city: patch.city ?? form.city,
-                state: patch.state ?? form.state,
-                postalCode: patch.postalCode ?? form.postalCode,
-              })
-            }
-            onCountryCodeChange={(addressCountry) => setForm({ ...form, addressCountry })}
-            disabled={disabled}
-            editing={!disabled}
-          />
+          <div className={cn(addressError && "rounded-xl ring-1 ring-destructive/40 p-3")}>
+            <BusinessAddressFields
+              countryCode={form.addressCountry}
+              values={{
+                line1: form.addressLine1,
+                city: form.city,
+                state: form.state,
+                postalCode: form.postalCode,
+              }}
+              onChange={(patch) =>
+                setForm((prev) => ({
+                  ...prev,
+                  addressLine1: patch.line1 ?? prev.addressLine1,
+                  city: patch.city ?? prev.city,
+                  state: patch.state ?? prev.state,
+                  postalCode: patch.postalCode ?? prev.postalCode,
+                }))
+              }
+              onCountryCodeChange={(addressCountry) =>
+                setForm((prev) => ({ ...prev, addressCountry }))
+              }
+              disabled={disabled}
+              editing={!disabled}
+            />
+            {addressError ? <p className="mt-2 text-sm text-destructive">{addressError.reason}</p> : null}
+          </div>
           <div className="space-y-2">
             <Label>Address line 2 (optional)</Label>
             <Input

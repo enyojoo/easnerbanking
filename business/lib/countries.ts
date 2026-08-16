@@ -219,6 +219,18 @@ export const countries: Country[] = [...priorityCountries, ...otherCountries]
  * Normalize `businesses.country` for invoices/PDFs: use full country name, mapping ISO 3166-1 alpha-2
  * when the DB still holds a two-letter code (legacy or imports).
  */
+/** ISO 3166-1 alpha-2 from a stored code or country name. */
+export function resolveCountryIso2(stored: string | null | undefined): string {
+  const raw = String(stored ?? "").trim()
+  if (!raw) return ""
+  if (/^[A-Za-z]{2}$/.test(raw)) {
+    const code = raw.toUpperCase()
+    return countries.some((row) => row.code === code) ? code : ""
+  }
+  const byName = countries.find((row) => row.name.toLowerCase() === raw.toLowerCase())
+  return byName?.code ?? ""
+}
+
 export function displayCountryFromBusinessSetting(stored: string | null | undefined): string {
   const t = (stored ?? "").trim()
   if (!t) return ""

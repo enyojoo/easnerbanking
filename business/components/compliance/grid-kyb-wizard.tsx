@@ -18,6 +18,8 @@ import { ensureBusinessOperationalAddressCountryRegistered } from "@/lib/address
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 import type { KybDocumentPacket, KybPacket } from "@/lib/grid/kyb-packet-types"
+import { fetchKybPacket, KYB_PACKET_QUERY_KEY } from "@/lib/grid/kyb-packet-query"
+import { useQueryClient } from "@tanstack/react-query"
 import { GridKybCompanyStep } from "./grid-kyb-company-step"
 import { GridKybPeopleStep } from "./grid-kyb-people-step"
 import { GridKybDocumentsStep } from "./grid-kyb-documents-step"
@@ -25,6 +27,7 @@ import { GridKybDocumentsStep } from "./grid-kyb-documents-step"
 type Props = {
   onClose: () => void
   initialCompany?: GridKybCompanyDraft
+  initialPacket: KybPacket
   initialInReview?: boolean
 }
 
@@ -34,21 +37,37 @@ const SECTIONS: { id: GridKybFormSection; label: string }[] = [
   { id: "documents", label: "Documents" },
 ]
 
-export function GridKybWizard({ onClose, initialCompany, initialInReview = false }: Props) {
-  const [packet, setPacket] = useState<KybPacket | null>(null)
-  const [company, setCompany] = useState<GridKybCompanyDraft>(
-    () => initialCompany ?? emptyGridKybCompanyDraft(),
+export function GridKybWizard({ onClose, initialCompany, initialPacket, initialInReview = false }: Props) {
+  const queryClient = useQueryClient()
+  const [packet, setPacketState] = useState<KybPacket>(initialPacket)
+  const [company, setCompany] = useState<GridKybCompanyDraft>(() =>
+    mergeGridKybCompanyDraft(
+      initialCompany ?? emptyGridKybCompanyDraft(),
+      initialPacket.company,
+      "prefer-incoming",
+    ),
   )
-  const [section, setSection] = useState<GridKybFormSection>("company")
+  const [section, setSection] = useState<GridKybFormSection>(() =>
+    initialPacket.errorPointers?.length ? firstGridKybErrorSection(initialPacket.errors) : "company",
+  )
   const [pendingCta, setPendingCta] = useState<"exit" | "next" | "complete" | null>(null)
   const [error, setError] = useState<string | null>(null)
   const companyDirtyRef = useRef(false)
-  const hydratedSectionRef = useRef(false)
+  const hydratedSectionRef = useRef(Boolean(initialPacket.errorPointers?.length))
+
+  const setPacket = useCallback(
+    (next: KybPacket | ((prev: KybPacket) => KybPacket)) => {
+      setPacketState((prev) => {
+        const resolved = typeof next === "function" ? next(prev) : next
+        queryClient.setQueryData(KYB_PACKET_QUERY_KEY, resolved)
+        return resolved
+      })
+    },
+    [queryClient],
+  )
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/grid/kyb/packet")
-    const json = (await res.json().catch(() => ({}))) as KybPacket & { error?: string }
-    if (!res.ok) throw new Error(json.error || "Could not load verification")
+    const json = await fetchKybPacket()
     setPacket(json)
     if (!companyDirtyRef.current) {
       setCompany((prev) => mergeGridKybCompanyDraft(prev, json.company, "prefer-incoming"))
@@ -58,11 +77,7 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
     }
     hydratedSectionRef.current = true
     return json
-  }, [])
-
-  useEffect(() => {
-    void load().catch((err) => setError(err instanceof Error ? err.message : "Could not load verification"))
-  }, [load])
+  }, [setPacket])
 
   useEffect(() => {
     if (!initialCompany || companyDirtyRef.current) return
@@ -104,7 +119,6 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
   }, [status, pointers.length, company, packet])
 
   async function saveCompany() {
-    if (!packet) await load()
     const res = await fetch("/api/grid/kyb/company", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -112,6 +126,7 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
     })
     const json = (await res.json().catch(() => ({}))) as { error?: string }
     if (!res.ok) throw new Error(json.error || "Could not save company details")
+    setPacket((prev) => ({ ...prev, company }))
   }
 
   async function goNext() {
@@ -168,16 +183,13 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
 
   function rememberDocument(doc: KybDocumentPacket) {
     setPacket((prev) => {
-      if (!prev) return prev
       if (prev.documents.some((row) => row.id === doc.id)) return prev
       return { ...prev, documents: [...prev.documents, doc] }
     })
   }
 
   function forgetDocument(id: string) {
-    setPacket((prev) =>
-      prev ? { ...prev, documents: prev.documents.filter((row) => row.id !== id) } : prev,
-    )
+    setPacket((prev) => ({ ...prev, documents: prev.documents.filter((row) => row.id !== id) }))
   }
 
   async function reloadQuiet() {
