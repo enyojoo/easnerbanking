@@ -4,9 +4,11 @@ import { gridFetch, GridHttpError } from "./http"
 import {
   buildGridBusinessCustomerPayload,
   buildGridBusinessInfoResyncPatch,
+  buildGridBusinessInfoScrubPatch,
   gridBusinessHostedKybBusinessInfoIsOverfilled,
   gridBusinessKybStubFieldsNeedResync,
   gridBusinessTaxIdIsInvalidOnGrid,
+  gridCustomerHasHostedKybInFlight,
   isGridShellBusinessTaxId,
   normalizeStoredBusinessTaxId,
   type GridBusinessProfile,
@@ -209,7 +211,15 @@ function readGridBusinessTaxId(customer: GridCustomer & Record<string, unknown>)
   return typeof raw === "string" && raw.trim() ? raw.trim() : null
 }
 
-function canSafelyRecreateGridBusinessCustomer(customer: GridCustomer): boolean {
+function canSafelyRecreateGridBusinessCustomer(
+  customer: GridCustomer,
+  context: { platformCustomerId: string; profile: GridBusinessProfile },
+): boolean {
+  if (
+    gridCustomerHasHostedKybInFlight(customer as GridCustomer & Record<string, unknown>, context)
+  ) {
+    return false
+  }
   const status = String(customer.kybStatus ?? customer.kycStatus ?? "")
     .trim()
     .toUpperCase()
@@ -257,6 +267,13 @@ async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
   platformCustomerId: string
 }): Promise<GridCustomer | "recreate"> {
   const customerRecord = input.customer as GridCustomer & Record<string, unknown>
+  const inFlightContext = {
+    platformCustomerId: input.platformCustomerId,
+    profile: input.profile,
+  }
+  if (gridCustomerHasHostedKybInFlight(customerRecord, inFlightContext)) {
+    return input.customer
+  }
   if (
     !gridBusinessKybStubFieldsNeedResync({
       customer: customerRecord,
@@ -267,7 +284,7 @@ async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
     return input.customer
   }
 
-  const skipPatch =
+  const needsScrubPatch =
     gridBusinessTaxIdIsInvalidOnGrid({
       customer: customerRecord,
       platformCustomerId: input.platformCustomerId,
@@ -280,20 +297,23 @@ async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
     })
 
   let patched = input.customer
-  if (!skipPatch) {
-    const businessInfo = buildGridBusinessInfoResyncPatch({
-      platformCustomerId: input.platformCustomerId,
-      profile: input.profile,
-    })
-    try {
-      patched = await gridFetch<GridCustomer>({
-        method: "PATCH",
-        path: `/customers/${encodeURIComponent(input.customerId)}`,
-        json: gridBusinessCustomerUpdatePayload({ businessInfo }),
+  const businessInfo = needsScrubPatch
+    ? buildGridBusinessInfoScrubPatch({
+        platformCustomerId: input.platformCustomerId,
+        profile: input.profile,
       })
-    } catch {
-      patched = input.customer
-    }
+    : buildGridBusinessInfoResyncPatch({
+        platformCustomerId: input.platformCustomerId,
+        profile: input.profile,
+      })
+  try {
+    patched = await gridFetch<GridCustomer>({
+      method: "PATCH",
+      path: `/customers/${encodeURIComponent(input.customerId)}`,
+      json: gridBusinessCustomerUpdatePayload({ businessInfo }),
+    })
+  } catch {
+    patched = input.customer
   }
 
   if (
@@ -306,7 +326,7 @@ async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
     return patched
   }
 
-  if (!canSafelyRecreateGridBusinessCustomer(patched)) {
+  if (!canSafelyRecreateGridBusinessCustomer(patched, inFlightContext)) {
     return patched
   }
 
@@ -567,6 +587,19 @@ export async function ensureGridBusinessCustomer(input: {
   const customerId = normalizeGridCustomerId(String(created.id ?? ""))
   if (!customerId) throw new Error("Grid BUSINESS customer create did not return id")
   await persistGridCustomerId(input.admin, input.businessId, customerId)
-  await markGridEndUserTermsSynced(input.admin, ownerUserId)
-  return { customerId, platformCustomerId, customer: created }
+  const finalized = await finalizeGridBusinessCustomer({
+    admin: input.admin,
+    businessId: input.businessId,
+    customerId,
+    customer: created,
+    profile,
+    platformCustomerId,
+    consent,
+    ownerUserId,
+    contact,
+  })
+  if (finalized === "recreate") {
+    throw new Error("Grid business customer could not be finalized after create")
+  }
+  return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
 }

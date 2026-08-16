@@ -6,7 +6,11 @@ import {
   loadGridBusinessProfile,
 } from "@/lib/grid/ensure-grid-business-customer"
 import { createGridBusinessKycLink } from "@/lib/grid/kyc-links"
-import { syncGridBusinessKybToSupabase } from "@/lib/grid/sync-kyb"
+import {
+  fetchGridVerificationsForCustomer,
+  gridBusinessKybStatus,
+  syncGridBusinessKybToSupabase,
+} from "@/lib/grid/sync-kyb"
 import { formatGridApiError } from "@/lib/grid/format-grid-api-error"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
 
@@ -32,12 +36,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { customerId } = await ensureGridBusinessCustomer({
+    const ensured = await ensureGridBusinessCustomer({
       admin,
       userId: ctx.userId,
       businessId: ctx.businessId,
       profile,
     })
+    const { customerId, customer } = ensured
 
     if (preflight.action === "skipHostedPost") {
       await syncGridBusinessKybToSupabase({
@@ -56,6 +61,21 @@ export async function POST(request: Request) {
       })
     }
 
+    const verifications = await fetchGridVerificationsForCustomer(customerId)
+    const kycStatus = gridBusinessKybStatus(
+      customer as Record<string, unknown>,
+      verifications,
+    )
+    if (kycStatus === "in_progress" || kycStatus === "pending" || kycStatus === "hold") {
+      await syncGridBusinessKybToSupabase({
+        admin,
+        businessId: ctx.businessId,
+        userId: ctx.userId,
+        customerId,
+        customer: customer as Record<string, unknown>,
+      })
+    }
+
     const link = await createGridBusinessKycLink({
       customerId,
       idempotencyKey: `kyb-link:${ctx.businessId}`,
@@ -64,7 +84,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       kyc_link: link.kycUrl,
       kyc_token: link.token ?? null,
-      kyc_status: "not_started",
+      kyc_status: kycStatus,
       customer_id: customerId,
       kyc_link_id: customerId,
       alreadyOnboarded: false,
