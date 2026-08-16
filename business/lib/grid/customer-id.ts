@@ -9,11 +9,9 @@ export function gridPlatformCustomerIdFromBusinessId(businessId: string): string
   return ebFromBusinessId(businessId)
 }
 
-/** Use `_g2+` when Grid still reserves the canonical id on a deleted customer. */
-export function gridPlatformCustomerIdWithGeneration(businessId: string, generation: number): string {
-  const canonical = gridPlatformCustomerIdFromBusinessId(businessId)
-  if (generation <= 1) return canonical
-  return `${canonical}_g${generation}`
+/** One-time platform id so POST /customers is not an idempotent replay of a deleted customer. */
+export function gridPlatformCustomerIdFresh(businessId: string, nonce = Date.now()): string {
+  return `${gridPlatformCustomerIdFromBusinessId(businessId)}_g${nonce}`
 }
 
 export function gridPlatformCustomerIdForSubject(input: {

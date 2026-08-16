@@ -20,8 +20,8 @@ import {
 } from "./business-kyc-metadata"
 import { buildGridBusinessProfileShell, resolveBusinessCountryIso2 } from "./business-profile-shell"
 import {
+  gridPlatformCustomerIdFresh,
   gridPlatformCustomerIdFromBusinessId,
-  gridPlatformCustomerIdWithGeneration,
 } from "./customer-id"
 import {
   customerNeedsEndUserTermsConsentPatch,
@@ -490,21 +490,24 @@ export async function ensureGridBusinessCustomer(input: {
   const tombstone = await findGridCustomerByPlatformId(platformCustomerId, {
     includeDeleted: true,
   }).catch(() => null)
-  let startGeneration = 1
+  let skipCanonicalPlatformId = false
   if (tombstone?.id) {
     const tombstoneId = normalizeGridCustomerId(tombstone.id)
     const tombstoneLive = tombstoneId ? await requireExistingGridCustomer(tombstoneId) : null
     if (!tombstoneLive) {
       await resetBusinessKybToNotStarted(input.admin, input.businessId)
-      startGeneration = 2
+      skipCanonicalPlatformId = true
     }
   }
 
   let created: GridCustomer | null = null
   let usedPlatformId = platformCustomerId
   let lastCreateError: unknown
-  for (let generation = startGeneration; generation <= 5; generation += 1) {
-    usedPlatformId = gridPlatformCustomerIdWithGeneration(input.businessId, generation)
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const useFreshId = skipCanonicalPlatformId || attempt > 0
+    usedPlatformId = useFreshId
+      ? gridPlatformCustomerIdFresh(input.businessId, Date.now() * 10 + attempt)
+      : platformCustomerId
     const payload = {
       ...buildGridBusinessCustomerPayload({
         platformCustomerId: usedPlatformId,
@@ -518,12 +521,19 @@ export async function ensureGridBusinessCustomer(input: {
         method: "POST",
         path: "/customers",
         json: payload,
-        idempotencyKey: `${usedPlatformId}:hosted-kyb-create`,
+        idempotencyKey: crypto.randomUUID(),
       })
       break
     } catch (e) {
       lastCreateError = e
+      console.warn("[grid] BUSINESS customer create failed", {
+        businessId: input.businessId,
+        platformCustomerId: usedPlatformId,
+        attempt,
+        error: e,
+      })
       if (!isGridCustomerNotFoundError(e)) throw e
+      skipCanonicalPlatformId = true
       await resetBusinessKybToNotStarted(input.admin, input.businessId)
       const recovered = await findGridCustomerByPlatformId(usedPlatformId).catch(() => null)
       const recoveredId = recovered?.id ? normalizeGridCustomerId(recovered.id) : ""
