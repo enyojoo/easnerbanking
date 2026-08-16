@@ -1,3 +1,60 @@
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function readReviewStatus(payload: unknown): string {
+  const root = asRecord(payload)
+  if (!root) return ""
+  const nested = asRecord(root.review)
+  return String(root.reviewStatus ?? nested?.reviewStatus ?? "").trim().toLowerCase()
+}
+
+function readDocSets(payload: unknown): Record<string, unknown>[] {
+  const root = asRecord(payload)
+  if (!root) return []
+  const required = asRecord(root.requiredIdDocs) ?? asRecord(root.requiredIdDocsStatus)
+  const raw = required?.docSets ?? root.docSets
+  return Array.isArray(raw) ? raw.filter((row): row is Record<string, unknown> => Boolean(asRecord(row))) : []
+}
+
+function docSetStatus(row: Record<string, unknown>): string {
+  return String(row.status ?? row.reviewStatus ?? "").trim().toLowerCase()
+}
+
+function docSetStillRequired(row: Record<string, unknown>): boolean {
+  const status = docSetStatus(row)
+  if (status === "approved" || status === "completed" || status === "submitted" || status === "ok") {
+    return false
+  }
+  if (status === "pending" || status === "init" || status === "incomplete" || status === "requested") {
+    return true
+  }
+  const images = row.imageIds ?? row.images
+  return Array.isArray(images) ? images.length === 0 : status.length === 0
+}
+
+/**
+ * Hosted SumSub keeps files in SumSub — they never show on Grid `/documents`.
+ * Reopening with no remaining step is the real "ID uploaded / in review" signal.
+ */
+export function sumsubApplicantHasNoRequiredAction(payload: unknown): boolean {
+  const reviewStatus = readReviewStatus(payload)
+  const docSets = readDocSets(payload)
+  const identitySets = docSets.filter((row) =>
+    sumsubStepIsIdentityDocument(String(row.idDocSetType ?? row.type ?? "")),
+  )
+  if (identitySets.length > 0) {
+    return !identitySets.some(docSetStillRequired)
+  }
+  return (
+    reviewStatus === "completed" ||
+    reviewStatus === "queued" ||
+    reviewStatus === "prechecked"
+  )
+}
+
 /** Terminal Sumsub review statuses for `onApplicantStatusChanged` (not initial load). */
 export function sumsubReviewStatusTriggersComplete(reviewStatus: string | null | undefined): boolean {
   const s = String(reviewStatus ?? "").toLowerCase()
@@ -41,7 +98,7 @@ export function sumsubReviewStatusMarksApplicantSubmitted(
   alreadyInProgress = false,
 ): boolean {
   const s = String(reviewStatus ?? "").toLowerCase()
-  if (s === "identity_submitted") return true
+  if (s === "identity_submitted" || s === "no_action_required") return true
   // Company submit also fires onApplicantSubmitted; only treat as UBO ID if KYB already in_progress.
   return s === "applicant_submitted" && alreadyInProgress
 }

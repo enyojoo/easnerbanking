@@ -30,6 +30,7 @@ vi.mock("@/lib/notifications/verification-notify", () => ({
 
 vi.mock("./http", () => ({
   gridFetch: (...args: unknown[]) => mockGridFetch(...args),
+  gridFetchAllPages: async () => [],
   GridHttpError: class GridHttpError extends Error {
     status: number
     constructor(status: number, message?: string) {
@@ -211,7 +212,7 @@ describe("syncGridBusinessKybToSupabase", () => {
     expect(mockEq).toHaveBeenCalledWith("id", "biz-1")
   })
 
-  it("does not email when correcting pending to in_progress", async () => {
+  it("does not drop hosted in-review back to in_progress when Grid documents are empty", async () => {
     mockFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
@@ -227,7 +228,7 @@ describe("syncGridBusinessKybToSupabase", () => {
         kybStatus: "PENDING",
         beneficialOwners: [{ kycStatus: "PENDING", roles: ["UBO"] }],
       },
-      [],
+      [{ verificationStatus: "RESOLVE_ERRORS", errors: [{ type: "MISSING_IDENTITY_DOCUMENT" }] }],
     )
 
     await syncGridBusinessKybToSupabase({
@@ -237,11 +238,15 @@ describe("syncGridBusinessKybToSupabase", () => {
       customerId: "Customer:abc",
     })
 
+    expect(mockPersistVerificationStatus).toHaveBeenCalledWith(
+      mockAdmin,
+      expect.objectContaining({ status: "pending" }),
+    )
     expect(mockNotifyBusinessKybStatusChange).toHaveBeenCalledWith(
       mockAdmin,
       "biz-1",
       "under_review",
-      "not_started",
+      "under_review",
       null,
     )
   })

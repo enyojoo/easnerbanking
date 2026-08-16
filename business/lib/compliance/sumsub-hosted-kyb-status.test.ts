@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   gridKybStatusClosesHostedFlow,
   gridStatusAfterApplicantSubmitted,
+  sumsubApplicantHasNoRequiredAction,
   sumsubReviewStatusMarksApplicantSubmitted,
   sumsubReviewStatusShouldSyncGrid,
   sumsubReviewStatusTriggersComplete,
@@ -49,12 +50,41 @@ describe("sumsubStepIsIdentityDocument", () => {
 
 describe("sumsubReviewStatusMarksApplicantSubmitted", () => {
   it("marks in-review after UBO ID step, not company pending or review completed", () => {
+    expect(sumsubReviewStatusMarksApplicantSubmitted("no_action_required")).toBe(true)
     expect(sumsubReviewStatusMarksApplicantSubmitted("identity_submitted")).toBe(true)
     expect(sumsubReviewStatusMarksApplicantSubmitted("applicant_submitted", true)).toBe(true)
     expect(sumsubReviewStatusMarksApplicantSubmitted("applicant_submitted", false)).toBe(false)
     expect(sumsubReviewStatusMarksApplicantSubmitted("completed")).toBe(false)
     expect(sumsubReviewStatusMarksApplicantSubmitted("pending")).toBe(false)
     expect(sumsubReviewStatusMarksApplicantSubmitted("init")).toBe(false)
+  })
+})
+
+describe("sumsubApplicantHasNoRequiredAction", () => {
+  it("treats completed identity doc sets as no action", () => {
+    expect(
+      sumsubApplicantHasNoRequiredAction({
+        reviewStatus: "pending",
+        requiredIdDocs: {
+          docSets: [{ idDocSetType: "IDENTITY", status: "submitted" }],
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it("keeps action required while identity set is still pending", () => {
+    expect(
+      sumsubApplicantHasNoRequiredAction({
+        reviewStatus: "pending",
+        requiredIdDocs: {
+          docSets: [{ idDocSetType: "IDENTITY", status: "pending" }],
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it("treats queued review without remaining identity as no action", () => {
+    expect(sumsubApplicantHasNoRequiredAction({ reviewStatus: "queued" })).toBe(true)
   })
 })
 

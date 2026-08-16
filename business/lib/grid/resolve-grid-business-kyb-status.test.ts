@@ -27,6 +27,37 @@ describe("resolveGridBusinessKybLocalStatus", () => {
     ).toBe("in_progress")
   })
 
+  it("keeps in_progress when verification is IN_PROGRESS but ID is still missing", () => {
+    expect(
+      resolveGridBusinessKybLocalStatus({
+        customer: {
+          kybStatus: "PENDING",
+          beneficialOwners: [{ kycStatus: "PENDING", roles: ["UBO"] }],
+        },
+        verifications: [
+          {
+            verificationStatus: "IN_PROGRESS",
+            errors: [{ type: "MISSING_IDENTITY_DOCUMENT" }],
+          },
+        ],
+        documents: [],
+      }),
+    ).toBe("in_progress")
+  })
+
+  it("does not treat IN_PROGRESS alone as ID uploaded", () => {
+    expect(
+      resolveGridBusinessKybLocalStatus({
+        customer: {
+          kybStatus: "PENDING",
+          beneficialOwners: [{ kycStatus: "PENDING", roles: ["UBO"] }],
+        },
+        verifications: [{ verificationStatus: "IN_PROGRESS" }],
+        documents: [],
+      }),
+    ).toBe("in_progress")
+  })
+
   it("treats PENDING with PENDING_MANUAL_REVIEW verification as pending (in review)", () => {
     expect(
       resolveGridBusinessKybLocalStatus({
@@ -91,6 +122,54 @@ describe("resolveGridBusinessKybLocalStatus", () => {
             errors: [{ type: "MISSING_FIELD" }, { type: "MISSING_IDENTITY_DOCUMENT" }],
           },
         ],
+      }),
+    ).toBe("in_progress")
+  })
+
+  it("does not treat company documents as UBO ID upload", () => {
+    expect(
+      resolveGridBusinessKybLocalStatus({
+        customer: {
+          kybStatus: "PENDING",
+          beneficialOwners: [{ kycStatus: "PENDING" }],
+        },
+        verifications: [
+          {
+            verificationStatus: "RESOLVE_ERRORS",
+            errors: [{ type: "MISSING_IDENTITY_DOCUMENT" }],
+          },
+        ],
+        documents: [
+          { documentType: "CERTIFICATE_OF_INCORPORATION", documentHolder: "Customer:1" },
+        ],
+      }),
+    ).toBe("in_progress")
+  })
+
+  it("treats PENDING with UBO identity document as pending even without a review webhook", () => {
+    expect(
+      resolveGridBusinessKybLocalStatus({
+        customer: {
+          kybStatus: "PENDING",
+          beneficialOwners: [{ id: "BeneficialOwner:1", kycStatus: "PENDING" }],
+        },
+        verifications: [],
+        documents: [{ documentType: "PASSPORT", documentHolder: "BeneficialOwner:1" }],
+      }),
+    ).toBe("pending")
+  })
+
+  it("keeps in_progress when Grid still reports MISSING_IDENTITY_DOCUMENT", () => {
+    expect(
+      resolveGridBusinessKybLocalStatus({
+        customer: { kybStatus: "PENDING", beneficialOwners: [{ kycStatus: "PENDING" }] },
+        verifications: [
+          {
+            verificationStatus: "RESOLVE_ERRORS",
+            errors: [{ type: "MISSING_IDENTITY_DOCUMENT" }],
+          },
+        ],
+        documents: [],
       }),
     ).toBe("in_progress")
   })

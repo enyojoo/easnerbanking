@@ -111,12 +111,20 @@ export async function gridFetchAllPages<T>(input: {
     if (cursor) params.set("cursor", cursor)
     const qs = params.toString()
     const path = qs ? `${input.path}?${qs}` : input.path
-    const page = await gridFetch<{ data?: T[]; cursor?: string | null }>({
+    const page = await gridFetch<{
+      data?: T[]
+      cursor?: string | null
+      nextCursor?: string | null
+    }>({
       method: "GET",
       path,
     })
     out.push(...input.mapPage(page))
-    cursor = page.cursor ? String(page.cursor) : undefined
+    cursor = page.nextCursor
+      ? String(page.nextCursor)
+      : page.cursor
+        ? String(page.cursor)
+        : undefined
   } while (cursor)
   return out
 }

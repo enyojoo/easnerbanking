@@ -6,6 +6,32 @@ export type GridVerificationSummary = {
   errors?: Array<{ type?: string | null }> | null
 }
 
+export type GridDocumentSummary = {
+  id?: string
+  documentType?: string | null
+  documentHolder?: string | null
+}
+
+const GRID_IDENTITY_DOCUMENT_TYPES = new Set(["PASSPORT", "DRIVERS_LICENSE", "NATIONAL_ID"])
+
+export function gridDocumentIsIdentity(documentType: string | null | undefined): boolean {
+  return GRID_IDENTITY_DOCUMENT_TYPES.has(normStatus(documentType))
+}
+
+export function gridVerificationsMissingIdentityDocument(
+  verifications: GridVerificationSummary[],
+): boolean {
+  return verifications.some((v) =>
+    (Array.isArray(v.errors) ? v.errors : []).some(
+      (error) => normStatus(error.type) === "MISSING_IDENTITY_DOCUMENT",
+    ),
+  )
+}
+
+export function gridDocumentsIncludeIdentity(documents: GridDocumentSummary[]): boolean {
+  return documents.some((doc) => gridDocumentIsIdentity(doc.documentType))
+}
+
 function normStatus(raw: string | null | undefined): string {
   return String(raw ?? "").trim().toUpperCase()
 }
@@ -19,7 +45,8 @@ function readBeneficialOwners(customer: Record<string, unknown>): Record<string,
 function verificationSignalsInReview(verifications: GridVerificationSummary[]): boolean {
   return verifications.some((v) => {
     const s = normStatus(v.verificationStatus)
-    return s === "PENDING_MANUAL_REVIEW" || s === "IN_PROGRESS"
+    // IN_PROGRESS / READY_FOR_VERIFICATION are job states — not proof the UBO ID is on Grid.
+    return s === "PENDING_MANUAL_REVIEW"
   })
 }
 
@@ -40,6 +67,8 @@ function allBeneficialOwnersApproved(beneficialOwners: Record<string, unknown>[]
 export function resolveGridBusinessKybLocalStatus(input: {
   customer: Record<string, unknown>
   verifications?: GridVerificationSummary[]
+  /** Grid `/documents` — UBO ID upload does not show on the customer GET. */
+  documents?: GridDocumentSummary[]
 }): VerificationStatus {
   const raw = normStatus(String(input.customer.kybStatus ?? input.customer.kycStatus ?? ""))
   if (raw !== "PENDING") {
@@ -47,6 +76,15 @@ export function resolveGridBusinessKybLocalStatus(input: {
   }
 
   const verifications = input.verifications ?? []
+  const documents = input.documents ?? []
+
+  // Hosted SumSub uploads do not appear on Grid `/documents` or clear
+  // MISSING_IDENTITY_DOCUMENT (BYO checklist). Those signals only promote BYO.
+  // They must not force in_progress after hosted ID is already in SumSub.
+  if (gridDocumentsIncludeIdentity(documents)) {
+    return "pending"
+  }
+
   if (verificationSignalsInReview(verifications)) {
     return "pending"
   }
@@ -57,7 +95,6 @@ export function resolveGridBusinessKybLocalStatus(input: {
   }
 
   if (verificationsAreEmptyOrResolveErrors(verifications)) {
-    // Company-only / mid-UBO Grid PENDING must stay in_progress so the CTA stays open.
     return "in_progress"
   }
 

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react"
 import snsWebSdk from "@sumsub/websdk"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
+  sumsubApplicantHasNoRequiredAction,
   sumsubReviewStatusShouldSyncGrid,
   sumsubReviewStatusTriggersComplete,
   sumsubStepIsIdentityDocument,
@@ -71,7 +72,14 @@ export function GridSumsubWebSdk({
 
     let disposed = false
     let identityStepDone = false
+    let requiredStepShown = false
+    let noActionTimer: ReturnType<typeof setTimeout> | null = null
     el.replaceChildren()
+
+    const markNoActionRequired = () => {
+      identityStepDone = true
+      onProgressRef.current?.("no_action_required")
+    }
 
     const readStepType = (payload: unknown): string => {
       const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {}
@@ -94,6 +102,15 @@ export function GridSumsubWebSdk({
       .on("idCheck.onReady", () => {
         onReadyRef.current?.()
       })
+      .on("idCheck.onStepInitiated", () => {
+        requiredStepShown = true
+      })
+      .on("idCheck.stepInitiated", () => {
+        requiredStepShown = true
+      })
+      .on("idCheck.onApplicantLoaded", (payload) => {
+        if (sumsubApplicantHasNoRequiredAction(payload)) markNoActionRequired()
+      })
       .on("idCheck.onStepCompleted", (payload) => {
         if (!sumsubStepIsIdentityDocument(readStepType(payload))) return
         identityStepDone = true
@@ -108,7 +125,15 @@ export function GridSumsubWebSdk({
         const reviewStatus = String(
           (payload as { reviewStatus?: string } | null)?.reviewStatus ?? "",
         )
-        if (sumsubReviewStatusShouldSyncGrid(reviewStatus)) {
+        if (sumsubApplicantHasNoRequiredAction(payload)) {
+          markNoActionRequired()
+        } else if (sumsubReviewStatusShouldSyncGrid(reviewStatus)) {
+          if (reviewStatus.toLowerCase() === "pending" || reviewStatus.toLowerCase() === "queued") {
+            if (noActionTimer) clearTimeout(noActionTimer)
+            noActionTimer = setTimeout(() => {
+              if (!disposed && !requiredStepShown) markNoActionRequired()
+            }, 1500)
+          }
           onProgressRef.current?.(identityStepDone && reviewStatus.toLowerCase() === "pending" ? "identity_submitted" : reviewStatus)
         }
         if (sumsubReviewStatusTriggersComplete(reviewStatus)) {
@@ -134,6 +159,7 @@ export function GridSumsubWebSdk({
 
     return () => {
       disposed = true
+      if (noActionTimer) clearTimeout(noActionTimer)
       try {
         // SumSub SDK has no documented destroy; clear DOM on unmount.
         el.replaceChildren()

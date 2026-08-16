@@ -7,6 +7,7 @@ import {
 } from "@/lib/grid/ensure-grid-business-customer"
 import { createGridBusinessKycLink } from "@/lib/grid/kyc-links"
 import {
+  fetchGridDocumentsForKyb,
   fetchGridVerificationsForCustomer,
   gridBusinessKybStatus,
   syncGridBusinessKybToSupabase,
@@ -76,9 +77,14 @@ export async function POST(request: Request) {
     }
 
     const verifications = await fetchGridVerificationsForCustomer(customerId)
+    const documents = await fetchGridDocumentsForKyb(
+      customerId,
+      customer as Record<string, unknown>,
+    )
     const kycStatus = gridBusinessKybStatus(
       customer as Record<string, unknown>,
       verifications,
+      documents,
     )
     if (kycStatus === "in_progress" || kycStatus === "pending" || kycStatus === "hold") {
       await syncGridBusinessKybToSupabase({

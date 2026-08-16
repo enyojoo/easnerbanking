@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { gridFetch, GridHttpError } from "./http"
+import { gridFetch, gridFetchAllPages, GridHttpError } from "./http"
 import { normalizeGridCustomerId } from "./quote-request"
 import type { GridCustomer } from "./types"
 import {
@@ -13,6 +13,7 @@ import { parseGridCustomerForBusiness } from "./parse-grid-customer-for-business
 import { syncGridBusinessOwnerUserFromKyb } from "./sync-grid-business-owner-user"
 import {
   resolveGridBusinessKybLocalStatus,
+  type GridDocumentSummary,
   type GridVerificationSummary,
 } from "./resolve-grid-business-kyb-status"
 
@@ -43,11 +44,44 @@ export async function fetchGridVerificationsForCustomer(
   return Array.isArray(response.data) ? response.data : []
 }
 
+function normalizeDocumentHolderId(id: string): string {
+  const trimmed = id.trim()
+  if (!trimmed) return trimmed
+  if (trimmed.startsWith("Customer:") || trimmed.startsWith("BeneficialOwner:")) return trimmed
+  return trimmed
+}
+
+function documentHolderIds(customerId: string, customer: Record<string, unknown>): string[] {
+  const owners = Array.isArray(customer.beneficialOwners) ? customer.beneficialOwners : []
+  const ownerIds = owners
+    .map((row) => normalizeDocumentHolderId(String((row as { id?: unknown }).id ?? "")))
+    .filter(Boolean)
+  return [...new Set([customerId, ...ownerIds])]
+}
+
+export async function fetchGridDocumentsForKyb(
+  customerId: string,
+  customer: Record<string, unknown>,
+): Promise<GridDocumentSummary[]> {
+  const holders = documentHolderIds(normalizeGridCustomerId(customerId), customer)
+  const pages = await Promise.all(
+    holders.map((holder) =>
+      gridFetchAllPages<GridDocumentSummary>({
+        path: "/documents",
+        query: { documentHolder: holder, limit: 50 },
+        mapPage: (page) => (Array.isArray(page.data) ? page.data : []),
+      }).catch(() => [] as GridDocumentSummary[]),
+    ),
+  )
+  return pages.flat()
+}
+
 export function gridBusinessKybStatus(
   customer: Record<string, unknown>,
   verifications?: GridVerificationSummary[],
+  documents?: GridDocumentSummary[],
 ): VerificationStatus {
-  return resolveGridBusinessKybLocalStatus({ customer, verifications })
+  return resolveGridBusinessKybLocalStatus({ customer, verifications, documents })
 }
 
 function shouldBackfillBusinessProfile(status: VerificationStatus): boolean {
@@ -72,7 +106,8 @@ export async function syncGridBusinessKybToSupabase(input: {
   })
 
   const verifications = await fetchGridVerificationsForCustomer(customerId)
-  const status = gridBusinessKybStatus(customer, verifications)
+  const documents = await fetchGridDocumentsForKyb(customerId, customer)
+  let status = gridBusinessKybStatus(customer, verifications, documents)
   const gridStatusRaw = String(customer.kybStatus ?? customer.kycStatus ?? "").trim() || null
   const rejectionReasons =
     status === "rejected" || status === "hold"
@@ -86,9 +121,13 @@ export async function syncGridBusinessKybToSupabase(input: {
     .select("verification_status,tax_id")
     .eq("id", input.businessId)
     .maybeSingle()
-  const previousStatus = verificationStatusForKybEmail(
-    String(priorBiz?.verification_status ?? "not_started").toLowerCase() as VerificationStatus,
-  )
+  const priorLocal = String(priorBiz?.verification_status ?? "not_started").toLowerCase()
+  // Hosted SumSub files never land on Grid documents. Once the client (or a
+  // review webhook) marked in-review, do not drop back to in_progress.
+  if (priorLocal === "pending" && status === "in_progress") {
+    status = "pending"
+  }
+  const previousStatus = verificationStatusForKybEmail(priorLocal as VerificationStatus)
 
   await persistVerificationStatus(input.admin, {
     kind: "business",

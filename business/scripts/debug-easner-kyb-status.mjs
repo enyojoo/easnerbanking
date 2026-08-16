@@ -11,9 +11,24 @@ const verifications = await gridFetch({
   path: `/verifications?customerId=${encodeURIComponent(customerId)}&limit=20`,
 }).catch(() => ({ data: [] }))
 
+const owners = Array.isArray(customer.beneficialOwners) ? customer.beneficialOwners : []
+const holders = [
+  customerId,
+  ...owners.map((row) => String(row?.id ?? "").trim()).filter(Boolean),
+]
+const documents = []
+for (const holder of holders) {
+  const page = await gridFetch({
+    method: "GET",
+    path: `/documents?documentHolder=${encodeURIComponent(holder)}&limit=50`,
+  }).catch(() => ({ data: [] }))
+  documents.push(...(page.data ?? []))
+}
+
 const resolved = resolveGridBusinessKybLocalStatus({
   customer,
   verifications: verifications.data ?? [],
+  documents,
 })
 
 console.log(
@@ -22,6 +37,7 @@ console.log(
       kybStatus: customer.kybStatus,
       beneficialOwners: customer.beneficialOwners,
       verifications: verifications.data,
+      documents,
       resolvedLocalStatus: resolved,
     },
     null,
