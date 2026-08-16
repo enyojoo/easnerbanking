@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
   gridKybStatusClosesHostedFlow,
+  gridStatusAfterApplicantSubmitted,
+  sumsubReviewStatusMarksApplicantSubmitted,
   sumsubReviewStatusShouldSyncGrid,
   sumsubReviewStatusTriggersComplete,
+  sumsubStepIsIdentityDocument,
 } from "./sumsub-hosted-kyb-status"
 
 describe("sumsubReviewStatusTriggersComplete", () => {
@@ -32,5 +35,34 @@ describe("gridKybStatusClosesHostedFlow", () => {
     expect(gridKybStatusClosesHostedFlow("rejected")).toBe(true)
     expect(gridKybStatusClosesHostedFlow("in_progress")).toBe(false)
     expect(gridKybStatusClosesHostedFlow("not_started")).toBe(false)
+  })
+})
+
+describe("sumsubStepIsIdentityDocument", () => {
+  it("matches UBO identity sets only", () => {
+    expect(sumsubStepIsIdentityDocument("IDENTITY")).toBe(true)
+    expect(sumsubStepIsIdentityDocument("IDENTITY2")).toBe(true)
+    expect(sumsubStepIsIdentityDocument("COMPANY")).toBe(false)
+    expect(sumsubStepIsIdentityDocument("QUESTIONNAIRE")).toBe(false)
+  })
+})
+
+describe("sumsubReviewStatusMarksApplicantSubmitted", () => {
+  it("marks in-review after UBO ID step, not company pending or review completed", () => {
+    expect(sumsubReviewStatusMarksApplicantSubmitted("identity_submitted")).toBe(true)
+    expect(sumsubReviewStatusMarksApplicantSubmitted("applicant_submitted", true)).toBe(true)
+    expect(sumsubReviewStatusMarksApplicantSubmitted("applicant_submitted", false)).toBe(false)
+    expect(sumsubReviewStatusMarksApplicantSubmitted("completed")).toBe(false)
+    expect(sumsubReviewStatusMarksApplicantSubmitted("pending")).toBe(false)
+    expect(sumsubReviewStatusMarksApplicantSubmitted("init")).toBe(false)
+  })
+})
+
+describe("gridStatusAfterApplicantSubmitted", () => {
+  it("promotes in_progress to pending when Grid sends no review webhook", () => {
+    expect(gridStatusAfterApplicantSubmitted("in_progress")).toBe("pending")
+    expect(gridStatusAfterApplicantSubmitted("not_started")).toBe("pending")
+    expect(gridStatusAfterApplicantSubmitted("approved")).toBe("approved")
+    expect(gridStatusAfterApplicantSubmitted("pending")).toBe("pending")
   })
 })

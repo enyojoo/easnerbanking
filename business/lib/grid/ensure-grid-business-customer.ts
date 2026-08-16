@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { gridFetch } from "./http"
 import {
+  findGridBusinessCustomerForOrg,
   findGridCustomerByPlatformId,
   isGridCustomerNotFoundError,
   requireExistingGridCustomer,
@@ -416,6 +417,75 @@ export function __resetEnsureGridBusinessCustomerInflightForTests(): void {
  * Ensure a Grid BUSINESS customer exists for the org.
  * Concurrent callers for the same business share one in-flight create.
  */
+/**
+ * Link an existing Grid BUSINESS customer to the org without creating one.
+ * Used by background sync so a missing `grid_customer_id` can still update KYB status.
+ */
+export async function attachExistingGridBusinessCustomer(input: {
+  admin: SupabaseClient
+  userId: string
+  businessId: string
+  profile?: GridBusinessProfile
+}): Promise<{ customerId: string } | null> {
+  const stored = await readStoredGridCustomerId(input.admin, input.businessId)
+  if (stored) {
+    const customerId = normalizeGridCustomerId(stored)
+    if (customerId && (await verifyGridCustomerExists(customerId))) {
+      return { customerId }
+    }
+  }
+
+  const platformCustomerId = gridPlatformCustomerIdFromBusinessId(input.businessId)
+  const byPlatform = await findGridCustomerByPlatformId(platformCustomerId).catch(() => null)
+  const byPlatformId = byPlatform?.id ? normalizeGridCustomerId(byPlatform.id) : ""
+  if (byPlatformId && (await verifyGridCustomerExists(byPlatformId))) {
+    await persistGridCustomerId(input.admin, input.businessId, byPlatformId)
+    return { customerId: byPlatformId }
+  }
+
+  for (let gen = 1; gen <= 3; gen += 1) {
+    const recreateId = gridPlatformCustomerIdForRecreate(input.businessId, gen)
+    const found = await findGridCustomerByPlatformId(recreateId).catch(() => null)
+    const foundId = found?.id ? normalizeGridCustomerId(found.id) : ""
+    if (foundId && (await verifyGridCustomerExists(foundId))) {
+      await persistGridCustomerId(input.admin, input.businessId, foundId)
+      return { customerId: foundId }
+    }
+  }
+
+  const profile = input.profile ?? (await loadGridBusinessProfile(input.admin, input.businessId))
+  if (!profile) return null
+
+  const { data: bizRow } = await input.admin
+    .from("businesses")
+    .select("support_email")
+    .eq("id", input.businessId)
+    .maybeSingle()
+  const supportEmail = String(bizRow?.support_email ?? "").trim() || null
+  let email = supportEmail
+  try {
+    const contact = await resolveGridBusinessKybContact({
+      admin: input.admin,
+      businessId: input.businessId,
+      userId: input.userId,
+      supportEmail,
+    })
+    email = contact.email
+  } catch {
+    // Name / registration match can still attach.
+  }
+
+  const orphan = await findGridBusinessCustomerForOrg({
+    email,
+    legalName: profile.legalName,
+    registrationNumber: profile.registrationNumber,
+  }).catch(() => null)
+  const orphanId = orphan?.id ? normalizeGridCustomerId(orphan.id) : ""
+  if (!orphanId || !(await verifyGridCustomerExists(orphanId))) return null
+  await persistGridCustomerId(input.admin, input.businessId, orphanId)
+  return { customerId: orphanId }
+}
+
 export async function ensureGridBusinessCustomer(input: {
   admin: SupabaseClient
   userId: string
@@ -514,6 +584,60 @@ async function ensureGridBusinessCustomerUnlocked(input: {
         contact,
       })
       return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
+    }
+  }
+
+  for (let gen = 1; gen <= 3; gen += 1) {
+    const recreateId = gridPlatformCustomerIdForRecreate(input.businessId, gen)
+    const recreated = await findGridCustomerByPlatformId(recreateId).catch(() => null)
+    const recreatedId = recreated?.id ? normalizeGridCustomerId(recreated.id) : ""
+    const recreatedLive = recreatedId ? await requireExistingGridCustomer(recreatedId) : null
+    if (recreatedLive) {
+      await persistGridCustomerId(input.admin, input.businessId, recreatedId)
+      const finalized = await finalizeGridBusinessCustomer({
+        admin: input.admin,
+        businessId: input.businessId,
+        customerId: recreatedId,
+        customer: recreatedLive,
+        profile,
+        platformCustomerId: recreateId,
+        consent,
+        ownerUserId,
+        contact,
+      })
+      return { customerId: finalized.customerId, platformCustomerId: recreateId, customer: finalized.customer }
+    }
+  }
+
+  const orphan = await findGridBusinessCustomerForOrg({
+    email: contact.email,
+    legalName: profile.legalName,
+    registrationNumber: profile.registrationNumber,
+  }).catch((e) => {
+    console.warn("[grid] list BUSINESS customers for org match failed:", e)
+    return null
+  })
+  if (orphan?.id) {
+    const customerId = normalizeGridCustomerId(orphan.id)
+    const liveOrphan = await requireExistingGridCustomer(customerId)
+    if (liveOrphan) {
+      await persistGridCustomerId(input.admin, input.businessId, customerId)
+      const finalized = await finalizeGridBusinessCustomer({
+        admin: input.admin,
+        businessId: input.businessId,
+        customerId,
+        customer: liveOrphan,
+        profile,
+        platformCustomerId: String(liveOrphan.platformCustomerId ?? platformCustomerId),
+        consent,
+        ownerUserId,
+        contact,
+      })
+      return {
+        customerId: finalized.customerId,
+        platformCustomerId: String(liveOrphan.platformCustomerId ?? platformCustomerId),
+        customer: finalized.customer,
+      }
     }
   }
 

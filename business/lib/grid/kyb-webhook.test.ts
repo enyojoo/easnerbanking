@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { handleGridKybWebhook } from "./kyb-webhook"
+import { handleGridKybWebhook, pickBusinessIdForKybOrgHints } from "./kyb-webhook"
 
 const mockSync = vi.fn().mockResolvedValue({ status: "pending" })
 const mockProvision = vi.fn().mockResolvedValue(undefined)
@@ -98,6 +98,72 @@ describe("handleGridKybWebhook", () => {
 
     expect(handled).toEqual({ handled: true })
     expect(mockSync).toHaveBeenCalledWith(expect.objectContaining({ businessId }))
+  })
+
+  it("resolves business by registration number when platform eb_ is not canonical", async () => {
+    const easnerId = "4769329d-a171-49cf-8647-7e9b8a0128d3"
+    const select = vi.fn().mockReturnValue({
+      eq: (column: string, value: string) => {
+        const rows =
+          column === "registration_number" && value === "10609372"
+            ? [
+                {
+                  id: easnerId,
+                  name: "Easner Group, Inc",
+                  support_email: "support@easner.com",
+                  registration_number: "10609372",
+                },
+              ]
+            : null
+        return {
+          maybeSingle: async () => ({ data: null }),
+          then(onFulfilled: (value: { data: unknown }) => unknown) {
+            return Promise.resolve({ data: rows }).then(onFulfilled)
+          },
+        }
+      },
+    })
+    const admin = { from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient
+
+    const handled = await handleGridKybWebhook(admin, {
+      type: "CUSTOMER.KYB_PENDING",
+      data: {
+        id: "Customer:01a008db-9fbc-938e-0000-a3e2e6585384",
+        email: "hello@easner.com",
+        platformCustomerId: "eb_9283ea82870a492cb10d9505237c4894",
+        businessInfo: {
+          legalName: "Easner Group, Inc",
+          registrationNumber: "10609372",
+        },
+      },
+    })
+
+    expect(handled).toEqual({ handled: true })
+    expect(mockSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: easnerId,
+        customerId: "Customer:01a008db-9fbc-938e-0000-a3e2e6585384",
+      }),
+    )
+  })
+
+  it("picks the org by registration number among webhook profile hints", () => {
+    const id = pickBusinessIdForKybOrgHints(
+      [
+        {
+          id: "4769329d-a171-49cf-8647-7e9b8a0128d3",
+          name: "Easner Group, Inc",
+          support_email: "support@easner.com",
+          registration_number: "10609372",
+        },
+      ],
+      {
+        email: "hello@easner.com",
+        legalName: "Easner Group, Inc",
+        registrationNumber: "10609372",
+      },
+    )
+    expect(id).toBe("4769329d-a171-49cf-8647-7e9b8a0128d3")
   })
 
   it("ignores non-KYB events", async () => {

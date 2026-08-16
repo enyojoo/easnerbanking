@@ -12,6 +12,67 @@ function webhookData(event: GridWebhookEvent): Record<string, unknown> | undefin
     : undefined
 }
 
+export function gridKybWebhookOrgHints(data?: Record<string, unknown>): {
+  email: string | null
+  legalName: string | null
+  registrationNumber: string | null
+} {
+  const info =
+    data?.businessInfo && typeof data.businessInfo === "object"
+      ? (data.businessInfo as Record<string, unknown>)
+      : {}
+  return {
+    email: String(data?.email ?? "").trim() || null,
+    legalName: String(info.legalName ?? info.tradeName ?? "").trim() || null,
+    registrationNumber: String(info.registrationNumber ?? "").replace(/\s/g, "") || null,
+  }
+}
+
+export function pickBusinessIdForKybOrgHints(
+  rows: Array<{
+    id: string
+    name?: string | null
+    support_email?: string | null
+    registration_number?: string | null
+  }>,
+  hints: { email: string | null; legalName: string | null; registrationNumber: string | null },
+): string | null {
+  if (rows.length === 0) return null
+  const email = hints.email?.trim().toLowerCase() ?? ""
+  const name = String(hints.legalName ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+  const registration = String(hints.registrationNumber ?? "").replace(/\s/g, "")
+
+  const scored = rows.filter((row) => {
+    const rowName = String(row.name ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+    const rowEmail = String(row.support_email ?? "").trim().toLowerCase()
+    const rowReg = String(row.registration_number ?? "").replace(/\s/g, "")
+    const nameOk = Boolean(name && rowName && (rowName === name || rowName.includes(name) || name.includes(rowName)))
+    const emailOk = Boolean(email && rowEmail && rowEmail === email)
+    const regOk = Boolean(registration && rowReg && rowReg === registration)
+    return nameOk || emailOk || regOk
+  })
+  if (scored.length === 1) return String(scored[0].id)
+  if (scored.length === 0 && rows.length === 1) return String(rows[0].id)
+  if (registration) {
+    const byReg = scored.filter((row) => String(row.registration_number ?? "").replace(/\s/g, "") === registration)
+    if (byReg.length === 1) return String(byReg[0].id)
+  }
+  if (name) {
+    const byName = scored.filter((row) => {
+      const rowName = String(row.name ?? "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+      return rowName === name
+    })
+    if (byName.length === 1) return String(byName[0].id)
+  }
+  return null
+}
+
 function readCustomerId(event: GridWebhookEvent): string | null {
   const fromData = gridWebhookCustomerId(webhookData(event))
   if (fromData) return fromData
@@ -49,6 +110,31 @@ async function resolveBusinessSubject(
             .eq("id", parsed.businessId)
             .maybeSingle()
           businessId = byId?.id ? String(byId.id) : null
+        }
+      }
+    }
+    if (!businessId) {
+      const hints = gridKybWebhookOrgHints(data)
+      const lookups: Array<{ column: string; value: string }> = []
+      if (hints.registrationNumber) {
+        lookups.push({ column: "registration_number", value: hints.registrationNumber })
+      }
+      if (hints.email) lookups.push({ column: "support_email", value: hints.email })
+      if (hints.legalName) lookups.push({ column: "name", value: hints.legalName })
+
+      for (const lookup of lookups) {
+        const query = admin
+          .from("businesses")
+          .select("id,name,support_email,registration_number")
+          .eq(lookup.column, lookup.value)
+        const { data: rows } = await query
+        const matched = pickBusinessIdForKybOrgHints(
+          Array.isArray(rows) ? rows : rows ? [rows] : [],
+          hints,
+        )
+        if (matched) {
+          businessId = matched
+          break
         }
       }
     }

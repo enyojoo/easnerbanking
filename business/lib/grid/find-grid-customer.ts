@@ -60,6 +60,84 @@ export async function findGridCustomerByPlatformId(
   )
 }
 
+export function normalizeGridOrgName(value: string): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+}
+
+function readGridCustomerEmail(row: GridCustomer): string {
+  return String((row as GridCustomer & { email?: string }).email ?? "")
+    .trim()
+    .toLowerCase()
+}
+
+function readGridCustomerLegalName(row: GridCustomer): string {
+  const info = (row as GridCustomer & { businessInfo?: { legalName?: string; tradeName?: string } })
+    .businessInfo
+  return String(info?.legalName ?? info?.tradeName ?? row.fullName ?? "")
+}
+
+function readGridCustomerRegistrationNumber(row: GridCustomer): string {
+  const info = (row as GridCustomer & { businessInfo?: { registrationNumber?: string } }).businessInfo
+  return String(info?.registrationNumber ?? "").replace(/\s/g, "")
+}
+
+function gridCustomerKybRank(row: GridCustomer): number {
+  const raw = String(row.kybStatus ?? row.kycStatus ?? "")
+    .trim()
+    .toUpperCase()
+  if (raw === "APPROVED") return 50
+  if (raw === "PENDING") return 40
+  if (raw === "HOLD") return 30
+  if (raw === "REJECTED") return 10
+  return 0
+}
+
+/** Attach an orphaned Grid BUSINESS customer created with a non-canonical platform id. */
+export function pickGridBusinessCustomerForOrg(
+  rows: GridCustomer[],
+  input: { email?: string | null; legalName?: string | null; registrationNumber?: string | null },
+): GridCustomer | null {
+  const email = String(input.email ?? "").trim().toLowerCase()
+  const name = normalizeGridOrgName(String(input.legalName ?? ""))
+  const registration = String(input.registrationNumber ?? "").replace(/\s/g, "")
+  if (!email && !name && !registration) return null
+
+  const matches = rows.filter((row) => {
+    if (!row?.id) return false
+    const type = String(row.customerType ?? "BUSINESS").toUpperCase()
+    if (type && type !== "BUSINESS") return false
+    const rowName = normalizeGridOrgName(readGridCustomerLegalName(row))
+    const rowEmail = readGridCustomerEmail(row)
+    const rowReg = readGridCustomerRegistrationNumber(row)
+    const nameOk = Boolean(name && rowName && (rowName === name || rowName.includes(name) || name.includes(rowName)))
+    const emailOk = Boolean(email && rowEmail && rowEmail === email)
+    const regOk = Boolean(registration && rowReg && rowReg === registration)
+    if (nameOk || regOk) return true
+    return emailOk && !rowName
+  })
+  if (matches.length === 0) return null
+  return [...matches].sort((a, b) => {
+    const byRank = gridCustomerKybRank(b) - gridCustomerKybRank(a)
+    if (byRank !== 0) return byRank
+    return String(b.id).localeCompare(String(a.id))
+  })[0] ?? null
+}
+
+export async function findGridBusinessCustomerForOrg(input: {
+  email?: string | null
+  legalName?: string | null
+  registrationNumber?: string | null
+}): Promise<GridCustomer | null> {
+  const rows = await gridFetchAllPages<GridCustomer>({
+    path: "/customers",
+    query: { customerType: "BUSINESS", limit: 50 },
+    mapPage: (page) => parseGridCustomerListPayload(page),
+  })
+  return pickGridBusinessCustomerForOrg(rows, input)
+}
+
 export async function requireExistingGridCustomer(customerId: string): Promise<GridCustomer | null> {
   const id = normalizeGridCustomerId(customerId)
   if (!id) return null

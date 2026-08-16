@@ -13,6 +13,8 @@ import {
   syncBusinessGridStatus,
   syncBusinessGridStatusUntilAccountsReady,
 } from "@/lib/grid/sync-business-grid-status"
+import { patchCachedBusinessProfile } from "@/lib/use-business-profile"
+import { sumsubReviewStatusMarksApplicantSubmitted } from "@/lib/compliance/sumsub-hosted-kyb-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
   hostedCredentialsAreReady,
@@ -47,7 +49,6 @@ import {
 } from "@/lib/compliance/cutover-comms"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 import { DelayedOpeningVerificationWait } from "@/components/compliance/opening-verification-wait"
-import { gridKybStatusClosesHostedFlow } from "@/lib/compliance/sumsub-hosted-kyb-status"
 
 const GridSumsubWebSdk = dynamic(
   () => import("@/components/compliance/grid-sumsub-websdk").then((m) => ({ default: m.GridSumsubWebSdk })),
@@ -281,22 +282,30 @@ export function BusinessVerificationSection({
     }, 280)
   }, [clearVerificationFlowUrl, syncBusinessTier1FromGrid])
 
-  const closeHostedAndSyncRef = useRef(closeHostedAndSync)
-  closeHostedAndSyncRef.current = closeHostedAndSync
   const sumsubProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleSumsubProgress = useCallback((reviewStatus: string) => {
     if (sumsubProgressTimerRef.current) clearTimeout(sumsubProgressTimerRef.current)
-    const delayMs = reviewStatus.toLowerCase() === "completed" ? 0 : 800
+    const submitted = sumsubReviewStatusMarksApplicantSubmitted(
+      reviewStatus,
+      tier1VerificationStatus === "in_progress",
+    )
+    const delayMs = submitted ? 0 : 800
     sumsubProgressTimerRef.current = setTimeout(() => {
       void (async () => {
-        const result = await syncBusinessGridStatus()
-        if (gridKybStatusClosesHostedFlow(result.verificationStatus)) {
-          closeHostedAndSyncRef.current()
+        const result = await syncBusinessGridStatus({ applicantSubmitted: submitted })
+        if (!submitted) return
+        const status = result.verificationStatus || "pending"
+        patchCachedBusinessProfile({
+          tier1VerificationStatus: status,
+          tier1Complete: status === "approved",
+        })
+        if (submitted) {
+          closeHostedAndSync()
         }
       })()
     }, delayMs)
-  }, [])
+  }, [closeHostedAndSync, tier1VerificationStatus])
 
   useEffect(() => {
     return () => {

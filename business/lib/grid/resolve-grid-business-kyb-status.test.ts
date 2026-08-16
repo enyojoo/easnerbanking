@@ -60,7 +60,7 @@ describe("resolveGridBusinessKybLocalStatus", () => {
     ).toBe("in_progress")
   })
 
-  it("treats PENDING with BYO RESOLVE_ERRORS and complete hosted profile as pending (in review)", () => {
+  it("treats PENDING with BYO RESOLVE_ERRORS and complete hosted profile as in_progress until review", () => {
     expect(
       resolveGridBusinessKybLocalStatus({
         customer: {
@@ -92,10 +92,10 @@ describe("resolveGridBusinessKybLocalStatus", () => {
           },
         ],
       }),
-    ).toBe("pending")
+    ).toBe("in_progress")
   })
 
-  it("treats PENDING with complete hosted profile and no verifications as pending (in review)", () => {
+  it("treats PENDING with complete hosted profile and no verifications as in_progress", () => {
     expect(
       resolveGridBusinessKybLocalStatus({
         customer: {
@@ -122,6 +122,6 @@ describe("resolveGridBusinessKybLocalStatus", () => {
         },
         verifications: [],
       }),
-    ).toBe("pending")
+    ).toBe("in_progress")
   })
 })

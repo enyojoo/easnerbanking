@@ -6,6 +6,7 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
   sumsubReviewStatusShouldSyncGrid,
   sumsubReviewStatusTriggersComplete,
+  sumsubStepIsIdentityDocument,
 } from "@/lib/compliance/sumsub-hosted-kyb-status"
 import { cn } from "@/lib/utils"
 
@@ -69,7 +70,21 @@ export function GridSumsubWebSdk({
     if (!el || !accessToken.trim()) return
 
     let disposed = false
+    let identityStepDone = false
     el.replaceChildren()
+
+    const readStepType = (payload: unknown): string => {
+      const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {}
+      return String(record.idDocSetType ?? record.step ?? "").trim()
+    }
+
+    const onIdentityOrCompanySubmit = () => {
+      if (identityStepDone) {
+        onProgressRef.current?.("identity_submitted")
+        return
+      }
+      onProgressRef.current?.("applicant_submitted")
+    }
 
     const sdk = snsWebSdk
       .init(accessToken, () => refreshGridKycToken())
@@ -79,16 +94,32 @@ export function GridSumsubWebSdk({
       .on("idCheck.onReady", () => {
         onReadyRef.current?.()
       })
+      .on("idCheck.onStepCompleted", (payload) => {
+        if (!sumsubStepIsIdentityDocument(readStepType(payload))) return
+        identityStepDone = true
+        onProgressRef.current?.("identity_submitted")
+      })
+      .on("idCheck.stepCompleted", (payload) => {
+        if (!sumsubStepIsIdentityDocument(readStepType(payload))) return
+        identityStepDone = true
+        onProgressRef.current?.("identity_submitted")
+      })
       .on("idCheck.onApplicantStatusChanged", (payload) => {
         const reviewStatus = String(
           (payload as { reviewStatus?: string } | null)?.reviewStatus ?? "",
         )
         if (sumsubReviewStatusShouldSyncGrid(reviewStatus)) {
-          onProgressRef.current?.(reviewStatus)
+          onProgressRef.current?.(identityStepDone && reviewStatus.toLowerCase() === "pending" ? "identity_submitted" : reviewStatus)
         }
         if (sumsubReviewStatusTriggersComplete(reviewStatus)) {
           onCompleteRef.current()
         }
+      })
+      .on("idCheck.onApplicantSubmitted", () => {
+        onIdentityOrCompanySubmit()
+      })
+      .on("idCheck.onApplicantResubmitted", () => {
+        onIdentityOrCompanySubmit()
       })
       .on("idCheck.onError", (error) => {
         const message =

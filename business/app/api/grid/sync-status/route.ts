@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { ensureGridBusinessCustomer, loadGridBusinessProfile } from "@/lib/grid/ensure-grid-business-customer"
+import {
+  attachExistingGridBusinessCustomer,
+  ensureGridBusinessCustomer,
+  loadGridBusinessProfile,
+} from "@/lib/grid/ensure-grid-business-customer"
 import { syncGridBusinessKybToSupabase } from "@/lib/grid/sync-kyb"
 import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
 import { resolveGridBusinessProvisionNeeds } from "@/lib/compliance/needs-business-provision"
+import { persistVerificationStatus } from "@/lib/compliance/verification-store"
+import { gridStatusAfterApplicantSubmitted } from "@/lib/compliance/sumsub-hosted-kyb-status"
 import { formatGridApiError } from "@/lib/grid/format-grid-api-error"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
 
@@ -31,21 +37,40 @@ async function runGridBusinessSync(request: Request) {
   const ctx = await resolveGridBusinessContextAsync(auth.user.id)
   if (!ctx.ok) return ctx.response
 
+  const applicantSubmitted =
+    request.method === "POST" &&
+    ((await request.json().catch(() => ({}))) as { applicantSubmitted?: boolean }).applicantSubmitted ===
+      true
+
   const admin = createSupabaseAdmin()
   const stored = await readStoredGridCustomerId(admin, ctx.businessId)
-
-  // Noah parity: background poll is a no-op until a Grid customer exists.
-  if (!stored.customerId) {
-    return NextResponse.json({
-      success: true,
-      skipped: true,
-      kycStatus: stored.verificationStatus || "not_started",
-    })
-  }
-
   const profile = await loadGridBusinessProfile(admin, ctx.businessId)
   if (!profile) {
     return NextResponse.json({ success: false, error: "Business organization not found" }, { status: 404 })
+  }
+
+  let customerId = stored.customerId
+  if (!customerId) {
+    const attached = await attachExistingGridBusinessCustomer({
+      admin,
+      userId: ctx.userId,
+      businessId: ctx.businessId,
+      profile,
+    }).catch((e) => {
+      console.warn("[grid/sync-status] attach existing Grid customer failed:", e)
+      return null
+    })
+    customerId = attached?.customerId ?? null
+  }
+
+  // Do not create a Grid customer from background poll.
+  if (!customerId) {
+    return NextResponse.json({
+      success: true,
+      skipped: true,
+      reason: "no_grid_customer",
+      kycStatus: stored.verificationStatus || "not_started",
+    })
   }
 
   try {
@@ -56,12 +81,26 @@ async function runGridBusinessSync(request: Request) {
       profile,
     })
 
-    const { status } = await syncGridBusinessKybToSupabase({
+    let { status } = await syncGridBusinessKybToSupabase({
       admin,
       businessId: ctx.businessId,
       userId: ctx.userId,
       customerId,
     })
+    if (applicantSubmitted) {
+      const next = gridStatusAfterApplicantSubmitted(status)
+      if (next !== status) {
+        await persistVerificationStatus(admin, {
+          kind: "business",
+          businessId: ctx.businessId,
+          userId: ctx.userId,
+          provider: "grid",
+          status: next as "pending",
+          gridCustomerId: customerId,
+        })
+        status = next as typeof status
+      }
+    }
 
     let provisioned: Record<string, unknown> | undefined
     if (status === "approved") {

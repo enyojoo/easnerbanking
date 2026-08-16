@@ -16,7 +16,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function syncBusinessGridStatusOnce(): Promise<SyncBusinessGridStatusResult> {
+async function syncBusinessGridStatusOnce(options?: {
+  applicantSubmitted?: boolean
+}): Promise<SyncBusinessGridStatusResult> {
   try {
     const supabase = createSupabaseBrowser()
     const { data } = await supabase.auth.getSession()
@@ -28,6 +30,7 @@ async function syncBusinessGridStatusOnce(): Promise<SyncBusinessGridStatusResul
     const res = await fetchWithSession("/api/grid/sync-status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ applicantSubmitted: options?.applicantSubmitted === true }),
       signal: controller.signal,
     })
     clearTimeout(timeoutId)
@@ -59,8 +62,10 @@ async function syncBusinessGridStatusOnce(): Promise<SyncBusinessGridStatusResul
   }
 }
 
-export async function syncBusinessGridStatus(): Promise<SyncBusinessGridStatusResult> {
-  return syncBusinessGridStatusOnce()
+export async function syncBusinessGridStatus(options?: {
+  applicantSubmitted?: boolean
+}): Promise<SyncBusinessGridStatusResult> {
+  return syncBusinessGridStatusOnce(options)
 }
 
 export async function syncBusinessGridStatusUntilAccountsReady(options?: {
