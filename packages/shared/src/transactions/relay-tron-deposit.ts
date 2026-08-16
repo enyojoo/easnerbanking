@@ -5,6 +5,7 @@ export type RelayTronDepositListDisplay = {
   ledgerCurrency: string
   displayDescription: string
   displayHeroTitle: string
+  transactionProduct?: string
 }
 
 function pickPositiveAmount(...values: unknown[]): number | null {
