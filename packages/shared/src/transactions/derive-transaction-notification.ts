@@ -216,8 +216,8 @@ function buildWalletSendBody(input: {
 
 type DescriptorDraft = Omit<
   TransactionNotificationDescriptor,
-  "title" | "pushTitle" | "emailSubject" | "emailEnabled"
-> & { emailEnabled?: boolean }
+  "title" | "pushTitle" | "emailSubject" | "emailEnabled" | "pushBody"
+> & { emailEnabled?: boolean; pushBody?: string }
 
 function buildGlobalPayoutOutContext(input: {
   meta: Record<string, unknown> | null
