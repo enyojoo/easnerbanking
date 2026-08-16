@@ -347,6 +347,19 @@ describe("postal-address-form exemplars", () => {
     expect(sanitizeSubdivisionForCountry("US", "CA")).toBe("CA")
   })
 
+  it("does not throw when formatting an incomplete US address", () => {
+    expect(() =>
+      formatOperationalAddress(
+        { countryCode: "US", line1: "", city: "", state: "", postalCode: "" },
+        { appendCountry: true },
+      ),
+    ).not.toThrow()
+    expect(
+      formatOperationalAddress({ countryCode: "US" }, { appendCountry: true }),
+    ).toBe("")
+    expect(isOperationalAddressComplete("US", { countryCode: "US" })).toBe(false)
+  })
+
   it("formats US address with country appended", () => {
     const formatted = formatOperationalAddress(
       { ...FIXTURES.US, countryCode: "US" },
