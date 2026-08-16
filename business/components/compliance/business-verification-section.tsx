@@ -427,7 +427,10 @@ export function BusinessVerificationSection({
   }, [flowFromUrl, hostedOpen, openHostedVerification])
 
   useEffect(() => {
-    if (flowFromUrl || !hostedOpen) return
+    // replaceState updates the URL without refreshing useSearchParams. Parent
+    // `fullPageFlow` is the source of truth after CTA click — do not wipe the
+    // SumSub token just because `flowFromUrl` is still stale.
+    if (fullPageFlow || flowFromUrl || !hostedOpen) return
     setHostedOpen(false)
     setHostedLoading(false)
     setOpeningVerification(false)
@@ -437,7 +440,7 @@ export function BusinessVerificationSection({
       setHostedToken(null)
       clearSessionAfterCloseRef.current = null
     }, 280)
-  }, [flowFromUrl, hostedOpen])
+  }, [fullPageFlow, flowFromUrl, hostedOpen])
 
   if (isLoading && !hasData) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
