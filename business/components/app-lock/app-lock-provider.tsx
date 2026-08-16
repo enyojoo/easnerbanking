@@ -12,6 +12,7 @@ import {
   setAppLocked,
 } from "@/lib/login-pin"
 import { isIdleLockSuspended, resetSessionActivity } from "@/lib/session-activity"
+import { requestHostedKybPrime } from "@/lib/compliance/prime-business-verification-flow"
 import { PinSetupScreen } from "./pin-setup-screen"
 import { PinUnlockScreen } from "./pin-unlock-screen"
 
@@ -45,11 +46,13 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     resetSessionActivity()
     setBump((n) => n + 1)
     setResume((r) => ({ version: r.version + 1, until: Date.now() + POST_UNLOCK_RESUME_MS }))
+    requestHostedKybPrime()
   }, [user])
 
   const onSetupComplete = useCallback(() => {
     resetSessionActivity()
     setBump((n) => n + 1)
+    requestHostedKybPrime()
   }, [])
 
   if (!user) {

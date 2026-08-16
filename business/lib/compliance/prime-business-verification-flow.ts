@@ -8,7 +8,9 @@ import {
   readHostedResumeAvailable,
 } from "@/lib/compliance/hosted-verification-credentials"
 
-/** Prime KYB credentials + SumSub bundle when Settings opens or the Verification tab is hinted. */
+export const HOSTED_KYB_PRIME_EVENT = "easner-prime-hosted-kyb"
+
+/** Warm Grid KYB token + SumSub after login, PIN unlock, or Settings. */
 export function primeBusinessVerificationFlow(options: {
   businessId: string | null | undefined
   canManageBusinessVerification: boolean
@@ -21,6 +23,12 @@ export function primeBusinessVerificationFlow(options: {
   }
   preloadSumsubWebSdk()
   void primeHostedVerificationCredentials({ businessId })
+}
+
+/** Ask the dashboard shell to refresh hosted KYB credentials (PIN unlock / setup). */
+export function requestHostedKybPrime() {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new Event(HOSTED_KYB_PRIME_EVENT))
 }
 
 export function useVerificationFlowPrime() {

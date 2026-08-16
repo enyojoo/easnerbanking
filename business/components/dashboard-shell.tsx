@@ -19,7 +19,10 @@ import { verificationBannerCopy, verificationBannerCta, verificationBannerStarte
 import { cn } from "@/lib/utils"
 import { useScope } from "@/lib/query/scope"
 import { prefetchWorkspaceCriticalData } from "@/lib/query/workspace-prefetch"
-import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
+import {
+  HOSTED_KYB_PRIME_EVENT,
+  primeBusinessVerificationFlow,
+} from "@/lib/compliance/prime-business-verification-flow"
 
 interface DashboardShellProps {
   children: React.ReactNode
@@ -51,20 +54,17 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
   const showTier1Banner = profileHasData && !profileLoading && !tier1Complete
 
   useEffect(() => {
-    if (!showTier1Banner) return
-    primeBusinessVerificationFlow({
-      businessId,
-      canManageBusinessVerification,
-      tier1Complete,
-      tier1CanResubmit,
-    })
-  }, [
-    showTier1Banner,
-    businessId,
-    canManageBusinessVerification,
-    tier1Complete,
-    tier1CanResubmit,
-  ])
+    const prime = () =>
+      primeBusinessVerificationFlow({
+        businessId,
+        canManageBusinessVerification,
+        tier1Complete,
+        tier1CanResubmit,
+      })
+    prime()
+    window.addEventListener(HOSTED_KYB_PRIME_EVENT, prime)
+    return () => window.removeEventListener(HOSTED_KYB_PRIME_EVENT, prime)
+  }, [businessId, canManageBusinessVerification, tier1Complete, tier1CanResubmit])
 
   useEffect(() => {
     if (!sessionUserId || !scope) return
