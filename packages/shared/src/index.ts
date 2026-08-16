@@ -490,6 +490,8 @@ export {
   gridKybApplicationIsEditable,
   gridKybApplicationStatusFromVerification,
   gridKybCompanyFieldIsFilled,
+  gridBeneficialOwnerIdFromResource,
+  gridBeneficialOwnerIdsFromVerificationErrors,
   gridKybOwnerResourceMatches,
   gridKybWizardReadiness,
   mapGridKybVerificationError,

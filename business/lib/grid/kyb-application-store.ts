@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   emptyGridKybCompanyDraft,
+  gridBeneficialOwnerIdFromResource,
+  gridBeneficialOwnerIdsFromVerificationErrors,
   gridKybApplicationStatusFromVerification,
   type GridKybApplicationStatus,
   type GridKybCompanyDraft,
@@ -175,6 +177,27 @@ export function mapKybDocumentRow(row: Record<string, unknown>, includeNumber: b
     side: row.side ? String(row.side) : null,
     gridDocumentId: row.grid_document_id ? String(row.grid_document_id) : null,
   }
+}
+
+/** Attach a leftover Grid owner id onto the sole local person so ID uploads resolve. */
+export async function linkKybPeopleToGridOwnerErrors(
+  admin: SupabaseClient,
+  people: KybPersonRow[],
+  errors: GridKybVerificationError[] | null | undefined,
+): Promise<KybPersonRow[]> {
+  const ownerIds = gridBeneficialOwnerIdsFromVerificationErrors(errors)
+  if (ownerIds.length !== 1 || people.length !== 1) return people
+  const person = people[0]
+  const current = gridBeneficialOwnerIdFromResource(person.gridBeneficialOwnerId)
+  if (current === ownerIds[0]) return people
+  await admin
+    .from("business_kyb_people")
+    .update({
+      grid_beneficial_owner_id: ownerIds[0],
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", person.id)
+  return [{ ...person, gridBeneficialOwnerId: ownerIds[0] }]
 }
 
 export async function listKybPeople(

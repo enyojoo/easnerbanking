@@ -179,6 +179,57 @@ describe("filterResolvedGridKybErrorPointers", () => {
     })
     expect(remaining).toEqual([])
   })
+
+  it("clears the Grid missing-identity pointer once the sole owner has an ID file", () => {
+    const remaining = filterResolvedGridKybErrorPointers({
+      pointers: mapGridKybVerificationErrors([
+        {
+          type: "MISSING_IDENTITY_DOCUMENT",
+          reason: "Identity document is required",
+          resourceId: "BeneficialOwner:019ff8c8-66cb-8887-0000-9dbe15c60c97",
+          acceptedDocumentTypes: ["PASSPORT", "DRIVERS_LICENSE", "NATIONAL_ID"],
+        },
+      ]),
+      company: emptyGridKybCompanyDraft(),
+      people: [{ id: "p1", gridBeneficialOwnerId: null, roles: ["UBO"], firstName: "Ada", lastName: "Lovelace" }],
+      documents: [{ personId: "p1", category: "identity" }],
+    })
+    expect(remaining).toEqual([])
+  })
+
+  it("clears people pointers even when Grid owner ids are not on the local draft yet", () => {
+    const remaining = filterResolvedGridKybErrorPointers({
+      pointers: [
+        {
+          section: "people",
+          field: "personalInfo.address.country",
+          resourceId: "BeneficialOwner:missing-locally",
+          reason: "Country is required",
+        },
+        {
+          section: "people",
+          documentCategory: "identity",
+          resourceId: "BeneficialOwner:missing-locally",
+          reason: "Identity document is required",
+        },
+      ],
+      company: emptyGridKybCompanyDraft(),
+      people: [
+        {
+          id: "p1",
+          gridBeneficialOwnerId: null,
+          roles: ["UBO"],
+          firstName: "Ada",
+          lastName: "Lovelace",
+          addressCountry: "GB",
+          addressLine1: "1 Street",
+          city: "London",
+        },
+      ],
+      documents: [{ personId: "p1", category: "identity" }],
+    })
+    expect(remaining).toEqual([])
+  })
 })
 
 describe("gridKybWizardReadiness", () => {

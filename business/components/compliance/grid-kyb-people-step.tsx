@@ -144,7 +144,9 @@ export function GridKybPeopleStep({
     return errors.filter((error) => {
       if (error.section !== "people") return false
       if (error.resourceId) {
-        return person ? gridKybOwnerResourceMatches(person, error.resourceId) : false
+        if (!person) return false
+        if (gridKybOwnerResourceMatches(person, error.resourceId)) return true
+        return !people.some((row) => gridKybOwnerResourceMatches(row, error.resourceId))
       }
       if (error.documentCategory === "identity" && person) {
         return identityDocsFor(person.id).length === 0
@@ -161,6 +163,8 @@ export function GridKybPeopleStep({
 
   const selectedErrors = peopleErrorsFor(selected)
   const nationalityError = fieldError("nationality")
+  const emailError = fieldError("email")
+  const phoneError = fieldError("phone") || fieldError("phoneNumber")
   const birthDateError = fieldError("birthDate") || fieldError("dateOfBirth")
   const addressError = selectedErrors.find(
     (error) =>
@@ -171,7 +175,9 @@ export function GridKybPeopleStep({
       error.field?.endsWith("state") ||
       error.field?.endsWith("postalCode"),
   )
-  const identityError = selectedErrors.find((error) => error.documentCategory === "identity")
+  const identityError =
+    selectedErrors.find((error) => error.documentCategory === "identity") ||
+    errors.find((error) => error.section === "people" && error.documentCategory === "identity")
   const idTypeError = fieldError("idType") || fieldError("identifier") || fieldError("countryOfIssuance")
 
   return (
@@ -252,6 +258,28 @@ export function GridKybPeopleStep({
             <div className="space-y-2">
               <Label>Last name</Label>
               <Input className={SETTINGS_INPUT_CLASS} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} disabled={disabled} />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                className={cn(SETTINGS_INPUT_CLASS, emailError && "border-destructive")}
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                disabled={disabled}
+              />
+              {emailError ? <p className="text-sm text-destructive">{emailError.reason}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <Label>Phone (optional)</Label>
+              <Input
+                type="tel"
+                className={cn(SETTINGS_INPUT_CLASS, phoneError && "border-destructive")}
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                disabled={disabled}
+              />
+              {phoneError ? <p className="text-sm text-destructive">{phoneError.reason}</p> : null}
             </div>
             <div className="space-y-2">
               <Label>Date of birth</Label>
@@ -372,22 +400,30 @@ export function GridKybPeopleStep({
               ))}
             </div>
           </div>
-          <GridKybDocumentUpload
-            key={selected?.id ?? "new"}
-            ref={idUploadRef}
-            title="Upload owner ID document"
-            category="identity"
-            acceptedDocumentTypes={
-              errors.find((error) => selected && gridKybOwnerResourceMatches(selected, error.resourceId))
-                ?.acceptedDocumentTypes ?? GRID_KYB_DOCUMENT_CATEGORIES.identity.acceptedDocumentTypes
-            }
-            extraFields={{ personId: selected?.id, issuingAuthority: true, documentNumber: true }}
-            existingDocuments={identityDocsFor(selected?.id)}
-            onRemoveExisting={onRemoveDocument}
-            disabled={disabled}
-            hideSubmit
-            onUploaded={onReload}
-          />
+          {identityError ? (
+            <p className="text-sm text-amber-700 dark:text-amber-400">{identityError.reason}</p>
+          ) : null}
+          <div className={cn(identityError && "rounded-xl ring-1 ring-amber-400/70")}>
+            <GridKybDocumentUpload
+              key={selected?.id ?? "new"}
+              ref={idUploadRef}
+              title="Upload owner ID document"
+              category="identity"
+              acceptedDocumentTypes={
+                errors.find((error) => error.documentCategory === "identity")?.acceptedDocumentTypes ??
+                GRID_KYB_DOCUMENT_CATEGORIES.identity.acceptedDocumentTypes
+              }
+              extraFields={{ personId: selected?.id, issuingAuthority: true, documentNumber: true }}
+              existingDocuments={identityDocsFor(selected?.id)}
+              onRemoveExisting={onRemoveDocument}
+              disabled={disabled}
+              hideSubmit
+              onUploaded={async (doc) => {
+                if (doc) onDocumentAdded(doc)
+                await onReload()
+              }}
+            />
+          </div>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <div className="flex gap-2">
             <Button type="button" size="sm" disabled={disabled || saving} onClick={() => void save()}>

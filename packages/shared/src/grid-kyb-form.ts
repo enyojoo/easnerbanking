@@ -451,14 +451,18 @@ export type GridKybPointerPerson = {
   firstName?: string
   lastName?: string
   email?: string
+  phone?: string
   birthDate?: string
   nationality?: string
   addressLine1?: string
   city?: string
+  state?: string
+  postalCode?: string
   addressCountry?: string
   idType?: string
   identifier?: string
   countryOfIssuance?: string
+  ownershipPercentage?: number | null
 }
 
 export type GridKybPointerDocument = {
@@ -466,32 +470,65 @@ export type GridKybPointerDocument = {
   category: string
 }
 
+export function gridBeneficialOwnerIdFromResource(resourceId: string | null | undefined): string {
+  const raw = String(resourceId ?? "").trim()
+  if (!raw) return ""
+  return raw.replace(/^BeneficialOwner:/, "")
+}
+
+export function gridBeneficialOwnerIdsFromVerificationErrors(
+  errors: GridKybVerificationError[] | null | undefined,
+): string[] {
+  const ids = new Set<string>()
+  for (const error of Array.isArray(errors) ? errors : []) {
+    const type = String(error.type ?? "").trim().toUpperCase()
+    const resourceId = String(error.resourceId ?? "").trim()
+    if (!resourceId.startsWith("BeneficialOwner:")) continue
+    if (type === "MISSING_IDENTITY_DOCUMENT" || type === "MISSING_FIELD" || type === "INVALID_FIELD") {
+      const id = gridBeneficialOwnerIdFromResource(resourceId)
+      if (id) ids.add(id)
+    }
+  }
+  return [...ids]
+}
+
 export function gridKybOwnerResourceMatches(
   person: Pick<GridKybPointerPerson, "gridBeneficialOwnerId">,
   resourceId: string | null | undefined,
 ): boolean {
-  const raw = String(resourceId ?? "").trim()
-  if (!raw || !person.gridBeneficialOwnerId) return false
-  const ownerId = raw.replace(/^BeneficialOwner:/, "")
-  return (
-    person.gridBeneficialOwnerId === raw ||
-    person.gridBeneficialOwnerId === ownerId ||
-    `BeneficialOwner:${person.gridBeneficialOwnerId}` === raw
-  )
+  const ownerId = gridBeneficialOwnerIdFromResource(resourceId)
+  const stored = gridBeneficialOwnerIdFromResource(person.gridBeneficialOwnerId)
+  if (!ownerId || !stored) return false
+  return stored === ownerId
 }
 
 function personFieldIsFilled(person: GridKybPointerPerson, field: string): boolean {
-  const key = lastFieldSegment(field)
+  const path = field.replace(/^personalInfo\./, "")
+  if (path === "address" || path.endsWith(".address")) {
+    return Boolean(person.addressLine1?.trim() && person.city?.trim() && person.addressCountry?.trim())
+  }
+  const key = lastFieldSegment(path)
+  if (key === "roles") return person.roles.length > 0
+  if (key === "ownershipPercentage" || key === "ownership") {
+    return person.ownershipPercentage != null && Number.isFinite(person.ownershipPercentage)
+  }
   const aliases: Record<string, string | undefined> = {
     firstName: person.firstName,
     lastName: person.lastName,
     email: person.email,
+    phone: person.phone,
+    phoneNumber: person.phone,
     birthDate: person.birthDate,
     dateOfBirth: person.birthDate,
     nationality: person.nationality,
     addressLine1: person.addressLine1,
     line1: person.addressLine1,
     city: person.city,
+    state: person.state,
+    region: person.state,
+    postalCode: person.postalCode,
+    zip: person.postalCode,
+    zipCode: person.postalCode,
     country: person.addressCountry,
     addressCountry: person.addressCountry,
     idType: person.idType,
@@ -499,6 +536,15 @@ function personFieldIsFilled(person: GridKybPointerPerson, field: string): boole
     countryOfIssuance: person.countryOfIssuance,
   }
   return Boolean(String(aliases[key] ?? "").trim())
+}
+
+function peopleForPointer(
+  people: GridKybPointerPerson[],
+  resourceId: string | null | undefined,
+): GridKybPointerPerson[] {
+  if (!resourceId) return people
+  const matched = people.filter((row) => gridKybOwnerResourceMatches(row, resourceId))
+  return matched.length > 0 ? matched : people
 }
 
 export function filterResolvedGridKybErrorPointers(input: {
@@ -511,12 +557,11 @@ export function filterResolvedGridKybErrorPointers(input: {
   return pointers.filter((pointer) => {
     if (pointer.documentCategory === "identity") {
       const identityDocs = documents.filter((row) => row.category === "identity")
-      if (pointer.resourceId) {
-        const person = people.find((row) => gridKybOwnerResourceMatches(row, pointer.resourceId))
-        if (!person) return true
-        return !identityDocs.some((row) => row.personId === person.id)
-      }
-      return people.length === 0 || people.some((person) => !identityDocs.some((row) => row.personId === person.id))
+      if (identityDocs.length === 0) return true
+      if (people.length <= 1) return false
+      const targets = peopleForPointer(people, pointer.resourceId)
+      if (targets.length === 0) return false
+      return targets.some((person) => !identityDocs.some((row) => row.personId === person.id))
     }
     if (pointer.documentCategory) {
       return !documents.some((row) => !row.personId && row.category === pointer.documentCategory)
@@ -525,10 +570,9 @@ export function filterResolvedGridKybErrorPointers(input: {
       return !gridKybCompanyFieldIsFilled(company, pointer.field)
     }
     if (pointer.section === "people" && pointer.field) {
-      if (!pointer.resourceId) return true
-      const person = people.find((row) => gridKybOwnerResourceMatches(row, pointer.resourceId))
-      if (!person) return true
-      return !personFieldIsFilled(person, pointer.field)
+      const targets = peopleForPointer(people, pointer.resourceId)
+      if (targets.length === 0) return true
+      return targets.some((person) => !personFieldIsFilled(person, pointer.field))
     }
     const reason = pointer.reason.toLowerCase()
     if (reason.includes("beneficial owner") && reason.includes("required")) {
@@ -536,6 +580,17 @@ export function filterResolvedGridKybErrorPointers(input: {
     }
     if (reason.includes("control person") && reason.includes("required")) {
       return !people.some((row) => row.roles.includes("CONTROL_PERSON"))
+    }
+    if (pointer.section === "people") {
+      const identityDocs = documents.filter((row) => row.category === "identity")
+      const targets = peopleForPointer(people, pointer.resourceId)
+      if (targets.length === 0) return true
+      return targets.some(
+        (person) =>
+          !person.firstName?.trim() ||
+          !person.lastName?.trim() ||
+          !identityDocs.some((row) => row.personId === person.id),
+      )
     }
     return true
   })

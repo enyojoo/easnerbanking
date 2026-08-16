@@ -3,6 +3,7 @@ import { mapGridKybVerificationErrors, mergeGridKybCompanyDraft, type GridKybCom
 import { requireKybContext } from "../_context"
 import {
   ensureKybApplication,
+  linkKybPeopleToGridOwnerErrors,
   listKybDocuments,
   listKybPeople,
 } from "@/lib/grid/kyb-application-store"
@@ -64,6 +65,7 @@ export async function GET(request: Request) {
         console.warn("[grid/kyb/packet] list documents:", error)
       }),
   ])
+  people = await linkKybPeopleToGridOwnerErrors(ctx.admin, people, application.last_errors)
   const company = prefillCompanyFromProfile(application.company, profile)
   if (JSON.stringify(application.company) !== JSON.stringify(company)) {
     await ctx.admin

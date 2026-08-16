@@ -75,7 +75,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   }))
   const hasStoredFile = existingDocuments.length > 0
   const showFilePicker = !hasStoredFile && !file
-  const showUpload = !hideSubmit && Boolean(file) && !hasStoredFile
+  const showUpload = Boolean(file) && !hasStoredFile && (!hideSubmit || Boolean(extraFields?.personId))
 
   async function upload(personId = extraFields?.personId) {
     if (!file) {
